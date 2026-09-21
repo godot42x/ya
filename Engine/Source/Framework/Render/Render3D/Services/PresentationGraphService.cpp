@@ -13,7 +13,6 @@
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Swapchain.h"
 #include "RHI/Render.h"
-#include "Render3D/Pipelines/BasicPostprocessing.h"
 
 #include <limits>
 
@@ -36,16 +35,6 @@ RGImportedTextureDesc makePresentationImportedTextureDesc(const RenderTexture& i
     return desc;
 }
 
-/// The copy samples a display-ready image and stretches it over the swapchain,
-/// so it runs the copy pipeline in its pass-through configuration: every
-/// grading stage off. The input is a View's display image, which the finalize
-/// pass already gave its output encoding and the view's grading. Grading it
-/// again here is the double-grade this constant replaced: the windowed image
-/// used to receive an ACES curve plus a second gamma on top of the view's own
-/// finalize, while the editor viewport (which samples the display image
-/// directly) received one.
-const PostProcessingState kDisplayComposeState = PostProcessingState::passThrough();
-
 } // namespace
 
 void PresentationGraphService::init(const InitDesc& desc)
@@ -56,42 +45,11 @@ void PresentationGraphService::init(const InitDesc& desc)
 
     _render                       = desc.render;
     _present                      = desc.present;
-    _viewDisplayImageProvider = desc.viewDisplayImageProvider;
+    _backdropWriter               = desc.backdropWriter;
 
     rebuildImages();
 
     auto* swapchain = _present->getSwapchain();
-    _displayImageCopy = ya::makeShared<BasicPostprocessing>();
-    _displayImageCopy->init(BasicPostprocessing::InitDesc{
-        .render                = _render,
-        .renderPass            = nullptr,
-        .pipelineRenderingInfo = PipelineRenderingInfo{
-            .label                   = "RuntimePresentation",
-            .viewMask                = 0,
-            .colorAttachmentFormats  = {swapchain->getFormat()},
-            .depthAttachmentFormat   = EFormat::Undefined,
-            .stencilAttachmentFormat = EFormat::Undefined,
-        },
-    });
-
-    auto inputLayout = _displayImageCopy->getInputDSL();
-    YA_CORE_ASSERT(inputLayout, "Presentation display copy must expose an input DSL");
-    _presentationInputPool = IDescriptorPool::create(
-        _render,
-        DescriptorPoolCreateInfo{
-            .label     = "Presentation_DisplayCopy_DSP",
-            .maxSets   = 1,
-            .poolSizes = {
-                DescriptorPoolSize{
-                    .type            = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = 1,
-                },
-            },
-        });
-    YA_CORE_ASSERT(_presentationInputPool, "PresentationGraphService requires a display-copy descriptor pool");
-    _displayImageCopyBindings.input.set = _presentationInputPool->allocateDescriptorSets(inputLayout);
-    YA_CORE_ASSERT(_displayImageCopyBindings.input.set,
-                   "PresentationGraphService failed to allocate the swapchain blit descriptor set");
 
     swapchain->onRecreate.addLambda(
         this,
@@ -114,15 +72,9 @@ void PresentationGraphService::shutdown()
             swapchain->onRecreate.removeAll(this);
         }
     }
-    _displayImageCopyBindings = {};
-    _presentationInputPool.reset();
-    if (_displayImageCopy) {
-        _displayImageCopy->shutdown();
-        _displayImageCopy.reset();
-    }
+    _backdropWriter = nullptr;
     _presentationGraphExecutors.clear();
     _presentationImages.clear();
-    _viewDisplayImageProvider = {};
     _present = nullptr;
     _render  = nullptr;
 }
@@ -180,10 +132,11 @@ std::shared_ptr<RenderTexture> PresentationGraphService::getCurrentPresentationI
     return _presentationImages[imageIndex];
 }
 
-void PresentationGraphService::recordDisplayCompose(bool                     bCopyViewDisplayImage,
-                                                    float                    deltaTime,
-                                                    IFrameRecordExtensions*  extensions,
-                                                    ICommandBuffer*          cmdBuf)
+void PresentationGraphService::recordDisplayCompose(const FSurfaceImage&    backdrop,
+                                                    RenderSubmission&       submission,
+                                                    float                   deltaTime,
+                                                    IFrameRecordExtensions* extensions,
+                                                    ICommandBuffer*         cmdBuf)
 {
     YA_PROFILE_FUNCTION();
 
@@ -207,10 +160,6 @@ void PresentationGraphService::recordDisplayCompose(bool                     bCo
     if (!presentationImage) {
         return;
     }
-    if (_displayImageCopy) {
-        _displayImageCopy->beginFrame();
-    }
-
     if (extensions) {
         // Contract: this hook runs before the presentation graph is built and
         // recorded, inside the already-open frame command buffer. Content
@@ -221,12 +170,27 @@ void PresentationGraphService::recordDisplayCompose(bool                     bCo
     }
 
     const Extent2D presentationExtent = presentationImage->getExtent();
-    // Asked only when the host says the window shows this View: a host that
-    // fills the surface itself has no use for a provider answer, and calling it
-    // would make the frame depend on a View the host is not going to show.
-    auto sourceImage = (bCopyViewDisplayImage && _viewDisplayImageProvider)
-                           ? _viewDisplayImageProvider()
-                           : nullptr;
+
+    // The gate: the surface's format may apply the transfer function to whatever
+    // this pass writes, so an image that already carries it would come out
+    // encoded twice. Refused and reported rather than written, because "we
+    // presented the wrong image" has no visible symptom other than wrong
+    // colours, and a surface quietly re-grading is exactly how that shipped
+    // before. The pass still runs: the surface keeps its clear and the host's
+    // own content is unaffected.
+    IImageView* backdropImageView = nullptr;
+    if (backdrop.hasImage()) {
+        const EFormat::T surfaceFormat = getSwapchain() ? getSwapchain()->getFormat() : EFormat::Undefined;
+        if (const char* mismatch = findSurfaceImageMismatch(backdrop, surfaceFormat)) {
+            YA_CORE_ERROR("PresentationGraphService: refusing the surface image: {}. Surface format is {}",
+                          mismatch,
+                          std::to_string(surfaceFormat));
+        }
+        else {
+            backdropImageView = backdrop.image->getImageView();
+        }
+    }
+
     RenderGraph graph;
     const auto  output = graph.importTexture(
         makePresentationImportedTextureDesc(*presentationImage,
@@ -247,21 +211,18 @@ void PresentationGraphService::recordDisplayCompose(bool                     bCo
                 }},
             });
         },
-        [this, sourceImage, output, presentationExtent, extensions, deltaTime](RGRenderContext& rgCtx)
+        [this, backdropImageView, &submission, output, presentationExtent, extensions, deltaTime](RGRenderContext& rgCtx)
         {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
-            if (_displayImageCopy && sourceImage && sourceImage->getImageView()) {
-                _displayImageCopy->render(BasicPostprocessing::RenderDesc{
-                    .cmdBuf         = &rgCtx.getCommandBuffer(),
-                    .ctx            = nullptr,
-                    .inputImageView = sourceImage->getImageView(),
-                    .renderExtent   = presentationExtent,
-                    .bOutputIsSRGB  = EFormat::isSRGB(getSwapchain() ? getSwapchain()->getFormat() : EFormat::Undefined),
-                    .state          = &kDisplayComposeState,
-                    .toneMap        = _displayImageCopyBindings,
-                });
+            // The renderer's pass, not this service's: presentation owns the
+            // surface and the order, and nothing about how an image is drawn.
+            if (_backdropWriter && backdropImageView) {
+                _backdropWriter->writeSurfaceBackdrop(rgCtx.getCommandBuffer(),
+                                                      submission,
+                                                      *backdropImageView,
+                                                      presentationExtent);
             }
 
             if (extensions) {

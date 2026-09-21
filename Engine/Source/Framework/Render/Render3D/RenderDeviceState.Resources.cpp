@@ -200,20 +200,34 @@ void RenderDeviceState::initSharedRenderResources()
 
 void RenderDeviceState::initPresentationResources()
 {
-    // Main world window display compose only. Acquire/present stay on the host
-    // FPresentFrame coordinator; this service never calls begin/end.
+    // Main world window's surface pass only. Acquire/present stay on the host
+    // FPresentFrame coordinator; this service never calls begin/end, owns no
+    // pipeline and does not fetch the image it writes: the host hands it one per
+    // frame (`getViewDisplayImage`), and the pass that draws it comes from the
+    // postprocess family (`SurfaceWritePass`), so the service holds no opinion
+    // about which View the window shows or how an image looks.
+    auto* surface = _render ? _render->getPrimarySurfaceContext() : nullptr;
+    if (auto* swapchain = surface ? surface->getSwapchain() : nullptr) {
+        _surfaceWritePass = ya::makeShared<SurfaceWritePass>();
+        _surfaceWritePass->init(SurfaceWritePass::InitDesc{
+            .render        = _render,
+            .surfaceFormat = swapchain->getFormat(),
+        });
+    }
+
     _presentationGraphService.init(PresentationGraphService::InitDesc{
-        .render  = _render,
-        .present = _render->getPrimarySurfaceContext(),
-        .viewDisplayImageProvider = [this]()
-        {
-            return getViewDisplayImageShared();
-        },
+        .render         = _render,
+        .present        = surface,
+        .backdropWriter = _surfaceWritePass.get(),
     });
 
     _deleter.push("ScreenRT", [this](void*)
                   {
-        _presentationGraphService.shutdown(); });
+        _presentationGraphService.shutdown();
+        if (_surfaceWritePass) {
+            _surfaceWritePass->shutdown();
+            _surfaceWritePass.reset();
+        } });
 }
 
 void RenderDeviceState::initCommandResources()

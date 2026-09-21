@@ -5,6 +5,7 @@
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
+#include "Render3D/Common/SurfaceImage.h"
 
 #include <functional>
 #include <glm/glm.hpp>
@@ -61,6 +62,11 @@ struct IRenderPipelineDebugOutputs
     /// Color format of the postprocess output image (stable pipeline config;
     /// queryable before the world graph creates the actual image).
     [[nodiscard]] virtual EFormat::T getPostprocessColorFormat() const = 0;
+    /// Which transfer function this pipeline's display image carries. The color
+    /// format says how many bits and which channels; this says what the values
+    /// mean, which no format can express. The surface pass checks it against the
+    /// surface before writing (see `findSurfaceImageMismatch`).
+    [[nodiscard]] virtual EImageEncoding getDisplayImageEncoding() const = 0;
 };
 
 struct IRenderPipeline : IRenderPipelineExecution,

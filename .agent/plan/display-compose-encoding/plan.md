@@ -115,9 +115,57 @@ SIGBUS / `KERN_PROTECTION_FAILURE` 死在 `App::presentsViewDisplayImage()` 里�
 倾向于把它记成构建/映射层面的偶发（正在跑的进程其 dylib 被重新链接），但没有查实，
 所以记在这里而不是抹掉：如果后续再看到同一处崩溃，这才是起点。
 
+## Phase F3（已落地）
+
+F1 只把 present 的 grading 关掉了，没有把它**移走**：surface 这一层仍然持有一个
+postprocess 管线实例和一份 state。`passThrough()` 意味着「现在不做」，不是「这里不能做」
+——F1 的根因（present 能再 grade 一次）在架构上仍然可达。
+
+这一轮把后处理从 surface 这一层删掉，并给 surface 写入加一道强类型门禁：
+
+- **窗口底板用类型表达，不用布尔。** `FSurfaceImage` = 图像 + `EImageEncoding`
+  （`Linear` / `DisplayEncoded`）。格式说不出的那件事（值是什么含义）随图像走。
+  `RenderDeviceState::getViewDisplayImage()` 由渲染侧回答；`display` 缺失回退到 raw color 时
+  如实标成 `Linear`，而不是让 surface 猜。
+- **门禁是配对检查，不是布尔。** `findSurfaceImageMismatch(image, surfaceFormat)`：只有当
+  `DisplayEncoded` 撞上会做写入编码的 surface（sRGB）时才拒绝——那会让硬件再编码一次。
+  另外三种配对都合法，其中 `Linear` + sRGB 就是「硬件来编码」的正路，不是异常。
+  不匹配时拒绝并报错，pass 照常跑：surface 保留 clear，host 的 chrome 不受影响。
+  选拒绝而不是断言，是因为「present 了错的图」除了颜色不对没有别的症状。
+- **pipeline 从 presentation 移走。** `PresentationGraphService` 不再持有任何管线、state、
+  descriptor pool，也不再 include `BasicPostprocessing` / `PostProcessingState`；它只有
+  swapchain 导入、per-image executor、clear、host 内容、capture。谁来画底板由
+  `ISurfaceBackdropWriter`（在 `SurfaceImage.h`）表达，实现是渲染侧的 `SurfaceWritePass`
+  ——postprocess 家族里的一次写入，复用现成的 `BasicPostprocessing`（`passThrough`），
+  没有新 shader、没有新管线类型。
+- **注入点回到 InitDesc**：`backdropWriter` 默认 null。null 是真实答案（host 自己铺满窗口），
+  此时 surface 只剩 clear。
+
+F2 那一版的 `PresentFrameInput::bCopyViewDisplayImage` 在这里升级成 `ESurfaceBackdrop`
+（`ViewDisplayImage` / `HostContent`）：同一个事实，但用类型表达，和「底板是什么」的
+`FSurfaceImage` 是同一套词汇。
+
+过程中撤掉的一版：先做了 `SurfaceResample`（独立 shader + 独立管线类）。它不必要——
+表面写入是 postprocess 形状的活，复用 `BasicPostprocessing` 即可，多一个管线类型只是多一份
+「以后可以把 grade 塞回来」的地方。
+
+验收（本轮实测）：
+
+- runtime 门禁仍 PASS：viewport = presentation = `c775245a…`，与 F1 之前基线逐字节相同。
+  surface 写入从「新 shader」换回复用的 postprocess 管线，输出逐字节不变。
+- 编辑器 presentation 截图（排除 HUD 计时带）改动前后逐字节相同，两次运行也相同；
+  没有任何 refused 日志。
+- `ya-render-3d-test` 177/177（新增 `SurfaceImageTest` 两例，锁住四种配对里只有
+  「已编码的图 + 会编码的 surface」被拒绝，以及 `isSRGB` 是门禁的唯一依据）。
+- 宽滤镜：698 跑 692 过，失败集与既有基线一致。
+
 ## 明确不做
 
 - 不把 game UI 合成并进 present 以省一次全屏 pass。View 的 display image 是会被多方采样的
   单位（编辑器视口、PIE、未来多窗口各自的 UI scale、自动化截图），UI 烤进 View 输出是有意为之。
 - 不改「UI 进 View RT、post 之后」这个落点。它与 Unity 的 Screen Space-Camera、UE 的
   post-Slate、Godot 的 CanvasLayer 同类，问题只在 present 又 grade 了一次。
+- 不把 surface 写入再抽一层「surface pass 抽象」或新的管线类型。它是 postprocess 家族里的
+  一次写入，`ISurfaceBackdropWriter` 已经是它需要的全部接口面。
+- 不为「surface 可能是 sRGB」去改 RHI 或强迫 swapchain 格式。门禁现在会把这种情形**报出来**
+  （`DisplayEncoded` + sRGB 被拒绝），要不要支持「线性图 + 硬件编码」这条正路是独立决定。

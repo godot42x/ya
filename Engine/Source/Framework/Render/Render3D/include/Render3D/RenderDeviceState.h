@@ -21,6 +21,7 @@
 #include "Render3D/Services/OffscreenTaskService.h"
 #include "Render3D/Services/PipelineCoordinator.h"
 #include "Render3D/Services/PresentationGraphService.h"
+#include "Render3D/Pipelines/SurfaceWritePass.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
 #include "Render3D/Services/RenderSharedResourceProvider.h"
 #include "Render3D/Services/GameplayResourceBinding.h"
@@ -104,6 +105,11 @@ struct YA_RENDER_3D_API RenderDeviceState
     RenderDiagnosticsService     _diagnostics{};
     PipelineCoordinator          _pipelineCoordinator{};
     PresentationGraphService     _presentationGraphService{};
+    /// The postprocess family's write onto the primary surface, handed to the
+    /// surface pass as its backdrop writer. Owned here because it is a frame
+    /// resource of this device, not of any one View or of the presentation
+    /// service.
+    stdptr<SurfaceWritePass>     _surfaceWritePass;
     // default rect for default rt creation
     Rect2D                       _pipelineViewRect{};
 
@@ -156,6 +162,12 @@ struct YA_RENDER_3D_API RenderDeviceState
     [[nodiscard]] std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> getActiveViewImageShared() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> getViewDisplayImageShared() const;
+    /// The same image as `getViewDisplayImageShared`, with the fact its format
+    /// cannot carry: which transfer function its values already have. The
+    /// surface pass takes this type instead of a bare texture, so "what am I
+    /// putting on the window" is answered by the renderer that made the image
+    /// and checked against the surface's format before anything is recorded.
+    [[nodiscard]] FSurfaceImage getViewDisplayImage() const;
     [[nodiscard]] EFormat::T getViewDisplayImageFormat() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> getPresentationImageShared() const;
     [[nodiscard]] const RenderSubmission* getLiveSubmission(uint32_t flightIndex) const

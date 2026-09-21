@@ -118,9 +118,9 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsFrameViewDisplayPresent)
     EXPECT_EQ(plan.present.imageIndex, -1);
     /// The surface's backdrop is the host's declaration, and the default is the
     /// plain one: a host that says nothing gets the window showing the View.
-    /// Only a host whose own passes fill the surface (the editor's chrome)
-    /// turns the View copy off.
-    EXPECT_TRUE(plan.present.bCopyViewDisplayImage);
+    /// Only a host whose own passes fill the surface (the editor's chrome) says
+    /// its content is the whole window.
+    EXPECT_EQ(plan.present.backdrop, ESurfaceBackdrop::ViewDisplayImage);
     EXPECT_TRUE(plan.sceneRender.empty());
     EXPECT_TRUE(plan.sceneRender.views().empty());
 }

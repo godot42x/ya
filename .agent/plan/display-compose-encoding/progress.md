@@ -109,10 +109,39 @@ F1 的代码改动最初是在本目录建成之前、与另一个写入者的 v
   不复现；该函数只是只读遍历。倾向于构建/映射层面的偶发（运行中的进程其 dylib 被重链），
   但没查实，所以留在这里。
 
+## 2026-09-22 — F3 落地
+
+改动（与 F2 同一个 `[render]` 线，独立提交）：
+
+- `FSurfaceImage`（图像 + `EImageEncoding`）+ `findSurfaceImageMismatch` / `surfaceEncodesOnWrite`
+  (`Render3D/Common/SurfaceImage.h`)：窗口底板从布尔升级为「图 + 它已经是什么」，门禁是配对
+  检查而不是开关。
+- `RenderDeviceState::getViewDisplayImage()` 提供带类型的 display image；raw color 回退如实标
+  `Linear`。`IRenderPipeline::getDisplayImageEncoding()` 由管线回答（依据就是
+  `bEnableGammaCorrection`：finalize 的 gamma 阶段才是「把它变成 display image」的那一步）。
+- `PresentationGraphService` 删掉 pipeline / state / descriptor pool，只留 swapchain 导入、
+  per-image executor、clear、host 内容、capture；底板通过 `ISurfaceBackdropWriter` 注入。
+- `SurfaceWritePass`（`Render3D/Pipelines/`）：postprocess 家族里的表面写入，复用
+  `BasicPostprocessing` + `passThrough`，输入 set 从当帧 `RenderSubmission` 分配（跨 flight 安全）。
+- 撤掉的中间版本：`SurfaceResample`（新 shader + 新管线类）已删除，包括生成的 spv/h。
+
+证据：
+
+- runtime 门禁 PASS：viewport = presentation = `c775245ae…`，仍与 F1 之前基线逐字节相同
+  —— 换实现（新 shader → 复用 postprocess 管线）没有改变一个像素。
+- 编辑器 presentation 截图（排除 HUD 计时带）改动前后逐字节相同，两次运行也相同；无 refused 日志。
+- `ya-render-3d-test` 177/177；宽滤镜 698 跑 692 过，失败集与既有基线一致。
+
 ## 未完成
 
 - 待定语义：bEnableGammaCorrection 关掉时会写出线性图像，编辑器路径今天就已经这样。
-  F1 让窗口路径与之保持一致，但这个开关本身该不该存在没有决定。
+  F1 让窗口路径与之保持一致，但这个开关本身该不该存在没有决定。F3 之后它有了新的含义：
+  关掉时 display image 被如实标成 `Linear`，此时若 surface 是 sRGB 就是合法的「硬件编码」路径，
+  而不是错误。
+- 门禁目前会拒绝「已编码的图 + sRGB surface」。本机 swapchain 落到的是 `B8G8R8A8_UNORM`
+  （请求的 `R8G8B8A8_UNORM` 不支持，回退到第一个可用格式），所以这条分支在本机跑不到；
+  它是为「某个平台的 surface 真的落到 sRGB」准备的显式失败。要不要正式支持
+  「线性图 + 硬件编码」这条正路（即让 finalize 输出线性、由 surface 编码）是独立决定。
 - 编辑器 HUD 没有关掉的可编程入口（`applyGuiFrameInspectorSpec` 只被 GUI host 的 config
   调用），所以编辑器截图目前只能靠「排除 HUD 区域」来做回归门禁。若要让编辑器截图也
   变成可逐字节比对的门禁，需要给编辑器一条关掉 HUD 的通道（CLI 或 config）。

@@ -206,6 +206,14 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     bool     isGradingEnabled() const override { return _postProcessStage.isGradingEnabled(); }
     [[nodiscard]] EFormat::T getPostprocessColorFormat() const override { return POSTPROCESS_COLOR_FORMAT; }
+    /// Same fact as the forward pipeline's: the finalize pass's gamma stage is
+    /// what makes the linear render target a display image, so that switch is
+    /// the encoding of this pipeline's display image.
+    [[nodiscard]] EImageEncoding getDisplayImageEncoding() const override
+    {
+        return _postProcessStage.getState().bEnableGammaCorrection ? EImageEncoding::DisplayEncoded
+                                                                   : EImageEncoding::Linear;
+    }
 
   private:
     void               loadPersistentSettings();

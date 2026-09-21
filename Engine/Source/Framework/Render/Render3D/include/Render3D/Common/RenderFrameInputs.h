@@ -83,25 +83,32 @@ struct ViewComposeInput
 /// must call `acquirePresentFrame` before `RenderDeviceState::record` and
 /// `submitPresentFrame` after. The renderer does not acquire or present.
 /// `imageIndex < 0` means this surface is not presenting this frame.
+///
+/// What the window starts from is a host fact, not something the renderer may
+/// infer: an editor authoring View is a display root by compose structure
+/// (`composeOntoViewId == 0`) and is still not what the window shows, because
+/// the editor's chrome samples it inside a viewport widget. The host says which
+/// of the two this frame is.
+enum class ESurfaceBackdrop : uint8_t
+{
+    /// The window is the View's display image this frame published. The
+    /// renderer resolves that image inside `record`, where it exists, together
+    /// with the encoding its format cannot express (`FSurfaceImage`).
+    ViewDisplayImage,
+    /// The host's own passes fill the surface; the surface pass contributes its
+    /// clear and nothing else.
+    HostContent,
+};
+
 struct PresentFrameInput
 {
     IRenderSurfaceContext* surface    = nullptr;
     int32_t                imageIndex = -1;
-    /// What the surface shows before the host's own display extensions: the
-    /// published View's display image (true), or nothing but display compose's
-    /// own clear (false) because the host's chrome fills the surface.
-    ///
-    /// This is the host's declaration, not something the renderer may infer.
-    /// An editor authoring View is a display root by compose structure
-    /// (`composeOntoViewId == 0`) and is still not what the window shows: the
-    /// editor's chrome widget samples it, so copying it across the surface
-    /// first would overwrite the whole window and be overwritten in turn.
-    /// Defaulting to true keeps a host that says nothing on the plain path: the
-    /// surface shows the View. The host's answer is
-    /// `App::presentsViewDisplayImage`, which asks the modules whether one of
-    /// them fills the surface. See plan
+    /// Defaults to the plain path: a host that says nothing gets the window
+    /// showing the View. The host's answer is `App::presentsViewDisplayImage`,
+    /// which asks the modules whether one of them fills the surface. See plan
     /// `.agent/plan/display-compose-encoding/plan.md` (F2).
-    bool bCopyViewDisplayImage = true;
+    ESurfaceBackdrop backdrop = ESurfaceBackdrop::ViewDisplayImage;
 };
 
 /// Sealed host frame value consumed by `RenderDeviceState::record`.

@@ -1,6 +1,6 @@
 {
   "plan": "display-compose-encoding",
-  "status": "f1_and_f2_landed",
+  "status": "f1_f2_f3_landed",
   "commits": {
     "rename_only": "57c55862",
     "f1_code": "4a78b5fd",
@@ -80,7 +80,29 @@
       "phase": "F2",
       "status": "verified",
       "evidence": [
-        "PresentationGraphService members renamed to _displayImageCopy / _displayImageCopyBindings, descriptor pool label Presentation_DisplayCopy_DSP; the pipeline is a pass-through sampled copy, not a tonemap"
+        "PresentationGraphService members renamed to _displayImageCopy / _displayImageCopyBindings, descriptor pool label Presentation_DisplayCopy_DSP (all removed in F3, when the pipeline left the service)"
+      ]
+    },
+    {
+      "id": "no_pipeline_in_the_surface_pass",
+      "phase": "F3",
+      "status": "verified",
+      "evidence": [
+        "PresentationGraphService no longer includes BasicPostprocessing.h or PostProcessingState.h and holds no pipeline, state, or descriptor pool: it imports the swapchain image, clears, records the host's content and capture",
+        "the backdrop is drawn through ISurfaceBackdropWriter (declared in SurfaceImage.h); the implementation is SurfaceWritePass, a renderer-side pass that reuses BasicPostprocessing in passThrough with no new shader",
+        "a first attempt added a SurfaceResample shader and pipeline class and was removed: the surface write is a postprocess-shaped job, and a second pipeline type is just another place a grading stage can be reintroduced"
+      ]
+    },
+    {
+      "id": "surface_write_pairing_is_a_typed_gate",
+      "phase": "F3",
+      "status": "verified",
+      "evidence": [
+        "FSurfaceImage carries EImageEncoding (Linear / DisplayEncoded) next to the image, so the one fact a format cannot express travels with it",
+        "findSurfaceImageMismatch refuses exactly one of the four pairings -- DisplayEncoded into a surface whose format encodes on write (sRGB) -- and reports it as an error instead of drawing; the pass still runs so the host's content is unaffected",
+        "Linear into sRGB is the hardware-encoding path and is accepted, not treated as an error",
+        "RenderDeviceState::getViewDisplayImage labels the raw-color fallback Linear rather than guessing DisplayEncoded",
+        "SurfaceImageTest locks the four pairings and that isSRGB is the gate's only input"
       ]
     },
     {

@@ -133,6 +133,16 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     [[nodiscard]] bool           isGradingEnabled() const override { return _postProcessStage.isGradingEnabled(); }
     [[nodiscard]] EFormat::T     getPostprocessColorFormat() const override { return POSTPROCESS_COLOR_FORMAT; }
+    /// The finalize pass's gamma stage is what makes a linear render target a
+    /// display image, so the encoding of this pipeline's display image is
+    /// exactly that switch. The looks it grades (tonemap, bloom, grain) do not
+    /// matter here: they are in the same image either way, and the surface takes
+    /// the image as it found it.
+    [[nodiscard]] EImageEncoding getDisplayImageEncoding() const override
+    {
+        return getPostProcessSettings().bEnableGammaCorrection ? EImageEncoding::DisplayEncoded
+                                                               : EImageEncoding::Linear;
+    }
     [[nodiscard]] ShadowSettings getCurrentShadowSettings() const;
     void                         requestShadowSettings(const ShadowSettings& shadowSettings);
     [[nodiscard]] PostProcessingState getPostProcessSettings() const;

@@ -112,8 +112,7 @@ struct IRuntimeModule
     ///
     /// A query rather than a switch the module flips, so there is no frame
     /// where the answer and what gets recorded can disagree. See
-    /// `App::presentsViewDisplayImage` and
-    /// `PresentFrameInput::bCopyViewDisplayImage`.
+    /// `App::presentsViewDisplayImage` and `ESurfaceBackdrop`.
     [[nodiscard]] virtual bool fillsPrimarySurface() const { return false; }
 };
 

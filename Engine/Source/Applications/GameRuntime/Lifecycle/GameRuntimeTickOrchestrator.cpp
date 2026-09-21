@@ -530,11 +530,12 @@ RecordedFrame GameRuntimeTickOrchestrator::recordFrame(App&                    a
             .surface    = presentFrame.surface,
             .imageIndex = presentFrame.imageIndex,
             // What the window shows is a host fact, so the host declares it
-            // rather than leaving display compose to infer it from a View's
+            // rather than leaving the surface pass to infer it from a View's
             // compose structure. The module that fills the surface (the editor
             // chrome) is what answers; a standalone runtime has none, so the
             // surface is the View.
-            .bCopyViewDisplayImage = app.presentsViewDisplayImage(),
+            .backdrop = app.presentsViewDisplayImage() ? ESurfaceBackdrop::ViewDisplayImage
+                                                       : ESurfaceBackdrop::HostContent,
         },
         .recordExtensions = &app,
     });

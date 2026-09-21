@@ -146,7 +146,7 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     //                    running the host's display stages inside it. The
     //                    surface's backdrop is the host's declaration: a View
     //                    display image, or only the pass clear when the host's
-    //                    chrome fills the surface (plan.present).
+    //                    content fills the surface (plan.present).
     //   capture        → the host's appendDisplayCapture, inside display
     //                    compose (automation screenshots)
     //
@@ -231,10 +231,15 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     if (plan.recordExtensions) {
         plan.recordExtensions->recordViewCompose(*cmdBuf, plan.frame.deltaTime);
     }
-    _presentationGraphService.recordDisplayCompose(plan.present.bCopyViewDisplayImage,
-                                                   plan.frame.deltaTime,
-                                                   plan.recordExtensions,
-                                                   cmdBuf.get());
+    if (RenderSubmission* submission = _submissions.get(plan.frame.flightIndex)) {
+        _presentationGraphService.recordDisplayCompose(
+            plan.present.backdrop == ESurfaceBackdrop::ViewDisplayImage ? getViewDisplayImage()
+                                                                        : FSurfaceImage{},
+            *submission,
+            plan.frame.deltaTime,
+            plan.recordExtensions,
+            cmdBuf.get());
+    }
 
     const uint32_t flightIndex = plan.frame.flightIndex;
     retainPublishedViewOutputs(flightIndex, cmdBuf.get());
@@ -325,6 +330,32 @@ std::shared_ptr<RenderTexture> RenderDeviceState::getViewDisplayImageShared() co
         }
     }
     return nullptr;
+}
+
+FSurfaceImage RenderDeviceState::getViewDisplayImage() const
+{
+    const RenderViewOutput* output = publishedViewOutput();
+    if (!output) {
+        return {};
+    }
+    auto image = output->displayImage();
+    if (!image) {
+        return {};
+    }
+
+    // `displayImage()` falls back to the raw colour attachment when the finalize
+    // output is absent, and that image is the renderer's linear colour rather
+    // than a display image. Naming it as linear is the difference between the
+    // surface reporting the mismatch and the window quietly going dark.
+    if (!output->display) {
+        return FSurfaceImage{.image = std::move(image), .encoding = EImageEncoding::Linear};
+    }
+
+    EImageEncoding encoding = EImageEncoding::DisplayEncoded;
+    if (auto* pipeline = _pipelineCoordinator.getActivePipeline()) {
+        encoding = pipeline->getDisplayImageEncoding();
+    }
+    return FSurfaceImage{.image = std::move(image), .encoding = encoding};
 }
 
 const RenderViewOutput* RenderDeviceState::publishedViewOutput() const
