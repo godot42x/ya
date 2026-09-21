@@ -54,7 +54,10 @@ struct IRenderPipelineDebugOutputs
     [[nodiscard]] virtual std::shared_ptr<RenderTexture> getEntityIdImageShared() const { return nullptr; }
     [[nodiscard]] virtual std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const = 0;
     [[nodiscard]] virtual std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const = 0;
-    [[nodiscard]] virtual bool isPostprocessingEnabled() const = 0;
+    /// Whether the view's postprocessing GRADES the image. Not whether the
+    /// postprocess pass runs: the finalize pass always runs, because it is what
+    /// encodes the linear view color into a display image.
+    [[nodiscard]] virtual bool isGradingEnabled() const = 0;
     /// Color format of the postprocess output image (stable pipeline config;
     /// queryable before the world graph creates the actual image).
     [[nodiscard]] virtual EFormat::T getPostprocessColorFormat() const = 0;

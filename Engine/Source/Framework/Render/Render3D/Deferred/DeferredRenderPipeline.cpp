@@ -1258,7 +1258,12 @@ RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     const auto postprocess = graphResources.textures.postprocessOutput.has_value()
         ? result.getExportedTextureShared(makeViewGraphName(PostProcessingStage::kOutputExportName, viewId))
         : nullptr;
-    output.display = postprocess ? postprocess : output.color;
+    // The display image is the finalize output, always: finalize is the pass
+    // that encodes the renderer's linear color, so it runs every frame and the
+    // display image never falls back to the raw color attachment. A fallback
+    // here is what let a presentation pass rescue an unencoded image by grading
+    // it itself, which double-graded the normal path.
+    output.display = postprocess;
     if (output.color) {
         output.desc.colorFormat = output.color->getFormat();
         if (!output.desc.hasExtent()) {

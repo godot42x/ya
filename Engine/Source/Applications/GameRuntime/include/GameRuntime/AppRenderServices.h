@@ -63,7 +63,7 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] bool                                   isShadowMappingEnabled() const;
     [[nodiscard]] std::shared_ptr<ImageResource>         getShadowDirectionalDepthResource() const;
     [[nodiscard]] std::shared_ptr<ImageResource>         getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const;
-    [[nodiscard]] bool                                   isPostprocessingEnabled() const;
+    [[nodiscard]] bool                                   isGradingEnabled() const;
     [[nodiscard]] const HostViewState&                   getHostViewState() const;
 
   private:

@@ -131,7 +131,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] std::shared_ptr<RenderTexture> getEntityIdImageShared() const override { return _viewResources.entityIdOwner; }
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
-    [[nodiscard]] bool           isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
+    [[nodiscard]] bool           isGradingEnabled() const override { return _postProcessStage.isGradingEnabled(); }
     [[nodiscard]] EFormat::T     getPostprocessColorFormat() const override { return POSTPROCESS_COLOR_FORMAT; }
     [[nodiscard]] ShadowSettings getCurrentShadowSettings() const;
     void                         requestShadowSettings(const ShadowSettings& shadowSettings);

@@ -98,9 +98,9 @@ std::shared_ptr<ImageResource> AppRenderServices::getShadowPointFaceDepthResourc
              : nullptr;
 }
 
-bool AppRenderServices::isPostprocessingEnabled() const
+bool AppRenderServices::isGradingEnabled() const
 {
-    return _state && _state->device && _state->device->isPostprocessingEnabled();
+    return _state && _state->device && _state->device->isGradingEnabled();
 }
 
 const HostViewState& AppRenderServices::getHostViewState() const

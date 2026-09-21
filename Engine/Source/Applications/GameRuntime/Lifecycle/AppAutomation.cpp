@@ -503,7 +503,7 @@ bool hasTickAutomationConfig(const AppAutomationOptions& automation)
 void applyPostprocessAutomationOverrides(PostProcessingStage& stage, const AppAutomationPostProcessOverrides& overrides)
 {
     if (overrides.enabled.has_value()) {
-        stage.setEnabled(*overrides.enabled);
+        stage.setGradingEnabled(*overrides.enabled);
     }
     if (overrides.bloomEnabled.has_value()) {
         stage.setBloomEnabled(*overrides.bloomEnabled);

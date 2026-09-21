@@ -385,17 +385,13 @@ void RenderDeviceState::retainPublishedViewOutputs(uint32_t flightIndex, IComman
 
 EFormat::T RenderDeviceState::getViewDisplayImageFormat() const
 {
-    // Mirrors getViewDisplayImageShared(): post-process output when
-    // postprocessing runs, else the raw viewport image. Both formats are
-    // pipeline-configured and stable, so they are known before the world graph
-    // creates the actual images (first-frame Render2D pipeline prep).
-    if (auto* pipeline = _pipelineCoordinator.getSelectedForwardPipeline()) {
-        return pipeline->isPostprocessingEnabled() ? pipeline->getPostprocessColorFormat()
-                                                   : pipeline->getViewColorFormat();
-    }
-    if (auto* pipeline = _pipelineCoordinator.getSelectedDeferredPipeline()) {
-        return pipeline->isPostprocessingEnabled() ? pipeline->getPostprocessColorFormat()
-                                                   : pipeline->getViewColorFormat();
+    // Mirrors getViewDisplayImageShared(): the display image is always the
+    // finalize output, so its format is the pipeline's postprocess format and
+    // never the raw view color format. Pipeline-configured and stable, so it is
+    // known before the world graph creates the actual image (first-frame
+    // Render2D pipeline prep).
+    if (auto* pipeline = _pipelineCoordinator.getActivePipeline()) {
+        return pipeline->getPostprocessColorFormat();
     }
     return EFormat::Undefined;
 }

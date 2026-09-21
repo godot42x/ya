@@ -140,7 +140,7 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
                                                        Extent2D        inputExtent,
                                                        FrameContext*   ctx)
 {
-    if (!bEnabled || !_postProcessor || !input.isValid() || inputExtent.width == 0 || inputExtent.height == 0) {
+    if (!_postProcessor || !input.isValid() || inputExtent.width == 0 || inputExtent.height == 0) {
         clearPreparedResources();
         return {};
     }
@@ -148,6 +148,8 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
     clearPreparedResources();
 
     const auto compositeInput = appendBloomGraphPasses(graph, input, inputExtent, ctx);
+    // Finalize is unconditional: it is the pass that makes the View's color a
+    // display image, so it runs whether or not grading is on.
     return appendFinalizeGraphPasses(graph, FinalizePassParams{
                                                 .input         = compositeInput.isValid() ? compositeInput : input,
                                                 .inputExtent   = inputExtent,
@@ -166,11 +168,14 @@ RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph
 {
     (void)ctx;
     clearPreparedResources();
-    if (!bEnabled || !input.isValid() || inputExtent.width == 0 || inputExtent.height == 0) {
+    if (!input.isValid() || inputExtent.width == 0 || inputExtent.height == 0) {
         return {};
     }
 
-    if (_state.bEnableBloom && _bloomProcessor) {
+    // Bloom is grading, and it is the only stage here that is allowed to be
+    // skipped: with grading off there is no bloom, so the input passes through
+    // as itself rather than as an invalid handle.
+    if (bGradingEnabled && _state.bEnableBloom && _bloomProcessor) {
         return _bloomProcessor->appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
             .sceneHandle  = input,
             .renderExtent = inputExtent,
@@ -185,9 +190,13 @@ RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph
 
 RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& graph, const FinalizePassParams& params)
 {
-    if (!bEnabled || !_postProcessor || !params.input.isValid() || params.inputExtent.width == 0 || params.inputExtent.height == 0) {
+    if (!_postProcessor || !params.input.isValid() || params.inputExtent.width == 0 || params.inputExtent.height == 0) {
         return {};
     }
+
+    // The state the finalize pass runs with: the configured grading when it is
+    // on, and "no look changes, keep the display encoding" when it is off.
+    const PostProcessingState grading = bGradingEnabled ? _state : _state.withoutGrading();
 
     const auto output = params.output.isValid()
                             ? params.output
@@ -215,7 +224,7 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& grap
                 }},
             });
         },
-        [this, input = params.input, inputExtent = params.inputExtent, bOutputIsSRGB = params.bOutputIsSRGB, state = &_state, postContext = params.postContext, viewId = params.viewId, toneMap = params.toneMap](RGRenderContext& rgCtx) {
+        [this, input = params.input, inputExtent = params.inputExtent, bOutputIsSRGB = params.bOutputIsSRGB, grading, postContext = params.postContext, viewId = params.viewId, toneMap = params.toneMap](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
@@ -228,7 +237,7 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& grap
                 .inputImageView = compositeInputImage->getImageView(),
                 .renderExtent   = inputExtent,
                 .bOutputIsSRGB  = bOutputIsSRGB,
-                .state          = state,
+                .state          = &grading,
                 .viewId         = viewId,
                 .toneMap        = toneMap,
             });

@@ -167,7 +167,7 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// `flightIndex`. `displayViewId == 0` clears it. Called once per recorded
     /// tick by the coordinator, from the plan's display root.
     void publishViewOutputIdentity(uint32_t flightIndex, SceneViewId displayViewId);
-    [[nodiscard]] bool     isPostprocessingEnabled() const;
+    [[nodiscard]] bool     isGradingEnabled() const;
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
     [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _pipelineCoordinator.getRenderPipeline(); }
     [[nodiscard]] ERenderPipeline getPendingRenderPipeline() const { return _pipelineCoordinator.getPendingRenderPipeline(); }

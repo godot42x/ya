@@ -41,7 +41,11 @@ struct PostProcessingStage
 
     IRender*                    _render             = nullptr;
     EFormat::T                  _colorFormat        = EFormat::R8G8B8A8_UNORM;
-    bool                        bEnabled            = true;
+    /// Whether grading runs. NOT whether the pass runs: the finalize pass is
+    /// what turns the renderer's linear color into a display image, so it runs
+    /// every frame, and this flag only decides whether the look-changing stages
+    /// (inversion / grayscale / kernel / tonemap / grain / bloom) apply.
+    bool                        bGradingEnabled     = true;
     PostProcessingState         _state              = {};
     stdptr<BloomPostprocessing> _bloomProcessor     = nullptr;
     stdptr<BasicPostprocessing> _postProcessor      = nullptr;
@@ -50,7 +54,7 @@ struct PostProcessingStage
     void     init(const InitDesc& desc);
     void     shutdown();
     void     beginFrame();
-    void     setEnabled(bool enabled) { bEnabled = enabled; }
+    void     setGradingEnabled(bool enabled) { bGradingEnabled = enabled; }
     void     setBloomEnabled(bool enabled) { _state.bEnableBloom = enabled; }
     void     setToneMappingEnabled(bool enabled) { _state.bEnableToneMapping = enabled; }
     void     setToneMappingCurve(PostProcessingState::EToneMappingCurve curve) { _state.toneMappingCurve = curve; }
@@ -75,7 +79,7 @@ struct PostProcessingStage
                                       FrameContext*   ctx);
     void     capturePreparedResources(const RenderGraphExecutionResult& result, uint64_t viewId = 0);
     void     clearPreparedResources();
-    [[nodiscard]] bool                       isEnabled() const { return bEnabled; }
+    [[nodiscard]] bool                       isGradingEnabled() const { return bGradingEnabled; }
     [[nodiscard]] stdptr<RenderTexture>      getBloomExtractImageShared() const { return _bloomProcessor ? _bloomProcessor->getExtractImageShared() : nullptr; }
     [[nodiscard]] stdptr<RenderTexture>      getBloomBlurImageShared() const { return _bloomProcessor ? _bloomProcessor->getBlurImageShared() : nullptr; }
     [[nodiscard]] stdptr<RenderTexture>      getBloomCompositeImageShared() const { return _bloomProcessor ? _bloomProcessor->getCompositeImageShared() : nullptr; }

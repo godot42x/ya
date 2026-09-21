@@ -204,7 +204,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     bool           isShadowMappingEnabled() const override;
     std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
     std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
-    bool     isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
+    bool     isGradingEnabled() const override { return _postProcessStage.isGradingEnabled(); }
     [[nodiscard]] EFormat::T getPostprocessColorFormat() const override { return POSTPROCESS_COLOR_FORMAT; }
 
   private:

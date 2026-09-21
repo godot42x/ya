@@ -36,6 +36,15 @@ RGImportedTextureDesc makePresentationImportedTextureDesc(const RenderTexture& i
     return desc;
 }
 
+/// Display compose copies a display-ready image onto the swapchain, so it runs
+/// the postprocessor in its pass-through configuration: every grading stage off.
+/// The input is a View's display image, which the finalize pass already gave its
+/// output encoding and the view's grading. Grading it again here is the
+/// double-grade this constant replaced: the windowed image used to receive an
+/// ACES curve plus a second gamma on top of the view's own finalize, while the
+/// editor viewport (which samples the display image directly) received one.
+const PostProcessingState kDisplayComposeState = PostProcessingState::passThrough();
+
 } // namespace
 
 void PresentationGraphService::init(const InitDesc& desc)
@@ -112,7 +121,6 @@ void PresentationGraphService::shutdown()
     }
     _presentationGraphExecutors.clear();
     _presentationImages.clear();
-    _presentationPostProcessState = {};
     _viewportDisplayImageProvider = {};
     _present = nullptr;
     _render  = nullptr;
@@ -244,7 +252,7 @@ void PresentationGraphService::recordDisplayCompose(float                     de
                     .inputImageView = sourceImage->getImageView(),
                     .renderExtent   = presentationExtent,
                     .bOutputIsSRGB  = EFormat::isSRGB(getSwapchain() ? getSwapchain()->getFormat() : EFormat::Undefined),
-                    .state          = &_presentationPostProcessState,
+                    .state          = &kDisplayComposeState,
                     .toneMap        = _presentationToneMap,
                 });
             }

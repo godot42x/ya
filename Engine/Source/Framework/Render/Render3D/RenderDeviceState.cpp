@@ -141,10 +141,10 @@ std::shared_ptr<RenderTexture> RenderDeviceState::getPresentationImageShared() c
     return _presentationGraphService.getCurrentPresentationImageShared();
 }
 
-bool RenderDeviceState::isPostprocessingEnabled() const
+bool RenderDeviceState::isGradingEnabled() const
 {
     if (auto* pipeline = getActivePipeline()) {
-        return pipeline->isPostprocessingEnabled();
+        return pipeline->isGradingEnabled();
     }
     return false;
 }
@@ -160,7 +160,7 @@ RenderPipelineDebugOutputCatalog RenderDeviceState::buildPipelineDebugOutputCata
     catalog.bShadowMappingEnabled   = pipeline->isShadowMappingEnabled();
     catalog.shadowDirectionalDepthResource = pipeline->getShadowDirectionalDepthResource();
     catalog.viewDepthImageOwner = nullptr;
-    catalog.bPostprocessingEnabled = pipeline->isPostprocessingEnabled();
+    catalog.bPostprocessingEnabled = pipeline->isGradingEnabled();
 
     if (const auto* output = publishedViewOutput()) {
         catalog.viewOutputImageOwner    = output->color;

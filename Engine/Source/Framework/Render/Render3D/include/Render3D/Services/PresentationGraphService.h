@@ -72,7 +72,6 @@ struct YA_RENDER_3D_API PresentationGraphService
     std::vector<std::unique_ptr<RenderGraphExecutor>> _presentationGraphExecutors;
     std::vector<std::shared_ptr<RenderTexture>>       _presentationImages;
     stdptr<BasicPostprocessing>                       _presentationPostProcessor = nullptr;
-    PostProcessingState                               _presentationPostProcessState{};
     // Surface-owned input set for the swapchain blit. View tone-map sets live
     // on ViewResources; this pass is display compose, not a View.
     stdptr<IDescriptorPool>                           _presentationInputPool;
