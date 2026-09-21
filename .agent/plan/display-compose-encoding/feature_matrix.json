@@ -1,6 +1,13 @@
 {
   "plan": "display-compose-encoding",
-  "status": "f1_landed_in_3a4144d4",
+  "status": "f1_landed_as_its_own_commit",
+  "commits": {
+    "rename_only": "57c55862",
+    "f1_code": "4a78b5fd",
+    "gate_and_plan": "f1ebdf4c",
+    "split_proof": "git diff 4a78b5fd 3a4144d4 is empty; git diff backup/main-pre-f1-split main is empty",
+    "backup": "backup/main-pre-f1-split"
+  },
   "features": [
     {
       "id": "display_image_is_always_finalize_output",
