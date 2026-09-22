@@ -32,6 +32,17 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-22 AB8-step2：`HostViewState` 拆成设置与排布。`HostViewState.h` →
+  `HostRenderSettings.h`（只剩 `clock` / `renderResolution` / `renderScale`）；新增
+  `GameRuntime/HostViewportView.h` 的 `HostViewportView{viewId, flightIndex, view, projection,
+  cameraPos}`，由 `tickRender` 从 plan 的 display root **一次写入**，`declareViews` 不再写 host state。
+  编辑器（`EditorViewportCompositor` / `makeEditorSurfaceContext` / `EditorLayer::pickEntity`）与
+  automation 改读该排布值。自我修正：上一版计划说「需先定 PIE 相机归属」是错的——保持今天行为
+  即逐字节等价，那个问题现在是独立的产品选择，不再阻塞。验证：4 个目标 build ok；
+  `ya-render-3d-test` 177/177；滤镜 681 passed / 11 skipped / 6 failed（与基线同 6 个）；parity PASS
+  （md5 `c775245a…`）；编辑器 smoke exit=0。下一刀：AB7（把整帧录制编排搬到应用侧
+  `RuntimeRenderContext`），开刀前先给 `AppAutomation` 一个 typed 入口替掉它对
+  `_pipelineCoordinator` 私有布局的访问。
 - 2026-09-22 AB8-step1：帧的 View 事实只从计划里读一次。`RenderDeviceState::_pipelineViewRect`
   与 `applyViewResize()` 删除，`PipelineCoordinator::applyPendingChanges(Rect2D viewRect)` 收本帧
   View rect（来自 plan 的 display root），自己只持有 `_appliedViewRect`；`reapplyViewRectSink` 删除；

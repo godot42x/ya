@@ -42,7 +42,7 @@
     {
       "id": "frame_view_facts_have_one_source",
       "phase": "AB8",
-      "status": "step1_landed_view_rect_and_host_viewport_identity",
+      "status": "step1_and_step2_landed",
       "evidence": [
         "step1 landed: RenderDeviceState::_pipelineViewRect and public applyViewResize() deleted; PipelineCoordinator::applyPendingChanges(Rect2D viewRect) takes the frame's View rect from the plan's display root as an input, and keeps only its own _appliedViewRect (what it last sized its pipelines to, not a copy of a View declaration)",
         "step1 landed: InitDesc.reapplyViewRectSink (a capturing std::function) deleted; applyPendingRenderPipelineSwitch() returns whether it rebuilt, which is what tells the caller the rect must be re-applied",
@@ -52,7 +52,11 @@
         "step1 landed: automation's three screenshot images are named at the call site (postprocess only when display != color, else the View's color is the image); get_world_view_state reads the host View's desc.extent; the editor's camera aspect and canvas target read getHostViewportOutput()->desc.extent",
         "step1 landed: two dead duplicates removed -- prepareFrameRecord's conditional UI-compose prepare (it read the PREVIOUS frame's published display image just to learn a format prepareComposePipelines above it already had from the pipeline) and record()'s three trailing retain() calls (retainPublishedViewOutputs already keeps every live View's display/color/depth/entityId)",
         "step1 recorded, not hidden: the binding is written before record(), so a frame that is not recorded at all (acquire failed / minimized) leaves the binding pointing at the flight this frame intended, where the old code kept the previous frame's identity. With flightFrameSize = 1 the flight is always 0 and both read the last recording; with more flights this needs re-examination",
-        "step2 open: HostViewState still carries view/projection/cameraPos (a copy of a SceneViewDesc) next to clock/renderResolution/renderScale. Splitting it needs a product decision first -- which camera the editor's viewport overlay/picking should use under PIE (today it is the host copy, i.e. the game camera; using the editor camera is a behaviour change)"
+        "step2 landed: HostViewState.h became HostRenderSettings.h and the struct keeps only clock/renderResolution/renderScale; the three camera fields are gone",
+        "step2 landed: new GameRuntime/HostViewportView.h holds HostViewportView{viewId, flightIndex, view, projection, cameraPos} -- the View the host window shows plus its camera. tickRender writes the whole value once from the plan's display root; declareViews no longer writes any host state (the bHostViewportDeclared loop and the identity fallback branch are deleted)",
+        "step2 landed: the editor and automation read the arrangement instead of a settings-shaped struct -- EditorViewportCompositor::compose/composeWorldFallback/composeWorldFromScene, makeEditorSurfaceContext and EditorLayer::pickEntity take const HostViewportView&; get_world_view_state's camera_pos reads it; AppRenderServices::getHostViewState became getHostRenderSettings plus getHostViewportView",
+        "step2 correction recorded: the earlier plan text said step 2 needed a product decision first (which camera PIE overlay/picking should use). That was wrong -- keeping today's behaviour (the display root's camera, i.e. the game camera under PIE) is byte-identical, and the point of the step was removing the duplicate, not changing the camera. The remaining product question (should PIE overlay/picking follow the game camera) is now a single field on HostViewportView and is recorded as independent, not blocking",
+        "step2 kept for later: the function name prepareHostViewState still says HostViewState although it now writes HostRenderSettings::clock; a pure rename, left to the naming batch"
       ]
     },
     {

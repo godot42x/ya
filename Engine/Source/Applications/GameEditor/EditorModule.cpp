@@ -542,7 +542,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                                     commandBuffer,
                                     snapshot,
                                     *_layer,
-                                    app.getRenderServices().getHostViewState(),
+                                    app.getRenderServices().getHostViewportView(),
                                     canvasTargetExtent);
         // Keep the last valid frame instead of clobbering the display with a
         // transiently null output (startup / mode-switch / resize gaps).
@@ -604,7 +604,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         const FEditorSurfaceContext surfaceContext = makeEditorSurfaceContext(
             app,
             *surface,
-            app.getRenderServices().getHostViewState());
+            app.getRenderServices().getHostViewportView());
         session->tick(surfaceContext, dt);
         const UIFrameSnapshot& snapshot = session->snapshot();
         const Extent2D targetExtent = surface->getSwapchain()

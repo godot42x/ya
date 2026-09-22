@@ -40,25 +40,25 @@ bool AppRenderServices::wasSceneRenderedLastTick(const Scene* scene) const
 void AppRenderServices::setRenderScale(float scale)
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->hostView.renderScale = scale;
+    _state->hostSettings.renderScale = scale;
 }
 
 float AppRenderServices::getRenderScale() const
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    return _state->hostView.renderScale;
+    return _state->hostSettings.renderScale;
 }
 
 void AppRenderServices::setRenderResolution(Extent2D resolution)
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->hostView.renderResolution = resolution;
+    _state->hostSettings.renderResolution = resolution;
 }
 
 Extent2D AppRenderServices::getRenderResolution() const
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    return _state->hostView.renderResolution;
+    return _state->hostSettings.renderResolution;
 }
 
 ShadowSettings& AppRenderServices::getShadowSettings()
@@ -95,10 +95,16 @@ bool AppRenderServices::isGradingEnabled() const
     return _state && _state->device && _state->device->isGradingEnabled();
 }
 
-const HostViewState& AppRenderServices::getHostViewState() const
+const HostRenderSettings& AppRenderServices::getHostRenderSettings() const
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    return _state->hostView;
+    return _state->hostSettings;
+}
+
+const HostViewportView& AppRenderServices::getHostViewportView() const
+{
+    YA_CORE_ASSERT(_state, "Render services are not available");
+    return _state->hostViewport;
 }
 
 bool AppRenderServices::hasRenderer() const

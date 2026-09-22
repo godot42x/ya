@@ -131,7 +131,7 @@ AB4-step2（待做）：让**额外的 OS 窗口走同一条路**。现状：额
 AB4-step3（待做）：`PresentationGraphService` 只保留「把 ready image 写进 surface」+ 宿主
 display stage 的顺序；acquire / submit / present 的编排留在应用。
 
-### AB8 — 同一事实只有一个来源：帧的 View 事实（step 1 已落地，step 2 待做）
+### AB8 — 同一事实只有一个来源：帧的 View 事实（step 1 + step 2 已落地）
 
 唯一目标：**「这一帧的 View 有多大、宿主窗口显示哪个 View」只从计划里读一次**，
 不再有「设置里抄一份、设备里记一份、应用再推一份」。
@@ -166,11 +166,24 @@ AB8-step1（已落地）：
   postprocess format 做过同一件事）；以及 `record()` 结尾三个 `retain(...)`——
   `retainPublishedViewOutputs()` 已经保活了每个 live view 的 display/color/depth/entityId。
 
-AB8-step2（待做）：**`HostViewState` 拆成设置与排布**。现状它同时装着
-`clock/renderResolution/renderScale`（设置）与 `view/projection/cameraPos`（某个
-`SceneViewDesc` 的副本）。目标是 `HostRenderSettings{clock, renderResolution, renderScale}`
-加应用侧排布里的 View 相机；编辑器与 automation 读排布，而不是读一个看起来像设置的 struct。
-这一步需要先定一件事：**PIE 下编辑器视口 overlay / picking 该用哪个相机**（今天用的是宿主副本
+= 游戏相机；直接用编辑器相机是行为变更），所以它是一个需要拍板的设计点，不是机械搬迁。
+AB8-step2（已落地）：**`HostViewState` 拆成设置与排布**。
+
+- `HostViewState.h` → `HostRenderSettings.h`，struct 只剩 `clock` / `renderResolution` /
+  `renderScale`（设置），三个相机字段删除。
+- 新增 `GameRuntime/HostViewportView.h`：`HostViewportView{viewId, flightIndex, view,
+  projection, cameraPos}`，即「宿主窗口显示的那个 View 及其相机」，与原 `HostViewportBinding`
+  合并成一个值。写在 `tickRender`，**一个写者、一次写入**，来源是 plan 的 display root；
+  `declareViews` 因此不再写任何 host state（它只声明与提交）。
+- 编辑器与 automation 改读这个排布值：`EditorViewportCompositor::compose`、
+  `makeEditorSurfaceContext`、`EditorLayer::pickEntity` 的入参从 `const HostViewState&` 变成
+  `const HostViewportView&`；`get_world_view_state` 的 `camera_pos` 读它。
+
+**修正上一版的一处判断**：这里原本写着「必须先决定 PIE 下 overlay/picking 用哪个相机」。
+不需要——保持今天是宿主 display root 的相机（PIE 下即游戏相机）就是逐字节等价的行为，
+而本轮的目标是消除「设置里抄一份 View 声明」，不是改变用哪个相机。剩下的产品问题是另一个
+问题：**PIE 下编辑器视口的 overlay/picking 该不该跟着游戏相机**（今天跟，另一种答案是跟
+编辑器相机）。它在 `HostViewportView` 落地后才是一个可以单独讨论的选择，而不是这次搬迁的前提。
 = 游戏相机；直接用编辑器相机是行为变更），所以它是一个需要拍板的设计点，不是机械搬迁。
 
 ### AB5 — 命名对齐语义（待做，必须在 AB3/AB4 之后）

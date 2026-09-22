@@ -1,6 +1,7 @@
 #pragma once
 
-#include "GameRuntime/HostViewState.h"
+#include "GameRuntime/HostRenderSettings.h"
+#include "GameRuntime/HostViewportView.h"
 #include "Render3D/Common/RenderPipelineSettings.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
@@ -68,7 +69,10 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] std::shared_ptr<ImageResource>         getShadowDirectionalDepthResource() const;
     [[nodiscard]] std::shared_ptr<ImageResource>         getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const;
     [[nodiscard]] bool                                   isGradingEnabled() const;
-    [[nodiscard]] const HostViewState&                   getHostViewState() const;
+    [[nodiscard]] const HostRenderSettings&              getHostRenderSettings() const;
+    /// The View the host window shows for the frame just recorded, with the
+    /// camera it was rendered from. `viewId == 0` means this frame showed none.
+    [[nodiscard]] const HostViewportView&                getHostViewportView() const;
 
     // === The renderer, named on the app's terms ===
     //

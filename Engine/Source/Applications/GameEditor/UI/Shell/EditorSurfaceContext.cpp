@@ -44,7 +44,7 @@ void applyEditorWindowMetrics(WidgetTree& tree, const EditorWindowMetrics& metri
 
 FEditorSurfaceContext makeEditorSurfaceContext(App& app,
                                                IRenderSurfaceContext& surface,
-                                               const HostViewState& hostView)
+                                               const HostViewportView& hostViewport)
 {
     int      windowW = 0;
     int      windowH = 0;
@@ -77,8 +77,8 @@ FEditorSurfaceContext makeEditorSurfaceContext(App& app,
     context.metrics.monitorIndex      = screenPlacement.monitorIndex;
     context.metrics.bMaximized        = screenPlacement.bMaximized;
     context.metrics.bHasScreenOrigin  = screenPlacement.bHasOrigin;
-    context.view                      = hostView.view;
-    context.projection                = hostView.projection;
+    context.view                      = hostViewport.view;
+    context.projection                = hostViewport.projection;
     return context;
 }
 

@@ -1,7 +1,7 @@
 #include "GameRuntime/Lifecycle/GameRuntimeTickOrchestrator.h"
 
 #include "GameRuntime/App.h"
-#include "GameRuntime/HostViewState.h"
+#include "GameRuntime/HostRenderSettings.h"
 #include "GameRuntime/AppRenderState.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
@@ -212,7 +212,7 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
         // nothing about the image).
         // `syncRuntimeCameraAspect` ignores a degenerate extent.
         syncRuntimeCameraAspect(findPrimaryCamera(*app.getSceneServices().getActiveScene()),
-                               app._renderState->hostView.renderResolution);
+                               app._renderState->hostSettings.renderResolution);
     }
 
     {
@@ -264,19 +264,18 @@ void GameRuntimeTickOrchestrator::prepareHostViewState(App& app, float dt)
 {
     (void)dt;
 
-    // The clock is the only host fact this step owns. Geometry and camera belong
-    // to declareViews, which is their single per-tick writer (see
-    // HostViewState.h for the full writer map); resetting them here as well
-    // would make the tick's final value readable only by reading both steps.
-    HostViewState& hostView = app._renderState->hostView;
+    // The clock is the only host fact this step owns; see HostRenderSettings.h
+    // for the writer map. The View the window shows is not host state at all --
+    // it is this frame's arrangement, written once in tickRender from the plan.
+    HostRenderSettings& hostSettings = app._renderState->hostSettings;
     if (!app.getRenderServices().getDeviceState()) {
         // No renderer: there is no host view this tick, not even a clock.
-        hostView = {};
+        hostSettings = {};
         return;
     }
 
-    hostView.clock.hostTick      = App::currentHostTick();
-    hostView.clock.elapsedTimeMS = app.getElapsedTimeMS();
+    hostSettings.clock.hostTick      = App::currentHostTick();
+    hostSettings.clock.elapsedTimeMS = app.getElapsedTimeMS();
 }
 
 uint32_t GameRuntimeTickOrchestrator::resolveFlightIndex(const App& app)
@@ -343,16 +342,22 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 
     TickFrame gameFrame = buildGameRenderFrame(app, dt, flightIndex, sceneRender);
 
-    // The app's arrangement for this frame: which View the host window shows,
-    // and in which flight its output was published. Written once, here, from the
-    // plan -- before the recording below, because the editor's compose and chrome
-    // stages run *inside* it and read this View. The renderer never learns this:
-    // it publishes every View and names none of them "the current one".
+    // The app's arrangement for this frame: which View the host window shows, in
+    // which flight its output is published, and the camera it renders from.
+    // Written once, here, from the plan -- before the recording below, because the
+    // editor's compose and chrome stages run *inside* it and read this View. The
+    // renderer never learns it: it publishes every View and names none of them
+    // "the current one". Which declaration is the host's comes from the same
+    // structural predicate the plan uses for its display root, so a well-known
+    // view id here would be a second definition that can disagree with it.
     {
         const SceneViewTask* displayRoot = sceneRender.displayRootTask();
-        app._renderState->hostViewport = HostViewportBinding{
+        app._renderState->hostViewport = HostViewportView{
             .viewId      = displayRoot ? displayRoot->desc.viewId : 0,
             .flightIndex = flightIndex,
+            .view        = displayRoot ? displayRoot->desc.view : glm::mat4(1.0f),
+            .projection  = displayRoot ? displayRoot->desc.projection : glm::mat4(1.0f),
+            .cameraPos   = displayRoot ? displayRoot->desc.cameraPos : glm::vec3(0.0f),
         };
     }
 
@@ -381,7 +386,7 @@ void GameRuntimeTickOrchestrator::declareViews(App&                  app,
                                                RenderDeviceState*    device,
                                                SceneRenderScheduler& scheduler)
 {
-    HostViewState& hostView = app._renderState->hostView;
+    const HostRenderSettings& hostSettings = app._renderState->hostSettings;
 
     // Declare this tick's views. Every owner declares its own (the game
     // viewport, the editor's authoring viewport, the camera preview), so a view
@@ -391,7 +396,7 @@ void GameRuntimeTickOrchestrator::declareViews(App&                  app,
     auto* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
     const SceneViewCollectContext collectContext{
         .activeScene    = scene,
-        .renderResolution = hostView.renderResolution,
+        .renderResolution = hostSettings.renderResolution,
         .hostTick       = App::_hostTick,
         .deltaTime      = dt,
     };
@@ -407,39 +412,10 @@ void GameRuntimeTickOrchestrator::declareViews(App&                  app,
         (void)scheduler.submit(view);
     }
 
-    // The host viewport's camera is what the host reports as "the world view":
-    // the camera packet and the offscreen extent follow the declaration instead
-    // of an injected copy of it. Which declaration that is comes from the same
-    // structural predicate the plan uses for its display root -- matching a
-    // well-known view id here would be a second definition of "the host view"
-    // that can disagree with it.
-    //
-    // This is the only per-tick writer of the host camera: the View's own rect is
-    // not copied here (it belongs to the declaration, and a reader that wants the
-    // rendered rectangle reads the renderer's published output), and no View
-    // claiming the host viewport this tick means "no host camera" rather than
-    // "keep the previous one".
-    bool bHostViewportDeclared = false;
-    for (const SceneViewDesc& view : collector.views()) {
-        if (!view.isDisplayRoot()) {
-            continue;
-        }
-        hostView.view       = view.view;
-        hostView.projection = view.projection;
-        hostView.cameraPos  = view.cameraPos;
-        // The pipeline's view rect is deliberately NOT pushed at the renderer
-        // here: the plan is the source, and prepareFrameRecord hands the display
-        // root's rect to the pipeline as it records. Pushing it from both places
-        // is how the renderer came to hold a second opinion about a View's
-        // geometry.
-        bHostViewportDeclared = true;
-        break;
-    }
-    if (!bHostViewportDeclared) {
-        hostView.view       = glm::mat4(1.0f);
-        hostView.projection = glm::mat4(1.0f);
-        hostView.cameraPos  = glm::vec3(0.0f);
-    }
+    // This step declares and submits, and adopts nothing: which of these Views
+    // the host window shows, and its camera, is read off the sealed plan once in
+    // tickRender (see the hostViewport assignment there). Adopting it here meant
+    // two writers for one fact, and a reader had to know which of them had run.
 }
 
 ExtractedSceneRender GameRuntimeTickOrchestrator::extractScenes(App&                 app,
@@ -487,7 +463,7 @@ void GameRuntimeTickOrchestrator::prepareViews(App&                  app,
                 .viewFeatures = desc.features,
                 .frameIndex = App::_hostTick,
                 .deltaTime = dt,
-                .elapsedTimeSeconds = app._renderState->hostView.clock.elapsedTimeMS / 1000.0f,
+                .elapsedTimeSeconds = app._renderState->hostSettings.clock.elapsedTimeMS / 1000.0f,
                 .shadowSettings = &app.getRenderServices().getShadowSettings(),
             },
             sceneRender.snapshotFor(task),
@@ -501,7 +477,7 @@ GameRuntimeTickOrchestrator::TickFrame GameRuntimeTickOrchestrator::buildGameRen
     uint32_t                    flightIndex,
     const ExtractedSceneRender& sceneRender)
 {
-    const HostViewState& hostView = app._renderState->hostView;
+    const HostRenderSettings& hostSettings = app._renderState->hostSettings;
 
     TickFrame tickFrame;
     // Frame-level only: which cameras draw and where their outputs go is on
@@ -511,7 +487,7 @@ GameRuntimeTickOrchestrator::TickFrame GameRuntimeTickOrchestrator::buildGameRen
         .flightIndex   = flightIndex,
         .frameIndex    = App::_hostTick,
         .deltaTime     = dt,
-        .renderScale = hostView.renderScale,
+        .renderScale = hostSettings.renderScale,
         .shadowSettings = &app.getRenderServices().getShadowSettings(),
     };
 

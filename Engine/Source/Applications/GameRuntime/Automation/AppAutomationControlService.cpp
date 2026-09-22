@@ -716,8 +716,7 @@ void AppAutomationControlService::handleGetWorldViewState(App& app, const AppAut
     }
 
     const auto& renderServices = app.getRenderServices();
-    const auto& hostView       = renderServices.getHostViewState();
-    const auto* hostViewport   = renderServices.getHostViewportOutput();
+    const auto& hostViewport   = renderServices.getHostViewportView();
     // Two different things, reported separately so neither has to stand in for
     // the other: the resolution the host viewport is asked to render at (a
     // setting), and the extent the renderer actually produced last tick (empty
@@ -726,14 +725,16 @@ void AppAutomationControlService::handleGetWorldViewState(App& app, const AppAut
     // What the renderer actually produced for the host viewport last frame: the
     // app knows which View that is, so it reads that View's output rather than
     // asking the renderer for "the current viewport".
-    const Extent2D renderedExtent = hostViewport ? hostViewport->desc.extent : Extent2D{};
+    const RenderViewOutput* hostViewportOutput = renderServices.getHostViewportOutput();
+    const Extent2D renderedExtent =
+        hostViewportOutput ? hostViewportOutput->desc.extent : Extent2D{};
 
     nlohmann::json result = {
         {"is_stopped", app.isStopped()},
         {"is_runtime", app.isRuntimeMode()},
         {"is_simulation", app.isSimulationMode()},
         {"is_paused", app.isPaused()},
-        {"camera_pos", {hostView.cameraPos.x, hostView.cameraPos.y, hostView.cameraPos.z}},
+        {"camera_pos", {hostViewport.cameraPos.x, hostViewport.cameraPos.y, hostViewport.cameraPos.z}},
         {"render_resolution", {
             {"width", requestedResolution.width},
             {"height", requestedResolution.height},

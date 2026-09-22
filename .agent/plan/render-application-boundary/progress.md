@@ -273,11 +273,68 @@ pipeline 自己的 `getPostprocessColorFormat()`。
 - 未完成：AB8-step2（HostViewState 拆分，需要先定 PIE 相机归属）、AB7（record 编排搬回应用侧）。
 - 偏离：无。parity 与 smoke 与基线逐字节一致。
 
+
+## 2026-09-22 AB8-step2 — HostViewState 拆成设置与排布
+
+step 1 留下的那份重复：`HostViewState` 同时装着 `clock/renderResolution/renderScale`（设置）
+与 `view/projection/cameraPos`（某个 `SceneViewDesc` 的副本），于是「这个 struct 是设置还是
+某一帧的 View」在读到它的时候无从判断。
+
+### 改动
+
+- **文件与 struct 改名**：`HostViewState.h` → `HostRenderSettings.h`，
+  `HostViewState` → `HostRenderSettings`，只剩 `clock` / `renderResolution` / `renderScale`。
+  头注释重写：说明它**只是设置**，以及为什么这么拆（原来一个 struct 里既有设置又有 View 声明的副本）。
+- **新增 `GameRuntime/HostViewportView.h`**：`HostViewportView{viewId, flightIndex, view,
+  projection, cameraPos}`，把上一轮的 `HostViewportBinding{viewId, flightIndex}` 与它需要的相机
+  合成一个值，并加 `isBound()` / `viewProjection()`。
+- **一个写者**：`tickRender` 从 plan 的 display root 一次性写整个值（viewId / flightIndex /
+  view / projection / cameraPos）；`declareViews` 因此**不再写任何 host state**——它现在只做
+  「声明 + submit」，之前那段 `bHostViewportDeclared` 循环与 identity 回退分支整体删除。
+  相机仍来自 plan 的 display root，所以 PIE 下依旧是游戏相机：行为不变。
+- **读者改名**：`EditorViewportCompositor::compose` / `composeWorldFallback` /
+  `composeWorldFromScene`、`makeEditorSurfaceContext`、`EditorLayer::pickEntity` 的参数从
+  `const HostViewState&` 变成 `const HostViewportView&`（`worldComposeDesc` 里的
+  `projection * view` 也改为值上的 `viewProjection()`）；`get_world_view_state` 的 `camera_pos`
+  读排布值；`AppRenderServices::getHostViewState()` → `getHostRenderSettings()` 加
+  `getHostViewportView()`。
+
+### 一处自我修正
+
+上一轮我在计划里写「step 2 需要先决定 PIE 下 overlay/picking 用哪个相机，所以不机械搬迁」。
+**这个判断是错的**：保持今天是宿主 display root 的相机（PIE 下即游戏相机）就是逐字节等价，
+本轮的目标是消除「设置里抄一份 View 声明」，不是换相机。剩下的是一个独立的产品问题——
+**PIE 下编辑器视口的 overlay/picking 该不该跟着游戏相机**——它现在有了明确的落点
+（`HostViewportView` 的一个字段），可以在不牵动其它结构的情况下单独讨论。计划文件已改正。
+
+### 验证证据
+
+- build：`ya-game-runtime` / `ya-runtime` / `ya-game-editor` / `ya-testing` 全部 `build ok`。
+- `xmake r ya-render-3d-test`：**177/177**。
+- `ya-testing` 滤镜：681 passed / 11 skipped / 6 failed，6 个与已登记基线逐项相同。
+- parity：**PASS**，两张截图 md5 均为 `c775245ae636f15b41da8485319a2267`（逐字节同基线）。
+- 编辑器 smoke：**exit=0**，六步全过。
+- 结构性证据：`grep HostViewState Engine/Source` 只剩 `prepareHostViewState` 这个函数名（它写的是
+  clock，函数名可以留）；`hostView.` 字段访问全仓为 0。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：`prepareHostViewState` 这个函数名还用「HostViewState」的说法——它现在写 `HostRenderSettings`
+  的 clock，改名（例如 `updateHostClock`）是纯改名，留到命名批次一起做，不在本轮混入。
+- 未完成：AB3-step2（debug/diagnostics/catalog 的引用面收窄）、AB4-step2/3、AB7。
+- 偏离：无。parity 与 smoke 与基线逐字节一致。
+
 ### 下一刀建议
 
-AB8-step2 优先，但需要先做一个决定：**PIE 下编辑器视口的 overlay / picking 用哪个相机**。
-今天的 `HostViewState.view/projection/cameraPos` 是「宿主窗口显示的那个 View 的相机」的副本
-（编辑器停止态 = 编辑器相机；PIE = 游戏相机）。要删掉这份副本，编辑器必须自己回答这个问题，
-而两种答案的行为不同（PIE 下 overlay/picking 跟着游戏相机 vs 跟着编辑器相机）。这是产品语义，
-不该由我替选。做完 step2 后，AB7（把整帧录制编排搬到应用侧 RuntimeRenderContext）才没有挡路项；
-AB4-step2（额外窗口）是 AB7 的下游。
+AB7 现在是下一刀：帧的 View 事实已经有唯一来源（AB8），renderer 不再持有任何「当前 View」的
+记忆，「这一帧如何组装、如何 present」是最后一块还留在 Framework 的应用职责。开刀前要先处理一项
+已知挡路依赖：`AppAutomation.cpp`（以及控制面里施加 automation override 的地方）直接访问
+`device->_pipelineCoordinator.getSelectedForwardPipeline()`——这是 app 对 renderer 私有布局的依赖，
+拆分时会挡住，先给它一个 typed 入口。
+
+AB4-step2（额外窗口）是 AB7 的下游：额外窗口之所以只能自己 `presentGuiSnapshot`，正是因为
+「这一帧如何组装、如何 present」被写死在 renderer 里。
+
+另有一个独立的产品问题挂着（不阻塞以上任何一步）：**PIE 下编辑器视口的 overlay / picking
+该不该跟着游戏相机**。今天跟（因为读的是宿主 display root 的相机），另一种答案是跟编辑器相机。
+AB8-step2 之后这个选择只剩 `HostViewportView` 的一个字段，可以单独讨论。

@@ -186,7 +186,7 @@ void App::init(AppDesc ci)
     app._renderState->device->init(RenderDeviceState::InitDesc{
         .hostServices = &app,
         .offscreenScheduler = &app.getTaskManager(),
-        .clockState = &app._renderState->hostView.clock,
+        .clockState = &app._renderState->hostSettings.clock,
         // Narrow read-only environment-lighting result provider: Render3D
         // consumes derived-resource handles through this contract instead of
         // locating the processor via the App singleton.
@@ -224,7 +224,7 @@ void App::init(AppDesc ci)
 
         // Seed the render resolution through the render services, so the setting
         // has one write path: this init-time seed and the control plane both go
-        // through AppRenderServices::setRenderResolution (see HostViewState.h).
+        // through AppRenderServices::setRenderResolution (see HostRenderSettings.h).
         // The window is only the presentation surface, so this is the *default*
         // resolution, chosen to match the window the surface was created with -
         // out of the box the image is presented 1:1 - and any later resolution
