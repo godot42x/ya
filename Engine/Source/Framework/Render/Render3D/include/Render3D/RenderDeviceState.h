@@ -185,11 +185,23 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// tick by the coordinator, from the plan's display root.
     void publishViewOutputIdentity(uint32_t flightIndex, SceneViewId displayViewId);
     [[nodiscard]] bool     isGradingEnabled() const;
-    [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
     [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _pipelineCoordinator.getRenderPipeline(); }
     [[nodiscard]] ERenderPipeline getPendingRenderPipeline() const { return _pipelineCoordinator.getPendingRenderPipeline(); }
     void setPendingRenderPipeline(ERenderPipeline renderPipeline) { _pipelineCoordinator.setPendingRenderPipeline(renderPipeline); }
     void requestActivePipelineReload() { _pipelineCoordinator.requestActivePipelineReload(); }
+
+    /// Which strategy is active, and the settings it reads. Both are answered by
+    /// the strategy itself through `IRenderPipeline`, so a caller that wants to
+    /// display or change render settings does not have to downcast into
+    /// `ForwardRenderPipeline` / `DeferredRenderPipeline` to find out what it is
+    /// looking at. `resolveActivePipelineSettings` is the pending value when a
+    /// request is in flight, which is what a settings panel needs to show.
+    [[nodiscard]] ERenderPipeline          resolveActivePipelineKind() const;
+    [[nodiscard]] RenderPipelineSettings   resolveActivePipelineSettings() const;
+    void                                   requestActivePipelineSettings(const RenderPipelineSettings& settings);
+    /// The compiled graph of the last recorded frame, or null when no pipeline
+    /// has recorded one.
+    [[nodiscard]] const RGTopologyDescription* getActiveFrameGraphTopology() const;
 
     [[nodiscard]] stdptr<IDescriptorPool>      getSkyboxDescriptorPool() const { return _sharedResourceProvider.getSkyboxDescriptorPool(); }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxDescriptorSetLayout() const { return _sharedResourceProvider.getSkyboxDescriptorSetLayout(); }
@@ -202,7 +214,10 @@ struct YA_RENDER_3D_API RenderDeviceState
     [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
 
     [[nodiscard]] Extent2D      getViewExtent() const;
-    [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
+    /// Depth format of the active strategy's View targets. Undefined when no
+    /// strategy is built, which is a case the caller has to handle anyway: it
+    /// asks this to configure a compose pipeline before any View exists.
+    [[nodiscard]] EFormat::T    getViewDepthFormat() const;
     [[nodiscard]] RenderTargetCatalog buildRenderTargetCatalog() const;
     [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot(Scene* inspectScene = nullptr) const;
     [[nodiscard]] bool            isDeferredPipelineActive() const { return _pipelineCoordinator.isDeferredPipelineActive(); }
@@ -248,6 +263,11 @@ struct YA_RENDER_3D_API RenderDeviceState
     void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog, Scene* inspectScene) const;
     /// Resolve the handles this renderer is willing to expose to the inspector.
     [[nodiscard]] ViewportDebugCatalogInput makeViewportDebugCatalogInput(Scene* inspectScene) const;
+    /// Resolution points of `makeViewportDebugCatalogInput`, not part of the
+    /// renderer's surface: their only consumers are the two functions above, so
+    /// they are private until something outside the renderer needs them.
+    [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
+    [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
 };
 
 } // namespace ya

@@ -199,6 +199,14 @@ Extent2D RenderDeviceState::getViewExtent() const
     return {};
 }
 
+EFormat::T RenderDeviceState::getViewDepthFormat() const
+{
+    if (const IRenderPipeline* pipeline = getActivePipeline()) {
+        return pipeline->getViewDepthFormat();
+    }
+    return EFormat::Undefined;
+}
+
 ViewportDebugCatalogInput RenderDeviceState::makeViewportDebugCatalogInput(Scene* inspectScene) const
 {
     // The one place that decides which of this renderer's resources the
@@ -231,6 +239,37 @@ DeferredPipelineDebugViews RenderDeviceState::getDeferredPipelineDebugViews() co
         return pipeline->buildDebugViews();
     }
     return {};
+}
+
+RenderDeviceState::ERenderPipeline RenderDeviceState::resolveActivePipelineKind() const
+{
+    return _pipelineCoordinator.getRenderPipeline();
+}
+
+RenderPipelineSettings RenderDeviceState::resolveActivePipelineSettings() const
+{
+    // No pipeline (between a switch and its rebuild) is a real answer: the
+    // default value names Deferred, which is what the coordinator selects when
+    // nothing has been asked for yet.
+    if (const IRenderPipeline* pipeline = getActivePipeline()) {
+        return pipeline->resolveSettings();
+    }
+    return {};
+}
+
+void RenderDeviceState::requestActivePipelineSettings(const RenderPipelineSettings& settings)
+{
+    if (IRenderPipeline* pipeline = getActivePipeline()) {
+        pipeline->requestSettings(settings);
+    }
+}
+
+const RGTopologyDescription* RenderDeviceState::getActiveFrameGraphTopology() const
+{
+    if (const IRenderPipeline* pipeline = getActivePipeline()) {
+        return &pipeline->getLastFrameGraphTopology();
+    }
+    return nullptr;
 }
 
 RenderTargetCatalog RenderDeviceState::buildRenderTargetCatalog() const

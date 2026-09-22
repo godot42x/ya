@@ -11,15 +11,8 @@
 namespace ya
 {
 
-namespace
-{
-
-const char* toString(PipelineCoordinator::ERenderPipeline pipeline)
-{
-    return pipeline == PipelineCoordinator::ERenderPipeline::Forward ? "Forward" : "Deferred";
-}
-
-} // namespace
+// `toString(ERenderPipelineKind)` is the shared spelling of this name; the
+// coordinator has no private one to keep in step with it.
 
 void PipelineCoordinator::init(const InitDesc& desc)
 {

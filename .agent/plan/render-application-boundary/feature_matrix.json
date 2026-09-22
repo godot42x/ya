@@ -27,11 +27,16 @@
     {
       "id": "renderer_public_surface_has_no_editor_query_api",
       "phase": "AB3",
-      "status": "pending",
+      "status": "step1_landed_editor_has_no_device_dependency",
       "evidence": [
-        "buildViewportSnapshot / buildRenderTargetCatalog / buildPipelineDebugOutputCatalog / getDeferredPipelineDebugViews are consumed only by GameEditor Runtime*Section (18 getDeviceState() call sites)",
-        "target shape: renderer publishes handles (getViewOutput(viewId), published display image, format); catalogs are built from data by the consumer side or a pure builder under Render3D/Debug/",
-        "ViewportDebugCatalogBuilder already shows the pattern: pure function of a resolved ViewportDebugCatalogInput"
+        "step1 landed: IRenderPipeline gained kind() (ERenderPipelineKind) and getLastFrameGraphTopology(), plus an IRenderPipelineSettings facet (resolveSettings/requestSettings); DeferredRenderPipeline::SettingsSnapshot moved up to RenderRenderPipelineSettings.h as RenderPipelineSettings carrying kind, and Forward implements the same facet (reads shadow/postProcessing, carries the deferred-only block unchanged)",
+        "step1 landed: PipelineCoordinator::ERenderPipeline is now an alias of ERenderPipelineKind, so 'which strategy is active' and 'what settings it has' speak one vocabulary; the private toString overload in PipelineCoordinator.cpp is gone",
+        "step1 landed: AppRenderServices is the app-side seam (hasRenderer, pipeline kind/pending/reload, settings get/set, frame graph topology, view extent/depth format, view output, viewport snapshot, render target catalog, debug render system, diagnostics service); RenderDeviceState gained resolveActivePipelineKind/Settings, requestActivePipelineSettings, getActiveFrameGraphTopology, getViewDepthFormat as the forwarding points",
+        "step1 landed: GameEditor has zero RenderDeviceState references and zero dynamic_cast into Forward/DeferredRenderPipeline (grep proven); the remaining getDeviceState() callers are all inside GameRuntime, i.e. the app itself",
+        "step1 landed: buildPipelineDebugOutputCatalog / getDeferredPipelineDebugViews had only makeViewportDebugCatalogInput as a consumer and are now private; AppRenderServices::getRenderPipeline() (IRenderPipeline*, zero callers) deleted",
+        "step1 landed: RuntimeDebugPrimitivesSection and RuntimeRenderTargetSection .cpp/.h were minified to single lines since d9de4739 (max line 2610 chars); they had to be edited, so they were rebuilt in readable form with no behaviour change. Rebuilding them hit the unity-build duplicate-private-symbol landmine (my makeCheck collided with RuntimeRenderSettingsSection's), fixed by renaming to makeDebugSwitch",
+        "step2 open: DebugRenderSystem&, RenderDiagnosticsService&, buildRenderTargetCatalog() and buildViewportSnapshot() return renderer types through the facade; the target is typed commands (setRenderDocCaptureEnabled etc.) and data-built catalogs rather than a wider reference surface",
+        "step2 open (recorded): AppAutomation.cpp still includes the concrete pipeline headers and reaches device->_pipelineCoordinator.getSelectedForwardPipeline() to apply automation overrides -- an app dependency on the renderer's private layout, to be handled with AB7"
       ]
     },
     {
@@ -73,10 +78,13 @@
     {
       "id": "renderer_is_the_persistent_renderer",
       "phase": "AB7",
-      "status": "pending",
+      "status": "pending_scope_revised_from_rename_to_split",
       "evidence": [
         "RenderDeviceState holds backend lifetime, persistent renderer services, frame recording and a 77-member public surface -- not an RHI device, not a state",
         "gated on AB3 (query surface narrowed) and AB4 (presentation decoupled)",
+        "scope revised 2026-09-22: no longer 'rename to Renderer'. RenderDeviceState::record is a product-level frame executor (prepare -> begin -> recordFamily -> publish -> view compose -> UI compose -> display compose -> capture); a rename would keep 'Framework owns the frame arrangement' alive under a nicer name",
+        "target: app-side RuntimeRenderContext owns frame flight, scene/view plan, submission, surface present targets, the record order after acquire, Game UI binding, and pre/post-present policy; Framework keeps Forward/Deferred/ViewComposePass/DisplayComposePass/PostProcess/RenderGraph/FrameRecording",
+        "RuntimeRenderContext is not the forbidden 'new Framework coordinator': it lives app-side, holds what RenderDeviceState already holds today, and is justified by the test in plan section 3 (does it need to know the app's Scenes / Views / windows)",
         "public entry stays init/shutdown/record/publishedViewOutput; no plan-wide Renderer facade (see plan section 5)"
       ]
     }

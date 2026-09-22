@@ -110,7 +110,7 @@ TEST(DeferredRenderPipelineTest, SettingsCommandsApplyLatestSnapshotAtFrameBound
     EXPECT_FALSE(beforeApply.postProcessing.bEnableInversion);
     EXPECT_EQ(beforeApply.shadow.quality, EShadowQuality::Off);
 
-    const auto pending = pipeline.resolveSettingsSnapshot();
+    const auto pending = pipeline.resolveSettings();
     EXPECT_FALSE(pending.bReverseViewportY);
     EXPECT_TRUE(pending.bSSAOEnabled);
     EXPECT_FLOAT_EQ(pending.ssaoRadius, 1.5f);

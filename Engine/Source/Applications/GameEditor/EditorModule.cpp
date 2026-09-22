@@ -45,8 +45,8 @@
 #include "RHI/NativeWindow.h"
 #include "RHI/Render.h"
 #include "Render/Resources/FontManager.h"
+#include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
-#include "Render3D/RenderDeviceState.h"
 #include "Scene/Core/Scene.h"
 #include "Scene3D/Node3D.h"
 
@@ -75,9 +75,10 @@ namespace
 //         updateEditorCameraAndPrepareCompose   (world graph on/off, camera,
 //                                                Render2D pipeline prep)
 //         EditorLayer::onUpdate
-//         applyPendingViewResize → RenderDeviceState
+//         (the authoring View's rect is declared by EditorViewProducer, not
+//          pushed at the renderer from here)
 //     tickRender
-//       RenderDeviceState::record world graph (disabled in 2D canvas)
+//       Renderer record world graph (disabled in 2D canvas)
 //       EditorModule::onViewportCompose          [command recording]
 //         viewport snapshot → EditorViewportCompositor
 //           2D: canvas preview + recordEditorCanvasSelectionOverlay
@@ -446,13 +447,12 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     void updateEditorCameraAndPrepareCompose(App& app, float dt)
     {
         auto& renderServices = app.getRenderServices();
-        auto* device         = renderServices.getDeviceState();
-        if (!device) {
+        if (!renderServices.hasRenderer()) {
             return;
         }
 
         auto&          editorCamera   = _layer->getCamera();
-        const Extent2D viewExtent = device->getViewExtent();
+        const Extent2D viewExtent = renderServices.getViewExtent();
         // Keep the editor camera controllable during simulation; only full
         // runtime (PIE) hands viewport input over to the game. 2D canvas
         // preview uses its own pan/zoom navigation instead of the camera.
@@ -469,10 +469,9 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         // the screen-space sprite pipeline's dynamic-rendering formats in
         // sync before presentation starts; recreating a pipeline while a
         // command buffer is recording invalidates that command buffer.
-        const auto* activePipeline = device->getActivePipeline();
-        const EFormat::T depthFormat = activePipeline
-                                           ? activePipeline->getViewDepthFormat()
-                                           : EFormat::Undefined;
+        // The depth format of the active strategy's View targets, asked of the
+        // renderer rather than read off a pipeline object.
+        const EFormat::T depthFormat = renderServices.getViewDepthFormat();
         prepareRender2DComposePassPipeline(
             FRender2DComposePassDesc{
                 .kind = ERender2DComposePassKind::EditorViewportCompose,
@@ -503,9 +502,8 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     void composeAuthoringViewport(App& app, ICommandBuffer& commandBuffer)
     {
         auto& renderServices = app.getRenderServices();
-        auto* device         = renderServices.getDeviceState();
         auto* render         = renderServices.getRender();
-        if (!device || !render) {
+        if (!renderServices.hasRenderer() || !render) {
             _layer->setViewportDisplayImage(nullptr);
             return;
         }
@@ -524,14 +522,14 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             return;
         }
 
-        const auto snapshot = device->buildViewportSnapshot(app.getSceneServices().getActiveScene());
+        const auto snapshot = renderServices.buildViewportSnapshot(app.getSceneServices().getActiveScene());
         _layer->setViewportContext(snapshot);
         _layer->setEntityIdPickImage(snapshot.entityIdImageOwner);
         // 2D mode disables the world scene graph, so the runtime pipeline never
         // publishes viewport resources and getViewExtent() stays 0x0;
         // size the canvas target from the editor panel instead (same fallback
         // guards a degenerate pipeline extent in 3D).
-        Extent2D canvasTargetExtent = device->getViewExtent();
+        Extent2D canvasTargetExtent = renderServices.getViewExtent();
         if (_layer->isViewportMode2D() ||
             canvasTargetExtent.width == 0 || canvasTargetExtent.height == 0) {
             canvasTargetExtent = Extent2D::fromVec2(_layer->getViewportSize());
@@ -564,13 +562,14 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     /// moved to a readable layout. Null when the tick recorded no preview View.
     std::shared_ptr<Texture> previewImageForChrome(App& app, ICommandBuffer& commandBuffer)
     {
-        auto* device = app.getRenderServices().getDeviceState();
-        if (!device) {
+        auto& renderServices = app.getRenderServices();
+        if (!renderServices.hasRenderer()) {
             return nullptr;
         }
         // The preview's identity belongs to this producer, not to a global slot:
         // ask the producer that declares it which View to read.
-        const RenderViewOutput* output = device->getViewOutput(_viewProducer.previewKey().viewId());
+        const RenderViewOutput* output =
+            renderServices.getViewOutput(_viewProducer.previewKey().viewId());
         if (!output) {
             return nullptr;
         }
@@ -726,8 +725,8 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     void onAttach(App& app) override
     {
         auto& renderServices = app.getRenderServices();
-        auto* device         = renderServices.getDeviceState();
-        YA_CORE_ASSERT(device, "Editor extension requires an initialized RenderDeviceState");
+        YA_CORE_ASSERT(renderServices.hasRenderer(),
+                       "Editor extension requires an initialized renderer");
 
         _layer = std::make_unique<EditorLayer>(&app);
         initializeEditorCamera(app, *_layer);

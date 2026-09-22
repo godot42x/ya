@@ -28,11 +28,10 @@ struct RenderSharedResourceProvider;
  */
 struct YA_RENDER_3D_API PipelineCoordinator
 {
-    enum class ERenderPipeline
-    {
-        Forward,
-        Deferred
-    };
+    /// The strategy identity lives with the settings value type, so publishing
+    /// "which pipeline is active" and "what settings that pipeline has" speak
+    /// one vocabulary instead of two enums that mean the same thing.
+    using ERenderPipeline = ERenderPipelineKind;
 
     struct InitDesc
     {

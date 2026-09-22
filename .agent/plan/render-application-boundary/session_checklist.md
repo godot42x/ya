@@ -32,6 +32,17 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-22 AB3-step1：编辑器通过应用读渲染器。`IRenderPipeline` 增加 `kind()` /
+  `getLastFrameGraphTopology()` / `IRenderPipelineSettings` facet；`DeferredRenderPipeline::SettingsSnapshot`
+  上移为 `Render3D/Common/RenderPipelineSettings.h` 的 `RenderPipelineSettings`（带 `kind`），Forward 实现同一 facet；
+  `PipelineCoordinator::ERenderPipeline` 变成 `ERenderPipelineKind` 别名。`AppRenderServices` 成为应用侧唯一缝
+  （新增 `hasRenderer` 与 pipeline/设置/topology/view extent/output/catalog/debug/diagnostics 转发）。
+  GameEditor 的 `RenderDeviceState` 引用与 concrete-pipeline `dynamic_cast` 都归零；
+  `buildPipelineDebugOutputCatalog` / `getDeferredPipelineDebugViews` 改 private，`AppRenderServices::getRenderPipeline()`
+  删除。同时展开两个自 `d9de4739` 起被压成单行的 Section 文件。验证：6 个目标 build ok；`ya-render-3d-test` 177/177；
+  滤镜 681 passed / 11 skipped / 6 failed（与基线同 6 个）；parity PASS（md5 `c775245a…`）；编辑器 smoke exit=0。
+  未完成：AB3-step2（`DebugRenderSystem&` / `RenderDiagnosticsService&` / catalog 返回体仍是 renderer 类型穿过 facade）
+  与 `AppAutomation.cpp` 对 `_pipelineCoordinator` 私有布局的依赖。下一刀：AB7（把整帧录制编排搬到应用侧 `RuntimeRenderContext`）。
 - 2026-09-22 AB4-step1：present target 变成 per-surface。新增 `SurfacePresentation`
   （一个 OS 窗口的导入图 + 每图 executor + 按该 surface format 建的 `SurfaceWritePass`）；
   `RenderDeviceState` 由单个 `PresentationGraphService` + `SurfaceWritePass` 改为

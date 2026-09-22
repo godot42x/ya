@@ -19,9 +19,6 @@
 #include "Render3D/Common/PostProcessingStateConfig.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Render3D/Common/ShadowSettings.h"
-#include "Render3D/Deferred/DeferredRenderPipeline.h"
-#include "Render3D/Forward/ForwardRenderPipeline.h"
-#include "Render3D/RenderDeviceState.h"
 #include "RHI/RenderDefines.h"
 
 #include <algorithm>
@@ -114,7 +111,7 @@ const char* presentLabel(int value)
     }
 }
 
-void saveDeferredExtras(const DeferredRenderPipeline::SettingsSnapshot& settings)
+void saveDeferredExtras(const RenderPipelineSettings& settings)
 {
     ConfigManager::Editor("runtime")
         .set("render.deferred.reverseViewportY", settings.bReverseViewportY)
@@ -127,7 +124,7 @@ void saveDeferredExtras(const DeferredRenderPipeline::SettingsSnapshot& settings
         .set("render.deferred.light.enablePBRSpecularIBL", settings.bPBRSpecularIBL);
 }
 
-void persistDeferred(const DeferredRenderPipeline::SettingsSnapshot& settings)
+void persistDeferred(const RenderPipelineSettings& settings)
 {
     postprocess_settings::saveRuntimeSettings(settings.postProcessing);
     shadow_settings::saveRuntimeSettings(settings.shadow);
@@ -140,18 +137,15 @@ void mutateDeferred(App* app, Fn&& fn)
     if (!app) {
         return;
     }
-    auto* runtime = app->getRenderServices().getDeviceState();
-    if (!runtime) {
+    auto& renderServices = app->getRenderServices();
+    if (!renderServices.hasRenderer() ||
+        renderServices.getRenderPipelineKind() != ERenderPipelineKind::Deferred) {
         return;
     }
-    auto* deferred = dynamic_cast<DeferredRenderPipeline*>(runtime->getActivePipeline());
-    if (!deferred) {
-        return;
-    }
-    auto snapshot = deferred->resolveSettingsSnapshot();
-    fn(snapshot);
-    deferred->requestSettings(snapshot);
-    persistDeferred(snapshot);
+    auto settings = renderServices.getRenderPipelineSettings();
+    fn(settings);
+    renderServices.setRenderPipelineSettings(settings);
+    persistDeferred(settings);
 }
 
 template <typename Fn>
@@ -160,22 +154,22 @@ void mutatePostProcess(App* app, Fn&& fn)
     if (!app) {
         return;
     }
-    auto* runtime = app->getRenderServices().getDeviceState();
-    if (!runtime) {
+    auto& renderServices = app->getRenderServices();
+    if (!renderServices.hasRenderer()) {
         return;
     }
-    if (auto* deferred = dynamic_cast<DeferredRenderPipeline*>(runtime->getActivePipeline())) {
-        auto snapshot = deferred->resolveSettingsSnapshot();
-        fn(snapshot.postProcessing);
-        deferred->requestSettings(snapshot);
-        persistDeferred(snapshot);
-        return;
+    // Post-processing is a field both strategies read, so this asks the active
+    // one for its settings and gives them back, instead of picking a concrete
+    // pipeline by downcast. Only the deferred strategy owns the extras block, so
+    // only it has that much to persist.
+    auto settings = renderServices.getRenderPipelineSettings();
+    fn(settings.postProcessing);
+    renderServices.setRenderPipelineSettings(settings);
+    if (settings.kind == ERenderPipelineKind::Deferred) {
+        persistDeferred(settings);
     }
-    if (auto* forward = dynamic_cast<ForwardRenderPipeline*>(runtime->getActivePipeline())) {
-        auto post = forward->resolvePostProcessSettings();
-        fn(post);
-        forward->requestPostProcessSettings(post);
-        postprocess_settings::saveRuntimeSettings(post);
+    else {
+        postprocess_settings::saveRuntimeSettings(settings.postProcessing);
     }
 }
 
@@ -185,22 +179,18 @@ void mutateShadow(App* app, Fn&& fn)
     if (!app) {
         return;
     }
-    auto* runtime = app->getRenderServices().getDeviceState();
-    if (!runtime) {
+    auto& renderServices = app->getRenderServices();
+    if (!renderServices.hasRenderer()) {
         return;
     }
-    if (auto* deferred = dynamic_cast<DeferredRenderPipeline*>(runtime->getActivePipeline())) {
-        auto snapshot = deferred->resolveSettingsSnapshot();
-        fn(snapshot.shadow);
-        deferred->requestSettings(snapshot);
-        persistDeferred(snapshot);
-        return;
+    auto settings = renderServices.getRenderPipelineSettings();
+    fn(settings.shadow);
+    renderServices.setRenderPipelineSettings(settings);
+    if (settings.kind == ERenderPipelineKind::Deferred) {
+        persistDeferred(settings);
     }
-    if (auto* forward = dynamic_cast<ForwardRenderPipeline*>(runtime->getActivePipeline())) {
-        auto shadow = forward->getCurrentShadowSettings();
-        fn(shadow);
-        forward->requestShadowSettings(shadow);
-        shadow_settings::saveRuntimeSettings(shadow);
+    else {
+        shadow_settings::saveRuntimeSettings(settings.shadow);
     }
 }
 
@@ -418,9 +408,8 @@ void RuntimeRenderSettingsSection::bindCallbacks()
         if (_bSyncing || !_app) {
             return;
         }
-        if (auto* runtime = _app->getRenderServices().getDeviceState()) {
-            runtime->setPendingRenderPipeline(static_cast<RenderDeviceState::ERenderPipeline>(index));
-        }
+        _app->getRenderServices().setPendingRenderPipelineKind(
+            static_cast<ERenderPipelineKind>(index));
     };
     _renderScale->_onValueChanged = [this](float value) {
         if (_bSyncing || !_app) {
@@ -451,9 +440,7 @@ void RuntimeRenderSettingsSection::bindCallbacks()
         if (!_app) {
             return;
         }
-        if (auto* runtime = _app->getRenderServices().getDeviceState()) {
-            runtime->requestActivePipelineReload();
-        }
+        _app->getRenderServices().requestRenderPipelineReload();
     };
 
     _inversion->_onChanged = [this](bool value) {
@@ -673,50 +660,50 @@ void RuntimeRenderSettingsSection::bindCallbacks()
 
     _reverseY->_onChanged = [this](bool value) {
         if (!_bSyncing) {
-            mutateDeferred(_app, [value](DeferredRenderPipeline::SettingsSnapshot& snap) {
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) {
                 snap.bReverseViewportY = value;
             });
         }
     };
     _iblDiffuse->_onChanged = [this](bool value) {
         if (!_bSyncing) {
-            mutateDeferred(_app, [value](DeferredRenderPipeline::SettingsSnapshot& snap) {
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) {
                 snap.bPBRDiffuseIBL = value;
             });
         }
     };
     _iblSpecular->_onChanged = [this](bool value) {
         if (!_bSyncing) {
-            mutateDeferred(_app, [value](DeferredRenderPipeline::SettingsSnapshot& snap) {
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) {
                 snap.bPBRSpecularIBL = value;
             });
         }
     };
     _ssaoEnable->_onChanged = [this](bool value) {
         if (!_bSyncing) {
-            mutateDeferred(_app, [value](DeferredRenderPipeline::SettingsSnapshot& snap) {
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) {
                 snap.bSSAOEnabled = value;
             });
         }
     };
     _ssaoRadius->_onValueChanged = [this](float value) {
         if (!_bSyncing) {
-            mutateDeferred(_app, [value](DeferredRenderPipeline::SettingsSnapshot& snap) { snap.ssaoRadius = value; });
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) { snap.ssaoRadius = value; });
         }
     };
     _ssaoBias->_onValueChanged = [this](float value) {
         if (!_bSyncing) {
-            mutateDeferred(_app, [value](DeferredRenderPipeline::SettingsSnapshot& snap) { snap.ssaoBias = value; });
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) { snap.ssaoBias = value; });
         }
     };
     _ssaoPower->_onValueChanged = [this](float value) {
         if (!_bSyncing) {
-            mutateDeferred(_app, [value](DeferredRenderPipeline::SettingsSnapshot& snap) { snap.ssaoPower = value; });
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) { snap.ssaoPower = value; });
         }
     };
     _ssaoIntensity->_onValueChanged = [this](float value) {
         if (!_bSyncing) {
-            mutateDeferred(_app, [value](DeferredRenderPipeline::SettingsSnapshot& snap) { snap.ssaoIntensity = value; });
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) { snap.ssaoIntensity = value; });
         }
     };
 }
@@ -730,18 +717,18 @@ void RuntimeRenderSettingsSection::sync(const App* app, IRenderSurfaceContext* p
         return;
     }
     _app = const_cast<App*>(app);
-    auto* runtime = app->getRenderServices().getDeviceState();
-    if (!runtime) {
+    auto& renderServices = app->getRenderServices();
+    if (!renderServices.hasRenderer()) {
         return;
     }
 
     _bSyncing = true;
 
-    const int pipeline = static_cast<int>(runtime->getPendingRenderPipeline());
-    const bool pending = runtime->getPendingRenderPipeline() != runtime->getRenderPipeline();
+    const int pipeline = static_cast<int>(renderServices.getPendingRenderPipelineKind());
+    const bool pending = renderServices.getPendingRenderPipelineKind() != renderServices.getRenderPipelineKind();
     _pipeline->setSelectedIndex(pipeline, false);
     _pipelinePending->setText(pending ? "(switch pending)" : "");
-    _renderScale->setValue(app->getRenderServices().getRenderScale(), false);
+    _renderScale->setValue(renderServices.getRenderScale(), false);
     if (_presentSurface) {
         if (auto* sc = _presentSurface->getSwapchain()) {
             _vsync->setChecked(sc->getVsync());
@@ -750,30 +737,24 @@ void RuntimeRenderSettingsSection::sync(const App* app, IRenderSurfaceContext* p
         }
     }
 
-    auto* active = runtime->getActivePipeline();
-    auto* deferred = dynamic_cast<DeferredRenderPipeline*>(active);
-    auto* forward = dynamic_cast<ForwardRenderPipeline*>(active);
-    const bool bDeferred = deferred != nullptr;
+    // One settings value for whichever strategy is active: the panel reads the
+    // fields it shows and gates its strategy-specific rows on `kind`, which is
+    // what replaced asking the concrete pipeline type what it was.
+    const RenderPipelineSettings settings = renderServices.getRenderPipelineSettings();
+    const bool bDeferred = settings.kind == ERenderPipelineKind::Deferred;
 
-    PostProcessingState post{};
-    ShadowSettings shadow{};
-    if (deferred) {
-        const auto snapshot = deferred->resolveSettingsSnapshot();
-        post    = snapshot.postProcessing;
-        shadow  = snapshot.shadow;
-        _reverseY->setChecked(snapshot.bReverseViewportY);
-        _iblDiffuse->setChecked(snapshot.bPBRDiffuseIBL);
-        _iblSpecular->setChecked(snapshot.bPBRSpecularIBL);
-        _ssaoEnable->setChecked(snapshot.bSSAOEnabled);
-        _ssaoRadius->setValue(snapshot.ssaoRadius, false);
-        _ssaoBias->setValue(snapshot.ssaoBias, false);
-        _ssaoPower->setValue(snapshot.ssaoPower, false);
-        _ssaoIntensity->setValue(snapshot.ssaoIntensity, false);
-        _ssaoBody->setEnabled(snapshot.bSSAOEnabled);
-    }
-    else if (forward) {
-        post   = forward->resolvePostProcessSettings();
-        shadow = forward->getCurrentShadowSettings();
+    PostProcessingState post   = settings.postProcessing;
+    ShadowSettings      shadow = settings.shadow;
+    if (bDeferred) {
+        _reverseY->setChecked(settings.bReverseViewportY);
+        _iblDiffuse->setChecked(settings.bPBRDiffuseIBL);
+        _iblSpecular->setChecked(settings.bPBRSpecularIBL);
+        _ssaoEnable->setChecked(settings.bSSAOEnabled);
+        _ssaoRadius->setValue(settings.ssaoRadius, false);
+        _ssaoBias->setValue(settings.ssaoBias, false);
+        _ssaoPower->setValue(settings.ssaoPower, false);
+        _ssaoIntensity->setValue(settings.ssaoIntensity, false);
+        _ssaoBody->setEnabled(settings.bSSAOEnabled);
     }
 
     _inversion->setChecked(post.bEnableInversion);

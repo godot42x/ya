@@ -1,7 +1,10 @@
 #pragma once
 
 #include "GameRuntime/HostViewState.h"
+#include "Render3D/Common/RenderPipelineSettings.h"
 #include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/RenderTargetCatalog.h"
+#include "Render3D/Common/RenderViewportSnapshot.h"
 
 #include <cstdint>
 #include <memory>
@@ -12,12 +15,14 @@ namespace ya
 {
 
 struct IRender;
-struct IRenderPipeline;
 struct ShaderStorage;
 struct ShadowSettings;
 struct ImageResource;
 struct DebugRenderSystem;
+struct RenderDiagnosticsService;
 struct RenderDeviceState;
+struct RGTopologyDescription;
+struct RenderViewOutput;
 struct Scene;
 struct AppRenderState;
 
@@ -58,13 +63,57 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] Extent2D                               getRenderResolution() const;
     [[nodiscard]] ShadowSettings&                        getShadowSettings();
     [[nodiscard]] const ShadowSettings&                  getShadowSettings() const;
-    [[nodiscard]] IRenderPipeline*                       getRenderPipeline() const;
-    [[nodiscard]] DebugRenderSystem&                     getDebugRenderSystem() const;
     [[nodiscard]] bool                                   isShadowMappingEnabled() const;
     [[nodiscard]] std::shared_ptr<ImageResource>         getShadowDirectionalDepthResource() const;
     [[nodiscard]] std::shared_ptr<ImageResource>         getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const;
     [[nodiscard]] bool                                   isGradingEnabled() const;
     [[nodiscard]] const HostViewState&                   getHostViewState() const;
+
+    // === The renderer, named on the app's terms ===
+    //
+    // The editor is a module on this app, so it reads the renderer through the
+    // app instead of through `RenderDeviceState`. Two things make that more than
+    // a rename. Render settings and strategy identity are answered by the active
+    // strategy through `IRenderPipeline` (kind / settings / compiled graph), so
+    // a panel states what it wants instead of downcasting into
+    // `ForwardRenderPipeline` / `DeferredRenderPipeline`. And the renderer's
+    // inspection queries the editor reads (the View images, the render-target
+    // catalog, the debug system, RenderDoc state) are named here, which is what
+    // keeps them from being the editor's own ideas about renderer internals.
+
+    /// Whether a renderer exists yet. Sections sync on startup paths that run
+    /// before the device is up, where "no renderer" is a normal answer to show
+    /// as unavailable rather than an assertion failure.
+    [[nodiscard]] bool                 hasRenderer() const;
+
+    /// Active strategy identity.
+    [[nodiscard]] ERenderPipelineKind  getRenderPipelineKind() const;
+    /// The requested strategy when a switch is in flight, else the active one.
+    [[nodiscard]] ERenderPipelineKind  getPendingRenderPipelineKind() const;
+    void                               setPendingRenderPipelineKind(ERenderPipelineKind kind);
+    void                               requestRenderPipelineReload();
+    /// The active strategy's settings: the pending ones when a request is in
+    /// flight, so a settings panel shows what it asked for rather than the state
+    /// it is being changed from.
+    [[nodiscard]] RenderPipelineSettings getRenderPipelineSettings() const;
+    void                                 setRenderPipelineSettings(const RenderPipelineSettings& settings);
+    /// The compiled graph of the last recorded frame; null when none was
+    /// recorded yet. A pointer because "there is no graph" is a real answer.
+    [[nodiscard]] const RGTopologyDescription* getFrameGraphTopology() const;
+
+    /// Extent the host viewport's View actually rendered at, `0x0` when this
+    /// tick produced no such View.
+    [[nodiscard]] Extent2D             getViewExtent() const;
+    [[nodiscard]] EFormat::T           getViewDepthFormat() const;
+    [[nodiscard]] const RenderViewOutput* getViewOutput(uint64_t viewId) const;
+    /// The images and handles the editor's viewport shows for one Scene, in the
+    /// form its compositor consumes.
+    [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot(Scene* inspectScene) const;
+
+    [[nodiscard]] RenderTargetCatalog  buildRenderTargetCatalog() const;
+    void                               requestRenderTargetFormat(const RenderTargetFormatCommand& command);
+    [[nodiscard]] DebugRenderSystem&   getDebugRenderSystem() const;
+    [[nodiscard]] RenderDiagnosticsService& getDiagnosticsService() const;
 
   private:
     AppRenderState* _state = nullptr;

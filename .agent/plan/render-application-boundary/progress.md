@@ -112,9 +112,92 @@ swapchain 的 format** 建的。这使得「第二个 OS 窗口」在结构上�
   所以拖出去的 viewport 面板看不到世界画面——这是 step2 要解决的既有缺口。
 - 偏离：无。
 
+## 2026-09-22 AB3-step1 — 编辑器通过应用读渲染器，且不再 downcast 到 concrete pipeline
+
+上一轮的结论指出：真正藏起来的第二条主流程还在 `RenderDeviceState`，而第一步应当先把它的公开面收窄。
+本轮执行的就是这一步，但把目标写得更可验收：**GameEditor 不再认识 `RenderDeviceState`**，
+并且**不再用 `dynamic_cast` 问渲染器「你是什么管线」**。
+
+### 改动的三段
+
+1. **策略身份、设置、编译后的图成为 typed 契约。**
+   - `IRenderPipeline` 增加 `kind()`（新的 `ERenderPipelineKind`）与
+     `getLastFrameGraphTopology()`；新增 `IRenderPipelineSettings` facet（`resolveSettings()` /
+     `requestSettings()`）。`IRenderPipeline` 现在由 Execution + Settings + RenderTargets + DebugOutputs
+     四个 facet 组成，与既有风格一致。
+   - `DeferredRenderPipeline::SettingsSnapshot` 上移为 `Render3D/Common/RenderPipelineSettings.h` 的
+     `RenderPipelineSettings`，并带上 `kind`。字段名保持原样（`bReverseViewportY` / `ssao*` /
+     `bPBR*IBL` / `shadow` / `postProcessing`），所以编辑器侧的改动是类型名与 `kind` 判断，不是字段搬家。
+   - Forward 实现同一 facet：读 `shadow` / `postProcessing`，**原样携带**只属于 deferred 的块；
+     哪个策略读哪一块由 `kind` 说明，而不是由调用方猜。
+   - `PipelineCoordinator::ERenderPipeline` 变成 `ERenderPipelineKind` 的别名（`RenderDeviceState::ERenderPipeline`
+     的既有别名因此不变），`toString(kind)` 只有一处（`PipelineCoordinator.cpp` 里那份私有重载删除）。
+   - `PipelineCoordinator.cpp` 的私有 `toString` 删除后，该文件不再有需要与公共拼写保持同步的名字。
+
+2. **`AppRenderServices` 成为应用侧唯一缝。** 新增（并分组注释）`hasRenderer()`、
+   `getRenderPipelineKind()`、`getPendingRenderPipelineKind()`、`setPendingRenderPipelineKind()`、
+   `requestRenderPipelineReload()`、`getRenderPipelineSettings()`、`setRenderPipelineSettings()`、
+   `getFrameGraphTopology()`、`getViewExtent()`、`getViewDepthFormat()`、`getViewOutput()`、
+   `buildViewportSnapshot()`、`buildRenderTargetCatalog()`、`requestRenderTargetFormat()`、
+   `getDebugRenderSystem()`、`getDiagnosticsService()`。落点是 `RenderDeviceState` 的四个新转发：
+   `resolveActivePipelineKind/Settings`、`requestActivePipelineSettings`、`getActiveFrameGraphTopology`，
+   以及 `getViewDepthFormat`。`DeferredRenderPipeline::resolveSettingsSnapshot` 随之改名为
+   `resolveSettings`（facet 名），测试里那 1 处调用同步更新。
+
+3. **删掉没有消费者的公开方法。** `buildPipelineDebugOutputCatalog` / `getDeferredPipelineDebugViews`
+   的唯一调用方是 `makeViewportDebugCatalogInput`，改为 private；`AppRenderServices::getRenderPipeline()`
+   （返回 `IRenderPipeline*`）零调用方，删除。
+
+### 编辑器侧的迁移
+
+| 文件 | 之前 | 之后 |
+| --- | --- | --- |
+| `RuntimeRenderSettingsSection.cpp` | 3 处 `dynamic_cast` 到 concrete pipeline + `resolveSettingsSnapshot` | `getRenderPipelineKind()` + `getRenderPipelineSettings()` / `setRenderPipelineSettings()` |
+| `RuntimeRenderGraphSection.cpp` | 2 处 `dynamic_cast`，只为拿 topology 与名字 | `getRenderPipelineKind()` + `getFrameGraphTopology()` |
+| `RuntimeDiagnosticsSection.cpp` | 5 处 `getDeviceState()->getDiagnosticsService()` | `hasRenderer()` + `getDiagnosticsService()` |
+| `RuntimeRenderTargetSection.cpp` | `getDeviceState()->buildRenderTargetCatalog()` | `buildRenderTargetCatalog()` |
+| `RuntimeDebugPrimitivesSection.cpp` | 5 处 `getDeviceState()->getDebugRenderSystem()` | `getDebugRenderSystem()`（四个开关共用一个 writer） |
+| `EditorModule.cpp` | `getViewExtent` / `getActivePipeline()->getViewDepthFormat` / `buildViewportSnapshot` / `getViewOutput` / assert | 全部走 facade，`RenderDeviceState.h` include 删除 |
+
+### 顺带修掉的噪声
+
+`RuntimeDebugPrimitivesSection.{cpp,h}` 与 `RuntimeRenderTargetSection.{cpp,h}` 自 `d9de4739` 起被压成单行
+（最大行长 2610 字符）。这两个 `.cpp` 本轮必须改，往单行文件里写新代码没有意义，因此 `git rm --cached`
+重建为正常可读形式（无行为变化）。重建时踩到一次 unity 批次重排导致的私有符号重名：我的 `makeCheck`
+与 `RuntimeRenderSettingsSection.cpp` 的同名 helper 撞车，改为 `makeDebugSwitch`（记忆文件
+`unity_build_duplicate_private_symbol.md` 记录的就是这一类）。
+
+### 验证证据
+
+- build：`ya-render-3d` / `ya-game-runtime` / `ya-runtime` / `ya-game-editor` / `ya-render-3d-test` /
+  `ya-testing` 全部 `build ok`。
+- `xmake r ya-render-3d-test`：**177/177**。
+- `ya-testing` 滤镜：681 passed / 11 skipped / **6 failed**，6 个与已登记基线逐项相同。
+- parity：**PASS**，两张截图 md5 仍为 `c775245ae636f15b41da8485319a2267`（逐字节同基线）。
+- 编辑器 smoke：**exit=0**，六步全过。
+- 结构性证据：`grep -RIn 'RenderDeviceState' Engine/Source/Applications/GameEditor` → 空；
+  `grep -RIn 'dynamic_cast<.*RenderPipeline' Engine/Source/Applications/GameEditor` → 空；
+  `getDeviceState()` 的剩余调用者只剩 GameRuntime（app 自己）。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：`RenderDeviceState::getDeviceState()` 仍是公开的——它是**应用自己**持有 renderer 的入口，
+  app 侧（tick orchestrator、AppAutomation、control service、App）继续用它是对的；本轮的验收对象是编辑器。
+- 未完成（AB3-step2）：`DebugRenderSystem&`、`RenderDiagnosticsService&`、`buildRenderTargetCatalog()` /
+  `buildViewportSnapshot()` 的返回体仍是 renderer 的类型穿过 facade。它们是 renderer 自己的事实，
+  收口方向是 typed command（`setRenderDocCaptureEnabled` 等）与「由数据构造 catalog」的纯函数，
+  而不是继续扩大 facade 的引用面。
+- 未完成（记录）：`AppAutomation.cpp` 仍在 app 侧直接 include concrete pipeline 头并访问
+  `device->_pipelineCoordinator.getSelectedForwardPipeline()` 来施加 automation override。
+  这是 app 对 renderer 私有布局的依赖，属于 AB7 拆分时要一起处理的项，本轮未动。
+- 偏离：无行为改动；parity 与 smoke 与基线一致。
+
 ### 下一刀建议
 
-AB4-step2 优先：让额外窗口的 chrome 每帧被 tick，并让它通过 `record` + 自己的
-`SurfacePresentation` 呈现（世界 View 的 display image 与 GUI chrome 一起）。这一步会同时
-回答「拖出去的 viewport 为什么不显示世界」这个既有缺口。AB3（renderer 公开面收窄）紧随其后，
-因为 `buildRenderTargetCatalog` 这类查询现在就带着一处「主 surface」假设。
+AB7 优先于 AB4-step2：本轮的结论是，「整帧录制编排住在 Framework」才是这条线的核心问题，而额外窗口
+（AB4-step2）是它的一个下游症状——额外窗口之所以只能自己 `presentGuiSnapshot`，正是因为「这一帧
+如何组装、如何 present」被写死在 renderer 里。先把 `RenderDeviceState` 的记录编排搬到应用侧
+`RuntimeRenderContext`，额外窗口才有地方接入同一条路。
+
+搬之前要先处理本轮记录的那项：`AppAutomation.cpp` 直接访问 `_pipelineCoordinator` 的私有布局，
+它是 app→renderer 内部结构的依赖，拆分时会挡住。

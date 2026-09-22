@@ -400,9 +400,10 @@ ShadowSettings DeferredRenderPipeline::currentShadowSettings() const
     return _frameShadowSettings;
 }
 
-DeferredRenderPipeline::SettingsSnapshot DeferredRenderPipeline::buildSettingsSnapshot() const
+RenderPipelineSettings DeferredRenderPipeline::buildSettingsSnapshot() const
 {
     return {
+        .kind              = ERenderPipelineKind::Deferred,
         .bReverseViewportY = _bReverseViewportY,
         .bSSAOEnabled      = _bEnableSSAO,
         .ssaoRadius        = _ssaoStage ? _ssaoStage->getRadius() : _ssaoRadius,
@@ -416,12 +417,12 @@ DeferredRenderPipeline::SettingsSnapshot DeferredRenderPipeline::buildSettingsSn
     };
 }
 
-DeferredRenderPipeline::SettingsSnapshot DeferredRenderPipeline::resolveSettingsSnapshot() const
+RenderPipelineSettings DeferredRenderPipeline::resolveSettings() const
 {
     return _pendingSettings ? *_pendingSettings : buildSettingsSnapshot();
 }
 
-void DeferredRenderPipeline::requestSettings(const SettingsSnapshot& settings)
+void DeferredRenderPipeline::requestSettings(const RenderPipelineSettings& settings)
 {
     _pendingSettings = settings;
 }
@@ -482,7 +483,7 @@ void DeferredRenderPipeline::applyPendingSettings()
         return;
     }
 
-    const SettingsSnapshot settings = std::move(*_pendingSettings);
+    const RenderPipelineSettings settings = std::move(*_pendingSettings);
     _pendingSettings.reset();
 
     _bReverseViewportY = settings.bReverseViewportY;

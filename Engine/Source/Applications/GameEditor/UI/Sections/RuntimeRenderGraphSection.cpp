@@ -2,9 +2,7 @@
 #include "GameRuntime/App.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Widgets/Controls/Text.h"
-#include "Render3D/RenderDeviceState.h"
-#include "Render3D/Deferred/DeferredRenderPipeline.h"
-#include "Render3D/Forward/ForwardRenderPipeline.h"
+#include "Graph/RenderGraph.h"
 
 #include <format>
 
@@ -25,13 +23,13 @@ void RuntimeRenderGraphSection::construct()
 void RuntimeRenderGraphSection::sync(const App* app)
 {
     if (!_pipeline || !_passes || !_dependencies || !_status || !app) return;
-    auto* runtime = app->getRenderServices().getDeviceState();
-    if (!runtime) { _status->setText("Frame graph unavailable"); return; }
-    const auto* active = runtime->getActivePipeline();
-    const RGTopologyDescription* topology = nullptr;
-    const char* name = "Unknown";
-    if (auto* deferred = dynamic_cast<const DeferredRenderPipeline*>(active)) { topology = &deferred->getLastFrameGraphTopology(); name = "Deferred"; }
-    else if (auto* forward = dynamic_cast<const ForwardRenderPipeline*>(active)) { topology = &forward->getLastFrameGraphTopology(); name = "Forward"; }
+    const auto& renderServices = app->getRenderServices();
+    if (!renderServices.hasRenderer()) { _status->setText("Frame graph unavailable"); return; }
+    // Which strategy is active, and what graph it compiled, are asked of the
+    // renderer: the panel states what it wants to show instead of downcasting
+    // into a concrete pipeline to find out what it is holding.
+    const char* name = toString(renderServices.getRenderPipelineKind());
+    const RGTopologyDescription* topology = renderServices.getFrameGraphTopology();
     _pipeline->setText(std::format("Pipeline: {}", name));
     if (!topology) { _passes->setText("Passes: <unavailable>"); _dependencies->setText("Dependencies: <unavailable>"); _status->setText("No active frame graph"); return; }
     _passes->setText(std::format("Passes: {}", topology->passOrder.size()));

@@ -3,7 +3,10 @@
 #include "GameRuntime/AppRenderState.h"
 
 #include "Core/Log.h"
+#include "Render3D/Common/RenderViewOutput.h"
+#include "Render3D/RenderDeviceState.h"
 #include "Render3D/Services/DebugRenderSystem.h"
+#include "Render3D/Services/RenderDiagnosticsService.h"
 
 #include <algorithm>
 
@@ -70,17 +73,6 @@ const ShadowSettings& AppRenderServices::getShadowSettings() const
     return _state->shadowSettings;
 }
 
-IRenderPipeline* AppRenderServices::getRenderPipeline() const
-{
-    return _state && _state->device ? _state->device->getActivePipeline() : nullptr;
-}
-
-DebugRenderSystem& AppRenderServices::getDebugRenderSystem() const
-{
-    YA_CORE_ASSERT(_state && _state->device, "RenderDeviceState is not available");
-    return _state->device->getDebugRenderSystem();
-}
-
 bool AppRenderServices::isShadowMappingEnabled() const
 {
     return _state && _state->device && _state->device->isShadowMappingEnabled();
@@ -107,6 +99,98 @@ const HostViewState& AppRenderServices::getHostViewState() const
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
     return _state->hostView;
+}
+
+bool AppRenderServices::hasRenderer() const
+{
+    return _state != nullptr && _state->device != nullptr;
+}
+
+ERenderPipelineKind AppRenderServices::getRenderPipelineKind() const
+{
+    return _state && _state->device ? _state->device->getRenderPipeline()
+                                    : ERenderPipelineKind::Deferred;
+}
+
+ERenderPipelineKind AppRenderServices::getPendingRenderPipelineKind() const
+{
+    return _state && _state->device ? _state->device->getPendingRenderPipeline()
+                                    : ERenderPipelineKind::Deferred;
+}
+
+void AppRenderServices::setPendingRenderPipelineKind(ERenderPipelineKind kind)
+{
+    YA_CORE_ASSERT(_state && _state->device, "RenderDeviceState is not available");
+    _state->device->setPendingRenderPipeline(kind);
+}
+
+void AppRenderServices::requestRenderPipelineReload()
+{
+    YA_CORE_ASSERT(_state && _state->device, "RenderDeviceState is not available");
+    _state->device->requestActivePipelineReload();
+}
+
+RenderPipelineSettings AppRenderServices::getRenderPipelineSettings() const
+{
+    return _state && _state->device ? _state->device->resolveActivePipelineSettings()
+                                    : RenderPipelineSettings{};
+}
+
+void AppRenderServices::setRenderPipelineSettings(const RenderPipelineSettings& settings)
+{
+    YA_CORE_ASSERT(_state && _state->device, "RenderDeviceState is not available");
+    _state->device->requestActivePipelineSettings(settings);
+}
+
+const RGTopologyDescription* AppRenderServices::getFrameGraphTopology() const
+{
+    return _state && _state->device ? _state->device->getActiveFrameGraphTopology() : nullptr;
+}
+
+Extent2D AppRenderServices::getViewExtent() const
+{
+    return _state && _state->device ? _state->device->getViewExtent() : Extent2D{};
+}
+
+EFormat::T AppRenderServices::getViewDepthFormat() const
+{
+    return _state && _state->device ? _state->device->getViewDepthFormat() : EFormat::Undefined;
+}
+
+const RenderViewOutput* AppRenderServices::getViewOutput(uint64_t viewId) const
+{
+    return _state && _state->device ? _state->device->getViewOutput(viewId) : nullptr;
+}
+
+RenderViewportSnapshot AppRenderServices::buildViewportSnapshot(Scene* inspectScene) const
+{
+    return _state && _state->device ? _state->device->buildViewportSnapshot(inspectScene)
+                                    : RenderViewportSnapshot{};
+}
+
+RenderTargetCatalog AppRenderServices::buildRenderTargetCatalog() const
+{
+    return _state && _state->device ? _state->device->buildRenderTargetCatalog()
+                                    : RenderTargetCatalog{};
+}
+
+void AppRenderServices::requestRenderTargetFormat(const RenderTargetFormatCommand& command)
+{
+    if (_state && _state->device) {
+        _state->device->requestRenderTargetFormat(command);
+    }
+}
+
+DebugRenderSystem& AppRenderServices::getDebugRenderSystem() const
+{
+    YA_CORE_ASSERT(_state && _state->device, "RenderDeviceState is not available");
+    return _state->device->getDebugRenderSystem();
+}
+
+RenderDiagnosticsService& AppRenderServices::getDiagnosticsService() const
+{
+    YA_CORE_ASSERT(_state && _state->device, "RenderDeviceState is not available");
+    return _state->device->getDiagnosticsService();
 }
 
 } // namespace ya

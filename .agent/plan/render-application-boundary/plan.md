@@ -66,16 +66,42 @@ Applications/GameRuntime/
 
 纯搬迁，无行为变化；公开路径随之变为 `GameRuntime/Render/<Name>.h`。
 
-### AB3 — Framework renderer 不再承载应用/编辑器查询面（待做）
+### AB3 — 编辑器通过应用读渲染器，而不是通过 device 内部（step 1 已落地）
 
 唯一目标：`RenderDeviceState` 的公开面上不再有「为编辑器面板服务」的查询。
 
-- 现存的 `buildViewportSnapshot` / `buildRenderTargetCatalog` /
-  `buildPipelineDebugOutputCatalog` / `getDeferredPipelineDebugViews` 只被
-  GameEditor 的 `Runtime*Section` 消费（18 处 `getDeviceState()` 调用）。
-- 目标形态：renderer 只发布 handle（`getViewOutput(viewId)` / 已发布 display image /
-  format），由编辑器侧或 `Render3D/Debug/` 的纯函数构造 catalog，输入是数据不是 device。
-- 验收：GameEditor 不再通过这些方法访问 renderer；catalog 输出不变。
+唯一目标：**GameEditor 不再认识 `RenderDeviceState`**，也不再用 `dynamic_cast`
+去问渲染器「你是什么管线」。
+
+AB3-step1（已落地）：
+
+- **策略身份、设置、编译后的图变成 typed 契约**，不再是「先 downcast 到 concrete
+  pipeline 再读」。`IRenderPipeline` 增加 `kind()`（`ERenderPipelineKind`）、
+  `getLastFrameGraphTopology()`，以及 `IRenderPipelineSettings` facet 的
+  `resolveSettings()` / `requestSettings()`。`DeferredRenderPipeline::SettingsSnapshot`
+  上移为 `Render3D/Common/RenderPipelineSettings.h` 的 `RenderPipelineSettings`（带 `kind`），
+  Forward 也实现同一 facet：读 `shadow` / `postProcessing`，原样携带只属于 deferred 的块，
+  由 `kind` 说明。`PipelineCoordinator::ERenderPipeline` 改为 `ERenderPipelineKind` 的别名，
+  `toString(kind)` 只有一处。
+- **`AppRenderServices` 成为应用侧唯一缝**：`getRenderPipelineKind` / `getPendingRenderPipelineKind` /
+  `setPendingRenderPipelineKind` / `requestRenderPipelineReload` / `getRenderPipelineSettings` /
+  `setRenderPipelineSettings` / `getFrameGraphTopology` / `getViewExtent` / `getViewDepthFormat` /
+  `getViewOutput` / `buildViewportSnapshot` / `buildRenderTargetCatalog` / `getDebugRenderSystem` /
+  `getDiagnosticsService` / `hasRenderer`。新增 `RenderDeviceState::resolveActivePipelineKind/Settings`、
+  `requestActivePipelineSettings`、`getActiveFrameGraphTopology`、`getViewDepthFormat` 作为转发落点。
+- **删除没有消费者的公开方法**：`buildPipelineDebugOutputCatalog` /
+  `getDeferredPipelineDebugViews` 只有 `makeViewportDebugCatalogInput` 一个调用方，改为 private；
+  `AppRenderServices::getRenderPipeline()`（返回 `IRenderPipeline*`，零调用方）删除。
+- **验收证据**：`grep RenderDeviceState Engine/Source/Applications/GameEditor` 为空；
+  `grep 'dynamic_cast<.*RenderPipeline' GameEditor` 为空；`getDeviceState()` 的剩余调用者全部在
+  GameRuntime（app 自己）内。
+- 顺带：`RuntimeDebugPrimitivesSection` / `RuntimeRenderTargetSection` 的 `.cpp` 与 `.h` 此前被压成
+  单行（自 `d9de4739` 起），这轮必须改它们，因此一并展开成正常可读形式（无行为变化）。
+
+AB3-step2（待做）：剩下的三个仍是 renderer 自己的事实，只是目前以服务引用形式穿过 facade：
+`DebugRenderSystem&`、`RenderDiagnosticsService&`、`buildRenderTargetCatalog` /
+`buildViewportSnapshot` 的返回体。收口方向是 typed command（`setRenderDocCaptureEnabled` 等）
+与「由数据构造 catalog」的纯函数，而不是继续扩大 facade 的引用面。
 
 ### AB4 — presentation 只搬运，present 由应用编排（进行中）
 
@@ -125,10 +151,30 @@ display stage 的顺序；acquire / submit / present 的编排留在应用。
 只迁移能一句话回答职责的文件（Scene / View / Compose / Debug / Resource / Pipeline），
 答不上的留在原地并在本文件记一笔，不为了消灭平铺而硬塞。
 
-### AB7 — `RenderDeviceState` → `Renderer`（待做）
+### AB7 — `RenderDeviceState` 拆成应用级 RenderContext 与 Framework 管线对象（待做）
 
 前置：AB3（查询面收窄）与 AB4（presentation 解开）。
-它是持久 renderer（管线、GPU 资源、录制、输出发布），不是 RHI device，也不是 state。
+
+**这一条已经从「改名成 `Renderer`」改成结构性拆分。** 修订理由：名字不是问题，职责才是。
+`RenderDeviceState` 同时是 RHI/device 生命周期、持久 GPU 资源、以及**产品级的整帧录制执行器**
+（prepare → begin → recordFamily → publish → view compose → UI compose → display compose → capture）。
+只把它改名成 `Renderer` 会让「Framework 拥有整帧排布」这件事换一个更好看的名字继续存在。
+
+目标形态：
+
+```
+Applications/GameRuntime/Render/
+  RuntimeRenderContext      frame flight、scene/view plan、submission、surface present 目标、
+                            acquire 之后的 record 顺序、Game UI 绑定、present 前后策略
+Framework/Render/
+  ForwardRenderPipeline / DeferredRenderPipeline / ViewComposePass / DisplayComposePass /
+  PostProcess stages / RenderGraph / FrameRecording
+```
+
+它不是新增一个万能 coordinator，而是把 `RenderDeviceState` 里已经存在的应用职责放回应用侧。
+Framework 侧的公开入口限定在 `init/shutdown/record(plan, surface)/publishedViewOutput(viewId)`，
+看不见 `_pipelineCoordinator` / `_submissions` / `_viewOutputs` / `_surfacePresentations`。
+取名用 `RuntimeRenderContext`（当前编辑器仍跑在 `GameRuntime::App` 上，叫 `GameEditorRenderer` 不准确）。
 
 ## 5. 与 `render-view-family` 4.0.3 的取舍
 
@@ -142,11 +188,14 @@ record(const RenderPlan&, const SurfaceTarget&) -> RecordedFrame;
 publishedViewOutput(viewId);
 ```
 
-看不见 `_pipelineCoordinator` / `_submissions` / `_viewOutputs` / `_presentationGraphService`。
+看不见 `_pipelineCoordinator` / `_submissions` / `_viewOutputs` / `_surfacePresentations`。
 
 ## 6. 非目标
 
-- 不新增 `RenderCoordinator2` / `RenderContext` / `RenderServiceHub` 之类总入口。
+- **不在 Framework 里**新增 `RenderCoordinator2` / `RenderContext` / `RenderServiceHub` 之类总入口。
+  AB7 的 `RuntimeRenderContext` 不属于这条禁止项：它住在应用侧、装的是「当前应用如何准备与录制这一帧」，
+  而这些职责今天已经存在于 `RenderDeviceState` 中——那是一次搬回，不是一次新增。判据是第三节的第 2 问：
+  它是否要知道当前应用有哪些 Scene / View / 窗口。
 - 不把每个 phase 做成一个 class；主时序必须能在一个入口里读完。
 - 不把 Forward / Deferred 合并成一个抽象基类。
 - 不把 `App` 拆成十几个 facade。
@@ -159,7 +208,9 @@ publishedViewOutput(viewId);
 
 - `AppRenderState` 里没有本帧排布（tick 的 arrangement 在 tick 里）。
 - `GameRuntime/Lifecycle/` 只放生命周期，不放渲染排布。
-- renderer 的公开面只回答「录制」与「已发布输出」，不回答编辑器面板要什么。
+- renderer 的公开面只回答「录制」与「已发布输出」；编辑器面板要什么由应用侧的名义转发。
+- `Engine/Source/Applications/GameEditor` 内没有 `RenderDeviceState`，也没有到 concrete pipeline 的
+  `dynamic_cast`。
 - acquire / submit / present 的调用者是应用，不是 Framework/Render。
 - 阅读入口仍是：`App::run` → `GameRuntimeTickOrchestrator::iterate` →
   `declareViews → extractScenes → prepareViews → buildGameRenderFrame → acquire →

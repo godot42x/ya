@@ -82,19 +82,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
 {
     friend class DeferredRenderPipelineTestAccess;
 
-    struct SettingsSnapshot
-    {
-        bool           bReverseViewportY = true;
-        bool           bSSAOEnabled      = true;
-        float          ssaoRadius        = 0.6f;
-        float          ssaoBias          = 0.025f;
-        float          ssaoPower         = 1.5f;
-        float          ssaoIntensity     = 2.5f;
-        bool           bPBRDiffuseIBL    = true;
-        bool           bPBRSpecularIBL   = true;
-        ShadowSettings shadow{};
-        PostProcessingState postProcessing{};
-    };
     using InitDesc = DeferredRenderInitDesc;
 
     IRender* _render = nullptr;
@@ -140,7 +127,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     bool     _bEnablePBRDiffuseIBL = true;
     bool     _bEnablePBRSpecularIBL = true;
 
-    std::optional<SettingsSnapshot> _pendingSettings;
+    std::optional<RenderPipelineSettings> _pendingSettings;
 
     uint32_t   _lastPointLightCount = 0;
     uint32_t   _lastDrawCount       = 0;
@@ -168,6 +155,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     void shutdown();
 
     void onViewResized(Rect2D rect) override;
+    [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Deferred; }
 
     Extent2D getViewExtent() const override
     {
@@ -185,15 +173,19 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     std::shared_ptr<RenderTexture> getBloomExtractImageShared() const { return _debugViews.bloomExtract; }
     std::shared_ptr<RenderTexture> getBloomBlurImageShared() const { return _debugViews.bloomBlur; }
     std::shared_ptr<RenderTexture> getBloomCompositeImageShared() const { return _debugViews.bloomComposite; }
-    const RGTopologyDescription& getLastFrameGraphTopology() const { return _lastFrameGraphTopology; }
+    const RGTopologyDescription& getLastFrameGraphTopology() const override
+    {
+        return _lastFrameGraphTopology;
+    }
     void setSSAOEnabled(bool enabled)
     {
         _bEnableSSAO = enabled;
     }
-    [[nodiscard]] SettingsSnapshot buildSettingsSnapshot() const;
+    /// The settings the stage state currently holds.
+    [[nodiscard]] RenderPipelineSettings buildSettingsSnapshot() const;
     /// Pending snapshot if a request is in flight, otherwise the applied snapshot.
-    [[nodiscard]] SettingsSnapshot resolveSettingsSnapshot() const;
-    void requestSettings(const SettingsSnapshot& settings);
+    [[nodiscard]] RenderPipelineSettings resolveSettings() const override;
+    void requestSettings(const RenderPipelineSettings& settings) override;
     DeferredPipelineDebugViews buildDebugViews() const;
     void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;
     bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner, EFormat::T format) override;

@@ -99,6 +99,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
                                     EFormat::T                               format) override;
 
     void                         onViewResized(Rect2D rect) override;
+    [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Forward; }
     Extent2D                     getViewExtent() const override;
     [[nodiscard]] EFormat::T     getViewColorFormat() const override;
     [[nodiscard]] EFormat::T     getViewDepthFormat() const override;
@@ -123,7 +124,10 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     {
         return _postProcessStage.getBloomCompositeImageShared();
     }
-    [[nodiscard]] const RGTopologyDescription& getLastFrameGraphTopology() const { return _lastFrameGraphTopology; }
+    [[nodiscard]] const RGTopologyDescription& getLastFrameGraphTopology() const override
+    {
+        return _lastFrameGraphTopology;
+    }
     void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;
 
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
@@ -148,6 +152,13 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] PostProcessingState getPostProcessSettings() const;
     [[nodiscard]] PostProcessingState resolvePostProcessSettings() const;
     void                         requestPostProcessSettings(const PostProcessingState& settings);
+
+    /// The forward strategy's settings as one value. It reads `shadow` and
+    /// `postProcessing` and carries the strategy-specific block unchanged: those
+    /// switches describe a deferred pipeline, which `kind` states, so nothing
+    /// here applies them silently.
+    [[nodiscard]] RenderPipelineSettings resolveSettings() const override;
+    void requestSettings(const RenderPipelineSettings& settings) override;
 
   private:
     void               initViewResources(const InitDesc& desc);

@@ -2,6 +2,7 @@
 
 #include "RHI/RenderDefines.h"
 #include "Render3D/Common/RenderFrameInputs.h"
+#include "Render3D/Common/RenderPipelineSettings.h"
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
@@ -21,10 +22,18 @@ struct ImageResource;
 struct RenderTexture;
 struct Texture;
 struct RenderFrameData;
+/// The compiled graph of the last recorded frame. Named, not included: a caller
+/// that reads its passes includes `Graph/RenderGraph.h` itself, and every caller
+/// that only forwards the reference does not need the graph at all.
+struct RGTopologyDescription;
 
 struct IRenderPipelineExecution
 {
     virtual ~IRenderPipelineExecution() = default;
+
+    /// This strategy's identity: Forward or Deferred. Answering it is what keeps
+    /// a caller from downcasting to find out which strategy it holds.
+    [[nodiscard]] virtual ERenderPipelineKind kind() const = 0;
 
     virtual void onViewResized(Rect2D rect) = 0;
     /// Compile and record one Scene family graph; return each View's output.
@@ -34,6 +43,23 @@ struct IRenderPipelineExecution
     [[nodiscard]] virtual Extent2D   getViewExtent() const          = 0;
     [[nodiscard]] virtual EFormat::T getViewColorFormat() const     = 0;
     [[nodiscard]] virtual EFormat::T getViewDepthFormat() const     = 0;
+
+    /// The graph this pipeline compiled for the last recorded frame, for the
+    /// tooling that displays it. The pipeline owns the value; the view is only
+    /// valid until the next recorded frame.
+    [[nodiscard]] virtual const RGTopologyDescription& getLastFrameGraphTopology() const = 0;
+};
+
+struct IRenderPipelineSettings
+{
+    virtual ~IRenderPipelineSettings() = default;
+
+    /// The settings this strategy would apply right now: the ones a request put
+    /// in flight if there is one, otherwise the applied ones. Reading and writing
+    /// settings through one value is how "what can be configured" stops being a
+    /// question about the concrete class.
+    [[nodiscard]] virtual RenderPipelineSettings resolveSettings() const = 0;
+    virtual void requestSettings(const RenderPipelineSettings& settings) = 0;
 };
 
 struct IRenderPipelineRenderTargets
@@ -70,6 +96,7 @@ struct IRenderPipelineDebugOutputs
 };
 
 struct IRenderPipeline : IRenderPipelineExecution,
+                         IRenderPipelineSettings,
                          IRenderPipelineRenderTargets,
                          IRenderPipelineDebugOutputs
 {

@@ -736,6 +736,21 @@ void ForwardRenderPipeline::requestPostProcessSettings(const PostProcessingState
     _pendingPostProcessSettings = settings;
 }
 
+RenderPipelineSettings ForwardRenderPipeline::resolveSettings() const
+{
+    return {
+        .kind           = ERenderPipelineKind::Forward,
+        .shadow         = currentShadowSettings(),
+        .postProcessing = resolvePostProcessSettings(),
+    };
+}
+
+void ForwardRenderPipeline::requestSettings(const RenderPipelineSettings& settings)
+{
+    requestShadowSettings(settings.shadow);
+    requestPostProcessSettings(settings.postProcessing);
+}
+
 void ForwardRenderPipeline::applyPendingPostProcessSettings()
 {
     if (!_pendingPostProcessSettings) {

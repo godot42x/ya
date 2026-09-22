@@ -6,7 +6,6 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/WidgetTree.h"
-#include "Render3D/RenderDeviceState.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
 
 #include <format>
@@ -42,29 +41,31 @@ void RuntimeDiagnosticsSection::construct()
                               .share();
     _captureEnabled->_onChanged = [](bool value) {
         if (auto* app = App::get()) {
-            if (auto* runtime = app->getRenderServices().getDeviceState()) {
-                auto& state = runtime->getDiagnosticsService().getRenderDocState();
+            auto& renderServices = app->getRenderServices();
+            if (renderServices.hasRenderer()) {
+                auto& state = renderServices.getDiagnosticsService().getRenderDocState();
                 if (state.capture) state.capture->setCaptureEnabled(value);
             }
         }
     };
     _hudVisible->_onChanged = [](bool value) {
         if (auto* app = App::get()) {
-            if (auto* runtime = app->getRenderServices().getDeviceState()) {
-                auto& state = runtime->getDiagnosticsService().getRenderDocState();
+            auto& renderServices = app->getRenderServices();
+            if (renderServices.hasRenderer()) {
+                auto& state = renderServices.getDiagnosticsService().getRenderDocState();
                 if (state.capture) state.capture->setHUDVisible(value);
             }
         }
     };
     _captureNextFrame->_onClick = []() {
-        if (auto* app = App::get()) if (auto* runtime = app->getRenderServices().getDeviceState()) {
-            auto& state = runtime->getDiagnosticsService().getRenderDocState();
+        if (auto* app = App::get()) if (auto& renderServices = app->getRenderServices(); renderServices.hasRenderer()) {
+            auto& state = renderServices.getDiagnosticsService().getRenderDocState();
             if (state.capture && state.capture->isCaptureEnabled()) state.capture->requestNextFrame();
         }
     };
     _captureAfterFrames->_onClick = []() {
-        if (auto* app = App::get()) if (auto* runtime = app->getRenderServices().getDeviceState()) {
-            auto& state = runtime->getDiagnosticsService().getRenderDocState();
+        if (auto* app = App::get()) if (auto& renderServices = app->getRenderServices(); renderServices.hasRenderer()) {
+            auto& state = renderServices.getDiagnosticsService().getRenderDocState();
             if (state.capture && state.capture->isCaptureEnabled()) state.capture->requestAfterFrames(120);
         }
     };
@@ -106,13 +107,13 @@ void RuntimeDiagnosticsSection::sync(const App* app)
         setUnavailable("RenderDoc: runtime unavailable");
         return;
     }
-    auto* runtime = app->getRenderServices().getDeviceState();
-    if (!runtime) {
+    auto& renderServices = app->getRenderServices();
+    if (!renderServices.hasRenderer()) {
         setUnavailable("RenderDoc: render runtime unavailable");
         return;
     }
 
-    const auto& state = runtime->getDiagnosticsService().getRenderDocState();
+    const auto& state = renderServices.getDiagnosticsService().getRenderDocState();
     const bool available = state.capture && state.capture->isAvailable();
     _availability->setText(std::format("RenderDoc: {}", available ? "Available" : "Unavailable"));
     _dllPath->setText(std::format("DLL Path: {}", state.configuredDllPath.empty() ? "<default>" : state.configuredDllPath));
