@@ -5,6 +5,8 @@
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
 #include "Render3D/Common/RenderViewportSnapshot.h"
+#include "Render3D/Common/RenderViewOutput.h"
+#include "Render3D/Common/SceneViewDesc.h"
 
 #include <cstdint>
 #include <memory>
@@ -22,7 +24,6 @@ struct DebugRenderSystem;
 struct RenderDiagnosticsService;
 struct RenderDeviceState;
 struct RGTopologyDescription;
-struct RenderViewOutput;
 struct Scene;
 struct AppRenderState;
 
@@ -101,13 +102,18 @@ class YA_GAME_RUNTIME_API AppRenderServices
     /// recorded yet. A pointer because "there is no graph" is a real answer.
     [[nodiscard]] const RGTopologyDescription* getFrameGraphTopology() const;
 
-    /// Extent the host viewport's View actually rendered at, `0x0` when this
-    /// tick produced no such View.
-    [[nodiscard]] Extent2D             getViewExtent() const;
+    /// The View the host window shows, as the frame that was just recorded left
+    /// it: the app's arrangement (see `HostViewportBinding`), not a renderer
+    /// opinion. Null when this frame showed no View, which is an answer -- the
+    /// caller decides what to show instead (the editor sizes its 2D canvas from
+    /// its own panel rect, the host from its window).
+    [[nodiscard]] const RenderViewOutput* getHostViewportOutput() const;
+    /// Which View that is, by id. Zero when this frame showed none.
+    [[nodiscard]] SceneViewId          getHostViewportViewId() const;
     [[nodiscard]] EFormat::T           getViewDepthFormat() const;
-    [[nodiscard]] const RenderViewOutput* getViewOutput(uint64_t viewId) const;
-    /// The images and handles the editor's viewport shows for one Scene, in the
-    /// form its compositor consumes.
+    [[nodiscard]] const RenderViewOutput* getViewOutput(SceneViewId viewId) const;
+    /// The images and handles the editor's viewport shows for the host
+    /// viewport's View, in the form its compositor consumes.
     [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot(Scene* inspectScene) const;
 
     [[nodiscard]] RenderTargetCatalog  buildRenderTargetCatalog() const;

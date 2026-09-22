@@ -40,6 +40,22 @@
       ]
     },
     {
+      "id": "frame_view_facts_have_one_source",
+      "phase": "AB8",
+      "status": "step1_landed_view_rect_and_host_viewport_identity",
+      "evidence": [
+        "step1 landed: RenderDeviceState::_pipelineViewRect and public applyViewResize() deleted; PipelineCoordinator::applyPendingChanges(Rect2D viewRect) takes the frame's View rect from the plan's display root as an input, and keeps only its own _appliedViewRect (what it last sized its pipelines to, not a copy of a View declaration)",
+        "step1 landed: InitDesc.reapplyViewRectSink (a capturing std::function) deleted; applyPendingRenderPipelineSwitch() returns whether it rebuilt, which is what tells the caller the rect must be re-applied",
+        "step1 landed: declareViews no longer pushes the View rect at the device -- the same rect used to reach the renderer from two places (every tick, and again inside record)",
+        "step1 landed: _publishedOutputViewId / _publishedOutputFlight / publishViewOutputIdentity / publishedViewOutput / clearPublishedViewOutputs deleted; the app owns HostViewportBinding{viewId, flightIndex} in AppRenderState, written once by tickRender from the plan's display root",
+        "step1 landed: identity-less getters deleted (getViewExtent, getActiveViewImageShared, getViewDisplayImageShared, getPostprocessOutputImageShared, getViewDisplayImage, getViewDisplayImageFormat); replaced by getViewOutput(flightIndex, viewId), surfaceImageFor(const RenderViewOutput*) and buildViewportSnapshot(flightIndex, viewId, Scene*)",
+        "step1 landed: automation's three screenshot images are named at the call site (postprocess only when display != color, else the View's color is the image); get_world_view_state reads the host View's desc.extent; the editor's camera aspect and canvas target read getHostViewportOutput()->desc.extent",
+        "step1 landed: two dead duplicates removed -- prepareFrameRecord's conditional UI-compose prepare (it read the PREVIOUS frame's published display image just to learn a format prepareComposePipelines above it already had from the pipeline) and record()'s three trailing retain() calls (retainPublishedViewOutputs already keeps every live View's display/color/depth/entityId)",
+        "step1 recorded, not hidden: the binding is written before record(), so a frame that is not recorded at all (acquire failed / minimized) leaves the binding pointing at the flight this frame intended, where the old code kept the previous frame's identity. With flightFrameSize = 1 the flight is always 0 and both read the last recording; with more flights this needs re-examination",
+        "step2 open: HostViewState still carries view/projection/cameraPos (a copy of a SceneViewDesc) next to clock/renderResolution/renderScale. Splitting it needs a product decision first -- which camera the editor's viewport overlay/picking should use under PIE (today it is the host copy, i.e. the game camera; using the editor camera is a behaviour change)"
+      ]
+    },
+    {
       "id": "presentation_is_a_pass_not_an_orchestrator",
       "phase": "AB4",
       "status": "step1_landed_per_surface_present_targets",

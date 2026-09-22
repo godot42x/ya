@@ -94,8 +94,6 @@ struct YA_RENDER_3D_API RenderDeviceState
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
     RenderSubmissionPool                         _submissions;
     RenderViewOutputTable                        _viewOutputs;
-    uint32_t                                     _publishedOutputFlight = MAX_FLIGHTS_IN_FLIGHT;
-    uint64_t                                     _publishedOutputViewId = 0;
     std::shared_ptr<ShaderStorage>               _shaderStorage = nullptr;
 
     ERenderAPI::T  currentRenderAPI      = ERenderAPI::None;
@@ -110,8 +108,11 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// surface the frame presents, and this table is how that surface's images
     /// and its format-specific write pass are found.
     std::vector<std::unique_ptr<SurfacePresentation>> _surfacePresentations;
-    // default rect for default rt creation
-    Rect2D                       _pipelineViewRect{};
+    /// The size a pipeline is built with before any View has declared one.
+    /// Seeded once from the create-info window size; never a "current View
+    /// rect" -- the frame's View rect reaches the pipeline through the plan
+    /// (`prepareFrameRecord` -> `PipelineCoordinator::applyPendingChanges`).
+    Extent2D                     _initialViewExtent{};
 
     /// Cached inspector catalog, rebuilt only when its digest changes. The
     /// snapshot is logically const, so this cache is too -- the state belongs to
@@ -128,9 +129,6 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// RecordedFrame).
     [[nodiscard]] RecordedFrame record(const RenderFramePlan& plan);
 
-    /// Safe-point mutation: pipeline RT specs. Call before command recording.
-    void applyViewResize(Rect2D rect);
-    void applyPendingMutations();
     /// Resolve the Scene-keyed GPU bindings one View's passes bind (skybox /
     /// IBL descriptor sets and derived resources). Called per View before
     /// recording starts, so a pass reads its own View's scene resources instead
@@ -159,16 +157,6 @@ struct YA_RENDER_3D_API RenderDeviceState
     [[nodiscard]] RenderDiagnosticsService&      getDiagnosticsService() { return _diagnostics; }
     [[nodiscard]] const RenderDiagnosticsService& getDiagnosticsService() const { return _diagnostics; }
 
-    [[nodiscard]] std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const;
-    [[nodiscard]] std::shared_ptr<RenderTexture> getActiveViewImageShared() const;
-    [[nodiscard]] std::shared_ptr<RenderTexture> getViewDisplayImageShared() const;
-    /// The same image as `getViewDisplayImageShared`, with the fact its format
-    /// cannot carry: which transfer function its values already have. The
-    /// surface pass takes this type instead of a bare texture, so "what am I
-    /// putting on the window" is answered by the renderer that made the image
-    /// and checked against the surface's format before anything is recorded.
-    [[nodiscard]] FSurfaceImage getViewDisplayImage() const;
-    [[nodiscard]] EFormat::T getViewDisplayImageFormat() const;
     /// This surface's image for the index it acquired. The surface is a
     /// parameter because "the window's image" is only meaningful for a named
     /// window -- with more than one surface, an unnamed getter would have to
@@ -179,11 +167,19 @@ struct YA_RENDER_3D_API RenderDeviceState
     {
         return _submissions.get(flightIndex);
     }
-    [[nodiscard]] const RenderViewOutput* getViewOutput(uint64_t viewId) const;
-    /// Decide which View's published output the host viewport displays for
-    /// `flightIndex`. `displayViewId == 0` clears it. Called once per recorded
-    /// tick by the coordinator, from the plan's display root.
-    void publishViewOutputIdentity(uint32_t flightIndex, SceneViewId displayViewId);
+    /// One View's output from one flight, or null when that flight published no
+    /// such View.
+    ///
+    /// Both the View and the flight are parameters because the renderer has no
+    /// opinion about which View matters: it publishes every View's output and
+    /// names none of them "the current one". `flightIndex` is the value
+    /// `RecordedFrame` handed back, so a reader that recorded the frame has it.
+    [[nodiscard]] const RenderViewOutput* getViewOutput(uint32_t flightIndex, SceneViewId viewId) const;
+    /// The image a surface pass may put on a window for this View, together with
+    /// the fact its format cannot carry: which transfer function its values
+    /// already have. A View with no output, or one whose display image is only
+    /// its raw colour, comes back as an invalid image or as `Linear`.
+    [[nodiscard]] FSurfaceImage surfaceImageFor(const RenderViewOutput* output) const;
     [[nodiscard]] bool     isGradingEnabled() const;
     [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _pipelineCoordinator.getRenderPipeline(); }
     [[nodiscard]] ERenderPipeline getPendingRenderPipeline() const { return _pipelineCoordinator.getPendingRenderPipeline(); }
@@ -213,13 +209,19 @@ struct YA_RENDER_3D_API RenderDeviceState
     [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene = nullptr) const;
     [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
 
-    [[nodiscard]] Extent2D      getViewExtent() const;
     /// Depth format of the active strategy's View targets. Undefined when no
     /// strategy is built, which is a case the caller has to handle anyway: it
     /// asks this to configure a compose pipeline before any View exists.
     [[nodiscard]] EFormat::T    getViewDepthFormat() const;
     [[nodiscard]] RenderTargetCatalog buildRenderTargetCatalog() const;
-    [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot(Scene* inspectScene = nullptr) const;
+    /// The editor's viewport data for one View of one flight: the View's
+    /// images plus the pipeline's debug catalogs. Both identities are
+    /// parameters -- `viewId == 0` means "this frame showed no View", which is
+    /// an answer, and the renderer will not substitute another View's images
+    /// for it.
+    [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot(uint32_t            flightIndex,
+                                                               SceneViewId         viewId,
+                                                               Scene*              inspectScene = nullptr) const;
     [[nodiscard]] bool            isDeferredPipelineActive() const { return _pipelineCoordinator.isDeferredPipelineActive(); }
     void requestRenderTargetFormat(const RenderTargetFormatCommand& command);
 
@@ -227,9 +229,11 @@ struct YA_RENDER_3D_API RenderDeviceState
     void recordViewFamilies(const RenderFramePlan& plan);
     /// Everything that mutates pipeline state or prepares GPU resources for this
     /// plan, before the command buffer opens: derived state for each Scene this
-    /// plan renders, pending mutations, the display root's viewport resize,
-    /// compose pipeline prep, each View's Scene-keyed GPU bindings, and the Game
-    /// UI compose pipeline when the plan carries a UI snapshot. Split from
+    /// plan renders, pending mutations, the display root's View rect, compose
+    /// pipeline prep, each View's Scene-keyed GPU bindings, and the Game UI
+    /// compose pipeline when the plan carries a UI snapshot. The rect comes from
+    /// `displayRoot`, so the plan is the only source of "how big is this frame's
+    /// View". Split from
     /// `record` so "what happens before recording" and "what is recorded" are
     /// two readable steps instead of one 170-line function.
     void prepareFrameRecord(const RenderFramePlan& plan, const SceneViewTask* displayRoot);
@@ -247,10 +251,8 @@ struct YA_RENDER_3D_API RenderDeviceState
     void                   destroyRenderBackend();
 
     bool                   beginFrameCommandBuffer(const RenderFramePlan& plan, std::shared_ptr<ICommandBuffer>& cmdBuf);
-    void                   clearPublishedViewOutputs();
     void                   publishFamilyResult(uint32_t flightIndex, ViewFamilyRenderResult result);
     void                   retainPublishedViewOutputs(uint32_t flightIndex, ICommandBuffer* cmdBuf);
-    [[nodiscard]] const RenderViewOutput* publishedViewOutput() const;
     void                   endFrameCommandBuffer(ICommandBuffer* cmdBuf);
 
     [[nodiscard]] SurfacePresentation* findSurfacePresentation(IRenderSurfaceContext& surface) const;
@@ -262,11 +264,14 @@ struct YA_RENDER_3D_API RenderDeviceState
 
     void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog, Scene* inspectScene) const;
     /// Resolve the handles this renderer is willing to expose to the inspector.
-    [[nodiscard]] ViewportDebugCatalogInput makeViewportDebugCatalogInput(Scene* inspectScene) const;
+    [[nodiscard]] ViewportDebugCatalogInput makeViewportDebugCatalogInput(uint32_t   flightIndex,
+                                                                         SceneViewId viewId,
+                                                                         Scene*      inspectScene) const;
     /// Resolution points of `makeViewportDebugCatalogInput`, not part of the
     /// renderer's surface: their only consumers are the two functions above, so
     /// they are private until something outside the renderer needs them.
-    [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
+    [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog(uint32_t   flightIndex,
+                                                                                  SceneViewId viewId) const;
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
 };
 

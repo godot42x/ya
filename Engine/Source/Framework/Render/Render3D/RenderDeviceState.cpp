@@ -24,28 +24,6 @@
 namespace ya
 {
 
-void RenderDeviceState::applyViewResize(Rect2D rect)
-{
-    if (rect.extent.x <= 0.0f || rect.extent.y <= 0.0f) {
-        return;
-    }
-    if (_pipelineViewRect.extent.x == rect.extent.x &&
-        _pipelineViewRect.extent.y == rect.extent.y &&
-        _pipelineViewRect.pos.x == rect.pos.x &&
-        _pipelineViewRect.pos.y == rect.pos.y) {
-        return;
-    }
-    _pipelineViewRect = rect;
-    if (auto* pipeline = getActivePipeline()) {
-        pipeline->onViewResized(rect);
-    }
-}
-
-void RenderDeviceState::applyPendingMutations()
-{
-    _pipelineCoordinator.applyPendingChanges();
-}
-
 void RenderDeviceState::prepareDerivedState(Scene* scene, float dt)
 {
     auto provider = [scene]() -> Scene* { return scene; };
@@ -75,11 +53,15 @@ void RenderDeviceState::prepareComposePipelines()
     // its own targets and prepares them itself, earlier in the same tick -- so
     // the renderer must not know they exist.
     if (auto* pipeline = getActivePipeline()) {
+        // The pipeline's postprocess format is the format of the image the UI
+        // composes onto. Asked of the pipeline rather than read back from a View
+        // output: the compose pipeline must exist before the graph creates that
+        // image, and the format is stable pipeline configuration.
         prepareRender2DComposePassPipeline(
             FRender2DComposePassDesc{
                 .kind = ERender2DComposePassKind::RuntimeUIComposite,
             },
-            getViewDisplayImageFormat());
+            pipeline->getPostprocessColorFormat());
     }
 }
 
@@ -127,16 +109,6 @@ std::shared_ptr<ImageResource> RenderDeviceState::getShadowPointFaceDepthResourc
     return nullptr;
 }
 
-std::shared_ptr<RenderTexture> RenderDeviceState::getPostprocessOutputImageShared() const
-{
-    if (const auto* output = publishedViewOutput()) {
-        if (output->display && output->display != output->color) {
-            return output->display;
-        }
-    }
-    return nullptr;
-}
-
 std::shared_ptr<RenderTexture> RenderDeviceState::getPresentationImageShared(
     IRenderSurfaceContext& surface) const
 {
@@ -155,7 +127,8 @@ bool RenderDeviceState::isGradingEnabled() const
     return false;
 }
 
-RenderPipelineDebugOutputCatalog RenderDeviceState::buildPipelineDebugOutputCatalog() const
+RenderPipelineDebugOutputCatalog RenderDeviceState::buildPipelineDebugOutputCatalog(uint32_t   flightIndex,
+                                                                                    SceneViewId viewId) const
 {
     RenderPipelineDebugOutputCatalog catalog{};
     auto* pipeline = getActivePipeline();
@@ -168,7 +141,7 @@ RenderPipelineDebugOutputCatalog RenderDeviceState::buildPipelineDebugOutputCata
     catalog.viewDepthImageOwner = nullptr;
     catalog.bPostprocessingEnabled = pipeline->isGradingEnabled();
 
-    if (const auto* output = publishedViewOutput()) {
+    if (const auto* output = getViewOutput(flightIndex, viewId)) {
         catalog.viewOutputImageOwner    = output->color;
         catalog.viewDepthImageOwner     = output->depth;
         catalog.postprocessOutputImageOwner = (output->display && output->display != output->color)
@@ -183,22 +156,6 @@ RenderPipelineDebugOutputCatalog RenderDeviceState::buildPipelineDebugOutputCata
     return catalog;
 }
 
-Extent2D RenderDeviceState::getViewExtent() const
-{
-    // One source: the published host viewport View. A tick that published none
-    // has no viewport, and the caller decides what to show instead (the editor
-    // sizes its 2D canvas from its own panel rect, the host from its window).
-    if (const auto* output = publishedViewOutput()) {
-        if (output->desc.hasExtent()) {
-            return output->desc.extent;
-        }
-        if (auto image = output->displayImage()) {
-            return image->getExtent();
-        }
-    }
-    return {};
-}
-
 EFormat::T RenderDeviceState::getViewDepthFormat() const
 {
     if (const IRenderPipeline* pipeline = getActivePipeline()) {
@@ -207,7 +164,9 @@ EFormat::T RenderDeviceState::getViewDepthFormat() const
     return EFormat::Undefined;
 }
 
-ViewportDebugCatalogInput RenderDeviceState::makeViewportDebugCatalogInput(Scene* inspectScene) const
+ViewportDebugCatalogInput RenderDeviceState::makeViewportDebugCatalogInput(uint32_t   flightIndex,
+                                                                          SceneViewId viewId,
+                                                                          Scene*      inspectScene) const
 {
     // The one place that decides which of this renderer's resources the
     // inspector may show. Everything downstream is a pure function of this
@@ -216,7 +175,7 @@ ViewportDebugCatalogInput RenderDeviceState::makeViewportDebugCatalogInput(Scene
     ViewportDebugCatalogInput input;
     input.bForwardPipeline  = (_pipelineCoordinator.getRenderPipeline() == ERenderPipeline::Forward);
     input.bDeferredPipeline = _pipelineCoordinator.hasDeferredPipeline();
-    input.debugOutputs      = buildPipelineDebugOutputCatalog();
+    input.debugOutputs      = buildPipelineDebugOutputCatalog(flightIndex, viewId);
     input.deferredViews     = getDeferredPipelineDebugViews();
     input.brdfLut           = _sharedResourceProvider.getBrdfLutTextureShared();
     input.environmentLighting = _environmentLightingProcessor.get();

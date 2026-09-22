@@ -147,9 +147,14 @@ const RGTopologyDescription* AppRenderServices::getFrameGraphTopology() const
     return _state && _state->device ? _state->device->getActiveFrameGraphTopology() : nullptr;
 }
 
-Extent2D AppRenderServices::getViewExtent() const
+const RenderViewOutput* AppRenderServices::getHostViewportOutput() const
 {
-    return _state && _state->device ? _state->device->getViewExtent() : Extent2D{};
+    return getViewOutput(_state ? _state->hostViewport.viewId : 0);
+}
+
+SceneViewId AppRenderServices::getHostViewportViewId() const
+{
+    return _state ? _state->hostViewport.viewId : 0;
 }
 
 EFormat::T AppRenderServices::getViewDepthFormat() const
@@ -157,15 +162,20 @@ EFormat::T AppRenderServices::getViewDepthFormat() const
     return _state && _state->device ? _state->device->getViewDepthFormat() : EFormat::Undefined;
 }
 
-const RenderViewOutput* AppRenderServices::getViewOutput(uint64_t viewId) const
+const RenderViewOutput* AppRenderServices::getViewOutput(SceneViewId viewId) const
 {
-    return _state && _state->device ? _state->device->getViewOutput(viewId) : nullptr;
+    return (_state && _state->device)
+               ? _state->device->getViewOutput(_state->hostViewport.flightIndex, viewId)
+               : nullptr;
 }
 
 RenderViewportSnapshot AppRenderServices::buildViewportSnapshot(Scene* inspectScene) const
 {
-    return _state && _state->device ? _state->device->buildViewportSnapshot(inspectScene)
-                                    : RenderViewportSnapshot{};
+    return (_state && _state->device)
+               ? _state->device->buildViewportSnapshot(_state->hostViewport.flightIndex,
+                                                      _state->hostViewport.viewId,
+                                                      inspectScene)
+               : RenderViewportSnapshot{};
 }
 
 RenderTargetCatalog AppRenderServices::buildRenderTargetCatalog() const

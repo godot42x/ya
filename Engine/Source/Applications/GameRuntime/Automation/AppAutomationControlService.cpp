@@ -715,13 +715,18 @@ void AppAutomationControlService::handleGetWorldViewState(App& app, const AppAut
         return;
     }
 
-    const auto& hostView = app.getRenderServices().getHostViewState();
+    const auto& renderServices = app.getRenderServices();
+    const auto& hostView       = renderServices.getHostViewState();
+    const auto* hostViewport   = renderServices.getHostViewportOutput();
     // Two different things, reported separately so neither has to stand in for
     // the other: the resolution the host viewport is asked to render at (a
     // setting), and the extent the renderer actually produced last tick (empty
     // when no View claimed the host viewport). A window resize changes neither.
-    const Extent2D requestedResolution = app.getRenderServices().getRenderResolution();
-    const Extent2D renderedExtent      = device->getViewExtent();
+    const Extent2D requestedResolution = renderServices.getRenderResolution();
+    // What the renderer actually produced for the host viewport last frame: the
+    // app knows which View that is, so it reads that View's output rather than
+    // asking the renderer for "the current viewport".
+    const Extent2D renderedExtent = hostViewport ? hostViewport->desc.extent : Extent2D{};
 
     nlohmann::json result = {
         {"is_stopped", app.isStopped()},

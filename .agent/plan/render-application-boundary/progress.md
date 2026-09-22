@@ -192,12 +192,92 @@ swapchain 的 format** 建的。这使得「第二个 OS 窗口」在结构上�
   这是 app 对 renderer 私有布局的依赖，属于 AB7 拆分时要一起处理的项，本轮未动。
 - 偏离：无行为改动；parity 与 smoke 与基线一致。
 
+## 2026-09-22 AB8-step1 — 帧的 View 事实只从计划里读一次
+
+起点是两份结论的同一个判断：`getViewExtent()` 不是「放错层」，而是它的语义缺一个身份；
+更根本的是**同一事实有多个来源**。本轮只动两个已被确认重复的事实，命名迁移留给后面。
+
+### 1. pipeline 的 view rect 变成输入
+
+- `RenderDeviceState::_pipelineViewRect` 与公开的 `applyViewResize()` 删除。
+  `PipelineCoordinator::applyPendingChanges(Rect2D viewRect)` 现在收本帧的 View rect：
+  它来自 `prepareFrameRecord(plan, displayRoot)` 里的 `displayRoot->desc.outputRect`，也就是计划本身。
+  coordinator 自己持有 `_appliedViewRect`——**它自己最后套用过的 rect**，不是 View 声明的副本；
+  rect 落在已应用值上的变化判定也从 renderer 搬到了这里（它必须留，`requestViewResize` 会标脏并
+  在下一次 recordFamily 重建资源）。退化 rect 的语义写清楚了：不是「尺寸 0」，而是「本帧没有 View」，
+  已应用的 rect 继续成立——因为 pipeline 会继续按上次的几何渲染，而重建出来的 pipeline 不能回落成
+  init 种子。
+- `InitDesc.reapplyViewRectSink`（一个捕获 this 的 std::function）删除：重建后要重新套用 rect
+  这件事现在由参数表达，`applyPendingRenderPipelineSwitch()` 改为返回「是否重建」。
+- init 期的窗口尺寸种子改名为 `_initialViewExtent`，注释说明它只服务第一次 build。
+- `declareViews` 里那句 `device->applyViewResize(view.outputRect)` 删除：同一个 rect 过去由
+  **两处**（app 每帧 + record 前）推给 renderer，这正是「两个意见」的来源。
+
+### 2. renderer 不再决定哪个 View 是宿主的
+
+- 删除 `_publishedOutputViewId` / `_publishedOutputFlight` / `publishViewOutputIdentity()` /
+  `publishedViewOutput()` / `clearPublishedViewOutputs()`。
+- 应用侧新增 `HostViewportBinding{viewId, flightIndex}`（`AppRenderState.h`，带说明：这是排布，
+  不是 renderer 事实）。唯一写者是 `tickRender`，从 plan 的 display root 写一次，且在 `record()`
+  **之前**——因为编辑器的 compose / chrome 阶段是在 record 内部跑的，要读这个 View。
+- `record()` 内部改用局部 `displayOutput`。这里有一个必须说清的顺序事实：这个查询只能发生在
+  `recordViewFamilies` **之后**（输出是那时发布的），所以变量声明在那一块之后，而不是函数开头。
+- 顺带：`insets` 的循环里那句 `getViewOutput(inset.viewId)` 也补上了 flight（inset 自带 viewId，
+  过去靠 renderer 记录的「当前 flight」）。
+
+### 3. 查询一律带身份
+
+删除的无身份接口：`getViewExtent()`、`getActiveViewImageShared()`、`getViewDisplayImageShared()`、
+`getPostprocessOutputImageShared()`、`getViewDisplayImage()`、`getViewDisplayImageFormat()`。
+替代：`getViewOutput(flightIndex, viewId)`、`surfaceImageFor(const RenderViewOutput*)`、
+`buildViewportSnapshot(flightIndex, viewId, Scene*)`。`prepareComposePipelines()` 改用
+pipeline 自己的 `getPostprocessColorFormat()`。
+
+应用侧 `AppRenderServices` 用 binding 解析出 `getHostViewportOutput()` / `getHostViewportViewId()` /
+`getViewOutput(viewId)`，并保留 `buildViewportSnapshot(Scene*)` 这个应用名义的入口。
+自动化截图的三张图（postprocess / viewport / presentation）改为在
+`GameRuntimeTickOrchestrator::iterate` 里**指名**取值：postprocess 图只在
+`display != color` 时存在，否则那张图就是 View 的 color——这个「先给两张，让消费者挑」的规则
+过去藏在 device 的两个 getter 里，现在写在调用点。
+`get_world_view_state` 的 `rendered_viewport_extent` 改读宿主 View 的 `desc.extent`。
+编辑器两处（相机 aspect、canvas 目标尺寸）改读 `getHostViewportOutput()->desc.extent`。
+
+### 4. 顺带删掉的两处已死重复工作
+
+- `prepareFrameRecord` 里那段「有 UI snapshot 就 prepare RuntimeUIComposite」的调用：它读的是
+  **上一帧**已发布的 display image 格式（`publishViewOutputIdentity` 在 record 后半段才执行），
+  而同一个函数上方三行的 `prepareComposePipelines()` 已经用 pipeline 自己的 postprocess format
+  做过同一件事。冗余且是陈旧读。
+- `record()` 结尾的三个 `retain(...)`：`retainPublishedViewOutputs()` 已经保活了每个 live view 的
+  `displayImage()` / `color` / `depth` / `entityId`，那三个调用没有新增任何保活对象。
+
+### 验证证据
+
+- build：`ya-render-3d` / `ya-game-runtime` / `ya-runtime` / `ya-game-editor` / `ya-render-3d-test` /
+  `ya-testing` 全部 `build ok`。
+- `xmake r ya-render-3d-test`：**177/177**（`RenderRuntimeSnapshotTest.EmptyDevicePublishesEmptyViewportResources`
+  改为按 (flight, viewId) 查询，正是本轮要证明的语义）。
+- `ya-testing` 滤镜：681 passed / 11 skipped / 6 failed，6 个与已登记基线逐项相同。
+- parity：**PASS**，两张截图 md5 均为 `c775245ae636f15b41da8485319a2267`（逐字节同基线）。
+- 编辑器 smoke：**exit=0**，六步全过（其中第 2 步断言 `rendered_viewport_extent` 非退化，
+  现在这条断言走的就是「宿主 View 的 output extent」）。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：`HostViewState.{view,projection,cameraPos}` 仍在（= AB8-step2）。编辑器视口的相机、
+  overlay 与 picking 今天读的仍是它，所以 declareViews 里的三个赋值这轮没有动。
+- 保留并记录一处差异（不录制的那一帧）：binding 在 `record()` 之前写，所以当 `acquirePresentFrame`
+  失败、整帧不录制时（surface 被最小化等），binding 已经指向「本帧本来打算用的 flight」；旧代码那时
+  保留上一帧的 identity。在 `flightFrameSize = 1` 的实际配置下 flight 恒为 0，两者都读到上一次录制的
+  结果，行为一致；多 flight 时这是一个需要重新审视的点，记在这里而不是假装不存在。
+- 未完成：AB8-step2（HostViewState 拆分，需要先定 PIE 相机归属）、AB7（record 编排搬回应用侧）。
+- 偏离：无。parity 与 smoke 与基线逐字节一致。
+
 ### 下一刀建议
 
-AB7 优先于 AB4-step2：本轮的结论是，「整帧录制编排住在 Framework」才是这条线的核心问题，而额外窗口
-（AB4-step2）是它的一个下游症状——额外窗口之所以只能自己 `presentGuiSnapshot`，正是因为「这一帧
-如何组装、如何 present」被写死在 renderer 里。先把 `RenderDeviceState` 的记录编排搬到应用侧
-`RuntimeRenderContext`，额外窗口才有地方接入同一条路。
-
-搬之前要先处理本轮记录的那项：`AppAutomation.cpp` 直接访问 `_pipelineCoordinator` 的私有布局，
-它是 app→renderer 内部结构的依赖，拆分时会挡住。
+AB8-step2 优先，但需要先做一个决定：**PIE 下编辑器视口的 overlay / picking 用哪个相机**。
+今天的 `HostViewState.view/projection/cameraPos` 是「宿主窗口显示的那个 View 的相机」的副本
+（编辑器停止态 = 编辑器相机；PIE = 游戏相机）。要删掉这份副本，编辑器必须自己回答这个问题，
+而两种答案的行为不同（PIE 下 overlay/picking 跟着游戏相机 vs 跟着编辑器相机）。这是产品语义，
+不该由我替选。做完 step2 后，AB7（把整帧录制编排搬到应用侧 RuntimeRenderContext）才没有挡路项；
+AB4-step2（额外窗口）是 AB7 的下游。

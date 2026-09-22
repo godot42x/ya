@@ -103,8 +103,14 @@ void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan, const Sc
             prepareDerivedState(scene, plan.frame.deltaTime);
         }
     }
-    applyPendingMutations();
-    applyViewResize(displayRoot ? displayRoot->desc.outputRect : Rect2D{});
+    // One call for the safe-point mutations and the View rect: the rect is this
+    // frame's declaration (`displayRoot`), so nothing here remembers a View's
+    // geometry between frames. See PipelineCoordinator::applyPendingChanges.
+    _pipelineCoordinator.applyPendingChanges(displayRoot ? displayRoot->desc.outputRect : Rect2D{});
+    // Prepares the runtime UI-compose pass from the pipeline's own postprocess
+    // format. There used to be a second, conditional call right below that read
+    // the *previous* frame's published display image to learn the same format --
+    // a stale read whose only answer this one already has.
     prepareComposePipelines();
     // Pre-record preparation: resolve each View's Scene-keyed GPU bindings now,
     // while the View's own declaration still names its Scene, so recording never
@@ -114,15 +120,6 @@ void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan, const Sc
         if (recording.frameData) {
             resolveViewSceneResources(recording.task ? recording.task->desc.scene : nullptr,
                                       recording.frameData->sceneResources);
-        }
-    }
-    if (plan.frame.uiFrameSnapshot) {
-        if (auto uiTarget = getViewDisplayImageShared()) {
-            prepareRender2DComposePassPipeline(
-                FRender2DComposePassDesc{
-                    .kind = ERender2DComposePassKind::RuntimeUIComposite,
-                },
-                uiTarget->getFormat());
         }
     }
 }
@@ -184,11 +181,16 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
         if (!plan.sceneRender.empty()) {
             recordViewFamilies(plan);
         }
-        // Everything below -- the compose insets, the display target, the
-        // host's later reads -- resolves through this one identity, so it is set
-        // before any of them, and a tick with no display root clears it.
-        publishViewOutputIdentity(plan.frame.flightIndex, displayRoot ? displayRoot->desc.viewId : 0);
     }
+
+    // This frame's display root, resolved once from the plan and after the
+    // families published their outputs. Everything below -- the UI compose
+    // target, the insets, the surface backdrop -- reads this View's output. The
+    // renderer does not remember it between frames: which View the host window
+    // shows is the app's arrangement, and the app asks for it by id
+    // (`getViewOutput(flight, viewId)`).
+    const RenderViewOutput* displayOutput =
+        displayRoot ? getViewOutput(plan.frame.flightIndex, displayRoot->desc.viewId) : nullptr;
 
     std::vector<ViewDisplayInset> composeInsets = plan.viewCompose.insets;
     if (!plan.sceneRender.empty()) {
@@ -208,7 +210,9 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     std::vector<ViewDisplayInsetImage> insetImages;
     insetImages.reserve(composeInsets.size());
     for (const auto& inset : composeInsets) {
-        const RenderViewOutput* output = getViewOutput(inset.viewId);
+        // Insets name their own Views, so each is read by id from this frame's
+        // flight -- not from "the current View".
+        const RenderViewOutput* output = getViewOutput(plan.frame.flightIndex, inset.viewId);
         if (!output || inset.viewId == 0) {
             continue;
         }
@@ -235,7 +239,7 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     // viewport is that View's declared geometry rather than a host camera copy.
     const Extent2D logicalViewExtent = displayRoot ? displayRoot->output.extent : Extent2D{};
     recordCameraViewCompose(cmdBuf.get(),
-                            getViewDisplayImageShared().get(),
+                            displayOutput ? displayOutput->displayImage().get() : nullptr,
                             plan.frame.uiFrameSnapshot,
                             logicalViewExtent,
                             insetImages);
@@ -245,7 +249,7 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     if (RenderSubmission* submission = _submissions.get(plan.frame.flightIndex)) {
         if (presentation) {
             presentation->recordDisplayCompose(
-                plan.present.backdrop == ESurfaceBackdrop::ViewDisplayImage ? getViewDisplayImage()
+                plan.present.backdrop == ESurfaceBackdrop::ViewDisplayImage ? surfaceImageFor(displayOutput)
                                                                             : FSurfaceImage{},
                 *submission,
                 plan.frame.deltaTime,
@@ -256,18 +260,9 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
 
     const uint32_t flightIndex = plan.frame.flightIndex;
     retainPublishedViewOutputs(flightIndex, cmdBuf.get());
-    auto retain = [&](auto resource) {
-        if (!resource) {
-            return;
-        }
-        if (RenderSubmission* submission = _submissions.get(flightIndex)) {
-            submission->retain(resource);
-        }
-        cmdBuf->retireResource(resource);
-    };
-    retain(getViewDisplayImageShared());
-    retain(getActiveViewImageShared());
-    retain(getPostprocessOutputImageShared());
+    // No second keepalive pass here: retainPublishedViewOutputs already retains
+    // every live View's display image, colour, depth and entity-id -- including
+    // the display root's, which is what the three extra calls used to repeat.
 
     endFrameCommandBuffer(cmdBuf.get());
     RenderSubmission* submission = _submissions.get(flightIndex);
@@ -286,12 +281,6 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     };
 }
 
-void RenderDeviceState::clearPublishedViewOutputs()
-{
-    _publishedOutputFlight = MAX_FLIGHTS_IN_FLIGHT;
-    _publishedOutputViewId = 0;
-}
-
 void RenderDeviceState::resolveViewSceneResources(Scene* scene, RenderViewSceneResources& out)
 {
     // Same calls the passes used to make through the services interface, moved
@@ -305,49 +294,8 @@ void RenderDeviceState::resolveViewSceneResources(Scene* scene, RenderViewSceneR
         _sharedResourceProvider.getSceneEnvironmentLightingDescriptorSet(scene);
 }
 
-void RenderDeviceState::publishViewOutputIdentity(uint32_t flightIndex, SceneViewId displayViewId)
+FSurfaceImage RenderDeviceState::surfaceImageFor(const RenderViewOutput* output) const
 {
-    // The one place that decides which View's output the host view shows.
-    // The plan names it, so the answer is not "whichever family was recorded
-    // last", and a tick that declared no display root clears the identity
-    // instead of leaving the previous tick's View readable as if this frame had
-    // produced it. Readers go through publishedViewOutput(), which resolves the
-    // identity against this flight's table, so a stale identity cannot outlive
-    // the outputs it names.
-    if (displayViewId == 0) {
-        clearPublishedViewOutputs();
-        return;
-    }
-
-    _publishedOutputFlight = flightIndex;
-    _publishedOutputViewId = displayViewId;
-}
-
-std::shared_ptr<RenderTexture> RenderDeviceState::getActiveViewImageShared() const
-{
-    // The host viewport's colour, and nothing else: this is the View the plan
-    // named as its display root, so a tick that published none has no viewport
-    // image. Falling back to "whatever the pipeline last published" would answer
-    // a question about a different frame with a plausible-looking image.
-    if (const auto* output = publishedViewOutput()) {
-        return output->color;
-    }
-    return nullptr;
-}
-
-std::shared_ptr<RenderTexture> RenderDeviceState::getViewDisplayImageShared() const
-{
-    if (const auto* output = publishedViewOutput()) {
-        if (auto image = output->displayImage()) {
-            return image;
-        }
-    }
-    return nullptr;
-}
-
-FSurfaceImage RenderDeviceState::getViewDisplayImage() const
-{
-    const RenderViewOutput* output = publishedViewOutput();
     if (!output) {
         return {};
     }
@@ -371,28 +319,13 @@ FSurfaceImage RenderDeviceState::getViewDisplayImage() const
     return FSurfaceImage{.image = std::move(image), .encoding = encoding};
 }
 
-const RenderViewOutput* RenderDeviceState::publishedViewOutput() const
+const RenderViewOutput* RenderDeviceState::getViewOutput(uint32_t flightIndex, SceneViewId viewId) const
 {
-    if (_publishedOutputFlight >= MAX_FLIGHTS_IN_FLIGHT || _publishedOutputViewId == 0) {
-        return nullptr;
-    }
-    return _viewOutputs.find(_publishedOutputFlight, _publishedOutputViewId);
-}
-
-const RenderViewOutput* RenderDeviceState::getViewOutput(uint64_t viewId) const
-{
-    if (viewId == 0) {
-        return nullptr;
-    }
-    // This flight only. The question is "the View this frame recorded", and
-    // scanning other flights answers it with a View from another frame that
-    // happens to share an id -- which is exactly how a stale image gets shown as
-    // if it were current. A consumer that genuinely needs an older image (the
-    // viewport debug catalog) holds its own handle instead of searching here.
-    if (_publishedOutputFlight >= MAX_FLIGHTS_IN_FLIGHT) {
-        return nullptr;
-    }
-    return _viewOutputs.find(_publishedOutputFlight, viewId);
+    // The flight is the caller's answer, not this object's memory. Scanning
+    // other flights would answer with a View from another frame that happens to
+    // share an id -- which is exactly how a stale image gets shown as if it were
+    // current.
+    return _viewOutputs.find(flightIndex, viewId);
 }
 
 void RenderDeviceState::publishFamilyResult(uint32_t flightIndex, ViewFamilyRenderResult familyResult)
@@ -431,19 +364,6 @@ void RenderDeviceState::retainPublishedViewOutputs(uint32_t flightIndex, IComman
         retain(output->depth);
         retain(output->entityId);
     }
-}
-
-EFormat::T RenderDeviceState::getViewDisplayImageFormat() const
-{
-    // Mirrors getViewDisplayImageShared(): the display image is always the
-    // finalize output, so its format is the pipeline's postprocess format and
-    // never the raw view color format. Pipeline-configured and stable, so it is
-    // known before the world graph creates the actual image (first-frame
-    // Render2D pipeline prep).
-    if (auto* pipeline = _pipelineCoordinator.getActivePipeline()) {
-        return pipeline->getPostprocessColorFormat();
-    }
-    return EFormat::Undefined;
 }
 
 void RenderDeviceState::endFrameCommandBuffer(ICommandBuffer* cmdBuf)

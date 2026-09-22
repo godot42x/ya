@@ -116,18 +116,26 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
 
     auto& renderServices = app.getRenderServices();
     auto* device         = renderServices.getDeviceState();
-    // The window the frame presented: the image is only meaningful for a named
-    // surface, so both automation consumers below read the primary surface's
-    // presentation rather than an unnamed "current window" on the renderer.
     auto* render         = renderServices.getRender();
     auto* primarySurface = render ? render->getPrimarySurfaceContext() : nullptr;
     const auto presentationImage =
         (device && primarySurface) ? device->getPresentationImageShared(*primarySurface) : nullptr;
+    // The three images automation may capture, each named: the host viewport's
+    // View supplies the world images and the primary surface supplies the
+    // window's. "The postprocess output" is that View's finalize image when it
+    // has one of its own -- when it does not, the View's colour IS the image,
+    // which is why the pair is offered and the consumer picks.
+    const RenderViewOutput* hostViewport = renderServices.getHostViewportOutput();
+    const auto              postprocessImage =
+        (hostViewport && hostViewport->display && hostViewport->display != hostViewport->color)
+            ? hostViewport->display
+            : nullptr;
+    const auto viewportImage = hostViewport ? hostViewport->color : nullptr;
     if (auto* automationControl = app.getAutomationControlService()) {
         automationControl->onTickCompleted(app,
                                             renderServices.getRender(),
-                                            device ? device->getPostprocessOutputImageShared() : nullptr,
-                                            device ? device->getActiveViewImageShared() : nullptr,
+                                            postprocessImage,
+                                            viewportImage,
                                             presentationImage,
                                             App::_hostTick);
     }
@@ -140,8 +148,8 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
         AppAutomation::onTickCompleted(app,
                                         AppAutomationTickContext{
                                             .render                     = renderServices.getRender(),
-                                            .postprocessImage           = device ? device->getPostprocessOutputImageShared() : nullptr,
-                                            .viewportImage              = device ? device->getActiveViewImageShared() : nullptr,
+                                            .postprocessImage           = postprocessImage,
+                                            .viewportImage              = viewportImage,
                                             .presentationImage          = presentationImage,
                                             .requestRenderDocCapture    = diagnosticsService
                                                                             ? [diagnosticsService]()
@@ -335,6 +343,19 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 
     TickFrame gameFrame = buildGameRenderFrame(app, dt, flightIndex, sceneRender);
 
+    // The app's arrangement for this frame: which View the host window shows,
+    // and in which flight its output was published. Written once, here, from the
+    // plan -- before the recording below, because the editor's compose and chrome
+    // stages run *inside* it and read this View. The renderer never learns this:
+    // it publishes every View and names none of them "the current one".
+    {
+        const SceneViewTask* displayRoot = sceneRender.displayRootTask();
+        app._renderState->hostViewport = HostViewportBinding{
+            .viewId      = displayRoot ? displayRoot->desc.viewId : 0,
+            .flightIndex = flightIndex,
+        };
+    }
+
     IRender*       render        = device->getRender();
     FPresentFrame  presentFrame{.surface = render ? render->getPrimarySurfaceContext() : nullptr};
     {
@@ -403,12 +424,14 @@ void GameRuntimeTickOrchestrator::declareViews(App&                  app,
         if (!view.isDisplayRoot()) {
             continue;
         }
-        // The extent the device expects follows the declaration instead of a rect
-        // pushed into host state.
         hostView.view       = view.view;
         hostView.projection = view.projection;
         hostView.cameraPos  = view.cameraPos;
-        device->applyViewResize(view.outputRect);
+        // The pipeline's view rect is deliberately NOT pushed at the renderer
+        // here: the plan is the source, and prepareFrameRecord hands the display
+        // root's rect to the pipeline as it records. Pushing it from both places
+        // is how the renderer came to hold a second opinion about a View's
+        // geometry.
         bHostViewportDeclared = true;
         break;
     }

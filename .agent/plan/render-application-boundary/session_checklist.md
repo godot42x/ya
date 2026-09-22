@@ -32,6 +32,20 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-22 AB8-step1：帧的 View 事实只从计划里读一次。`RenderDeviceState::_pipelineViewRect`
+  与 `applyViewResize()` 删除，`PipelineCoordinator::applyPendingChanges(Rect2D viewRect)` 收本帧
+  View rect（来自 plan 的 display root），自己只持有 `_appliedViewRect`；`reapplyViewRectSink` 删除；
+  `declareViews` 不再把 rect 推给 device。renderer 不再记录「哪个 View 是宿主的」：
+  `_publishedOutputViewId` / `publishViewOutputIdentity()` / `publishedViewOutput()` 删除，应用侧新增
+  `HostViewportBinding{viewId, flightIndex}`（唯一写者 `tickRender`，从 plan 的 display root）。
+  无身份查询（`getViewExtent` / `getActiveViewImageShared` / `getViewDisplayImageShared` /
+  `getPostprocessOutputImageShared` / `getViewDisplayImage` / `getViewDisplayImageFormat`）全部删除，
+  改为 `getViewOutput(flightIndex, viewId)` / `surfaceImageFor(...)` /
+  `buildViewportSnapshot(flightIndex, viewId, Scene*)`。顺带删掉 `prepareFrameRecord` 里读上一帧
+  display image 格式的冗余 prepare，与 `record()` 结尾三个重复的 `retain`。验证：6 个目标 build ok；
+  `ya-render-3d-test` 177/177；滤镜 681 passed / 11 skipped / 6 failed（与基线同 6 个）；parity PASS
+  （md5 `c775245a…`）；编辑器 smoke exit=0。下一刀：AB8-step2（`HostViewState` 拆分），需先定 PIE
+  下编辑器视口 overlay/picking 用哪个相机。
 - 2026-09-22 AB3-step1：编辑器通过应用读渲染器。`IRenderPipeline` 增加 `kind()` /
   `getLastFrameGraphTopology()` / `IRenderPipelineSettings` facet；`DeferredRenderPipeline::SettingsSnapshot`
   上移为 `Render3D/Common/RenderPipelineSettings.h` 的 `RenderPipelineSettings`（带 `kind`），Forward 实现同一 facet；

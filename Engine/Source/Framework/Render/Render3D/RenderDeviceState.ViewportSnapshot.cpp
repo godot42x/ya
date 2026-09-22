@@ -4,20 +4,25 @@
 namespace ya
 {
 
-RenderViewportSnapshot RenderDeviceState::buildViewportSnapshot(Scene* inspectScene) const
+RenderViewportSnapshot RenderDeviceState::buildViewportSnapshot(uint32_t   flightIndex,
+                                                              SceneViewId viewId,
+                                                              Scene*      inspectScene) const
 {
-    const auto debugOutputs = buildPipelineDebugOutputCatalog();
+    const auto debugOutputs = buildPipelineDebugOutputCatalog(flightIndex, viewId);
 
     RenderViewportSnapshot snapshot;
     snapshot.bForwardPipeline       = (_pipelineCoordinator.getRenderPipeline() == ERenderPipeline::Forward);
     snapshot.bPostprocessingEnabled = debugOutputs.bPostprocessingEnabled;
-    if (const auto* output = publishedViewOutput()) {
+    if (const auto* output = getViewOutput(flightIndex, viewId)) {
         snapshot.viewportImageOwner = output->displayImage();
         snapshot.viewDepthOwner = output->depth;
         snapshot.entityIdImageOwner = output->entityId;
     }
     else {
-        snapshot.viewportImageOwner = getViewDisplayImageShared();
+        // No output for the named View this flight: the panel shows the
+        // pipeline's own persistent targets, which hold the last frame that did
+        // render. Named as the fallback it is, rather than reached for by a
+        // getter that pretends to know which View is current.
         if (auto* pipeline = getActivePipeline()) {
             snapshot.viewDepthOwner = pipeline->getViewDepthImageShared();
             snapshot.entityIdImageOwner = pipeline->getEntityIdImageShared();
@@ -30,7 +35,8 @@ RenderViewportSnapshot RenderDeviceState::buildViewportSnapshot(Scene* inspectSc
     // One resolved input for both: the catalog (metadata, cached by digest) and
     // the images the panel uploads. Resolving here keeps the builder a pure
     // function of handles -- it never asks the renderer which pipeline ran.
-    const ViewportDebugCatalogInput debugInput = makeViewportDebugCatalogInput(inspectScene);
+    const ViewportDebugCatalogInput debugInput =
+        makeViewportDebugCatalogInput(flightIndex, viewId, inspectScene);
 
     snapshot.debugCatalog = _viewportDebugCache.get(debugInput);
     if (snapshot.debugCatalog) {

@@ -131,6 +131,48 @@ AB4-step2（待做）：让**额外的 OS 窗口走同一条路**。现状：额
 AB4-step3（待做）：`PresentationGraphService` 只保留「把 ready image 写进 surface」+ 宿主
 display stage 的顺序；acquire / submit / present 的编排留在应用。
 
+### AB8 — 同一事实只有一个来源：帧的 View 事实（step 1 已落地，step 2 待做）
+
+唯一目标：**「这一帧的 View 有多大、宿主窗口显示哪个 View」只从计划里读一次**，
+不再有「设置里抄一份、设备里记一份、应用再推一份」。
+
+判据来自两层结论的共同点：`getViewExtent()` 不是「放错层」，而是它的语义缺一个身份；
+问题也不只是命名，而是**同一个事实存在多个写入者**。本 checkpoint 只动两个已被确认重复的事实：
+
+AB8-step1（已落地）：
+
+- **pipeline 的 view rect 改为输入，不再由 renderer 保存。**
+  `RenderDeviceState::_pipelineViewRect` 与公开的 `applyViewResize()` 删除；
+  `PipelineCoordinator::applyPendingChanges(Rect2D viewRect)` 收本帧的 View rect（来自 plan
+  的 display root），自己持有 `_appliedViewRect`（**它自己的已应用状态**，不是 View 声明的副本）。
+  `InitDesc.reapplyViewRectSink` 这个 std::function 随之删除——「重建后要重新套用 rect」
+  现在由参数表达。init 期的窗口尺寸种子改名为 `_initialViewExtent`，并注明它只服务第一次 build。
+  同时删掉 `declareViews` 里那句 `device->applyViewResize(view.outputRect)`：同一个 rect 过去由
+  **两处**推给 renderer，这正是「两个意见」的来源。
+- **renderer 不再决定哪个 View 是宿主的。**
+  删除 `_publishedOutputViewId` / `_publishedOutputFlight` / `publishViewOutputIdentity()` /
+  `publishedViewOutput()`。应用侧新增 `HostViewportBinding{viewId, flightIndex}`（见
+  `AppRenderState.h`），由 `tickRender` 从 plan 的 display root 写一次；`record()` 内部改用局部
+  `displayOutput = getViewOutput(flight, displayRoot->viewId)`。
+- **查询一律带身份。** 删除无身份的 `getViewExtent()`、`getActiveViewImageShared()`、
+  `getViewDisplayImageShared()`、`getPostprocessOutputImageShared()`、`getViewDisplayImage()`、
+  `getViewDisplayImageFormat()`；改为 `getViewOutput(flightIndex, viewId)` 与
+  `surfaceImageFor(const RenderViewOutput*)`。`buildViewportSnapshot(flightIndex, viewId, Scene*)`
+  同样带身份。应用侧 `AppRenderServices` 用自己保存的 binding 解析：`getHostViewportOutput()`、
+  `getHostViewportViewId()`、`getViewOutput(viewId)`。自动化截图的三张图（postprocess /
+  viewport / presentation）改由应用**指名**取值，不再问 device「当前 viewport 是哪张」。
+- 顺带删掉两处已死的重复工作：`prepareFrameRecord` 里用**上一帧**已发布 display image 的格式
+  去 prepare UI compose pipeline（同一函数上方 `prepareComposePipelines()` 已经用 pipeline 自己的
+  postprocess format 做过同一件事）；以及 `record()` 结尾三个 `retain(...)`——
+  `retainPublishedViewOutputs()` 已经保活了每个 live view 的 display/color/depth/entityId。
+
+AB8-step2（待做）：**`HostViewState` 拆成设置与排布**。现状它同时装着
+`clock/renderResolution/renderScale`（设置）与 `view/projection/cameraPos`（某个
+`SceneViewDesc` 的副本）。目标是 `HostRenderSettings{clock, renderResolution, renderScale}`
+加应用侧排布里的 View 相机；编辑器与 automation 读排布，而不是读一个看起来像设置的 struct。
+这一步需要先定一件事：**PIE 下编辑器视口 overlay / picking 该用哪个相机**（今天用的是宿主副本
+= 游戏相机；直接用编辑器相机是行为变更），所以它是一个需要拍板的设计点，不是机械搬迁。
+
 ### AB5 — 命名对齐语义（待做，必须在 AB3/AB4 之后）
 
 | 当前 | 目标 | 理由 |

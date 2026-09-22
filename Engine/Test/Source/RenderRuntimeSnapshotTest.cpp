@@ -51,19 +51,15 @@ TEST(RenderRuntimeSnapshotTest, EmptyDevicePublishesEmptyViewportResources)
 
     EXPECT_EQ(device.getLiveSubmission(0), nullptr);
     EXPECT_EQ(device.getLiveSubmission(MAX_FLIGHTS_IN_FLIGHT), nullptr);
-    EXPECT_EQ(device.getViewOutput(1), nullptr);
+    EXPECT_EQ(device.getViewOutput(0, 1), nullptr);
 
-    // No tick has published a display root, so every host-viewport accessor
-    // answers "nothing". Falling back to pipeline state would answer with an
-    // image from another frame, which is how a stale viewport gets read as the
-    // current one.
-    EXPECT_EQ(device.getActiveViewImageShared(), nullptr);
-    EXPECT_EQ(device.getViewDisplayImageShared(), nullptr);
-    EXPECT_EQ(device.getPostprocessOutputImageShared(), nullptr);
-    EXPECT_EQ(device.getViewExtent().width, 0u);
-    EXPECT_EQ(device.getViewExtent().height, 0u);
+    // No tick has recorded anything, so every View query answers "nothing" for
+    // its named identity. Which View the host window shows is the app's
+    // arrangement, so the renderer has no unnamed host-viewport accessor left to
+    // fall back through.
+    EXPECT_EQ(device.surfaceImageFor(device.getViewOutput(0, 1)).image, nullptr);
 
-    const RenderViewportSnapshot viewport = device.buildViewportSnapshot();
+    const RenderViewportSnapshot viewport = device.buildViewportSnapshot(0, 0);
     const RenderTargetCatalog    targets  = device.buildRenderTargetCatalog();
 
     EXPECT_EQ(viewport.viewportImageOwner, nullptr);

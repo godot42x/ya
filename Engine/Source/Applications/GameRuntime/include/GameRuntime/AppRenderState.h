@@ -20,6 +20,22 @@ namespace ya
 /// arrangement: which Views this tick draws is decided inside the tick
 /// (`SceneRenderScheduler` lives there), so nothing here is a leftover of the
 /// previous tick that a reader has to reason about.
+/// Which View the host window shows for the frame that was just recorded, and in
+/// which flight its output was published.
+///
+/// This is an arrangement, not a renderer fact: the app derives it from the
+/// plan's display root (the View whose `composeOntoViewId == 0`), and the
+/// renderer only ever stores every View's output. Keeping it here is what lets
+/// `RenderDeviceState` publish Views without naming one of them "the current
+/// one".
+struct HostViewportBinding
+{
+    SceneViewId viewId      = 0;
+    /// `MAX_FLIGHTS_IN_FLIGHT` means "no frame has been recorded yet", the same
+    /// way `viewId == 0` means "this frame showed no View".
+    uint32_t    flightIndex = MAX_FLIGHTS_IN_FLIGHT;
+};
+
 struct AppRenderState
 {
     std::unique_ptr<RenderDeviceState>      device;
@@ -38,6 +54,10 @@ struct AppRenderState
     /// that describes a viewport instead of a Scene.
     std::vector<Scene*>                     renderedScenesLastTick;
     std::array<std::vector<RenderFrameData>, MAX_FLIGHTS_IN_FLIGHT> viewFrameDataPerFlight{};
+    /// The frame's host-viewport arrangement. Written by the tick when a frame
+    /// was recorded, read by every consumer that asks "the image the window
+    /// shows" -- the panels, automation screenshots and the editor's viewport.
+    HostViewportBinding hostViewport{};
 };
 
 } // namespace ya

@@ -40,20 +40,32 @@ struct YA_RENDER_3D_API PipelineCoordinator
         RenderSharedResourceProvider* sharedResourceProvider = nullptr;
         /// Debug overlay sink, injected into the pipelines that draw it.
         DebugRenderSystem*            debugRenderSystem     = nullptr;
-        /// Initial view extent in pixels. Not swapchain extent.
-        int                           viewWidth         = 0;
-        int                           viewHeight        = 0;
-        /// Invoked after a pipeline switch/reload so the owner can re-apply
-        /// its current view rect to the freshly built pipeline.
-        std::function<void()>         reapplyViewRectSink;
+        /// Initial view extent in pixels, used for the first pipeline build
+        /// only. Not swapchain extent. The first frame's View rect replaces it
+        /// (see `applyPendingChanges`), so this is a seed for "what size is a
+        /// pipeline before any View has declared one", not a viewport fact.
+        int                           initialViewWidth      = 0;
+        int                           initialViewHeight     = 0;
     };
 
     void init(const InitDesc& desc);
     void shutdown();
 
-    /// Applied at frame start: pending pipeline switch/reload first, then the
-    /// queued render-target format commands (both act on the active pipeline).
-    void applyPendingChanges();
+    /// Applied at frame start, in this order: pending pipeline switch/reload,
+    /// the queued render-target format commands, and the view rect.
+    ///
+    /// `viewRect` is the frame's View rect -- the plan's display root -- as an
+    /// INPUT. A pipeline built or rebuilt inside this call is sized from it, and
+    /// a pipeline whose rect differs is resized. Holding the rect here instead
+    /// (as the renderer used to) meant two opinions about a View's geometry, and
+    /// the app had to push the same rect at the renderer every tick to keep them
+    /// in step. A degenerate rect is "this frame declared no View": the last
+    /// applied rect stands, because a pipeline keeps rendering its last geometry
+    /// and a freshly built one must not come up at the init seed.
+    ///
+    /// Returns true when a pipeline was (re)built, which is also when the rect
+    /// must be re-applied even if it did not change.
+    bool applyPendingChanges(Rect2D viewRect);
 
     [[nodiscard]] IRenderPipeline* getActivePipeline() const;
     [[nodiscard]] ForwardRenderPipeline*  getSelectedForwardPipeline() const;
@@ -74,16 +86,20 @@ struct YA_RENDER_3D_API PipelineCoordinator
     void initForwardPipeline(int viewWidth, int viewHeight);
     void initDeferredPipeline(int viewWidth, int viewHeight);
     void shutdownActivePipeline();
-    void applyPendingRenderPipelineSwitch();
+    /// Returns true when a switch/reload rebuilt the active pipeline.
+    bool applyPendingRenderPipelineSwitch();
     void applyPendingRenderTargetFormatCommands();
 
     IRender*                         _render                = nullptr;
     IRenderRuntimeHostServices*      _hostServices          = nullptr;
     RenderSharedResourceProvider*    _sharedResourceProvider = nullptr;
     DebugRenderSystem*               _debugRenderSystem      = nullptr;
-    std::function<void()>            _reapplyViewRectSink;
-    int                              _viewWidth         = 0;
-    int                              _viewHeight        = 0;
+    int                              _initialViewWidth      = 0;
+    int                              _initialViewHeight     = 0;
+    /// This coordinator's own applied state: the rect its current pipelines were
+    /// last sized to. Not a copy of a View's declaration -- the View's rect
+    /// arrives as an argument on every call.
+    Rect2D                           _appliedViewRect{};
 
     ERenderPipeline _renderPipeline          = ERenderPipeline::Deferred;
     ERenderPipeline _pendingRenderPipeline   = ERenderPipeline::Deferred;

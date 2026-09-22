@@ -60,9 +60,11 @@ void RenderDeviceState::initRuntimeState(const InitDesc& desc)
     _environmentLightingProvider = desc.environmentLightingProvider;
 
     currentRenderAPI = ERenderAPI::Vulkan;
-    _pipelineViewRect = Rect2D{
-        .pos    = {0.0f, 0.0f},
-        .extent = {static_cast<float>(desc.windowWidth), static_cast<float>(desc.windowHeight)},
+    // A seed for the first pipeline build only: the first frame's View rect
+    // replaces it. Not a "current viewport" -- see the member's declaration.
+    _initialViewExtent = Extent2D{
+        .width  = desc.windowWidth,
+        .height = desc.windowHeight,
     };
 }
 
@@ -185,16 +187,8 @@ void RenderDeviceState::initSharedRenderResources()
         .hostServices          = _hostServices,
         .sharedResourceProvider = &_sharedResourceProvider,
         .debugRenderSystem     = &DebugRenderSystem::get(),
-        .viewWidth         = static_cast<int>(_pipelineViewRect.extent.x),
-        .viewHeight        = static_cast<int>(_pipelineViewRect.extent.y),
-        .reapplyViewRectSink   = [this]()
-        {
-            if (_pipelineViewRect.extent.x > 0.0f && _pipelineViewRect.extent.y > 0.0f) {
-                if (auto* pipeline = getActivePipeline()) {
-                    pipeline->onViewResized(_pipelineViewRect);
-                }
-            }
-        },
+        .initialViewWidth      = static_cast<int>(_initialViewExtent.width),
+        .initialViewHeight     = static_cast<int>(_initialViewExtent.height),
     });
 }
 
@@ -295,8 +289,6 @@ void RenderDeviceState::shutdown(bool bRenderAlreadyIdle)
 
     _submissions.clear();
     _viewOutputs.clear();
-    _publishedOutputFlight = MAX_FLIGHTS_IN_FLIGHT;
-    _publishedOutputViewId = 0;
     _pipelineCoordinator.shutdown();
     // Owned derived-processing systems must release their GPU resources
     // before the render backend is destroyed.

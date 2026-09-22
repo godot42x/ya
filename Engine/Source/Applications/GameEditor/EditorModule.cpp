@@ -451,8 +451,12 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             return;
         }
 
-        auto&          editorCamera   = _layer->getCamera();
-        const Extent2D viewExtent = renderServices.getViewExtent();
+        auto& editorCamera = _layer->getCamera();
+        // Aspect follows the extent the host viewport's View actually rendered
+        // at -- read from that View's output, since the app names which View the
+        // window shows. Nothing here derives it from the window.
+        const RenderViewOutput* hostViewport = renderServices.getHostViewportOutput();
+        const Extent2D viewExtent = hostViewport ? hostViewport->desc.extent : Extent2D{};
         // Keep the editor camera controllable during simulation; only full
         // runtime (PIE) hands viewport input over to the game. 2D canvas
         // preview uses its own pan/zoom navigation instead of the camera.
@@ -525,11 +529,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         const auto snapshot = renderServices.buildViewportSnapshot(app.getSceneServices().getActiveScene());
         _layer->setViewportContext(snapshot);
         _layer->setEntityIdPickImage(snapshot.entityIdImageOwner);
-        // 2D mode disables the world scene graph, so the runtime pipeline never
-        // publishes viewport resources and getViewExtent() stays 0x0;
-        // size the canvas target from the editor panel instead (same fallback
-        // guards a degenerate pipeline extent in 3D).
-        Extent2D canvasTargetExtent = renderServices.getViewExtent();
+        // 2D mode disables the world scene graph, so no View is declared and the
+        // host viewport has no output; size the canvas target from the editor
+        // panel instead (the same fallback guards a degenerate extent in 3D).
+        const RenderViewOutput* hostViewport = renderServices.getHostViewportOutput();
+        Extent2D canvasTargetExtent = hostViewport ? hostViewport->desc.extent : Extent2D{};
         if (_layer->isViewportMode2D() ||
             canvasTargetExtent.width == 0 || canvasTargetExtent.height == 0) {
             canvasTargetExtent = Extent2D::fromVec2(_layer->getViewportSize());

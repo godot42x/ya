@@ -22,9 +22,8 @@ void PipelineCoordinator::init(const InitDesc& desc)
     _hostServices          = desc.hostServices;
     _sharedResourceProvider = desc.sharedResourceProvider;
     _debugRenderSystem     = desc.debugRenderSystem;
-    _reapplyViewRectSink   = desc.reapplyViewRectSink;
-    _viewWidth         = desc.viewWidth;
-    _viewHeight        = desc.viewHeight;
+    _initialViewWidth      = desc.initialViewWidth;
+    _initialViewHeight     = desc.initialViewHeight;
 
     initActivePipeline();
 }
@@ -39,16 +38,36 @@ void PipelineCoordinator::shutdown()
     _hostServices          = nullptr;
     _sharedResourceProvider = nullptr;
     _debugRenderSystem     = nullptr;
-    _reapplyViewRectSink   = {};
-    _viewWidth         = 0;
-    _viewHeight        = 0;
+    _initialViewWidth      = 0;
+    _initialViewHeight     = 0;
+    _appliedViewRect       = Rect2D{};
     _pendingRenderTargetFormatCommands.clear();
 }
 
-void PipelineCoordinator::applyPendingChanges()
+bool PipelineCoordinator::applyPendingChanges(Rect2D viewRect)
 {
-    applyPendingRenderPipelineSwitch();
+    // The rect this call sizes pipelines with. A degenerate rect is not "sized
+    // zero": it is "no View this frame", and the already applied rect stands.
+    const bool bDescribesPixels = viewRect.extent.x > 0.0f && viewRect.extent.y > 0.0f;
+    const bool bRectChanged     = bDescribesPixels &&
+                              (_appliedViewRect.pos.x != viewRect.pos.x ||
+                               _appliedViewRect.pos.y != viewRect.pos.y ||
+                               _appliedViewRect.extent.x != viewRect.extent.x ||
+                               _appliedViewRect.extent.y != viewRect.extent.y);
+    if (bDescribesPixels) {
+        _appliedViewRect = viewRect;
+    }
+
+    const bool bRebuilt = applyPendingRenderPipelineSwitch();
     applyPendingRenderTargetFormatCommands();
+
+    // A rebuilt pipeline is sized at the init seed, so it needs the rect even
+    // when the rect did not change; an unchanged, unrebuilt one needs nothing.
+    IRenderPipeline* pipeline = getActivePipeline();
+    if (pipeline && (bRebuilt || bRectChanged)) {
+        pipeline->onViewResized(_appliedViewRect);
+    }
+    return bRebuilt;
 }
 
 IRenderPipeline* PipelineCoordinator::getActivePipeline() const
@@ -86,8 +105,10 @@ DeferredRenderPipeline* PipelineCoordinator::getSelectedDeferredPipeline() const
 
 void PipelineCoordinator::initActivePipeline()
 {
-    const int windowWidth  = _viewWidth;
-    const int windowHeight = _viewHeight;
+    // The first build uses the init seed; the first frame's View rect arrives
+    // through applyPendingChanges and resizes it.
+    const int windowWidth  = _initialViewWidth;
+    const int windowHeight = _initialViewHeight;
 
     if (_renderPipeline == ERenderPipeline::Forward) {
         initForwardPipeline(windowWidth, windowHeight);
@@ -143,10 +164,10 @@ void PipelineCoordinator::shutdownActivePipeline()
     }
 }
 
-void PipelineCoordinator::applyPendingRenderPipelineSwitch()
+bool PipelineCoordinator::applyPendingRenderPipelineSwitch()
 {
     if (_pendingRenderPipeline == _renderPipeline && !_pendingActivePipelineReload) {
-        return;
+        return false;
     }
     YA_PROFILE_FUNCTION_LOG();
 
@@ -159,10 +180,7 @@ void PipelineCoordinator::applyPendingRenderPipelineSwitch()
     _renderPipeline = _pendingRenderPipeline;
     _pendingActivePipelineReload = false;
     initActivePipeline();
-
-    if (_reapplyViewRectSink) {
-        _reapplyViewRectSink();
-    }
+    return true;
 }
 
 void PipelineCoordinator::requestRenderTargetFormat(const RenderTargetFormatCommand& command)
