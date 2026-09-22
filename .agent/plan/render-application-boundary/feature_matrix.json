@@ -37,11 +37,15 @@
     {
       "id": "presentation_is_a_pass_not_an_orchestrator",
       "phase": "AB4",
-      "status": "pending",
+      "status": "step1_landed_per_surface_present_targets",
       "evidence": [
         "PresentationGraphService already declares a ready-image-only surface pass (F3) and refuses the double-encode pairing",
-        "still open: RenderDeviceState::initPresentationResources builds SurfaceWritePass from the primary swapchain's format, so a second OS window would need a second renderer -- this is the multi-window blocker",
-        "target: Framework keeps DisplayComposePass; the application owns acquire/submit/present and the surface<->view mapping"
+        "step1 landed: new Render3D/Services/SurfacePresentation owns one surface's imported images, per-image executors and its OWN SurfaceWritePass built from that surface's swapchain format",
+        "step1 landed: RenderDeviceState holds std::vector<std::unique_ptr<SurfacePresentation>> instead of one PresentationGraphService + one SurfaceWritePass; record() resolves or builds the target for plan.present.surface before prepareFrameRecord (the same pre-record safe point where prepareComposePipelines already builds pipelines)",
+        "step1 landed: initPresentationResources became initSurfacePresentations -- no GPU work and no primary-surface privilege at init, only the ordered teardown",
+        "step1 landed: getPresentationImageShared(IRenderSurfaceContext&) is non-creating; the two automation consumers name the primary surface explicitly instead of relying on an unnamed current window",
+        "step2 open: extra OS windows still present through the GUI host's presentGuiSnapshot (own acquire/submit/present, GUI chrome only, RenderDeviceState::record not involved), so a torn-off viewport panel shows no world image; their chrome is also not ticked per frame today",
+        "step2 open: therefore no product path exercises a non-primary SurfacePresentation, so step1's payoff is verified structurally (and by the primary path being byte-identical), not end-to-end"
       ]
     },
     {

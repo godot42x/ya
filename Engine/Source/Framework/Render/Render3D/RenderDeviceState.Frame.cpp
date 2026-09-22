@@ -142,7 +142,8 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     //   graphics       → world graph into the display root's offscreen RT
     //   UI             → game UI onto that RT (after post, never into bloom)
     //   view compose   → View insets, then the host's View-compose stage
-    //   display compose→ PresentationGraphService onto swapchain[imageIndex],
+    //   display compose→ this surface's SurfacePresentation onto
+    //                    swapchain[imageIndex],
     //                    running the host's display stages inside it. The
     //                    surface's backdrop is the host's declaration: a View
     //                    display image, or only the pass clear when the host's
@@ -160,6 +161,16 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     // The View whose output the host view shows. It is the plan's answer
     // (V1/V2) and it also supplies the host-level geometry below: the viewport
     // rect a freshly built pipeline is sized from.
+    // The present target, resolved before anything is recorded: a surface the
+    // renderer has never presented through has no images and no write pass yet,
+    // and building them here is the pre-record section where pipeline
+    // construction already happens. The plan names the surface, so which window
+    // this frame presents is the host's answer, not a primary-surface default.
+    SurfacePresentation* presentation = nullptr;
+    if (plan.present.surface) {
+        presentation = &acquireSurfacePresentation(*plan.present.surface);
+    }
+
     const SceneViewTask* displayRoot = plan.sceneRender.displayRootTask();
     prepareFrameRecord(plan, displayRoot);
 
@@ -232,13 +243,15 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
         plan.recordExtensions->recordViewCompose(*cmdBuf, plan.frame.deltaTime);
     }
     if (RenderSubmission* submission = _submissions.get(plan.frame.flightIndex)) {
-        _presentationGraphService.recordDisplayCompose(
-            plan.present.backdrop == ESurfaceBackdrop::ViewDisplayImage ? getViewDisplayImage()
-                                                                        : FSurfaceImage{},
-            *submission,
-            plan.frame.deltaTime,
-            plan.recordExtensions,
-            cmdBuf.get());
+        if (presentation) {
+            presentation->recordDisplayCompose(
+                plan.present.backdrop == ESurfaceBackdrop::ViewDisplayImage ? getViewDisplayImage()
+                                                                            : FSurfaceImage{},
+                *submission,
+                plan.frame.deltaTime,
+                plan.recordExtensions,
+                cmdBuf.get());
+        }
     }
 
     const uint32_t flightIndex = plan.frame.flightIndex;

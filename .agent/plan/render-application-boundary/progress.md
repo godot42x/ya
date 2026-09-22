@@ -62,9 +62,59 @@ include 从 `GameRuntime/Lifecycle/<Name>.h` 改为 `GameRuntime/Render/<Name>.h
   AB5（命名）、AB6（`Common`/`Services` 归类）、AB7（`RenderDeviceState` → `Renderer`）。
 - 偏离：无。AB2 是纯搬迁，未混入任何行为改动。
 
+## 2026-09-22 AB4-step1 — present target 从「主窗口」变成 per-surface
+
+复核到的结构性阻塞：`RenderDeviceState::initPresentationResources` 只为主窗口做一次
+`PresentationGraphService` + `SurfaceWritePass`，且 `SurfaceWritePass` 的 pipeline 是从**主
+swapchain 的 format** 建的。这使得「第二个 OS 窗口」在结构上要求复制整个 renderer——这正是
+多窗口（`gui-multi-os-window-editor`）的硬阻塞。
+
+### 改动
+
+- 新增 `Render3D/Services/SurfacePresentation.{h,cpp}`：一个 OS 窗口的 present 目标，拥有
+  `PresentationGraphService`（该 surface 的导入图 + 每图 executor）与它**自己**的
+  `SurfaceWritePass`（按该 surface 的 swapchain format 构建），并转发
+  `recordDisplayCompose` / `currentImageShared`。
+- `RenderDeviceState`：删 `PresentationGraphService _presentationGraphService` 与
+  `stdptr<SurfaceWritePass> _surfaceWritePass`，改为
+  `std::vector<std::unique_ptr<SurfacePresentation>> _surfacePresentations`，配
+  `findSurfacePresentation`（非创建）与 `acquireSurfacePresentation`（find-or-build）。
+- `initPresentationResources` → `initSurfacePresentations`：init 期不再建 GPU 资源，也不再
+  有主 surface 特权；这里只 push teardown，保证每个 surface 的导入图与 write pass 都在
+  render backend 之前销毁（与其它 device 资源同一条有序栈）。
+- `record()`：在 `prepareFrameRecord` 之前按 `plan.present.surface` 解析/构建 present target。
+  选择点写在注释里——这是录制前的 safe point，`prepareComposePipelines` 已经在同一段建管线，
+  而命令录制开始后不再有任何构建。
+- `getPresentationImageShared()` 改为收 `IRenderSurfaceContext&`，并明确是**非创建**查询：
+  没呈现过的 surface 返回空，不为回答查询而建图。`GameRuntimeTickOrchestrator::iterate` 里两个
+  automation 消费点改为显式读主 surface 的 presentation（不再依赖 renderer 上的匿名“当前窗口”）。
+- `buildRenderTargetCatalog()` 里那处 `_presentationGraphService` 用法改为显式取主 surface 的
+  presentation，并在注释里点明：它是编辑器面向的查询，属于计划 AB3 要搬出 renderer 的部分。
+
+### 验证证据
+
+- build：`ya-render-3d` / `ya-game-runtime` / `ya-runtime` / `ya-game-editor` / `ya-render-3d-test` /
+  `ya-testing` 全部 `build ok`。
+- `xmake r ya-render-3d-test`：**177/177**。
+- `ya-testing` 滤镜：681 passed / 11 skipped / 6 failed，6 个与基线逐项相同。
+- parity：**PASS**，两张截图 md5 均为 `c775245ae636f15b41da8485319a2267`（逐字节同基线）。
+- 编辑器 smoke：exit=0，六步全过。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：`PresentationGraphService` 本身没改（它已经是「吃一个 surface」的形状），改名到
+  `DisplayComposer` 属 AB5。
+- 未完成：AB4-step2（额外 OS 窗口走同一条 present 路）与 step3。
+- **未验证的部分要说清楚**：产品路径上还没有任何「非主 surface 的 presentation」，
+  所以这次改动的好处尚未端到端验证；已验证的是主 surface 路径逐字节不变、
+  且表结构允许第二个 surface 自带自己的 format 与 write pass。额外窗口今天仍走 GUI host 的
+  `presentGuiSnapshot`（自建 acquire/submit/present，只呈现 GUI chrome，`record` 不参与），
+  所以拖出去的 viewport 面板看不到世界画面——这是 step2 要解决的既有缺口。
+- 偏离：无。
+
 ### 下一刀建议
 
-AB4 优先于 AB3：presentation 与 surface 的耦合是多窗口（`gui-multi-os-window-editor`）的
-硬阻塞，而 AB3 只是公开面收窄。AB4 的第一步是把 primary-surface 耦合解开——
-`RenderDeviceState::initPresentationResources` 目前从主 swapchain 的 format 建
-`SurfaceWritePass`，这让第二个 OS 窗口必须复制整个 renderer。
+AB4-step2 优先：让额外窗口的 chrome 每帧被 tick，并让它通过 `record` + 自己的
+`SurfacePresentation` 呈现（世界 View 的 display image 与 GUI chrome 一起）。这一步会同时
+回答「拖出去的 viewport 为什么不显示世界」这个既有缺口。AB3（renderer 公开面收窄）紧随其后，
+因为 `buildRenderTargetCatalog` 这类查询现在就带着一处「主 surface」假设。

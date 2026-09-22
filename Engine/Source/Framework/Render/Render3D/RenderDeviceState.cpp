@@ -9,6 +9,7 @@
 #include "GUI/Compose/Render2DComposePass.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderTexture.h"
+#include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/Core/Texture.h"
 #include "RHI/Core/Swapchain.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
@@ -136,9 +137,14 @@ std::shared_ptr<RenderTexture> RenderDeviceState::getPostprocessOutputImageShare
     return nullptr;
 }
 
-std::shared_ptr<RenderTexture> RenderDeviceState::getPresentationImageShared() const
+std::shared_ptr<RenderTexture> RenderDeviceState::getPresentationImageShared(
+    IRenderSurfaceContext& surface) const
 {
-    return _presentationGraphService.getCurrentPresentationImageShared();
+    // Non-creating: a reader asks what the window shows, and a surface no frame
+    // has ever presented through shows nothing -- building its images to answer
+    // would be a side effect of a query.
+    SurfacePresentation* presentation = findSurfacePresentation(surface);
+    return presentation ? presentation->currentImageShared() : nullptr;
 }
 
 bool RenderDeviceState::isGradingEnabled() const
@@ -231,8 +237,14 @@ RenderTargetCatalog RenderDeviceState::buildRenderTargetCatalog() const
 {
     RenderTargetCatalog catalog{};
 
-    if (auto presentationImage = _presentationGraphService.getCurrentPresentationImageShared()) {
-        auto* swapchain = _presentationGraphService.getSwapchain();
+    // The catalog's surface entry has always meant the primary window's. Naming
+    // that surface is what keeps the entry honest now that presentations are
+    // per-surface; this editor-facing query leaving the renderer entirely is
+    // plan AB3.
+    IRenderSurfaceContext* primary      = _render ? _render->getPrimarySurfaceContext() : nullptr;
+    SurfacePresentation*   presentation = primary ? findSurfacePresentation(*primary) : nullptr;
+    if (auto presentationImage = presentation ? presentation->currentImageShared() : nullptr) {
+        auto* swapchain = presentation->swapchain();
         catalog.entries.push_back({
             .label            = "Presentation",
             .owner            = RenderTargetCatalog::Entry::EOwner::Presentation,

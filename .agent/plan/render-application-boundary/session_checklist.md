@@ -32,6 +32,17 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-22 AB4-step1：present target 变成 per-surface。新增 `SurfacePresentation`
+  （一个 OS 窗口的导入图 + 每图 executor + 按该 surface format 建的 `SurfaceWritePass`）；
+  `RenderDeviceState` 由单个 `PresentationGraphService` + `SurfaceWritePass` 改为
+  `_surfacePresentations` 表，`record()` 在 `prepareFrameRecord` 前按 `plan.present.surface`
+  解析/构建；`initPresentationResources` → `initSurfacePresentations`（init 期零 GPU 工作、
+  无主 surface 特权，只登记 teardown）；`getPresentationImageShared(IRenderSurfaceContext&)`
+  为非创建查询。验证：六个目标 build ok；`ya-render-3d-test` 177/177；滤镜 681 passed /
+  11 skipped / 6 failed（与基线同 6 个）；parity PASS（md5 `c775245a…`）；编辑器 smoke exit=0。
+  **注意**：产品路径尚无「非主 surface 的 presentation」，好处未端到端验证；额外窗口仍走 GUI
+  host 的 `presentGuiSnapshot`（只呈现 chrome），拖出去的 viewport 看不到世界画面属既有缺口。
+  下一刀：AB4-step2（额外窗口每帧 tick 自己的 chrome 并经 `record` 呈现）。
 - 2026-09-22 AB1+AB2：`SceneRenderScheduler` 从 `AppRenderState` 的字段变成 `tickRender`
   的局部对象（`declareViews` 收 `SceneRenderScheduler&`，删 `SceneSchedulerGuard`）；
   `GameRuntime/Lifecycle/` 的四个渲染排布文件搬到 `GameRuntime/Render/`（纯 `git mv` +

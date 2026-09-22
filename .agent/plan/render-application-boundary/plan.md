@@ -77,14 +77,33 @@ Applications/GameRuntime/
   format），由编辑器侧或 `Render3D/Debug/` 的纯函数构造 catalog，输入是数据不是 device。
 - 验收：GameEditor 不再通过这些方法访问 renderer；catalog 输出不变。
 
-### AB4 — presentation 只搬运，present 由应用编排（待做）
+### AB4 — presentation 只搬运，present 由应用编排（进行中）
 
-唯一目标：`PresentationGraphService` 里不再有「应用什么时候 present」。
+唯一目标：presentation 不再属于「主窗口」，present 的编排由应用持有。
 
-- Framework 侧保留 `DisplayComposePass`（surface write，只接受 ready image）。
-- 应用侧拥有 acquire / submit / present 与 surface↔view 的映射。
-- 多窗口前置：primary-surface 耦合（`initPresentationResources` 从主 swapchain
-  的 format 建 `SurfaceWritePass`）必须先解开，否则第二个 OS 窗口需要第二个 renderer。
+AB4-step1（已落地）：**present target 变成 per-surface**。
+
+- 新增 `SurfacePresentation`：一个 OS 窗口的 present 目标，拥有该 surface 的导入图 + 
+  每张图的 executor，以及**按该 surface 的 swapchain format** 构建的 `SurfaceWritePass`。
+- `RenderDeviceState` 由「一个 `_presentationGraphService` + 一个 `_surfaceWritePass`」
+  改为 `_surfacePresentations` 表：按 `plan.present.surface` 惰性创建、随 device 销毁。
+  第二个窗口是这张表里的第二项，而不是第二个 renderer。
+- `initPresentationResources` → `initSurfacePresentations`：init 期不再做任何 GPU 工作，
+  也不再有「主 surface 特权」；这里只登记 teardown，保证每个 surface 的图与 write pass 
+  都在 render backend 之前销毁。
+- `getPresentationImageShared()` 收 `IRenderSurfaceContext&`：图像只对「具名的窗口」有意义，
+  匿名 getter 在多 surface 下只能挑一个再叫它 current。查询是非创建的（没呈现过的 surface 
+  返回空，不为回答查询而建图）。
+- `record()` 在**录制前**解析/构建本 surface 的 present target（与 `prepareComposePipelines` 
+  同处 safe point）。
+
+AB4-step2（待做）：让**额外的 OS 窗口走同一条路**。现状：额外窗口由 GUI host 的
+`presentGuiSnapshot` 自建 acquire/submit/present，并且只呈现 GUI chrome，
+`RenderDeviceState::record` 完全没参与——所以被拖出去的 viewport 面板看不到世界画面。
+这一步同时需要额外窗口的 chrome 每帧被 tick（现在 `session->tick` 只对默认窗口调用）。
+
+AB4-step3（待做）：`PresentationGraphService` 只保留「把 ready image 写进 surface」+ 宿主
+display stage 的顺序；acquire / submit / present 的编排留在应用。
 
 ### AB5 — 命名对齐语义（待做，必须在 AB3/AB4 之后）
 

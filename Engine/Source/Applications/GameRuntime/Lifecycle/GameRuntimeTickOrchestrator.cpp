@@ -116,12 +116,19 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
 
     auto& renderServices = app.getRenderServices();
     auto* device         = renderServices.getDeviceState();
+    // The window the frame presented: the image is only meaningful for a named
+    // surface, so both automation consumers below read the primary surface's
+    // presentation rather than an unnamed "current window" on the renderer.
+    auto* render         = renderServices.getRender();
+    auto* primarySurface = render ? render->getPrimarySurfaceContext() : nullptr;
+    const auto presentationImage =
+        (device && primarySurface) ? device->getPresentationImageShared(*primarySurface) : nullptr;
     if (auto* automationControl = app.getAutomationControlService()) {
         automationControl->onTickCompleted(app,
                                             renderServices.getRender(),
                                             device ? device->getPostprocessOutputImageShared() : nullptr,
                                             device ? device->getActiveViewImageShared() : nullptr,
-                                            device ? device->getPresentationImageShared() : nullptr,
+                                            presentationImage,
                                             App::_hostTick);
     }
 
@@ -135,7 +142,7 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
                                             .render                     = renderServices.getRender(),
                                             .postprocessImage           = device ? device->getPostprocessOutputImageShared() : nullptr,
                                             .viewportImage              = device ? device->getActiveViewImageShared() : nullptr,
-                                            .presentationImage          = device ? device->getPresentationImageShared() : nullptr,
+                                            .presentationImage          = presentationImage,
                                             .requestRenderDocCapture    = diagnosticsService
                                                                             ? [diagnosticsService]()
                                                                            { return diagnosticsService->requestAutomationRenderDocCapture(); }

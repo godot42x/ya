@@ -47,7 +47,7 @@ void RenderDeviceState::init(const InitDesc& desc)
     initDiagnostics(desc);
     initResourceCaches();
     initSharedRenderResources();
-    initPresentationResources();
+    initSurfacePresentations();
     initCommandResources();
     initFrameServices();
 }
@@ -198,36 +198,48 @@ void RenderDeviceState::initSharedRenderResources()
     });
 }
 
-void RenderDeviceState::initPresentationResources()
+void RenderDeviceState::initSurfacePresentations()
 {
-    // Main world window's surface pass only. Acquire/present stay on the host
-    // FPresentFrame coordinator; this service never calls begin/end, owns no
-    // pipeline and does not fetch the image it writes: the host hands it one per
-    // frame (`getViewDisplayImage`), and the pass that draws it comes from the
-    // postprocess family (`SurfaceWritePass`), so the service holds no opinion
-    // about which View the window shows or how an image looks.
-    auto* surface = _render ? _render->getPrimarySurfaceContext() : nullptr;
-    if (auto* swapchain = surface ? surface->getSwapchain() : nullptr) {
-        _surfaceWritePass = ya::makeShared<SurfaceWritePass>();
-        _surfaceWritePass->init(SurfaceWritePass::InitDesc{
-            .render        = _render,
-            .surfaceFormat = swapchain->getFormat(),
-        });
+    // Present targets are built on demand, one per surface the host actually
+    // presents through (see acquireSurfacePresentation), so there is no GPU work
+    // at init and no surface is privileged. What is registered here is only their
+    // teardown, so every surface's imported images and format-specific write
+    // pass are destroyed before the render backend, in the same ordered stack as
+    // the rest of the device resources.
+    _deleter.push("SurfacePresentations", [this](void*)
+                  {
+        for (auto& presentation : _surfacePresentations) {
+            if (presentation) {
+                presentation->shutdown();
+            }
+        }
+        _surfacePresentations.clear(); });
+}
+
+SurfacePresentation* RenderDeviceState::findSurfacePresentation(IRenderSurfaceContext& surface) const
+{
+    for (const auto& presentation : _surfacePresentations) {
+        if (presentation && presentation->surface() == &surface) {
+            return presentation.get();
+        }
+    }
+    return nullptr;
+}
+
+SurfacePresentation& RenderDeviceState::acquireSurfacePresentation(IRenderSurfaceContext& surface)
+{
+    if (SurfacePresentation* existing = findSurfacePresentation(surface)) {
+        return *existing;
     }
 
-    _presentationGraphService.init(PresentationGraphService::InitDesc{
-        .render         = _render,
-        .present        = surface,
-        .backdropWriter = _surfaceWritePass.get(),
+    auto presentation = std::make_unique<SurfacePresentation>();
+    presentation->init(SurfacePresentation::InitDesc{
+        .render  = _render,
+        .present = &surface,
     });
 
-    _deleter.push("ScreenRT", [this](void*)
-                  {
-        _presentationGraphService.shutdown();
-        if (_surfaceWritePass) {
-            _surfaceWritePass->shutdown();
-            _surfaceWritePass.reset();
-        } });
+    _surfacePresentations.push_back(std::move(presentation));
+    return *_surfacePresentations.back();
 }
 
 void RenderDeviceState::initCommandResources()

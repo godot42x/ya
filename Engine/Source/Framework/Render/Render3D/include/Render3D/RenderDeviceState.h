@@ -20,8 +20,7 @@
 #include "Render3D/Debug/ViewportDebugCatalogBuilder.h"
 #include "Render3D/Services/OffscreenTaskService.h"
 #include "Render3D/Services/PipelineCoordinator.h"
-#include "Render3D/Services/PresentationGraphService.h"
-#include "Render3D/Pipelines/SurfaceWritePass.h"
+#include "Render3D/Services/SurfacePresentation.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
 #include "Render3D/Services/RenderSharedResourceProvider.h"
 #include "Render3D/Services/GameplayResourceBinding.h"
@@ -104,12 +103,13 @@ struct YA_RENDER_3D_API RenderDeviceState
     RenderSharedResourceProvider  _sharedResourceProvider{};
     RenderDiagnosticsService     _diagnostics{};
     PipelineCoordinator          _pipelineCoordinator{};
-    PresentationGraphService     _presentationGraphService{};
-    /// The postprocess family's write onto the primary surface, handed to the
-    /// surface pass as its backdrop writer. Owned here because it is a frame
-    /// resource of this device, not of any one View or of the presentation
-    /// service.
-    stdptr<SurfaceWritePass>     _surfaceWritePass;
+    /// One per OS-window present target this renderer has recorded for. Built
+    /// on demand from `plan.present.surface` and torn down with the device, so a
+    /// second window is a second entry here, not a second renderer. Every
+    /// present destination a frame names must have one: the plan says which
+    /// surface the frame presents, and this table is how that surface's images
+    /// and its format-specific write pass are found.
+    std::vector<std::unique_ptr<SurfacePresentation>> _surfacePresentations;
     // default rect for default rt creation
     Rect2D                       _pipelineViewRect{};
 
@@ -169,7 +169,12 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// and checked against the surface's format before anything is recorded.
     [[nodiscard]] FSurfaceImage getViewDisplayImage() const;
     [[nodiscard]] EFormat::T getViewDisplayImageFormat() const;
-    [[nodiscard]] std::shared_ptr<RenderTexture> getPresentationImageShared() const;
+    /// This surface's image for the index it acquired. The surface is a
+    /// parameter because "the window's image" is only meaningful for a named
+    /// window -- with more than one surface, an unnamed getter would have to
+    /// pick one and call it the current one.
+    [[nodiscard]] std::shared_ptr<RenderTexture> getPresentationImageShared(
+        IRenderSurfaceContext& surface) const;
     [[nodiscard]] const RenderSubmission* getLiveSubmission(uint32_t flightIndex) const
     {
         return _submissions.get(flightIndex);
@@ -220,7 +225,7 @@ struct YA_RENDER_3D_API RenderDeviceState
     void                   initRenderBackend(const InitDesc& desc);
     void                   initResourceCaches();
     void                   initSharedRenderResources();
-    void                   initPresentationResources();
+    void                   initSurfacePresentations();
     void                   initCommandResources();
     void                   initFrameServices();
     void                   shutdownRuntimeServices();
@@ -232,6 +237,13 @@ struct YA_RENDER_3D_API RenderDeviceState
     void                   retainPublishedViewOutputs(uint32_t flightIndex, ICommandBuffer* cmdBuf);
     [[nodiscard]] const RenderViewOutput* publishedViewOutput() const;
     void                   endFrameCommandBuffer(ICommandBuffer* cmdBuf);
+
+    [[nodiscard]] SurfacePresentation* findSurfacePresentation(IRenderSurfaceContext& surface) const;
+    /// Find or build the present target for `surface`. A safe-point action: it
+    /// can construct a pipeline, so it runs in the pre-record section of
+    /// `record` where `prepareComposePipelines` already does the same, and never
+    /// while commands are being recorded.
+    SurfacePresentation& acquireSurfacePresentation(IRenderSurfaceContext& surface);
 
     void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog, Scene* inspectScene) const;
     /// Resolve the handles this renderer is willing to expose to the inspector.
