@@ -7,7 +7,7 @@
 #include "GameRuntime/Lifecycle/AppAutomation.h"
 #include "HostSdlEventSource.h"
 #include "GameRuntime/Lifecycle/FPSCtrl.h"
-#include "GameRuntime/Lifecycle/SceneCameraQuery.h"
+#include "GameRuntime/Render/SceneCameraQuery.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
 
 #include "Core/Async/TaskQueue.h"
@@ -31,11 +31,12 @@
 
 #include "Render2D/Render2D.h"
 #include "Render3D/Common/RenderFrameInputs.h"
+#include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/RecordedFrame.h"
 #include "Render3D/RenderDeviceState.h"
 #include "Render3D/Material/Material.h"
-#include "GameRuntime/Lifecycle/HostSceneExtract.h"
-#include "GameRuntime/Lifecycle/RenderFrameExtractor.h"
+#include "GameRuntime/Render/HostSceneExtract.h"
+#include "GameRuntime/Render/RenderFrameExtractor.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 
@@ -313,21 +314,15 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 
     const uint32_t flightIndex = resolveFlightIndex(app);
 
-    auto& sceneScheduler = app._renderState->sceneRenderScheduler;
+    // This tick's declaration collector and the plan sealed from it. It is a
+    // local, not host state: `beginTick -> submit -> seal` describes one tick's
+    // arrangement, so its lifetime is this scope, and a scheduler that outlived
+    // the tick could only hold declarations the tick already resolved.
+    SceneRenderScheduler sceneScheduler;
     sceneScheduler.beginTick(App::_hostTick);
-    struct SceneSchedulerGuard
-    {
-        SceneRenderScheduler* scheduler = nullptr;
-        ~SceneSchedulerGuard()
-        {
-            if (scheduler) {
-                scheduler->clearTick();
-            }
-        }
-    } sceneSchedulerGuard{.scheduler = &sceneScheduler};
 
     // declare → extract → prepare → build → acquire → record → submit → extras
-    declareViews(app, dt, device);
+    declareViews(app, dt, device, sceneScheduler);
     ExtractedSceneRender sceneRender = extractScenes(app, sceneScheduler, device);
     prepareViews(app, dt, flightIndex, sceneRender);
 
@@ -353,7 +348,10 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     app.presentModuleExtras(dt);
 }
 
-void GameRuntimeTickOrchestrator::declareViews(App& app, float dt, RenderDeviceState* device)
+void GameRuntimeTickOrchestrator::declareViews(App&                  app,
+                                               float                 dt,
+                                               RenderDeviceState*    device,
+                                               SceneRenderScheduler& scheduler)
 {
     HostViewState& hostView = app._renderState->hostView;
 
@@ -377,9 +375,8 @@ void GameRuntimeTickOrchestrator::declareViews(App& app, float dt, RenderDeviceS
 
     // submit() stores a copy, so from here on the declarations live in the
     // scheduler's frame and this collector has no readers.
-    auto& sceneScheduler = app._renderState->sceneRenderScheduler;
     for (const SceneViewDesc& view : collector.views()) {
-        (void)sceneScheduler.submit(view);
+        (void)scheduler.submit(view);
     }
 
     // The host viewport's camera is what the host reports as "the world view":

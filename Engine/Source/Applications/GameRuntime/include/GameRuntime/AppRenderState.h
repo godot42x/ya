@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Render3D/RenderFrameData.h"
-#include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/SceneViewProducer.h"
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Stage/IRenderStage.h"
@@ -17,6 +16,10 @@
 namespace ya
 {
 
+/// The host's render settings and registrations. It holds no per-tick
+/// arrangement: which Views this tick draws is decided inside the tick
+/// (`SceneRenderScheduler` lives there), so nothing here is a leftover of the
+/// previous tick that a reader has to reason about.
 struct AppRenderState
 {
     std::unique_ptr<RenderDeviceState>      device;
@@ -34,7 +37,6 @@ struct AppRenderState
     /// gets drawn (SkeletonAnimationSystem), so they stop depending on a switch
     /// that describes a viewport instead of a Scene.
     std::vector<Scene*>                     renderedScenesLastTick;
-    SceneRenderScheduler                    sceneRenderScheduler;
     std::array<std::vector<RenderFrameData>, MAX_FLIGHTS_IN_FLIGHT> viewFrameDataPerFlight{};
 };
 

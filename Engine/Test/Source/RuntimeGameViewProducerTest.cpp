@@ -1,7 +1,7 @@
 #include "AppModuleTestAccess.h"
 
 #include "GameRuntime/App.h"
-#include "GameRuntime/Lifecycle/RuntimeGameViewProducer.h"
+#include "GameRuntime/Render/RuntimeGameViewProducer.h"
 
 #include "Render3D/Common/RenderFeatures.h"
 #include "Scene/Core/Scene.h"

@@ -3,7 +3,7 @@
 #include "GameEditor/UI/Shell/EditorSurface.h"
 #include "GameEditor/UI/Tabs/EditorViewportTab.h"
 
-#include "GameRuntime/Lifecycle/RuntimeGameViewProducer.h"
+#include "GameRuntime/Render/RuntimeGameViewProducer.h"
 
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "GUI/Layout/UILayout.h"

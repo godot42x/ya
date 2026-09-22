@@ -1,7 +1,7 @@
-#include "GameRuntime/Lifecycle/RuntimeGameViewProducer.h"
+#include "GameRuntime/Render/RuntimeGameViewProducer.h"
 
 #include "GameRuntime/App.h"
-#include "GameRuntime/Lifecycle/SceneCameraQuery.h"
+#include "GameRuntime/Render/SceneCameraQuery.h"
 
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "Render3D/Common/RenderFeatures.h"

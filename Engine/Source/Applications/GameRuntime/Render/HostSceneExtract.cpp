@@ -1,6 +1,6 @@
-#include "GameRuntime/Lifecycle/HostSceneExtract.h"
+#include "GameRuntime/Render/HostSceneExtract.h"
 
-#include "GameRuntime/Lifecycle/RenderFrameExtractor.h"
+#include "GameRuntime/Render/RenderFrameExtractor.h"
 #include "Scene/Core/Scene.h"
 
 namespace ya

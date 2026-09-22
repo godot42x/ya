@@ -1,0 +1,91 @@
+{
+  "plan": "render-application-boundary",
+  "status": "in_progress",
+  "principle": "Framework/Render holds reusable pipelines only; the application owns this tick's arrangement (which Views, which Scene, where they go, when to acquire/submit/present).",
+  "features": [
+    {
+      "id": "app_owns_view_arrangement",
+      "phase": "AB1",
+      "status": "landed",
+      "evidence": [
+        "SceneRenderScheduler is a local in GameRuntimeTickOrchestrator::tickRender (beginTick -> submit -> seal is one tick), not AppRenderState::sceneRenderScheduler",
+        "declareViews takes SceneRenderScheduler& -- it is one of the two steps that write the tick's arrangement",
+        "SceneSchedulerGuard deleted: a local object's destructor is the clearTick semantics",
+        "AppRenderState.h documents that it holds host settings and registrations only, with no per-tick arrangement"
+      ]
+    },
+    {
+      "id": "app_render_arrangement_has_its_own_place",
+      "phase": "AB2",
+      "status": "landed",
+      "evidence": [
+        "git mv only: RenderFrameExtractor / HostSceneExtract / RuntimeGameViewProducer / SceneCameraQuery moved from Applications/GameRuntime/Lifecycle/ to Applications/GameRuntime/Render/ (cpp + include/GameRuntime/Render/<Name>.h)",
+        "public paths updated to GameRuntime/Render/<Name>.h in 10 files (App.h, GameRuntimeTickOrchestrator.cpp, HostSceneExtract.cpp, RuntimeGameViewProducer.cpp, RenderFrameExtractor.cpp, SceneCameraQuery.cpp, AppSceneServices.cpp, and Engine/Test RuntimeGameViewProducerTest / HostSceneExtractTest / EditorViewProducerTest)",
+        "GameRuntime/Lifecycle/ now holds lifecycle only: AppLifecycle, AppEventRouter, FPSCtrl, AppAutomation, HostSdlEventSource, GameRuntimeTickOrchestrator"
+      ]
+    },
+    {
+      "id": "renderer_public_surface_has_no_editor_query_api",
+      "phase": "AB3",
+      "status": "pending",
+      "evidence": [
+        "buildViewportSnapshot / buildRenderTargetCatalog / buildPipelineDebugOutputCatalog / getDeferredPipelineDebugViews are consumed only by GameEditor Runtime*Section (18 getDeviceState() call sites)",
+        "target shape: renderer publishes handles (getViewOutput(viewId), published display image, format); catalogs are built from data by the consumer side or a pure builder under Render3D/Debug/",
+        "ViewportDebugCatalogBuilder already shows the pattern: pure function of a resolved ViewportDebugCatalogInput"
+      ]
+    },
+    {
+      "id": "presentation_is_a_pass_not_an_orchestrator",
+      "phase": "AB4",
+      "status": "pending",
+      "evidence": [
+        "PresentationGraphService already declares a ready-image-only surface pass (F3) and refuses the double-encode pairing",
+        "still open: RenderDeviceState::initPresentationResources builds SurfaceWritePass from the primary swapchain's format, so a second OS window would need a second renderer -- this is the multi-window blocker",
+        "target: Framework keeps DisplayComposePass; the application owns acquire/submit/present and the surface<->view mapping"
+      ]
+    },
+    {
+      "id": "naming_matches_semantics",
+      "phase": "AB5",
+      "status": "pending",
+      "evidence": [
+        "RenderFrameData -> PreparedView (it is a View-level camera/light/draw packet)",
+        "RenderSubmission -> FrameRecording (finish() seals, it does not queue submit)",
+        "RenderFrameInputs plan types -> RenderPlan",
+        "PipelineCoordinator -> renderer-private or RenderPipelineController",
+        "PresentationGraphService -> DisplayComposer",
+        "renames must not be committed as progress on their own"
+      ]
+    },
+    {
+      "id": "render3d_dirs_answer_ownership",
+      "phase": "AB6",
+      "status": "pending",
+      "evidence": [
+        "Render3D/Common and Render3D/Services are semantic buckets: they cannot answer which lifetime owns the file",
+        "migrate only files whose concern can be stated in one sentence; leave the rest and record why"
+      ]
+    },
+    {
+      "id": "renderer_is_the_persistent_renderer",
+      "phase": "AB7",
+      "status": "pending",
+      "evidence": [
+        "RenderDeviceState holds backend lifetime, persistent renderer services, frame recording and a 77-member public surface -- not an RHI device, not a state",
+        "gated on AB3 (query surface narrowed) and AB4 (presentation decoupled)",
+        "public entry stays init/shutdown/record/publishedViewOutput; no plan-wide Renderer facade (see plan section 5)"
+      ]
+    }
+  ],
+  "known_baseline_failures": [
+    "EditorPropertyGraphTest.AutoPropertySectionAssetPathCommitBrowseAndUndo",
+    "EditorPropertyGraphTest.TextureAssetRowShowsRetainedPreview",
+    "WidgetLayoutTest.FloatingWindowResizeHandlesLiveOnOverlaySlots",
+    "ScriptApiLibraryFixture.GameUIWidgetLifecycleThroughRegistry",
+    "GameUIHostTest.BuildSnapshotComposesMountedWidgets",
+    "RenderGraphCoreTest.ResourceRegistryUsesProvidedImportedImageViewAndRetainsOwner (flaky)"
+  ],
+  "known_broken_tests": [
+    "WidgetTreeTest.SystemLayersCannotBeDetached kills the test process (SIGTRAP, deliberate YA_CORE_ASSERT on detaching a system layer); exclude it from wide filters"
+  ]
+}

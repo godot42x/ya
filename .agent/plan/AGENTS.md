@@ -46,6 +46,7 @@
 | 目录 | 主题 |
 | --- | --- |
 | `render-view-family/` | view/frame 语义拆分、`PreparedView`、RenderRuntime 状态与逻辑分离（开放项最多） |
+| `render-application-boundary/` | Framework/Render 只放可复用管线，本帧的排布与状态归应用（AB1/AB2 已落地） |
 | `gui-framework-editor-readiness/` | retained GUI 承载完整编辑器的能力补齐，含 Phase 8 移除 ImGui 双栈 |
 | `gui-framework-editor-runtime-refactor/` | 编辑器向 GUI framework 收敛的运行期契约 |
 | `gui-kernel-ux-parity/` | 独立 GUI app 与引擎内 GUI 的 UX 对齐 |

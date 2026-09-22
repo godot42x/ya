@@ -1,7 +1,7 @@
 #include "GameRuntime/AppSceneServices.h"
 
 #include "GameRuntime/App.h"
-#include "GameRuntime/Lifecycle/SceneCameraQuery.h"
+#include "GameRuntime/Render/SceneCameraQuery.h"
 #include "Core/Log.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"

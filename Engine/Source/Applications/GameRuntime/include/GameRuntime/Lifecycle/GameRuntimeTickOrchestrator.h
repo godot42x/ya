@@ -43,11 +43,14 @@ class GameRuntimeTickOrchestrator
     /// branch of a single long function.
     ///
     /// Declares this tick's views from every registered producer, submits each
-    /// declaration to the scheduler (which stores a copy of it), and adopts the
+    /// declaration to `scheduler` (which stores a copy of it), and adopts the
     /// host viewport View's camera and rect into the host view state. The
     /// collector is this step's own storage: nothing downstream refers to it, so
     /// no caller has to keep it alive.
-    static void declareViews(App& app, float dt, RenderDeviceState* device);
+    /// The scheduler is a parameter because it is the tick's own arrangement:
+    /// `tickRender` owns it for the duration of one tick, and this step is one
+    /// of the two steps that write into it.
+    static void declareViews(App& app, float dt, RenderDeviceState* device, SceneRenderScheduler& scheduler);
     /// Groups the declarations and extracts Scene content for them. Grouping
     /// and extraction stay separate: seal() reads no ECS, this step does.
     static ExtractedSceneRender extractScenes(App& app, SceneRenderScheduler& scheduler, RenderDeviceState* device);

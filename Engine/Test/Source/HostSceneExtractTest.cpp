@@ -1,8 +1,8 @@
-#include "GameRuntime/Lifecycle/HostSceneExtract.h"
+#include "GameRuntime/Render/HostSceneExtract.h"
 
 #include "Core/Log.h"
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
-#include "GameRuntime/Lifecycle/RenderFrameExtractor.h"
+#include "GameRuntime/Render/RenderFrameExtractor.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Scene/Core/Scene.h"
 #include "Scene3D/TransformComponent.h"

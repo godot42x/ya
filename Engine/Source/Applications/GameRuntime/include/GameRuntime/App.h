@@ -18,7 +18,7 @@
 #include "Core/Common/AppState.h"
 #include "GameRuntime/AppTaskManager.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
-#include "GameRuntime/Lifecycle/RuntimeGameViewProducer.h"
+#include "GameRuntime/Render/RuntimeGameViewProducer.h"
 
 #include <chrono>
 #include <glm/glm.hpp>
