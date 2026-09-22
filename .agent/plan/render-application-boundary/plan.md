@@ -233,6 +233,28 @@ Framework 侧的公开入口限定在 `init/shutdown/record(plan, surface)/publi
 
 ## 5. 与 `render-view-family` 4.0.3 的取舍
 
+## 4b. 已确认但未完成的所有权偏差（2026-09-22 review）
+
+以下每一条都已在源码里核对过，不是推测。它们**不是本 checkpoint 的目标**，列在这里是为了让下一步
+不再从「猜哪里有问题」开始。每条都标了当前证据与目标归属。
+
+| 偏差 | 当前证据 | 目标归属 |
+| --- | --- | --- |
+| 整帧录制编排仍在 Framework | `RenderDeviceState::record()` 负责 acquire 之后的 submission / recordFamily / view compose / display compose / surface presentation / finish | 应用侧 `RuntimeRenderContext`（AB7） |
+| 本 tick 的 View 准备数据由 App 长期持有 | `AppRenderState::viewFrameDataPerFlight`，并在 `AppLifecycle` 的 quit / `handleSceneDestroy` 两处手工清空 | `ExtractedSceneRender`（本 tick 的 extracted/prepared view 数据）；App 的清空循环随之消失。**动手前必须先确认保活关系**：`RenderFrameData` 里的 `sceneResources` 是 device 生命的缓存句柄，而 per-flight 存储原本同时承担「跨帧保活」与「避免每次分配」两个作用，拆之前要逐项证明没有消费者在 tick 之外读它（`hostFrameData()` 目前只有测试在读） |
+| 无身份的 View 尺寸语义仍在 pipeline 接口上 | ~~`IRenderPipeline::getViewExtent()`~~ **已删除（2026-09-22）**；但 pipeline 内仍保存单套 View 资源（`_viewResources` / `_viewRI` / `_viewRTSpec` / `_pendingViewExtent` / `_debugViews`） | View 资源按 `ViewResourceKey = identity + extent + format + feature policy` 分键；当前 View 不得由 pipeline 成员表达（报告第三批） |
+| `IRenderRuntimeServices` 删了，但「当前 Scene」仍是隐式全局 | `EnvironmentLightingProcessor::setActiveSceneProvider` / `TerrainProcessor::setActiveSceneProvider` / `GameplayResourceBinding::setActiveSceneProvider`，由 `RenderDeviceState` 在 init 注入 `app.getActiveScene` | 显式输入：`prepareSceneResources(Scene&, FrameTime)` 或 `SceneDerivedState prepareScene(Scene&, const FramePacket&)`，结果按 Scene 保存（报告第四批） |
+| plan 仍携带行为 | `RenderFramePlan::recordExtensions`（`IFrameRecordExtensions*`），renderer 在固定阶段回调它 | 比 `std::function` 清晰，但「plan 是 immutable data」仍未达成；方向是把那些阶段变成应用侧显式调用（与 AB7 同批） |
+| renderer 仍有编辑器查询面 + 反向依赖 GUI | `buildViewportSnapshot` / `buildRenderTargetCatalog` / `getDebugRenderSystem` / `getDiagnosticsService`；`RenderDeviceState.cpp` 与 `RenderDeviceState.Frame.cpp` include `GUI/Compose/Render2DComposePass.h` | AB3-step2（typed command + 由数据构造 catalog）；GUI compose 的 include 需要 compose 准备改由宿主调用（已在 `source-layout-subtraction` S2 记录） |
+
+### 报告点出的死代码（2026-09-22 已修）
+
+`GameRuntimeTickOrchestrator::pumpOffscreenTasks` 是一个**只有自我递归、没有任何调用者**的函数：
+663e0f82 想把它命名成 tickRender 的一个步骤，但 `tickRender` 实际直接调
+`device->getOffscreenTaskService().tick(app.getTaskManager())`，命名的那一步丢了，函数体留在那里
+自我调用。修法是**把步骤接回去**（`tickRender` 调 `pumpOffscreenTasks`，函数体做实际工作），不是
+把名字删掉——命名本身是那次提交的正确意图。同时删除 `declareViews` 已不再使用的 `device` 形参。
+
 `render-view-family` 曾把「合并成公开 `Renderer`」当作收口方向。本线保留「合并」
 （它确实是一个 owner，不该再拆 Coordinator），但**拒绝**让它成为整帧排布的入口：
 公开入口限定在

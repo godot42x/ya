@@ -1,11 +1,13 @@
 # Render View Family 与 GUI/GameUI 渲染边界重构计划
 
 > 建立日期：2026-09-12
-> 状态：R2 架构未收口。功能已向 ViewFamily 靠近（typed View resources、`recordFamily` 入口、host live Scene 列表），但 `RenderDeviceState` + `RenderFrameCoordinator` 仍是一次不完整拆分，不是更清晰的唯一 orchestration。Checkpoint C/D/E 均为部分完成。下一刀是合并为公开 `Renderer` owner，不是产品双 viewport，也不是再向 Binding/Stage 加字段。
+> 状态：R2 架构未收口，且**本文件 §2、§3.7、§4 里关于 `RenderDeviceState` + `RenderFrameCoordinator` 的描述已经过时**（2026-09-22 校正：Coordinator 已于 2026-09-19 删除并合回 `RenderDeviceState`，`friend` 越界与 `_publishedOutputViewId` 也已删除）。功能已向 ViewFamily 靠近（typed View resources、`recordFamily` 入口、host live Scene 列表）。Checkpoint C/D/E 均为部分完成。
+> **下一刀不在这里，而在 `./../render-application-boundary/plan.md`**：原定的"合并为公开 `Renderer` owner"已改为结构性拆分（AB7 —— `RenderDeviceState` 的整帧录制编排搬回应用侧 `RuntimeRenderContext`，而不是改名）。判据见该文件 §1 与 §3：只把 `RenderDeviceState` 改名成 `Renderer` 会让"Framework 拥有整帧排布"换一个更好看的名字继续存在。
+> 本文件保持历史叙述原样（§5 之后的进度与发现仍然有效），但**方向性决策以 `render-application-boundary` 为准**。
 
 ## 1. 主线选择
 
-下一阶段选择 camera based render flow / SceneRenderScheduler / ViewFamily 作为主线。当前多窗口 RHI、GUI surface/present 和单 Camera 输入契约已经存在，但产品帧仍是一次 Surface acquire → 一次 world recording → 一次 present；高层编排分散在 `RenderDeviceState` 与 `RenderFrameCoordinator` 之间，读者要跨多层才能拼出主 loop。这里不引入 WorldInstance/WorldRegistry：Scene 仍属于 GameRuntime、GameEditor 或 preview 产品层；只有本帧需要显示的 Scene viewport 才向渲染调度器提交 offscreen render request。先收口公开 `Renderer` owner，再推进多相机 / 多 Surface；不要同时重写 Dock、动画、GameUI 和 N Camera。
+下一阶段选择 camera based render flow / SceneRenderScheduler / ViewFamily 作为主线。当前多窗口 RHI、GUI surface/present 和单 Camera 输入契约已经存在，但产品帧仍是一次 Surface acquire → 一次 world recording → 一次 present；高层编排**全部收在 `RenderDeviceState` 里**（Coordinator 已删，见文件头状态说明），读者要跨多层才能拼出主 loop。这里不引入 WorldInstance/WorldRegistry：Scene 仍属于 GameRuntime、GameEditor 或 preview 产品层；只有本帧需要显示的 Scene viewport 才向渲染调度器提交 offscreen render request。**先按 `render-application-boundary` AB7 把那部分编排搬回应用侧**，再推进多相机 / 多 Surface；不要同时重写 Dock、动画、GameUI 和 N Camera。
 
 推荐顺序：
 
@@ -19,6 +21,25 @@ GUI 动画属于 gui-invalidation-architecture 的独立小切片，可在 R0 �
 
 ## 2. 当前仓库事实
 
+> **2026-09-22 校正（先读这条，本节以下部分文字描述的是修复前的状态）**：
+> - `RenderFrameCoordinator` 已删除并合回 `RenderDeviceState`（2026-09-19）；`friend struct
+>   RenderFrameCoordinator` 的 5 处越界写入与 `_publishedOutputViewId` /
+>   `publishViewOutputIdentity()` 也已删除（2026-09-22）。真实主 loop 现在是
+>   `AppKernel::run` -> `GameRuntimeTickOrchestrator::tickRender` -> **`RenderDeviceState::record`**
+>   -> `pipeline.recordFamily` -> view compose -> display compose -> host submit/present。
+> - `RenderDeviceState` 今天同时拥有：RHI backend 生命周期、shader storage、资源缓存、
+>   `EnvironmentLightingProcessor` / `TerrainProcessor` / `GameplayResourceBinding`、
+>   `PipelineCoordinator`、submission pool、`RenderViewOutputTable`、`SurfacePresentation` 表、
+>   view compose、display compose、debug catalog、diagnostics，**以及一整条应用级整帧录制编排**。
+>   类名已无法帮助读者判断职责，这是本文件与 `render-application-boundary` AB7 共同要拆的部分。
+> - `PreparedView` **尚未落地**：`RenderFrameData` / `SceneViewRecording` / `RenderViewRecordingContext`
+>   / `RenderPipelineFrameContext` 仍在，`RenderFrameData` 名字里仍带 `Frame`，仍同时承载 camera /
+>   projection / draw buckets / SceneSnapshot / Scene GPU binding / frameIndex / deltaTime / timeSeconds。
+> - **多 View 不同 extent 尚未完成**：`IRenderPipeline::getViewExtent()`（已删除，2026-09-22）曾是这
+>   个缺口的症状；pipeline 内仍保存单套 View 资源（`_viewResources` / `_viewRI` / `_viewRTSpec` /
+>   `_pendingViewExtent` / `_debugViews`），所以「同一 pipeline 支持尺寸不同的多个 View」还不能表达。
+> - 方向性决策以 `./../render-application-boundary/plan.md` 为准；本文件保留历史叙述与仍然有效的发现。
+>
 - Framework/Render/Render3D/Common/RenderFrameInputs.h 已有 CameraFrameInput、ViewComposeInput、DisplayComposeInput、PresentFrameInput。这些包与 SceneViewRecording / ViewFamilyRecordContext / RenderPipelineFrameContext 仍重复携带矩阵、extent、frameData、cmd 与 Scene*。
 - 真实主 loop 只有一条：`AppKernel::run` → `GameRuntimeFrameOrchestrator::tickRender` → `RenderFrameCoordinator::record` → `pipeline.recordFamily` → compose → host submit/present。`RenderRuntime` 类已删除，但拆出的 `RenderDeviceState` 与 `RenderFrameCoordinator` 不是两个独立 owner：Coordinator 几乎无状态，经 friend 写 DeviceState 的 submissions / viewOutputs / presentation / published output。DeviceState 实际是 persistent renderer（cmd、submission pool、pipeline、presentation、environment、terrain、diagnostics），不是 RHI device（RHI 已是 `IRender`）。
 - `RenderSubmission::finish()` 只置 `_finished`，不 queue submit。Host 拥有 world-enable、viewport rect 与 present。`activeSceneProvider` / `ViewportStateService` 已删除。本帧 Scene 经 `SceneViewRecording::derivedScene` 进入各 family，由 `HostSceneViewSubmit` 列表绑定。TAA 未使用，未引入空的 `ViewHistoryStore`。
@@ -241,7 +262,7 @@ PreparedView 直接包含 View task、prepared frame data 和 derived Scene，�
 
 | 当前 | 目标 | 说明 |
 | --- | --- | --- |
-| `RenderRuntime` / `RenderDeviceState` + `RenderFrameCoordinator` | `Renderer` | 公开持久 renderer；Coordinator 可作私有实现，不经 friend 越界 |
+| `RenderRuntime` / `RenderDeviceState` + `RenderFrameCoordinator` | ~~`Renderer`~~ **已作废** | 2026-09-22 校正：Coordinator 已删除并合回；但**不再**改名成 `Renderer`，而是按 `render-application-boundary` AB7 拆成应用侧 `RuntimeRenderContext` + Framework 管线对象。改名不解决"Framework 拥有整帧排布" |
 | `RenderRuntime::FrameInput` | `RenderFramePlan` | sealed frame value：PreparedViewFamily[] + SurfaceComposePlan[] |
 | `RenderSubmission` / `RenderSubmissionPool` | `FrameRecording` + `FrameFlightResources` | recording scope 与 fence-safe 资源；finish/seal 不是 queue submit |
 | `SceneViewRecording` + `CameraFrameInput` + `RenderPipelineFrameContext` | `PreparedView` + `ViewRecordContext` | 删除重复转译层 |
@@ -486,7 +507,7 @@ AppKernel::run
 执行顺序（每个 checkpoint 一个可验收目标）：
 
 1. **修计划状态（已完成）**：C/D/E 改为部分完成；删除把 DeviceState+Coordinator 当成闭环、把 RenderRuntime 当成现行 orchestrator 的叙述。
-2. **公开 `Renderer` owner**：合并 `RenderDeviceState` + `RenderFrameCoordinator`；关闭 friend 越界。产品层只调用 `Renderer::recordFrame(plan, surfaceTarget) -> RecordedFrame`。不引入第三个全能 coordinator。**入口已完成（RecordedFrame 值）**：`RenderFrameCoordinator::record()` 现在返回 `RecordedFrame`（command buffer + flight/token 身份 + `valid()`），host 只提交该值、seal 失败即空提交；类合并与 friend 收口仍未开始（见 todo.md）。
+2. **公开 `Renderer` owner** — **已完成前半，后半作废（2026-09-22 校正）**：合并 `RenderDeviceState` + `RenderFrameCoordinator` 与关闭 `friend` 越界已于 2026-09-19 落地（Coordinator 整文件删除，record/recordViewFamilies/prepareFrameRecord 移入 `RenderDeviceState`；`_publishedOutputViewId` 亦于 2026-09-22 删除）。**"产品层只调用公开 `Renderer`"这一步不再做**：它会把应用级整帧排布留在一个改了名的 Framework 类里。后续按 `render-application-boundary` AB7 执行——应用侧 `RuntimeRenderContext` 拥有 frame flight / view plan / submission / present 目标 / 录制顺序，Framework 侧只留管线与 compose pass。
 3. **recording 与 flight 拆名**：`RenderSubmission` 拆成 `FrameRecording`（cmd/allocate/retain/seal）与 `FrameFlightResources`（fence-safe arena/descriptors/keepalives）。**`RecordedFrame` 已完成**（带 command buffer、`flightIndex`、`frameToken`，由 host submit；见 temporal_semantics M4 执行记录）。
    - **前置待决**：flight 深度。Vulkan surface 的 `flightFrameSize = 1` 让 `getCurrentFrameIndex()` 恒为 0（实测 90 tick 全 `flight=0`），所以渲染侧双槽表在生产里只走槽位 0，而 `begin()` 的 `waitAllGraphicsFences()` 是每帧等齐 GPU 的 wait-idle 策略。先判定要 1 还是 2，再决定本条的记账范围（详见 temporal_semantics.md M4 现状发现）。
 4. **view 声明与收集收口（2026-09-17 review 新增，见 §3.10）**：补齐「谁声明 view」，再让抽取成为显式一步。四刀，每刀可独立验收：

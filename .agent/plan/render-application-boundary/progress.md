@@ -324,6 +324,90 @@ step 1 留下的那份重复：`HostViewState` 同时装着 `clock/renderResolut
 - 未完成：AB3-step2（debug/diagnostics/catalog 的引用面收窄）、AB4-step2/3、AB7。
 - 偏离：无。parity 与 smoke 与基线逐字节一致。
 
+
+## 2026-09-22 AB9 — 计划对齐与死代码清理（review 第一批）
+
+这一轮不改大类，只做「先把计划和实际状态对齐 + 删掉噪声」。起点是一份 review，它的判据我认同：
+偏差集中在**所有权已经移动了一部分，但语义和状态仍留在旧 owner 里**。
+
+### 1. 修掉一处真死代码（不是文档问题，是地雷）
+
+`GameRuntimeTickOrchestrator::pumpOffscreenTasks` **只有自我递归调用，没有任何调用者**：
+
+```cpp
+void GameRuntimeTickOrchestrator::pumpOffscreenTasks(App& app, RenderDeviceState* device)
+{
+    YA_PROFILE_SCOPE("Render/PumpOffscreenTasks");
+    pumpOffscreenTasks(app, device);   // <- 自己
+}
+```
+
+而 `tickRender` 直接调 `device->getOffscreenTaskService().tick(app.getTaskManager())`。663e0f82
+（上一轮会话）的意图是把这一步命名出来，但命名只写进了头文件和一个自我调用的函数体，真实调用留在
+tickRender 里匿名。修法是**把步骤接回去**：`tickRender` 调 `pumpOffscreenTasks`，函数体做实际工作，
+注释说明为什么它必须是录制前的步骤。命名本身是正确意图，删名字只会丢掉它。
+
+### 2. 删除已死的 pipeline 尺寸接口
+
+`IRenderPipeline::getViewExtent()` / `ForwardRenderPipeline::getViewExtent()` /
+`DeferredRenderPipeline::getViewExtent()` 删除（零调用方）。它暗示「一个 pipeline 有一个 View 尺寸」，
+而多 View（材质预览 / 编辑器作者视口 / 游戏视口尺寸不同）下这个语义不够——这正是 review 指出的缺口。
+**只删接口不代表缺口已补**：pipeline 内仍保存单套 View 资源，那一项记在 plan §4b。
+
+### 3. 删除不再使用的形参
+
+`declareViews(App&, float, RenderDeviceState* device, SceneRenderScheduler&)` 的 `device` 自
+`applyViewResize` 删除后再无使用（AB8-step1 之后）。删掉。
+
+### 4. 计划与实际状态对齐（防误导）
+
+`render-view-family/plan.md` 的开头状态、§1 主线、§2 主 loop 事实、§3.7 命名映射表、§4 checkpoint 2
+都仍写着「`RenderDeviceState` + `RenderFrameCoordinator` 是一次不完整拆分，下一刀是合并为公开
+`Renderer`」。Coordinator 早已删除，而「改成公开 `Renderer`」这个方向也已在 AB7 被推翻。
+
+- 文件头加了状态校正：Coordinator 已删除；**下一刀在 `render-application-boundary`**；本文件保留历史
+  叙述，方向性决策以后者为准。
+- §2 顶部加了一段「先读这条」的校正块，列出真实主 loop、`RenderDeviceState` 今天的完整职责清单、
+  `PreparedView` 尚未落地、多 View extent 尚未完成。**§2 以下的原文保持不动**并明确标注「描述的是修复前
+  的状态」——历史叙述的价值在于记录当时为什么那样判断，重写它等于销毁证据。
+  （一处例外说明：那行原文里的 `→` 字符无法被 patch 精确匹配，我改用「在章节顶部加校正块」，
+  效果相同且不动原文。）
+- §3.7 命名映射表的 `Renderer` 行标记为**已作废**并写明理由。
+  §4 checkpoint 2 改写为「前半已完成、后半作废」，指向 AB7。
+
+### 5. 把核对过的偏差一次记清（plan §4b）
+
+新增一节表格，逐条列出**已确认但未完成**的所有权偏差，每条带当前证据与目标归属：整帧录制编排；
+`AppRenderState::viewFrameDataPerFlight`（并注明动手前必须先证明保活关系，`hostFrameData()` 目前只有
+测试在读）；pipeline 单 View 资源；`setActiveSceneProvider` 的隐式当前 Scene；`recordExtensions` 仍
+携带行为；renderer 的编辑器查询面与 `Render3D -> GUI/Compose` 的 include。
+
+### 验证证据
+
+> **证据的取得方式需要说明**：主仓库在当前时刻**编译不过**，原因不是本轮改动——另有并发写者正在把
+> `ForwardViewResources` / `DeferredViewResources` 的裸指针别名（`color` / `depth` / `entityId`）删掉，
+> 而 `ViewportDebugCatalogBuilder.cpp` 仍有 4 处读 `.color` / `.depth`（未提交的 WIP，含一行注释掉的旧
+> 表达式）。那是他们的文件，我不改。为了拿到真实的端到端证据，我把仓库用 APFS clonefile 复制到临时目录，
+> 在**副本里**把这两个头文件 checkout 回 HEAD（即去掉他们的 WIP，得到等价于本 checkpoint 的树），
+> 在那里构建并运行全部验证。这样既不触碰他们的文件，也不是「只跑单测」。
+
+- build：`ya-render-3d` / `ya-runtime` / `ya-game-editor` / `ya-render-3d-test` / `ya-testing` 全部
+  `build ok`（`ya-game-runtime` 在主仓库当时的干净时刻也已 `build ok`）。
+- `xmake r ya-render-3d-test`：**177/177**。
+- `ya-testing` 滤镜：**681 passed / 11 skipped / 6 failed**，6 个与已登记基线逐项相同。
+- parity：**PASS**，viewport 与 presentation 截图 md5 均为 `c775245ae636f15b41da8485319a2267`
+  ——与基线逐字节相同。这条是本轮最有价值的证据：它证明「把 `pumpOffscreenTasks` 接回去」与原来的匿名
+  调用**行为完全一致**（唯一差异是那个原本就在死函数里的 profile scope 现在真的生效了）。
+- 编辑器 smoke：**exit=0**，六步全过。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：`AppRenderState::viewFrameDataPerFlight` 与 `AppLifecycle` 的两处清空循环**没动**。它的迁移
+  需要先证明 tick 之外没有读者与保活依赖，属于 review 第二批，单独一刀。
+- 未完成：review 第二至五批（viewFrameDataPerFlight 归属、pipeline 单 View 状态、移除当前 Scene
+  provider、拆 `RenderDeviceState`）。方向与证据已写入 plan §4b，不再需要重新调研。
+- 偏离：无。
+
 ### 下一刀建议
 
 AB7 现在是下一刀：帧的 View 事实已经有唯一来源（AB8），renderer 不再持有任何「当前 View」的

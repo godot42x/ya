@@ -50,7 +50,7 @@ class GameRuntimeTickOrchestrator
     /// The scheduler is a parameter because it is the tick's own arrangement:
     /// `tickRender` owns it for the duration of one tick, and this step is one
     /// of the two steps that write into it.
-    static void declareViews(App& app, float dt, RenderDeviceState* device, SceneRenderScheduler& scheduler);
+    static void declareViews(App& app, float dt, SceneRenderScheduler& scheduler);
     /// Groups the declarations and extracts Scene content for them. Grouping
     /// and extraction stay separate: seal() reads no ECS, this step does.
     static ExtractedSceneRender extractScenes(App& app, SceneRenderScheduler& scheduler, RenderDeviceState* device);

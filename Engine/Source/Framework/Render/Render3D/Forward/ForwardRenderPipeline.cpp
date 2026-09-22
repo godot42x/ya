@@ -951,11 +951,6 @@ void ForwardRenderPipeline::onViewResized(Rect2D rect)
     requestViewResize(newExtent);
 }
 
-Extent2D ForwardRenderPipeline::getViewExtent() const
-{
-    return _viewResources.extent;
-}
-
 std::shared_ptr<ImageResource> ForwardRenderPipeline::getShadowDirectionalDepthResource() const
 {
     return makeShadowDebugResource(

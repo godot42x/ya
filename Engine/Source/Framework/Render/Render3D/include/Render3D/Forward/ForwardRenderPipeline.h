@@ -100,7 +100,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
 
     void                         onViewResized(Rect2D rect) override;
     [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Forward; }
-    Extent2D                     getViewExtent() const override;
     [[nodiscard]] EFormat::T     getViewColorFormat() const override;
     [[nodiscard]] EFormat::T     getViewDepthFormat() const override;
     [[nodiscard]] const ForwardViewResources& getCurrentViewportResources() const { return _viewResources; }

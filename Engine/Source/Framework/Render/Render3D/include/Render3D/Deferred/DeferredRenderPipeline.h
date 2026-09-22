@@ -157,10 +157,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     void onViewResized(Rect2D rect) override;
     [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Deferred; }
 
-    Extent2D getViewExtent() const override
-    {
-        return _viewRTSpec.extent;
-    }
     EFormat::T getViewColorFormat() const override;
     EFormat::T getViewDepthFormat() const override;
 

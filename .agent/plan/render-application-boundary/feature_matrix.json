@@ -40,6 +40,20 @@
       ]
     },
     {
+      "id": "plan_matches_reality",
+      "phase": "AB9",
+      "status": "landed_review_batch_1",
+      "evidence": [
+        "pumpOffscreenTasks was a function with only a self-recursive call and no caller: commit 663e0f82 named the offscreen pump as a tickRender step, but tickRender actually called device->getOffscreenTaskService().tick(app.getTaskManager()) inline, so the named step existed in the header plus an infinite recursion while the real call stayed anonymous. Fixed by wiring the step back (tickRender calls pumpOffscreenTasks, the body does the work) rather than deleting the name, because naming it was the correct intent",
+        "IRenderPipeline::getViewExtent() and the Forward/Deferred implementations are deleted (zero callers). They implied 'a pipeline has one View extent', which cannot express multiple differently-sized Views; deleting the interface does NOT close that gap -- the pipeline's single-set View resources stay and are recorded in plan section 4b",
+        "declareViews no longer takes RenderDeviceState* -- unused since applyViewResize was deleted in AB8 step 1",
+        "render-view-family/plan.md now carries a status correction at its head (Coordinator deleted; the 'rename to public Renderer' direction is superseded; the next cut lives in render-application-boundary) and a 'read this first' block at the top of section 2 listing the real main loop, RenderDeviceState's full current duty list, that PreparedView has not landed, and that multi-View extents are not done. The section 2 body below is left verbatim and labelled as describing the pre-fix state -- history is where the 'why we judged it that way' lives",
+        "render-view-family/plan.md section 3.7's Renderer row is marked as void and section 4 checkpoint 2 is rewritten as 'first half done, second half void', both pointing at AB7",
+        "new plan section 4b records six verified-but-unfinished ownership deviations with evidence and target owner each: the whole-frame recording orchestration in RenderDeviceState; AppRenderState::viewFrameDataPerFlight (with the note that the keepalive/lifetime relation must be proven before moving it -- hostFrameData() has only tests as readers today); the pipeline's single-set View resources; the implicit current Scene behind setActiveSceneProvider on EnvironmentLightingProcessor / TerrainProcessor / GameplayResourceBinding; RenderFramePlan::recordExtensions still carrying behaviour; and RenderDeviceState's editor query surface plus the Render3D -> GUI/Compose include",
+        "deliberately NOT done in this checkpoint: AppRenderState::viewFrameDataPerFlight and the two AppLifecycle clear loops are untouched -- moving them needs the keepalive proof first, and that is review batch 2 as its own cut"
+      ]
+    },
+    {
       "id": "frame_view_facts_have_one_source",
       "phase": "AB8",
       "status": "step1_and_step2_landed",

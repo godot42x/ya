@@ -256,7 +256,7 @@ void GameRuntimeTickOrchestrator::pumpOffscreenTasks(App& app, RenderDeviceState
     // resources this tick's Views bind were produced by offscreen jobs queued on
     // earlier ticks, and reading them before their fence has been waited on is a
     // use-before-ready, not a slower frame.
-    pumpOffscreenTasks(app, device);
+    device->getOffscreenTaskService().tick(app.getTaskManager());
 }
 
 
@@ -324,7 +324,11 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         }
     } diagnosticsGuard{.diagnostics = &diagnostics};
 
-    device->getOffscreenTaskService().tick(app.getTaskManager());
+    // The one call that makes the previous paragraph true. It used to be
+    // inlined here while `pumpOffscreenTasks` called only itself, so the named
+    // step existed in the header and as an infinite recursion, and the real call
+    // was anonymous. One step, one body, one call site.
+    pumpOffscreenTasks(app, device);
 
     const uint32_t flightIndex = resolveFlightIndex(app);
 
@@ -336,7 +340,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     sceneScheduler.beginTick(App::_hostTick);
 
     // declare → extract → prepare → build → acquire → record → submit → extras
-    declareViews(app, dt, device, sceneScheduler);
+    declareViews(app, dt, sceneScheduler);
     ExtractedSceneRender sceneRender = extractScenes(app, sceneScheduler, device);
     prepareViews(app, dt, flightIndex, sceneRender);
 
@@ -383,7 +387,6 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 
 void GameRuntimeTickOrchestrator::declareViews(App&                  app,
                                                float                 dt,
-                                               RenderDeviceState*    device,
                                                SceneRenderScheduler& scheduler)
 {
     const HostRenderSettings& hostSettings = app._renderState->hostSettings;

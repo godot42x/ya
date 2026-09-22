@@ -40,7 +40,6 @@ struct IRenderPipelineExecution
     /// Product recording does not use tick/beginTick/getCurrent.
     virtual ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) = 0;
 
-    [[nodiscard]] virtual Extent2D   getViewExtent() const          = 0;
     [[nodiscard]] virtual EFormat::T getViewColorFormat() const     = 0;
     [[nodiscard]] virtual EFormat::T getViewDepthFormat() const     = 0;
 

@@ -32,6 +32,19 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-22 AB9（review 第一批：计划对齐 + 删噪声）：修掉 `GameRuntimeTickOrchestrator::pumpOffscreenTasks`
+  ——它只有自我递归、没有任何调用者，而 `tickRender` 直接匿名调 `getOffscreenTaskService().tick(...)`；
+  修法是把 663e0f82 想命名的那一步接回去（`tickRender` 调它，函数体做实际工作），不是删名字。删除零调用方的
+  `IRenderPipeline::getViewExtent()` / Forward / Deferred 三个实现，以及 `declareViews` 已不再使用的
+  `device` 形参。`render-view-family/plan.md` 加状态校正（Coordinator 已删、`Renderer` 改名方向已作废、
+  下一刀在 `render-application-boundary`），§2 顶部加「先读这条」校正块并保留原文标注为修复前状态。
+  新增 plan §4b：把已核对未完成的六项所有权偏差逐条记清（整帧录制编排、`viewFrameDataPerFlight` 归属、
+  pipeline 单 View 资源、`setActiveSceneProvider` 隐式当前 Scene、`recordExtensions` 携带行为、renderer 的
+  编辑器查询面与 `Render3D -> GUI/Compose` include）。验证：全目标 build ok；`ya-render-3d-test` 177/177；
+  滤镜 681 passed / 6 failed（与基线同 6 个）；parity PASS（md5 `c775245a…`）；编辑器 smoke exit=0。
+  **注意**：证据是在 APFS 副本里取得的——主仓库当时被另一位并发写者的半截 WIP（删 `ViewResources` 的
+  `color`/`depth` 别名而 `ViewportDebugCatalogBuilder.cpp` 仍在读）编译不过；副本里把他们的两个头 checkout 回
+  HEAD 后得到等价于本 checkpoint 的树。这在 progress.md 里有完整说明，不要误记成主仓库当时是全绿的。
 - 2026-09-22 AB8-step2：`HostViewState` 拆成设置与排布。`HostViewState.h` →
   `HostRenderSettings.h`（只剩 `clock` / `renderResolution` / `renderScale`）；新增
   `GameRuntime/HostViewportView.h` 的 `HostViewportView{viewId, flightIndex, view, projection,
