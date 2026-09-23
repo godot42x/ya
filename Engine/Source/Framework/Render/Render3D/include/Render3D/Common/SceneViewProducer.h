@@ -3,6 +3,7 @@
 #include "Render3D/Common/SceneViewDesc.h"
 
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace ya
@@ -66,6 +67,13 @@ class ISceneViewProducer
     {
         return SceneViewKey{.owner = viewOwner(), .local = local};
     }
+
+    /// The stable local ids this producer owns. A producer registers the Views
+    /// behind these ids when it is attached to the app, so a tick that declares
+    /// none of them hides the View without destroying it; removing the
+    /// producer unregisters every id here. Dynamic per-tick declarations stay
+    /// in collectSceneViews(); this list is only the View lifecycle.
+    [[nodiscard]] virtual std::span<const uint32_t> ownedViewLocalIds() const = 0;
 
     virtual void collectSceneViews(const SceneViewCollectContext& context,
                                    SceneViewCollector&            collector) = 0;

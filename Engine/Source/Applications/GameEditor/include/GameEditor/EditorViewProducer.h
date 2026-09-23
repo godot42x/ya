@@ -32,6 +32,10 @@ class EditorViewProducer final : public ISceneViewProducer
     static constexpr uint32_t         kAuthoringLocalId = 1;
     /// The selected camera's preview inset.
     static constexpr uint32_t         kPreviewLocalId   = 2;
+    /// The Views this producer owns while it is attached: the authoring
+    /// viewport and the camera preview inset. A hidden viewport still owns
+    /// them, it only stops declaring them for that tick.
+    static constexpr uint32_t         kOwnedLocalIds[]  = {kAuthoringLocalId, kPreviewLocalId};
 
     /// Where the preview sits inside the authoring viewport, in viewport pixels.
     /// The preview View renders at this size and the editor's viewport chrome
@@ -47,6 +51,10 @@ class EditorViewProducer final : public ISceneViewProducer
     [[nodiscard]] SceneViewOwnerId viewOwner() const override { return kViewOwner; }
     [[nodiscard]] SceneViewKey     authoringKey() const { return viewKey(kAuthoringLocalId); }
     [[nodiscard]] SceneViewKey     previewKey() const { return viewKey(kPreviewLocalId); }
+    [[nodiscard]] std::span<const uint32_t> ownedViewLocalIds() const override
+    {
+        return kOwnedLocalIds;
+    }
 
     void collectSceneViews(const SceneViewCollectContext& context,
                            SceneViewCollector&            collector) override;

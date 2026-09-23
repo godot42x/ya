@@ -25,11 +25,17 @@ class YA_GAME_RUNTIME_API RuntimeGameViewProducer final : public ISceneViewProdu
     /// viewport is a different owner declaring its own primary View, so neither
     /// has to know the other exists.
     static constexpr uint32_t         kDisplayRootLocalId = 1;
+    /// The Views this producer owns while it is registered.
+    static constexpr uint32_t         kOwnedLocalIds[]    = {kDisplayRootLocalId};
 
     void bind(App& app) { _app = &app; }
 
     [[nodiscard]] SceneViewOwnerId viewOwner() const override { return kViewOwner; }
     [[nodiscard]] SceneViewKey     displayRootKey() const { return viewKey(kDisplayRootLocalId); }
+    [[nodiscard]] std::span<const uint32_t> ownedViewLocalIds() const override
+    {
+        return kOwnedLocalIds;
+    }
 
     void collectSceneViews(const SceneViewCollectContext& context,
                            SceneViewCollector&            collector) override;

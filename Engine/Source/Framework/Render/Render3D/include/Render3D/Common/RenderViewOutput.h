@@ -139,6 +139,30 @@ class RenderViewOutputTable
         return _flights[flightIndex].liveViewCount;
     }
 
+    /// Remove one View's publication from every flight. Unregistering a View
+    /// calls this, so a consumer can no longer observe the destroyed View;
+    /// already recorded submissions keep their own keepalive copies instead.
+    void dropView(uint64_t viewId)
+    {
+        if (viewId == 0) {
+            return;
+        }
+        for (Flight& flight : _flights) {
+            for (auto it = flight.views.begin(); it != flight.views.end();) {
+                const size_t slot    = static_cast<size_t>(it - flight.views.begin());
+                const bool   wasLive = slot < flight.liveViewCount;
+                if ((*it)->desc.viewId == viewId) {
+                    it = flight.views.erase(it);
+                    if (wasLive) {
+                        --flight.liveViewCount;
+                    }
+                    continue;
+                }
+                ++it;
+            }
+        }
+    }
+
     void clear() { _flights = {}; }
 };
 

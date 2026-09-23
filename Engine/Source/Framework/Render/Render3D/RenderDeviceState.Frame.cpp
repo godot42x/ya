@@ -39,8 +39,8 @@ bool RenderDeviceState::beginFrameCommandBuffer(const RenderFramePlan& plan, std
         YA_CORE_ERROR("Recording flight {} failed to begin a live submission", flightIndex);
         return false;
     }
-    if (!_viewOutputs.beginSubmission(flightIndex, plan.frame.frameIndex)) {
-        YA_CORE_ERROR("Recording flight {} failed to begin view outputs", flightIndex);
+    if (!_viewTargets.beginPublication(flightIndex, plan.frame.frameIndex)) {
+        YA_CORE_ERROR("Recording flight {} failed to begin view publication", flightIndex);
         return false;
     }
     return true;
@@ -159,7 +159,17 @@ const RenderViewOutput* RenderDeviceState::getViewOutput(uint32_t flightIndex, S
     // other flights would answer with a View from another frame that happens to
     // share an id -- which is exactly how a stale image gets shown as if it were
     // current.
-    return _viewOutputs.find(flightIndex, viewId);
+    return _viewTargets.findPublication(flightIndex, viewId);
+}
+
+void RenderDeviceState::registerSceneView(SceneViewKey key)
+{
+    _viewTargets.registerView(key);
+}
+
+void RenderDeviceState::unregisterSceneView(SceneViewKey key)
+{
+    _viewTargets.unregisterView(key);
 }
 
 void RenderDeviceState::publishFamilyResult(uint32_t flightIndex, ViewFamilyRenderResult familyResult)
@@ -169,7 +179,7 @@ void RenderDeviceState::publishFamilyResult(uint32_t flightIndex, ViewFamilyRend
         if (viewId == 0) {
             continue;
         }
-        if (!_viewOutputs.publish(flightIndex, std::move(output))) {
+        if (!_viewTargets.publishView(flightIndex, std::move(output))) {
             YA_CORE_ERROR("Failed to publish view output for view {}", viewId);
         }
     }

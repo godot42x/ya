@@ -154,4 +154,22 @@ TEST(RenderViewOutputTableTest, InspectableAttachmentsStayWithTheirPublishedView
     EXPECT_NE(published->bloomComposite, nullptr);
 }
 
+TEST(RenderViewOutputTableTest, DropViewRemovesPublicationFromEveryFlight)
+{
+    RenderViewOutputTable table;
+    ASSERT_TRUE(table.beginSubmission(0, 1u));
+    ASSERT_TRUE(table.beginSubmission(1, 1u));
+    ASSERT_NE(table.publish(0, RenderViewOutput{.desc = {.viewId = 5}}), nullptr);
+    ASSERT_NE(table.publish(1, RenderViewOutput{.desc = {.viewId = 5}}), nullptr);
+    ASSERT_NE(table.publish(0, RenderViewOutput{.desc = {.viewId = 6}}), nullptr);
+
+    table.dropView(5);
+
+    EXPECT_EQ(table.find(0, 5), nullptr);
+    EXPECT_EQ(table.find(1, 5), nullptr);
+    EXPECT_NE(table.find(0, 6), nullptr);
+    EXPECT_EQ(table.liveViewCount(0), 1u);
+    EXPECT_EQ(table.liveViewCount(1), 0u);
+}
+
 } // namespace ya

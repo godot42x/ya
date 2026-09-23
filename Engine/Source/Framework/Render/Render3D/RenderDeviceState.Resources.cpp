@@ -292,7 +292,6 @@ void RenderDeviceState::shutdown(bool bRenderAlreadyIdle)
 
     _submissions.clear();
     _viewTargets.clear();
-    _viewOutputs.clear();
     _pipelineCoordinator.shutdown();
     // Owned derived-processing systems must release their GPU resources
     // before the render backend is destroyed.

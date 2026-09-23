@@ -1,7 +1,7 @@
 # Render View 资源所有权与管线编排收口计划
 
 > 建立日期：2026-09-23
-> 状态：执行中；Checkpoint A-C 已完成（2026-09-23）
+> 状态：执行中；Checkpoint A-D 已完成（2026-09-23）
 > 关联计划：`../render-view-family/plan.md`、`../render-application-boundary/plan.md`
 
 ## 1. 当前目标与边界
@@ -511,6 +511,16 @@ target request 和输出角色仍由具体 pipeline 清楚写出。
 - transient pool hit / miss 行为保持可观测。
 
 ### Checkpoint D：显式 View 生命周期
+
+状态：已完成（2026-09-23）。
+
+完成结果：
+
+- `ISceneViewProducer` 新增 `ownedViewLocalIds()`；runtime display root、editor authoring / preview 各自枚举自己拥有的固定 local View。
+`App::addSceneViewProducer` / `removeSceneViewProducer` 在注册边界调用 `RenderDeviceState::registerSceneView` / `unregisterSceneView`，转交 `ViewTargetStore::registerView` / `unregisterView`。
+- `ViewTargetStore` 的 publication 表收编 `RenderViewOutputTable`（`beginPublication` / `publishView` / `findPublication`），unregister 通过 `dropView` 立即清空所有 flight 的可见发布；present / picking / debug 的查询入口不变。
+- `prepare()` 只为已注册 View 分配 target；某帧没有 request 的注册 View 保留 allocation。迁移期 "plan 缺席即建 / 即删" 语义移除。
+- 已录制 submission 的 allocation keepalive 不受 unregister 影响，测试覆盖旧 generation 在 store 释放后仍可用。
 
 目标：View GC 不再依赖 SceneRenderPlan 缺席。
 

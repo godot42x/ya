@@ -11,6 +11,9 @@ namespace ya
 namespace
 {
 
+const SceneViewKey kViewA{.owner = 1, .local = 1};
+const SceneViewKey kViewB{.owner = 1, .local = 2};
+
 class StoreTestImage final : public IImage
 {
     ImageCreateInfo _desc;
@@ -68,10 +71,10 @@ class StoreTestFactory final : public IRenderResourceFactory
     }
 };
 
-ViewTargetRequest request(SceneViewId viewId, Extent2D extent)
+ViewTargetRequest request(SceneViewKey key, Extent2D extent)
 {
     return ViewTargetRequest{
-        .viewId = viewId,
+        .viewId = key.viewId(),
         .pipeline = ERenderPipelineKind::Forward,
         .extent = extent,
         .attachments = {
@@ -88,22 +91,23 @@ TEST(ViewTargetStoreTest, ExactRequestReusesAllocationAndResizeReplacesOnce)
     StoreTestFactory factory;
     ViewTargetStore store;
     store.init(factory);
+    store.registerView(kViewA);
 
-    auto initial = request(11, {.width = 1280, .height = 720});
+    auto initial = request(kViewA, {.width = 1280, .height = 720});
     ASSERT_TRUE(store.prepare(std::span<const ViewTargetRequest>(&initial, 1)));
-    const ViewTargetLease first = store.lease(11);
+    const ViewTargetLease first = store.lease(kViewA.viewId());
     ASSERT_TRUE(first);
     EXPECT_EQ(factory.imageCreates, 2u);
 
     ASSERT_TRUE(store.prepare(std::span<const ViewTargetRequest>(&initial, 1)));
-    const ViewTargetLease reused = store.lease(11);
+    const ViewTargetLease reused = store.lease(kViewA.viewId());
     EXPECT_EQ(reused.allocation, first.allocation);
     EXPECT_EQ(reused.allocation->generation, first.allocation->generation);
     EXPECT_EQ(factory.imageCreates, 2u);
 
-    auto resized = request(11, {.width = 640, .height = 480});
+    auto resized = request(kViewA, {.width = 640, .height = 480});
     ASSERT_TRUE(store.prepare(std::span<const ViewTargetRequest>(&resized, 1)));
-    const ViewTargetLease replacement = store.lease(11);
+    const ViewTargetLease replacement = store.lease(kViewA.viewId());
     ASSERT_TRUE(replacement);
     EXPECT_NE(replacement.allocation, first.allocation);
     EXPECT_GT(replacement.allocation->generation, first.allocation->generation);
@@ -117,20 +121,91 @@ TEST(ViewTargetStoreTest, DifferentViewsOwnIndependentAllocations)
     StoreTestFactory factory;
     ViewTargetStore store;
     store.init(factory);
+    store.registerView(kViewA);
+    store.registerView(kViewB);
 
     std::array requests{
-        request(11, {.width = 1280, .height = 720}),
-        request(12, {.width = 256, .height = 256}),
+        request(kViewA, {.width = 1280, .height = 720}),
+        request(kViewB, {.width = 256, .height = 256}),
     };
     ASSERT_TRUE(store.prepare(requests));
 
-    const auto world = store.lease(11);
-    const auto preview = store.lease(12);
+    const auto world   = store.lease(kViewA.viewId());
+    const auto preview = store.lease(kViewB.viewId());
     ASSERT_TRUE(world);
     ASSERT_TRUE(preview);
     EXPECT_NE(world.allocation, preview.allocation);
     EXPECT_NE(world.find(EViewAttachment::SceneColor), preview.find(EViewAttachment::SceneColor));
     EXPECT_EQ(store.residentAllocationCount(), 2u);
+}
+
+TEST(ViewTargetStoreTest, RegisteredViewKeepsAllocationAcrossSkippedFrame)
+{
+    StoreTestFactory factory;
+    ViewTargetStore store;
+    store.init(factory);
+    store.registerView(kViewA);
+
+    auto initial = request(kViewA, {.width = 1280, .height = 720});
+    ASSERT_TRUE(store.prepare(std::span<const ViewTargetRequest>(&initial, 1)));
+    const ViewTargetLease first = store.lease(kViewA.viewId());
+    ASSERT_TRUE(first);
+
+    // A registered View that this frame does not request keeps its allocation:
+    // absence from the plan is "hidden", not "destroyed".
+    const std::span<const ViewTargetRequest> noRequests;
+    ASSERT_TRUE(store.prepare(noRequests));
+    const ViewTargetLease kept = store.lease(kViewA.viewId());
+    EXPECT_EQ(kept.allocation, first.allocation);
+    EXPECT_EQ(store.residentAllocationCount(), 1u);
+    EXPECT_EQ(factory.imageCreates, 2u);
+}
+
+TEST(ViewTargetStoreTest, PrepareSkipsUnregisteredView)
+{
+    StoreTestFactory factory;
+    ViewTargetStore store;
+    store.init(factory);
+
+    auto initial = request(kViewA, {.width = 1280, .height = 720});
+    ASSERT_TRUE(store.prepare(std::span<const ViewTargetRequest>(&initial, 1)));
+    EXPECT_FALSE(store.lease(kViewA.viewId()));
+    EXPECT_EQ(store.residentAllocationCount(), 0u);
+
+    // Unregistering an unknown or invalid key is a no-op, not a crash.
+    store.unregisterView(kViewA);
+    store.unregisterView(SceneViewKey{});
+}
+
+TEST(ViewTargetStoreTest, UnregisterDropsAllocationAndPublication)
+{
+    StoreTestFactory factory;
+    ViewTargetStore store;
+    store.init(factory);
+    store.registerView(kViewA);
+
+    auto initial = request(kViewA, {.width = 1280, .height = 720});
+    ASSERT_TRUE(store.prepare(std::span<const ViewTargetRequest>(&initial, 1)));
+    const ViewTargetLease live = store.lease(kViewA.viewId());
+    ASSERT_TRUE(live);
+
+    const SceneViewId viewId = kViewA.viewId();
+    ASSERT_TRUE(store.beginPublication(0, 1u));
+    ASSERT_TRUE(store.beginPublication(1, 1u));
+    ASSERT_NE(store.publishView(0, RenderViewOutput{.desc = {.viewId = viewId}}), nullptr);
+    ASSERT_NE(store.publishView(1, RenderViewOutput{.desc = {.viewId = viewId}}), nullptr);
+
+    store.unregisterView(kViewA);
+
+    EXPECT_FALSE(store.lease(viewId));
+    EXPECT_EQ(store.residentAllocationCount(), 0u);
+    EXPECT_EQ(store.findPublication(0, viewId), nullptr);
+    EXPECT_EQ(store.findPublication(1, viewId), nullptr);
+
+    // The recorded submission keeps its keepalive copy of the allocation until
+    // its fence, even though the store no longer holds a long-term reference.
+    ASSERT_TRUE(live.allocation);
+    EXPECT_EQ(live.allocation->generation, 1u);
 }
 
 } // namespace ya

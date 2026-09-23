@@ -48,9 +48,36 @@ void ViewTargetStore::init(IRenderResourceFactory& factory)
 
 void ViewTargetStore::clear()
 {
+    _publications.clear();
     _entries.clear();
     _factory         = nullptr;
     _nextGeneration = 1;
+}
+
+void ViewTargetStore::registerView(SceneViewKey key)
+{
+    if (!key.valid()) {
+        YA_CORE_ERROR("Cannot register an invalid scene view key");
+        return;
+    }
+
+    // Re-registering a live View keeps its allocation: registration is the
+    // lifecycle boundary, not a per-frame reset.
+    _entries[key.viewId()].key = key;
+}
+
+void ViewTargetStore::unregisterView(SceneViewKey key)
+{
+    if (!key.valid()) {
+        return;
+    }
+
+    const auto it = _entries.find(key.viewId());
+    if (it == _entries.end() || it->second.key != key) {
+        return;
+    }
+    _publications.dropView(key.viewId());
+    _entries.erase(it);
 }
 
 bool ViewTargetStore::prepare(std::span<const ViewTargetRequest> requests)
@@ -64,7 +91,16 @@ bool ViewTargetStore::prepare(std::span<const ViewTargetRequest> requests)
             continue;
         }
 
-        Entry& entry = _entries[request.viewId];
+        const auto registered = _entries.find(request.viewId);
+        if (registered == _entries.end()) {
+            // A request without registration is a producer/plan bug: the View
+            // lifecycle is explicit, so absence is not a resize or a create.
+            // The recording path already reports the missing lease for it.
+            YA_CORE_ERROR("View target request for unregistered view {}", request.viewId);
+            continue;
+        }
+
+        Entry& entry = registered->second;
         if (entry.allocation && entry.allocation->desc == request) {
             continue;
         }

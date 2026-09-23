@@ -98,7 +98,6 @@ struct YA_RENDER_3D_API RenderDeviceState
     OffscreenTaskService                         _offscreen{};
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
     RenderSubmissionPool                         _submissions;
-    RenderViewOutputTable                        _viewOutputs;
     ViewTargetStore                              _viewTargets;
     std::shared_ptr<ShaderStorage>               _shaderStorage = nullptr;
 
@@ -188,6 +187,11 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// names none of them "the current one". `flightIndex` is the value
     /// `RecordedFrame` handed back, so a reader that recorded the frame has it.
     [[nodiscard]] const RenderViewOutput* getViewOutput(uint32_t flightIndex, SceneViewId viewId) const;
+    /// Producer-driven View lifecycle: register when a producer attaches,
+    /// unregister when it is removed. See ViewTargetStore for the exact
+    /// lifetime contract.
+    void registerSceneView(SceneViewKey key);
+    void unregisterSceneView(SceneViewKey key);
     /// The image a surface pass may put on a window for this View, together with
     /// the fact its format cannot carry: which transfer function its values
     /// already have. A View with no output, or one whose display image is only

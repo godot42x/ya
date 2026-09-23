@@ -210,6 +210,13 @@ void App::addSceneViewProducer(ISceneViewProducer& producer)
                            producer.viewOwner());
         }
         producers.push_back(&producer);
+        // The producer owns its Views for as long as it is registered, so the
+        // target store keeps them across ticks that declare none of them.
+        if (RenderDeviceState* device = _renderState->device.get()) {
+            for (const uint32_t local : producer.ownedViewLocalIds()) {
+                device->registerSceneView(producer.viewKey(local));
+            }
+        }
     }
 }
 
@@ -217,6 +224,13 @@ void App::removeSceneViewProducer(ISceneViewProducer& producer)
 {
     if (!_renderState) {
         return;
+    }
+    // Unregister first: this is the lifecycle boundary that drops the View's
+    // allocation and publication, not the erasure of the collector entry.
+    if (RenderDeviceState* device = _renderState->device.get()) {
+        for (const uint32_t local : producer.ownedViewLocalIds()) {
+            device->unregisterSceneView(producer.viewKey(local));
+        }
     }
     std::erase(_renderState->viewProducers, &producer);
 }
