@@ -44,6 +44,21 @@ xmake ya-shader
 xmake b ya-testing && xmake r ya-testing --gtest_filter=Suite.Test
 ```
 
+### 跑全部测试（group）
+
+每个测试 target 都带 `set_group("test")`，所以全量测试不需要手维护 target 列表：
+
+```bash
+make test        # 等价于 xmake test
+xmake b -g test  # 只构建全部测试 target
+xmake r -g test  # 只运行（构建已就绪时）
+```
+
+`xmake test` 这个 action 定义在 `Engine/Test/Test.xmake.lua`（两个 profile 都 include）。
+group 内 target 顺序由 xmake 决定，**遇到第一个红 target 就停下**：它是“修完再跑”
+的闸门，不是“汇总报告”。要单独定位时直接 `xmake r <target>`，不要用二进制路径直接跑
+（`set_rundir` 把工作目录钉在仓库根，直接跑会让相对资源路径失效，产生假失败）。
+
 ## 两种启动模式
 
 仓库只有两类入口，按"是否经过引擎项目流程"区分，不要混用：
@@ -64,10 +79,36 @@ xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test
 xmake b ya-gui-closure-test && xmake r ya-gui-closure-test
 xmake b ya-gui-workbench-workspace-test && xmake r ya-gui-workbench-workspace-test
 
-# make 等价（薄包装，TARGET/ARGS 可覆盖）
-make b TARGET=GUIWorkbench
-make r TARGET=GUIWorkbench ARGS="--smoke-actions"
+# make 等价（薄包装，t/ARGS 可覆盖）
+make b t=GUIWorkbench
+make r t=GUIWorkbench ARGS="--smoke-actions"
+make test
 ```
+
+### 测试源码布局（新增用例时看这里）
+
+`Engine/Test/Source/` 按**门禁（gate）**分目录，每个 target 用目录 glob 收源码
+（`ya_test_sources("Support", "<Gate>")`），所以新用例只要放进对的目录就自动进闸门，
+不需要改 xmake：
+
+| 目录 | 谁编译它 | 说明 |
+| --- | --- | --- |
+| `Support/` | 全部测试 target | 共享 runner (`TestEntry.cpp`) 与测试辅助头（如 `TestSource.h`） |
+| `Integration/` | 仅 `ya-testing` | 需要整条引擎链路（App/Scene/Editor/Runtime）的用例 |
+| `EcCore` `ResourceCore` `Render2D` `Render3D` `ResourceRuntime` `RhiVulkan` | 对应 closure target | 只链接该模块的闭包回归 |
+| `GuiDeclarative` | `ya-gui-declarative-contract-test`、`ya-gui-widgets-test`、`ya-gui-closure-test` | declarative 契约 |
+| `GuiWidgets` | `ya-gui-widgets-test`、`ya-gui-closure-test` | 只依赖 widgets 的契约 |
+| `GuiFramework` | `ya-gui-closure-test` | 需要整个 GUI closure |
+| `GuiHost` | `ya-gui-headless-host-test` | host / 窗口 / chrome |
+
+两条硬约定：
+
+1. **不要用子节点下标定位控件**：布局会变，下标会静默变成 `nullptr` 让断言失效。按
+   authored key（`_stableKey`，直构控件在 `_name`）或类型查找，见
+   `EditorPropertyGraphTest` 的 `findControlByKeySuffix`。
+2. **读源码文本的用例**用 `#include "TestSource.h"` 的 `readEngineSource()`：它按仓库根
+   标记（`Engine/Source` + `Xmake`）向上查找，不要写 `__FILE__` 加固定 `../..` 层数——
+   用例换一个 suite 目录就会静默读到空文件。
 
 ### 模式 2：项目相关 / editor（Script/ya.py）
 
@@ -169,7 +210,8 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
   `make run|run-editor|build|package t=...`）
 - `xmake.lua`：全局规则、`compile_commands.autoupdate`
 - `Engine/Shader/Shader.xmake.lua`：shader 生成入口
-- `Test/xmake.lua`：测试目标定义
+- `Engine/Test/Test.xmake.lua`：测试 target 定义 + `xmake test` action；`Engine/Test/Source/<Gate>/` 按门禁分目录收源码
+- `test/Test.xmake.lua`：作者 scratch 原型（`bus` / `type_size` / `LazyStatic`），**不在** `test` group 里（不是 gtest 用例，`bus.cpp` 还会卡在 `std::cin`）
 - `Example/`：可运行示例目标
 
 ## 常见排查顺序
@@ -200,9 +242,12 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
 
 ### 5. 测试运行失败
 
-1. 确认目标是 `$(t)-testing` 或 `ya-testing`。
-2. 确认 `--gtest_filter` / `r_args` 写法正确。
-3. 若只是单测不过，构建链路没问题时再转去具体模块 skill。
+1. 先跑 `make test` 拿全貌；group 遇红即停，所以再 `xmake r <target>` 单独复现。
+2. 确认目标是 `$(t)-testing` 或 `ya-testing`，`--gtest_filter` 写法正确。
+3. 断言失败先分清三类：框架 bug / 框架变更后用例没跟上 / 用例本身无意义（例如断言一个
+   被注释掉的代码生成器产物、`EXPECT_EXIT` 里再起线程、依赖平台真的最小化窗口）。见
+   `../memories/stale_test_assertions_after_contract_change.md`。
+4. 构建没问题时再转去具体模块 skill。
 
 ## 共享缓存（多 worktree / 多 agent 并行）
 

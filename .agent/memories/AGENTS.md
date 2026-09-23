@@ -29,6 +29,7 @@
 - `./reflected_transform_write_bypasses_child_dirty.md`：反射/undo/反序列化直写 `TransformComponent` 字段绕过 setter，子节点 world matrix 不标脏 → 生成物（相机机身）停在旧位置；含"父脏必然子脏"应落在 `updateNodeTree` 的理由
 - `./component_created_without_owner.md`：scene.json 载入的组件 `_owner` 为空（反序列化走的是不知道 `Entity*` 的按名字 funnel）→ 相机 `getFreeView()` 落到 orbit 默认分支，预览与视锥线框一起停在世界原点而 mesh 在 authored 位姿；含"枚举全部 emplace 路径"的排查法
 - `./widget_tick_gate_hidden_by_override.md`：tick 的"门"（`wantsTick`）曾被子类 override 接管，而执行侧仍转发 `_behaviors` → 挂在 compound 上的 tween/behavior 静默不跑且不报错；现在门归 `UIElement` 且非虚（`_bTickEnabled || 任一 behavior 想跑`）。同族第二处（`onPointerEnter` 等 input dispatch）与未做的 `tick()`→`onTick()` 拆分一并记录
+- `./stale_test_assertions_after_contract_change.md`：断言层测试过期的三类归属与修法（`engine.panel` 不再绘制、剪贴板是进程级、按下标找控件、默认参数翻转、依赖被禁用的生成器、`EXPECT_EXIT`+线程、平台最小化标志残留）；含"优先改断言而不是改框架"的约定
 
 ## 边界
 
