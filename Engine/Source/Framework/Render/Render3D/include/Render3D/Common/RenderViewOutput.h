@@ -35,6 +35,7 @@ struct RenderViewOutput
     std::shared_ptr<RenderTexture> bloomBlur;
     std::shared_ptr<RenderTexture> bloomComposite;
     std::shared_ptr<RenderTexture> ssao;
+    std::array<std::shared_ptr<RenderTexture>, 4> gBufferColors{};
 
     [[nodiscard]] std::shared_ptr<RenderTexture> displayImage() const
     {

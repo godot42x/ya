@@ -1,12 +1,9 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
-#include "Render3D/Deferred/DeferredGBufferResources.h"
 #include "Render3D/Deferred/DeferredFrameGraphResources.h"
 #include "Render3D/Deferred/DeferredFrameGraphOrchestrator.h"
 #include "Render3D/Deferred/DeferredFrameResourceSet.h"
-#include "Render3D/Deferred/DeferredPipelineDebugViews.h"
-#include "Render3D/Deferred/DeferredViewResources.h"
 #include "Render3D/Deferred/GBufferStage.h"
 #include "Render3D/Deferred/LightStage.h"
 #include "RHI/Core/DescriptorSet.h"
@@ -20,7 +17,6 @@
 #include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/PostProcessingState.h"
-#include "Render3D/Common/ViewResourceKey.h"
 #include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Render3D/Common/Shadow/ShadowStage.h"
@@ -138,11 +134,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     stdptr<IImageView> _debugSpecularAlphaView;
     ImageViewHandle    _cachedAlbedoSpecImageViewHandle = nullptr;
     uint32_t           _pendingResourceRefreshMask = 0;
-    /// Per-View GBuffer / viewport / postprocess attachments, keyed by
-    /// identity + extent + formats + features. A second View in the same tick
-    /// is a second entry, not an overwrite of the first.
-    ViewResourceTable<DeferredPipelineDebugViews> _publishedViews{};
-
     // ── Frame state ───────────────────────────────────────────────────
     EntityIdPass       _entityIdPass{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
@@ -154,7 +145,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
 
     void init(const InitDesc& desc);
     ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
-    void reconcilePublishedViews(const SceneRenderPlan& plan) override;
     void shutdown();
 
     [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Deferred; }
@@ -177,23 +167,10 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     /// Pending snapshot if a request is in flight, otherwise the applied snapshot.
     [[nodiscard]] RenderPipelineSettings resolveSettings() const override;
     void requestSettings(const RenderPipelineSettings& settings) override;
-    /// What this pipeline recorded for the named View. A View this pipeline did
-    /// not record answers with an empty snapshot, not with another View's.
-    DeferredPipelineDebugViews buildDebugViews(SceneViewId viewId) const;
     void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;
     bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner, EFormat::T format) override;
     bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) override;
 
-    std::shared_ptr<RenderTexture> getViewDepthImageShared(SceneViewId viewId) const override
-    {
-        const DeferredPipelineDebugViews* views = _publishedViews.findForView(viewId);
-        return views ? views->viewportResources.depthOwner : nullptr;
-    }
-    std::shared_ptr<RenderTexture> getEntityIdImageShared(SceneViewId viewId) const override
-    {
-        const DeferredPipelineDebugViews* views = _publishedViews.findForView(viewId);
-        return views ? views->viewportResources.entityIdOwner : nullptr;
-    }
     bool           isShadowMappingEnabled() const override;
     std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
     std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
@@ -219,11 +196,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool shouldSkipView(const RenderPipelineFrameContext& frame) const;
     void               beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               invalidateGBufferDependentViews();
-    [[nodiscard]] DeferredGBufferResources buildPublishedGBufferResources(const RenderGraphExecutionResult& result, uint64_t viewId) const;
-    [[nodiscard]] DeferredViewResources buildPublishedViewResources(
-        const RenderGraphExecutionResult& result,
-        uint64_t viewId,
-        const std::shared_ptr<RenderTexture>& depthOwner) const;
     [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
                                                      const DeferredFrameGraphResources& graphResources,
                                                      const SceneViewTask* task,
@@ -260,7 +232,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     void               applyPendingResourceRefreshes();
     void               requestShadowResourceRefresh();
     void               applyPendingSettings();
-    void               publishViewResources(const ViewResourceKey& key, DeferredPipelineDebugViews views);
     void               setDeferredSharedDepthFormat(EFormat::T format);
     void               initShadowResources();
     void               destroyShadowResources();

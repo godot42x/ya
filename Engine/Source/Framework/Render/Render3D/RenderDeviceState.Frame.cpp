@@ -5,8 +5,6 @@
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
 #include "RHI/Core/CommandBuffer.h"
-#include "Render3D/Deferred/DeferredRenderPipeline.h"
-#include "Render3D/Forward/ForwardRenderPipeline.h"
 #include <vector>
 
 namespace ya
@@ -92,15 +90,6 @@ void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan)
     // geometry is not pushed here -- it is that View's own declaration and its
     // resources are keyed by it. See PipelineCoordinator::applyPendingChanges.
     _pipelineCoordinator.applyPendingChanges();
-    // The other safe-point mutation, and the only one that is about a View
-    // *leaving*: a View this tick does not declare is not one of the Views the
-    // last recorded tick left behind, so the pipeline drops what it published
-    // for it here -- before the command buffer opens. The whole plan is the
-    // input, so this is one answer for the tick, not one per recorded family,
-    // and a tick that declares no View at all still reconciles.
-    if (IRenderPipeline* pipeline = getActivePipeline()) {
-        pipeline->reconcilePublishedViews(plan.sceneRender.plan());
-    }
     // Prepares the runtime UI-compose pass from the pipeline's own postprocess
     // format. There used to be a second, conditional call right below that read
     // the *previous* frame's published display image to learn the same format --
@@ -200,6 +189,13 @@ void RenderDeviceState::retainPublishedViewOutputs(uint32_t flightIndex, IComman
         retain(output->color);
         retain(output->depth);
         retain(output->entityId);
+        retain(output->ssao);
+        retain(output->bloomExtract);
+        retain(output->bloomBlur);
+        retain(output->bloomComposite);
+        for (const auto& gBufferColor : output->gBufferColors) {
+            retain(gBufferColor);
+        }
     }
 }
 

@@ -121,4 +121,37 @@ TEST(RenderViewOutputTableTest, PublishRequiresSubmissionAndViewId)
     EXPECT_EQ(table.get(0, 0), nullptr);
 }
 
+TEST(RenderViewOutputTableTest, InspectableAttachmentsStayWithTheirPublishedView)
+{
+    RenderViewOutputTable table;
+    ASSERT_TRUE(table.beginSubmission(0, 17u));
+
+    RenderViewOutput output{.desc = {.viewId = 31, .extent = {.width = 320, .height = 180}}};
+    output.depth          = std::make_shared<RenderTexture>();
+    output.entityId       = std::make_shared<RenderTexture>();
+    output.ssao           = std::make_shared<RenderTexture>();
+    output.bloomExtract   = std::make_shared<RenderTexture>();
+    output.bloomBlur      = std::make_shared<RenderTexture>();
+    output.bloomComposite = std::make_shared<RenderTexture>();
+    for (auto& gBufferColor : output.gBufferColors) {
+        gBufferColor = std::make_shared<RenderTexture>();
+    }
+
+    const auto expectedDepth    = output.depth;
+    const auto expectedEntityId = output.entityId;
+    const auto expectedSsao     = output.ssao;
+    const auto expectedGBuffer  = output.gBufferColors;
+    ASSERT_NE(table.publish(0, std::move(output)), nullptr);
+
+    const RenderViewOutput* published = table.find(0, 31);
+    ASSERT_NE(published, nullptr);
+    EXPECT_EQ(published->depth, expectedDepth);
+    EXPECT_EQ(published->entityId, expectedEntityId);
+    EXPECT_EQ(published->ssao, expectedSsao);
+    EXPECT_EQ(published->gBufferColors, expectedGBuffer);
+    EXPECT_NE(published->bloomExtract, nullptr);
+    EXPECT_NE(published->bloomBlur, nullptr);
+    EXPECT_NE(published->bloomComposite, nullptr);
+}
+
 } // namespace ya

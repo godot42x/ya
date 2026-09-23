@@ -2,7 +2,6 @@
 
 #include "Core/Base.h"
 #include "Render3D/Forward/ForwardViewStage.h"
-#include "Render3D/Forward/ForwardViewResources.h"
 #include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
 #include "Graph/RenderGraphExecutor.h"
@@ -13,7 +12,6 @@
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/EntityIdPass.h"
-#include "Render3D/Common/ViewResourceKey.h"
 #include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Render3D/Common/Shadow/ShadowStage.h"
@@ -41,8 +39,6 @@ struct Sampler;
 
 struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
 {
-    friend class ForwardRenderPipelineTestAccess;
-
     static constexpr auto VIEWPORT_COLOR_FORMAT              = EFormat::R16G16B16A16_SFLOAT;
     static constexpr auto POSTPROCESS_COLOR_FORMAT           = EFormat::R8G8B8A8_UNORM;
     static constexpr auto DEPTH_FORMAT                       = EFormat::D32_SFLOAT_S8_UINT;
@@ -87,15 +83,12 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     /// that View's resource key.
     RenderTargetCreateInfo _viewRTSpec{};
     RenderAttachmentFormats _viewFormats{};
-    /// Per-View attachments, keyed by identity + extent + formats + features.
-    ViewResourceTable<ForwardViewResources> _viewResources{};
     EntityIdPass     _entityIdPass{};
     ShadowSettings _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
     std::optional<PostProcessingState> _pendingPostProcessSettings;
 
     void init(const InitDesc& desc);
     ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
-    void reconcilePublishedViews(const SceneRenderPlan& plan) override;
     void shutdown();
 
     bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner,
@@ -107,12 +100,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Forward; }
     [[nodiscard]] EFormat::T     getViewColorFormat() const override;
     [[nodiscard]] EFormat::T     getViewDepthFormat() const override;
-    /// The attachments this pipeline recorded for the named View, or nullptr
-    /// when it recorded none.
-    [[nodiscard]] const ForwardViewResources* viewResourcesFor(SceneViewId viewId) const
-    {
-        return _viewResources.findForView(viewId);
-    }
     [[nodiscard]] const RGTopologyDescription& getLastFrameGraphTopology() const override
     {
         return _lastFrameGraphTopology;
@@ -120,16 +107,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;
 
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
-    [[nodiscard]] std::shared_ptr<RenderTexture> getViewDepthImageShared(SceneViewId viewId) const override
-    {
-        const ForwardViewResources* resources = _viewResources.findForView(viewId);
-        return resources ? resources->depthOwner : nullptr;
-    }
-    [[nodiscard]] std::shared_ptr<RenderTexture> getEntityIdImageShared(SceneViewId viewId) const override
-    {
-        const ForwardViewResources* resources = _viewResources.findForView(viewId);
-        return resources ? resources->entityIdOwner : nullptr;
-    }
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     [[nodiscard]] bool           isGradingEnabled() const override { return _postProcessStage.isGradingEnabled(); }
@@ -170,10 +147,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void               requestShadowResourceRefresh();
     void               applyPendingResourceRefreshes();
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
-    /// Drop every published View's resources: nothing recorded survives a
-    /// change to the pipeline's view-target format configuration.
-    void               invalidatePublishedViewResources();
-    void               publishViewResources(const RenderViewOutput& output, Extent2D extent, FRenderFeatureMask features);
     void               refreshViewSnapshot();
     void               refreshViewStageState();
     void               refreshShadowStageState();

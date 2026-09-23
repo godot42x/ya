@@ -163,22 +163,14 @@ void allocateForwardViewPassResources(
 
 void ForwardRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& catalog) const
 {
-    // One entry per recorded View: a tick with a world view and a thumbnail has
-    // two View targets of different sizes, and a single row could only name one
-    // of them.
-    for (const auto& published : _viewResources.entries()) {
-        catalog.entries.push_back({
-            .label            = "Forward View",
-            .viewId           = published.key.viewId,
-            .owner            = RenderTargetCatalog::Entry::EOwner::ForwardView,
-            .colorFormats     = _viewFormats.colorFormats,
-            .depthFormat      = _viewFormats.depthFormat,
-            .colorAttachments = {published.resources.colorOwner},
-            .depthAttachment  = published.resources.depthOwner,
-            .extent           = published.resources.extent,
-            .frameBufferCount = 1,
-        });
-    }
+    catalog.entries.push_back({
+        .label            = "Forward View",
+        .owner            = RenderTargetCatalog::Entry::EOwner::ForwardView,
+        .colorFormats     = _viewFormats.colorFormats,
+        .depthFormat      = _viewFormats.depthFormat,
+        .extent           = _viewRTSpec.extent,
+        .frameBufferCount = 1,
+    });
     catalog.entries.push_back({
         .label               = "Forward Shadow",
         .owner               = RenderTargetCatalog::Entry::EOwner::ForwardShadow,
@@ -244,7 +236,6 @@ void ForwardRenderPipeline::initViewResources(const InitDesc& desc)
         VIEWPORT_COLOR_FORMAT,
         DEPTH_FORMAT);
     _entityIdPass.init(_render, EFormat::R32_UINT, DEPTH_FORMAT);
-    invalidatePublishedViewResources();
     refreshViewSnapshot();
 }
 
@@ -499,10 +490,8 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
 
     for (const ForwardFamilyViewBranch& branch : liveBranches) {
         const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
-        RenderViewOutput output = collectViewOutput(
-            execution, branch.frame.view.task, viewId, branch.stageCtx.viewExtent);
-        publishViewResources(output, branch.stageCtx.viewExtent, viewFeatureMask(branch.frame));
-        result.views.push_back(std::move(output));
+        result.views.push_back(collectViewOutput(
+            execution, branch.frame.view.task, viewId, branch.stageCtx.viewExtent));
     }
     return result;
 }
@@ -600,7 +589,6 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
     }
 
     if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat)) {
-        invalidatePublishedViewResources();
         bRefreshViewportSnapshot   = true;
         bRefreshViewportStageState = true;
         clearPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat);
@@ -631,41 +619,6 @@ void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& 
     }
 
     syncShadowSettings();
-}
-
-void ForwardRenderPipeline::invalidatePublishedViewResources()
-{
-    _viewResources.clear();
-}
-
-void ForwardRenderPipeline::reconcilePublishedViews(const SceneRenderPlan& plan)
-{
-    // The tick's declarations are the whole criterion. A View this tick does not
-    // name is no longer one of the Views the last recorded tick left behind, so
-    // what it left in this table -- the only owner of its attachments -- goes
-    // away with it. Not a heuristic on age: a View declared every tick is never
-    // dropped, and a View the tick stops declaring is gone on the first tick
-    // that omits it. The whole plan is the input, so the answer cannot depend on
-    // how many families this tick records or in which order.
-    _viewResources.retainIf([&plan](SceneViewId viewId) { return planDeclaresView(plan, viewId); });
-}
-
-void ForwardRenderPipeline::publishViewResources(const RenderViewOutput& output, Extent2D extent, FRenderFeatureMask features)
-{
-    if (output.desc.viewId == 0) {
-        return;
-    }
-
-    ForwardViewResources resources;
-    resources.publish(output.color, output.depth, nullptr, output.entityId, extent);
-    _viewResources.publish(ViewResourceKey{
-                               .viewId      = output.desc.viewId,
-                               .extent      = extent,
-                               .colorFormat = output.desc.colorFormat,
-                               .depthFormat = output.desc.depthFormat,
-                               .featureMask = features,
-                           },
-                           std::move(resources));
 }
 
 void ForwardRenderPipeline::refreshViewSnapshot()
@@ -852,7 +805,6 @@ void ForwardRenderPipeline::shutdown()
     _graphExecutor.reset();
     _pendingResourceRefreshMask = 0;
     _viewFormats = {};
-    _viewResources.clear();
     _deleter.clear();
 }
 

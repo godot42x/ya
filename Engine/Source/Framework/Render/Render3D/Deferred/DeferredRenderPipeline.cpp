@@ -3,7 +3,6 @@
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
-#include "Render3D/Deferred/DeferredViewResources.h"
 #include "Render3D/Deferred/DeferredAttachmentFormats.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
@@ -549,65 +548,24 @@ void DeferredRenderPipeline::loadPersistentSettings()
     _frameShadowSettings = shadowSettings;
 }
 
-DeferredPipelineDebugViews DeferredRenderPipeline::buildDebugViews(SceneViewId viewId) const
-{
-    const DeferredPipelineDebugViews* views = _publishedViews.findForView(viewId);
-    return views ? *views : DeferredPipelineDebugViews{};
-}
-
-void DeferredRenderPipeline::publishViewResources(const ViewResourceKey& key, DeferredPipelineDebugViews views)
-{
-    if (key.viewId == 0) {
-        return;
-    }
-    _publishedViews.publish(key, std::move(views));
-}
-
-void DeferredRenderPipeline::reconcilePublishedViews(const SceneRenderPlan& plan)
-{
-    // Same criterion as the forward path: what the tick declares is what exists.
-    // A View this tick omits is no longer one of the Views the last recorded
-    // tick left behind, and this table is the only owner of its GBuffer,
-    // viewport and postprocess attachments, so dropping the entry is what
-    // releases them. The whole plan arrives at once, so one family's View list
-    // can never evict another family's View of the same tick.
-    _publishedViews.retainIf([&plan](SceneViewId viewId) { return planDeclaresView(plan, viewId); });
-}
-
 void DeferredRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& catalog) const
 {
-    // One pair of entries per recorded View: the extent on the entry is the
-    // extent that View declared, not whichever View happened to record last.
-    for (const auto& published : _publishedViews.entries()) {
-        const DeferredPipelineDebugViews& views = published.resources;
-        catalog.entries.push_back({
-            .label        = "Deferred GBuffer",
-            .viewId       = published.key.viewId,
-            .owner        = RenderTargetCatalog::Entry::EOwner::DeferredGBuffer,
-            .colorFormats = views.gBufferResources.formats.colorFormats,
-            .depthFormat  = views.gBufferResources.formats.depthFormat,
-            .colorAttachments = {
-                views.gBufferResources.colorOwners[0],
-                views.gBufferResources.colorOwners[1],
-                views.gBufferResources.colorOwners[2],
-                views.gBufferResources.colorOwners[3],
-            },
-            .depthAttachment  = views.gBufferResources.depthOwner,
-            .extent           = published.key.extent,
-            .frameBufferCount = 1,
-        });
-        catalog.entries.push_back({
-            .label            = "Deferred View",
-            .viewId           = published.key.viewId,
-            .owner            = RenderTargetCatalog::Entry::EOwner::DeferredView,
-            .colorFormats     = views.viewportResources.formats.colorFormats,
-            .depthFormat      = views.viewportResources.formats.depthFormat,
-            .colorAttachments = {views.viewportResources.colorOwner},
-            .depthAttachment  = views.viewportResources.depthOwner,
-            .extent           = published.key.extent,
-            .frameBufferCount = 1,
-        });
-    }
+    catalog.entries.push_back({
+        .label            = "Deferred GBuffer",
+        .owner            = RenderTargetCatalog::Entry::EOwner::DeferredGBuffer,
+        .colorFormats     = buildGBufferSnapshotFormats().colorFormats,
+        .depthFormat      = buildGBufferSnapshotFormats().depthFormat,
+        .extent           = _gBufferRTSpec.extent,
+        .frameBufferCount = 1,
+    });
+    catalog.entries.push_back({
+        .label            = "Deferred View",
+        .owner            = RenderTargetCatalog::Entry::EOwner::DeferredView,
+        .colorFormats     = buildViewSnapshotFormats().colorFormats,
+        .depthFormat      = buildViewSnapshotFormats().depthFormat,
+        .extent           = _viewRTSpec.extent,
+        .frameBufferCount = 1,
+    });
     catalog.entries.push_back({
         .label               = "Deferred Shadow",
         .owner               = RenderTargetCatalog::Entry::EOwner::DeferredShadow,
@@ -764,7 +722,6 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _debugRenderSystem            = desc.debugRenderSystem;
     _pendingSettings.reset();
     _pendingResourceRefreshMask   = 0;
-    _publishedViews.clear();
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
     }
@@ -844,7 +801,6 @@ void DeferredRenderPipeline::shutdown()
     _debugSpecularAlphaView.reset();
     _cachedAlbedoSpecImageViewHandle = nullptr;
     _pendingResourceRefreshMask      = 0;
-    _publishedViews.clear();
     if (_ssaoStage) {
     }
     _graphExecutor.reset();
@@ -1026,43 +982,8 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
 
     for (const DeferredFamilyViewBranch& branch : liveBranches) {
         const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
-        RenderViewOutput output = collectViewOutput(
-            execution, branch.graphResources, branch.frame.view.task, viewId);
-        DeferredPipelineDebugViews views{};
-        views.gBufferResources  = buildPublishedGBufferResources(execution, viewId);
-        views.viewportResources = buildPublishedViewResources(execution, viewId, views.gBufferResources.depthOwner);
-        views.ssaoTextureOwner  = output.ssao;
-        views.postprocess       = output.display == output.color ? nullptr : output.display;
-        views.bloomExtract      = output.bloomExtract;
-        views.bloomBlur         = output.bloomBlur;
-        views.bloomComposite    = output.bloomComposite;
-
-        // The stage formats are refreshed when *this View's* published formats
-        // change, so a second View of another size never triggers work for the
-        // first. A View that was never published is already at the pipeline's
-        // configured formats from init.
-        const ViewResourceKey key{
-            .viewId      = viewId,
-            .extent      = branch.stageCtx.viewExtent,
-            .colorFormat = output.desc.colorFormat,
-            .depthFormat = output.desc.depthFormat,
-            .featureMask = branch.frame.view.frameData ? branch.frame.view.frameData->viewFeatures : 0,
-        };
-        const DeferredPipelineDebugViews* previous = _publishedViews.findForView(viewId);
-        const bool bGBufferChanged = previous &&
-                                     (previous->gBufferResources.formats.colorFormats != views.gBufferResources.formats.colorFormats ||
-                                      previous->gBufferResources.formats.depthFormat != views.gBufferResources.formats.depthFormat);
-        const bool bViewportChanged = previous &&
-                                      (previous->viewportResources.formats.colorFormats != views.viewportResources.formats.colorFormats ||
-                                       previous->viewportResources.formats.depthFormat != views.viewportResources.formats.depthFormat);
-        publishViewResources(key, std::move(views));
-        if (bGBufferChanged) {
-            refreshGBufferStageState();
-        }
-        if (bViewportChanged) {
-            refreshViewStageState();
-        }
-        result.views.push_back(std::move(output));
+        result.views.push_back(collectViewOutput(
+            execution, branch.graphResources, branch.frame.view.task, viewId));
     }
 
     if (!_graphExecutor->executeCompiled(graph, compiled, *ctx.cmdBuf)) {
@@ -1204,37 +1125,6 @@ void DeferredRenderPipeline::invalidateGBufferDependentViews()
     _debugSpecularAlphaView.reset();
 }
 
-DeferredGBufferResources DeferredRenderPipeline::buildPublishedGBufferResources(
-    const RenderGraphExecutionResult& result, uint64_t viewId) const
-{
-    std::array<std::shared_ptr<RenderTexture>, 4> nextGBufferColors{};
-    for (uint32_t attachmentIndex = 0; attachmentIndex < std::size(deferred_graph_exports::gBufferColor); ++attachmentIndex) {
-        nextGBufferColors[attachmentIndex] = result.getExportedTextureShared(
-            makeViewGraphName(deferred_graph_exports::gBufferColor[attachmentIndex], viewId));
-    }
-
-    DeferredGBufferResources resources{};
-    resources.publish(
-        std::move(nextGBufferColors),
-        result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId)),
-        buildGBufferSnapshotFormats());
-    return resources;
-}
-
-DeferredViewResources DeferredRenderPipeline::buildPublishedViewResources(
-    const RenderGraphExecutionResult& result,
-    uint64_t viewId,
-    const std::shared_ptr<RenderTexture>& depthOwner) const
-{
-    DeferredViewResources resources{};
-    resources.publish(
-        result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::viewColor, viewId)),
-        depthOwner,
-        result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::entityId, viewId)),
-        buildViewSnapshotFormats());
-    return resources;
-}
-
 RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     const RenderGraphExecutionResult& result,
     const DeferredFrameGraphResources& graphResources,
@@ -1256,6 +1146,12 @@ RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     output.ssao     = graphResources.textures.ssao.has_value()
         ? result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::ssao, viewId))
         : nullptr;
+    for (uint32_t attachmentIndex = 0;
+         attachmentIndex < std::size(deferred_graph_exports::gBufferColor);
+         ++attachmentIndex) {
+        output.gBufferColors[attachmentIndex] = result.getExportedTextureShared(
+            makeViewGraphName(deferred_graph_exports::gBufferColor[attachmentIndex], viewId));
+    }
     output.bloomExtract = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kExtractExportName, viewId));
     output.bloomBlur    = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kBlurPongExportName, viewId));
     if (!output.bloomBlur) {

@@ -18,16 +18,6 @@ RenderViewportSnapshot RenderDeviceState::buildViewportSnapshot(uint32_t   fligh
         snapshot.viewDepthOwner = output->depth;
         snapshot.entityIdImageOwner = output->entityId;
     }
-    else {
-        // No output for the named View this flight: the panel shows the
-        // pipeline's own persistent targets, which hold the last frame that did
-        // render. The fallback is scoped to the View that was asked about, not
-        // to whichever View the pipeline happened to record last.
-        if (auto* pipeline = getActivePipeline()) {
-            snapshot.viewDepthOwner = pipeline->getViewDepthImageShared(viewId);
-            snapshot.entityIdImageOwner = pipeline->getEntityIdImageShared(viewId);
-        }
-    }
     snapshot.viewportImageView = snapshot.viewportImageOwner && snapshot.viewportImageOwner->getImageView()
                                      ? snapshot.viewportImageOwner->getImageView()
                                      : nullptr;

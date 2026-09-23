@@ -135,7 +135,7 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// Prepare the derived processors for exactly this frame's Scenes, then
     /// rewrite the IBL sets those Scenes asked for. The Scene set is the
     /// tick's declaration: a Scene it does not name has its derived state
-    /// dropped, the same way a View it stops declaring is dropped.
+    /// dropped.
     void prepareDerivedState(std::span<Scene* const> scenes, float dt);
     void prepareComposePipelines();
 
@@ -250,8 +250,8 @@ struct YA_RENDER_3D_API RenderDeviceState
 
     /// Everything that mutates pipeline state or prepares GPU resources for this
     /// plan, before the command buffer opens: derived state for each Scene this
-    /// plan renders, pending mutations, eviction of the Views this tick no longer
-    /// declares, compose pipeline prep, each View's Scene-keyed GPU bindings, and
+    /// plan renders, pending mutations, compose pipeline prep, each View's
+    /// Scene-keyed GPU bindings, and
     /// the Game UI compose pipeline when the plan carries a UI snapshot. No
     /// View's geometry is applied here: a View sizes its own resources, and the
     /// plan is what names the Views this frame records.
@@ -281,14 +281,6 @@ struct YA_RENDER_3D_API RenderDeviceState
     SurfacePresentation& acquireSurfacePresentation(IRenderSurfaceContext& surface);
 
   private:
-    /// Test-only seam: a case that wants to prove the pre-record step evicts the
-    /// Views a tick stops declaring has to reach it with a pipeline installed.
-    /// Building one is a device-lifetime action a real backend performs, so the
-    /// test names itself instead of the header growing an install-the-strategy
-    /// entry point. Same shape as the two pipelines'
-    /// `ForwardRenderPipelineTestAccess` / `DeferredRenderPipelineTestAccess`.
-    friend class RenderDeviceStateTestAccess;
-
     void                   initRuntimeState(const InitDesc& desc);
     void                   initShaderSystems();
     void                   initDiagnostics(const InitDesc& desc);
@@ -315,10 +307,6 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// they are private until something outside the renderer needs them.
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog(uint32_t   flightIndex,
                                                                                   SceneViewId viewId) const;
-    /// The deferred pipeline's recorded resources for the named View. Identity
-    /// is the argument: the pipeline holds one View's resources per View, so
-    /// there is no unnamed "current" set to hand back.
-    [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews(SceneViewId viewId) const;
 };
 
 } // namespace ya

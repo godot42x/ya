@@ -1,17 +1,10 @@
 #include "GameRuntime/Render/RuntimeRenderContext.h"
 
 #include "Render3D/Common/RenderFrameInputs.h"
-#include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/RecordedFrame.h"
-#include "Render3D/Common/SceneRenderScheduler.h"
-#include "Render3D/Forward/ForwardRenderPipeline.h"
 #include "Render3D/RenderDeviceState.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderSurfaceContext.h"
-#include "RHI/Core/RenderTexture.h"
-#include "Scene/Core/Scene.h"
-
-#include "RenderTestAccess.h"
 
 #include <gtest/gtest.h>
 
@@ -23,9 +16,6 @@ namespace ya
 {
 namespace
 {
-
-constexpr Extent2D kWorldExtent     = {.width = 1280, .height = 720};
-constexpr Extent2D kThumbnailExtent = {.width = 256, .height = 256};
 
 // The shape checks are concepts on a type parameter rather than plain
 // requires-expressions on `RenderDeviceState`: only a dependent expression turns
@@ -43,46 +33,6 @@ template <typename Device>
 concept LooksUpAPresentTargetWithoutBuildingOne = requires(Device& device, IRenderSurfaceContext& surface) {
     device.findSurfacePresentation(surface);
 };
-
-std::shared_ptr<RenderTexture> makeAttachment()
-{
-    return std::make_shared<RenderTexture>();
-}
-
-RenderViewOutput makeOutput(SceneViewId                            viewId,
-                            Extent2D                               extent,
-                            const std::shared_ptr<RenderTexture>&  color,
-                            const std::shared_ptr<RenderTexture>&  depth)
-{
-    RenderViewOutput output;
-    output.desc.viewId      = viewId;
-    output.desc.extent      = extent;
-    output.desc.colorFormat = EFormat::R16G16B16A16_SFLOAT;
-    output.desc.depthFormat = EFormat::D32_SFLOAT;
-    output.color            = color;
-    output.depth            = depth;
-    output.entityId         = makeAttachment();
-    return output;
-}
-
-/// A tick that declares `viewId` and nothing else, extracted the way the host
-/// does it, so the plan is the scheduler's own grouping rather than a
-/// hand-assembled list.
-RenderFramePlan makeTickDeclaring(Scene& scene, SceneViewId viewId)
-{
-    SceneRenderScheduler scheduler;
-    scheduler.beginTick(1);
-    EXPECT_TRUE(scheduler.submit(SceneViewDesc{
-        .scene      = &scene,
-        .viewId     = viewId,
-        .outputRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
-    }));
-
-    RenderFramePlan plan;
-    plan.sceneRender = buildSceneSnapshots(scheduler.seal(),
-                                           [](Scene&) { return std::make_shared<const SceneSnapshot>(); });
-    return plan;
-}
 
 /// The whole-frame entry point is the application's. If someone re-adds a
 /// renderer-side one, this stops compiling -- which is the point: a renderer
@@ -128,54 +78,6 @@ TEST(RuntimeRenderContextTest, TheApplicationsOrderIsWrittenWithTheRenderersOwnS
                   "publishing is the family-recording step's own business, not a host step");
     static_assert(!LooksUpAPresentTargetWithoutBuildingOne<RenderDeviceState>,
                   "looking a present target up without being willing to build one is not a host step");
-}
-
-/// The order's first two steps, on the one path a test can drive without a real
-/// command buffer. A frame whose present the host did not acquire is still a
-/// frame the tick declared Views for, and the old order prepared before it
-/// decided whether to record -- so a View this tick stopped declaring is dropped
-/// from the pipeline even though no command is written.
-///
-/// Boundary: this pins that `RuntimeRenderContext::record` prepares (and
-/// therefore evicts) *before* the "is there anything to record" gate. It does
-/// not pin the rest of the sequence -- the families, compose and seal steps need
-/// a real command buffer, so those stay something the readable order in
-/// `RuntimeRenderContext.cpp` guarantees.
-TEST(RuntimeRenderContextTest, ARefusedFrameStillPreparesTheTickBeforeItGivesUp)
-{
-    Scene scene("Authoring");
-
-    auto              pipeline = std::make_shared<ForwardRenderPipeline>();
-    RenderDeviceState device;
-    RenderDeviceStateTestAccess::installActivePipeline(device, pipeline);
-
-    // Two Views are published, as if the previous tick had declared both; this
-    // tick declares only one of them.
-    ForwardRenderPipelineTestAccess::publishViewResources(
-        *pipeline, makeOutput(11, kWorldExtent, makeAttachment(), makeAttachment()), kWorldExtent, toMask(ERenderFeature::Game));
-    ForwardRenderPipelineTestAccess::publishViewResources(
-        *pipeline,
-        makeOutput(12, kThumbnailExtent, makeAttachment(), makeAttachment()),
-        kThumbnailExtent,
-        toMask(ERenderFeature::Game));
-    ASSERT_NE(pipeline->viewResourcesFor(12), nullptr);
-
-    RuntimeRenderContext context{device};
-
-    RenderFramePlan plan       = makeTickDeclaring(scene, 11);
-    plan.frame.flightIndex     = 0;
-    plan.present.surface       = nullptr; // the host did not acquire this frame
-    plan.present.imageIndex    = -1;
-
-    const RecordedFrame recorded = context.record(plan);
-
-    // Nothing was recorded, so the host submits an empty frame and presents the
-    // image it acquired.
-    EXPECT_FALSE(recorded.valid());
-    // ... and the tick was still prepared: the View it stopped declaring is gone.
-    EXPECT_EQ(pipeline->viewResourcesFor(12), nullptr);
-    // The View it still declares is untouched.
-    EXPECT_NE(pipeline->viewResourcesFor(11), nullptr);
 }
 
 /// The gate itself: a plan with no acquired present opens no recording at all.

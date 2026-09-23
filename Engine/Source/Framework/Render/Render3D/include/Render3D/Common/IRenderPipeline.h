@@ -39,18 +39,6 @@ struct IRenderPipelineExecution
     /// Product recording does not use tick/beginTick/getCurrent.
     virtual ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) = 0;
 
-    /// Drop what this pipeline published for Views the tick does not declare.
-    ///
-    /// A View the tick omits is not "the last View" any more, so its
-    /// attachments stop belonging to this pipeline and a query about it answers
-    /// nothing instead of the previous tick's image. The tick's declarations are
-    /// the whole criterion -- not how long ago the View was recorded -- and the
-    /// whole plan arrives at once, so no View of this tick can be dropped by
-    /// another View's own family. Idempotent, and a tick that declares no View
-    /// at all drops everything, which is why the caller does this once per tick
-    /// at the pre-record safe point rather than per recorded family.
-    virtual void reconcilePublishedViews([[maybe_unused]] const SceneRenderPlan& plan) {}
-
     [[nodiscard]] virtual EFormat::T getViewColorFormat() const     = 0;
     [[nodiscard]] virtual EFormat::T getViewDepthFormat() const     = 0;
 
@@ -86,12 +74,6 @@ struct IRenderPipelineDebugOutputs
     virtual ~IRenderPipelineDebugOutputs() = default;
 
     [[nodiscard]] virtual bool isShadowMappingEnabled() const = 0;
-    /// The named View's depth attachment, or nullptr when this pipeline has no
-    /// such View. Identity is the argument: a pipeline holds one View's
-    /// resources per View, so there is no "the current View" to fall back to.
-    [[nodiscard]] virtual std::shared_ptr<RenderTexture> getViewDepthImageShared(SceneViewId viewId) const = 0;
-    /// R32_UINT viewport target holding per-pixel entity ids (editor picking).
-    [[nodiscard]] virtual std::shared_ptr<RenderTexture> getEntityIdImageShared([[maybe_unused]] SceneViewId viewId) const { return nullptr; }
     [[nodiscard]] virtual std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const = 0;
     [[nodiscard]] virtual std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const = 0;
     /// Whether the view's postprocessing GRADES the image. Not whether the

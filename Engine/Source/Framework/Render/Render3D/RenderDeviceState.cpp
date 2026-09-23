@@ -151,6 +151,8 @@ RenderPipelineDebugOutputCatalog RenderDeviceState::buildPipelineDebugOutputCata
         catalog.bloomExtractOwner           = output->bloomExtract;
         catalog.bloomBlurOwner              = output->bloomBlur;
         catalog.bloomCompositeOwner         = output->bloomComposite;
+        catalog.ssaoOwner                   = output->ssao;
+        catalog.gBufferColorOwners          = output->gBufferColors;
         return catalog;
     }
 
@@ -177,7 +179,6 @@ ViewportDebugCatalogInput RenderDeviceState::makeViewportDebugCatalogInput(uint3
     input.bForwardPipeline  = (_pipelineCoordinator.getRenderPipeline() == ERenderPipeline::Forward);
     input.bDeferredPipeline = _pipelineCoordinator.hasDeferredPipeline();
     input.debugOutputs      = buildPipelineDebugOutputCatalog(flightIndex, viewId);
-    input.deferredViews     = getDeferredPipelineDebugViews(viewId);
     input.brdfLut           = _sharedResourceProvider.getBrdfLutTextureShared();
     input.environmentLighting = (inspectScene && _environmentLightingProcessor)
         ? _environmentLightingProcessor->findSceneWork(*inspectScene)
@@ -193,14 +194,6 @@ ViewportDebugCatalogInput RenderDeviceState::makeViewportDebugCatalogInput(uint3
         }
     }
     return input;
-}
-
-DeferredPipelineDebugViews RenderDeviceState::getDeferredPipelineDebugViews(SceneViewId viewId) const
-{
-    if (auto* pipeline = _pipelineCoordinator.getSelectedDeferredPipeline()) {
-        return pipeline->buildDebugViews(viewId);
-    }
-    return {};
 }
 
 RenderDeviceState::ERenderPipeline RenderDeviceState::resolveActivePipelineKind() const

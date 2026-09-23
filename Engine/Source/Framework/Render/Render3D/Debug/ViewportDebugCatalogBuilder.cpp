@@ -199,15 +199,14 @@ void appendDeferredDebugSlots(const ViewportDebugCatalogInput& input, ViewportDe
         return;
     }
 
-    const auto&        debugOutputs  = input.debugOutputs;
-    const auto&        deferredViews = input.deferredViews;
-    auto* positionTexture      = deferredViews.gBufferResources.color[0];
-    auto* normalTexture        = deferredViews.gBufferResources.color[1];
-    auto* albedoSpecTexture    = deferredViews.gBufferResources.color[2];
-    auto* shadingModelTexture  = deferredViews.gBufferResources.color[3];
-    auto* gbufferDepthTexture  = deferredViews.gBufferResources.depth;
-    auto* viewColorTexture = deferredViews.viewportResources.color;
-    auto* viewDepthTexture = deferredViews.viewportResources.depth;
+    const auto& debugOutputs       = input.debugOutputs;
+    auto* positionTexture          = debugOutputs.gBufferColorOwners[0].get();
+    auto* normalTexture            = debugOutputs.gBufferColorOwners[1].get();
+    auto* albedoSpecTexture        = debugOutputs.gBufferColorOwners[2].get();
+    auto* shadingModelTexture      = debugOutputs.gBufferColorOwners[3].get();
+    auto* gbufferDepthTexture      = debugOutputs.viewDepthImageOwner.get();
+    auto* viewColorTexture         = debugOutputs.viewOutputImageOwner.get();
+    auto* viewDepthTexture         = debugOutputs.viewDepthImageOwner.get();
     if (!positionTexture || !normalTexture || !albedoSpecTexture || !shadingModelTexture || !gbufferDepthTexture ||
         !viewColorTexture || !viewDepthTexture) {
         return;
@@ -261,7 +260,7 @@ void appendDeferredDebugSlots(const ViewportDebugCatalogInput& input, ViewportDe
                         .image       = gbufferDepthTexture->getImageShared(),
                     });
 
-    if (auto ssaoTexture = deferredViews.ssaoTextureOwner; ssaoTexture && ssaoTexture->getImageView()) {
+    if (auto ssaoTexture = debugOutputs.ssaoOwner; ssaoTexture && ssaoTexture->getImageView()) {
         builder.addSlot({
                             .label         = "SSAO",
                             .categoryIndex = CATEGORY_GBUFFER,
@@ -486,8 +485,7 @@ size_t viewportDebugCatalogSignature(const ViewportDebugCatalogInput& input)
     size_t seed = 0;
     hashCombineValue(seed, input.bDeferredPipeline);
 
-    const auto& debugOutputs  = input.debugOutputs;
-    const auto& deferredViews = input.deferredViews;
+    const auto& debugOutputs = input.debugOutputs;
 
     hashCombineValue(seed, debugOutputs.bShadowMappingEnabled);
     hashCombineValue(seed, debugOutputs.shadowDirectionalDepthResource != nullptr);
@@ -495,6 +493,7 @@ size_t viewportDebugCatalogSignature(const ViewportDebugCatalogInput& input)
     hashCombineValue(seed, debugOutputs.bloomExtractOwner != nullptr);
     hashCombineValue(seed, debugOutputs.bloomBlurOwner != nullptr);
     hashCombineValue(seed, debugOutputs.bloomCompositeOwner != nullptr);
+    hashCombineValue(seed, debugOutputs.ssaoOwner != nullptr);
     hashCombineValue(seed, debugOutputs.postprocessOutputImageOwner != nullptr);
     hashCombineValue(seed, input.brdfLut != nullptr);
 
@@ -514,14 +513,11 @@ size_t viewportDebugCatalogSignature(const ViewportDebugCatalogInput& input)
     hashCombineValue(seed, pointShadowFaceMask);
 
     if (input.bDeferredPipeline) {
-        hashCombineValue(seed, deferredViews.gBufferResources.color[0] != nullptr);
-        hashCombineValue(seed, deferredViews.gBufferResources.color[1] != nullptr);
-        hashCombineValue(seed, deferredViews.gBufferResources.color[2] != nullptr);
-        hashCombineValue(seed, deferredViews.gBufferResources.color[3] != nullptr);
-        hashCombineValue(seed, deferredViews.gBufferResources.depth != nullptr);
-        hashCombineValue(seed, deferredViews.viewportResources.color != nullptr);
-        hashCombineValue(seed, deferredViews.viewportResources.depth != nullptr);
-        hashCombineValue(seed, deferredViews.ssaoTextureOwner != nullptr);
+        for (const auto& gBufferColor : debugOutputs.gBufferColorOwners) {
+            hashCombineValue(seed, gBufferColor != nullptr);
+        }
+        hashCombineValue(seed, debugOutputs.viewOutputImageOwner != nullptr);
+        hashCombineValue(seed, debugOutputs.viewDepthImageOwner != nullptr);
     }
 
     if (input.inspectScene) {

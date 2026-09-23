@@ -5,7 +5,6 @@
 #include "RHI/Core/RenderTexture.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Common/RenderViewportSnapshot.h"
-#include "Render3D/Deferred/DeferredPipelineDebugViews.h"
 #include "Render3D/Common/Shadow/ShadowTypes.h"
 
 #include <array>
@@ -32,6 +31,8 @@ struct RenderPipelineDebugOutputCatalog
     std::shared_ptr<RenderTexture> bloomExtractOwner             = nullptr;
     std::shared_ptr<RenderTexture> bloomBlurOwner                = nullptr;
     std::shared_ptr<RenderTexture> bloomCompositeOwner           = nullptr;
+    std::shared_ptr<RenderTexture> ssaoOwner                     = nullptr;
+    std::array<std::shared_ptr<RenderTexture>, 4> gBufferColorOwners{};
     bool                          bPostprocessingEnabled          = false;
 };
 
@@ -47,7 +48,6 @@ struct ViewportDebugCatalogInput
     bool bDeferredPipeline = false;
 
     RenderPipelineDebugOutputCatalog debugOutputs{};
-    DeferredPipelineDebugViews       deferredViews{};
     std::shared_ptr<RenderTexture>   brdfLut = nullptr;
 
     /// Point-light shadow cubemap faces, flattened. Resolved per frame by the
