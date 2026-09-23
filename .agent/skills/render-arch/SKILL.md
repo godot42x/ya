@@ -115,6 +115,25 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
       "这一帧实际渲染成多大"问 renderer 的已发布输出（`getViewportExtent()`）。
     - presentation 的拉伸是**按渲染图像素 1:1** 贴上去的（只 tone map，不做 fit）。宽高比不同的
       窗口会被拉伸；letterbox / fit 是一个需要先决定"多出来的像素画什么"的呈现特性，要单独做。
+18. **View target 资源只有一套所有权，落在 `ViewTargetStore`。** 对任意一张 View texture，
+    生命周期是固定的：由 store 在安全点按 `ViewTargetRequest` 创建（exact reuse，generation 递增标记
+    replacement）；长期持有者是 store 的 live View allocation；本帧使用由 `RenderSubmission` 持有的
+    `ViewTargetLease`（一个 allocation 整体 retain，不做逐 attachment 保活）；graph 以 imported
+    texture 访问；只在 graph execute **成功后**本 flight 才 publish（`ViewTargetStore::findPublication
+    (flight, viewId)` 是 present / picking / debug 唯一查询入口）；request 变化时在安全点替换；
+    `unregisterView()` 是唯一的正确性 GC——立即撤掉所有 flight 的可见发布并释放长期引用，已被录制
+    submission / flight 引用的旧 generation 活到 fence 完成。因此：
+
+    - View 存在（registered）与"这一帧渲染不渲染"（request 缺不缺席）是两件事：某帧没有 request
+      只意味着这一帧没有新输出，registered View 的 allocation 继续驻留。
+    - 不要用 "连续 N 帧没看到就猜销毁" 的 GC 代替 `unregisterView()`，也不要让 pipeline / stage 保存
+      "上一帧哪个 View 的资源"（`ViewResourceTable` / `reconcilePublishedViews` / `_publishedViews`
+      这类东西已删除，出现即删）。
+    - attachment 身份用**稳定角色有限枚举** `EViewAttachment`（SceneColor / SceneDepth / DisplayColor /
+      EntityId / GBuffer0..3 / SSAO / BloomExtract / BloomBlur / BloomComposite），不要退化成
+      `unordered_map<string, texture>` 或 pipeline 私有字符串 key；PSO format variant 在新 allocation
+      创建前准备好，录制中途不许重建 target。Shadow map 不属于 View target（shadow strategy 持有，
+      经独立 shadow diagnostic provider 发布）。
 
 ### 复盘：一个字段同时承担多种语义时怎么发现
 2026-09-19 修掉的两处都是同一形态——**同一个字段在不同模式下指不同东西，因此谁也不敢删它**：

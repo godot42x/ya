@@ -89,3 +89,9 @@
 | `gui-animation/` | 框架层已落地并写进 skill；Game UI 轨道层显式延后，留在 `gui-invalidation-architecture/animation-integration.md`（1、3） |
 | `gui-capability-gap/` | 方向被 `gui-framework-editor-readiness`（Phase 8 移除 ImGui 双栈）接手（2） |
 | `render-pipeline-dedup-runtime-split/` | 被 `render-view-family` §4.0.2 明确接手（2） |
+
+### 2026-09-23 归档
+
+| 目录 | 理由 |
+| --- | --- |
+| `render-view-resource-ownership/` | 5/5 checkpoint 全绿，结论已沉淀进 `skills/render-arch` 第 18 条「View target 资源只有一套所有权」（1） |

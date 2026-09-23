@@ -1,7 +1,7 @@
 # Render View 资源所有权与管线编排收口计划
 
 > 建立日期：2026-09-23
-> 状态：已完成；五个 checkpoint 全部完成（2026-09-23）
+> 状态：已完成；五个 checkpoint 全部落地并通过验证（2026-09-23 收尾轮，见 `progress.md`）
 > 关联计划：`../render-view-family/plan.md`、`../render-application-boundary/plan.md`
 
 ## 1. 当前目标与边界
@@ -70,7 +70,7 @@ RuntimeRenderContext
 ViewTargetStore
   ├─ live View entries
   ├─ View target allocation and exact-desc reuse
-  ├─ per-flight PublishedView table
+  ├─ per-flight RenderViewOutput table (`RenderViewOutputTable`，由 store 收编)
   ├─ debug / picking / present query
   └─ explicit destroy and retirement
 
@@ -116,8 +116,8 @@ public:
     const ViewTargetLease* lease(SceneViewId viewId) const;
 
     void beginPublication(uint32_t flightIndex, uint64_t frameToken);
-    bool publish(uint32_t flightIndex, PublishedView view);
-    const PublishedView* find(uint32_t flightIndex, SceneViewId viewId) const;
+    bool publish(uint32_t flightIndex, RenderViewOutput view);
+    const RenderViewOutput* findPublication(uint32_t flightIndex, SceneViewId viewId) const;
 };
 ```
 
@@ -271,15 +271,21 @@ allocation 与 publication 是两个概念：
 - allocation 表示 View 拥有哪些 GPU target。
 - publication 表示某一 flight 的 graph 成功写出了哪些 target，以及哪个 attachment 是最终 display。
 
+实现沿用既有记录类型 `RenderViewOutput`（本计划草案里叫 `PublishedView`，落地时未改名）：
+它按 `EViewAttachment` 角色持有 color / depth / display / entityId / ssao / bloom* /
+gBufferColors，外加 `targets`（本 allocation 的 `shared_ptr`）与 `allocationGeneration`；
+"最终 display 是哪个 attachment" 由 `displayImage()`（有 `display` 用之，否则回落 `color`）
+表达，不再单独存一个 `displayRole` 字段。
+
 ```cpp
-struct PublishedView
+struct RenderViewOutput
 {
-    SceneViewId viewId = 0;
-    uint64_t allocationGeneration = 0;
-    Extent2D extent{};
-    ERenderPipelineKind pipeline{};
-    std::shared_ptr<const ViewTargetAllocation> targets;
-    EViewAttachment displayRole = EViewAttachment::DisplayColor;
+    RenderViewOutputDesc                          desc{};   // viewId / extent / formats
+    std::shared_ptr<RenderTexture>                color, depth, display, entityId;
+    std::shared_ptr<RenderTexture>                bloomExtract, bloomBlur, bloomComposite, ssao;
+    std::array<std::shared_ptr<RenderTexture>, 4> gBufferColors{};
+    std::shared_ptr<ViewTargetAllocation>         targets;
+    uint64_t                                      allocationGeneration = 0;
 };
 ```
 
@@ -297,15 +303,16 @@ prepare allocation
 不允许 Deferred 在 execute 前发布，而 Forward 在 execute 后发布。失败时也不允许把旧 View 输出伪装
 成本帧输出。调用方需要 fallback 时，由调用方根据本 tick 输入决定。
 
-`PublishedView` 取代 `RenderViewOutputTable`、Deferred `ViewResourceTable` 和 Forward
-`ViewResourceTable` 三套并行状态。
+发布记录收编进 `RenderViewOutputTable`，由 `ViewTargetStore` 持有
+（`beginPublication` / `publishView` / `findPublication`），取代 Deferred / Forward 各自
+平行的 View 资源表（`ViewResourceTable` 已删除）。
 
 ## 9. 查询路径
 
 所有 View 输出查询都进入 `ViewTargetStore`：
 
 ```cpp
-const PublishedView* published = targets.find(flightIndex, viewId);
+const RenderViewOutput* published = targets.findPublication(flightIndex, viewId);
 ```
 
 随后：
@@ -596,8 +603,8 @@ transientTexturePoolHits / Misses
 - 谁长期持有：`ViewTargetStore` 的 live View allocation。
 - 谁在本帧使用：`RenderSubmission` 持有的 `ViewTargetLease`。
 - graph 如何访问：imported texture handle。
-- 谁对外发布：`ViewTargetStore` 的 per-flight `PublishedView`。
-- 谁查询：present、picking、debug 都通过同一个 `find(flight, viewId)`。
+- 谁对外发布：`ViewTargetStore` 的 per-flight `RenderViewOutput`。
+- 谁查询：present、picking、debug 都通过同一个 `findPublication(flight, viewId)`。
 - 什么时候替换：safe point 上 request 变化。
 - 什么时候回收：View unregister，最后一个 flight / submission 引用结束。
 
