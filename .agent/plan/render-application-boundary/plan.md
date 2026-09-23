@@ -355,7 +355,7 @@ publishedViewOutput(viewId);
 
 ```bash
 xmake b ya-game-runtime && xmake b ya-runtime && xmake b ya-game-editor && xmake b ya-testing
-xmake r ya-render-3d-test                      # 177/177
+xmake r ya-render-3d-test                      # 185/185
 ./build/macosx/arm64/debug/ya-testing --gtest_filter='RenderRuntime*:HostScene*:ViewFamily*:ForwardFrameGraph*:DeferredRender*:PostProcessing*:Offscreen*:AppKernel*:AppLifecycle*:AppScreenshot*:Widget*:Dock*:Editor*:GameUIHost*:Scene*:UIDocument*:ScriptApi*:RenderGraph*:ViewPersistent*:View*:SurfaceImage*-WidgetTreeTest.SystemLayersCannotBeDetached'
 python3 Script/automation/render/run_display_compose_parity.py --skip-build   # PASS, md5 c775245a...
 python3 Script/automation/editor/run_widgettree_editor_smoke.py --skip-build  # 六步全过
