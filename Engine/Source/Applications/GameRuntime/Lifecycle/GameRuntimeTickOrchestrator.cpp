@@ -557,8 +557,10 @@ RecordedFrame GameRuntimeTickOrchestrator::recordFrame(App&                    a
             // compose structure. The module that fills the surface (the editor
             // chrome) is what answers; a standalone runtime has none, so the
             // surface is the View.
-            .backdrop = app.presentsViewDisplayImage() ? ESurfaceBackdrop::ViewDisplayImage
-                                                       : ESurfaceBackdrop::HostContent,
+            // The surface is non-null here: `acquirePresentFrame` is what
+            // produces an acquired frame, and recording only happens for one.
+            .backdrop = app.presentsViewDisplayImage(*presentFrame.surface) ? ESurfaceBackdrop::ViewDisplayImage
+                                                                            : ESurfaceBackdrop::HostContent,
         },
         .recordExtensions = &app,
     });

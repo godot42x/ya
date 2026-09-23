@@ -198,7 +198,20 @@ UE 的同位概念是**帧级**的：device 的帧号、延迟删除、GPU 计�
 `make test` 13 target / **2705 passed / 0 failed**；parity 两张图 md5 仍 `c775245ae…`；
 编辑器 smoke exit=0（一次 `{0,0}` 首帧竞态，重跑三次全过，与已登记的首帧竞态同形）。
 
-##### AB4-2a-2：plan 支持多个 present target（结构批次，产品行为不变）
+##### AB4-2a-2 第一步：backdrop 是 per surface 的政策（已落地 2026-09-23）
+
+`fillsPrimarySurface()`（无参数、只能有一个 surface 回答）→ `fillsSurface(const IRenderSurfaceContext&)`，
+`App::presentsViewDisplayImage(const IRenderSurfaceContext&)`（`nullptr` 这条退化分支不允许存在：
+录制只发生在已 acquire 的 frame 上，surface 必非空）。编辑器答“每个我托管的窗口都由 chrome 填满”
+（tear-off 窗口是同一套 chrome 在第二张 surface 上，不是另一种窗口）；`PresentFrameInput::backdrop`
+本来就在 present 项上，现在它的来源也是 per surface 的。这就是 UE 里“游戏视口填满窗口”与
+“视口是窗口里的一块面板”的区别，与窗口等级无关。
+
+证据：`AppLifecycleTest.TheSurfaceBackdropIsWhatTheLoadedModulesSayItIs` 改为对一个 stand-in
+surface 提问（不再能靠 `nullptr` 让断言变空转）。`make test` 2705 passed / 0 failed；parity、
+编辑器 smoke 与基线一致。
+
+##### AB4-2a-2 第二步：plan 支持多个 present target（结构批次，产品行为不变）
 
 - `RenderFramePlan::present` 单值 → `std::vector<DisplayRootPlan>`，每项
   `{surface, imageIndex, backdrop, chromeSnapshot(可选), displayViewId}`。

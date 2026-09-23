@@ -7,6 +7,7 @@ namespace ya
 
 struct App;
 struct AppDesc;
+struct IRenderSurfaceContext;
 class Event;
 struct ICommandBuffer;
 struct Scene;
@@ -104,17 +105,27 @@ struct IRuntimeModule
         (void)dt;
     }
 
-    /// Display-compose coverage: do this module's own passes fill the whole
-    /// primary surface? True means those passes *are* the window's content, so
-    /// the renderer must not first copy a View's display image across the
-    /// surface -- that copy would be overdrawn and thrown away. The editor's
-    /// chrome answers true; a module that only contributes an overlay leaves it
-    /// false and keeps the View as the surface's backdrop.
+    /// Display-compose coverage for ONE surface: do this module's own passes
+    /// fill that whole window? True means those passes *are* the window's
+    /// content, so the renderer must not first copy a View's display image
+    /// across the surface -- that copy would be overdrawn and thrown away. The
+    /// editor's chrome answers true; a module that only contributes an overlay
+    /// leaves it false and keeps the View as the surface's backdrop.
     ///
     /// A query rather than a switch the module flips, so there is no frame
     /// where the answer and what gets recorded can disagree. See
     /// `App::presentsViewDisplayImage` and `ESurfaceBackdrop`.
-    [[nodiscard]] virtual bool fillsPrimarySurface() const { return false; }
+    ///
+    /// It takes the surface because the difference is a property of a window's
+    /// content, not a rank: "this window's content IS its viewport image" (a
+    /// game viewport filling its window) versus "the viewport is one panel
+    /// inside this window" (the editor). A host that presents several windows
+    /// gets asked once per window.
+    [[nodiscard]] virtual bool fillsSurface(const IRenderSurfaceContext& surface) const
+    {
+        (void)surface;
+        return false;
+    }
 };
 
 } // namespace ya

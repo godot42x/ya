@@ -681,13 +681,15 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     void onStop() override { persistLayout(); }
     void onUnload() override {}
 
-    /// The editor's chrome fills the primary window: the shell root paints an
-    /// opaque fill over the whole surface and shows the world inside a viewport
-    /// widget. That holds in every state the module is loaded in, including a
-    /// play session -- Play runs the game in Runtime mode but the window is
-    /// still the editor's. A copy of the View across the surface before that
-    /// chrome records is therefore a full-surface draw nothing can see.
-    [[nodiscard]] bool fillsPrimarySurface() const override { return _layer != nullptr; }
+    /// The editor's chrome fills every window it hosts: each shell root paints
+    /// an opaque fill over the whole of its own surface and shows the world
+    /// inside a viewport widget (a torn-off window is a second shell root on a
+    /// second surface, not a different kind of window). That holds in every
+    /// state the module is loaded in, including a play session -- Play runs the
+    /// game in Runtime mode but the window is still the editor's. A copy of the
+    /// View across the surface before that chrome records is therefore a
+    /// full-surface draw nothing can see.
+    [[nodiscard]] bool fillsSurface(const IRenderSurfaceContext&) const override { return _layer != nullptr; }
 
     void onConfigure(App& app, AppDesc& desc) override
     {

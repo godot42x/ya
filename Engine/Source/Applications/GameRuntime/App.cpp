@@ -402,16 +402,17 @@ void App::prepareModulesForRender(float dt)
     }
 }
 
-bool App::presentsViewDisplayImage() const
+bool App::presentsViewDisplayImage(const IRenderSurfaceContext& surface) const
 {
     // Asked before display compose records, and answered from module state
     // rather than from a flag a module set earlier in the frame: the renderer
     // gets the same answer the recording below will produce. The loop is the
-    // whole policy -- one module filling the surface is enough to make the View
+    // whole policy -- one module filling a surface is enough to make the View
     // copy pointless, and a host with no such module (a standalone runtime)
-    // shows the View.
+    // shows the View. There is no surface whose answer stands for the others:
+    // each window is asked about itself.
     for (const auto& slot : _modules) {
-        if (getRuntimeModule(slot.module)->fillsPrimarySurface()) {
+        if (getRuntimeModule(slot.module)->fillsSurface(surface)) {
             return false;
         }
     }

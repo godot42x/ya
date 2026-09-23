@@ -42,6 +42,7 @@ struct SceneManager;
 struct UIDocumentStore;
 struct Entity;
 struct ICommandBuffer;
+struct IRenderSurfaceContext;
 struct LuaScriptingSystem;
 struct JSScriptingSystem;
 struct FProjectDescriptor;
@@ -263,16 +264,18 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
         return static_cast<T*>(queryModuleInterface(interfaceId));
     }
 
-    /// What the primary surface shows before the host's own display passes: a
-    /// View's display image (true), or nothing but the pass clear (false)
-    /// because a module fills the surface itself.
+    /// What ONE surface shows before the host's own display passes: a View's
+    /// display image (true), or nothing but the pass clear (false) because a
+    /// module fills that surface itself. Asked per window: a host that presents
+    /// several windows gets one answer per window, and no surface's answer
+    /// stands for the others.
     ///
     /// Not a question about AppState. The editor's Play runs the game in
     /// Runtime mode and still draws its chrome across the whole window, so
     /// "runtime" does not mean "the window is the game's view". The module that
     /// owns the surface is what decides; see
-    /// `IRuntimeModule::fillsPrimarySurface`.
-    [[nodiscard]] bool presentsViewDisplayImage() const;
+    /// `IRuntimeModule::fillsSurface`.
+    [[nodiscard]] bool presentsViewDisplayImage(const IRenderSurfaceContext& surface) const;
 
     glm::vec2 getLastMousePos() const { return _lastMousePos; }
 

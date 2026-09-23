@@ -5,6 +5,7 @@
 
 #include "Core/System/VirtualFileSystem.h"
 #include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/RenderSurfaceContext.h"
 #include "Scene/Runtime/SceneManager.h"
 
 #include <gtest/gtest.h>
@@ -136,7 +137,34 @@ struct SurfaceFillingModule final : IModule, IRuntimeModule
     {
         return interfaceId == YA_RUNTIME_MODULE_INTERFACE ? static_cast<IRuntimeModule*>(this) : nullptr;
     }
-    [[nodiscard]] bool fillsPrimarySurface() const override { return bFills; }
+    [[nodiscard]] bool fillsSurface(const IRenderSurfaceContext&) const override { return bFills; }
+};
+
+/// A window the backdrop policy can be asked about. The question is which
+/// surface a module fills, so the policy needs surface identity and nothing
+/// else -- no device, no swapchain.
+struct StandInSurface final : IRenderSurfaceContext
+{
+    [[nodiscard]] INativeWindow* getNativeWindow() const override { return nullptr; }
+    [[nodiscard]] ISwapchain*    getSwapchain() const override { return nullptr; }
+    bool buildPresentationImages(IRenderResourceFactory&,
+                                 const char*,
+                                 std::vector<std::shared_ptr<RenderTexture>>&) override
+    {
+        return false;
+    }
+    [[nodiscard]] bool isPresentable() const override { return true; }
+    void               requestRecreate() override {}
+    bool begin(int32_t* imageIndex) override
+    {
+        *imageIndex = -1;
+        return true;
+    }
+    bool end(int32_t, std::vector<void*>) override { return true; }
+    void waitInFlight() override {}
+    [[nodiscard]] void* getCurrentImageAvailableSemaphore() override { return nullptr; }
+    [[nodiscard]] void* getCurrentFrameFence() override { return nullptr; }
+    [[nodiscard]] void* getRenderFinishedSemaphore(uint32_t) override { return nullptr; }
 };
 
 class AppLifecycleTest : public ::testing::Test
@@ -213,7 +241,9 @@ TEST_F(AppLifecycleTest, TheSurfaceBackdropIsWhatTheLoadedModulesSayItIs)
     /// A host with no surface-filling module shows the View: this is the
     /// standalone runtime, where display compose must copy the View across the
     /// window.
-    EXPECT_TRUE(app.presentsViewDisplayImage());
+    StandInSurface surface;
+
+    EXPECT_TRUE(app.presentsViewDisplayImage(surface));
 
     auto filler = std::make_unique<SurfaceFillingModule>();
     SurfaceFillingModule* fillerModule = filler.get();
@@ -224,11 +254,11 @@ TEST_F(AppLifecycleTest, TheSurfaceBackdropIsWhatTheLoadedModulesSayItIs)
     /// One module filling the surface is enough: the View copy would be
     /// overdrawn, so display compose must not make it. The editor is this case
     /// in every state it is loaded in, including a play session.
-    EXPECT_FALSE(app.presentsViewDisplayImage());
+    EXPECT_FALSE(app.presentsViewDisplayImage(surface));
 
     /// The answer follows the module, not a registration-time decision.
     fillerModule->bFills = false;
-    EXPECT_TRUE(app.presentsViewDisplayImage());
+    EXPECT_TRUE(app.presentsViewDisplayImage(surface));
 }
 
 TEST_F(AppLifecycleTest, ModulesDispatchInRegistrationOrderAndDetachInReverseOrder)

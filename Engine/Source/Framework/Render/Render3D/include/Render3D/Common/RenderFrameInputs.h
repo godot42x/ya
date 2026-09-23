@@ -108,7 +108,9 @@ struct PresentFrameInput
     int32_t                imageIndex = -1;
     /// Defaults to the plain path: a host that says nothing gets the window
     /// showing the View. The host's answer is `App::presentsViewDisplayImage`,
-    /// which asks the modules whether one of them fills the surface. See plan
+    /// which asks the modules whether one of them fills THIS surface -- the
+    /// answer belongs to the window, so it is carried per present target rather
+    /// than decided once for the frame. See plan
     /// `.agent/plan/display-compose-encoding/plan.md` (F2).
     ESurfaceBackdrop backdrop = ESurfaceBackdrop::ViewDisplayImage;
 };
