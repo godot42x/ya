@@ -6,6 +6,7 @@
 
 #include <deque>
 #include <functional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -17,45 +18,62 @@ namespace ya
 
 struct Scene;
 
+/**
+ * @brief Runtime resource resolution for the components a Scene already has.
+ *
+ * The Scene is an argument everywhere, never a lookup: the tick names the
+ * Scenes it renders and each one keeps its own dirty queue, active set and
+ * audit clock below, so resolving one Scene can neither drop nor overwrite
+ * another's.
+ */
 struct YA_RENDER_3D_API GameplayResourceBinding : public ISystem
 {
-  private:
-    std::function<Scene*()>  _getActiveScene;
-    std::function<uint64_t()> _getHostTick;
-    Scene*                   _pendingStateScene = nullptr;
-    std::deque<entt::entity> _dirtyMaterialQueue;
-    std::unordered_set<entt::entity> _dirtyMaterialSet;
-    std::unordered_set<entt::entity> _activeMaterial;
-    uint64_t                 _nextMaterialAuditTick  = 0;
-
-    /// How often the material staleness audit runs (ticks).
-    static constexpr uint64_t MATERIAL_AUDIT_INTERVAL_TICKS = 30;
-
-    void auditMaterialWork(Scene* scene);
-    void clearSceneResolveWork();
-    void cleanupMaterialState(entt::entity entity);
-    [[nodiscard]] bool isMaterialQueuedOrActive(entt::entity entity) const;
-
   public:
-    void setActiveSceneProvider(std::function<Scene*()> provider) { _getActiveScene = std::move(provider); }
+    /// One Scene's material resolve work.
+    struct SceneWork
+    {
+        Scene*                           scene = nullptr;
+        std::deque<entt::entity>         dirtyMaterialQueue;
+        std::unordered_set<entt::entity> dirtyMaterialSet;
+        std::unordered_set<entt::entity> activeMaterial;
+        uint64_t                         nextMaterialAuditTick = 0;
+        bool                             bSeeded               = false;
+    };
+
     /// Frame counter for the periodic staleness audit; bound by the Host.
     void setHostTickProvider(std::function<uint64_t()> provider) { _getHostTick = std::move(provider); }
-    void init() override;
 
     /**
-     * @brief Resolve all pending plain resources (mesh / material / UI / billboard).
-     * Skybox / environment / terrain derived GPU work moved to
-     * EnvironmentLightingProcessor (Render3D).
+     * @brief Resolves the pending plain resources (mesh / material / UI /
+     * billboard) of exactly these Scenes. Skybox / environment / terrain
+     * derived GPU work lives in EnvironmentLightingProcessor and
+     * TerrainProcessor. A Scene this call does not name has its work dropped.
      */
-    void onUpdate(float dt) override;
+    void prepareScenes(std::span<Scene* const> scenes, float dt);
 
     void shutdown() override;
 
-    void markMaterialDirty(entt::entity entity, const char* reason);
-    void resolvePendingMeshes(Scene* scene);
-    void resolvePendingMaterials(Scene* scene);
-    void resolvePendingUI(Scene* scene);
-    void resolvePendingBillboards(Scene* scene);
+  private:
+    /// How often the material staleness audit runs (ticks).
+    static constexpr uint64_t MATERIAL_AUDIT_INTERVAL_TICKS = 30;
+
+    SceneWork& ensureWork(Scene& scene);
+    void       dropScenesAbsentFrom(std::span<Scene* const> scenes);
+    void       dropWork(SceneWork& work);
+    void       dropAllWork();
+    void       seedSceneResolveWork(SceneWork& work);
+
+    void auditMaterialWork(SceneWork& work);
+    void cleanupMaterialState(SceneWork& work, entt::entity entity);
+    [[nodiscard]] bool isMaterialQueuedOrActive(const SceneWork& work, entt::entity entity) const;
+    void markMaterialDirty(SceneWork& work, entt::entity entity, const char* reason);
+    void resolvePendingMeshes(Scene& scene);
+    void resolvePendingMaterials(SceneWork& work);
+    void resolvePendingUI(Scene& scene);
+    void resolvePendingBillboards(Scene& scene);
+
+    std::function<uint64_t()>                   _getHostTick;
+    std::unordered_map<const Scene*, SceneWork> _sceneWork;
 };
 
 } // namespace ya

@@ -153,3 +153,14 @@
   include 改写）。验证：四个目标 build ok；`ya-render-3d-test` 177/177；滤镜 681 passed /
   11 skipped / 6 failed（与基线同 6 个）；parity PASS（md5 `c775245a…`）；编辑器 smoke exit=0。
   下一刀：AB4（presentation 拆纯 pass + 应用侧 present，先解 primary-surface 耦合）。
+- 2026-09-23 第四批：Scene 是参数，不是查找。三个 derived-resource processor 的
+  `setActiveSceneProvider(std::function<Scene*()>)` 删除，改为 `prepareScenes(std::span<Scene* const>, float)`；
+  每个 processor 按 Scene 持一份 `SceneWork`（`renderer` 侧不再有 `_pendingStateScene`），本 tick 不点名的
+  Scene 失去 work（与 `reconcilePublishedViews` 同一判据）；实体级查询 / `mark*Dirty` 都带 Scene，
+  resolve 状态与 preview 落在 `SceneWork` 上。`ViewportDebugCatalogInput::environmentLighting` 改成
+  `const EnvironmentLightingProcessor::SceneWork*`，以免动并发写者的 `ViewportDebugCatalogBuilder.cpp`。
+  验证：六个目标 build ok；`ya-render-3d-test` 189/189；滤镜 706 tests / 689 passed / 11 skipped /
+  6 failed（与基线同 6 个）；parity PASS（md5 `c775245a…`）；编辑器 smoke 是首帧竞态（同一二进制 1 失败 1 通过，
+  未含本批改动的树第 0 帧同样 `{0,0}`），不是回归。
+  下一刀：AB7（`RenderDeviceState` 拆成应用级 RenderContext 与 Framework 管线对象），或先做
+  `recordExtensions` 去行为化。

@@ -71,16 +71,16 @@ void AppSceneServices::refreshSceneDerivedState(Scene* scene)
 
     auto& registry = scene->getRegistry();
     auto* envProcessor = _app ? _app->getEnvironmentLightingProcessor() : nullptr;
-    registry.view<SkyboxComponent>().each([envProcessor](auto entity, SkyboxComponent& skybox) {
+    registry.view<SkyboxComponent>().each([envProcessor, scene](auto entity, SkyboxComponent& skybox) {
         skybox.invalidate();
         if (envProcessor) {
-            envProcessor->markSkyboxDirty(entity, "scene derived-state refresh");
+            envProcessor->markSkyboxDirty(*scene, entity, "scene derived-state refresh");
         }
     });
-    registry.view<EnvironmentLightingComponent>().each([envProcessor](auto entity, EnvironmentLightingComponent& environment) {
+    registry.view<EnvironmentLightingComponent>().each([envProcessor, scene](auto entity, EnvironmentLightingComponent& environment) {
         environment.invalidate();
         if (envProcessor) {
-            envProcessor->markEnvironmentLightingDirty(entity, "scene derived-state refresh");
+            envProcessor->markEnvironmentLightingDirty(*scene, entity, "scene derived-state refresh");
         }
     });
 }

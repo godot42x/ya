@@ -95,14 +95,7 @@ void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan)
 void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan)
 {
     const std::vector<Scene*> scenes = renderedScenes(plan.sceneRender.plan());
-    if (scenes.empty()) {
-        prepareDerivedState(nullptr, plan.frame.deltaTime);
-    }
-    else {
-        for (Scene* scene : scenes) {
-            prepareDerivedState(scene, plan.frame.deltaTime);
-        }
-    }
+    prepareDerivedState(scenes, plan.frame.deltaTime);
     // One call for this frame's safe-point mutations: pending pipeline
     // switch/reload and the queued render-target format commands. A View's
     // geometry is not pushed here -- it is that View's own declaration and its

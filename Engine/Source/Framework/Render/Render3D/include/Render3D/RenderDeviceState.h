@@ -30,6 +30,7 @@
 #include <functional>
 #include <glm/glm.hpp>
 #include <memory>
+#include <span>
 
 namespace ya
 {
@@ -135,8 +136,11 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// of asking this owner which Scene is current. Not const: binding a Scene's
     /// skybox/IBL descriptor set updates the cached binding for that set.
     void resolveViewSceneResources(Scene* scene, RenderViewSceneResources& out);
-    /// Tick derived processors and rewrite IBL sets for this frame's Scene.
-    void prepareDerivedState(Scene* scene, float dt);
+    /// Prepare the derived processors for exactly this frame's Scenes, then
+    /// rewrite the IBL sets those Scenes asked for. The Scene set is the
+    /// tick's declaration: a Scene it does not name has its derived state
+    /// dropped, the same way a View it stops declaring is dropped.
+    void prepareDerivedState(std::span<Scene* const> scenes, float dt);
     void prepareComposePipelines();
 
     void resetSkyboxPool();

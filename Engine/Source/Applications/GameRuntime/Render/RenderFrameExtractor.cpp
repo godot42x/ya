@@ -397,12 +397,12 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     // Terrain draw items: mesh lives in the terrain processor runtime state,
     // not on the component.
     auto* const terrainProcessor = ctx.terrainProcessor;
-    if (terrainProcessor) {
+    if (terrainProcessor && ctx.scene) {
         auto emitTerrain = [&]<typename MatComp>(std::vector<RenderDrawItem>& bucket)
         {
             for (const auto& [e, terrain, tc, matComp] :
                  reg.view<TerrainComponent, TransformComponent, MatComp>().each()) {
-                auto* mesh = terrainProcessor->getTerrainMesh(e);
+                auto* mesh = terrainProcessor->getTerrainMesh(*ctx.scene, e);
                 if (!mesh) continue;
 
                 auto* mat = matComp.getMaterial();
@@ -461,9 +461,9 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     emitFallback.template operator()<SkinnedMeshComponent>(skinnedBuckets.fallbackDrawItems);
 
     // Terrain fallback: no material component
-    if (terrainProcessor) {
+    if (terrainProcessor && ctx.scene) {
         for (const auto& [e, terrain, tc] : reg.view<TerrainComponent, TransformComponent>().each()) {
-            auto* mesh = terrainProcessor->getTerrainMesh(e);
+            auto* mesh = terrainProcessor->getTerrainMesh(*ctx.scene, e);
             if (!mesh) continue;
             if (reg.any_of<PBRMaterialComponent, PhongMaterialComponent, UnlitMaterialComponent, SimpleMaterialComponent>(e)) {
                 continue;

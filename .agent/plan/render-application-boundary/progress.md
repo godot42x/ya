@@ -610,3 +610,57 @@ View：presentation / shadow 目标沿用既有「0 = 没有 View」的约定）
   的「淘汰的产品级证据：路径 3（已评估、暂不做）」。
 - 未完成：同「第三批收尾」的未完成项（AB7、第四批显式 active Scene、`RenderFrameData` 改名），本批未碰。
 - 偏离：无。生产改动只有两处 friend 声明 + 一个测试文件。
+## 2026-09-23 第四批 — Scene 是参数，不是查找
+
+唯一目标：删掉三个 derived-resource processor 上的 `setActiveSceneProvider`，让 Scene 成为显式输入、
+结果按 Scene 保存。旧形状是 `RenderDeviceState::prepareDerivedState(Scene*, dt)` 每帧把「刚处理的那个
+Scene」塞进 provider，processor 再反查；`_pendingStateScene != scene` 那一支会 `clearSceneResolveWork()`，
+所以多 Scene 时准备 B 会丢掉 A 的 resolve 状态。
+
+### 改动
+- `EnvironmentLightingProcessor` / `TerrainProcessor` / `GameplayResourceBinding` 各新增嵌套 `SceneWork`
+  （per-entity 状态表、dirty 队列 / 集合、active 集合、audit 时钟、`bSeeded`），processor 上改为
+  `std::unordered_map<const Scene*, SceneWork> _sceneWork`；跨 Scene 共享的只剩 derived-resource 缓存
+  （键是「资源由什么构建出来的」）。
+- 入口：`onUpdate(float)` → `prepareScenes(std::span<Scene* const> scenes, float dt)`。先 `dropScenesAbsentFrom`
+  丢掉本 tick 不点名的 Scene 的 work（与 `reconcilePublishedViews` 同一条判据），再逐 Scene
+  seed / sweep / audit / gc / resolve；tick 无 Scene 时同样清空（保留旧的 `prepareDerivedState(nullptr)` 语义）。
+  `RenderDeviceState::prepareDerivedState` 也随之改成收 `std::span<Scene* const>`。
+- 实体级查询 / 失效入口带 Scene：`getTerrainMesh` / `findTerrainState` / `isSkyboxLoading` /
+  `isEnvironmentLightingLoading` / `markSkyboxDirty` / `markEnvironmentLightingDirty`；resolve 状态与 preview
+  查询落到 `SceneWork`（一个 `SceneWork` 就是一个 Scene 的状态，实体签名那里不再有歧义）。
+- `ViewportDebugCatalogInput::environmentLighting`：`EnvironmentLightingProcessor*` →
+  `const EnvironmentLightingProcessor::SceneWork*`，在 `makeViewportDebugCatalogInput` 用 `inspectScene` 绑好。
+  **这是为了不改 `Debug/ViewportDebugCatalogBuilder.cpp`（并发写者的在飞 WIP）**：blob 的 4 处调用保持原样，
+  只换绑定的对象。代价——`SceneWork` 成为公开类型，该头从 forward declaration 改成 include processor 头；
+  字段名 `environmentLighting` 暂时仍读作「processor」，重命名要动那个 WIP 文件。
+- 调用点：`RenderFrameExtractor`（传正在遍历的 Scene）、`AppAutomation`（两个 loading 判定 + terrain 状态）、
+  `AppSceneServices::refreshSceneDerivedState`（失效入口传自己的 scene）。
+- 顺带删除：三个 processor 的空 `init()` override、`onUpdate` override、`setActiveSceneProvider`、
+  `_pendingStateScene`、`_getActiveScene`。无兼容 wrapper。
+
+### 归属判断（三个 processor）
+它们扫 ECS/Scene、维护 dirty / resolve 状态、按内容键缓存派生 GPU 资源 —— 属于「运行时派生资源解析」，
+不是纯 GPU 管线；但「不是管线」不等于「必须搬出 Render3D」：整体迁移（如落到 `GameRuntime/Render/`）是
+AB7 之后的独立判断，本批只做「Scene 显式 + 按 Scene 分状态」，不预判 AB7 的结论。
+
+### 验证
+- build：`ya-render-3d` / `ya-render-3d-test` / `ya-game-runtime` / `ya-runtime` / `ya-game-editor` /
+  `ya-testing` 全部 ok。
+- `xmake r ya-render-3d-test`：**189/189**（基线 186 + 本批 3）。
+- 滤镜（plan §8 的那条）：**706 tests / 689 passed / 11 skipped / 6 failed**，6 个失败与登记基线逐项相同
+  （含偶发的 `RenderGraphCoreTest.ResourceRegistryUsesProvidedImportedImageViewAndRetainsOwner`）。
+- `run_display_compose_parity.py --skip-build`：**PASS**，两张图 md5 仍 `c775245ae636f15b41da8485319a2267`。
+- `run_widgettree_editor_smoke.py --skip-build`：**首帧竞态**，不是本批回归。同一二进制两次运行 1 失败 1 通过；
+  自动化探针在**未含本批改动**的等价树里第 0 帧同样读到 `{0,0}`、第 2 帧起 `873x470`，含本批改动的树同样如此。
+  取证方式见下条。
+- 取证环境：主仓库有 5 个并发写者的在飞 WIP，为把「本批改动」和「构建状态」分开，用 APFS clonefile 复制仓库
+  到临时目录跑对照（A：恢复本批改动的文件；B：含本批改动的当前树），两处都在副本里完整重构建。临时副本已删除。
+
+### 保留 / 未完成 / 偏离
+- 保留（刻意）：`ViewportDebugCatalogInput::environmentLighting` 的字段名；重命名要动并发写者的 WIP 文件。
+- 未完成（不属于本批）：AB7（整帧编排搬应用侧）、`RenderFrameData` 改名、`recordExtensions` 去行为化、
+  AB3-step2 的 renderer 编辑器查询面、`Render3D → GUI/Compose` 的 include。
+- 未覆盖（如实记录）：`GameplayResourceBinding` 拿到了同一套结构改动，但它没有任何公开查询面，
+  所以本批的证据（`SceneDerivedStateTest`）只钉了 `EnvironmentLightingProcessor` 与 `TerrainProcessor`。
+- 偏离：无。

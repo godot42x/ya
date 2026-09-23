@@ -275,7 +275,7 @@ bool hasLoadingSkybox(const Scene& scene)
     if (!envProcessor) return false;
     for (const auto& [entity, skybox] : scene.getRegistry().view<SkyboxComponent>().each()) {
         (void)skybox;
-        if (envProcessor->isSkyboxLoading(entity)) {
+        if (envProcessor->isSkyboxLoading(scene, entity)) {
             return true;
         }
     }
@@ -288,7 +288,7 @@ bool hasLoadingEnvironmentLighting(const Scene& scene)
     if (!envProcessor) return false;
     for (const auto& [entity, elc] : scene.getRegistry().view<EnvironmentLightingComponent>().each()) {
         (void)elc;
-        if (envProcessor->isEnvironmentLightingLoading(entity)) {
+        if (envProcessor->isEnvironmentLightingLoading(scene, entity)) {
             return true;
         }
     }
@@ -317,7 +317,7 @@ bool hasPendingTerrainResolve(const Scene& scene)
         }
 
         auto* terrainProcessor = App::get() ? App::get()->getTerrainProcessor() : nullptr;
-        const auto* state = terrainProcessor ? terrainProcessor->findTerrainState(entity) : nullptr;
+        const auto* state = terrainProcessor ? terrainProcessor->findTerrainState(scene, entity) : nullptr;
         if (!state) {
             return true;
         }

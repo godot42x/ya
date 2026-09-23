@@ -138,6 +138,22 @@
       ]
     },
     {
+      "id": "scene_is_an_argument_not_a_lookup",
+      "phase": "第四批",
+      "status": "landed",
+      "evidence": [
+        "setActiveSceneProvider / std::function<Scene*()> deleted from EnvironmentLightingProcessor, TerrainProcessor and GameplayResourceBinding; RenderDeviceState::prepareDerivedState now takes std::span<Scene* const> and forwards the tick's Scene set",
+        "each processor keeps one SceneWork per Scene (per-entity state maps, dirty queues/sets, active sets, audit clock, bSeeded); the only cross-Scene state left is the derived-resource cache, which is keyed by what the resource was built from",
+        "prepareScenes drops the work of a Scene the tick does not name -- the same judgement reconcilePublishedViews uses for Views (this tick's declaration set, not a timer); a tick that names no Scene clears everything, preserving the old prepareDerivedState(nullptr) semantics",
+        "entity-scoped queries and invalidation entries all take the Scene: getTerrainMesh/findTerrainState/isSkyboxLoading/isEnvironmentLightingLoading/markSkyboxDirty/markEnvironmentLightingDirty; the old mark* signatures silently no-oped whenever _pendingStateScene was another Scene",
+        "resolve-state and preview queries moved onto SceneWork (one SceneWork IS one Scene's state, so an entity-only signature is unambiguous there); findFirstReadySkyboxState / findFirstReadyEnvironmentLightingState replace the processor-level first-scene scans",
+        "ViewportDebugCatalogInput::environmentLighting is now const EnvironmentLightingProcessor::SceneWork*, bound from inspectScene in makeViewportDebugCatalogInput -- this keeps Debug/ViewportDebugCatalogBuilder.cpp (a concurrent writer's in-flight WIP) untouched; the cost is that the header now includes EnvironmentLightingProcessor.h and the field name still reads as 'processor'",
+        "call sites updated: RenderFrameExtractor passes the Scene it is walking, AppAutomation passes its scene, AppSceneServices::refreshSceneDerivedState passes its scene",
+        "ownership judgement recorded: these three scan ECS/Scene and cache derived GPU resources per content key, so they are runtime derived-resource resolution rather than pure GPU pipelines; moving them out of Render3D entirely is a separate AB7-era decision, not this batch",
+        "evidence: Engine/Test/Source/SceneDerivedStateTest.cpp (3 cases in ya-render-3d-test) -- two Scenes sharing one entt id keep separate work/state, a Scene the tick stops naming loses its work, and terrain Scene A's state object survives a prepareScenes({A,B}); negative control: ensureWork reverted to a single slot makes the first two cases FAIL"
+      ]
+    },
+    {
       "id": "renderer_is_the_persistent_renderer",
       "phase": "AB7",
       "status": "pending_scope_revised_from_rename_to_split",
@@ -160,6 +176,7 @@
     "RenderGraphCoreTest.ResourceRegistryUsesProvidedImportedImageViewAndRetainsOwner (flaky)"
   ],
   "known_broken_tests": [
-    "WidgetTreeTest.SystemLayersCannotBeDetached kills the test process (SIGTRAP, deliberate YA_CORE_ASSERT on detaching a system layer); exclude it from wide filters"
+    "WidgetTreeTest.SystemLayersCannotBeDetached kills the test process (SIGTRAP, deliberate YA_CORE_ASSERT on detaching a system layer); exclude it from wide filters",
+    "Script/automation/editor/run_widgettree_editor_smoke.py step 2 is a first-frame race, not a render regression (verified 2026-09-23): the host viewport View has published nothing on frames 0/1, so rendered_viewport_extent reads {0,0} and the script raises 'world view did not render'. One binary, two runs: one exits 0, the next fails. A probe on a tree WITHOUT the batch-4 change also reads {0,0} on frame 0 and 873x470 from frame 2. Fix belongs in the script (wait for one rendered frame the way step 5 already does)"
   ]
 }

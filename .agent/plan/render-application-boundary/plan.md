@@ -243,7 +243,7 @@ Framework 侧的公开入口限定在 `init/shutdown/record(plan, surface)/publi
 | 整帧录制编排仍在 Framework | `RenderDeviceState::record()` 负责 acquire 之后的 submission / recordFamily / view compose / display compose / surface presentation / finish | 应用侧 `RuntimeRenderContext`（AB7） |
 | 本 tick 的 View 准备数据由 App 长期持有 | ~~`AppRenderState::viewFrameDataPerFlight`~~ **已删除（2026-09-22 review batch 2）**；`AppLifecycle` 的 quit / `handleSceneDestroy` 两处清空循环同步删除 | `ExtractedSceneRender` 持有本 tick 的 `_frameData`，`SceneViewRecording` 只借用该对象内的 plan/data；保活审计确认 `RenderFrameData::sceneResources` 只含录制期消费的句柄/processor 指针，GPU 生命周期由 `RenderSubmission` 与 `retainPublishedViewOutputs` 负责，因此不存在把 packet 留在 App 才能保活的约束。零生产消费者的 `hostFrameData()` 也一并删除 |
 | 无身份的 View 尺寸语义仍在 pipeline 接口上 | ~~`IRenderPipeline::getViewExtent()`~~ **已删除（2026-09-22）**；~~pipeline 内仍保存单套 View 资源（`_viewResources` / `_viewRI` / `_viewRTSpec` / `_pendingViewExtent` / `_debugViews`）~~ **已修（2026-09-23 第三批）** | 已落地：View 资源按 `ViewResourceKey = identity + extent + format + feature policy` 分键（`ViewResourceTable`）；"单套尺寸"的接口（`onViewResized`、`_pendingViewExtent`）已删除 |
-| `IRenderRuntimeServices` 删了，但「当前 Scene」仍是隐式全局 | `EnvironmentLightingProcessor::setActiveSceneProvider` / `TerrainProcessor::setActiveSceneProvider` / `GameplayResourceBinding::setActiveSceneProvider`，由 `RenderDeviceState` 在 init 注入 `app.getActiveScene` | 显式输入：`prepareSceneResources(Scene&, FrameTime)` 或 `SceneDerivedState prepareScene(Scene&, const FramePacket&)`，结果按 Scene 保存（报告第四批） |
+| ~~`IRenderRuntimeServices` 删了，但「当前 Scene」仍是隐式全局~~ **已修（2026-09-23 第四批）** | ~~`setActiveSceneProvider` ×3 + `prepareDerivedState(Scene*, dt)` 每帧注入「刚处理的那个 Scene」；`_pendingStateScene != scene` 那一支会 `clearSceneResolveWork()`，所以处理 B 会丢掉 A 的 resolve 状态~~ | 已落地：三个 processor 各持**按 Scene 一份**的 `SceneWork`，入口是 `prepareScenes(std::span<Scene* const>, float)`；本 tick 不点名的 Scene 在那里失去 work（与 `reconcilePublishedViews` 同一判据）。实体级查询 / 失效入口都带 Scene |
 | plan 仍携带行为 | `RenderFramePlan::recordExtensions`（`IFrameRecordExtensions*`），renderer 在固定阶段回调它 | 比 `std::function` 清晰，但「plan 是 immutable data」仍未达成；方向是把那些阶段变成应用侧显式调用（与 AB7 同批） |
 | renderer 仍有编辑器查询面 + 反向依赖 GUI | `buildViewportSnapshot` / `buildRenderTargetCatalog` / `getDebugRenderSystem` / `getDiagnosticsService`；`RenderDeviceState.cpp` 与 `RenderDeviceState.Frame.cpp` include `GUI/Compose/Render2DComposePass.h` | AB3-step2（typed command + 由数据构造 catalog）；GUI compose 的 include 需要 compose 准备改由宿主调用（已在 `source-layout-subtraction` S2 记录） |
 
@@ -362,6 +362,47 @@ publishedViewOutput(viewId);
 看不见 `_pipelineCoordinator` / `_submissions` / `_viewOutputs` / `_surfacePresentations`。
 
 ## 6. 非目标
+### 第四批：Scene 是参数，不是查找（2026-09-23 已落地）
+
+唯一目标：删掉「全局当前 Scene」。`EnvironmentLightingProcessor` / `TerrainProcessor` /
+`GameplayResourceBinding` 各有一个 `setActiveSceneProvider(std::function<Scene*()>)`，由
+`RenderDeviceState::prepareDerivedState(Scene*, dt)` 每帧把「刚处理的那个 Scene」塞进去，三个 processor
+再在自己的 `onUpdate` 里反查回来。多 Scene 时不只「谁是当前的」含糊：`_pendingStateScene != scene` 那
+一支会 `clearSceneResolveWork()`，所以准备 B 会把 A 刚建好的 resolve 状态整片丢掉。
+
+- 每个 processor 现在有 `SceneWork`（**按 Scene 一份**）：per-entity 状态表、dirty 队列 / 集合、active 集合、
+  audit 时钟、`bSeeded`。processor 上只剩跨 Scene 共享的一样东西——derived-resource 缓存，因为它的键是
+  「资源由什么构建出来的」，不是「谁问的」。
+- 入口从 `onUpdate(float)` 变成 `prepareScenes(std::span<Scene* const> scenes, float dt)`：本 tick 渲染哪些
+  Scene 就是哪些 Scene 被准备，**没被点名的 Scene 的 work 在这里丢掉**——判据是本 tick 的声明集合
+  （与 `IRenderPipeline::reconcilePublishedViews` 同一条），不是计时器或启发式；tick 一个 Scene 都不声明时
+  同样清空，即旧的 `prepareDerivedState(nullptr)` 语义被保留而不是漏掉。
+- 实体级查询与失效入口都带 Scene：`getTerrainMesh(const Scene&, entt::entity)`、
+  `findTerrainState(const Scene&, entt::entity)`、`isSkyboxLoading(const Scene&, entt::entity)`、
+  `isEnvironmentLightingLoading(const Scene&, entt::entity)`、`markSkyboxDirty(Scene&, entt::entity, ...)`、
+  `markEnvironmentLightingDirty(Scene&, entt::entity, ...)`。后两个第一次有了「这个实体属于哪个 Scene」的
+  答案：旧签名在 `_pendingStateScene` 不是它时是静默 no-op，现在按传入的 Scene 建 work。
+- 其余实体级查询（resolve 状态、preview）落在 `SceneWork` 上：一个 `SceneWork` **就是**一个 Scene 的状态，
+  所以 `getSkyboxPreview(entity)` 这种「只有实体」的签名在那里不再有歧义，也不必再问谁是当前 Scene。
+- `ViewportDebugCatalogInput::environmentLighting` 从 `EnvironmentLightingProcessor*` 变成
+  `const EnvironmentLightingProcessor::SceneWork*`，由 `makeViewportDebugCatalogInput` 用 `inspectScene`
+  绑好。这条是**为了不改** `Debug/ViewportDebugCatalogBuilder.cpp`（并发写者的在飞 WIP），同时把「检查器看的
+  是哪个 Scene 的 lighting」写进了输入类型。代价：`SceneWork` 成了公开类型，该头因此 include 了
+  `EnvironmentLightingProcessor.h`（原来是 forward declaration），字段名 `environmentLighting` 也暂时仍读作
+  「processor」——重命名要动那个 WIP 文件，留给它落地后再做。
+- 调用点：`RenderFrameExtractor` 传它正在遍历的 Scene（`ctx.scene` 为空时不再去问「当前是哪个」）；
+  `AppAutomation` 的两个 loading 判定与 terrain 状态查询传它正在遍历的 `scene`；
+  `AppSceneServices::refreshSceneDerivedState` 的失效入口传自己的 `scene`。
+- **三个 processor 的归属判断**：它们扫 ECS/Scene、维护 dirty/resolve 状态、按内容键缓存派生 GPU 资源，
+  属于「运行时派生资源解析」，不是纯 GPU 管线；但也不能只因为「不是管线」就搬——把它们整体移出 `Render3D`
+  （例如落到 `GameRuntime/Render/`）是 AB7 之后的独立判断，本批只做「Scene 显式 + 按 Scene 分状态」。
+
+证据：`Engine/Test/Source/SceneDerivedStateTest.cpp`（落在 `ya-render-3d-test`）三个用例。前两个用两个 Scene
+各放一个 skybox 实体——**同一个 entt id**——断言两个 Scene 的 work 与状态互不覆盖、且本 tick 不点名的 Scene
+会失去 work；第三个用 terrain 证明 A 的状态对象在下一次 `prepareScenes({A, B})` 后是**同一个对象**（不是重新
+seed 出来的），即 B 没有把 A 整片拿走。负向对照（真做）：把 `ensureWork` 临时改回单槽（`_sceneWork.clear()`）
+重新构建 → 前两个用例 FAIL，恢复后 3/3 PASS。
+
 
 - **不在 Framework 里**新增 `RenderCoordinator2` / `RenderContext` / `RenderServiceHub` 之类总入口。
   AB7 的 `RuntimeRenderContext` 不属于这条禁止项：它住在应用侧、装的是「当前应用如何准备与录制这一帧」，
@@ -391,11 +432,19 @@ publishedViewOutput(viewId);
 
 ```bash
 xmake b ya-game-runtime && xmake b ya-runtime && xmake b ya-game-editor && xmake b ya-testing
-xmake r ya-render-3d-test                      # 186/186
+xmake r ya-render-3d-test                      # 189/189
 ./build/macosx/arm64/debug/ya-testing --gtest_filter='RenderRuntime*:HostScene*:ViewFamily*:ForwardFrameGraph*:DeferredRender*:PostProcessing*:Offscreen*:AppKernel*:AppLifecycle*:AppScreenshot*:Widget*:Dock*:Editor*:GameUIHost*:Scene*:UIDocument*:ScriptApi*:RenderGraph*:ViewPersistent*:View*:SurfaceImage*-WidgetTreeTest.SystemLayersCannotBeDetached'
 python3 Script/automation/render/run_display_compose_parity.py --skip-build   # PASS, md5 c775245a...
-python3 Script/automation/editor/run_widgettree_editor_smoke.py --skip-build  # 六步全过
+python3 Script/automation/editor/run_widgettree_editor_smoke.py --skip-build  # 六步全过（见下方首帧竞态）
 ```
+
+**编辑器 smoke 的第 2 步是首帧竞态（2026-09-23 核实，与本批无关）**：脚本 `wait_for_port` 一返回就立刻
+查 `get_world_view_state`，而宿主的 host viewport View 在第 0/1 帧还没有发布过输出，于是
+`rendered_viewport_extent` 读到 `{0,0}` 并抛 `world view did not render`。证据：
+① 同一份二进制（含本批改动）连跑两次，一次 `exit=0` 六步全过、一次在第 2 步失败；
+② 用自动化探针在**未含本批改动**的等价树里实测，第 0 帧同样是 `{width:0,height:0}`，第 2 帧起是 `873x470`；
+③ 含本批改动的树里同一探针同样从第 2 帧起报 `873x470`。也就是说这条失败与渲染无关，修法属于 smoke 脚本
+自己（像第 5 步的 `wait_for_frame_progress` 那样先等一帧真的渲染出来），本批不动别人的 harness。
 
 已知基线失败（与本线无关，不要追）：`EditorPropertyGraphTest.AutoPropertySectionAssetPathCommitBrowseAndUndo`、
 `EditorPropertyGraphTest.TextureAssetRowShowsRetainedPreview`、

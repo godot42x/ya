@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "RHI/Core/ImageResource.h"
 #include "RHI/Core/RenderTexture.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Common/RenderViewportSnapshot.h"
 #include "Render3D/Deferred/DeferredPipelineDebugViews.h"
 #include "Render3D/Common/Shadow/ShadowTypes.h"
@@ -17,7 +18,6 @@ namespace ya
 {
 
 struct Scene;
-struct EnvironmentLightingProcessor;
 
 /// Debug/colour outputs one pipeline published this frame, for the inspector.
 /// A panel-facing view of a pipeline's targets -- not renderer state and not an
@@ -54,7 +54,11 @@ struct ViewportDebugCatalogInput
     /// owner so the builder needs no lookup and no callback.
     std::array<std::shared_ptr<ImageResource>, ShadowConstants::POINT_SHADOW_FACE_COUNT> pointShadowFaces{};
 
-    EnvironmentLightingProcessor* environmentLighting = nullptr;
+    /// The inspect Scene's environment-lighting resolve state. Scene-bound on
+    /// purpose: the entity-scoped lookups below are unambiguous only because
+    /// this is one Scene's state, and the builder must not ask which Scene is
+    /// current.
+    const EnvironmentLightingProcessor::SceneWork* environmentLighting = nullptr;
     /// Scene to describe environment resources for, or null for none.
     Scene* inspectScene = nullptr;
 };

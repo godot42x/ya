@@ -24,22 +24,23 @@
 namespace ya
 {
 
-void RenderDeviceState::prepareDerivedState(Scene* scene, float dt)
+void RenderDeviceState::prepareDerivedState(std::span<Scene* const> scenes, float dt)
 {
-    auto provider = [scene]() -> Scene* { return scene; };
+    // Each processor resolves work per Scene, so the second Scene of the tick
+    // cannot drop or overwrite the first one's.
     if (_environmentLightingProcessor) {
-        _environmentLightingProcessor->setActiveSceneProvider(provider);
-        _environmentLightingProcessor->onUpdate(dt);
+        _environmentLightingProcessor->prepareScenes(scenes, dt);
     }
     if (_terrainProcessor) {
-        _terrainProcessor->setActiveSceneProvider(provider);
-        _terrainProcessor->onUpdate(dt);
+        _terrainProcessor->prepareScenes(scenes, dt);
     }
     if (_gameplayResourceBinding) {
-        _gameplayResourceBinding->setActiveSceneProvider(provider);
-        _gameplayResourceBinding->onUpdate(dt);
+        _gameplayResourceBinding->prepareScenes(scenes, dt);
     }
-    if (scene) {
+    for (Scene* scene : scenes) {
+        if (!scene) {
+            continue;
+        }
         (void)_sharedResourceProvider.getSceneSkyboxDescriptorSet(scene);
         (void)_sharedResourceProvider.getSceneEnvironmentLightingDescriptorSet(scene);
     }
@@ -178,7 +179,9 @@ ViewportDebugCatalogInput RenderDeviceState::makeViewportDebugCatalogInput(uint3
     input.debugOutputs      = buildPipelineDebugOutputCatalog(flightIndex, viewId);
     input.deferredViews     = getDeferredPipelineDebugViews(viewId);
     input.brdfLut           = _sharedResourceProvider.getBrdfLutTextureShared();
-    input.environmentLighting = _environmentLightingProcessor.get();
+    input.environmentLighting = (inspectScene && _environmentLightingProcessor)
+        ? _environmentLightingProcessor->findSceneWork(*inspectScene)
+        : nullptr;
     input.inspectScene        = inspectScene;
 
     for (uint32_t pointLightIndex = 0; pointLightIndex < MAX_POINT_LIGHTS; ++pointLightIndex) {
