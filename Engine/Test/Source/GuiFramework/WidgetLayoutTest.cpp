@@ -2330,9 +2330,16 @@ TEST(WidgetLayoutTest, FloatingWindowResizeHandlesLiveOnOverlaySlots)
     hostFill.anchorMax = {1.0f, 1.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), host, hostFill);
 
-    auto                  panel    = std::make_shared<UICanvasPanel>("SceneBody");
-    const DockPanelId     panelId  = ws->addPanel("Scene", panel);
-    ASSERT_NE(ws->tearOffPanel(panelId, {100.0f, 80.0f}, {300.0f, 200.0f}), kInvalidFloatingWindowId);
+    auto              panel   = std::make_shared<UICanvasPanel>("SceneBody");
+    const DockPanelId panelId = ws->addPanel("Scene", panel);
+    const FDockFloatingWindowId floatingId
+        = ws->tearOffPanel(panelId, {100.0f, 80.0f}, {300.0f, 200.0f});
+    ASSERT_NE(floatingId, kInvalidFloatingWindowId);
+    // The reveal affordance is mounted only while the tab strip is hidden
+    // (FDockHideTabBarAffordance): hiding is what gives it its 12x12 overlay
+    // slot at the content origin. Ask for that state instead of expecting a
+    // laid-out rect from a collapsed child.
+    ws->setFloatingHideTabBar(floatingId, true);
     host->syncFromContext();
     tree.layout();
 
