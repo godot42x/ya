@@ -17,6 +17,7 @@ struct EntityIdPass;
 struct FrameContext;
 struct PostProcessingStage;
 struct RenderTargetCreateInfo;
+struct ViewTargetLease;
 
 namespace forward_frame_graph
 {
@@ -27,6 +28,10 @@ struct ViewGraphResources
     RGTextureHandle       resolve{};
     RGTextureHandle       depth{};
     RGTextureHandle       entityId{};
+    RGTextureHandle       display{};
+    RGTextureHandle       bloomExtract{};
+    RGTextureHandle       bloomBlur{};
+    RGTextureHandle       bloomComposite{};
     std::optional<RGTextureHandle> shadowDepth{};
     Extent2D              viewExtent{};
     AttachmentDescription colorAttachment{};
@@ -51,6 +56,7 @@ struct BuildInputs
     bool                                             bPostprocessOutputIsSRGB = false;
     uint64_t                                         viewId              = 0;
     const ForwardFrameResourceSet::ViewResources*    viewResources       = nullptr;
+    const ViewTargetLease*                           targets             = nullptr;
     std::optional<RGPassHandle>                      familyPredecessor   = std::nullopt;
 };
 
@@ -65,7 +71,8 @@ struct Dependencies
     RenderGraph& graph,
     const RenderTargetCreateInfo& viewRTSpec,
     std::optional<RGTextureHandle> shadowDepth,
-    uint64_t viewId);
+    uint64_t viewId,
+    const ViewTargetLease& targets);
 
 void appendViewPasses(RenderGraph& graph,
                           const Dependencies& deps,

@@ -23,6 +23,7 @@ struct SSAOStage;
 struct PostProcessingStage;
 struct RenderTargetCreateInfo;
 struct EntityIdPass;
+struct ViewTargetLease;
 
 struct DeferredFrameGraphOrchestrator
 {
@@ -59,6 +60,7 @@ struct DeferredFrameGraphOrchestrator
         bool                                   bPostprocessOutputIsSRGB  = false;
         uint64_t                               viewId                    = 0;
         const DeferredFrameResourceSet::ViewResources* viewResources     = nullptr;
+        const ViewTargetLease*                  targets                  = nullptr;
         std::optional<RGPassHandle>            familyPredecessor         = std::nullopt;
     };
 

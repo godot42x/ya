@@ -26,9 +26,8 @@ class RenderSubmissionPool;
 /// One GPU command submission: command buffer, frame token, upload arena,
 /// transient descriptor allocation, keepalive and finish state.
 ///
-/// Persistent pipeline objects do not belong here. View tables still live on
-/// resource sets; they open slots from this submission's token instead of
-/// calling a second beginSubmission() on their own arena.
+/// Persistent pipeline objects do not belong here. A recorded View contributes
+/// one allocation keepalive; descriptor and upload slots remain submission-owned.
 class RenderSubmission
 {
     friend class RenderSubmissionPool;

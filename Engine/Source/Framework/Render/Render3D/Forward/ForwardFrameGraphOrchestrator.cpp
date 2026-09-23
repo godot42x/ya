@@ -29,7 +29,8 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
         graph,
         *inputs.viewRTSpec,
         shadowOutputs.shadowDepth,
-        inputs.viewId);
+        inputs.viewId,
+        *inputs.targets);
     const forward_frame_graph::Dependencies passDeps{
         .viewStage    = deps.viewStage,
         .entityIdPass     = deps.entityIdPass,

@@ -145,6 +145,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
 
     void init(const InitDesc& desc);
     ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
+    void appendTargetRequests(const SceneRenderPlan& plan, std::vector<ViewTargetRequest>& out) const override;
     void shutdown();
 
     [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Deferred; }
@@ -224,6 +225,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
                                                  DescriptorSetHandle environmentLightingDS,
                                                  FrameContext& postContext,
                                                  DeferredFrameGraphResources& graphResources,
+                                                 const ViewTargetLease& targets,
                                                  std::optional<RGPassHandle> familyPredecessor);
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               markPendingResourceRefresh(EDeferredPendingResourceRefresh refresh);

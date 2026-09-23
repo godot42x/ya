@@ -1,10 +1,9 @@
 #pragma once
 
 #include "Graph/RenderGraph.h"
+#include "Render3D/Common/ViewGraphName.h"
 
 #include <cstdint>
-#include <format>
-#include <string>
 #include <string_view>
 
 namespace ya
@@ -16,11 +15,6 @@ namespace ya
 /// keys identify the executor registry across graphs; two Views must not share
 /// `ForwardView.Color`. ViewId 0 still uses `.view0` so a missing task
 /// cannot revive an unkeyed global name.
-[[nodiscard]] inline std::string makeViewGraphName(std::string_view base, uint64_t viewId)
-{
-    return std::format("{}.view{}", base, viewId);
-}
-
 [[nodiscard]] inline RGPersistentTextureKey makeViewPersistentTextureKey(
     std::string_view base,
     uint64_t         viewId)

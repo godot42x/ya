@@ -1,7 +1,7 @@
 # Render View 资源所有权与管线编排收口计划
 
 > 建立日期：2026-09-23
-> 状态：执行中；Checkpoint A 已完成（2026-09-23）
+> 状态：执行中；Checkpoint A-B 已完成（2026-09-23）
 > 关联计划：`../render-view-family/plan.md`、`../render-application-boundary/plan.md`
 
 ## 1. 当前目标与边界
@@ -460,6 +460,16 @@ target request 和输出角色仍由具体 pipeline 清楚写出。
 - View 查询没有 pipeline downcast 或 concrete pipeline 入口。
 
 ### Checkpoint B：引入 ViewTargetStore，收回 allocation owner
+
+状态：已完成（2026-09-23）。
+
+完成结果：
+
+- `ViewTargetStore` 按 `ViewTargetRequest` 在 pre-record safe point 创建、精确复用或替换 allocation。
+- Forward / Deferred 在录制时只消费 `ViewTargetLease`，所有 View attachment 通过 imported texture 进入 graph。
+- Bloom 的交替 scratch 保持 transient；可发布的 extract / blur / composite target 归 store。
+- `RenderSubmission` 一次保活完整 allocation，删除逐 attachment retain。
+- publication 携带 allocation generation；相同 request generation 不变，resize 只替换一次。
 
 目标：View target 只由 store 创建和持有，pipeline 只消费 lease。
 

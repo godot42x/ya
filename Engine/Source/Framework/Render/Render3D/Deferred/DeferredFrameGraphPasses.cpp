@@ -6,7 +6,8 @@
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Common/Shadow/ShadowStage.h"
-#include "Render3D/Common/ViewPersistentResourceKey.h"
+#include "Render3D/Common/ViewGraphName.h"
+#include "Render3D/Common/ViewTargetStore.h"
 
 #include <string>
 
@@ -92,48 +93,30 @@ void createAttachmentTextures(DeferredFrameGraphPassContext& context)
     auto&       graphResources = context.graphResources;
     const auto& gBufferSpec    = context.gBufferRTSpec;
     const auto& viewportSpec   = context.viewRTSpec;
-
-    const auto makeAttachmentDesc = [](const RenderTargetCreateInfo& spec,
-                                       const AttachmentDescription&  attachment,
-                                       std::string                   label) {
-        return RGTextureDesc{
-            .label       = std::move(label),
-            .format      = attachment.format,
-            .extent      = Extent3D{spec.extent.width, spec.extent.height, 1},
-            .mipLevels   = 1,
-            .arrayLayers = spec.layerCount,
-            .samples     = attachment.samples,
-            .usage       = attachment.usage,
-            .flags       = attachment.imageCreateFlags,
-        };
+    YA_CORE_ASSERT(context.targets != nullptr, "Deferred graph requires prepared View targets");
+    const auto importTarget = [&](EViewAttachment role, std::string_view label, EImageLayout::T finalLayout, EImageUsage::T usage) {
+        auto target = context.targets->find(role);
+        YA_CORE_ASSERT(target != nullptr, "Deferred View target is missing role {}", static_cast<uint32_t>(role));
+        return context.graph.importTexture(makeImportedTextureDesc(*target, label, finalLayout, usage));
     };
 
     for (uint32_t attachmentIndex = 0; attachmentIndex < graphResources.textures.gBufferColors.size(); ++attachmentIndex) {
-        const auto base = std::format("DeferredGBuffer.Color{}", attachmentIndex);
-        graphResources.textures.gBufferColors[attachmentIndex] = createViewPersistentTexture(
-            context.graph,
-            makeAttachmentDesc(
-                gBufferSpec,
-                gBufferSpec.attachments.colorAttach[attachmentIndex],
-                base),
-            base,
-            context.viewId);
+        const auto label = std::format("DeferredGBuffer.Color{}", attachmentIndex);
+        graphResources.textures.gBufferColors[attachmentIndex] = importTarget(
+            static_cast<EViewAttachment>(static_cast<uint8_t>(EViewAttachment::GBuffer0) + attachmentIndex),
+            label, EImageLayout::ShaderReadOnlyOptimal, gBufferSpec.attachments.colorAttach[attachmentIndex].usage);
     }
     YA_CORE_ASSERT(gBufferSpec.attachments.depthAttach.has_value(),
                    "Deferred GBuffer graph requires a depth attachment spec");
-    graphResources.textures.gBufferDepth = createViewPersistentTexture(
-        context.graph,
-        makeAttachmentDesc(gBufferSpec, *gBufferSpec.attachments.depthAttach, "DeferredGBuffer.Depth"),
-        "DeferredGBuffer.Depth",
-        context.viewId);
+    graphResources.textures.gBufferDepth = importTarget(
+        EViewAttachment::SceneDepth, "DeferredGBuffer.Depth", EImageLayout::ShaderReadOnlyOptimal,
+        gBufferSpec.attachments.depthAttach->usage);
 
     YA_CORE_ASSERT(!viewportSpec.attachments.colorAttach.empty(),
                    "Deferred viewport graph requires a color attachment spec");
-    graphResources.textures.viewColor = createViewPersistentTexture(
-        context.graph,
-        makeAttachmentDesc(viewportSpec, viewportSpec.attachments.colorAttach.front(), "DeferredView.Color"),
-        "DeferredView.Color",
-        context.viewId);
+    graphResources.textures.viewColor = importTarget(
+        EViewAttachment::SceneColor, "DeferredView.Color", EImageLayout::ShaderReadOnlyOptimal,
+        viewportSpec.attachments.colorAttach.front().usage);
 
     AttachmentDescription entityIdDesc{};
     entityIdDesc.format      = EFormat::R32_UINT;
@@ -142,11 +125,11 @@ void createAttachmentTextures(DeferredFrameGraphPassContext& context)
     entityIdDesc.storeOp     = EAttachmentStoreOp::Store;
     entityIdDesc.usage       = EImageUsage::ColorAttachment | EImageUsage::TransferSrc;
     entityIdDesc.finalLayout = EImageLayout::ColorAttachmentOptimal;
-    graphResources.textures.entityId = createViewPersistentTexture(
-        context.graph,
-        makeAttachmentDesc(viewportSpec, entityIdDesc, "DeferredView.EntityId"),
-        "DeferredView.EntityId",
-        context.viewId);
+    graphResources.textures.entityId = importTarget(
+        EViewAttachment::EntityId, "DeferredView.EntityId", EImageLayout::ColorAttachmentOptimal, entityIdDesc.usage);
+    graphResources.textures.postprocessOutput = importTarget(
+        EViewAttachment::DisplayColor, "DeferredView.Display", EImageLayout::ShaderReadOnlyOptimal,
+        EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc);
 }
 
 void appendGBuffer(DeferredFrameGraphPassContext& context)
@@ -236,6 +219,11 @@ void appendSSAO(DeferredFrameGraphPassContext& context)
                    "Deferred SSAO requires an imported frame buffer");
 
     const auto& frameBinding = context.frameBinding;
+    auto ssaoTarget = context.targets ? context.targets->find(EViewAttachment::SSAO) : nullptr;
+    YA_CORE_ASSERT(ssaoTarget != nullptr, "Deferred SSAO requires a prepared target");
+    const auto ssaoOutput = context.graph.importTexture(makeImportedTextureDesc(
+        *ssaoTarget, "Deferred.SSAO", EImageLayout::ShaderReadOnlyOptimal,
+        EImageUsage::ColorAttachment | EImageUsage::Sampled));
     context.graphResources.textures.ssao = context.ssaoStage->appendGraphPass(
         context.graph,
         context.stageCtx,
@@ -248,7 +236,8 @@ void appendSSAO(DeferredFrameGraphPassContext& context)
             .frameDescriptorSet = frameBinding.ssaoFrameDescriptorSet,
             .inputDescriptorSet = context.viewResources ? context.viewResources->ssao.inputs.set : DescriptorSetHandle{},
             .viewId             = context.viewId,
-        });
+        },
+        ssaoOutput);
 }
 
 void appendLight(DeferredFrameGraphPassContext& context)
@@ -450,13 +439,24 @@ void appendSkybox(DeferredFrameGraphPassContext& context)
 
 void appendBloom(DeferredFrameGraphPassContext& context)
 {
+    const auto importBloom = [&](EViewAttachment role, std::string_view label) {
+        auto target = context.targets ? context.targets->find(role) : nullptr;
+        return target
+            ? context.graph.importTexture(makeImportedTextureDesc(
+                  *target, label, EImageLayout::ShaderReadOnlyOptimal,
+                  EImageUsage::ColorAttachment | EImageUsage::Sampled))
+            : RGTextureHandle{};
+    };
     const auto bloomComposite = context.postProcessStage.appendBloomGraphPasses(
         context.graph,
         context.graphResources.textures.viewColor,
         context.viewExtent,
         context.postContext,
         context.viewId,
-        context.viewResources ? context.viewResources->post.bloom : BloomPassBindings{});
+        context.viewResources ? context.viewResources->post.bloom : BloomPassBindings{},
+        importBloom(EViewAttachment::BloomExtract, "Deferred.BloomExtract"),
+        importBloom(EViewAttachment::BloomBlur, "Deferred.BloomBlur"),
+        importBloom(EViewAttachment::BloomComposite, "Deferred.BloomComposite"));
     if (bloomComposite.isValid()) {
         context.graphResources.textures.bloomComposite = bloomComposite;
     }

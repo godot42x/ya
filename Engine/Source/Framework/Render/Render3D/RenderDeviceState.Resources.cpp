@@ -248,6 +248,9 @@ void RenderDeviceState::initCommandResources()
     if (!_submissions.init(_render)) {
         YA_CORE_ERROR("RenderDeviceState failed to initialize the submission pool");
     }
+    if (_render && _render->getResourceFactory()) {
+        _viewTargets.init(*_render->getResourceFactory());
+    }
     _deleter.push("RenderSubmissionPool", [this](void*)
                   { _submissions.destroy(); });
 
@@ -288,6 +291,7 @@ void RenderDeviceState::shutdown(bool bRenderAlreadyIdle)
     }
 
     _submissions.clear();
+    _viewTargets.clear();
     _viewOutputs.clear();
     _pipelineCoordinator.shutdown();
     // Owned derived-processing systems must release their GPU resources

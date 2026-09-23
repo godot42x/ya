@@ -11,7 +11,8 @@
 #include "Render3D/Common/PostProcessingStateConfig.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/ViewPassResources.h"
-#include "Render3D/Common/ViewPersistentResourceKey.h"
+#include "Render3D/Common/ViewTargetStore.h"
+#include "Render3D/Common/ViewGraphName.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Pipelines/BloomPostprocessing.h"
 #include "Graph/RenderGraph.h"
@@ -179,6 +180,35 @@ void ForwardRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& catal
         .extent              = _shadowResources.extent,
         .frameBufferCount    = 1,
     });
+}
+
+void ForwardRenderPipeline::appendTargetRequests(
+    const SceneRenderPlan& plan,
+    std::vector<ViewTargetRequest>& out) const
+{
+    const auto post = resolvePostProcessSettings();
+    for (const SceneViewTask& task : plan.viewTasks) {
+        if (task.desc.viewId == 0 || !task.output.hasExtent()) {
+            continue;
+        }
+        ViewTargetRequest request{
+            .viewId   = task.desc.viewId,
+            .pipeline = ERenderPipelineKind::Forward,
+            .extent   = task.output.extent,
+            .attachments = {
+                {EViewAttachment::SceneColor, _viewFormats.colorFormats.front(), _viewRTSpec.attachments.colorAttach.front().usage},
+                {EViewAttachment::SceneDepth, _viewFormats.depthFormat.value_or(EFormat::Undefined), _viewRTSpec.attachments.depthAttach->usage, ESampleCount::Sample_1, true},
+                {EViewAttachment::DisplayColor, POSTPROCESS_COLOR_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc},
+                {EViewAttachment::EntityId, EFormat::R32_UINT, EImageUsage::ColorAttachment | EImageUsage::TransferSrc},
+            },
+        };
+        if (isGradingEnabled() && post.bEnableBloom) {
+            request.attachments.push_back({EViewAttachment::BloomExtract, BloomPostprocessing::BLOOM_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled});
+            request.attachments.push_back({EViewAttachment::BloomBlur, BloomPostprocessing::BLOOM_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled});
+            request.attachments.push_back({EViewAttachment::BloomComposite, BloomPostprocessing::BLOOM_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled});
+        }
+        out.push_back(std::move(request));
+    }
 }
 
 void ForwardRenderPipeline::rebuildShadowViews()
@@ -366,6 +396,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         std::unique_ptr<ForwardViewStage::PassContext> viewPassContext;
         ForwardFrameResourceSet::Binding frameBinding{};
         ForwardFrameResourceSet::ViewResources* viewResources = nullptr;
+        ViewTargetLease targets{};
     };
 
     RenderGraph graph;
@@ -391,6 +422,14 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
             .derivedScene            = recording.task ? recording.task->desc.scene : nullptr,
         };
         if (shouldSkipView(branch.frame)) {
+            continue;
+        }
+        branch.targets = ctx.targets && recording.task
+            ? ctx.targets->lease(recording.task->desc.viewId)
+            : ViewTargetLease{};
+        if (!branch.targets || !ctx.submission->retain(branch.targets.allocation)) {
+            YA_CORE_ERROR("Forward View {} has no prepared target lease",
+                          recording.task ? recording.task->desc.viewId : 0);
             continue;
         }
 
@@ -467,6 +506,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
                 *live.viewPassContext,
                 live.frameBinding,
                 live.viewResources,
+                live.targets,
                 familyPredecessor)) {
             liveBranches.pop_back();
             continue;
@@ -490,8 +530,11 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
 
     for (const ForwardFamilyViewBranch& branch : liveBranches) {
         const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
-        result.views.push_back(collectViewOutput(
-            execution, branch.frame.view.task, viewId, branch.stageCtx.viewExtent));
+        auto output = collectViewOutput(
+            execution, branch.frame.view.task, viewId, branch.stageCtx.viewExtent);
+        output.targets = branch.targets.allocation;
+        output.allocationGeneration = branch.targets.allocation ? branch.targets.allocation->generation : 0;
+        result.views.push_back(std::move(output));
     }
     return result;
 }
@@ -816,6 +859,7 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
                                                     ForwardViewStage::PassContext& viewPassContext,
                                                     const ForwardFrameResourceSet::Binding& frameBinding,
                                                     ForwardFrameResourceSet::ViewResources* viewResources,
+                                                    const ViewTargetLease& targets,
                                                     std::optional<RGPassHandle> familyPredecessor)
 {
     YA_CORE_ASSERT(_graphExecutor != nullptr, "ForwardRenderPipeline graph executor is not initialized");
@@ -854,6 +898,7 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
             .viewId                   = frame.view.task ? frame.view.task->desc.viewId : 0,
             .viewResources            = viewResources,
+            .targets                  = &targets,
             .familyPredecessor        = familyPredecessor,
         });
     return true;

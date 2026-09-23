@@ -21,6 +21,7 @@ namespace ya
 
 struct ShadowStage;
 struct PostProcessingStage;
+struct ViewTargetLease;
 
 struct DeferredFrameGraphPassContext
 {
@@ -32,6 +33,7 @@ struct DeferredFrameGraphPassContext
     const RenderTargetCreateInfo&            viewRTSpec;
     const ViewOverlayStage::FrameInputs* overlayInputs = nullptr;
     const DeferredFrameResourceSet::ViewResources* viewResources = nullptr;
+    const ViewTargetLease*                  targets = nullptr;
     const EnvironmentLightingSceneResources*  environmentLighting = nullptr;
     DescriptorSetHandle                      environmentLightingDS{};
     FrameContext*                            postContext = nullptr;

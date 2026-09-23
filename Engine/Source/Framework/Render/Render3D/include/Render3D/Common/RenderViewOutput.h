@@ -10,6 +10,7 @@
 
 namespace ya
 {
+struct ViewTargetAllocation;
 
 /// Offscreen identity of one View. Not an OS window, swapchain, or a global
 /// viewport-state slot. Extent/format belong to this View; another View
@@ -36,6 +37,8 @@ struct RenderViewOutput
     std::shared_ptr<RenderTexture> bloomComposite;
     std::shared_ptr<RenderTexture> ssao;
     std::array<std::shared_ptr<RenderTexture>, 4> gBufferColors{};
+    std::shared_ptr<ViewTargetAllocation> targets;
+    uint64_t allocationGeneration = 0;
 
     [[nodiscard]] std::shared_ptr<RenderTexture> displayImage() const
     {

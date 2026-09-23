@@ -14,7 +14,8 @@
 #include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/ViewPassResources.h"
-#include "Render3D/Common/ViewPersistentResourceKey.h"
+#include "Render3D/Common/ViewTargetStore.h"
+#include "Render3D/Common/ViewGraphName.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Pipelines/BloomPostprocessing.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
@@ -576,6 +577,43 @@ void DeferredRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& cata
     });
 }
 
+void DeferredRenderPipeline::appendTargetRequests(
+    const SceneRenderPlan& plan,
+    std::vector<ViewTargetRequest>& out) const
+{
+    const RenderPipelineSettings settings = resolveSettings();
+    const auto gBufferFormats = buildGBufferSnapshotFormats();
+    for (const SceneViewTask& task : plan.viewTasks) {
+        if (task.desc.viewId == 0 || !task.output.hasExtent()) {
+            continue;
+        }
+        ViewTargetRequest request{
+            .viewId   = task.desc.viewId,
+            .pipeline = ERenderPipelineKind::Deferred,
+            .extent   = task.output.extent,
+            .attachments = {
+                {EViewAttachment::SceneColor, _viewColorFormat, _viewRTSpec.attachments.colorAttach.front().usage},
+                {EViewAttachment::SceneDepth, _sharedDepthFormat, _gBufferRTSpec.attachments.depthAttach->usage, ESampleCount::Sample_1, true},
+                {EViewAttachment::DisplayColor, POSTPROCESS_COLOR_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc},
+                {EViewAttachment::EntityId, EFormat::R32_UINT, EImageUsage::ColorAttachment | EImageUsage::TransferSrc},
+                {EViewAttachment::GBuffer0, gBufferFormats.colorFormats[0], _gBufferRTSpec.attachments.colorAttach[0].usage},
+                {EViewAttachment::GBuffer1, gBufferFormats.colorFormats[1], _gBufferRTSpec.attachments.colorAttach[1].usage},
+                {EViewAttachment::GBuffer2, gBufferFormats.colorFormats[2], _gBufferRTSpec.attachments.colorAttach[2].usage},
+                {EViewAttachment::GBuffer3, gBufferFormats.colorFormats[3], _gBufferRTSpec.attachments.colorAttach[3].usage},
+            },
+        };
+        if (settings.bSSAOEnabled) {
+            request.attachments.push_back({EViewAttachment::SSAO, SSAOStage::AO_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled});
+        }
+        if (isGradingEnabled() && settings.postProcessing.bEnableBloom) {
+            request.attachments.push_back({EViewAttachment::BloomExtract, BloomPostprocessing::BLOOM_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled});
+            request.attachments.push_back({EViewAttachment::BloomBlur, BloomPostprocessing::BLOOM_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled});
+            request.attachments.push_back({EViewAttachment::BloomComposite, BloomPostprocessing::BLOOM_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled});
+        }
+        out.push_back(std::move(request));
+    }
+}
+
 void DeferredRenderPipeline::setDeferredSharedDepthFormat(EFormat::T format)
 {
     bool bDepthFormatChanged = false;
@@ -875,6 +913,7 @@ struct DeferredFamilyViewBranch
     DescriptorSetHandle                   environmentLightingDS{};
     FrameContext                          postContext{};
     DeferredFrameGraphResources           graphResources{};
+    ViewTargetLease                       targets{};
 };
 
 } // namespace
@@ -918,6 +957,14 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
         if (shouldSkipView(branch.frame)) {
             continue;
         }
+        branch.targets = ctx.targets && recording.task
+            ? ctx.targets->lease(recording.task->desc.viewId)
+            : ViewTargetLease{};
+        if (!branch.targets || !ctx.submission->retain(branch.targets.allocation)) {
+            YA_CORE_ERROR("Deferred View {} has no prepared target lease",
+                          recording.task ? recording.task->desc.viewId : 0);
+            continue;
+        }
 
         beginViewRecording(branch.frame, branch.stageCtx, branch.vpW, branch.vpH);
         syncFrameSettings(branch.frame);
@@ -948,6 +995,7 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
                 live.environmentLightingDS,
                 live.postContext,
                 live.graphResources,
+                live.targets,
                 familyPredecessor)) {
             liveBranches.pop_back();
             continue;
@@ -982,8 +1030,11 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
 
     for (const DeferredFamilyViewBranch& branch : liveBranches) {
         const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
-        result.views.push_back(collectViewOutput(
-            execution, branch.graphResources, branch.frame.view.task, viewId));
+        auto output = collectViewOutput(
+            execution, branch.graphResources, branch.frame.view.task, viewId);
+        output.targets = branch.targets.allocation;
+        output.allocationGeneration = branch.targets.allocation ? branch.targets.allocation->generation : 0;
+        result.views.push_back(std::move(output));
     }
 
     if (!_graphExecutor->executeCompiled(graph, compiled, *ctx.cmdBuf)) {
@@ -1294,9 +1345,10 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
                                                        ViewOverlayStage::FrameInputs& overlayInputs,
                                                        EnvironmentLightingSceneResources& environmentLighting,
                                                        DescriptorSetHandle environmentLightingDS,
-                                                       FrameContext& postContext,
-                                                       DeferredFrameGraphResources& graphResources,
-                                                       std::optional<RGPassHandle> familyPredecessor)
+                                                 FrameContext& postContext,
+                                                 DeferredFrameGraphResources& graphResources,
+                                                 const ViewTargetLease& targets,
+                                                 std::optional<RGPassHandle> familyPredecessor)
 {
     YA_CORE_ASSERT(_frameResources != nullptr, "Deferred pipeline frame resources are not initialized");
     if (!frame.submission || !frame.submission->isRecording()) {
@@ -1391,7 +1443,8 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
             .bReverseViewportY        = _bReverseViewportY,
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
             .viewId                   = frame.view.task ? frame.view.task->desc.viewId : 0,
-            .viewResources            = viewResources,
+        .viewResources            = viewResources,
+        .targets                  = &targets,
             .familyPredecessor        = familyPredecessor,
         });
     return true;

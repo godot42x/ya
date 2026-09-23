@@ -3,7 +3,7 @@
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Profiling/Profiling.h"
 #include "Render3D/Common/Shadow/ShadowStage.h"
-#include "Render3D/Common/ViewPersistentResourceKey.h"
+#include "Render3D/Common/ViewGraphName.h"
 
 namespace ya
 {
@@ -47,6 +47,7 @@ void DeferredFrameGraphOrchestrator::build(
         .viewRTSpec           = *inputs.viewRTSpec,
         .overlayInputs            = inputs.overlayInputs,
         .viewResources            = inputs.viewResources,
+        .targets                  = inputs.targets,
         .environmentLighting      = inputs.environmentLighting,
         .environmentLightingDS    = inputs.environmentLightingDS,
         .postContext              = inputs.postContext,

@@ -1,4 +1,5 @@
 #include "Render3D/Pipelines/BloomPostprocessing.h"
+#include "Render3D/Common/ViewGraphName.h"
 
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/DescriptorSet.h"
@@ -6,7 +7,6 @@
 #include "Graph/RenderGraphImportUtils.h"
 #include "RHI/Render.h"
 #include "RHI/Backend/TextureLibrary.h"
-#include "Render3D/Common/ViewPersistentResourceKey.h"
 
 #include <algorithm>
 #include <optional>
@@ -219,15 +219,36 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
         .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     };
-    const auto output = createViewPersistentTexture(graph, bloomDesc, "Bloom.CompositeOutput", desc.viewId);
+    const auto output = desc.compositeHandle.isValid()
+        ? desc.compositeHandle
+        : graph.createTexture(bloomDesc);
     std::optional<RGTextureHandle> bloomExtract{};
     std::optional<RGTextureHandle> blurPing{};
     std::optional<RGTextureHandle> blurPong{};
 
     if (bBloomEnabled) {
-        bloomExtract = createViewPersistentTexture(graph, bloomDesc, "Bloom.Extract", desc.viewId);
-        blurPing     = createViewPersistentTexture(graph, bloomDesc, "Bloom.BlurPing", desc.viewId);
-        blurPong     = createViewPersistentTexture(graph, bloomDesc, "Bloom.BlurPong", desc.viewId);
+        bloomExtract = desc.extractHandle.isValid()
+            ? desc.extractHandle
+            : graph.createTexture(RGTextureDesc{
+                  .label  = "Bloom.Extract",
+                  .format = BloomPostprocessing::BLOOM_FORMAT,
+                  .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
+                  .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+              });
+        blurPing     = graph.createTexture(RGTextureDesc{
+            .label  = "Bloom.BlurScratch",
+            .format = BloomPostprocessing::BLOOM_FORMAT,
+            .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        });
+        blurPong     = desc.blurHandle.isValid()
+            ? desc.blurHandle
+            : graph.createTexture(RGTextureDesc{
+                  .label  = "Bloom.BlurOutput",
+                  .format = BloomPostprocessing::BLOOM_FORMAT,
+                  .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
+                  .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+              });
     }
 
     graph.exportTexture(output, makeViewGraphName(kOutputExportName, desc.viewId));

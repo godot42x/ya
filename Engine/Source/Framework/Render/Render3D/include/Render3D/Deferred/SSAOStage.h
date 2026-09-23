@@ -62,7 +62,8 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
 
     RGTextureHandle appendGraphPass(RenderGraph& graph,
                                     const RenderStageContext& ctx,
-                                    const DeferredSSAOPassParams& params);
+                                    const DeferredSSAOPassParams& params,
+                                    RGTextureHandle output);
     [[nodiscard]] float getRadius() const { return _radius; }
     [[nodiscard]] float getBias() const { return _bias; }
     [[nodiscard]] float getPower() const { return _power; }

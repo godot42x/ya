@@ -63,7 +63,10 @@ struct PostProcessingStage
                                            Extent2D        inputExtent,
                                            FrameContext*   ctx,
                                            uint64_t        viewId = 0,
-                                           const BloomPassBindings& bloom = {});
+                                           const BloomPassBindings& bloom = {},
+                                           RGTextureHandle bloomExtract = {},
+                                           RGTextureHandle bloomBlur = {},
+                                           RGTextureHandle bloomComposite = {});
     RGTextureHandle appendFinalizeGraphPasses(RenderGraph& graph, const FinalizePassParams& params);
     RGTextureHandle appendGraphPasses(RenderGraph& graph,
                                       Texture*      inputTexture,

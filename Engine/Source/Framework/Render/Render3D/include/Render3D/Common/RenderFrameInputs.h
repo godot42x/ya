@@ -17,6 +17,7 @@ struct ICommandBuffer;
 struct IRenderSurfaceContext;
 struct RenderFrameData;
 class RenderSubmission;
+class ViewTargetStore;
 struct Scene;
 struct UIFrameSnapshot;
 
@@ -140,6 +141,7 @@ struct ViewFamilyRecordContext
     RenderSubmission*                                    submission = nullptr;
     const SceneRenderPlan*                               plan       = nullptr;
     const SceneViewFamilyPlan*                           family     = nullptr;
+    const ViewTargetStore*                               targets    = nullptr;
     /// The family's views, each carrying its own task and therefore its own
     /// Scene; a family exists only for one (Scene, revision, policy).
     std::vector<SceneViewRecording>                      views;

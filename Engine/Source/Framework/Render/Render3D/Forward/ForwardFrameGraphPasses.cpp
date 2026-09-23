@@ -3,8 +3,9 @@
 #include "RHI/Core/RenderTargetCreateInfo.h"
 #include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/PostProcessingStage.h"
+#include "Render3D/Common/ViewGraphName.h"
 #include "Render3D/Common/ViewPassResources.h"
-#include "Render3D/Common/ViewPersistentResourceKey.h"
+#include "Render3D/Common/ViewTargetStore.h"
 
 #include <string>
 #include <string_view>
@@ -63,23 +64,6 @@ struct ViewPassParams
     TransparentPassParams transparent{};
     EntityIdPassParams    entityId{};
 };
-
-RGTextureDesc makeViewTextureDesc(const AttachmentDescription& attachment,
-                                      Extent2D                    extent,
-                                      uint32_t                    layerCount,
-                                      std::string                  label)
-{
-    return RGTextureDesc{
-        .label       = std::move(label),
-        .format      = attachment.format,
-        .extent      = Extent3D{extent.width, extent.height, 1},
-        .mipLevels   = 1,
-        .arrayLayers = layerCount,
-        .samples     = attachment.samples,
-        .usage       = attachment.usage,
-        .flags       = attachment.imageCreateFlags,
-    };
-}
 
 AttachmentDescription makeEntityIdAttachmentDesc()
 {
@@ -307,31 +291,31 @@ void appendEntityIdPass(RenderGraph& graph,
 ViewGraphResources createViewResources(RenderGraph&                   graph,
                                                const RenderTargetCreateInfo& viewRTSpec,
                                                std::optional<RGTextureHandle> shadowDepth,
-                                               uint64_t                       viewId)
+                                               uint64_t                       viewId,
+                                               const ViewTargetLease&         targets)
 {
     const auto colorAttachment = viewRTSpec.attachments.colorAttach[0];
     const auto depthAttachment = *viewRTSpec.attachments.depthAttach;
-    const uint32_t layerCount = viewRTSpec.layerCount;
-    const auto createKeyed = [&](const AttachmentDescription& attachment, std::string_view base) {
-        return createViewPersistentTexture(
-            graph,
-            makeViewTextureDesc(attachment, viewRTSpec.extent, layerCount, std::string(base)),
-            base,
-            viewId);
+    const auto importTarget = [&](EViewAttachment role, std::string_view label, EImageLayout::T finalLayout, EImageUsage::T usage) {
+        auto target = targets.find(role);
+        YA_CORE_ASSERT(target != nullptr, "Forward View target is missing role {}", static_cast<uint32_t>(role));
+        return graph.importTexture(makeImportedTextureDesc(*target, label, finalLayout, usage));
     };
-    const auto color = createKeyed(colorAttachment, "ForwardView.Color");
-    const RGTextureHandle resolve = viewRTSpec.attachments.resolveAttach.has_value()
-        ? createKeyed(*viewRTSpec.attachments.resolveAttach, "ForwardView.Resolve")
-        : RGTextureHandle{};
-    const auto depth = createKeyed(depthAttachment, "ForwardView.Depth");
+    const auto color = importTarget(EViewAttachment::SceneColor, "ForwardView.Color", EImageLayout::ShaderReadOnlyOptimal, colorAttachment.usage);
+    const RGTextureHandle resolve{};
+    const auto depth = importTarget(EViewAttachment::SceneDepth, "ForwardView.Depth", EImageLayout::DepthStencilAttachmentOptimal, depthAttachment.usage);
     const auto entityIdAttachment = makeEntityIdAttachmentDesc();
-    const auto entityId = createKeyed(entityIdAttachment, "ForwardView.EntityId");
+    const auto entityId = importTarget(EViewAttachment::EntityId, "ForwardView.EntityId", EImageLayout::ColorAttachmentOptimal, entityIdAttachment.usage);
 
     return ViewGraphResources{
         .color            = color,
         .resolve          = resolve,
         .depth            = depth,
         .entityId         = entityId,
+        .display          = importTarget(EViewAttachment::DisplayColor, "ForwardView.Display", EImageLayout::ShaderReadOnlyOptimal, EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc),
+        .bloomExtract     = targets.find(EViewAttachment::BloomExtract) ? importTarget(EViewAttachment::BloomExtract, "ForwardView.BloomExtract", EImageLayout::ShaderReadOnlyOptimal, EImageUsage::ColorAttachment | EImageUsage::Sampled) : RGTextureHandle{},
+        .bloomBlur        = targets.find(EViewAttachment::BloomBlur) ? importTarget(EViewAttachment::BloomBlur, "ForwardView.BloomBlur", EImageLayout::ShaderReadOnlyOptimal, EImageUsage::ColorAttachment | EImageUsage::Sampled) : RGTextureHandle{},
+        .bloomComposite   = targets.find(EViewAttachment::BloomComposite) ? importTarget(EViewAttachment::BloomComposite, "ForwardView.BloomComposite", EImageLayout::ShaderReadOnlyOptimal, EImageUsage::ColorAttachment | EImageUsage::Sampled) : RGTextureHandle{},
         .shadowDepth      = shadowDepth,
         .viewExtent   = viewRTSpec.extent,
         .colorAttachment  = colorAttachment,
@@ -365,12 +349,16 @@ void appendPostprocessPasses(RenderGraph&                  graph,
         resources.viewExtent,
         inputs.postContext,
         inputs.viewId,
-        inputs.viewResources ? inputs.viewResources->post.bloom : BloomPassBindings{});
+        inputs.viewResources ? inputs.viewResources->post.bloom : BloomPassBindings{},
+        resources.bloomExtract,
+        resources.bloomBlur,
+        resources.bloomComposite);
     const auto finalizeInput = bloomComposite.isValid() ? bloomComposite : postprocessInput;
     [[maybe_unused]] const auto postprocessOutput = deps.postProcessStage->appendFinalizeGraphPasses(
         graph,
         PostProcessingStage::FinalizePassParams{
             .input         = finalizeInput,
+            .output        = resources.display,
             .inputExtent   = resources.viewExtent,
             .bOutputIsSRGB = inputs.bPostprocessOutputIsSRGB,
             .postContext   = inputs.postContext,

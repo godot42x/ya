@@ -63,6 +63,7 @@ void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan)
             .submission = live,
             .plan       = &plan.sceneRender.plan(),
             .family     = family,
+            .targets    = &_viewTargets,
             .views      = std::move(views),
         };
         publishFamilyResult(plan.frame.flightIndex, pipeline->recordFamily(ctx));
@@ -90,6 +91,13 @@ void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan)
     // geometry is not pushed here -- it is that View's own declaration and its
     // resources are keyed by it. See PipelineCoordinator::applyPendingChanges.
     _pipelineCoordinator.applyPendingChanges();
+    if (IRenderPipeline* pipeline = getActivePipeline()) {
+        std::vector<ViewTargetRequest> requests;
+        pipeline->appendTargetRequests(plan.sceneRender.plan(), requests);
+        if (!_viewTargets.prepare(requests)) {
+            YA_CORE_ERROR("Failed to prepare View targets before recording");
+        }
+    }
     // Prepares the runtime UI-compose pass from the pipeline's own postprocess
     // format. There used to be a second, conditional call right below that read
     // the *previous* frame's published display image to learn the same format --
@@ -163,38 +171,6 @@ void RenderDeviceState::publishFamilyResult(uint32_t flightIndex, ViewFamilyRend
         }
         if (!_viewOutputs.publish(flightIndex, std::move(output))) {
             YA_CORE_ERROR("Failed to publish view output for view {}", viewId);
-        }
-    }
-}
-
-void RenderDeviceState::retainPublishedViewOutputs(uint32_t flightIndex, ICommandBuffer* cmdBuf)
-{
-    auto retain = [&](auto resource) {
-        if (!resource) {
-            return;
-        }
-        if (RenderSubmission* submission = _submissions.get(flightIndex)) {
-            submission->retain(resource);
-        }
-        cmdBuf->retireResource(resource);
-    };
-
-    const uint32_t liveCount = _viewOutputs.liveViewCount(flightIndex);
-    for (uint32_t slot = 0; slot < liveCount; ++slot) {
-        const RenderViewOutput* output = _viewOutputs.get(flightIndex, slot);
-        if (!output) {
-            continue;
-        }
-        retain(output->displayImage());
-        retain(output->color);
-        retain(output->depth);
-        retain(output->entityId);
-        retain(output->ssao);
-        retain(output->bloomExtract);
-        retain(output->bloomBlur);
-        retain(output->bloomComposite);
-        for (const auto& gBufferColor : output->gBufferColors) {
-            retain(gBufferColor);
         }
     }
 }

@@ -41,6 +41,9 @@ struct BloomPostprocessing
         const PostProcessingState* state             = nullptr;
         uint64_t                   viewId            = 0;
         BloomPassBindings          bloom{};
+        RGTextureHandle            extractHandle{};
+        RGTextureHandle            blurHandle{};
+        RGTextureHandle            compositeHandle{};
     };
 
     IRender* _render = nullptr;

@@ -26,6 +26,7 @@ struct RenderFrameData;
 /// that reads its passes includes `Graph/RenderGraph.h` itself, and every caller
 /// that only forwards the reference does not need the graph at all.
 struct RGTopologyDescription;
+struct ViewTargetRequest;
 
 struct IRenderPipelineExecution
 {
@@ -38,6 +39,9 @@ struct IRenderPipelineExecution
     /// Compile and record one Scene family graph; return each View's output.
     /// Product recording does not use tick/beginTick/getCurrent.
     virtual ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) = 0;
+    virtual void appendTargetRequests(
+        const SceneRenderPlan& plan,
+        std::vector<ViewTargetRequest>& out) const = 0;
 
     [[nodiscard]] virtual EFormat::T getViewColorFormat() const     = 0;
     [[nodiscard]] virtual EFormat::T getViewDepthFormat() const     = 0;

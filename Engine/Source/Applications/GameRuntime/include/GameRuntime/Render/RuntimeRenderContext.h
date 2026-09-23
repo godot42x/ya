@@ -25,9 +25,8 @@ struct RenderDeviceState;
 ///
 ///   present target  → this frame's present target exists before any command is
 ///                     recorded; building one is a safe-point action
-///   prepare         → derived scene state, pending mutations, eviction of the
-///                     Views this tick stops declaring, compose pipelines, each
-///                     View's Scene-keyed bindings
+///   prepare         → derived scene state, pending mutations, View target
+///                     allocation, compose pipelines and Scene-keyed bindings
 ///   begin           → the flight's submission and view-output table open, and
 ///                     its command buffer begins
 ///   graphics        → the world graph into the display root's offscreen RT
@@ -36,7 +35,6 @@ struct RenderDeviceState;
 ///   view compose    → the host's view-compose stage
 ///   display compose → the surface's pass onto swapchain[imageIndex], running
 ///                     the host's display stages and its capture inside it
-///   retain          → keep every View published this flight alive to its fence
 ///   end + seal      → close the command buffer and seal the submission
 ///
 /// Acquire and present stay with the host's present coordinator: this records

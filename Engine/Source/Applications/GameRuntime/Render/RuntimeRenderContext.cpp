@@ -140,7 +140,6 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan)
             cmdBuf.get());
     }
 
-    _device->retainPublishedViewOutputs(flightIndex, cmdBuf.get());
     _device->endFrameCommandBuffer(cmdBuf.get());
     return _device->sealFrame(flightIndex, cmdBuf.get());
 }

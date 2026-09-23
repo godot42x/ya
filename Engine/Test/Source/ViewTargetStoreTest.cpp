@@ -1,0 +1,136 @@
+#include "Render3D/Common/ViewTargetStore.h"
+
+#include "RHI/Core/RenderResourceFactory.h"
+
+#include <gtest/gtest.h>
+
+#include <array>
+
+namespace ya
+{
+namespace
+{
+
+class StoreTestImage final : public IImage
+{
+    ImageCreateInfo _desc;
+
+  public:
+    explicit StoreTestImage(ImageCreateInfo desc) : _desc(std::move(desc)) {}
+    ImageHandle getHandle() const override { return ImageHandle{reinterpret_cast<void*>(1)}; }
+    uint32_t getWidth() const override { return _desc.extent.width; }
+    uint32_t getHeight() const override { return _desc.extent.height; }
+    EFormat::T getFormat() const override { return _desc.format; }
+    uint32_t getMipLevels() const override { return _desc.mipLevels; }
+    uint32_t getArrayLayers() const override { return _desc.arrayLayers; }
+    EImageUsage::T getUsage() const override { return _desc.usage; }
+    EImageLayout::T getCompatibilityLayout() const override { return _desc.initialLayout; }
+    void setDebugName(const std::string& name) override { _desc.label = name; }
+};
+
+class StoreTestImageView final : public IImageView
+{
+  public:
+    StoreTestImageView(IImage* image, const ImageViewCreateInfo& desc)
+    {
+        _image = image;
+        _subresourceRange = {
+            .aspectMask = desc.aspectFlags,
+            .baseMipLevel = desc.baseMipLevel,
+            .levelCount = desc.levelCount,
+            .baseArrayLayer = desc.baseArrayLayer,
+            .layerCount = desc.layerCount,
+        };
+    }
+    ImageViewHandle getHandle() const override { return ImageViewHandle{reinterpret_cast<void*>(2)}; }
+    EFormat::T getFormat() const override { return _image ? _image->getFormat() : EFormat::Undefined; }
+    void setDebugName(const std::string&) override {}
+};
+
+class StoreTestFactory final : public IRenderResourceFactory
+{
+  public:
+    uint32_t imageCreates = 0;
+
+    std::shared_ptr<IBuffer> createBuffer(const BufferCreateInfo&) override { return nullptr; }
+    std::shared_ptr<Sampler> createSampler(const SamplerDesc&) override { return nullptr; }
+    std::shared_ptr<IImage> createImage(const ImageCreateInfo& desc) override
+    {
+        ++imageCreates;
+        return std::make_shared<StoreTestImage>(desc);
+    }
+    std::shared_ptr<IImage> importImage(const ImportedImageDesc&) override { return nullptr; }
+    std::shared_ptr<IImageView> createImageView(
+        std::shared_ptr<IImage> image,
+        const ImageViewCreateInfo& desc) override
+    {
+        return std::make_shared<StoreTestImageView>(image.get(), desc);
+    }
+};
+
+ViewTargetRequest request(SceneViewId viewId, Extent2D extent)
+{
+    return ViewTargetRequest{
+        .viewId = viewId,
+        .pipeline = ERenderPipelineKind::Forward,
+        .extent = extent,
+        .attachments = {
+            {EViewAttachment::SceneColor, EFormat::R16G16B16A16_SFLOAT, EImageUsage::ColorAttachment | EImageUsage::Sampled},
+            {EViewAttachment::SceneDepth, EFormat::D32_SFLOAT, EImageUsage::DepthStencilAttachment | EImageUsage::Sampled, ESampleCount::Sample_1, true},
+        },
+    };
+}
+
+} // namespace
+
+TEST(ViewTargetStoreTest, ExactRequestReusesAllocationAndResizeReplacesOnce)
+{
+    StoreTestFactory factory;
+    ViewTargetStore store;
+    store.init(factory);
+
+    auto initial = request(11, {.width = 1280, .height = 720});
+    ASSERT_TRUE(store.prepare(std::span<const ViewTargetRequest>(&initial, 1)));
+    const ViewTargetLease first = store.lease(11);
+    ASSERT_TRUE(first);
+    EXPECT_EQ(factory.imageCreates, 2u);
+
+    ASSERT_TRUE(store.prepare(std::span<const ViewTargetRequest>(&initial, 1)));
+    const ViewTargetLease reused = store.lease(11);
+    EXPECT_EQ(reused.allocation, first.allocation);
+    EXPECT_EQ(reused.allocation->generation, first.allocation->generation);
+    EXPECT_EQ(factory.imageCreates, 2u);
+
+    auto resized = request(11, {.width = 640, .height = 480});
+    ASSERT_TRUE(store.prepare(std::span<const ViewTargetRequest>(&resized, 1)));
+    const ViewTargetLease replacement = store.lease(11);
+    ASSERT_TRUE(replacement);
+    EXPECT_NE(replacement.allocation, first.allocation);
+    EXPECT_GT(replacement.allocation->generation, first.allocation->generation);
+    EXPECT_EQ(factory.imageCreates, 4u);
+    EXPECT_EQ(first.find(EViewAttachment::SceneColor)->getExtent().width, 1280u);
+    EXPECT_EQ(replacement.find(EViewAttachment::SceneColor)->getExtent().width, 640u);
+}
+
+TEST(ViewTargetStoreTest, DifferentViewsOwnIndependentAllocations)
+{
+    StoreTestFactory factory;
+    ViewTargetStore store;
+    store.init(factory);
+
+    std::array requests{
+        request(11, {.width = 1280, .height = 720}),
+        request(12, {.width = 256, .height = 256}),
+    };
+    ASSERT_TRUE(store.prepare(requests));
+
+    const auto world = store.lease(11);
+    const auto preview = store.lease(12);
+    ASSERT_TRUE(world);
+    ASSERT_TRUE(preview);
+    EXPECT_NE(world.allocation, preview.allocation);
+    EXPECT_NE(world.find(EViewAttachment::SceneColor), preview.find(EViewAttachment::SceneColor));
+    EXPECT_EQ(store.residentAllocationCount(), 2u);
+}
+
+} // namespace ya

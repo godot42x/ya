@@ -12,6 +12,7 @@
 #include "Render3D/Common/RecordedFrame.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewOutput.h"
+#include "Render3D/Common/ViewTargetStore.h"
 #include "Render3D/Common/PostProcessingState.h"
 #include "Render3D/Common/HostClockState.h"
 #include "Render3D/Services/EnvironmentLightingResultProvider.h"
@@ -98,6 +99,7 @@ struct YA_RENDER_3D_API RenderDeviceState
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
     RenderSubmissionPool                         _submissions;
     RenderViewOutputTable                        _viewOutputs;
+    ViewTargetStore                              _viewTargets;
     std::shared_ptr<ShaderStorage>               _shaderStorage = nullptr;
 
     ERenderAPI::T  currentRenderAPI      = ERenderAPI::None;
@@ -264,9 +266,6 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// Hands each family of the plan to the active strategy, which records it
     /// into the flight's live submission and publishes its Views' outputs.
     void recordViewFamilies(const RenderFramePlan& plan);
-    /// Keep every View published this flight alive until the fence that owns it
-    /// has passed.
-    void retainPublishedViewOutputs(uint32_t flightIndex, ICommandBuffer* cmdBuf);
     /// Close the flight's command buffer and publish the frame's GPU timing.
     void endFrameCommandBuffer(ICommandBuffer* cmdBuf);
     /// Seal the flight's submission and report the recording's identity: the

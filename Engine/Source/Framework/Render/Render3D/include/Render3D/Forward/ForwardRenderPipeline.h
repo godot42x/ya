@@ -89,6 +89,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
 
     void init(const InitDesc& desc);
     ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
+    void appendTargetRequests(const SceneRenderPlan& plan, std::vector<ViewTargetRequest>& out) const override;
     void shutdown();
 
     bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner,
@@ -158,6 +159,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
                                                ForwardViewStage::PassContext& viewPassContext,
                                                const ForwardFrameResourceSet::Binding& frameBinding,
                                                ForwardFrameResourceSet::ViewResources* viewResources,
+                                               const ViewTargetLease& targets,
                                                std::optional<RGPassHandle> familyPredecessor);
     [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
                                                      const SceneViewTask* task,

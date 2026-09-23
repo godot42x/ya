@@ -1,8 +1,8 @@
 #include "Render3D/Common/PostProcessingStage.h"
 
 #include "Graph/RenderGraphImportUtils.h"
+#include "Render3D/Common/ViewGraphName.h"
 #include "RHI/Core/Swapchain.h"
-#include "Render3D/Common/ViewPersistentResourceKey.h"
 #include <algorithm>
 
 namespace ya
@@ -164,7 +164,10 @@ RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph
                                                             Extent2D        inputExtent,
                                                             FrameContext*   ctx,
                                                             uint64_t        viewId,
-                                                            const BloomPassBindings& bloom)
+                                                            const BloomPassBindings& bloom,
+                                                            RGTextureHandle bloomExtract,
+                                                            RGTextureHandle bloomBlur,
+                                                            RGTextureHandle bloomComposite)
 {
     (void)ctx;
     clearPreparedResources();
@@ -182,6 +185,9 @@ RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph
             .state        = &_state,
             .viewId       = viewId,
             .bloom        = bloom,
+            .extractHandle   = bloomExtract,
+            .blurHandle      = bloomBlur,
+            .compositeHandle = bloomComposite,
         });
     }
 
@@ -199,17 +205,13 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& grap
     const PostProcessingState grading = bGradingEnabled ? _state : _state.withoutGrading();
 
     const auto output = params.output.isValid()
-                            ? params.output
-                            : createViewPersistentTexture(
-                                  graph,
-                                  RGTextureDesc{
-                                      .label  = "Postprocessing.Output",
-                                      .format = _colorFormat,
-                                      .extent = Extent3D{params.inputExtent.width, params.inputExtent.height, 1},
-                                      .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
-                                  },
-                                  "Postprocessing.Output",
-                                  params.viewId);
+        ? params.output
+        : graph.createTexture(RGTextureDesc{
+              .label  = "Postprocessing.Output",
+              .format = _colorFormat,
+              .extent = Extent3D{params.inputExtent.width, params.inputExtent.height, 1},
+              .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
+          });
     [[maybe_unused]] const auto pass = graph.addPass(
         makeViewGraphName("Postprocessing", params.viewId),
         [input = params.input, output, inputExtent = params.inputExtent](RGPassBuilder& pass) {
