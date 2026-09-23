@@ -124,17 +124,19 @@ TEST_F(ScriptApiLibraryFixture, SingleArgCommandMapsPositionally)
 
 TEST_F(ScriptApiLibraryFixture, GameUIWidgetLifecycleThroughRegistry)
 {
+    // engine.panel is a canvas LAYOUT host with no `_color`; the widget that
+    // owns reflected fill fields is engine.border.
     const auto result = _system.evalJS(R"(
         const types = ya.ui.types();
-        const w = ya.ui.create({type: "engine.panel", name: "HUD"});
+        const w = ya.ui.create({type: "engine.border", name: "HUD"});
         const set = ya.ui.set({handle: w.handle, fields: {_color: [1, 0, 0, 1]}});
         const det = ya.ui.detach(w.handle);
         const destroyed = ya.ui.destroy(w.handle);
-        [types.includes("engine.panel"), w.name, set.type, det.detached, destroyed.destroyed]
+        [types.includes("engine.border"), w.name, set.type, det.detached, destroyed.destroyed]
     )");
     ASSERT_TRUE(result.ok) << result.error;
     EXPECT_EQ(result.value,
-              Json::array({true, "HUD", "engine.panel", true, true}));
+              Json::array({true, "HUD", "engine.border", true, true}));
 }
 
 TEST_F(ScriptApiLibraryFixture, GameUIUnknownTypeIsDiagnosed)

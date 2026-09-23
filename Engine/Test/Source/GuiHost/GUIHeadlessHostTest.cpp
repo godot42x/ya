@@ -1,4 +1,5 @@
 #include "GUI/Host/GUIHeadlessHost.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
@@ -31,7 +32,9 @@ struct HeadlessDelegate final : IGUIAppDelegate
 
     void buildUI(WidgetTree& tree) override
     {
-        auto panel = std::make_shared<UICanvasPanel>("HeadlessPanel");
+        // Must be a widget that PAINTS: this test asserts the headless host
+        // produced real draw items, and UICanvasPanel is a layout host.
+        auto panel = std::make_shared<UIBorder>("HeadlessPanel");
         FCanvasSlotArgs slot;
         slot.offset = {8.0f, 12.0f};
         slot.fixedSize = {96.0f, 48.0f};
@@ -186,11 +189,14 @@ TEST(GUIHeadlessHostTest, UnthemedFallbackThenThemeSwitchRepaintsSnapshot)
         void buildUI(WidgetTree& inTree) override
         {
             tree = &inTree;
-            auto panel = std::make_shared<UICanvasPanel>("P");
+            // A painted rect is UIBorder (engine.border): UICanvasPanel is a
+            // canvas layout host and paints nothing, so it cannot show that an
+            // unthemed frame fell back to the style default.
+            auto border = std::make_shared<UIBorder>("P");
             FCanvasSlotArgs panelSlot;
             panelSlot.offset    = {8.0f, 8.0f};
             panelSlot.fixedSize = {64.0f, 32.0f};
-            inTree.attach(*inTree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+            inTree.attach(*inTree.getLayer(WidgetTree::ELayer::Content), border, panelSlot);
 
             auto image = std::make_shared<UIImage>("Img");
             FCanvasSlotArgs imageSlot;

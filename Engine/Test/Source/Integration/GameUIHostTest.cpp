@@ -1,6 +1,10 @@
 // Phase 3 regression guards for the GameUIHost: scene lifecycle mounts/
 // unmounts authoring entries, addToWorld attaches dynamic widgets, input
 // routes into the presentation tree, and presentation mapping is exact.
+//
+// Surface note: `engine.panel` is a canvas LAYOUT host that deliberately does
+// not paint (see UICanvasPanel); the painted rect is `engine.border`. Tests
+// that assert on produced draw items mount a Border.
 
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 
@@ -194,7 +198,7 @@ TEST(GameUIHostTest, BuildSnapshotComposesMountedWidgets)
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
 
     Scene scene("World");
-    scene.addWidgetEntry(makeEntry("P", publishDocument(documents, "P", "engine.panel"), 0));
+    scene.addWidgetEntry(makeEntry("P", publishDocument(documents, "P", kTypeIdBorder), 0));
     host.onSceneActivated(scene);
 
     const UIFrameSnapshot snapshot = host.buildSnapshot();

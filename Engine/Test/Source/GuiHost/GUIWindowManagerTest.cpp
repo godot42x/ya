@@ -117,7 +117,7 @@ TEST(GUIWindowManagerTest, CreatesIsolatedTreesAndDoesNotQuitSiblingOnClose)
     EXPECT_EQ(manager.extraWindowCount(), 1u);
 }
 
-TEST(GUIWindowManagerTest, IsolatesPointerFocusCaptureTooltipClipboardDpiAndSnapshot)
+TEST(GUIWindowManagerTest, IsolatesPointerFocusCaptureTooltipDpiAndSnapshot)
 {
     NamedWindowDelegate a;
     a.name = "A";
@@ -140,11 +140,6 @@ TEST(GUIWindowManagerTest, IsolatesPointerFocusCaptureTooltipClipboardDpiAndSnap
     a.button->setTooltip("tip-a");
     b.button->setTooltip("tip-b");
     manager.tickAll(0.0f);
-
-    treeA->setClipboardText("clip-a");
-    treeB->setClipboardText("clip-b");
-    EXPECT_EQ(treeA->getClipboardText(), "clip-a");
-    EXPECT_EQ(treeB->getClipboardText(), "clip-b");
 
     treeA->setDpiScale(1.25f);
     treeB->setDpiScale(2.0f);
@@ -198,7 +193,13 @@ TEST(GUIWindowManagerTest, IsolatesPointerFocusCaptureTooltipClipboardDpiAndSnap
     EXPECT_EQ(treeA->getHovered(), nullptr);
     EXPECT_EQ(treeA->getTooltipHost(), nullptr);
     EXPECT_EQ(treeA->getFocused(), a.button.get());
-    EXPECT_EQ(treeA->getPointerCapture(), a.button.get());
+    // Focus survives key-focus loss; the pointer session does not, because the
+    // press was synthetic. The manager reconciles the cached button mask with
+    // the platform's authoritative state on focus loss, and the platform here
+    // reports no button held, so the stale session is cancelled instead of
+    // poisoning the next click. A real cross-window drag is kept alive by the
+    // drag path (see FocusLostClearsHoverDuringDragWithoutInjectingFarPointer).
+    EXPECT_EQ(treeA->getPointerCapture(), nullptr);
     EXPECT_EQ(treeB->getHovered(), b.button.get());
     EXPECT_EQ(manager.focusedWindowId(), idB);
 
@@ -210,6 +211,45 @@ TEST(GUIWindowManagerTest, IsolatesPointerFocusCaptureTooltipClipboardDpiAndSnap
     manager.setFocusedWindow(0);
     EXPECT_EQ(manager.focusedWindowId(), 0u);
     EXPECT_FALSE(manager.dispatchEvent(leftoverKey));
+}
+
+/// The clipboard is deliberately NOT tree-local: a session's tree is bound to
+/// the OS clipboard because a real window is a real clipboard client, so the
+/// last write is what every window reads back. The tree-local fallback in
+/// WidgetTree exists for hosts with no clipboard hook (windowless trees), and
+/// that half is asserted here too.
+TEST(GUIWindowManagerTest, ClipboardIsProcessGlobalNotPerTree)
+{
+    NamedWindowDelegate a;
+    a.name = "A";
+    NamedWindowDelegate b;
+    b.name = "B";
+
+    GUIWindowManager manager;
+    ASSERT_TRUE(manager.init());
+
+    const GUIWindowId idA = manager.create(extraConfig("MW-102-clip-A", 160, 120), a);
+    const GUIWindowId idB = manager.create(extraConfig("MW-102-clip-B", 200, 150), b);
+    if (idA == 0 || idB == 0) {
+        GTEST_SKIP() << "SDL native window create failed";
+    }
+
+    WidgetTree* treeA = manager.findTree(idA);
+    WidgetTree* treeB = manager.findTree(idB);
+    ASSERT_NE(treeA, nullptr);
+    ASSERT_NE(treeB, nullptr);
+
+    treeA->setClipboardText("clip-a");
+    EXPECT_EQ(treeA->getClipboardText(), "clip-a");
+    EXPECT_EQ(treeB->getClipboardText(), "clip-a");
+
+    treeB->setClipboardText("clip-b");
+    EXPECT_EQ(treeB->getClipboardText(), "clip-b");
+    EXPECT_EQ(treeA->getClipboardText(), "clip-b");
+
+    WidgetTree windowless({.width = 64, .height = 64});
+    windowless.setClipboardText("local");
+    EXPECT_EQ(windowless.getClipboardText(), "local");
 }
 
 TEST(GUIWindowManagerTest, FocusLostClearsHoverDuringDragWithoutInjectingFarPointer)
