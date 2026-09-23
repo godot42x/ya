@@ -98,6 +98,13 @@ RenderTargetCreateInfo buildForwardViewRenderTargetSpec(Extent2D extent, EFormat
     };
 }
 
+/// The View's own feature policy. A View that prepared no frame data declares
+/// no features, which is a policy of its own rather than "everything".
+FRenderFeatureMask viewFeatureMask(const RenderPipelineFrameContext& frame)
+{
+    return frame.view.frameData ? frame.view.frameData->viewFeatures : 0;
+}
+
 void allocateForwardViewPassResources(
     RenderSubmission&                        submission,
     IRender*                                 render,
@@ -156,16 +163,21 @@ void allocateForwardViewPassResources(
 
 void ForwardRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& catalog) const
 {
-    catalog.entries.push_back({
-        .label            = "Forward View",
-        .owner            = RenderTargetCatalog::Entry::EOwner::ForwardView,
-        .colorFormats     = _viewFormats.colorFormats,
-        .depthFormat      = _viewFormats.depthFormat,
-        .colorAttachments = {_viewResources.colorOwner},
-        .depthAttachment  = _viewResources.depthOwner,
-        .extent           = _viewResources.extent,
-        .frameBufferCount = 1,
-    });
+    // One entry per recorded View: a tick with a world view and a thumbnail has
+    // two View targets of different sizes, and a single row could only name one
+    // of them.
+    for (const auto& published : _viewResources.entries()) {
+        catalog.entries.push_back({
+            .label            = "Forward View",
+            .owner            = RenderTargetCatalog::Entry::EOwner::ForwardView,
+            .colorFormats     = _viewFormats.colorFormats,
+            .depthFormat      = _viewFormats.depthFormat,
+            .colorAttachments = {published.resources.colorOwner},
+            .depthAttachment  = published.resources.depthOwner,
+            .extent           = published.resources.extent,
+            .frameBufferCount = 1,
+        });
+    }
     catalog.entries.push_back({
         .label               = "Forward Shadow",
         .owner               = RenderTargetCatalog::Entry::EOwner::ForwardShadow,
@@ -231,7 +243,7 @@ void ForwardRenderPipeline::initViewResources(const InitDesc& desc)
         VIEWPORT_COLOR_FORMAT,
         DEPTH_FORMAT);
     _entityIdPass.init(_render, EFormat::R32_UINT, DEPTH_FORMAT);
-    recreateViewResources();
+    invalidatePublishedViewResources();
     refreshViewSnapshot();
 }
 
@@ -488,11 +500,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
         RenderViewOutput output = collectViewOutput(
             execution, branch.frame.view.task, viewId, branch.stageCtx.viewExtent);
-        const bool bDisplayRoot = branch.frame.view.task && ctx.plan &&
-                                  branch.frame.view.task == ctx.plan->displayRootTask();
-        if (bDisplayRoot) {
-            _viewResources.publish(output.color, output.depth, nullptr, output.entityId, branch.stageCtx.viewExtent);
-        }
+        publishViewResources(output, branch.stageCtx.viewExtent, viewFeatureMask(branch.frame));
         result.views.push_back(std::move(output));
     }
     return result;
@@ -507,18 +515,13 @@ bool ForwardRenderPipeline::shouldSkipView(const RenderPipelineFrameContext& fra
 
 void ForwardRenderPipeline::beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
-    Extent2D viewExtent = frame.view.viewExtent;
-    if (viewExtent.width == 0 || viewExtent.height == 0) {
-        viewExtent = _viewResources.extent;
-    }
-
     stageCtx = RenderStageContext{
         .cmdBuf         = frame.cmdBuf,
         .frameData      = frame.view.frameData,
         .flightIndex    = frame.frame ? frame.frame->flightIndex : 0,
         .frameIndex     = frame.frame ? frame.frame->frameIndex : 0,
         .deltaTime      = frame.frame ? frame.frame->deltaTime : 0.0f,
-        .viewExtent = viewExtent,
+        .viewExtent     = frame.view.viewExtent,
         .derivedScene   = frame.derivedScene,
     };
 }
@@ -575,16 +578,6 @@ void ForwardRenderPipeline::clearPendingResourceRefresh(EForwardPendingResourceR
     _pendingResourceRefreshMask &= ~static_cast<uint32_t>(refresh);
 }
 
-void ForwardRenderPipeline::requestViewResize(Extent2D extent)
-{
-    if (extent.width == 0 || extent.height == 0) {
-        return;
-    }
-
-    _pendingViewExtent = extent;
-    markPendingResourceRefresh(EForwardPendingResourceRefresh::ViewResize);
-}
-
 void ForwardRenderPipeline::requestShadowResourceRefresh()
 {
     markPendingResourceRefresh(EForwardPendingResourceRefresh::ShadowResources);
@@ -596,14 +589,6 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
     bool bRefreshViewportStageState = false;
     bool bRefreshShadowStageState   = false;
 
-    if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::ViewResize)) {
-        _viewRTSpec.extent = _pendingViewExtent;
-        recreateViewResources();
-        bRefreshViewportSnapshot   = true;
-        bRefreshViewportStageState = true;
-        clearPendingResourceRefresh(EForwardPendingResourceRefresh::ViewResize);
-    }
-
     if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::ShadowResources) && _render) {
         _shadowResources.destroy();
         if (currentShadowSettings().isEnabled()) {
@@ -614,7 +599,7 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
     }
 
     if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat)) {
-        recreateViewResources();
+        invalidatePublishedViewResources();
         bRefreshViewportSnapshot   = true;
         bRefreshViewportStageState = true;
         clearPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat);
@@ -633,15 +618,6 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
 
 void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
-    if (sceneViewIsDisplayRoot(frame.view.task)) {
-        const float frameBufferScale = std::max(frame.frame ? frame.frame->renderScale : 1.0f, 1.0f);
-        const auto  desiredExtent    = Extent2D::fromVec2(glm::vec2{static_cast<float>(frame.view.viewExtent.width),
-                                                                    static_cast<float>(frame.view.viewExtent.height)} / frameBufferScale);
-        if (desiredExtent.width > 0 && desiredExtent.height > 0 && !(desiredExtent == _viewResources.extent)) {
-            requestViewResize(desiredExtent);
-        }
-    }
-
     const ShadowSettings shadowSettings          = currentShadowSettings();
     const uint32_t       desiredShadowResolution = std::max(shadowSettings.resolution, 1u);
     if (shadowSettings.isEnabled()) {
@@ -656,9 +632,27 @@ void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& 
     syncShadowSettings();
 }
 
-void ForwardRenderPipeline::recreateViewResources()
+void ForwardRenderPipeline::invalidatePublishedViewResources()
 {
-    _viewResources.reset(_viewRTSpec.extent);
+    _viewResources.clear();
+}
+
+void ForwardRenderPipeline::publishViewResources(const RenderViewOutput& output, Extent2D extent, FRenderFeatureMask features)
+{
+    if (output.desc.viewId == 0) {
+        return;
+    }
+
+    ForwardViewResources resources;
+    resources.publish(output.color, output.depth, nullptr, output.entityId, extent);
+    _viewResources.publish(ViewResourceKey{
+                               .viewId      = output.desc.viewId,
+                               .extent      = extent,
+                               .colorFormat = output.desc.colorFormat,
+                               .depthFormat = output.desc.depthFormat,
+                               .featureMask = features,
+                           },
+                           std::move(resources));
 }
 
 void ForwardRenderPipeline::refreshViewSnapshot()
@@ -843,10 +837,9 @@ void ForwardRenderPipeline::shutdown()
         _frameResources.reset();
     }
     _graphExecutor.reset();
-    _pendingViewExtent = {};
     _pendingResourceRefreshMask = 0;
     _viewFormats = {};
-    _viewResources.reset();
+    _viewResources.clear();
     _deleter.clear();
 }
 
@@ -940,15 +933,6 @@ RenderViewOutput ForwardRenderPipeline::collectViewOutput(const RenderGraphExecu
         output.desc.depthFormat = output.depth->getFormat();
     }
     return output;
-}
-
-void ForwardRenderPipeline::onViewResized(Rect2D rect)
-{
-    Extent2D newExtent{
-        .width  = static_cast<uint32_t>(rect.extent.x),
-        .height = static_cast<uint32_t>(rect.extent.y),
-    };
-    requestViewResize(newExtent);
 }
 
 std::shared_ptr<ImageResource> ForwardRenderPipeline::getShadowDirectionalDepthResource() const

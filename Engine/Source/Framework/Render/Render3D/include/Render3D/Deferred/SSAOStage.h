@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Render3D/Deferred/DeferredFrameGraphResources.h"
-#include "Render3D/Deferred/DeferredGBufferResources.h"
 #include "RHI/Core/Buffer.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/FrameUploadArena.h"
@@ -26,7 +25,6 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
     static constexpr EFormat::T AO_FORMAT = EFormat::R8_UNORM;
 
     IRender*                 _render          = nullptr;
-    DeferredGBufferResources _gBufferResources{};
     stdptr<IGraphicsPipeline>    _pipeline;
     stdptr<IPipelineLayout>      _pipelineLayout;
     // Kept alive for the pipeline layout; frame descriptor sets and upload
@@ -44,7 +42,6 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
 
     SSAOStage() : IRenderStage("SSAO") {}
 
-    void setup(const DeferredGBufferResources& gBufferResources);
     void refreshPipelineFormat();
 
     void init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL);

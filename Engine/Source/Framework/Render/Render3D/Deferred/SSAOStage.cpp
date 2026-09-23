@@ -56,11 +56,6 @@ RGImportedTextureDesc makeSSAOImportedTextureDesc(const std::shared_ptr<ImageRes
 
 } // namespace
 
-void SSAOStage::setup(const DeferredGBufferResources& gBufferResources)
-{
-    _gBufferResources = gBufferResources;
-}
-
 void SSAOStage::refreshPipelineFormat()
 {
     if (!_pipeline) {
@@ -149,7 +144,6 @@ void SSAOStage::destroy()
     _pipelineLayout.reset();
 
     _render           = nullptr;
-    _gBufferResources = {};
 }
 
 SSAOStage::FrameData SSAOStage::buildFrameData(const RenderStageContext& ctx) const

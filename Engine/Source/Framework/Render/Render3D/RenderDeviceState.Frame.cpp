@@ -92,7 +92,7 @@ void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan)
     }
 }
 
-void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan, const SceneViewTask* displayRoot)
+void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan)
 {
     const std::vector<Scene*> scenes = renderedScenes(plan.sceneRender.plan());
     if (scenes.empty()) {
@@ -103,10 +103,11 @@ void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan, const Sc
             prepareDerivedState(scene, plan.frame.deltaTime);
         }
     }
-    // One call for the safe-point mutations and the View rect: the rect is this
-    // frame's declaration (`displayRoot`), so nothing here remembers a View's
-    // geometry between frames. See PipelineCoordinator::applyPendingChanges.
-    _pipelineCoordinator.applyPendingChanges(displayRoot ? displayRoot->desc.outputRect : Rect2D{});
+    // One call for this frame's safe-point mutations: pending pipeline
+    // switch/reload and the queued render-target format commands. A View's
+    // geometry is not pushed here -- it is that View's own declaration and its
+    // resources are keyed by it. See PipelineCoordinator::applyPendingChanges.
+    _pipelineCoordinator.applyPendingChanges();
     // Prepares the runtime UI-compose pass from the pipeline's own postprocess
     // format. There used to be a second, conditional call right below that read
     // the *previous* frame's published display image to learn the same format --
@@ -169,7 +170,7 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     }
 
     const SceneViewTask* displayRoot = plan.sceneRender.displayRootTask();
-    prepareFrameRecord(plan, displayRoot);
+    prepareFrameRecord(plan);
 
     std::shared_ptr<ICommandBuffer> cmdBuf;
     if (!beginFrameCommandBuffer(plan, cmdBuf)) {

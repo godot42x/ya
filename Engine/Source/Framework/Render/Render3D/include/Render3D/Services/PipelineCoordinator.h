@@ -41,9 +41,9 @@ struct YA_RENDER_3D_API PipelineCoordinator
         /// Debug overlay sink, injected into the pipelines that draw it.
         DebugRenderSystem*            debugRenderSystem     = nullptr;
         /// Initial view extent in pixels, used for the first pipeline build
-        /// only. Not swapchain extent. The first frame's View rect replaces it
-        /// (see `applyPendingChanges`), so this is a seed for "what size is a
-        /// pipeline before any View has declared one", not a viewport fact.
+        /// only. Not swapchain extent: a View's size comes from that View's own
+        /// declaration, so this is a seed for "what does a pipeline get built
+        /// with before any View has declared one", not a viewport fact.
         int                           initialViewWidth      = 0;
         int                           initialViewHeight     = 0;
     };
@@ -52,20 +52,15 @@ struct YA_RENDER_3D_API PipelineCoordinator
     void shutdown();
 
     /// Applied at frame start, in this order: pending pipeline switch/reload,
-    /// the queued render-target format commands, and the view rect.
+    /// then the queued render-target format commands.
     ///
-    /// `viewRect` is the frame's View rect -- the plan's display root -- as an
-    /// INPUT. A pipeline built or rebuilt inside this call is sized from it, and
-    /// a pipeline whose rect differs is resized. Holding the rect here instead
-    /// (as the renderer used to) meant two opinions about a View's geometry, and
-    /// the app had to push the same rect at the renderer every tick to keep them
-    /// in step. A degenerate rect is "this frame declared no View": the last
-    /// applied rect stands, because a pipeline keeps rendering its last geometry
-    /// and a freshly built one must not come up at the init seed.
+    /// There is no View rect here any more. A View is sized by its own
+    /// declaration and its resources are keyed by that View, so the pipeline has
+    /// no single geometry to be told about; pushing one rect in meant every View
+    /// but that one had to share it.
     ///
-    /// Returns true when a pipeline was (re)built, which is also when the rect
-    /// must be re-applied even if it did not change.
-    bool applyPendingChanges(Rect2D viewRect);
+    /// Returns true when a pipeline was (re)built.
+    bool applyPendingChanges();
 
     [[nodiscard]] IRenderPipeline* getActivePipeline() const;
     [[nodiscard]] ForwardRenderPipeline*  getSelectedForwardPipeline() const;
@@ -96,11 +91,6 @@ struct YA_RENDER_3D_API PipelineCoordinator
     DebugRenderSystem*               _debugRenderSystem      = nullptr;
     int                              _initialViewWidth      = 0;
     int                              _initialViewHeight     = 0;
-    /// This coordinator's own applied state: the rect its current pipelines were
-    /// last sized to. Not a copy of a View's declaration -- the View's rect
-    /// arrives as an argument on every call.
-    Rect2D                           _appliedViewRect{};
-
     ERenderPipeline _renderPipeline          = ERenderPipeline::Deferred;
     ERenderPipeline _pendingRenderPipeline   = ERenderPipeline::Deferred;
     bool            _pendingActivePipelineReload = false;

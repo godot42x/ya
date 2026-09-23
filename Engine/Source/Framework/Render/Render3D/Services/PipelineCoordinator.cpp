@@ -40,33 +40,13 @@ void PipelineCoordinator::shutdown()
     _debugRenderSystem     = nullptr;
     _initialViewWidth      = 0;
     _initialViewHeight     = 0;
-    _appliedViewRect       = Rect2D{};
     _pendingRenderTargetFormatCommands.clear();
 }
 
-bool PipelineCoordinator::applyPendingChanges(Rect2D viewRect)
+bool PipelineCoordinator::applyPendingChanges()
 {
-    // The rect this call sizes pipelines with. A degenerate rect is not "sized
-    // zero": it is "no View this frame", and the already applied rect stands.
-    const bool bDescribesPixels = viewRect.extent.x > 0.0f && viewRect.extent.y > 0.0f;
-    const bool bRectChanged     = bDescribesPixels &&
-                              (_appliedViewRect.pos.x != viewRect.pos.x ||
-                               _appliedViewRect.pos.y != viewRect.pos.y ||
-                               _appliedViewRect.extent.x != viewRect.extent.x ||
-                               _appliedViewRect.extent.y != viewRect.extent.y);
-    if (bDescribesPixels) {
-        _appliedViewRect = viewRect;
-    }
-
     const bool bRebuilt = applyPendingRenderPipelineSwitch();
     applyPendingRenderTargetFormatCommands();
-
-    // A rebuilt pipeline is sized at the init seed, so it needs the rect even
-    // when the rect did not change; an unchanged, unrebuilt one needs nothing.
-    IRenderPipeline* pipeline = getActivePipeline();
-    if (pipeline && (bRebuilt || bRectChanged)) {
-        pipeline->onViewResized(_appliedViewRect);
-    }
     return bRebuilt;
 }
 
@@ -105,8 +85,8 @@ DeferredRenderPipeline* PipelineCoordinator::getSelectedDeferredPipeline() const
 
 void PipelineCoordinator::initActivePipeline()
 {
-    // The first build uses the init seed; the first frame's View rect arrives
-    // through applyPendingChanges and resizes it.
+    // The first build uses the init seed. Nothing resizes it afterwards: each
+    // View's resources are sized from that View's own declaration.
     const int windowWidth  = _initialViewWidth;
     const int windowHeight = _initialViewHeight;
 

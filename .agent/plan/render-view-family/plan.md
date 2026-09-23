@@ -35,9 +35,11 @@ GUI 动画属于 gui-invalidation-architecture 的独立小切片，可在 R0 �
 > - `PreparedView` **尚未落地**：`RenderFrameData` / `SceneViewRecording` / `RenderViewRecordingContext`
 >   / `RenderPipelineFrameContext` 仍在，`RenderFrameData` 名字里仍带 `Frame`，仍同时承载 camera /
 >   projection / draw buckets / SceneSnapshot / Scene GPU binding / frameIndex / deltaTime / timeSeconds。
-> - **多 View 不同 extent 尚未完成**：`IRenderPipeline::getViewExtent()`（已删除，2026-09-22）曾是这
->   个缺口的症状；pipeline 内仍保存单套 View 资源（`_viewResources` / `_viewRI` / `_viewRTSpec` /
->   `_pendingViewExtent` / `_debugViews`），所以「同一 pipeline 支持尺寸不同的多个 View」还不能表达。
+> - **多 View 不同 extent 已落地（2026-09-23 第三批）**：`IRenderPipeline::getViewExtent()` 与
+>   `onViewResized` 均已删除；pipeline 内的单套 View 资源（`_viewResources` / `_viewRI` / `_viewRTSpec` /
+>   `_pendingViewExtent` / `_debugViews`）已改为按 `ViewResourceKey = identity + extent + format +
+>   feature policy` 分键的 `ViewResourceTable`，所以「同一 pipeline 支持尺寸不同的多个 View」现在可以表达。
+>   细节见 `./../render-application-boundary/plan.md` §4b「第三批」。
 > - 方向性决策以 `./../render-application-boundary/plan.md` 为准；本文件保留历史叙述与仍然有效的发现。
 >
 - Framework/Render/Render3D/Common/RenderFrameInputs.h 已有 CameraFrameInput、ViewComposeInput、DisplayComposeInput、PresentFrameInput。这些包与 SceneViewRecording / ViewFamilyRecordContext / RenderPipelineFrameContext 仍重复携带矩阵、extent、frameData、cmd 与 Scene*。

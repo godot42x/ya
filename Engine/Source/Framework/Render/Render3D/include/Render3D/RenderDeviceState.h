@@ -110,8 +110,8 @@ struct YA_RENDER_3D_API RenderDeviceState
     std::vector<std::unique_ptr<SurfacePresentation>> _surfacePresentations;
     /// The size a pipeline is built with before any View has declared one.
     /// Seeded once from the create-info window size; never a "current View
-    /// rect" -- the frame's View rect reaches the pipeline through the plan
-    /// (`prepareFrameRecord` -> `PipelineCoordinator::applyPendingChanges`).
+    /// rect" -- each View's size is that View's own declaration, and the view
+    /// resources recorded for it are keyed by that View's identity.
     Extent2D                     _initialViewExtent{};
 
     /// Cached inspector catalog, rebuilt only when its digest changes. The
@@ -229,14 +229,14 @@ struct YA_RENDER_3D_API RenderDeviceState
     void recordViewFamilies(const RenderFramePlan& plan);
     /// Everything that mutates pipeline state or prepares GPU resources for this
     /// plan, before the command buffer opens: derived state for each Scene this
-    /// plan renders, pending mutations, the display root's View rect, compose
-    /// pipeline prep, each View's Scene-keyed GPU bindings, and the Game UI
-    /// compose pipeline when the plan carries a UI snapshot. The rect comes from
-    /// `displayRoot`, so the plan is the only source of "how big is this frame's
-    /// View". Split from
+    /// plan renders, pending mutations, compose pipeline prep, each View's
+    /// Scene-keyed GPU bindings, and the Game UI compose pipeline when the plan
+    /// carries a UI snapshot. No View's geometry is applied here: a View sizes
+    /// its own resources, and the plan is what names the Views this frame
+    /// records. Split from
     /// `record` so "what happens before recording" and "what is recorded" are
     /// two readable steps instead of one 170-line function.
-    void prepareFrameRecord(const RenderFramePlan& plan, const SceneViewTask* displayRoot);
+    void prepareFrameRecord(const RenderFramePlan& plan);
 
     void                   initRuntimeState(const InitDesc& desc);
     void                   initShaderSystems();
@@ -272,7 +272,10 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// they are private until something outside the renderer needs them.
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog(uint32_t   flightIndex,
                                                                                   SceneViewId viewId) const;
-    [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
+    /// The deferred pipeline's recorded resources for the named View. Identity
+    /// is the argument: the pipeline holds one View's resources per View, so
+    /// there is no unnamed "current" set to hand back.
+    [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews(SceneViewId viewId) const;
 };
 
 } // namespace ya

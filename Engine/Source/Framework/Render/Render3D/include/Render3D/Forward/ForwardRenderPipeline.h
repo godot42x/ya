@@ -13,6 +13,7 @@
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/EntityIdPass.h"
+#include "Render3D/Common/ViewResourceKey.h"
 #include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Render3D/Common/Shadow/ShadowStage.h"
@@ -29,7 +30,6 @@ namespace ya
 enum class EForwardPendingResourceRefresh : uint32_t
 {
     None             = 0,
-    ViewResize   = 1 << 0,
     ShadowResources  = 1 << 1,
     AttachmentFormat = 1 << 2,
 };
@@ -41,6 +41,8 @@ struct Sampler;
 
 struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
 {
+    friend class ForwardRenderPipelineTestAccess;
+
     static constexpr auto VIEWPORT_COLOR_FORMAT              = EFormat::R16G16B16A16_SFLOAT;
     static constexpr auto POSTPROCESS_COLOR_FORMAT           = EFormat::R8G8B8A8_UNORM;
     static constexpr auto DEPTH_FORMAT                       = EFormat::D32_SFLOAT_S8_UINT;
@@ -78,12 +80,15 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
 
     bool                    bMSAA                    = false;
 
-    Extent2D      _pendingViewExtent{};
     uint32_t      _pendingResourceRefreshMask = 0;
-    RenderingInfo _viewRI{};
+    /// The pipeline's durable view-target configuration: the formats it builds
+    /// View pipelines with, plus the extent a pipeline is seeded at before any
+    /// View has declared one. A View's own extent is not here -- it is part of
+    /// that View's resource key.
     RenderTargetCreateInfo _viewRTSpec{};
     RenderAttachmentFormats _viewFormats{};
-    ForwardViewResources _viewResources{};
+    /// Per-View attachments, keyed by identity + extent + formats + features.
+    ViewResourceTable<ForwardViewResources> _viewResources{};
     EntityIdPass     _entityIdPass{};
     ShadowSettings _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
     std::optional<PostProcessingState> _pendingPostProcessSettings;
@@ -98,30 +103,14 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner,
                                     EFormat::T                               format) override;
 
-    void                         onViewResized(Rect2D rect) override;
     [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Forward; }
     [[nodiscard]] EFormat::T     getViewColorFormat() const override;
     [[nodiscard]] EFormat::T     getViewDepthFormat() const override;
-    [[nodiscard]] const ForwardViewResources& getCurrentViewportResources() const { return _viewResources; }
-    [[nodiscard]] std::shared_ptr<RenderTexture>    getViewOutputImageShared() const
+    /// The attachments this pipeline recorded for the named View, or nullptr
+    /// when it recorded none.
+    [[nodiscard]] const ForwardViewResources* viewResourcesFor(SceneViewId viewId) const
     {
-        return bMSAA ? _viewResources.resolveOwner : _viewResources.colorOwner;
-    }
-    [[nodiscard]] std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const
-    {
-        return nullptr;
-    }
-    [[nodiscard]] std::shared_ptr<RenderTexture> getBloomExtractImageShared() const
-    {
-        return _postProcessStage.getBloomExtractImageShared();
-    }
-    [[nodiscard]] std::shared_ptr<RenderTexture> getBloomBlurImageShared() const
-    {
-        return _postProcessStage.getBloomBlurImageShared();
-    }
-    [[nodiscard]] std::shared_ptr<RenderTexture> getBloomCompositeImageShared() const
-    {
-        return _postProcessStage.getBloomCompositeImageShared();
+        return _viewResources.findForView(viewId);
     }
     [[nodiscard]] const RGTopologyDescription& getLastFrameGraphTopology() const override
     {
@@ -130,8 +119,16 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;
 
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
-    [[nodiscard]] std::shared_ptr<RenderTexture> getViewDepthImageShared() const override { return _viewResources.depthOwner; }
-    [[nodiscard]] std::shared_ptr<RenderTexture> getEntityIdImageShared() const override { return _viewResources.entityIdOwner; }
+    [[nodiscard]] std::shared_ptr<RenderTexture> getViewDepthImageShared(SceneViewId viewId) const override
+    {
+        const ForwardViewResources* resources = _viewResources.findForView(viewId);
+        return resources ? resources->depthOwner : nullptr;
+    }
+    [[nodiscard]] std::shared_ptr<RenderTexture> getEntityIdImageShared(SceneViewId viewId) const override
+    {
+        const ForwardViewResources* resources = _viewResources.findForView(viewId);
+        return resources ? resources->entityIdOwner : nullptr;
+    }
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     [[nodiscard]] bool           isGradingEnabled() const override { return _postProcessStage.isGradingEnabled(); }
@@ -169,11 +166,13 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void               markPendingResourceRefresh(EForwardPendingResourceRefresh refresh);
     [[nodiscard]] bool hasPendingResourceRefresh(EForwardPendingResourceRefresh refresh) const;
     void               clearPendingResourceRefresh(EForwardPendingResourceRefresh refresh);
-    void               requestViewResize(Extent2D extent);
     void               requestShadowResourceRefresh();
     void               applyPendingResourceRefreshes();
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
-    void               recreateViewResources();
+    /// Drop every published View's resources: nothing recorded survives a
+    /// change to the pipeline's view-target format configuration.
+    void               invalidatePublishedViewResources();
+    void               publishViewResources(const RenderViewOutput& output, Extent2D extent, FRenderFeatureMask features);
     void               refreshViewSnapshot();
     void               refreshViewStageState();
     void               refreshShadowStageState();

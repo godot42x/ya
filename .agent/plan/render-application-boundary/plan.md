@@ -242,12 +242,43 @@ Framework 侧的公开入口限定在 `init/shutdown/record(plan, surface)/publi
 | --- | --- | --- |
 | 整帧录制编排仍在 Framework | `RenderDeviceState::record()` 负责 acquire 之后的 submission / recordFamily / view compose / display compose / surface presentation / finish | 应用侧 `RuntimeRenderContext`（AB7） |
 | 本 tick 的 View 准备数据由 App 长期持有 | ~~`AppRenderState::viewFrameDataPerFlight`~~ **已删除（2026-09-22 review batch 2）**；`AppLifecycle` 的 quit / `handleSceneDestroy` 两处清空循环同步删除 | `ExtractedSceneRender` 持有本 tick 的 `_frameData`，`SceneViewRecording` 只借用该对象内的 plan/data；保活审计确认 `RenderFrameData::sceneResources` 只含录制期消费的句柄/processor 指针，GPU 生命周期由 `RenderSubmission` 与 `retainPublishedViewOutputs` 负责，因此不存在把 packet 留在 App 才能保活的约束。零生产消费者的 `hostFrameData()` 也一并删除 |
-| 无身份的 View 尺寸语义仍在 pipeline 接口上 | ~~`IRenderPipeline::getViewExtent()`~~ **已删除（2026-09-22）**；但 pipeline 内仍保存单套 View 资源（`_viewResources` / `_viewRI` / `_viewRTSpec` / `_pendingViewExtent` / `_debugViews`） | View 资源按 `ViewResourceKey = identity + extent + format + feature policy` 分键；当前 View 不得由 pipeline 成员表达（报告第三批） |
+| 无身份的 View 尺寸语义仍在 pipeline 接口上 | ~~`IRenderPipeline::getViewExtent()`~~ **已删除（2026-09-22）**；~~pipeline 内仍保存单套 View 资源（`_viewResources` / `_viewRI` / `_viewRTSpec` / `_pendingViewExtent` / `_debugViews`）~~ **已修（2026-09-23 第三批）** | 已落地：View 资源按 `ViewResourceKey = identity + extent + format + feature policy` 分键（`ViewResourceTable`）；"单套尺寸"的接口（`onViewResized`、`_pendingViewExtent`）已删除 |
 | `IRenderRuntimeServices` 删了，但「当前 Scene」仍是隐式全局 | `EnvironmentLightingProcessor::setActiveSceneProvider` / `TerrainProcessor::setActiveSceneProvider` / `GameplayResourceBinding::setActiveSceneProvider`，由 `RenderDeviceState` 在 init 注入 `app.getActiveScene` | 显式输入：`prepareSceneResources(Scene&, FrameTime)` 或 `SceneDerivedState prepareScene(Scene&, const FramePacket&)`，结果按 Scene 保存（报告第四批） |
 | plan 仍携带行为 | `RenderFramePlan::recordExtensions`（`IFrameRecordExtensions*`），renderer 在固定阶段回调它 | 比 `std::function` 清晰，但「plan 是 immutable data」仍未达成；方向是把那些阶段变成应用侧显式调用（与 AB7 同批） |
 | renderer 仍有编辑器查询面 + 反向依赖 GUI | `buildViewportSnapshot` / `buildRenderTargetCatalog` / `getDebugRenderSystem` / `getDiagnosticsService`；`RenderDeviceState.cpp` 与 `RenderDeviceState.Frame.cpp` include `GUI/Compose/Render2DComposePass.h` | AB3-step2（typed command + 由数据构造 catalog）；GUI compose 的 include 需要 compose 准备改由宿主调用（已在 `source-layout-subtraction` S2 记录） |
 
 ### 报告点出的死代码（2026-09-22 已修）
+
+### 第三批：View 资源按身份分键（2026-09-23 已落地）
+
+唯一目标：Forward / Deferred pipeline 不得再用**一套**成员表示「当前 View 的资源 / 尺寸 / 输出」。
+
+- 新增 `Render3D/Common/ViewResourceKey.h`：`ViewResourceKey{viewId, extent, colorFormat, depthFormat,
+  featureMask}` 说明「哪些资源属于同一个 View」；`ViewResourceTable<Resources>` 是 pipeline 的 per-View
+  发布表（一个 View 一个 live entry —— 同一 View 换 extent/format 是替换，不是第二条；另一个身份的 View
+  是另一条，B 不覆盖 A）。
+- `ForwardRenderPipeline`：`_viewResources` 从单个 `ForwardViewResources` 变为
+  `ViewResourceTable<ForwardViewResources>`；`recordFamily` 对**每个**记录的 View 发布（不再只发 display
+  root），键 = identity + extent + 格式 + feature policy。删除死成员 `_viewRI`、`_pendingViewExtent`、
+  `requestViewResize`、`EForwardPendingResourceRefresh::ViewResize`，以及无身份的查询
+  `getCurrentViewportResources` / `getViewOutputImageShared` / `getPostprocessOutputImageShared` /
+  `getBloom*ImageShared`。`getViewDepthImageShared` / `getEntityIdImageShared` 改为**带身份**。
+- `DeferredRenderPipeline`：`_debugViews` 从单个 `DeferredPipelineDebugViews` 变为同一 keyed 表
+  `_publishedViews`；`buildDebugViews(viewId)` 取代无身份版本；同样删除 `_pendingViewExtent` / `ViewResize` /
+  无身份的 `getCurrentGBufferResources` / `getCurrentViewportResources` / `getViewOutputImageShared` /
+  `getBloom*ImageShared`。`appendRenderTargetEntries` 改为**按 View** 输出条目（此前只有一个
+  "当前 View" 行，两个不同 extent 的 View 无法同时表达）。
+- **删除 `IRenderPipeline::onViewResized`**：它唯一的作用是让 pipeline 记住「那个 View 的尺寸」。随之
+  `PipelineCoordinator::applyPendingChanges(Rect2D)` 的 rect 参数与 `_appliedViewRect` 一并删除。这是
+  AB8-step1 的下一步：那次把 rect 从 renderer 状态改成输入，这一步发现「输入给谁」本身不再需要——每个
+  View 声明自己的 extent。（`prepareFrameRecord` 也随之不再收 `displayRoot` 只为取 rect。）
+- 顺带删除因上述改动变成死代码的 `SSAOStage::setup(DeferredGBufferResources)` + `_gBufferResources`
+  （只写不读）。`ForwardViewResources.h` / `DeferredViewResources.h` / `ViewportDebugCatalogBuilder.cpp`
+  属并发写者的在飞 WIP，本批未改。
+- 证据：`Engine/Test/Source/ViewResourceKeyTest.cpp`（key 分区 + 表语义 + Forward pipeline 在同一 tick
+  记录三个 View 后各自持有独立 attachment/extent，且其中一个 resize 不打断其他 View）与
+  `DeferredRenderPipelineTest.TwoViewsKeepTheirOwnPublishedResources`。
+
 
 `GameRuntimeTickOrchestrator::pumpOffscreenTasks` 是一个**只有自我递归、没有任何调用者**的函数：
 663e0f82 想把它命名成 tickRender 的一个步骤，但 `tickRender` 实际直接调

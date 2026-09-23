@@ -35,7 +35,6 @@ struct IRenderPipelineExecution
     /// a caller from downcasting to find out which strategy it holds.
     [[nodiscard]] virtual ERenderPipelineKind kind() const = 0;
 
-    virtual void onViewResized(Rect2D rect) = 0;
     /// Compile and record one Scene family graph; return each View's output.
     /// Product recording does not use tick/beginTick/getCurrent.
     virtual ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) = 0;
@@ -75,9 +74,12 @@ struct IRenderPipelineDebugOutputs
     virtual ~IRenderPipelineDebugOutputs() = default;
 
     [[nodiscard]] virtual bool isShadowMappingEnabled() const = 0;
-    [[nodiscard]] virtual std::shared_ptr<RenderTexture> getViewDepthImageShared() const = 0;
+    /// The named View's depth attachment, or nullptr when this pipeline has no
+    /// such View. Identity is the argument: a pipeline holds one View's
+    /// resources per View, so there is no "the current View" to fall back to.
+    [[nodiscard]] virtual std::shared_ptr<RenderTexture> getViewDepthImageShared(SceneViewId viewId) const = 0;
     /// R32_UINT viewport target holding per-pixel entity ids (editor picking).
-    [[nodiscard]] virtual std::shared_ptr<RenderTexture> getEntityIdImageShared() const { return nullptr; }
+    [[nodiscard]] virtual std::shared_ptr<RenderTexture> getEntityIdImageShared([[maybe_unused]] SceneViewId viewId) const { return nullptr; }
     [[nodiscard]] virtual std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const = 0;
     [[nodiscard]] virtual std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const = 0;
     /// Whether the view's postprocessing GRADES the image. Not whether the

@@ -20,6 +20,7 @@
 #include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/PostProcessingState.h"
+#include "Render3D/Common/ViewResourceKey.h"
 #include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Render3D/Common/Shadow/ShadowStage.h"
@@ -48,7 +49,6 @@ class DeferredRenderPipelineTestAccess;
 enum class EDeferredPendingResourceRefresh : uint32_t
 {
     None                = 0,
-    ViewResize      = 1 << 0,
     ShadowResources     = 1 << 1,
     SharedDepth         = 1 << 2,
     GBufferAttachments  = 1 << 3,
@@ -133,13 +133,15 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     uint32_t   _lastDrawCount       = 0;
     EFormat::T _shadowDepthFormat   = SHADOW_DEPTH_FORMAT;
 
-    // ── Debug views ───────────────────────────────────────────────────
+    // ── Published View resources ──────────────────────────────────────
     stdptr<IImageView> _debugAlbedoRGBView;
     stdptr<IImageView> _debugSpecularAlphaView;
     ImageViewHandle    _cachedAlbedoSpecImageViewHandle = nullptr;
-    Extent2D           _pendingViewExtent{};
     uint32_t           _pendingResourceRefreshMask = 0;
-    DeferredPipelineDebugViews _debugViews{};
+    /// Per-View GBuffer / viewport / postprocess attachments, keyed by
+    /// identity + extent + formats + features. A second View in the same tick
+    /// is a second entry, not an overwrite of the first.
+    ViewResourceTable<DeferredPipelineDebugViews> _publishedViews{};
 
     // ── Frame state ───────────────────────────────────────────────────
     EntityIdPass       _entityIdPass{};
@@ -154,7 +156,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
     void shutdown();
 
-    void onViewResized(Rect2D rect) override;
     [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Deferred; }
 
     EFormat::T getViewColorFormat() const override;
@@ -162,13 +163,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
-    const DeferredGBufferResources& getCurrentGBufferResources() const { return _debugViews.gBufferResources; }
-    const DeferredViewResources& getCurrentViewportResources() const { return _debugViews.viewportResources; }
-    std::shared_ptr<RenderTexture> getViewOutputImageShared() const { return _debugViews.viewportResources.colorOwner; }
-    std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const { return _debugViews.postprocess; }
-    std::shared_ptr<RenderTexture> getBloomExtractImageShared() const { return _debugViews.bloomExtract; }
-    std::shared_ptr<RenderTexture> getBloomBlurImageShared() const { return _debugViews.bloomBlur; }
-    std::shared_ptr<RenderTexture> getBloomCompositeImageShared() const { return _debugViews.bloomComposite; }
     const RGTopologyDescription& getLastFrameGraphTopology() const override
     {
         return _lastFrameGraphTopology;
@@ -182,13 +176,23 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     /// Pending snapshot if a request is in flight, otherwise the applied snapshot.
     [[nodiscard]] RenderPipelineSettings resolveSettings() const override;
     void requestSettings(const RenderPipelineSettings& settings) override;
-    DeferredPipelineDebugViews buildDebugViews() const;
+    /// What this pipeline recorded for the named View. A View this pipeline did
+    /// not record answers with an empty snapshot, not with another View's.
+    DeferredPipelineDebugViews buildDebugViews(SceneViewId viewId) const;
     void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;
     bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner, EFormat::T format) override;
     bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) override;
 
-    std::shared_ptr<RenderTexture> getViewDepthImageShared() const override { return _debugViews.viewportResources.depthOwner; }
-    std::shared_ptr<RenderTexture> getEntityIdImageShared() const override { return _debugViews.viewportResources.entityIdOwner; }
+    std::shared_ptr<RenderTexture> getViewDepthImageShared(SceneViewId viewId) const override
+    {
+        const DeferredPipelineDebugViews* views = _publishedViews.findForView(viewId);
+        return views ? views->viewportResources.depthOwner : nullptr;
+    }
+    std::shared_ptr<RenderTexture> getEntityIdImageShared(SceneViewId viewId) const override
+    {
+        const DeferredPipelineDebugViews* views = _publishedViews.findForView(viewId);
+        return views ? views->viewportResources.entityIdOwner : nullptr;
+    }
     bool           isShadowMappingEnabled() const override;
     std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
     std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
@@ -253,9 +257,9 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool hasPendingResourceRefresh(EDeferredPendingResourceRefresh refresh) const;
     void               clearPendingResourceRefresh(EDeferredPendingResourceRefresh refresh);
     void               applyPendingResourceRefreshes();
-    void               requestViewResize(Extent2D extent);
     void               requestShadowResourceRefresh();
     void               applyPendingSettings();
+    void               publishViewResources(const ViewResourceKey& key, DeferredPipelineDebugViews views);
     void               setDeferredSharedDepthFormat(EFormat::T format);
     void               initShadowResources();
     void               destroyShadowResources();

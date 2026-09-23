@@ -176,7 +176,7 @@ ViewportDebugCatalogInput RenderDeviceState::makeViewportDebugCatalogInput(uint3
     input.bForwardPipeline  = (_pipelineCoordinator.getRenderPipeline() == ERenderPipeline::Forward);
     input.bDeferredPipeline = _pipelineCoordinator.hasDeferredPipeline();
     input.debugOutputs      = buildPipelineDebugOutputCatalog(flightIndex, viewId);
-    input.deferredViews     = getDeferredPipelineDebugViews();
+    input.deferredViews     = getDeferredPipelineDebugViews(viewId);
     input.brdfLut           = _sharedResourceProvider.getBrdfLutTextureShared();
     input.environmentLighting = _environmentLightingProcessor.get();
     input.inspectScene        = inspectScene;
@@ -192,10 +192,10 @@ ViewportDebugCatalogInput RenderDeviceState::makeViewportDebugCatalogInput(uint3
     return input;
 }
 
-DeferredPipelineDebugViews RenderDeviceState::getDeferredPipelineDebugViews() const
+DeferredPipelineDebugViews RenderDeviceState::getDeferredPipelineDebugViews(SceneViewId viewId) const
 {
     if (auto* pipeline = _pipelineCoordinator.getSelectedDeferredPipeline()) {
-        return pipeline->buildDebugViews();
+        return pipeline->buildDebugViews(viewId);
     }
     return {};
 }

@@ -27,6 +27,13 @@ class DeferredRenderPipelineTestAccess
     {
         pipeline.loadPersistentSettings();
     }
+
+    static void publishViewResources(DeferredRenderPipeline& pipeline,
+                                     const ViewResourceKey&  key,
+                                     DeferredPipelineDebugViews views)
+    {
+        pipeline.publishViewResources(key, std::move(views));
+    }
 };
 
 class DeferredFrameResourceSetTestAccess
@@ -130,6 +137,108 @@ TEST(DeferredRenderPipelineTest, SettingsCommandsApplyLatestSnapshotAtFrameBound
     EXPECT_TRUE(afterApply.postProcessing.bEnableInversion);
     EXPECT_FALSE(afterApply.postProcessing.bEnableBloom);
     EXPECT_EQ(afterApply.shadow.quality, EShadowQuality::Ultra);
+}
+
+constexpr FRenderFeatureMask kGameFeatures    = toMask(ERenderFeature::Game);
+constexpr Extent2D           kWorldExtent     = {.width = 1280, .height = 720};
+constexpr Extent2D           kThumbnailExtent = {.width = 256, .height = 256};
+
+DeferredAttachmentFormats deferredViewFormats()
+{
+    return DeferredAttachmentFormats{
+        .colorFormats = {EFormat::R16G16B16A16_SFLOAT},
+        .depthFormat  = EFormat::D32_SFLOAT,
+    };
+}
+
+DeferredPipelineDebugViews makeDeferredViews(const std::shared_ptr<RenderTexture>& color,
+                                             const std::shared_ptr<RenderTexture>& depth,
+                                             const std::shared_ptr<RenderTexture>& entityId)
+{
+    DeferredPipelineDebugViews views{};
+    views.viewportResources.publish(color, depth, entityId, deferredViewFormats());
+    return views;
+}
+
+ViewResourceKey makeDeferredKey(SceneViewId viewId, Extent2D extent)
+{
+    return ViewResourceKey{
+        .viewId      = viewId,
+        .extent      = extent,
+        .colorFormat = EFormat::R16G16B16A16_SFLOAT,
+        .depthFormat = EFormat::D32_SFLOAT,
+        .featureMask = kGameFeatures,
+    };
+}
+
+/// The acceptance evidence for this batch on the deferred side: one tick
+/// records a world View and a thumbnail View of different sizes, and each keeps
+/// its own viewport attachments.
+TEST(DeferredRenderPipelineTest, TwoViewsKeepTheirOwnPublishedResources)
+{
+    DeferredRenderPipeline pipeline;
+
+    const auto worldColor     = std::make_shared<RenderTexture>();
+    const auto worldDepth     = std::make_shared<RenderTexture>();
+    const auto worldEntityId  = std::make_shared<RenderTexture>();
+    const auto thumbColor     = std::make_shared<RenderTexture>();
+    const auto thumbDepth     = std::make_shared<RenderTexture>();
+    const auto thumbEntityId  = std::make_shared<RenderTexture>();
+
+    DeferredRenderPipelineTestAccess::publishViewResources(
+        pipeline, makeDeferredKey(11, kWorldExtent), makeDeferredViews(worldColor, worldDepth, worldEntityId));
+    DeferredRenderPipelineTestAccess::publishViewResources(
+        pipeline, makeDeferredKey(12, kThumbnailExtent), makeDeferredViews(thumbColor, thumbDepth, thumbEntityId));
+
+    const DeferredPipelineDebugViews world     = pipeline.buildDebugViews(11);
+    const DeferredPipelineDebugViews thumbnail = pipeline.buildDebugViews(12);
+    EXPECT_EQ(world.viewportResources.colorOwner, worldColor);
+    EXPECT_EQ(world.viewportResources.depthOwner, worldDepth);
+    EXPECT_EQ(world.viewportResources.entityIdOwner, worldEntityId);
+    EXPECT_EQ(thumbnail.viewportResources.colorOwner, thumbColor);
+    EXPECT_EQ(thumbnail.viewportResources.depthOwner, thumbDepth);
+    EXPECT_NE(world.viewportResources.colorOwner, thumbnail.viewportResources.colorOwner);
+
+    // Identity-carrying queries answer about the named View, and a View this
+    // pipeline never recorded answers nothing rather than another View's set.
+    EXPECT_EQ(pipeline.getViewDepthImageShared(11), worldDepth);
+    EXPECT_EQ(pipeline.getViewDepthImageShared(12), thumbDepth);
+    EXPECT_EQ(pipeline.getViewDepthImageShared(99), nullptr);
+    EXPECT_EQ(pipeline.getEntityIdImageShared(11), worldEntityId);
+    EXPECT_EQ(pipeline.buildDebugViews(99).viewportResources.colorOwner, nullptr);
+
+    RenderTargetCatalog catalog;
+    pipeline.appendRenderTargetEntries(catalog);
+    // A GBuffer and a view target per recorded View, plus the shadow map.
+    ASSERT_EQ(catalog.entries.size(), 5u);
+    EXPECT_EQ(catalog.entries[4].owner, RenderTargetCatalog::Entry::EOwner::DeferredShadow);
+    EXPECT_EQ(catalog.entries[0].owner, RenderTargetCatalog::Entry::EOwner::DeferredGBuffer);
+    EXPECT_EQ(catalog.entries[1].owner, RenderTargetCatalog::Entry::EOwner::DeferredView);
+    EXPECT_EQ(catalog.entries[0].extent.width, 1280u);
+    EXPECT_EQ(catalog.entries[1].extent.width, 1280u);
+    EXPECT_EQ(catalog.entries[2].extent.width, 256u);
+    EXPECT_EQ(catalog.entries[3].extent.width, 256u);
+
+    // The world View resizes: its entry is replaced, the thumbnail keeps its
+    // own attachments and extent, and no third View appears.
+    const auto resizedColor = std::make_shared<RenderTexture>();
+    const auto resizedDepth = std::make_shared<RenderTexture>();
+    DeferredRenderPipelineTestAccess::publishViewResources(
+        pipeline,
+        makeDeferredKey(11, Extent2D{.width = 640, .height = 480}),
+        makeDeferredViews(resizedColor, resizedDepth, std::make_shared<RenderTexture>()));
+
+    EXPECT_EQ(pipeline.buildDebugViews(11).viewportResources.colorOwner, resizedColor);
+    EXPECT_EQ(pipeline.getViewDepthImageShared(11), resizedDepth);
+    EXPECT_EQ(pipeline.buildDebugViews(12).viewportResources.colorOwner, thumbColor);
+    EXPECT_EQ(pipeline.getViewDepthImageShared(12), thumbDepth);
+
+    RenderTargetCatalog resizedCatalog;
+    pipeline.appendRenderTargetEntries(resizedCatalog);
+    ASSERT_EQ(resizedCatalog.entries.size(), 5u);
+    EXPECT_EQ(resizedCatalog.entries[0].extent.width, 640u);
+    EXPECT_EQ(resizedCatalog.entries[1].extent.width, 640u);
+    EXPECT_EQ(resizedCatalog.entries[2].extent.width, 256u);
 }
 
 TEST(DeferredFrameResourceSetTest, SkinningCapacityStartsSmallGrowsAndRejectsOverflow)
