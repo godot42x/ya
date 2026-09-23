@@ -558,3 +558,55 @@ View：presentation / shadow 目标沿用既有「0 = 没有 View」的约定）
   对外语义问题，只是保活略长于必要）。它与本批的淘汰不是一件事，留给需要的人。
 - 未完成（不属于本批）：AB7（整帧编排搬应用侧）、第四批（显式 active Scene）、`RenderFrameData` 改名。
 - 偏离：无。
+
+## 2026-09-23 第三批收尾补丁 — 淘汰调用点有了自动化覆盖（路径 1）
+
+第三批收尾（`81088ea1`）让 `RenderDeviceState::prepareFrameRecord` 在 command buffer 打开前按本 tick 的
+`SceneRenderPlan::viewTasks` 淘汰不再声明的 View，功能闭环。独立复核发现覆盖缺口：当批新增的 4 个
+用例**全部**经 `*TestAccess` 直接调 `pipeline.reconcilePublishedViews(plan)`，**没有一条经过
+`RenderDeviceState`**——把 `RenderDeviceState.Frame.cpp` 里那一行调用删掉，185 个测试仍然全绿，
+「调用点存在且真的跑到」这件事没有任何自动化证据。本批补的就是它。
+
+### 改动（路径 1：测试专用访问器 + 注入 pipeline）
+
+- `RenderDeviceState.h` 私有段加 `friend class RenderDeviceStateTestAccess;`，`PipelineCoordinator.h`
+  私有段加 `friend class PipelineCoordinatorTestAccess;`。**只加 friend**：不改行为、不动 ABI，形状与
+  既有的 `ForwardRenderPipeline.h` / `DeferredRenderPipeline.h` / `App.h` 一致。没有走路径 2
+  （让 `PipelineCoordinator` 接受外部 pipeline 指针作为**生产**接口）。
+- 新用例 `RenderDeviceStateTest.PrepareFrameRecordDropsTheViewsTheTickStopsDeclaring`，落在
+  `Engine/Test/Source/ViewResourceKeyTest.cpp`：与同族的 `ForwardRenderPipelineTest.*` 淘汰 case 同文件，
+  复用该文件已有的 `ForwardRenderPipelineTestAccess` 发布缝，不复制第二份访问器。
+- 用例形状：注入一个测试自有的 `ForwardRenderPipeline` 作为活动策略 → 往表里 publish 两个 View
+  （11 = world / 12 = preview）→ 用 `SceneRenderScheduler` 走宿主同一条 `beginTick → submit → seal`
+  造一份**只声明 11** 的 plan → 调 `RenderDeviceState::prepareFrameRecord(plan)` → 断言 12 的 entry 与
+  身份查询全空、`weak_ptr` 证明它的 color/depth 附件真的被释放（测试自己的 handle 与临时 output 都
+  先弃养，表是唯一 owner），并逐字段断言 11 的 owners / extent 原样不变。
+
+### 它证明了什么，以及边界
+
+- 证明：「`prepareFrameRecord` 会按交给它的这份 plan 淘汰 View」+「那一行调用存在且真的跑到」。
+- **边界（不要当成覆盖到了）**：它**不**钉 `record()` 里 `prepareFrameRecord` 与
+  `beginFrameCommandBuffer` 的先后——那只在真 command buffer 下才可观察。用例只调 `prepareFrameRecord`，
+  `record()` 的这段顺序仍是读代码得出的性质，不是这里的断言。
+- 负向对照（真做）：把 `RenderDeviceState.Frame.cpp:118` 的
+  `pipeline->reconcilePublishedViews(plan.sceneRender.plan());` 注释掉重新构建 → 新用例 FAIL
+  （`viewResourcesFor(12)` 非空、`getViewDepthImageShared(12)` / `getEntityIdImageShared(12)` 非空、
+  两个 `weak_ptr` 都还没过期）→ 恢复后 PASS。
+
+### 验证
+
+- build（**APFS clonefile 副本**；主仓库被并发写者对两个 `ViewResources` 头的在飞 WIP 卡住，副本里把
+  这两个头 checkout 回 HEAD 得到等价于本批改动的树，主仓库未动）：`ya-render-3d-test` ok。
+- `xmake r ya-render-3d-test`：**186/186**（185 + 本批 1 个新 case）。
+- 本批只动测试基建与两处 friend，没有改 `reconcilePublishedViews` 的行为；按上级收窄的验证范围，
+  **不再**跑全目标构建与自动化 parity / smoke（渲染路径未动）。已在副本里跑过一次的
+  `run_display_compose_parity.py --skip-build`（PASS，两张图 md5 仍 `c775245a…`）与
+  `run_widgettree_editor_smoke.py --skip-build`（exit=0 六步）是在收到收窄指令之前跑的，如实记录、
+  不作为本批的验收项。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：路径 3（自动化产品级查询面，如 `get_render_target_catalog`）本批不做，登记在 `plan.md`
+  的「淘汰的产品级证据：路径 3（已评估、暂不做）」。
+- 未完成：同「第三批收尾」的未完成项（AB7、第四批显式 active Scene、`RenderFrameData` 改名），本批未碰。
+- 偏离：无。生产改动只有两处 friend 声明 + 一个测试文件。

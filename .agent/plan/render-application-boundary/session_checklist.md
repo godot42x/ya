@@ -21,8 +21,8 @@
 ## 收尾前
 
 - [ ] 受影响目标 build：`ya-game-runtime` / `ya-runtime` / `ya-game-editor` / `ya-testing`。
-- [ ] `xmake r ya-render-3d-test`（期望 185/185；batch 2 删掉 2 个只测已删接口的 case，第三批与本批
-      各加了 case）。
+-- [ ] `xmake r ya-render-3d-test`（期望 186/186；batch 2 删掉 2 个只测已删接口的 case，第三批加 4 个、
+      覆盖补丁加 1 个）。
 - [ ] `ya-testing` 滤镜跑一遍，与已登记基线比对（排除 `WidgetTreeTest.SystemLayersCannotBeDetached`）。
 - [ ] `run_display_compose_parity.py --skip-build` 期望 PASS、md5 `c775245a…`。
 - [ ] `run_widgettree_editor_smoke.py --skip-build` 期望 exit=0。
@@ -33,6 +33,29 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-23 第三批收尾补丁（淘汰调用点的自动化覆盖，路径 1）：第三批收尾的 4 个新用例**全部**经
+  `*TestAccess` 直调 `pipeline.reconcilePublishedViews(plan)`，没有一条经过 `RenderDeviceState`——删掉
+  `RenderDeviceState.Frame.cpp:118` 那一行调用，185 个测试仍全绿，「调用点存在且被调用」当时没有
+  自动化证据。补法是**路径 1**：`RenderDeviceState.h` / `PipelineCoordinator.h` 各加一处 `friend class
+  *TestAccess;`（只加 friend，不改行为、不动 ABI），注入一个测试自有的 `ForwardRenderPipeline` 作为
+  活动策略，新用例 `RenderDeviceStateTest.PrepareFrameRecordDropsTheViewsTheTickStopsDeclaring`
+  （落在 `Engine/Test/Source/ViewResourceKeyTest.cpp`，复用该文件已有的发布缝）：用
+  `SceneRenderScheduler` 造一份只声明 View 11 的 plan，publish 过 11 与 12 之后调
+  `prepareFrameRecord(plan)`，断言 12 的 entry / 身份查询全空、`weak_ptr` 证明其附件真的被释放，
+  11 的 owners 与 extent 逐字段不变。**它证明的是**「`prepareFrameRecord` 会按这份 plan 淘汰」与
+  「那一行存在且被调用」；**边界**：它**不**钉 `record()` 里 `prepareFrameRecord` 与
+  `beginFrameCommandBuffer` 的先后（要真 command buffer），也不覆盖产品面。负向对照真做过：注释掉
+  那一行 → 新用例 FAIL（`viewResourcesFor(12)` 非空、两个 `weak_ptr` 未过期）→ 恢复后 PASS。
+  `ya-render-3d-test` 186/186（副本构建；主仓库被并发 WIP 卡住，副本里把两个 `ViewResources` 头
+  checkout 回 HEAD，主仓库未动）。**路径 2 明确不做**（让 `PipelineCoordinator` 接受外部 pipeline
+  指针作生产接口）；**路径 3（产品级证据）已评估、暂不做**：触发侧可自动化
+  （`EditorViewProducer.cpp:52` `isViewportShown()`、`:60` `isViewportMode2D()`，`viewport.set_mode` 是
+  已注册 script API，见 `EditorModule.cpp:347`），卡点在查询通路——`AppAutomationControlService` 没有
+  render target catalog / view resources 查询，script API 也没有 `render.*`，要做需新增一个自动化
+  method，属产品面新功能。**陷阱（已复核代码）**：现成的
+  `get_world_view_state.rendered_viewport_extent` **不能**替它——它读的 `_viewOutputs` 按新 token 在
+  `beginSubmission` 清零并由本 tick 重填（查询以 `liveViewCount` 为界），所以「某 View 不再被声明」
+  在它上面在 `81088ea1` 之前同样成立，会得到一个两版本都绿的无牙测试。详见 progress.md。
 - 2026-09-23 第三批收尾（不再被声明的 View 必须被淘汰）：`c0e2275a` 只做了「View 资源按身份分键」，
   没有回答「本 tick 不再声明的 View 怎么办」——选中相机→声明 preview、取消选中→不再声明，那条 entry
   与它唯一的 `shared_ptr<RenderTexture>` 附件永久留下，查询返回上一帧的图（`render-arch` 契约禁止的

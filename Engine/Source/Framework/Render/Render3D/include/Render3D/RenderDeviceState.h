@@ -226,6 +226,14 @@ struct YA_RENDER_3D_API RenderDeviceState
     void requestRenderTargetFormat(const RenderTargetFormatCommand& command);
 
   private:
+    /// Test-only seam: `prepareFrameRecord` is the pre-record safe point, and a
+    /// case that wants to prove the eviction runs *from there* has to reach it
+    /// with a pipeline installed. Building one is a device-lifetime action a real
+    /// backend performs, so the test names itself instead of the header growing
+    /// an install-the-strategy entry point. Same shape as the two pipelines'
+    /// `ForwardRenderPipelineTestAccess` / `DeferredRenderPipelineTestAccess`.
+    friend class RenderDeviceStateTestAccess;
+
     void recordViewFamilies(const RenderFramePlan& plan);
     /// Everything that mutates pipeline state or prepares GPU resources for this
     /// plan, before the command buffer opens: derived state for each Scene this

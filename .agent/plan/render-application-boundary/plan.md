@@ -306,6 +306,42 @@ Framework 侧的公开入口限定在 `init/shutdown/record(plan, surface)/publi
   `DeferredRenderPipelineTest.AViewTheNextTickDoesNotDeclareIsEvictedAndTheOtherIsKept`；
   `ya-render-3d-test` 185/185。
 
+**覆盖补丁（2026-09-23 同日）**：这一批的淘汰调用点当时**没有自动化证据**——4 个新用例全部经
+`*TestAccess` 直调 `pipeline.reconcilePublishedViews(plan)`，删掉 `RenderDeviceState.Frame.cpp` 里那一行
+调用，185 个测试仍然全绿。补法是路径 1：两处 friend（`RenderDeviceStateTestAccess` /
+`PipelineCoordinatorTestAccess`）+ 注入 pipeline + 一个新用例
+`RenderDeviceStateTest.PrepareFrameRecordDropsTheViewsTheTickStopsDeclaring`（落在
+`Engine/Test/Source/ViewResourceKeyTest.cpp`）。它钉的是「`prepareFrameRecord` 会按这份 plan 淘汰」与
+「那一行存在且被调用」；**不**钉 `record()` 里 `prepareFrameRecord` / `beginFrameCommandBuffer` 的先后
+（那要真 command buffer）。负向对照做过：注释掉那一行 → 新用例 FAIL，恢复后 PASS。
+`ya-render-3d-test` 186/186。产品级证据见下一节。
+
+### 淘汰的产品级证据：路径 3（已评估、暂不做）
+
+「本 tick 不再声明的 View 在**产品面**上不再出现」目前没有任何自动化证据（面板不再列出那一行、
+`viewResourcesFor` 之外的查询不再返回它）。三种取证路径评估如下：
+
+- 路径 1（**本批采用**）：`RenderDeviceStateTestAccess` 注入 pipeline 调 `prepareFrameRecord`。生产改动
+  最小（两处 friend，无行为/ABI 变化），证据钉调用点本身；不覆盖产品面。
+- 路径 2（**明确不做**）：让 `PipelineCoordinator` 接受外部 pipeline 指针作为**生产**接口。为测试注入
+  把「谁来建 pipeline」变成可注入的生产契约，是把测试需求写进产品接口。
+- 路径 3（**已评估、暂不做**）：从编辑器**触发**真实路径、再从**自动化查询面**观察淘汰。触发侧本身
+  可自动化：`EditorViewProducer.cpp:52` 的 `isViewportShown()`（视口标签页被换掉）与 `:60` 的
+  `isViewportMode2D()`（切到 2D 画布）就是这两条真实路径的入口，而 `viewport.set_mode` 已是注册的
+  script API（`EditorModule.cpp:347`），所以「声明消失」可以用脚本造出来。**卡点在查询通路**：
+  `AppAutomationControlService` 没有 render target catalog / view resources 查询，script API 也没有
+  `render.*`，要做必须**新增一个自动化 method**——那是产品面新功能，不是测试基建，因此本批不做。
+
+**陷阱（已复核代码后落笔）**：现成的 `get_world_view_state.rendered_viewport_extent` **不能**当路径 3 的
+观察点。它经 `AppRenderServices::getHostViewportOutput()` 读的是 `_viewOutputs`
+（`RenderViewOutputTable`），而该表在 `beginSubmission` 遇到新 token 时把 `liveViewCount` 清零、随后由
+**本 tick** 的 publish 重新填满；`find` / `get` 都以 `liveViewCount` 为边界。所以它每个 tick 呈现的都是
+**当 tick 的重写结果**，从来不携带上一 tick 的 entry——「某 View 不再被声明」这件事在它上面**在
+`81088ea1` 之前同样成立**（旧条目留在 pipeline 的 `ViewResourceTable` 里、查询返回上一帧的图，这个
+可观察差异**只存在于 pipeline 的表**）。拿它写测试会得到一个**两个版本都绿**的无牙测试。
+（精度说明：它「为空」是**查询边界**的事实，不是存储的事实——非 live slot 里仍留着一份上一 token 的
+`shared_ptr`，只是不对外可查，与本目录已记的「`RenderViewOutputTable` 保活略长于必要」是同一处。）
+
 
 `GameRuntimeTickOrchestrator::pumpOffscreenTasks` 是一个**只有自我递归、没有任何调用者**的函数：
 663e0f82 想把它命名成 tickRender 的一个步骤，但 `tickRender` 实际直接调
@@ -355,7 +391,7 @@ publishedViewOutput(viewId);
 
 ```bash
 xmake b ya-game-runtime && xmake b ya-runtime && xmake b ya-game-editor && xmake b ya-testing
-xmake r ya-render-3d-test                      # 185/185
+xmake r ya-render-3d-test                      # 186/186
 ./build/macosx/arm64/debug/ya-testing --gtest_filter='RenderRuntime*:HostScene*:ViewFamily*:ForwardFrameGraph*:DeferredRender*:PostProcessing*:Offscreen*:AppKernel*:AppLifecycle*:AppScreenshot*:Widget*:Dock*:Editor*:GameUIHost*:Scene*:UIDocument*:ScriptApi*:RenderGraph*:ViewPersistent*:View*:SurfaceImage*-WidgetTreeTest.SystemLayersCannotBeDetached'
 python3 Script/automation/render/run_display_compose_parity.py --skip-build   # PASS, md5 c775245a...
 python3 Script/automation/editor/run_widgettree_editor_smoke.py --skip-build  # 六步全过

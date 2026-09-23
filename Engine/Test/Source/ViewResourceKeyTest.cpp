@@ -1,9 +1,14 @@
 #include "Render3D/Common/RenderTargetCatalog.h"
+#include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ViewResourceKey.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
+#include "Render3D/RenderDeviceState.h"
+#include "Render3D/RenderFrameData.h"
+#include "Render3D/Services/PipelineCoordinator.h"
 #include "RHI/Core/RenderTexture.h"
+#include "Scene/Core/Scene.h"
 
 #include <gtest/gtest.h>
 
@@ -27,6 +32,41 @@ class ForwardRenderPipelineTestAccess
     static void reconcilePublishedViews(ForwardRenderPipeline& pipeline, const SceneRenderPlan& plan)
     {
         pipeline.reconcilePublishedViews(plan);
+    }
+};
+
+/// Installs a pipeline the test owns as the coordinator's active strategy.
+/// Building one goes through `initForwardPipeline` and needs a real backend, so
+/// this is the seam instead of the coordinator growing a public
+/// install-the-strategy entry point just for a test.
+class PipelineCoordinatorTestAccess
+{
+  public:
+    static void installForwardPipeline(PipelineCoordinator&                   coordinator,
+                                       std::shared_ptr<ForwardRenderPipeline> pipeline)
+    {
+        coordinator._forwardPipeline       = std::move(pipeline);
+        coordinator._renderPipeline        = PipelineCoordinator::ERenderPipeline::Forward;
+        coordinator._pendingRenderPipeline = PipelineCoordinator::ERenderPipeline::Forward;
+    }
+};
+
+/// Drives the device's pre-record step with a pipeline the test published into.
+/// `prepareFrameRecord` is private because it is only meaningful inside a frame,
+/// so a case that wants the eviction *call site* covered reaches it from here
+/// rather than standing up a real backend and a command buffer.
+class RenderDeviceStateTestAccess
+{
+  public:
+    static void installActivePipeline(RenderDeviceState&                     device,
+                                      std::shared_ptr<ForwardRenderPipeline> pipeline)
+    {
+        PipelineCoordinatorTestAccess::installForwardPipeline(device._pipelineCoordinator, std::move(pipeline));
+    }
+
+    static void prepareFrameRecord(RenderDeviceState& device, const RenderFramePlan& plan)
+    {
+        device.prepareFrameRecord(plan);
     }
 };
 
@@ -363,6 +403,92 @@ TEST(ForwardRenderPipelineTest, ATickThatDeclaresNoViewLeavesNothingPublished)
     EXPECT_EQ(pipeline.viewResourcesFor(11), nullptr);
     EXPECT_EQ(pipeline.getViewDepthImageShared(11), nullptr);
     EXPECT_TRUE(colorRef.expired());
+}
+
+/// The wiring evidence for dropping a View the tick stopped declaring: it is
+/// `RenderDeviceState::prepareFrameRecord` -- the device's own pre-record step --
+/// that reconciles against this tick's plan. The sibling case above covers the
+/// pipeline's half with `reconcilePublishedViews()` called straight from the test;
+/// this one goes through the device, so removing the reconcile call from
+/// `RenderDeviceState.Frame.cpp` turns it red.
+///
+/// Boundary: this pins that `prepareFrameRecord` reconciles against the plan it is
+/// handed, and that the call site exists and runs. It does not pin the order
+/// between `prepareFrameRecord` and `beginFrameCommandBuffer` inside `record()`:
+/// that needs a real command buffer, so the order stays something `record()`
+/// guarantees rather than something this case watches.
+TEST(RenderDeviceStateTest, PrepareFrameRecordDropsTheViewsTheTickStopsDeclaring)
+{
+    Scene scene("Authoring");
+
+    auto              pipeline = std::make_shared<ForwardRenderPipeline>();
+    RenderDeviceState device;
+    RenderDeviceStateTestAccess::installActivePipeline(device, pipeline);
+    // The seam worked: the device is asking this pipeline, not a real one.
+    EXPECT_EQ(device.getRenderPipeline(), PipelineCoordinator::ERenderPipeline::Forward);
+
+    auto worldColor   = makeAttachment();
+    auto worldDepth   = makeAttachment();
+    auto previewColor = makeAttachment();
+    auto previewDepth = makeAttachment();
+
+    // The world View's declaration is kept as a named value because the case
+    // reads its entityId attachment back below.
+    const RenderViewOutput worldOutput   = makeOutput(11, kWorldExtent, worldColor, worldDepth);
+    const auto             worldEntityId = worldOutput.entityId;
+
+    // Weak references taken before the preview View is published, and the
+    // test's own handles dropped right after: the preview declaration is a
+    // temporary and the local handles are the only owners outside the
+    // pipeline's table, so "this View is gone" is provably also "its
+    // attachments were released" rather than merely "the lookup misses".
+    std::weak_ptr<RenderTexture> previewColorRef = previewColor;
+    std::weak_ptr<RenderTexture> previewDepthRef = previewDepth;
+
+    ForwardRenderPipelineTestAccess::publishViewResources(*pipeline, worldOutput, kWorldExtent, kGameFeatures);
+    ForwardRenderPipelineTestAccess::publishViewResources(
+        *pipeline, makeOutput(12, kThumbnailExtent, previewColor, previewDepth), kThumbnailExtent, kGameFeatures);
+    previewColor.reset();
+    previewDepth.reset();
+
+    // This tick declares the world View and nothing else, and it declares it
+    // through the scheduler the host uses: the criterion is the tick's own
+    // declarations, not a list the test keeps on the side.
+    SceneRenderScheduler scheduler;
+    scheduler.beginTick(1);
+    ASSERT_TRUE(scheduler.submit(SceneViewDesc{
+        .scene      = &scene,
+        .viewId     = 11,
+        .outputRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
+    }));
+
+    RenderFramePlan plan;
+    plan.sceneRender = buildSceneSnapshots(scheduler.seal(),
+                                           [](Scene&) { return std::make_shared<const SceneSnapshot>(); });
+    ASSERT_EQ(plan.sceneRender.plan().viewTasks.size(), 1u);
+
+    RenderDeviceStateTestAccess::prepareFrameRecord(device, plan);
+
+    // The View this tick stopped declaring is gone: no entry, nothing behind the
+    // identity-carrying queries, and no second owner keeping its images alive.
+    EXPECT_EQ(pipeline->viewResourcesFor(12), nullptr);
+    EXPECT_EQ(pipeline->getViewDepthImageShared(12), nullptr);
+    EXPECT_EQ(pipeline->getEntityIdImageShared(12), nullptr);
+    EXPECT_TRUE(previewColorRef.expired());
+    EXPECT_TRUE(previewDepthRef.expired());
+
+    // The View the tick still declares is untouched, field for field: the same
+    // owners and extent, not a re-published or shifted copy.
+    const ForwardViewResources* world = pipeline->viewResourcesFor(11);
+    ASSERT_NE(world, nullptr);
+    EXPECT_EQ(world->colorOwner, worldColor);
+    EXPECT_EQ(world->depthOwner, worldDepth);
+    EXPECT_EQ(world->resolveOwner, nullptr);
+    EXPECT_EQ(world->entityIdOwner, worldEntityId);
+    EXPECT_EQ(world->extent.width, kWorldExtent.width);
+    EXPECT_EQ(world->extent.height, kWorldExtent.height);
+    EXPECT_EQ(pipeline->getViewDepthImageShared(11), worldDepth);
+    EXPECT_EQ(pipeline->getEntityIdImageShared(11), worldEntityId);
 }
 
 } // namespace

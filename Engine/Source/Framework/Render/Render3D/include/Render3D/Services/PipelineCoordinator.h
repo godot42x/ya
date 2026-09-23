@@ -77,6 +77,12 @@ struct YA_RENDER_3D_API PipelineCoordinator
     void requestRenderTargetFormat(const RenderTargetFormatCommand& command);
 
   private:
+    /// Test-only seam: install a pipeline the test owns as the active strategy.
+    /// Building one goes through `initForwardPipeline` and needs a real backend,
+    /// so a case that only wants `getActivePipeline()` to answer with a pipeline
+    /// it published into names itself instead.
+    friend class PipelineCoordinatorTestAccess;
+
     void initActivePipeline();
     void initForwardPipeline(int viewWidth, int viewHeight);
     void initDeferredPipeline(int viewWidth, int viewHeight);
