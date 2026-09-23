@@ -341,6 +341,12 @@ TEST(ToolControlsTest, SplitPaneDividerDragChangesRatioAndEndsSession)
     WidgetTree tree({.width = 400, .height = 300});
     auto       split = std::make_shared<UISplitPane>("Split");
     split->setSplitRatio(0.5f);
+    // Explicit fixture values: the layout defaults (divider thickness, min
+    // extents) are framework policy and changed once already; this test is
+    // about the drag/clamp behaviour, so it pins its own geometry.
+    split->setDividerThickness(6.0f);
+    split->setMinFirstExtent(40.0f);
+    split->setMinSecondExtent(40.0f);
     auto left  = std::make_shared<UICanvasPanel>("Left");
     auto right = std::make_shared<UICanvasPanel>("Right");
     FCanvasSlotArgs splitSlot;
@@ -746,6 +752,7 @@ TEST(ToolControlsTest, ScrollViewportNestedInsideSplitKeepsCustomLayout)
     WidgetTree tree({.width = 400, .height = 300});
     auto       split = std::make_shared<UISplitPane>("Split");
     split->setSplitRatio(0.5f);
+    split->setDividerThickness(6.0f);
     auto scroll = std::make_shared<UIScrollViewport>("Scroll");
     auto content = std::make_shared<UICanvasPanel>("Content");
     FCanvasSlotArgs splitSlot;

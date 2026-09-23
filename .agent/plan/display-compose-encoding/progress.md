@@ -96,11 +96,9 @@ F1 的代码改动最初是在本目录建成之前、与另一个写入者的 v
 
 本轮新发现（与 F2 无关，但会影响别人验证）：
 
-- `WidgetTreeTest.SystemLayersCannotBeDetached` 会以 SIGTRAP 打死整个测试进程。该用例故意
-  detach 系统 layer，而 `YA_CORE_ASSERT` 是 `log + PLATFORM_BREAK()`。HEAD 上 WidgetTree.cpp
-  与该用例都未被修改（`git diff --stat HEAD` 为空），所以这是既有问题，不是本次改动引入。
-  本轮宽滤镜用 `-WidgetTreeTest.SystemLayersCannotBeDetached` 排除它。要不要把「detach 系统
-  layer」从 trap 改成返回 refused（那样用例才有意义）属于 GUI 侧的决定。
+- ~~`WidgetTreeTest.SystemLayersCannotBeDetached` 会以 SIGTRAP 打死整个测试进程~~
+  **GUI 侧已定（760fd1f1，2026-09-23）**：detach 系统 layer 改为日志拒绝（不 trap），
+  用例原样保留并绿；death-test 方案作废，全量套件从此可跑完。
 - 编辑器截图漂移来源确认：Frame Inspector HUD 的实时计时文字（默认开启）。比对区域
   x 1140..1240 / y 735..776，其余逐字节稳定。
 - 未归属：第一次 `control start` 拉起的编辑器实例在首帧前后以 SIGBUS

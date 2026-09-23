@@ -331,14 +331,27 @@ view compose 阶段，不属于编辑器），并在函数头写明"为什么编
 
 理由：这些引用是"设计记录在这里"的指路牌。不跟着改，归档就等于把结论弄丢。
 
-## 环境现状（与本线无关的既有失败，动手前先确认是否仍存在）
+## 环境现状（2026-09-23 复核；此前两条已修，登记当前失败清单）
 
-1. `ya-gui-widgets-test` 编译失败：`Engine/Test/Source/GuiFrameInspectorTest.cpp`
-   找不到 `GUI/Compose/GuiFrameInspectorOverlay.h` —— 该 target 的 deps 只有
-   `ya-gui-widgets` + `ya-render-resources`，缺 `ya-gui-compose`。属 GUI 线的
-   target 配置缺口。
-2. `ya-testing` 中 `WidgetLayoutTest.DockTabBarStripDoubleClickFiresHostCallback`
-   在 `WidgetTree::beginPointerDispatch` 断言 `EXC_BREAKPOINT`（SIGTRAP）。
-   该断言由 `e1c93a0e [gui] crash on leftover pointer capture instead of eating
-   the first click`（2026-09-17）引入，且是本次 S1 base 提交的祖先；S1 未触碰
-   该测试与指针逻辑，故为既有失败。
+1. ~~`ya-gui-widgets-test` 编译失败（GuiFrameInspectorOverlay 在 Compose）~~
+   **已修（b562347a）**：`GuiFrameInspectorTest.cpp` 在 `ya-gui-closure-test` 里已
+   有一份注册，`ya-gui-widgets-test` 里的重复条目删除，闭合门禁语义恢复原样。
+2. ~~`WidgetTreeTest` 系统层 detach 断言 trap 截断全量套件~~ **已被 GUI 线解决
+  （760fd1f1）**：`WidgetTree::detach` 对系统层从 `YA_CORE_ASSERT(false)` 改为
+   日志拒绝，测试语义（detach 被拒、层仍在）成立。`DockTabBarStripDoubleClick…`
+   的 trap 亦不再复现。
+3. `ToolControlsTest` 两个 split 用例：`UISplitLayout` 默认值在 c0ae42e4 拆头文件时
+   改变（`dividerThickness` 6→4、`minFirst/SecondExtent` 40→0），测试断言仍按旧默认。
+   **已修**：fixture 显式 pin `setDividerThickness(6.0f)` / `setMinFirst/SecondExtent(40.0f)`
+   （测试的意图是 drag/clamp 行为，几何自持；`ya-testing` 与 `ya-gui-closure-test` 双绿）。
+   已在 2aef14d4 基线 worktree 验证这三个失败全部预存，不是近期渲染/GUI 改动引入。
+4. 当前 `ya-testing` 全量：1269 passed / 8 failed / 11 skipped，失败清单与归属：
+   - `WidgetLayoutTest.FloatingWindowResizeHandlesLiveOnOverlaySlots` ——
+     a8af1c88（dock stack 优化）的行为变化；在 2aef14d4 基线同样失败，GUI 线。
+   - `GameUIHostTest.BuildSnapshotComposesMountedWidgets`、
+     `ScriptApiLibraryFixture.GameUIWidgetLifecycleThroughRegistry` ——
+     3cba2e61（scene 挂 document 资产）改变挂载契约，`game-ui-authoring` 线。
+   - `GUIHeadlessHostTest.ReusesAppKernel…`、`GUIHeadlessHostTest.UnthemedFallback…`、
+     `GUIWindowManagerTest.DragOverlaySessionIsExemptFromFocusAndInput` —— GUI host 线。
+   - `EditorPropertyGraphTest.AutoPropertySectionAssetPathCommitBrowseAndUndo`、
+     `EditorPropertyGraphTest.TextureAssetRowShowsRetainedPreview` —— 编辑器线。

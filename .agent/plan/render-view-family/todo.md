@@ -36,7 +36,7 @@
 
 - [x] 画出 GameRuntimeTickOrchestrator、RenderFrameExtractor、RenderRuntime、Forward/Deferred、ViewCompose、DisplayCompose、Present 的真实调用图。
 - [x] 核对 RenderGraph build/execute 的 snapshot 时序和 live-state 访问。
-- [ ] 登记并修复影响 R0 的 GUI widget test include/target 配置。
+- [x] 登记并修复影响 R0 的 GUI widget test include/target 配置（b562347a：GuiFrameInspectorTest 移回 closure 套件；760fd1f1 的 detach 拒绝语义 + ToolControls fixture pin 让全量套件可跑完）。
 - [ ] 添加单 Camera golden：矩阵、离屏 extent、output format、surface imageIndex。
 - [ ] 添加 resize、surface recreate、zero-extent、关闭单窗场景。
 - [x] 记录 Forward 与 Deferred 当前 pass 顺序，不改策略。

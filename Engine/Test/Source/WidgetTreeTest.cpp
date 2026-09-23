@@ -1496,6 +1496,9 @@ TEST(WidgetTreeTest, TreeDestructionReleasesMembershipSafely)
     EXPECT_EQ(button->getSlot(), nullptr);
 }
 
+// System layers are owned by the tree: detach() refuses caller misuse
+// (logs + keeps the layer) instead of trapping the process. The refusal is
+// the contract, so the test asserts the layer survives the attempt.
 TEST(WidgetTreeTest, SystemLayersCannotBeDetached)
 {
     WidgetTree tree({.width = 800, .height = 600});
