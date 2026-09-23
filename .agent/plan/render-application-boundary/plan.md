@@ -129,6 +129,67 @@ AB4-step2（待做）：让**额外的 OS 窗口走同一条路**。现状：额
 整帧录制完全没参与——所以被拖出去的 viewport 面板看不到世界画面。
 这一步同时需要额外窗口的 chrome 每帧被 tick（现在 `session->tick` 只对默认窗口调用）。
 
+#### AB4-step2 的执行口径（沿用 `render-view-family` R2 已登记的决定，不再单独拍板）
+
+**一个逻辑帧、一份 `SceneRenderPlan`、N 个 present surface。** R2 的待办
+（“让同一逻辑帧的多个 surface/window 共用一个 SceneRenderScheduler/SceneRenderPlan，
+避免按窗口重复抽取同一 Scene”）已经把这个口径写死；今天 `RenderFramePlan::present`
+只有一个 `PresentFrameInput`，所以这一步的第一件事是把它变成 N 个 display root，
+而不是“每窗口各渲一帧”。
+
+当前产品的真实顺序（`EditorModule`，与 step2 要改的正是这两处）：
+
+```
+主窗口   tickRender → record（世界 RT → chrome UIImage → compose → present）
+额外窗口 onAfterPresent → sweepAndPresentExtraWindows
+           → GUIWindowManager::tickTrees + renderAll
+           → presentGuiSnapshot（自建 acquire/submit/present，只有 GUI）
+```
+
+因此 step2 不只是“多一个 present target”，而是**把额外窗口的 tick / compose / present
+从主窗口 present 之后挪进 app 的录制顺序里**——这是唯一的时序改动，也是最容易踩
+“chrome tick 在 present 之后”这类半状态的地方。
+
+##### AB4-2a：plan 支持多个 present target（结构批次，产品行为不变）
+
+- `RenderFramePlan::present` 单值 → `std::vector<DisplayRootPlan>`，每项
+  `{surface, imageIndex, backdrop, chromeSnapshot(可选), displayViewId}`；
+  **主窗口仍是第一项**（保序，现有所有读 `.present.surface` 的单值消费点只读第一项）。
+- `RuntimeRenderContext::record` 里 present target 获取、UI compose、display compose、
+  `sealFrame` 按 display root 循环，**每项走同一条顺序**；空表 = 今天“plan 无 surface”
+  的既有语义（不录、不 present）。
+- `SurfacePresentation` 已经是 per-surface（step1 落地，按该窗口自己的 swapchain format
+  建 write pass），这一批不改它。
+- 验收：`ya-render-3d-test` 全绿；`run_display_compose_parity.py --skip-build` 两张图
+  md5 逐字节不变（`c775245ae…`）；`make test` 全绿。
+
+##### AB4-2b：额外窗口的 chrome 进同一帧
+
+- `sweepAndPresentExtraWindows` 的 `tickTrees + renderAll` 改为：额外窗口的 tree tick
+  与 snapshot 构建挪到 **record 之前**（app 帧循环内），snapshot 交给 `RuntimeRenderContext`
+  作为第二项 display root，compose 落到该窗口自己的 swapchain；
+  `GUIWindowManager::renderAll` 从编辑器产品路径退役（GUIApp / headless 仍可用它）。
+- `EditorWindowSession` 的回收语义不变：close-requested 的 extra 仍由 app 侧收口，
+  不允许在录制中途销毁 session（`app_teardown_order_and_instance_lock.md` 的边界）。
+- 验收：`GUIAppCrossWindowDragTest.*` / `GUIWindowManagerTest.*` / `EditorNativeTearOffTest.*`
+  全绿；新增一条断言：额外 surface 的 present 真的进了 app 的 record
+  （`getPresentationImageShared(extraSurface)` 非空），而不是 `presentGuiSnapshot` 的自循环。
+
+##### AB4-2c：额外窗口里的 viewport 面板渲世界
+
+- 该窗口内的 viewport tab 由 `EditorViewProducer` 声明到**那个 surface**（owner-scoped
+  `SceneViewKey` 已就位；同 Scene 双 View 的 snapshot 复用表在 R2 已有验证，这里直接接上）。
+  chrome 的 `UIImage` 采样该 View 的 display RT——与主窗口同一机制，不是把主窗口的图复制过去。
+- 验收：一条自动化：把 viewport 面板 tear-off 成独立 OS 窗口 → 断言第二张 swapchain
+  的图非空、extent 非退化、且与主窗口的 presentation 图**不同**（不同相机位姿下必然不同，
+  防“只是把主窗口的 display 拷给了第二张 surface”）；世界内容正确性留给目视 + 现有 smoke。
+
+##### 非目标（本条不做）
+
+- 不改 `PresentFrameInput::backdrop` 的语义（那是 display-compose 的待定项）。
+- 不在本条里决定 flight 深度（R2/temporal_semantics M4，独立决策）。
+- 不新增“第二个 renderer”：AB4-step1 已经把第二窗口变成 `_surfacePresentations` 表的第二项。
+
 AB4-step3（待做）：`PresentationGraphService` 只保留「把 ready image 写进 surface」+ 宿主
 display stage 的顺序；acquire / submit / present 的编排留在应用。
 
