@@ -1,3 +1,7 @@
+-- Scratch prototypes (bus / enum_name / type_size / graphics.h / LazyStatic):
+-- author sandboxes for language and API experiments. They are programs with their
+-- own main(), not tests, and bus.cpp blocks on std::cin, so they stay OUT of the
+-- `test` group on purpose -- building/running them stays an explicit opt-in.
 do -- grab all cpp file under test folder as a target
     local bDebug = false
     local files = os.files("./*.cpp")
@@ -12,7 +16,6 @@ do -- grab all cpp file under test folder as a target
             if bDebug then
                 print("add test unit:", targetName)
             end
-            set_group("test")
             set_kind("binary")
             add_deps("ya-engine")
             if filepath:find("EditorPropertyGraphTest", 1, true) then

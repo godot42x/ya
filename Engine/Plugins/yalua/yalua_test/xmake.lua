@@ -3,6 +3,7 @@ add_requires("gtest")
 target("yalua_test")
 do
     set_kind("binary")
+    set_group("test")
     set_rundir(os.scriptdir())
     set_languages("c++20")
 

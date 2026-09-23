@@ -10,7 +10,7 @@ int main()
 
     ya::DeferredFrameGraphResources::Passes passes{};
     if (passes.shadow.shadowDepth.has_value() || passes.gBuffer.has_value() || passes.light.has_value() ||
-        passes.skybox.has_value() || passes.sceneOverlay.has_value() || passes.viewportOverlay.has_value()) {
+        passes.skybox.has_value() || passes.sceneOverlay.has_value() || passes.viewOverlay.has_value()) {
         return 2;
     }
 

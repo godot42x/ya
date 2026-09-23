@@ -1,5 +1,24 @@
 add_requires("gtest")
 
+-- Test sources are collected by DIRECTORY, one directory per gate, so a new
+-- test file joins its gate the moment it lands in the right folder -- no edit
+-- here, no per-file bookkeeping. Layout contract:
+--
+--   Source/Support/     shared runner (gtest main) -- every target batches it
+--   Source/Integration/ full-engine tests -- reached through the `**.cpp` glob
+--                       below, so they only ever run in `ya-testing`
+--   Source/<Gate>/      minimal-closure regression suites; the gate name is the
+--                       linkage promise the target enforces (see add_deps)
+--
+-- A directory glob selects whole suites, never individual cases. Picking a
+-- single file out of a suite directory again means the file sits in the wrong
+-- folder: move it instead of naming it.
+function ya_test_sources(...)
+    for _, dir in ipairs({ ... }) do
+        add_files("./Source/" .. dir .. "/*.cpp")
+    end
+end
+
 -- Engine test runner + module fixture depend on the full engine aggregate,
 -- so they are engine-profile only; the GUI closure test below is the single
 -- test target that also exists in the gui profile.
@@ -7,13 +26,14 @@ if get_config("ya_profile") ~= "gui" then
     target("ya-module-fixture")
     do
         set_kind("shared")
-        add_files("./Fixture/ModuleFixture.cpp")
+        add_files("./Fixture/*.cpp")
         add_deps("ya-engine")
     end
 
     target("ya-testing")
     do
         set_kind("binary")
+        set_group("test")
         add_files("./Source/**.cpp")
 
         add_deps("ya-engine", "ya-module-fixture", "ya-game-editor")
@@ -33,7 +53,8 @@ if get_config("ya_profile") ~= "gui" then
     target("ya-ecs-core-test")
     do
         set_kind("binary")
-        add_files("./Source/TestEntry.cpp", "./Source/ECSTest.cpp")
+        set_group("test")
+        ya_test_sources("Support", "EcCore")
         add_deps("ya-ecs-core")
         add_packages("gtest")
     end
@@ -41,9 +62,8 @@ if get_config("ya_profile") ~= "gui" then
     target("ya-resource-core-test")
     do
         set_kind("binary")
-        add_files("./Source/TestEntry.cpp",
-                  "./Source/PathRegistryTest.cpp",
-                  "./Source/ResourceTableTest.cpp")
+        set_group("test")
+        ya_test_sources("Support", "ResourceCore")
         add_deps("ya-resource-core", "ya-foundation-core")
         add_packages("gtest")
     end
@@ -51,24 +71,8 @@ if get_config("ya_profile") ~= "gui" then
     target("ya-render-3d-test")
     do
         set_kind("binary")
-        add_files("./Source/TestEntry.cpp",
-                  "./Source/DeferredRenderPipelineTest.cpp",
-                  "./Source/DirectionalShadowMathTest.cpp",
-                  "./Source/RenderGraphCoreTest.cpp",
-                  "./Source/DrawCandidateViewTest.cpp",
-                  "./Source/RenderRuntimeSnapshotTest.cpp",
-                  "./Source/RenderSubmissionTest.cpp",
-                  "./Source/SceneFamilyResourcesTest.cpp",
-                  "./Source/ViewPassResourcesTest.cpp",
-                  "./Source/RenderViewBindingTableTest.cpp",
-                  "./Source/RenderViewOutputTableTest.cpp",
-                  "./Source/ViewTargetStoreTest.cpp",
-                  "./Source/ViewFamilyRendererTest.cpp",
-                  "./Source/ForwardFrameGraphOrchestratorTest.cpp",
-                  "./Source/ShadowPreparedViewTest.cpp",
-                  "./Source/SurfaceImageTest.cpp",
-                  "./Source/SceneDerivedStateTest.cpp",
-                  "./Source/CameraFrustumOverlayTest.cpp")
+        set_group("test")
+        ya_test_sources("Support", "Render3D")
         -- Plan tests declare real Scenes: a Scene handle, not an invented id, is
         -- what a view declaration carries.
         add_deps("ya-render-3d", "ya-render-graph", "ya-foundation-core", "ya-scene-core")
@@ -81,8 +85,8 @@ if get_config("ya_profile") ~= "gui" then
     target("ya-render-2d-test")
     do
         set_kind("binary")
-        add_files("./Source/TestEntry.cpp",
-                  "./Source/Render2DClipTest.cpp")
+        set_group("test")
+        ya_test_sources("Support", "Render2D")
         add_deps("ya-render-2d")
         add_packages("gtest")
     end
@@ -93,8 +97,8 @@ if get_config("ya_profile") ~= "gui" then
     target("ya-resource-runtime-closure-test")
     do
         set_kind("binary")
-        add_files("./Source/TestEntry.cpp",
-                  "./Source/ResourceRuntimeClosureTest.cpp")
+        set_group("test")
+        ya_test_sources("Support", "ResourceRuntime")
         add_deps("ya-resource-runtime")
         add_packages("gtest")
     end
@@ -104,9 +108,8 @@ if get_config("ya_profile") ~= "gui" then
     target("ya-rhi-vulkan-smoke")
     do
         set_kind("binary")
-        add_files("./Source/TestEntry.cpp",
-                  "./Source/RHIVulkanSmoke.cpp",
-                  "./Source/RHISurfaceContextTest.cpp")
+        set_group("test")
+        ya_test_sources("Support", "RhiVulkan")
         add_deps("ya-rhi-vulkan")
         add_packages("gtest")
     end
@@ -120,28 +123,8 @@ end
 target("ya-gui-closure-test")
 do
     set_kind("binary")
-    add_files("./Source/ToolControlsTest.cpp")
-    add_files("./Source/WidgetTreeTest.cpp")
-    add_files("./Source/BindingContractTest.cpp")
-    add_files("./Source/DockNodeTest.cpp")
-    add_files("./Source/UIDocumentTest.cpp")
-    add_files("./Source/UIFrameSnapshotTest.cpp")
-    add_files("./Source/GuiAnimationTest.cpp")
-    add_files("./Source/ComposeClipReplayTest.cpp")
-    add_files("./Source/GUIRenderSurfaceTest.cpp")
-    add_files("./Source/LayoutHostSkipBaselineTest.cpp")
-    add_files("./Source/TextureCompletionThreadBaselineTest.cpp")
-    add_files("./Source/GuiFrameInspectorTest.cpp")
-    add_files("./Source/SceneCostBaselineTest.cpp")
-    add_files("./Source/WidgetLayoutTest.cpp")
-    add_files("./Source/GuiEventDriverTest.cpp")
-    add_files("./Source/BmpDiffTest.cpp")
-    add_files("./Source/AppKernelTest.cpp")
-    add_files("./Source/DeclarativeContractTest.cpp")
-    add_files("./Source/EditorScaleBaselineTest.cpp")
-    add_files("./Source/EditorLongRunSoakTest.cpp")
-    add_files("./Source/EditorInputContractTest.cpp")
-    add_files("./Source/TestEntry.cpp")
+    set_group("test")
+    ya_test_sources("Support", "GuiDeclarative", "GuiWidgets", "GuiFramework")
 
     add_deps("ya-gui-framework")
     -- This target also covers AppKernelTest, which drives the windowless main
@@ -161,19 +144,8 @@ end
 target("ya-gui-widgets-test")
 do
     set_kind("binary")
-    add_files("./Source/WidgetTreeTest.cpp")
-    add_files("./Source/BindingContractTest.cpp")
-    add_files("./Source/DockNodeTest.cpp")
-    add_files("./Source/UIDocumentTest.cpp")
-    add_files("./Source/UIFrameSnapshotTest.cpp")
-    add_files("./Source/LayoutHostSkipBaselineTest.cpp")
-    add_files("./Source/TextureCompletionThreadBaselineTest.cpp")
-    add_files("./Source/ToolControlsTest.cpp")
-    add_files("./Source/DeclarativeContractTest.cpp")
-    add_files("./Source/EditorScaleBaselineTest.cpp")
-    add_files("./Source/EditorLongRunSoakTest.cpp")
-    add_files("./Source/EditorInputContractTest.cpp")
-    add_files("./Source/TestEntry.cpp")
+    set_group("test")
+    ya_test_sources("Support", "GuiDeclarative", "GuiWidgets")
 
     add_deps("ya-gui-widgets", "ya-render-resources")
     add_packages("gtest")
@@ -188,9 +160,8 @@ end
 target("ya-gui-declarative-contract-test")
 do
     set_kind("binary")
-    add_files("./Source/DeclarativeContractTest.cpp")
-    add_files("./Source/ScreenStackContractTest.cpp")
-    add_files("./Source/TestEntry.cpp")
+    set_group("test")
+    ya_test_sources("Support", "GuiDeclarative")
     add_deps("ya-gui-widgets", "ya-render-resources")
     add_packages("gtest")
 
@@ -204,10 +175,8 @@ end
 target("ya-gui-headless-host-test")
 do
     set_kind("binary")
-    add_files("./Source/GUIHeadlessHostTest.cpp")
-    add_files("./Source/GUIWindowManagerTest.cpp")
-    add_files("./Source/GUIWindowChromeTest.cpp")
-    add_files("./Source/TestEntry.cpp")
+    set_group("test")
+    ya_test_sources("Support", "GuiHost")
 
     add_deps("ya-gui-host")
     add_packages("gtest")

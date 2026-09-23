@@ -13,6 +13,7 @@ target("GUIWorkbench")
 -- state, so this target links only the workspace TU + gtest, no GUI closure.
 target("ya-gui-workbench-workspace-test")
     set_kind("binary")
-    add_files("./Test/TestEntry.cpp", "./Test/WorkspaceTest.cpp")
+    set_group("test")
+    add_files("./Test/*.cpp")
     add_deps("ya-gui-tooling")
     add_packages("gtest", "glm")

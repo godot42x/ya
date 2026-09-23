@@ -102,6 +102,7 @@ end)
 target("reflects-generator-test")
 do
     set_kind("binary")
+    set_group("test")
 
     -- ========================================================================
     -- 源文件
