@@ -221,11 +221,17 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockPrimaryPresent)
     ASSERT_TRUE(presentOneFrame(*primary));
     ASSERT_TRUE(presentOneFrame(*extra));
 
+    // This guard needs the platform to actually drive the minimize/restore
+    // transition, and it says so up front instead of asserting half of it: in
+    // this harness SDL keeps (or keeps missing) SDL_WINDOW_MINIMIZED for a
+    // window the window manager never really miniaturized, and a stale flag is
+    // a reason the code under test cannot act on. Both directions are checked
+    // so a red here always means the surface path, not the flag.
     if (!extraWindow.minimize()) {
         GTEST_SKIP() << "native minimize is unavailable";
     }
-    if (!extraWindow.isMinimized() && extra->isPresentable()) {
-        GTEST_SKIP() << "platform did not mark extra window unpresentable after minimize";
+    if (!extraWindow.isMinimized()) {
+        GTEST_SKIP() << "platform did not mark the extra window minimized";
     }
 
     extra->requestRecreate();
@@ -243,6 +249,9 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockPrimaryPresent)
     ASSERT_TRUE(extraWindow.restoreFromMinimize());
     extra->requestRecreate();
     ASSERT_TRUE(presentOneFrame(*extra));
+    if (extraWindow.isMinimized()) {
+        GTEST_SKIP() << "platform kept the minimized flag after restore";
+    }
     ASSERT_TRUE(extra->isPresentable());
     ASSERT_TRUE(presentOneFrame(*primary));
 
