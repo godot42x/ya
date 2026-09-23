@@ -26,18 +26,3 @@ do -- grab all cpp file under test folder as a target
         end
     end
 end
-
-
-task("test")
-do
-    set_menu {
-        usage = "xmake test",
-        options = {
-            { nil, "rule", "v", "debug", "the rule to config build mode " }
-        }
-    }
-    on_run(function()
-        os.exec("xmake b -g test")
-        os.exec("xmake r -g test")
-    end)
-end

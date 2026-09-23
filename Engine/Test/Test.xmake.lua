@@ -1,5 +1,24 @@
 add_requires("gtest")
 
+-- `xmake test` (and `make test`): build and run the whole `test` group, so the
+-- sweep lives next to the targets it sweeps instead of next to the scratch
+-- prototypes. Groups resolve through set_group("test") on every test target;
+-- target order is xmake's, and the sweep stops at the first red target, so a
+-- failure means "fix and re-run" rather than "here is the full report".
+task("test")
+do
+    set_menu {
+        usage = "xmake test",
+        options = {
+            { nil, "rule", "v", "debug", "the rule to config build mode " }
+        }
+    }
+    on_run(function()
+        os.exec("xmake b -g test")
+        os.exec("xmake r -g test")
+    end)
+end
+
 -- Test sources are collected by DIRECTORY, one directory per gate, so a new
 -- test file joins its gate the moment it lands in the right folder -- no edit
 -- here, no per-file bookkeeping. Layout contract:
