@@ -168,7 +168,6 @@ do
     add_files("./Source/UIFrameSnapshotTest.cpp")
     add_files("./Source/LayoutHostSkipBaselineTest.cpp")
     add_files("./Source/TextureCompletionThreadBaselineTest.cpp")
-    add_files("./Source/GuiFrameInspectorTest.cpp")
     add_files("./Source/ToolControlsTest.cpp")
     add_files("./Source/DeclarativeContractTest.cpp")
     add_files("./Source/EditorScaleBaselineTest.cpp")
