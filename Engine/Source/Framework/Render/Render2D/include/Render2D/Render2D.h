@@ -100,6 +100,10 @@ struct YA_RENDER_2D_API Render2D
 {
     static FQuadRender*  quadData;
     static FLineRender*  lineData;
+    /// The device both batchers record through, kept so `begin()` can resolve
+    /// the per-frame ring slot from the device's frames in flight instead of a
+    /// swapchain's image counter.
+    static IRender*      device;
     static FRender2dDebugState debug;
     static FRender2dSession    session;
 

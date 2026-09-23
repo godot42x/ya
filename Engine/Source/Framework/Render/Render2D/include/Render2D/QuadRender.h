@@ -217,7 +217,11 @@ struct YA_RENDER_2D_API FQuadRender
     void destroy();
     /// Lazily allocate one pass slot's buffers + descriptor sets (all flights).
     void ensureSlotResources(Render2DPassSlot passSlot);
-    void begin(Render2DPassSlot passSlot, const Extent2D& extent);
+    /// `flightSlot` is the slot of this pass's per-frame ring this recording may
+    /// use; `Render2D::begin` resolves it from the device's frames in flight
+    /// (see `IRender::framesInFlight`). Render2D never asks a swapchain which
+    /// frame it is on -- that was the primary window leaking into 2D batching.
+    void begin(Render2DPassSlot passSlot, const Extent2D& extent, uint32_t flightSlot);
     void end();
     /// Ensure a pass slot's screen-space pipeline matches its target attachment
     /// formats. A depth-less target (depthFormat == Undefined) resolves to the

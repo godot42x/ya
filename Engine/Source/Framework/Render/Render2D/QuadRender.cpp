@@ -565,10 +565,10 @@ void FQuadRender::ensureSlotResources(Render2DPassSlot passSlot)
     }
 }
 
-void FQuadRender::begin(Render2DPassSlot passSlot, const Extent2D& extent)
+void FQuadRender::begin(Render2DPassSlot passSlot, const Extent2D& extent, uint32_t flightSlot)
 {
     _activePassSlot = passSlot;
-    _activeFlightIndex = _render ? _render->primaryFrameIndex() % MAX_FLIGHTS_IN_FLIGHT : 0;
+    _activeFlightIndex = flightSlot % MAX_FLIGHTS_IN_FLIGHT;
     ensureSlotResources(passSlot);
     auto& resources = activeFlightResources();
     vertexPtrHead      = resources.vertexPtrHead;

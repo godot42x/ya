@@ -28,6 +28,19 @@ struct INativeWindow;
 /// of this size. Shared by the 2D batch renderer and the 3D render stages.
 constexpr uint32_t MAX_FLIGHTS_IN_FLIGHT = 2;
 
+/// How many frames the device actually keeps in flight. This is the depth of
+/// every per-frame GPU ring: each presentation surface's acquire/flight ring
+/// (image-available semaphores + in-flight fences) and the device's GPU-timing
+/// query ring. One means "beginning frame N waits frame N-1's work on that
+/// surface"; it also bounds which slot of any per-frame ring a recording may
+/// use, which is why `MAX_FLIGHTS_IN_FLIGHT` tables in production only ever
+/// touch slot 0.
+///
+/// Raising this is the CPU/GPU-overlap decision, not a rename: it must raise
+/// every ring above together and verify that the higher slots really rotate
+/// (see `.agent/plan/render-view-family/temporal_semantics.md` M4).
+constexpr uint32_t kFramesInFlight = 1;
+
 // using slang_types::Common::Limits::MAX_POINT_LIGHTS;
 using slang_types::Common::Limits::MAX_BONE_COUNT;
 using slang_types::Common::Limits::MAX_BONE_WEIGHT_PER_VERTEX;

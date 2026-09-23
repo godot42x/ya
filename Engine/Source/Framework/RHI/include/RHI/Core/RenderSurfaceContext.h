@@ -66,7 +66,12 @@ struct YA_RHI_API IRenderSurfaceContext
     [[nodiscard]] virtual void*    getCurrentImageAvailableSemaphore() = 0;
     [[nodiscard]] virtual void*    getCurrentFrameFence()              = 0;
     [[nodiscard]] virtual void*    getRenderFinishedSemaphore(uint32_t imageIndex) = 0;
-    [[nodiscard]] virtual uint32_t getCurrentFrameIndex() const        = 0;
+    // `getCurrentFrameIndex()` used to be here: the surface's own acquire-slot
+    // counter exposed so callers could ask a WINDOW which frame it was on (the
+    // world recording's flight slot and the GPU-timing ring both did). Both now
+    // key off `IRender::recordedFrameIndex()`, which is the frame's own number;
+    // the slot stays private to the surface, where it only picks this
+    // surface's semaphores and fence.
 };
 
 } // namespace ya

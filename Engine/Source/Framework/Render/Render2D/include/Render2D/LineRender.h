@@ -106,7 +106,8 @@ struct YA_RENDER_2D_API FLineRender
     void preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFormat, EFormat::T depthFormat);
     /// Lazily allocate one pass slot's buffers + descriptor sets (all flights).
     void ensureSlotResources(Render2DPassSlot passSlot);
-    void begin(Render2DPassSlot passSlot);
+    /// `flightSlot` as in `FQuadRender::begin` (resolved by `Render2D::begin`).
+    void begin(Render2DPassSlot passSlot, uint32_t flightSlot);
     void flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj);
 
     void addLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color);

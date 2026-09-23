@@ -247,9 +247,8 @@ bool VulkanRenderSurfaceContext::init(VulkanRender* render, INativeWindow& windo
     YA_CORE_ASSERT(render, "VulkanRenderSurfaceContext requires a device owner");
     _render        = render;
     _window        = &window;
-    _bOwnsSurface      = true;
-    _bDeviceFrameOwner = false;
-    _debugLabel        = "Extra";
+    _bOwnsSurface = true;
+    _debugLabel   = "Extra";
 
     if (!window.onCreateVkSurface(render->getInstance(), &_surface) || _surface == VK_NULL_HANDLE) {
         YA_CORE_ERROR("VulkanRenderSurfaceContext: failed to create VkSurfaceKHR");
@@ -275,9 +274,8 @@ bool VulkanRenderSurfaceContext::attachExistingSurface(VulkanRender*            
     _render       = render;
     _window       = &window;
     _surface      = surface;
-    _bOwnsSurface      = false;
-    _bDeviceFrameOwner = true;
-    _debugLabel        = "Primary";
+    _bOwnsSurface = false;
+    _debugLabel   = "Primary";
     return createSwapchainAndSync(swapchainCI, false);
 }
 
@@ -491,9 +489,6 @@ bool VulkanRenderSurfaceContext::begin(int32_t* outImageIndex)
 {
     YA_PROFILE_FUNCTION();
     waitAllGraphicsFences();
-    if (_bDeviceFrameOwner) {
-        _render->onPrimaryPresentFenceWaited();
-    }
 
     YA_CORE_ASSERT(outImageIndex, "begin requires an image index out-parameter");
     if (!isPresentable()) {

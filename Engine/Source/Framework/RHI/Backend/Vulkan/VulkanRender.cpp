@@ -1140,7 +1140,7 @@ void VulkanRender::createFrameGpuTimingResources()
     _lastCompletedFrameGpuTimeMs = 0.0f;
     _gpuTimestampPeriodNs        = 0.0f;
     _bFrameGpuTimingSupported    = false;
-    _frameGpuTimingValid.assign(VulkanRenderSurfaceContext::flightFrameSize, 0);
+    _frameGpuTimingValid.assign(kFramesInFlight, 0);
 
     if (getDevice() == VK_NULL_HANDLE || !_pfnCmdResetQueryPool) {
         return;
@@ -1165,7 +1165,7 @@ void VulkanRender::createFrameGpuTimingResources()
         .pNext              = nullptr,
         .flags              = 0,
         .queryType          = VK_QUERY_TYPE_TIMESTAMP,
-        .queryCount         = VulkanRenderSurfaceContext::flightFrameSize * 2,
+        .queryCount         = kFramesInFlight * 2,
         .pipelineStatistics = 0,
     };
 
@@ -1194,7 +1194,7 @@ void VulkanRender::releaseFrameGpuTimingResources()
 
 void VulkanRender::updateCompletedFrameGpuTiming()
 {
-    const uint32_t frameIdx = _primarySurface ? _primarySurface->getCurrentFrameIndex() : 0;
+    const uint32_t frameIdx = frameTimingSlot();
     if (!_bFrameGpuTimingSupported || _frameGpuTimestampQueryPool == VK_NULL_HANDLE || frameIdx >= _frameGpuTimingValid.size() || !_frameGpuTimingValid[frameIdx]) {
         return;
     }
@@ -1249,7 +1249,7 @@ const VkAllocationCallbacks* VulkanRender::getAllocator()
 
 
 // MARK: Frame
-void VulkanRender::onPrimaryPresentFenceWaited()
+void VulkanRender::beginRecordedFrame()
 {
     updateCompletedFrameGpuTiming();
     ++_frameIndex;
@@ -1267,7 +1267,7 @@ void VulkanRender::beginFrameGpuTiming(ICommandBuffer* commandBuffer)
         return;
     }
 
-    const uint32_t frameIdx               = _primarySurface ? _primarySurface->getCurrentFrameIndex() : 0;
+    const uint32_t frameIdx               = frameTimingSlot();
     const uint32_t queryBase              = frameIdx * 2;
     _frameGpuTimingValid[frameIdx]        = 0;
     _pfnCmdResetQueryPool(vkCommandBuffer, _frameGpuTimestampQueryPool, queryBase, 2);
@@ -1288,7 +1288,7 @@ void VulkanRender::endFrameGpuTiming(ICommandBuffer* commandBuffer)
         return;
     }
 
-    const uint32_t frameIdx  = _primarySurface ? _primarySurface->getCurrentFrameIndex() : 0;
+    const uint32_t frameIdx  = frameTimingSlot();
     const uint32_t queryBase = frameIdx * 2;
     vkCmdWriteTimestamp(vkCommandBuffer,
                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,

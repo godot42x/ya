@@ -104,11 +104,30 @@ struct YA_RHI_API IRender : public plat_base<IRender>
         return surface ? surface->getNativeWindow() : nullptr;
     }
 
-    [[nodiscard]] uint32_t primaryFrameIndex() const
-    {
-        auto* surface = getPrimarySurfaceContext();
-        return surface ? surface->getCurrentFrameIndex() : 0;
-    }
+    /// Frame-level bookkeeping for ONE recorded frame.
+    ///
+    /// The application calls this once per frame it records, after every
+    /// presentation surface taking part in that frame has waited its own
+    /// in-flight fences (`acquirePresentFrame` is where that wait happens) and
+    /// before the frame is recorded. It reads back the previous frame's GPU
+    /// timestamps, advances the frame generation, and flushes the deferred
+    /// deletion queue for the resources the GPU can no longer be using.
+    ///
+    /// Deliberately NOT a surface property: no window is "the" window whose
+    /// present advances the frame, so a frame that presents two windows
+    /// advances the generation once, and a frame that presents none (every
+    /// surface minimized, or no window) still retires what is safe.
+    virtual void beginRecordedFrame() {}
+
+    /// Monotonic generation of `beginRecordedFrame()`, starting at 0 for the
+    /// first frame. Deferred retirement and any per-frame ring key off this
+    /// number, never off a swapchain's image index.
+    [[nodiscard]] virtual uint64_t recordedFrameIndex() const { return 0; }
+
+    /// How many frames this device keeps in flight (see `kFramesInFlight`).
+    /// Which slot of a per-frame ring a recording may use is bounded by this,
+    /// not by any window.
+    [[nodiscard]] virtual uint32_t framesInFlight() const { return kFramesInFlight; }
 
     /// Extra presentation surface sharing this device. Does not create a
     /// second backend. Returns null when the backend cannot present to `window`.

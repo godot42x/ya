@@ -39,6 +39,55 @@ bool presentOneFrame(IRenderSurfaceContext& surface)
 
 } // namespace
 
+/// The device's frame generation is a fact about a FRAME, not about a window.
+///
+/// It used to live on the primary surface: only that surface's `begin()`
+/// advanced the counter, read back the GPU timestamps and flushed the
+/// deferred-deletion queue (VulkanRenderSurfaceContext::_bDeviceFrameOwner).
+/// That ranks one window above another in the frame loop -- the thing the
+/// per-surface presentation rework removes -- and it makes a frame that
+/// presents no window retire nothing.
+TEST(RHISurfaceContext, FrameBookkeepingBelongsToTheFrameNotAWindow)
+{
+    SDLNativeWindow window;
+    if (!createTestWindow(window, "MW-210-FrameBookkeeping", 160, 120)) {
+        GTEST_SKIP() << "SDL native window create failed";
+    }
+
+    RenderCreateInfo renderCI{
+        .renderAPI = ERenderAPI::Vulkan,
+        .swapchainCI = SwapchainCreateInfo{
+            .bEnableTransferSrc = true,
+            .width              = 160,
+            .height             = 120,
+        },
+        .nativeWindow = &window,
+    };
+
+    IRender* render = IRender::create(renderCI);
+    ASSERT_NE(render, nullptr);
+    ASSERT_TRUE(render->init(renderCI));
+
+    // Advanceable without any surface taking part: that is the whole point.
+    EXPECT_EQ(render->recordedFrameIndex(), 0u);
+    EXPECT_EQ(render->framesInFlight(), kFramesInFlight);
+    render->beginRecordedFrame();
+    EXPECT_EQ(render->recordedFrameIndex(), 1u);
+    render->beginRecordedFrame();
+    EXPECT_EQ(render->recordedFrameIndex(), 2u);
+
+    // And presenting a window does NOT advance it: no surface owns the frame.
+    auto* primary = render->getPrimarySurfaceContext();
+    ASSERT_NE(primary, nullptr);
+    const uint64_t beforePresent = render->recordedFrameIndex();
+    ASSERT_TRUE(presentOneFrame(*primary));
+    EXPECT_EQ(render->recordedFrameIndex(), beforePresent);
+
+    render->waitIdle();
+    render->destroy();
+    delete render;
+}
+
 TEST(RHISurfaceContext, ExtraWindowAcquireSubmitPresentIndependentOfPrimary)
 {
     SDLNativeWindow primaryWindow;

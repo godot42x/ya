@@ -172,6 +172,32 @@ UE 的同位概念是**帧级**的：device 的帧号、延迟删除、GPU 计�
   present 主 + 额外两个 surface，是双 advance / 漏 advance 的现成探针；`make test` 全绿；
   parity md5 逐字节不变。
 
+##### AB4-2a-1 已落地（2026-09-23）
+
+三条写入点全部移走，`_bDeviceFrameOwner` 删除：
+
+| 之前 | 之后 |
+| --- | --- |
+| `VulkanRenderSurfaceContext::begin()` 里 `if (_bDeviceFrameOwner) onPrimaryPresentFenceWaited()` | 删除；surface 不再触发任何帧级动作 |
+| `VulkanRender::_frameIndex` 由主 surface 的 acquire 推进；GPU 计时环槽位取自主 surface 的 `getCurrentFrameIndex()` | `IRender::beginRecordedFrame()` / `recordedFrameIndex()` / `framesInFlight()`；计时环槽位 = `_frameIndex % kFramesInFlight`（`VulkanRender::frameTimingSlot()`） |
+| `Render2D` 的 flight 槽位 `primaryFrameIndex() % MAX_FLIGHTS_IN_FLIGHT`（两处） | `Render2D::begin` 从 `recordedFrameIndex() % framesInFlight()` 解析一次，作为 `flightSlot` 形参传给 `FQuadRender::begin` / `FLineRender::begin` |
+| `GameRuntimeTickOrchestrator::resolveFlightIndex` 读 `primarySurface->getCurrentFrameIndex()` | 读 `recordedFrameIndex() % framesInFlight()` |
+| `IRender::primaryFrameIndex()`、`IRenderSurfaceContext::getCurrentFrameIndex()` | 删除（零消费者；surface 的槽位回到 private） |
+
+新增 `kFramesInFlight`（`RHI/RenderDefines.h`，值仍是 1）：它是 device 级的“几帧在飞”，
+同时是每个每帧环的深度（surface 的 acquire/flight 环与 GPU 计时环）与“一个录制最多能用哪个槽位”
+的上界。**值没变**——抬高它是 CPU/GPU overlap 决策（temporal_semantics M4），本轮只把
+“谁是那个数”从窗口改成 device。
+
+调用点：`tickRender` 在 acquire 之后、录制之前调一次 `render->beginRecordedFrame()`，两条
+早退路径（acquire 失败 / 不可呈现）也走它——那正是“没有任何 surface 参与的一帧也要回收”的情形。
+
+证据：新用例 `RHISurfaceContext.FrameBookkeepingBelongsToTheFrameNotAWindow`（正：无 surface
+即可推进；反：present 一个窗口**不**推进）。负向对照（真做）：把 `beginRecordedFrame()` 加回
+主 surface 的 `begin()` → 该用例 FAIL（`recordedFrameIndex` 3 vs 2），移除后 PASS。
+`make test` 13 target / **2705 passed / 0 failed**；parity 两张图 md5 仍 `c775245ae…`；
+编辑器 smoke exit=0（一次 `{0,0}` 首帧竞态，重跑三次全过，与已登记的首帧竞态同形）。
+
 ##### AB4-2a-2：plan 支持多个 present target（结构批次，产品行为不变）
 
 - `RenderFramePlan::present` 单值 → `std::vector<DisplayRootPlan>`，每项

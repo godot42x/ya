@@ -286,15 +286,15 @@ uint32_t GameRuntimeTickOrchestrator::resolveFlightIndex(const App& app)
         return 0;
     }
 
-    auto* present = render->getPrimarySurfaceContext();
-    if (!present) {
-        return 0;
-    }
-
-    // Surface present flight before this frame's begin(). Single-window
-    // coincidence: end() advances after present, so this is the slot begin()
-    // will wait. World recording uses this flight, not swapchain imageIndex.
-    return present->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT;
+    // Which slot of a per-frame ring this recording may use: the device's frame
+    // ordinal modulo how many frames it keeps in flight. It used to read the
+    // primary surface's acquire-slot counter -- a swapchain detail that only
+    // worked because one window was assumed to be "the" window, and with one
+    // frame in flight it made every recording use slot 0 anyway. Raising
+    // `kFramesInFlight` is what would make these slots rotate (temporal_semantics
+    // M4), and that has to raise every ring above together.
+    const uint32_t framesInFlight = render->framesInFlight() > 0 ? render->framesInFlight() : 1u;
+    return static_cast<uint32_t>(render->recordedFrameIndex() % framesInFlight) % MAX_FLIGHTS_IN_FLIGHT;
 }
 
 void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
@@ -371,12 +371,24 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 
     IRender*       render        = device->getRender();
     FPresentFrame  presentFrame{.surface = render ? render->getPrimarySurfaceContext() : nullptr};
+    bool           bAcquireAttempted = false;
     {
         YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());
-        if (!acquirePresentFrame(presentFrame)) {
-            app.presentModuleExtras(dt);
-            return;
-        }
+        bAcquireAttempted = acquirePresentFrame(presentFrame);
+    }
+    // Frame bookkeeping is the device's, not a window's: acquiring above is
+    // what waited this surface's in-flight fences, and the counter, the GPU
+    // timestamp readback and the deferred-deletion flush all belong to "this
+    // frame" rather than to whichever swapchain happened to present. It runs on
+    // every frame the app reaches this point -- including one whose surface is
+    // unpresentable (minimized) or whose acquire failed, which is exactly the
+    // frame where nothing else would retire the resources this tick drops.
+    if (render) {
+        render->beginRecordedFrame();
+    }
+    if (!bAcquireAttempted) {
+        app.presentModuleExtras(dt);
+        return;
     }
     if (!presentFrame.acquired()) {
         submitPresentFrame(presentFrame, {});

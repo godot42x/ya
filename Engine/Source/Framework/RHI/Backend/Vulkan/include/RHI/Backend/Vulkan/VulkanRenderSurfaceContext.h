@@ -2,6 +2,7 @@
 
 #include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/Backend/Vulkan/VulkanSwapChain.h"
+#include "RHI/RenderDefines.h"
 
 #include <memory>
 #include <vector>
@@ -18,13 +19,14 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
     VulkanRender*  _render       = nullptr;
     INativeWindow* _window       = nullptr;
     VkSurfaceKHR   _surface      = VK_NULL_HANDLE;
-    bool           _bOwnsSurface      = true;
-    bool           _bDeviceFrameOwner = false;
+    bool           _bOwnsSurface = true;
     const char*    _debugLabel        = "Surface";
 
     std::unique_ptr<VulkanSwapChain> _swapChain;
 
-    static constexpr uint32_t flightFrameSize = 1;
+    /// This surface's acquire/flight ring depth == the device's frames in
+    /// flight: the device owns how many frames may overlap, a window does not.
+    static constexpr uint32_t flightFrameSize = kFramesInFlight;
     /// Empty submit after present, so recreate/destroy can wait THIS
     /// surface's last present without `vkQueueWaitIdle` on the shared queue.
     static constexpr uint32_t presentCompleteFenceCount = 2;
@@ -74,7 +76,6 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
     [[nodiscard]] void*    getCurrentImageAvailableSemaphore() override;
     [[nodiscard]] void*    getCurrentFrameFence() override;
     [[nodiscard]] void*    getRenderFinishedSemaphore(uint32_t imageIndex) override;
-    [[nodiscard]] uint32_t getCurrentFrameIndex() const override { return currentFrameIdx; }
 
   private:
     [[nodiscard]] bool queryPresentSupport() const;

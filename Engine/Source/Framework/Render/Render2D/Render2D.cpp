@@ -2,6 +2,7 @@
 
 #include "Core/Log.h"
 
+#include <algorithm>
 #include <vector>
 
 namespace ya
@@ -11,6 +12,7 @@ FRender2dDebugState Render2D::debug;
 FRender2dSession    Render2D::session;
 FQuadRender*        Render2D::quadData = nullptr;
 FLineRender*        Render2D::lineData = nullptr;
+IRender*            Render2D::device   = nullptr;
 
 namespace
 {
@@ -39,6 +41,7 @@ const FRender2dFrameStats& Render2D::lastFrameStats() { return gLastFrameStats; 
 void Render2D::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
 {
     YA_CORE_ASSERT(!isInitialized(), "Render2D::init called while already initialized");
+    device   = render;
     quadData = new FQuadRender();
     quadData->init(render, colorFormat, depthFormat);
 
@@ -59,6 +62,7 @@ void Render2D::destroy()
         delete quadData;
         quadData = nullptr;
     }
+    device = nullptr;
 }
 
 bool Render2D::isInitialized()
@@ -105,8 +109,15 @@ void Render2D::begin(const FRender2dContext& ctx)
                      debug.bReverseViewport);
     }
     Extent2D extent{.width = session.windowWidth, .height = session.windowHeight};
-    quadData->begin(ctx.passSlot, extent);
-    lineData->begin(ctx.passSlot);
+    // One derivation for both batchers: which slot of a pass's per-frame ring
+    // this recording may use. The bound is the device's frames in flight -- the
+    // frame ordinal modulo that depth -- so with one frame in flight every
+    // recording uses slot 0, and raising the depth (the CPU/GPU overlap
+    // decision, temporal_semantics M4) is what makes the slots rotate.
+    const uint32_t framesInFlight = device ? std::max(1u, device->framesInFlight()) : 1u;
+    const uint32_t flightSlot     = static_cast<uint32_t>(device ? device->recordedFrameIndex() % framesInFlight : 0u);
+    quadData->begin(ctx.passSlot, extent, flightSlot);
+    lineData->begin(ctx.passSlot, flightSlot);
 }
 
 void Render2D::end()

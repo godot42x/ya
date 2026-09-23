@@ -158,7 +158,9 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     std::shared_ptr<ShaderStorage> _shaderStorage = nullptr;
     // Graphics cards excluded from device selection (host-provided via RenderCreateInfo).
     std::vector<std::string> _disabledGraphicsCards;
-    // Backend-owned frame counter used for deferred deletion pacing.
+    // Monotonic recorded-frame generation. Advanced once per frame by
+    // `beginRecordedFrame()`, and the only clock deferred deletion and the GPU
+    // timing ring use (see IRender::recordedFrameIndex).
     uint64_t _frameIndex = 0;
     // Every sampler created through this render's factory, kept alive until
     // device teardown so handles are released before the device dies (some
@@ -170,6 +172,16 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     float                     _lastCompletedFrameGpuTimeMs = 0.0f;
     bool                      _bFrameGpuTimingSupported    = false;
     std::vector<uint8_t>      _frameGpuTimingValid;
+
+    /// Which slot of the GPU-timing query ring the current frame owns. Indexed
+    /// by the recorded-frame generation, so the readback at the start of frame
+    /// N+1 reads what frame N wrote without asking any window which frame it is
+    /// on (it used to ask the primary surface's acquire-slot counter, which is
+    /// a swapchain detail and only ever 0 while one frame is in flight).
+    [[nodiscard]] uint32_t frameTimingSlot() const
+    {
+        return static_cast<uint32_t>(_frameIndex % kFramesInFlight);
+    }
 
 
   public:
@@ -217,7 +229,13 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     std::unique_ptr<IRenderSurfaceContext> createSurfaceContext(INativeWindow& window) override;
     [[nodiscard]] IRenderSurfaceContext*   getPrimarySurfaceContext() const override { return _primarySurface.get(); }
 
-    void onPrimaryPresentFenceWaited();
+    /// Frame bookkeeping for one recorded frame (see IRender::beginRecordedFrame).
+    /// Was `onPrimaryPresentFenceWaited`, driven from the primary surface's
+    /// begin() -- which made "how many frames have we rendered" a property of
+    /// one particular window.
+    void beginRecordedFrame() override;
+    [[nodiscard]] uint64_t recordedFrameIndex() const override { return _frameIndex; }
+    [[nodiscard]] uint32_t framesInFlight() const override { return kFramesInFlight; }
 
     const RenderCapabilities& getCapabilities() const override { return _capabilities; }
     uint32_t getUniformBufferOffsetAlignment() const override
