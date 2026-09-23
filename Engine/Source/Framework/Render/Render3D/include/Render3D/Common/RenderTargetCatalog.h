@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Render3D/Common/SceneViewDesc.h"
 #include "RHI/RenderDefines.h"
 
 #include <memory>
@@ -17,6 +18,11 @@ struct RenderTargetCatalog
     struct Entry
     {
         const char*    label = "";
+        /// The View this target belongs to, or 0 for a target no View owns (the
+        /// window's present image, a shadow map). A row *is* one render target,
+        /// so the identity is what tells two View targets of the same kind and
+        /// size apart; the label only names the kind.
+        SceneViewId    viewId = 0;
         enum class EOwner
         {
             Presentation,

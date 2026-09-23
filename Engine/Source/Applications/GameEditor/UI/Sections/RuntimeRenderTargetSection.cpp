@@ -80,8 +80,15 @@ void RuntimeRenderTargetSection::sync(const App* app)
         if (!text.empty()) {
             text.push_back('\n');
         }
+        // A row is one render target, so a target a View owns names that View:
+        // two Views of the same kind and the same extent are otherwise the same
+        // line. A target no View owns (the window's present image, a shadow
+        // map) has no identity to show and keeps the kind label alone.
+        const std::string targetName = entry.viewId != 0
+                                           ? std::format("{} {:#x}", entry.label, entry.viewId)
+                                           : std::string(entry.label);
         text += std::format("{} | {} | {}x{} | {}{}",
-                            entry.label,
+                            targetName,
                             ownerLabel(entry.owner),
                             entry.extent.width,
                             entry.extent.height,

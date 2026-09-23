@@ -563,6 +563,17 @@ void DeferredRenderPipeline::publishViewResources(const ViewResourceKey& key, De
     _publishedViews.publish(key, std::move(views));
 }
 
+void DeferredRenderPipeline::reconcilePublishedViews(const SceneRenderPlan& plan)
+{
+    // Same criterion as the forward path: what the tick declares is what exists.
+    // A View this tick omits is no longer one of the Views the last recorded
+    // tick left behind, and this table is the only owner of its GBuffer,
+    // viewport and postprocess attachments, so dropping the entry is what
+    // releases them. The whole plan arrives at once, so one family's View list
+    // can never evict another family's View of the same tick.
+    _publishedViews.retainIf([&plan](SceneViewId viewId) { return planDeclaresView(plan, viewId); });
+}
+
 void DeferredRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& catalog) const
 {
     // One pair of entries per recorded View: the extent on the entry is the
@@ -571,6 +582,7 @@ void DeferredRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& cata
         const DeferredPipelineDebugViews& views = published.resources;
         catalog.entries.push_back({
             .label        = "Deferred GBuffer",
+            .viewId       = published.key.viewId,
             .owner        = RenderTargetCatalog::Entry::EOwner::DeferredGBuffer,
             .colorFormats = views.gBufferResources.formats.colorFormats,
             .depthFormat  = views.gBufferResources.formats.depthFormat,
@@ -586,6 +598,7 @@ void DeferredRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& cata
         });
         catalog.entries.push_back({
             .label            = "Deferred View",
+            .viewId           = published.key.viewId,
             .owner            = RenderTargetCatalog::Entry::EOwner::DeferredView,
             .colorFormats     = views.viewportResources.formats.colorFormats,
             .depthFormat      = views.viewportResources.formats.depthFormat,

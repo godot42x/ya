@@ -4,6 +4,7 @@
 #include "Render3D/Common/SceneViewDesc.h"
 #include "RHI/RenderDefines.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -39,6 +40,10 @@ struct ViewResourceKey
 /// View's resources, because it is still the same View. Entries stay in publish
 /// order, so a reader that wants a representative can take the first while an
 /// identity-carrying lookup answers about that View alone.
+///
+/// The table holds the only owner of those resources, so a View that is no
+/// longer recorded has to leave this table for its attachments to be released;
+/// `retainIf` is how the caller states which Views still exist.
 template <typename Resources>
 class ViewResourceTable
 {
@@ -90,6 +95,20 @@ class ViewResourceTable
     [[nodiscard]] const std::vector<Entry>& entries() const { return _entries; }
     [[nodiscard]] std::size_t               size() const { return _entries.size(); }
     [[nodiscard]] bool                      empty() const { return _entries.empty(); }
+
+    /// Keep only the entries whose View `keepView` accepts, and release the
+    /// rest.
+    ///
+    /// The criterion is the caller's, not this table's: whether a View still
+    /// exists is a fact about the tick's declarations, and a table that answered
+    /// it for itself could only guess. An entry the predicate accepts keeps its
+    /// order, its key and its resources, so dropping one View never disturbs
+    /// another.
+    template <typename KeepView>
+    void retainIf(KeepView&& keepView)
+    {
+        std::erase_if(_entries, [&keepView](const Entry& entry) { return !keepView(entry.key.viewId); });
+    }
 
     void clear() { _entries.clear(); }
 

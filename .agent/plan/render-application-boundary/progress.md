@@ -480,3 +480,81 @@ AppRenderState 才能保活的假设不成立。当前 production path 没有 `R
 - 保留 `RenderFrameData` 这个历史命名；它仍被大量 pipeline API 使用，改名属于单独的命名批次。
 - pipeline 单 View 资源、隐式 active Scene provider、整帧编排从 `RenderDeviceState` 拆回应用侧
   仍未开始；这些不会因为 packet owner 迁移而自动解决。
+
+## 2026-09-23 第三批收尾 — 不再被声明的 View 必须被淘汰（生命周期缺口）
+
+第三批（`c0e2275a`「the pipeline keeps one View's resources per View」）把 pipeline 的单套 View 资源
+改成按身份分键的 `ViewResourceTable`，但只回答了「两个 View 同时存在时不互相覆盖」，没有回答
+「一个 View 不再被声明时它的条目去哪」。可达路径就在编辑器里：`EditorViewProducer` 只在选中相机时
+声明 preview，取消选中后那条 entry 与它唯一的 `shared_ptr<RenderTexture>` 附件永久留在表里，
+`viewResourcesFor` / `getViewDepthImageShared` 继续返回上一帧的图——正是 `render-arch` 契约
+「未发布就返回 `nullptr`/`{}`，要回落的调用方自己回落」禁止的兜底（「pipeline 上再留一份上次发布的图」）。
+
+### 唯一目标与落点
+
+- 判据是**本 tick 的声明集合**：`SceneRenderPlan::viewTasks` 的 viewId（新助手
+  `planDeclaresView(plan, viewId)`，与 `displayRootTask()` 同一层）；不是「距上次 publish 多少帧」
+  这类启发式，`ViewResourceTable` 上也没有定时器或纪元计数器。
+- `ViewResourceTable::retainIf(predicate)`：判据由调用方给，表本身不猜；被留下的 entry 保持顺序、
+  key 与资源。
+- 落点是**录制前的 safe point**：`RenderDeviceState::prepareFrameRecord` 在
+  `beginFrameCommandBuffer` 之前调用一次 `IRenderPipeline::reconcilePublishedViews(plan)`（新增虚方法，
+  默认空实现），Forward 淘汰 `_viewResources`、Deferred 淘汰 `_publishedViews`。
+  `invalidatePublishedViewResources` / `clear()` 的既有语义（格式失效 / shutdown 整体丢弃）不变。
+- **为什么是整 tick 一次**：`RenderDeviceState::recordViewFamilies` 对
+  `plan.sceneRender.plan().viewFamilies` 逐个调用 `recordFamily`，一个 tick 可以进来多次。判据用整份
+  plan，所以调用幂等，不会用单次 family 的 views 子集把同 tick 另一个 family 的 View 误杀。
+  更要紧的是反向的漏杀：`recordViewFamilies` 只在 `!plan.sceneRender.empty()` 时被调用，
+  「本 tick 一个 View 都不声明」（视口标签页被关掉，`EditorViewProducer` 注释里写明这是普通情况）
+  时没有任何 family 会进来——把淘汰写在 `recordFamily` 里恰好漏掉这条真实路径。放在
+  `prepareFrameRecord`（这段的文档就是「所有改状态/备资源的动作，都在 command buffer 打开之前」）
+  两种情形都覆盖。
+- 释放安全性（按要求核实并记录）：表里的 `shared_ptr<RenderTexture>` 不是唯一保活。
+  `retainPublishedViewOutputs` 已经把同一批 color/depth/entityId owner 通过
+  `RenderSubmission::retain` 存进 `_keepalives`（`RetainedResource` 内部就是 `shared_ptr<void>`）并对
+  command buffer `retireResource`；flight 的 keepalive 只在该 flight 换 token 复用时清空，而那时宿主
+  present 路径（`GUIAppHost` / `GUIWindowPresent` 的 `waitInFlight`）已经等过 fence。
+  **没有发现「keepalive 只持裸 handle」的缺口，因此没有改 keepalive 设计**，淘汰点还比 keepalive
+  清空更早（command buffer 还没打开，规则 6 的最强形式）。
+
+### 顺带修的一处可见性缺口
+
+`appendRenderTargetEntries` 每行都是字面量 `"Forward View"`（Deferred 同理），两个同尺寸不同身份的
+View 在面板上完全无法区分。`RenderTargetCatalog::Entry` 增加 `SceneViewId viewId`（`0` = 不属于任何
+View：presentation / shadow 目标沿用既有「0 = 没有 View」的约定），Forward/Deferred 按 View 写入，
+`RuntimeRenderTargetSection` 在行首显示身份（`Forward View 0x100000001`）。没有为它新增查询 API。
+
+### 验证
+
+**取证方式**：主仓库此刻被并发写者的在飞 WIP 卡住（他们在删 `ForwardViewResources` /
+`DeferredViewResources` 的裸指针别名）。按既定做法用 APFS clonefile 复制到 `mktemp` 目录，在副本里把
+这两个头 `git checkout HEAD --` 回 HEAD 得到等价于本批改动的树，全部构建与验证都在副本里跑；
+**主仓库一个字符都没动**（本批提交后临时目录已删除，磁盘已回收）。
+
+- build（副本）：`ya-render-3d-test` ok（51s）、`ya-game-runtime` ok、`ya-runtime` ok、
+  `ya-game-editor` ok、`ya-testing` ok。
+- `xmake r ya-render-3d-test`：**185/185 PASSED**（上一批 181 + 本批新增 4 个 case）。
+- plan §8 滤镜：`703 tests from 56 test suites ran. [ PASSED ] 686 tests.`，11 skipped，
+  6 failed 与已登记基线逐项相同（两个 `EditorPropertyGraphTest.*`、
+  `WidgetLayoutTest.FloatingWindowResizeHandlesLiveOnOverlaySlots`、
+  `ScriptApiLibraryFixture.GameUIWidgetLifecycleThroughRegistry`、偶发
+  `RenderGraphCoreTest.ResourceRegistryUsesProvidedImportedImageViewAndRetainsOwner`、
+  `GameUIHostTest.BuildSnapshotComposesMountedWidgets`）。相对 batch 2 的 696，多出的 7 个是第三批与
+  本批落在滤镜里的 case（`ForwardRenderPipelineTest` 不在 §8 滤镜内，由 `ya-render-3d-test` 覆盖）。
+- `run_display_compose_parity.py --skip-build`：**PASS: display compose is a pass-through**，
+  viewport 与 presentation 的 md5 都是 `c775245ae636f15b41da8485319a2267`，与基线逐字节相同
+  ——淘汰逻辑没有动到任何还在被声明的 View 的像素。
+- `run_widgettree_editor_smoke.py --skip-build`：`exit=0`，`1. ping` 到 `6. quit` 六步全过，
+  输出里没有 error / assert。
+
+### 保留 / 未完成 / 偏离
+
+- 保留（本批刻意不动）：`PostProcessingStage` / bloom / `_debugAlbedoRGBView` 里残留的「当前 View
+  捕获」是有意留到后续批次的。`ForwardViewResources.h` / `DeferredViewResources.h` /
+  `ViewportDebugCatalogBuilder.cpp` / `ControlBuilders.h` / `Plugins/log.cc` 是并发写者的在飞 WIP，
+  本批未改也未 stage。
+- 顺带发现（未改，属既有行为）：`RenderViewOutputTable` 在换 token 时只把 `liveViewCount` 清零，
+  不再被重发布的 slot 仍持有上一 token 的 `shared_ptr`（查询按 `liveViewCount` 边界返回空，所以没有
+  对外语义问题，只是保活略长于必要）。它与本批的淘汰不是一件事，留给需要的人。
+- 未完成（不属于本批）：AB7（整帧编排搬应用侧）、第四批（显式 active Scene）、`RenderFrameData` 改名。
+- 偏离：无。

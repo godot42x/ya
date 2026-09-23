@@ -39,6 +39,18 @@ struct IRenderPipelineExecution
     /// Product recording does not use tick/beginTick/getCurrent.
     virtual ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) = 0;
 
+    /// Drop what this pipeline published for Views the tick does not declare.
+    ///
+    /// A View the tick omits is not "the last View" any more, so its
+    /// attachments stop belonging to this pipeline and a query about it answers
+    /// nothing instead of the previous tick's image. The tick's declarations are
+    /// the whole criterion -- not how long ago the View was recorded -- and the
+    /// whole plan arrives at once, so no View of this tick can be dropped by
+    /// another View's own family. Idempotent, and a tick that declares no View
+    /// at all drops everything, which is why the caller does this once per tick
+    /// at the pre-record safe point rather than per recorded family.
+    virtual void reconcilePublishedViews([[maybe_unused]] const SceneRenderPlan& plan) {}
+
     [[nodiscard]] virtual EFormat::T getViewColorFormat() const     = 0;
     [[nodiscard]] virtual EFormat::T getViewDepthFormat() const     = 0;
 

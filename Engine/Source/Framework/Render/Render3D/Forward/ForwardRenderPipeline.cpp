@@ -169,6 +169,7 @@ void ForwardRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& catal
     for (const auto& published : _viewResources.entries()) {
         catalog.entries.push_back({
             .label            = "Forward View",
+            .viewId           = published.key.viewId,
             .owner            = RenderTargetCatalog::Entry::EOwner::ForwardView,
             .colorFormats     = _viewFormats.colorFormats,
             .depthFormat      = _viewFormats.depthFormat,
@@ -635,6 +636,18 @@ void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& 
 void ForwardRenderPipeline::invalidatePublishedViewResources()
 {
     _viewResources.clear();
+}
+
+void ForwardRenderPipeline::reconcilePublishedViews(const SceneRenderPlan& plan)
+{
+    // The tick's declarations are the whole criterion. A View this tick does not
+    // name is no longer one of the Views the last recorded tick left behind, so
+    // what it left in this table -- the only owner of its attachments -- goes
+    // away with it. Not a heuristic on age: a View declared every tick is never
+    // dropped, and a View the tick stops declaring is gone on the first tick
+    // that omits it. The whole plan is the input, so the answer cannot depend on
+    // how many families this tick records or in which order.
+    _viewResources.retainIf([&plan](SceneViewId viewId) { return planDeclaresView(plan, viewId); });
 }
 
 void ForwardRenderPipeline::publishViewResources(const RenderViewOutput& output, Extent2D extent, FRenderFeatureMask features)

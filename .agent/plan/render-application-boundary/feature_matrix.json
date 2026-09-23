@@ -57,6 +57,24 @@
       ]
     },
     {
+      "id": "pipeline_holds_one_views_resources_per_view",
+      "phase": "AB9",
+      "status": "landed_2026-09-23_batch_3_plus_lifecycle_followup",
+      "evidence": [
+        "batch 3 (c0e2275a): ViewResourceKey{viewId, extent, colorFormat, depthFormat, featureMask} + ViewResourceTable<Resources> -- one live entry per View, so publishing B cannot overwrite A and a same-View resize replaces that View's resources instead of adding a second entry",
+        "batch 3: ForwardRenderPipeline::_viewResources and DeferredRenderPipeline::_publishedViews are those tables; every identity-less View query was deleted and replaced by identity-carrying ones (viewResourcesFor(viewId), buildDebugViews(viewId), getViewDepthImageShared(viewId), getEntityIdImageShared(viewId)); appendRenderTargetEntries emits one row per recorded View instead of one 'current View' row",
+        "lifecycle gap found after batch 3: nothing ever removed a View that a tick stops declaring, so a View entry and its sole owner (shared_ptr<RenderTexture> attachments) stayed forever and queries kept answering with the previous tick's image -- exactly the fallback the render-arch contract forbids ('unpublished answers nullptr/{}; the caller that wants a fallback writes it itself'); reachable in the editor because EditorViewProducer declares the camera preview only while a camera is selected, and declares nothing at all while the viewport tab is hidden",
+        "followup: the criterion is the tick's declaration set (SceneRenderPlan::viewTasks via the new planDeclaresView(plan, viewId) helper) -- not an age heuristic, and no timer/epoch counter was added to ViewResourceTable",
+        "followup: ViewResourceTable::retainIf(predicate) drops the entries the caller rejects while the accepted ones keep their order, key and resources; clear() keeps its existing whole-table semantics (format invalidation / shutdown)",
+        "followup: new IRenderPipeline::reconcilePublishedViews(const SceneRenderPlan&) (default no-op) is called once per tick from RenderDeviceState::prepareFrameRecord, i.e. before the command buffer opens -- the same pre-record safe point where pipeline state mutations already happen",
+        "followup: why one call per tick with the whole plan -- RenderDeviceState::recordViewFamilies calls recordFamily once per family, and recordViewFamilies is only entered when the plan has views, so a per-family eviction would both risk dropping another family's View and miss the tick that declares nothing at all (viewport tab hidden); the whole-plan input makes the call idempotent and total",
+        "followup release-safety audit: the tables' shared_ptr owners are not the only keepalive -- retainPublishedViewOutputs already stores the same color/depth/entityId owners in RenderSubmission::_keepalives (RetainedResource wraps shared_ptr<void>) and retires them on the command buffer, and a flight's keepalives are cleared only when that flight is reused under a new token, after the host present path waited on the fence. No bare-handle-only keepalive exists, so the keepalive design did not need changing and the drop happens strictly before any command is recorded",
+        "followup (problem 2): RenderTargetCatalog::Entry gained SceneViewId viewId (0 = no View owns it, the existing convention for presentation/shadow targets) so two View targets of the same kind and extent are distinguishable rows; appendRenderTargetEntries writes it and RuntimeRenderTargetSection shows it. No new query API was added",
+        "followup evidence: ya-render-3d-test 185/185 (181 + 4 new cases); new cases are ViewResourceTableTest.RetainIfDropsOnlyTheViewsTheCriterionRejects, ForwardRenderPipelineTest.AViewTheNextTickDoesNotDeclareIsEvictedAndTheOtherIsKept (weak_ptr proves the evicted View's attachments are actually released, while the kept View's owners are untouched), ForwardRenderPipelineTest.ATickThatDeclaresNoViewLeavesNothingPublished and DeferredRenderPipelineTest.AViewTheNextTickDoesNotDeclareIsEvictedAndTheOtherIsKept",
+        "followup evidence: builds ok for ya-render-3d-test / ya-game-runtime / ya-runtime / ya-game-editor / ya-testing; plan section 8 filter 703 ran / 686 passed / 11 skipped / 6 failed with the same 6 registered baseline failures; display-compose parity PASS with both images still md5 c775245ae636f15b41da8485319a2267; editor smoke exit=0 across all six steps. Evidence taken in an APFS clonefile copy with the two concurrent-writer headers reverted to HEAD, because the main tree is mid-WIP and must not be touched"
+      ]
+    },
+    {
       "id": "frame_view_facts_have_one_source",
       "phase": "AB8",
       "status": "step1_and_step2_landed",

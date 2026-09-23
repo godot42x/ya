@@ -160,6 +160,20 @@ struct SceneRenderPlan
     return task && task->desc.isDisplayRoot();
 }
 
+/// Whether this tick declares the named View.
+///
+/// This is the whole answer to "does that View still exist this tick": the
+/// tick's declarations are what makes a View real, so a caller deciding what a
+/// View's absence means reads the tick rather than guessing from how long ago
+/// the View was recorded. The identity compared here is the declaration's, and
+/// it is the same id the View's output is published under -- seal() derives the
+/// one from the other.
+[[nodiscard]] inline bool planDeclaresView(const SceneRenderPlan& plan, SceneViewId viewId)
+{
+    return std::any_of(plan.viewTasks.begin(), plan.viewTasks.end(),
+                       [viewId](const SceneViewTask& task) { return task.desc.viewId == viewId; });
+}
+
 /// Every Scene an extracted plan actually produces content for, in snapshot-table
 /// order. The table is deduplicated by (Scene, sceneRevision) already, so this
 /// only collapses the remaining case: one Scene declared at two revisions.

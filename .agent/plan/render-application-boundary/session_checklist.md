@@ -21,7 +21,8 @@
 ## 收尾前
 
 - [ ] 受影响目标 build：`ya-game-runtime` / `ya-runtime` / `ya-game-editor` / `ya-testing`。
-- [ ] `xmake r ya-render-3d-test`（期望 175/175；batch 2 删掉 2 个只测已删接口的 case）。
+- [ ] `xmake r ya-render-3d-test`（期望 185/185；batch 2 删掉 2 个只测已删接口的 case，第三批与本批
+      各加了 case）。
 - [ ] `ya-testing` 滤镜跑一遍，与已登记基线比对（排除 `WidgetTreeTest.SystemLayersCannotBeDetached`）。
 - [ ] `run_display_compose_parity.py --skip-build` 期望 PASS、md5 `c775245a…`。
 - [ ] `run_widgettree_editor_smoke.py --skip-build` 期望 exit=0。
@@ -32,6 +33,22 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-23 第三批收尾（不再被声明的 View 必须被淘汰）：`c0e2275a` 只做了「View 资源按身份分键」，
+  没有回答「本 tick 不再声明的 View 怎么办」——选中相机→声明 preview、取消选中→不再声明，那条 entry
+  与它唯一的 `shared_ptr<RenderTexture>` 附件永久留下，查询返回上一帧的图（`render-arch` 契约禁止的
+  兜底）。判据用**本 tick 的 `SceneRenderPlan::viewTasks`**（新助手 `planDeclaresView`，无定时器/纪元
+  计数）：`ViewResourceTable::retainIf` + 新虚方法 `IRenderPipeline::reconcilePublishedViews(plan)`，
+  由 `RenderDeviceState::prepareFrameRecord` 在 command buffer 打开前**整 tick 调用一次**（`recordFamily`
+  一个 tick 会进多次，而 `recordViewFamilies` 在 plan 无 View 时根本不进——按 family 淘汰既会误杀也会
+  漏掉「视口标签页关掉」这条真实路径）。释放安全性已核实：表里的 shared_ptr 不是唯一保活，
+  `retainPublishedViewOutputs` 已把同一批 owner 放进 `RenderSubmission::_keepalives` 并对 command buffer
+  `retireResource`，flight 的 keepalive 只在其换 token 复用（fence 已过）时清空，**keepalive 设计无需改动**。
+  顺带：`RenderTargetCatalog::Entry` 增加 `SceneViewId viewId`（0 = 不属于任何 View），
+  `RuntimeRenderTargetSection` 显示它，同尺寸不同身份的 View 行从此可区分。验证（**APFS clonefile 副本**：
+  主仓库被并发写者对 `ForwardViewResources` / `DeferredViewResources` 的在飞 WIP 卡住，副本里把这两个头
+  checkout 回 HEAD，主仓库未动）：五个目标 build ok；`ya-render-3d-test` 185/185（181 + 4 个新 case，
+  其中两个用 `weak_ptr` 证明附件真的被释放）；§8 滤镜 703 ran / 686 passed / 11 skipped / 6 failed（与
+  基线同 6 个）；parity PASS（两张图 md5 仍为 `c775245a…`）；编辑器 smoke exit=0 六步全过。
 - 2026-09-23 AB9（review 第二批：收回本 tick 的 View packet owner）：`AppRenderState::viewFrameDataPerFlight`
   删除（它把「本 tick 的 View 准备数据」和「跨帧保活/免分配」两件事混在 App 长期状态里，还逼出
   `AppLifecycle` 的 quit / `handleSceneDestroy` 两处手工清空）。`ExtractedSceneRender` 现在自己持有

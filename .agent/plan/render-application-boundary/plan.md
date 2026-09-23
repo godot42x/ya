@@ -279,6 +279,33 @@ Framework 侧的公开入口限定在 `init/shutdown/record(plan, surface)/publi
   记录三个 View 后各自持有独立 attachment/extent，且其中一个 resize 不打断其他 View）与
   `DeferredRenderPipelineTest.TwoViewsKeepTheirOwnPublishedResources`。
 
+**收尾（2026-09-23 同一批的补丁）**：第三批只做了「按身份分键」，没有回答「一个 View 不再被声明时
+它的条目去哪」。于是选中相机→声明 preview、取消选中→不再声明，那条 entry 与它唯一的
+`shared_ptr<RenderTexture>` 附件永久留在表里，查询仍返回上一帧的图——正是
+`render-arch` 契约「未发布就返回 `nullptr`/`{}`，要回落的调用方自己回落」禁止的兜底。
+
+- 判据是**本 tick 的声明集合**（`SceneRenderPlan::viewTasks` 的 viewId），不是「距上次 publish
+  多少帧」这类启发式；`ViewResourceTable` 上不引入定时器/纪元计数器。
+- 落点是**录制前的 safe point**：`RenderDeviceState::prepareFrameRecord` 在
+  `beginFrameCommandBuffer` 之前调用一次 `IRenderPipeline::reconcilePublishedViews(plan)`，
+  pipeline 用 `retainIf([&plan](id){ return planDeclaresView(plan, id); })` 丢掉本 tick 不声明的
+  View。**整 tick 一次、整份 plan 为输入**，所以同一 tick 内多个 family 的记录不会互相误杀；
+  而且 tick 声明为空时也照样清空——`recordViewFamilies` 只在 plan 有 View 时才被调用，
+  「按单次 family 淘汰」会漏掉「视口标签页关掉、本 tick 一个 View 都不声明」这一条真实路径
+  （`EditorViewProducer` 的注释里写着这就是普通情况，不是错误状态）。
+- 释放安全性已核实：表里的 `shared_ptr` 不是唯一保活——`retainPublishedViewOutputs` 把同一批
+  color/depth/entityId owner 以 `RetainedResource`（内部 `shared_ptr<void>`）放进
+  `RenderSubmission::_keepalives` 并 `retireResource`，flight 的 keepalive 只在该 flight 换 token
+  复用时清空（那时 fence 已过）。**keepalive 没有只持裸 handle 的缺口，因此没有动 keepalive 设计。**
+- 顺带：`RenderTargetCatalog::Entry` 增加 `SceneViewId viewId`（0 = 不属于任何 View），
+  `appendRenderTargetEntries` 按 View 写入，`RuntimeRenderTargetSection` 显示它——两行同尺寸不同
+  身份的 View 从此可区分（此前每行 label 都是字面量 "Forward View"）。
+- 证据：`ViewResourceTableTest.RetainIfDropsOnlyTheViewsTheCriterionRejects`、
+  `ForwardRenderPipelineTest.AViewTheNextTickDoesNotDeclareIsEvictedAndTheOtherIsKept`（用 `weak_ptr`
+  证明附件真的被释放）、`ForwardRenderPipelineTest.ATickThatDeclaresNoViewLeavesNothingPublished`、
+  `DeferredRenderPipelineTest.AViewTheNextTickDoesNotDeclareIsEvictedAndTheOtherIsKept`；
+  `ya-render-3d-test` 185/185。
+
 
 `GameRuntimeTickOrchestrator::pumpOffscreenTasks` 是一个**只有自我递归、没有任何调用者**的函数：
 663e0f82 想把它命名成 tickRender 的一个步骤，但 `tickRender` 实际直接调

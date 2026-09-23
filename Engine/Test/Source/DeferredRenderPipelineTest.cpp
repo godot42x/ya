@@ -1,5 +1,6 @@
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "Render3D/Deferred/DeferredFrameGraphPasses.h"
+#include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/SceneFamilyResources.h"
 
 #include "Core/Config/ConfigManager.h"
@@ -33,6 +34,11 @@ class DeferredRenderPipelineTestAccess
                                      DeferredPipelineDebugViews views)
     {
         pipeline.publishViewResources(key, std::move(views));
+    }
+
+    static void reconcilePublishedViews(DeferredRenderPipeline& pipeline, const SceneRenderPlan& plan)
+    {
+        pipeline.reconcilePublishedViews(plan);
     }
 };
 
@@ -499,6 +505,80 @@ TEST_F(DeferredRenderPipelineSettingsTest, PersistentPostProcessAndDeferredExtra
     EXPECT_FALSE(snapshot.bPBRDiffuseIBL);
     EXPECT_FALSE(snapshot.bPBRSpecularIBL);
     EXPECT_FALSE(snapshot.bReverseViewportY);
+}
+
+/// A Scene view task as the plan carries it: the declaration, whose identity is
+/// what a tick says about a View existing.
+SceneViewTask deferredPlanTask(SceneViewId viewId)
+{
+    SceneViewTask task;
+    task.desc.viewId   = viewId;
+    task.output.viewId = viewId;
+    return task;
+}
+
+/// The deferred half of the batch's acceptance evidence: after a tick publishes
+/// View A and View B, a tick that declares only B drops A's GBuffer, viewport and
+/// postprocess owners, and leaves B exactly as it was.
+TEST(DeferredRenderPipelineTest, AViewTheNextTickDoesNotDeclareIsEvictedAndTheOtherIsKept)
+{
+    DeferredRenderPipeline pipeline;
+
+    auto worldColor    = std::make_shared<RenderTexture>();
+    auto worldDepth    = std::make_shared<RenderTexture>();
+    auto worldEntityId = std::make_shared<RenderTexture>();
+    auto thumbColor    = std::make_shared<RenderTexture>();
+    auto thumbDepth    = std::make_shared<RenderTexture>();
+    auto thumbEntityId = std::make_shared<RenderTexture>();
+
+    DeferredRenderPipelineTestAccess::publishViewResources(
+        pipeline, makeDeferredKey(11, kWorldExtent), makeDeferredViews(worldColor, worldDepth, worldEntityId));
+    DeferredRenderPipelineTestAccess::publishViewResources(
+        pipeline, makeDeferredKey(12, kThumbnailExtent), makeDeferredViews(thumbColor, thumbDepth, thumbEntityId));
+
+    // The table is the only owner left, so "the entry is gone" is provably also
+    // "the attachments were released".
+    std::weak_ptr<RenderTexture> thumbColorRef = thumbColor;
+    std::weak_ptr<RenderTexture> thumbDepthRef = thumbDepth;
+    thumbColor.reset();
+    thumbDepth.reset();
+    thumbEntityId.reset();
+
+    SceneRenderPlan plan;
+    plan.viewTasks.push_back(deferredPlanTask(11));
+
+    DeferredRenderPipelineTestAccess::reconcilePublishedViews(pipeline, plan);
+
+    // A is gone from the table, from the identity-carrying queries and from
+    // memory.
+    EXPECT_EQ(pipeline.buildDebugViews(12).viewportResources.colorOwner, nullptr);
+    EXPECT_EQ(pipeline.getViewDepthImageShared(12), nullptr);
+    EXPECT_EQ(pipeline.getEntityIdImageShared(12), nullptr);
+    EXPECT_TRUE(thumbColorRef.expired());
+    EXPECT_TRUE(thumbDepthRef.expired());
+
+    // B is untouched.
+    EXPECT_EQ(pipeline.buildDebugViews(11).viewportResources.colorOwner, worldColor);
+    EXPECT_EQ(pipeline.buildDebugViews(11).viewportResources.depthOwner, worldDepth);
+    EXPECT_EQ(pipeline.getViewDepthImageShared(11), worldDepth);
+    EXPECT_EQ(pipeline.getEntityIdImageShared(11), worldEntityId);
+
+    // The tick reconciles once and the criterion is the whole tick's
+    // declarations, so repeating the call cannot drop a View the tick declares.
+    DeferredRenderPipelineTestAccess::reconcilePublishedViews(pipeline, plan);
+    EXPECT_EQ(pipeline.buildDebugViews(11).viewportResources.colorOwner, worldColor);
+
+    // The panel's rows follow: one GBuffer row and one view row for the View
+    // that is left, both naming it, plus the shadow map that belongs to no View.
+    RenderTargetCatalog catalog;
+    pipeline.appendRenderTargetEntries(catalog);
+    ASSERT_EQ(catalog.entries.size(), 3u);
+    EXPECT_EQ(catalog.entries[0].owner, RenderTargetCatalog::Entry::EOwner::DeferredGBuffer);
+    EXPECT_EQ(catalog.entries[0].viewId, 11u);
+    EXPECT_EQ(catalog.entries[1].owner, RenderTargetCatalog::Entry::EOwner::DeferredView);
+    EXPECT_EQ(catalog.entries[1].viewId, 11u);
+    EXPECT_EQ(catalog.entries[2].owner, RenderTargetCatalog::Entry::EOwner::DeferredShadow);
+    EXPECT_EQ(catalog.entries[2].viewId, 0u);
 }
 
 } // namespace

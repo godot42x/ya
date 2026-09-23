@@ -1,5 +1,6 @@
 #include "Render3D/Common/RenderTargetCatalog.h"
 #include "Render3D/Common/RenderViewOutput.h"
+#include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ViewResourceKey.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
 #include "RHI/Core/RenderTexture.h"
@@ -21,6 +22,11 @@ class ForwardRenderPipelineTestAccess
                                      FRenderFeatureMask      features)
     {
         pipeline.publishViewResources(output, extent, features);
+    }
+
+    static void reconcilePublishedViews(ForwardRenderPipeline& pipeline, const SceneRenderPlan& plan)
+    {
+        pipeline.reconcilePublishedViews(plan);
     }
 };
 
@@ -150,6 +156,43 @@ TEST(ViewResourceTableTest, AViewThatWasNeverRecordedAnswersNothing)
     EXPECT_EQ(table.findForView(11), nullptr);
 }
 
+TEST(ViewResourceTableTest, RetainIfDropsOnlyTheViewsTheCriterionRejects)
+{
+    ViewResourceTable<TestViewRecord> table;
+
+    table.publish(makeKey(11, kWorldExtent), TestViewRecord{.id = 1, .extent = kWorldExtent});
+    table.publish(makeKey(12, kThumbnailExtent), TestViewRecord{.id = 2, .extent = kThumbnailExtent});
+    table.publish(makeKey(13, kWorldExtent), TestViewRecord{.id = 3, .extent = kWorldExtent});
+
+    table.retainIf([](SceneViewId viewId) { return viewId != 11; });
+
+    ASSERT_EQ(table.size(), 2u);
+    EXPECT_EQ(table.findForView(11), nullptr);
+    // The Views the criterion accepted keep their own records, not a shifted
+    // copy of a neighbour's.
+    ASSERT_NE(table.findForView(12), nullptr);
+    EXPECT_EQ(table.findForView(12)->id, 2);
+    EXPECT_EQ(table.findForView(12)->extent.width, 256u);
+    ASSERT_NE(table.findForView(13), nullptr);
+    EXPECT_EQ(table.findForView(13)->id, 3);
+
+    // Dropping everything is the same operation with a criterion that accepts
+    // nothing, and clear() is still the whole-table reset it always was.
+    table.retainIf([](SceneViewId) { return false; });
+    EXPECT_TRUE(table.empty());
+}
+
+/// A Scene view task as the plan carries it: the declaration, whose identity is
+/// what a tick says about a View existing. Only the fields the criterion reads
+/// are meaningful here.
+SceneViewTask forwardPlanTask(SceneViewId viewId)
+{
+    SceneViewTask task;
+    task.desc.viewId = viewId;
+    task.output.viewId = viewId;
+    return task;
+}
+
 /// The acceptance evidence for this batch: one tick records a world View and a
 /// thumbnail View of different sizes, and each keeps its own attachments.
 TEST(ForwardRenderPipelineTest, TwoViewsKeepTheirOwnAttachmentsAndExtents)
@@ -228,6 +271,98 @@ TEST(ForwardRenderPipelineTest, TwoViewsKeepTheirOwnAttachmentsAndExtents)
     EXPECT_EQ(resizedCatalog.entries[0].extent.width, 640u);
     EXPECT_EQ(resizedCatalog.entries[1].extent.width, 256u);
     EXPECT_EQ(resizedCatalog.entries[2].extent.width, 1280u);
+}
+
+/// The acceptance evidence for this batch: after a tick records View A and View
+/// B, a tick that declares only B drops A -- its entry, its queries and the
+/// attachments only A's entry owned -- and leaves B exactly as it was.
+TEST(ForwardRenderPipelineTest, AViewTheNextTickDoesNotDeclareIsEvictedAndTheOtherIsKept)
+{
+    ForwardRenderPipeline pipeline;
+
+    auto worldColor   = makeAttachment();
+    auto worldDepth   = makeAttachment();
+    auto previewColor = makeAttachment();
+    auto previewDepth = makeAttachment();
+
+    // One tick records both Views.
+    ForwardRenderPipelineTestAccess::publishViewResources(
+        pipeline, makeOutput(11, kWorldExtent, worldColor, worldDepth), kWorldExtent, kGameFeatures);
+    ForwardRenderPipelineTestAccess::publishViewResources(
+        pipeline, makeOutput(12, kThumbnailExtent, previewColor, previewDepth), kThumbnailExtent, kGameFeatures);
+
+    // Weak references, and the test's own handles dropped, so "the entry is
+    // gone" is provably also "the attachment was released": the pipeline's table
+    // is the only owner left.
+    std::weak_ptr<RenderTexture> previewColorRef = previewColor;
+    std::weak_ptr<RenderTexture> previewDepthRef = previewDepth;
+    previewColor.reset();
+    previewDepth.reset();
+
+    // The next tick declares the world View and nothing else.
+    SceneRenderPlan plan;
+    plan.viewTasks.push_back(forwardPlanTask(11));
+
+    ForwardRenderPipelineTestAccess::reconcilePublishedViews(pipeline, plan);
+
+    // A is gone: no entry, no attachment behind the identity-carrying queries,
+    // and no second owner keeping its images alive.
+    EXPECT_EQ(pipeline.viewResourcesFor(12), nullptr);
+    EXPECT_EQ(pipeline.getViewDepthImageShared(12), nullptr);
+    EXPECT_EQ(pipeline.getEntityIdImageShared(12), nullptr);
+    EXPECT_TRUE(previewColorRef.expired());
+    EXPECT_TRUE(previewDepthRef.expired());
+
+    // B is untouched: the same entry with the same resource owners and extent,
+    // not a re-published or shifted copy.
+    const ForwardViewResources* world = pipeline.viewResourcesFor(11);
+    ASSERT_NE(world, nullptr);
+    EXPECT_EQ(world->colorOwner, worldColor);
+    EXPECT_EQ(world->depthOwner, worldDepth);
+    EXPECT_EQ(world->extent.width, 1280u);
+    EXPECT_EQ(pipeline.getViewDepthImageShared(11), worldDepth);
+
+    // Reconciling again in the same tick is the same answer: the criterion is
+    // the tick's declarations, so a second family's recording of them (or a
+    // repeated call) cannot drop a View the tick declares.
+    ForwardRenderPipelineTestAccess::reconcilePublishedViews(pipeline, plan);
+    ASSERT_NE(pipeline.viewResourcesFor(11), nullptr);
+    EXPECT_EQ(pipeline.viewResourcesFor(11)->colorOwner, worldColor);
+
+    // The panel's rows follow: one row per View, and the row names its View.
+    RenderTargetCatalog catalog;
+    pipeline.appendRenderTargetEntries(catalog);
+    ASSERT_EQ(catalog.entries.size(), 2u);
+    EXPECT_EQ(catalog.entries[0].owner, RenderTargetCatalog::Entry::EOwner::ForwardView);
+    EXPECT_EQ(catalog.entries[0].viewId, 11u);
+    EXPECT_EQ(catalog.entries[0].colorAttachments[0], worldColor);
+    EXPECT_EQ(catalog.entries[1].owner, RenderTargetCatalog::Entry::EOwner::ForwardShadow);
+    EXPECT_EQ(catalog.entries[1].viewId, 0u);
+}
+
+/// The case a per-family criterion would have missed: a tick that declares no
+/// View at all (the editor's viewport tab closed) records no family, so nothing
+/// would reconcile if the eviction were driven by the family list. The tick's
+/// declarations are the criterion, and an empty declaration list is the answer
+/// "nothing this pipeline published is still a View of this tick".
+TEST(ForwardRenderPipelineTest, ATickThatDeclaresNoViewLeavesNothingPublished)
+{
+    ForwardRenderPipeline pipeline;
+
+    auto color = makeAttachment();
+    auto depth = makeAttachment();
+    ForwardRenderPipelineTestAccess::publishViewResources(
+        pipeline, makeOutput(11, kWorldExtent, color, depth), kWorldExtent, kGameFeatures);
+
+    std::weak_ptr<RenderTexture> colorRef = color;
+    color.reset();
+    depth.reset();
+
+    ForwardRenderPipelineTestAccess::reconcilePublishedViews(pipeline, SceneRenderPlan{});
+
+    EXPECT_EQ(pipeline.viewResourcesFor(11), nullptr);
+    EXPECT_EQ(pipeline.getViewDepthImageShared(11), nullptr);
+    EXPECT_TRUE(colorRef.expired());
 }
 
 } // namespace

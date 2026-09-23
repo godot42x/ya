@@ -154,6 +154,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
 
     void init(const InitDesc& desc);
     ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
+    void reconcilePublishedViews(const SceneRenderPlan& plan) override;
     void shutdown();
 
     [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Deferred; }
