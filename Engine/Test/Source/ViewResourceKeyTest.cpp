@@ -10,6 +10,8 @@
 #include "RHI/Core/RenderTexture.h"
 #include "Scene/Core/Scene.h"
 
+#include "RenderTestAccess.h"
+
 #include <gtest/gtest.h>
 
 #include <array>
@@ -17,58 +19,6 @@
 
 namespace ya
 {
-
-class ForwardRenderPipelineTestAccess
-{
-  public:
-    static void publishViewResources(ForwardRenderPipeline&  pipeline,
-                                     const RenderViewOutput& output,
-                                     Extent2D                extent,
-                                     FRenderFeatureMask      features)
-    {
-        pipeline.publishViewResources(output, extent, features);
-    }
-
-    static void reconcilePublishedViews(ForwardRenderPipeline& pipeline, const SceneRenderPlan& plan)
-    {
-        pipeline.reconcilePublishedViews(plan);
-    }
-};
-
-/// Installs a pipeline the test owns as the coordinator's active strategy.
-/// Building one goes through `initForwardPipeline` and needs a real backend, so
-/// this is the seam instead of the coordinator growing a public
-/// install-the-strategy entry point just for a test.
-class PipelineCoordinatorTestAccess
-{
-  public:
-    static void installForwardPipeline(PipelineCoordinator&                   coordinator,
-                                       std::shared_ptr<ForwardRenderPipeline> pipeline)
-    {
-        coordinator._forwardPipeline       = std::move(pipeline);
-        coordinator._renderPipeline        = PipelineCoordinator::ERenderPipeline::Forward;
-        coordinator._pendingRenderPipeline = PipelineCoordinator::ERenderPipeline::Forward;
-    }
-};
-
-/// Drives the device's pre-record step with a pipeline the test published into.
-/// `prepareFrameRecord` is private because it is only meaningful inside a frame,
-/// so a case that wants the eviction *call site* covered reaches it from here
-/// rather than standing up a real backend and a command buffer.
-class RenderDeviceStateTestAccess
-{
-  public:
-    static void installActivePipeline(RenderDeviceState&                     device,
-                                      std::shared_ptr<ForwardRenderPipeline> pipeline)
-    {
-        PipelineCoordinatorTestAccess::installForwardPipeline(device._pipelineCoordinator, std::move(pipeline));
-    }
-
-    static void prepareFrameRecord(RenderDeviceState& device, const RenderFramePlan& plan)
-    {
-        device.prepareFrameRecord(plan);
-    }
-};
 
 namespace
 {
@@ -406,17 +356,17 @@ TEST(ForwardRenderPipelineTest, ATickThatDeclaresNoViewLeavesNothingPublished)
 }
 
 /// The wiring evidence for dropping a View the tick stopped declaring: it is
-/// `RenderDeviceState::prepareFrameRecord` -- the device's own pre-record step --
+/// `RenderDeviceState::prepareFrameRecord` -- the renderer's pre-record step --
 /// that reconciles against this tick's plan. The sibling case above covers the
 /// pipeline's half with `reconcilePublishedViews()` called straight from the test;
 /// this one goes through the device, so removing the reconcile call from
 /// `RenderDeviceState.Frame.cpp` turns it red.
 ///
 /// Boundary: this pins that `prepareFrameRecord` reconciles against the plan it is
-/// handed, and that the call site exists and runs. It does not pin the order
-/// between `prepareFrameRecord` and `beginFrameCommandBuffer` inside `record()`:
-/// that needs a real command buffer, so the order stays something `record()`
-/// guarantees rather than something this case watches.
+/// handed, and that the call runs. It does not pin where that step sits in a
+/// frame's recording order -- that is the application's order now, and
+/// `RuntimeRenderContextTest` watches the part of it a test can reach without a
+/// real command buffer.
 TEST(RenderDeviceStateTest, PrepareFrameRecordDropsTheViewsTheTickStopsDeclaring)
 {
     Scene scene("Authoring");
@@ -467,7 +417,9 @@ TEST(RenderDeviceStateTest, PrepareFrameRecordDropsTheViewsTheTickStopsDeclaring
                                            [](Scene&) { return std::make_shared<const SceneSnapshot>(); });
     ASSERT_EQ(plan.sceneRender.plan().viewTasks.size(), 1u);
 
-    RenderDeviceStateTestAccess::prepareFrameRecord(device, plan);
+    // The step itself is reached directly: it is one of the steps an
+    // application's recording order calls, so it is public on the renderer.
+    device.prepareFrameRecord(plan);
 
     // The View this tick stopped declaring is gone: no entry, nothing behind the
     // identity-carrying queries, and no second owner keeping its images alive.

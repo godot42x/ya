@@ -80,8 +80,9 @@ struct ViewComposeInput
 };
 
 /// Acquire / present destination for this frame. The host/present coordinator
-/// must call `acquirePresentFrame` before `RenderDeviceState::record` and
-/// `submitPresentFrame` after. The renderer does not acquire or present.
+/// must call `acquirePresentFrame` before the application records the frame
+/// (`RuntimeRenderContext::record`) and `submitPresentFrame` after. The renderer
+/// does not acquire or present.
 /// `imageIndex < 0` means this surface is not presenting this frame.
 ///
 /// What the window starts from is a host fact, not something the renderer may
@@ -111,7 +112,8 @@ struct PresentFrameInput
     ESurfaceBackdrop backdrop = ESurfaceBackdrop::ViewDisplayImage;
 };
 
-/// Sealed host frame value consumed by `RenderDeviceState::record`.
+/// Sealed host frame value consumed by the application's recording order
+/// (`RuntimeRenderContext::record`).
 /// `sceneRender` owns the extracted plan together with the recordings paired
 /// with it, so the Scene a view renders is already on that view's own task.
 /// Not an active-Scene query and not swapchain ownership.

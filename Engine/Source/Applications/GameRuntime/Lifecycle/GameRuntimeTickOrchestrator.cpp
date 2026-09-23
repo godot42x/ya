@@ -37,6 +37,7 @@
 #include "Render3D/Material/Material.h"
 #include "GameRuntime/Render/HostSceneExtract.h"
 #include "GameRuntime/Render/RenderFrameExtractor.h"
+#include "GameRuntime/Render/RuntimeRenderContext.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 
@@ -299,7 +300,10 @@ uint32_t GameRuntimeTickOrchestrator::resolveFlightIndex(const App& app)
 void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 {
     auto* device = app.getRenderServices().getDeviceState();
-    if (!device) {
+    // The context is created with the device and records through it, so this is
+    // the same question as "is there a renderer this tick".
+    auto* renderContext = app._renderState->runtimeRender.get();
+    if (!device || !renderContext) {
         return;
     }
 
@@ -380,7 +384,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         return;
     }
 
-    const RecordedFrame recorded = recordFrame(app, *device, dt, std::move(sceneRender), gameFrame, presentFrame);
+    const RecordedFrame recorded = recordFrame(app, *renderContext, dt, std::move(sceneRender), gameFrame, presentFrame);
     submitRecordedFrame(app, presentFrame, recorded);
     app.presentModuleExtras(dt);
 }
@@ -517,13 +521,16 @@ GameRuntimeTickOrchestrator::TickFrame GameRuntimeTickOrchestrator::buildGameRen
 }
 
 RecordedFrame GameRuntimeTickOrchestrator::recordFrame(App&                    app,
-                                                       RenderDeviceState&      device,
+                                                       RuntimeRenderContext&   context,
                                                        float                   dt,
                                                        ExtractedSceneRender    sceneRender,
                                                        TickFrame&              frame,
                                                        const FPresentFrame&    presentFrame)
 {
-    return device.record(RenderFramePlan{
+    // The recording order is the application's and lives in the context; this
+    // step only states this frame's facts, so the sequence stays readable in
+    // one place instead of being assembled here and re-decided there.
+    return context.record(RenderFramePlan{
         .sceneRender = std::move(sceneRender),
         .frame = frame.boundFrame(),
         .viewCompose = {

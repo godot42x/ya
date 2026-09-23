@@ -216,7 +216,7 @@ using SceneSnapshotExtractor =
 ///
 /// Only `buildSceneSnapshots()` can build the plan half, and the default state
 /// is the empty UI-only plan, so a plan that still holds empty snapshot entries
-/// cannot reach `RenderDeviceState::record`: "forgot to extract" is a
+/// cannot reach a recording: "forgot to extract" is a
 /// compile error instead of a runtime log. Recordings enter through
 /// `pairViewFrames()` alone, so the two lists cannot drift apart the way
 /// hand-filled parallel arrays can.
@@ -309,7 +309,7 @@ class ExtractedSceneRender
                                                                        const SceneSnapshotExtractor& extract);
 
 /// Tick-local declaration collector. It does not own Scene/ECS objects and does
-/// not record GPU commands; RenderDeviceState::record consumes the sealed immutable plan.
+/// not record GPU commands; the application's recording order consumes the sealed immutable plan.
 /// Its two phases are separate: `seal()` groups declarations, and extraction
 /// is the caller's explicit `buildSceneSnapshots()` step.
 class SceneRenderScheduler

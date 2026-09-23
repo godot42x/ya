@@ -1,7 +1,8 @@
 # Framework 只放可复用管线，应用拥有排布与状态
 
 > 建立日期：2026-09-22
-> 状态：AB1 / AB2 已落地；AB3–AB7 待做。
+> 状态：AB1 / AB2 已落地；AB7-step1 已落地（整帧录制顺序搬到应用侧）；AB3-step2、AB4-step2/3、
+> AB5 / AB6、AB7-step2 待做。
 
 ## 1. 原则
 
@@ -125,7 +126,7 @@ AB4-step1（已落地）：**present target 变成 per-surface**。
 
 AB4-step2（待做）：让**额外的 OS 窗口走同一条路**。现状：额外窗口由 GUI host 的
 `presentGuiSnapshot` 自建 acquire/submit/present，并且只呈现 GUI chrome，
-`RenderDeviceState::record` 完全没参与——所以被拖出去的 viewport 面板看不到世界画面。
+整帧录制完全没参与——所以被拖出去的 viewport 面板看不到世界画面。
 这一步同时需要额外窗口的 chrome 每帧被 tick（现在 `session->tick` 只对默认窗口调用）。
 
 AB4-step3（待做）：`PresentationGraphService` 只保留「把 ready image 写进 surface」+ 宿主
@@ -206,7 +207,7 @@ AB8-step2（已落地）：**`HostViewState` 拆成设置与排布**。
 只迁移能一句话回答职责的文件（Scene / View / Compose / Debug / Resource / Pipeline），
 答不上的留在原地并在本文件记一笔，不为了消灭平铺而硬塞。
 
-### AB7 — `RenderDeviceState` 拆成应用级 RenderContext 与 Framework 管线对象（待做）
+### AB7 — `RenderDeviceState` 拆成应用级 RenderContext 与 Framework 管线对象（step 1 已落地）
 
 前置：AB3（查询面收窄）与 AB4（presentation 解开）。
 
@@ -214,6 +215,36 @@ AB8-step2（已落地）：**`HostViewState` 拆成设置与排布**。
 `RenderDeviceState` 同时是 RHI/device 生命周期、持久 GPU 资源、以及**产品级的整帧录制执行器**
 （prepare → begin → recordFamily → publish → view compose → UI compose → display compose → capture）。
 只把它改名成 `Renderer` 会让「Framework 拥有整帧排布」这件事换一个更好看的名字继续存在。
+
+AB7-step1（已落地，2026-09-23 第五批）：**整帧录制顺序搬到应用侧，`RenderDeviceState::record` 删除。**
+
+- `Applications/GameRuntime/Render/RuntimeRenderContext.{h,cpp}`（公开头
+  `include/GameRuntime/Render/RuntimeRenderContext.h`）持有 `RenderDeviceState*`，公开
+  `record(const RenderFramePlan&) -> RecordedFrame`；**函数体就是那条顺序**：present target 获取 →
+  prepare → begin → graphics → inset 合并 / inset 图构建 → UI compose → `recordExtensions->recordViewCompose`
+  → display compose（capture 仍在它内部）→ retain → end → seal。display root 的解析、inset 的合并与
+  backdrop 的选择都在这里，Framework 看不到。
+- `RenderDeviceState` 只剩**机制步骤**，且都是真实函数体：`prepareFrameRecord` / `beginFrameCommandBuffer`
+  / `recordViewFamilies` / `retainPublishedViewOutputs` / `endFrameCommandBuffer` /
+  `sealFrame(flightIndex, cmdBuf) -> RecordedFrame`（新，合并原 finish 段）/ `acquireSurfacePresentation`
+  转为 public；`getLiveSubmission(uint32_t)` 增加非 const 重载（`SurfacePresentation::recordDisplayCompose`
+  的公开签名本就要求 `RenderSubmission&`）。`publishFamilyResult` / `findSurfacePresentation` 仍私有。
+  **没有保留任何转发到 `record` 的方法**，也没有 `Coordinator2` / `RenderServiceHub` 之类的皮。
+- 归属：`AppRenderState::runtimeRender`（`std::unique_ptr<RuntimeRenderContext>`），在 `AppLifecycle`
+  里紧跟 `device->init(...)` 创建、在 `device` 之前销毁；调用点是
+  `GameRuntimeTickOrchestrator::recordFrame`（它仍只负责「本帧的事实」）。
+- 反向验收（入口可读性）：`App::run` → `iterate` → `declareViews → extractScenes → prepareViews →
+  buildGameRenderFrame → acquire → record → submit` 不变；`tickRender` 只是多了一行
+  `recordFrame(app, *renderContext, ...)`，没有变难读。
+- 证据：`Engine/Test/Source/RuntimeRenderContextTest.cpp`（4 个用例，落在 `ya-testing`）。
+- 顺带消掉：`RenderDeviceState.Frame.cpp` 的 `#include "GUI/Compose/Render2DComposePass.h"`
+  （本批前它已无使用者，真正的使用者在 `Render3D/Common/ViewCompose.cpp`）。
+  `RenderDeviceState.cpp` 的那个 include **仍在**——它服务 `prepareComposePipelines()` 的
+  `prepareRender2DComposePassPipeline`。
+
+AB7-step2（待做）：让 `RuntimeRenderContext` 继续收下「frame flight、scene/view plan、submission、
+surface present 目标、Game UI 绑定、present 前后策略」这些今天仍散在应用侧或 device 上的事实；
+`recordExtensions` 的阶段变成应用侧显式调用（plan §4b 同一条）。
 
 目标形态：
 
@@ -240,12 +271,12 @@ Framework 侧的公开入口限定在 `init/shutdown/record(plan, surface)/publi
 
 | 偏差 | 当前证据 | 目标归属 |
 | --- | --- | --- |
-| 整帧录制编排仍在 Framework | `RenderDeviceState::record()` 负责 acquire 之后的 submission / recordFamily / view compose / display compose / surface presentation / finish | 应用侧 `RuntimeRenderContext`（AB7） |
+| ~~整帧录制编排仍在 Framework~~ **已修（2026-09-23 第五批）** | ~~`RenderDeviceState::record()` 负责 acquire 之后的 submission / recordFamily / view compose / display compose / surface presentation / finish~~ | 已落地：顺序在应用侧 `RuntimeRenderContext::record`，`RenderDeviceState::record` 已删除；Framework 只留机制步骤（AB7-step1） |
 | 本 tick 的 View 准备数据由 App 长期持有 | ~~`AppRenderState::viewFrameDataPerFlight`~~ **已删除（2026-09-22 review batch 2）**；`AppLifecycle` 的 quit / `handleSceneDestroy` 两处清空循环同步删除 | `ExtractedSceneRender` 持有本 tick 的 `_frameData`，`SceneViewRecording` 只借用该对象内的 plan/data；保活审计确认 `RenderFrameData::sceneResources` 只含录制期消费的句柄/processor 指针，GPU 生命周期由 `RenderSubmission` 与 `retainPublishedViewOutputs` 负责，因此不存在把 packet 留在 App 才能保活的约束。零生产消费者的 `hostFrameData()` 也一并删除 |
 | 无身份的 View 尺寸语义仍在 pipeline 接口上 | ~~`IRenderPipeline::getViewExtent()`~~ **已删除（2026-09-22）**；~~pipeline 内仍保存单套 View 资源（`_viewResources` / `_viewRI` / `_viewRTSpec` / `_pendingViewExtent` / `_debugViews`）~~ **已修（2026-09-23 第三批）** | 已落地：View 资源按 `ViewResourceKey = identity + extent + format + feature policy` 分键（`ViewResourceTable`）；"单套尺寸"的接口（`onViewResized`、`_pendingViewExtent`）已删除 |
 | ~~`IRenderRuntimeServices` 删了，但「当前 Scene」仍是隐式全局~~ **已修（2026-09-23 第四批）** | ~~`setActiveSceneProvider` ×3 + `prepareDerivedState(Scene*, dt)` 每帧注入「刚处理的那个 Scene」；`_pendingStateScene != scene` 那一支会 `clearSceneResolveWork()`，所以处理 B 会丢掉 A 的 resolve 状态~~ | 已落地：三个 processor 各持**按 Scene 一份**的 `SceneWork`，入口是 `prepareScenes(std::span<Scene* const>, float)`；本 tick 不点名的 Scene 在那里失去 work（与 `reconcilePublishedViews` 同一判据）。实体级查询 / 失效入口都带 Scene |
 | plan 仍携带行为 | `RenderFramePlan::recordExtensions`（`IFrameRecordExtensions*`），renderer 在固定阶段回调它 | 比 `std::function` 清晰，但「plan 是 immutable data」仍未达成；方向是把那些阶段变成应用侧显式调用（与 AB7 同批） |
-| renderer 仍有编辑器查询面 + 反向依赖 GUI | `buildViewportSnapshot` / `buildRenderTargetCatalog` / `getDebugRenderSystem` / `getDiagnosticsService`；`RenderDeviceState.cpp` 与 `RenderDeviceState.Frame.cpp` include `GUI/Compose/Render2DComposePass.h` | AB3-step2（typed command + 由数据构造 catalog）；GUI compose 的 include 需要 compose 准备改由宿主调用（已在 `source-layout-subtraction` S2 记录） |
+| renderer 仍有编辑器查询面 + 反向依赖 GUI | `buildViewportSnapshot` / `buildRenderTargetCatalog` / `getDebugRenderSystem` / `getDiagnosticsService`；~~`RenderDeviceState.cpp` 与 `RenderDeviceState.Frame.cpp` include `GUI/Compose/Render2DComposePass.h`~~ **一半已修（2026-09-23 第五批）**：`RenderDeviceState.Frame.cpp` 那个（本批前已无使用者）随 `record()` 一起删除；`RenderDeviceState.cpp` 的仍在，它服务 `prepareComposePipelines()` 的 `prepareRender2DComposePassPipeline` | AB3-step2（typed command + 由数据构造 catalog）；剩下那个 include 需要 compose 准备改由宿主调用（已在 `source-layout-subtraction` S2 记录） |
 
 ### 报告点出的死代码（2026-09-22 已修）
 

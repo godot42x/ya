@@ -54,14 +54,17 @@ struct DebugRenderSystem;
 struct Node;
 
 /// Device-lifetime backend, persistent renderer services, fence-safe mutations,
-/// and one frame's recording. The single owner of the recording: consuming a
-/// sealed plan and writing commands into a submission are the same lifetime, so
-/// `record` lives here instead of on a second object that would have to reach
-/// back into this one for the submission table, the presentation graph and the
-/// pipeline. Does not own the backend's swapchain and does not locate the active
-/// Scene; every View binds its own Scene, and `record` accepts only an
-/// `ExtractedSceneRender`, so a plan whose Scene content was never extracted
-/// cannot be recorded.
+/// and the steps one frame's recording is made of. It owns the machinery, not
+/// the arrangement: the *order* a product frame is recorded in -- which surface
+/// this frame presents through, which View is the display root, how the plan's
+/// composed Views become insets on it, and where the host's own stages sit -- is
+/// the application's, in `GameRuntime/Render/RuntimeRenderContext`. Nothing on
+/// this object answers "which Views does this frame render" or "which window
+/// does it present"; the plan carries those and the application reads them.
+/// Does not own the backend's swapchain and does not locate the active Scene;
+/// every View binds its own Scene, and the recording steps accept only a
+/// `RenderFramePlan` built from an `ExtractedSceneRender`, so a plan whose Scene
+/// content was never extracted cannot be recorded.
 struct YA_RENDER_3D_API RenderDeviceState
 {
     using ERenderPipeline = PipelineCoordinator::ERenderPipeline;
@@ -123,13 +126,6 @@ struct YA_RENDER_3D_API RenderDeviceState
     void init(const InitDesc& desc);
     void shutdown(bool bRenderAlreadyIdle = false);
 
-    /// Records graphics → UI → view compose → display compose for one sealed
-    /// plan and returns what the host submits. The caller must already have
-    /// acquired `plan.present` and submits what comes back: the recorded
-    /// command buffer, or an empty frame when the result is invalid (see
-    /// RecordedFrame).
-    [[nodiscard]] RecordedFrame record(const RenderFramePlan& plan);
-
     /// Resolve the Scene-keyed GPU bindings one View's passes bind (skybox /
     /// IBL descriptor sets and derived resources). Called per View before
     /// recording starts, so a pass reads its own View's scene resources instead
@@ -167,6 +163,17 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// pick one and call it the current one.
     [[nodiscard]] std::shared_ptr<RenderTexture> getPresentationImageShared(
         IRenderSurfaceContext& surface) const;
+    /// The recording in progress for `flightIndex`, or null when that flight is
+    /// not recording. The mutable overload exists because recording *into* a
+    /// flight is a step the host performs: a surface pass takes the recording as
+    /// a `RenderSubmission&` (see `SurfacePresentation::recordDisplayCompose`) and
+    /// the resources a host lifts while recording are kept alive through it.
+    /// Which flight that is comes from the plan, so this answers a fact rather
+    /// than choosing a recording.
+    [[nodiscard]] RenderSubmission* getLiveSubmission(uint32_t flightIndex)
+    {
+        return _submissions.get(flightIndex);
+    }
     [[nodiscard]] const RenderSubmission* getLiveSubmission(uint32_t flightIndex) const
     {
         return _submissions.get(flightIndex);
@@ -229,26 +236,58 @@ struct YA_RENDER_3D_API RenderDeviceState
     [[nodiscard]] bool            isDeferredPipelineActive() const { return _pipelineCoordinator.isDeferredPipelineActive(); }
     void requestRenderTargetFormat(const RenderTargetFormatCommand& command);
 
-  private:
-    /// Test-only seam: `prepareFrameRecord` is the pre-record safe point, and a
-    /// case that wants to prove the eviction runs *from there* has to reach it
-    /// with a pipeline installed. Building one is a device-lifetime action a real
-    /// backend performs, so the test names itself instead of the header growing
-    /// an install-the-strategy entry point. Same shape as the two pipelines'
-    /// `ForwardRenderPipelineTestAccess` / `DeferredRenderPipelineTestAccess`.
-    friend class RenderDeviceStateTestAccess;
+    // === The steps one frame's recording is made of ===
+    //
+    // The *order* these run in is the application's, spelled out once in
+    // `GameRuntime/Render/RuntimeRenderContext`: present target, prepare, begin,
+    // graphics, insets/UI, view compose, display compose, retain, end, seal.
+    // Each function below is the real action of one such step. None of them is a
+    // whole-frame entry point, and none of them decides which surface presents,
+    // which View is the display root, or what a window shows -- the plan carries
+    // those and the application reads them. There is deliberately no
+    // `record(plan)`: one would put the product frame's arrangement back inside
+    // the renderer.
 
-    void recordViewFamilies(const RenderFramePlan& plan);
     /// Everything that mutates pipeline state or prepares GPU resources for this
     /// plan, before the command buffer opens: derived state for each Scene this
-    /// plan renders, pending mutations, compose pipeline prep, each View's
-    /// Scene-keyed GPU bindings, and the Game UI compose pipeline when the plan
-    /// carries a UI snapshot. No View's geometry is applied here: a View sizes
-    /// its own resources, and the plan is what names the Views this frame
-    /// records. Split from
-    /// `record` so "what happens before recording" and "what is recorded" are
-    /// two readable steps instead of one 170-line function.
+    /// plan renders, pending mutations, eviction of the Views this tick no longer
+    /// declares, compose pipeline prep, each View's Scene-keyed GPU bindings, and
+    /// the Game UI compose pipeline when the plan carries a UI snapshot. No
+    /// View's geometry is applied here: a View sizes its own resources, and the
+    /// plan is what names the Views this frame records.
     void prepareFrameRecord(const RenderFramePlan& plan);
+    /// Opens this plan's flight: begins its command buffer and opens the
+    /// submission and the view-output table on it. False when there is nothing to
+    /// record (the plan names no presentable surface / flight, or its flight has
+    /// no command buffer), which is a legitimate frame the host submits empty.
+    bool beginFrameCommandBuffer(const RenderFramePlan& plan, std::shared_ptr<ICommandBuffer>& cmdBuf);
+    /// Hands each family of the plan to the active strategy, which records it
+    /// into the flight's live submission and publishes its Views' outputs.
+    void recordViewFamilies(const RenderFramePlan& plan);
+    /// Keep every View published this flight alive until the fence that owns it
+    /// has passed.
+    void retainPublishedViewOutputs(uint32_t flightIndex, ICommandBuffer* cmdBuf);
+    /// Close the flight's command buffer and publish the frame's GPU timing.
+    void endFrameCommandBuffer(ICommandBuffer* cmdBuf);
+    /// Seal the flight's submission and report the recording's identity: the
+    /// command buffer to submit, the fence slot, and the serial. An invalid
+    /// result means the recording must not be submitted -- its resources and
+    /// finish state are what the fence slot expects.
+    [[nodiscard]] RecordedFrame sealFrame(uint32_t flightIndex, ICommandBuffer* cmdBuf);
+    /// Find or build the present target for `surface`. A safe-point action: it
+    /// can construct a pipeline, so it runs before any command is recorded, the
+    /// same place `prepareComposePipelines` does. Which surface this frame
+    /// presents through is not this renderer's question.
+    SurfacePresentation& acquireSurfacePresentation(IRenderSurfaceContext& surface);
+
+  private:
+    /// Test-only seam: a case that wants to prove the pre-record step evicts the
+    /// Views a tick stops declaring has to reach it with a pipeline installed.
+    /// Building one is a device-lifetime action a real backend performs, so the
+    /// test names itself instead of the header growing an install-the-strategy
+    /// entry point. Same shape as the two pipelines'
+    /// `ForwardRenderPipelineTestAccess` / `DeferredRenderPipelineTestAccess`.
+    friend class RenderDeviceStateTestAccess;
 
     void                   initRuntimeState(const InitDesc& desc);
     void                   initShaderSystems();
@@ -262,17 +301,9 @@ struct YA_RENDER_3D_API RenderDeviceState
     void                   shutdownRuntimeServices();
     void                   destroyRenderBackend();
 
-    bool                   beginFrameCommandBuffer(const RenderFramePlan& plan, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   publishFamilyResult(uint32_t flightIndex, ViewFamilyRenderResult result);
-    void                   retainPublishedViewOutputs(uint32_t flightIndex, ICommandBuffer* cmdBuf);
-    void                   endFrameCommandBuffer(ICommandBuffer* cmdBuf);
 
     [[nodiscard]] SurfacePresentation* findSurfacePresentation(IRenderSurfaceContext& surface) const;
-    /// Find or build the present target for `surface`. A safe-point action: it
-    /// can construct a pipeline, so it runs in the pre-record section of
-    /// `record` where `prepareComposePipelines` already does the same, and never
-    /// while commands are being recorded.
-    SurfacePresentation& acquireSurfacePresentation(IRenderSurfaceContext& surface);
 
     void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog, Scene* inspectScene) const;
     /// Resolve the handles this renderer is willing to expose to the inspector.

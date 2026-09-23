@@ -88,14 +88,18 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
     长得完全一样，它会带着**一整条每帧空跑的 pass** 活很久（`kTopologyPassOverlay` 就这么活到
     2026-09-19）。删除前先回答“生产者是谁”：找不到生产者的字段 / 通道 / pass 一律删除，不要为它
     补一个消费者。
-16. 一帧的录制顺序只写在一个地方：`RenderDeviceState::record`。host 通过
+16. 一帧的录制顺序只写在一个地方：**应用侧** `GameRuntime/Render/RuntimeRenderContext::record`。
+    renderer 只提供顺序里的每一步机制（`prepareFrameRecord` / `beginFrameCommandBuffer` /
+    `recordViewFamilies` / `retainPublishedViewOutputs` / `endFrameCommandBuffer` / `sealFrame` /
+    `acquireSurfacePresentation`），**不再有** `RenderDeviceState::record` 这样的整帧入口——
+    那等于让 Framework 拥有「这一帧渲染哪些 View、哪个窗口 present」的排布。host 通过
     `IFrameRecordExtensions`（`recordViewCompose` / `recordBeforeDisplayExtensions` /
     `recordDisplayExtensions` / `appendDisplayCapture`）在这些阶段里录自己的东西，
     阶段名是 Render3D 的词汇。**不要**把 `std::function` 放进 `RenderFramePlan`：
     plan 是数据，行为挂在数据上会让顺序一半在 host 构造处、一半在 renderer 调用处，
     两边都读不出完整时序。每个阶段无条件被调用，“这一步什么都不录”用默认空实现表达
     （headless / UI-only 帧合法如此），不要用断言把合法帧判成错误。
-    它拆成 `prepareFrameRecord()`（所有改状态 / 备 GPU 资源的动作）与 `record()`（只录命令）两段：
+    它拆成 `prepareFrameRecord()`（所有改状态 / 备 GPU 资源的动作）与「录命令」那几步：
     "safe point 在哪"必须是一条能被读出来的边界，不是没写下来的约定。
 17. **窗口是呈现面，渲染分辨率是设置。** `HostViewState::renderResolution` 是"宿主视口要渲染
     多大"，`INativeWindow::getWindowSize()` 是"窗口多大"，两者可以不同且**互不派生**：

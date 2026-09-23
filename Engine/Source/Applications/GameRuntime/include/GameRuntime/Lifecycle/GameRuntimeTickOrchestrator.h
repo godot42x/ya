@@ -12,6 +12,7 @@ namespace ya
 struct App;
 struct Entity;
 struct RenderDeviceState;
+class RuntimeRenderContext;
 class SceneRenderScheduler;
 struct FPresentFrame;
 struct RenderFrameData;
@@ -87,9 +88,12 @@ class GameRuntimeTickOrchestrator
                                           float                       dt,
                                           uint32_t                    flightIndex,
                                           const ExtractedSceneRender& sceneRender);
-    /// Records the tick in one renderer call and returns what the host submits.
+    /// States this tick's frame facts and hands them to the context, which owns
+    /// the recording order: prepare → begin → graphics → insets/UI → view and
+    /// display compose → retain → end → seal. Returns what the host submits (or
+    /// an invalid frame when the tick's present was not acquired).
     static RecordedFrame recordFrame(App&                        app,
-                                     RenderDeviceState&          device,
+                                     RuntimeRenderContext&       context,
                                      float                       dt,
                                      ExtractedSceneRender        sceneRender,
                                      TickFrame&                  frame,

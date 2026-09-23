@@ -208,6 +208,9 @@ void App::init(AppDesc ci)
         .renderDocDllPath = app._ci.renderDocDllPath,
         .renderDocCaptureOutputDir = app._ci.renderDocCaptureOutputDir,
     });
+    // The app's frame render context records through that device, so it exists
+    // exactly while the device does; teardown clears it before the device.
+    app._renderState->runtimeRender = std::make_unique<RuntimeRenderContext>(*app._renderState->device);
     // The game viewport is one of the view owners; the App keeps the list it
     // collects from each tick (the editor registers its own on attach).
     app._gameViewProducer.bind(app);
@@ -530,6 +533,8 @@ void App::quit()
     AssetManager::get()->clearTextures();
 
     if (app._renderState->device) {
+        // The render context holds the device it records through; it goes first.
+        app._renderState->runtimeRender.reset();
         app._renderState->device->shutdown(/*bRenderAlreadyIdle=*/true);
         app._renderState->device.reset();
     }

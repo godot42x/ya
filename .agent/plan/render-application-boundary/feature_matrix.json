@@ -153,19 +153,21 @@
         "evidence: Engine/Test/Source/SceneDerivedStateTest.cpp (3 cases in ya-render-3d-test) -- two Scenes sharing one entt id keep separate work/state, a Scene the tick stops naming loses its work, and terrain Scene A's state object survives a prepareScenes({A,B}); negative control: ensureWork reverted to a single slot makes the first two cases FAIL"
       ]
     },
-    {
-      "id": "renderer_is_the_persistent_renderer",
-      "phase": "AB7",
-      "status": "pending_scope_revised_from_rename_to_split",
-      "evidence": [
-        "RenderDeviceState holds backend lifetime, persistent renderer services, frame recording and a 77-member public surface -- not an RHI device, not a state",
-        "gated on AB3 (query surface narrowed) and AB4 (presentation decoupled)",
-        "scope revised 2026-09-22: no longer 'rename to Renderer'. RenderDeviceState::record is a product-level frame executor (prepare -> begin -> recordFamily -> publish -> view compose -> UI compose -> display compose -> capture); a rename would keep 'Framework owns the frame arrangement' alive under a nicer name",
-        "target: app-side RuntimeRenderContext owns frame flight, scene/view plan, submission, surface present targets, the record order after acquire, Game UI binding, and pre/post-present policy; Framework keeps Forward/Deferred/ViewComposePass/DisplayComposePass/PostProcess/RenderGraph/FrameRecording",
-        "RuntimeRenderContext is not the forbidden 'new Framework coordinator': it lives app-side, holds what RenderDeviceState already holds today, and is justified by the test in plan section 3 (does it need to know the app's Scenes / Views / windows)",
-        "public entry stays init/shutdown/record/publishedViewOutput; no plan-wide Renderer facade (see plan section 5)"
-      ]
-    }
+  {
+    "id": "renderer_is_the_persistent_renderer",
+    "phase": "AB7",
+    "status": "step1_landed_the_record_order_moved_app_side",
+    "evidence": [
+      "RenderDeviceState holds backend lifetime, persistent renderer services, the recording *steps* and a wide public surface -- not an RHI device, not a state",
+      "gated on AB3 (query surface narrowed) and AB4 (presentation decoupled)",
+      "scope revised 2026-09-22: no longer 'rename to Renderer'. RenderDeviceState::record is a product-level frame executor (prepare -> begin -> recordFamily -> publish -> view compose -> UI compose -> display compose -> capture); a rename would keep 'Framework owns the frame arrangement' alive under a nicer name",
+      "step1 (2026-09-23, batch 5): RenderDeviceState::record is deleted; the order (present target -> prepare -> begin -> graphics -> insets/UI -> view compose -> display compose -> retain -> end -> seal) lives in Applications/GameRuntime/Render/RuntimeRenderContext.cpp, held by AppRenderState::runtimeRender and called from GameRuntimeTickOrchestrator::recordFrame. The renderer exposes the steps (prepareFrameRecord/beginFrameCommandBuffer/recordViewFamilies/retainPublishedViewOutputs/endFrameCommandBuffer/sealFrame/acquireSurfacePresentation) with real bodies, no wrapper",
+      "step1 evidence: RenderRuntimeContextTest.ARefusedFrameStillPreparesTheTickBeforeItGivesUp pins that the app's order prepares (and evicts) before the 'is there anything to record' gate; negative control (prepare moved after the gate) turned it red. TheFrameEntryPointIsTheApplicationsNotTheRenderers pins that RenderDeviceState has no whole-frame entry point (negative control: re-adding record() broke the build)",
+      "target (remaining): app-side RuntimeRenderContext additionally owns frame flight, scene/view plan, submission, surface present targets, Game UI binding, and pre/post-present policy; Framework keeps Forward/Deferred/ViewComposePass/DisplayComposePass/PostProcess/RenderGraph/FrameRecording",
+      "RuntimeRenderContext is not the forbidden 'new Framework coordinator': it lives app-side, holds what RenderDeviceState already holds today, and is justified by the test in plan section 3 (does it need to know the app's Scenes / Views / windows)",
+      "public entry stays init/shutdown/record/publishedViewOutput; no plan-wide Renderer facade (see plan section 5)"
+    ]
+  }
   ],
   "known_baseline_failures": [
     "EditorPropertyGraphTest.AutoPropertySectionAssetPathCommitBrowseAndUndo",

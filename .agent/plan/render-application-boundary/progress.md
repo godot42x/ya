@@ -664,3 +664,79 @@ AB7 之后的独立判断，本批只做「Scene 显式 + 按 Scene 分状态」
 - 未覆盖（如实记录）：`GameplayResourceBinding` 拿到了同一套结构改动，但它没有任何公开查询面，
   所以本批的证据（`SceneDerivedStateTest`）只钉了 `EnvironmentLightingProcessor` 与 `TerrainProcessor`。
 - 偏离：无。
+
+## 2026-09-23 第五批 — 这一帧怎么排是应用的，`RenderDeviceState::record` 删除（AB7-step1）
+
+唯一目标：把 `RenderDeviceState::record` 里的**应用级整帧录制编排**搬回应用侧，Framework 只剩「怎么渲染一个
+已经准备好的 View」这一量级的机制步骤，并**删除**那个整帧编排入口（不保留 wrapper）。
+
+### 判为「应用排布」的部分（搬走了）
+
+present target 的获取时机与对象（`plan.present.surface`）、display root 解析、`displayOutput` 取值、
+inset 合并（host 声明 ∪ `viewDisplayInsetsFromPlan`）、inset 图构建（layout transition + `Texture::wrap` +
+retain/retire）、UI compose（落到 display root 的 RT，logical viewport 取自该 View 的声明）、
+`recordExtensions->recordViewCompose` 的调用位置、display compose（含 backdrop 选择）、以及**整条顺序本身**。
+
+### 判为「可复用机制」的部分（留在 `RenderDeviceState`，转 public，真实函数体）
+
+`prepareFrameRecord(plan)` / `beginFrameCommandBuffer(plan, cmdBuf&)` / `recordViewFamilies(plan)` /
+`retainPublishedViewOutputs(flight, cmdBuf)` / `endFrameCommandBuffer(cmdBuf)` / 新增
+`sealFrame(flight, cmdBuf) -> RecordedFrame`（合并原 finish 段）/ `acquireSurfacePresentation(surface)` /
+`getLiveSubmission(uint32_t)` 的非 const 重载。判据是 §3 三问：它们只依赖 GPU 抽象与 immutable 输入，
+不知道「当前应用有哪些 Scene / 哪些 View / 哪个窗口」。`publishFamilyResult` / `findSurfacePresentation`
+仍私有；**没有**给应用用的转发方法，也没有新 hub。
+
+### 改动
+
+- 新增 `Applications/GameRuntime/Render/RuntimeRenderContext.{h,cpp}` + 公开头
+  `include/GameRuntime/Render/RuntimeRenderContext.h`；`record(const RenderFramePlan&) -> RecordedFrame`
+  的函数体就是那条顺序。
+- `RenderDeviceState.h` / `RenderDeviceState.Frame.cpp`：删 `record()`（原文约 157 行）与其 5 个只为它存在的
+  include（`GUI/Compose/Render2DComposePass.h`、`Render3D/Common/ViewCompose.h`、`RHI/Core/Texture.h`、
+  `Graph/RenderGraphImportUtils.h`、`RHI/Core/Swapchain.h`、`utility.cc/ranges.h`、`<format>`、glm）；
+  新增 `sealFrame`；机制步骤转 public 并补注释。
+- `AppRenderState`：新增 `std::unique_ptr<RuntimeRenderContext> runtimeRender`；`AppLifecycle` 里在
+  `device->init(...)` 之后创建、在 `device` 之前销毁。`GameRuntimeTickOrchestrator::recordFrame` 改为
+  `context.record(plan)`（它仍只负责本帧事实）。指向 `RenderDeviceState::record` 的三处注释同步改写
+  （`RenderFrameInputs.h` / `SceneRenderScheduler.h` / `IRuntimeModule.h`）。
+- `render-arch` skill §16 改写为「顺序在应用侧 `RuntimeRenderContext::record`，renderer 只提供机制步骤」。
+
+### 测试（`Engine/Test/Source/RuntimeRenderContextTest.cpp`，落在 `ya-testing`）
+
+- `TheFrameEntryPointIsTheApplicationsNotTheRenderers`：概念断言 `!RecordsAWholeFrame<RenderDeviceState>`
+  （renderer 没有整帧入口）+ `RuntimeRenderContext::record(plan) -> RecordedFrame` 的形状。
+  **负向对照**（真做）：临时把 `record()` 声明加回 `RenderDeviceState.h` → 编译失败、断言信息就是这条；
+  移除后恢复绿。
+- `TheApplicationsOrderIsWrittenWithTheRenderersOwnSteps`：钉住顺序写法所需的机制面（7 个步骤的签名），
+  同时钉 `publishFamilyResult` / `findSurfacePresentation` **仍私有**——「把 `record` 写成一层转发」在这里
+  没有立锥之地。
+- `ARefusedFrameStillPreparesTheTickBeforeItGivesUp`：plan 声明 View 11、pipeline 里已发布 11 与 12；
+  present 未 acquire → `record` 返回 invalid frame，**同时** 12 被淘汰、11 原样保留。钉的是「应用侧顺序里
+  prepare（含淘汰）在『有没有东西可录』这道门之前」。**负向对照**（真做）：把 `prepareFrameRecord` 挪到
+  `beginFrameCommandBuffer` 之后 → FAIL（12 仍在），挪回 → PASS。
+- `APlanWithoutAnAcquiredPresentOpensNoRecording`：空 plan → invalid frame 且该 flight 没有 live submission。
+- `ViewResourceKeyTest.cpp` 里那两条 `*TestAccess`（`RenderDeviceStateTestAccess` / `PipelineCoordinatorTestAccess`）
+  与 `ForwardRenderPipelineTestAccess` 抽到共享头 `Engine/Test/Source/RenderTestAccess.h`（两个测试目标共用同一
+  份定义，避免重复定义），`PrepareFrameRecordDropsTheViewsTheTickStopsDeclaring` 改直调已 public 的
+  `prepareFrameRecord`（未删除该用例，也未删 `RenderRuntimeSnapshotTest`）。
+
+### 验证
+
+- build：`ya-render-3d` / `ya-render-3d-test` / `ya-game-runtime` / `ya-runtime` / `ya-game-editor` /
+  `ya-testing` 全部 ok。**本批开工时主仓库是编译得过的**：并发写者已把 `ViewportDebugCatalogBuilder.cpp`
+  改成 `.colorOwner.get()` / `.depthOwner.get()`（`git diff` 可见），因此不需要 clonefile 副本。
+- `xmake r ya-render-3d-test`：**189/189**（与基线一致；本批新增用例落在 `ya-testing`）。
+- plan §8 滤镜：**706 tests / 689 passed / 11 skipped / 6 failed**，6 个失败与登记基线逐项相同。
+- `run_display_compose_parity.py --skip-build`：**PASS**，两张图 md5 仍 `c775245ae636f15b41da8485319a2267`。
+- `run_widgettree_editor_smoke.py --skip-build`：**exit=0 六步全过**（首次运行即过，无需重跑）。
+
+### 保留 / 未完成 / 偏离
+
+- 保留（刻意）：`RenderFramePlan::recordExtensions` 仍携带行为（AB7-step2）；`RenderDeviceState.cpp` 的
+  `GUI/Compose/Render2DComposePass.h` include（服务 `prepareComposePipelines`）。
+- 未完成（AB7-step2，已写进 `plan.md`）：`RuntimeRenderContext` 继续收下 frame flight、scene/view plan、
+  submission、surface present 目标、Game UI 绑定与 present 前后策略；`recordExtensions` 去行为化。
+- 未覆盖（如实记录）：`ARefusedFrameStillPreparesTheTickBeforeItGivesUp` 只钉到「prepare 在门之前」；
+  families → compose → retain → end → seal 这段顺序要真 command buffer 才能驱动，本批没有任何用例覆盖它，
+  只能靠 `RuntimeRenderContext.cpp` 里那条可读顺序与产品级自动化（parity / smoke）兜。
+- 偏离：无。

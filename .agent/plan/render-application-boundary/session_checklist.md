@@ -21,8 +21,8 @@
 ## 收尾前
 
 - [ ] 受影响目标 build：`ya-game-runtime` / `ya-runtime` / `ya-game-editor` / `ya-testing`。
--- [ ] `xmake r ya-render-3d-test`（期望 186/186；batch 2 删掉 2 个只测已删接口的 case，第三批加 4 个、
-      覆盖补丁加 1 个）。
+- [ ] `xmake r ya-render-3d-test`（期望 189/189；batch 2 删掉 2 个只测已删接口的 case，第三批加 4 个、
+      覆盖补丁加 1 个、第四批加 3 个；第五批的用例落在 `ya-testing`，见 `RuntimeRenderContextTest.cpp`）。
 - [ ] `ya-testing` 滤镜跑一遍，与已登记基线比对（排除 `WidgetTreeTest.SystemLayersCannotBeDetached`）。
 - [ ] `run_display_compose_parity.py --skip-build` 期望 PASS、md5 `c775245a…`。
 - [ ] `run_widgettree_editor_smoke.py --skip-build` 期望 exit=0。
@@ -33,6 +33,24 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-23 第五批（AB7-step1）：**整帧录制顺序搬到应用侧，`RenderDeviceState::record` 删除。**
+  新增 `Applications/GameRuntime/Render/RuntimeRenderContext.{h,cpp}`，`record(plan)` 的函数体就是那条
+  顺序（present target → prepare → begin → graphics → inset 合并/图构建 → UI compose →
+  `recordExtensions->recordViewCompose` → display compose → retain → end → seal）；`RenderDeviceState`
+  只留机制步骤并转 public（`prepareFrameRecord` / `beginFrameCommandBuffer` / `recordViewFamilies` /
+  `retainPublishedViewOutputs` / `endFrameCommandBuffer` / 新 `sealFrame` / `acquireSurfacePresentation` /
+  非 const `getLiveSubmission`），没有转发层，也没有新 hub。归属 `AppRenderState::runtimeRender`，
+  随 `device` 建/销毁，由 `GameRuntimeTickOrchestrator::recordFrame` 调用。测试 4 个用例落在
+  `Engine/Test/Source/RuntimeRenderContextTest.cpp`（`ya-testing`）：整帧入口在应用侧（**负向对照**：
+  把 `record()` 声明加回 `RenderDeviceState.h` → 编译失败）、机制面正是这 7 步（并钉
+  `publishFamilyResult` / `findSurfacePresentation` 仍私有）、被拒帧仍先 prepare 再放弃（**负向对照**：
+  把 `prepareFrameRecord` 挪到门之后 → FAIL → 挪回 → PASS）、空 plan 不开录制。
+  `ViewResourceKeyTest.cpp` 的两处 `*TestAccess` 抽到共享头 `RenderTestAccess.h`，原淘汰用例改直调已 public
+  的 `prepareFrameRecord`（未删）。验证：六目标 build ok、`ya-render-3d-test` 189/189、滤镜 706/689/11/6
+  （与基线逐项相同）、parity PASS md5 `c775245a…`、smoke exit=0 六步全过（首次即过）。**开工时主仓库是
+  编译得过的**：并发写者已把 `ViewportDebugCatalogBuilder.cpp` 改成 `.colorOwner.get()`，故未使用 clonefile
+  副本。**标为未覆盖**：families → compose → retain → end → seal 那段顺序没有自动化用例（要真
+  command buffer）。
 - 2026-09-23 第三批收尾补丁（淘汰调用点的自动化覆盖，路径 1）：第三批收尾的 4 个新用例**全部**经
   `*TestAccess` 直调 `pipeline.reconcilePublishedViews(plan)`，没有一条经过 `RenderDeviceState`——删掉
   `RenderDeviceState.Frame.cpp:118` 那一行调用，185 个测试仍全绿，「调用点存在且被调用」当时没有

@@ -5,6 +5,7 @@
 #include "Render3D/Stage/IRenderStage.h"
 #include "GameRuntime/HostRenderSettings.h"
 #include "GameRuntime/HostViewportView.h"
+#include "GameRuntime/Render/RuntimeRenderContext.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/RenderDeviceState.h"
 
@@ -22,6 +23,12 @@ namespace ya
 struct AppRenderState
 {
     std::unique_ptr<RenderDeviceState>      device;
+    /// The application's frame render context (see RuntimeRenderContext): the
+    /// order one product frame is recorded in. Created with `device` and
+    /// destroyed before it, because it records through that device -- "which
+    /// surface this frame presents, which View the window shows" is the app's
+    /// arrangement and lives here, not on the renderer.
+    std::unique_ptr<RuntimeRenderContext>   runtimeRender;
     ShadowSettings                          shadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
     bool                                    bRenderMirror  = false;
     /// The host's render settings: the clock, and the resolution its viewport
