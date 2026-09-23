@@ -49,7 +49,7 @@ TEST(ReflectsCore, VisitAllPropertiesRecursiveAndNonRecursive)
             types.push_back("float");
             values.push_back(std::to_string(value));
         }
-    });
+    }, true);
     ASSERT_EQ(names.size(), 2u);
     EXPECT_EQ(names[0], "baseValue");
     EXPECT_EQ(names[1], "derivedValue");

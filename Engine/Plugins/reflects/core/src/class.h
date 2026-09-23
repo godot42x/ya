@@ -168,9 +168,12 @@ struct Class : public Field
 
     REFLECTS_CORE_API Class *getClassByTypeId(refl::type_index_t typeId) const;
 
-    // 访问所有属性（可选递归访问父类）- 非 const 版本（用于修改操作）
+    // 访问所有属性。`recursive` 没有默认值：调用方必须说明是否要走到父类。
+    // （默认值曾经是 true，后来为了修正属性遍历顺序被改成 false，于是"名字说
+    // 了访问全部、行为却不是"的歧义就留在调用点上。）
+    // 非 const 版本（用于修改操作）
     template <typename VisitorFunc>
-    void visitAllProperties(void *obj, VisitorFunc &&visitor, bool recursive = false) const
+    void visitAllProperties(void *obj, VisitorFunc &&visitor, bool recursive) const
     {
         if (recursive) {
             for (auto parentTypeId : parents) {
@@ -191,9 +194,9 @@ struct Class : public Field
         });
     }
 
-    // 访问所有属性（可选递归访问父类）- const 版本（用于只读操作，如序列化）
+    // 访问所有属性。const 版本（用于只读操作，如序列化）
     template <typename VisitorFunc>
-    void visitAllProperties(const void *obj, VisitorFunc &&visitor, bool recursive = false) const
+    void visitAllProperties(const void *obj, VisitorFunc &&visitor, bool recursive) const
     {
         if (recursive) {
 

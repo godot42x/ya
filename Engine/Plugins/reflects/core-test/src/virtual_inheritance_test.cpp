@@ -78,7 +78,7 @@ TEST(ReflectsCore, MultipleInheritance)
             types.push_back("double");
             values.push_back(std::to_string(value));
         }
-    });
+    }, true);
     ASSERT_EQ(names.size(), 3u);
     EXPECT_EQ(names[0], "value1");
     EXPECT_EQ(names[1], "value2");
@@ -128,7 +128,7 @@ TEST(ReflectsCore, VirtualFunctionBase)
             types.push_back("int");
             values.push_back(std::to_string(value));
         }
-    });
+    }, true);
     ASSERT_EQ(names.size(), 2u);
     EXPECT_EQ(names[0], "vbValue2");
     EXPECT_EQ(names[1], "vdValue");
