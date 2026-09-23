@@ -148,9 +148,9 @@ void AppRenderServices::setRenderPipelineSettings(const RenderPipelineSettings& 
     _state->device->requestActivePipelineSettings(settings);
 }
 
-const RGTopologyDescription* AppRenderServices::getFrameGraphTopology() const
+const std::vector<RGTopologyDescription>* AppRenderServices::getFrameGraphTopologies() const
 {
-    return _state && _state->device ? _state->device->getActiveFrameGraphTopology() : nullptr;
+    return _state && _state->device ? &_state->device->getFrameGraphTopologies() : nullptr;
 }
 
 const RenderViewOutput* AppRenderServices::getHostViewportOutput() const

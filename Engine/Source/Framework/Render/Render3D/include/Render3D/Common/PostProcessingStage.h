@@ -49,7 +49,6 @@ struct PostProcessingStage
     PostProcessingState         _state              = {};
     stdptr<BloomPostprocessing> _bloomProcessor     = nullptr;
     stdptr<BasicPostprocessing> _postProcessor      = nullptr;
-    stdptr<RenderTexture>       _preparedOutputImage = nullptr;
 
     void     init(const InitDesc& desc);
     void     shutdown();
@@ -80,13 +79,7 @@ struct PostProcessingStage
                                       RGTextureHandle input,
                                       Extent2D        inputExtent,
                                       FrameContext*   ctx);
-    void     capturePreparedResources(const RenderGraphExecutionResult& result, uint64_t viewId = 0);
-    void     clearPreparedResources();
     [[nodiscard]] bool                       isGradingEnabled() const { return bGradingEnabled; }
-    [[nodiscard]] stdptr<RenderTexture>      getBloomExtractImageShared() const { return _bloomProcessor ? _bloomProcessor->getExtractImageShared() : nullptr; }
-    [[nodiscard]] stdptr<RenderTexture>      getBloomBlurImageShared() const { return _bloomProcessor ? _bloomProcessor->getBlurImageShared() : nullptr; }
-    [[nodiscard]] stdptr<RenderTexture>      getBloomCompositeImageShared() const { return _bloomProcessor ? _bloomProcessor->getCompositeImageShared() : nullptr; }
-    [[nodiscard]] stdptr<RenderTexture>      getPreparedOutputImageShared() const { return _preparedOutputImage; }
     [[nodiscard]] PostProcessingState&       getState() { return _state; }
     [[nodiscard]] const PostProcessingState& getState() const { return _state; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getBloomExtractDSL() const

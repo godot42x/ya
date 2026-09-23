@@ -162,7 +162,7 @@ SSAOStage::FrameData SSAOStage::buildFrameData(const RenderStageContext& ctx) co
     return frameData;
 }
 
-void SSAOStage::prepare(const RenderStageContext& ctx)
+void SSAOStage::beginFrame()
 {
     YA_PROFILE_FUNCTION();
     if (_pipeline) {

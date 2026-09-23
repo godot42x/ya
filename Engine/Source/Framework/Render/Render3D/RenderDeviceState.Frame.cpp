@@ -43,6 +43,7 @@ bool RenderDeviceState::beginFrameCommandBuffer(const RenderFramePlan& plan, std
         YA_CORE_ERROR("Recording flight {} failed to begin view publication", flightIndex);
         return false;
     }
+    _frameGraphTopologies.clear();
     return true;
 }
 
@@ -55,6 +56,10 @@ void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan)
 
     RenderSubmission* live = _submissions.get(plan.frame.flightIndex);
     YA_CORE_ASSERT(live && live->isRecording(), "Family record requires a recording submission");
+
+    // Submission-scoped warmup runs once here; stages must not repeat it per
+    // View or per family.
+    pipeline->beginSubmission();
 
     const auto recordOneFamily = [&](const SceneViewFamilyPlan* family, std::vector<SceneViewRecording> views) {
         ViewFamilyRecordContext ctx{
@@ -174,6 +179,9 @@ void RenderDeviceState::unregisterSceneView(SceneViewKey key)
 
 void RenderDeviceState::publishFamilyResult(uint32_t flightIndex, ViewFamilyRenderResult familyResult)
 {
+    if (!familyResult.topology.passOrder.empty()) {
+        _frameGraphTopologies.push_back(std::move(familyResult.topology));
+    }
     for (RenderViewOutput& output : familyResult.views) {
         const uint64_t viewId = output.desc.viewId;
         if (viewId == 0) {

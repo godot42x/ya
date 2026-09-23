@@ -202,10 +202,9 @@ void LightStage::destroy()
     _shadowState = {};
 }
 
-void LightStage::prepare(const RenderStageContext& ctx)
+void LightStage::beginFrame()
 {
     YA_PERF_SCOPE(perf::sample::deferredLightPrepare(), perf::metric::cpuTimeMs(), perf::domain::render());
-    (void)ctx;
     if (_pipeline) {
         _pipeline->beginFrame();
     }

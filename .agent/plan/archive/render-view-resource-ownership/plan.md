@@ -1,7 +1,7 @@
 # Render View 资源所有权与管线编排收口计划
 
 > 建立日期：2026-09-23
-> 状态：执行中；Checkpoint A-D 已完成（2026-09-23）
+> 状态：已完成；五个 checkpoint 全部完成（2026-09-23）
 > 关联计划：`../render-view-family/plan.md`、`../render-application-boundary/plan.md`
 
 ## 1. 当前目标与边界
@@ -537,6 +537,15 @@ target request 和输出角色仍由具体 pipeline 清楚写出。
 - owner / local key 冲突继续在 producer 注册时断言。
 
 ### Checkpoint E：收敛 stage 与诊断残留
+
+状态：已完成（2026-09-23）。
+
+完成结果：
+
+- `IRenderPipeline` 新增 submission 级 `beginSubmission()`；Forward / Deferred 的 PSO warmup（含 SSAO、Light、Overlay、GBuffer stage 的 `beginFrame()`）每 submission 调用一次，删除 Deferred 用 `liveBranches.back().stageCtx` 调 SSAO / Light / Overlay prepare 的形态。GBufferStage 拆分后 per-View material flush 仍在 prepare()，PSO warmup 移入 beginFrame()。
+- `ViewFamilyRenderResult` 携带本 family 的 `RGTopologyDescription`，只在 graph 执行成功时填充；device 按 flight 收集 `_frameGraphTopologies`，present 面板按整帧 family 列表汇总。删除 `IRenderPipeline::getLastFrameGraphTopology()` 与两个 pipeline 的 last-frame 缓存。
+- 删除 `PostProcessingStage::_preparedOutputImage`、capture/clear prepared API 和 Bloom 的 `_extractImage` / `_blurPingImage` / `_blurPongImage` / `_compositeImage`（全部无真实消费者）；Deferred 删除 `_debugAlbedoRGBView` / `_debugSpecularAlphaView` / `_cachedAlbedoSpecImageViewHandle`（只 reset、从未赋值）。
+- 删除 `ViewResourceKey.h` / `ViewResourceTable` 与其测试；删除已无引用的 `ForwardViewResources.h` / `DeferredViewResources.h`。
 
 目标：pipeline / stage 中没有 current View 或 last View 资源状态。
 

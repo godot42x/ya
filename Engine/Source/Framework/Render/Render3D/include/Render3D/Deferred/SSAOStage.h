@@ -47,7 +47,8 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
     void init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL);
     void init(IRender* render) override { init(render, nullptr); }
     void destroy() override;
-    void prepare(const RenderStageContext& ctx) override;
+    /// Submission-scoped PSO warmup; the stage holds no per-View state.
+    void beginFrame();
     void execute(const RenderStageContext& ctx) override;
 
     [[nodiscard]] FrameData buildFrameData(const RenderStageContext& ctx) const;

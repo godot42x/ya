@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graph/RenderGraph.h"
 #include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/SceneViewDesc.h"
 #include "Render3D/RenderFrameData.h"
@@ -57,6 +58,10 @@ struct ViewFamilyRenderResult
 {
     SceneViewFamilyKey            key{};
     std::vector<RenderViewOutput> views;
+    /// The topology this family's graph compiled to. Empty unless the graph
+    /// executed successfully, so diagnostics never show a graph that did not
+    /// run; the per-frame collection lives on the device publication side.
+    RGTopologyDescription         topology{};
 };
 
 struct SceneViewTask

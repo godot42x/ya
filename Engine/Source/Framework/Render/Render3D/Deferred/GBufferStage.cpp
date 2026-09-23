@@ -360,6 +360,15 @@ void GBufferStage::destroy()
 void GBufferStage::prepare(const RenderStageContext& ctx)
 {
     YA_PROFILE_FUNCTION();
+    if (!ctx.frameData) return;
+    preparePBR(*ctx.frameData);
+    preparePhong(*ctx.frameData);
+    prepareUnlit(*ctx.frameData);
+}
+
+void GBufferStage::beginFrame()
+{
+    YA_PROFILE_FUNCTION();
     if (_pbr.pipeline) {
         _pbr.pipeline->beginFrame();
     }
@@ -378,11 +387,6 @@ void GBufferStage::prepare(const RenderStageContext& ctx)
     if (_unlitSkinned.pipeline) {
         _unlitSkinned.pipeline->beginFrame();
     }
-
-    if (!ctx.frameData) return;
-    preparePBR(*ctx.frameData);
-    preparePhong(*ctx.frameData);
-    prepareUnlit(*ctx.frameData);
 }
 
 void GBufferStage::preparePBR(const RenderFrameData& frameData)

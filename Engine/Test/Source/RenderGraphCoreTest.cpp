@@ -1929,6 +1929,11 @@ TEST(RenderGraphCoreTest, ResourceRegistryUsesProvidedImportedImageViewAndRetain
     EXPECT_EQ(factory.createdViews, createdViewsBeforeSync);
 
     registry.clear();
+    // clear() hands the retained bundle to the GPU-safe deferred queue instead of
+    // releasing it inline, so the owner survives until that queue is flushed.  The
+    // queue is a process-wide singleton whose state depends on whichever test ran
+    // before this one, so flush it explicitly rather than inheriting that state.
+    DeferredDeletionQueue::get().flushAll();
     EXPECT_TRUE(retainedOwner.expired());
 }
 

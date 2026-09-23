@@ -103,6 +103,9 @@ struct GBufferStage : public IRenderStage
     void init(IRender* render) override { init(render, nullptr, nullptr); }
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
+    /// Submission-scoped PSO warmup; the per-View material flush stays on
+    /// prepare(), which runs once per View branch.
+    void beginFrame();
     /// Graph pass entry: explicit current-flight binding. Does not read stage members.
     void execute(const RenderStageContext& ctx, const FrameInputs& inputs);
     /// IRenderStage conformance; graph passes must use the parameterized overload.

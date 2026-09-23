@@ -57,7 +57,7 @@ struct YA_RENDER_3D_API LightStage : public IRenderStage
     ShadowRuntimeState           _shadowState{};
 
     // GBuffer / shadow layouts are device-lifetime. Per-View CIS sets live on
-    // DeferredViewResources, not this recipe.
+    // the per-flight family resources, not this recipe.
     stdptr<IDescriptorSetLayout> _shadowDSL;
     Mesh*                        _fullscreenQuad = nullptr;
 
@@ -99,7 +99,8 @@ struct YA_RENDER_3D_API LightStage : public IRenderStage
 
     void init(IRender* render) override;
     void destroy() override;
-    void prepare(const RenderStageContext& ctx) override;
+    /// Submission-scoped PSO warmup; the stage holds no per-View state.
+    void beginFrame();
     void execute(const RenderStageContext& ctx,
                  DescriptorSetHandle       frameAndLight,
                  DescriptorSetHandle       environmentLighting,

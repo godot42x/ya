@@ -673,7 +673,12 @@ void WidgetTree::detach(UIElement& widget)
 
     for (const auto& layer : _layers) {
         if (layer.get() == &widget) {
-            YA_CORE_ASSERT(false, "WidgetTree::detach: system layers cannot be detached by project code");
+            // System layers are owned by the tree and cannot be detached by
+            // project code. This is a defensive rejection of caller misuse,
+            // not a broken invariant -- logging and refusing keeps the layer
+            // in the tree (the caller's old reference keeps meaning "the layer")
+            // without taking the process down over a recoverable call.
+            YA_CORE_WARN("WidgetTree::detach: system layer '{}' cannot be detached by project code", widget._name);
             return;
         }
     }

@@ -72,7 +72,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     ForwardFrameGraphOrchestrator _frameGraphOrchestrator{};
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
     stdptr<ForwardFrameResourceSet> _frameResources;
-    RGTopologyDescription        _lastFrameGraphTopology{};
 
     bool                    bMSAA                    = false;
 
@@ -89,6 +88,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
 
     void init(const InitDesc& desc);
     ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
+    void                   beginSubmission() override;
     void appendTargetRequests(const SceneRenderPlan& plan, std::vector<ViewTargetRequest>& out) const override;
     void shutdown();
 
@@ -101,10 +101,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Forward; }
     [[nodiscard]] EFormat::T     getViewColorFormat() const override;
     [[nodiscard]] EFormat::T     getViewDepthFormat() const override;
-    [[nodiscard]] const RGTopologyDescription& getLastFrameGraphTopology() const override
-    {
-        return _lastFrameGraphTopology;
-    }
     void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;
 
     [[nodiscard]] bool           isShadowMappingEnabled() const override;

@@ -219,12 +219,9 @@ void RenderDeviceState::requestActivePipelineSettings(const RenderPipelineSettin
     }
 }
 
-const RGTopologyDescription* RenderDeviceState::getActiveFrameGraphTopology() const
+const std::vector<RGTopologyDescription>& RenderDeviceState::getFrameGraphTopologies() const
 {
-    if (const IRenderPipeline* pipeline = getActivePipeline()) {
-        return &pipeline->getLastFrameGraphTopology();
-    }
-    return nullptr;
+    return _frameGraphTopologies;
 }
 
 RenderTargetCatalog RenderDeviceState::buildRenderTargetCatalog() const

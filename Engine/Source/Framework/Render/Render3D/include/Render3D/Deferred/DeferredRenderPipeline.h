@@ -130,15 +130,11 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     EFormat::T _shadowDepthFormat   = SHADOW_DEPTH_FORMAT;
 
     // ── Published View resources ──────────────────────────────────────
-    stdptr<IImageView> _debugAlbedoRGBView;
-    stdptr<IImageView> _debugSpecularAlphaView;
-    ImageViewHandle    _cachedAlbedoSpecImageViewHandle = nullptr;
     uint32_t           _pendingResourceRefreshMask = 0;
     // ── Frame state ───────────────────────────────────────────────────
     EntityIdPass       _entityIdPass{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
-    RGTopologyDescription               _lastFrameGraphTopology{};
 
     DeferredRenderPipeline() = default;
     ~DeferredRenderPipeline();
@@ -153,12 +149,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     EFormat::T getViewColorFormat() const override;
     EFormat::T getViewDepthFormat() const override;
 
-    IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
-    IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
-    const RGTopologyDescription& getLastFrameGraphTopology() const override
-    {
-        return _lastFrameGraphTopology;
-    }
+    void                   beginSubmission() override;
     void setSSAOEnabled(bool enabled)
     {
         _bEnableSSAO = enabled;
@@ -196,7 +187,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] DeferredAttachmentFormats buildViewSnapshotFormats() const;
     [[nodiscard]] bool shouldSkipView(const RenderPipelineFrameContext& frame) const;
     void               beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
-    void               invalidateGBufferDependentViews();
     [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
                                                      const DeferredFrameGraphResources& graphResources,
                                                      const SceneViewTask* task,

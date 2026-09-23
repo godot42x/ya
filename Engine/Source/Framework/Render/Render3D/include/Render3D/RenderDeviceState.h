@@ -99,6 +99,7 @@ struct YA_RENDER_3D_API RenderDeviceState
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
     RenderSubmissionPool                         _submissions;
     ViewTargetStore                              _viewTargets;
+    std::vector<RGTopologyDescription>           _frameGraphTopologies;
     std::shared_ptr<ShaderStorage>               _shaderStorage = nullptr;
 
     ERenderAPI::T  currentRenderAPI      = ERenderAPI::None;
@@ -214,7 +215,10 @@ struct YA_RENDER_3D_API RenderDeviceState
     void                                   requestActivePipelineSettings(const RenderPipelineSettings& settings);
     /// The compiled graph of the last recorded frame, or null when no pipeline
     /// has recorded one.
-    [[nodiscard]] const RGTopologyDescription* getActiveFrameGraphTopology() const;
+    /// The graphs this submission compiled, one entry per recorded family.
+    /// Cleared when the flight begins a new submission; consumers read the
+    /// frame's family list, never a single family posing as the whole frame.
+    [[nodiscard]] const std::vector<RGTopologyDescription>& getFrameGraphTopologies() const;
 
     [[nodiscard]] stdptr<IDescriptorPool>      getSkyboxDescriptorPool() const { return _sharedResourceProvider.getSkyboxDescriptorPool(); }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxDescriptorSetLayout() const { return _sharedResourceProvider.getSkyboxDescriptorSetLayout(); }

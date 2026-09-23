@@ -101,10 +101,6 @@ void BloomPostprocessing::shutdown()
     _compositePPL.reset();
     _render            = nullptr;
     _lastBlurPassCount = 0;
-    _extractImage.reset();
-    _blurPingImage.reset();
-    _blurPongImage.reset();
-    _compositeImage.reset();
 }
 
 void BloomPostprocessing::beginFrame()
@@ -118,22 +114,6 @@ void BloomPostprocessing::beginFrame()
     if (_compositePipeline) {
         _compositePipeline->beginFrame();
     }
-}
-
-void BloomPostprocessing::clearPreparedResources()
-{
-    _extractImage.reset();
-    _blurPingImage.reset();
-    _blurPongImage.reset();
-    _compositeImage.reset();
-}
-
-void BloomPostprocessing::capturePreparedResources(const RenderGraphExecutionResult& result, uint64_t viewId)
-{
-    _extractImage   = result.getExportedTextureShared(makeViewGraphName(kExtractExportName, viewId));
-    _blurPingImage  = result.getExportedTextureShared(makeViewGraphName(kBlurPingExportName, viewId));
-    _blurPongImage  = result.getExportedTextureShared(makeViewGraphName(kBlurPongExportName, viewId));
-    _compositeImage = result.getExportedTextureShared(makeViewGraphName(kOutputExportName, viewId));
 }
 
 void BloomPostprocessing::initExtractPipeline()
@@ -198,7 +178,6 @@ void BloomPostprocessing::writeComposite(DescriptorSetHandle set, IImageView* sc
 
 RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const RenderDesc& desc)
 {
-    clearPreparedResources();
     if ((!desc.sceneTexture && !desc.sceneImage && !desc.sceneHandle.isValid()) || !desc.state) {
         return {};
     }
@@ -399,7 +378,6 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
 void BloomPostprocessing::render(const RenderDesc& desc)
 {
     if (!desc.cmdBuf) {
-        clearPreparedResources();
         return;
     }
 
@@ -411,14 +389,7 @@ void BloomPostprocessing::render(const RenderDesc& desc)
     }
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "BloomPostprocessing graph executor is not initialized");
-    RenderGraphExecutionResult result;
-    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *desc.cmdBuf, nullptr, &result);
-    if (!bExecuted) {
-        clearPreparedResources();
-        return;
-    }
-
-    capturePreparedResources(result, desc.viewId);
+    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *desc.cmdBuf, nullptr, nullptr);
 }
 
 } // namespace ya

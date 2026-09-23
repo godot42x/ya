@@ -835,9 +835,6 @@ void DeferredRenderPipeline::shutdown()
     _entityIdPass.destroy();
     _postProcessStage.shutdown();
 
-    _debugAlbedoRGBView.reset();
-    _debugSpecularAlphaView.reset();
-    _cachedAlbedoSpecImageViewHandle = nullptr;
     _pendingResourceRefreshMask      = 0;
     if (_ssaoStage) {
     }
@@ -918,6 +915,27 @@ struct DeferredFamilyViewBranch
 
 } // namespace
 
+void DeferredRenderPipeline::beginSubmission()
+{
+    // Submission-scoped warmup: pending settings land once, then every stage's
+    // PSO beginFrame runs once per submission instead of once per View.
+    applyPendingSettings();
+    applyPendingResourceRefreshes();
+    if (_gBufferStage) {
+        _gBufferStage->beginFrame();
+    }
+    _postProcessStage.beginFrame();
+    if (_bEnableSSAO && _ssaoStage) {
+        _ssaoStage->beginFrame();
+    }
+    if (_lightStage) {
+        _lightStage->beginFrame();
+    }
+    if (_overlayStage) {
+        _overlayStage->beginFrame();
+    }
+}
+
 ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyRecordContext& ctx)
 {
     YA_PROFILE_FUNCTION();
@@ -932,10 +950,6 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
 
     ctx.cmdBuf->debugBeginLabel("Deferred Family");
     YA_PERF_SCOPE(perf::sample::deferredTick(), perf::metric::cpuTimeMs(), perf::domain::render());
-
-    applyPendingSettings();
-    applyPendingResourceRefreshes();
-    _postProcessStage.beginFrame();
 
     // A family exists because a Scene has content and a View declared it, so an
     // empty family is not a tick to synthesize a View for: there is no View id,
@@ -1012,20 +1026,8 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
     RGCompiledGraph compiled{};
     RenderGraphExecutionResult execution;
     if (!_graphExecutor->prepare(graph, compiled, &execution)) {
-        _lastFrameGraphTopology = {};
         ctx.cmdBuf->debugEndLabel();
         return result;
-    }
-    _lastFrameGraphTopology = graph.describeCompiledTopology(compiled);
-
-    if (_bEnableSSAO && _ssaoStage) {
-        _ssaoStage->prepare(liveBranches.back().stageCtx);
-    }
-    if (_lightStage) {
-        _lightStage->prepare(liveBranches.back().stageCtx);
-    }
-    if (_overlayStage) {
-        _overlayStage->prepare(liveBranches.back().stageCtx);
     }
 
     for (const DeferredFamilyViewBranch& branch : liveBranches) {
@@ -1038,8 +1040,10 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
     }
 
     if (!_graphExecutor->executeCompiled(graph, compiled, *ctx.cmdBuf)) {
-        _lastFrameGraphTopology = {};
         result.views.clear();
+    }
+    else {
+        result.topology = graph.describeCompiledTopology(compiled);
     }
 
     ctx.cmdBuf->debugEndLabel();
@@ -1169,13 +1173,6 @@ ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
     return frameInputs;
 }
 
-void DeferredRenderPipeline::invalidateGBufferDependentViews()
-{
-    _cachedAlbedoSpecImageViewHandle = nullptr;
-    _debugAlbedoRGBView.reset();
-    _debugSpecularAlphaView.reset();
-}
-
 RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     const RenderGraphExecutionResult& result,
     const DeferredFrameGraphResources& graphResources,
@@ -1257,8 +1254,6 @@ EFormat::T DeferredRenderPipeline::getViewDepthFormat() const
 
 void DeferredRenderPipeline::refreshGBufferStageState()
 {
-    invalidateGBufferDependentViews();
-
     if (_ssaoStage) {
         _ssaoStage->refreshPipelineFormat();
     }

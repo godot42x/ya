@@ -102,9 +102,9 @@ class YA_GAME_RUNTIME_API AppRenderServices
     /// it is being changed from.
     [[nodiscard]] RenderPipelineSettings getRenderPipelineSettings() const;
     void                                 setRenderPipelineSettings(const RenderPipelineSettings& settings);
-    /// The compiled graph of the last recorded frame; null when none was
-    /// recorded yet. A pointer because "there is no graph" is a real answer.
-    [[nodiscard]] const RGTopologyDescription* getFrameGraphTopology() const;
+    /// The graphs this submission compiled, one per recorded family; null when
+    /// nothing was recorded yet. A pointer because "no graph" is a real answer.
+    [[nodiscard]] const std::vector<RGTopologyDescription>* getFrameGraphTopologies() const;
 
     /// The View the host window shows, as the frame that was just recorded left
     /// it: the app's arrangement (see `HostViewportBinding`), not a renderer

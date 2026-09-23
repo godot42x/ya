@@ -362,6 +362,12 @@ void ForwardRenderPipeline::initStageResources()
         if (_shadowStage) { _shadowStage->destroy(); _shadowStage.reset(); } });
 }
 
+void ForwardRenderPipeline::beginSubmission()
+{
+    applyPendingPostProcessSettings();
+    _postProcessStage.beginFrame();
+}
+
 ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecordContext& ctx)
 {
     YA_PROFILE_FUNCTION();
@@ -373,9 +379,6 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
     if (!ctx.cmdBuf || !ctx.submission || !ctx.submission->isRecording()) {
         return result;
     }
-
-    applyPendingPostProcessSettings();
-    _postProcessStage.beginFrame();
 
     // A family exists because a Scene has content and a View declared it, so an
     // empty family is not a tick to synthesize a View for: there is no View id,
@@ -523,10 +526,9 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
     RenderGraphExecutionResult execution;
     const bool bExecuted = _graphExecutor->execute(graph, *ctx.cmdBuf, &compiled, &execution);
     if (!bExecuted) {
-        _lastFrameGraphTopology = {};
         return result;
     }
-    _lastFrameGraphTopology = graph.describeCompiledTopology(compiled);
+    result.topology = graph.describeCompiledTopology(compiled);
 
     for (const ForwardFamilyViewBranch& branch : liveBranches) {
         const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;

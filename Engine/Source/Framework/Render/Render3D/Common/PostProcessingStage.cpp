@@ -62,7 +62,6 @@ void PostProcessingStage::shutdown()
         _postProcessor.reset();
     }
 
-    clearPreparedResources();
     _render = nullptr;
 }
 
@@ -76,22 +75,6 @@ void PostProcessingStage::beginFrame()
     }
 }
 
-void PostProcessingStage::clearPreparedResources()
-{
-    _preparedOutputImage.reset();
-    if (_bloomProcessor) {
-        _bloomProcessor->clearPreparedResources();
-    }
-}
-
-void PostProcessingStage::capturePreparedResources(const RenderGraphExecutionResult& result, uint64_t viewId)
-{
-    _preparedOutputImage = result.getExportedTextureShared(makeViewGraphName(kOutputExportName, viewId));
-    if (_bloomProcessor) {
-        _bloomProcessor->capturePreparedResources(result, viewId);
-    }
-}
-
 RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
                                                        Texture*     inputTexture,
                                                        glm::vec2    viewExtent,
@@ -99,13 +82,11 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
 {
     (void)viewExtent;
     if (!inputTexture || !inputTexture->isValid()) {
-        clearPreparedResources();
         return {};
     }
 
     const Extent2D inputExtent = inputTexture->getExtent();
     if (inputExtent.width == 0 || inputExtent.height == 0) {
-        clearPreparedResources();
         return {};
     }
 
@@ -121,13 +102,11 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
     (void)viewExtent;
 
     if (!inputImage || !inputImage->isValid()) {
-        clearPreparedResources();
         return {};
     }
 
     const Extent2D inputExtent = inputImage->getExtent();
     if (inputExtent.width == 0 || inputExtent.height == 0) {
-        clearPreparedResources();
         return {};
     }
 
@@ -141,11 +120,8 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
                                                        FrameContext*   ctx)
 {
     if (!_postProcessor || !input.isValid() || inputExtent.width == 0 || inputExtent.height == 0) {
-        clearPreparedResources();
         return {};
     }
-
-    clearPreparedResources();
 
     const auto compositeInput = appendBloomGraphPasses(graph, input, inputExtent, ctx);
     // Finalize is unconditional: it is the pass that makes the View's color a
@@ -170,7 +146,6 @@ RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph
                                                             RGTextureHandle bloomComposite)
 {
     (void)ctx;
-    clearPreparedResources();
     if (!input.isValid() || inputExtent.width == 0 || inputExtent.height == 0) {
         return {};
     }

@@ -22,10 +22,6 @@ struct ImageResource;
 struct RenderTexture;
 struct Texture;
 struct RenderFrameData;
-/// The compiled graph of the last recorded frame. Named, not included: a caller
-/// that reads its passes includes `Graph/RenderGraph.h` itself, and every caller
-/// that only forwards the reference does not need the graph at all.
-struct RGTopologyDescription;
 struct ViewTargetRequest;
 
 struct IRenderPipelineExecution
@@ -39,6 +35,9 @@ struct IRenderPipelineExecution
     /// Compile and record one Scene family graph; return each View's output.
     /// Product recording does not use tick/beginTick/getCurrent.
     virtual ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) = 0;
+    /// Submission-scoped warmup: PSO beginFrame and the state that must land
+    /// before any family records. Called once per submission, never per View.
+    virtual void beginSubmission() = 0;
     virtual void appendTargetRequests(
         const SceneRenderPlan& plan,
         std::vector<ViewTargetRequest>& out) const = 0;
@@ -46,10 +45,6 @@ struct IRenderPipelineExecution
     [[nodiscard]] virtual EFormat::T getViewColorFormat() const     = 0;
     [[nodiscard]] virtual EFormat::T getViewDepthFormat() const     = 0;
 
-    /// The graph this pipeline compiled for the last recorded frame, for the
-    /// tooling that displays it. The pipeline owns the value; the view is only
-    /// valid until the next recorded frame.
-    [[nodiscard]] virtual const RGTopologyDescription& getLastFrameGraphTopology() const = 0;
 };
 
 struct IRenderPipelineSettings

@@ -29,11 +29,17 @@ void RuntimeRenderGraphSection::sync(const App* app)
     // renderer: the panel states what it wants to show instead of downcasting
     // into a concrete pipeline to find out what it is holding.
     const char* name = toString(renderServices.getRenderPipelineKind());
-    const RGTopologyDescription* topology = renderServices.getFrameGraphTopology();
+    const std::vector<RGTopologyDescription>* topologies = renderServices.getFrameGraphTopologies();
     _pipeline->setText(std::format("Pipeline: {}", name));
-    if (!topology) { _passes->setText("Passes: <unavailable>"); _dependencies->setText("Dependencies: <unavailable>"); _status->setText("No active frame graph"); return; }
-    _passes->setText(std::format("Passes: {}", topology->passOrder.size()));
-    _dependencies->setText(std::format("Dependencies: {}", topology->dependencies.size()));
-    _status->setText(topology->passOrder.empty() ? "No compiled frame graph captured yet" : "Compiled frame graph available");
+    if (!topologies || topologies->empty()) { _passes->setText("Passes: <unavailable>"); _dependencies->setText("Dependencies: <unavailable>"); _status->setText("No active frame graph"); return; }
+    size_t totalPasses       = 0;
+    size_t totalDependencies = 0;
+    for (const RGTopologyDescription& topology : *topologies) {
+        totalPasses += topology.passOrder.size();
+        totalDependencies += topology.dependencies.size();
+    }
+    _passes->setText(std::format("Passes: {}", totalPasses));
+    _dependencies->setText(std::format("Dependencies: {}", totalDependencies));
+    _status->setText(std::format("Family graphs: {}", topologies->size()));
 }
 }

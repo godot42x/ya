@@ -62,22 +62,13 @@ struct BloomPostprocessing
     stdptr<IGraphicsPipeline>    _compositePipeline;
 
     uint32_t _lastBlurPassCount = 0;
-    stdptr<RenderTexture> _extractImage;
-    stdptr<RenderTexture> _blurPingImage;
-    stdptr<RenderTexture> _blurPongImage;
-    stdptr<RenderTexture> _compositeImage;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     void init(const InitDesc& initDesc);
     void shutdown();
     void beginFrame();
     RGTextureHandle appendGraphPasses(RenderGraph& graph, const RenderDesc& desc);
-    void capturePreparedResources(const RenderGraphExecutionResult& result, uint64_t viewId = 0);
-    void clearPreparedResources();
     void render(const RenderDesc& desc);
-    [[nodiscard]] stdptr<RenderTexture> getExtractImageShared() const { return _extractImage; }
-    [[nodiscard]] stdptr<RenderTexture> getBlurImageShared() const { return _blurPongImage ? _blurPongImage : _blurPingImage; }
-    [[nodiscard]] stdptr<RenderTexture> getCompositeImageShared() const { return _compositeImage; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getExtractDSL() const { return _extractDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getBlurDSL() const { return _blurDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getCompositeDSL() const { return _compositeDSL; }

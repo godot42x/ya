@@ -171,13 +171,13 @@ class UIButtonWidgetBuilder final : public TUIWidgetChildrenBuilder<UIButton, UI
         return std::move(*this);
     }
 
-    [[nodiscard]] UIButtonWidgetBuilder& setOnClick(std::function<void()> value) &
+    UIButtonWidgetBuilder& setOnClick(std::function<void()> value) &
     {
         _widget->_onClick = std::move(value);
         return *this;
     }
 
-    [[nodiscard]] UIButtonWidgetBuilder&& setOnClick(std::function<void()> value) &&
+    UIButtonWidgetBuilder&& setOnClick(std::function<void()> value) &&
     {
         _widget->_onClick = std::move(value);
         return std::move(*this);

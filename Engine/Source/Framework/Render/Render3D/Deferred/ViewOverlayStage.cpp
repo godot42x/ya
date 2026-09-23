@@ -288,7 +288,7 @@ void ViewOverlayStage::destroy()
 // Prepare
 // ═══════════════════════════════════════════════════════════════════════
 
-void ViewOverlayStage::prepare(const RenderStageContext& ctx)
+void ViewOverlayStage::beginFrame()
 {
     YA_PROFILE_FUNCTION();
     if (_skyboxPipeline) {
