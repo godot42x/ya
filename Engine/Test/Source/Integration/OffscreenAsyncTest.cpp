@@ -521,30 +521,31 @@ TEST(OffscreenAsyncTest, MultithreadedWorkersSimulateAsyncSuccessFailureAndCance
     }
 }
 
-TEST(OffscreenAsyncTest, SubprocessWorkerCompletesRecordedJobsInIsolation)
+/// The isolation that matters here is the JOB SET, not a forked process: a
+/// worker must finish the job that is already recorded and leave the one that
+/// is still queued alone.
+///
+/// This used to be `EXPECT_EXIT`: gtest forks the test binary, and a forked
+/// child that then has to create a std::thread aborts with a runtime error as
+/// soon as the parent owns threads (the async workers of the tests above), so
+/// the case reported "died but not with expected exit code" at random and said
+/// nothing about finalizeSubmittedOffscreenJobs. Same scenario, no fork.
+TEST(OffscreenAsyncTest, WorkerFinishesRecordedJobAndLeavesQueuedJobAlone)
 {
-    EXPECT_EXIT(
-        ([]() {
-            auto recorded = makeJob(EOffscreenJobPhase::Recorded);
-            auto queued   = makeJob(EOffscreenJobPhase::Queued);
+    auto recorded = makeJob(EOffscreenJobPhase::Recorded);
+    auto queued   = makeJob(EOffscreenJobPhase::Queued);
 
-            std::vector<std::shared_ptr<OffscreenJobState>> submittedJobs = {
-                recorded,
-                queued,
-            };
+    std::vector<std::shared_ptr<OffscreenJobState>> submittedJobs = {
+        recorded,
+        queued,
+    };
 
-            std::thread worker([&submittedJobs]() { finalizeSubmittedOffscreenJobs(submittedJobs); });
-            worker.join();
+    std::thread worker([&submittedJobs]() { finalizeSubmittedOffscreenJobs(submittedJobs); });
+    worker.join();
 
-            if (recorded->phase == EOffscreenJobPhase::GpuCompleted &&
-                queued->phase == EOffscreenJobPhase::Queued && submittedJobs.empty()) {
-                std::exit(0);
-            }
-
-            std::exit(1);
-            })(),
-        ::testing::ExitedWithCode(0),
-        "");
+    EXPECT_EQ(recorded->phase, EOffscreenJobPhase::GpuCompleted);
+    EXPECT_EQ(queued->phase, EOffscreenJobPhase::Queued);
+    EXPECT_TRUE(submittedJobs.empty());
 }
 
 TEST(OffscreenAsyncTest, SeededStressPlanProducesStableResults)
