@@ -53,6 +53,21 @@ minimize → restore。本机（macOS，SDL3）实测：
 是宿主给不出平台事件。处置：用例在每个方向上都显式检查标志并 skip 原因，让红只可能来自
 surface 路径。**不要**为了让它变绿去改 `isPresentable()` 的判据。
 
+## 脚本门禁里的同类过期（2026-09-24 补记）
+
+同一类过期也出现在 **Python 自动化门禁**的期望文件里，而它们不在 `make test` 的覆盖范围内——
+所以 gtest 全绿不代表 GUI 门禁能用：
+
+- `Example/GUIWorkbench/Scenarios/widgets_interaction.jsonl` 的 `tree.focusPath` 期望缺
+  `DemoSurface`。该节点由 `ecacb8f6`（2026-09-12）加进 `WorkbenchSurface.cpp`，同一提交更新了这条
+  期望却没带上新节点（只补了 `WorkbenchChrome`）→ `run_workbench_gpu_parity.py` 自那时起
+  必然失败。修法是把节点补进期望；修完 `pass=true differing=0 ratio=0.0000`，route checkpoint
+  与 digest 断言全过。
+- 判据同断言层：期望文件比树结构旧。这类文件的“红”要先看期望文件的最后一次改动是否晚于被断言
+  结构的最后一次改动（`git log -S` 两边的节点名）。
+- 别把它当成渲染回归：`DemoSurface` 是 widget tree 的节点名，任何不产出树节点的批次
+  （RHI/present/帧簿记）都不可能让它出现或消失。
+
 ## 约定
 
 - 断言过期时优先改**断言**而不是改框架；只有当生产调用点会受影响时才动框架。
