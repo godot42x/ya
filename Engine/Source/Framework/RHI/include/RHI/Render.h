@@ -90,14 +90,6 @@ struct YA_RHI_API IRender : public plat_base<IRender>
     /// Extra windows use `createSurfaceContext`.
     [[nodiscard]] virtual IRenderSurfaceContext* getPrimarySurfaceContext() const { return nullptr; }
 
-    /// Convenience for the bootstrap present surface. Do not use as viewport
-    /// extent, world format, or recording-flight index.
-    [[nodiscard]] ISwapchain* primarySwapchain() const
-    {
-        auto* surface = getPrimarySurfaceContext();
-        return surface ? surface->getSwapchain() : nullptr;
-    }
-
     [[nodiscard]] INativeWindow* primaryWindow() const
     {
         auto* surface = getPrimarySurfaceContext();

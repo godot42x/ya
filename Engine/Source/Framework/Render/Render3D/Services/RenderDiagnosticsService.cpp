@@ -7,6 +7,7 @@
 #include "Core/Os/Os.h"
 
 #include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Core/RenderSurfaceContext.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -126,11 +127,12 @@ void openCaptureDirectoryInOS(const std::string& filePath)
 
 } // namespace
 
-void RenderDiagnosticsService::init(IRender* render, bool bEnableRenderDoc,
+void RenderDiagnosticsService::init(IRender* render, IRenderSurfaceContext* captureSurface, bool bEnableRenderDoc,
                       const std::string& renderDocDllPath,
                       const std::string& renderDocCaptureOutputDir)
 {
-    _render = render;
+    _render         = render;
+    _captureSurface = captureSurface;
     if (!bEnableRenderDoc) {
         return;
     }
@@ -145,7 +147,7 @@ void RenderDiagnosticsService::init(IRender* render, bool bEnableRenderDoc,
                                                    { handleCaptureFinished(result); });
     configureRenderContext();
 
-    if (auto* swapchain = _render ? _render->primarySwapchain() : nullptr) {
+    if (auto* swapchain = _captureSurface ? _captureSurface->getSwapchain() : nullptr) {
         swapchain->onRecreate.addLambda(
             this,
             [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
@@ -165,6 +167,7 @@ void RenderDiagnosticsService::shutdown()
         _renderDoc.capture.reset();
     }
     _render = nullptr;
+    _captureSurface = nullptr;
     _renderDoc = {};
 }
 
@@ -247,8 +250,8 @@ void RenderDiagnosticsService::configureRenderContext()
         return;
     }
 
-    auto* vkRender = _render->as<VulkanRender>();
-    auto* swapchain = _render ? _render->primarySwapchain() : nullptr;
+    auto* vkRender  = _render->as<VulkanRender>();
+    auto* swapchain = _captureSurface ? _captureSurface->getSwapchain() : nullptr;
     if (!vkRender || !swapchain) {
         return;
     }

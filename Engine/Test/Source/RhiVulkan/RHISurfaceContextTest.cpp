@@ -119,7 +119,10 @@ TEST(RHISurfaceContext, ExtraWindowAcquireSubmitPresentIndependentOfPrimary)
     ASSERT_NE(primary->getSwapchain(), extra->getSwapchain());
     EXPECT_NE(primary->getCurrentFrameFence(), nullptr);
     EXPECT_NE(primary->getCurrentImageAvailableSemaphore(), nullptr);
-    EXPECT_EQ(primary->getSwapchain()->getImageCount(), render->primarySwapchain()->getImageCount());
+    // The primary surface is the one `getPrimarySurfaceContext()` names -- a
+    // bootstrap fact, not a rank: there is no "the" swapchain accessor on the
+    // device any more, so a caller holding a surface asks it directly.
+    EXPECT_NE(primary->getSwapchain(), nullptr);
     EXPECT_EQ(extra->getNativeWindow(), &extraWindow);
     EXPECT_EQ(render->primaryWindow(), &primaryWindow);
 

@@ -224,16 +224,14 @@ const std::vector<RGTopologyDescription>& RenderDeviceState::getFrameGraphTopolo
     return _frameGraphTopologies;
 }
 
-RenderTargetCatalog RenderDeviceState::buildRenderTargetCatalog() const
+RenderTargetCatalog RenderDeviceState::buildRenderTargetCatalog(IRenderSurfaceContext& surface) const
 {
     RenderTargetCatalog catalog{};
 
-    // The catalog's surface entry has always meant the primary window's. Naming
-    // that surface is what keeps the entry honest now that presentations are
-    // per-surface; this editor-facing query leaving the renderer entirely is
-    // plan AB3.
-    IRenderSurfaceContext* primary      = _render ? _render->getPrimarySurfaceContext() : nullptr;
-    SurfacePresentation*   presentation = primary ? findSurfacePresentation(*primary) : nullptr;
+    // The caller names the window this catalog describes; the renderer no longer
+    // decides that one of them is "the" window. This editor-facing query leaving
+    // the renderer entirely is plan AB3.
+    SurfacePresentation* presentation = findSurfacePresentation(surface);
     if (auto presentationImage = presentation ? presentation->currentImageShared() : nullptr) {
         auto* swapchain = presentation->swapchain();
         catalog.entries.push_back({

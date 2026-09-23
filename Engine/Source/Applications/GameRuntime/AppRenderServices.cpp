@@ -186,8 +186,15 @@ RenderViewportSnapshot AppRenderServices::buildViewportSnapshot(Scene* inspectSc
 
 RenderTargetCatalog AppRenderServices::buildRenderTargetCatalog() const
 {
-    return _state && _state->device ? _state->device->buildRenderTargetCatalog()
-                                    : RenderTargetCatalog{};
+    // The window this app presents: which one that is belongs here, at the app,
+    // not inside the renderer as an implicit "primary". Picking per display root
+    // is AB4-2b, when a frame can present more than one.
+    IRender*     render = getRender();
+    IRenderSurfaceContext* hostSurface = render ? render->getPrimarySurfaceContext() : nullptr;
+    if (!_state || !_state->device || !hostSurface) {
+        return RenderTargetCatalog{};
+    }
+    return _state->device->buildRenderTargetCatalog(*hostSurface);
 }
 
 void AppRenderServices::requestRenderTargetFormat(const RenderTargetFormatCommand& command)

@@ -1,4 +1,5 @@
 #include "AppModuleTestAccess.h"
+#include "TestSurface.h"
 
 #include "GameRuntime/App.h"
 #include "GameRuntime/IRuntimeModule.h"
@@ -140,32 +141,7 @@ struct SurfaceFillingModule final : IModule, IRuntimeModule
     [[nodiscard]] bool fillsSurface(const IRenderSurfaceContext&) const override { return bFills; }
 };
 
-/// A window the backdrop policy can be asked about. The question is which
-/// surface a module fills, so the policy needs surface identity and nothing
-/// else -- no device, no swapchain.
-struct StandInSurface final : IRenderSurfaceContext
-{
-    [[nodiscard]] INativeWindow* getNativeWindow() const override { return nullptr; }
-    [[nodiscard]] ISwapchain*    getSwapchain() const override { return nullptr; }
-    bool buildPresentationImages(IRenderResourceFactory&,
-                                 const char*,
-                                 std::vector<std::shared_ptr<RenderTexture>>&) override
-    {
-        return false;
-    }
-    [[nodiscard]] bool isPresentable() const override { return true; }
-    void               requestRecreate() override {}
-    bool begin(int32_t* imageIndex) override
-    {
-        *imageIndex = -1;
-        return true;
-    }
-    bool end(int32_t, std::vector<void*>) override { return true; }
-    void waitInFlight() override {}
-    [[nodiscard]] void* getCurrentImageAvailableSemaphore() override { return nullptr; }
-    [[nodiscard]] void* getCurrentFrameFence() override { return nullptr; }
-    [[nodiscard]] void* getRenderFinishedSemaphore(uint32_t) override { return nullptr; }
-};
+using TestSurface = ::ya::test::StandInSurface;
 
 class AppLifecycleTest : public ::testing::Test
 {
@@ -241,7 +217,7 @@ TEST_F(AppLifecycleTest, TheSurfaceBackdropIsWhatTheLoadedModulesSayItIs)
     /// A host with no surface-filling module shows the View: this is the
     /// standalone runtime, where display compose must copy the View across the
     /// window.
-    StandInSurface surface;
+    TestSurface surface;
 
     EXPECT_TRUE(app.presentsViewDisplayImage(surface));
 

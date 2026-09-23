@@ -4,6 +4,7 @@
 #include "Render3D/RenderFrameData.h"
 #include "Render3D/RenderDeviceState.h"
 #include "Scene/Core/Scene.h"
+#include "TestSurface.h"
 
 #include <cstdint>
 #include <glm/glm.hpp>
@@ -60,7 +61,10 @@ TEST(RenderRuntimeSnapshotTest, EmptyDevicePublishesEmptyViewportResources)
     EXPECT_EQ(device.surfaceImageFor(device.getViewOutput(0, 1)).image, nullptr);
 
     const RenderViewportSnapshot viewport = device.buildViewportSnapshot(0, 0);
-    const RenderTargetCatalog    targets  = device.buildRenderTargetCatalog();
+    // The catalog describes a named window; this device has no renderer, so the
+    // surface entry is absent and only the (also empty) pipeline entries remain.
+    test::StandInSurface      surface;
+    const RenderTargetCatalog targets = device.buildRenderTargetCatalog(surface);
 
     EXPECT_EQ(viewport.viewportImageOwner, nullptr);
     EXPECT_EQ(viewport.viewportImageView, nullptr);

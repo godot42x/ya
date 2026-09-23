@@ -234,7 +234,10 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// strategy is built, which is a case the caller has to handle anyway: it
     /// asks this to configure a compose pipeline before any View exists.
     [[nodiscard]] EFormat::T    getViewDepthFormat() const;
-    [[nodiscard]] RenderTargetCatalog buildRenderTargetCatalog() const;
+    /// The catalog's surface entry describes ONE window, which the caller
+    /// names. It used to describe "the primary window" -- a fact the renderer
+    /// cannot know and should not invent once several windows present.
+    [[nodiscard]] RenderTargetCatalog buildRenderTargetCatalog(IRenderSurfaceContext& surface) const;
     /// The editor's viewport data for one View of one flight: the View's
     /// images plus the pipeline's debug catalogs. Both identities are
     /// parameters -- `viewId == 0` means "this frame showed no View", which is

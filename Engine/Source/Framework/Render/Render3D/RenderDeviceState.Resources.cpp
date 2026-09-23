@@ -101,7 +101,12 @@ void RenderDeviceState::initShaderSystems()
 
 void RenderDeviceState::initDiagnostics(const InitDesc& desc)
 {
-    _diagnostics.init(_render, desc.bEnableRenderDoc, desc.renderDocDllPath, desc.renderDocCaptureOutputDir);
+    // The window the device was created for is the one a capture diagnoses.
+    // Naming it here keeps the service from inventing "the primary window": it
+    // is told which surface it captures. With several windows presenting, the
+    // capture target becomes an explicit app choice instead (AB4-2b).
+    IRenderSurfaceContext* captureSurface = _render ? _render->getPrimarySurfaceContext() : nullptr;
+    _diagnostics.init(_render, captureSurface, desc.bEnableRenderDoc, desc.renderDocDllPath, desc.renderDocCaptureOutputDir);
     _deleter.push("RenderDiagnostics", [this](void*)
                   { _diagnostics.shutdown(); });
 }

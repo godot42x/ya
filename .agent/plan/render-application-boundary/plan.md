@@ -159,7 +159,24 @@ AB4-step2（待做）：让**额外的 OS 窗口走同一条路**。现状：额
 | --- | --- | --- |
 | `_bDeviceFrameOwner` / `onPrimaryPresentFenceWaited()` | `VulkanRenderSurfaceContext.cpp:279/494`、`VulkanRender.cpp:1252` | 帧号推进、`DeferredDeletionQueue::flush`、GPU 计时读回都由**主 surface** 的 `begin()` 触发。第二 surface begin 时不推进（对），主 surface 缺席（最小化/拒绝帧）时也不推进（错：这一帧的回收没人管） |
 | `_activeFlightIndex = _render->primaryFrameIndex() % MAX_FLIGHTS_IN_FLIGHT` | `Render2D/QuadRender.cpp:571`、`LineRender.cpp:251` | GUI 2D 的 flight 槽位取自主 swapchain 的帧号，而不是本帧 recording 的 flight slot |
-| `_render->primarySwapchain()` | `RenderDiagnosticsService.cpp:148/251` | 诊断读回只认主 surface 的 swapchain |
+| `_render->primarySwapchain()` | `RenderDiagnosticsService.cpp:148/251` | 诊断读回只认主 surface 的 swapchain（**已落地**，见下） |
+
+##### AB4-2a-1 收尾：最后两个匿名“那个窗口”查询（已落地 2026-09-23）
+
+- `RenderDiagnosticsService::init(...)` 增加 `IRenderSurfaceContext* captureSurface`：服务不再自己
+  `primarySwapchain()` 挑窗口，而是被**告知**它诊断哪个窗口（onRecreate 订阅与 RenderDoc
+  render context 都跟着这个 surface）。`RenderDeviceState::initDiagnostics` 传的是“device
+  创建时用的那个 surface”（init 期事实，非每帧路径）。
+- `RenderDeviceState::buildRenderTargetCatalog()` → `buildRenderTargetCatalog(IRenderSurfaceContext&)`：
+  catalog 的 surface 条目描述**调用方点名的**那个窗口；`AppRenderServices` 侧解析“本 app 呈现的
+  窗口”（AB4-2b 变多 display root 时按 root 取）。
+- `IRender::primarySwapchain()` 删除（零消费者）。
+
+**顺带发现（登记，未做）**：`IRenderPass::create()` 在整个仓库里**零调用方**，所以
+`VulkanRenderPass`（含 OpenGL 那份）是死代码——它正是 `VulkanRender::primaryVulkanSwapchain()`
+的唯一使用者，而它的 `createDefaultRenderPass()` 还会拿**主 swapchain 的 format** 当默认附件。
+删掉这套 render-pass 抽象要连带清理 Forward 各 pass desc 里恒为 nullptr 的 `renderPass` 字段与
+`RenderDefines.h` 的 `RenderPassCreateInfo`，属独立批次（“删死抽象”），不与本批的“窗口等级”混。
 
 UE 的同位概念是**帧级**的：device 的帧号、延迟删除、GPU 计时读回都挂在“这一帧”上，
 由渲染线程每 tick 推进一次，跟“哪个窗口 present 了”无关；present 是 per-viewport 的
