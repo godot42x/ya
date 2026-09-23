@@ -342,7 +342,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     // declare → extract → prepare → build → acquire → record → submit → extras
     declareViews(app, dt, sceneScheduler);
     ExtractedSceneRender sceneRender = extractScenes(app, sceneScheduler, device);
-    prepareViews(app, dt, flightIndex, sceneRender);
+    prepareViews(app, dt, sceneRender);
 
     TickFrame gameFrame = buildGameRenderFrame(app, dt, flightIndex, sceneRender);
 
@@ -440,11 +440,9 @@ ExtractedSceneRender GameRuntimeTickOrchestrator::extractScenes(App&            
 
 void GameRuntimeTickOrchestrator::prepareViews(App&                  app,
                                               float                 dt,
-                                              uint32_t              flightIndex,
                                               ExtractedSceneRender& sceneRender)
 {
-    auto& viewFrames = app._renderState->viewFrameDataPerFlight[flightIndex];
-    sceneRender.pairViewFrames(viewFrames);
+    sceneRender.pairViewFrames();
     if (sceneRender.empty()) {
         return;
     }

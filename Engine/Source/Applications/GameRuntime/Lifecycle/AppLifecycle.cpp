@@ -509,11 +509,6 @@ void App::quit()
         app.onQuit();
     }
 
-    for (auto& flightFrames : app._renderState->viewFrameDataPerFlight) {
-        for (auto& frameData : flightFrames) {
-            frameData.clear();
-        }
-    }
     const bool bHadSceneBeforeUnload = app._sceneManager && app._sceneManager->hasScene();
     if (app._luaScriptingSystem) {
         app._luaScriptingSystem->onStop();
@@ -620,12 +615,6 @@ void App::handleSceneDestroy(Scene* scene)
     }
 
     app.notifyModulesSceneDestroyed(scene);
-
-    for (auto& flightFrames : app._renderState->viewFrameDataPerFlight) {
-        for (auto& frameData : flightFrames) {
-            frameData.clear();
-        }
-    }
 
     if (app._renderState->device) {
         app._renderState->device->resetSkyboxPool();

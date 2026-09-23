@@ -422,3 +422,61 @@ AB4-step2（额外窗口）是 AB7 的下游：额外窗口之所以只能自己
 另有一个独立的产品问题挂着（不阻塞以上任何一步）：**PIE 下编辑器视口的 overlay / picking
 该不该跟着游戏相机**。今天跟（因为读的是宿主 display root 的相机），另一种答案是跟编辑器相机。
 AB8-step2 之后这个选择只剩 `HostViewportView` 的一个字段，可以单独讨论。
+
+## 2026-09-22 AB9 review batch 2 — 收回本 tick 的 View packet owner
+
+第一批已经把问题登记为「需要证明保活关系后再迁移」。本批完成的目标只有一个：让本 tick 的
+`RenderFrameData` 不再由 `AppRenderState` 的 per-flight 长期容器持有。
+
+### 已完成
+
+- 删除 `AppRenderState::viewFrameDataPerFlight`。它原先既像 App 状态又像每 flight 的临时缓存，
+  导致 `AppLifecycle::quit` 与 `handleSceneDestroy` 必须手工清空。
+- `ExtractedSceneRender` 现在拥有 `_frameData`，`pairViewFrames()` 在 plan extraction 之后为每个
+  surviving View 创建一个 packet；`SceneViewRecording` 只借用同一个 owner 内的 task/data。
+- `ExtractedSceneRender` 的 move constructor/assignment 显式重绑这些借用指针。`tickRender` 将
+  `sceneRender` 移入 `RenderFramePlan`，因此这条不变量必须由类型本身守住，不能依赖 NRVO。
+- 删除零生产消费者的 `ExtractedSceneRender::hostFrameData()`。display-root 的唯一身份仍由
+  `SceneRenderPlan::displayRootTask()` 提供；不再额外缓存一根宿主 packet 指针。
+- 删除两处生命周期清空循环；UI-only tick 不再制造一个无 View 的 per-flight 空 slot。
+
+### 保活审计结论
+
+`RenderFrameData::sceneResources` 只保存录制期读取的 `DescriptorSetHandle`、Scene 派生结果和
+`EnvironmentLightingProcessor*`。它不拥有需要跨 queue submit 保活的 image/buffer；录制后 GPU 资源由
+`RenderSubmission` 的 keepalive 以及 `retainPublishedViewOutputs()` 维护。因此 packet 必须留在
+AppRenderState 才能保活的假设不成立。当前 production path 没有 `RenderFrameData` 在 `device.record()`
+返回后继续被读；渲染 graph 的执行回调也在该调用内完成。
+
+### 验证
+
+**取证说明（与 batch 1 不同）**：batch 1 时主仓库被并发 WIP 卡住，只能靠 APFS 副本取证。这一轮并发
+写者已把他们的 `ViewportDebugCatalogBuilder.cpp` 与两个 `*ViewResources.h` 改到自洽状态，所以
+**主仓库直接构建通过，不需要 clonefile 副本**；也因此本轮的证据是主仓库的真实结果，而不是等价树。
+那三个文件仍然保持未 stage（它们不是本批改动）。
+
+- `xmake b ya-render-3d-test`：`build ok, spent 0.75s`。
+- `xmake b ya-game-runtime`：`build ok, spent 32.32s`。
+- `xmake b ya-runtime`：`build ok, spent 0.944s`。
+- `xmake b ya-game-editor`：`build ok, spent 4.596s`。
+- `xmake b ya-testing`：`build ok, spent 11.706s`。
+- `xmake r ya-render-3d-test`：`175 tests from 24 test suites ran. [ PASSED ] 175 tests.`（原 177 减 2 个
+  只测已删接口的 case，并把配对测试改为验证 move 后借用指针仍指向目标 owner 且数据随之搬移）。
+- plan §8 滤镜（`./build/macosx/arm64/debug/ya-testing --gtest_filter='…'`）：**696 ran / 679 passed /
+  11 skipped / 6 failed**。6 个失败与已登记基线逐项一致（`EditorPropertyGraphTest.*` 两个、
+  `WidgetLayoutTest.FloatingWindowResizeHandlesLiveOnOverlaySlots`、
+  `ScriptApiLibraryFixture.GameUIWidgetLifecycleThroughRegistry`、
+  `GameUIHostTest.BuildSnapshotComposesMountedWidgets`、偶发
+  `RenderGraphCoreTest.ResourceRegistryUsesProvidedImportedImageViewAndRetainsOwner`）。相对 batch 1 的
+  681 passed 少 2 个，正好是被删的两个 case。
+- `run_display_compose_parity.py --skip-build`：**PASS: display compose is a pass-through**；
+  viewport 与 presentation 的 md5 都是 `c775245ae636f15b41da8485319a2267`，与基线逐字节相同。
+  这是本轮最关键的证据：packet owner 从 App 长期容器搬到 `ExtractedSceneRender` 之后像素没动。
+- `run_widgettree_editor_smoke.py --skip-build`：wrapper `exit=0`，`1. ping` 到 `6. quit` 六步全过，
+  stderr 为空，引擎日志无 error。
+
+### 保留 / 未完成
+
+- 保留 `RenderFrameData` 这个历史命名；它仍被大量 pipeline API 使用，改名属于单独的命名批次。
+- pipeline 单 View 资源、隐式 active Scene provider、整帧编排从 `RenderDeviceState` 拆回应用侧
+  仍未开始；这些不会因为 packet owner 迁移而自动解决。

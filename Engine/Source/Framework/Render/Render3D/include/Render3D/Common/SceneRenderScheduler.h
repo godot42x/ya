@@ -194,8 +194,11 @@ struct SceneViewRecording
 using SceneSnapshotExtractor =
     std::function<std::shared_ptr<const SceneSnapshot>(Scene& scene)>;
 
-/// A sealed plan whose snapshot table has been resolved, paired with the host's
-/// per-view frame data.
+/// A sealed plan whose snapshot table has been resolved, paired with this tick's
+/// per-view prepared data. The packets are consumed synchronously while the
+/// renderer builds and executes the graph; they are not GPU-lifetime state and
+/// must not live on AppRenderState merely because the old implementation reused
+/// a per-flight vector.
 ///
 /// Only `buildSceneSnapshots()` can build the plan half, and the default state
 /// is the empty UI-only plan, so a plan that still holds empty snapshot entries
@@ -209,41 +212,46 @@ class ExtractedSceneRender
     ExtractedSceneRender() = default;
     ExtractedSceneRender(const ExtractedSceneRender&)            = delete;
     ExtractedSceneRender& operator=(const ExtractedSceneRender&) = delete;
-    /// Moving a vector transfers its storage, so the task pointers held by the
-    /// recordings keep pointing at this plan's own tasks.
-    ExtractedSceneRender(ExtractedSceneRender&&)            = default;
-    ExtractedSceneRender& operator=(ExtractedSceneRender&&) = default;
+    /// Recordings borrow the plan and packet vectors, so a move must rebind
+    /// those pointers to the destination object's storage.
+    ExtractedSceneRender(ExtractedSceneRender&& other) noexcept
+        : _plan(std::move(other._plan)),
+          _views(std::move(other._views)),
+          _frameData(std::move(other._frameData))
+    {
+        rebindRecordings();
+    }
+
+    ExtractedSceneRender& operator=(ExtractedSceneRender&& other) noexcept
+    {
+        if (this != &other) {
+            _plan      = std::move(other._plan);
+            _views     = std::move(other._views);
+            _frameData = std::move(other._frameData);
+            rebindRecordings();
+        }
+        return *this;
+    }
 
     /// Pair one recording with every surviving viewport task, in plan order.
-    /// `frameData` ends up with exactly one slot per surviving view; slots left
-    /// over from a wider tick are released so they cannot keep that tick's Scene
-    /// snapshot alive. A UI-only tick keeps one emptied slot for that release and
-    /// no host frame data: the slot exists to drop the previous tick's snapshot,
-    /// not because the camera packet reads it.
-    void pairViewFrames(std::vector<RenderFrameData>& frameData)
+    /// The packet storage is owned by this tick's extracted render value, so
+    /// recordings cannot point into long-lived App state or a different flight.
+    /// A UI-only tick owns no View packet and therefore produces no recording.
+    void pairViewFrames()
     {
         _views.clear();
-        _hostFrameData = nullptr;
+        _frameData.clear();
         if (_plan.viewTasks.empty()) {
-            frameData.resize(1);
-            frameData.front().clear();
             return;
         }
 
-        frameData.resize(_plan.viewTasks.size());
+        _frameData.resize(_plan.viewTasks.size());
         _views.reserve(_plan.viewTasks.size());
         for (size_t index = 0; index < _plan.viewTasks.size(); ++index) {
             _views.push_back(SceneViewRecording{
                 .task      = &_plan.viewTasks[index],
-                .frameData = &frameData[index],
+                .frameData = &_frameData[index],
             });
-            // Frame data is indexed by declaration order, which says nothing
-            // about which View is the host's. The host camera packet needs the
-            // latter, so record it here instead of letting the caller read
-            // slot 0 and hope the producer declared the host View first.
-            if (!_hostFrameData && _plan.viewTasks[index].desc.isDisplayRoot()) {
-                _hostFrameData = &frameData[index];
-            }
         }
     }
 
@@ -255,11 +263,6 @@ class ExtractedSceneRender
 
     [[nodiscard]] const SceneViewTask* displayRootTask() const { return _plan.displayRootTask(); }
 
-    /// This tick's preparation for the View whose output goes to the host
-    /// viewport, or null when no declared View owns it. The host camera packet
-    /// reads this rather than the first paired slot.
-    [[nodiscard]] RenderFrameData* hostFrameData() const { return _hostFrameData; }
-
     [[nodiscard]] std::shared_ptr<const SceneSnapshot> snapshotFor(const SceneViewTask& task) const
     {
         return _plan.snapshotFor(task);
@@ -268,9 +271,18 @@ class ExtractedSceneRender
   private:
     friend ExtractedSceneRender buildSceneSnapshots(SceneRenderPlan plan, const SceneSnapshotExtractor& extract);
 
+    void rebindRecordings()
+    {
+        for (size_t index = 0; index < _views.size(); ++index) {
+            SceneViewRecording& recording = _views[index];
+            recording.task = index < _plan.viewTasks.size() ? &_plan.viewTasks[index] : nullptr;
+            recording.frameData = index < _frameData.size() ? &_frameData[index] : nullptr;
+        }
+    }
+
     SceneRenderPlan                 _plan;
     std::vector<SceneViewRecording> _views;
-    RenderFrameData*                _hostFrameData = nullptr;
+    std::vector<RenderFrameData>    _frameData;
 };
 
 /// Explicit extraction step: consumed by the host after `seal()` and before

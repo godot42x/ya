@@ -56,7 +56,7 @@ class GameRuntimeTickOrchestrator
     static ExtractedSceneRender extractScenes(App& app, SceneRenderScheduler& scheduler, RenderDeviceState* device);
     /// Pairs this tick's View recordings with their frame data and prepares one
     /// View's camera-dependent packet each.
-    static void prepareViews(App& app, float dt, uint32_t flightIndex, ExtractedSceneRender& sceneRender);
+    static void prepareViews(App& app, float dt, ExtractedSceneRender& sceneRender);
     /// One tick's frame facts together with the UI snapshot the packet borrows.
     /// They are built as one value because the packet points into the snapshot:
     /// returning them separately made the caller declare a local before the call

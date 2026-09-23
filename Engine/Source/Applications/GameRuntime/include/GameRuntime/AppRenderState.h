@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Render3D/RenderFrameData.h"
 #include "Render3D/Common/SceneViewProducer.h"
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Stage/IRenderStage.h"
@@ -9,7 +8,6 @@
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/RenderDeviceState.h"
 
-#include <array>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -37,7 +35,6 @@ struct AppRenderState
     /// gets drawn (SkeletonAnimationSystem), so they stop depending on a switch
     /// that describes a viewport instead of a Scene.
     std::vector<Scene*>                     renderedScenesLastTick;
-    std::array<std::vector<RenderFrameData>, MAX_FLIGHTS_IN_FLIGHT> viewFrameDataPerFlight{};
     /// The frame's host-viewport arrangement: which View the window shows, in
     /// which flight, and that View's camera. Written once per tick from the plan
     /// (see GameRuntimeTickOrchestrator::tickRender) and read by every consumer

@@ -127,7 +127,6 @@ TEST(RenderRuntimeSnapshotTest, EmptySceneRenderIsUiOnlyFrame)
     EXPECT_TRUE(plan.sceneRender.empty());
     EXPECT_TRUE(plan.sceneRender.views().empty());
     EXPECT_EQ(plan.sceneRender.displayRootTask(), nullptr);
-    EXPECT_EQ(plan.sceneRender.hostFrameData(), nullptr);
 }
 
 TEST(RenderRuntimeSnapshotTest, EveryTaskCarriesTheSceneItsDeclarationNamed)
@@ -405,7 +404,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDropsViewsOfUnresolvedScene)
     EXPECT_TRUE(extracted.views().empty());
 }
 
-TEST(RenderRuntimeSnapshotTest, UiOnlyTickKeepsOneFrameSlotAndPairsNoView)
+TEST(RenderRuntimeSnapshotTest, UiOnlyTickOwnsNoPreparedViewData)
 {
     SceneRenderScheduler scheduler;
     scheduler.beginTick(7);
@@ -413,72 +412,9 @@ TEST(RenderRuntimeSnapshotTest, UiOnlyTickKeepsOneFrameSlotAndPairsNoView)
     ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
     EXPECT_TRUE(extracted.empty());
     EXPECT_EQ(extracted.displayRootTask(), nullptr);
-    EXPECT_EQ(extracted.hostFrameData(), nullptr);
 
-    // A previous tick left Scene content in the per-flight slot; a UI-only tick
-    // must not hand the camera packet a stale snapshot.
-    std::vector<RenderFrameData> frames(2);
-    frames[0].sceneSnapshot = std::make_shared<const SceneSnapshot>();
-    extracted.pairViewFrames(frames);
-
-    ASSERT_EQ(frames.size(), 1u);
-    EXPECT_FALSE(frames[0].sceneSnapshot);
+    extracted.pairViewFrames();
     EXPECT_TRUE(extracted.views().empty());
-}
-
-TEST(RenderRuntimeSnapshotTest, HostFrameDataFollowsTheDisplayRootNotThePairingSlot)
-{
-    Scene scene("Shared");
-
-    SceneRenderScheduler scheduler;
-    scheduler.beginTick(11);
-
-    // The overlay View is declared first, so it lands in slot 0. Pairing order
-    // is declaration order and says nothing about which View is the host's, so
-    // the host camera packet must not read slot 0.
-    SceneViewDesc overlay;
-    overlay.scene             = &scene;
-    overlay.viewId            = kOverlayView.viewId();
-    overlay.outputRect      = {.pos = {0.0f, 0.0f}, .extent = {320.0f, 180.0f}};
-    overlay.composeOntoViewId = kDisplayView.viewId();
-    ASSERT_TRUE(scheduler.submit(overlay));
-    ASSERT_TRUE(scheduler.submit(makeView(&scene, kDisplayView.viewId())));
-
-    ExtractedSceneRender   extracted = sealWithEmptySnapshots(scheduler);
-    const SceneRenderPlan& plan      = extracted.plan();
-    ASSERT_EQ(plan.viewTasks.size(), 2u);
-    EXPECT_EQ(plan.displayRootTask(), &plan.viewTasks[1]);
-
-    std::vector<RenderFrameData> frames;
-    extracted.pairViewFrames(frames);
-    ASSERT_EQ(frames.size(), 2u);
-    EXPECT_EQ(extracted.hostFrameData(), &frames[1]);
-}
-
-TEST(RenderRuntimeSnapshotTest, TickThatDeclaresNoDisplayRootHasNoHostFrameData)
-{
-    Scene scene("Preview");
-
-    SceneRenderScheduler scheduler;
-    scheduler.beginTick(12);
-
-    // Only an overlay View: nothing owns the host viewport, so there is no
-    // display root, no host frame data, and no substitute View to fall back to.
-    SceneViewDesc overlay;
-    overlay.scene             = &scene;
-    overlay.viewId            = kOverlayView.viewId();
-    overlay.outputRect      = {.pos = {0.0f, 0.0f}, .extent = {320.0f, 180.0f}};
-    overlay.composeOntoViewId = kDisplayView.viewId();
-    ASSERT_TRUE(scheduler.submit(overlay));
-
-    ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
-    ASSERT_FALSE(extracted.empty());
-    EXPECT_EQ(extracted.displayRootTask(), nullptr);
-
-    std::vector<RenderFrameData> frames;
-    extracted.pairViewFrames(frames);
-    ASSERT_EQ(frames.size(), 1u);
-    EXPECT_EQ(extracted.hostFrameData(), nullptr);
 }
 
 TEST(RenderRuntimeSnapshotTest, ExtractedSceneRenderPairsEveryTaskWithItsOwnFrameData)
@@ -504,19 +440,17 @@ TEST(RenderRuntimeSnapshotTest, ExtractedSceneRenderPairsEveryTaskWithItsOwnFram
     ASSERT_TRUE(scheduler.submit(makeRequest(12, viewB)));
 
     ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
-    const SceneRenderPlan& plan   = extracted.plan();
+    const SceneRenderPlan& plan = extracted.plan();
     ASSERT_EQ(plan.viewTasks.size(), 2u);
     EXPECT_EQ(plan.snapshotFor(plan.viewTasks[0]), plan.snapshotFor(plan.viewTasks[1]));
 
-    std::vector<RenderFrameData> frames;
-    extracted.pairViewFrames(frames);
-
-    ASSERT_EQ(frames.size(), 2u);
+    extracted.pairViewFrames();
     ASSERT_EQ(extracted.views().size(), 2u);
     EXPECT_EQ(extracted.views()[0].task, &plan.viewTasks[0]);
     EXPECT_EQ(extracted.views()[1].task, &plan.viewTasks[1]);
-    EXPECT_EQ(extracted.views()[0].frameData, &frames[0]);
-    EXPECT_EQ(extracted.views()[1].frameData, &frames[1]);
+    ASSERT_NE(extracted.views()[0].frameData, nullptr);
+    ASSERT_NE(extracted.views()[1].frameData, nullptr);
+    EXPECT_NE(extracted.views()[0].frameData, extracted.views()[1].frameData);
     EXPECT_EQ(extracted.displayRootTask(), &plan.viewTasks[0]);
 
     // Each View is its own camera: the second View's matrices and extent are on
@@ -526,7 +460,19 @@ TEST(RenderRuntimeSnapshotTest, ExtractedSceneRenderPairsEveryTaskWithItsOwnFram
     EXPECT_NE(plan.viewTasks[1].desc.view, plan.viewTasks[0].desc.view);
     EXPECT_EQ(plan.viewTasks[1].output.extent.width, 640u);
     EXPECT_EQ(plan.viewTasks[1].output.extent.height, 360u);
-    EXPECT_EQ(extracted.views()[1].frameData, &frames[1]);
+    extracted.views()[1].frameData->view = viewB;
+
+    // The runtime moves the packet owner into RenderFramePlan before record().
+    // Moving it must rebind both borrowed pointers to the destination storage,
+    // not leave recordings pointing into the moved-from object.
+    ExtractedSceneRender moved = std::move(extracted);
+    ASSERT_EQ(moved.views().size(), 2u);
+    EXPECT_EQ(moved.views()[0].task, &moved.plan().viewTasks[0]);
+    EXPECT_EQ(moved.views()[1].task, &moved.plan().viewTasks[1]);
+    ASSERT_NE(moved.views()[0].frameData, nullptr);
+    ASSERT_NE(moved.views()[1].frameData, nullptr);
+    EXPECT_NE(moved.views()[0].frameData, moved.views()[1].frameData);
+    EXPECT_EQ(moved.views()[1].frameData->view, viewB);
 }
 
 TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsSnapshotMetadataMismatch)

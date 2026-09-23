@@ -21,7 +21,7 @@
 ## 收尾前
 
 - [ ] 受影响目标 build：`ya-game-runtime` / `ya-runtime` / `ya-game-editor` / `ya-testing`。
-- [ ] `xmake r ya-render-3d-test`（期望 177/177）。
+- [ ] `xmake r ya-render-3d-test`（期望 175/175；batch 2 删掉 2 个只测已删接口的 case）。
 - [ ] `ya-testing` 滤镜跑一遍，与已登记基线比对（排除 `WidgetTreeTest.SystemLayersCannotBeDetached`）。
 - [ ] `run_display_compose_parity.py --skip-build` 期望 PASS、md5 `c775245a…`。
 - [ ] `run_widgettree_editor_smoke.py --skip-build` 期望 exit=0。
@@ -32,6 +32,21 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-23 AB9（review 第二批：收回本 tick 的 View packet owner）：`AppRenderState::viewFrameDataPerFlight`
+  删除（它把「本 tick 的 View 准备数据」和「跨帧保活/免分配」两件事混在 App 长期状态里，还逼出
+  `AppLifecycle` 的 quit / `handleSceneDestroy` 两处手工清空）。`ExtractedSceneRender` 现在自己持有
+  `_frameData`，`pairViewFrames()` 不再收外部容器；因为 `tickRender` 会把 `sceneRender` 移进
+  `RenderFramePlan`，move constructor/assignment 必须显式重绑 `SceneViewRecording` 的 task/frameData
+  借用指针（不能依赖 vector 存储地址不变），新增的测试断言就是钉这条。顺带删除零生产消费者的
+  `ExtractedSceneRender::hostFrameData()`——display-root 身份的唯一来源仍是
+  `SceneRenderPlan::displayRootTask()`。保活审计：`RenderFrameData::sceneResources` 只含录制期读取的
+  descriptor handle 与 processor 指针，跨 submit 的 GPU 保活由 `RenderSubmission` 与
+  `retainPublishedViewOutputs()` 负责，没有「packet 必须留在 App 才能保活」的约束。
+  验证（**主仓库直接跑，不需要 batch 1 的 APFS 副本**——并发写者已把他们的三个文件改到自洽，只保持未
+  stage）：`ya-render-3d-test` build ok、175/175（原 177 减 2 个死接口 case）；`ya-game-runtime` /
+  `ya-runtime` / `ya-game-editor` / `ya-testing` build ok；§8 滤镜 696 ran / 679 passed / 11 skipped /
+  6 failed（与基线同 6 个，比 batch 1 少的 2 个就是被删的 case）；parity PASS（两张图 md5 均为
+  `c775245a…`）；编辑器 smoke exit=0 六步全过。详见 progress.md 对应小节。
 - 2026-09-22 AB9（review 第一批：计划对齐 + 删噪声）：修掉 `GameRuntimeTickOrchestrator::pumpOffscreenTasks`
   ——它只有自我递归、没有任何调用者，而 `tickRender` 直接匿名调 `getOffscreenTaskService().tick(...)`；
   修法是把 663e0f82 想命名的那一步接回去（`tickRender` 调它，函数体做实际工作），不是删名字。删除零调用方的
