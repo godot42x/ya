@@ -150,16 +150,46 @@ AB4-step2（待做）：让**额外的 OS 窗口走同一条路**。现状：额
 从主窗口 present 之后挪进 app 的录制顺序里**——这是唯一的时序改动，也是最容易踩
 “chrome tick 在 present 之后”这类半状态的地方。
 
-##### AB4-2a：plan 支持多个 present target（结构批次，产品行为不变）
+##### AB4-2a-1：帧生命周期离开 surface（前置，不动 plan）
+
+今天 RHI 的 device 级簿记挂在**主 surface 的 present**上，而“主 surface”这个身份
+就是这里要删的东西：
+
+| 写法 | 位置 | 问题 |
+| --- | --- | --- |
+| `_bDeviceFrameOwner` / `onPrimaryPresentFenceWaited()` | `VulkanRenderSurfaceContext.cpp:279/494`、`VulkanRender.cpp:1252` | 帧号推进、`DeferredDeletionQueue::flush`、GPU 计时读回都由**主 surface** 的 `begin()` 触发。第二 surface begin 时不推进（对），主 surface 缺席（最小化/拒绝帧）时也不推进（错：这一帧的回收没人管） |
+| `_activeFlightIndex = _render->primaryFrameIndex() % MAX_FLIGHTS_IN_FLIGHT` | `Render2D/QuadRender.cpp:571`、`LineRender.cpp:251` | GUI 2D 的 flight 槽位取自主 swapchain 的帧号，而不是本帧 recording 的 flight slot |
+| `_render->primarySwapchain()` | `RenderDiagnosticsService.cpp:148/251` | 诊断读回只认主 surface 的 swapchain |
+
+UE 的同位概念是**帧级**的：device 的帧号、延迟删除、GPU 计时读回都挂在“这一帧”上，
+由渲染线程每 tick 推进一次，跟“哪个窗口 present 了”无关；present 是 per-viewport 的
+`RHIEndDrawingViewport`。所以这一批做的是：把帧号推进 / 延迟删除 flush / GPU 计时读回
+挂到**本帧 recording**（`RecordedFrame` / `RenderSubmission`）上，Render2D 的 flight 槽位
+改读本帧 recording，`primarySwapchain()` 这类匿名查询改为显式给 surface。
+
+- 验收：现有双 surface 用例（`RHISurfaceContext.ExtraWindowPresentResizeCloseSoak` /
+  `ExtraWindowResizeAndCloseDoesNotDeviceWaitIdlePrimary`）全绿 —— 它们本来就每帧
+  present 主 + 额外两个 surface，是双 advance / 漏 advance 的现成探针；`make test` 全绿；
+  parity md5 逐字节不变。
+
+##### AB4-2a-2：plan 支持多个 present target（结构批次，产品行为不变）
 
 - `RenderFramePlan::present` 单值 → `std::vector<DisplayRootPlan>`，每项
-  `{surface, imageIndex, backdrop, chromeSnapshot(可选), displayViewId}`；
-  **主窗口仍是第一项**（保序，现有所有读 `.present.surface` 的单值消费点只读第一项）。
+  `{surface, imageIndex, backdrop, chromeSnapshot(可选), displayViewId}`。
+  **无序集合，没有“第一项”特权**：plan 不区分主次，谁是“主窗口”是 app 层的宿主事实
+  （编辑器的默认窗口 / 独立 GUI app 的唯一窗口），不是 present 路径的属性。今天读
+  `.present.surface` 的单值消费点全部改读“自己那一项”，不留“数组第 0 项就是主窗口”
+  这类隐式排序。
 - `RuntimeRenderContext::record` 里 present target 获取、UI compose、display compose、
   `sealFrame` 按 display root 循环，**每项走同一条顺序**；空表 = 今天“plan 无 surface”
   的既有语义（不录、不 present）。
 - `SurfacePresentation` 已经是 per-surface（step1 落地，按该窗口自己的 swapchain format
   建 write pass），这一批不改它。
+- 顺带把“这个 surface 的内容是不是 View 的图”改成 per-surface 政策：`App::presentsViewDisplayImage()`
+  今天用“有没有模块 `fillsPrimarySurface()`”回答，且只有一个 surface 可答 —— UE 里对应的
+  区别也不是“主窗口”，而是“这个窗口的内容是不是直接就是 viewport 的图”（游戏视口填满窗口、
+  编辑器视口是面板内的一块）。所以 `IRuntimeModule::fillsPrimarySurface()` → `fillsSurface(surface)`，
+  `ESurfaceBackdrop` 落到每个 display root 各自一个值。
 - 验收：`ya-render-3d-test` 全绿；`run_display_compose_parity.py --skip-build` 两张图
   md5 逐字节不变（`c775245ae…`）；`make test` 全绿。
 
@@ -175,14 +205,15 @@ AB4-step2（待做）：让**额外的 OS 窗口走同一条路**。现状：额
   全绿；新增一条断言：额外 surface 的 present 真的进了 app 的 record
   （`getPresentationImageShared(extraSurface)` 非空），而不是 `presentGuiSnapshot` 的自循环。
 
-##### AB4-2c：额外窗口里的 viewport 面板渲世界
+##### AB4-2c：某个窗口里的 viewport 面板渲世界
 
 - 该窗口内的 viewport tab 由 `EditorViewProducer` 声明到**那个 surface**（owner-scoped
   `SceneViewKey` 已就位；同 Scene 双 View 的 snapshot 复用表在 R2 已有验证，这里直接接上）。
-  chrome 的 `UIImage` 采样该 View 的 display RT——与主窗口同一机制，不是把主窗口的图复制过去。
+  chrome 的 `UIImage` 采样该 View 的 display RT——与任何窗口同一机制，不是把别的窗口的图复制过来。
 - 验收：一条自动化：把 viewport 面板 tear-off 成独立 OS 窗口 → 断言第二张 swapchain
-  的图非空、extent 非退化、且与主窗口的 presentation 图**不同**（不同相机位姿下必然不同，
-  防“只是把主窗口的 display 拷给了第二张 surface”）；世界内容正确性留给目视 + 现有 smoke。
+  的图非空、extent 非退化，且其内容来自**它自己**那个 View（不同相机位姿下该图必然
+  不同于其它窗口的 presentation 图，防“把别处一张现成图拷给了第二张 surface”）；
+  世界内容正确性留给目视 + 现有 smoke。
 
 ##### 非目标（本条不做）
 
