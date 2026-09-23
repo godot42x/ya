@@ -14,6 +14,8 @@ add_requires("gtest")
 -- single file out of a suite directory again means the file sits in the wrong
 -- folder: move it instead of naming it.
 function ya_test_sources(...)
+    -- Support/ headers are addressed by name from every suite directory.
+    add_includedirs("./Source/Support")
     for _, dir in ipairs({ ... }) do
         add_files("./Source/" .. dir .. "/*.cpp")
     end
@@ -35,6 +37,7 @@ if get_config("ya_profile") ~= "gui" then
         set_kind("binary")
         set_group("test")
         add_files("./Source/**.cpp")
+        add_includedirs("./Source/Support")
 
         add_deps("ya-engine", "ya-module-fixture", "ya-game-editor")
         -- The engine tests drive the App shell directly.

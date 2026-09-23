@@ -1,5 +1,7 @@
 #include "GUI/Compose/GUIRenderSurface.h"
 
+#include "TestSource.h"
+
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -11,13 +13,9 @@ namespace ya
 namespace
 {
 
-std::string readEngineSource(const std::filesystem::path& relative)
-{
-    const auto path = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() / relative;
-    std::ifstream in(path);
-    EXPECT_TRUE(in.good()) << "missing " << path.string();
-    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-}
+// Source-reading guards resolve the repo root through the shared walker so a
+// test can move between suite directories without pointing at nothing.
+using ::ya::test::readEngineSource;
 
 std::size_t countLiteral(const std::string& haystack, const std::string& needle)
 {
