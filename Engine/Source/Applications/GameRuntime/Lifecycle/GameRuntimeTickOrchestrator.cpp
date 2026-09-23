@@ -118,7 +118,9 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
     auto& renderServices = app.getRenderServices();
     auto* device         = renderServices.getDeviceState();
     auto* render         = renderServices.getRender();
-    auto* primarySurface = render ? render->getPrimarySurfaceContext() : nullptr;
+    // The window this app presents (a bootstrap fact, not a rank): the app
+    // names it once, in `AppRenderServices`, and this reads that answer.
+    auto* primarySurface = renderServices.getHostSurface();
     const auto presentationImage =
         (device && primarySurface) ? device->getPresentationImageShared(*primarySurface) : nullptr;
     // The three images automation may capture, each named: the host viewport's
@@ -370,7 +372,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     }
 
     IRender*       render        = device->getRender();
-    FPresentFrame  presentFrame{.surface = render ? render->getPrimarySurfaceContext() : nullptr};
+    FPresentFrame  presentFrame{.surface = app.getRenderServices().getHostSurface()};
     bool           bAcquireAttempted = false;
     {
         YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());

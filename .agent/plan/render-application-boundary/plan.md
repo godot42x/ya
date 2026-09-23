@@ -178,6 +178,21 @@ AB4-step2（待做）：让**额外的 OS 窗口走同一条路**。现状：额
 删掉这套 render-pass 抽象要连带清理 Forward 各 pass desc 里恒为 nullptr 的 `renderPass` 字段与
 `RenderDefines.h` 的 `RenderPassCreateInfo`，属独立批次（“删死抽象”），不与本批的“窗口等级”混。
 
+##### AB4-2a-1 收尾之二：调用点不再各自去问 renderer（已落地 2026-09-23）
+
+`getPrimarySurfaceContext()` 本身保留（“device 是用哪个窗口创建的”是 bootstrap 事实），但
+**每帧代码不该各自去问它**。新增 `AppRenderServices::getHostSurface()` 作为 app 唯一的“我呈现哪个窗口”
+出口，三个 app/编辑器调用点改读它（`GameRuntimeTickOrchestrator` 的自动化截图与 `presentFrame`、
+`EditorModule` 的 three 处）。AB4-2b 让一帧呈现多个窗口时，改的是这一个出口与它的消费者，
+不是散落各处的 `primary…` 调用。
+
+同时把 `IRender.h` / `RenderSurfaceContext.h` 上三处“primary”的头注释改写成“bootstrap 事实、
+非等级”：该 surface 在帧循环里没有任何特权（帧簿记是 `beginRecordedFrame`，计时与 flight 槽位是帧号），
+`primaryWindow()` 只服务 app/input 的启动期绑定。
+
+证据：`make test` 2705 passed / 0 failed；parity md5 与基线相同；编辑器 smoke 三轮全过
+（本轮共 4 次里 1 次 `{0,0}` 首帧竞态，与既有登记同形）。
+
 UE 的同位概念是**帧级**的：device 的帧号、延迟删除、GPU 计时读回都挂在“这一帧”上，
 由渲染线程每 tick 推进一次，跟“哪个窗口 present 了”无关；present 是 per-viewport 的
 `RHIEndDrawingViewport`。所以这一批做的是：把帧号推进 / 延迟删除 flush / GPU 计时读回

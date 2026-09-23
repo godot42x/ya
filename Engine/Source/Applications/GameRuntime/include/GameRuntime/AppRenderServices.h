@@ -18,6 +18,7 @@ namespace ya
 {
 
 struct IRender;
+struct IRenderSurfaceContext;
 struct ShaderStorage;
 struct ShadowSettings;
 struct ImageResource;
@@ -114,6 +115,14 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] const RenderViewOutput* getHostViewportOutput() const;
     /// Which View that is, by id. Zero when this frame showed none.
     [[nodiscard]] SceneViewId          getHostViewportViewId() const;
+    /// The OS window this app presents: the surface the device was created with
+    /// (a bootstrap fact, not a rank -- the renderer keeps no "the window").
+    /// Everything that means "the window I show" asks here rather than reaching
+    /// for `IRender::getPrimarySurfaceContext()` on its own; when a frame can
+    /// present more than one window this becomes the per-display-root query
+    /// (plan AB4-2b), and callers stop changing one by one. Null before the
+    /// device exists.
+    [[nodiscard]] IRenderSurfaceContext* getHostSurface() const;
     [[nodiscard]] EFormat::T           getViewDepthFormat() const;
     [[nodiscard]] const RenderViewOutput* getViewOutput(SceneViewId viewId) const;
     /// The images and handles the editor's viewport shows for the host

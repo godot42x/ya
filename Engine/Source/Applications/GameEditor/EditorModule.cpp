@@ -156,10 +156,12 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         if (!_app) {
             return nullptr;
         }
-        if (auto* render = _app->getRenderServices().getRender()) {
-            if (IRenderSurfaceContext* surface = render->getPrimarySurfaceContext()) {
-                return surface->getNativeWindow();
-            }
+        // The editor's shell window: the window this app presents. Its own
+        // window becomes a per-window identity when a frame can present more
+        // than one (the host's session registry takes over the primary window
+        // too), so ask the app rather than naming the renderer's primary.
+        if (IRenderSurfaceContext* surface = _app->getRenderServices().getHostSurface()) {
+            return surface->getNativeWindow();
         }
         return nullptr;
     }
@@ -491,10 +493,8 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                 kEditorViewportComposeColorFormat);
         }
         EFormat::T chromeFormat = EFormat::B8G8R8A8_UNORM;
-        if (auto* render = renderServices.getRender(); render) {
-            if (auto* surface = render->getPrimarySurfaceContext(); surface && surface->getSwapchain()) {
-                chromeFormat = surface->getSwapchain()->getFormat();
-            }
+        if (auto* surface = renderServices.getHostSurface(); surface && surface->getSwapchain()) {
+            chromeFormat = surface->getSwapchain()->getFormat();
         }
         prepareRender2DComposePassPipeline(
             FRender2DComposePassDesc{
@@ -597,7 +597,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         if (!session) {
             return;
         }
-        IRenderSurfaceContext* surface = render->getPrimarySurfaceContext();
+        IRenderSurfaceContext* surface = app.getRenderServices().getHostSurface();
         if (!surface) {
             return;
         }

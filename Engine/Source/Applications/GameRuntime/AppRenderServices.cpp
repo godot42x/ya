@@ -18,6 +18,12 @@ IRender* AppRenderServices::getRender() const
     return _state && _state->device ? _state->device->getRender() : nullptr;
 }
 
+IRenderSurfaceContext* AppRenderServices::getHostSurface() const
+{
+    IRender* render = getRender();
+    return render ? render->getPrimarySurfaceContext() : nullptr;
+}
+
 std::shared_ptr<ShaderStorage> AppRenderServices::getShaderStorage() const
 {
     return _state && _state->device ? _state->device->getShaderStorage() : nullptr;
@@ -189,8 +195,7 @@ RenderTargetCatalog AppRenderServices::buildRenderTargetCatalog() const
     // The window this app presents: which one that is belongs here, at the app,
     // not inside the renderer as an implicit "primary". Picking per display root
     // is AB4-2b, when a frame can present more than one.
-    IRender*     render = getRender();
-    IRenderSurfaceContext* hostSurface = render ? render->getPrimarySurfaceContext() : nullptr;
+    IRenderSurfaceContext* hostSurface = getHostSurface();
     if (!_state || !_state->device || !hostSurface) {
         return RenderTargetCatalog{};
     }

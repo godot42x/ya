@@ -84,12 +84,18 @@ struct YA_RHI_API IRender : public plat_base<IRender>
     virtual void                                 setShaderStorage(std::shared_ptr<ShaderStorage> shaderStorage) = 0;
     [[nodiscard]] virtual std::shared_ptr<ShaderStorage> getShaderStorage()                                   = 0;
 
-    /// Bootstrap present surface used to pick the physical device.
-    /// Not the viewport. World rendering targets offscreen RenderTextures;
-    /// this surface only supplies swapchain images at present/compose time.
-    /// Extra windows use `createSurfaceContext`.
+    /// The present surface the device was CREATED with, used to pick the
+    /// physical device. A bootstrap fact, not a rank: it is not privileged in
+    /// the frame loop (frame bookkeeping is `beginRecordedFrame`, timing and the
+    /// flight slot are frame numbers) and nothing may assume it is the window
+    /// being presented. Extra windows use `createSurfaceContext`.
+    ///
+    /// Not the viewport. World rendering targets offscreen RenderTextures; a
+    /// surface only supplies swapchain images at present/compose time.
     [[nodiscard]] virtual IRenderSurfaceContext* getPrimarySurfaceContext() const { return nullptr; }
 
+    /// The native window of that bootstrap surface. App/input bootstrap uses it
+    /// (which window owns the pointer and the keyboard); per-frame code must not.
     [[nodiscard]] INativeWindow* primaryWindow() const
     {
         auto* surface = getPrimarySurfaceContext();
