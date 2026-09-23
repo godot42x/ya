@@ -28,72 +28,59 @@
 #include <array>
 #include <map>
 #include <gtest/gtest.h>
+#include <string_view>
 #include <vector>
 
 namespace ya
 {
 
+/// Which row an asset control sits on, and in which order, is presentation:
+/// the editor has already reshuffled it once (the buttons moved out of the
+/// text row onto their own row so the thumbnail fits). Find controls by the
+/// key the section authors for them, so a layout change cannot turn these
+/// guards into ASSERT_NE(nullptr) on nothing.
+///
+/// The identity of a control is its authored key: DSL-built children keep it
+/// in `_stableKey` and use `_name` for display text ("Browse"), while directly
+/// constructed ones carry the key in `_name`.
+template <typename T>
+[[nodiscard]] T* findControlByKeySuffix(UIElement& root, std::string_view keySuffix)
+{
+    for (const auto& child : root.getChildren()) {
+        if (!child) {
+            continue;
+        }
+        const std::string& identity = child->_stableKey.empty() ? child->_name : child->_stableKey;
+        if (identity.size() >= keySuffix.size() && identity.ends_with(keySuffix)) {
+            if (auto* typed = dynamic_cast<T*>(child.get())) {
+                return typed;
+            }
+        }
+        if (auto* found = findControlByKeySuffix<T>(*child, keySuffix)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
 [[nodiscard]] UITextField* assetPathField(UIElement& row)
 {
-    if (row.getChildren().size() < 2) {
-        return nullptr;
-    }
-    UIElement* value = row.getChildren()[1].get();
-    if (auto* field = dynamic_cast<UITextField*>(value)) {
-        return field;
-    }
-    if (!value || value->getChildren().empty()) {
-        return nullptr;
-    }
-    UIElement* pathRow = value->getChildren()[0].get();
-    if (!pathRow || pathRow->getChildren().empty()) {
-        return nullptr;
-    }
-    return dynamic_cast<UITextField*>(pathRow->getChildren()[0].get());
+    return findControlByKeySuffix<UITextField>(row, "_Path");
 }
 
 [[nodiscard]] UIButton* assetBrowseButton(UIElement& row)
 {
-    if (row.getChildren().size() < 2) {
-        return nullptr;
-    }
-    UIElement* value = row.getChildren()[1].get();
-    if (!value || value->getChildren().empty()) {
-        return nullptr;
-    }
-    UIElement* pathRow = value->getChildren()[0].get();
-    if (!pathRow || pathRow->getChildren().size() < 2) {
-        return nullptr;
-    }
-    return dynamic_cast<UIButton*>(pathRow->getChildren()[1].get());
+    return findControlByKeySuffix<UIButton>(row, "_Browse");
 }
 
 [[nodiscard]] UIButton* assetLocateButton(UIElement& row)
 {
-    if (row.getChildren().size() < 2) {
-        return nullptr;
-    }
-    UIElement* value = row.getChildren()[1].get();
-    if (!value || value->getChildren().empty()) {
-        return nullptr;
-    }
-    UIElement* pathRow = value->getChildren()[0].get();
-    if (!pathRow || pathRow->getChildren().size() < 3) {
-        return nullptr;
-    }
-    return dynamic_cast<UIButton*>(pathRow->getChildren()[2].get());
+    return findControlByKeySuffix<UIButton>(row, "_Locate");
 }
 
 [[nodiscard]] UIImage* assetPreviewImage(UIElement& row)
 {
-    if (row.getChildren().size() < 2) {
-        return nullptr;
-    }
-    UIElement* value = row.getChildren()[1].get();
-    if (!value || value->getChildren().size() < 2) {
-        return nullptr;
-    }
-    return dynamic_cast<UIImage*>(value->getChildren()[1].get());
+    return findControlByKeySuffix<UIImage>(row, "_Preview");
 }
 
 struct ValidationTestComponent
