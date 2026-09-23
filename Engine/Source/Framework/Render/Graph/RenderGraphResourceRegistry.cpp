@@ -10,16 +10,6 @@ namespace ya
 namespace
 {
 
-std::string makePersistentTextureKeyValue(const RGPersistentTextureKey& key)
-{
-    return key.value;
-}
-
-std::string makePersistentBufferKeyValue(const RGPersistentBufferKey& key)
-{
-    return key.value;
-}
-
 bool isSameTextureDesc(const RGTextureDesc& lhs, const RGTextureDesc& rhs)
 {
     return lhs.label == rhs.label &&
@@ -163,7 +153,7 @@ void RenderGraphResourceRegistry::releaseTextureBinding(std::shared_ptr<TextureE
     if (!entry) {
         return;
     }
-    if (!entry->persistentKey.has_value() && !entry->pooledTransient) {
+    if (!entry->pooledTransient) {
         retireSharedResource(entry->resource);
     }
     entry.reset();
@@ -174,7 +164,7 @@ void RenderGraphResourceRegistry::releaseOwnedBufferBinding(std::shared_ptr<Owne
     if (!entry) {
         return;
     }
-    if (!entry->persistentKey.has_value() && !entry->pooledTransient) {
+    if (!entry->pooledTransient) {
         retireSharedResource(entry->resource);
     }
     entry.reset();
@@ -470,38 +460,6 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
     usedTransientTextureEntries.reserve(graph.getTextures().size());
 
     for (const auto& texture : graph.getTextures()) {
-        if (texture.lifetime == ERGResourceLifetime::Persistent) {
-            YA_CORE_ASSERT(texture.persistentKey.has_value(),
-                           "Persistent render graph texture '{}' is missing stable key",
-                           texture.desc.label);
-            const auto key = makePersistentTextureKeyValue(*texture.persistentKey);
-            auto& persistentEntry = _persistentTextures[key];
-            if (!persistentEntry) {
-                persistentEntry = std::make_shared<TextureEntry>();
-                persistentEntry->persistentKey = texture.persistentKey;
-            }
-            if (!persistentEntry->resource || needsTextureReplacement(*persistentEntry, texture)) {
-                if (persistentEntry->resource) {
-                    YA_CORE_TRACE("RenderGraph registry replacing persistent texture '{}' (key={})",
-                                  texture.desc.label,
-                                  key);
-                    retireSharedResource(persistentEntry->resource);
-                }
-                persistentEntry->resource = RenderTexture::adopt(createImageResource(_factory, makeImageResourceDesc(texture.desc)));
-                persistentEntry->desc = texture.desc;
-                persistentEntry->allocationDesc = texture.desc;
-                persistentEntry->imported.reset();
-                persistentEntry->pooledTransient = false;
-            }
-
-            if (auto existing = _textures.find(texture.handle); existing != _textures.end() &&
-                existing->second != persistentEntry) {
-                releaseTextureBinding(existing->second);
-            }
-            _textures[texture.handle] = persistentEntry;
-            continue;
-        }
-
         const auto existing = _textures.find(texture.handle);
         if (existing != _textures.end() && !needsTextureReplacement(*existing->second, texture)) {
             if (texture.lifetime == ERGResourceLifetime::Transient && existing->second->pooledTransient) {
@@ -555,46 +513,6 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
         if (compiled != nullptr && buffer.lifetime == ERGResourceLifetime::Transient) {
             continue;
         }
-        if (buffer.lifetime == ERGResourceLifetime::Persistent) {
-            YA_CORE_ASSERT(buffer.persistentKey.has_value(),
-                           "Persistent render graph buffer '{}' is missing stable key",
-                           buffer.desc.label);
-            const auto key = makePersistentBufferKeyValue(*buffer.persistentKey);
-            auto& persistentEntry = _persistentOwnedBuffers[key];
-            if (!persistentEntry) {
-                persistentEntry = std::make_shared<OwnedBufferEntry>();
-                persistentEntry->persistentKey = buffer.persistentKey;
-            }
-            if (!persistentEntry->resource || needsOwnedBufferReplacement(*persistentEntry, buffer)) {
-                if (persistentEntry->resource) {
-                    YA_CORE_TRACE("RenderGraph registry replacing persistent buffer '{}' (key={})",
-                                  buffer.desc.label,
-                                  key);
-                    retireSharedResource(persistentEntry->resource);
-                }
-                persistentEntry->resource = _factory.createBuffer(BufferCreateInfo{
-                    .label       = buffer.desc.label,
-                    .usage       = buffer.desc.usage,
-                    .size        = buffer.desc.size,
-                    .memoryUsage = buffer.desc.memoryUsage,
-                });
-                persistentEntry->desc = buffer.desc;
-            }
-
-            if (const auto imported = _importedBuffers.find(buffer.handle);
-                imported != _importedBuffers.end() && imported->second.imported.has_value()) {
-                retireRetainedResources(imported->second.imported->retainedResources);
-            }
-            _importedBuffers.erase(buffer.handle);
-
-            if (const auto existing = _ownedBuffers.find(buffer.handle);
-                existing != _ownedBuffers.end() && existing->second != persistentEntry) {
-                releaseOwnedBufferBinding(existing->second);
-            }
-            _ownedBuffers[buffer.handle] = persistentEntry;
-            continue;
-        }
-
         if (buffer.lifetime == ERGResourceLifetime::Imported) {
             YA_CORE_ASSERT(buffer.imported.has_value(), "Imported render graph buffer '{}' is missing import desc", buffer.desc.label);
             if (const auto owned = _ownedBuffers.find(buffer.handle); owned != _ownedBuffers.end()) {
@@ -650,14 +568,6 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
 
 void RenderGraphResourceRegistry::clear()
 {
-    for (auto& [key, texture] : _persistentTextures) {
-        (void)key;
-        retireSharedResource(texture->resource);
-    }
-    for (auto& [key, buffer] : _persistentOwnedBuffers) {
-        (void)key;
-        retireSharedResource(buffer->resource);
-    }
     for (auto& buffer : _transientBufferPool) {
         retireSharedResource(buffer->resource);
     }
@@ -672,8 +582,6 @@ void RenderGraphResourceRegistry::clear()
         (void)handle;
         releaseOwnedBufferBinding(buffer);
     }
-    _persistentTextures.clear();
-    _persistentOwnedBuffers.clear();
     _transientTexturePool.clear();
     _transientBufferPool.clear();
     _transientPoolDiagnostics = {};

@@ -50,35 +50,10 @@ struct RGPassHandleTag
 {};
 using RGPassHandle = RGHandle<RGPassHandleTag>;
 
-struct RGPersistentTextureKey
-{
-    std::string value;
-
-    [[nodiscard]] bool isValid() const
-    {
-        return !value.empty();
-    }
-
-    bool operator==(const RGPersistentTextureKey&) const = default;
-};
-
-struct RGPersistentBufferKey
-{
-    std::string value;
-
-    [[nodiscard]] bool isValid() const
-    {
-        return !value.empty();
-    }
-
-    bool operator==(const RGPersistentBufferKey&) const = default;
-};
-
 enum class ERGResourceLifetime : uint8_t
 {
     Imported,
     Transient,
-    Persistent,
 };
 
 struct RGTextureDesc
@@ -133,7 +108,6 @@ struct RGTextureResource
 {
     RGTextureHandle                  handle{};
     ERGResourceLifetime              lifetime = ERGResourceLifetime::Transient;
-    std::optional<RGPersistentTextureKey> persistentKey{};
     RGTextureDesc                    desc{};
     std::optional<RGImportedTextureDesc> imported{};
 };
@@ -142,7 +116,6 @@ struct RGBufferResource
 {
     RGBufferHandle                   handle{};
     ERGResourceLifetime              lifetime = ERGResourceLifetime::Transient;
-    std::optional<RGPersistentBufferKey> persistentKey{};
     RGBufferDesc                     desc{};
     std::optional<RGImportedBufferDesc> imported{};
 };
@@ -349,7 +322,6 @@ struct RGCompileIssue
         InvalidResource,
         InvalidUsage,
         InvalidPassKind,
-        InvalidPersistentIdentity,
         Cycle,
     };
 
@@ -634,12 +606,10 @@ class RenderGraph
     }
 
   public:
-    [[nodiscard]] YA_RENDER_GRAPH_API RGTextureHandle createTexture(const RGTextureDesc& desc, ERGResourceLifetime lifetime = ERGResourceLifetime::Transient);
-    [[nodiscard]] YA_RENDER_GRAPH_API RGTextureHandle createPersistentTexture(const RGTextureDesc& desc, const RGPersistentTextureKey& key);
+    [[nodiscard]] YA_RENDER_GRAPH_API RGTextureHandle createTexture(const RGTextureDesc& desc);
     [[nodiscard]] YA_RENDER_GRAPH_API RGTextureHandle importTexture(const RGImportedTextureDesc& desc);
 
-    [[nodiscard]] YA_RENDER_GRAPH_API RGBufferHandle createBuffer(const RGBufferDesc& desc, ERGResourceLifetime lifetime = ERGResourceLifetime::Transient);
-    [[nodiscard]] YA_RENDER_GRAPH_API RGBufferHandle createPersistentBuffer(const RGBufferDesc& desc, const RGPersistentBufferKey& key);
+    [[nodiscard]] YA_RENDER_GRAPH_API RGBufferHandle createBuffer(const RGBufferDesc& desc);
     [[nodiscard]] YA_RENDER_GRAPH_API RGBufferHandle importBuffer(const RGImportedBufferDesc& desc);
 
     [[nodiscard]] YA_RENDER_GRAPH_API const RGTextureResource* getTexture(RGTextureHandle handle) const;
@@ -679,24 +649,6 @@ struct hash<ya::RGHandle<Tag>>
     std::size_t operator()(const ya::RGHandle<Tag>& h) const noexcept
     {
         return (static_cast<std::size_t>(h.generation) << 32) ^ static_cast<std::size_t>(h.index);
-    }
-};
-
-template <>
-struct hash<ya::RGPersistentTextureKey>
-{
-    std::size_t operator()(const ya::RGPersistentTextureKey& key) const noexcept
-    {
-        return std::hash<std::string>{}(key.value);
-    }
-};
-
-template <>
-struct hash<ya::RGPersistentBufferKey>
-{
-    std::size_t operator()(const ya::RGPersistentBufferKey& key) const noexcept
-    {
-        return std::hash<std::string>{}(key.value);
     }
 };
 

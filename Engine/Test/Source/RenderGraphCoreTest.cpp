@@ -6,7 +6,6 @@
 #include "RHI/Core/FrameUploadArena.h"
 #include "RHI/Core/ResourceStateTracker.h"
 #include "Core/Common/DeferredDeletionQueue.h"
-#include "Render3D/Common/ViewPersistentResourceKey.h"
 
 #include <gtest/gtest.h>
 
@@ -775,52 +774,6 @@ TEST(RenderGraphCoreTest, CompileRejectsCopyPassWithNonTransferUsage)
               compiled.issues.end());
 }
 
-TEST(RenderGraphCoreTest, CompileRejectsPersistentResourceWithoutStableKey)
-{
-    RenderGraph graph;
-    graph.createTexture(RGTextureDesc{
-        .label  = "persistent.missing-key",
-        .format = EFormat::R8G8B8A8_UNORM,
-        .extent = Extent3D{64, 64, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, ERGResourceLifetime::Persistent);
-
-    const auto compiled = graph.compile();
-    ASSERT_FALSE(compiled.isValid());
-    EXPECT_NE(std::find_if(compiled.issues.begin(),
-                           compiled.issues.end(),
-                           [](const RGCompileIssue& issue) {
-                               return issue.kind == RGCompileIssue::EKind::InvalidPersistentIdentity;
-                           }),
-              compiled.issues.end());
-}
-
-TEST(RenderGraphCoreTest, CompileRejectsConflictingPersistentTextureKeys)
-{
-    RenderGraph graph;
-    graph.createPersistentTexture(RGTextureDesc{
-        .label  = "history.a",
-        .format = EFormat::R16G16B16A16_SFLOAT,
-        .extent = Extent3D{128, 128, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "history"});
-    graph.createPersistentTexture(RGTextureDesc{
-        .label  = "history.b",
-        .format = EFormat::R16G16B16A16_SFLOAT,
-        .extent = Extent3D{256, 128, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "history"});
-
-    const auto compiled = graph.compile();
-    ASSERT_FALSE(compiled.isValid());
-    EXPECT_NE(std::find_if(compiled.issues.begin(),
-                           compiled.issues.end(),
-                           [](const RGCompileIssue& issue) {
-                               return issue.kind == RGCompileIssue::EKind::InvalidPersistentIdentity;
-                           }),
-              compiled.issues.end());
-}
-
 TEST(RenderGraphCoreTest, CompileStoresDeclaredRasterPlanInCompiledPassPlan)
 {
     RenderGraph graph;
@@ -1172,14 +1125,6 @@ TEST(RenderGraphCoreTest, CompileDoesNotAliasOverlappingOrIncompatibleTransientB
         .size        = 48,
         .memoryUsage = EMemoryUsage::CpuToGpu,
     });
-    const auto persistent = graph.createPersistentBuffer(
-        RGBufferDesc{
-            .label       = "persistent.buffer",
-            .usage       = EBufferUsage::StorageBuffer,
-            .size        = 64,
-            .memoryUsage = EMemoryUsage::GpuOnly,
-        },
-        RGPersistentBufferKey{"persistent.buffer"});
     auto importedBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
         .label = "imported.buffer",
         .usage = EBufferUsage::StorageBuffer,
@@ -1212,7 +1157,6 @@ TEST(RenderGraphCoreTest, CompileDoesNotAliasOverlappingOrIncompatibleTransientB
     });
     graph.addPass("write-incompatible", [&](RGPassBuilder& pass) {
         pass.storageWrite(incompatible);
-        pass.storageWrite(persistent);
         pass.storageRead(imported);
     });
 
@@ -1988,205 +1932,6 @@ TEST(RenderGraphCoreTest, ResourceRegistryUsesProvidedImportedImageViewAndRetain
     EXPECT_TRUE(retainedOwner.expired());
 }
 
-TEST(RenderGraphCoreTest, ResourceRegistryReusesStableResourcesAcrossSyncs)
-{
-    TestResourceFactory factory;
-    RenderGraphResourceRegistry registry(factory);
-
-    RenderGraph graphA;
-    const auto textureHandle = graphA.createPersistentTexture(RGTextureDesc{
-        .label  = "persistent.ao",
-        .format = EFormat::R8_UNORM,
-        .extent = Extent3D{320, 180, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "persistent.ao"});
-    const auto bufferHandle = graphA.createPersistentBuffer(RGBufferDesc{
-        .label = "persistent.constants",
-        .usage = EBufferUsage::StorageBuffer,
-        .size  = 256,
-    }, RGPersistentBufferKey{.value = "persistent.constants"});
-
-    registry.sync(graphA);
-    const auto* firstTexture = registry.resolveTexture(textureHandle);
-    auto        firstTextureOwner = registry.resolveTextureShared(textureHandle);
-    auto*       firstBuffer  = registry.resolveBuffer(bufferHandle);
-    ASSERT_NE(firstTexture, nullptr);
-    ASSERT_NE(firstTextureOwner, nullptr);
-    EXPECT_EQ(firstTextureOwner.get(), firstTexture);
-    ASSERT_NE(firstBuffer, nullptr);
-    EXPECT_EQ(factory.createdImages, 1u);
-    EXPECT_EQ(factory.createdViews, 1u);
-    EXPECT_EQ(factory.createdBuffers, 1u);
-
-    RenderGraph graphB;
-    const auto transientBefore = graphB.createTexture(RGTextureDesc{
-        .label  = "transient.before",
-        .format = EFormat::R8_UNORM,
-        .extent = Extent3D{32, 32, 1},
-        .usage  = EImageUsage::ColorAttachment,
-    });
-    (void)transientBefore;
-    const auto textureHandleB = graphB.createPersistentTexture(RGTextureDesc{
-        .label  = "persistent.ao",
-        .format = EFormat::R8_UNORM,
-        .extent = Extent3D{320, 180, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "persistent.ao"});
-    const auto bufferHandleB = graphB.createPersistentBuffer(RGBufferDesc{
-        .label = "persistent.constants",
-        .usage = EBufferUsage::StorageBuffer,
-        .size  = 256,
-    }, RGPersistentBufferKey{.value = "persistent.constants"});
-
-    registry.sync(graphB);
-    EXPECT_EQ(registry.resolveTexture(textureHandleB), firstTexture);
-    EXPECT_EQ(registry.resolveBuffer(bufferHandleB), firstBuffer);
-    EXPECT_EQ(factory.createdImages, 2u);
-    EXPECT_EQ(factory.createdViews, 2u);
-    EXPECT_EQ(factory.createdBuffers, 1u);
-}
-
-TEST(RenderGraphCoreTest, ViewKeyedPersistentTexturesStayIndependent)
-{
-    TestResourceFactory factory;
-    RenderGraphResourceRegistry registry(factory);
-
-    const auto keyA = makeViewPersistentTextureKey("ForwardView.Color", 11);
-    const auto keyB = makeViewPersistentTextureKey("ForwardView.Color", 12);
-    ASSERT_NE(keyA, keyB);
-
-    RenderGraph graph;
-    const auto desc = RGTextureDesc{
-        .label  = "ForwardView.Color",
-        .format = EFormat::R8G8B8A8_UNORM,
-        .extent = Extent3D{64, 32, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    };
-    const auto handleA = graph.createPersistentTexture(desc, keyA);
-    const auto handleB = graph.createPersistentTexture(desc, keyB);
-
-    registry.sync(graph);
-    const auto* textureA = registry.resolveTexture(handleA);
-    const auto* textureB = registry.resolveTexture(handleB);
-    ASSERT_NE(textureA, nullptr);
-    ASSERT_NE(textureB, nullptr);
-    EXPECT_NE(textureA, textureB);
-    EXPECT_EQ(factory.createdImages, 2u);
-    EXPECT_EQ(factory.createdViews, 2u);
-
-    RenderGraph graphReuse;
-    const auto handleAReuse = graphReuse.createPersistentTexture(desc, keyA);
-    registry.sync(graphReuse);
-    EXPECT_EQ(registry.resolveTexture(handleAReuse), textureA);
-    EXPECT_EQ(factory.createdImages, 2u);
-}
-
-TEST(RenderGraphCoreTest, ViewKeyedPostprocessTexturesStayIndependentAcrossSequentialGraphs)
-{
-    TestResourceFactory factory;
-    RenderGraphResourceRegistry registry(factory);
-
-    const auto desc = RGTextureDesc{
-        .label  = "Postprocessing.Output",
-        .format = EFormat::R8G8B8A8_UNORM,
-        .extent = Extent3D{64, 32, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    };
-
-    RenderGraph graphA;
-    const auto handleA = createViewPersistentTexture(graphA, desc, "Postprocessing.Output", 11);
-    registry.sync(graphA);
-    const auto* textureA = registry.resolveTexture(handleA);
-    ASSERT_NE(textureA, nullptr);
-
-    RenderGraph graphB;
-    const auto handleB = createViewPersistentTexture(graphB, desc, "Postprocessing.Output", 12);
-    registry.sync(graphB);
-    const auto* textureB = registry.resolveTexture(handleB);
-    ASSERT_NE(textureB, nullptr);
-    EXPECT_NE(textureA, textureB);
-    EXPECT_EQ(factory.createdImages, 2u);
-
-    RenderGraph graphBloomA;
-    const auto bloomHandleA = createViewPersistentTexture(graphBloomA, desc, "Bloom.CompositeOutput", 11);
-    registry.sync(graphBloomA);
-    const auto* bloomA = registry.resolveTexture(bloomHandleA);
-    ASSERT_NE(bloomA, nullptr);
-
-    RenderGraph graphBloomB;
-    const auto bloomHandleB = createViewPersistentTexture(graphBloomB, desc, "Bloom.CompositeOutput", 12);
-    registry.sync(graphBloomB);
-    const auto* bloomB = registry.resolveTexture(bloomHandleB);
-    ASSERT_NE(bloomB, nullptr);
-    EXPECT_NE(bloomA, bloomB);
-    EXPECT_NE(bloomA, textureA);
-    EXPECT_NE(bloomB, textureB);
-    EXPECT_EQ(factory.createdImages, 4u);
-
-    RenderGraph graphAReuse;
-    const auto handleAReuse = createViewPersistentTexture(graphAReuse, desc, "Postprocessing.Output", 11);
-    registry.sync(graphAReuse);
-    EXPECT_EQ(registry.resolveTexture(handleAReuse), textureA);
-    EXPECT_EQ(factory.createdImages, 4u);
-}
-
-TEST(RenderGraphCoreTest, ResourceRegistryKeepsPersistentResourcesAcrossTemporaryOmission)
-{
-    TestResourceFactory factory;
-    RenderGraphResourceRegistry registry(factory);
-
-    RenderGraph graphA;
-    const auto textureHandleA = graphA.createPersistentTexture(RGTextureDesc{
-        .label  = "persistent.history",
-        .format = EFormat::R32_SFLOAT,
-        .extent = Extent3D{160, 90, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "persistent.history"});
-    const auto bufferHandleA = graphA.createPersistentBuffer(RGBufferDesc{
-        .label = "persistent.history.constants",
-        .usage = EBufferUsage::StorageBuffer,
-        .size  = 128,
-    }, RGPersistentBufferKey{.value = "persistent.history.constants"});
-
-    registry.sync(graphA);
-    const auto* firstTexture = registry.resolveTexture(textureHandleA);
-    auto* firstBuffer = registry.resolveBuffer(bufferHandleA);
-    ASSERT_NE(firstTexture, nullptr);
-    ASSERT_NE(firstBuffer, nullptr);
-
-    RenderGraph graphB;
-    const auto transientOnly = graphB.createTexture(RGTextureDesc{
-        .label  = "transient.only",
-        .format = EFormat::R8_UNORM,
-        .extent = Extent3D{16, 16, 1},
-        .usage  = EImageUsage::ColorAttachment,
-    });
-    (void)transientOnly;
-    registry.sync(graphB);
-    EXPECT_EQ(factory.createdImages, 2u);
-    EXPECT_EQ(factory.createdBuffers, 1u);
-
-    RenderGraph graphC;
-    const auto textureHandleC = graphC.createPersistentTexture(RGTextureDesc{
-        .label  = "persistent.history",
-        .format = EFormat::R32_SFLOAT,
-        .extent = Extent3D{160, 90, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "persistent.history"});
-    const auto bufferHandleC = graphC.createPersistentBuffer(RGBufferDesc{
-        .label = "persistent.history.constants",
-        .usage = EBufferUsage::StorageBuffer,
-        .size  = 128,
-    }, RGPersistentBufferKey{.value = "persistent.history.constants"});
-
-    registry.sync(graphC);
-    EXPECT_EQ(registry.resolveTexture(textureHandleC), firstTexture);
-    EXPECT_EQ(registry.resolveBuffer(bufferHandleC), firstBuffer);
-    EXPECT_EQ(factory.createdImages, 2u);
-    EXPECT_EQ(factory.createdViews, 2u);
-    EXPECT_EQ(factory.createdBuffers, 1u);
-}
-
 TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedKeepAliveWithoutRecreatingView)
 {
     auto& deletionQueue = DeferredDeletionQueue::get();
@@ -2396,71 +2141,18 @@ TEST(RenderGraphCoreTest, ExecutorClearDefersImportedTextureKeepAliveReleaseThro
     EXPECT_TRUE(retainedOwner.expired());
 }
 
-TEST(RenderGraphCoreTest, ResourceRegistryReplacesResourcesWhenDescriptorsChange)
-{
-    TestResourceFactory factory;
-    RenderGraphResourceRegistry registry(factory);
-
-    RenderGraph graphA;
-    const auto textureHandle = graphA.createPersistentTexture(RGTextureDesc{
-        .label  = "persistent.history",
-        .format = EFormat::R32_SFLOAT,
-        .extent = Extent3D{160, 90, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "persistent.history"});
-    const auto bufferHandle = graphA.createPersistentBuffer(RGBufferDesc{
-        .label = "persistent.history.buffer",
-        .usage = EBufferUsage::StorageBuffer,
-        .size  = 128,
-    }, RGPersistentBufferKey{.value = "persistent.history.buffer"});
-
-    registry.sync(graphA);
-    const auto* firstTexture = registry.resolveTexture(textureHandle);
-    auto*       firstBuffer  = registry.resolveBuffer(bufferHandle);
-    ASSERT_NE(firstTexture, nullptr);
-    ASSERT_NE(firstBuffer, nullptr);
-
-    RenderGraph graphB;
-    graphB.createPersistentTexture(RGTextureDesc{
-        .label  = "persistent.history",
-        .format = EFormat::R32_SFLOAT,
-        .extent = Extent3D{320, 180, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "persistent.history"});
-    graphB.createPersistentBuffer(RGBufferDesc{
-        .label = "persistent.history.buffer",
-        .usage = EBufferUsage::StorageBuffer,
-        .size  = 256,
-    }, RGPersistentBufferKey{.value = "persistent.history.buffer"});
-
-    registry.sync(graphB);
-    ASSERT_NE(registry.resolveTexture(textureHandle), nullptr);
-    ASSERT_NE(registry.resolveBuffer(bufferHandle), nullptr);
-    EXPECT_EQ(registry.resolveTexture(textureHandle)->getWidth(), 320u);
-    EXPECT_EQ(registry.resolveTexture(textureHandle)->getHeight(), 180u);
-    EXPECT_EQ(registry.resolveBuffer(bufferHandle)->getSize(), 256u);
-    EXPECT_EQ(factory.createdImages, 2u);
-    EXPECT_EQ(factory.createdViews, 2u);
-    EXPECT_EQ(factory.createdBuffers, 2u);
-    ASSERT_EQ(factory.createdImageDescs.size(), 2u);
-    EXPECT_EQ(factory.createdImageDescs[1].extent.width, 320u);
-    EXPECT_EQ(factory.createdImageDescs[1].extent.height, 180u);
-    ASSERT_EQ(factory.createdBufferDescs.size(), 2u);
-    EXPECT_EQ(factory.createdBufferDescs[1].size, 256u);
-}
-
 TEST(RenderGraphCoreTest, PrepareCapturesExplicitExportedTexturesOnly)
 {
     TestResourceFactory factory;
     RenderGraphExecutor executor(factory);
     RenderGraph         graph;
 
-    const auto exported = graph.createPersistentTexture(RGTextureDesc{
+    const auto exported = graph.createTexture(RGTextureDesc{
         .label  = "viewport",
         .format = EFormat::R16G16B16A16_SFLOAT,
         .extent = Extent3D{640, 360, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "viewport"});
+    });
     graph.createTexture(RGTextureDesc{
         .label  = "hidden",
         .format = EFormat::R8G8B8A8_UNORM,
@@ -2486,12 +2178,12 @@ TEST(RenderGraphCoreTest, ExportedTextureOwnerSurvivesReplacementAcrossPrepare)
     RenderGraphExecutor executor(factory);
 
     RenderGraph graphA;
-    const auto textureA = graphA.createPersistentTexture(RGTextureDesc{
-        .label  = "persistent.viewport",
+    const auto textureA = graphA.createTexture(RGTextureDesc{
+        .label  = "viewport.320",
         .format = EFormat::R16G16B16A16_SFLOAT,
         .extent = Extent3D{320, 180, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "persistent.viewport"});
+    });
     graphA.exportTexture(textureA, "ViewportColor");
 
     RGCompiledGraph           compiledA;
@@ -2502,12 +2194,12 @@ TEST(RenderGraphCoreTest, ExportedTextureOwnerSurvivesReplacementAcrossPrepare)
     EXPECT_EQ(firstOwner->getWidth(), 320u);
 
     RenderGraph graphB;
-    const auto textureB = graphB.createPersistentTexture(RGTextureDesc{
-        .label  = "persistent.viewport",
+    const auto textureB = graphB.createTexture(RGTextureDesc{
+        .label  = "viewport.640",
         .format = EFormat::R16G16B16A16_SFLOAT,
         .extent = Extent3D{640, 360, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "persistent.viewport"});
+    });
     graphB.exportTexture(textureB, "ViewportColor");
 
     RGCompiledGraph           compiledB;

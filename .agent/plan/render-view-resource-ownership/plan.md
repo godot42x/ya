@@ -1,7 +1,7 @@
 # Render View 资源所有权与管线编排收口计划
 
 > 建立日期：2026-09-23
-> 状态：执行中；Checkpoint A-B 已完成（2026-09-23）
+> 状态：执行中；Checkpoint A-C 已完成（2026-09-23）
 > 关联计划：`../render-view-family/plan.md`、`../render-application-boundary/plan.md`
 
 ## 1. 当前目标与边界
@@ -487,6 +487,15 @@ target request 和输出角色仍由具体 pipeline 清楚写出。
 - resize / format change 只产生一个新 generation。
 
 ### Checkpoint C：删除 graph persistent View 资源
+
+状态：已完成（2026-09-23）。
+
+完成结果：
+
+- RenderGraph 的 resource lifetime 收敛为 imported / transient，删除 persistent texture / buffer API、key 与编译期 identity 校验。
+- `RenderGraphResourceRegistry` 删除 persistent map 与 replacement / omission 分支，只保留 imported binding、transient texture pool 和 transient buffer alias pool。
+- 删除 `ViewPersistentResourceKey.h` 及其专用测试，View graph 名称测试直接依赖 `ViewGraphName.h`。
+- export owner、imported keepalive / final state 与 transient pool 相关测试继续覆盖原有执行契约。
 
 目标：RenderGraph registry 只管理 imported binding 与 transient pool。
 

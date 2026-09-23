@@ -1,7 +1,7 @@
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
-#include "Render3D/Common/ViewPersistentResourceKey.h"
+#include "Render3D/Common/ViewGraphName.h"
 #include "Scene/Core/Scene.h"
 
 #include <gtest/gtest.h>

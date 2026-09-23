@@ -19,7 +19,6 @@ class RenderGraphResourceRegistry
         std::shared_ptr<RenderTexture> resource;
         RGTextureDesc                desc{};
         RGTextureDesc                allocationDesc{};
-        std::optional<RGPersistentTextureKey> persistentKey{};
         std::optional<RGImportedTextureDesc> imported{};
         bool                         pooledTransient = false;
     };
@@ -28,7 +27,6 @@ class RenderGraphResourceRegistry
     {
         std::shared_ptr<IBuffer> resource;
         RGBufferDesc             desc{};
-        std::optional<RGPersistentBufferKey> persistentKey{};
         bool                     pooledTransient = false;
     };
 
@@ -40,10 +38,8 @@ class RenderGraphResourceRegistry
 
     IRenderResourceFactory& _factory;
     std::unordered_map<RGTextureHandle, std::shared_ptr<TextureEntry>> _textures;
-    std::unordered_map<std::string, std::shared_ptr<TextureEntry>> _persistentTextures;
     std::vector<std::shared_ptr<TextureEntry>> _transientTexturePool;
     std::unordered_map<RGBufferHandle, std::shared_ptr<OwnedBufferEntry>> _ownedBuffers;
-    std::unordered_map<std::string, std::shared_ptr<OwnedBufferEntry>> _persistentOwnedBuffers;
     std::vector<std::shared_ptr<OwnedBufferEntry>> _transientBufferPool;
     RGTransientBufferPoolDiagnostics _transientPoolDiagnostics{};
     std::unordered_map<RGBufferHandle, ImportedBufferEntry> _importedBuffers;

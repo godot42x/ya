@@ -501,12 +501,6 @@ void appendBufferUsage(RGPass& pass, RGBufferHandle handle, ERGBufferAccess acce
     });
 }
 
-bool isUniformOnlyBufferUsage(EBufferUsage usage)
-{
-    return hasBufferUsage(usage, EBufferUsage::UniformBuffer) &&
-           !hasBufferUsage(usage, EBufferUsage::StorageBuffer);
-}
-
 bool isStorageCapableBufferUsage(EBufferUsage usage)
 {
     return hasBufferUsage(usage, EBufferUsage::StorageBuffer);
@@ -1020,9 +1014,8 @@ void RGPassBuilder::transferDst(RGTextureHandle handle)
     pass().textures.push_back({.handle = handle, .access = ERGPassResourceAccess::TransferDst});
 }
 
-RGTextureHandle RenderGraph::createTexture(const RGTextureDesc& desc, ERGResourceLifetime lifetime)
+RGTextureHandle RenderGraph::createTexture(const RGTextureDesc& desc)
 {
-    YA_CORE_ASSERT(lifetime != ERGResourceLifetime::Imported, "Imported texture must use importTexture()");
     YA_CORE_ASSERT(desc.format != EFormat::Undefined, "RenderGraph texture desc format must be defined");
     YA_CORE_ASSERT(desc.extent.width > 0 && desc.extent.height > 0 && desc.extent.depth > 0,
                    "RenderGraph texture extent must be non-zero");
@@ -1033,18 +1026,9 @@ RGTextureHandle RenderGraph::createTexture(const RGTextureDesc& desc, ERGResourc
     };
     _textures.push_back(RGTextureResource{
         .handle   = handle,
-        .lifetime = lifetime,
+        .lifetime = ERGResourceLifetime::Transient,
         .desc     = desc,
     });
-    return handle;
-}
-
-RGTextureHandle RenderGraph::createPersistentTexture(const RGTextureDesc& desc, const RGPersistentTextureKey& key)
-{
-    YA_CORE_ASSERT(key.isValid(), "Persistent texture key must not be empty for '{}'", desc.label);
-
-    const auto handle              = createTexture(desc, ERGResourceLifetime::Persistent);
-    _textures.back().persistentKey = key;
     return handle;
 }
 
@@ -1069,9 +1053,8 @@ RGTextureHandle RenderGraph::importTexture(const RGImportedTextureDesc& imported
     return handle;
 }
 
-RGBufferHandle RenderGraph::createBuffer(const RGBufferDesc& desc, ERGResourceLifetime lifetime)
+RGBufferHandle RenderGraph::createBuffer(const RGBufferDesc& desc)
 {
-    YA_CORE_ASSERT(lifetime != ERGResourceLifetime::Imported, "Imported buffer must use importBuffer()");
     YA_CORE_ASSERT(desc.size > 0, "RenderGraph buffer size must be non-zero");
     YA_CORE_ASSERT(desc.alignment > 0, "RenderGraph buffer alignment must be non-zero");
 
@@ -1081,18 +1064,9 @@ RGBufferHandle RenderGraph::createBuffer(const RGBufferDesc& desc, ERGResourceLi
     };
     _buffers.push_back(RGBufferResource{
         .handle   = handle,
-        .lifetime = lifetime,
+        .lifetime = ERGResourceLifetime::Transient,
         .desc     = desc,
     });
-    return handle;
-}
-
-RGBufferHandle RenderGraph::createPersistentBuffer(const RGBufferDesc& desc, const RGPersistentBufferKey& key)
-{
-    YA_CORE_ASSERT(key.isValid(), "Persistent buffer key must not be empty for '{}'", desc.label);
-
-    const auto handle             = createBuffer(desc, ERGResourceLifetime::Persistent);
-    _buffers.back().persistentKey = key;
     return handle;
 }
 
@@ -1184,8 +1158,6 @@ RGCompiledGraph RenderGraph::compile() const
         ERGBufferAccess access = ERGBufferAccess::StorageRead;
     };
     std::unordered_map<RGBufferHandle, std::vector<TrackedBufferAccess>> bufferAccesses;
-    std::unordered_map<std::string, const RGTextureResource*>            persistentTexturesByKey;
-    std::unordered_map<std::string, const RGBufferResource*>             persistentBuffersByKey;
     std::vector<std::vector<uint32_t>>                                   adjacency(_passes.size());
     std::vector<uint32_t>                                                indegree(_passes.size(), 0);
     std::vector<RGCompiledPassPlan>                                      passPlans(_passes.size());
@@ -1475,69 +1447,6 @@ RGCompiledGraph RenderGraph::compile() const
                 .access = usage.access,
             });
         }
-    }
-
-    for (const auto& texture : _textures) {
-        if (texture.lifetime != ERGResourceLifetime::Persistent) {
-            continue;
-        }
-        if (!texture.persistentKey.has_value() || !texture.persistentKey->isValid()) {
-            addIssue(RGCompileIssue::EKind::InvalidPersistentIdentity,
-                     RGPassHandle{},
-                     std::format("persistent texture {} is missing a stable key", texture.desc.label));
-            continue;
-        }
-
-        if (const auto existing = persistentTexturesByKey.find(texture.persistentKey->value);
-            existing != persistentTexturesByKey.end()) {
-            if (existing->second->desc.format != texture.desc.format ||
-                existing->second->desc.extent.width != texture.desc.extent.width ||
-                existing->second->desc.extent.height != texture.desc.extent.height ||
-                existing->second->desc.extent.depth != texture.desc.extent.depth ||
-                existing->second->desc.mipLevels != texture.desc.mipLevels ||
-                existing->second->desc.arrayLayers != texture.desc.arrayLayers ||
-                existing->second->desc.samples != texture.desc.samples ||
-                existing->second->desc.usage != texture.desc.usage ||
-                existing->second->desc.flags != texture.desc.flags) {
-                addIssue(RGCompileIssue::EKind::InvalidPersistentIdentity,
-                         RGPassHandle{},
-                         std::format("persistent texture key '{}' maps to conflicting descriptors ('{}' vs '{}')",
-                                     texture.persistentKey->value,
-                                     existing->second->desc.label,
-                                     texture.desc.label));
-            }
-            continue;
-        }
-        persistentTexturesByKey.emplace(texture.persistentKey->value, &texture);
-    }
-
-    for (const auto& buffer : _buffers) {
-        if (buffer.lifetime != ERGResourceLifetime::Persistent) {
-            continue;
-        }
-        if (!buffer.persistentKey.has_value() || !buffer.persistentKey->isValid()) {
-            addIssue(RGCompileIssue::EKind::InvalidPersistentIdentity,
-                     RGPassHandle{},
-                     std::format("persistent buffer {} is missing a stable key", buffer.desc.label));
-            continue;
-        }
-
-        if (const auto existing = persistentBuffersByKey.find(buffer.persistentKey->value);
-            existing != persistentBuffersByKey.end()) {
-            if (existing->second->desc.usage != buffer.desc.usage ||
-                existing->second->desc.size != buffer.desc.size ||
-                existing->second->desc.memoryUsage != buffer.desc.memoryUsage ||
-                existing->second->desc.alignment != buffer.desc.alignment) {
-                addIssue(RGCompileIssue::EKind::InvalidPersistentIdentity,
-                         RGPassHandle{},
-                         std::format("persistent buffer key '{}' maps to conflicting descriptors ('{}' vs '{}')",
-                                     buffer.persistentKey->value,
-                                     existing->second->desc.label,
-                                     buffer.desc.label));
-            }
-            continue;
-        }
-        persistentBuffersByKey.emplace(buffer.persistentKey->value, &buffer);
     }
 
     std::unordered_set<std::string> exportedTextureNames;
@@ -1967,9 +1876,6 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
             break;
         case RGCompileIssue::EKind::InvalidPassKind:
             oss << "InvalidPassKind";
-            break;
-        case RGCompileIssue::EKind::InvalidPersistentIdentity:
-            oss << "InvalidPersistentIdentity";
             break;
         case RGCompileIssue::EKind::Cycle:
             oss << "Cycle";
