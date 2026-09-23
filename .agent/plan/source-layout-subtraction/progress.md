@@ -345,13 +345,13 @@ view compose 阶段，不属于编辑器），并在函数头写明"为什么编
    **已修**：fixture 显式 pin `setDividerThickness(6.0f)` / `setMinFirst/SecondExtent(40.0f)`
    （测试的意图是 drag/clamp 行为，几何自持；`ya-testing` 与 `ya-gui-closure-test` 双绿）。
    已在 2aef14d4 基线 worktree 验证这三个失败全部预存，不是近期渲染/GUI 改动引入。
-4. 当前 `ya-testing` 全量：1269 passed / 8 failed / 11 skipped，失败清单与归属：
-   - `WidgetLayoutTest.FloatingWindowResizeHandlesLiveOnOverlaySlots` ——
-     a8af1c88（dock stack 优化）的行为变化；在 2aef14d4 基线同样失败，GUI 线。
-   - `GameUIHostTest.BuildSnapshotComposesMountedWidgets`、
-     `ScriptApiLibraryFixture.GameUIWidgetLifecycleThroughRegistry` ——
-     3cba2e61（scene 挂 document 资产）改变挂载契约，`game-ui-authoring` 线。
-   - `GUIHeadlessHostTest.ReusesAppKernel…`、`GUIHeadlessHostTest.UnthemedFallback…`、
-     `GUIWindowManagerTest.DragOverlaySessionIsExemptFromFocusAndInput` —— GUI host 线。
-   - `EditorPropertyGraphTest.AutoPropertySectionAssetPathCommitBrowseAndUndo`、
-     `EditorPropertyGraphTest.TextureAssetRowShowsRetainedPreview` —— 编辑器线。
+4. ~~当前 `ya-testing` 全量 8 个失败~~ **全部收口（2026-09-23 测试门禁批次）**。
+   归因与处置见 `../memories/stale_test_assertions_after_contract_change.md`：5 条是断言过期
+   （`engine.panel` 拆出绘制、剪贴板是进程级、按下标找控件、tab 条未隐藏就断言手柄、
+   `visitAllProperties` 默认参数翻转），2 条是用例本身无意义（`EXPECT_EXIT` 里再起线程、
+   依赖被注释掉的代码生成器），1 条是本机 SDL 的 minimized 标志残留（surface 判据无误）。
+   该文件同时记下了当时的基线对照方法与逐项归属，本段保留为历史。
+5. 现在的门禁入口是 `make test`（= `xmake test` → `xmake b|r -g test`），所有测试 target
+   都带 `set_group("test")`：13 个 target 报 PASSED，**2703 passed / 0 failed / 1 skipped**
+   （那条 skip 是本机 SDL 最小化前提不成立的 RHI 用例）。它取代了「逐个 target 手动跑」
+   和此前无入口的 `python3 Script/ya.py test --target ya`。
