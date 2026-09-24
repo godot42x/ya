@@ -1293,3 +1293,41 @@ review 指出的问题：compositor 的世界 compose 路径把 `DisplayedView`�
 - 保留：`RenderDeviceState::getDebugRenderSystem()/getDiagnosticsService()` 本体（renderer 内部
   与 GameRuntime app 自己使用，AB3 的边界是 GameEditor 不认识 device，已达成）。
 - 偏离：无。
+
+---
+
+## 2026-09-24 AB7-step2 批 1 — plan 不再携带行为
+
+唯一目标：**§5.1 "plan 仍携带行为" 偏差闭合**。`RenderFramePlan::recordExtensions`（行为指针）
+从 plan 上删除——sealed plan 从此只有值，host 的 record 阶段成为 record 调用的显式参数。
+
+### 改动
+
+- `RenderFrameInputs.h`：`RenderFramePlan` 四字段定形（sceneRender / frame / viewCompose / present），
+  `recordExtensions` 删除，`FrameRecordExtensions.h` include 移除；头注释声明
+  "sealed plan can never grow behavior after it was built"。
+- `RuntimeRenderContext::record(plan)` → `record(plan, IFrameRecordExtensions* extensions)`：
+  view compose 阶段与 `recordDisplayCompose` 的 extensions 参数改走调用参数。
+  （display compose 内部的 before-display / in-pass / capture 三阶段本就由
+  `PresentationGraphService` 参数传递，不变——那是"阶段命名在一处"的既定设计。）
+- `GameRuntimeTickOrchestrator::recordFrame`：`&app` 改为 record 的第二个实参。
+- 契约更新：`RuntimeRenderContextTest` 增加 `RecordsWithAnExplicitHostStageArg` 概念断言
+  （record 必须带显式 stage 参数），plan static_assert 改为"四字段即整个类型"。
+
+### 测试
+
+- `RuntimeRenderContextTest.TheFrameEntryPointIsTheApplicationsNotTheRenderers` 扩展为同时钉
+  "plan 是值、行为在调用上"；`RenderFramePlanGroupsFrameViewDisplayPresent` 的
+  recordExtensions 断言删除。
+
+### 验证
+
+- build：`ya-render-3d` / `ya-game-runtime` / `ya-game-editor` / `xmake b -g test` ok。
+- `ya-testing`：**1321 passed / 0 failed**（1 skipped 为 platform minimize guard，同基线）。
+- `GUIWorkbench --smoke-actions`：**PASS**；parity md5 仍 `c775245ae636f15b41da8485319a2267`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留（AB7-step2 批 2，已在 plan.md 登记）：编排事实收拢（frame flight / acquire / submit /
+  present 策略进 `RuntimeRenderContext`）+ 其 API 形状决策（是否认识 App 服务面）。
+- 偏离：无。

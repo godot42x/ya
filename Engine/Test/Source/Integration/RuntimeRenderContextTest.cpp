@@ -1,5 +1,6 @@
 #include "GameRuntime/Render/RuntimeRenderContext.h"
 
+#include "Render3D/Common/FrameRecordExtensions.h"
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/RecordedFrame.h"
 #include "Render3D/RenderDeviceState.h"
@@ -25,6 +26,12 @@ namespace
 template <typename Device>
 concept RecordsAWholeFrame = requires(Device& device, const RenderFramePlan& plan) { device.record(plan); };
 
+template <typename Context>
+concept RecordsWithAnExplicitHostStageArg =
+    requires(Context& context, const RenderFramePlan& plan, IFrameRecordExtensions* extensions) {
+        context.record(plan, extensions);
+    };
+
 template <typename Device>
 concept PublishesFamilyResults = requires(Device& device, uint32_t flight) {
     device.publishFamilyResult(flight, ViewFamilyRenderResult{});
@@ -44,8 +51,11 @@ TEST(RuntimeRenderContextTest, TheFrameEntryPointIsTheApplicationsNotTheRenderer
     static_assert(!RecordsAWholeFrame<RenderDeviceState>,
                   "RenderDeviceState must not offer a whole-frame record(): that is the application's order");
     static_assert(std::is_same_v<decltype(std::declval<RuntimeRenderContext&>().record(
-                                      std::declval<const RenderFramePlan&>())),
+                                      std::declval<const RenderFramePlan&>(),
+                                      std::declval<IFrameRecordExtensions*>())),
                                   RecordedFrame>);
+    // The plan is values; the host's record stages ride on the call, not on it.
+    static_assert(RecordsWithAnExplicitHostStageArg<RuntimeRenderContext>);
 }
 
 /// The steps that order is written with are the renderer's, but each is a real
@@ -89,7 +99,7 @@ TEST(RuntimeRenderContextTest, APlanWithoutAnAcquiredPresentOpensNoRecording)
     RenderDeviceState    device;
     RuntimeRenderContext context{device};
 
-    const RecordedFrame recorded = context.record(RenderFramePlan{});
+    const RecordedFrame recorded = context.record(RenderFramePlan{}, nullptr);
 
     EXPECT_FALSE(recorded.valid());
     EXPECT_EQ(recorded.commandBuffer, nullptr);

@@ -2,7 +2,7 @@
 
 > 建立日期：2026-09-22
 > 状态：AB1 / AB2 已落地；AB3（step1 + step2）已落地；AB7-step1 已落地（整帧录制顺序搬到应用侧）；
-> AB4-step2/3（余 AB4-2d/2e）、AB5 / AB6、AB7-step2 待做。
+> AB7-step2 批 1 已落地（plan 不再携带行为）；AB4-2d/2e、AB5 / AB6、AB7-step2 批 2 待做。
 
 ## 1. 原则
 
@@ -776,9 +776,20 @@ AB7-step1（已落地，2026-09-23 第五批）：**整帧录制顺序搬到应�
   `RenderDeviceState.cpp` 的那个 include **仍在**——它服务 `prepareComposePipelines()` 的
   `prepareRender2DComposePassPipeline`。
 
-AB7-step2（待做）：让 `RuntimeRenderContext` 继续收下「frame flight、scene/view plan、submission、
-surface present 目标、Game UI 绑定、present 前后策略」这些今天仍散在应用侧或 device 上的事实；
-`recordExtensions` 的阶段变成应用侧显式调用（plan §4b 同一条）。
+AB7-step2 批 1（已落地 2026-09-24）：**plan 不再携带行为**（§5.1 "plan 仍携带行为" 偏差闭合）。
+`RenderFramePlan::recordExtensions` 字段删除——host 的 record 阶段（view compose / display compose /
+capture）成为 `RuntimeRenderContext::record(plan, IFrameRecordExtensions*)` 的显式调用参数，
+sealed plan 从此只有值（`RenderFrameInputs.h` 的 `FrameRecordExtensions.h` include 一并移除）。
+契约守卫（`RuntimeRenderContextTest`）更新：`record` 必须带显式 stage 参数的概念断言 +
+"四字段即整个 plan" 的注释。§5.1 表中该行已闭环。
+
+AB7-step2 批 2（待做）：**编排事实收拢**。把今天仍散在 `GameRuntimeTickOrchestrator` 的
+frame flight 解析（`resolveFlightIndex`）、present 目标 acquire、submit/present 编排
+（`submitRecordedFrame`）与 present 前后策略收进 `RuntimeRenderContext`，使其成为
+"host present coordinator" 本体（现头文件注释还声明 acquire/present 留在编排层——批 2 改这条）。
+declare/extract/prepare/build 是否同批收拢需先拍板 API 形状：`RuntimeRenderContext` 今天只认识
+`RenderDeviceState`，收下 scene/view plan 与 Game UI 绑定意味着它开始认识 App 的服务面，
+这是批 2 的主要设计决策。
 
 目标形态：
 

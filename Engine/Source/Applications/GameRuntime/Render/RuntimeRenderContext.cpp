@@ -9,6 +9,7 @@
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Texture.h"
 #include "GUI/Compose/Render2DComposePass.h"
+#include "Render3D/Common/FrameRecordExtensions.h"
 #include "Render3D/Common/ViewCompose.h"
 #include "Render3D/RenderDeviceState.h"
 #include "Render3D/Services/SurfacePresentation.h"
@@ -21,7 +22,7 @@
 namespace ya
 {
 
-RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan)
+RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan, IFrameRecordExtensions* extensions)
 {
     YA_PROFILE_SCOPE("RuntimeRenderContext::record");
     YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -138,8 +139,8 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan)
                             plan.frame.uiFrameSnapshot,
                             logicalViewExtent,
                             insetImages);
-    if (plan.recordExtensions) {
-        plan.recordExtensions->recordViewCompose(*cmdBuf, plan.frame.deltaTime);
+    if (extensions) {
+        extensions->recordViewCompose(*cmdBuf, plan.frame.deltaTime);
     }
 
     if (submission && presentation) {
@@ -153,7 +154,7 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan)
                                                                         : FSurfaceImage{},
             *submission,
             plan.frame.deltaTime,
-            plan.recordExtensions,
+            extensions,
             cmdBuf.get(),
             plan.present.imageIndex);
     }

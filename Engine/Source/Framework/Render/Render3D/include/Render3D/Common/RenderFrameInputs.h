@@ -3,7 +3,6 @@
 #include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ShadowSettings.h"
-#include "Render3D/Common/FrameRecordExtensions.h"
 #include "RHI/Core/SurfaceId.h"
 
 #include <cstddef>
@@ -126,18 +125,16 @@ struct PresentFrameInput
 /// (`RuntimeRenderContext::record`).
 /// `sceneRender` owns the extracted plan together with the recordings paired
 /// with it, so the Scene a view renders is already on that view's own task.
-/// Not an active-Scene query and not swapchain ownership.
+/// Not an active-Scene query and not swapchain ownership. Immutable data
+/// throughout: the host's own record stages are not on the plan -- they are
+/// explicit arguments of the record call, so a sealed plan can never grow
+/// behavior after it was built.
 struct RenderFramePlan
 {
     ExtractedSceneRender sceneRender{};
     FramePacket          frame{};
     ViewComposeInput     viewCompose{};
     PresentFrameInput    present{};
-    /// What the host records at the stages the coordinator defines. Null means
-    /// the host contributes nothing; the renderer's own order is unaffected
-    /// either way, and no stage can be installed out of order because the plan
-    /// no longer names an order at all.
-    IFrameRecordExtensions* recordExtensions = nullptr;
 };
 
 /// One Scene family to record into a single graph on the live submission.

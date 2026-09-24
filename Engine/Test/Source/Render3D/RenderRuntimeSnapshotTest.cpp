@@ -90,9 +90,9 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsFrameViewDisplayPresent)
     static_assert(std::is_same_v<decltype(ExtractedSceneRender{}.views()), const std::vector<SceneViewRecording>&>);
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.viewCompose), ViewComposeInput>);
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.present), PresentFrameInput>);
-    /// The plan carries behavior only as one named interface: the stages live
-    /// in the interface and their order lives in the coordinator.
-    static_assert(std::is_same_v<decltype(RenderFramePlan{}.recordExtensions), IFrameRecordExtensions*>);
+    /// The plan carries no behavior: the host's record stages are an explicit
+    /// argument of the record call (`RuntimeRenderContext::record`), so a
+    /// sealed plan is values only -- the four fields above are the whole type.
     /// One declaration type: the plan entry holds the desc verbatim and only
     /// adds its own output identity and bookkeeping.
     static_assert(std::is_same_v<decltype(SceneViewTask{}.desc), SceneViewDesc>);
@@ -117,7 +117,6 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsFrameViewDisplayPresent)
     EXPECT_FLOAT_EQ(plan.frame.deltaTime, 0.016f);
     EXPECT_TRUE(plan.viewCompose.empty());
     EXPECT_TRUE(plan.viewCompose.insets.empty());
-    EXPECT_EQ(plan.recordExtensions, nullptr);
     EXPECT_EQ(plan.present.surface, nullptr);
     EXPECT_EQ(plan.present.imageIndex, -1);
     /// The surface's backdrop is the host's declaration, and the default is the

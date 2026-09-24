@@ -552,13 +552,15 @@ RecordedFrame GameRuntimeTickOrchestrator::recordFrame(App&                    a
 {
     // The recording order is the application's and lives in the context; this
     // step only states this frame's facts, so the sequence stays readable in
-    // one place instead of being assembled here and re-decided there.
+    // one place instead of being assembled here and re-decided there. The app
+    // is the record-stage contributor, passed as an explicit call argument --
+    // the plan stays values.
     return context.record(RenderFramePlan{
         .sceneRender = std::move(sceneRender),
         .frame = frame.boundFrame(),
         .viewCompose = {
-            // Empty: the host's View-inset list. Overlay recording is a stage of
-            // `recordExtensions`, not data on the plan.
+            // Empty: the host's View-inset list. Overlay recording is a host
+            // record stage, not data on the plan.
         },
         .present = {
             .surface    = presentFrame.surface,
@@ -579,8 +581,8 @@ RecordedFrame GameRuntimeTickOrchestrator::recordFrame(App&                    a
             .backdrop = app.presentsViewDisplayImage(*presentFrame.surface) ? ESurfaceBackdrop::ViewDisplayImage
                                                                             : ESurfaceBackdrop::HostContent,
         },
-        .recordExtensions = &app,
-    });
+    },
+    /* extensions = */ &app);
 }
 
 void GameRuntimeTickOrchestrator::submitRecordedFrame(App&                 app,
