@@ -68,8 +68,8 @@ class EditorDockWorkspace
     void bind(FHost host);
     void clear() { _host = {}; }
 
-    /// Window-root factory (level-editor + window tools). Keep in sync with
-    /// DefaultEditorDockLayout.json.
+    /// Window-root factory (level-editor + window tools). The factory
+    /// documents are the JSON literals in EditorDockWorkspace.cpp.
     [[nodiscard]] static const nlohmann::json& factoryLayout();
     /// Level-owned nested factory (play-toolbar / viewport / hierarchy / inspector).
     [[nodiscard]] static const nlohmann::json& factoryOwnedNestedLayout();

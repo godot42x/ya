@@ -23,7 +23,9 @@ namespace ya
 namespace
 {
 
-// Keep in sync with DefaultEditorDockLayout.json.
+// Factory dock layout documents (first-run / Window>Reset / fallback). These
+// literals are the single source of truth: nothing reads a layout JSON from
+// disk at runtime, so edit here.
 constexpr std::string_view kFactoryWindowRootLayoutJson = R"JSON(
 {
   "version": 1,
@@ -59,7 +61,6 @@ constexpr std::string_view kFactoryWindowRootLayoutJson = R"JSON(
 }
 )JSON";
 
-// Keep in sync with DefaultEditorOwnedDockLayout.json.
 constexpr std::string_view kFactoryOwnedNestedLayoutJson = R"JSON(
 {
   "version": 1,

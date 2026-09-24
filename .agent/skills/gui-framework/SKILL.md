@@ -525,9 +525,9 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   `IRender::create`）。禁止把这些模型倒进 WindowSession god object。
   Tab 经 `EditorTabSpawnerRegistry` 注册，`EditorDockWorkspace::invokeTab` 按 stable key
   激活或 spawn（owned tool 若 owner 不是当前 host，先打开对应 WindowRootEditor 再进其 nested）。layout 工厂是
-  `DefaultEditorDockLayout.json` + `DefaultEditorOwnedDockLayout.json`（Level nested
-  为 hierarchy | play-toolbar 在 viewport 上 | inspector），外加 UI/Material/Script
-  的 in-code nested factory。Window 菜单
+  `EditorDockWorkspace.cpp` 顶部的 JSON 字面量（唯一事实源，运行时不读磁盘布局文件）：
+  window-root 与 Level nested（hierarchy | play-toolbar 在 viewport 上 | inspector），
+  外加 UI/Material/Script 的 nested factory。Window 菜单
   checkbox 切换已注册 tab；Layout → Default 一键恢复工厂布局（先
   `setPanelClosable(true)` 再关 Locked tab）。rebuild 期
   dock/workspace 政策在 `EditorDockWorkspace`，ActionMap 目录在
