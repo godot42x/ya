@@ -13,17 +13,18 @@ struct EditorWindowRegistry;
 struct INativeWindow;
 class IGUIWindowCoordinator;
 
-inline constexpr int kEditorWindowLayoutVersion = 4;
-
 enum class EEditorWindowRole : uint8_t
 {
     Main,
     TornOff,
 };
 
-/// Versioned editor.dockLayout envelope (v4): OS-window topology in `windows[]`.
-/// Dock overlay `floating[]` stays tree-local (MW-707). Extra OS windows restore
-/// only through `IGUIWindowCoordinator`; GameEditor never creates SDL windows.
+/// Versioned editor.dockLayout envelope (v5): OS-window topology in `windows[]`,
+/// each record embedding v2 dock documents (`tree` node structure + `dockSpace`
+/// stack data). Dock overlay `floating[]` stays tree-local (MW-707). Extra OS
+/// windows restore only through `IGUIWindowCoordinator`; GameEditor never
+/// creates SDL windows.
+inline constexpr int kEditorWindowLayoutVersion = 5;
 [[nodiscard]] nlohmann::json exportEditorWindowLayout(const EditorWindowRegistry& windows,
                                                       INativeWindow*              mainNative,
                                                       IGUIWindowCoordinator*      coordinator);
@@ -44,7 +45,7 @@ struct FEditorWindowRestoreStats
     size_t relocatedMonitor       = 0;
 };
 
-/// Restore torn-off OS windows from a v4 envelope. Main window is left to
+/// Restore torn-off OS windows from a v5 envelope. Main window is left to
 /// `EditorDockWorkspace::applyWorkspaceLayout`. Missing owner/document skips
 /// that extra (does not rebind to another root). `closing: true` extras are
 /// not revived. Product present/input of extras is still the caller's job.

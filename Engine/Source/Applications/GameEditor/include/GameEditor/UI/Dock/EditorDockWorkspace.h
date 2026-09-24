@@ -76,8 +76,9 @@ class EditorDockWorkspace
     /// Nested factory for a document WindowRootEditor (UI / Material / Script).
     [[nodiscard]] static const nlohmann::json& factoryOwnedNestedLayoutFor(EditorRootId rootId);
     /// Map a persisted `editor.dockLayout` document onto this host's placement.
-    /// Version 2 envelopes use `windowRoot` / `ownedNested`. Version 1 flat
-    /// layouts remap owned tools into the nested factory and inject level-editor.
+    /// v5 envelopes carry `windowRoot` / `ownedNested` v2 dock documents on
+    /// their main window record; anything older or malformed falls back to
+    /// the factory layout.
     [[nodiscard]] static nlohmann::json layoutDocumentForPlacement(const nlohmann::json& document,
                                                                    EEditorTabPlacement placement);
 

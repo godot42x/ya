@@ -492,11 +492,10 @@ TEST(EditorDockWorkspaceTest, InvokeTabActivatesNestedWindowToolWithoutSpawningD
 
     const nlohmann::json layout = nlohmann::json::parse(R"JSON(
 {
-  "version": 1,
-  "root": {
-    "kind": "leaf",
-    "panels": ["hierarchy", "content-browser"],
-    "selected": "hierarchy"
+  "version": 2,
+  "tree": { "kind": "leaf", "id": "main" },
+  "dockSpace": {
+    "main": { "panels": ["hierarchy", "content-browser"], "selected": "hierarchy" }
   },
   "floating": []
 }
@@ -652,11 +651,10 @@ TEST(EditorDockWorkspaceTest, LayoutRestoresWindowToolInLevelNestedHost)
 
     const nlohmann::json layout = nlohmann::json::parse(R"JSON(
 {
-  "version": 1,
-  "root": {
-    "kind": "leaf",
-    "panels": ["hierarchy", "content-browser"],
-    "selected": "hierarchy"
+  "version": 2,
+  "tree": { "kind": "leaf", "id": "main" },
+  "dockSpace": {
+    "main": { "panels": ["hierarchy", "content-browser"], "selected": "hierarchy" }
   },
   "floating": []
 }
@@ -696,11 +694,10 @@ TEST(EditorDockWorkspaceTest, LayoutRestoresOwnedToolOnWindowRootHost)
 
     const nlohmann::json layout = nlohmann::json::parse(R"JSON(
 {
-  "version": 1,
-  "root": {
-    "kind": "leaf",
-    "panels": ["content-browser", "hierarchy"],
-    "selected": "content-browser"
+  "version": 2,
+  "tree": { "kind": "leaf", "id": "main" },
+  "dockSpace": {
+    "main": { "panels": ["content-browser", "hierarchy"], "selected": "content-browser" }
   },
   "floating": []
 }
@@ -740,11 +737,10 @@ TEST(EditorDockWorkspaceTest, LayoutDropsWindowToolFromUIOwnedNestedHost)
 
     const nlohmann::json layout = nlohmann::json::parse(R"JSON(
 {
-  "version": 1,
-  "root": {
-    "kind": "leaf",
-    "panels": ["ui-hierarchy", "content-browser"],
-    "selected": "ui-hierarchy"
+  "version": 2,
+  "tree": { "kind": "leaf", "id": "main" },
+  "dockSpace": {
+    "main": { "panels": ["ui-hierarchy", "content-browser"], "selected": "ui-hierarchy" }
   },
   "floating": []
 }

@@ -395,8 +395,8 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   opaque `ownerEditorId` / `documentKey`）。overlay 坐标永远是 tree-local（Popup），
   缺 `projection` 的旧 `floating` 视为 `inProcessOverlay`，**不得**把 Popup 坐标升格成屏幕坐标。
   legacy `floating` 里的 `nativeWindow` 缺 `geometrySpace` 时仍是 TreeLocal，下次 export 迁到 `windows[]`。
-  Editor 经 `ConfigManager` `editor.dockLayout` 恢复（envelope v3 仍用 `windowRoot` /
-  `ownedNested`；OS 窗 topology `windows[]` 是 MW-801）。产品启动 restore extra OS
+  Editor 经 `ConfigManager` `editor.dockLayout` 恢复（v5 信封 `windows[]` 记录
+  OS 窗 topology，MW-801）。产品启动 restore extra OS
   window 并在 primary submit 之后 `renderAll`（C9-P）。`FDockContext::appendOnDockUpdated`
   与 `appendOnFloatingUpdated` 写回。Editor chrome 打开 `bAllowFloating` /
   `bAllowTearOff`，`UIDockFloatingHost` 挂在 Popup 层，只画 overlay placement。
@@ -505,9 +505,11 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   持有，不把 Surface 做成 dock manager；这些 nested dock 关闭 floating/tear-off（C7）。
   C5 起 owned tool 只进同 owner 的 nested `FDockContext`（window-root 不再扁平物化）。
   Level Editor 是 Locked、不可关闭的 window-root tab，内部 `UIDockSpace` 投影 nested dock。
-  `editor.dockLayout` v4 信封为 `{version:4, windows:[{role, bounds, monitor, maximized, windowRoot, ownedNested, ...}]}`。
-  v2/v3 `{version, windowRoot, ownedNested}` 仍映射到 main window。v1 扁平文档 remap
-  到两个工厂布局（自定义 split 丢失）。Dock overlay `floating[]` 坐标仍是 tree-local。
+  `editor.dockLayout` v5 信封为 `{version:5, windows:[{role, bounds, monitor, maximized, windowRoot, ownedNested, ...}]}`。
+  每个 record 内嵌 v2 dock 文档：`tree` 只放节点结构（split + `{kind:"leaf",id}` 引用），
+  `dockSpace` 按叶 id 放栈数据（role/hideTabBar/persistentEmpty/panels/selected），
+  `floating[]`/`windows[]` 仍是 placement 记录。v1–v4 旧文档不再映射，直接回退工厂布局。
+  Dock overlay `floating[]` 坐标仍是 tree-local。
   Extra OS window 只经 `IGUIWindowCoordinator` restore（`restoreEditorExtraWindows`）；
   GameEditor 不创建 SDL 窗。坏 monitor 经 `recoverWindowScreenPlacement` 迁到可用屏
   （按 index，否则按 name，否则 primary）；未知 origin（index<0 且无名）只改 size。

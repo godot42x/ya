@@ -67,16 +67,15 @@ TEST(EditorWindowLayoutTest, RestoreExtraCreatesCoordinatorWindowAndSession)
     });
 
     const nlohmann::json extraRoot = {
-        {"version", 1},
-        {"root",
-         {{"kind", "leaf"},
-          {"panels", nlohmann::json::array({"material-editor"})},
-          {"selected", "material-editor"}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace",
+         {{"main", {{"panels", nlohmann::json::array({"material-editor"})}, {"selected", "material-editor"}}}}},
         {"floating", nlohmann::json::array()},
         {"windows", nlohmann::json::array()},
     };
     const nlohmann::json document = {
-        {"version", 4},
+        {"version", kEditorWindowLayoutVersion},
         {"windows",
          nlohmann::json::array({
              nlohmann::json{{"role", "main"},
@@ -158,8 +157,9 @@ TEST(EditorWindowLayoutTest, RestoreDoesNotTreatOverlayFloatingPosAsScreen)
     });
 
     const nlohmann::json nested = {
-        {"version", 1},
-        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace", {{"main", {{"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}}}},
         {"floating",
          nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"inspector"})},
                                                {"pos", nlohmann::json::array({12.0f, 24.0f})},
@@ -167,7 +167,7 @@ TEST(EditorWindowLayoutTest, RestoreDoesNotTreatOverlayFloatingPosAsScreen)
         {"windows", nlohmann::json::array()},
     };
     const nlohmann::json document = {
-        {"version", 4},
+        {"version", kEditorWindowLayoutVersion},
         {"windows",
          nlohmann::json::array({
              nlohmann::json{{"role", "main"},
@@ -258,11 +258,10 @@ TEST(EditorWindowLayoutTest, DockWorkspaceSourceDoesNotCreateNativeWindows)
 nlohmann::json makeMaterialExtraEnvelope(bool bClosing, uint32_t ownerEditorId, std::string documentKey)
 {
     const nlohmann::json extraRoot = {
-        {"version", 1},
-        {"root",
-         {{"kind", "leaf"},
-          {"panels", nlohmann::json::array({"material-editor"})},
-          {"selected", "material-editor"}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace",
+         {{"main", {{"panels", nlohmann::json::array({"material-editor"})}, {"selected", "material-editor"}}}}},
         {"floating", nlohmann::json::array()},
         {"windows", nlohmann::json::array()},
     };
@@ -283,7 +282,7 @@ nlohmann::json makeMaterialExtraEnvelope(bool bClosing, uint32_t ownerEditorId, 
         extra["closing"] = true;
     }
     return {
-        {"version", 4},
+        {"version", kEditorWindowLayoutVersion},
         {"windows",
          nlohmann::json::array({
              nlohmann::json{{"role", "main"},

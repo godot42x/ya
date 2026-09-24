@@ -1,4 +1,5 @@
 #include "GameEditor/UI/Dock/EditorDockWorkspace.h"
+#include "GameEditor/UI/Dock/EditorWindowLayout.h"
 #include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
 
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
@@ -100,77 +101,28 @@ TEST(EditorDockWorkspaceTest, FactoryOwnedNestedLayoutPlacesOwnedTools)
     EXPECT_EQ(leafKeys(context, "inspector"), std::vector<std::string>({"inspector"}));
     ASSERT_NE(context.dockModel().getRootNode()->child[0].get(), nullptr);
     EXPECT_EQ(context.dockModel().getRootNode()->child[0]->orientation,
-              EDockSplitOrientation::Horizontal);
+              EDockSplitOrientation::Vertical);
     ASSERT_NE(context.dockModel().getRootNode()->child[0]->child[1].get(), nullptr);
     EXPECT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->kind, EDockNodeKind::Split);
     EXPECT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->orientation,
-              EDockSplitOrientation::Horizontal);
+              EDockSplitOrientation::Vertical);
     EXPECT_FLOAT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->ratio, 0.0f);
     EXPECT_FLOAT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->minExtent[0], 54.0f);
     EXPECT_TRUE(context.floatingWindows().empty());
 }
 
-TEST(EditorDockWorkspaceTest, LayoutDocumentForPlacementRemapsFlatV1)
+TEST(EditorDockWorkspaceTest, LayoutDocumentForPlacementSelectsMainWindowFields)
 {
-    const nlohmann::json v1 = {
-        {"version", 1},
-        {"root",
-         {{"kind", "leaf"},
-          {"panels", nlohmann::json::array({"viewport", "content-browser"})},
-          {"selected", "viewport"}}},
-        {"floating", nlohmann::json::array()},
-    };
-
-    const nlohmann::json windowRoot =
-        EditorDockWorkspace::layoutDocumentForPlacement(v1, EEditorTabPlacement::WindowRootDock);
-    const nlohmann::json nested =
-        EditorDockWorkspace::layoutDocumentForPlacement(v1, EEditorTabPlacement::EditorOwnedNested);
-    EXPECT_EQ(windowRoot, EditorDockWorkspace::factoryLayout());
-    EXPECT_EQ(nested, EditorDockWorkspace::factoryOwnedNestedLayout());
-}
-
-TEST(EditorDockWorkspaceTest, LayoutDocumentForPlacementV2SelectsFields)
-{
-    const nlohmann::json windowRoot = EditorDockWorkspace::factoryLayout();
-    const nlohmann::json nested     = EditorDockWorkspace::factoryOwnedNestedLayout();
-    const nlohmann::json v2 = {
+    const nlohmann::json& windowRoot = EditorDockWorkspace::factoryLayout();
+    const nlohmann::json& nested     = EditorDockWorkspace::factoryOwnedNestedLayout();
+    const nlohmann::json extraRoot   = {
         {"version", 2},
-        {"windowRoot", windowRoot},
-        {"ownedNested", nested},
-    };
-    EXPECT_EQ(EditorDockWorkspace::layoutDocumentForPlacement(v2, EEditorTabPlacement::WindowRootDock),
-              windowRoot);
-    EXPECT_EQ(EditorDockWorkspace::layoutDocumentForPlacement(v2, EEditorTabPlacement::EditorOwnedNested),
-              nested);
-}
-
-TEST(EditorDockWorkspaceTest, LayoutDocumentForPlacementV3SelectsFields)
-{
-    const nlohmann::json windowRoot = EditorDockWorkspace::factoryLayout();
-    const nlohmann::json nested     = EditorDockWorkspace::factoryOwnedNestedLayout();
-    const nlohmann::json v3 = {
-        {"version", 3},
-        {"windowRoot", windowRoot},
-        {"ownedNested", nested},
-    };
-    EXPECT_EQ(EditorDockWorkspace::layoutDocumentForPlacement(v3, EEditorTabPlacement::WindowRootDock),
-              windowRoot);
-    EXPECT_EQ(EditorDockWorkspace::layoutDocumentForPlacement(v3, EEditorTabPlacement::EditorOwnedNested),
-              nested);
-}
-
-TEST(EditorDockWorkspaceTest, LayoutDocumentForPlacementV4SelectsMainWindowFields)
-{
-    const nlohmann::json windowRoot = EditorDockWorkspace::factoryLayout();
-    const nlohmann::json nested     = EditorDockWorkspace::factoryOwnedNestedLayout();
-    const nlohmann::json extraRoot  = {
-        {"version", 1},
-        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"material-editor"})}, {"selected", "material-editor"}}},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace", {{"main", {{"panels", nlohmann::json::array({"material-editor"})}, {"selected", "material-editor"}}}}},
         {"floating", nlohmann::json::array()},
-        {"windows", nlohmann::json::array()},
     };
-    const nlohmann::json v4 = {
-        {"version", 4},
+    const nlohmann::json envelope = {
+        {"version", kEditorWindowLayoutVersion},
         {"windows",
          nlohmann::json::array({
              nlohmann::json{{"role", "tornOff"},
@@ -184,10 +136,36 @@ TEST(EditorDockWorkspaceTest, LayoutDocumentForPlacementV4SelectsMainWindowField
                             {"ownedNested", nested}},
          })},
     };
-    EXPECT_EQ(EditorDockWorkspace::layoutDocumentForPlacement(v4, EEditorTabPlacement::WindowRootDock),
+    EXPECT_EQ(EditorDockWorkspace::layoutDocumentForPlacement(envelope, EEditorTabPlacement::WindowRootDock),
               windowRoot);
-    EXPECT_EQ(EditorDockWorkspace::layoutDocumentForPlacement(v4, EEditorTabPlacement::EditorOwnedNested),
+    EXPECT_EQ(EditorDockWorkspace::layoutDocumentForPlacement(envelope, EEditorTabPlacement::EditorOwnedNested),
               nested);
+}
+
+TEST(EditorDockWorkspaceTest, LayoutDocumentForPlacementFallsBackToFactoryOutsideEnvelope)
+{
+    // Legacy envelopes and bare dock documents are not mapped; both
+    // placements fall back to the factory layouts.
+    const nlohmann::json legacyEnvelope = {
+        {"version", kEditorWindowLayoutVersion - 1},
+        {"windowRoot", EditorDockWorkspace::factoryLayout()},
+        {"ownedNested", EditorDockWorkspace::factoryOwnedNestedLayout()},
+    };
+    EXPECT_EQ(EditorDockWorkspace::layoutDocumentForPlacement(legacyEnvelope, EEditorTabPlacement::WindowRootDock),
+              EditorDockWorkspace::factoryLayout());
+    EXPECT_EQ(EditorDockWorkspace::layoutDocumentForPlacement(legacyEnvelope, EEditorTabPlacement::EditorOwnedNested),
+              EditorDockWorkspace::factoryOwnedNestedLayout());
+
+    const nlohmann::json bareDocument = {
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace", {{"main", {{"panels", nlohmann::json::array({"viewport"})}}}}},
+        {"floating", nlohmann::json::array()},
+    };
+    EXPECT_EQ(EditorDockWorkspace::layoutDocumentForPlacement(bareDocument, EEditorTabPlacement::WindowRootDock),
+              EditorDockWorkspace::factoryLayout());
+    EXPECT_EQ(EditorDockWorkspace::layoutDocumentForPlacement(bareDocument, EEditorTabPlacement::EditorOwnedNested),
+              EditorDockWorkspace::factoryOwnedNestedLayout());
 }
 
 TEST(EditorDockWorkspaceTest, SavedLayoutWithUnknownSpawnerStillRestoresKnownTabs)
@@ -195,20 +173,21 @@ TEST(EditorDockWorkspaceTest, SavedLayoutWithUnknownSpawnerStillRestoresKnownTab
     FDockContext context;
     context.bAllowFloating = true;
     const nlohmann::json saved = {
-        {"version", 1},
-        {"root",
+        {"version", 2},
+        {"tree",
          {{"kind", "split"},
           {"orientation", "vertical"},
           {"ratio", 0.6f},
           {"children",
            nlohmann::json::array({
-               nlohmann::json{{"kind", "leaf"},
-                              {"panels", nlohmann::json::array({"viewport", "gui-workbench"})},
-                              {"selected", "viewport"}},
-               nlohmann::json{{"kind", "leaf"},
-                              {"panels", nlohmann::json::array({"inspector"})},
-                              {"selected", "inspector"}},
+               nlohmann::json{{"kind", "leaf"}, {"id", "page"}},
+               nlohmann::json{{"kind", "leaf"}, {"id", "well"}},
            })}}},
+        {"dockSpace",
+         {
+             {"page", {{"panels", nlohmann::json::array({"viewport", "gui-workbench"})}, {"selected", "viewport"}}},
+             {"well", {{"panels", nlohmann::json::array({"inspector"})}, {"selected", "inspector"}}},
+         }},
         {"floating", nlohmann::json::array()},
     };
 

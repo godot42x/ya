@@ -16,6 +16,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "GameEditor/UI/Viewport/EditorViewportHost.h"
 #include "GameEditor/UI/Viewport/EditorViewportGizmoOverlay.h"
+#include "GameEditor/UI/Dock/EditorWindowLayout.h"
 #include "GameEditor/UI/Shell/EditorListRows.h"
 #include "GUI/Declarative/Build.h"
 #include "GameEditor/EditorLayer.h"
@@ -640,7 +641,7 @@ void EditorSurface::persistDockLayouts()
     window["windowRoot"]  = _dockContext->exportLayoutJson();
     window["ownedNested"] = _ownedDockContext->exportLayoutJson();
     nlohmann::json document;
-    document["version"] = 4;
+    document["version"] = kEditorWindowLayoutVersion;
     document["windows"] = nlohmann::json::array({std::move(window)});
     ConfigManager::Editor("editor").set("dockLayout", document).flush();
 }

@@ -9,6 +9,7 @@
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GameEditor/UI/Dock/EditorNestedDockHost.h"
+#include "GameEditor/UI/Dock/EditorWindowLayout.h"
 #include "GameEditor/UI/Viewport/EditorViewportHost.h"
 
 #include <cstddef>
@@ -25,37 +26,41 @@ namespace
 
 // Factory dock layout documents (first-run / Window>Reset / fallback). These
 // literals are the single source of truth: nothing reads a layout JSON from
-// disk at runtime, so edit here.
+// disk at runtime, so edit here. v2 documents split the two concerns:
+// `tree` is the node structure (splits + leaf references), `dockSpace` holds
+// each leaf's stack data (role, panels, selection) keyed by leaf id.
 constexpr std::string_view kFactoryWindowRootLayoutJson = R"JSON(
 {
-  "version": 1,
-  "root": {
+  "version": 2,
+  "tree": {
     "kind": "split",
     "orientation": "vertical",
     "ratio": 0.78,
     "minExtent": [120.0, 120.0],
     "children": [
-      {
-        "kind": "leaf",
-        "leafRole": "page",
-        "hideTabBar": true,
-        "panels": ["level-editor", "ui-designer"],
-        "selected": "level-editor"
-      },
-      {
-        "kind": "leaf",
-        "leafRole": "tools",
-        "panels": [
-          "content-browser",
-          "frame-stats",
-          "runtime-tools",
-          "render-settings",
-          "asset-inspector",
-          "debug-images"
-        ],
-        "selected": "content-browser"
-      }
+      { "kind": "leaf", "id": "page" },
+      { "kind": "leaf", "id": "tools" }
     ]
+  },
+  "dockSpace": {
+    "page": {
+      "role": "page",
+      "hideTabBar": true,
+      "panels": ["level-editor", "ui-designer"],
+      "selected": "level-editor"
+    },
+    "tools": {
+      "role": "tools",
+      "panels": [
+        "content-browser",
+        "frame-stats",
+        "runtime-tools",
+        "render-settings",
+        "asset-inspector",
+        "debug-images"
+      ],
+      "selected": "content-browser"
+    }
   },
   "floating": []
 }
@@ -63,8 +68,8 @@ constexpr std::string_view kFactoryWindowRootLayoutJson = R"JSON(
 
 constexpr std::string_view kFactoryOwnedNestedLayoutJson = R"JSON(
 {
-  "version": 1,
-  "root": {
+  "version": 2,
+  "tree": {
     "kind": "split",
     "orientation": "horizontal",
     "ratio": 0.78,
@@ -72,41 +77,31 @@ constexpr std::string_view kFactoryOwnedNestedLayoutJson = R"JSON(
     "children": [
       {
         "kind": "split",
-        "orientation": "horizontal",
+        "orientation": "vertical",
         "ratio": 0.22,
         "minExtent": [120.0, 120.0],
         "children": [
-          {
-            "kind": "leaf",
-            "panels": ["hierarchy"],
-            "selected": "hierarchy"
-          },
+          { "kind": "leaf", "id": "hierarchy" },
           {
             "kind": "split",
-            "orientation": "horizontal",
+            "orientation": "vertical",
             "ratio": 0.0,
             "minExtent": [54.0, 80.0],
             "children": [
-              {
-                "kind": "leaf",
-                "panels": ["play-toolbar"],
-                "selected": "play-toolbar"
-              },
-              {
-                "kind": "leaf",
-                "panels": ["viewport"],
-                "selected": "viewport"
-              }
+              { "kind": "leaf", "id": "play-toolbar" },
+              { "kind": "leaf", "id": "viewport" }
             ]
           }
         ]
       },
-      {
-        "kind": "leaf",
-        "panels": ["inspector"],
-        "selected": "inspector"
-      }
+      { "kind": "leaf", "id": "inspector" }
     ]
+  },
+  "dockSpace": {
+    "hierarchy":    { "panels": ["hierarchy"] },
+    "play-toolbar": { "panels": ["play-toolbar"] },
+    "viewport":     { "panels": ["viewport"] },
+    "inspector":    { "panels": ["inspector"] }
   },
   "floating": []
 }
@@ -114,8 +109,8 @@ constexpr std::string_view kFactoryOwnedNestedLayoutJson = R"JSON(
 
 constexpr std::string_view kFactoryUIOwnedNestedLayoutJson = R"JSON(
 {
-  "version": 1,
-  "root": {
+  "version": 2,
+  "tree": {
     "kind": "split",
     "orientation": "vertical",
     "ratio": 0.72,
@@ -127,24 +122,17 @@ constexpr std::string_view kFactoryUIOwnedNestedLayoutJson = R"JSON(
         "ratio": 0.28,
         "minExtent": [80.0, 80.0],
         "children": [
-          {
-            "kind": "leaf",
-            "panels": ["ui-parameters"],
-            "selected": "ui-parameters"
-          },
-          {
-            "kind": "leaf",
-            "panels": ["ui-preview", "ui-hierarchy"],
-            "selected": "ui-preview"
-          }
+          { "kind": "leaf", "id": "ui-parameters" },
+          { "kind": "leaf", "id": "ui-preview" }
         ]
       },
-      {
-        "kind": "leaf",
-        "panels": ["ui-inspector"],
-        "selected": "ui-inspector"
-      }
+      { "kind": "leaf", "id": "ui-inspector" }
     ]
+  },
+  "dockSpace": {
+    "ui-parameters": { "panels": ["ui-parameters"] },
+    "ui-preview":    { "panels": ["ui-preview", "ui-hierarchy"], "selected": "ui-preview" },
+    "ui-inspector":  { "panels": ["ui-inspector"] }
   },
   "floating": []
 }
@@ -152,8 +140,8 @@ constexpr std::string_view kFactoryUIOwnedNestedLayoutJson = R"JSON(
 
 constexpr std::string_view kFactoryMaterialOwnedNestedLayoutJson = R"JSON(
 {
-  "version": 1,
-  "root": {
+  "version": 2,
+  "tree": {
     "kind": "split",
     "orientation": "vertical",
     "ratio": 0.72,
@@ -165,24 +153,17 @@ constexpr std::string_view kFactoryMaterialOwnedNestedLayoutJson = R"JSON(
         "ratio": 0.55,
         "minExtent": [80.0, 80.0],
         "children": [
-          {
-            "kind": "leaf",
-            "panels": ["material-preview", "material-hierarchy"],
-            "selected": "material-preview"
-          },
-          {
-            "kind": "leaf",
-            "panels": ["material-parameters"],
-            "selected": "material-parameters"
-          }
+          { "kind": "leaf", "id": "material-preview" },
+          { "kind": "leaf", "id": "material-parameters" }
         ]
       },
-      {
-        "kind": "leaf",
-        "panels": ["material-inspector"],
-        "selected": "material-inspector"
-      }
+      { "kind": "leaf", "id": "material-inspector" }
     ]
+  },
+  "dockSpace": {
+    "material-preview":    { "panels": ["material-preview", "material-hierarchy"], "selected": "material-preview" },
+    "material-parameters": { "panels": ["material-parameters"] },
+    "material-inspector":  { "panels": ["material-inspector"] }
   },
   "floating": []
 }
@@ -190,8 +171,8 @@ constexpr std::string_view kFactoryMaterialOwnedNestedLayoutJson = R"JSON(
 
 constexpr std::string_view kFactoryScriptOwnedNestedLayoutJson = R"JSON(
 {
-  "version": 1,
-  "root": {
+  "version": 2,
+  "tree": {
     "kind": "split",
     "orientation": "vertical",
     "ratio": 0.72,
@@ -203,38 +184,21 @@ constexpr std::string_view kFactoryScriptOwnedNestedLayoutJson = R"JSON(
         "ratio": 0.55,
         "minExtent": [80.0, 80.0],
         "children": [
-          {
-            "kind": "leaf",
-            "panels": ["script-preview", "script-hierarchy"],
-            "selected": "script-preview"
-          },
-          {
-            "kind": "leaf",
-            "panels": ["script-parameters"],
-            "selected": "script-parameters"
-          }
+          { "kind": "leaf", "id": "script-preview" },
+          { "kind": "leaf", "id": "script-parameters" }
         ]
       },
-      {
-        "kind": "leaf",
-        "panels": ["script-inspector"],
-        "selected": "script-inspector"
-      }
+      { "kind": "leaf", "id": "script-inspector" }
     ]
+  },
+  "dockSpace": {
+    "script-preview":    { "panels": ["script-preview", "script-hierarchy"], "selected": "script-preview" },
+    "script-parameters": { "panels": ["script-parameters"] },
+    "script-inspector":  { "panels": ["script-inspector"] }
   },
   "floating": []
 }
 )JSON";
-
-bool layoutContainsPanel(const nlohmann::json& layout, std::string_view key)
-{
-    for (const std::string& panel : FDockContext::collectLayoutPanelKeys(layout)) {
-        if (panel == key) {
-            return true;
-        }
-    }
-    return false;
-}
 
 /// Pixel floor for a split edge. This is a min, not an allocation: do not
 /// rewrite `ratio` (that steals divider drag and can pin pointer capture).
@@ -432,50 +396,20 @@ void EditorDockWorkspace::applyAdoptPolicy()
 nlohmann::json EditorDockWorkspace::layoutDocumentForPlacement(const nlohmann::json& document,
                                                                EEditorTabPlacement placement)
 {
-    // v4 envelope: OS windows[] (main record still has windowRoot / ownedNested).
-    // Dock-level native windows[] stays inside those documents (MW-707).
-    if (document.is_object() && document.value("version", 1) >= 4) {
-        const nlohmann::json* record = nullptr;
-        if (document.contains("windows") && document["windows"].is_array()) {
-            for (const nlohmann::json& window : document["windows"]) {
-                if (!window.is_object()) {
-                    continue;
-                }
-                if (!record) {
-                    record = &window;
-                }
-                if (window.contains("role") && window["role"].is_string() &&
-                    window["role"].get<std::string>() == "main") {
-                    record = &window;
-                    break;
-                }
-            }
-        }
-        if (record) {
+    // v5 envelope: OS windows[] (main record carries windowRoot / ownedNested
+    // v2 dock documents). Dock-level native windows[] stays inside those
+    // documents (MW-707). Anything older (v1-v4) or malformed falls back to
+    // the factory layout.
+    if (document.is_object() && document.value("version", 0) >= kEditorWindowLayoutVersion) {
+        if (const nlohmann::json* record = findMainEditorWindowRecord(document)) {
             const char* field = placement == EEditorTabPlacement::EditorOwnedNested ? "ownedNested"
                                                                                     : "windowRoot";
             if (record->contains(field) && (*record)[field].is_object()) {
                 return (*record)[field];
             }
         }
-        return factoryForPlacement(placement);
     }
-    if (document.is_object() && document.value("version", 1) >= 2) {
-        const char* field = placement == EEditorTabPlacement::EditorOwnedNested ? "ownedNested"
-                                                                                : "windowRoot";
-        if (document.contains(field) && document[field].is_object()) {
-            return document[field];
-        }
-        return factoryForPlacement(placement);
-    }
-
-    if (placement == EEditorTabPlacement::EditorOwnedNested) {
-        return factoryOwnedNestedLayout();
-    }
-    if (layoutContainsPanel(document, "level-editor")) {
-        return document;
-    }
-    return factoryLayout();
+    return factoryForPlacement(placement);
 }
 
 FEditorTabSpawnContext EditorDockWorkspace::makeSpawnContext(const FEditorTabSpawner& spawner) const
