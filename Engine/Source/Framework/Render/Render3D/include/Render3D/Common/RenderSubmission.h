@@ -19,7 +19,6 @@ namespace ya
 struct ICommandBuffer;
 struct IRender;
 struct IRenderResourceFactory;
-struct IRenderSurfaceContext;
 struct SceneSnapshot;
 class RenderSubmissionPool;
 
@@ -35,7 +34,6 @@ class RenderSubmission
     uint64_t                         _frameToken  = 0;
     uint32_t                         _flightIndex = 0;
     ICommandBuffer*                  _cmdBuf      = nullptr;
-    IRenderSurfaceContext*           _hostSurface = nullptr;
     FrameUploadArena*                _arena       = nullptr;
     RenderSubmissionPool*            _pool        = nullptr;
     std::vector<RetainedResource>    _keepalives;
@@ -47,7 +45,6 @@ class RenderSubmission
     [[nodiscard]] uint64_t               frameToken() const { return _frameToken; }
     [[nodiscard]] uint32_t               flightIndex() const { return _flightIndex; }
     [[nodiscard]] ICommandBuffer*        commandBuffer() const { return _cmdBuf; }
-    [[nodiscard]] IRenderSurfaceContext* hostSurface() const { return _hostSurface; }
     [[nodiscard]] IRenderResourceFactory* resourceFactory() const;
     [[nodiscard]] bool                   occupied() const { return _occupied; }
     [[nodiscard]] bool                   isRecording() const { return _occupied && !_finished; }
@@ -102,10 +99,9 @@ class RenderSubmissionPool
     void clear() { destroy(); }
 
     RenderSubmission* acquire(
-        uint32_t               flightIndex,
-        uint64_t               frameToken,
-        ICommandBuffer*        cmdBuf,
-        IRenderSurfaceContext* hostSurface = nullptr);
+        uint32_t        flightIndex,
+        uint64_t        frameToken,
+        ICommandBuffer* cmdBuf);
 
     [[nodiscard]] RenderSubmission*       get(uint32_t flightIndex);
     [[nodiscard]] const RenderSubmission* get(uint32_t flightIndex) const;

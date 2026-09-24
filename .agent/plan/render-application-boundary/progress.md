@@ -1046,3 +1046,34 @@ present 三步，并第一次让“没有可呈现窗口的帧”“一帧呈现
   fence 之下”。判据与依据：设备在帧内第一次 `submitFrame` 时武装 fence、后续提交共同引用它，而三条真实
   present 路径（parity / workbench / editor smoke）全绿；这条是时序性质，需要真实设备加帧序探针，本批不造。
 - 偏离：无。
+
+---
+
+## 2026-09-24 AB4-2f step 3（批 1/4）— RenderSubmission 不再持有 surface
+
+唯一目标：**删掉提交路径上最后一个 surface 残留**。`RenderSubmission::_hostSurface` 被写入
+（pool `acquire` 第四参、destroy 清空）但 `hostSurface()` 全仓零调用者——纯粹的旧模型尸体，
+与已落地语义"提交是 queue 对 command buffer 的操作"直接冲突。
+
+### 改动
+
+- `RenderSubmission.h`：删 `_hostSurface` 成员、`hostSurface()` 访问器、`RenderSubmissionPool::acquire`
+  的 `IRenderSurfaceContext* hostSurface` 第四参、不再使用的 `IRenderSurfaceContext` 前向声明。
+- `RenderSubmission.cpp`：`destroy()` 与 `acquire()`（两条写入分支）的对应赋值删除。
+- `RenderDeviceState.Frame.cpp`：`beginFrameCommandBuffer` 里 `acquire(flightIndex, frameToken, cmdBuf)`
+  去掉 `plan.present.surface` 实参。
+
+### 测试
+
+- 全仓 grep `_hostSurface` / `hostSurface()` 零命中（写入侧唯一来源就是
+  `RenderDeviceState.Frame.cpp:38`，随本批一并消失）。
+
+### 验证
+
+- build：`ya-render-3d` ok（23s；告警来自 `Engine/Plugins/log.cc` 的既有改动，与本批无关）。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：AB4-2f step 3 的其余三批（record 门控解除、imageIndex 单一事实源、DisplayedView 改名）
+  各自独立 commit，见后续 progress 条目。
+- 偏离：无。

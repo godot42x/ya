@@ -409,6 +409,25 @@ AB4-step2（待做）不是一个改动，而是以下有依赖关系的闭环�
    `ya-testing` 1321 tests / 1320 passed / 1 skipped（同一 platform guard）/ 0 failed；
    GUIWorkbench `--smoke-actions` exit=0 且无 VMA leak；parity 两张图 md5 仍
    `c775245ae636f15b41da8485319a2267`；editor smoke exit=0。
+
+   AB4-2f step 3（2026-09-24，闭环批）：**单 host surface 编排下的语义收尾**。目标不是多窗口，
+   而是把「GameRuntime = 1 host surface + N View（分屏预留）」从注释意图变成代码事实，四个子项：
+
+   1. `RenderSubmission` 不再持有 surface：`_hostSurface` / `hostSurface()` / pool `acquire`
+      第四参删除（写入后零读取的死残留）。提交路径上只剩 `Queue + CommandBuffer + 同步对`。
+   2. View 录制不再被 present acquire 门控：`RenderDeviceState::beginFrameCommandBuffer` 的
+      `!plan.present.surface || imageIndex < 0` 整帧拒绝删除。"窗口最小化时跳过录制"是 host 策略，
+      归编排层（GameRuntimeTickOrchestrator 的 acquire 失败早退）；渲染器只回答 plan 里有没有 View。
+      offscreen-only 帧（plan 无 present、有 View）从此在 Render3D 侧合法。
+   3. acquired imageIndex 单一事实源：`PresentationGraphService::recordDisplayCompose` 停止在录制期
+      回查 `swapchain->getCurImageIndex()`，改为接收 plan 携带的 `PresentFrameInput::imageIndex`。
+      swapchain 直查只保留给帧外回读查询（automation capture 等）。
+   4. GameRuntime 侧命名收口：`HostViewportView` → `DisplayedView`（头文件
+      `GameRuntime/DisplayedView.h`，公开路径唯一物理位置），`AppRenderState::hostViewport` →
+      `displayedView`，`AppRenderServices::getHostViewport*()` → `getDisplayedView*()`。命名直述
+      "本帧被显示的那个 View"，不定死 host、不声称全屏；分屏演进 = display root 上叠加 N 个
+      `ViewDisplayInset`（机制已在），不是第二个 surface。产品语义（单 GameUIHost、单 InputRouter、
+      `findPrimaryCamera` producer）本批不动，属于分屏产品层。
 2. **AB4-2c：GUI 所有窗口成为同级 session（step 1 已落地 2026-09-24）。**
 
    已落地：`IGUIWindowSession` 从 `GUIWindowSession.h` 拆到自己的头，`GUIWindowHost` 直接实现它——

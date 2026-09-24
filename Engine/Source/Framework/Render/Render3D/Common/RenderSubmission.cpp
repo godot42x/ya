@@ -138,7 +138,6 @@ void RenderSubmissionPool::destroy()
         flight._keepalives.clear();
         flight._families.clear();
         flight._cmdBuf      = nullptr;
-        flight._hostSurface = nullptr;
         flight._occupied    = false;
         flight._finished    = false;
         flight._frameToken  = 0;
@@ -151,10 +150,9 @@ void RenderSubmissionPool::destroy()
 }
 
 RenderSubmission* RenderSubmissionPool::acquire(
-    uint32_t               flightIndex,
-    uint64_t               frameToken,
-    ICommandBuffer*        cmdBuf,
-    IRenderSurfaceContext* hostSurface)
+    uint32_t        flightIndex,
+    uint64_t        frameToken,
+    ICommandBuffer* cmdBuf)
 {
     if (!_arena || flightIndex >= MAX_FLIGHTS_IN_FLIGHT || !cmdBuf) {
         return nullptr;
@@ -165,8 +163,7 @@ RenderSubmission* RenderSubmissionPool::acquire(
         if (flight._finished) {
             return nullptr;
         }
-        flight._cmdBuf      = cmdBuf;
-        flight._hostSurface = hostSurface;
+        flight._cmdBuf = cmdBuf;
         return &flight;
     }
 
@@ -175,7 +172,6 @@ RenderSubmission* RenderSubmissionPool::acquire(
     flight._frameToken  = frameToken;
     flight._flightIndex = flightIndex;
     flight._cmdBuf      = cmdBuf;
-    flight._hostSurface = hostSurface;
     flight._arena       = _arena.get();
     flight._pool        = this;
     flight._occupied    = true;

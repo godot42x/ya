@@ -35,7 +35,7 @@ bool RenderDeviceState::beginFrameCommandBuffer(const RenderFramePlan& plan, std
         _render->beginFrameGpuTiming(cmdBuf.get());
     }
 
-    if (!_submissions.acquire(flightIndex, plan.frame.frameIndex, cmdBuf.get(), plan.present.surface)) {
+    if (!_submissions.acquire(flightIndex, plan.frame.frameIndex, cmdBuf.get())) {
         YA_CORE_ERROR("Recording flight {} failed to begin a live submission", flightIndex);
         return false;
     }
