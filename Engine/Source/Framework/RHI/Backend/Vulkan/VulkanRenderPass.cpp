@@ -11,14 +11,13 @@
 namespace ya
 {
 
-VulkanRenderPass::VulkanRenderPass(VulkanRender *render)
+VulkanRenderPass::VulkanRenderPass(VulkanRender *render, ISwapchain *swapchain)
 {
-    _render    = render;
-    _swapChain = _render->primaryVulkanSwapchain();
-
-    // _swapChain->onRecreate.addLambda([this]() {
-    // this->recreate(this->getCI());
-    // });
+    _render = render;
+    // The pass describes one surface's present target, so the swapchain is
+    // handed in rather than looked up: the device has several and privileges
+    // none of them.
+    _swapChain = swapchain ? swapchain->as<VulkanSwapChain>() : nullptr;
 }
 
 
@@ -112,12 +111,17 @@ bool VulkanRenderPass::createDefaultRenderPass()
 {
     YA_CORE_INFO("no attachments defined, using default attachments preset");
 
+    if (!_swapChain) {
+        YA_CORE_ERROR("A default render pass needs the surface's swapchain format, but this pass was built without one");
+        return false;
+    }
+
     std::vector<VkAttachmentDescription> vkAttachments;
 
     // default color attachment
     VkAttachmentDescription defaultColorAttachment({
         .flags   = 0,
-        .format  = _render->primaryVulkanSwapchain()->_surfaceFormat,
+        .format  = _swapChain->_surfaceFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -186,7 +190,11 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
     // Convert abstract configuration to Vulkan-specific values
     std::vector<VkAttachmentDescription> attachmentDescs;
 
-    VkFormat surfaceFormat = _render->primaryVulkanSwapchain()->getSurfaceFormat();
+    if (!_swapChain) {
+        YA_CORE_ERROR("A render pass needs its surface's swapchain format, but this pass was built without one");
+        return false;
+    }
+    VkFormat surfaceFormat = _swapChain->getSurfaceFormat();
     // Convert attachments from config
     for (const AttachmentDescription &attachmentDesc : _ci.attachments) {
         VkAttachmentDescription vkAttachmentDesc{

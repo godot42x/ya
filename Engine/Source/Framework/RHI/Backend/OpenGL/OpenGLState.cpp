@@ -40,12 +40,19 @@ bool OpenGLState::initialize()
 
 void OpenGLState::init(const ya::RenderCreateInfo &renderCI)
 {
+    // The OpenGL backend is retired (not built); it reads the first startup
+    // window's description here only so this historical file keeps compiling
+    // against the rank-free surface model, where a device has a set of windows
+    // rather than one it was "created with".
+    const SwapchainCreateInfo startupCI = renderCI.startupSurfaces.empty()
+                                              ? SwapchainCreateInfo{}
+                                              : renderCI.startupSurfaces.front().swapchainCI;
     _window = new SDLNativeWindow();
     _window->init();
     _window->recreate(WindowCreateInfo{
         .renderAPI = renderCI.renderAPI,
-        .width     = renderCI.swapchainCI.width,
-        .height    = renderCI.swapchainCI.height,
+        .width     = startupCI.width,
+        .height    = startupCI.height,
     });
     m_Window = static_cast<SDL_Window *>(_window->getNativeWindowHandle());
 

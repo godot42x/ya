@@ -740,3 +740,93 @@ retain/retire）、UI compose（落到 display root 的 RT，logical viewport �
   families → compose → retain → end → seal 这段顺序要真 command buffer 才能驱动，本批没有任何用例覆盖它，
   只能靠 `RuntimeRenderContext.cpp` 里那条可读顺序与产品级自动化（parity / smoke）兜。
 - 偏离：无。
+## 2026-09-24 架构复核 — 收敛 Window/Surface/View/Pipeline 与提交生命周期
+
+本轮只做计划审计和计划更新，没有修改生产代码，也没有触碰既存的 `Engine/Plugins/log.cc` submodule 状态。
+
+核对了当前 `RenderDeviceState`、`RuntimeRenderContext`、`RenderSubmission`、`IRenderSurfaceContext`、
+Vulkan surface/device 初始化、`GUIApp` / `GUIWindowManager` / `GUIWindowSession` 以及 GameRuntime 的
+acquire → record → submit → present 路径，补入 `plan.md` 的结论如下：
+
+- 旧计划把“无 Surface 仍可记录 offscreen View”写成了目标，但当前 `beginFrameCommandBuffer()` 以
+  acquired Surface/image 为前置；计划改成先记录独立 View work，再按 Surface acquire 状态记录 display compose。
+- `IRenderSurfaceContext::begin/end` 仍把 acquire 与 submit/present 合并，`RenderSubmission` 仍保存单一
+  `_hostSurface`，`RecordedFrame` 仍只有单 command buffer；新增 AB4-2f，要求显式 `FrameRecording`、
+  `SubmissionGraph`、acquire token 和逐类失败路径，禁止用空提交掩盖协议缺失。
+- Vulkan queue plan 改为由 startup surfaces 的完整 requirements 集合决定，运行时 surface 只使用已启用且
+  兼容的 queue family；删除“启用所有 queue family”这一未经验证的默认策略。
+- 补齐 Window/Surface/View 的 generation、logical/drawable/DPI/Surface/View extent、format/color-space/
+  alpha/tone-map、SceneId/contentRevision、GUI session 全局 DPI、关闭/重建顺序、截图/diagnostic 身份等遗漏。
+- 明确当前 `SceneManager::getActiveScene()`、GUIApp primary/extras、`FontManager::setActiveDpiScale()`、
+  `recordExtensions`、host viewport facade 都是迁移中的隐藏耦合；各自写入目标 owner 和验收条件。
+- 增加 §4.0 执行依赖：契约冻结 → RHI presentation backend → GUI session → 多 View/多 Surface RenderPlan
+  → 查询与命名清理。
+
+验证：`git diff --check` 通过；本轮为文档审计，未执行编译/测试。
+## 2026-09-24 AB4-2b step 1 — surface 注册不再有“首窗”
+
+唯一目标：**RHI 的 surface 对象模型里不再存在“设备创建时附带的那个窗口”**，startup 窗口与后续窗口
+走同一注册路径、同一身份（`SurfaceId`）、同一生命周期所有权。
+
+### 改动
+
+- `RHI/Core/SurfaceId.h`（新）：`SurfaceId{index, generation}`，默认值无效；同 slot 换租户后旧 id
+  解析不到东西，而不是悄悄指向新窗口。
+- `RenderCreateInfo`：`nativeWindow + swapchainCI` → `std::vector<StartupSurfaceDesc>`。设备创建前
+   app 一次给出“必须能呈现的窗口集合”，backend 据此建 VkSurfaceKHR、选 physical device 与 queue plan；
+   startup 是**时序**事实（这些窗口先于设备存在），不是等级。
+- `IRender`：删 `getPrimarySurfaceContext()` / `primaryWindow()`；新增
+  `createSurfaceContext(window, desc) -> SurfaceId`、`findSurface(SurfaceId)`、`findSurface(INativeWindow&)`、
+  `findSurfaceId(INativeWindow&)`、`destroySurfaceContext(SurfaceId)`。surface 由设备持有，调用方持有 id。
+- Vulkan：删 `_surface`（单值）/`_primarySurface`/`createPrimarySurface()`/`primaryVulkanSwapchain()`；
+  新增 `_startupSurfaces`（窗口 + swapchain desc + VkSurfaceKHR）与 `_surfaces`（slot + generation）注册表、
+  `createStartupSurfaceHandles()`、`createStartupSurfaces()`、`registerSurface()`。instance 扩展取所有
+  startup 窗口的并集；present family 必须是“能呈现整组 startup 窗口”的 family；device teardown 先清空
+  注册表，再由设备销毁它创建的 VkSurfaceKHR。
+- `VulkanRenderSurfaceContext`：`attachExistingSurface` → `adoptStartupSurface`（设备持有 VkSurfaceKHR，
+  context 不拥有）；`_debugLabel` 从 `const char*` 改为 `std::string`。
+- 死抽象连带修正：`IRenderPass::create` 增加显式的 `ISwapchain&`（pass 描述的是**某个 surface**的
+  present target，设备不再有“那个” swapchain），`VulkanRenderPass` 由传入 swapchain 提供 format，
+  null 时给出明确错误。删除 render-pass 抽象本身仍属独立批次。
+- GUI host：`GUIAppHost` 用 `findSurface(window)` 拿自己的 surface；新增
+  `makeHostWindowSurfaceDesc(config)` 作为“host 窗口 → swapchain 描述”的唯一策略点，startup 窗口与
+  `GUIWindowManager` 开的后续窗口都用它。`GUIWindowSession` 的 `unique_ptr ownedPresent` →
+  `SurfaceId surfaceId` + 解析指针，`destroyOwnedSession` 在 present 资源清空后
+  `destroySurfaceContext()`。
+- GameRuntime：`AppRenderState::hostSurfaceId`（init 时由 app 自己的主窗口求得）成为
+  `AppRenderServices::getHostSurface()` 的唯一来源；`AppLifecycle` 不再调用 `render->primaryWindow()`，
+  改为 `getOrCreateMainNativeWindow(...)` + `findSurfaceId(...)`；`RenderDeviceState` 记住启动窗口
+  （`_startupWindow`）供 capture target 命名使用，`initDiagnostics` 走 `findSurface(*window)`。
+- `OpenGLState::init`（退役、不参与构建）跟随新模型读 `startupSurfaces.front().swapchainCI`，避免留一个
+  编译不过的历史文件。
+
+### 测试
+
+- `Engine/Test/Source/RhiVulkan/RHISurfaceContextTest.cpp`：全部用例改为 startup surface 模型；
+  新增 `AReleasedSurfaceIdDoesNotResolveToTheNextTenantOfItsSlot`（释放后旧 id 不解析、不能再次 destroy，
+  重新注册复用 slot 但 generation 不同）与 `StartupWindowsAndLaterWindowsAreRegisteredAlike`
+  （两个 startup 窗口各自可寻址、各自可 present，没有 rank）。
+- `EditorWindowSessionTest.HostAndSurfaceAskForTheirOwnSurface`（原 `...DoNotReadPrimarySwapchain`）：
+  除 `primarySwapchain`/`primaryWindow` 外，再禁止 `getPrimarySurfaceContext`/`createPrimarySurface` 出现在
+  编辑器的 surface 消费点，保持该守卫的语义。
+
+### 验证
+
+- build：`ya-rhi-vulkan` / `ya-gui-host` / `ya-game-runtime` / `ya-runtime` / `ya-game-editor` / `ya-testing` /
+  `GUIWorkbench` / `-g test` 全部 ok。
+- `xmake r ya-rhi-vulkan-smoke`：**8 passed / 1 skipped**（platform minimize guard，与既有登记同形）。
+- `xmake r ya-testing`：**1319 tests / 1318 passed / 1 skipped / 0 failed**（跳过的同一条 minimize guard）。
+  plan §8 滤镜：692 tests 全绿。
+- `xmake r GUIWorkbench --smoke-actions`：**PASS**（含 drag reparent 与 editor shell，退出时两张 surface 都被正常销毁）。
+- `run_display_compose_parity.py --skip-build`：**PASS**，viewport / presentation md5 仍
+  `c775245ae636f15b41da8485319a2267`（逐字节不变）。
+- `run_widgettree_editor_smoke.py --skip-build`：**exit=0** 六步全过。
+
+### 保留 / 未完成 / 偏离
+
+- 保留（刻意）：多 present family 的 queue plan、offscreen-only 设备（空 startup 集合）今天都是
+  **明确拒绝**而不是已实现路径；`_surfacePresentations` 仍用裸指针为键；acquire/submit/present 仍在
+  `IRenderSurfaceContext::begin/end`（AB4-2f）；GUIApp 仍是 `_primaryWindow` + extras 两个 owner（AB4-2c）。
+- 未覆盖（如实记录）：没有用例覆盖“后续窗口在已启用 family 上不可呈现时注册失败”这条拒绝路径
+  （需要第二个 device/窗口组合，当前 harness 里两个窗口都能呈现）；该路径只有代码与错误信息。
+- 偏离：无。

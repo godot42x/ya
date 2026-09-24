@@ -40,7 +40,167 @@ View/Display compose 会被两个应用各写一遍。
 2. 它是否要知道「当前应用有哪些 Scene / 哪些 View / 哪个窗口」？（是 → 应用层）
 3. 它是否只是为某个面板/工具服务的查询面？（是 → 消费方那一层，不是 renderer）
 
+## 3.1 目标语义：Window、Surface、View、Pipeline 各自独立
+
+这四者不能形成继承链，也不能用“primary/host/current”让其中一个替另一个做身份。
+它们只在应用构造的本 tick render plan 中通过稳定 ID 发生关系。
+
+| 语义 | 唯一事实 / owner | 它不表示什么 | 稳定关联 |
+| --- | --- | --- | --- |
+| `Window` / `WindowSession` | GUI host；原生窗口、WidgetTree、事件与焦点生命周期 | swapchain、相机、渲染分辨率 | `WindowId`；可关联 0 或 1 个呈现 surface（headless 合法） |
+| `Surface` | RHI；一个 window 的呈现能力与 swapchain 生命周期 | Scene、View、WidgetTree、device frame | `SurfaceId`；通常由 app 把 `WindowId → SurfaceId` 绑定 |
+| `SurfaceImage` | 一次 surface acquire 的结果；image index / acquire token | 逻辑帧号、View 输出身份 | `(SurfaceId, acquire serial/image index)`；只在本次提交有效 |
+| `View` | View producer；Scene、camera、projection、输出尺寸、features 与 temporal history key | Window、swapchain、GUI 面板、present 顺序 | owner-scoped `SceneViewKey` / `SceneViewId` |
+| `SceneSnapshot` | 应用 extraction；按 `(Scene, revision)` 去重 | camera、surface、窗口顺序 | View request 引用共享快照 |
+| `RenderPipeline` | Framework/Render；用 immutable view input 执行 Forward/Deferred 等策略 | active window、surface、swapchain、当前 View 的隐式全局状态 | 应用 render configuration 选择策略；View request 可引用策略，不把 pipeline 绑定到 window |
+| `DisplayComposition` | 应用/GUI host；为一个 surface 声明有序图层（View output、UI snapshot、chrome、clear/overlay） | 新相机、新 Scene、渲染管线选择 | `SurfaceId` + `ViewId` / UI snapshot 引用 |
+| `FrameRecording` | Render recording；本次生成的 command work 与资源租约，未必已经提交 | queue submission、present、app tick | recording token；资源 lease 至 completion |
+| `SubmissionGraph` | 应用给出的 work 依赖 + RHI backend 执行的 queue submit/sync | 一个 surface 或一个 View | graph/batch serial；command buffer 只能进入一次 submit |
+
+目标数据关系：
+
+```text
+GUI host: WindowSession[] ──WindowId──┐
+                                     ├─ app-owned binding: WindowId ↔ SurfaceId
+RHI device: SurfaceContext[] ─SurfaceId┘
+
+app tick → SceneSnapshot[(Scene, revision)] → ViewRequest[ViewId]
+                                      └────→ DisplayComposition[SurfaceId]
+ViewRequest → selected RenderPipeline → ViewOutput[ViewId]
+ViewOutput[] → DisplayComposition + acquired SurfaceImage → compose command work
+           → SubmissionGraph → present each acquired SurfaceId on a compatible queue
+```
+
+应用入口应能读完唯一的 orchestration 顺序；但 acquire 不应成为整帧 View 录制的门槛：
+
+```text
+poll OS events once; dispatch to all WindowSessions
+  → tick each live WidgetTree and build its immutable UI snapshot
+  → collect Scene/View requests and Surface display policies
+  → deduplicate Scene extraction; prepare and record requested offscreen Views
+  → acquire each eligible Surface before recording its display composition
+  → compose each acquired Surface's ordered layers; failed/minimized surfaces skip only this step
+  → build/submit the device queue dependency graph with acquire waits and resource leases
+  → present each acquired Surface after its producing submission is queued
+  → retire closed WindowSessions/Surfaces only after GPU and present use is complete
+```
+
+Surface acquire 只必须发生在依赖其 swapchain image 的 display-compose recording 之前；它不是
+offscreen View recording 的前置条件。所有 OS event 由一个 host pump 收集一次，再按 WindowId 分发，
+不能让每个 WindowSession 各自 poll 全局事件队列。acquire 失败、最小化、swapchain out-of-date 只取消
+该 Surface 本 tick 的 display/present，不丢弃仍被请求的 offscreen View work。device-lost 等 device-wide
+错误则使本 tick 全体提交失效，不能伪装成单 Surface 跳过。各队列的 semaphore/fence 关联以实际
+submission dependency graph 为准，不能从 window 数量推导 submission 数量。
+
+硬边界：
+
+- Window 的 logical client extent、drawable/framebuffer pixel extent 与 DPI scale 属于 WindowSession；
+  Surface recreate 更新 swapchain extent / format / color space / present sync；View 的 target extent /
+  render scale 属于 View request。它们由明确的 host/producer 适配规则关联，但不能互相冒充。窗口 DPI
+  变化应更新该窗口的 WidgetTree/snapshot 映射，不应污染其他窗口的 View target。
+- 一个 View 可以不呈现、呈现到一个或多个 Surface；一个 Surface 的 composition 可以组合多个 View
+  和多个 UI 层。View 不再带 `composeOntoViewId`，也没有 `displayRootTask()` / “第一个 root”语义。
+- View 的 3D 管线在 offscreen target 上运行；2D GUI 编辑器可以只声明 GUI display layer，不必制造
+  Scene/View。Game UI 是 GUI snapshot 的一种 layer，不能成为全局唯一的 `FramePacket::uiFrameSnapshot`。
+- SceneSnapshot 按 `(SceneId, contentRevision)` 每 tick 至多抽取一次；revision 必须来自 owner 或
+  等价的 frame-local generation，当前 `sceneRevision = 0` 占位不能作为跨 View 去重键。每个 View 独立提供
+  camera、extent、render scale 与 temporal
+  history。多个 surface 引用同一 View 时复用其 published output；多个不同 View 可复用同一 SceneSnapshot。
+- 现有 `RenderFrameData` 同时装了 SceneSnapshot / per-view draw buckets 与 camera，也装了
+  frameIndex / deltaTime / timeSeconds。闭环时拆为共享 Scene snapshot、per-view prepared input、
+  tick constants 三种数据；不得仅把整块改名为 `PreparedView` 后继续混装。
+- App tick、device flight slot、queue submission serial、各 Surface 的 acquire/image index、
+  View history serial 是不同身份/计数。一个 tick 可无 submission、一个或多个 queue submission；
+  多个 Surface 可共享同一个 graphics submission；任何计数都不得充当另一个的替身。flight slot 只有在
+  对应 GPU completion fence 已满足后才可复用；Surface image index 只在这次 acquired token 的
+  submit/present 生命周期内有效；View history 按 View identity + generation 独立推进。
+- Surface 的 acquire 与 present 是 per-surface；queue submission/completion 是 device/queue 工作。
+  一个 command buffer 只能提交一次；多 Surface 共享 recording 时，应由 submission 明确等待所有关联的
+  image-available sync、为各 acquired image 产生可等待的完成 sync，再分别调用各 Surface 的 present。
+  若 queue family 需要 ownership transfer，也必须成为 graph dependency，而非 Surface::end 的隐藏副作用。
+  不能让 `SurfaceContext::end()` 同时暗含任意 command submit 与 present，也不能假设一个 window 对应
+  一次 GPU submit。
+- Pipeline 是“如何处理一份 View 输入”的执行策略；应用 render configuration 决定采用的策略，View request
+  可明确引用该配置。当前产品可以对所有 View 选同一 Forward/Deferred 策略，架构不把策略绑定到 window。
+  pipeline 不 `begin/end` surface，也不控制 acquire、
+  present 或窗口循环。graph/pass 的执行状态属于本次 recording/submission，pipeline 对象只保留明确可复用
+  的 immutable config / device cache，不留“上次 active View”的隐式状态。
+
+当前代码中必须随闭环删除的混合语义：`SceneViewDesc::composeOntoViewId`、
+`SceneRenderPlan::displayRootTask()` 的首项回退、`HostViewportView` 单一 View 缓存、
+`RenderFramePlan::present` 单值、`FramePacket::uiFrameSnapshot` 单值，以及 RHI / GUI host 的
+primary surface/window 所有权。保留同 Scene snapshot 去重、owner-scoped View key、
+`ViewTargetStore` 生命周期和 app-owned record 顺序。
+
+### 3.2 当前计划遗漏的生命周期与隐藏全局状态
+
+下列不是可选“以后优化”，而是多窗口/多 View 闭环的正确性条件。实现时要纳入对应 checkpoint 的
+验收，不额外制造只改名的批次。
+
+| 事实 | 当前耦合/证据 | 目标 owner 与收口要求 |
+| --- | --- | --- |
+| 窗口身份与资源代次 | GUI 用 `GUIWindowId`，RHI/render 传裸 `IRenderSurfaceContext*`；present target/cache 可能跨 surface 重建 | WindowId、SurfaceId、ViewId 各自类型化；surface/window recreate 或 ID reuse 带 generation。异步读回、诊断、catalog、输出查询都带身份，禁止缓存裸指针作为永久 key |
+| acquire 事务与 submission | `IRenderSurfaceContext::begin/end` 将 acquire 与 submit+present 包在 surface；`RenderSubmission::finish()` 只结束 recording，却保存单一 `_hostSurface`；`RecordedFrame` 仅一个 command buffer | acquired image 是一次性 token；recording 产出 command work + resource leases；device 建立一次性 submission dependency graph；surface 只 acquire/present；失败路径要消费/取消 acquired token，不能遗留 semaphore/fence 处于不可复用状态 |
+| partial failure | 当前 `RecordedFrame` 无效时向已 acquire surface 提交空命令；多个 Surface 尚无 acquire 集合模型 | 明确 acquire failed / out-of-date / minimized / record failed / submit failed / device lost 的逐级处理。只做 per-surface skip 的错误不得吞成 device-wide 错误；acquire 成功后任何早退必须仍合法地消费 image-available semaphore 并释放 image |
+| 帧内与跨帧状态 | `RenderDeviceState` 聚合 `_submissions`、`ViewTargetStore`、pipeline controller、processor/resource caches、offscreen jobs、diagnostics、surface presentation | 按 device lifetime cache、tick-local input/plan、View lifetime/history、Surface lifetime、flight-slot resources、submission lifetime leases 分类；只有跨帧不变量需要常驻。`beginSubmission()` 语义应改为一次 recording/family 明确调用，不可用 pipeline 的隐式 current frame |
+| Scene 身份与“当前世界” | `GameRuntimeTickOrchestrator` / `EditorViewProducer` 仍从 `SceneManager::getActiveScene()` / `collectContext.activeScene` 推导请求；编辑器注释和自动化接口仍使用 world/viewport 词汇 | `SceneId` 必须由 View producer 明确提交；SceneManager 的 active scene 只是产品选择，不能成为 renderer 或 scheduler 的隐式查询。Level scene、PIE scene、材质/缩略图 preview scene、独立 editor document 都可各自提交 Scene-backed request；没有 Scene 的 preview 走 standalone offscreen request |
+| Pipeline 活状态 | `PipelineCoordinator` 保存 active/pending strategy，Forward/Deferred 仍有 submission/view begin hooks | active 策略及 pending settings 属应用/产品配置；pipeline 实例只持共享不可变 recipe/device cache；每个 call 显式接收 `PreparedView`、Scene-family data、recording context 并返回输出。safe-point reload 是应用 orchestration 的显式步骤 |
+| 尺寸、色彩空间 | 当前每 surface `SurfaceWritePass` 知 format，但 Display layer 没完整列 color space/alpha/HDR/tone-map contract；`FramePacket::renderScale` 全局 | Window logical/drawable/DPI、Surface extent/format/color space、View target extent/scale 分别持有；display layer 显式给采样编码/alpha/blend，Surface policy 选 tone-map/encoding。移除全局 `FramePacket::renderScale`，缩放归 View |
+| GUI 全局状态 | `GUIApp` 的 primary 与 manager extras 分治；每 session 有 tree/snapshot；`FontManager::setActiveDpiScale()` 是进程级可变值 | 一个 OS event pump + session registry；每 tree 独立 tick/snapshot/input/focus/DPI。字体 atlas/字体实例的 DPI 身份需是显式 per-window/per-scale 资源或明确的共享逻辑像素策略，不能依赖“最后 tick 的窗口”全局 active DPI |
+| 退出 / 重建 | session close 会 wait surface flight；surface cache `SurfacePresentation` 随 renderer shutdown 清理 | 先停止产生新 plan，再撤销 session 的 View/UI 引用，等待相关 submission 与 present completion，释放 swapchain-dependent presentation resources，销毁 Surface，再销毁 native window；device shutdown 最后。resize/recreate 同样在该 Surface 的 GPU 使用完成后替换 generation |
+| GUI-only 与异步 offscreen | GUI Framework 不依赖 Render3D；material/thumbnail/preview 可没有 Scene | 将 RenderRequest 分为 Scene-backed View 与 standalone image/offscreen task；UI-only composition 是独立 display layer，不伪造空 Scene/View。offscreen task 的输出/同步进入同一 submission graph，但不被窗口 present 必需性门控 |
+| 模块扩展行为 | `RenderFramePlan::recordExtensions` 保存 `IFrameRecordExtensions*`，extension 接口从 data plan 回调行为 | plan 只含数据；GameEditor/GameUI 的 overlay、capture 和 chrome 阶段由应用 loop 在明确阶段调用，并将录制结果加入同一 recording graph。Framework 不持有应用对象指针，不靠 callback 把顺序藏回 renderer |
+| 输出查询与截图 | 自动化和编辑器通过 `getHostViewportOutput()`、`getHostViewportView()` 等单宿主 facade 取图；截图同时有 viewport/presentation/offscreen 三类目标 | 所有输出查询显式带 `ViewId`、`SurfaceId` 或 standalone target id，以及 frame/generation；“host viewport”只能是 GameEditor 的产品 binding，不能成为 Render/GUI 的公共身份。截图服务消费已发布 immutable output，不触发额外渲染或隐式 acquire |
+
+这里的 “一次 queue submission”不是架构硬限制；硬约束是每份 command buffer 只提交一次，跨 queue 的 wait/signal、ownership transfer、resource keepalive 和 completion 必须显式建图。先用当前单 graphics queue 完成一个 device submission + 多 surface presents；只有 RHI backend 确实要求多 queue 时才拆多个 submission node，不为抽象未来并行而先建复杂调度器。
+
+### 3.3 `RenderDeviceState` 现有成员的生命周期盘点
+
+这类成员不能一起“下沉到 Renderer”或一起搬到 `RuntimeRenderContext`。迁移时按下面的生命周期分组，
+每组只允许有一个 owner：
+
+| 生命周期 | 当前代表 | 目标处理 |
+| --- | --- | --- |
+| device lifetime | `IRender*`、shader storage、pipeline recipes/PSO、resource factory、共享 descriptor/layout cache | 留在 Framework/Render 或 RHI device owner；只提供线程安全/显式的 resource API |
+| scene-derived lifetime | `EnvironmentLightingProcessor`、`TerrainProcessor`、`GameplayResourceBinding`、按 Scene 的 derived resource cache | 由应用在 tick 前提供 Scene 集合；processor 只按 `(SceneId, revision)` 维护派生缓存，不读取 active/current Scene |
+| surface lifetime | `SurfacePresentation`、swapchain imported images、SurfaceWritePass、Surface format/color-space policy | 由 RHI surface registry / display composer 按 `SurfaceId + generation` 持有；Surface 销毁先等待所有引用它的 submission |
+| View lifetime | `ViewTargetStore`、published `RenderViewOutput`、View history/temporal attachments、ViewResourceTable | 由 View identity + target generation 管理；View 输出不绑定窗口，多个 Surface 只引用同一 published output |
+| flight/submission lifetime | command buffers、upload arena、descriptor lanes、`RenderSubmission`/未来 `FrameRecording`、retained resources | 每个 flight slot 只在 GPU completion 后复用；recording seal、queue submit、completion、present 分开表达 |
+| tick-local | `SceneRenderScheduler`、`RenderFramePlan`、SceneSnapshotSet、ViewRequest、SurfaceDisplayPlan、acquire tokens | 由应用 tick 入口创建/封存；不写回长寿命 host state，不被 renderer 保存为 current plan |
+| application policy | `HostRenderSettings`、GameUI/Editor UI snapshot、host viewport binding、module callbacks、截图请求 | 只在 GameRuntime/GameEditor/GUI host；Framework 只消费 immutable layer/input，不反向查询应用对象 |
+
+任何同时跨越两行的类型都必须拆成“长寿命 owner + 本次调用的 immutable input”，不能以一个
+`RenderDeviceState` 字段继续承载两种生命周期。
+
 ## 4. Checkpoints
+
+### 4.0 执行依赖（本次复核后收敛）
+
+后续实现按下面的依赖推进，避免先改数据结构再把旧的窗口等级和提交语义搬进新结构：
+
+1. **契约冻结**：先引入/统一 `WindowId + generation`、`SurfaceId + generation`、`ViewId`、
+   `SceneId + contentRevision`、`FrameRecording` / acquire token 的身份规则；同时把 logical extent、
+   drawable extent、Surface extent、View target extent 的来源写清。此阶段只清理类型和不变量，不宣称多窗口已完成。
+2. **RHI presentation backend**（**step 1 已落地 2026-09-24，见 AB4-2b**）：设备 bootstrap 接收
+   startup surface requirements 集合；renderer 的 primary surface 所有权与 `getPrimarySurfaceContext()`
+   /`primaryWindow()` 已删除，全部 surface 走一个按 `SurfaceId + generation` 的注册表。
+   未完成部分：把 acquire、queue submission、present、completion 拆成可表达失败状态的接口
+   （AB4-2f）；以及“一个 present family 覆盖不了全部窗口”时的多 family queue plan（今天明确拒绝）。
+3. **GUI host session**：把 GUIApp 的首窗口和 extras 纳入同一 session registry、event pump、tick、
+   snapshot、close/recreate 生命周期；移除 `presentGuiSnapshot` 的独立提交循环。GUI Framework 只输出
+   每个 session 的 UI snapshot 和 display layer，不知道 Scene。
+4. **应用 RenderPlan**：一次 tick 先收集所有 Scene/View/offscreen requests，再按 Scene revision 去重，
+   记录每个 View 一次，最后对 acquired Surface 做 display compose；无 Surface 仍允许发布 offscreen output。
+   这一步同时替换单值 `present`、`uiFrameSnapshot`、`displayRootTask()` 和 `recordExtensions` 行为回调。
+5. **查询与清理**：截图、debug catalog、编辑器 host binding 全部改成显式 View/Surface/target 身份；
+   最后才做 `RenderSubmission → FrameRecording`、`PresentationGraphService → DisplayComposer` 等命名/目录
+   收口。若前一步仍存在旧身份，禁止用改名掩盖。
+6. **规范同步**：闭环实现后同步 `.agent/skills/render-arch/SKILL.md` 与活跃的
+   `render-view-family` 计划，把本计划确定的 Window/Surface/View/Frame/Submission 语义写成唯一当前规范；
+   archive 文档保留历史，但必须标明其方案已冻结，不能继续作为执行依据。
+
+每个步骤的验收必须同时覆盖：单窗口、双窗口、无 Surface 的 offscreen、Surface minimized/resize、
+部分 acquire 失败、record/submit 失败后的下一 tick，以及关闭/重建时 GPU 资源保活。
 
 ### AB1 — 应用拥有本帧的 view 排布（已落地）
 
@@ -108,6 +268,30 @@ AB3-step2（待做）：剩下的三个仍是 renderer 自己的事实，只是�
 
 唯一目标：presentation 不再属于「主窗口」，present 的编排由应用持有。
 
+> **架构复核修正（2026-09-24）：AB4-step1 与 AB4-2a 只移走了帧推进、诊断查询和 per-surface 策略，
+> 没有移除单窗口等级。** `RenderCreateInfo` 仍带 `nativeWindow + swapchainCI`；Vulkan 用它创建
+> `_surface`、据它选择 present queue，并把它单独存进 `_primarySurface`。`IRender` 仍提供
+> `getPrimarySurfaceContext()/primaryWindow()`；GUIApp 也把 `_primaryWindow` 和 extra-window manager
+> 分开持有、分开 tick/present。因此“bootstrap fact, not a rank”只是注释约束，底层对象模型仍是
+> 一主多次。AB4 后续不得以 `getHostSurface()` 作为永久抽象把这个模型保留下来。
+>
+> **目标对象模型：** 一个应用创建一个 render device；每个可呈现的 OS window 都由同一条显式
+> `createSurfaceContext(window, swapchainDesc)` 注册路径获得 surface context。Renderer 不拥有
+> “创建 device 时附带的那个窗口”，也不通过无参 getter 暴露默认 surface。GUI host 的全部窗口
+> 是同级 session：统一注册、事件路由、tick、compose 与 present。应用可以有“启动时打开的窗口”或
+> “游戏内容默认显示的 display root”等产品策略，但这些策略由 app 持有明确的 window/surface ID，
+> 不成为 RHI 的窗口等级。
+>
+> **Vulkan 前置设计必须先闭环：** present support 是 physical device + queue family + `VkSurfaceKHR`
+> 的关系，logical device 创建时必须声明启用的 queue families。初次创建设备前，由应用一次性提供所有
+> 已知 startup window 的 surface requirements；backend 创建这些 VkSurface、按整个集合选择 physical
+> device 和 queue plan，再创建 logical device。队列选择优先让 graphics queue 支持全部初始 surfaces；
+> 若做不到，启用满足初始集合所需的最小额外 present queue families。运行时 tear-off 创建的 surface
+> 只能使用已启用且经查询支持它的 family；不支持时，明确拒绝该 surface 并报告能力限制。本阶段不
+> “启用每个 queue family”也不隐式重建 device；若产品要求任意运行时 surface 必成功，再单独设计
+> device rebuild/migration。初始窗口没有主次，但 device bootstrap 必须知道它们的集合。Surface context
+> 创建、swapchain 创建及销毁顺序需和 device teardown 一起验收。
+
 AB4-step1（已落地）：**present target 变成 per-surface**。
 
 - 新增 `SurfacePresentation`：一个 OS 窗口的 present 目标，拥有该 surface 的导入图 + 
@@ -124,30 +308,75 @@ AB4-step1（已落地）：**present target 变成 per-surface**。
 - `record()` 在**录制前**解析/构建本 surface 的 present target（与 `prepareComposePipelines` 
   同处 safe point）。
 
-AB4-step2（待做）：让**额外的 OS 窗口走同一条路**。现状：额外窗口由 GUI host 的
-`presentGuiSnapshot` 自建 acquire/submit/present，并且只呈现 GUI chrome，
-整帧录制完全没参与——所以被拖出去的 viewport 面板看不到世界画面。
-这一步同时需要额外窗口的 chrome 每帧被 tick（现在 `session->tick` 只对默认窗口调用）。
+AB4-step2（待做）不是一个改动，而是以下有依赖关系的闭环；不得先把 `RenderFramePlan` 改成 vector
+就宣称支持多窗口，因为当前 RHI 和 GUI host 仍把第一个窗口单独持有。
+
+1. **AB4-2b：RHI surface 注册不分首窗/后续窗（step 1 已落地 2026-09-24）。**
+
+   已落地：`RenderCreateInfo.nativeWindow + swapchainCI` → `startupSurfaces`（设备被创建时必须能
+   呈现的窗口集合）；`IRender::getPrimarySurfaceContext()` / `primaryWindow()` 删除；Vulkan 的
+   单值 `_surface`、`_primarySurface`、`createPrimarySurface()`、`primaryVulkanSwapchain()` 删除。
+   设备持有 `SurfaceId{index, generation}` 注册表：`createSurfaceContext(window, desc)` 是
+   startup 窗口与后续窗口唯一的注册路径，`findSurface(id)` / `findSurface(window)` /
+   `findSurfaceId(window)` / `destroySurfaceContext(id)` 是唯一的解析与释放路径。释放后的 id
+   不会解析到占用同一 slot 的下一个窗口（generation 判据）。present family 由整组 startup
+   requirements 选出：一个 family 必须能呈现全部 startup 窗口；后续窗口只在其上可呈现时被接受，
+   否则注册失败并给出原因（`VulkanRenderSurfaceContext::queryPresentSupport`）。
+
+   app 侧的“我呈现哪个窗口”随之变成 app 自己的绑定：`AppRenderState::hostSurfaceId`（init 时从
+   host 创建的窗口求得）是 `AppRenderServices::getHostSurface()` 的唯一来源；GUI host 用
+   `findSurface(window)` 命名自己的窗口；`GUIWindowSession` 持有 `SurfaceId` + 解析出的指针，
+   surface 生命周期归设备（`destroySurfaceContext`），不再由 session 的 `unique_ptr` 决定。
+
+   未完成（本 step 明确不做，登记在案）：
+   - 多 present family queue plan：今天一个 family 必须覆盖整组 startup 窗口，否则该设备被跳过；
+     “满足初始集合所需的最小额外 present family”尚未实现。
+   - 无窗口（offscreen-only）设备：`startupSurfaces` 为空会被明确拒绝（queue plan 需要 present
+     family），不是已实现的模式。
+   - `RenderDeviceState::_surfacePresentations` 仍以 `IRenderSurfaceContext*` 为键（AB4-2d 改成
+     `SurfaceId + generation`）。
+   - acquire/submit/present 仍在 `IRenderSurfaceContext::begin/end` 里（AB4-2f）。
+
+   证据：`ya-rhi-vulkan-smoke` 8 passed / 1 skipped（platform minimize guard），新增
+   `RHISurfaceContext.AReleasedSurfaceIdDoesNotResolveToTheNextTenantOfItsSlot` 与
+   `RHISurfaceContext.StartupWindowsAndLaterWindowsAreRegisteredAlike`；`ya-testing` 1319 tests /
+   1318 passed / 1 skipped（同一 platform guard）/ 0 failed；GUIWorkbench `--smoke-actions` PASS；
+   parity 两张图 md5 仍 `c775245ae636f15b41da8485319a2267`；editor smoke exit=0。
+2. **AB4-2c：GUI 所有窗口成为同级 session。** GUIApp 不再把 `_primaryWindow` 与
+   `GUIWindowManager` extras 分开持有；注册、事件路由、tick、关闭和拖拽查找统一走 session registry。
+   应用启动窗口只是一个普通 session 的创建时机，退出策略由应用明确指定。
+3. **AB4-2d：一个逻辑 tick 构造多个 SurfaceDisplayPlan。** render plan 分开携带
+   View requests 与每个 surface 的有序 display layers；acquire result 是录制期间的一次性 runtime token，
+   不属于长期 display policy；record/compose/present 对每个
+   surface 执行同一顺序，绝不按 vector 下标解释默认窗口。UI snapshot 按 WindowId/session 关联，
+   同一 View output 可被多个 display layer 引用。
+4. **AB4-2e：tear-off viewport 绑定自己的 View 与 surface。** Editor 把面板产生的 View request
+   和 display layer 显式关联到目标 session；chrome 采样该 View 的 display image，不借用别的窗口的图。
+
+当前默认窗口由 GUIApp 的 `_primaryWindow` 单独持有，extras 才由 GUI host 的
+`presentGuiSnapshot` 自建 acquire/submit/present，且只呈现 GUI chrome；整帧录制完全没参与，
+所以被拖出去的 viewport 面板看不到世界画面。
 
 #### AB4-step2 的执行口径（沿用 `render-view-family` R2 已登记的决定，不再单独拍板）
 
-**一个逻辑帧、一份 `SceneRenderPlan`、N 个 present surface。** R2 的待办
-（“让同一逻辑帧的多个 surface/window 共用一个 SceneRenderScheduler/SceneRenderPlan，
-避免按窗口重复抽取同一 Scene”）已经把这个口径写死；今天 `RenderFramePlan::present`
-只有一个 `PresentFrameInput`，所以这一步的第一件事是把它变成 N 个 display root，
-而不是“每窗口各渲一帧”。
+**一个逻辑 tick、一份 SceneSnapshot 集合、多份 View request、N 份 surface composition。** R2 的待办
+（“让同一逻辑 tick 的多个 surface/window 共用一个 SceneRenderScheduler/SceneRenderPlan，避免按窗口
+重复抽取同一 Scene”）已经确定此口径；今天 `RenderFramePlan` 仍把 `PresentFrameInput`、UI snapshot
+与唯一 display root 混在一起。目标 plan 拆出 frame facts、Scene snapshots、View requests、各 surface 的
+display layer list 和本次 acquired image。先统一无等级 surface/session 的生命周期，再一次替换这个混合
+plan；不要在旧结构上逐个加 vector 字段。
 
 当前产品的真实顺序（`EditorModule`，与 step2 要改的正是这两处）：
 
 ```
-主窗口   tickRender → record（世界 RT → chrome UIImage → compose → present）
-额外窗口 onAfterPresent → sweepAndPresentExtraWindows
-           → GUIWindowManager::tickTrees + renderAll
-           → presentGuiSnapshot（自建 acquire/submit/present，只有 GUI）
+当前默认窗口 tickRender → record（世界 RT → chrome UIImage → compose → present）
+当前 extras      onAfterPresent → sweepAndPresentExtraWindows
+                → GUIWindowManager::tickTrees + renderAll
+                → presentGuiSnapshot（自建 acquire/submit/present，只有 GUI）
 ```
 
-因此 step2 不只是“多一个 present target”，而是**把额外窗口的 tick / compose / present
-从主窗口 present 之后挪进 app 的录制顺序里**——这是唯一的时序改动，也是最容易踩
+因此 step2 不只是“多一个 present target”，而是**合并默认窗口与 extras 的 session 生命周期，
+再把每个窗口的 tick / compose / present 放进同一个 app 录制顺序**——这是主要时序改动，也是最容易踩
 “chrome tick 在 present 之后”这类半状态的地方。
 
 ##### AB4-2a-1：帧生命周期离开 surface（前置，不动 plan）
@@ -180,15 +409,13 @@ AB4-step2（待做）：让**额外的 OS 窗口走同一条路**。现状：额
 
 ##### AB4-2a-1 收尾之二：调用点不再各自去问 renderer（已落地 2026-09-23）
 
-`getPrimarySurfaceContext()` 本身保留（“device 是用哪个窗口创建的”是 bootstrap 事实），但
-**每帧代码不该各自去问它**。新增 `AppRenderServices::getHostSurface()` 作为 app 唯一的“我呈现哪个窗口”
-出口，三个 app/编辑器调用点改读它（`GameRuntimeTickOrchestrator` 的自动化截图与 `presentFrame`、
-`EditorModule` 的 three 处）。AB4-2b 让一帧呈现多个窗口时，改的是这一个出口与它的消费者，
-不是散落各处的 `primary…` 调用。
-
-同时把 `IRender.h` / `RenderSurfaceContext.h` 上三处“primary”的头注释改写成“bootstrap 事实、
-非等级”：该 surface 在帧循环里没有任何特权（帧簿记是 `beginRecordedFrame`，计时与 flight 槽位是帧号），
-`primaryWindow()` 只服务 app/input 的启动期绑定。
+这次复核推翻了当时“保留 `getPrimarySurfaceContext()`，只集中调用到
+`AppRenderServices::getHostSurface()`”的处理：它没有消除等级，只把查询集中到一个 facade。
+该 facade 只能作为迁移中的临时调用点，不是最终设计。AB4 的验收必须覆盖删除
+`IRender::getPrimarySurfaceContext()/primaryWindow()`、Vulkan 的 `_primarySurface` 与
+`createPrimarySurface()`，并让 app 对每个 display root 显式提供对应 surface；GUI host 同时删除
+`_primaryWindow` 与 primary/extras 双路径。命名为“initial/bootstrap/default”但仍由 renderer 单独
+拥有的 surface，同样不通过验收。
 
 证据：`make test` 2705 passed / 0 failed；parity md5 与基线相同；编辑器 smoke 三轮全过
 （本轮共 4 次里 1 次 `{0,0}` 首帧竞态，与既有登记同形）。
@@ -233,8 +460,8 @@ UE 的同位概念是**帧级**的：device 的帧号、延迟删除、GPU 计�
 ##### AB4-2a-2 第一步：backdrop 是 per surface 的政策（已落地 2026-09-23）
 
 `fillsPrimarySurface()`（无参数、只能有一个 surface 回答）→ `fillsSurface(const IRenderSurfaceContext&)`，
-`App::presentsViewDisplayImage(const IRenderSurfaceContext&)`（`nullptr` 这条退化分支不允许存在：
-录制只发生在已 acquire 的 frame 上，surface 必非空）。编辑器答“每个我托管的窗口都由 chrome 填满”
+`App::presentsViewDisplayImage(const IRenderSurfaceContext&)`（旧的 `nullptr` 退化分支不能作为最终协议）。
+Surface display compose 只对 acquire 成功的 Surface 录制；offscreen View recording 可以没有 Surface。编辑器答“每个我托管的窗口都由 chrome 填满”
 （tear-off 窗口是同一套 chrome 在第二张 surface 上，不是另一种窗口）；`PresentFrameInput::backdrop`
 本来就在 present 项上，现在它的来源也是 per surface 的。这就是 UE 里“游戏视口填满窗口”与
 “视口是窗口里的一块面板”的区别，与窗口等级无关。
@@ -243,52 +470,77 @@ UE 的同位概念是**帧级**的：device 的帧号、延迟删除、GPU 计�
 surface 提问（不再能靠 `nullptr` 让断言变空转）。`make test` 2705 passed / 0 failed；parity、
 编辑器 smoke 与基线一致。
 
-##### AB4-2a-2 第二步：plan 支持多个 present target（结构批次，产品行为不变）
+##### AB4-2c：所有 window session 以同一生命周期运行
 
-- `RenderFramePlan::present` 单值 → `std::vector<DisplayRootPlan>`，每项
-  `{surface, imageIndex, backdrop, chromeSnapshot(可选), displayViewId}`。
-  **无序集合，没有“第一项”特权**：plan 不区分主次，谁是“主窗口”是 app 层的宿主事实
-  （编辑器的默认窗口 / 独立 GUI app 的唯一窗口），不是 present 路径的属性。今天读
-  `.present.surface` 的单值消费点全部改读“自己那一项”，不留“数组第 0 项就是主窗口”
+- 全体 session 的 tree tick 与 snapshot 构建发生在 **record 之前**（app 帧循环内）；GUI snapshot
+  以所属 WindowId/session 进入对应 surface display plan，compose 落到该 session 自己的 swapchain。
+- 删除 `presentGuiSnapshot` 的独立 acquire/submit/present loop；GUIApp 与 GameEditor 共用同一条
+  app-owned record/present 顺序。
+- session 的关闭语义保持在帧边界收口；不允许录制中途销毁 session 或 surface
+  （`app_teardown_order_and_instance_lock.md` 的边界）。
+- 验收：`GUIAppCrossWindowDragTest.*` / `GUIWindowManagerTest.*` / `EditorNativeTearOffTest.*`
+  全绿；各 session 都由同一 registry 查找、分发事件、tick、关闭。
+
+##### AB4-2d：单帧 plan 拆分并支持多个 surface composition（依赖 AB4-2b/2c）
+
+- 彻底替换 `RenderFramePlan` 的混合输入：`FramePacket` 只留 tick/flight/clock 等帧事实；View 的
+  render scale/extent 进入各自的 `ViewRequest`，不得再由单一 frame-wide 设置代替；
+  `SceneSnapshotSet` 共享抽取结果；`ViewRequest[]` 携带 scene key、camera、extent、features、pipeline
+  policy；`SurfaceDisplayPlan[]` 描述 surface ID 与有序 display layers。UI snapshot 随其所属
+  `WindowId`/session 进入 display layer。删除 `SceneViewDesc::composeOntoViewId` 和全局
+  `FramePacket::uiFrameSnapshot`，不留 `displayRootTask()`。
+- 每个 `SurfaceDisplayPlan` 描述一个 surface 的 composition（surface ID、有序 layer 列表、
+  backdrop/clear policy）。acquire 返回值独立保存在该 surface 本次 `AcquiredSurfaceImage` 中；
+  不把 transient image index 塞进长期的 display policy。
+  **无序集合，没有“第一项”特权**：plan 不区分主次；应用启动时选择哪个窗口作为默认展示策略，
+  必须通过明确的 window/surface ID 表达，不能映射回 renderer 的隐式默认对象。今天读
+  `.present.surface` 的单值消费点全部改读“自己那一项”，不留“数组第 0 项就是默认窗口”
   这类隐式排序。
-- `RuntimeRenderContext::record` 里 present target 获取、UI compose、display compose、
-  `sealFrame` 按 display root 循环，**每项走同一条顺序**；空表 = 今天“plan 无 surface”
-  的既有语义（不录、不 present）。
+- `RuntimeRenderContext` 先为每个不同 View 记录一次并发布 `ViewOutput[ViewId]`；之后只对 acquire
+  成功的 Surface 记录 display compose。空 surface 列表仍可录制 Scene/View 的 offscreen 工作；纯 UI app
+  可不产生任何 View。Application 决定 work 的逻辑依赖顺序；RHI 将显式 queue work / acquire wait /
+  present signal / completion 要求映射到 backend，同一 command buffer 不可因多个 Surface 被重复提交。
 - `SurfacePresentation` 已经是 per-surface（step1 落地，按该窗口自己的 swapchain format
   建 write pass），这一批不改它。
-- 顺带把“这个 surface 的内容是不是 View 的图”改成 per-surface 政策：`App::presentsViewDisplayImage()`
-  今天用“有没有模块 `fillsPrimarySurface()`”回答，且只有一个 surface 可答 —— UE 里对应的
-  区别也不是“主窗口”，而是“这个窗口的内容是不是直接就是 viewport 的图”（游戏视口填满窗口、
-  编辑器视口是面板内的一块）。所以 `IRuntimeModule::fillsPrimarySurface()` → `fillsSurface(surface)`，
-  `ESurfaceBackdrop` 落到每个 display root 各自一个值。
+- 删除基于 `fillsPrimarySurface()` / `presentsViewDisplayImage()` 的隐式组合判断。每个 surface 的
+  display layer 明确声明 image、UI/chrome、clear 与 overlay 顺序；游戏窗口可以是单个 View layer，
+  Editor window 可以是 viewport image + GUI chrome 的多 layer composition。
 - 验收：`ya-render-3d-test` 全绿；`run_display_compose_parity.py --skip-build` 两张图
   md5 逐字节不变（`c775245ae…`）；`make test` 全绿。
 
-##### AB4-2b：额外窗口的 chrome 进同一帧
+##### AB4-2e：某个窗口里的 viewport 面板渲世界
 
-- `sweepAndPresentExtraWindows` 的 `tickTrees + renderAll` 改为：额外窗口的 tree tick
-  与 snapshot 构建挪到 **record 之前**（app 帧循环内），snapshot 交给 `RuntimeRenderContext`
-  作为第二项 display root，compose 落到该窗口自己的 swapchain；
-  `GUIWindowManager::renderAll` 从编辑器产品路径退役（GUIApp / headless 仍可用它）。
-- `EditorWindowSession` 的回收语义不变：close-requested 的 extra 仍由 app 侧收口，
-  不允许在录制中途销毁 session（`app_teardown_order_and_instance_lock.md` 的边界）。
-- 验收：`GUIAppCrossWindowDragTest.*` / `GUIWindowManagerTest.*` / `EditorNativeTearOffTest.*`
-  全绿；新增一条断言：额外 surface 的 present 真的进了 app 的 record
-  （`getPresentationImageShared(extraSurface)` 非空），而不是 `presentGuiSnapshot` 的自循环。
-
-##### AB4-2c：某个窗口里的 viewport 面板渲世界
-
-- 该窗口内的 viewport tab 由 `EditorViewProducer` 声明到**那个 surface**（owner-scoped
-  `SceneViewKey` 已就位；同 Scene 双 View 的 snapshot 复用表在 R2 已有验证，这里直接接上）。
-  chrome 的 `UIImage` 采样该 View 的 display RT——与任何窗口同一机制，不是把别的窗口的图复制过来。
+- viewport tab 由 `EditorViewProducer` 声明为独立 View request；所在 window session 的 display layer
+  引用这个 View 的 output（owner-scoped `SceneViewKey` 已就位；同 Scene 双 View 的 snapshot 复用表
+  在 R2 已有验证，这里直接接上）。chrome 的 `UIImage` 采样该 View 的 display RT——与任何窗口同一
+  机制，不是把别的窗口的图复制过来。
 - 验收：一条自动化：把 viewport 面板 tear-off 成独立 OS 窗口 → 断言第二张 swapchain
   的图非空、extent 非退化，且其内容来自**它自己**那个 View（不同相机位姿下该图必然
   不同于其它窗口的 presentation 图，防“把别处一张现成图拷给了第二张 surface”）；
   世界内容正确性留给目视 + 现有 smoke。
 
+##### AB4-2f：录制、提交、呈现三段闭环
+
+- `FrameRecording` 只表示 command work、GPU 资源租约和 recording token；它的 `seal` 不得被命名或实现成
+  queue submit。`SubmissionGraph` 由应用把 View work、display-composition work 和各 Surface 的
+  acquire/present dependency 连接起来，再交给 RHI backend 执行。
+- 一个 command buffer 只能进入一次 queue submit；多个 Surface 共享 View work 时共享 recording 或
+  output，不复制提交同一 command buffer。每个 acquired Surface 都有自己的 image-available /
+  render-finished / present-complete 生命周期；present 只能等待产生该 image 的 submission signal。
+- 需要覆盖四类早退：无 surface 但有 offscreen work、部分 surface acquire 失败、record 失败、
+  submit/present 失败。前两类不应丢弃可独立完成的 View work；acquire 成功后发生 record/submit 失败，
+  backend 必须提供合法的 image 消费/取消路径，确保下一个 acquire 不被悬挂 semaphore/fence 卡住。
+- 当前 `IRenderSurfaceContext::end(imageIndex, commandBuffers)` 作为迁移态必须拆成 surface acquire token、
+  backend submission、surface present 三个明确责任；不能把“空 command list 也可 present”继续当作通用
+  错误处理协议。
+- 验收：单 graphics queue 下两 Surface 可共享一份 View recording 并分别 present；一个 Surface minimized
+  不影响另一个 Surface；无可呈现 Surface 时 offscreen View 仍能发布 output；失败后下一 tick 可重新 acquire，
+  且所有 submission keepalive 在 completion 后才释放。
+
 ##### 非目标（本条不做）
 
-- 不改 `PresentFrameInput::backdrop` 的语义（那是 display-compose 的待定项）。
+- `PresentFrameInput::backdrop` 迁移为每个 `SurfaceDisplayPlan` 的显式 display policy；不再由全局或
+  `fillsPrimarySurface()` 推导。
 - 不在本条里决定 flight 深度（R2/temporal_semantics M4，独立决策）。
 - 不新增“第二个 renderer”：AB4-step1 已经把第二窗口变成 `_surfacePresentations` 表的第二项。
 
@@ -296,6 +548,10 @@ AB4-step3（待做）：`PresentationGraphService` 只保留「把 ready image �
 display stage 的顺序；acquire / submit / present 的编排留在应用。
 
 ### AB8 — 同一事实只有一个来源：帧的 View 事实（step 1 + step 2 已落地）
+
+> AB8 的 `HostViewportView` 是当时单宿主窗口模型下的迁移态。AB4-2d 完成后，多个 window/session
+> 可以各自显示不同 View，因此该单值不能继续作为最终模型；应由 `WindowId/SurfaceId →
+> SurfaceDisplayPlan → ViewId` 显式求得窗口内容，工具查询也必须点名 View/Window。
 
 唯一目标：**「这一帧的 View 有多大、宿主窗口显示哪个 View」只从计划里读一次**，
 不再有「设置里抄一份、设备里记一份、应用再推一份」。
@@ -354,7 +610,7 @@ AB8-step2（已落地）：**`HostViewState` 拆成设置与排布**。
 
 | 当前 | 目标 | 理由 |
 | --- | --- | --- |
-| `RenderFrameData` | `PreparedView` | 它是 View 级 camera/light/draw packet，不是 frame |
+| `RenderFrameData` | 拆为共享 `SceneSnapshot`、View 级 `PreparedView`、帧级 tick constants | 现类型同时混装 Scene 共享数据、View 数据与 tick 数据，不能整体换名 |
 | `RenderSubmission` | `FrameRecording` | `finish()` 只封录制，不 queue submit |
 | `RenderFrameInputs.h` 内的 plan 类型 | `RenderPlan` | 内容是本次渲染输入 |
 | `PipelineCoordinator` | 收为 renderer 私有，或改名 `RenderPipelineController` | 它管 active/pending pipeline 与切换，不是通用 coordinator |
@@ -383,10 +639,10 @@ AB7-step1（已落地，2026-09-23 第五批）：**整帧录制顺序搬到应�
 
 - `Applications/GameRuntime/Render/RuntimeRenderContext.{h,cpp}`（公开头
   `include/GameRuntime/Render/RuntimeRenderContext.h`）持有 `RenderDeviceState*`，公开
-  `record(const RenderFramePlan&) -> RecordedFrame`；**函数体就是那条顺序**：present target 获取 →
-  prepare → begin → graphics → inset 合并 / inset 图构建 → UI compose → `recordExtensions->recordViewCompose`
-  → display compose（capture 仍在它内部）→ retain → end → seal。display root 的解析、inset 的合并与
-  backdrop 的选择都在这里，Framework 看不到。
+  `record(const RenderFramePlan&) -> RecordedFrame`；**函数体就是那条顺序**：prepare → begin recording
+  → graphics/View work → inset 合并 / inset 图构建 → UI compose → 应用显式 overlay/capture 阶段
+  → 对已 acquire 的 Surface 做 display compose → retain → seal recording。display root 的解析、inset 的
+  合并与每个 Surface 的 display policy 都在应用 plan 中，Framework 不选择窗口。
 - `RenderDeviceState` 只剩**机制步骤**，且都是真实函数体：`prepareFrameRecord` / `beginFrameCommandBuffer`
   / `recordViewFamilies` / `retainPublishedViewOutputs` / `endFrameCommandBuffer` /
   `sealFrame(flightIndex, cmdBuf) -> RecordedFrame`（新，合并原 finish 段）/ `acquireSurfacePresentation`
@@ -421,13 +677,14 @@ Framework/Render/
 ```
 
 它不是新增一个万能 coordinator，而是把 `RenderDeviceState` 里已经存在的应用职责放回应用侧。
-Framework 侧的公开入口限定在 `init/shutdown/record(plan, surface)/publishedViewOutput(viewId)`，
-看不见 `_pipelineCoordinator` / `_submissions` / `_viewOutputs` / `_surfacePresentations`。
+Framework 侧的公开入口限定在 device/resource lifetime、View-family recording、DisplayComposer
+和已发布 View output 等窄接口；它不公开“整帧 record(plan, surface)”这种应用级入口，不能看见
+`_pipelineCoordinator` / `_submissions` / `_viewOutputs` / `_surfacePresentations` 的产品排布。
 取名用 `RuntimeRenderContext`（当前编辑器仍跑在 `GameRuntime::App` 上，叫 `GameEditorRenderer` 不准确）。
 
 ## 5. 与 `render-view-family` 4.0.3 的取舍
 
-## 4b. 已确认但未完成的所有权偏差（2026-09-22 review）
+### 5.1 已确认但未完成的所有权偏差（2026-09-22 review）
 
 以下每一条都已在源码里核对过，不是推测。它们**不是本 checkpoint 的目标**，列在这里是为了让下一步
 不再从「猜哪里有问题」开始。每条都标了当前证据与目标归属。

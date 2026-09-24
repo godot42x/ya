@@ -57,7 +57,12 @@ class YA_GUI_API GUIWindowSession final : public IGUIWindowSession
     bool                                 bSwapchainRecreatePending = false;
     Render2DPassSlot                     presentPassSlot   = kInvalidRender2DPassSlot;
     Render2DPassSlot                     offscreenPassSlot = kInvalidRender2DPassSlot;
-    std::unique_ptr<IRenderSurfaceContext> ownedPresent;
+    /// The device's surface for this window, named by `surfaceId`. The device
+    /// owns it (see `IRender::createSurfaceContext`), so a session holds the id
+    /// and the resolved pointer, never a `unique_ptr` that would make surface
+    /// lifetime a session detail.
+    SurfaceId                            surfaceId{};
+    IRenderSurfaceContext*                present = nullptr;
     FGUISurfacePresentResources          presentResources;
     FWindowChromeState                   chromeState;
 
@@ -65,10 +70,7 @@ class YA_GUI_API GUIWindowSession final : public IGUIWindowSession
     [[nodiscard]] INativeWindow*         nativeWindow() const override { return native; }
     [[nodiscard]] WidgetTree*            tree() const override { return ownedTree.get(); }
     [[nodiscard]] const UIFrameSnapshot* snapshot() const override { return &ownedSnapshot; }
-    [[nodiscard]] IRenderSurfaceContext* surfaceContext() const override
-    {
-        return ownedPresent.get();
-    }
+    [[nodiscard]] IRenderSurfaceContext* surfaceContext() const override { return present; }
     [[nodiscard]] bool isMinimized() const override { return bMinimized; }
     [[nodiscard]] bool closeRequested() const override { return bCloseRequested; }
     [[nodiscard]] const FWindowChromeState& chrome() const override { return chromeState; }

@@ -219,11 +219,24 @@ void App::init(AppDesc ci)
         AppAutomation::applyRuntimeOverrides(app);
     }
     if (auto* render = app.getRenderServices().getRender()) {
+        // The window exists already (the device was created for it), so this is
+        // the app naming its own window -- not a renderer default.
+        INativeWindow* mainWindow = app.getOrCreateMainNativeWindow(WindowCreateInfo{
+            .index      = 0,
+            .renderAPI  = render->getAPI(),
+            .title      = app._ci.title,
+            .width      = static_cast<uint32_t>(app._ci.width),
+            .height     = static_cast<uint32_t>(app._ci.height),
+            .scale      = 1.0f,
+            .bResizable = true,
+        });
+        app._renderState->hostSurfaceId = mainWindow ? render->findSurfaceId(*mainWindow) : SurfaceId{};
+
         int winW = 0, winH = 0;
-        if (auto* window = render->primaryWindow()) {
-            window->getWindowSize(winW, winH);
+        if (mainWindow) {
+            mainWindow->getWindowSize(winW, winH);
         }
-        app.inputRouter.setWindow(render->primaryWindow());
+        app.inputRouter.setWindow(mainWindow);
 
         // Seed the render resolution through the render services, so the setting
         // has one write path: this init-time seed and the control plane both go

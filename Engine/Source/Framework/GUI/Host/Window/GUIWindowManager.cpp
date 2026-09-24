@@ -165,9 +165,13 @@ GUIWindowId GUIWindowManager::createSession(const FGUIWindowHostConfig& config,
     session->offscreenPassSlot = Render2D::acquirePassSlot();
 
     if (render) {
-        session->ownedPresent = render->createSurfaceContext(*native);
-        if (!session->ownedPresent) {
-            YA_CORE_ERROR("GUIWindowManager: failed to create surface context for extra window '{}'",
+        // Same policy the device's startup window used: a later window is a
+        // second surface, not a second kind of window (see
+        // makeHostWindowSurfaceDesc).
+        session->surfaceId  = render->createSurfaceContext(*native, makeHostWindowSurfaceDesc(config));
+        session->present    = render->findSurface(session->surfaceId);
+        if (!session->present) {
+            YA_CORE_ERROR("GUIWindowManager: the device cannot present to extra window '{}' (its surface was refused)",
                           config.title);
             Render2D::releasePassSlot(session->presentPassSlot);
             Render2D::releasePassSlot(session->offscreenPassSlot);
@@ -179,7 +183,7 @@ GUIWindowId GUIWindowManager::createSession(const FGUIWindowHostConfig& config,
             return 0;
         }
         session->presentResources.render  = render;
-        session->presentResources.present = session->ownedPresent.get();
+        session->presentResources.present = session->present;
         rebuildGuiSurfacePresentation(session->presentResources,
                                       std::format("GUIExtra_{}", session->windowId).c_str(),
                                       /*bWaitForGpu=*/true);
@@ -334,7 +338,7 @@ void GUIWindowManager::tickTrees(float dt)
 void GUIWindowManager::renderAll()
 {
     for (auto& session : _sessions) {
-        if (!session || !session->ownedPresent) {
+        if (!session || !session->present) {
             continue;
         }
         presentGuiSnapshot(session->presentResources,
@@ -445,14 +449,24 @@ const GUIWindowSession* GUIWindowManager::findOwnedSession(GUIWindowId id) const
 
 void GUIWindowManager::destroyOwnedSession(GUIWindowSession& session)
 {
-    if (session.ownedPresent) {
-        session.ownedPresent->waitInFlight();
+    // The device owns the surface, so this releases it rather than letting a
+    // member destructor decide when a swapchain may be torn down. It happens
+    // after the present resources that reference the surface's images are gone
+    // and after this window's in-flight work has completed -- the ordering the
+    // teardown rules require (`app_teardown_order_and_instance_lock`).
+    IRender* render = session.presentResources.render;
+    if (session.present) {
+        session.present->waitInFlight();
     }
     session.presentResources.commandBuffers.clear();
     session.presentResources.presentationTargets.clear();
     session.presentResources.present = nullptr;
     session.presentResources.render  = nullptr;
-    session.ownedPresent.reset();
+    if (render && session.surfaceId.valid()) {
+        (void)render->destroySurfaceContext(session.surfaceId);
+    }
+    session.present   = nullptr;
+    session.surfaceId = {};
     Render2D::releasePassSlot(session.presentPassSlot);
     Render2D::releasePassSlot(session.offscreenPassSlot);
     session.presentPassSlot   = kInvalidRender2DPassSlot;

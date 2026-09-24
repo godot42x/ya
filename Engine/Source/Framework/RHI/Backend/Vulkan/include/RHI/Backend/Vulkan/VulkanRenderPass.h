@@ -13,6 +13,7 @@ namespace ya
 {
 struct VulkanRender;
 struct VulkanSwapChain;
+struct ISwapchain;
 
 
 /*
@@ -31,7 +32,10 @@ struct VulkanRenderPass : public ya::IRenderPass
 
 
   public:
-    VulkanRenderPass(VulkanRender *render);
+    /// `swapchain` is the surface's present target this pass describes; see
+    /// `IRenderPass::create`. Null is accepted because nothing constructs a
+    /// render pass today, and the two callers that would read it guard for it.
+    VulkanRenderPass(VulkanRender *render, ISwapchain *swapchain);
     ~VulkanRenderPass() override { cleanup(); }
 
     VulkanRenderPass(const VulkanRenderPass &)            = delete;

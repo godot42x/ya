@@ -165,9 +165,24 @@
       "step1 evidence: RenderRuntimeContextTest.ARefusedFrameStillPreparesTheTickBeforeItGivesUp pins that the app's order prepares (and evicts) before the 'is there anything to record' gate; negative control (prepare moved after the gate) turned it red. TheFrameEntryPointIsTheApplicationsNotTheRenderers pins that RenderDeviceState has no whole-frame entry point (negative control: re-adding record() broke the build)",
       "target (remaining): app-side RuntimeRenderContext additionally owns frame flight, scene/view plan, submission, surface present targets, Game UI binding, and pre/post-present policy; Framework keeps Forward/Deferred/ViewComposePass/DisplayComposePass/PostProcess/RenderGraph/FrameRecording",
       "RuntimeRenderContext is not the forbidden 'new Framework coordinator': it lives app-side, holds what RenderDeviceState already holds today, and is justified by the test in plan section 3 (does it need to know the app's Scenes / Views / windows)",
-      "public entry stays init/shutdown/record/publishedViewOutput; no plan-wide Renderer facade (see plan section 5)"
+      "target public surface is device/resource lifetime, View-family recording, DisplayComposer, and published View output; no application-level record(plan, surface) facade"
     ]
-  }
+    },
+    {
+      "id": "window_surface_view_submission_contract",
+      "phase": "AB4-review-2026-09-24",
+      "status": "audit_contract_added_ab4_2b_step1_landed",
+      "evidence": [
+        "plan now separates WindowSession, Surface, SurfaceImage/acquire token, View, SceneSnapshot, DisplayComposition, FrameRecording, and SubmissionGraph",
+        "current code still has RenderCreateInfo nativeWindow + swapchainCI, Vulkan _primarySurface, GUIApp primary/extras split, IRenderSurfaceContext::begin/end acquire+submit+present coupling, RenderSubmission::_hostSurface, and RenderFramePlan single present/ui snapshot; these are explicitly recorded as migration blockers",
+        "execution order is contract freeze -> RHI surface backend -> GUI session registry -> multi-View/multi-Surface RenderPlan -> explicit queries and naming cleanup",
+        "required coverage includes offscreen with no Surface, partial acquire failure, minimized/resize, record/submit failure recovery, SurfaceId/WindowId generation, SceneId/contentRevision, and teardown keepalive",
+        "AB4-2b step 1 landed 2026-09-24: RenderCreateInfo.nativeWindow + swapchainCI replaced by startupSurfaces; IRender::getPrimarySurfaceContext()/primaryWindow() deleted; Vulkan _surface/_primarySurface/createPrimarySurface()/primaryVulkanSwapchain() deleted; SurfaceId{index, generation} registry with createSurfaceContext/findSurface/findSurfaceId/destroySurfaceContext is the only registration, resolution and release path",
+        "AB4-2b step 1 landed: the present family must cover the whole startup set (a later window is accepted only if an enabled family presents to it, otherwise registration fails with a reason); the app names its own surface (AppRenderState::hostSurfaceId, GUIWindowSession holds SurfaceId + resolved pointer, GUIWindowManager releases it through destroySurfaceContext)",
+        "AB4-2b step 1 not done, recorded: multi present-family queue plans, offscreen-only devices (empty startup set is rejected), _surfacePresentations still keyed by raw context pointer, acquire/submit/present still inside IRenderSurfaceContext::begin/end (AB4-2f), GUIApp still has a separate primary host + extras manager (AB4-2c)",
+        "AB4-2b step 1 evidence: ya-rhi-vulkan-smoke 8 passed / 1 skipped (platform minimize guard); ya-testing 1319 tests / 1318 passed / 1 skipped / 0 failed; GUIWorkbench --smoke-actions PASS; display-compose parity md5 c775245ae636f15b41da8485319a2267 unchanged; editor smoke exit=0; new cases RHISurfaceContext.AReleasedSurfaceIdDoesNotResolveToTheNextTenantOfItsSlot and RHISurfaceContext.StartupWindowsAndLaterWindowsAreRegisteredAlike"
+      ]
+    }
   ],
   "known_baseline_failures": [
     "EditorPropertyGraphTest.AutoPropertySectionAssetPathCommitBrowseAndUndo",

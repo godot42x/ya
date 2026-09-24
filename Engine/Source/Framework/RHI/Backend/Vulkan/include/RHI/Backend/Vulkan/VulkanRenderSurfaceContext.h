@@ -20,7 +20,7 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
     INativeWindow* _window       = nullptr;
     VkSurfaceKHR   _surface      = VK_NULL_HANDLE;
     bool           _bOwnsSurface = true;
-    const char*    _debugLabel        = "Surface";
+    std::string    _debugLabel        = "Surface";
 
     std::unique_ptr<VulkanSwapChain> _swapChain;
 
@@ -40,14 +40,17 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
 
     ~VulkanRenderSurfaceContext() override;
 
-    /// Extra window: create and own a `VkSurfaceKHR`, then swapchain + sync.
+    /// Window registered after device creation: create and own a
+    /// `VkSurfaceKHR`, then swapchain + sync.
     [[nodiscard]] bool init(VulkanRender* render, INativeWindow& window, const SwapchainCreateInfo& swapchainCI);
 
-    /// Primary window: device pick already created `surface`. Context does not destroy it.
-    [[nodiscard]] bool attachExistingSurface(VulkanRender*           render,
-                                             INativeWindow&          window,
-                                             VkSurfaceKHR            surface,
-                                             const SwapchainCreateInfo& swapchainCI);
+    /// Startup window: the device already created `surface` (before device
+    /// pick, because present support is what the queue plan came from), so the
+    /// context presents through it without owning it.
+    [[nodiscard]] bool adoptStartupSurface(VulkanRender*           render,
+                                           INativeWindow&          window,
+                                           VkSurfaceKHR            surface,
+                                           const SwapchainCreateInfo& swapchainCI);
 
     void waitInFlight() override;
     void waitInFlightFence();

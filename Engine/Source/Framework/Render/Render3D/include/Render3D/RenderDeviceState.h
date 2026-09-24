@@ -95,6 +95,11 @@ struct YA_RENDER_3D_API RenderDeviceState
     ut::StackDeleter _deleter;
 
     IRender*                                     _render = nullptr;
+    /// The window this device was created for (a startup surface). Kept so
+    /// window-addressed questions -- a capture target, a diagnostic label -- can
+    /// name their window instead of asking the device which surface it
+    /// "is" (it has a set, and privileges none of them).
+    INativeWindow*                               _startupWindow = nullptr;
     OffscreenTaskService                         _offscreen{};
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
     RenderSubmissionPool                         _submissions;

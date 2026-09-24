@@ -8,7 +8,7 @@ namespace ya
 {
 
 
-std::shared_ptr<IRenderPass> IRenderPass::create(IRender *render, const RenderPassCreateInfo &ci)
+std::shared_ptr<IRenderPass> IRenderPass::create(IRender *render, ISwapchain &swapchain, const RenderPassCreateInfo &ci)
 {
     if (!render)
         return nullptr;
@@ -17,7 +17,7 @@ std::shared_ptr<IRenderPass> IRenderPass::create(IRender *render, const RenderPa
     {
     case ERenderAPI::Vulkan:
     {
-        auto ret = makeShared<VulkanRenderPass>(render->as<VulkanRender>());
+        auto ret = makeShared<VulkanRenderPass>(render->as<VulkanRender>(), &swapchain);
         ret->recreate(ci);
         return ret;
     }

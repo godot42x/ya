@@ -11,6 +11,7 @@ namespace ya
 struct IRender;
 struct ICommandBuffer;
 struct IFrameBuffer;
+struct ISwapchain;
 
 /**
  * @brief Generic render pass interface
@@ -126,7 +127,11 @@ struct IRenderPass : public plat_base<IRenderPass>
     /**
      * @brief Factory method to create render pass
      */
-    static std::shared_ptr<IRenderPass> create(IRender *render, const RenderPassCreateInfo &ci);
+    /// `swapchain` names the present target this pass describes. It is a
+    /// parameter because swapchains belong to surfaces (one per OS window), so
+    /// there is no device-level "the" swapchain a pass could default to -- a
+    /// pass built for a surface's format has to be told which surface.
+    static std::shared_ptr<IRenderPass> create(IRender *render, ISwapchain &swapchain, const RenderPassCreateInfo &ci);
 };
 
 } // namespace ya

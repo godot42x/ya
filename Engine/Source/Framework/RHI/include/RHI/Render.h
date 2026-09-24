@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "RHI/RenderDefines.h"
 #include "RHI/Core/RenderSurfaceContext.h"
+#include "RHI/Core/SurfaceId.h"
 
 #include <memory>
 #include <string>
@@ -84,24 +85,6 @@ struct YA_RHI_API IRender : public plat_base<IRender>
     virtual void                                 setShaderStorage(std::shared_ptr<ShaderStorage> shaderStorage) = 0;
     [[nodiscard]] virtual std::shared_ptr<ShaderStorage> getShaderStorage()                                   = 0;
 
-    /// The present surface the device was CREATED with, used to pick the
-    /// physical device. A bootstrap fact, not a rank: it is not privileged in
-    /// the frame loop (frame bookkeeping is `beginRecordedFrame`, timing and the
-    /// flight slot are frame numbers) and nothing may assume it is the window
-    /// being presented. Extra windows use `createSurfaceContext`.
-    ///
-    /// Not the viewport. World rendering targets offscreen RenderTextures; a
-    /// surface only supplies swapchain images at present/compose time.
-    [[nodiscard]] virtual IRenderSurfaceContext* getPrimarySurfaceContext() const { return nullptr; }
-
-    /// The native window of that bootstrap surface. App/input bootstrap uses it
-    /// (which window owns the pointer and the keyboard); per-frame code must not.
-    [[nodiscard]] INativeWindow* primaryWindow() const
-    {
-        auto* surface = getPrimarySurfaceContext();
-        return surface ? surface->getNativeWindow() : nullptr;
-    }
-
     /// Frame-level bookkeeping for ONE recorded frame.
     ///
     /// The application calls this once per frame it records, after every
@@ -127,10 +110,55 @@ struct YA_RHI_API IRender : public plat_base<IRender>
     /// not by any window.
     [[nodiscard]] virtual uint32_t framesInFlight() const { return kFramesInFlight; }
 
-    /// Extra presentation surface sharing this device. Does not create a
-    /// second backend. Returns null when the backend cannot present to `window`.
-    /// Destroy the context before `destroy()` on this device.
-    [[nodiscard]] virtual std::unique_ptr<IRenderSurfaceContext> createSurfaceContext(INativeWindow& window);
+    /// Register one more presentable OS window on this device: creates that
+    /// window's surface, swapchain and acquire/present sync, and returns the id
+    /// that names it from now on. An invalid id means the window cannot be
+    /// presented through the queue families this device enabled.
+    ///
+    /// The device enables the queues its `RenderCreateInfo::startupSurfaces`
+    /// needed, so a window registered later is accepted exactly when it strips
+    /// to one of those families; registering it may therefore fail on a device
+    /// whose present support differs per window. That is a capability answer,
+    /// not a rank: the device never privileges one of its surfaces, it only
+    /// fixes its queue plan once.
+    ///
+    /// The device owns the surface from here on. Does not create a second
+    /// backend. `destroySurfaceContext` it (or destroy the device) before
+    /// destroying the native window.
+    [[nodiscard]] virtual SurfaceId createSurfaceContext(INativeWindow& window, const SwapchainCreateInfo& swapchainCI);
+
+    /// The surface `id` names, or null when that id is stale (destroyed, or
+    /// never registered on this device). Both the surface and the window are
+    /// parameters because the renderer has no default window: a caller that
+    /// owns a window names its own surface.
+    [[nodiscard]] virtual IRenderSurfaceContext* findSurface(SurfaceId id) const
+    {
+        (void)id;
+        return nullptr;
+    }
+    [[nodiscard]] virtual IRenderSurfaceContext* findSurface(INativeWindow& window) const
+    {
+        (void)window;
+        return nullptr;
+    }
+
+    /// The id the surface registered for `window` carries, or an invalid id when
+    /// this device has none. A caller that owns a window and wants to keep the
+    /// binding (rather than the pointer) names its surface this way.
+    [[nodiscard]] virtual SurfaceId findSurfaceId(INativeWindow& window) const
+    {
+        (void)window;
+        return {};
+    }
+
+    /// Release one surface: its swapchain images and sync are destroyed after
+    /// its in-flight work completes, and ids handed out for it stop resolving.
+    /// False when `id` is unknown or already released.
+    virtual bool destroySurfaceContext(SurfaceId id)
+    {
+        (void)id;
+        return false;
+    }
 
     [[nodiscard]] ERenderAPI::T getAPI() const { return _renderAPI; }
 

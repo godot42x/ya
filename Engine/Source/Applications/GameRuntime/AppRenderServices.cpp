@@ -21,7 +21,12 @@ IRender* AppRenderServices::getRender() const
 IRenderSurfaceContext* AppRenderServices::getHostSurface() const
 {
     IRender* render = getRender();
-    return render ? render->getPrimarySurfaceContext() : nullptr;
+    if (!render || !_state) {
+        return nullptr;
+    }
+    // The app names the surface it presents through; the renderer has no
+    // default window to fall back to.
+    return render->findSurface(_state->hostSurfaceId);
 }
 
 std::shared_ptr<ShaderStorage> AppRenderServices::getShaderStorage() const

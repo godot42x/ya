@@ -1,5 +1,6 @@
 #include "RHI/Core/PresentFrame.h"
 #include "RHI/Core/RenderSurfaceContext.h"
+#include "RHI/Core/SurfaceId.h"
 #include "RHI/Core/Swapchain.h"
 #include "RHI/NativeWindow.h"
 #include "RHI/Render.h"
@@ -37,11 +38,37 @@ bool presentOneFrame(IRenderSurfaceContext& surface)
     return surface.end(imageIndex, {});
 }
 
+/// One presentable size with readback enabled: what every case here presents.
+SwapchainCreateInfo testSurfaceDesc(uint32_t width, uint32_t height)
+{
+    return SwapchainCreateInfo{
+        .bEnableTransferSrc = true,
+        .width              = width,
+        .height             = height,
+    };
+}
+
+/// A device created for exactly one window -- the startup surface case. The
+/// window is handed to the device, and the case asks for its surface back by
+/// that window rather than assuming a rank.
+RenderCreateInfo testRenderCI(INativeWindow& startupWindow, uint32_t width, uint32_t height)
+{
+    return RenderCreateInfo{
+        .renderAPI = ERenderAPI::Vulkan,
+        .startupSurfaces = {
+            StartupSurfaceDesc{
+                .window      = &startupWindow,
+                .swapchainCI = testSurfaceDesc(width, height),
+            },
+        },
+    };
+}
+
 } // namespace
 
 /// The device's frame generation is a fact about a FRAME, not about a window.
 ///
-/// It used to live on the primary surface: only that surface's `begin()`
+/// It used to live on the device's one surface: only that surface's `begin()`
 /// advanced the counter, read back the GPU timestamps and flushed the
 /// deferred-deletion queue (VulkanRenderSurfaceContext::_bDeviceFrameOwner).
 /// That ranks one window above another in the frame loop -- the thing the
@@ -54,15 +81,7 @@ TEST(RHISurfaceContext, FrameBookkeepingBelongsToTheFrameNotAWindow)
         GTEST_SKIP() << "SDL native window create failed";
     }
 
-    RenderCreateInfo renderCI{
-        .renderAPI = ERenderAPI::Vulkan,
-        .swapchainCI = SwapchainCreateInfo{
-            .bEnableTransferSrc = true,
-            .width              = 160,
-            .height             = 120,
-        },
-        .nativeWindow = &window,
-    };
+    const RenderCreateInfo renderCI = testRenderCI(window, 160, 120);
 
     IRender* render = IRender::create(renderCI);
     ASSERT_NE(render, nullptr);
@@ -77,10 +96,10 @@ TEST(RHISurfaceContext, FrameBookkeepingBelongsToTheFrameNotAWindow)
     EXPECT_EQ(render->recordedFrameIndex(), 2u);
 
     // And presenting a window does NOT advance it: no surface owns the frame.
-    auto* primary = render->getPrimarySurfaceContext();
-    ASSERT_NE(primary, nullptr);
+    auto* startup = render->findSurface(window);
+    ASSERT_NE(startup, nullptr);
     const uint64_t beforePresent = render->recordedFrameIndex();
-    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*startup));
     EXPECT_EQ(render->recordedFrameIndex(), beforePresent);
 
     render->waitIdle();
@@ -88,99 +107,176 @@ TEST(RHISurfaceContext, FrameBookkeepingBelongsToTheFrameNotAWindow)
     delete render;
 }
 
-TEST(RHISurfaceContext, ExtraWindowAcquireSubmitPresentIndependentOfPrimary)
+TEST(RHISurfaceContext, ExtraWindowAcquireSubmitPresentIndependentOfStartupWindow)
 {
-    SDLNativeWindow primaryWindow;
+    SDLNativeWindow startupWindow;
     SDLNativeWindow extraWindow;
-    if (!createTestWindow(primaryWindow, "MW-201-A", 160, 120) ||
+    if (!createTestWindow(startupWindow, "MW-201-A", 160, 120) ||
         !createTestWindow(extraWindow, "MW-201-B", 200, 150)) {
         GTEST_SKIP() << "SDL native window create failed";
     }
 
-    RenderCreateInfo renderCI{
-        .renderAPI = ERenderAPI::Vulkan,
-        .swapchainCI = SwapchainCreateInfo{
-            .bEnableTransferSrc = true,
-            .width              = 160,
-            .height             = 120,
-        },
-        .nativeWindow = &primaryWindow,
-    };
+    const RenderCreateInfo renderCI = testRenderCI(startupWindow, 160, 120);
 
     IRender* render = IRender::create(renderCI);
     ASSERT_NE(render, nullptr);
     ASSERT_TRUE(render->init(renderCI));
 
-    std::unique_ptr<IRenderSurfaceContext> extra = render->createSurfaceContext(extraWindow);
+    const SurfaceId extraId = render->createSurfaceContext(extraWindow, testSurfaceDesc(200, 150));
+    ASSERT_TRUE(extraId.valid());
+    IRenderSurfaceContext* extra = render->findSurface(extraId);
     ASSERT_NE(extra, nullptr);
     ASSERT_NE(extra->getSwapchain(), nullptr);
-    auto* primary = render->getPrimarySurfaceContext();
-    ASSERT_NE(primary, nullptr);
-    ASSERT_NE(primary->getSwapchain(), extra->getSwapchain());
-    EXPECT_NE(primary->getCurrentFrameFence(), nullptr);
-    EXPECT_NE(primary->getCurrentImageAvailableSemaphore(), nullptr);
-    // The primary surface is the one `getPrimarySurfaceContext()` names -- a
-    // bootstrap fact, not a rank: there is no "the" swapchain accessor on the
-    // device any more, so a caller holding a surface asks it directly.
-    EXPECT_NE(primary->getSwapchain(), nullptr);
+    auto* startup = render->findSurface(startupWindow);
+    ASSERT_NE(startup, nullptr);
+    ASSERT_NE(startup->getSwapchain(), extra->getSwapchain());
+    EXPECT_NE(startup->getCurrentFrameFence(), nullptr);
+    EXPECT_NE(startup->getCurrentImageAvailableSemaphore(), nullptr);
+    EXPECT_NE(startup->getSwapchain(), nullptr);
     EXPECT_EQ(extra->getNativeWindow(), &extraWindow);
-    EXPECT_EQ(render->primaryWindow(), &primaryWindow);
+    EXPECT_EQ(startup->getNativeWindow(), &startupWindow);
+    // Identity answers "which surface", and it answers it for both windows:
+    // the startup window is not the one the device "is", it is the one that
+    // happens to have existed before the device did.
+    EXPECT_EQ(render->findSurfaceId(startupWindow), render->findSurfaceId(startupWindow));
+    EXPECT_NE(render->findSurfaceId(startupWindow), render->findSurfaceId(extraWindow));
+    EXPECT_EQ(render->findSurface(render->findSurfaceId(extraWindow)), extra);
 
     for (int frame = 0; frame < 3; ++frame) {
-        ASSERT_TRUE(presentOneFrame(*primary));
+        ASSERT_TRUE(presentOneFrame(*startup));
         ASSERT_TRUE(presentOneFrame(*extra));
     }
 
-    extra.reset();
+    ASSERT_TRUE(render->destroySurfaceContext(extraId));
 
-    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*startup));
 
     render->waitIdle();
     render->destroy();
     delete render;
 }
 
-TEST(RHISurfaceContext, ExtraWindowResizeAndCloseDoesNotDeviceWaitIdlePrimary)
+/// A surface id names a registry slot AND which tenant of that slot it is.
+///
+/// Releasing a surface and registering another window of the same size is the
+/// case that tells the two apart: the second registration takes the slot back,
+/// and the id held for the first must resolve to nothing rather than quietly
+/// naming the new window. That is what an app holding "the surface I present"
+/// across a tear-off window closing and reopening depends on.
+TEST(RHISurfaceContext, AReleasedSurfaceIdDoesNotResolveToTheNextTenantOfItsSlot)
 {
-    SDLNativeWindow primaryWindow;
+    SDLNativeWindow startupWindow;
+    SDLNativeWindow firstWindow;
+    SDLNativeWindow secondWindow;
+    if (!createTestWindow(startupWindow, "MW-211-A", 160, 120) ||
+        !createTestWindow(firstWindow, "MW-211-B", 200, 150) ||
+        !createTestWindow(secondWindow, "MW-211-C", 200, 150)) {
+        GTEST_SKIP() << "SDL native window create failed";
+    }
+
+    const RenderCreateInfo renderCI = testRenderCI(startupWindow, 160, 120);
+    IRender*               render   = IRender::create(renderCI);
+    ASSERT_NE(render, nullptr);
+    ASSERT_TRUE(render->init(renderCI));
+
+    const SurfaceId firstId = render->createSurfaceContext(firstWindow, testSurfaceDesc(200, 150));
+    ASSERT_TRUE(firstId.valid());
+    EXPECT_EQ(render->findSurface(firstId)->getNativeWindow(), &firstWindow);
+
+    ASSERT_TRUE(render->destroySurfaceContext(firstId));
+    // Released: the id names nothing, and so does the released window.
+    EXPECT_EQ(render->findSurface(firstId), nullptr);
+    EXPECT_EQ(render->findSurface(firstWindow), nullptr);
+    EXPECT_FALSE(render->findSurfaceId(firstWindow).valid());
+    // A released id cannot act on the registry either.
+    EXPECT_FALSE(render->destroySurfaceContext(firstId));
+
+    const SurfaceId secondId = render->createSurfaceContext(secondWindow, testSurfaceDesc(200, 150));
+    ASSERT_TRUE(secondId.valid());
+    EXPECT_EQ(secondId.index, firstId.index) << "the freed slot should be reused";
+    EXPECT_NE(secondId.generation, firstId.generation) << "a reused slot is a new tenant";
+    EXPECT_EQ(render->findSurface(firstId), nullptr) << "the stale id must not name the new window";
+    EXPECT_EQ(render->findSurface(secondId)->getNativeWindow(), &secondWindow);
+
+    render->waitIdle();
+    render->destroy();
+    delete render;
+}
+
+/// A device is created for a set of windows, and the windows it was created for
+/// are not privileged over the ones registered afterwards.
+TEST(RHISurfaceContext, StartupWindowsAndLaterWindowsAreRegisteredAlike)
+{
+    SDLNativeWindow firstStartup;
+    SDLNativeWindow secondStartup;
+    if (!createTestWindow(firstStartup, "MW-212-A", 160, 120) ||
+        !createTestWindow(secondStartup, "MW-212-B", 200, 150)) {
+        GTEST_SKIP() << "SDL native window create failed";
+    }
+
+    const RenderCreateInfo renderCI{
+        .renderAPI = ERenderAPI::Vulkan,
+        .startupSurfaces = {
+            StartupSurfaceDesc{.window = &firstStartup, .swapchainCI = testSurfaceDesc(160, 120)},
+            StartupSurfaceDesc{.window = &secondStartup, .swapchainCI = testSurfaceDesc(200, 150)},
+        },
+    };
+    IRender* render = IRender::create(renderCI);
+    ASSERT_NE(render, nullptr);
+    ASSERT_TRUE(render->init(renderCI));
+
+    // Both startup windows present, and neither is answered by a rank: each is
+    // found through its own window.
+    IRenderSurfaceContext* first  = render->findSurface(firstStartup);
+    IRenderSurfaceContext* second = render->findSurface(secondStartup);
+    ASSERT_NE(first, nullptr);
+    ASSERT_NE(second, nullptr);
+    ASSERT_NE(first, second);
+    EXPECT_NE(first->getSwapchain(), second->getSwapchain());
+    EXPECT_TRUE(first->isPresentable());
+    EXPECT_TRUE(second->isPresentable());
+    EXPECT_TRUE(presentOneFrame(*first));
+    EXPECT_TRUE(presentOneFrame(*second));
+
+    render->waitIdle();
+    render->destroy();
+    delete render;
+}
+
+TEST(RHISurfaceContext, ExtraWindowResizeAndCloseDoesNotDeviceWaitIdleStartupWindow)
+{
+    SDLNativeWindow startupWindow;
     SDLNativeWindow extraWindow;
-    if (!createTestWindow(primaryWindow, "MW-202-A", 160, 120) ||
+    if (!createTestWindow(startupWindow, "MW-202-A", 160, 120) ||
         !createTestWindow(extraWindow, "MW-202-B", 200, 150)) {
         GTEST_SKIP() << "SDL native window create failed";
     }
 
-    RenderCreateInfo renderCI{
-        .renderAPI = ERenderAPI::Vulkan,
-        .swapchainCI = SwapchainCreateInfo{
-            .bEnableTransferSrc = true,
-            .width              = 160,
-            .height             = 120,
-        },
-        .nativeWindow = &primaryWindow,
-    };
+    const RenderCreateInfo renderCI = testRenderCI(startupWindow, 160, 120);
 
     IRender* render = IRender::create(renderCI);
     ASSERT_NE(render, nullptr);
     ASSERT_TRUE(render->init(renderCI));
 
-    std::unique_ptr<IRenderSurfaceContext> extra = render->createSurfaceContext(extraWindow);
+    const SurfaceId        extraId = render->createSurfaceContext(extraWindow, testSurfaceDesc(200, 150));
+    IRenderSurfaceContext* extra   = render->findSurface(extraId);
     ASSERT_NE(extra, nullptr);
-    auto* primary = render->getPrimarySurfaceContext();
-    ASSERT_NE(primary, nullptr);
+    auto* startup = render->findSurface(startupWindow);
+    ASSERT_NE(startup, nullptr);
 
-    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*startup));
     ASSERT_TRUE(presentOneFrame(*extra));
 
     ASSERT_TRUE(extraWindow.setWindowSize(240, 180));
     extra->requestRecreate();
 
-    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*startup));
     ASSERT_TRUE(presentOneFrame(*extra));
-    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*startup));
     ASSERT_TRUE(presentOneFrame(*extra));
 
-    extra.reset();
-    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(render->destroySurfaceContext(extraId));
+    ASSERT_TRUE(presentOneFrame(*startup));
 
     render->waitIdle();
     render->destroy();
@@ -189,36 +285,29 @@ TEST(RHISurfaceContext, ExtraWindowResizeAndCloseDoesNotDeviceWaitIdlePrimary)
 
 TEST(RHISurfaceContext, ExtraWindowPresentResizeCloseSoak)
 {
-    SDLNativeWindow primaryWindow;
+    SDLNativeWindow startupWindow;
     SDLNativeWindow extraWindow;
-    if (!createTestWindow(primaryWindow, "C9-soak-A", 160, 120) ||
+    if (!createTestWindow(startupWindow, "C9-soak-A", 160, 120) ||
         !createTestWindow(extraWindow, "C9-soak-B", 200, 150)) {
         GTEST_SKIP() << "SDL native window create failed";
     }
 
-    RenderCreateInfo renderCI{
-        .renderAPI = ERenderAPI::Vulkan,
-        .swapchainCI = SwapchainCreateInfo{
-            .bEnableTransferSrc = true,
-            .width              = 160,
-            .height             = 120,
-        },
-        .nativeWindow = &primaryWindow,
-    };
+    const RenderCreateInfo renderCI = testRenderCI(startupWindow, 160, 120);
 
     IRender* render = IRender::create(renderCI);
     ASSERT_NE(render, nullptr);
     ASSERT_TRUE(render->init(renderCI));
 
-    std::unique_ptr<IRenderSurfaceContext> extra = render->createSurfaceContext(extraWindow);
+    const SurfaceId        extraId = render->createSurfaceContext(extraWindow, testSurfaceDesc(200, 150));
+    IRenderSurfaceContext* extra   = render->findSurface(extraId);
     ASSERT_NE(extra, nullptr);
-    auto* primary = render->getPrimarySurfaceContext();
-    ASSERT_NE(primary, nullptr);
-    ASSERT_NE(primary, extra.get());
+    auto* startup = render->findSurface(startupWindow);
+    ASSERT_NE(startup, nullptr);
+    ASSERT_NE(startup, extra);
 
     constexpr int kFrames = 32;
     for (int frame = 0; frame < kFrames; ++frame) {
-        ASSERT_TRUE(presentOneFrame(*primary)) << "primary frame " << frame;
+        ASSERT_TRUE(presentOneFrame(*startup)) << "startup frame " << frame;
         ASSERT_TRUE(presentOneFrame(*extra)) << "extra frame " << frame;
         if (frame == 8) {
             ASSERT_TRUE(extraWindow.setWindowSize(240, 180));
@@ -230,9 +319,9 @@ TEST(RHISurfaceContext, ExtraWindowPresentResizeCloseSoak)
         }
     }
 
-    extra.reset();
+    ASSERT_TRUE(render->destroySurfaceContext(extraId));
     for (int frame = 0; frame < 8; ++frame) {
-        ASSERT_TRUE(presentOneFrame(*primary)) << "primary after extra close " << frame;
+        ASSERT_TRUE(presentOneFrame(*startup)) << "startup after extra close " << frame;
     }
 
     render->waitIdle();
@@ -240,37 +329,30 @@ TEST(RHISurfaceContext, ExtraWindowPresentResizeCloseSoak)
     delete render;
 }
 
-TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockPrimaryPresent)
+TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockStartupWindowPresent)
 {
-    SDLNativeWindow primaryWindow;
+    SDLNativeWindow startupWindow;
     SDLNativeWindow extraWindow;
-    if (!createTestWindow(primaryWindow, "MW-206-A", 160, 120) ||
+    if (!createTestWindow(startupWindow, "MW-206-A", 160, 120) ||
         !createTestWindow(extraWindow, "MW-206-B", 200, 150)) {
         GTEST_SKIP() << "SDL native window create failed";
     }
 
-    RenderCreateInfo renderCI{
-        .renderAPI = ERenderAPI::Vulkan,
-        .swapchainCI = SwapchainCreateInfo{
-            .bEnableTransferSrc = true,
-            .width              = 160,
-            .height             = 120,
-        },
-        .nativeWindow = &primaryWindow,
-    };
+    const RenderCreateInfo renderCI = testRenderCI(startupWindow, 160, 120);
 
     IRender* render = IRender::create(renderCI);
     ASSERT_NE(render, nullptr);
     ASSERT_TRUE(render->init(renderCI));
 
-    std::unique_ptr<IRenderSurfaceContext> extra = render->createSurfaceContext(extraWindow);
+    const SurfaceId        extraId = render->createSurfaceContext(extraWindow, testSurfaceDesc(200, 150));
+    IRenderSurfaceContext* extra   = render->findSurface(extraId);
     ASSERT_NE(extra, nullptr);
-    auto* primary = render->getPrimarySurfaceContext();
-    ASSERT_NE(primary, nullptr);
-    EXPECT_TRUE(primary->isPresentable());
+    auto* startup = render->findSurface(startupWindow);
+    ASSERT_NE(startup, nullptr);
+    EXPECT_TRUE(startup->isPresentable());
     EXPECT_TRUE(extra->isPresentable());
 
-    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*startup));
     ASSERT_TRUE(presentOneFrame(*extra));
 
     // This guard needs the platform to actually drive the minimize/restore
@@ -288,7 +370,7 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockPrimaryPresent)
 
     extra->requestRecreate();
 
-    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*startup));
 
     int32_t extraImage = -1;
     ASSERT_TRUE(extra->begin(&extraImage));
@@ -296,7 +378,7 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockPrimaryPresent)
     EXPECT_FALSE(extra->isPresentable());
     ASSERT_TRUE(extra->end(extraImage, {}));
 
-    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*startup));
 
     ASSERT_TRUE(extraWindow.restoreFromMinimize());
     extra->requestRecreate();
@@ -305,10 +387,10 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockPrimaryPresent)
         GTEST_SKIP() << "platform kept the minimized flag after restore";
     }
     ASSERT_TRUE(extra->isPresentable());
-    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*startup));
 
-    extra.reset();
-    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(render->destroySurfaceContext(extraId));
+    ASSERT_TRUE(presentOneFrame(*startup));
 
     render->waitIdle();
     render->destroy();

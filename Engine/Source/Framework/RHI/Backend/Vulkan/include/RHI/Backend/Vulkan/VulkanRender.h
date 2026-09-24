@@ -101,10 +101,39 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     uint32_t apiVersion = 0;
 
     VkInstance   _instance;
-    // Created before device pick so present support can be queried. Adopted by
-    // `_primarySurface` for swapchain/sync; this handle is still released here.
-    VkSurfaceKHR _surface;
 
+    /// One window whose present requirements were known before this device
+    /// existed (see `RenderCreateInfo::startupSurfaces`). The device creates
+    /// the VkSurfaceKHR here -- before device pick, because present support is
+    /// what the queue plan is chosen from -- and owns it until teardown; the
+    /// surface context that presents through it does not.
+    struct StartupSurface
+    {
+        INativeWindow*      window = nullptr;
+        SwapchainCreateInfo swapchainCI{};
+        VkSurfaceKHR        surface = VK_NULL_HANDLE;
+    };
+
+    /// One registry slot of this device's surface set. `generation == 0` marks
+    /// the slot free, so an id held across a destroy fails to resolve instead
+    /// of naming whatever registered into the slot next.
+    struct SurfaceSlot
+    {
+        std::unique_ptr<VulkanRenderSurfaceContext> context;
+        uint32_t                                    generation = 0;
+    };
+
+    std::vector<StartupSurface> _startupSurfaces;
+    std::vector<SurfaceSlot>    _surfaces;
+    uint32_t                    _nextSurfaceGeneration = 1;
+
+    /// When `startupSurfaces` is empty the device exists to produce offscreen
+    /// work only: no window, no swapchain, no present family.
+    [[nodiscard]] bool hasStartupSurfaces() const { return !_startupSurfaces.empty(); }
+    /// Register an already-built context and hand back its id. Appends to a free
+    /// slot when there is one, so a window opened and closed repeatedly does not
+    /// grow the registry without bound.
+    SurfaceId registerSurface(std::unique_ptr<VulkanRenderSurfaceContext> context);
 
     QueueFamilyIndices _graphicsQueueFamily;
     QueueFamilyIndices _presentQueueFamily;
@@ -130,8 +159,6 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     VmaAllocator _vmaAllocator   = VK_NULL_HANDLE;
 
 
-
-    std::unique_ptr<VulkanRenderSurfaceContext> _primarySurface;
 
     bool                     bOnlyOnePresentQueue = false;
     std::vector<VulkanQueue> _presentQueues;
@@ -185,12 +212,9 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
 
   public:
-    INativeWindow*                       _nativeWindow = nullptr;
-    std::unique_ptr<INativeWindow>       _ownedNativeWindow = nullptr;
-
-    Delegate<bool(VkInstance, VkSurfaceKHR* inSurface)> onCreateSurface;
-    Delegate<void(VkInstance, VkSurfaceKHR* inSurface)> onReleaseSurface;
-    Delegate<std::vector<DeviceFeature>()>              onGetRequiredInstanceExtensions;
+    /// Extensions every startup window needs at instance level (unioned: there
+    /// is no single window whose requirements the instance may satisfy alone).
+    Delegate<std::vector<DeviceFeature>()> onGetRequiredInstanceExtensions;
 
   public:
 
@@ -226,8 +250,11 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     void trackSampler(const std::shared_ptr<VulkanSampler>& sampler) { _trackedSamplers.emplace_back(sampler); }
     void releaseTrackedSamplers();
 
-    std::unique_ptr<IRenderSurfaceContext> createSurfaceContext(INativeWindow& window) override;
-    [[nodiscard]] IRenderSurfaceContext*   getPrimarySurfaceContext() const override { return _primarySurface.get(); }
+    SurfaceId createSurfaceContext(INativeWindow& window, const SwapchainCreateInfo& swapchainCI) override;
+    [[nodiscard]] IRenderSurfaceContext* findSurface(SurfaceId id) const override;
+    [[nodiscard]] IRenderSurfaceContext* findSurface(INativeWindow& window) const override;
+    [[nodiscard]] SurfaceId              findSurfaceId(INativeWindow& window) const override;
+    bool                                 destroySurfaceContext(SurfaceId id) override;
 
     /// Frame bookkeeping for one recorded frame (see IRender::beginRecordedFrame).
     /// Was `onPrimaryPresentFenceWaited`, driven from the primary surface's
@@ -281,12 +308,14 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
     bool initInternal(const RenderCreateInfo& ci)
     {
-        initWindow(ci);
+        initStartupSurfaces(ci);
+        if (!hasStartupSurfaces()) {
+            return false;
+        }
 
         createInstance();
 
-
-        createSurface();
+        createStartupSurfaceHandles();
 
         //  find a suitable physical device
         findPhysicalDevice();
@@ -315,7 +344,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
             terminate();
         }
         createPipelineCache();
-        if (!createPrimarySurface(ci.swapchainCI)) {
+        if (!createStartupSurfaces()) {
             terminate();
         }
         createFrameGpuTimingResources();
@@ -332,14 +361,9 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
     [[nodiscard]] uint32_t         getApiVersion() const { return apiVersion; }
     [[nodiscard]] VkInstance       getInstance() const { return _instance; }
-    [[nodiscard]] VkSurfaceKHR     getSurface() const { return _surface; }
     [[nodiscard]] VkDevice         getDevice() const { return m_LogicalDevice; }
     [[nodiscard]] VkPhysicalDevice getPhysicalDevice() const { return m_PhysicalDevice; }
     [[nodiscard]] VmaAllocator     getVmaAllocator() const { return _vmaAllocator; }
-    [[nodiscard]] VulkanSwapChain* primaryVulkanSwapchain() const
-    {
-        return _primarySurface ? static_cast<VulkanSwapChain*>(_primarySurface->getSwapchain()) : nullptr;
-    }
 
     [[nodiscard]] VkPipelineCache getPipelineCache() const { return _pipelineCache; }
 
@@ -413,11 +437,15 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
   private:
 
-    void initWindow(const RenderCreateInfo& ci);
+    /// Build the startup window list (the surfaces the device must be able to
+    /// present to) and the instance-level requirements they share.
+    void initStartupSurfaces(const RenderCreateInfo& ci);
     void createInstance();
     void findPhysicalDevice();
 
-    void createSurface();
+    /// One VkSurfaceKHR per startup window, before the device is picked: present
+    /// support is what the queue plan is derived from.
+    void createStartupSurfaceHandles();
 
 
     bool createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount);
@@ -447,7 +475,9 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
         std::vector<const char*>&                 outLayerNames,
         bool                                      bDebug = false);
 
-    bool createPrimarySurface(const SwapchainCreateInfo& swapchainCI);
+    /// Register one surface context per startup window (swapchain + sync),
+    /// after the device and its queues exist.
+    bool createStartupSurfaces();
     void createFrameGpuTimingResources();
     void releaseFrameGpuTimingResources();
     void updateCompletedFrameGpuTiming();

@@ -248,14 +248,16 @@ bool VulkanRenderSurfaceContext::init(VulkanRender* render, INativeWindow& windo
     _render        = render;
     _window        = &window;
     _bOwnsSurface = true;
-    _debugLabel   = "Extra";
+    _debugLabel   = "Surface";
 
     if (!window.onCreateVkSurface(render->getInstance(), &_surface) || _surface == VK_NULL_HANDLE) {
         YA_CORE_ERROR("VulkanRenderSurfaceContext: failed to create VkSurfaceKHR");
         return false;
     }
     if (!queryPresentSupport()) {
-        YA_CORE_ERROR("VulkanRenderSurfaceContext: physical device cannot present to this surface");
+        // The device enabled its queue plan when it was created, so this is the
+        // capability answer for a window registered later -- not a rank.
+        YA_CORE_ERROR("VulkanRenderSurfaceContext: the queue families this device enabled cannot present to this window");
         window.onDestroyVkSurface(render->getInstance(), &_surface);
         _surface = VK_NULL_HANDLE;
         return false;
@@ -264,18 +266,18 @@ bool VulkanRenderSurfaceContext::init(VulkanRender* render, INativeWindow& windo
     return createSwapchainAndSync(swapchainCI, true);
 }
 
-bool VulkanRenderSurfaceContext::attachExistingSurface(VulkanRender*              render,
-                                                       INativeWindow&             window,
-                                                       VkSurfaceKHR               surface,
-                                                       const SwapchainCreateInfo& swapchainCI)
+bool VulkanRenderSurfaceContext::adoptStartupSurface(VulkanRender*              render,
+                                                     INativeWindow&             window,
+                                                     VkSurfaceKHR               surface,
+                                                     const SwapchainCreateInfo& swapchainCI)
 {
     YA_CORE_ASSERT(render, "VulkanRenderSurfaceContext requires a device owner");
-    YA_CORE_ASSERT(surface != VK_NULL_HANDLE, "Primary surface context requires an existing VkSurfaceKHR");
+    YA_CORE_ASSERT(surface != VK_NULL_HANDLE, "A startup surface context requires the device's VkSurfaceKHR");
     _render       = render;
     _window       = &window;
     _surface      = surface;
     _bOwnsSurface = false;
-    _debugLabel   = "Primary";
+    _debugLabel   = "Surface";
     return createSwapchainAndSync(swapchainCI, false);
 }
 

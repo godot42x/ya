@@ -215,7 +215,10 @@ void VulkanRender::destroyInternal()
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     }
 
-    _primarySurface.reset();
+    // Destroy every surface context (each waits its own fences and releases its
+    // swapchain + sync) before the device goes away. There is no privileged one
+    // to destroy first: the registry is the whole set.
+    _surfaces.clear();
     releaseFrameGpuTimingResources();
     VK_DESTROY(PipelineCache, m_LogicalDevice, _pipelineCache);
 
@@ -251,7 +254,14 @@ void VulkanRender::destroyInternal()
     if (m_EnableValidationLayers && bSupportDebugUtils) {
         _debugUtils->destroy();
     }
-    onReleaseSurface.executeIfBound(&(*_instance), &_surface);
+    // The device created these VkSurfaceKHRs (the contexts only presented
+    // through them), so it is what releases them.
+    for (StartupSurface& startup : _startupSurfaces) {
+        if (startup.surface != VK_NULL_HANDLE && startup.window) {
+            startup.window->onDestroyVkSurface(_instance, &startup.surface);
+        }
+    }
+    _startupSurfaces.clear();
     vkDestroyInstance(_instance, getAllocator());
 }
 
@@ -460,11 +470,16 @@ void VulkanRender::findPhysicalDevice()
 
         candidate.score = getDeviceScore(device);
 
-        uint32_t formatCount = 0;
-        VK_CALL(vkGetPhysicalDeviceSurfaceFormatsKHR(device, _surface, &formatCount, nullptr));
-        if (formatCount > 0) {
+        // Preferred-format bonus is asked of every startup window: with more
+        // than one, no single window's formats stand in for the others'.
+        for (const StartupSurface& startup : _startupSurfaces) {
+            uint32_t formatCount = 0;
+            VK_CALL(vkGetPhysicalDeviceSurfaceFormatsKHR(device, startup.surface, &formatCount, nullptr));
+            if (formatCount == 0) {
+                continue;
+            }
             std::vector<VkSurfaceFormatKHR> formats(formatCount);
-            VK_CALL(vkGetPhysicalDeviceSurfaceFormatsKHR(device, _surface, &formatCount, formats.data()));
+            VK_CALL(vkGetPhysicalDeviceSurfaceFormatsKHR(device, startup.surface, &formatCount, formats.data()));
             for (const auto& format : formats) {
                 if (format.format == VK_FORMAT_B8G8R8A8_UNORM && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
                     candidate.score += 100;
@@ -483,6 +498,9 @@ void VulkanRender::findPhysicalDevice()
         YA_CORE_INFO("Queue family count: {}", familyCount);
 
         std::vector<QueueFamilyIndices> graphicsQueueFamilies;
+        // Only all-startup-surfaces families: the device enables ONE present
+        // family, so a family that cannot present to every window the device is
+        // created for would leave one of them unpresentable at creation time.
         std::vector<QueueFamilyIndices> presentQueueFamilies;
 
         int32_t familyIndex = 0;
@@ -500,9 +518,16 @@ void VulkanRender::findPhysicalDevice()
                 });
             }
 
-            VkBool32 bSupport = false;
-            VK_CALL(vkGetPhysicalDeviceSurfaceSupportKHR(device, familyIndex, _surface, &bSupport));
-            if (bSupport) {
+            bool bPresentsEveryStartupWindow = hasStartupSurfaces();
+            for (const StartupSurface& startup : _startupSurfaces) {
+                VkBool32 bSupport = VK_FALSE;
+                VK_CALL(vkGetPhysicalDeviceSurfaceSupportKHR(device, familyIndex, startup.surface, &bSupport));
+                if (!bSupport) {
+                    bPresentsEveryStartupWindow = false;
+                    break;
+                }
+            }
+            if (bPresentsEveryStartupWindow) {
                 YA_CORE_TRACE("\tPresent queue family index: {}:{}, queue count: {}", presentQueueFamilies.size(), familyIndex, queueFamily.queueCount);
                 presentQueueFamilies.push_back({
                     .queueFamilyIndex = familyIndex,
@@ -515,7 +540,10 @@ void VulkanRender::findPhysicalDevice()
 
         printf("==========================================\n");
 
-        if (graphicsQueueFamilies.empty() || presentQueueFamilies.empty()) {
+        // The present family is a requirement because the device was created
+        // for windows (`initStartupSurfaces` rejects an empty set); the guard
+        // keeps this query honest if that ever changes.
+        if (graphicsQueueFamilies.empty() || (hasStartupSurfaces() && presentQueueFamilies.empty())) {
             YA_CORE_WARN("Skipping device {}, missing required queue families", candidate.properties.deviceName);
             continue;
         }
@@ -565,10 +593,16 @@ void VulkanRender::findPhysicalDevice()
     // YA_CORE_INFO("Memory Type Count: {}", _memoryProperties.memoryTypeCount);
 }
 
-void VulkanRender::createSurface()
+void VulkanRender::createStartupSurfaceHandles()
 {
-    bool ok = onCreateSurface.executeIfBound(&(*_instance), &_surface);
-    YA_CORE_ASSERT(ok, "Failed to create surface!");
+    // One VkSurfaceKHR per startup window, created before device pick: which
+    // queue families can present is what the queue plan is chosen from.
+    for (StartupSurface& startup : _startupSurfaces) {
+        YA_CORE_ASSERT(startup.window != nullptr, "A startup surface requires a native window");
+        const bool ok = startup.window->onCreateVkSurface(_instance, &startup.surface);
+        YA_CORE_ASSERT(ok && startup.surface != VK_NULL_HANDLE,
+                       "Failed to create the VkSurfaceKHR of a startup window");
+    }
 }
 
 bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount)
@@ -1127,12 +1161,38 @@ bool VulkanRender::isFeatureSupported(
     return true;
 }
 
-bool VulkanRender::createPrimarySurface(const SwapchainCreateInfo& swapchainCI)
+bool VulkanRender::createStartupSurfaces()
 {
-    YA_CORE_ASSERT(_nativeWindow, "Primary surface requires a native window");
-    YA_CORE_ASSERT(_surface != VK_NULL_HANDLE, "Primary VkSurfaceKHR must exist before swapchain");
-    _primarySurface = std::make_unique<VulkanRenderSurfaceContext>();
-    return _primarySurface->attachExistingSurface(this, *_nativeWindow, _surface, swapchainCI);
+    // The device holds every startup window's swapchain + sync from here on.
+    for (const StartupSurface& startup : _startupSurfaces) {
+        auto context = std::make_unique<VulkanRenderSurfaceContext>();
+        if (!context->adoptStartupSurface(this, *startup.window, startup.surface, startup.swapchainCI)) {
+            return false;
+        }
+        registerSurface(std::move(context));
+    }
+    return true;
+}
+
+SurfaceId VulkanRender::registerSurface(std::unique_ptr<VulkanRenderSurfaceContext> context)
+{
+    if (!context) {
+        return {};
+    }
+
+    // Reuse a freed slot when there is one, so opening and closing windows does
+    // not grow the registry without bound. The generation is what keeps an id
+    // that outlived its surface from resolving to the new tenant.
+    for (uint32_t index = 0; index < _surfaces.size(); ++index) {
+        if (_surfaces[index].generation == 0) {
+            _surfaces[index].generation = _nextSurfaceGeneration++;
+            _surfaces[index].context    = std::move(context);
+            return SurfaceId{.index = index, .generation = _surfaces[index].generation};
+        }
+    }
+
+    _surfaces.push_back(SurfaceSlot{.context = std::move(context), .generation = _nextSurfaceGeneration++});
+    return SurfaceId{.index = static_cast<uint32_t>(_surfaces.size() - 1), .generation = _surfaces.back().generation};
 }
 
 void VulkanRender::createFrameGpuTimingResources()
@@ -1297,13 +1357,60 @@ void VulkanRender::endFrameGpuTiming(ICommandBuffer* commandBuffer)
     _frameGpuTimingValid[frameIdx] = 1;
 }
 
-std::unique_ptr<IRenderSurfaceContext> VulkanRender::createSurfaceContext(INativeWindow& window)
+SurfaceId VulkanRender::createSurfaceContext(INativeWindow& window, const SwapchainCreateInfo& swapchainCI)
 {
     auto context = std::make_unique<VulkanRenderSurfaceContext>();
-    if (!context->init(this, window, _ci.swapchainCI)) {
+    if (!context->init(this, window, swapchainCI)) {
+        return {};
+    }
+    return registerSurface(std::move(context));
+}
+
+IRenderSurfaceContext* VulkanRender::findSurface(SurfaceId id) const
+{
+    if (id.index >= _surfaces.size()) {
         return nullptr;
     }
-    return context;
+    const SurfaceSlot& slot = _surfaces[id.index];
+    // A generation mismatch means this id names a surface that was released;
+    // answering with the slot's current tenant would present to the wrong
+    // window, so it answers nothing.
+    if (slot.generation == 0 || slot.generation != id.generation) {
+        return nullptr;
+    }
+    return slot.context.get();
+}
+
+IRenderSurfaceContext* VulkanRender::findSurface(INativeWindow& window) const
+{
+    return findSurface(findSurfaceId(window));
+}
+
+SurfaceId VulkanRender::findSurfaceId(INativeWindow& window) const
+{
+    for (uint32_t index = 0; index < _surfaces.size(); ++index) {
+        const SurfaceSlot& slot = _surfaces[index];
+        if (slot.generation != 0 && slot.context && slot.context->getNativeWindow() == &window) {
+            return SurfaceId{.index = index, .generation = slot.generation};
+        }
+    }
+    return {};
+}
+
+bool VulkanRender::destroySurfaceContext(SurfaceId id)
+{
+    if (id.index >= _surfaces.size()) {
+        return false;
+    }
+    SurfaceSlot& slot = _surfaces[id.index];
+    if (slot.generation == 0 || slot.generation != id.generation) {
+        return false;
+    }
+    // The context's own teardown waits its fences and releases its swapchain
+    // and sync before the slot is handed back.
+    slot.context.reset();
+    slot.generation = 0;
+    return true;
 }
 
 void VulkanRender::submitToQueue(
@@ -1404,36 +1511,48 @@ int32_t VulkanRender::getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t 
     return -1;
 }
 
-void VulkanRender::initWindow(const RenderCreateInfo& ci)
+void VulkanRender::initStartupSurfaces(const RenderCreateInfo& ci)
 {
-    _nativeWindow = ci.nativeWindow;
-    if (!_nativeWindow) {
-#if USE_SDL
-        _ownedNativeWindow = std::make_unique<SDLNativeWindow>();
-        _nativeWindow      = _ownedNativeWindow.get();
-        YA_CORE_ASSERT(_nativeWindow->init(), "Failed to initialize fallback SDL native window");
-        YA_CORE_ASSERT(_nativeWindow->recreate(WindowCreateInfo{
-                            .renderAPI = ci.renderAPI,
-                            .width     = ci.swapchainCI.width,
-                            .height    = ci.swapchainCI.height,
-                        }),
-                       "Failed to recreate fallback SDL native window");
-#endif
+    _startupSurfaces.clear();
+    _startupSurfaces.reserve(ci.startupSurfaces.size());
+    for (const StartupSurfaceDesc& desc : ci.startupSurfaces) {
+        if (!desc.window) {
+            continue;
+        }
+        _startupSurfaces.push_back(StartupSurface{
+            .window      = desc.window,
+            .swapchainCI = desc.swapchainCI,
+            .surface     = VK_NULL_HANDLE,
+        });
     }
-    YA_CORE_ASSERT(_nativeWindow != nullptr, "VulkanRender requires a native window");
 
-    onCreateSurface.set([nativeWindow = _nativeWindow](VkInstance instance, VkSurfaceKHR* surface)
-                        { return nativeWindow->onCreateVkSurface(instance, surface); });
-    onReleaseSurface.set([nativeWindow = _nativeWindow](VkInstance instance, VkSurfaceKHR* surface)
-                         { nativeWindow->onDestroyVkSurface(instance, surface); });
-    onGetRequiredInstanceExtensions.set([nativeWindow = _nativeWindow]()
+    if (_startupSurfaces.empty()) {
+        // Vulkan's queue plan is derived from what must be presented to, so a
+        // device with nothing to present to is a different device, not the
+        // same one with an empty list. Rejecting it here keeps the queue code
+        // free of a "no present family" mode nobody has asked for yet.
+        YA_CORE_ERROR("VulkanRender requires at least one startup window: the queue plan is chosen from the windows the device must present to");
+        return;
+    }
+
+    // Instance-level requirements are the union of every startup window's: no
+    // single window's extension list may stand in for the others'.
+    onGetRequiredInstanceExtensions.set([startupSurfaces = _startupSurfaces]()
                                         {
         std::vector<DeviceFeature> extensions;
-        for (const char* ext : nativeWindow->onGetVkInstanceExtensions()) {
-            extensions.push_back({
-                .name      = ext,
-                .bRequired = true,
-            });
+        for (const StartupSurface& startup : startupSurfaces) {
+            for (const char* ext : startup.window->onGetVkInstanceExtensions()) {
+                const bool bKnown = std::any_of(extensions.begin(),
+                                                extensions.end(),
+                                                [ext](const DeviceFeature& feature)
+                                                { return feature.name == ext; });
+                if (!bKnown) {
+                    extensions.push_back(DeviceFeature{
+                        .name      = ext,
+                        .bRequired = true,
+                    });
+                }
+            }
         }
         return extensions; });
 }

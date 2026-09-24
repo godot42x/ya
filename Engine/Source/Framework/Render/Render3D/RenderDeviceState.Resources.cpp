@@ -101,11 +101,11 @@ void RenderDeviceState::initShaderSystems()
 
 void RenderDeviceState::initDiagnostics(const InitDesc& desc)
 {
-    // The window the device was created for is the one a capture diagnoses.
-    // Naming it here keeps the service from inventing "the primary window": it
-    // is told which surface it captures. With several windows presenting, the
-    // capture target becomes an explicit app choice instead (AB4-2b).
-    IRenderSurfaceContext* captureSurface = _render ? _render->getPrimarySurfaceContext() : nullptr;
+    // A capture diagnoses a named window, so this names the one the device was
+    // created for instead of letting the service pick "the" window. With
+    // several windows presenting, which one a capture targets becomes an
+    // explicit app choice (`AB4-2d`).
+    IRenderSurfaceContext* captureSurface = (_render && _startupWindow) ? _render->findSurface(*_startupWindow) : nullptr;
     _diagnostics.init(_render, captureSurface, desc.bEnableRenderDoc, desc.renderDocDllPath, desc.renderDocCaptureOutputDir);
     _deleter.push("RenderDiagnostics", [this](void*)
                   { _diagnostics.shutdown(); });
@@ -124,24 +124,31 @@ void RenderDeviceState::initRenderBackend(const InitDesc& desc)
         .bResizable = true,
     });
     YA_CORE_ASSERT(nativeWindow != nullptr, "Native window must exist before initializing render backend");
+    // The device is created for this window: it is a startup surface (see
+    // RenderCreateInfo::startupSurfaces), not a privileged one. The app names
+    // its own surface through this window when it needs it.
+    _startupWindow = nativeWindow;
 
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
-        .swapchainCI = SwapchainCreateInfo{
-            .imageFormat        = EFormat::R8G8B8A8_UNORM,
-            .bVsync             = false,
-            .minImageCount      = 3,
-            // Presentation readback must be available even when the screenshot
-            // is requested at runtime through the control port, not only when
-            // a startup automation screenshot path was configured.
-            .bEnableTransferSrc = true,
-            .width              = desc.windowWidth,
-            .height             = desc.windowHeight,
+        .startupSurfaces = {
+            StartupSurfaceDesc{
+                .window      = nativeWindow,
+                .swapchainCI = SwapchainCreateInfo{
+                    .imageFormat        = EFormat::R8G8B8A8_UNORM,
+                    .bVsync             = false,
+                    .minImageCount      = 3,
+                    // Presentation readback must be available even when the screenshot
+                    // is requested at runtime through the control port, not only when
+                    // a startup automation screenshot path was configured.
+                    .bEnableTransferSrc = true,
+                    .width              = desc.windowWidth,
+                    .height             = desc.windowHeight,
+                },
+            },
         },
         .disabledGraphicsCards = {},
     };
-
-    renderCI.nativeWindow = nativeWindow;
 
     _render = IRender::create(renderCI);
     YA_CORE_ASSERT(_render, "Failed to create IRender instance");

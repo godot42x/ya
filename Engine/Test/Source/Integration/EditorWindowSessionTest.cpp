@@ -163,7 +163,7 @@ TEST(EditorWindowSessionTest, TickAppForwardingIsGone)
     }
 }
 
-TEST(EditorWindowSessionTest, HostAndSurfaceDoNotReadPrimarySwapchain)
+TEST(EditorWindowSessionTest, HostAndSurfaceAskForTheirOwnSurface)
 {
     const char* files[] = {
         "Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorSurface.h",
@@ -178,6 +178,11 @@ TEST(EditorWindowSessionTest, HostAndSurfaceDoNotReadPrimarySwapchain)
         const std::string text = readEngineSource(relative);
         EXPECT_EQ(text.find("primarySwapchain"), std::string::npos) << relative;
         EXPECT_EQ(text.find("primaryWindow"), std::string::npos) << relative;
+        // The device keeps one registry of surfaces and privileges none of
+        // them, so the query an editor is allowed to make is "the surface of
+        // this window" -- never "the device's surface".
+        EXPECT_EQ(text.find("getPrimarySurfaceContext"), std::string::npos) << relative;
+        EXPECT_EQ(text.find("createPrimarySurface"), std::string::npos) << relative;
     }
 }
 

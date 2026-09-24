@@ -19,10 +19,11 @@ struct RenderTexture;
 ///
 /// This is not a viewport. `begin()` chooses which swapchain image this
 /// window will compose onto and present; actual rendering targets a
-/// separate offscreen `RenderTexture`. Every window is one of these: the one
-/// the device was created with (`IRender::getPrimarySurfaceContext()`, a
-/// bootstrap fact rather than a rank) and every other one
-/// (`IRender::createSurfaceContext`). No surface owns frame-level state -- see
+/// separate offscreen `RenderTexture`. A device keeps every one of these in
+/// one registry and privileges none of them: the windows it was created for
+/// are registered while it is created (see `RenderCreateInfo::startupSurfaces`)
+/// and later ones through `IRender::createSurfaceContext`, and both are
+/// addressed by `SurfaceId`. No surface owns frame-level state -- see
 /// `IRender::beginRecordedFrame` and `recordedFrameIndex`.
 struct YA_RHI_API IRenderSurfaceContext
 {

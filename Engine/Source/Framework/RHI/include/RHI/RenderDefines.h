@@ -1392,11 +1392,32 @@ struct DeviceFeature
 };
 
 
+/// One window whose present requirements must hold from the moment the device
+/// exists.
+///
+/// Startup is a *timing* fact, not a rank: these windows are known before
+/// there is a device to register them on, so the device creates and registers
+/// their surfaces while it is being created, and the app asks for the id back
+/// (`IRender::findSurface`). A window opened later registers through the same
+/// call (`IRender::createSurfaceContext`) -- the only difference is that the
+/// device already fixed its queue plan, so a later window must fit it.
+struct StartupSurfaceDesc
+{
+    INativeWindow*      window = nullptr;
+    SwapchainCreateInfo swapchainCI{};
+};
+
 struct RenderCreateInfo
 {
-    ERenderAPI::T       renderAPI = ERenderAPI::Vulkan;
-    SwapchainCreateInfo swapchainCI;
-    INativeWindow*      nativeWindow   = nullptr;
+    ERenderAPI::T renderAPI = ERenderAPI::Vulkan;
+
+    /// Windows the device must be able to present to. The backend creates one
+    /// surface per entry before it picks the physical device and enables
+    /// queues, so its queue plan covers this whole set (see
+    /// `IRender::createSurfaceContext` for what that means for later windows).
+    /// An empty set is rejected: an offscreen-only device is a capability
+    /// change (a queue plan with no present family), not an empty list.
+    std::vector<StartupSurfaceDesc> startupSurfaces;
 
     /// Graphics cards excluded from physical-device selection by name
     /// (host-provided; consumed by the backend during device picking).

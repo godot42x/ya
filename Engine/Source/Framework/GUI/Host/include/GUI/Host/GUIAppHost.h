@@ -142,6 +142,15 @@ struct FGUIWindowHostConfig
 
 using GUIWindowId = uint32_t;
 
+/// How one GUI host window becomes a presentable surface: the single place a
+/// window's configuration turns into a swapchain description.
+///
+/// Both windows the device is created for and windows opened later go through
+/// this, so "which format, how many images, which present mode" has one answer
+/// instead of one per registration path. The window's own size is the swapchain
+/// extent; a resize recreates the swapchain rather than editing this.
+[[nodiscard]] YA_GUI_API SwapchainCreateInfo makeHostWindowSurfaceDesc(const FGUIWindowHostConfig& config);
+
 /// One native GUI window: owns its SDL window, presentation resources,
 /// transient pointer state and exactly one WidgetTree. It is the concrete
 /// single-window owner.

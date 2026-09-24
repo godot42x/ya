@@ -29,6 +29,11 @@ struct AppRenderState
     /// surface this frame presents, which View the window shows" is the app's
     /// arrangement and lives here, not on the renderer.
     std::unique_ptr<RuntimeRenderContext>   runtimeRender;
+    /// The surface this app presents its display root through. Written once at
+    /// init, from the window the host created before the device existed; the
+    /// renderer keeps every surface in one registry and privileges none, so
+    /// "which window this app shows its image in" has to be the app's answer.
+    SurfaceId                               hostSurfaceId{};
     ShadowSettings                          shadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
     bool                                    bRenderMirror  = false;
     /// The host's render settings: the clock, and the resolution its viewport

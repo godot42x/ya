@@ -5,10 +5,13 @@
 namespace ya
 {
 
-std::unique_ptr<IRenderSurfaceContext> IRender::createSurfaceContext(INativeWindow& window)
+SurfaceId IRender::createSurfaceContext(INativeWindow& window, const SwapchainCreateInfo& swapchainCI)
 {
     (void)window;
-    return nullptr;
+    (void)swapchainCI;
+    // A backend that cannot register surfaces reports that as an invalid id
+    // rather than by returning a half-built context the caller then owns.
+    return {};
 }
 
 IRender *IRender::create(const RenderCreateInfo &ci)

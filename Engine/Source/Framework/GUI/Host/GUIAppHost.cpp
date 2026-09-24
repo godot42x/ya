@@ -512,6 +512,22 @@ struct SdlEventSource final : IAppEventSource
 
 } // namespace
 
+SwapchainCreateInfo makeHostWindowSurfaceDesc(const FGUIWindowHostConfig& config)
+{
+    return SwapchainCreateInfo{
+        .imageFormat = EFormat::R8G8B8A8_UNORM,
+        // GUI hover is high-frequency interaction: prefer Mailbox (low latency,
+        // no tearing) over the default FIFO present queue. The backend falls
+        // back to FIFO when the driver lacks Mailbox.
+        .presentMode        = EPresentMode::Mailbox,
+        .bVsync             = config.bVsync,
+        .minImageCount      = 3,
+        .bEnableTransferSrc = true,
+        .width              = config.width != 0 ? config.width : DEFAULT_WINDOW_WIDTH,
+        .height             = config.height != 0 ? config.height : DEFAULT_WINDOW_HEIGHT,
+    };
+}
+
 /// Runtime automation screenshot request (GUI offscreen parity). The control
 /// server defers completion until the frame loop has captured the requested
 /// surfaces and (optionally) diffed them, so the request carries its waiter.
@@ -636,22 +652,17 @@ bool GUIWindowHost::init()
             .withCachedStoragePath("Engine/Intermediate/Shader/Slang")
             .FactoryNew());
 
-    // 3. Render backend (same API as the primary native window).
+    // 3. Render backend. This window is a startup surface: it exists before the
+    //    device does, so the device creates its surface while it is being
+    //    created and the window asks for the id back below.
     RenderCreateInfo renderCI{
         .renderAPI = config.renderAPI,
-        .swapchainCI = SwapchainCreateInfo{
-            .imageFormat = EFormat::R8G8B8A8_UNORM,
-            // GUI hover is high-frequency interaction: prefer Mailbox (low
-            // latency, no tearing) over the default FIFO present queue. The
-            // backend falls back to FIFO when the driver lacks Mailbox.
-            .presentMode        = EPresentMode::Mailbox,
-            .bVsync             = config.bVsync,
-            .minImageCount      = 3,
-            .bEnableTransferSrc = true,
-            .width              = config.width != 0 ? config.width : DEFAULT_WINDOW_WIDTH,
-            .height             = config.height != 0 ? config.height : DEFAULT_WINDOW_HEIGHT,
+        .startupSurfaces = {
+            StartupSurfaceDesc{
+                .window      = &window,
+                .swapchainCI = makeHostWindowSurfaceDesc(config),
+            },
         },
-        .nativeWindow   = &window,
     };
     IRender* render = IRender::create(renderCI);
     if (!render) {
@@ -669,9 +680,10 @@ bool GUIWindowHost::init()
         window.destroy();
         return false;
     }
-    _impl->present = render->getPrimarySurfaceContext();
+    // The host owns this window, so it names its own surface by that window.
+    _impl->present = render->findSurface(window);
     if (!_impl->present || !_impl->present->getSwapchain()) {
-        YA_CORE_ERROR("GUIAppHost: missing primary surface context");
+        YA_CORE_ERROR("GUIAppHost: the device registered no surface for the host window");
         render->destroy();
         delete render;
         _impl->render  = nullptr;
@@ -790,7 +802,7 @@ bool GUIWindowHost::init()
                                          *_impl->present,
                                          "GUIApp",
                                          _impl->presentationTargets)) {
-        YA_CORE_ERROR("GUIAppHost: failed to build presentation targets for the primary surface");
+        YA_CORE_ERROR("GUIAppHost: failed to build presentation targets for this window's surface");
         return false;
     }
     _impl->cachedSwapchainHandle = swapchain->getHandle();
@@ -864,7 +876,7 @@ void GUIWindowHost::rebuildPresentationResources(bool bWaitForGpu)
 
     auto* swapchain = _impl->present->getSwapchain();
     if (!swapchain) {
-        YA_CORE_ERROR("GUIAppHost: primary surface has no swapchain");
+        YA_CORE_ERROR("GUIAppHost: this window's surface has no swapchain");
         return;
     }
     _impl->render->allocateCommandBuffers(swapchain->getImageCount(), _impl->commandBuffers);
