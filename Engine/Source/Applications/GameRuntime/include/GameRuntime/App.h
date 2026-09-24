@@ -60,6 +60,10 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
                                  public IFrameRecordExtensions
 {
     friend class GameRuntimeTickOrchestrator;
+    /// The frame render context owns one product frame's whole render order and
+    /// reads the app's arrangement (producers, scene manager, UI host, render
+    /// services) off it -- the same access the orchestrator's steps had.
+    friend class RuntimeRenderContext;
     friend class AppModuleTestAccess;
     friend class AppSceneServices;
     friend class InputRouter;

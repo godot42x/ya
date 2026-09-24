@@ -1,8 +1,8 @@
 # Framework 只放可复用管线，应用拥有排布与状态
 
 > 建立日期：2026-09-22
-> 状态：AB1 / AB2 已落地；AB3（step1 + step2）已落地；AB7-step1 已落地（整帧录制顺序搬到应用侧）；
-> AB7-step2 批 1 已落地（plan 不再携带行为）；AB4-2d/2e、AB5 / AB6、AB7-step2 批 2 待做。
+> 状态：AB1 / AB2 已落地；AB3（step1 + step2）已落地；AB7（step1 + step2 批 1/2）已落地；
+> AB4-2d/2e、AB5 / AB6 待做。
 
 ## 1. 原则
 
@@ -783,13 +783,18 @@ sealed plan 从此只有值（`RenderFrameInputs.h` 的 `FrameRecordExtensions.h
 契约守卫（`RuntimeRenderContextTest`）更新：`record` 必须带显式 stage 参数的概念断言 +
 "四字段即整个 plan" 的注释。§5.1 表中该行已闭环。
 
-AB7-step2 批 2（待做）：**编排事实收拢**。把今天仍散在 `GameRuntimeTickOrchestrator` 的
-frame flight 解析（`resolveFlightIndex`）、present 目标 acquire、submit/present 编排
-（`submitRecordedFrame`）与 present 前后策略收进 `RuntimeRenderContext`，使其成为
-"host present coordinator" 本体（现头文件注释还声明 acquire/present 留在编排层——批 2 改这条）。
-declare/extract/prepare/build 是否同批收拢需先拍板 API 形状：`RuntimeRenderContext` 今天只认识
-`RenderDeviceState`，收下 scene/view plan 与 Game UI 绑定意味着它开始认识 App 的服务面，
-这是批 2 的主要设计决策。
+AB7-step2 批 2（已落地 2026-09-24）：**编排事实收拢，`RuntimeRenderContext` 成为帧本体**。
+依赖形状经拍板：`RuntimeRenderContext` 拿 `App&`（App 的 friend），与 GameRuntime 现有习惯一致。
+`RuntimeRenderContext::tick(App&, dt)` 拥有一个产品帧的整条渲染顺序——offscreen pump → flight
+解析 → declare → extract → prepare → build → displayedView 写入 → frame 簿记 + acquire →
+record → submit/present → present extras；原 orchestrator 的 `pumpOffscreenTasks` /
+`resolveFlightIndex` / `declareViews` / `extractScenes` / `prepareViews` /
+`buildGameRenderFrame`（含 `TickFrame`）/ `recordFrame` / `submitRecordedFrame` 全部搬入成为
+具名步骤，per-tick 状态仍是 tick 局部变量。`GameRuntimeTickOrchestrator::tickRender` 只剩
+App-shell 准备（module prepare-for-render、host 时钟）加一行 `context->tick(app, dt)`；
+头文件里那些步骤声明与 `App.h` 的 friend 一并收窄（`RuntimeRenderContext` 替换为 friend）。
+source 守卫（`EditorWindowSessionTest`）随迁：module-extras 钩子守卫指向新的所在文件，
+并反向断言 orchestrator 不再 present extras。
 
 目标形态：
 

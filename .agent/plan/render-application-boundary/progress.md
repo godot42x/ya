@@ -1331,3 +1331,44 @@ review 指出的问题：compositor 的世界 compose 路径把 `DisplayedView`�
 - 保留（AB7-step2 批 2，已在 plan.md 登记）：编排事实收拢（frame flight / acquire / submit /
   present 策略进 `RuntimeRenderContext`）+ 其 API 形状决策（是否认识 App 服务面）。
 - 偏离：无。
+
+---
+
+## 2026-09-24 AB7-step2 批 2 — RuntimeRenderContext 收拢编排事实，成为帧本体
+
+唯一目标：**plan 目标形态的最后一块落地**——"一个产品帧的渲染顺序"整体搬进
+`RuntimeRenderContext`。依赖形状经拍板：拿 `App&`（App 的 friend），与 GameRuntime
+现有习惯（每个编排函数都拿 App&）一致，不引入打包输入或窄服务集的管道参数。
+
+### 改动
+
+- `RuntimeRenderContext::tick(App&, dt)`：一个产品帧的渲染顺序，一段一个具名步骤——
+  offscreen pump → flight 解析 → declare → extract → prepare → build → displayedView 写入 →
+  frame 簿记（onFrameBegin/End + guard）+ beginRecordedFrame + acquire → record →
+  submit/present → present extras。per-tick 状态仍是 tick 局部变量（SceneRenderScheduler、
+  TickFrame），context 本身无逐 tick 成员。
+- 原 orchestrator 的 `pumpOffscreenTasks` / `resolveFlightIndex` / `declareViews` /
+  `extractScenes` / `prepareViews` / `buildGameRenderFrame`（含 `TickFrame`）/ `recordFrame` /
+  `submitRecordedFrame` 平移为 context 的私有具名步骤；`record(plan, extensions)` 保持公开
+  （契约测试钉的是它），`recordFrame` 是构造 plan 并调用它的那一步。
+- `GameRuntimeTickOrchestrator::tickRender` 变壳：module prepare-for-render + host 时钟 +
+  `context->tick(app, dt)`；头文件删掉全部步骤声明与多余 include，`App.h` 的 friend 集合
+  以 `RuntimeRenderContext` 替换 orchestrator 不再需要的部分。
+- `EditorWindowSessionTest.InputRoutesByWindowId` 的 source 守卫随迁：presentModuleExtras
+  的存在断言改指 `RuntimeRenderContext.cpp`，并新增反向断言 orchestrator 不再 present extras。
+
+### 测试
+
+- 全量 `ya-testing`：**1320 passed / 1 skipped（platform minimize guard，同基线）/ 0 failed**
+  （过滤掉 `EditorDockWorkspaceTest.FactoryOwnedNestedLayoutPlacesOwnedTools` —— 该测试
+  失败来自工作树中用户自己的 `EditorDockWorkspace.cpp` 未提交改动（布局 JSON
+  horizontal→vertical，测试期望未同步），stash 对照验证过 HEAD 上它通过，与本批无关）。
+- `GUIWorkbench --smoke-actions`：**PASS**；editor smoke **exit=0**；
+  parity md5 仍 `c775245ae636f15b41da8485319a2267`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：`prepareHostViewState`（host 时钟）与 `prepareModulesForRender`（模块壳准备）留在
+  orchestrator——它们是 app-shell 准备，不是帧渲染顺序的步骤。
+- 保留：iterate() 里的 automation 回读（facade 查询）不动。
+- 偏离：无。

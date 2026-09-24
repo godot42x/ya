@@ -244,10 +244,16 @@ TEST(EditorWindowSessionTest, InputRoutesByWindowId)
         readEngineSource("Source/Framework/GUI/Runtime/Widgets/Controls/DockSpace/DockSpace.cpp");
     EXPECT_NE(dockSpaceCpp.find("realizeNoTargetTearOff"), std::string::npos);
 
+    // The module-extras hook lives where the frame's present order lives: the
+    // frame render context (it moved out of the tick orchestrator with AB7).
+    const std::string renderContext =
+        readEngineSource("Source/Applications/GameRuntime/Render/RuntimeRenderContext.cpp");
+    EXPECT_NE(renderContext.find("presentModuleExtras"), std::string::npos);
+    EXPECT_NE(renderContext.find("app.presentModuleExtras(dt)"), std::string::npos);
+    // ...and the orchestrator no longer presents extras itself.
     const std::string orchestrator =
         readEngineSource("Source/Applications/GameRuntime/Lifecycle/GameRuntimeTickOrchestrator.cpp");
-    EXPECT_NE(orchestrator.find("presentModuleExtras"), std::string::npos);
-    EXPECT_NE(orchestrator.find("app.presentModuleExtras(dt)"), std::string::npos);
+    EXPECT_EQ(orchestrator.find("presentModuleExtras"), std::string::npos);
 
     const std::string eventRouter =
         readEngineSource("Source/Applications/GameRuntime/Lifecycle/AppEventRouter.cpp");
