@@ -553,6 +553,10 @@ RecordedFrame GameRuntimeTickOrchestrator::recordFrame(App&                    a
         },
         .present = {
             .surface    = presentFrame.surface,
+            // The app's own binding, carried so the renderer files this frame's
+            // present target under the window's identity rather than its
+            // address (see PresentFrameInput::surfaceId).
+            .surfaceId  = app.getRenderServices().getHostSurfaceId(),
             .imageIndex = presentFrame.imageIndex,
             // What the window shows is a host fact, so the host declares it
             // rather than leaving the surface pass to infer it from a View's

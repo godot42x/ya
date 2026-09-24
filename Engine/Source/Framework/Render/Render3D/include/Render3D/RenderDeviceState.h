@@ -289,11 +289,14 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// result means the recording must not be submitted -- its resources and
     /// finish state are what the fence slot expects.
     [[nodiscard]] RecordedFrame sealFrame(uint32_t flightIndex, ICommandBuffer* cmdBuf);
-    /// Find or build the present target for `surface`. A safe-point action: it
-    /// can construct a pipeline, so it runs before any command is recorded, the
-    /// same place `prepareComposePipelines` does. Which surface this frame
-    /// presents through is not this renderer's question.
-    SurfacePresentation& acquireSurfacePresentation(IRenderSurfaceContext& surface);
+    /// Find or build the present target for the surface `id` names. A safe-point
+    /// action: it can construct a pipeline, so it runs before any command is
+    /// recorded, the same place `prepareComposePipelines` does. Which surface
+    /// this frame presents through is not this renderer's question; the plan
+    /// answers it, and the id is what the renderer files the answer under -- a
+    /// surface pointer alone would attribute a reopened window's address to the
+    /// previous window's imported images.
+    SurfacePresentation& acquireSurfacePresentation(SurfaceId id, IRenderSurfaceContext& surface);
 
   private:
     void                   initRuntimeState(const InitDesc& desc);
@@ -310,7 +313,16 @@ struct YA_RENDER_3D_API RenderDeviceState
 
     void                   publishFamilyResult(uint32_t flightIndex, ViewFamilyRenderResult result);
 
-    [[nodiscard]] SurfacePresentation* findSurfacePresentation(IRenderSurfaceContext& surface) const;
+    [[nodiscard]] SurfacePresentation* findSurfacePresentation(SurfaceId id) const;
+    /// The id this device's registry knows `surface` by, or an invalid id when
+    /// the device does not own it (a stand-in surface in a test, or one whose
+    /// registration is already gone).
+    [[nodiscard]] SurfaceId surfaceIdOf(IRenderSurfaceContext& surface) const;
+    /// Drop the present targets whose surface is no longer registered: their
+    /// swapchain is gone, so their imported images and write pass describe a
+    /// window that does not exist. A safe-point action, like the acquire above
+    /// -- and the reason a frame presents through an id rather than an address.
+    void reconcileSurfacePresentations();
 
     void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog, Scene* inspectScene) const;
     /// Resolve the handles this renderer is willing to expose to the inspector.

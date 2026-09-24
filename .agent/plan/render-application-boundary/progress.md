@@ -830,3 +830,46 @@ acquire → record → submit → present 路径，补入 `plan.md` 的结论如
 - 未覆盖（如实记录）：没有用例覆盖“后续窗口在已启用 family 上不可呈现时注册失败”这条拒绝路径
   （需要第二个 device/窗口组合，当前 harness 里两个窗口都能呈现）；该路径只有代码与错误信息。
 - 偏离：无。
+## 2026-09-24 AB4-2b step 1b — per-surface GPU 状态按身份归位
+
+唯一目标：**surface 相关 GPU 缓存的键是身份（`SurfaceId`），不是地址**，并且 surface 消失后它的
+present target 不再留在表里。这是 step 1a 引入 `SurfaceId` 后立刻可达的那个口子：窗口关闭再打开
+可以复用同一个地址。
+
+### 改动
+
+- `SurfacePresentation`：新增 `SurfaceId _id`（`InitDesc.id` 传入，`shutdown()` 清空）；`id()` 访问器。
+- `RenderDeviceState::acquireSurfacePresentation(SurfaceId, IRenderSurfaceContext&)`：表按 id 查/建，
+  不再按 `presentation->surface() == &surface` 匹配。
+- `RenderDeviceState::surfaceIdOf(surface)`：向设备注册表问“这是哪个 surface”，设备没有注册表
+  （未初始化 / 测试 stand-in）时返回无效 id。
+- `RenderDeviceState::reconcileSurfacePresentations()`：丢弃 id 已不解析（surface 已销毁）的 present
+  target，在 `prepareFrameRecord` 的录制前 safe point 调用——那是 GPU 资源可以安全重建/释放的位置。
+- `PresentFrameInput::surfaceId`：应用把自己绑定的 `AppRenderState::hostSurfaceId`
+  （经 `AppRenderServices::getHostSurfaceId()`）随 present 目标交给渲染器，渲染器不必从指针反推。
+- 两个以指针为入参的查询（`getPresentationImageShared`、`buildRenderTargetCatalog`）改成
+  “先解析 id，再查表”；`IRender` 增加 `findSurfaceId(const IRenderSurfaceContext&)` 重载供其使用。
+
+### 验证
+
+- build：`ya-render-3d` / `ya-rhi-vulkan` / `ya-game-runtime` / `ya-runtime` / `ya-game-editor` /
+  `-g test` 全部 ok。
+- `xmake r ya-rhi-vulkan-smoke`：8 passed / 1 skipped（同一 platform minimize guard）。
+- `xmake r ya-testing`：**1319 tests / 1318 passed / 1 skipped / 0 failed**。
+- `xmake r GUIWorkbench --smoke-actions`：**PASS**。
+- `run_display_compose_parity.py --skip-build`：**PASS**，md5 仍 `c775245ae636f15b41da8485319a2267`。
+- `run_widgettree_editor_smoke.py --skip-build`：**exit=0** 六步全过。
+  （中间失败过一次：`Automation control server failed to listen ... Address already in use` —— 上一轮
+  残留实例占着 19995，不是本批回归；端口空闲后重跑即过。）
+
+### 保留 / 未完成 / 偏离
+
+- `RuntimeRenderContextTest` 的 seam 断言升级为 `acquireSurfacePresentation(SurfaceId, surface)`，
+  钉住“present 目标按身份归档”这条缝。
+- 未覆盖（如实记录）：`reconcileSurfacePresentations()` 的“surface 已消失则丢弃”分支没有单元用例——
+  构造“注册过的 surface 被销毁”需要一个真实 device + 窗口，那个身份规则本身已在 RHI 层由
+  `AReleasedSurfaceIdDoesNotResolveToTheNextTenantOfItsSlot` 钉住；id-keyed 查表在产品路径每帧都走
+  （parity / smoke / workbench 均通过）。
+- 仍未做：一个 present family 覆盖不了全部 startup 窗口 / 无窗口设备（明确拒绝）、
+  acquire/submit/present 拆分（AB4-2f）、GUI session 合并（AB4-2c）。
+- 偏离：无。

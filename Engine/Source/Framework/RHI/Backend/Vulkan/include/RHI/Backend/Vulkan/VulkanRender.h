@@ -254,6 +254,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     [[nodiscard]] IRenderSurfaceContext* findSurface(SurfaceId id) const override;
     [[nodiscard]] IRenderSurfaceContext* findSurface(INativeWindow& window) const override;
     [[nodiscard]] SurfaceId              findSurfaceId(INativeWindow& window) const override;
+    [[nodiscard]] SurfaceId              findSurfaceId(const IRenderSurfaceContext& surface) const override;
     bool                                 destroySurfaceContext(SurfaceId id) override;
 
     /// Frame bookkeeping for one recorded frame (see IRender::beginRecordedFrame).

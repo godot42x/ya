@@ -36,7 +36,7 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan)
     // presents is the host's answer, not a primary-surface default.
     SurfacePresentation* presentation = nullptr;
     if (plan.present.surface) {
-        presentation = &_device->acquireSurfacePresentation(*plan.present.surface);
+        presentation = &_device->acquireSurfacePresentation(plan.present.surfaceId, *plan.present.surface);
     }
 
     // The View whose output the host window shows. It is the plan's answer, and

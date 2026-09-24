@@ -1397,6 +1397,17 @@ SurfaceId VulkanRender::findSurfaceId(INativeWindow& window) const
     return {};
 }
 
+SurfaceId VulkanRender::findSurfaceId(const IRenderSurfaceContext& surface) const
+{
+    for (uint32_t index = 0; index < _surfaces.size(); ++index) {
+        const SurfaceSlot& slot = _surfaces[index];
+        if (slot.generation != 0 && slot.context.get() == &surface) {
+            return SurfaceId{.index = index, .generation = slot.generation};
+        }
+    }
+    return {};
+}
+
 bool VulkanRender::destroySurfaceContext(SurfaceId id)
 {
     if (id.index >= _surfaces.size()) {

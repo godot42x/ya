@@ -116,7 +116,7 @@ std::shared_ptr<RenderTexture> RenderDeviceState::getPresentationImageShared(
     // Non-creating: a reader asks what the window shows, and a surface no frame
     // has ever presented through shows nothing -- building its images to answer
     // would be a side effect of a query.
-    SurfacePresentation* presentation = findSurfacePresentation(surface);
+    SurfacePresentation* presentation = findSurfacePresentation(surfaceIdOf(surface));
     return presentation ? presentation->currentImageShared() : nullptr;
 }
 
@@ -231,7 +231,7 @@ RenderTargetCatalog RenderDeviceState::buildRenderTargetCatalog(IRenderSurfaceCo
     // The caller names the window this catalog describes; the renderer no longer
     // decides that one of them is "the" window. This editor-facing query leaving
     // the renderer entirely is plan AB3.
-    SurfacePresentation* presentation = findSurfacePresentation(surface);
+    SurfacePresentation* presentation = findSurfacePresentation(surfaceIdOf(surface));
     if (auto presentationImage = presentation ? presentation->currentImageShared() : nullptr) {
         auto* swapchain = presentation->swapchain();
         catalog.entries.push_back({

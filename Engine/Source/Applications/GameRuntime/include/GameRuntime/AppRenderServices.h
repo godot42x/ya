@@ -8,6 +8,7 @@
 #include "Render3D/Common/RenderViewportSnapshot.h"
 #include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/SceneViewDesc.h"
+#include "RHI/Core/SurfaceId.h"
 
 #include <cstdint>
 #include <memory>
@@ -124,6 +125,11 @@ class YA_GAME_RUNTIME_API AppRenderServices
     /// (plan AB4-2d) and callers stop changing one by one. Null before the
     /// device exists or when the bound surface is gone.
     [[nodiscard]] IRenderSurfaceContext* getHostSurface() const;
+    /// Which surface that is, in the device's registry. Callers that hand the
+    /// surface to something which files state per window (the frame plan's
+    /// present target) pass the id alongside it, so the identity survives a
+    /// window being closed and reopened.
+    [[nodiscard]] SurfaceId             getHostSurfaceId() const;
     [[nodiscard]] EFormat::T           getViewDepthFormat() const;
     [[nodiscard]] const RenderViewOutput* getViewOutput(SceneViewId viewId) const;
     /// The images and handles the editor's viewport shows for the host

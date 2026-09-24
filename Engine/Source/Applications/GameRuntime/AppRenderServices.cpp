@@ -29,6 +29,11 @@ IRenderSurfaceContext* AppRenderServices::getHostSurface() const
     return render->findSurface(_state->hostSurfaceId);
 }
 
+SurfaceId AppRenderServices::getHostSurfaceId() const
+{
+    return _state ? _state->hostSurfaceId : SurfaceId{};
+}
+
 std::shared_ptr<ShaderStorage> AppRenderServices::getShaderStorage() const
 {
     return _state && _state->device ? _state->device->getShaderStorage() : nullptr;

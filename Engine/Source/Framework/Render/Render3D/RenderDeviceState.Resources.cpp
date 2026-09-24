@@ -222,19 +222,30 @@ void RenderDeviceState::initSurfacePresentations()
         _surfacePresentations.clear(); });
 }
 
-SurfacePresentation* RenderDeviceState::findSurfacePresentation(IRenderSurfaceContext& surface) const
+SurfaceId RenderDeviceState::surfaceIdOf(IRenderSurfaceContext& surface) const
 {
+    // The device's registry is the answer to "which surface is this"; a device
+    // that has none (an uninitialized state, or a caller's stand-in surface)
+    // cannot name it, which is an answer too.
+    return _render ? _render->findSurfaceId(surface) : SurfaceId{};
+}
+
+SurfacePresentation* RenderDeviceState::findSurfacePresentation(SurfaceId id) const
+{
+    if (!id.valid()) {
+        return nullptr;
+    }
     for (const auto& presentation : _surfacePresentations) {
-        if (presentation && presentation->surface() == &surface) {
+        if (presentation && presentation->id() == id) {
             return presentation.get();
         }
     }
     return nullptr;
 }
 
-SurfacePresentation& RenderDeviceState::acquireSurfacePresentation(IRenderSurfaceContext& surface)
+SurfacePresentation& RenderDeviceState::acquireSurfacePresentation(SurfaceId id, IRenderSurfaceContext& surface)
 {
-    if (SurfacePresentation* existing = findSurfacePresentation(surface)) {
+    if (SurfacePresentation* existing = findSurfacePresentation(id)) {
         return *existing;
     }
 
@@ -242,10 +253,40 @@ SurfacePresentation& RenderDeviceState::acquireSurfacePresentation(IRenderSurfac
     presentation->init(SurfacePresentation::InitDesc{
         .render  = _render,
         .present = &surface,
+        .id      = id,
     });
 
     _surfacePresentations.push_back(std::move(presentation));
     return *_surfacePresentations.back();
+}
+
+void RenderDeviceState::reconcileSurfacePresentations()
+{
+    if (_surfacePresentations.empty()) {
+        return;
+    }
+
+    // A present target is only meaningful while its surface is: its images are
+    // imported views of that window's swapchain. Releasing it here keeps the
+    // table from answering a later window that happens to own the same address.
+    std::erase_if(_surfacePresentations,
+                  [this](const std::unique_ptr<SurfacePresentation>& presentation)
+                  {
+                      if (!presentation) {
+                          return true;
+                      }
+                      const SurfaceId id = presentation->id();
+                      // An entry acquired without a registry id (a device with no
+                      // backend) has nothing to reconcile against.
+                      if (!id.valid()) {
+                          return false;
+                      }
+                      if (_render && _render->findSurface(id) == presentation->surface()) {
+                          return false;
+                      }
+                      presentation->shutdown();
+                      return true;
+                  });
 }
 
 void RenderDeviceState::initCommandResources()

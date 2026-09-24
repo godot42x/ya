@@ -5,6 +5,7 @@
 #include "Render3D/RenderDeviceState.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderSurfaceContext.h"
+#include "RHI/Core/SurfaceId.h"
 
 #include <gtest/gtest.h>
 
@@ -67,8 +68,11 @@ TEST(RuntimeRenderContextTest, TheApplicationsOrderIsWrittenWithTheRenderersOwnS
     static_assert(requires(Device& device) {
         { device.sealFrame(0u, static_cast<ICommandBuffer*>(nullptr)) } -> std::same_as<RecordedFrame>;
     });
-    static_assert(requires(Device& device, IRenderSurfaceContext& surface) {
-        device.acquireSurfacePresentation(surface);
+    // The surface is named by id: filing this frame's present target under the
+    // window's identity (not its address) is what keeps a reopened window out of
+    // the previous window's imported images.
+    static_assert(requires(Device& device, SurfaceId id, IRenderSurfaceContext& surface) {
+        device.acquireSurfacePresentation(id, surface);
     });
     static_assert(requires(Device& device) { device.getLiveSubmission(0u); });
     static_assert(!PublishesFamilyResults<RenderDeviceState>,

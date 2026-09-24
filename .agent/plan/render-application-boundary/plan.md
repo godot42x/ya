@@ -333,9 +333,16 @@ AB4-step2（待做）不是一个改动，而是以下有依赖关系的闭环�
      “满足初始集合所需的最小额外 present family”尚未实现。
    - 无窗口（offscreen-only）设备：`startupSurfaces` 为空会被明确拒绝（queue plan 需要 present
      family），不是已实现的模式。
-   - `RenderDeviceState::_surfacePresentations` 仍以 `IRenderSurfaceContext*` 为键（AB4-2d 改成
-     `SurfaceId + generation`）。
    - acquire/submit/present 仍在 `IRenderSurfaceContext::begin/end` 里（AB4-2f）。
+
+   AB4-2b step 1b（已落地 2026-09-24）：per-surface 的 GPU 状态也按身份归位。
+   `SurfacePresentation` 记录 `SurfaceId`；`RenderDeviceState::acquireSurfacePresentation(id, surface)`
+   是唯一入口，`PresentFrameInput.surfaceId`（app 用自己的 `AppRenderState::hostSurfaceId` 填）把它
+   带过应用边界，因此窗口关闭再打开即使复用同一地址也不会命中上一扇窗的导入图。
+   `prepareFrameRecord` 在录制前的 safe point 调 `reconcileSurfacePresentations()`：surface 已从设备
+   注册表消失的 present target 被丢弃（它的导入图属于一个不存在的 swapchain）。
+   仍以指针为入参的两个查询（`getPresentationImageShared`、`buildRenderTargetCatalog`）改成先解析 id
+   再查表，设备无法为其命名（未初始化 / 测试 stand-in）时返回空而不是猜。
 
    证据：`ya-rhi-vulkan-smoke` 8 passed / 1 skipped（platform minimize guard），新增
    `RHISurfaceContext.AReleasedSurfaceIdDoesNotResolveToTheNextTenantOfItsSlot` 与

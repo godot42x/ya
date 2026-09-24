@@ -4,6 +4,7 @@
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Common/FrameRecordExtensions.h"
+#include "RHI/Core/SurfaceId.h"
 
 #include <cstddef>
 #include <glm/glm.hpp>
@@ -105,6 +106,12 @@ enum class ESurfaceBackdrop : uint8_t
 struct PresentFrameInput
 {
     IRenderSurfaceContext* surface    = nullptr;
+    /// Which surface that is, in the device's registry. The renderer files this
+    /// frame's present target under this id, so a window closed and reopened on
+    /// the same address is a different surface rather than the previous one's
+    /// imported images. The host knows it (it binds windows to surfaces); the
+    /// renderer would have to guess it from the pointer.
+    SurfaceId              surfaceId{};
     int32_t                imageIndex = -1;
     /// Defaults to the plain path: a host that says nothing gets the window
     /// showing the View. The host's answer is `App::presentsViewDisplayImage`,

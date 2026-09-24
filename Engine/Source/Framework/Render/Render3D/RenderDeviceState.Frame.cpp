@@ -91,6 +91,10 @@ void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan)
 {
     const std::vector<Scene*> scenes = renderedScenes(plan.sceneRender.plan());
     prepareDerivedState(scenes, plan.frame.deltaTime);
+    // Safe point, before any command is recorded: drop the present targets of
+    // windows that no longer exist, so a surface that was closed last frame
+    // cannot be answered for this one (see reconcileSurfacePresentations).
+    reconcileSurfacePresentations();
     // One call for this frame's safe-point mutations: pending pipeline
     // switch/reload and the queued render-target format commands. A View's
     // geometry is not pushed here -- it is that View's own declaration and its

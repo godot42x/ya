@@ -4,6 +4,7 @@
 
 #include "Render3D/Pipelines/SurfaceWritePass.h"
 #include "Render3D/Services/PresentationGraphService.h"
+#include "RHI/Core/SurfaceId.h"
 
 #include <memory>
 
@@ -37,8 +38,14 @@ struct YA_RENDER_3D_API SurfacePresentation
     {
         IRender*               render  = nullptr;
         IRenderSurfaceContext* present = nullptr;
+        /// Which surface the device registry calls this one. The presentation
+        /// is keyed by it, not by `present`'s address: a window that is closed
+        /// and reopened can land on the same address, and imported swapchain
+        /// images must never be attributed to the second window.
+        SurfaceId              id{};
     };
 
+    SurfaceId                _id{};
     IRenderSurfaceContext*   _present = nullptr;
     PresentationGraphService _graph{};
     /// The postprocess family's write onto this surface, built from this
@@ -48,6 +55,7 @@ struct YA_RENDER_3D_API SurfacePresentation
     void init(const InitDesc& desc);
     void shutdown();
 
+    [[nodiscard]] SurfaceId              id() const { return _id; }
     [[nodiscard]] IRenderSurfaceContext* surface() const { return _present; }
     [[nodiscard]] ISwapchain*            swapchain() const { return _graph.getSwapchain(); }
 

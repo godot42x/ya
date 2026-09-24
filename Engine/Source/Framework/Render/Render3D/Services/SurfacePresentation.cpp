@@ -15,6 +15,7 @@ void SurfacePresentation::init(const InitDesc& desc)
     YA_CORE_ASSERT(desc.present->getSwapchain() != nullptr,
                    "SurfacePresentation requires a swapchain");
 
+    _id      = desc.id;
     _present = desc.present;
 
     // Built from this surface's format, before the graph that uses it as its
@@ -41,6 +42,7 @@ void SurfacePresentation::shutdown()
         _writePass->shutdown();
         _writePass.reset();
     }
+    _id      = {};
     _present = nullptr;
 }
 

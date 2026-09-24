@@ -142,12 +142,19 @@ struct YA_RHI_API IRender : public plat_base<IRender>
         return nullptr;
     }
 
-    /// The id the surface registered for `window` carries, or an invalid id when
-    /// this device has none. A caller that owns a window and wants to keep the
-    /// binding (rather than the pointer) names its surface this way.
+    /// The id this device registered `window` / `surface` under, or an invalid
+    /// id when it owns no such surface. A caller that wants to file state per
+    /// window (rather than per address) names its surface this way -- and so
+    /// does a consumer holding only a pointer, which is how a surface-keyed
+    /// cache stays keyed by identity rather than by address.
     [[nodiscard]] virtual SurfaceId findSurfaceId(INativeWindow& window) const
     {
         (void)window;
+        return {};
+    }
+    [[nodiscard]] virtual SurfaceId findSurfaceId(const IRenderSurfaceContext& surface) const
+    {
+        (void)surface;
         return {};
     }
 
