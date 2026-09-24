@@ -1236,3 +1236,60 @@ review 指出的问题：compositor 的世界 compose 路径把 `DisplayedView`�
 
 - 保留：`getDisplayedView()` 单数排布未动（app 策略，AB4-2d 再演进）。
 - 偏离：无。
+
+---
+
+## 2026-09-24 AB3-step2 — facade 不再出 renderer 服务引用
+
+唯一目标：`RenderDeviceState` 公开面上最后三个"为编辑器面板服务"的查询收口——两个服务引用
+（DebugRenderSystem / RenderDiagnosticsService）与 catalog 组装。方向：typed command +
+由数据构造，而不是扩大 facade 的引用面。
+
+### 改动
+
+- **DebugRenderSystem**：facade 的 `getDebugRenderSystem()` 删除，改
+  `getDebugRenderSettings()` / `requestDebugRenderSettings()`（`DebugPrimitives::SettingsSnapshot`
+  值进出）。`RuntimeDebugPrimitivesSection` 改走快照-请求对。
+- **RenderDiagnosticsService**：新增 `RenderDocPanelState` 值快照（bAvailable / bCaptureEnabled /
+  bHUDVisible / bCapturing / delayFrames / 三个配置路径）与四个 typed 命令
+  （capture enabled / HUD visible / next frame / after frames；无 capture 上下文 no-op）。
+  `getRenderDocState()` 引用出口删除（改动后全仓零调用者）。facade 的
+  `getDiagnosticsService()` 删除，换成 1 快照 + 4 命令转发。`RuntimeDiagnosticsSection`
+  不再深挖 `state.capture->`，改读快照、发命令（点击命令前查快照的 bCaptureEnabled，
+  保留原"按钮只在 capture enabled 时可用"语义）。
+- **catalog 组装上移**：`RenderDeviceState::buildRenderTargetCatalog(surface)` 删除；设备只留
+  窄数据出口 `getPresentationImageShared(surface)`（已有）与新增
+  `appendRenderTargetEntries(catalog)`（转发活动策略）。presentation entry 的组装搬到
+  `AppRenderServices::buildRenderTargetCatalog()`——renderer 发布数据，app 组装面板视图。
+  `RenderRuntimeSnapshotTest.EmptyDevicePublishesEmptyViewportResources` 改为直接断言两个数据
+  源为空（getPresentationImageShared 为 null + appendRenderTargetEntries 后 entries 为空）。
+- **GUI 反向依赖收口（source-layout-subtraction S2）**：`RenderDeviceState::prepareComposePipelines()`
+  删除（连同 .h 声明与 Frame.cpp 调用点），`RenderDeviceState.cpp` 的
+  `GUI/Compose/Render2DComposePass.h` include 移除。runtime UI compose 的准备改由宿主
+  `RuntimeRenderContext::record` 执行——`prepareFrameRecord` 之后（pipeline 切换已应用）、
+  `beginFrameCommandBuffer` 之前（录制未开始），格式经窄查询
+  `RenderDeviceState::getPostprocessColorFormat()` 问活动策略。
+
+### 验收
+
+- `grep getDebugRenderSystem|getDiagnosticsService Engine/Source/Applications/GameEditor`：**空**。
+- `grep GUI/Compose Engine/Source/Framework/Render`：仅剩 `ViewCompose.cpp`（compose pass 本体，
+  边界表里正当归属 Framework/Render 的正是它）。
+
+### 验证
+
+- build：`ya-render-3d` / `ya-game-runtime` / `ya-game-editor` / `GUIWorkbench` / `xmake b -g test` 全部 ok
+  （中途修过一处 `ISwapchain` 不完整类型 include）。
+- `ya-testing`：**1322 tests / 1321 passed / 1 skipped（platform minimize guard，同基线）/ 0 failed**。
+- `GUIWorkbench --smoke-actions`：**PASS**。
+- `run_widgettree_editor_smoke.py --skip-build`：**exit=0**。
+- parity md5 仍 `c775245ae636f15b41da8485319a2267`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：`buildViewportSnapshot` 及其 debug catalog 机器（builder / cache / appendViewportDebugImages）
+  仍在 renderer 上——它返回的是值、不构成引用面，但"编辑器查询整个离开渲染器"的搬迁（含
+  ViewportDebugCatalogBuilder 系）是独立批次，随本条如实登记，AB4-2d 前不阻塞。
+- 保留：`RenderDeviceState::getDebugRenderSystem()/getDiagnosticsService()` 本体（renderer 内部
+  与 GameRuntime app 自己使用，AB3 的边界是 GameEditor 不认识 device，已达成）。
+- 偏离：无。

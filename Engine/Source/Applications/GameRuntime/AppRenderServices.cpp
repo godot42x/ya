@@ -3,6 +3,7 @@
 #include "GameRuntime/AppRenderState.h"
 
 #include "Core/Log.h"
+#include "RHI/Core/Swapchain.h"
 #include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/RenderDeviceState.h"
 #include "Render3D/Services/DebugRenderSystem.h"
@@ -205,11 +206,32 @@ RenderTargetCatalog AppRenderServices::buildRenderTargetCatalog() const
     // The window this app presents: which one that is belongs here, at the app,
     // not inside the renderer as an implicit "primary". Picking per display root
     // is AB4-2b, when a frame can present more than one.
-    IRenderSurfaceContext* hostSurface = getHostSurface();
-    if (!_state || !_state->device || !hostSurface) {
-        return RenderTargetCatalog{};
+    //
+    // Assembled from the renderer's published data, here at the app: the
+    // presentation entry from the surface this app names, plus the active
+    // strategy's per-View entries. The renderer publishes both and assembles
+    // no panel views.
+    RenderTargetCatalog catalog{};
+    if (!_state || !_state->device) {
+        return catalog;
     }
-    return _state->device->buildRenderTargetCatalog(*hostSurface);
+    IRenderSurfaceContext* hostSurface = getHostSurface();
+    if (auto presentationImage =
+            hostSurface ? _state->device->getPresentationImageShared(*hostSurface) : nullptr) {
+        auto* swapchain = hostSurface->getSwapchain();
+        catalog.entries.push_back({
+            .label            = "Presentation",
+            .owner            = RenderTargetCatalog::Entry::EOwner::Presentation,
+            .colorFormats     = {presentationImage->getFormat()},
+            .colorAttachments = {presentationImage},
+            .extent           = presentationImage->getExtent(),
+            .frameBufferCount = swapchain ? swapchain->getImageCount() : 1,
+            .bSwapChainTarget = true,
+            .bEditable        = false,
+        });
+    }
+    _state->device->appendRenderTargetEntries(catalog);
+    return catalog;
 }
 
 void AppRenderServices::requestRenderTargetFormat(const RenderTargetFormatCommand& command)
@@ -219,16 +241,53 @@ void AppRenderServices::requestRenderTargetFormat(const RenderTargetFormatComman
     }
 }
 
-DebugRenderSystem& AppRenderServices::getDebugRenderSystem() const
+DebugPrimitives::SettingsSnapshot AppRenderServices::getDebugRenderSettings() const
 {
-    YA_CORE_ASSERT(_state && _state->device, "RenderDeviceState is not available");
-    return _state->device->getDebugRenderSystem();
+    return _state && _state->device
+               ? _state->device->getDebugRenderSystem().buildSettingsSnapshot()
+               : DebugPrimitives::SettingsSnapshot{};
 }
 
-RenderDiagnosticsService& AppRenderServices::getDiagnosticsService() const
+void AppRenderServices::requestDebugRenderSettings(const DebugPrimitives::SettingsSnapshot& settings)
 {
-    YA_CORE_ASSERT(_state && _state->device, "RenderDeviceState is not available");
-    return _state->device->getDiagnosticsService();
+    if (_state && _state->device) {
+        _state->device->getDebugRenderSystem().requestSettings(settings);
+    }
+}
+
+RenderDiagnosticsService::RenderDocPanelState AppRenderServices::getRenderDocPanelState() const
+{
+    return _state && _state->device
+               ? _state->device->getDiagnosticsService().buildRenderDocPanelState()
+               : RenderDiagnosticsService::RenderDocPanelState{};
+}
+
+void AppRenderServices::requestRenderDocCaptureEnabled(bool bEnabled)
+{
+    if (_state && _state->device) {
+        _state->device->getDiagnosticsService().requestRenderDocCaptureEnabled(bEnabled);
+    }
+}
+
+void AppRenderServices::requestRenderDocHUDVisible(bool bVisible)
+{
+    if (_state && _state->device) {
+        _state->device->getDiagnosticsService().requestRenderDocHUDVisible(bVisible);
+    }
+}
+
+void AppRenderServices::requestRenderDocCaptureNextFrame()
+{
+    if (_state && _state->device) {
+        _state->device->getDiagnosticsService().requestRenderDocCaptureNextFrame();
+    }
+}
+
+void AppRenderServices::requestRenderDocCaptureAfterFrames(uint32_t frameCount)
+{
+    if (_state && _state->device) {
+        _state->device->getDiagnosticsService().requestRenderDocCaptureAfterFrames(frameCount);
+    }
 }
 
 } // namespace ya

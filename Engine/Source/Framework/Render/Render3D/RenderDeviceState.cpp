@@ -6,7 +6,6 @@
 #include "Core/Profiling/PerfState.h"
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "Render3D/Common/RenderOverlay.h"
-#include "GUI/Compose/Render2DComposePass.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/RenderSurfaceContext.h"
@@ -46,23 +45,18 @@ void RenderDeviceState::prepareDerivedState(std::span<Scene* const> scenes, floa
     }
 }
 
-void RenderDeviceState::prepareComposePipelines()
+EFormat::T RenderDeviceState::getPostprocessColorFormat() const
 {
-    // The runtime's own UI compose only: the packet that goes onto the display
-    // RT after the world graph. The editor's compose kinds (its viewport image
-    // and canvas preview) are the editor's pipelines -- it records them onto
-    // its own targets and prepares them itself, earlier in the same tick -- so
-    // the renderer must not know they exist.
+    if (const IRenderPipeline* pipeline = getActivePipeline()) {
+        return pipeline->getPostprocessColorFormat();
+    }
+    return EFormat::Undefined;
+}
+
+void RenderDeviceState::appendRenderTargetEntries(RenderTargetCatalog& catalog) const
+{
     if (auto* pipeline = getActivePipeline()) {
-        // The pipeline's postprocess format is the format of the image the UI
-        // composes onto. Asked of the pipeline rather than read back from a View
-        // output: the compose pipeline must exist before the graph creates that
-        // image, and the format is stable pipeline configuration.
-        prepareRender2DComposePassPipeline(
-            FRender2DComposePassDesc{
-                .kind = ERender2DComposePassKind::RuntimeUIComposite,
-            },
-            pipeline->getPostprocessColorFormat());
+        pipeline->appendRenderTargetEntries(catalog);
     }
 }
 
@@ -222,34 +216,6 @@ void RenderDeviceState::requestActivePipelineSettings(const RenderPipelineSettin
 const std::vector<RGTopologyDescription>& RenderDeviceState::getFrameGraphTopologies() const
 {
     return _frameGraphTopologies;
-}
-
-RenderTargetCatalog RenderDeviceState::buildRenderTargetCatalog(IRenderSurfaceContext& surface) const
-{
-    RenderTargetCatalog catalog{};
-
-    // The caller names the window this catalog describes; the renderer no longer
-    // decides that one of them is "the" window. This editor-facing query leaving
-    // the renderer entirely is plan AB3.
-    SurfacePresentation* presentation = findSurfacePresentation(surfaceIdOf(surface));
-    if (auto presentationImage = presentation ? presentation->currentImageShared() : nullptr) {
-        auto* swapchain = presentation->swapchain();
-        catalog.entries.push_back({
-            .label            = "Presentation",
-            .owner            = RenderTargetCatalog::Entry::EOwner::Presentation,
-            .colorFormats     = {presentationImage->getFormat()},
-            .colorAttachments = {presentationImage},
-            .extent           = presentationImage->getExtent(),
-            .frameBufferCount = swapchain ? swapchain->getImageCount() : 1,
-            .bSwapChainTarget = true,
-            .bEditable        = false,
-        });
-    }
-    if (auto* pipeline = getActivePipeline()) {
-        pipeline->appendRenderTargetEntries(catalog);
-    }
-
-    return catalog;
 }
 
 void RenderDeviceState::requestRenderTargetFormat(const RenderTargetFormatCommand& command)

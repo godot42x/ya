@@ -61,10 +61,14 @@ TEST(RenderRuntimeSnapshotTest, EmptyDevicePublishesEmptyViewportResources)
     EXPECT_EQ(device.surfaceImageFor(device.getViewOutput(0, 1)).image, nullptr);
 
     const RenderViewportSnapshot viewport = device.buildViewportSnapshot(0, 0);
-    // The catalog describes a named window; this device has no renderer, so the
-    // surface entry is absent and only the (also empty) pipeline entries remain.
-    test::StandInSurface      surface;
-    const RenderTargetCatalog targets = device.buildRenderTargetCatalog(surface);
+    // The catalog the app assembles from the renderer's published data: this
+    // device has no renderer and no pipeline, so both data sources answer
+    // empty -- the named surface has no presentation image and no strategy
+    // publishes entries.
+    test::StandInSurface surface;
+    EXPECT_EQ(device.getPresentationImageShared(surface), nullptr);
+    RenderTargetCatalog targets;
+    device.appendRenderTargetEntries(targets);
 
     EXPECT_EQ(viewport.viewportImageOwner, nullptr);
     EXPECT_EQ(viewport.viewportImageView, nullptr);

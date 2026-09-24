@@ -244,6 +244,51 @@ const std::string& RenderDiagnosticsService::getAutomationRenderDocPassSummaryPa
     return _renderDoc.automationPassSummaryPath;
 }
 
+RenderDiagnosticsService::RenderDocPanelState RenderDiagnosticsService::buildRenderDocPanelState() const
+{
+    RenderDocPanelState state;
+    state.configuredDllPath   = _renderDoc.configuredDllPath;
+    state.configuredOutputDir = _renderDoc.configuredOutputDir;
+    state.lastCapturePath     = _renderDoc.lastCapturePath;
+    if (!_renderDoc.capture) {
+        return state;
+    }
+    state.bAvailable      = _renderDoc.capture->isAvailable();
+    state.bCaptureEnabled = _renderDoc.capture->isCaptureEnabled();
+    state.bHUDVisible     = _renderDoc.capture->isHUDVisible();
+    state.bCapturing      = _renderDoc.capture->isCapturing();
+    state.delayFrames     = _renderDoc.capture->getDelayFrames();
+    return state;
+}
+
+void RenderDiagnosticsService::requestRenderDocCaptureEnabled(bool bEnabled)
+{
+    if (_renderDoc.capture) {
+        _renderDoc.capture->setCaptureEnabled(bEnabled);
+    }
+}
+
+void RenderDiagnosticsService::requestRenderDocHUDVisible(bool bVisible)
+{
+    if (_renderDoc.capture) {
+        _renderDoc.capture->setHUDVisible(bVisible);
+    }
+}
+
+void RenderDiagnosticsService::requestRenderDocCaptureNextFrame()
+{
+    if (_renderDoc.capture) {
+        _renderDoc.capture->requestNextFrame();
+    }
+}
+
+void RenderDiagnosticsService::requestRenderDocCaptureAfterFrames(uint32_t frameCount)
+{
+    if (_renderDoc.capture) {
+        _renderDoc.capture->requestAfterFrames(frameCount);
+    }
+}
+
 void RenderDiagnosticsService::configureRenderContext()
 {
     if (!_render || !_renderDoc.capture) {

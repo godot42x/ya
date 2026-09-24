@@ -8,6 +8,8 @@
 #include "Render3D/Common/RenderViewportSnapshot.h"
 #include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/SceneViewDesc.h"
+#include "Render3D/Pipelines/DebugPrimitives.h"
+#include "Render3D/Services/RenderDiagnosticsService.h"
 #include "RHI/Core/SurfaceId.h"
 
 #include <cstdint>
@@ -23,8 +25,6 @@ struct IRenderSurfaceContext;
 struct ShaderStorage;
 struct ShadowSettings;
 struct ImageResource;
-struct DebugRenderSystem;
-struct RenderDiagnosticsService;
 struct RenderDeviceState;
 struct RGTopologyDescription;
 struct Scene;
@@ -136,10 +136,26 @@ class YA_GAME_RUNTIME_API AppRenderServices
     /// View, in the form its compositor consumes.
     [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot(Scene* inspectScene) const;
 
+    /// The render-target catalog, assembled here at the app from the
+    /// renderer's published data: the presentation entry from the surface the
+    /// app names, plus the active strategy's per-View entries. The renderer
+    /// publishes both and assembles no panel views.
     [[nodiscard]] RenderTargetCatalog  buildRenderTargetCatalog() const;
     void                               requestRenderTargetFormat(const RenderTargetFormatCommand& command);
-    [[nodiscard]] DebugRenderSystem&   getDebugRenderSystem() const;
-    [[nodiscard]] RenderDiagnosticsService& getDiagnosticsService() const;
+    /// The debug-primitives panel's settings, as the snapshot/request pair the
+    /// section edits through. A service reference would let a panel reach the
+    /// whole debug system; these two answers are all it needs.
+    [[nodiscard]] DebugPrimitives::SettingsSnapshot getDebugRenderSettings() const;
+    void               requestDebugRenderSettings(const DebugPrimitives::SettingsSnapshot& settings);
+    /// The diagnostics panel's answer, as a value (see
+    /// `RenderDiagnosticsService::RenderDocPanelState`), plus the four capture
+    /// commands the panel's controls map onto. Commands are requests: without
+    /// a capture context they are no-ops, and the snapshot says so.
+    [[nodiscard]] RenderDiagnosticsService::RenderDocPanelState getRenderDocPanelState() const;
+    void               requestRenderDocCaptureEnabled(bool bEnabled);
+    void               requestRenderDocHUDVisible(bool bVisible);
+    void               requestRenderDocCaptureNextFrame();
+    void               requestRenderDocCaptureAfterFrames(uint32_t frameCount);
 
   private:
     AppRenderState* _state = nullptr;

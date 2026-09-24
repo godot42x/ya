@@ -144,7 +144,6 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// tick's declaration: a Scene it does not name has its derived state
     /// dropped.
     void prepareDerivedState(std::span<Scene* const> scenes, float dt);
-    void prepareComposePipelines();
 
     void resetSkyboxPool();
     void resetEnvironmentLightingPool();
@@ -239,10 +238,15 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// strategy is built, which is a case the caller has to handle anyway: it
     /// asks this to configure a compose pipeline before any View exists.
     [[nodiscard]] EFormat::T    getViewDepthFormat() const;
-    /// The catalog's surface entry describes ONE window, which the caller
-    /// names. It used to describe "the primary window" -- a fact the renderer
-    /// cannot know and should not invent once several windows present.
-    [[nodiscard]] RenderTargetCatalog buildRenderTargetCatalog(IRenderSurfaceContext& surface) const;
+    /// The format the runtime UI compose pass writes onto: the active
+    /// strategy's postprocess output. Undefined when no strategy is built. The
+    /// host prepares its own compose pass from this before recording, so the
+    /// renderer does not carry GUI headers to do it itself.
+    [[nodiscard]] EFormat::T    getPostprocessColorFormat() const;
+    /// The active strategy's published render-target entries. Data publication,
+    /// not a panel query: the app assembles the catalog it shows from this plus
+    /// the presentation image it names (see `getPresentationImageShared`).
+    void appendRenderTargetEntries(RenderTargetCatalog& catalog) const;
     /// The editor's viewport data for one View of one flight: the View's
     /// images plus the pipeline's debug catalogs. Both identities are
     /// parameters -- `viewId == 0` means "this frame showed no View", which is
@@ -291,7 +295,7 @@ struct YA_RENDER_3D_API RenderDeviceState
     [[nodiscard]] RecordedFrame sealFrame(uint32_t flightIndex, ICommandBuffer* cmdBuf);
     /// Find or build the present target for the surface `id` names. A safe-point
     /// action: it can construct a pipeline, so it runs before any command is
-    /// recorded, the same place `prepareComposePipelines` does. Which surface
+    /// recorded. Which surface
     /// this frame presents through is not this renderer's question; the plan
     /// answers it, and the id is what the renderer files the answer under -- a
     /// surface pointer alone would attribute a reopened window's address to the

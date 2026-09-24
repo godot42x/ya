@@ -106,11 +106,6 @@ void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan)
             YA_CORE_ERROR("Failed to prepare View targets before recording");
         }
     }
-    // Prepares the runtime UI-compose pass from the pipeline's own postprocess
-    // format. There used to be a second, conditional call right below that read
-    // the *previous* frame's published display image to learn the same format --
-    // a stale read whose only answer this one already has.
-    prepareComposePipelines();
     // Pre-record preparation: resolve each View's Scene-keyed GPU bindings now,
     // while the View's own declaration still names its Scene, so recording never
     // has to ask which Scene is current. Skipping this would leave every pass

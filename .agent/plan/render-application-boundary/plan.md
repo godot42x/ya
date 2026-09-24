@@ -1,8 +1,8 @@
 # Framework 只放可复用管线，应用拥有排布与状态
 
 > 建立日期：2026-09-22
-> 状态：AB1 / AB2 已落地；AB7-step1 已落地（整帧录制顺序搬到应用侧）；AB3-step2、AB4-step2/3、
-> AB5 / AB6、AB7-step2 待做。
+> 状态：AB1 / AB2 已落地；AB3（step1 + step2）已落地；AB7-step1 已落地（整帧录制顺序搬到应用侧）；
+> AB4-step2/3（余 AB4-2d/2e）、AB5 / AB6、AB7-step2 待做。
 
 ## 1. 原则
 
@@ -259,10 +259,25 @@ AB3-step1（已落地）：
 - 顺带：`RuntimeDebugPrimitivesSection` / `RuntimeRenderTargetSection` 的 `.cpp` 与 `.h` 此前被压成
   单行（自 `d9de4739` 起），这轮必须改它们，因此一并展开成正常可读形式（无行为变化）。
 
-AB3-step2（待做）：剩下的三个仍是 renderer 自己的事实，只是目前以服务引用形式穿过 facade：
-`DebugRenderSystem&`、`RenderDiagnosticsService&`、`buildRenderTargetCatalog` /
-`buildViewportSnapshot` 的返回体。收口方向是 typed command（`setRenderDocCaptureEnabled` 等）
-与「由数据构造 catalog」的纯函数，而不是继续扩大 facade 的引用面。
+AB3-step2（已落地 2026-09-24）：剩下的三个服务引用从 facade 上消失，收口为 typed command 与
+由数据构造的组装：
+
+- **DebugRenderSystem**：`AppRenderServices` 不再返回 `DebugRenderSystem&`，改为
+  `getDebugRenderSettings()` / `requestDebugRenderSettings()` 快照-请求对。
+- **RenderDiagnosticsService**：新增面板值快照 `RenderDocPanelState`（available/capture enabled/
+  HUD/capturing/delay + 配置路径），typed 命令 `requestRenderDocCaptureEnabled/HUDVisible/
+  CaptureNextFrame/CaptureAfterFrames`（无 capture 上下文时 no-op）；`getRenderDocState()` 引用
+  出口删除（全仓零调用后）；`AppRenderServices::getDiagnosticsService()` 删除。
+- **catalog 组装上移**：`RenderDeviceState::buildRenderTargetCatalog(surface)` 删除，设备只留两个
+  窄数据出口（`getPresentationImageShared` 已有、`appendRenderTargetEntries(catalog)` 新增）；
+  catalog 由 `AppRenderServices` 从发布数据组装（presentation entry + 策略 entries）。
+- **GUI 反向依赖收口（S2）**：`RenderDeviceState::prepareComposePipelines()` 删除，
+  `RenderDeviceState.cpp` 的 `GUI/Compose/Render2DComposePass.h` include 移除；runtime UI compose
+  的准备改由宿主 `RuntimeRenderContext::record` 在 `prepareFrameRecord` 之后、录制开始之前调用
+  （格式经窄查询 `getPostprocessColorFormat()` 问活动策略）。`Render3D` 里剩下的 GUI include 只有
+  `ViewCompose.cpp`（compose pass 本体，正当归属）。
+- 验收 grep：`grep getDebugRenderSystem|getDiagnosticsService GameEditor` 为空；
+  `grep GUI/Compose Framework/Render` 仅剩 ViewCompose.cpp。
 
 ### AB4 — presentation 只搬运，present 由应用编排（进行中）
 

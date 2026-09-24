@@ -8,6 +8,7 @@
 #include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Texture.h"
+#include "GUI/Compose/Render2DComposePass.h"
 #include "Render3D/Common/ViewCompose.h"
 #include "Render3D/RenderDeviceState.h"
 #include "Render3D/Services/SurfacePresentation.h"
@@ -47,6 +48,18 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan)
     const SceneViewTask* displayRoot = plan.sceneRender.displayRootTask();
 
     _device->prepareFrameRecord(plan);
+
+    // The runtime's own UI compose pass, prepared before recording begins: the
+    // packet that goes onto the display RT after the world graph. This is a
+    // host call now -- the editor's compose kinds are the editor's pipelines
+    // and it prepares them itself, so the renderer carries no GUI headers for
+    // either. The format is the active strategy's postprocess output, asked
+    // after `prepareFrameRecord` applied any pending pipeline switch.
+    prepareRender2DComposePassPipeline(
+        FRender2DComposePassDesc{
+            .kind = ERender2DComposePassKind::RuntimeUIComposite,
+        },
+        _device->getPostprocessColorFormat());
 
     std::shared_ptr<ICommandBuffer> cmdBuf;
     if (!_device->beginFrameCommandBuffer(plan, cmdBuf)) {

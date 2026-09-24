@@ -43,8 +43,7 @@ void RuntimeDiagnosticsSection::construct()
         if (auto* app = App::get()) {
             auto& renderServices = app->getRenderServices();
             if (renderServices.hasRenderer()) {
-                auto& state = renderServices.getDiagnosticsService().getRenderDocState();
-                if (state.capture) state.capture->setCaptureEnabled(value);
+                renderServices.requestRenderDocCaptureEnabled(value);
             }
         }
     };
@@ -52,21 +51,22 @@ void RuntimeDiagnosticsSection::construct()
         if (auto* app = App::get()) {
             auto& renderServices = app->getRenderServices();
             if (renderServices.hasRenderer()) {
-                auto& state = renderServices.getDiagnosticsService().getRenderDocState();
-                if (state.capture) state.capture->setHUDVisible(value);
+                renderServices.requestRenderDocHUDVisible(value);
             }
         }
     };
     _captureNextFrame->_onClick = []() {
         if (auto* app = App::get()) if (auto& renderServices = app->getRenderServices(); renderServices.hasRenderer()) {
-            auto& state = renderServices.getDiagnosticsService().getRenderDocState();
-            if (state.capture && state.capture->isCaptureEnabled()) state.capture->requestNextFrame();
+            if (renderServices.getRenderDocPanelState().bCaptureEnabled) {
+                renderServices.requestRenderDocCaptureNextFrame();
+            }
         }
     };
     _captureAfterFrames->_onClick = []() {
         if (auto* app = App::get()) if (auto& renderServices = app->getRenderServices(); renderServices.hasRenderer()) {
-            auto& state = renderServices.getDiagnosticsService().getRenderDocState();
-            if (state.capture && state.capture->isCaptureEnabled()) state.capture->requestAfterFrames(120);
+            if (renderServices.getRenderDocPanelState().bCaptureEnabled) {
+                renderServices.requestRenderDocCaptureAfterFrames(120);
+            }
         }
     };
 
@@ -113,30 +113,20 @@ void RuntimeDiagnosticsSection::sync(const App* app)
         return;
     }
 
-    const auto& state = renderServices.getDiagnosticsService().getRenderDocState();
-    const bool available = state.capture && state.capture->isAvailable();
-    _availability->setText(std::format("RenderDoc: {}", available ? "Available" : "Unavailable"));
+    const auto state = renderServices.getRenderDocPanelState();
+    _availability->setText(std::format("RenderDoc: {}", state.bAvailable ? "Available" : "Unavailable"));
     _dllPath->setText(std::format("DLL Path: {}", state.configuredDllPath.empty() ? "<default>" : state.configuredDllPath));
     _outputDir->setText(std::format("Output Dir: {}", state.configuredOutputDir.empty() ? "<default>" : state.configuredOutputDir));
     _lastCapture->setText(std::format("Last Capture: {}", state.lastCapturePath.empty() ? "<none>" : state.lastCapturePath));
-    if (!state.capture) {
-        _captureState->setText("Capture: unavailable");
-        _captureEnabled->setEnabled(false);
-        _hudVisible->setEnabled(false);
-        _captureNextFrame->setEnabled(false);
-        _captureAfterFrames->setEnabled(false);
-    }
-    else {
-        _captureEnabled->setEnabled(available);
-        _hudVisible->setEnabled(available);
-        _captureNextFrame->setEnabled(available && state.capture->isCaptureEnabled());
-        _captureAfterFrames->setEnabled(available && state.capture->isCaptureEnabled());
-        _captureEnabled->setChecked(state.capture->isCaptureEnabled());
-        _hudVisible->setChecked(state.capture->isHUDVisible());
-        _captureState->setText(std::format("Capture: {} | queued delay: {} frame(s)",
-                                            state.capture->isCapturing() ? "active" : "idle",
-                                            state.capture->getDelayFrames()));
-    }
+    _captureEnabled->setEnabled(state.bAvailable);
+    _hudVisible->setEnabled(state.bAvailable);
+    _captureNextFrame->setEnabled(state.bAvailable && state.bCaptureEnabled);
+    _captureAfterFrames->setEnabled(state.bAvailable && state.bCaptureEnabled);
+    _captureEnabled->setChecked(state.bCaptureEnabled);
+    _hudVisible->setChecked(state.bHUDVisible);
+    _captureState->setText(std::format("Capture: {} | queued delay: {} frame(s)",
+                                        state.bCapturing ? "active" : "idle",
+                                        state.delayFrames));
 }
 
 } // namespace ya

@@ -52,8 +52,8 @@ void RuntimeDebugPrimitivesSection::construct()
     addDetachedChild(rows.release());
 
     // One writer for the four switches: each reads the current settings, changes
-    // its own field, and requests them back. The render system is a renderer
-    // service, so the section reaches it through the app rather than the device.
+    // its own field, and requests them back. The settings travel as values --
+    // the section never holds a renderer service reference.
     const auto bindSwitch = [this](const std::shared_ptr<UICheckBox>& control, auto&& apply)
     {
         control->_onChanged = [control, apply = std::forward<decltype(apply)>(apply)](bool)
@@ -66,10 +66,9 @@ void RuntimeDebugPrimitivesSection::construct()
             if (!renderServices.hasRenderer()) {
                 return;
             }
-            auto& debug = renderServices.getDebugRenderSystem();
-            auto  settings = debug.buildSettingsSnapshot();
+            auto settings = renderServices.getDebugRenderSettings();
             apply(settings, control->isChecked());
-            debug.requestSettings(settings);
+            renderServices.requestDebugRenderSettings(settings);
         };
     };
 
@@ -91,7 +90,7 @@ void RuntimeDebugPrimitivesSection::sync(const App* app)
         return;
     }
 
-    const auto settings = renderServices.getDebugRenderSystem().buildSettingsSnapshot();
+    const auto settings = renderServices.getDebugRenderSettings();
     _enabled->setChecked(settings.bEnabled);
     _depth->setChecked(settings.bDepthTest);
     _lines->setChecked(settings.bDrawLines);
