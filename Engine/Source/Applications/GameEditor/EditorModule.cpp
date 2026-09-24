@@ -538,11 +538,21 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             canvasTargetExtent.width == 0 || canvasTargetExtent.height == 0) {
             canvasTargetExtent = Extent2D::fromVec2(_layer->getViewportSize());
         }
+        // The compositor wants a camera, not "the displayed View": this caller
+        // answers with the displayed View's camera today; another View's camera
+        // composes just as well.
+        const DisplayedView& displayedArrangement = renderServices.getDisplayedView();
+        const FRender2DComposePassDesc::Camera worldCamera{
+            .position       = displayedArrangement.cameraPos,
+            .view           = displayedArrangement.view,
+            .projection     = displayedArrangement.projection,
+            .viewProjection = displayedArrangement.viewProjection(),
+        };
         _viewportCompositor.compose(*render,
                                     commandBuffer,
                                     snapshot,
                                     *_layer,
-                                    app.getRenderServices().getDisplayedView(),
+                                    worldCamera,
                                     canvasTargetExtent);
         // Keep the last valid frame instead of clobbering the display with a
         // transiently null output (startup / mode-switch / resize gaps).

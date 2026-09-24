@@ -1206,3 +1206,33 @@ acquire 成功的 present surface，注释自己承认 "One cmdBuf still couples
 是 present compose 的唯一事实源；app 侧显示排布以 `DisplayedView` 命名（arrangement，
 分屏 = 同一 display root 上的 N 个 inset）。"1 host surface + N View" 的底座语义闭环，
 AB4-2d per-surface display plan 是下一个开口。
+
+---
+
+## 2026-09-24 AB4-2f step 3（批 4 补充）— EditorViewportCompositor 收相机，不收 DisplayedView
+
+review 指出的问题：compositor 的世界 compose 路径把 `DisplayedView`（app 本帧显示排布）写进了参数
+类型，但该路径真正消费的只有相机矩阵——compose 世界画面是**对任意 View** 都成立的操作，
+不该绑定"被显示的那个 View"。
+
+### 改动
+
+- `EditorViewportCompositor` 的 `compose / composeWorldFallback / composeWorldFromScene /
+  worldComposeDesc` 参数从 `DisplayedView` 改为 `FRender2DComposePassDesc::Camera`
+  （compose pass 自带的相机类型，position/view/projection/viewProjection，正是该路径消费的全部）；
+  头注释声明"世界 compose 按 View 的相机作答，调用方命名是哪个 View"。
+- `EditorModule` 调用点显式构造相机：今天用 `getDisplayedView()` 的相机填，另一个 View 的
+  相机同样可传；`GameRuntime/DisplayedView.h` include 从 compositor 移除（类型耦合消失）。
+- `EditorSurfaceContext`（chrome 全窗度量 + 拾取相机）与 picking 路径保留 `DisplayedView`——
+  那些问的确实是"窗口显示的那个 View"，属于该排布的正当消费者。
+
+### 验证
+
+- build：`ya-game-editor` ok。
+- `ya-gui-closure-test` 601 passed；`run_widgettree_editor_smoke.py --skip-build` exit=0；
+  parity md5 仍 `c775245ae636f15b41da8485319a2267`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：`getDisplayedView()` 单数排布未动（app 策略，AB4-2d 再演进）。
+- 偏离：无。

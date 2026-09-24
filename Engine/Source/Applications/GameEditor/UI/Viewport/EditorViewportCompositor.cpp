@@ -2,7 +2,6 @@
 
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/UI/Viewport/EditorViewportOverlayRecord.h"
-#include "GameRuntime/DisplayedView.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "GUI/Compose/Render2DComposePass.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
@@ -41,16 +40,11 @@ std::shared_ptr<RenderTexture> createEditorViewportImage(IRender& render, const 
         });
 }
 
-FRender2DComposePassDesc worldComposeDesc(const DisplayedView& displayedView)
+FRender2DComposePassDesc worldComposeDesc(const FRender2DComposePassDesc::Camera& worldCamera)
 {
     return FRender2DComposePassDesc{
         .kind   = ERender2DComposePassKind::EditorViewportCompose,
-        .camera = {
-            .position       = displayedView.cameraPos,
-            .view           = displayedView.view,
-            .projection     = displayedView.projection,
-            .viewProjection = displayedView.viewProjection(),
-        },
+        .camera = worldCamera,
     };
 }
 
@@ -65,12 +59,12 @@ void EditorViewportCompositor::shutdown()
     _scenePreviewErrors.clear();
 }
 
-void EditorViewportCompositor::compose(IRender&                      render,
-                                       ICommandBuffer&               commandBuffer,
-                                       const RenderViewportSnapshot& snapshot,
-                                       EditorLayer&                  layer,
-                                       const DisplayedView&       displayedView,
-                                       const Extent2D&               canvasTargetExtent)
+void EditorViewportCompositor::compose(IRender&                            render,
+                                       ICommandBuffer&                     commandBuffer,
+                                       const RenderViewportSnapshot&       snapshot,
+                                       EditorLayer&                        layer,
+                                       const FRender2DComposePassDesc::Camera& worldCamera,
+                                       const Extent2D&                     canvasTargetExtent)
 {
     // 2D always takes the canvas path: the world graph is disabled, so a
     // world-sourced compose would leave the viewport empty during startup.
@@ -81,10 +75,10 @@ void EditorViewportCompositor::compose(IRender&                      render,
 
     auto source = snapshot.viewportImageOwner;
     if (!source || !source->getImageShared() || !source->getImageView()) {
-        composeWorldFallback(render, commandBuffer, layer, displayedView, canvasTargetExtent);
+        composeWorldFallback(render, commandBuffer, layer, worldCamera, canvasTargetExtent);
         return;
     }
-    composeWorldFromScene(render, commandBuffer, snapshot, layer, displayedView);
+    composeWorldFromScene(render, commandBuffer, snapshot, layer, worldCamera);
 }
 
 void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
@@ -162,11 +156,11 @@ void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
                               });
 }
 
-void EditorViewportCompositor::composeWorldFallback(IRender&                   render,
-                                                    ICommandBuffer&            commandBuffer,
-                                                    EditorLayer&               layer,
-                                                    const DisplayedView&    displayedView,
-                                                    const Extent2D&            canvasTargetExtent)
+void EditorViewportCompositor::composeWorldFallback(IRender&                            render,
+                                                    ICommandBuffer&                     commandBuffer,
+                                                    EditorLayer&                        layer,
+                                                    const FRender2DComposePassDesc::Camera& worldCamera,
+                                                    const Extent2D&                     canvasTargetExtent)
 {
     Extent2D fallback = canvasTargetExtent;
     if (fallback.width == 0 || fallback.height == 0) {
@@ -183,7 +177,7 @@ void EditorViewportCompositor::composeWorldFallback(IRender&                   r
     commandBuffer.retireResource(_composedViewportImage->getImageViewShared());
     commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(),
                                             EImageLayout::ColorAttachmentOptimal);
-    FRender2DComposePassDesc desc = worldComposeDesc(displayedView);
+    FRender2DComposePassDesc desc = worldComposeDesc(worldCamera);
     recordRender2DComposePass(
         &commandBuffer,
         *_composedViewportImage,
@@ -193,11 +187,11 @@ void EditorViewportCompositor::composeWorldFallback(IRender&                   r
         [&]() { recordEditorWorldViewportOverlays(layer, /*bDepthTestedWorld=*/false); });
 }
 
-void EditorViewportCompositor::composeWorldFromScene(IRender&                      render,
-                                                     ICommandBuffer&               commandBuffer,
-                                                     const RenderViewportSnapshot& snapshot,
-                                                     EditorLayer&                  layer,
-                                                     const DisplayedView&       displayedView)
+void EditorViewportCompositor::composeWorldFromScene(IRender&                            render,
+                                                     ICommandBuffer&                     commandBuffer,
+                                                     const RenderViewportSnapshot&       snapshot,
+                                                     EditorLayer&                        layer,
+                                                     const FRender2DComposePassDesc::Camera& worldCamera)
 {
     auto source = snapshot.viewportImageOwner;
     ensureTarget(render, *source);
@@ -226,7 +220,7 @@ void EditorViewportCompositor::composeWorldFromScene(IRender&                   
                                                 EImageLayout::DepthStencilAttachmentOptimal);
     }
 
-    FRender2DComposePassDesc desc = worldComposeDesc(displayedView);
+    FRender2DComposePassDesc desc = worldComposeDesc(worldCamera);
     desc.sceneSourceTexture = resolveSourceTexture(*source);
     recordRender2DComposePass(
         &commandBuffer,
