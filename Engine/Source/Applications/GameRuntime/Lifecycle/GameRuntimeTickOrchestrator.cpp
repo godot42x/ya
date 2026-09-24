@@ -392,6 +392,10 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());
         bAcquireAttempted = acquirePresentFrame(presentFrame);
     }
+    // Both early returns below are this app's policy, not a renderer rule:
+    // when its one window shows nothing (no surface, or acquire refused), no
+    // consumer reads its Views this frame, so recording them is skipped. The
+    // renderer itself records a present-less plan fine.
     if (!bAcquireAttempted) {
         app.presentModuleExtras(dt);
         return;
@@ -567,8 +571,10 @@ RecordedFrame GameRuntimeTickOrchestrator::recordFrame(App&                    a
             // compose structure. The module that fills the surface (the editor
             // chrome) is what answers; a standalone runtime has none, so the
             // surface is the View.
-            // The surface is non-null here: `acquirePresentFrame` is what
-            // produces an acquired frame, and recording only happens for one.
+            // The surface is non-null here as a matter of app policy: this
+            // app records only for an acquired frame, because nothing consumes
+            // its Views when its one window is unpresentable. The renderer no
+            // longer imposes that -- an offscreen-only plan records fine.
             .backdrop = app.presentsViewDisplayImage(*presentFrame.surface) ? ESurfaceBackdrop::ViewDisplayImage
                                                                             : ESurfaceBackdrop::HostContent,
         },

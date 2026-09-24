@@ -15,13 +15,12 @@ bool RenderDeviceState::beginFrameCommandBuffer(const RenderFramePlan& plan, std
     YA_PROFILE_SCOPE("RenderDeviceState::beginFrameCommandBuffer");
     YA_PERF_SCOPE(perf::sample::renderPrepareFrame(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    if (!plan.present.surface || plan.present.imageIndex < 0) {
-        // Host skipped acquire (unpresentable / failed begin). One cmdBuf still
-        // couples world record to present, so there is nothing to record here.
-        // Camera skip is host policy, not a swapchain query inside the coordinator.
-        return false;
-    }
-
+    // Whether anything is recorded is the plan's answer (are there Views to
+    // record), not the present target's: a frame whose surface is minimized or
+    // whose acquire failed may still owe offscreen View work, and "skip
+    // recording" is host policy -- the host expresses it by not recording, not
+    // through a swapchain query inside the coordinator. The renderer never
+    // refuses a frame for lacking a present target.
     const uint32_t flightIndex = plan.frame.flightIndex;
     if (flightIndex >= _commandBuffers.size() || !_commandBuffers[flightIndex]) {
         YA_CORE_ERROR("Recording flight {} has no command buffer", flightIndex);

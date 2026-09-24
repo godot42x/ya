@@ -33,7 +33,9 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan)
     // renderer has never presented through has no images and no write pass yet,
     // and building them is the pre-record section where pipeline construction
     // already happens. The plan names the surface, so which window this frame
-    // presents is the host's answer, not a primary-surface default.
+    // presents is the host's answer, not a primary-surface default. A plan with
+    // no present target is a legal frame -- offscreen View work records and
+    // publishes exactly the same way, only the surface compose below is skipped.
     SurfacePresentation* presentation = nullptr;
     if (plan.present.surface) {
         presentation = &_device->acquireSurfacePresentation(plan.present.surfaceId, *plan.present.surface);

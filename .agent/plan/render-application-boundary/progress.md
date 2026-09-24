@@ -1077,3 +1077,37 @@ present 三步，并第一次让“没有可呈现窗口的帧”“一帧呈现
 - 保留：AB4-2f step 3 的其余三批（record 门控解除、imageIndex 单一事实源、DisplayedView 改名）
   各自独立 commit，见后续 progress 条目。
 - 偏离：无。
+
+---
+
+## 2026-09-24 AB4-2f step 3（批 2/4）— View 录制不再被 present acquire 门控
+
+唯一目标：**把"是否录制"的决定权还给 plan**。`RenderDeviceState::beginFrameCommandBuffer` 曾在
+`!plan.present.surface || imageIndex < 0` 时整帧拒绝——只想录一个 offscreen View 也必须先有一个
+acquire 成功的 present surface，注释自己承认 "One cmdBuf still couples world record to present"。
+
+### 改动
+
+- `RenderDeviceState.Frame.cpp`：删除该门控，替换为边界注释——录制与否由 plan 里有没有 View 决定；
+  "窗口最小化/无 surface 时跳过录制"是 host 策略，归编排层，渲染器不再替 app 拒绝一帧。
+- `RuntimeRenderContext.cpp`：present 目标解析处补注——plan 无 present target 是合法帧，
+  offscreen View 的录制与发布完全同路，只有最后的 surface compose 被跳过（该路径本来就按
+  `plan.present.surface` 判空，`recordCameraViewCompose` 对空目标 no-op）。
+- `GameRuntimeTickOrchestrator.cpp`：两处 acquire 失败早退补注——这是本 app 的策略
+  （它唯一的窗口不显示时没有任何消费者读它的 View），渲染器已不再施加此规则。
+
+### 测试
+
+- 行为零变化：GameRuntime 只在 acquire 成功后 record，本批只解开能力、不改今天任何帧的产物。
+  渲染器侧 "offscreen-only 帧合法" 已有 RHI smoke 用例覆盖帧簿记语义（AB4-2f step 1 的
+  `FrameBookkeepingBelongsToTheFrameNotAWindow`），本批不新增。
+
+### 验证
+
+- build：`ya-render-3d` / `ya-game-runtime` ok。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：orchestrator 的 app 策略维持不变；未来若出现真正的 offscreen-only 消费帧
+  （如 headless 自动化、无窗渲染），策略改动发生在编排层，一行即可。
+- 偏离：无。
