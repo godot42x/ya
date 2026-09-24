@@ -1429,14 +1429,14 @@ void GUIWindowHost::presentSnapshot()
         return;
     }
     if (!presentFrame.acquired()) {
-        submitPresentFrame(presentFrame, {});
+        submitPresentFrame(*_impl->render, presentFrame, {});
         return;
     }
     const int32_t imageIndex = presentFrame.imageIndex;
 
     ISwapchain* swapchain = _impl->present->getSwapchain();
     if (!swapchain) {
-        submitPresentFrame(presentFrame, {});
+        submitPresentFrame(*_impl->render, presentFrame, {});
         return;
     }
     const Extent2D swapchainExtent = swapchain->getExtent();
@@ -1451,7 +1451,7 @@ void GUIWindowHost::presentSnapshot()
         rebuildPresentationResources(/*bWaitForGpu=*/false);
         swapchain = _impl->present->getSwapchain();
         if (!swapchain) {
-            submitPresentFrame(presentFrame, {});
+            submitPresentFrame(*_impl->render, presentFrame, {});
             return;
         }
     }
@@ -1461,13 +1461,13 @@ void GUIWindowHost::presentSnapshot()
                       imageIndex,
                       _impl->presentationTargets.size(),
                       _impl->commandBuffers.size());
-        submitPresentFrame(presentFrame, {});
+        submitPresentFrame(*_impl->render, presentFrame, {});
         return;
     }
     const auto& presentation = _impl->presentationTargets[static_cast<size_t>(imageIndex)];
     if (!presentation || !presentation->renderSurface || !presentation->renderSurface->isValid()) {
         YA_CORE_ERROR("GUIAppHost: presentation surface {} is invalid", imageIndex);
-        submitPresentFrame(presentFrame, {});
+        submitPresentFrame(*_impl->render, presentFrame, {});
         return;
     }
     const auto& renderSurface = presentation->renderSurface;
@@ -1660,7 +1660,7 @@ void GUIWindowHost::presentSnapshot()
     }
 
     cmdBuf->end();
-    submitPresentFrame(presentFrame, {cmdBuf->getHandle()});
+    submitPresentFrame(*_impl->render, presentFrame, {cmdBuf->getHandle()});
 
     if (!capturePath.empty() || bCaptureOffscreen) {
         _impl->present->waitInFlight();

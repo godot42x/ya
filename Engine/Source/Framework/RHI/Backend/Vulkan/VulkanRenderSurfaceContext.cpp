@@ -454,8 +454,10 @@ bool VulkanRenderSurfaceContext::begin(int32_t* outImageIndex)
     return acquire(outImageIndex);
 }
 
-void* VulkanRenderSurfaceContext::presentBarrierCommand(uint32_t imageIndex)
+ICommandBuffer* VulkanRenderSurfaceContext::presentFallbackCommand(uint32_t imageIndex)
 {
+    // The surface's own command (it knows its swapchain image and the layout
+    // present needs); the application submits it like any other command buffer.
     if (!_scratchPresentCmd) {
         std::vector<std::shared_ptr<ICommandBuffer>> buffers;
         _render->allocateCommandBuffers(1, buffers);
@@ -469,33 +471,7 @@ void* VulkanRenderSurfaceContext::presentBarrierCommand(uint32_t imageIndex)
     _scratchPresentCmd->begin(false);
     recordPresentBarrier(_scratchPresentCmd->getHandleAs<VkCommandBuffer>(), imageIndex);
     _scratchPresentCmd->end();
-    return _scratchPresentCmd->getHandleAs<VkCommandBuffer>();
-}
-
-bool VulkanRenderSurfaceContext::submit(int32_t imageIndex, std::vector<void*> commandBuffers)
-{
-    YA_PROFILE_FUNCTION();
-    if (imageIndex < 0) {
-        return true;
-    }
-
-    std::vector<void*> submits = std::move(commandBuffers);
-    if (submits.empty()) {
-        // An acquired image must be legal to present even when nothing filled
-        // it, which is the barrier's whole job.
-        void* barrier = presentBarrierCommand(static_cast<uint32_t>(imageIndex));
-        if (!barrier) {
-            return false;
-        }
-        submits.push_back(barrier);
-    }
-
-    // This window contributes its own acquire/present sync; the frame's fence is
-    // the device's, so several windows can be submitted under one frame.
-    return _render->submitFrame(
-        submits,
-        {frameImageAvailableSemaphores[currentFrameIdx]},
-        {imageSubmittedSignalSemaphores[static_cast<uint32_t>(imageIndex)]});
+    return _scratchPresentCmd.get();
 }
 
 bool VulkanRenderSurfaceContext::present(int32_t imageIndex)

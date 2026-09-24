@@ -56,9 +56,6 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
     void signalPresentComplete();
     [[nodiscard]] bool prepareSwapchainForAcquire();
     [[nodiscard]] bool acquire(int32_t* imageIndex);
-    /// The present-layout barrier a surface with no commands still needs, so an
-    /// acquired image is legal to present.
-    [[nodiscard]] void* presentBarrierCommand(uint32_t imageIndex);
     void               advanceFrame() { currentFrameIdx = (currentFrameIdx + 1) % flightFrameSize; }
 
     [[nodiscard]] INativeWindow* getNativeWindow() const override { return _window; }
@@ -70,8 +67,8 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
     [[nodiscard]] bool           isPresentable() const override;
 
     bool begin(int32_t* imageIndex) override;
-    bool submit(int32_t imageIndex, std::vector<void*> commandBuffers) override;
     bool present(int32_t imageIndex) override;
+    [[nodiscard]] ICommandBuffer* presentFallbackCommand(uint32_t imageIndex) override;
     void requestRecreate() override;
 
     [[nodiscard]] void*    getCurrentImageAvailableSemaphore() override;

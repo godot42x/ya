@@ -333,8 +333,9 @@ AB4-step2（待做）不是一个改动，而是以下有依赖关系的闭环�
      “满足初始集合所需的最小额外 present family”尚未实现。
    - 无窗口（offscreen-only）设备：`startupSurfaces` 为空会被明确拒绝（queue plan 需要 present
      family），不是已实现的模式。
-   - acquire/submit/present 曾在 `IRenderSurfaceContext::begin/end` 里；**AB4-2f step 1（已落地 2026-09-24）
-     把它拆成 `begin` / `submit` / `present`**，并把帧的完成 fence 从窗口搬到设备。见下。
+   - acquire/submit/present 曾在 `IRenderSurfaceContext::begin/end` 里；**AB4-2f step 1 + step 2（已落地
+     2026-09-24）把它拆成 surface 只 `begin`/`present`，提交归设备**，并把帧的完成 fence 从窗口
+     搬到设备。见下。
 
    AB4-2f step 1（已落地 2026-09-24）：**帧的完成属于帧，提交与呈现分家**。
    - `IRender::submitFrame(cmdBufs, waits, signals)`：一次帧提交的入口。设备在帧内第一次调用时
@@ -343,8 +344,8 @@ AB4-step2（待做）不是一个改动，而是以下有依赖关系的闭环�
    - `IRender::beginRecordedFrame()`：等待本帧 slot 的 fence（上一轮用该 slot 的帧），再推进 generation
      与 deferred deletion。**它必须早于本帧任何 acquire**，因为 acquire 复用上一帧提交等待过的
      image-available semaphore——GameRuntime 的顺序因此改为 `beginRecordedFrame → acquire → record → submit`。
-   - `IRenderSurfaceContext`：`end(imageIndex, cmdBufs)` → `submit(imageIndex, cmdBufs)` +
-     `present(imageIndex)`；窗口不再有 frame fence（`getCurrentFrameFence()` 删除），`begin()` 只做
+   - `IRenderSurfaceContext`：`end(imageIndex, cmdBufs)` → `present(imageIndex)`，提交交给设备
+     （step 2 落地后的最终形态）；窗口不再有 frame fence（`getCurrentFrameFence()` 删除），`begin()` 只做
      “应用 pending recreate + acquire”，`waitInFlight()` 只等本窗口的 present-complete。
    - GUI 两条线也参与帧簿记：`GUIWindowHost::onTick`（单窗）与 `GUIApp::onTick`（多窗）各调用一次
      `beginRecordedFrame`，且都在任何 present 之前；tick/present 两半不重复调用。
@@ -353,6 +354,43 @@ AB4-step2（待做）不是一个改动，而是以下有依赖关系的闭环�
    意义：`一个 tick = 一个 generation + 一个 fence + N 个 surface 的 acquire/present`，且“没有可呈现窗口
    的帧”第一次成为合法帧（offscreen-only / 全最小化）。这解开了 AB4-2d 的最后一道锁——
    “每个 View 只录一次、按 surface 组合”不再需要某个窗口冒充帧的 owner。
+
+   AB4-2f step 2（已落地 2026-09-24）：**提交是 queue 对 command buffer 的操作，不是 surface 的操作**。
+
+   step 1 把 `submit` 从 `begin/end` 里拆出来，但把它留在 surface 上，于是“把这个窗口的作品交给队列”
+   仍然被说成 “surface->submit(imageIndex, cmdBufs)”。step 2 把它彻底拿走：
+   - `IRenderSurfaceContext::submit()` **删除**。surface 对一次提交只贡献两样东西：
+     (a) 同步对 `getCurrentImageAvailableSemaphore()` / `getRenderFinishedSemaphore(imageIndex)`；
+     (b) 让它自己那张 acquired image 能合法 present 的一条命令
+     `presentFallbackCommand(imageIndex)`（只有 surface 知道是哪个 swapchain image、要转到哪个 layout）。
+   - `PresentFrame.h` 新增 `FPresentSync{waits, signals}` 与纯函数 `presentSyncOf(surface, imageIndex)`：
+     把“某个 acquired surface 给这次提交贡献什么”变成可组合的值，因此一帧呈现 N 个窗口是
+     **一次提交带 N 组同步**，而不是 N 次各自提交。
+   - `submitPresentFrame(IRender& render, FPresentFrame&, commandBuffers)` 改成自由函数并接收 `IRender&`：
+     空 command 列表时它取 `presentFallbackCommand` 补上合法化命令，再 `render.submitFrame(...)`。
+     “空列表仍然合法”这一条语义没有变，只是执行者从窗口变成帧。
+
+   意义：`Surface` / `Window` 不再出现在“提交”这条路径上，只有 `Queue + CommandBuffer + 同步对`。
+   这是 AB4-2d 的“一个逻辑 tick 构造多个 SurfaceDisplayPlan、每 View 只录一次”真正需要的形状：
+   应用收集每个 acquired surface 的 `FPresentSync`，把它们合并进同一次 `submitFrame`。
+
+   新增契约守卫（`GUIRenderSurfaceTest.SubmissionIsAQueueOperationNotASurfaceOne`）：`RenderSurfaceContext.h`
+   出现任何 `submit(` 即红、且必须保留“为什么它不在这里”的注释；`FPresentSync` / `presentSyncOf` /
+   `submitPresentFrame(IRender&` 必须存在；GUI host 与 GameRuntime 不得用 `->submit(`。
+   **负向对照实跑**：往头文件临时加回 `virtual bool submit(...)` → 该用例立刻变红（`countLiteral` 得到 1），
+   移除后恢复绿。
+
+   证据（step 2）：`ya-rhi-vulkan-smoke` **9 passed / 1 skipped**（platform minimize guard；
+   `presentOneFrame` 辅助函数改成真实帧写法：`beginRecordedFrame → 各窗 acquire → 一次提交（同步对 +
+   该 surface 的合法化命令）→ 各窗 present`）；`ya-testing` **1322 tests / 1321 passed / 1 skipped /
+   0 failed**；`ya-gui-closure-test` 601 passed；`ya-gui-headless-host-test` 47 passed；
+   GUIWorkbench `--smoke-actions` exit=0 且无 VMA leak；parity 两张图 md5 仍
+   `c775245ae636f15b41da8485319a2267`；editor smoke exit=0。
+
+   未完成/如实记录（step 2）：今天的落地是**每个窗口一次 `submitFrame`**（GUI 的
+   `presentSnapshot` / `presentGuiSnapshot` 与 GameRuntime 的 `tickRender` 各呈现各自那一个 surface），
+   共享的是设备的 frame fence；真正“一帧一次提交、合并所有 surface 的同步对”要等 AB4-2d 的
+   per-surface display plan 把多个 surface 收进同一个位置（届时不需要新接口，`FPresentSync` 已经能拼）。
 
    AB4-2b step 1b（已落地 2026-09-24）：per-surface 的 GPU 状态也按身份归位。
    `SurfacePresentation` 记录 `SurfaceId`；`RenderDeviceState::acquireSurfacePresentation(id, surface)`

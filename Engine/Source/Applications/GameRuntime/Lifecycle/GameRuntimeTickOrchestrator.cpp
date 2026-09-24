@@ -397,7 +397,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         return;
     }
     if (!presentFrame.acquired()) {
-        submitPresentFrame(presentFrame, {});
+        submitPresentFrame(*render, presentFrame, {});
         app.presentModuleExtras(dt);
         return;
     }
@@ -588,7 +588,7 @@ void GameRuntimeTickOrchestrator::submitRecordedFrame(App&                 app,
     //               recorded.flightIndex,
     //               recorded.frameToken,
     //               recorded.valid());
-    submitPresentFrame(presentFrame,
+    submitPresentFrame(*app.getRenderServices().getRender(), presentFrame,
                        recorded.valid() ? std::vector<void*>{recorded.commandBuffer->getHandle()}
                                         : std::vector<void*>{});
 }

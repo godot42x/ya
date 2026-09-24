@@ -943,6 +943,7 @@ present 三步，并第一次让“没有可呈现窗口的帧”“一帧呈现
   `present(imageIndex)`；删掉 `getCurrentFrameFence()`，删掉 `waitAllGraphicsFences` /
   `resetInFlightFence` / `resignalCurrentFence` / `waitInFlightFence`。`begin()` 只剩“应用 pending
   recreate + acquire”，`waitInFlight()` 只等本窗口的 present-complete（recreate/destroy 需要的正是它）。
+  **（已被 step 2 取代：`submit` 随后从 surface 彻底删除。）**
 - `VulkanRender`：新增 `_frameFences[kFramesInFlight]`（创建即 signaled，避免首帧特判）与
   `_bFrameFenceArmed`（每帧只武装一次，否则第二次 reset 会抹掉第一次提交的 pending signal）。
 - `VulkanSwapChain::acquireNextImage` 去掉 fence 形参（原先的 wait+reset 只是替窗口那个 fence 兜底）。
@@ -977,4 +978,71 @@ present 三步，并第一次让“没有可呈现窗口的帧”“一帧呈现
   GPU 使用”。判据与依据：present-complete 在队列顺序上晚于 present，而 present 等待 render-finished，
   因此 present-complete ⊇ 本窗口渲染完成；证据是 soak / workbench / editor 三条真实 present 且在结束时
   销毁窗口的路径全绿。把这条推理写下来，是因为它是“删掉那个 wait 是否安全”的唯一判据。
+- 偏离：无。
+
+---
+
+## 2026-09-24 AB4-2f step 2 — 提交是 queue 对 command buffer 的操作，不是 surface 的操作
+
+唯一目标：**把 `submit` 从 surface 上彻底拿走**。step 1 已经让帧拥有 fence、让 acquire 与 present 分开，
+但“把这个窗口的作品交给队列”仍被表达成 `surface->submit(imageIndex, cmdBufs)`，于是 `Surface` / `Window`
+还站在提交这条路径上；一帧呈现 N 个窗口就只能变成 N 次各自提交。
+
+### 改动
+
+- `IRenderSurfaceContext::submit()` **删除**，接口注释里保留一句“为什么它不在这里”。surface 对一次提交
+  只剩两项贡献：(a) 同步对 `getCurrentImageAvailableSemaphore()` / `getRenderFinishedSemaphore(imageIndex)`；
+  (b) `presentFallbackCommand(imageIndex)` —— 一条把 acquired image 转到 present layout 的命令，只有
+  surface 知道是哪个 swapchain image、要转到哪个 layout。它是**命令**，不是提交。
+- `PresentFrame.h` 新增 `FPresentSync{waits, signals}` 与 `presentSyncOf(surface, imageIndex)`（`imageIndex < 0`
+  返回空）：把“某个 acquired surface 贡献什么”变成可组合的值。于是“一帧呈现 N 个窗口”= 一次提交带 N 组同步。
+- `submitPresentFrame` 从 `FPresentFrame` 上的成员式拼法改成自由函数 `submitPresentFrame(IRender& render, FPresentFrame&, std::vector<void*> commandBuffers)`：
+  `imageIndex < 0` 直接返回 true；command 列表为空时取 `presentFallbackCommand` 补上合法化命令；
+  最后 `render.submitFrame(submits, sync.waits, sync.signals) && frame.surface->present(imageIndex)`。
+  “空 command 列表仍合法”这条语义没变，执行者从窗口换成帧。
+- Vulkan：`VulkanRenderSurfaceContext::submit()` 删除，`presentBarrierCommand`（返回 `void*`）改成
+  `presentFallbackCommand`（返回 `ICommandBuffer*`），仍然只在第一次需要时分配那张 scratch command buffer。
+  `VulkanRender` 的 frame fence 逻辑不变（step 1 已落地）。
+- 调用点全部改为带上 `IRender&`：GameRuntime `GameRuntimeTickOrchestrator`（2 处）、GUI `GUIAppHost.cpp`（6 处）、
+  `GUIWindowPresent.cpp`（6 处）。
+- 顺手清掉三处过时注释：surface 头文件的 “acquire/submit/present sync” / “skip submit+present” /
+  “after this surface's submit”。它们都还在教 step 1 之前的模型。
+
+### 测试
+
+- `RHISurfaceContextTest.cpp` 的 `presentOneFrame` 辅助函数改成真实帧写法，并且中间那一步不再“什么都没提交”：
+  `beginRecordedFrame → 各窗 acquire → 每个 acquired surface 一次提交（同步对 + 该 surface 的
+  presentFallbackCommand）→ 各窗 present`。这保证 smoke 仍然真的走了一遍 present-layout 转换。
+- `ExtraWindowUnpresentableDoesNotBlockStartupWindowPresent` 里“unpresentable 的 submit 与 present 都是 no-op”
+  改写为断言它**对这次提交的贡献为空**（`presentSyncOf` 的 waits/signals 都为空），present 仍是 no-op。
+  这是同一件事在新模型里的说法，不是把断言放宽。
+- `StandInSurface`（`Engine/Test/Source/Support/TestSurface.h`）：`submit` → `presentFallbackCommand` 返回 `nullptr`。
+- 新增契约守卫 `GUIRenderSurfaceTest.SubmissionIsAQueueOperationNotASurfaceOne`（源码文本守卫，和该文件里
+  已有的 compose 守卫同一形状）：`RenderSurfaceContext.h` 出现任何 `submit(` 即红，且必须保留“为什么它不在
+  这里”的注释与 `IRender::submitFrame` 的指向；`FPresentSync` / `presentSyncOf` / `submitPresentFrame(IRender&`
+  必须存在；GUI host 与 GameRuntime 不得用 `->submit(`。
+- **负向对照实跑**：往 `RenderSurfaceContext.h` 临时加回 `virtual bool submit(...)`，该用例立刻变红
+  （`countLiteral` 得到 1），移除后恢复绿。守卫读的是文件文本，所以对照不需要重编。
+
+### 验证
+
+- build：`ya-rhi-vulkan` / `ya-gui-host` / `GUIWorkbench` / `ya-game-runtime` / `ya-runtime` /
+  `ya-game-editor` / `-g test` 全部 ok。
+- `ya-rhi-vulkan-smoke`：**9 passed / 1 skipped**（同一 platform minimize guard）。
+- `ya-testing`：**1322 tests / 1321 passed / 1 skipped / 0 failed**。
+- `ya-gui-closure-test` 601 passed（600 + 新守卫）；`ya-gui-headless-host-test` 47 passed。
+- `GUIWorkbench --smoke-actions`：**exit=0** 且无 VMA leak。
+- `run_display_compose_parity.py --skip-build`：**PASS**，md5 仍 `c775245ae636f15b41da8485319a2267`。
+- `run_widgettree_editor_smoke.py --skip-build`：**exit=0**。
+
+### 保留 / 未完成 / 偏离
+
+- 未完成（本 step 明确不做的）：落地形态仍是**每个窗口一次 `submitFrame`**——GUI 的 `presentSnapshot` /
+  `presentGuiSnapshot` 与 GameRuntime 的 `tickRender` 各自呈现自己那一个 surface，共享的只是设备的
+  frame fence。真正“一帧一次提交、合并所有 surface 的同步对”属于 AB4-2d 的 per-surface display plan
+  （把多个 surface 收进同一个位置），届时不需要新接口：`FPresentSync` 已经能拼。把这条写清楚，是因为
+  “删掉 surface 的 submit”**不等于**“今天就只有一次提交”。
+- 未覆盖（如实记录）：没有新用例断言“GUI 的某一次 `submitFrame` 与 GameRuntime 的那一次处于同一帧的同一批
+  fence 之下”。判据与依据：设备在帧内第一次 `submitFrame` 时武装 fence、后续提交共同引用它，而三条真实
+  present 路径（parity / workbench / editor smoke）全绿；这条是时序性质，需要真实设备加帧序探针，本批不造。
 - 偏离：无。

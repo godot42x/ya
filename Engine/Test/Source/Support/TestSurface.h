@@ -40,7 +40,7 @@ struct StandInSurface final : IRenderSurfaceContext
         *imageIndex = -1;
         return true;
     }
-    bool submit(int32_t, std::vector<void*>) override { return true; }
+    [[nodiscard]] ICommandBuffer* presentFallbackCommand(uint32_t) override { return nullptr; }
     bool present(int32_t) override { return true; }
     void waitInFlight() override {}
     [[nodiscard]] void* getCurrentImageAvailableSemaphore() override { return nullptr; }

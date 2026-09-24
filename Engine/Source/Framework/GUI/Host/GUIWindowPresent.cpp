@@ -67,14 +67,14 @@ void presentGuiSnapshot(FGUISurfacePresentResources& resources,
         return;
     }
     if (!presentFrame.acquired()) {
-        submitPresentFrame(presentFrame, {});
+        submitPresentFrame(*resources.render, presentFrame, {});
         return;
     }
     const int32_t imageIndex = presentFrame.imageIndex;
 
     ISwapchain* swapchain = resources.present->getSwapchain();
     if (!swapchain) {
-        submitPresentFrame(presentFrame, {});
+        submitPresentFrame(*resources.render, presentFrame, {});
         return;
     }
     const Extent2D swapchainExtent = swapchain->getExtent();
@@ -85,21 +85,21 @@ void presentGuiSnapshot(FGUISurfacePresentResources& resources,
         rebuildGuiSurfacePresentation(resources, "GUIExtra", /*bWaitForGpu=*/false);
         swapchain = resources.present->getSwapchain();
         if (!swapchain) {
-            submitPresentFrame(presentFrame, {});
+            submitPresentFrame(*resources.render, presentFrame, {});
             return;
         }
     }
     if (!guiPresentationIndexValid(imageIndex, resources.presentationTargets.size(),
                                    resources.commandBuffers.size())) {
         YA_CORE_ERROR("GUI extra present: image index {} out of range", imageIndex);
-        submitPresentFrame(presentFrame, {});
+        submitPresentFrame(*resources.render, presentFrame, {});
         return;
     }
 
     const auto& presentation = resources.presentationTargets[static_cast<size_t>(imageIndex)];
     if (!presentation || !presentation->renderSurface || !presentation->renderSurface->isValid()) {
         YA_CORE_ERROR("GUI extra present: presentation surface {} is invalid", imageIndex);
-        submitPresentFrame(presentFrame, {});
+        submitPresentFrame(*resources.render, presentFrame, {});
         return;
     }
     const auto& renderSurface = presentation->renderSurface;
@@ -153,7 +153,7 @@ void presentGuiSnapshot(FGUISurfacePresentResources& resources,
             .logicalExtent = logicalExtent,
         });
     cmdBuf->end();
-    submitPresentFrame(presentFrame, {cmdBuf->getHandle()});
+    submitPresentFrame(*resources.render, presentFrame, {cmdBuf->getHandle()});
 }
 
 } // namespace ya

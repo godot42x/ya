@@ -30,7 +30,8 @@ bool createTestWindow(SDLNativeWindow& window, const char* title, uint32_t width
 
 /// One frame that presents `surfaces`, spelled the way a real frame is: the
 /// device opens the frame (waiting the previous frame's GPU work), each surface
-/// acquires, each submits, each presents.
+/// acquires, the frame submits each surface's sync pair plus the surface's own
+/// legalizing command, then each presents.
 bool presentOneFrame(IRender& render, std::span<IRenderSurfaceContext*> surfaces)
 {
     render.beginRecordedFrame();
@@ -42,7 +43,18 @@ bool presentOneFrame(IRender& render, std::span<IRenderSurfaceContext*> surfaces
         }
     }
     for (size_t i = 0; i < surfaces.size(); ++i) {
-        if (imageIndex[i] >= 0 && !surfaces[i]->submit(imageIndex[i], {})) {
+        if (imageIndex[i] < 0) {
+            continue;
+        }
+        // Nothing is drawn here, so this image's work is the surface's own
+        // legalizing command -- which is also what a product frame submits when it
+        // has nothing to fill an image with.
+        ICommandBuffer* legalize = surfaces[i]->presentFallbackCommand(static_cast<uint32_t>(imageIndex[i]));
+        if (!legalize) {
+            return false;
+        }
+        const FPresentSync sync = presentSyncOf(*surfaces[i], imageIndex[i]);
+        if (!render.submitFrame({legalize->getHandle()}, sync.waits, sync.signals)) {
             return false;
         }
     }
@@ -459,9 +471,14 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockStartupWindowPresent
     ASSERT_TRUE(extra->begin(&extraImage));
     EXPECT_LT(extraImage, 0);
     EXPECT_FALSE(extra->isPresentable());
-    // Unpresentable: submit and present are both no-ops for it, which is what
+    // Unpresentable: it contributes nothing to the frame's submission -- no
+    // sync pair to wait or signal -- and its present is a no-op, which is what
     // keeps one minimized window from stopping the other's frame.
-    ASSERT_TRUE(extra->submit(extraImage, {}));
+    {
+        const FPresentSync none = presentSyncOf(*extra, extraImage);
+        EXPECT_TRUE(none.waits.empty());
+        EXPECT_TRUE(none.signals.empty());
+    }
     ASSERT_TRUE(extra->present(extraImage));
 
     ASSERT_TRUE(presentOneFrame(*render, *startup));
