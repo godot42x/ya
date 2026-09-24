@@ -219,6 +219,14 @@ void VulkanRender::destroyInternal()
     // swapchain + sync) before the device goes away. There is no privileged one
     // to destroy first: the registry is the whole set.
     _surfaces.clear();
+    // vkDeviceWaitIdle above retired every frame, so the frame fences are free.
+    for (VkFence& fence : _frameFences) {
+        if (fence != VK_NULL_HANDLE) {
+            vkDestroyFence(m_LogicalDevice, fence, getAllocator());
+            fence = VK_NULL_HANDLE;
+        }
+    }
+    _frameFences.clear();
     releaseFrameGpuTimingResources();
     VK_DESTROY(PipelineCache, m_LogicalDevice, _pipelineCache);
 
@@ -1313,7 +1321,70 @@ void VulkanRender::beginRecordedFrame()
 {
     updateCompletedFrameGpuTiming();
     ++_frameIndex;
+
+    // Wait the fence of the slot this frame is about to use: that is the frame
+    // whose transient GPU resources, command buffer and per-surface semaphores
+    // this frame will reuse. Waiting here -- not inside a window's acquire -- is
+    // what makes "this frame's work finished" a fact about the frame, so a frame
+    // with no presentable window (or no work at all) still retires it.
+    const uint32_t slot = static_cast<uint32_t>(_frameIndex % kFramesInFlight);
+    if (slot < _frameFences.size() && _frameFences[slot] != VK_NULL_HANDLE) {
+        VK_CALL(vkWaitForFences(m_LogicalDevice, 1, &_frameFences[slot], VK_TRUE, UINT64_MAX));
+    }
+    // Re-armed by this frame's first submission. A frame that submits nothing
+    // leaves the fence signaled for the next frame that uses the slot.
+    _bFrameFenceArmed = false;
+
     DeferredDeletionQueue::get().flush(_frameIndex);
+}
+
+bool VulkanRender::createFrameFences()
+{
+    // Signaled to start, so the first frame's wait passes without a "has any
+    // frame run yet" branch.
+    VkFenceCreateInfo fenceInfo{
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
+    _frameFences.assign(kFramesInFlight, VK_NULL_HANDLE);
+    for (uint32_t slot = 0; slot < kFramesInFlight; ++slot) {
+        const VkResult ret = vkCreateFence(m_LogicalDevice, &fenceInfo, getAllocator(), &_frameFences[slot]);
+        if (ret != VK_SUCCESS) {
+            YA_CORE_ERROR("Failed to create the frame fence for flight slot {}: {}", slot, static_cast<int32_t>(ret));
+            return false;
+        }
+        setDebugObjectName(VK_OBJECT_TYPE_FENCE,
+                           _frameFences[slot],
+                           std::format("RecordedFrameFence_{}", slot).c_str());
+    }
+    _bFrameFenceArmed = false;
+    return true;
+}
+
+bool VulkanRender::submitFrame(const std::vector<void*>& cmdBufs,
+                               const std::vector<void*>& waitSemaphores,
+                               const std::vector<void*>& signalSemaphores)
+{
+    if (m_LogicalDevice == VK_NULL_HANDLE || _frameFences.empty()) {
+        return false;
+    }
+    const uint32_t slot = static_cast<uint32_t>(_frameIndex % kFramesInFlight);
+    if (slot >= _frameFences.size() || _frameFences[slot] == VK_NULL_HANDLE) {
+        return false;
+    }
+
+    // The first submission of this frame re-arms the slot's fence; later ones in
+    // the same frame reference the same fence, which the spec signals once all of
+    // them complete. Resetting it a second time would clear the first submit's
+    // pending signal, which is why the arming is once per frame.
+    if (!_bFrameFenceArmed) {
+        VK_CALL(vkResetFences(m_LogicalDevice, 1, &_frameFences[slot]));
+        _bFrameFenceArmed = true;
+    }
+
+    submitToQueue(cmdBufs, waitSemaphores, signalSemaphores, _frameFences[slot]);
+    return true;
 }
 
 void VulkanRender::beginFrameGpuTiming(ICommandBuffer* commandBuffer)

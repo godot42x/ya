@@ -333,7 +333,26 @@ AB4-step2（待做）不是一个改动，而是以下有依赖关系的闭环�
      “满足初始集合所需的最小额外 present family”尚未实现。
    - 无窗口（offscreen-only）设备：`startupSurfaces` 为空会被明确拒绝（queue plan 需要 present
      family），不是已实现的模式。
-   - acquire/submit/present 仍在 `IRenderSurfaceContext::begin/end` 里（AB4-2f）。
+   - acquire/submit/present 曾在 `IRenderSurfaceContext::begin/end` 里；**AB4-2f step 1（已落地 2026-09-24）
+     把它拆成 `begin` / `submit` / `present`**，并把帧的完成 fence 从窗口搬到设备。见下。
+
+   AB4-2f step 1（已落地 2026-09-24）：**帧的完成属于帧，提交与呈现分家**。
+   - `IRender::submitFrame(cmdBufs, waits, signals)`：一次帧提交的入口。设备在帧内第一次调用时
+     重新武装自己的 frame fence，之后同帧的提交共同引用它（spec：所有引用它的提交完成时 fence 才 signal）。
+     帧内不提交也合法——fence 保持 signaled，下一帧的 wait 直接通过，不会吊死。
+   - `IRender::beginRecordedFrame()`：等待本帧 slot 的 fence（上一轮用该 slot 的帧），再推进 generation
+     与 deferred deletion。**它必须早于本帧任何 acquire**，因为 acquire 复用上一帧提交等待过的
+     image-available semaphore——GameRuntime 的顺序因此改为 `beginRecordedFrame → acquire → record → submit`。
+   - `IRenderSurfaceContext`：`end(imageIndex, cmdBufs)` → `submit(imageIndex, cmdBufs)` +
+     `present(imageIndex)`；窗口不再有 frame fence（`getCurrentFrameFence()` 删除），`begin()` 只做
+     “应用 pending recreate + acquire”，`waitInFlight()` 只等本窗口的 present-complete。
+   - GUI 两条线也参与帧簿记：`GUIWindowHost::onTick`（单窗）与 `GUIApp::onTick`（多窗）各调用一次
+     `beginRecordedFrame`，且都在任何 present 之前；tick/present 两半不重复调用。
+   - `VulkanSwapChain::acquireNextImage` 去掉 fence 形参（原先的 wait+reset 只是把窗口那个 fence 兜住）。
+
+   意义：`一个 tick = 一个 generation + 一个 fence + N 个 surface 的 acquire/present`，且“没有可呈现窗口
+   的帧”第一次成为合法帧（offscreen-only / 全最小化）。这解开了 AB4-2d 的最后一道锁——
+   “每个 View 只录一次、按 surface 组合”不再需要某个窗口冒充帧的 owner。
 
    AB4-2b step 1b（已落地 2026-09-24）：per-surface 的 GPU 状态也按身份归位。
    `SurfacePresentation` 记录 `SurfaceId`；`RenderDeviceState::acquireSurfacePresentation(id, surface)`
@@ -344,11 +363,14 @@ AB4-step2（待做）不是一个改动，而是以下有依赖关系的闭环�
    仍以指针为入参的两个查询（`getPresentationImageShared`、`buildRenderTargetCatalog`）改成先解析 id
    再查表，设备无法为其命名（未初始化 / 测试 stand-in）时返回空而不是猜。
 
-   证据：`ya-rhi-vulkan-smoke` 8 passed / 1 skipped（platform minimize guard），新增
-   `RHISurfaceContext.AReleasedSurfaceIdDoesNotResolveToTheNextTenantOfItsSlot` 与
-   `RHISurfaceContext.StartupWindowsAndLaterWindowsAreRegisteredAlike`；`ya-testing` 1319 tests /
-   1318 passed / 1 skipped（同一 platform guard）/ 0 failed；GUIWorkbench `--smoke-actions` PASS；
-   parity 两张图 md5 仍 `c775245ae636f15b41da8485319a2267`；editor smoke exit=0。
+   证据（AB4-2b step 1 + 1b + AB4-2f step 1 合计）：`ya-rhi-vulkan-smoke` 9 passed / 1 skipped
+   （platform minimize guard），新增 `RHISurfaceContext.AReleasedSurfaceIdDoesNotResolveToTheNextTenantOfItsSlot`、
+   `RHISurfaceContext.StartupWindowsAndLaterWindowsAreRegisteredAlike`、
+   `RHISurfaceContext.OneFrameCanPresentSeveralWindows`；`FrameBookkeepingBelongsToTheFrameNotAWindow`
+   改写为「同一帧呈现两窗只推进一次」并覆盖「无提交的帧不吊死」「offscreen-only 帧合法」；
+   `ya-testing` 1321 tests / 1320 passed / 1 skipped（同一 platform guard）/ 0 failed；
+   GUIWorkbench `--smoke-actions` exit=0 且无 VMA leak；parity 两张图 md5 仍
+   `c775245ae636f15b41da8485319a2267`；editor smoke exit=0。
 2. **AB4-2c：GUI 所有窗口成为同级 session（step 1 已落地 2026-09-24）。**
 
    已落地：`IGUIWindowSession` 从 `GUIWindowSession.h` 拆到自己的头，`GUIWindowHost` 直接实现它——

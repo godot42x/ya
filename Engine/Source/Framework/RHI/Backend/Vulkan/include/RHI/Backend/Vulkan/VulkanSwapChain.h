@@ -76,7 +76,10 @@ struct YA_RHI_BACKEND_API VulkanSwapChain : public ISwapchain
     void cleanup();
 
     // Swap chain operations
-    VkResult acquireNextImage(::VkSemaphore semaphore, ::VkFence fence, uint32_t &outImageIndex);
+    /// Acquire the next presentable image, signalling `semaphore` when it is
+    /// free to be written. There is no fence parameter: the caller awaiting the
+    /// acquire is the frame (`IRender::beginRecordedFrame`), not this window.
+    VkResult acquireNextImage(::VkSemaphore semaphore, uint32_t &outImageIndex);
     VkResult presentImage(uint32_t imageIndex, std::vector<::VkSemaphore> semaphores);
 
   private:

@@ -7,6 +7,8 @@
 
 #include <gtest/gtest.h>
 #include <memory>
+#include <span>
+#include <vector>
 
 namespace ya
 {
@@ -26,16 +28,36 @@ bool createTestWindow(SDLNativeWindow& window, const char* title, uint32_t width
     });
 }
 
-bool presentOneFrame(IRenderSurfaceContext& surface)
+/// One frame that presents `surfaces`, spelled the way a real frame is: the
+/// device opens the frame (waiting the previous frame's GPU work), each surface
+/// acquires, each submits, each presents.
+bool presentOneFrame(IRender& render, std::span<IRenderSurfaceContext*> surfaces)
 {
-    int32_t imageIndex = -1;
-    if (!surface.begin(&imageIndex)) {
-        return false;
+    render.beginRecordedFrame();
+
+    std::vector<int32_t> imageIndex(surfaces.size(), -1);
+    for (size_t i = 0; i < surfaces.size(); ++i) {
+        if (!surfaces[i]->begin(&imageIndex[i])) {
+            return false;
+        }
     }
-    if (imageIndex < 0) {
-        return true;
+    for (size_t i = 0; i < surfaces.size(); ++i) {
+        if (imageIndex[i] >= 0 && !surfaces[i]->submit(imageIndex[i], {})) {
+            return false;
+        }
     }
-    return surface.end(imageIndex, {});
+    for (size_t i = 0; i < surfaces.size(); ++i) {
+        if (imageIndex[i] >= 0 && !surfaces[i]->present(imageIndex[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool presentOneFrame(IRender& render, IRenderSurfaceContext& surface)
+{
+    IRenderSurfaceContext* one[] = {&surface};
+    return presentOneFrame(render, std::span<IRenderSurfaceContext*>(one));
 }
 
 /// One presentable size with readback enabled: what every case here presents.
@@ -95,12 +117,70 @@ TEST(RHISurfaceContext, FrameBookkeepingBelongsToTheFrameNotAWindow)
     render->beginRecordedFrame();
     EXPECT_EQ(render->recordedFrameIndex(), 2u);
 
-    // And presenting a window does NOT advance it: no surface owns the frame.
+    // Presenting a window advances the generation exactly once -- by opening the
+    // frame, not by presenting. Two presents in one frame are one frame.
     auto* startup = render->findSurface(window);
     ASSERT_NE(startup, nullptr);
-    const uint64_t beforePresent = render->recordedFrameIndex();
-    ASSERT_TRUE(presentOneFrame(*startup));
-    EXPECT_EQ(render->recordedFrameIndex(), beforePresent);
+    const uint64_t beforeFrame = render->recordedFrameIndex();
+    ASSERT_TRUE(presentOneFrame(*render, *startup));
+    EXPECT_EQ(render->recordedFrameIndex(), beforeFrame + 1);
+
+    // Submitting is what arms the fence, so a frame that submits nothing leaves
+    // it signaled instead of leaving the next frame to hang on it. Two idle
+    // frames still advance and still wait cleanly.
+    render->beginRecordedFrame();
+    render->beginRecordedFrame();
+    EXPECT_EQ(render->recordedFrameIndex(), beforeFrame + 3);
+
+    // And an offscreen-only frame -- submitted work, no window presented -- is a
+    // legal frame: the fence is the device's, so it needs no surface to hang on.
+    render->beginRecordedFrame();
+    ASSERT_TRUE(render->submitFrame({}, {}, {}));
+    render->beginRecordedFrame();
+    EXPECT_EQ(render->recordedFrameIndex(), beforeFrame + 5);
+
+    render->waitIdle();
+    render->destroy();
+    delete render;
+}
+
+/// One frame, several windows.
+///
+/// This is what the split is for: each window acquires its own image and
+/// presents it, but they are one FRAME -- one generation advance, one fence that
+/// the next frame waits. A frame that presented a window per generation would
+/// make "how many frames ran" depend on how many windows are open.
+TEST(RHISurfaceContext, OneFrameCanPresentSeveralWindows)
+{
+    SDLNativeWindow startupWindow;
+    SDLNativeWindow extraWindow;
+    if (!createTestWindow(startupWindow, "MW-213-A", 160, 120) ||
+        !createTestWindow(extraWindow, "MW-213-B", 200, 150)) {
+        GTEST_SKIP() << "SDL native window create failed";
+    }
+
+    const RenderCreateInfo renderCI = testRenderCI(startupWindow, 160, 120);
+    IRender*               render   = IRender::create(renderCI);
+    ASSERT_NE(render, nullptr);
+    ASSERT_TRUE(render->init(renderCI));
+
+    const SurfaceId extraId = render->createSurfaceContext(extraWindow, testSurfaceDesc(200, 150));
+    ASSERT_TRUE(extraId.valid());
+    IRenderSurfaceContext* startup = render->findSurface(startupWindow);
+    IRenderSurfaceContext* extra   = render->findSurface(extraId);
+    ASSERT_NE(startup, nullptr);
+    ASSERT_NE(extra, nullptr);
+
+    IRenderSurfaceContext* pair[] = {startup, extra};
+    constexpr int          kFrames = 4;
+    for (int frame = 0; frame < kFrames; ++frame) {
+        ASSERT_TRUE(presentOneFrame(*render, std::span<IRenderSurfaceContext*>(pair)))
+            << "frame " << frame;
+    }
+
+    // Two windows presented per frame, and the generation moved once per frame:
+    // a window does not own "a frame", the frame does.
+    EXPECT_EQ(render->recordedFrameIndex(), static_cast<uint64_t>(kFrames));
 
     render->waitIdle();
     render->destroy();
@@ -130,8 +210,11 @@ TEST(RHISurfaceContext, ExtraWindowAcquireSubmitPresentIndependentOfStartupWindo
     auto* startup = render->findSurface(startupWindow);
     ASSERT_NE(startup, nullptr);
     ASSERT_NE(startup->getSwapchain(), extra->getSwapchain());
-    EXPECT_NE(startup->getCurrentFrameFence(), nullptr);
+    // A window supplies its own acquire/present sync. The frame's completion
+    // fence is the device's now, which is why there is no per-window one left to
+    // ask for.
     EXPECT_NE(startup->getCurrentImageAvailableSemaphore(), nullptr);
+    EXPECT_NE(startup->getRenderFinishedSemaphore(0), nullptr);
     EXPECT_NE(startup->getSwapchain(), nullptr);
     EXPECT_EQ(extra->getNativeWindow(), &extraWindow);
     EXPECT_EQ(startup->getNativeWindow(), &startupWindow);
@@ -143,13 +226,13 @@ TEST(RHISurfaceContext, ExtraWindowAcquireSubmitPresentIndependentOfStartupWindo
     EXPECT_EQ(render->findSurface(render->findSurfaceId(extraWindow)), extra);
 
     for (int frame = 0; frame < 3; ++frame) {
-        ASSERT_TRUE(presentOneFrame(*startup));
-        ASSERT_TRUE(presentOneFrame(*extra));
+        ASSERT_TRUE(presentOneFrame(*render, *startup));
+        ASSERT_TRUE(presentOneFrame(*render, *extra));
     }
 
     ASSERT_TRUE(render->destroySurfaceContext(extraId));
 
-    ASSERT_TRUE(presentOneFrame(*startup));
+    ASSERT_TRUE(presentOneFrame(*render, *startup));
 
     render->waitIdle();
     render->destroy();
@@ -235,8 +318,8 @@ TEST(RHISurfaceContext, StartupWindowsAndLaterWindowsAreRegisteredAlike)
     EXPECT_NE(first->getSwapchain(), second->getSwapchain());
     EXPECT_TRUE(first->isPresentable());
     EXPECT_TRUE(second->isPresentable());
-    EXPECT_TRUE(presentOneFrame(*first));
-    EXPECT_TRUE(presentOneFrame(*second));
+    EXPECT_TRUE(presentOneFrame(*render, *first));
+    EXPECT_TRUE(presentOneFrame(*render, *second));
 
     render->waitIdle();
     render->destroy();
@@ -264,19 +347,19 @@ TEST(RHISurfaceContext, ExtraWindowResizeAndCloseDoesNotDeviceWaitIdleStartupWin
     auto* startup = render->findSurface(startupWindow);
     ASSERT_NE(startup, nullptr);
 
-    ASSERT_TRUE(presentOneFrame(*startup));
-    ASSERT_TRUE(presentOneFrame(*extra));
+    ASSERT_TRUE(presentOneFrame(*render, *startup));
+    ASSERT_TRUE(presentOneFrame(*render, *extra));
 
     ASSERT_TRUE(extraWindow.setWindowSize(240, 180));
     extra->requestRecreate();
 
-    ASSERT_TRUE(presentOneFrame(*startup));
-    ASSERT_TRUE(presentOneFrame(*extra));
-    ASSERT_TRUE(presentOneFrame(*startup));
-    ASSERT_TRUE(presentOneFrame(*extra));
+    ASSERT_TRUE(presentOneFrame(*render, *startup));
+    ASSERT_TRUE(presentOneFrame(*render, *extra));
+    ASSERT_TRUE(presentOneFrame(*render, *startup));
+    ASSERT_TRUE(presentOneFrame(*render, *extra));
 
     ASSERT_TRUE(render->destroySurfaceContext(extraId));
-    ASSERT_TRUE(presentOneFrame(*startup));
+    ASSERT_TRUE(presentOneFrame(*render, *startup));
 
     render->waitIdle();
     render->destroy();
@@ -307,8 +390,8 @@ TEST(RHISurfaceContext, ExtraWindowPresentResizeCloseSoak)
 
     constexpr int kFrames = 32;
     for (int frame = 0; frame < kFrames; ++frame) {
-        ASSERT_TRUE(presentOneFrame(*startup)) << "startup frame " << frame;
-        ASSERT_TRUE(presentOneFrame(*extra)) << "extra frame " << frame;
+        ASSERT_TRUE(presentOneFrame(*render, *startup)) << "startup frame " << frame;
+        ASSERT_TRUE(presentOneFrame(*render, *extra)) << "extra frame " << frame;
         if (frame == 8) {
             ASSERT_TRUE(extraWindow.setWindowSize(240, 180));
             extra->requestRecreate();
@@ -321,7 +404,7 @@ TEST(RHISurfaceContext, ExtraWindowPresentResizeCloseSoak)
 
     ASSERT_TRUE(render->destroySurfaceContext(extraId));
     for (int frame = 0; frame < 8; ++frame) {
-        ASSERT_TRUE(presentOneFrame(*startup)) << "startup after extra close " << frame;
+        ASSERT_TRUE(presentOneFrame(*render, *startup)) << "startup after extra close " << frame;
     }
 
     render->waitIdle();
@@ -352,8 +435,8 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockStartupWindowPresent
     EXPECT_TRUE(startup->isPresentable());
     EXPECT_TRUE(extra->isPresentable());
 
-    ASSERT_TRUE(presentOneFrame(*startup));
-    ASSERT_TRUE(presentOneFrame(*extra));
+    ASSERT_TRUE(presentOneFrame(*render, *startup));
+    ASSERT_TRUE(presentOneFrame(*render, *extra));
 
     // This guard needs the platform to actually drive the minimize/restore
     // transition, and it says so up front instead of asserting half of it: in
@@ -370,27 +453,30 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockStartupWindowPresent
 
     extra->requestRecreate();
 
-    ASSERT_TRUE(presentOneFrame(*startup));
+    ASSERT_TRUE(presentOneFrame(*render, *startup));
 
     int32_t extraImage = -1;
     ASSERT_TRUE(extra->begin(&extraImage));
     EXPECT_LT(extraImage, 0);
     EXPECT_FALSE(extra->isPresentable());
-    ASSERT_TRUE(extra->end(extraImage, {}));
+    // Unpresentable: submit and present are both no-ops for it, which is what
+    // keeps one minimized window from stopping the other's frame.
+    ASSERT_TRUE(extra->submit(extraImage, {}));
+    ASSERT_TRUE(extra->present(extraImage));
 
-    ASSERT_TRUE(presentOneFrame(*startup));
+    ASSERT_TRUE(presentOneFrame(*render, *startup));
 
     ASSERT_TRUE(extraWindow.restoreFromMinimize());
     extra->requestRecreate();
-    ASSERT_TRUE(presentOneFrame(*extra));
+    ASSERT_TRUE(presentOneFrame(*render, *extra));
     if (extraWindow.isMinimized()) {
         GTEST_SKIP() << "platform kept the minimized flag after restore";
     }
     ASSERT_TRUE(extra->isPresentable());
-    ASSERT_TRUE(presentOneFrame(*startup));
+    ASSERT_TRUE(presentOneFrame(*render, *startup));
 
     ASSERT_TRUE(render->destroySurfaceContext(extraId));
-    ASSERT_TRUE(presentOneFrame(*startup));
+    ASSERT_TRUE(presentOneFrame(*render, *startup));
 
     render->waitIdle();
     render->destroy();

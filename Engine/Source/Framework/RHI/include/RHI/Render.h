@@ -110,6 +110,29 @@ struct YA_RHI_API IRender : public plat_base<IRender>
     /// not by any window.
     [[nodiscard]] virtual uint32_t framesInFlight() const { return kFramesInFlight; }
 
+    /// Hand this frame's GPU work to the device: one or more command buffers,
+    /// the semaphores to wait before running them (each presenting surface's
+    /// acquired image) and the semaphores to signal when they are done (each
+    /// presenting surface's render-finished). The device arms its own frame
+    /// fence on the first call of a frame and signals it when all such work
+    /// completes, so a frame may be submitted once or several times without any
+    /// window owning "the" completion.
+    ///
+    /// A frame that submits nothing is legal and costs nothing: the slot's
+    /// fence stays signaled, so the next frame's wait passes instead of hanging
+    /// on a fence nobody was going to signal. That is what lets a frame record
+    /// offscreen work, or skip recording entirely, without inventing a window to
+    /// hang the frame's completion on.
+    virtual bool submitFrame(const std::vector<void*>& cmdBufs,
+                             const std::vector<void*>& waitSemaphores,
+                             const std::vector<void*>& signalSemaphores)
+    {
+        (void)cmdBufs;
+        (void)waitSemaphores;
+        (void)signalSemaphores;
+        return false;
+    }
+
     /// Register one more presentable OS window on this device: creates that
     /// window's surface, swapchain and acquire/present sync, and returns the id
     /// that names it from now on. An invalid id means the window cannot be

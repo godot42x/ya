@@ -24,8 +24,8 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
 
     std::unique_ptr<VulkanSwapChain> _swapChain;
 
-    /// This surface's acquire/flight ring depth == the device's frames in
-    /// flight: the device owns how many frames may overlap, a window does not.
+    /// This surface's acquire ring depth == the device's frames in flight: the
+    /// device owns how many frames may overlap, a window does not.
     static constexpr uint32_t flightFrameSize = kFramesInFlight;
     /// Empty submit after present, so recreate/destroy can wait THIS
     /// surface's last present without `vkQueueWaitIdle` on the shared queue.
@@ -33,7 +33,6 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
     uint32_t                  currentFrameIdx = 0;
     uint32_t                  presentCompleteFenceIdx = 0;
     std::vector<VkSemaphore>  frameImageAvailableSemaphores;
-    std::vector<VkFence>      frameFences;
     std::vector<VkFence>      presentCompleteFences;
     std::vector<VkSemaphore>  imageSubmittedSignalSemaphores;
     std::shared_ptr<ICommandBuffer> _scratchPresentCmd;
@@ -53,15 +52,13 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
                                            const SwapchainCreateInfo& swapchainCI);
 
     void waitInFlight() override;
-    void waitInFlightFence();
-    void waitAllGraphicsFences();
     void waitAllPresentCompleteFences();
-    void resetInFlightFence();
     void signalPresentComplete();
-    void resignalCurrentFence();
     [[nodiscard]] bool prepareSwapchainForAcquire();
     [[nodiscard]] bool acquire(int32_t* imageIndex);
-    [[nodiscard]] bool submitAndPresent(int32_t imageIndex, std::vector<void*> commandBuffers, bool bScratchIfEmpty);
+    /// The present-layout barrier a surface with no commands still needs, so an
+    /// acquired image is legal to present.
+    [[nodiscard]] void* presentBarrierCommand(uint32_t imageIndex);
     void               advanceFrame() { currentFrameIdx = (currentFrameIdx + 1) % flightFrameSize; }
 
     [[nodiscard]] INativeWindow* getNativeWindow() const override { return _window; }
@@ -73,11 +70,11 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
     [[nodiscard]] bool           isPresentable() const override;
 
     bool begin(int32_t* imageIndex) override;
-    bool end(int32_t imageIndex, std::vector<void*> commandBuffers) override;
+    bool submit(int32_t imageIndex, std::vector<void*> commandBuffers) override;
+    bool present(int32_t imageIndex) override;
     void requestRecreate() override;
 
     [[nodiscard]] void*    getCurrentImageAvailableSemaphore() override;
-    [[nodiscard]] void*    getCurrentFrameFence() override;
     [[nodiscard]] void*    getRenderFinishedSemaphore(uint32_t imageIndex) override;
 
   private:

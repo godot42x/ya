@@ -159,7 +159,6 @@ void VulkanRenderSurfaceContext::createSyncResources(uint32_t swapchainImageCoun
 
     imageSubmittedSignalSemaphores.resize(swapchainImageCount);
     frameImageAvailableSemaphores.resize(flightFrameSize);
-    frameFences.resize(flightFrameSize);
     presentCompleteFences.resize(presentCompleteFenceCount);
     presentCompleteFenceIdx = 0;
 
@@ -171,24 +170,19 @@ void VulkanRenderSurfaceContext::createSyncResources(uint32_t swapchainImageCoun
                                     std::format("{}_RenderFinishedSemaphore_{}", _debugLabel, i).c_str());
     }
 
-    VkFenceCreateInfo fenceInfo{
-        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
-    };
     for (uint32_t i = 0; i < flightFrameSize; ++i) {
         VkResult ret = vkCreateSemaphore(_render->getDevice(), &semaphoreInfo, nullptr, &frameImageAvailableSemaphores[i]);
         YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create {} image-available semaphore", _debugLabel);
-        ret = vkCreateFence(_render->getDevice(), &fenceInfo, nullptr, &frameFences[i]);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create {} frame fence", _debugLabel);
-        _render->setDebugObjectName(VK_OBJECT_TYPE_FENCE,
-                                    frameFences[i],
-                                    std::format("{}_FrameFence_{}", _debugLabel, i).c_str());
         _render->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
                                     frameImageAvailableSemaphores[i],
                                     std::format("{}_ImageAvailableSemaphore_{}", _debugLabel, i).c_str());
     }
 
+    VkFenceCreateInfo fenceInfo{
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
     for (uint32_t i = 0; i < presentCompleteFenceCount; ++i) {
         const VkResult ret = vkCreateFence(_render->getDevice(), &fenceInfo, nullptr, &presentCompleteFences[i]);
         YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create {} present-complete fence", _debugLabel);
@@ -202,7 +196,6 @@ void VulkanRenderSurfaceContext::releaseSyncResources()
 {
     if (!_render || _render->getDevice() == VK_NULL_HANDLE) {
         frameImageAvailableSemaphores.clear();
-        frameFences.clear();
         presentCompleteFences.clear();
         imageSubmittedSignalSemaphores.clear();
         return;
@@ -211,9 +204,6 @@ void VulkanRenderSurfaceContext::releaseSyncResources()
     for (VkSemaphore semaphore : frameImageAvailableSemaphores) {
         vkDestroySemaphore(_render->getDevice(), semaphore, _render->getAllocator());
     }
-    for (VkFence fence : frameFences) {
-        vkDestroyFence(_render->getDevice(), fence, _render->getAllocator());
-    }
     for (VkFence fence : presentCompleteFences) {
         vkDestroyFence(_render->getDevice(), fence, _render->getAllocator());
     }
@@ -221,7 +211,6 @@ void VulkanRenderSurfaceContext::releaseSyncResources()
         vkDestroySemaphore(_render->getDevice(), semaphore, _render->getAllocator());
     }
     frameImageAvailableSemaphores.clear();
-    frameFences.clear();
     presentCompleteFences.clear();
     imageSubmittedSignalSemaphores.clear();
 }
@@ -315,20 +304,6 @@ void VulkanRenderSurfaceContext::recordPresentBarrier(VkCommandBuffer commandBuf
         &barrier);
 }
 
-void VulkanRenderSurfaceContext::waitAllGraphicsFences()
-{
-    if (frameFences.empty()) {
-        return;
-    }
-    YA_PERF_SCOPE(perf::sample::vulkanWaitFence(), perf::metric::cpuTimeMs(), perf::domain::render());
-    YA_PROFILE_SCOPE("vkWaitFence1");
-    VK_CALL(vkWaitForFences(_render->getDevice(),
-                            static_cast<uint32_t>(frameFences.size()),
-                            frameFences.data(),
-                            VK_TRUE,
-                            kFenceTimeout));
-}
-
 void VulkanRenderSurfaceContext::waitAllPresentCompleteFences()
 {
     if (presentCompleteFences.empty()) {
@@ -341,20 +316,12 @@ void VulkanRenderSurfaceContext::waitAllPresentCompleteFences()
                             kFenceTimeout));
 }
 
-void VulkanRenderSurfaceContext::waitInFlightFence()
-{
-    waitAllGraphicsFences();
-}
-
 void VulkanRenderSurfaceContext::waitInFlight()
 {
-    waitAllGraphicsFences();
+    // The frame's own completion is the device's now (IRender::beginRecordedFrame
+    // waits it). What is specific to THIS window is its presentation: this waits
+    // for that, which is what a recreate or a destroy needs.
     waitAllPresentCompleteFences();
-}
-
-void VulkanRenderSurfaceContext::resetInFlightFence()
-{
-    VK_CALL(vkResetFences(_render->getDevice(), 1, &frameFences[currentFrameIdx]));
 }
 
 void VulkanRenderSurfaceContext::signalPresentComplete()
@@ -372,18 +339,6 @@ void VulkanRenderSurfaceContext::signalPresentComplete()
         {},
         fence);
     presentCompleteFenceIdx = (presentCompleteFenceIdx + 1) % presentCompleteFenceCount;
-}
-
-void VulkanRenderSurfaceContext::resignalCurrentFence()
-{
-    if (frameFences.empty() || _render->getGraphicsQueues().empty()) {
-        return;
-    }
-    _render->getGraphicsQueues()[0].submit(
-        std::vector<VkCommandBuffer>{},
-        {},
-        {},
-        frameFences[currentFrameIdx]);
 }
 
 bool VulkanRenderSurfaceContext::prepareSwapchainForAcquire()
@@ -417,10 +372,7 @@ bool VulkanRenderSurfaceContext::acquire(int32_t* outImageIndex)
     {
         YA_PERF_SCOPE(perf::sample::vulkanAcquire(), perf::metric::cpuTimeMs(), perf::domain::render());
         YA_PROFILE_SCOPE("acquireNextImage");
-        ret = _swapChain->acquireNextImage(
-            frameImageAvailableSemaphores[currentFrameIdx],
-            frameFences[currentFrameIdx],
-            imageIndex);
+        ret = _swapChain->acquireNextImage(frameImageAvailableSemaphores[currentFrameIdx], imageIndex);
     }
 
     if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -431,24 +383,18 @@ bool VulkanRenderSurfaceContext::acquire(int32_t* outImageIndex)
             return false;
         }
         if (_swapChain->getImageCount() == 0) {
-            resignalCurrentFence();
             *outImageIndex = -1;
             return true;
         }
         if (_swapChain->getImageCount() != imageSubmittedSignalSemaphores.size()) {
             createSyncResources(_swapChain->getImageCount());
         }
-        VK_CALL(vkResetFences(_render->getDevice(), 1, &frameFences[currentFrameIdx]));
         {
             YA_PERF_SCOPE(perf::sample::vulkanAcquire(), perf::metric::cpuTimeMs(), perf::domain::render());
-            ret = _swapChain->acquireNextImage(
-                frameImageAvailableSemaphores[currentFrameIdx],
-                frameFences[currentFrameIdx],
-                imageIndex);
+            ret = _swapChain->acquireNextImage(frameImageAvailableSemaphores[currentFrameIdx], imageIndex);
         }
         if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
             YA_CORE_ERROR("{}: failed to acquire after recreate: {}", _debugLabel, static_cast<int32_t>(ret));
-            resignalCurrentFence();
             return false;
         }
         YA_CORE_ASSERT(imageIndex < _swapChain->getImageSize(),
@@ -458,7 +404,6 @@ bool VulkanRenderSurfaceContext::acquire(int32_t* outImageIndex)
     }
     else if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
         YA_CORE_ERROR("{}: acquire failed: {}", _debugLabel, static_cast<int32_t>(ret));
-        resignalCurrentFence();
         return false;
     }
 
@@ -490,8 +435,6 @@ void VulkanRenderSurfaceContext::requestRecreate()
 bool VulkanRenderSurfaceContext::begin(int32_t* outImageIndex)
 {
     YA_PROFILE_FUNCTION();
-    waitAllGraphicsFences();
-
     YA_CORE_ASSERT(outImageIndex, "begin requires an image index out-parameter");
     if (!isPresentable()) {
         *outImageIndex = -1;
@@ -505,11 +448,31 @@ bool VulkanRenderSurfaceContext::begin(int32_t* outImageIndex)
         *outImageIndex = -1;
         return true;
     }
-    resetInFlightFence();
+    // No fence work here: this window's own in-flight state is presentation
+    // (waited by `waitInFlight`) and the frame's completion is the device's, so
+    // this is only "apply pending recreate, acquire this window's next image".
     return acquire(outImageIndex);
 }
 
-bool VulkanRenderSurfaceContext::submitAndPresent(int32_t imageIndex, std::vector<void*> commandBuffers, bool bScratchIfEmpty)
+void* VulkanRenderSurfaceContext::presentBarrierCommand(uint32_t imageIndex)
+{
+    if (!_scratchPresentCmd) {
+        std::vector<std::shared_ptr<ICommandBuffer>> buffers;
+        _render->allocateCommandBuffers(1, buffers);
+        _scratchPresentCmd = buffers.empty() ? nullptr : buffers.front();
+    }
+    if (!_scratchPresentCmd) {
+        YA_CORE_ERROR("{}: failed to allocate present command buffer", _debugLabel);
+        return nullptr;
+    }
+    _scratchPresentCmd->reset();
+    _scratchPresentCmd->begin(false);
+    recordPresentBarrier(_scratchPresentCmd->getHandleAs<VkCommandBuffer>(), imageIndex);
+    _scratchPresentCmd->end();
+    return _scratchPresentCmd->getHandleAs<VkCommandBuffer>();
+}
+
+bool VulkanRenderSurfaceContext::submit(int32_t imageIndex, std::vector<void*> commandBuffers)
 {
     YA_PROFILE_FUNCTION();
     if (imageIndex < 0) {
@@ -517,29 +480,29 @@ bool VulkanRenderSurfaceContext::submitAndPresent(int32_t imageIndex, std::vecto
     }
 
     std::vector<void*> submits = std::move(commandBuffers);
-    if (submits.empty() && bScratchIfEmpty) {
-        if (!_scratchPresentCmd) {
-            std::vector<std::shared_ptr<ICommandBuffer>> buffers;
-            _render->allocateCommandBuffers(1, buffers);
-            _scratchPresentCmd = buffers.empty() ? nullptr : buffers.front();
-        }
-        if (!_scratchPresentCmd) {
-            YA_CORE_ERROR("{}: failed to allocate present command buffer", _debugLabel);
+    if (submits.empty()) {
+        // An acquired image must be legal to present even when nothing filled
+        // it, which is the barrier's whole job.
+        void* barrier = presentBarrierCommand(static_cast<uint32_t>(imageIndex));
+        if (!barrier) {
             return false;
         }
-        _scratchPresentCmd->reset();
-        _scratchPresentCmd->begin(false);
-        recordPresentBarrier(_scratchPresentCmd->getHandleAs<VkCommandBuffer>(), static_cast<uint32_t>(imageIndex));
-        _scratchPresentCmd->end();
-        submits.push_back(_scratchPresentCmd->getHandleAs<VkCommandBuffer>());
+        submits.push_back(barrier);
     }
 
-    if (!submits.empty()) {
-        _render->submitToQueue(
-            submits,
-            {frameImageAvailableSemaphores[currentFrameIdx]},
-            {imageSubmittedSignalSemaphores[static_cast<uint32_t>(imageIndex)]},
-            frameFences[currentFrameIdx]);
+    // This window contributes its own acquire/present sync; the frame's fence is
+    // the device's, so several windows can be submitted under one frame.
+    return _render->submitFrame(
+        submits,
+        {frameImageAvailableSemaphores[currentFrameIdx]},
+        {imageSubmittedSignalSemaphores[static_cast<uint32_t>(imageIndex)]});
+}
+
+bool VulkanRenderSurfaceContext::present(int32_t imageIndex)
+{
+    YA_PROFILE_FUNCTION();
+    if (imageIndex < 0) {
+        return true;
     }
 
     int result = VK_SUCCESS;
@@ -565,19 +528,9 @@ bool VulkanRenderSurfaceContext::submitAndPresent(int32_t imageIndex, std::vecto
     return true;
 }
 
-bool VulkanRenderSurfaceContext::end(int32_t imageIndex, std::vector<void*> commandBuffers)
-{
-    return submitAndPresent(imageIndex, std::move(commandBuffers), true);
-}
-
 void* VulkanRenderSurfaceContext::getCurrentImageAvailableSemaphore()
 {
     return frameImageAvailableSemaphores[currentFrameIdx];
-}
-
-void* VulkanRenderSurfaceContext::getCurrentFrameFence()
-{
-    return frameFences[currentFrameIdx];
 }
 
 void* VulkanRenderSurfaceContext::getRenderFinishedSemaphore(uint32_t imageIndex)

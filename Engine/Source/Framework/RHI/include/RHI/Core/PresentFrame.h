@@ -31,8 +31,14 @@ struct FPresentFrame
     return frame.surface->begin(&frame.imageIndex);
 }
 
-/// Submit recorded command buffers and present this surface. Empty command
-/// list still legalizes an acquired image. `imageIndex < 0` is a no-op end.
+/// Submit `commandBuffers` as the work that fills the acquired image, then
+/// present it. Empty command list still legalizes an acquired image, and
+/// `imageIndex < 0` is a no-op for both steps.
+///
+/// The two steps are separate on the surface (`submit` / `present`) because a
+/// frame may present more than one window: one submission can carry several
+/// surfaces' work, and each surface presents its own image after it. This
+/// helper is the single-window spelling of that pair.
 inline bool submitPresentFrame(FPresentFrame& frame, std::vector<void*> commandBuffers)
 {
     if (!frame.surface) {
@@ -40,7 +46,8 @@ inline bool submitPresentFrame(FPresentFrame& frame, std::vector<void*> commandB
     }
     const int32_t imageIndex = frame.imageIndex;
     frame.imageIndex         = -1;
-    return frame.surface->end(imageIndex, std::move(commandBuffers));
+    return frame.surface->submit(imageIndex, std::move(commandBuffers)) &&
+           frame.surface->present(imageIndex);
 }
 
 } // namespace ya

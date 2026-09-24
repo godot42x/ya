@@ -1126,6 +1126,15 @@ void GUIWindowHost::onTick(float dt)
     // One window's frame is exactly its content and its presentation (see the
     // header): an app with several windows calls the two halves separately, so
     // no window is presented before every window has ticked.
+    //
+    // The frame begins here too: this is the one place a single-window host
+    // records a frame, so it is where the frame's GPU work is retired and its
+    // flight slot freed. A GUI app that drives several windows through
+    // `tickContent`/`presentSnapshot` calls this once for the whole frame (see
+    // `GUIApp::onTick`) instead.
+    if (_impl->render) {
+        _impl->render->beginRecordedFrame();
+    }
     tickContent(dt);
     presentSnapshot();
 }
@@ -1938,6 +1947,12 @@ void GUIApp::onEvent(const Event& event)
 void GUIApp::onTick(float dt)
 {
     applyDeferredCloses();
+    // One frame for every window: the frame's bookkeeping runs once, before any
+    // window acquires or presents, and no window runs it again (the per-window
+    // halves below deliberately do not, see GUIWindowHost::tickContent).
+    if (IRender* render = _primaryWindow.isInitialized() ? _primaryWindow.getRender() : nullptr) {
+        render->beginRecordedFrame();
+    }
     // Every window's content is ticked and snapshotted before any window
     // presents: presenting window A first would leave window B's chrome a frame
     // stale, and a window torn off in this frame would show a tree that was

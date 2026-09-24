@@ -373,20 +373,24 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 
     IRender*       render        = device->getRender();
     FPresentFrame  presentFrame{.surface = app.getRenderServices().getHostSurface()};
+
+    // Frame bookkeeping first, acquire second. The wait that retires the
+    // previous frame's GPU work (and frees the flight slot, the transient
+    // buffers and this window's acquire semaphore for reuse) is the DEVICE's,
+    // and it has to happen before this frame starts acquiring images -- the
+    // acquire reuses the semaphore the previous frame's submission waited on.
+    // It runs on every frame the app reaches this point, including one whose
+    // surface is unpresentable (minimized) or whose acquire fails: that is
+    // exactly the frame where nothing else would retire the resources this tick
+    // drops.
+    if (render) {
+        render->beginRecordedFrame();
+    }
+
     bool           bAcquireAttempted = false;
     {
         YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());
         bAcquireAttempted = acquirePresentFrame(presentFrame);
-    }
-    // Frame bookkeeping is the device's, not a window's: acquiring above is
-    // what waited this surface's in-flight fences, and the counter, the GPU
-    // timestamp readback and the deferred-deletion flush all belong to "this
-    // frame" rather than to whichever swapchain happened to present. It runs on
-    // every frame the app reaches this point -- including one whose surface is
-    // unpresentable (minimized) or whose acquire failed, which is exactly the
-    // frame where nothing else would retire the resources this tick drops.
-    if (render) {
-        render->beginRecordedFrame();
     }
     if (!bAcquireAttempted) {
         app.presentModuleExtras(dt);

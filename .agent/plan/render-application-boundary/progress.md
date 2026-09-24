@@ -920,3 +920,61 @@ present target 不再留在表里。这是 step 1a 引入 `SurfaceId` 后立刻�
   才能看到 present；本批只钉住了 registry（id 查找 / 遍历 / 关闭后消失）。产品级证据是 workbench smoke
   （两窗口 + drag reparent + editor shell）与 editor smoke。
 - 偏离：无。
+## 2026-09-24 AB4-2f step 1 — 帧的完成属于帧，提交与呈现分家
+
+唯一目标：**让“这一帧的 GPU 工作做完了吗”从窗口搬到设备**，从而把 `begin/end` 拆成 acquire / submit /
+present 三步，并第一次让“没有可呈现窗口的帧”“一帧呈现多个窗口”都成为合法帧。
+
+### 为什么这是 AB4-2d 的最后一道锁
+
+一个 Vulkan 提交只能 signal 一个 fence。此前那个 fence 存在**正在呈现的那个窗口**上
+（`VulkanRenderSurfaceContext::frameFences`），于是：一个窗口替整帧做了 owner；“没有任何可呈现 surface”
+的帧没有 fence 可挂，只能整帧不录；“一帧多个窗口”则要么重复录 View，要么让某个窗口冒充整帧。
+
+### 改动
+
+- `IRender::submitFrame(cmdBufs, waits, signals)`：帧提交入口。设备在帧内第一次调用时重新武装自己的
+  frame fence，同帧后续提交共同引用它；帧内不提交也合法（fence 保持 signaled，下一帧 wait 直接通过）。
+  文档明确“一个 command buffer 仍只能提交一次”，避免它被当成“重复提交同一 cmdbuf”的许可。
+- `IRender::beginRecordedFrame()`：等待本帧 slot 的 fence（上一轮用该 slot 的帧）→ 推进 generation →
+  deferred deletion flush。因为 acquire 复用上一帧提交等待过的 image-available semaphore，
+  **GameRuntime 的顺序改为 `beginRecordedFrame → acquire → record → submit`**。
+- `IRenderSurfaceContext`：`end(imageIndex, cmdBufs)` → `submit(imageIndex, cmdBufs)` +
+  `present(imageIndex)`；删掉 `getCurrentFrameFence()`，删掉 `waitAllGraphicsFences` /
+  `resetInFlightFence` / `resignalCurrentFence` / `waitInFlightFence`。`begin()` 只剩“应用 pending
+  recreate + acquire”，`waitInFlight()` 只等本窗口的 present-complete（recreate/destroy 需要的正是它）。
+- `VulkanRender`：新增 `_frameFences[kFramesInFlight]`（创建即 signaled，避免首帧特判）与
+  `_bFrameFenceArmed`（每帧只武装一次，否则第二次 reset 会抹掉第一次提交的 pending signal）。
+- `VulkanSwapChain::acquireNextImage` 去掉 fence 形参（原先的 wait+reset 只是替窗口那个 fence 兜底）。
+- GUI 两条线参与帧簿记：`GUIWindowHost::onTick`（单窗）与 `GUIApp::onTick`（多窗一次）都在任何 present
+  之前调用 `beginRecordedFrame`；tick/present 两半刻意不重复调用。
+
+### 测试
+
+- `RHISurfaceContext.FrameBookkeepingBelongsToTheFrameNotAWindow` 改写：呈现两窗只推进 generation 一次；
+  「连续两帧无提交」不吊死；`submitFrame({}, {}, {})` 的 offscreen-only 帧合法。
+- 新增 `RHISurfaceContext.OneFrameCanPresentSeveralWindows`：一帧内两窗各自 acquire/submit/present，
+  4 帧后 generation 恰好是 4（窗口数不影响帧数）。
+- `presentOneFrame` 辅助函数改成真实帧写法（`beginRecordedFrame` → 各窗 acquire → 各窗 submit → 各窗 present）。
+
+### 验证
+
+- build：`ya-rhi-vulkan` / `ya-gui-host` / `GUIWorkbench` / `ya-game-runtime` / `ya-runtime` /
+  `ya-game-editor` / `-g test` 全部 ok。
+- `ya-rhi-vulkan-smoke`：**9 passed / 1 skipped**（同一 platform minimize guard）。
+- `ya-testing`：**1321 tests / 1320 passed / 1 skipped / 0 failed**。
+- `ya-gui-closure-test` 600 passed；`ya-gui-headless-host-test` 47 passed。
+- `GUIWorkbench --smoke-actions`：**exit=0** 且无 VMA leak。
+- `run_display_compose_parity.py --skip-build`：**PASS**，md5 仍 `c775245ae636f15b41da8485319a2267`。
+- `run_widgettree_editor_smoke.py --skip-build`：**exit=0** 六步全过。
+
+### 保留 / 未完成 / 偏离
+
+- 未做（AB4-2d 主体）：`RenderFramePlan` 仍是单 `present` + 单 UI snapshot；编辑器 extra 窗口仍在主窗
+  present 之后经 `presentGuiSnapshot` 呈现；每 View 只录一次 + 按 surface 组合的 display plan 还没落地。
+  本批只把**机制**备齐（帧 fence 归设备、submit/present 可分离、offscreen-only 帧合法）。
+- 未覆盖（如实记录）：本批没有新用例直接断言“移除 `waitAllGraphicsFences` 后，窗口释放时不会有未等待的
+  GPU 使用”。判据与依据：present-complete 在队列顺序上晚于 present，而 present 等待 render-finished，
+  因此 present-complete ⊇ 本窗口渲染完成；证据是 soak / workbench / editor 三条真实 present 且在结束时
+  销毁窗口的路径全绿。把这条推理写下来，是因为它是“删掉那个 wait 是否安全”的唯一判据。
+- 偏离：无。

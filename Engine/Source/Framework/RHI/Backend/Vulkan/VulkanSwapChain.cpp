@@ -452,21 +452,20 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &newCI)
     return true;
 }
 
-VkResult VulkanSwapChain::acquireNextImage(VkSemaphore semaphore, VkFence fence, uint32_t &outImageIdx)
+VkResult VulkanSwapChain::acquireNextImage(VkSemaphore semaphore, uint32_t &outImageIdx)
 {
     auto     device = _render->getDevice();
+    // No fence: the acquire waits this window's in-flight state through the
+    // device's frame fence (`IRender::beginRecordedFrame`), so a window does not
+    // carry a completion fence of its own.
     VkResult result = vkAcquireNextImageKHR(device,
                                             m_swapChain,
                                             UINT64_MAX,
                                             semaphore,
-                                            fence,
+                                            VK_NULL_HANDLE,
                                             &outImageIdx);
 
     if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) {
-        if (fence != VK_NULL_HANDLE) {
-            VK_CALL(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
-            VK_CALL(vkResetFences(device, 1, &fence));
-        }
         if (result == VK_SUBOPTIMAL_KHR) {
             YA_CORE_WARN("Swap chain is out of date or suboptimal: {}", result);
         }

@@ -189,6 +189,16 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     // `beginRecordedFrame()`, and the only clock deferred deletion and the GPU
     // timing ring use (see IRender::recordedFrameIndex).
     uint64_t _frameIndex = 0;
+    /// One fence per flight slot: this frame's GPU work is done when they all
+    /// are. It lives on the DEVICE because "has this frame finished" is a fact
+    /// about the frame, not about whichever window happened to present -- a
+    /// frame that presents two windows submits work for both under this fence,
+    /// and a frame that presents nothing still has one.
+    std::vector<VkFence> _frameFences;
+    /// Whether the current frame has already re-armed its slot's fence. The
+    /// first `submitFrame` of a frame resets it; a frame that never submits
+    /// leaves it signaled, so the next frame's wait passes instead of hanging.
+    bool _bFrameFenceArmed = false;
     // Every sampler created through this render's factory, kept alive until
     // device teardown so handles are released before the device dies (some
     // owners may outlive the device via static destruction).
@@ -264,6 +274,10 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     void beginRecordedFrame() override;
     [[nodiscard]] uint64_t recordedFrameIndex() const override { return _frameIndex; }
     [[nodiscard]] uint32_t framesInFlight() const override { return kFramesInFlight; }
+
+    bool submitFrame(const std::vector<void*>& cmdBufs,
+                     const std::vector<void*>& waitSemaphores,
+                     const std::vector<void*>& signalSemaphores) override;
 
     const RenderCapabilities& getCapabilities() const override { return _capabilities; }
     uint32_t getUniformBufferOffsetAlignment() const override
@@ -342,6 +356,9 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
         }
 
         if (!createCommandPool()) {
+            terminate();
+        }
+        if (!createFrameFences()) {
             terminate();
         }
         createPipelineCache();
@@ -452,6 +469,10 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     bool createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount);
     void initExtensionFunctions();
     bool createCommandPool();
+
+    /// One signaled fence per flight slot. Signaled rather than not, so the
+    /// first frame's wait passes without a "has any frame run yet" special case.
+    bool createFrameFences();
 
     void createPipelineCache();
     // void createDepthResources();
