@@ -1,7 +1,7 @@
 #pragma once
 
 #include "GameRuntime/HostRenderSettings.h"
-#include "GameRuntime/HostViewportView.h"
+#include "GameRuntime/DisplayedView.h"
 #include "Render3D/Common/RenderPipelineSettings.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
@@ -72,9 +72,9 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] std::shared_ptr<ImageResource>         getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const;
     [[nodiscard]] bool                                   isGradingEnabled() const;
     [[nodiscard]] const HostRenderSettings&              getHostRenderSettings() const;
-    /// The View the host window shows for the frame just recorded, with the
+    /// The View this app displayed for the frame just recorded, with the
     /// camera it was rendered from. `viewId == 0` means this frame showed none.
-    [[nodiscard]] const HostViewportView&                getHostViewportView() const;
+    [[nodiscard]] const DisplayedView&                   getDisplayedView() const;
 
     // === The renderer, named on the app's terms ===
     //
@@ -108,14 +108,14 @@ class YA_GAME_RUNTIME_API AppRenderServices
     /// nothing was recorded yet. A pointer because "no graph" is a real answer.
     [[nodiscard]] const std::vector<RGTopologyDescription>* getFrameGraphTopologies() const;
 
-    /// The View the host window shows, as the frame that was just recorded left
-    /// it: the app's arrangement (see `HostViewportBinding`), not a renderer
+    /// The View this app displayed, as the frame that was just recorded left
+    /// it: the app's arrangement (see `DisplayedView`), not a renderer
     /// opinion. Null when this frame showed no View, which is an answer -- the
     /// caller decides what to show instead (the editor sizes its 2D canvas from
     /// its own panel rect, the host from its window).
-    [[nodiscard]] const RenderViewOutput* getHostViewportOutput() const;
+    [[nodiscard]] const RenderViewOutput* getDisplayedViewOutput() const;
     /// Which View that is, by id. Zero when this frame showed none.
-    [[nodiscard]] SceneViewId          getHostViewportViewId() const;
+    [[nodiscard]] SceneViewId          getDisplayedViewId() const;
     /// The OS window this app presents through, resolved from the binding the
     /// app wrote at init (`AppRenderState::hostSurfaceId`). The renderer keeps
     /// every window's surface in one registry and privileges none of them, so
@@ -132,8 +132,8 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] SurfaceId             getHostSurfaceId() const;
     [[nodiscard]] EFormat::T           getViewDepthFormat() const;
     [[nodiscard]] const RenderViewOutput* getViewOutput(SceneViewId viewId) const;
-    /// The images and handles the editor's viewport shows for the host
-    /// viewport's View, in the form its compositor consumes.
+    /// The images and handles the editor's viewport shows for the displayed
+    /// View, in the form its compositor consumes.
     [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot(Scene* inspectScene) const;
 
     [[nodiscard]] RenderTargetCatalog  buildRenderTargetCatalog() const;

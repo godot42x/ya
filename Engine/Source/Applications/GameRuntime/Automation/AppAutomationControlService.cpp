@@ -716,25 +716,25 @@ void AppAutomationControlService::handleGetWorldViewState(App& app, const AppAut
     }
 
     const auto& renderServices = app.getRenderServices();
-    const auto& hostViewport   = renderServices.getHostViewportView();
+    const auto& displayedView  = renderServices.getDisplayedView();
     // Two different things, reported separately so neither has to stand in for
-    // the other: the resolution the host viewport is asked to render at (a
+    // the other: the resolution the displayed View is asked to render at (a
     // setting), and the extent the renderer actually produced last tick (empty
-    // when no View claimed the host viewport). A window resize changes neither.
+    // when no View was displayed). A window resize changes neither.
     const Extent2D requestedResolution = renderServices.getRenderResolution();
-    // What the renderer actually produced for the host viewport last frame: the
+    // What the renderer actually produced for the displayed View last frame: the
     // app knows which View that is, so it reads that View's output rather than
     // asking the renderer for "the current viewport".
-    const RenderViewOutput* hostViewportOutput = renderServices.getHostViewportOutput();
+    const RenderViewOutput* displayedViewOutput = renderServices.getDisplayedViewOutput();
     const Extent2D renderedExtent =
-        hostViewportOutput ? hostViewportOutput->desc.extent : Extent2D{};
+        displayedViewOutput ? displayedViewOutput->desc.extent : Extent2D{};
 
     nlohmann::json result = {
         {"is_stopped", app.isStopped()},
         {"is_runtime", app.isRuntimeMode()},
         {"is_simulation", app.isSimulationMode()},
         {"is_paused", app.isPaused()},
-        {"camera_pos", {hostViewport.cameraPos.x, hostViewport.cameraPos.y, hostViewport.cameraPos.z}},
+        {"camera_pos", {displayedView.cameraPos.x, displayedView.cameraPos.y, displayedView.cameraPos.z}},
         {"render_resolution", {
             {"width", requestedResolution.width},
             {"height", requestedResolution.height},

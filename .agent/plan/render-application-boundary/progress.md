@@ -1146,3 +1146,63 @@ acquire 成功的 present surface，注释自己承认 "One cmdBuf still couples
 - 保留：`buildRenderTargetCatalog` / `getPresentationImageShared` 等回读查询仍按 id 解析 +
   swapchain current 作答（非录制决策），与本批口径一致。
 - 偏离：无。
+
+---
+
+## 2026-09-24 AB4-2f step 3（批 4/4）— HostViewportView → DisplayedView，语义收口
+
+唯一目标：**app 侧"显示排布"的命名不定死 host 语义**。`HostViewportView` 把"host 的 viewport"
+写死进类型名，而它实际回答的是"本帧被显示的那个 View、在哪个 flight、从哪个相机"——game 下
+是全屏那张 image，editor 下是 viewport 面板里的 authoring view。用户拍板的方向：宽泛抽象名，
+不声称 host、不声称全屏、不声称树根。
+
+### 改动（13 文件，机械改名 + 注释同步）
+
+- `include/GameRuntime/HostViewportView.h` → `DisplayedView.h`（git mv，公开路径唯一物理位置，
+  不留 stub）；struct `HostViewportView` → `DisplayedView`；头注释重写：命名直述答案，
+  保留 arrangement 语义，并新增 split-screen 形状说明（额外 View 以 `ViewDisplayInset`
+  合成到同一个 display root 上，不是第二个 surface；本结构是未来 presentation layout 的 N=1 拼法）。
+- `AppRenderState::hostViewport` → `displayedView`；`AppRenderServices::getHostViewportView/
+  getHostViewportOutput/getHostViewportViewId` → `getDisplayedView/getDisplayedViewOutput/
+  getDisplayedViewId`（含 .h/.cpp 与注释；顺带清掉注释里过时的 `HostViewportBinding` 指涉）。
+- GameRuntime 读点：`GameRuntimeTickOrchestrator`（写入点 + iterate 局部变量
+  `displayedViewOutput`）、`AppAutomationControlService`、`HostRenderSettings.h` 注释。
+- GameEditor 读点：`EditorModule.cpp`（aspect / canvas extent / surface context 三处）、
+  `EditorViewportCompositor.h/.cpp`（类型 + 参数名 `displayedView`）、
+  `EditorSurfaceContext.h/.cpp`、`EditorLayer.Interaction.cpp`。
+- 全仓 grep `HostViewportView|hostViewport|getHostViewport`（含 Test/Example）零命中。
+
+### 验证（step 3 全批汇总）
+
+- build：`ya-render-3d` / `ya-game-runtime` / `ya-game-editor` / `GUIWorkbench` / `xmake b -g test` 全部 ok。
+- `ya-testing`：**1322 tests / 1321 passed / 1 skipped（platform minimize guard，同基线）/ 0 failed**。
+- `ya-rhi-vulkan-smoke`：**9 passed / 1 skipped（同一 guard）**。
+- `ya-gui-closure-test`：**601 passed**。
+- `GUIWorkbench --smoke-actions`：**PASS，exit=0**。
+- `run_display_compose_parity.py --skip-build`：**PASS**，两张图 md5 仍
+  `c775245ae636f15b41da8485319a2267`（imageIndex 接线 + 门控解除未改变任何像素）。
+- `run_widgettree_editor_smoke.py --skip-build`：**exit=0**。
+
+### 保留 / 未完成 / 偏离
+
+- 保留（分屏产品层，本批不动）：多 camera producer（仍 `findPrimaryCamera` 单 View）、
+  player input context、per-area GameUIHost。机制底座（SceneViewDesc compose 结构、
+  ViewDisplayInset、DisplayedView 排布）本批已通。
+- 保留（AB4-2d/2e）：per-surface display plan、tear-off viewport；`getHostSurface()` 仍是
+  app 侧单数绑定（app 策略，注释已声明 AB4-2d 的演进方向）。
+- 偏离：无。
+
+---
+
+## 2026-09-24 AB4-2f step 3 收口总结
+
+四个批次的单一验收目标各自成 commit：
+1. `86a203d1 [render3d/submission] submission does not remember a surface it never reads`
+2. `d3af75b7 [render3d/present] a plan records by its views, not by an acquired surface`
+3. `be51b06a [render3d/present] the surface pass writes the image the plan acquired`
+4. （本批）`[gameruntime] the view this app displays is named for what it answers`
+
+结论：`Surface` 不再出现在 submission 与录制决策的任何路径上；plan 的 acquired imageIndex
+是 present compose 的唯一事实源；app 侧显示排布以 `DisplayedView` 命名（arrangement，
+分屏 = 同一 display root 上的 N 个 inset）。"1 host surface + N View" 的底座语义闭环，
+AB4-2d per-surface display plan 是下一个开口。

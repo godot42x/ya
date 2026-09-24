@@ -123,17 +123,17 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
     auto* primarySurface = renderServices.getHostSurface();
     const auto presentationImage =
         (device && primarySurface) ? device->getPresentationImageShared(*primarySurface) : nullptr;
-    // The three images automation may capture, each named: the host viewport's
-    // View supplies the world images and the primary surface supplies the
-    // window's. "The postprocess output" is that View's finalize image when it
-    // has one of its own -- when it does not, the View's colour IS the image,
-    // which is why the pair is offered and the consumer picks.
-    const RenderViewOutput* hostViewport = renderServices.getHostViewportOutput();
+    // The three images automation may capture, each named: the displayed View
+    // supplies the world images and the primary surface supplies the window's.
+    // "The postprocess output" is that View's finalize image when it has one of
+    // its own -- when it does not, the View's colour IS the image, which is why
+    // the pair is offered and the consumer picks.
+    const RenderViewOutput* displayedViewOutput = renderServices.getDisplayedViewOutput();
     const auto              postprocessImage =
-        (hostViewport && hostViewport->display && hostViewport->display != hostViewport->color)
-            ? hostViewport->display
+        (displayedViewOutput && displayedViewOutput->display && displayedViewOutput->display != displayedViewOutput->color)
+            ? displayedViewOutput->display
             : nullptr;
-    const auto viewportImage = hostViewport ? hostViewport->color : nullptr;
+    const auto viewportImage = displayedViewOutput ? displayedViewOutput->color : nullptr;
     if (auto* automationControl = app.getAutomationControlService()) {
         automationControl->onTickCompleted(app,
                                             renderServices.getRender(),
@@ -352,17 +352,18 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 
     TickFrame gameFrame = buildGameRenderFrame(app, dt, flightIndex, sceneRender);
 
-    // The app's arrangement for this frame: which View the host window shows, in
-    // which flight its output is published, and the camera it renders from.
-    // Written once, here, from the plan -- before the recording below, because the
+    // The app's arrangement for this frame: which View it displays, in which
+    // flight its output is published, and the camera it renders from. Written
+    // once, here, from the plan -- before the recording below, because the
     // editor's compose and chrome stages run *inside* it and read this View. The
     // renderer never learns it: it publishes every View and names none of them
-    // "the current one". Which declaration is the host's comes from the same
-    // structural predicate the plan uses for its display root, so a well-known
-    // view id here would be a second definition that can disagree with it.
+    // "the current one". Which declaration is the displayed one comes from the
+    // same structural predicate the plan uses for its display root, so a
+    // well-known view id here would be a second definition that can disagree
+    // with it.
     {
         const SceneViewTask* displayRoot = sceneRender.displayRootTask();
-        app._renderState->hostViewport = HostViewportView{
+        app._renderState->displayedView = DisplayedView{
             .viewId      = displayRoot ? displayRoot->desc.viewId : 0,
             .flightIndex = flightIndex,
             .view        = displayRoot ? displayRoot->desc.view : glm::mat4(1.0f),
@@ -443,7 +444,7 @@ void GameRuntimeTickOrchestrator::declareViews(App&                  app,
 
     // This step declares and submits, and adopts nothing: which of these Views
     // the host window shows, and its camera, is read off the sealed plan once in
-    // tickRender (see the hostViewport assignment there). Adopting it here meant
+    // tickRender (see the displayedView assignment there). Adopting it here meant
     // two writers for one fact, and a reader had to know which of them had run.
 }
 

@@ -117,10 +117,10 @@ const HostRenderSettings& AppRenderServices::getHostRenderSettings() const
     return _state->hostSettings;
 }
 
-const HostViewportView& AppRenderServices::getHostViewportView() const
+const DisplayedView& AppRenderServices::getDisplayedView() const
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    return _state->hostViewport;
+    return _state->displayedView;
 }
 
 bool AppRenderServices::hasRenderer() const
@@ -169,14 +169,14 @@ const std::vector<RGTopologyDescription>* AppRenderServices::getFrameGraphTopolo
     return _state && _state->device ? &_state->device->getFrameGraphTopologies() : nullptr;
 }
 
-const RenderViewOutput* AppRenderServices::getHostViewportOutput() const
+const RenderViewOutput* AppRenderServices::getDisplayedViewOutput() const
 {
-    return getViewOutput(_state ? _state->hostViewport.viewId : 0);
+    return getViewOutput(_state ? _state->displayedView.viewId : 0);
 }
 
-SceneViewId AppRenderServices::getHostViewportViewId() const
+SceneViewId AppRenderServices::getDisplayedViewId() const
 {
-    return _state ? _state->hostViewport.viewId : 0;
+    return _state ? _state->displayedView.viewId : 0;
 }
 
 EFormat::T AppRenderServices::getViewDepthFormat() const
@@ -187,15 +187,15 @@ EFormat::T AppRenderServices::getViewDepthFormat() const
 const RenderViewOutput* AppRenderServices::getViewOutput(SceneViewId viewId) const
 {
     return (_state && _state->device)
-               ? _state->device->getViewOutput(_state->hostViewport.flightIndex, viewId)
+               ? _state->device->getViewOutput(_state->displayedView.flightIndex, viewId)
                : nullptr;
 }
 
 RenderViewportSnapshot AppRenderServices::buildViewportSnapshot(Scene* inspectScene) const
 {
     return (_state && _state->device)
-               ? _state->device->buildViewportSnapshot(_state->hostViewport.flightIndex,
-                                                      _state->hostViewport.viewId,
+               ? _state->device->buildViewportSnapshot(_state->displayedView.flightIndex,
+                                                      _state->displayedView.viewId,
                                                       inspectScene)
                : RenderViewportSnapshot{};
 }

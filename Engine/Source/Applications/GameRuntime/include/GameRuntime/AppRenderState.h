@@ -4,7 +4,7 @@
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Stage/IRenderStage.h"
 #include "GameRuntime/HostRenderSettings.h"
-#include "GameRuntime/HostViewportView.h"
+#include "GameRuntime/DisplayedView.h"
 #include "GameRuntime/Render/RuntimeRenderContext.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/RenderDeviceState.h"
@@ -47,12 +47,14 @@ struct AppRenderState
     /// gets drawn (SkeletonAnimationSystem), so they stop depending on a switch
     /// that describes a viewport instead of a Scene.
     std::vector<Scene*>                     renderedScenesLastTick;
-    /// The frame's host-viewport arrangement: which View the window shows, in
-    /// which flight, and that View's camera. Written once per tick from the plan
-    /// (see GameRuntimeTickOrchestrator::tickRender) and read by every consumer
-    /// that asks "the image the window shows" -- the panels, automation
-    /// screenshots and the editor's viewport.
-    HostViewportView                        hostViewport{};
+    /// Which View this frame displayed, in which flight, and that View's
+    /// camera. Written once per tick from the plan (see
+    /// GameRuntimeTickOrchestrator::tickRender) and read by every consumer
+    /// that asks "the image this app displayed" -- the panels, automation
+    /// screenshots and the editor's viewport. The N=1 spelling of a display
+    /// arrangement: split-screen adds ViewDisplayInsets onto this one
+    /// display root, not a second surface (see DisplayedView).
+    DisplayedView                          displayedView{};
 };
 
 } // namespace ya

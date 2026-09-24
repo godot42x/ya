@@ -306,9 +306,9 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
     // The camera of the View the host window shows, from the app's arrangement
     // for the last recorded frame. Picking runs on input, i.e. before this
     // tick's render, so it reads the arrangement rather than a live declaration.
-    const auto& hostViewport = app->getRenderServices().getHostViewportView();
-    glm::mat4   view         = hostViewport.view;
-    glm::mat4   projection   = hostViewport.projection;
+    const auto& displayedView = app->getRenderServices().getDisplayedView();
+    glm::mat4   view         = displayedView.view;
+    glm::mat4   projection   = displayedView.projection;
 
     // Pixel-accurate picking: read the entity id the viewport graph wrote at
     // the cursor position. Falls back to the CPU raycast when the id target is

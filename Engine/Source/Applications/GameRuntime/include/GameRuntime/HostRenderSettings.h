@@ -10,9 +10,9 @@ namespace ya
 {
 
 /// The host's render settings: the clock and what resolution its viewport
-/// renders at. One per App, and **settings only** -- which View the host window
-/// shows, and that View's camera, is an arrangement of one frame and lives in
-/// `HostViewportView`.
+/// renders at. One per App, and **settings only** -- which View this app
+/// displays, and that View's camera, is an arrangement of one frame and lives
+/// in `DisplayedView`.
 ///
 /// That split is the point of the name. This struct used to also carry
 /// `view`/`projection`/`cameraPos` copied out of a `SceneViewDesc`, so it held

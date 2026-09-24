@@ -8,7 +8,7 @@ namespace ya
 {
 
 struct App;
-struct HostViewportView;
+struct DisplayedView;
 struct IRenderSurfaceContext;
 struct WidgetTree;
 
@@ -60,6 +60,6 @@ void applyEditorWindowMetrics(WidgetTree& tree, const EditorWindowMetrics& metri
 [[nodiscard]] FEditorSurfaceContext makeEditorSurfaceContext(
     App& app,
     IRenderSurfaceContext& surface,
-    const HostViewportView& hostViewport);
+    const DisplayedView& displayedView);
 
 } // namespace ya

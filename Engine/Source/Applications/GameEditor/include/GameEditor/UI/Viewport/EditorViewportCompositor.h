@@ -8,7 +8,7 @@
 namespace ya
 {
 
-struct HostViewportView;
+struct DisplayedView;
 struct EditorLayer;
 struct ICommandBuffer;
 struct IImage;
@@ -40,7 +40,7 @@ class EditorViewportCompositor
                  ICommandBuffer&               commandBuffer,
                  const RenderViewportSnapshot& snapshot,
                  EditorLayer&                  layer,
-                 const HostViewportView&       hostViewport,
+                 const DisplayedView&       displayedView,
                  const Extent2D&               canvasTargetExtent);
 
   private:
@@ -51,13 +51,13 @@ class EditorViewportCompositor
     void composeWorldFallback(IRender&                   render,
                               ICommandBuffer&            commandBuffer,
                               EditorLayer&               layer,
-                              const HostViewportView&    hostViewport,
+                              const DisplayedView&    displayedView,
                               const Extent2D&            canvasTargetExtent);
     void composeWorldFromScene(IRender&                      render,
                                ICommandBuffer&               commandBuffer,
                                const RenderViewportSnapshot& snapshot,
                                EditorLayer&                  layer,
-                               const HostViewportView&       hostViewport);
+                               const DisplayedView&       displayedView);
     std::shared_ptr<Texture> resolveSourceTexture(const RenderTexture& source);
     void ensureTarget(IRender& render, const RenderTexture& source);
     void ensureCanvasTarget(IRender& render, const Extent2D& extent);
