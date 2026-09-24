@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -15,6 +16,8 @@ namespace ya
 struct IRender;
 struct IRenderSurfaceContext;
 struct ICommandBuffer;
+class GUIRenderSurface;
+struct ISwapchain;
 
 /// Per-surface display compose resources for one extra (or reusable) GUI window.
 /// Does not own the `IRender` device.
@@ -32,15 +35,35 @@ void rebuildGuiSurfacePresentation(FGUISurfacePresentResources& resources,
                                    const char*                  labelPrefix,
                                    bool                         bWaitForGpu);
 
+/// The recording facts a window's own present contributions run against: the
+/// per-image command buffer is open, the surface's clear + UI compose are
+/// already recorded, and end/submit have not run.
+struct FGUIPresentExtensionContext
+{
+    ICommandBuffer&   cmdBuf;
+    GUIRenderSurface& presentedSurface;
+    ISwapchain&       swapchain;
+    Extent2D          presentExtent;
+};
+
 /// Acquire, compose `snapshot` onto this surface, present. Skips when
 /// unpresentable. Serial Render2D session: caller must not be inside another
 /// `Render2D::begin`.
-void presentGuiSnapshot(FGUISurfacePresentResources& resources,
-                        const UIFrameSnapshot&       snapshot,
-                        Extent2D                     logicalExtent,
-                        Render2DPassSlot             passSlot,
-                        bool                         bMinimized,
-                        bool&                        bSwapchainRecreatePending);
+///
+/// The one present sequence for every GUI window, main or extra. A window adds
+/// its own content at two named points, both optional and both receiving
+/// `FGUIPresentExtensionContext`:
+/// - `composeExtra` records inside the surface's compose pass (overlays);
+/// - `preSubmit` records after the compose pass and before the command buffer
+///   ends -- anything that must land in the same submission (readback copies).
+void presentGuiSnapshot(FGUISurfacePresentResources&  resources,
+                        const UIFrameSnapshot&        snapshot,
+                        Extent2D                      logicalExtent,
+                        Render2DPassSlot              passSlot,
+                        bool                          bMinimized,
+                        bool&                         bSwapchainRecreatePending,
+                        const std::function<void(const FGUIPresentExtensionContext&)>& composeExtra = {},
+                        const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit    = {});
 
 [[nodiscard]] inline bool guiPresentationIndexValid(int32_t imageIndex,
                                                     size_t  targetCount,

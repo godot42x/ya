@@ -49,6 +49,8 @@ namespace ya
 
 struct IRender; // forward decl: only used as a pointer param in refreshDevicePixelRatio
 struct INativeWindow;
+struct FGUIPresentExtensionContext;
+struct RenderTexture;
 
 struct FGUIWindowHostConfig
 {
@@ -239,7 +241,19 @@ private:
     [[nodiscard]] bool requestWindowSize(uint32_t width, uint32_t height, std::string_view reason);
     /// Write a scenario checkpoint tree dump (<scenarioDumpDir>/<tag>.json).
     void dumpScenarioCheckpoint(const std::string& tag);
-    void rebuildPresentationResources(bool bWaitForGpu = true);
+    /// This window's contribution to the shared present sequence
+    /// (`presentGuiSnapshot`), recorded into the acquired image's command
+    /// buffer before it is submitted.
+    /// Offscreen parity mirror: the same snapshot onto an offscreen surface
+    /// plus a GPU->CPU copy, so parity can diff "what the window shows" against
+    /// "what the compose produced" at zero tolerance. Returns false when the
+    /// mirror could not be created, in which case nothing was recorded.
+    [[nodiscard]] bool recordOffscreenParityCapture(const FGUIPresentExtensionContext& ctx,
+                                                    const UIFrameSnapshot&             snapshot,
+                                                    std::shared_ptr<RenderTexture>&    outImage);
+    /// GPU shot: copy the presented image itself into a readback buffer, still
+    /// inside the same submission.
+    void recordGpuShotCopy(const FGUIPresentExtensionContext& ctx);
     /// Apply the hovered widget's requested cursor (system cursor, deduped).
     void updateCursor();
 

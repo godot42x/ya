@@ -44,12 +44,14 @@ void rebuildGuiSurfacePresentation(FGUISurfacePresentResources& resources,
     resources.cachedSwapchainExtent = swapchain->getExtent();
 }
 
-void presentGuiSnapshot(FGUISurfacePresentResources& resources,
-                        const UIFrameSnapshot&       snapshot,
-                        Extent2D                     logicalExtent,
-                        Render2DPassSlot             passSlot,
-                        bool                         bMinimized,
-                        bool&                        bSwapchainRecreatePending)
+void presentGuiSnapshot(FGUISurfacePresentResources&  resources,
+                        const UIFrameSnapshot&        snapshot,
+                        Extent2D                      logicalExtent,
+                        Render2DPassSlot              passSlot,
+                        bool                          bMinimized,
+                        bool&                         bSwapchainRecreatePending,
+                        const std::function<void(const FGUIPresentExtensionContext&)>& composeExtra,
+                        const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit)
 {
     if (!resources.render || !resources.present) {
         return;
@@ -120,7 +122,7 @@ void presentGuiSnapshot(FGUISurfacePresentResources& resources,
     cmdBuf->retireResource(renderImage->getImageViewShared());
     cmdBuf->transitionImageLayoutAuto(renderImage->getImage(), EImageLayout::ColorAttachmentOptimal);
     cmdBuf->beginRendering(RenderingInfo{
-        .label                         = "GUIExtra_Clear",
+        .label                         = "GUI_Clear",
         .bExternalTransitionManagement = true,
         .attachments                   = RenderAttachmentSet{
             .renderArea = Rect2D{
@@ -143,6 +145,15 @@ void presentGuiSnapshot(FGUISurfacePresentResources& resources,
         },
     });
     cmdBuf->endRendering();
+    // This window's content inside the compose pass (overlays), then its
+    // same-submission work before the buffer ends (readback copies). Both see
+    // the same recording facts; neither is part of the sequence itself.
+    const FGUIPresentExtensionContext extensionContext{
+        .cmdBuf           = *cmdBuf,
+        .presentedSurface = *renderSurface,
+        .swapchain        = *swapchain,
+        .presentExtent    = presentExtent,
+    };
     renderSurface->record(
         cmdBuf.get(),
         nullptr,
@@ -151,7 +162,11 @@ void presentGuiSnapshot(FGUISurfacePresentResources& resources,
             .kind                  = ERender2DComposePassKind::RuntimeUIComposite,
             .passSlot              = passSlot,
             .logicalExtent = logicalExtent,
-        });
+        },
+        composeExtra ? [&]() { composeExtra(extensionContext); } : std::function<void()>{});
+    if (preSubmit) {
+        preSubmit(extensionContext);
+    }
     cmdBuf->end();
     submitPresentFrame(*resources.render, presentFrame, {cmdBuf->getHandle()});
 }

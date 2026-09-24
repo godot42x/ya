@@ -559,10 +559,12 @@ struct GUIWindowHost::FImpl
     bool            bSnapshotBuilt = false;
     HostGuiTextureSource        textureSource;
 
-    std::vector<std::shared_ptr<ICommandBuffer>>       commandBuffers;
-    std::vector<std::shared_ptr<GUIPresentationTarget>> presentationTargets;
-    void*    cachedSwapchainHandle = nullptr;
-    Extent2D cachedSwapchainExtent{};
+    /// This window's present resources and the shared present sequence's
+    /// per-frame state (command buffers, imported compose targets, the
+    /// swapchain identity it re-checks). One struct, not four loose fields --
+    /// the same shape every GUI window presents through (see
+    /// `FGUISurfacePresentResources` / `presentGuiSnapshot`).
+    FGUISurfacePresentResources presentResources;
     Render2DPassSlot presentPassSlot   = kInvalidRender2DPassSlot;
     Render2DPassSlot offscreenPassSlot = kInvalidRender2DPassSlot;
     uint64_t frameCount = 0;
@@ -800,18 +802,15 @@ bool GUIWindowHost::init()
             &static_cast<SdlEventSource*>(_impl->eventSource.get())->hostWindowID;
     }
 
-    render->allocateCommandBuffers(swapchain->getImageCount(), _impl->commandBuffers);
-
-    // Presentation render targets: one imported swapchain image per frame.
-    if (!GUIPresentationTarget::buildAll(*render,
-                                         *_impl->present,
-                                         "GUIApp",
-                                         _impl->presentationTargets)) {
+    // Presentation resources for this window's surface: command buffers plus
+    // one imported compose target per swapchain image, and the swapchain
+    // identity the shared present path re-checks every frame. Built by the
+    // same helper every GUI window rebuilds with.
+    rebuildGuiSurfacePresentation(_impl->presentResources, "GUIApp", /*bWaitForGpu=*/false);
+    if (_impl->presentResources.presentationTargets.empty()) {
         YA_CORE_ERROR("GUIAppHost: failed to build presentation targets for this window's surface");
         return false;
     }
-    _impl->cachedSwapchainHandle = swapchain->getHandle();
-    _impl->cachedSwapchainExtent = swapchain->getExtent();
     _impl->tree->setLogicalExtent(queryWindowLogicalExtent(_impl->window));
 
     _impl->bInitialized = true;
@@ -863,38 +862,6 @@ bool GUIWindowHost::requestWindowSize(uint32_t width, uint32_t height, std::stri
     _impl->bWindowMinimized          = false;
     _impl->bSwapchainRecreatePending = true;
     return true;
-}
-
-void GUIWindowHost::rebuildPresentationResources(bool bWaitForGpu)
-{
-    // Frame boundary only. Recreate already waited this surface's fences
-    // inside `IRenderSurfaceContext::begin`; do not `IRender::waitIdle()`
-    // (that stalls every other window). `bWaitForGpu` remains for callers
-    // that invoke this outside an acquired frame.
-    if (bWaitForGpu) {
-        _impl->present->waitInFlight();
-    }
-    _impl->commandBuffers.clear();
-    _impl->presentationTargets.clear();
-    _impl->offscreenSurface.reset();
-    _impl->offscreenShotBuffer.reset();
-
-    auto* swapchain = _impl->present->getSwapchain();
-    if (!swapchain) {
-        YA_CORE_ERROR("GUIAppHost: this window's surface has no swapchain");
-        return;
-    }
-    _impl->render->allocateCommandBuffers(swapchain->getImageCount(), _impl->commandBuffers);
-    if (!GUIPresentationTarget::buildAll(*_impl->render,
-                                         *_impl->present,
-                                         "GUIApp",
-                                         _impl->presentationTargets)) {
-        YA_CORE_ERROR("GUIAppHost: failed to rebuild presentation targets");
-        _impl->commandBuffers.clear();
-        return;
-    }
-    _impl->cachedSwapchainHandle = swapchain->getHandle();
-    _impl->cachedSwapchainExtent = swapchain->getExtent();
 }
 
 int GUIWindowHost::run()
@@ -1417,307 +1384,241 @@ void GUIWindowHost::presentSnapshot()
         return;
     }
     const UIFrameSnapshot& snapshot = _impl->snapshot;
-    FontManager::get()->flushPendingGlyphs(*_impl->render);
-    (void)FontManager::get()->consumeNewGlyphCapture();
 
-    if (_impl->bWindowMinimized || !_impl->present->isPresentable()) {
-        return;
-    }
-
-    FPresentFrame presentFrame{.surface = _impl->present};
-    if (!acquirePresentFrame(presentFrame)) {
-        return;
-    }
-    if (!presentFrame.acquired()) {
-        submitPresentFrame(*_impl->render, presentFrame, {});
-        return;
-    }
-    const int32_t imageIndex = presentFrame.imageIndex;
-
-    ISwapchain* swapchain = _impl->present->getSwapchain();
-    if (!swapchain) {
-        submitPresentFrame(*_impl->render, presentFrame, {});
-        return;
-    }
-    const Extent2D swapchainExtent = swapchain->getExtent();
-    if (swapchain->getHandle() != _impl->cachedSwapchainHandle ||
-        swapchain->getImageCount() != _impl->presentationTargets.size() ||
-        swapchainExtent.width != _impl->cachedSwapchainExtent.width ||
-        swapchainExtent.height != _impl->cachedSwapchainExtent.height) {
-        // begin() already acquired from the live swapchain. Rebuild only
-        // refreshes imported compose targets; do not acquire again (that
-        // would leak the first image). If the index is then OOB or rebuild
-        // failed, legalize the acquired image and skip compose.
-        rebuildPresentationResources(/*bWaitForGpu=*/false);
-        swapchain = _impl->present->getSwapchain();
-        if (!swapchain) {
-            submitPresentFrame(*_impl->render, presentFrame, {});
-            return;
+    // The present sequence itself is the shared one every GUI window runs
+    // (`presentGuiSnapshot`). What this window adds, per acquired image, is
+    // captured by the two hooks below and spelled out in
+    // `recordPresentExtensions`: the first-frame stats line, the inspector
+    // overlay inside the compose pass, and the automation captures whose
+    // readback copies must land in the same submission.
+    std::optional<PendingGuiCapture> captured; // automation request consumed this frame
+    std::string                      capturePath;   // non-empty: a GPU shot was recorded
+    std::string                      offscreenPath; // decided path (mirror recorded iff bCaptureOffscreen)
+    bool                             bCaptureOffscreen = false;
+    Extent2D                         presentedExtent{};
+    std::shared_ptr<RenderTexture>   offscreenImage;
+    auto preSubmit = [this, &snapshot, &captured, &capturePath, &offscreenPath, &bCaptureOffscreen,
+                      &presentedExtent, &offscreenImage](const FGUIPresentExtensionContext& ctx)
+    {
+        if (!_impl->bLoggedFirstSnapshot) {
+            _impl->bLoggedFirstSnapshot = true;
+            const GuiPerfStats& stats   = _impl->tree->getPerfStats();
+            YA_CORE_INFO("GUIAppHost first snapshot: {} draw items, {} widgets painted, layout {:.3f}ms paint {:.3f}ms, {}x{} logical -> {}x{} render",
+                         snapshot.items.size(),
+                         stats.paintedWidgets,
+                         stats.layoutMS,
+                         stats.paintMS,
+                         snapshot.logicalExtent.width,
+                         snapshot.logicalExtent.height,
+                         ctx.presentExtent.width,
+                         ctx.presentExtent.height);
         }
-    }
-    if (!guiPresentationIndexValid(imageIndex, _impl->presentationTargets.size(),
-                                   _impl->commandBuffers.size())) {
-        YA_CORE_ERROR("GUIAppHost: presentation image index {} out of range (targets={} cmds={})",
-                      imageIndex,
-                      _impl->presentationTargets.size(),
-                      _impl->commandBuffers.size());
-        submitPresentFrame(*_impl->render, presentFrame, {});
-        return;
-    }
-    const auto& presentation = _impl->presentationTargets[static_cast<size_t>(imageIndex)];
-    if (!presentation || !presentation->renderSurface || !presentation->renderSurface->isValid()) {
-        YA_CORE_ERROR("GUIAppHost: presentation surface {} is invalid", imageIndex);
-        submitPresentFrame(*_impl->render, presentFrame, {});
-        return;
-    }
-    const auto& renderSurface = presentation->renderSurface;
-    const auto& renderImage   = renderSurface->getRenderImage();
-    const Extent2D presentExtent = renderImage->getExtent();
-    renderSurface->prepare(FRender2DComposePassDesc{
-        .kind     = ERender2DComposePassKind::RuntimeUIComposite,
-        .passSlot = _impl->presentPassSlot,
-    });
 
-    if (!_impl->bLoggedFirstSnapshot) {
-        _impl->bLoggedFirstSnapshot = true;
-        const GuiPerfStats& stats   = _impl->tree->getPerfStats();
-        YA_CORE_INFO("GUIAppHost first snapshot: {} draw items, {} widgets painted, layout {:.3f}ms paint {:.3f}ms, {}x{} logical -> {}x{} render",
-                     snapshot.items.size(),
-                     stats.paintedWidgets,
-                     stats.layoutMS,
-                     stats.paintMS,
-                     snapshot.logicalExtent.width,
-                     snapshot.logicalExtent.height,
-                     presentExtent.width,
-                     presentExtent.height);
-    }
+        // Runtime automation capture (GUI offscreen parity): the control server
+        // defers the request until this frame loop reaches its warmup frame.
+        // Consumed here -- the point where the old inline sequence decided it --
+        // so a skipped frame (minimized / acquire refused) keeps the request.
+        if (_impl->pendingCapture && _impl->frameCount >= _impl->pendingCapture->earliestFrame) {
+            captured = std::move(_impl->pendingCapture);
+            _impl->pendingCapture.reset();
+        }
+        offscreenPath = captured && !captured->offscreenPath.empty()
+                            ? captured->offscreenPath
+                            : _impl->config->offscreenShotPath;
+        bCaptureOffscreen =
+            (captured && !captured->offscreenPath.empty()) ||
+            (_impl->config->offscreenShotFrame != 0 &&
+             _impl->frameCount == _impl->config->offscreenShotFrame &&
+             !_impl->config->offscreenShotPath.empty());
+        if (bCaptureOffscreen) {
+            bCaptureOffscreen = recordOffscreenParityCapture(ctx, snapshot, offscreenImage);
+        }
 
-    auto cmdBuf = _impl->commandBuffers[static_cast<size_t>(imageIndex)];
-    cmdBuf->reset();
-    cmdBuf->begin();
-
-    cmdBuf->retireResource(renderImage->getImageShared());
-    cmdBuf->retireResource(renderImage->getImageViewShared());
-    cmdBuf->transitionImageLayoutAuto(renderImage->getImage(), EImageLayout::ColorAttachmentOptimal);
-    cmdBuf->beginRendering(RenderingInfo{
-        .label                         = "GUIApp_Clear",
-        .bExternalTransitionManagement = true,
-        .attachments                   = RenderAttachmentSet{
-            .renderArea = Rect2D{
-                .pos    = {0.0f, 0.0f},
-                .extent = {static_cast<float>(presentExtent.width), static_cast<float>(presentExtent.height)},
-            },
-            .layerCount = 1,
-            .colors     = {
-                RenderAttachment{
-                    .image         = renderImage->getImage(),
-                    .imageView     = renderImage->getImageView(),
-                    .loadOp        = EAttachmentLoadOp::Clear,
-                    .storeOp       = EAttachmentStoreOp::Store,
-                    .clearValue    = ClearValue(0.05f, 0.06f, 0.07f, 1.0f),
-                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout   = EImageLayout::ColorAttachmentOptimal,
-                },
-            },
-            .depth = std::nullopt,
-        },
-    });
-    cmdBuf->endRendering();
-
-    const auto inspectorExtra = [&]() {
-        runGuiFrameInspectorOverlay(*_impl->tree,
-                                    snapshot,
-                                    Extent2D{.width = presentExtent.width, .height = presentExtent.height});
+        if (captured && !captured->gpuPath.empty()) {
+            capturePath = captured->gpuPath;
+        }
+        else if (_impl->config->gpuShotFrame != 0 &&
+                 _impl->frameCount == _impl->config->gpuShotFrame &&
+                 !_impl->config->gpuShotPath.empty()) {
+            capturePath = _impl->config->gpuShotPath;
+        }
+        else if (!_impl->captureRequestPath.empty()) {
+            capturePath = _impl->captureRequestPath;
+            _impl->captureRequestPath.clear();
+        }
+        if (!capturePath.empty()) {
+            recordGpuShotCopy(ctx);
+        }
+        presentedExtent = ctx.presentExtent;
     };
-    renderSurface->record(
-        cmdBuf.get(),
-        /*depthTarget=*/nullptr,
-        &snapshot,
-        FRender2DComposePassDesc{
-            .kind                  = ERender2DComposePassKind::RuntimeUIComposite,
-            .passSlot              = _impl->presentPassSlot,
-            .logicalExtent = _impl->tree->getLogicalExtent(),
-        },
-        inspectorExtra);
 
-    // Runtime automation capture (GUI offscreen parity): the control server
-    // defers the request until this frame loop reaches its warmup frame.
-    std::optional<PendingGuiCapture> capture;
-    if (_impl->pendingCapture && _impl->frameCount >= _impl->pendingCapture->earliestFrame) {
-        capture = std::move(_impl->pendingCapture);
-        _impl->pendingCapture.reset();
-    }
+    presentGuiSnapshot(_impl->presentResources,
+                       snapshot,
+                       _impl->tree->getLogicalExtent(),
+                       _impl->presentPassSlot,
+                       _impl->bWindowMinimized,
+                       _impl->bSwapchainRecreatePending,
+                       /*composeExtra=*/[this, &snapshot](const FGUIPresentExtensionContext& ctx)
+                       {
+                           runGuiFrameInspectorOverlay(
+                               *_impl->tree,
+                               snapshot,
+                               Extent2D{.width = ctx.presentExtent.width, .height = ctx.presentExtent.height});
+                       },
+                       preSubmit);
 
-    const std::string offscreenPath = capture && !capture->offscreenPath.empty()
-                                          ? capture->offscreenPath
-                                          : _impl->config->offscreenShotPath;
-    const bool bCaptureOffscreen =
-        (capture && !capture->offscreenPath.empty()) ||
-        (_impl->config->offscreenShotFrame != 0 &&
-         _impl->frameCount == _impl->config->offscreenShotFrame &&
-         !_impl->config->offscreenShotPath.empty());
-    std::shared_ptr<RenderTexture> offscreenImage;
-    if (bCaptureOffscreen) {
-        if (!_impl->offscreenSurface ||
-            !_impl->offscreenSurface->isValid() ||
-            _impl->offscreenSurface->getRenderImage()->getExtent() != presentExtent ||
-            _impl->offscreenSurface->getRenderImage()->getFormat() != renderImage->getFormat()) {
-            _impl->offscreenSurface = GUIRenderSurface::createOffscreen(
-                *_impl->render->getResourceFactory(),
-                FGUIRenderSurfaceDesc{
-                    .label       = "GUIAppHost_OffscreenMirror",
-                    .extent      = presentExtent,
-                    .colorFormat = renderImage->getFormat(),
-                });
-        }
-        if (!_impl->offscreenSurface || !_impl->offscreenSurface->isValid()) {
-            YA_CORE_ERROR("GUIAppHost: unable to create offscreen parity surface");
-        }
-        else {
-            _impl->offscreenSurface->prepare(FRender2DComposePassDesc{
-                .kind     = ERender2DComposePassKind::RuntimeUIOffscreen,
-                .passSlot = _impl->offscreenPassSlot,
-            });
-            _impl->offscreenSurface->record(
-                cmdBuf.get(),
-                nullptr,
-                &snapshot,
-                FRender2DComposePassDesc{
-                    .kind                  = ERender2DComposePassKind::RuntimeUIOffscreen,
-                    .passSlot              = _impl->offscreenPassSlot,
-                    .logicalExtent = _impl->tree->getLogicalExtent(),
-                });
-            offscreenImage = _impl->offscreenSurface->getRenderImage();
-
-            const uint32_t requiredReadbackSize = presentExtent.width * presentExtent.height * 4;
-            if (!_impl->offscreenShotBuffer || _impl->offscreenShotBuffer->getSize() != requiredReadbackSize) {
-                _impl->offscreenShotBuffer = _impl->render->getResourceFactory()->createBuffer(
-                    ya::BufferCreateInfo{
-                        .label       = "GUIAppHost_OffscreenShot",
-                        .usage       = EBufferUsage::TransferDst,
-                        .size        = requiredReadbackSize,
-                        .memoryUsage = EMemoryUsage::GpuToCpu,
-                    });
-            }
-            cmdBuf->transitionImageLayoutAuto(offscreenImage->getImage(), EImageLayout::TransferSrc);
-            cmdBuf->copyImageToBuffer(
-                offscreenImage->getImage(),
-                EImageLayout::TransferSrc,
-                _impl->offscreenShotBuffer.get(),
-                {ya::BufferImageCopy{
-                    .imageSubresource  = {.aspectMask = 1, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
-                    .imageOffsetX      = 0,
-                    .imageOffsetY      = 0,
-                    .imageOffsetZ      = 0,
-                    .imageExtentWidth  = presentExtent.width,
-                    .imageExtentHeight = presentExtent.height,
-                    .imageExtentDepth  = 1,
-                }});
-            cmdBuf->transitionImageLayoutAuto(offscreenImage->getImage(),
-                                               _impl->offscreenSurface->getFinalLayout());
-        }
-    }
-
-    std::string capturePath;
-    if (capture && !capture->gpuPath.empty()) {
-        capturePath = capture->gpuPath;
-    }
-    else if (_impl->config->gpuShotFrame != 0 &&
-             _impl->frameCount == _impl->config->gpuShotFrame &&
-             !_impl->config->gpuShotPath.empty()) {
-        capturePath = _impl->config->gpuShotPath;
-    }
-    else if (!_impl->captureRequestPath.empty()) {
-        capturePath = _impl->captureRequestPath;
-        _impl->captureRequestPath.clear();
-    }
-    if (!capturePath.empty()) {
-        const uint32_t requiredReadbackSize = presentExtent.width * presentExtent.height * 4;
-        if (!_impl->gpuShotBuffer || _impl->gpuShotBuffer->getSize() != requiredReadbackSize) {
-            _impl->gpuShotBuffer = _impl->render->getResourceFactory()->createBuffer(
-                ya::BufferCreateInfo{
-                    .label       = "GUIAppHost_GpuShot",
-                    .usage       = EBufferUsage::TransferDst,
-                    .size        = requiredReadbackSize,
-                    .memoryUsage = EMemoryUsage::GpuToCpu,
-                });
-        }
-        cmdBuf->transitionImageLayoutAuto(renderImage->getImage(), EImageLayout::TransferSrc);
-        cmdBuf->copyImageToBuffer(
-            renderImage->getImage(),
-            EImageLayout::TransferSrc,
-            _impl->gpuShotBuffer.get(),
-            {ya::BufferImageCopy{
-                .imageSubresource  = {.aspectMask = 1, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
-                .imageOffsetX      = 0,
-                .imageOffsetY      = 0,
-                .imageOffsetZ      = 0,
-                .imageExtentWidth  = presentExtent.width,
-                .imageExtentHeight = presentExtent.height,
-                .imageExtentDepth  = 1,
-            }});
-        cmdBuf->transitionImageLayoutAuto(renderImage->getImage(), renderSurface->getFinalLayout());
-    }
-
-    cmdBuf->end();
-    submitPresentFrame(*_impl->render, presentFrame, {cmdBuf->getHandle()});
-
+    // The captures are complete once the submit retires: map the readback
+    // staging buffers and encode. Parity additionally diffs gpu vs offscreen
+    // at zero tolerance before completing the automation request.
     if (!capturePath.empty() || bCaptureOffscreen) {
         _impl->present->waitInFlight();
         if (!capturePath.empty() && _impl->gpuShotBuffer) {
             if (uint8_t* pixels = _impl->gpuShotBuffer->map<uint8_t>()) {
+                auto* swapchain = _impl->present->getSwapchain();
                 writeRGBAtoBMP(pixels,
-                               presentExtent.width,
-                               presentExtent.height,
-                               swapchain->getFormat() == EFormat::B8G8R8A8_UNORM,
+                               presentedExtent.width,
+                               presentedExtent.height,
+                               swapchain && swapchain->getFormat() == EFormat::B8G8R8A8_UNORM,
                                capturePath);
                 _impl->gpuShotBuffer->unmap();
                 YA_CORE_INFO("GUIAppHost wrote GPU shot to '{}' ({}x{})",
                              capturePath,
-                             presentExtent.width,
-                             presentExtent.height);
+                             presentedExtent.width,
+                             presentedExtent.height);
             }
         }
         if (bCaptureOffscreen && _impl->offscreenShotBuffer) {
             if (uint8_t* pixels = _impl->offscreenShotBuffer->map<uint8_t>()) {
-                const bool bOffscreenIsBgra = offscreenImage &&
-                                              offscreenImage->getFormat() == EFormat::B8G8R8A8_UNORM;
                 writeRGBAtoBMP(pixels,
-                               presentExtent.width,
-                               presentExtent.height,
-                               bOffscreenIsBgra,
+                               presentedExtent.width,
+                               presentedExtent.height,
+                               offscreenImage && offscreenImage->getFormat() == EFormat::B8G8R8A8_UNORM,
                                offscreenPath);
                 _impl->offscreenShotBuffer->unmap();
                 YA_CORE_INFO("GUIAppHost wrote offscreen shot to '{}' ({}x{})",
                              offscreenPath,
-                             presentExtent.width,
-                             presentExtent.height);
+                             presentedExtent.width,
+                             presentedExtent.height);
             }
         }
     }
-
-    // Complete a runtime automation capture after the requested surfaces were
-    // written; parity additionally diffs gpu vs offscreen at zero tolerance.
-    if (capture) {
+    if (captured) {
         nlohmann::json result = {
-            {"gpu_path", capture->gpuPath},
-            {"offscreen_path", capture->offscreenPath},
+            {"gpu_path", captured->gpuPath},
+            {"offscreen_path", captured->offscreenPath},
         };
-        if (!capture->diffPath.empty()) {
-            const BmpDiffResult diff = diffBmpFiles(capture->gpuPath,
-                                                    capture->offscreenPath,
-                                                    capture->diffPath,
+        if (!captured->diffPath.empty()) {
+            const BmpDiffResult diff = diffBmpFiles(captured->gpuPath,
+                                                    captured->offscreenPath,
+                                                    captured->diffPath,
                                                     0, 0.0f);
-            result["diff_path"]        = capture->diffPath;
+            result["diff_path"]        = captured->diffPath;
             result["pass"]             = diff.bPass;
             result["differing_pixels"] = diff.differingPixels;
             result["diff_ratio"]       = diff.diffRatio;
             YA_CORE_INFO("GUIAppHost offscreen parity diff: pass={} differing={} ratio={:.4f}",
                          diff.bPass, diff.differingPixels, diff.diffRatio);
         }
-        _impl->automationServer.completeRequest(capture->waiter,
-                                                makeAutomationSuccess(*capture->waiter, std::move(result)));
+        _impl->automationServer.completeRequest(captured->waiter,
+                                                makeAutomationSuccess(*captured->waiter, std::move(result)));
     }
+}
+
+bool GUIWindowHost::recordOffscreenParityCapture(const FGUIPresentExtensionContext& ctx,
+                                                 const UIFrameSnapshot&             snapshot,
+                                                 std::shared_ptr<RenderTexture>&    outImage)
+{
+    // The mirror is sized and formatted from the presented image, and the
+    // check below is what makes a swapchain rebuild self-heal on the next
+    // capture -- there is no dedicated teardown for it.
+    const auto& presentedImage = ctx.presentedSurface.getRenderImage();
+    if (!_impl->offscreenSurface ||
+        !_impl->offscreenSurface->isValid() ||
+        _impl->offscreenSurface->getRenderImage()->getExtent() != ctx.presentExtent ||
+        _impl->offscreenSurface->getRenderImage()->getFormat() != presentedImage->getFormat()) {
+        _impl->offscreenSurface = GUIRenderSurface::createOffscreen(
+            *_impl->render->getResourceFactory(),
+            FGUIRenderSurfaceDesc{
+                .label       = "GUIAppHost_OffscreenMirror",
+                .extent      = ctx.presentExtent,
+                .colorFormat = presentedImage->getFormat(),
+            });
+    }
+    if (!_impl->offscreenSurface || !_impl->offscreenSurface->isValid()) {
+        YA_CORE_ERROR("GUIAppHost: unable to create offscreen parity surface");
+        return false;
+    }
+    _impl->offscreenSurface->prepare(FRender2DComposePassDesc{
+        .kind     = ERender2DComposePassKind::RuntimeUIOffscreen,
+        .passSlot = _impl->offscreenPassSlot,
+    });
+    _impl->offscreenSurface->record(
+        &ctx.cmdBuf,
+        nullptr,
+        &snapshot,
+        FRender2DComposePassDesc{
+            .kind                  = ERender2DComposePassKind::RuntimeUIOffscreen,
+            .passSlot              = _impl->offscreenPassSlot,
+            .logicalExtent = _impl->tree->getLogicalExtent(),
+        });
+    outImage = _impl->offscreenSurface->getRenderImage();
+
+    const uint32_t requiredReadbackSize = ctx.presentExtent.width * ctx.presentExtent.height * 4;
+    if (!_impl->offscreenShotBuffer || _impl->offscreenShotBuffer->getSize() != requiredReadbackSize) {
+        _impl->offscreenShotBuffer = _impl->render->getResourceFactory()->createBuffer(
+            ya::BufferCreateInfo{
+                .label       = "GUIAppHost_OffscreenShot",
+                .usage       = EBufferUsage::TransferDst,
+                .size        = requiredReadbackSize,
+                .memoryUsage = EMemoryUsage::GpuToCpu,
+            });
+    }
+    ctx.cmdBuf.transitionImageLayoutAuto(outImage->getImage(), EImageLayout::TransferSrc);
+    ctx.cmdBuf.copyImageToBuffer(
+        outImage->getImage(),
+        EImageLayout::TransferSrc,
+        _impl->offscreenShotBuffer.get(),
+        {ya::BufferImageCopy{
+            .imageSubresource  = {.aspectMask = 1, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
+            .imageOffsetX      = 0,
+            .imageOffsetY      = 0,
+            .imageOffsetZ      = 0,
+            .imageExtentWidth  = ctx.presentExtent.width,
+            .imageExtentHeight = ctx.presentExtent.height,
+            .imageExtentDepth  = 1,
+        }});
+    ctx.cmdBuf.transitionImageLayoutAuto(outImage->getImage(), _impl->offscreenSurface->getFinalLayout());
+    return true;
+}
+
+void GUIWindowHost::recordGpuShotCopy(const FGUIPresentExtensionContext& ctx)
+{
+    const uint32_t requiredReadbackSize = ctx.presentExtent.width * ctx.presentExtent.height * 4;
+    if (!_impl->gpuShotBuffer || _impl->gpuShotBuffer->getSize() != requiredReadbackSize) {
+        _impl->gpuShotBuffer = _impl->render->getResourceFactory()->createBuffer(
+            ya::BufferCreateInfo{
+                .label       = "GUIAppHost_GpuShot",
+                .usage       = EBufferUsage::TransferDst,
+                .size        = requiredReadbackSize,
+                .memoryUsage = EMemoryUsage::GpuToCpu,
+            });
+    }
+    const auto& renderImage = ctx.presentedSurface.getRenderImage();
+    ctx.cmdBuf.transitionImageLayoutAuto(renderImage->getImage(), EImageLayout::TransferSrc);
+    ctx.cmdBuf.copyImageToBuffer(
+        renderImage->getImage(),
+        EImageLayout::TransferSrc,
+        _impl->gpuShotBuffer.get(),
+        {ya::BufferImageCopy{
+            .imageSubresource  = {.aspectMask = 1, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
+            .imageOffsetX      = 0,
+            .imageOffsetY      = 0,
+            .imageOffsetZ      = 0,
+            .imageExtentWidth  = ctx.presentExtent.width,
+            .imageExtentHeight = ctx.presentExtent.height,
+            .imageExtentDepth  = 1,
+        }});
+    ctx.cmdBuf.transitionImageLayoutAuto(renderImage->getImage(), ctx.presentedSurface.getFinalLayout());
 }
 
 void GUIWindowHost::injectEvent(const Event& event, const glm::vec2& logicalPoint)
@@ -1784,8 +1685,8 @@ void GUIWindowHost::shutdown()
     }
     _impl->automationServer.shutdown();
     Render2D::destroy();
-    _impl->commandBuffers.clear();   // releases command-buffer resource retention
-    _impl->presentationTargets.clear();
+    _impl->presentResources.commandBuffers.clear();   // releases command-buffer resource retention
+    _impl->presentResources.presentationTargets.clear();
     _impl->gpuShotBuffer.reset();    // readback staging buffer (RHI-owned)
     _impl->offscreenSurface.reset();
     _impl->offscreenShotBuffer.reset();
