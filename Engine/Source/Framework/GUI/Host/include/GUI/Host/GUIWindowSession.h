@@ -3,6 +3,7 @@
 #include "GUI/Host/GUIAppDelegate.h"
 #include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Host/GUIAppHost.h"
+#include "GUI/Host/IGUIWindowSession.h"
 #include "GUI/Host/GUIWindowPresent.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -16,31 +17,9 @@
 namespace ya
 {
 
-/// One native GUI window's live session. Not an editor/document object.
-///
-/// Owns the NativeWindow handle, WidgetTree, snapshot, input/focus state on
-/// that tree, and optional `IRenderSurfaceContext` presentation set. Shared
-/// device stays on the process `IRender`; this object never calls
-/// `IRender::create`.
-class YA_GUI_API IGUIWindowSession
-{
-  public:
-    virtual ~IGUIWindowSession() = default;
-
-    [[nodiscard]] virtual GUIWindowId              id() const             = 0;
-    [[nodiscard]] virtual INativeWindow*           nativeWindow() const   = 0;
-    [[nodiscard]] virtual WidgetTree*              tree() const           = 0;
-    [[nodiscard]] virtual const UIFrameSnapshot*   snapshot() const       = 0;
-    [[nodiscard]] virtual IRenderSurfaceContext*   surfaceContext() const = 0;
-    [[nodiscard]] virtual bool                     isMinimized() const    = 0;
-    [[nodiscard]] virtual bool                     closeRequested() const = 0;
-    [[nodiscard]] virtual const FWindowChromeState& chrome() const        = 0;
-    /// Click-through drag preview window. Not an editor/session extra.
-    [[nodiscard]] virtual bool isHostOverlay() const { return false; }
-};
-
-/// Extra-window owner used by `GUIWindowManager`. Primary `GUIWindowHost`
-/// stays a separate owner until a later unify; extras are sessions.
+/// One extra window's session (`IGUIWindowSession` itself lives in
+/// `IGUIWindowSession.h`, because the GUI app's startup window is one too).
+/// Owned by `GUIWindowManager`.
 class YA_GUI_API GUIWindowSession final : public IGUIWindowSession
 {
   public:

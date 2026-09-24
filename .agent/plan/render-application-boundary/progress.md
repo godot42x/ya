@@ -873,3 +873,50 @@ present target 不再留在表里。这是 step 1a 引入 `SurfaceId` 后立刻�
 - 仍未做：一个 present family 覆盖不了全部 startup 窗口 / 无窗口设备（明确拒绝）、
   acquire/submit/present 拆分（AB4-2f）、GUI session 合并（AB4-2c）。
 - 偏离：无。
+## 2026-09-24 AB4-2c step 1 — 每个 GUI 窗口都是同一个 registry 里的 session
+
+唯一目标：**GUI app 的窗口是一组同级 session**，跑一次 tick 时先让所有窗口的 content 都前进，再让
+任何窗口 present。启动窗口不再是「另一种形状」，只是「另一个创建时机」。
+
+### 改动
+
+- `IGUIWindowSession` 从 `GUIWindowSession.h` 拆到 `GUI/Host/IGUIWindowSession.h`（原先那个头反过来
+  包含 `GUIAppHost.h`，所以宿主类无法实现这个接口）。`GUIWindowId` 也随之落到该头。
+- `GUIWindowHost` 实现 `IGUIWindowSession`：`id/nativeWindow/tree/snapshot/surfaceContext/isMinimized/
+  closeRequested/chrome`。
+- `GUIWindowHost::onTick` 拆成 `tickContent(dt)`（automation、tree tick、`updateUI`、DPI、buildSnapshot、
+  dump、overlay）与 `presentSnapshot()`（recreate/presentable 检查、compose、capture、submit、readback、
+  automation 完成）。`onTick` 保持为两者之和，单窗口调用方（`GUIWindowHost::run`、测试）不变。
+  snapshot 存在 `FImpl` 里，新增 `getSnapshot()`（未 tick 过返回 null）。
+- `GUIApp`：`findSession` / `findTree` 走同一判定；新增 `sessions()` / `windowCount()` / `forEachSession()`；
+  `onTick` 改为「tick 全部 → present 全部」。
+- `GUIWindowManager::forEachSession()`：让「多个 registry 当一个窗口集合用」成为可能。
+
+### 一个真实回归与修法（记录，不隐藏）
+
+把 snapshot 从 tick 的局部变量搬进 `FImpl` 后，`GUIWorkbench --smoke-actions` 的日志仍打印 PASS，**但进程
+以非 0 退出**（`execv ... failed(-1)`），VMA 同时报 `UNFREED ALLOCATION ... FontAtlas_*`。原因是 snapshot
+引用它排版时用到的字体/图集资源，而 `FImpl` 比 render device 活得久，于是图集一直没被释放。修法是在
+`GUIWindowHost::shutdown()` **最开头**清空 snapshot（那时资源还活着），之后才做 reverse-order teardown。
+验证方式是把 HEAD 也跑一遍比对退出码（HEAD=0，改动后=255），再修完后回到 0 —— 只看“PASS”字样会漏掉它。
+
+### 验证
+
+- `xmake b`：`ya-gui-host` / `GUIWorkbench` / `ya-game-runtime` / `ya-runtime` / `ya-game-editor` /
+  `-g test` 全部 ok。
+- `ya-gui-closure-test`：600 passed。`ya-gui-headless-host-test`：47 passed（含新增
+  `GUIAppWindowRegistryTest.EveryWindowIsASessionInOneRegistry`）。
+- `ya-testing`：**1320 tests / 1319 passed / 1 skipped / 0 failed**（跳过的仍是 platform minimize guard）。
+- `GUIWorkbench --smoke-actions`：**exit=0** 且无 VMA leak 警告。
+- `run_display_compose_parity.py --skip-build`：**exit=0**，md5 仍 `c775245ae636f15b41da8485319a2267`。
+- `run_widgettree_editor_smoke.py --skip-build`：**exit=0** 六步全过。
+
+### 保留 / 未完成 / 偏离
+
+- 未完成（明确留给 AB4-2d）：`presentGuiSnapshot` 仍是额外的 acquire/submit/present 循环；游戏侧
+  extra 窗口的 chrome 仍在主窗 present 之后 tick（`EditorModule` 的 `onAfterPresent`），需要 GameRuntime
+  tick 的钩子才能把同一顺序搬到编辑器线上。
+- 未覆盖（如实记录）：「所有窗口 tick 完再 present」这条顺序没有被单元用例直接观测——它需要真实 device
+  才能看到 present；本批只钉住了 registry（id 查找 / 遍历 / 关闭后消失）。产品级证据是 workbench smoke
+  （两窗口 + drag reparent + editor shell）与 editor smoke。
+- 偏离：无。

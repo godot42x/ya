@@ -32,6 +32,7 @@
 #include "GUI/Host/GUIAppDelegate.h"
 #include "GUI/Host/GUIDragRouter.h"
 #include "GUI/Host/GUIWindowChrome.h"
+#include "GUI/Host/IGUIWindowSession.h"
 #include "RHI/RenderDefines.h"
 
 #include <cstdint>
@@ -140,8 +141,6 @@ struct FGUIWindowHostConfig
     AppAutomationRunOptions automation;
 };
 
-using GUIWindowId = uint32_t;
-
 /// How one GUI host window becomes a presentable surface: the single place a
 /// window's configuration turns into a swapchain description.
 ///
@@ -152,10 +151,13 @@ using GUIWindowId = uint32_t;
 [[nodiscard]] YA_GUI_API SwapchainCreateInfo makeHostWindowSurfaceDesc(const FGUIWindowHostConfig& config);
 
 /// One native GUI window: owns its SDL window, presentation resources,
-/// transient pointer state and exactly one WidgetTree. It is the concrete
-/// single-window owner.
+/// transient pointer state and exactly one WidgetTree.
+///
+/// It is also an `IGUIWindowSession`, so a registry of windows can hold it next
+/// to the ones a GUI app opens later: the startup window has no special shape,
+/// only a special creation time (the device is created for it).
 /// The delegate must outlive the host.
-class YA_GUI_API GUIWindowHost : public IAppLoopDelegate
+class YA_GUI_API GUIWindowHost : public IAppLoopDelegate, public IGUIWindowSession
 {
 public:
     GUIWindowHost(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate);
@@ -195,6 +197,36 @@ public:
     /// AppKernel run. GUIApp calls this after its kernel exits.
     [[nodiscard]] int finishRun(int kernelResult);
 
+    /// === The tick, split at the point a registry of windows needs ===
+    ///
+    /// `tickContent` runs this window's live state one frame forward and
+    /// publishes the snapshot that describes it; `presentSnapshot` puts the
+    /// snapshot this window most recently built onto its surface. `onTick` is
+    /// exactly those two, which is what a single-window caller wants.
+    ///
+    /// The split exists because an app with several windows must not interleave
+    /// them: presenting window A before window B has ticked makes B's chrome a
+    /// frame stale, and a surface that is torn off mid-frame would show a tree
+    /// that was never laid out for it. Ticking every window first and then
+    /// presenting every window keeps each frame's content and its presentation
+    /// in the same frame for all of them.
+    void tickContent(float dt);
+    void presentSnapshot();
+    /// The snapshot `tickContent` most recently published. Null before the first
+    /// tick, which is the honest answer for "what does this window show" before
+    /// it has been laid out once.
+    [[nodiscard]] const UIFrameSnapshot* getSnapshot() const;
+
+    // === IGUIWindowSession: this window in a registry of windows ===
+    [[nodiscard]] GUIWindowId                    id() const override { return getWindowID(); }
+    [[nodiscard]] INativeWindow*                 nativeWindow() const override;
+    [[nodiscard]] WidgetTree*                    tree() const override;
+    [[nodiscard]] const UIFrameSnapshot*         snapshot() const override { return getSnapshot(); }
+    [[nodiscard]] IRenderSurfaceContext*         surfaceContext() const override;
+    [[nodiscard]] bool                           isMinimized() const override;
+    [[nodiscard]] bool                           closeRequested() const override;
+    [[nodiscard]] const FWindowChromeState&      chrome() const override { return windowChrome(); }
+
     // === IAppLoopDelegate (driven by AppKernel; init/shutdown stay public) ===
     void onInit() override;
     void onEvent(const Event& event) override;
@@ -222,12 +254,18 @@ private:
 
 class GUIWindowManager;
 class IGUIWindowCoordinator;
-class IGUIWindowSession;
+struct IGUIWindowSession;
 
-/// GUI assembly/policy layer. Owns the primary GUIWindowHost plus extra
-/// native windows (`GUIWindowManager` as `IGUIWindowCoordinator`). One
-/// AppKernel drives both; extras share the process device and do not call
-/// IRender::create. Extra windows present through `GUIWindowManager::renderAll`.
+/// GUI assembly/policy layer. Owns the startup `GUIWindowHost` plus the
+/// native windows opened later (`GUIWindowManager` as `IGUIWindowCoordinator`).
+/// One AppKernel drives all of them; every later window shares the process
+/// device and does not call `IRender::create`.
+///
+/// Every window is a session, the startup one included: `findSession`,
+/// `findTree`, `forEachSession` and `windowCount` answer for any window by id,
+/// and one tick ticks every window's content before any window presents. The
+/// startup window differs only in that the device was created for it (see
+/// `RenderCreateInfo::startupSurfaces`).
 class YA_GUI_API GUIApp final : public IAppLoopDelegate
 {
     GUIWindowHost                     _primaryWindow;
@@ -259,6 +297,13 @@ public:
     [[nodiscard]] size_t      extraWindowCount() const;
     [[nodiscard]] IGUIWindowCoordinator& windowCoordinator();
     [[nodiscard]] IGUIWindowSession*     findSession(GUIWindowId id);
+    /// Every window this app owns, the startup one first. A window that has not
+    /// been initialized is not in the registry: `init()` is what creates one.
+    [[nodiscard]] std::vector<IGUIWindowSession*> sessions() const;
+    [[nodiscard]] size_t                          windowCount() const;
+    /// Visit every window. Used by callers that treat windows uniformly (the
+    /// tick, the drag router's window list) instead of naming the startup one.
+    void forEachSession(const std::function<void(IGUIWindowSession&)>& fn) const;
 
     /// Unique drag session for this GUIApp (primary + extras). `GUIDragRouter`
     /// is the only source/hover identity; GUIApp methods are thin wrappers.

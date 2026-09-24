@@ -349,9 +349,23 @@ AB4-step2（待做）不是一个改动，而是以下有依赖关系的闭环�
    `RHISurfaceContext.StartupWindowsAndLaterWindowsAreRegisteredAlike`；`ya-testing` 1319 tests /
    1318 passed / 1 skipped（同一 platform guard）/ 0 failed；GUIWorkbench `--smoke-actions` PASS；
    parity 两张图 md5 仍 `c775245ae636f15b41da8485319a2267`；editor smoke exit=0。
-2. **AB4-2c：GUI 所有窗口成为同级 session。** GUIApp 不再把 `_primaryWindow` 与
-   `GUIWindowManager` extras 分开持有；注册、事件路由、tick、关闭和拖拽查找统一走 session registry。
-   应用启动窗口只是一个普通 session 的创建时机，退出策略由应用明确指定。
+2. **AB4-2c：GUI 所有窗口成为同级 session（step 1 已落地 2026-09-24）。**
+
+   已落地：`IGUIWindowSession` 从 `GUIWindowSession.h` 拆到自己的头，`GUIWindowHost` 直接实现它——
+   启动窗口不再是一种形状，只是一个创建时机。`GUIApp` 的查找/遍历统一：`findSession` / `findTree` /
+   `windowCount` / `sessions` / `forEachSession` 对一个 id 作答，不再分 primary/extras 两种形状。
+   一帧的顺序改成**先 tick 全部窗口的 content，再 present 全部窗口**：`GUIWindowHost::onTick` =
+   `tickContent` + `presentSnapshot`，`GUIApp::onTick` 先 `tickContent`（主窗）+ `tickAll`（其余），
+   然后 `presentSnapshot` + `renderAll`。这消掉了「A 窗 present 早于 B 窗 chrome tick」的半状态。
+
+   未完成（本 step 明确不做）：`presentGuiSnapshot` 的独立 acquire/submit/present 循环仍在，
+   “一个 app-owned record/present 顺序”需要 per-surface display plan（AB4-2d）；游戏侧（GameEditor
+   经 GUIWindowManager 在 `onAfterPresent` 里 tick+present extras）仍把 extra 的 chrome tick 放在主窗
+   present 之后，需要GameRuntime tick 的钩子，随 AB4-2d 一起收。
+
+   证据：`GUIAppWindowRegistryTest.EveryWindowIsASessionInOneRegistry`；`ya-gui-closure-test` 600 passed；
+   `ya-gui-headless-host-test` 47 passed；`ya-testing` 1320 tests / 1319 passed / 1 skipped / 0 failed；
+   GUIWorkbench `--smoke-actions` PASS；parity md5 不变；editor smoke exit=0。
 3. **AB4-2d：一个逻辑 tick 构造多个 SurfaceDisplayPlan。** render plan 分开携带
    View requests 与每个 surface 的有序 display layers；acquire result 是录制期间的一次性 runtime token，
    不属于长期 display policy；record/compose/present 对每个

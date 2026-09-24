@@ -552,6 +552,11 @@ struct GUIWindowHost::FImpl
     AppAutomationControlServer automationServer;
     std::shared_ptr<ShaderStorage> shaderStorage;
     std::unique_ptr<WidgetTree> tree;
+    /// The layout this window last published (see tickContent). Held across the
+    /// tick/present split so a window's presentation uses the frame that was
+    /// laid out for it rather than rebuilding one mid-loop.
+    UIFrameSnapshot snapshot;
+    bool            bSnapshotBuilt = false;
     HostGuiTextureSource        textureSource;
 
     std::vector<std::shared_ptr<ICommandBuffer>>       commandBuffers;
@@ -1118,6 +1123,15 @@ bool GUIWindowHost::shouldClose() const
 
 void GUIWindowHost::onTick(float dt)
 {
+    // One window's frame is exactly its content and its presentation (see the
+    // header): an app with several windows calls the two halves separately, so
+    // no window is presented before every window has ticked.
+    tickContent(dt);
+    presentSnapshot();
+}
+
+void GUIWindowHost::tickContent(float dt)
+{
     // Events are delivered by the kernel event phase (via onEvent) before
     // this tick. Drive live widget lifecycle before application-level state
     // synchronization and snapshot generation.
@@ -1296,11 +1310,12 @@ void GUIWindowHost::onTick(float dt)
         // user zoom stays separate (uiUserScale, default 1.0).
         FontManager::get()->setActiveDpiScale(_impl->devicePixelRatio);
         _impl->tree->setDpiScale(_impl->devicePixelRatio);
-        _impl->tree->buildSnapshot(UIFrameBuildContext{
+        _impl->snapshot = _impl->tree->buildSnapshot(UIFrameBuildContext{
             .uiScale         = {_impl->uiUserScale, _impl->uiUserScale},
             .offset          = {0.0f, 0.0f},
             .textureResolver = resolveBuiltinTexture,
         });
+        _impl->bSnapshotBuilt = true;
         // Safe-point glyph flush (Core Rule 6): this path never records
         // commands, so pending glyph capture can run here too.
         FontManager::get()->flushPendingGlyphs(*_impl->render);
@@ -1344,6 +1359,55 @@ void GUIWindowHost::onTick(float dt)
                           _impl->config->dumpSnapshotJsonPath);
         }
     }
+
+    // This window's frame is published here: everything below presents it, and
+    // a registry of windows runs that presentation for every window after every
+    // window has reached this point.
+    _impl->snapshot      = std::move(snapshot);
+    _impl->bSnapshotBuilt = true;
+}
+
+const UIFrameSnapshot* GUIWindowHost::getSnapshot() const
+{
+    return _impl->bSnapshotBuilt ? &_impl->snapshot : nullptr;
+}
+
+WidgetTree* GUIWindowHost::tree() const
+{
+    return _impl->tree.get();
+}
+
+INativeWindow* GUIWindowHost::nativeWindow() const
+{
+    return &_impl->window;
+}
+
+IRenderSurfaceContext* GUIWindowHost::surfaceContext() const
+{
+    return _impl->present;
+}
+
+bool GUIWindowHost::isMinimized() const
+{
+    return _impl->bWindowMinimized;
+}
+
+bool GUIWindowHost::closeRequested() const
+{
+    return _impl->bQuitRequested;
+}
+
+void GUIWindowHost::presentSnapshot()
+{
+    // Scenario frames have no presentable swapchain (see tickContent); the
+    // snapshot they built is still the window's current content.
+    if (_impl->config && _impl->config->bScenarioRender && _impl->bScenarioMode) {
+        return;
+    }
+    if (!_impl->bSnapshotBuilt || !_impl->render || !_impl->present) {
+        return;
+    }
+    const UIFrameSnapshot& snapshot = _impl->snapshot;
     FontManager::get()->flushPendingGlyphs(*_impl->render);
     (void)FontManager::get()->consumeNewGlyphCapture();
 
@@ -1687,6 +1751,13 @@ void GUIWindowHost::shutdown()
         return;
     }
 
+    // Drop this window's published frame first: a snapshot refers to the fonts
+    // and textures it was laid out with (atlas pages, images), and this is the
+    // last moment they are still alive. Holding it across the render teardown
+    // below is how a font atlas ends up unfreed.
+    _impl->snapshot = {};
+    _impl->bSnapshotBuilt = false;
+
     // Clean shutdown, reverse order. Every member owning GPU resources must be
     // released BEFORE the Vulkan device / VMA allocator is destroyed below
     // (a later ~VulkanBuffer would call vmaDestroyBuffer on a dead allocator).
@@ -1775,13 +1846,8 @@ void GUIApp::closeWindow(GUIWindowId id)
 
 WidgetTree* GUIApp::findTree(GUIWindowId id)
 {
-    if (_primaryWindow.isInitialized()) {
-        const uint32_t primaryId = _primaryWindow.getWindowID();
-        if (id == 0 || id == primaryId) {
-            return &_primaryWindow.getTree();
-        }
-    }
-    return _extraWindows->findTree(id);
+    IGUIWindowSession* session = findSession(id);
+    return session ? session->tree() : nullptr;
 }
 
 size_t GUIApp::extraWindowCount() const
@@ -1796,7 +1862,37 @@ IGUIWindowCoordinator& GUIApp::windowCoordinator()
 
 IGUIWindowSession* GUIApp::findSession(GUIWindowId id)
 {
+    // One registry, so a caller that has a window id does not have to know
+    // whether the window is the one the app started with.
+    if (_primaryWindow.isInitialized()) {
+        const GUIWindowId primaryId = _primaryWindow.getWindowID();
+        if (id != 0 && id == primaryId) {
+            return &_primaryWindow;
+        }
+    }
     return _extraWindows->findSession(id);
+}
+
+std::vector<IGUIWindowSession*> GUIApp::sessions() const
+{
+    std::vector<IGUIWindowSession*> out;
+    forEachSession([&out](IGUIWindowSession& session) { out.push_back(&session); });
+    return out;
+}
+
+size_t GUIApp::windowCount() const
+{
+    size_t count = 0;
+    forEachSession([&count](IGUIWindowSession&) { ++count; });
+    return count;
+}
+
+void GUIApp::forEachSession(const std::function<void(IGUIWindowSession&)>& fn) const
+{
+    if (_primaryWindow.isInitialized()) {
+        fn(const_cast<GUIWindowHost&>(_primaryWindow));
+    }
+    _extraWindows->forEachSession(fn);
 }
 
 void GUIApp::onInit() {}
@@ -1842,10 +1938,22 @@ void GUIApp::onEvent(const Event& event)
 void GUIApp::onTick(float dt)
 {
     applyDeferredCloses();
+    // Every window's content is ticked and snapshotted before any window
+    // presents: presenting window A first would leave window B's chrome a frame
+    // stale, and a window torn off in this frame would show a tree that was
+    // never laid out for its surface. The two halves of a window's frame are
+    // what makes that ordering expressible (see GUIWindowHost::tickContent).
     if (_primaryWindow.isInitialized()) {
-        _primaryWindow.onTick(dt);
+        _primaryWindow.tickContent(dt);
     }
+    // tickAll is this manager's "tick every window's content" (it flushes the
+    // frame's close requests first); presentation is the separate step below,
+    // which is what keeps every window's content a frame ahead of the first
+    // window's presentation.
     _extraWindows->tickAll(dt);
+    if (_primaryWindow.isInitialized()) {
+        _primaryWindow.presentSnapshot();
+    }
     _extraWindows->renderAll();
     if (_extraWindows->extraWindowCount() == 0) {
         _primaryWindow.setAcceptAllWindowEvents(false);

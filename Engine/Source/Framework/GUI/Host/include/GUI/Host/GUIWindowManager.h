@@ -20,9 +20,9 @@ namespace ya
 /// hover, tooltip host, capture widget and DPI live on that tree. Pointer
 /// capture/drag identity, OS clipboard, IME and cursor belong to the host
 /// `GUIDragRouter`. It does
-/// not call `IRender::create`. The primary window stays on GUIWindowHost;
-/// this manager only holds extras. One AppKernel tick calls tickAll then
-/// renderAll after the primary host tick.
+/// not call `IRender::create`. This manager holds the windows opened after the
+/// startup one; the startup window is a session too (`GUIWindowHost`), and a
+/// GUI app ticks every window's content before presenting any of them.
 class YA_GUI_API GUIWindowManager final : public IGUIWindowCoordinator
 {
     NativeWindowManager                           _nativeWindows;
@@ -95,6 +95,9 @@ class YA_GUI_API GUIWindowManager final : public IGUIWindowCoordinator
     [[nodiscard]] GUIWindowId findCapturingWindowId() const;
     [[nodiscard]] GUIWindowId findModalWindowId() const;
     void forEachWindow(const std::function<void(GUIWindowId, WidgetTree*, INativeWindow*)>& fn) const;
+    /// Visit this manager's sessions as windows, for a caller that owns several
+    /// registries and treats them as one set.
+    void forEachSession(const std::function<void(IGUIWindowSession&)>& fn) const;
 
   private:
     GUIWindowSession*       findOwnedSession(GUIWindowId id);

@@ -406,6 +406,18 @@ void GUIWindowManager::forEachWindow(
     }
 }
 
+void GUIWindowManager::forEachSession(const std::function<void(IGUIWindowSession&)>& fn) const
+{
+    if (!fn) {
+        return;
+    }
+    for (const auto& session : _sessions) {
+        if (session) {
+            fn(*session);
+        }
+    }
+}
+
 void GUIWindowManager::flushPendingCloses()
 {
     for (size_t i = 0; i < _sessions.size();) {

@@ -820,6 +820,54 @@ TEST(GUIAppExtraWindowTest, ExposesCoordinatorSessions)
     EXPECT_EQ(app.findSession(0), nullptr);
 }
 
+/// A GUI app's windows are one set, whether they were opened at startup or
+/// later. The id is the only handle a caller needs: it never has to know that
+/// the window it is asking about is "the primary" one, and the app never
+/// answers a lookup with "that is the other kind of window".
+///
+/// The startup window only joins the registry once `init()` has created it, so
+/// this case pins the other half: before that, the registry holds exactly the
+/// windows that exist, and every lookup still answers by id.
+TEST(GUIAppWindowRegistryTest, EveryWindowIsASessionInOneRegistry)
+{
+    NamedWindowDelegate primary;
+    NamedWindowDelegate first;
+    NamedWindowDelegate second;
+
+    GUIApp app(extraConfig("MW-703-primary", 64, 64), primary);
+    EXPECT_FALSE(app.getPrimaryWindow().isInitialized());
+    EXPECT_EQ(app.windowCount(), 0u);
+    EXPECT_TRUE(app.sessions().empty());
+
+    const GUIWindowId firstId  = app.openWindow(extraConfig("MW-703-first", 160, 120), first);
+    const GUIWindowId secondId = app.openWindow(extraConfig("MW-703-second", 200, 150), second);
+    if (firstId == 0 || secondId == 0) {
+        GTEST_SKIP() << "SDL native window create failed";
+    }
+
+    // The registry is the window set, and it answers for each window by id.
+    EXPECT_EQ(app.windowCount(), app.extraWindowCount());
+    std::vector<GUIWindowId> visited;
+    app.forEachSession([&visited](IGUIWindowSession& session) { visited.push_back(session.id()); });
+    ASSERT_EQ(visited.size(), 2u);
+    EXPECT_EQ(visited[0], firstId);
+    EXPECT_EQ(visited[1], secondId);
+    for (GUIWindowId id : {firstId, secondId}) {
+        IGUIWindowSession* session = app.findSession(id);
+        ASSERT_NE(session, nullptr);
+        EXPECT_EQ(session->id(), id);
+        EXPECT_EQ(session->tree(), app.findTree(id));
+        EXPECT_EQ(session->surfaceContext(), nullptr);
+        EXPECT_FALSE(session->closeRequested());
+    }
+
+    app.closeWindow(firstId);
+    app.onTick(0.0f);
+    EXPECT_EQ(app.windowCount(), 1u);
+    EXPECT_EQ(app.findSession(firstId), nullptr);
+    ASSERT_NE(app.findSession(secondId), nullptr);
+}
+
 struct DockWindowDelegate final : IGUIAppDelegate
 {
     std::shared_ptr<FDockContext> dock;
