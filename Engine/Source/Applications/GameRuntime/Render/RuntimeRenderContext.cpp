@@ -132,14 +132,17 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan)
     if (submission && presentation) {
         // What the window starts from is this host's declaration: the display
         // root's image, or only the pass clear when the host's own content fills
-        // the surface (the editor's chrome).
+        // the surface (the editor's chrome). The image written is the plan's
+        // acquired token -- the same answer the submission's sync pair came
+        // from -- never a swapchain query at record time.
         presentation->recordDisplayCompose(
             plan.present.backdrop == ESurfaceBackdrop::ViewDisplayImage ? _device->surfaceImageFor(displayOutput)
                                                                         : FSurfaceImage{},
             *submission,
             plan.frame.deltaTime,
             plan.recordExtensions,
-            cmdBuf.get());
+            cmdBuf.get(),
+            plan.present.imageIndex);
     }
 
     _device->endFrameCommandBuffer(cmdBuf.get());

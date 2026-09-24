@@ -1111,3 +1111,38 @@ acquire 成功的 present surface，注释自己承认 "One cmdBuf still couples
 - 保留：orchestrator 的 app 策略维持不变；未来若出现真正的 offscreen-only 消费帧
   （如 headless 自动化、无窗渲染），策略改动发生在编排层，一行即可。
 - 偏离：无。
+
+---
+
+## 2026-09-24 AB4-2f step 3（批 3/4）— acquired imageIndex 单一事实源
+
+唯一目标：**录制期不再向 swapchain 回查 image index**。
+`PresentationGraphService::recordDisplayCompose` 曾在录制中调 `swapchain->getCurImageIndex()`，
+与 plan 携带的 `PresentFrameInput::imageIndex` 构成两个事实来源；按 AB4 口径
+"SurfaceImage 只在本次提交有效"，写哪张导入图必须来自同一次 acquire（同步对的来源）。
+
+### 改动
+
+- `PresentationGraphService`：`recordDisplayCompose` 新增 `int32_t imageIndex` 参数；
+  `< 0`（本帧不 present）或越界早退；executor 与导入图都按该下标取，不再有
+  `getCurrentPresentationImageIndex()` 调用。
+- `SurfacePresentation::recordDisplayCompose` 转发该参数；`RuntimeRenderContext` 传
+  `plan.present.imageIndex`（调用点仅此一处，全仓 grep 确认）。
+- `getCurrentPresentationImageIndex()/getCurrentPresentationImageShared()` 保留为
+  帧外回读查询（automation capture、render target catalog），头注释写明分工：
+  录制路径用 acquired token，swapchain 直查只属于回读。
+
+### 测试
+
+- 走真实帧的既有验证（parity / workbench / smoke）会逐帧穿过该路径：一旦 token 与
+  executor/导入图失配，结果立即表现为画面错乱或断言，而非静默。
+
+### 验证
+
+- build：`ya-render-3d` / `ya-game-runtime` ok；全量验证见批 4 之后的汇总条目。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：`buildRenderTargetCatalog` / `getPresentationImageShared` 等回读查询仍按 id 解析 +
+  swapchain current 作答（非录制决策），与本批口径一致。
+- 偏离：无。

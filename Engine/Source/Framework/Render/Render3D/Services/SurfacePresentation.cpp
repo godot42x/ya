@@ -50,9 +50,10 @@ void SurfacePresentation::recordDisplayCompose(const FSurfaceImage&    backdrop,
                                                RenderSubmission&       submission,
                                                float                   deltaTime,
                                                IFrameRecordExtensions* extensions,
-                                               ICommandBuffer*         cmdBuf)
+                                               ICommandBuffer*         cmdBuf,
+                                               int32_t                 imageIndex)
 {
-    _graph.recordDisplayCompose(backdrop, submission, deltaTime, extensions, cmdBuf);
+    _graph.recordDisplayCompose(backdrop, submission, deltaTime, extensions, cmdBuf, imageIndex);
 }
 
 std::shared_ptr<RenderTexture> SurfacePresentation::currentImageShared() const

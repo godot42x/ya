@@ -70,6 +70,13 @@ struct YA_RENDER_3D_API PresentationGraphService
     /// The pass itself runs either way, so the record order does not depend on
     /// which of the two this frame is.
     ///
+    /// `imageIndex` is the acquired token the plan carries: the one answer to
+    /// "which of this surface's imported images this record writes", taken from
+    /// the same acquire the submission's sync pair comes from. It is not
+    /// re-derived from the swapchain here -- a record must never guess which
+    /// image it was handed. `imageIndex < 0` means this surface is not
+    /// presenting this frame, and the stage is skipped.
+    ///
     /// A `backdrop` whose encoding does not survive this surface's format is
     /// refused with an error rather than written: the hardware would apply the
     /// transfer function a second time.
@@ -81,8 +88,13 @@ struct YA_RENDER_3D_API PresentationGraphService
                               RenderSubmission&        submission,
                               float                    deltaTime,
                               IFrameRecordExtensions*  extensions,
-                              ICommandBuffer*          cmdBuf);
+                              ICommandBuffer*          cmdBuf,
+                              int32_t                  imageIndex);
 
+    /// Post-frame readback: which image the surface last acquired, answered by
+    /// the swapchain itself. Legitimate outside the record window (automation
+    /// capture, render-target catalogs); recording paths must pass the acquired
+    /// token instead (see `recordDisplayCompose`).
     [[nodiscard]] std::shared_ptr<RenderTexture> getCurrentPresentationImageShared() const;
     [[nodiscard]] uint32_t                     getCurrentPresentationImageIndex() const;
     [[nodiscard]] ISwapchain*                  getSwapchain() const;

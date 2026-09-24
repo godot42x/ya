@@ -136,7 +136,8 @@ void PresentationGraphService::recordDisplayCompose(const FSurfaceImage&    back
                                                     RenderSubmission&       submission,
                                                     float                   deltaTime,
                                                     IFrameRecordExtensions* extensions,
-                                                    ICommandBuffer*         cmdBuf)
+                                                    ICommandBuffer*         cmdBuf,
+                                                    int32_t                 imageIndex)
 {
     YA_PROFILE_FUNCTION();
 
@@ -147,16 +148,17 @@ void PresentationGraphService::recordDisplayCompose(const FSurfaceImage&    back
         return;
     }
 
-    const uint32_t presentationImageIndex = getCurrentPresentationImageIndex();
-    if (presentationImageIndex >= _presentationGraphExecutors.size()) {
+    // The acquired token the plan carries is the only answer to "which image
+    // this record writes"; it is never re-derived from the swapchain here.
+    if (imageIndex < 0 || static_cast<size_t>(imageIndex) >= _presentationGraphExecutors.size()) {
         return;
     }
-    auto* presentationExecutor = _presentationGraphExecutors[presentationImageIndex].get();
+    auto* presentationExecutor = _presentationGraphExecutors[static_cast<size_t>(imageIndex)].get();
     if (!presentationExecutor) {
         return;
     }
 
-    auto presentationImage = getCurrentPresentationImageShared();
+    auto presentationImage = _presentationImages[static_cast<size_t>(imageIndex)];
     if (!presentationImage) {
         return;
     }

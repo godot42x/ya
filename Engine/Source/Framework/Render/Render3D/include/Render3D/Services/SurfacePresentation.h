@@ -60,12 +60,14 @@ struct YA_RENDER_3D_API SurfacePresentation
     [[nodiscard]] ISwapchain*            swapchain() const { return _graph.getSwapchain(); }
 
     /// The surface pass for one acquired swapchain image of this surface. See
-    /// `PresentationGraphService::recordDisplayCompose` for the contract.
+    /// `PresentationGraphService::recordDisplayCompose` for the contract;
+    /// `imageIndex` is the plan-carried acquired token, not a swapchain query.
     void recordDisplayCompose(const FSurfaceImage&    backdrop,
                               RenderSubmission&       submission,
                               float                   deltaTime,
                               IFrameRecordExtensions* extensions,
-                              ICommandBuffer*         cmdBuf);
+                              ICommandBuffer*         cmdBuf,
+                              int32_t                 imageIndex);
 
     /// This surface's image for the acquired index, or null before acquire.
     [[nodiscard]] std::shared_ptr<RenderTexture> currentImageShared() const;
