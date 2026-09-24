@@ -234,12 +234,12 @@ struct YA_GUI_API FDockContext
     /// Hide the floating tab strip. Allowed only when the window holds one tab.
     void setFloatingHideTabBar(FDockFloatingWindowId id, bool hide);
 
-    /// Serialize dock topology (`root` + overlay `floating`) separately from
-    /// native window topology (`windows`). Overlay geometry is tree-local.
+    /// Serialize dock topology: v2 `tree` (node structure) + `dockSpace`
+    /// (per-leaf stack data) + overlay `floating` + native `windows`.
+    /// Overlay geometry is tree-local.
     [[nodiscard]] nlohmann::json exportLayoutJson() const;
     /// Restore docked tree, overlay `floating`, then native `windows`.
-    /// Missing arrays are empty. Legacy `floating` without `projection` is
-    /// InProcessOverlay + tree-local (never screen). Unknown panel keys fail.
+    /// Missing arrays are empty. Unknown panel keys fail.
     bool importLayoutJson(const nlohmann::json& layout);
 
     /// The DockSpace re-projects via `syncProjection(Structure)` when the dock

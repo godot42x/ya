@@ -23,7 +23,8 @@ inline constexpr FDockFloatingWindowId kInvalidFloatingWindowId = 0;
 enum class EDockNodeKind : uint8_t
 {
     Split,
-    /// Tab stack. JSON still accepts `"leaf"` for persist compatibility.
+    /// Tab stack. Layout documents write tree positions as `leaf` nodes; the
+    /// stack content lives in the sibling `dockSpace` section.
     Stack
 };
 enum class EDockSplitOrientation : uint8_t
@@ -154,6 +155,8 @@ struct YA_GUI_API FDockTreeModel
     [[nodiscard]] bool                    validateInvariants(std::string* error = nullptr) const;
     [[nodiscard]] size_t                  panelCount() const { return _panels.size(); }
     [[nodiscard]] const FDockPanelRecord* findPanelByStableKey(const std::string& stableKey) const;
+    /// v2 layout document: `tree` holds the node structure (splits + leaf
+    /// references), `dockSpace` holds per-leaf stack data keyed by leaf id.
     [[nodiscard]] nlohmann::json          exportLayoutJson() const;
     bool                                  importLayoutJson(const nlohmann::json& layout);
 
@@ -171,6 +174,9 @@ struct YA_GUI_API FDockTreeModel
                                             std::string*                             error) const;
     void                       collectLeafIds(const FDockNode& node, std::vector<DockNodeId>& result) const;
     void                       collectMountedPanelIds(const FDockNode& node, std::unordered_map<DockPanelId, size_t>& seen) const;
-    bool                       importNodeFromJson(const nlohmann::json& nodeJson, FDockNode& node, std::string* error);
+    bool                       importNodeFromJson(const nlohmann::json& nodeJson,
+                                                  FDockNode& node,
+                                                  std::unordered_map<std::string, DockNodeId>& leafsById,
+                                                  std::string* error);
 };
 } // namespace ya

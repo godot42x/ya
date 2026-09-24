@@ -1,5 +1,7 @@
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
 
+#include "Core/Log.h"
+
 #include <algorithm>
 #include <cmath>
 #include <format>
@@ -25,45 +27,53 @@ void normalizeHiddenTabBar(FDockNode& leaf)
     }
 }
 
-nlohmann::json exportNode(const FDockTreeModel& model, const FDockNode& node)
+// v2 layout documents separate the two concerns the old nested format
+// interleaved: `tree` holds pure node structure (splits + leaf references),
+// `dockSpace` holds the per-leaf stack data (role, panels, selection) keyed
+// by leaf id. imgui.ini draws the same line between [Docking][Data] nodes and
+// [Window][...] records.
+constexpr int kDockLayoutVersion = 2;
+
+nlohmann::json exportNode(const FDockTreeModel& model, const FDockNode& node, nlohmann::json& dockSpace)
 {
     if (node.kind == EDockNodeKind::Stack) {
-        nlohmann::json result = nlohmann::json::object();
-        result["kind"] = "stack";
-        result["panels"] = nlohmann::json::array();
+        const std::string leafId = std::to_string(node.id);
+        nlohmann::json record = nlohmann::json::object();
+        record["panels"] = nlohmann::json::array();
         for (const DockPanelId panelId : node.panelIds) {
-            if (const FDockPanelRecord* record = model.findPanel(panelId)) {
-                result["panels"].push_back(record->stableKey);
+            if (const FDockPanelRecord* panel = model.findPanel(panelId)) {
+                record["panels"].push_back(panel->stableKey);
             }
         }
         if (const FDockPanelRecord* selected = model.findPanel(node.selectedPanel)) {
-            result["selected"] = selected->stableKey;
+            record["selected"] = selected->stableKey;
         }
         if (node.persistentEmptyLeaf) {
-            result["persistentEmpty"] = true;
+            record["persistentEmpty"] = true;
         }
         if (node.bHideTabBar) {
-            result["hideTabBar"] = true;
+            record["hideTabBar"] = true;
         }
         if (node.leafRole == EDockLeafRole::Page) {
-            result["leafRole"] = "page";
+            record["role"] = "page";
         }
         else if (node.leafRole == EDockLeafRole::Tools) {
-            result["leafRole"] = "tools";
+            record["role"] = "tools";
         }
-        return result;
+        dockSpace[leafId] = std::move(record);
+        return nlohmann::json{{"kind", "leaf"}, {"id", leafId}};
     }
 
-    nlohmann::json result = nlohmann::json::object();
-    result["kind"] = "split";
-    result["orientation"] = node.orientation == EDockSplitOrientation::Vertical ? "vertical" : "horizontal";
-    result["ratio"] = node.ratio;
-    result["minExtent"] = nlohmann::json::array({node.minExtent[0], node.minExtent[1]});
-    result["children"] = nlohmann::json::array({
-        exportNode(model, *node.child[0]),
-        exportNode(model, *node.child[1]),
-    });
-    return result;
+    return nlohmann::json{
+        {"kind", "split"},
+        {"orientation", node.orientation == EDockSplitOrientation::Vertical ? "vertical" : "horizontal"},
+        {"ratio", node.ratio},
+        {"minExtent", nlohmann::json::array({node.minExtent[0], node.minExtent[1]})},
+        {"children", nlohmann::json::array({
+            exportNode(model, *node.child[0], dockSpace),
+            exportNode(model, *node.child[1], dockSpace),
+        })},
+    };
 }
 }
 
@@ -501,53 +511,28 @@ const FDockPanelRecord* FDockTreeModel::findPanelByStableKey(const std::string& 
 
 nlohmann::json FDockTreeModel::exportLayoutJson() const
 {
-    nlohmann::json layout = nlohmann::json::object();
-    layout["version"] = 1;
-    layout["root"] = exportNode(*this, *_root);
+    nlohmann::json layout    = nlohmann::json::object();
+    layout["version"]        = kDockLayoutVersion;
+    nlohmann::json dockSpace = nlohmann::json::object();
+    layout["tree"]           = exportNode(*this, *_root, dockSpace);
+    layout["dockSpace"]      = std::move(dockSpace);
     return layout;
 }
 
-bool FDockTreeModel::importNodeFromJson(const nlohmann::json& nodeJson, FDockNode& node, std::string* error)
+bool FDockTreeModel::importNodeFromJson(const nlohmann::json&            nodeJson,
+                                        FDockNode&                       node,
+                                        std::unordered_map<std::string, DockNodeId>& leafIds,
+                                        std::string*                     error)
 {
     const std::string kind = nodeJson.value("kind", "");
     if (kind == "leaf" || kind == "stack") {
         node.kind = EDockNodeKind::Stack;
-        node.panelIds.clear();
-        node.selectedPanel = kInvalidDockPanelId;
-        node.persistentEmptyLeaf = nodeJson.value("persistentEmpty", false);
-        node.bHideTabBar = nodeJson.value("hideTabBar", false);
-        node.leafRole = EDockLeafRole::Generic;
-        if (const std::string role = nodeJson.value("leafRole", ""); role == "page") {
-            node.leafRole = EDockLeafRole::Page;
+        const std::string leafId = nodeJson.value("id", "");
+        if (leafId.empty()) {
+            return fail(error, "dock layout leaf is missing an id");
         }
-        else if (role == "tools") {
-            node.leafRole = EDockLeafRole::Tools;
-        }
-        if (!nodeJson.contains("panels") || !nodeJson["panels"].is_array()) {
-            return fail(error, "dock layout leaf is missing panels array");
-        }
-        for (const nlohmann::json& panelKeyJson : nodeJson["panels"]) {
-            if (!panelKeyJson.is_string()) {
-                return fail(error, "dock layout panel key must be a string");
-            }
-            const FDockPanelRecord* record = findPanelByStableKey(panelKeyJson.get<std::string>());
-            if (!record) {
-                return fail(error, std::format("dock layout references unknown panel '{}'", panelKeyJson.get<std::string>()));
-            }
-            node.panelIds.push_back(record->id);
-        }
-        if (nodeJson.contains("selected")) {
-            if (!nodeJson["selected"].is_string()) {
-                return fail(error, "dock layout selected panel must be a string");
-            }
-            const FDockPanelRecord* selected = findPanelByStableKey(nodeJson["selected"].get<std::string>());
-            if (!selected) {
-                return fail(error, std::format("dock layout references unknown selected panel '{}'", nodeJson["selected"].get<std::string>()));
-            }
-            node.selectedPanel = selected->id;
-        }
-        else if (!node.panelIds.empty()) {
-            node.selectedPanel = node.panelIds.front();
+        if (!leafIds.emplace(leafId, node.id).second) {
+            return fail(error, std::format("dock layout leaf id '{}' is duplicated", leafId));
         }
         return true;
     }
@@ -578,10 +563,10 @@ bool FDockTreeModel::importNodeFromJson(const nlohmann::json& nodeJson, FDockNod
     node.child[1]->id = _nextNodeId++;
     node.child[0]->parent = &node;
     node.child[1]->parent = &node;
-    if (!importNodeFromJson(nodeJson["children"][0], *node.child[0], error)) {
+    if (!importNodeFromJson(nodeJson["children"][0], *node.child[0], leafIds, error)) {
         return false;
     }
-    if (!importNodeFromJson(nodeJson["children"][1], *node.child[1], error)) {
+    if (!importNodeFromJson(nodeJson["children"][1], *node.child[1], leafIds, error)) {
         return false;
     }
     return true;
@@ -605,9 +590,12 @@ void FDockTreeModel::collectMountedPanelIds(const FDockNode& node, std::unordere
 
 bool FDockTreeModel::importLayoutJson(const nlohmann::json& layout)
 {
-    if (layout.value("version", 0) != 1 || !layout.contains("root")) {
+    if (layout.value("version", 0) != kDockLayoutVersion || !layout.contains("tree")) {
         return false;
     }
+    static const nlohmann::json kEmptyDockSpace = nlohmann::json::object();
+    const nlohmann::json& dockSpace =
+        layout.contains("dockSpace") && layout["dockSpace"].is_object() ? layout["dockSpace"] : kEmptyDockSpace;
 
     auto backupRoot = cloneNode(*_root, nullptr);
     const DockNodeId nextNodeIdBackup = _nextNodeId;
@@ -617,11 +605,92 @@ bool FDockTreeModel::importLayoutJson(const nlohmann::json& layout)
     _root->id = _nextNodeId++;
     _root->parent = nullptr;
 
+    std::unordered_map<std::string, DockNodeId> leafsById;
     std::string error;
-    if (!importNodeFromJson(layout["root"], *_root, &error)) {
+    if (!importNodeFromJson(layout["tree"], *_root, leafsById, &error)) {
+        YA_CORE_WARN("DockLayout import failed: {}", error);
         _root = std::move(backupRoot);
         _nextNodeId = nextNodeIdBackup;
         return false;
+    }
+
+    for (auto it = dockSpace.begin(); it != dockSpace.end(); ++it) {
+        const nlohmann::json& record = it.value();
+        const auto leafIt = leafsById.find(it.key());
+        if (!record.is_object()) {
+            YA_CORE_WARN("DockLayout import failed: dock space record '{}' is not an object", it.key());
+            _root = std::move(backupRoot);
+            _nextNodeId = nextNodeIdBackup;
+            return false;
+        }
+        if (leafIt == leafsById.end()) {
+            continue; // record without a tree leaf: stale, ignore
+        }
+        FDockNode* leaf = findNode(leafIt->second);
+        if (!leaf || leaf->kind != EDockNodeKind::Stack) {
+            continue;
+        }
+
+        leaf->leafRole = EDockLeafRole::Generic;
+        if (record.contains("role")) {
+            const std::string role = record.value("role", "");
+            if (role == "page") {
+                leaf->leafRole = EDockLeafRole::Page;
+            }
+            else if (role == "tools") {
+                leaf->leafRole = EDockLeafRole::Tools;
+            }
+            else if (role != "generic") {
+                YA_CORE_WARN("DockLayout import failed: leaf '{}' has unknown role '{}'", it.key(), role);
+                _root = std::move(backupRoot);
+                _nextNodeId = nextNodeIdBackup;
+                return false;
+            }
+        }
+        leaf->persistentEmptyLeaf = record.value("persistentEmpty", false);
+        leaf->bHideTabBar = record.value("hideTabBar", false);
+
+        leaf->panelIds.clear();
+        leaf->selectedPanel = kInvalidDockPanelId;
+        if (record.contains("panels")) {
+            if (!record["panels"].is_array()) {
+                YA_CORE_WARN("DockLayout import failed: leaf '{}' panels must be an array", it.key());
+                _root = std::move(backupRoot);
+                _nextNodeId = nextNodeIdBackup;
+                return false;
+            }
+            for (const nlohmann::json& panelKeyJson : record["panels"]) {
+                if (!panelKeyJson.is_string()) {
+                    YA_CORE_WARN("DockLayout import failed: leaf '{}' panel key must be a string", it.key());
+                    _root = std::move(backupRoot);
+                    _nextNodeId = nextNodeIdBackup;
+                    return false;
+                }
+                const FDockPanelRecord* panel = findPanelByStableKey(panelKeyJson.get<std::string>());
+                if (!panel) {
+                    YA_CORE_WARN("DockLayout import failed: leaf '{}' references unknown panel '{}'",
+                                 it.key(), panelKeyJson.get<std::string>());
+                    _root = std::move(backupRoot);
+                    _nextNodeId = nextNodeIdBackup;
+                    return false;
+                }
+                leaf->panelIds.push_back(panel->id);
+            }
+        }
+        if (record.contains("selected")) {
+            const FDockPanelRecord* selected = findPanelByStableKey(record.value("selected", ""));
+            if (!selected) {
+                YA_CORE_WARN("DockLayout import failed: leaf '{}' selected panel '{}' is unknown",
+                             it.key(), record.value("selected", ""));
+                _root = std::move(backupRoot);
+                _nextNodeId = nextNodeIdBackup;
+                return false;
+            }
+            leaf->selectedPanel = selected->id;
+        }
+        else if (!leaf->panelIds.empty()) {
+            leaf->selectedPanel = leaf->panelIds.front();
+        }
     }
 
     std::unordered_map<DockPanelId, size_t> mounted;

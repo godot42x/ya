@@ -314,7 +314,8 @@ TEST(DockNodeTest, HideTabBarRoundTripsLayoutJson)
     EXPECT_TRUE(model.getRootNode()->bHideTabBar);
 
     const nlohmann::json layout = model.exportLayoutJson();
-    EXPECT_TRUE(layout["root"].value("hideTabBar", false));
+    EXPECT_EQ(layout["version"], 2);
+    EXPECT_TRUE(layout["dockSpace"]["1"].value("hideTabBar", false));
 
     FDockTreeModel restored;
     registerPanel(restored, 1, "viewport");
@@ -368,8 +369,8 @@ TEST(DockNodeTest, LeafRoleRoundTripsLayoutJson)
     ASSERT_TRUE(model.setHideTabBar(model.getRootNode()->id, true));
 
     const nlohmann::json layout = model.exportLayoutJson();
-    EXPECT_EQ(layout["root"].value("leafRole", ""), "page");
-    EXPECT_TRUE(layout["root"].value("hideTabBar", false));
+    EXPECT_EQ(layout["dockSpace"]["1"].value("role", ""), "page");
+    EXPECT_TRUE(layout["dockSpace"]["1"].value("hideTabBar", false));
 
     FDockTreeModel restored;
     registerPanel(restored, 1, "level-editor");
@@ -412,10 +413,10 @@ TEST(DockNodeTest, ImportRejectsUnknownPanelKey)
     registerPanel(model, 1, "viewport");
     ASSERT_TRUE(model.addPanel(1));
     const nlohmann::json layout = {
-        {"version", 1},
-        {"root",
-         {{"kind", "leaf"},
-          {"panels", nlohmann::json::array({"missing-panel"})}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace",
+         {{"main", {{"panels", nlohmann::json::array({"missing-panel"})}}}}},
     };
     EXPECT_FALSE(model.importLayoutJson(layout));
     EXPECT_EQ(model.getRootNode()->panelIds, std::vector<DockPanelId>({1}));
@@ -430,8 +431,9 @@ TEST(DockNodeTest, ImportMountsMissingPanelsOnFirstLeaf)
     ASSERT_TRUE(model.addPanel(1));
     ASSERT_TRUE(model.addPanel(2));
     const nlohmann::json layout = {
-        {"version", 1},
-        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace", {{"main", {{"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}}}},
     };
     ASSERT_TRUE(model.importLayoutJson(layout));
     ASSERT_NE(model.findLeafForPanel(1), nullptr);
@@ -486,8 +488,9 @@ TEST(DockNodeTest, ContextImportRejectsUnknownFloatingPanelKey)
     const DockPanelId viewportId = context.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("ViewportBody"));
     ASSERT_NE(viewportId, kInvalidDockPanelId);
     const nlohmann::json layout = {
-        {"version", 1},
-        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace", {{"main", {{"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}}}},
         {"floating", nlohmann::json::array({nlohmann::json::object({
             {"panels", nlohmann::json::array({"missing-panel"})},
             {"pos", nlohmann::json::array({10.0f, 20.0f})},
@@ -506,8 +509,9 @@ TEST(DockNodeTest, ContextImportAcceptsTreeOnlySnapshot)
     ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("ViewportBody")), kInvalidDockPanelId);
     ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("InspectorBody")), kInvalidDockPanelId);
     const nlohmann::json layout = {
-        {"version", 1},
-        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport", "inspector"})}, {"selected", "viewport"}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace", {{"main", {{"panels", nlohmann::json::array({"viewport", "inspector"})}, {"selected", "viewport"}}}}},
     };
     ASSERT_TRUE(context.importLayoutJson(layout));
     EXPECT_TRUE(context.floatingWindows().empty());
@@ -599,20 +603,25 @@ TEST(DockNodeTest, ActivatePanelGraftsSelectedTabAndDetachedStopsTick)
 TEST(DockNodeTest, SanitizeLayoutJsonDropsUnknownDockedAndFloatingKeys)
 {
     const nlohmann::json layout = {
-        {"version", 1},
-        {"root",
+        {"version", 2},
+        {"tree",
          {{"kind", "split"},
           {"orientation", "vertical"},
           {"ratio", 0.5f},
           {"children",
            nlohmann::json::array({
-               nlohmann::json{{"kind", "leaf"},
-                              {"panels", nlohmann::json::array({"viewport", "gui-workbench"})},
-                              {"selected", "gui-workbench"}},
-               nlohmann::json{{"kind", "leaf"},
-                              {"panels", nlohmann::json::array({"inspector"})},
-                              {"selected", "inspector"}},
+               nlohmann::json{{"kind", "leaf"}, {"id", "left"}},
+               nlohmann::json{{"kind", "leaf"}, {"id", "right"}},
            })}}},
+        {"dockSpace",
+         {
+             {"left",
+              {{"panels", nlohmann::json::array({"viewport", "gui-workbench"})},
+               {"selected", "gui-workbench"}}},
+             {"right",
+              {{"panels", nlohmann::json::array({"inspector"})},
+               {"selected", "inspector"}}},
+         }},
         {"floating",
          nlohmann::json::array({
              nlohmann::json{{"panels", nlohmann::json::array({"missing-panel"})},
@@ -628,9 +637,9 @@ TEST(DockNodeTest, SanitizeLayoutJsonDropsUnknownDockedAndFloatingKeys)
     const nlohmann::json sanitized = FDockContext::sanitizeLayoutJson(
         layout, std::unordered_set<std::string>{"viewport", "inspector", "hierarchy"});
 
-    EXPECT_EQ(sanitized["root"]["children"][0]["panels"], nlohmann::json::array({"viewport"}));
-    EXPECT_EQ(sanitized["root"]["children"][0]["selected"], "viewport");
-    EXPECT_EQ(sanitized["root"]["children"][1]["panels"], nlohmann::json::array({"inspector"}));
+    EXPECT_EQ(sanitized["dockSpace"]["left"]["panels"], nlohmann::json::array({"viewport"}));
+    EXPECT_EQ(sanitized["dockSpace"]["left"]["selected"], "viewport");
+    EXPECT_EQ(sanitized["dockSpace"]["right"]["panels"], nlohmann::json::array({"inspector"}));
     ASSERT_EQ(sanitized["floating"].size(), 1u);
     EXPECT_EQ(sanitized["floating"][0]["panels"], nlohmann::json::array({"hierarchy"}));
     EXPECT_EQ(sanitized["floating"][0]["selected"], "hierarchy");
@@ -761,7 +770,7 @@ TEST(DockNodeTest, TearOffCopiesHostAndPanelIdentityIntoPlacement)
     EXPECT_EQ(layout["floating"][0]["documentKey"], "panel-a");
 }
 
-TEST(DockNodeTest, LegacyFloatingJsonImportsAsInProcessOverlay)
+TEST(DockNodeTest, FloatingWithoutProjectionImportsAsInProcessOverlay)
 {
     FDockContext restored;
     restored.bAllowFloating = true;
@@ -770,8 +779,9 @@ TEST(DockNodeTest, LegacyFloatingJsonImportsAsInProcessOverlay)
     ASSERT_NE(restored.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
     ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I")), kInvalidDockPanelId);
     const nlohmann::json layout = {
-        {"version", 1},
-        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace", {{"main", {{"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}}}},
         {"floating",
          nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"inspector"})},
                                                {"pos", nlohmann::json::array({12.0f, 24.0f})},
@@ -860,8 +870,9 @@ TEST(DockNodeTest, NativeWindowJsonWithoutTargetStaysUnbound)
     ASSERT_NE(restored.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
     ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I")), kInvalidDockPanelId);
     const nlohmann::json layout = {
-        {"version", 1},
-        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace", {{"main", {{"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}}}},
         {"floating",
          nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"inspector"})},
                                                {"projection", "nativeWindow"},
@@ -891,8 +902,9 @@ TEST(DockNodeTest, NativeWindowsArrayImportsWithoutTreatingPosAsScreen)
     ASSERT_NE(restored.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
     ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I")), kInvalidDockPanelId);
     const nlohmann::json layout = {
-        {"version", 1},
-        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace", {{"main", {{"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}}}},
         {"floating", nlohmann::json::array()},
         {"windows",
          nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"inspector"})},
@@ -932,8 +944,9 @@ TEST(DockNodeTest, DuplicatePanelKeysAcrossFloatingAndWindowsFailImport)
     ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
     ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I")), kInvalidDockPanelId);
     const nlohmann::json layout = {
-        {"version", 1},
-        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace", {{"main", {{"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}}}},
         {"floating",
          nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"inspector"})},
                                                {"pos", nlohmann::json::array({1.0f, 2.0f})},
@@ -974,8 +987,9 @@ TEST(DockNodeTest, OverlayRejectsScreenGeometrySpace)
 TEST(DockNodeTest, CollectLayoutPanelKeysWalksNativeWindows)
 {
     const nlohmann::json layout = {
-        {"version", 1},
-        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace", {{"main", {{"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}}}},
         {"floating", nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"inspector"})}}})},
         {"windows", nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"hierarchy"})}}})},
     };
@@ -989,8 +1003,9 @@ TEST(DockNodeTest, CollectLayoutPanelKeysWalksNativeWindows)
 TEST(DockNodeTest, SanitizeLayoutJsonDropsUnknownNativeWindowKeys)
 {
     const nlohmann::json layout = {
-        {"version", 1},
-        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"version", 2},
+        {"tree", {{"kind", "leaf"}, {"id", "main"}}},
+        {"dockSpace", {{"main", {{"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}}}},
         {"windows",
          nlohmann::json::array({
              nlohmann::json{{"panels", nlohmann::json::array({"missing-panel"})},
@@ -1323,24 +1338,56 @@ TEST(DockNodeTest, DropTargetKindDistinguishesWellStackSplitAndNoTarget)
     EXPECT_FALSE(outside->target.commitsDrop());
 }
 
-TEST(DockNodeTest, LayoutJsonExportsStackKindAndImportsLegacyLeaf)
+TEST(DockNodeTest, LayoutSplitsTreeNodesFromDockSpaceRecords)
 {
     FDockTreeModel model;
     registerPanel(model, 1, "viewport");
+    registerPanel(model, 2, "inspector");
     ASSERT_TRUE(model.addPanel(1));
-    const nlohmann::json exported = model.exportLayoutJson();
-    EXPECT_EQ(exported["root"]["kind"], "stack");
+    ASSERT_TRUE(model.splitLeaf(model.getRootNode()->id, EDockCardinalSide::East, 2, 0.7f));
 
+    const nlohmann::json exported = model.exportLayoutJson();
+    EXPECT_EQ(exported["version"], 2);
+    EXPECT_EQ(exported["tree"]["kind"], "split");
+    EXPECT_EQ(exported["tree"]["children"][0]["kind"], "leaf");
+    EXPECT_FALSE(exported["tree"]["children"][0].contains("panels"));
+    const std::string leftId  = exported["tree"]["children"][0]["id"].get<std::string>();
+    const std::string rightId = exported["tree"]["children"][1]["id"].get<std::string>();
+    EXPECT_EQ(exported["dockSpace"][leftId]["panels"], nlohmann::json::array({"viewport"}));
+    EXPECT_EQ(exported["dockSpace"][rightId]["panels"], nlohmann::json::array({"inspector"}));
+
+    // Hand-written documents use the same split: named leaves in the tree,
+    // stack data keyed by the same names in dockSpace.
+    const nlohmann::json handWritten = {
+        {"version", 2},
+        {"tree",
+         {{"kind", "split"},
+          {"orientation", "horizontal"},
+          {"ratio", 0.7f},
+          {"children",
+           nlohmann::json::array({
+               nlohmann::json{{"kind", "leaf"}, {"id", "page"}},
+               nlohmann::json{{"kind", "leaf"}, {"id", "tools"}},
+           })}}},
+        {"dockSpace",
+         {
+             {"page", {{"role", "page"}, {"panels", nlohmann::json::array({"viewport"})}}},
+             {"tools", {{"role", "tools"}, {"panels", nlohmann::json::array({"inspector"})}}},
+         }},
+    };
     FDockTreeModel restored;
     registerPanel(restored, 1, "viewport");
+    registerPanel(restored, 2, "inspector");
     ASSERT_TRUE(restored.addPanel(1));
-    const nlohmann::json legacy = {
-        {"version", 1},
-        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
-    };
-    ASSERT_TRUE(restored.importLayoutJson(legacy));
-    EXPECT_EQ(restored.getRootNode()->kind, EDockNodeKind::Stack);
-    EXPECT_EQ(restored.findStackForPanel(1)->panelIds, std::vector<DockPanelId>({1}));
+    ASSERT_TRUE(restored.addPanel(2));
+    ASSERT_TRUE(restored.importLayoutJson(handWritten));
+    ASSERT_NE(restored.findLeafForPanel(1), nullptr);
+    ASSERT_NE(restored.findLeafForPanel(2), nullptr);
+    EXPECT_EQ(restored.findFirstLeafWithRole(EDockLeafRole::Page), restored.findLeafForPanel(1)->id);
+    EXPECT_EQ(restored.findFirstLeafWithRole(EDockLeafRole::Tools), restored.findLeafForPanel(2)->id);
+    EXPECT_EQ(restored.getRootNode()->orientation, EDockSplitOrientation::Horizontal);
+    EXPECT_FLOAT_EQ(restored.getRootNode()->ratio, 0.7f);
+    EXPECT_TRUE(restored.validateInvariants());
 }
 
 TEST(DockNodeTest, CommitDropMovesPanelBetweenStacks)

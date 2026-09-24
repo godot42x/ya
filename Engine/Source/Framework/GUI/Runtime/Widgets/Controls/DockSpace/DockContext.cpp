@@ -252,37 +252,36 @@ std::vector<std::string> FDockContext::collectLayoutPanelKeys(const nlohmann::js
         }
         keys.push_back(key);
     };
-    std::function<void(const nlohmann::json&)> walk = [&](const nlohmann::json& node) {
-        if (!node.is_object()) {
+    const auto addRecord = [&](const nlohmann::json& record) {
+        if (!record.is_object()) {
             return;
         }
-        if (node.contains("panels") && node["panels"].is_array()) {
-            for (const nlohmann::json& panel : node["panels"]) {
+        if (record.contains("panels") && record["panels"].is_array()) {
+            for (const nlohmann::json& panel : record["panels"]) {
                 if (panel.is_string()) {
                     add(panel.get<std::string>());
                 }
             }
         }
-        if (node.contains("root")) {
-            walk(node["root"]);
-        }
-        if (node.contains("children") && node["children"].is_array()) {
-            for (const nlohmann::json& child : node["children"]) {
-                walk(child);
-            }
-        }
-        if (node.contains("floating") && node["floating"].is_array()) {
-            for (const nlohmann::json& window : node["floating"]) {
-                walk(window);
-            }
-        }
-        if (node.contains("windows") && node["windows"].is_array()) {
-            for (const nlohmann::json& window : node["windows"]) {
-                walk(window);
-            }
+        if (record.contains("selected") && record["selected"].is_string()) {
+            add(record["selected"].get<std::string>());
         }
     };
-    walk(layout);
+
+    // v2 documents keep every panel reference in one of these places; the
+    // `tree` section carries structure only.
+    if (layout.contains("dockSpace") && layout["dockSpace"].is_object()) {
+        for (auto it = layout["dockSpace"].begin(); it != layout["dockSpace"].end(); ++it) {
+            addRecord(it.value());
+        }
+    }
+    for (const char* field : {"floating", "windows"}) {
+        if (layout.contains(field) && layout[field].is_array()) {
+            for (const nlohmann::json& window : layout[field]) {
+                addRecord(window);
+            }
+        }
+    }
     return keys;
 }
 
@@ -314,60 +313,49 @@ nlohmann::json FDockContext::sanitizeLayoutJson(nlohmann::json layout,
     const auto keepPanel = [&](const nlohmann::json& panel) {
         return panel.is_string() && knownKeys.contains(panel.get<std::string>());
     };
-    const auto sanitizeNode = [&](auto& self, nlohmann::json& node) -> void {
-        if (!node.is_object()) {
+    const auto sanitizeRecord = [&](nlohmann::json& record) -> void {
+        if (!record.is_object()) {
             return;
         }
-        if (node.contains("panels") && node["panels"].is_array()) {
+        if (record.contains("panels") && record["panels"].is_array()) {
             nlohmann::json kept = nlohmann::json::array();
-            for (const nlohmann::json& panel : node["panels"]) {
+            for (const nlohmann::json& panel : record["panels"]) {
                 if (keepPanel(panel)) {
                     kept.push_back(panel);
                 }
             }
-            node["panels"] = std::move(kept);
-            if (node.contains("selected")) {
-                const bool bSelectedKnown = node["selected"].is_string() &&
-                                            knownKeys.contains(node["selected"].get<std::string>());
+            record["panels"] = std::move(kept);
+            if (record.contains("selected")) {
+                const bool bSelectedKnown = record["selected"].is_string() &&
+                                            knownKeys.contains(record["selected"].get<std::string>());
                 if (!bSelectedKnown) {
-                    if (!node["panels"].empty()) {
-                        node["selected"] = node["panels"].front();
+                    if (!record["panels"].empty()) {
+                        record["selected"] = record["panels"].front();
                     }
                     else {
-                        node.erase("selected");
+                        record.erase("selected");
                     }
                 }
             }
         }
-        if (node.contains("children") && node["children"].is_array()) {
-            for (nlohmann::json& child : node["children"]) {
-                self(self, child);
-            }
-        }
     };
 
-    if (layout.contains("root")) {
-        sanitizeNode(sanitizeNode, layout["root"]);
-    }
-    if (layout.contains("floating") && layout["floating"].is_array()) {
-        nlohmann::json keptWindows = nlohmann::json::array();
-        for (nlohmann::json window : layout["floating"]) {
-            sanitizeNode(sanitizeNode, window);
-            if (window.contains("panels") && window["panels"].is_array() && !window["panels"].empty()) {
-                keptWindows.push_back(std::move(window));
-            }
+    if (layout.contains("dockSpace") && layout["dockSpace"].is_object()) {
+        for (auto it = layout["dockSpace"].begin(); it != layout["dockSpace"].end(); ++it) {
+            sanitizeRecord(it.value());
         }
-        layout["floating"] = std::move(keptWindows);
     }
-    if (layout.contains("windows") && layout["windows"].is_array()) {
-        nlohmann::json keptWindows = nlohmann::json::array();
-        for (nlohmann::json window : layout["windows"]) {
-            sanitizeNode(sanitizeNode, window);
-            if (window.contains("panels") && window["panels"].is_array() && !window["panels"].empty()) {
-                keptWindows.push_back(std::move(window));
+    for (const char* field : {"floating", "windows"}) {
+        if (layout.contains(field) && layout[field].is_array()) {
+            nlohmann::json keptWindows = nlohmann::json::array();
+            for (nlohmann::json window : layout[field]) {
+                sanitizeRecord(window);
+                if (window.contains("panels") && window["panels"].is_array() && !window["panels"].empty()) {
+                    keptWindows.push_back(std::move(window));
+                }
             }
+            layout[field] = std::move(keptWindows);
         }
-        layout["windows"] = std::move(keptWindows);
     }
     return layout;
 }
