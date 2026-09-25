@@ -52,11 +52,11 @@ FRender2DComposePassDesc worldComposeDesc(const FRender2DComposePassDesc::Camera
 
 void EditorViewportCompositor::shutdown()
 {
+    _scenePreview.shutdown();
     _composedViewportImage.reset();
     _sourceViewportTexture.reset();
     _sourceViewportImage.reset();
     _sourceViewportImageView.reset();
-    _scenePreviewErrors.clear();
 }
 
 void EditorViewportCompositor::compose(IRender&                            render,
@@ -116,26 +116,15 @@ void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
         pSelectionRect = layer.getEditorUIDesignerSession().getSelectedLayoutRect();
     }
     else if (Scene* scene = layer.getViewportInteractionScene()) {
-        WidgetTree previewTree(logicalExtent);
-        previewTree.setTextureSource(&gameUITextureSource());
-        std::string errors;
-        (void)mountSceneAutoMountEntries(*scene, previewTree,
-                                         layer.uiDocumentStore(),
-                                         [&errors](std::string_view message) {
-                                             errors.append(message);
-                                             errors.push_back('\n');
-                                         });
-        if (errors != _scenePreviewErrors) {
-            _scenePreviewErrors = std::move(errors);
-            if (!_scenePreviewErrors.empty()) {
-                YA_CORE_WARN("Editor scene UI preview mount errors:\n{}", _scenePreviewErrors);
-            }
-        }
-        uiPreviewSnapshot = previewTree.buildSnapshot(UIFrameBuildContext{
-            .uiScale         = uiScale,
-            .offset          = offset,
-            .textureResolver = &resolveGameUITexture,
-        });
+        // Persistent preview tree: rebuilt only when a mount input changes, not
+        // every compose. The tree is the scene's mounts instantiated in
+        // Authoring mode -- it lays out and paints, and does not tick or
+        // dispatch input, so it can never show state the game does not have.
+        uiPreviewSnapshot = _scenePreview.buildSnapshot(*scene,
+                                                       layer.uiDocumentStore(),
+                                                       logicalExtent,
+                                                       uiScale,
+                                                       offset);
         pUiPreviewSnapshot = &uiPreviewSnapshot;
     }
 

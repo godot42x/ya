@@ -1,25 +1,55 @@
 {
   "plan": "game-ui-authoring",
-  "status": "phase0_landed",
+  "status": "phase2b_landed",
   "features": [
     {
-      "id": "runtime_ui_tick_driver",
+      "id": "runtime_ui_update_driver",
       "phase": "P0",
       "status": "verified",
       "evidence": [
-        "GameUIHost::tick forwards to WidgetTree::tick; buildSnapshot only lays out and paints",
-        "RuntimeRenderContext::buildGameRenderFrame ticks the presented tree then snapshots it",
+        "GameUIHost::update forwards to WidgetTree::tick; buildSnapshot only lays out and paints",
+        "RuntimeRenderContext::buildGameRenderFrame updates the presented tree then snapshots it",
         "placed on the render side because pause gates logic but paused frames still present",
-        "GameUIHostTest.TickAdvancesMountedTreeBehaviors counts behavior frames"
+        "GameUIHostTest.UpdateAdvancesMountedTreeBehaviors counts behavior frames"
+      ]
+    },
+    {
+      "id": "ui_time_policy_is_named",
+      "phase": "P0",
+      "status": "verified",
+      "evidence": [
+        "FUIFrameClock{gameDelta, realDelta} computed once where the pause decision lives",
+        "EUIUpdateClock is a host property (updateClock/setUpdateClock); default RealTime keeps previous behavior",
+        "GameUIHostTest.ClockPolicyDecidesWhetherPausedFramesAdvanceTheTree asserts accumulated seconds, because a paused frame still visits the tree with a zero delta"
+      ]
+    },
+    {
+      "id": "designer_is_authoring_mode",
+      "phase": "P2b",
+      "status": "verified",
+      "evidence": [
+        "preview tree is private and exposes no tick/dispatch entry point",
+        "EditorUIDesignerSessionTest.CanvasPickingSelectsAButtonWithoutRunningItsClickHandler"
+      ]
+    },
+    {
+      "id": "scene_ui_preview_is_persistent",
+      "phase": "P2b",
+      "status": "verified",
+      "evidence": [
+        "EditorGameUIPreview owns the Scene mounts tree; EditorViewportCompositor uses it",
+        "rebuild triggers are mount inputs (scene, mount list, document revision, extent), not frames",
+        "UIDocumentStore::revision lets a cache tell 'same document' from 'edited'",
+        "EditorGameUIPreviewTest: stable scene instantiates once across frames; edits/extent/scene rebuild"
       ]
     },
     {
       "id": "designer_preview_tick_driver",
       "phase": "P0",
-      "status": "not_started",
+      "status": "resolved_by_design",
       "evidence": [
-        "EditorUIDesignerSession only calls buildPreviewSnapshot; _previewTree is never ticked",
-        "belongs with the Phase 3 preview render work"
+        "Authoring mode is the contract: the designer preview must NOT tick",
+        "Interactive Preview, if wanted, is an explicit mode with its own clock"
       ]
     },
     {

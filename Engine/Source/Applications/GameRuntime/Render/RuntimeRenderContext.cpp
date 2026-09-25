@@ -387,9 +387,19 @@ RuntimeRenderContext::TickFrame RuntimeRenderContext::buildGameRenderFrame(
             // buildSnapshot only lays out and paints, so a host that skipped
             // this would show a frozen first frame forever. Sitting on the
             // render side (not the logic side, which pause gates) is what keeps
-            // a pause menu alive -- paused frames still present, so its own
-            // input feedback and animations keep running.
-            gameUIHost->tick(dt);
+            // a pause menu alive -- paused frames still present.
+            //
+            // Both clocks are named here because this is the only place that
+            // knows the pause decision: a paused frame still renders `dt` of
+            // wall time, but the game advanced by none of it. The host picks
+            // which one its tree follows (`updateClock`), so a HUD on GameTime
+            // freezes with the game while a pause menu on RealTime keeps
+            // animating, without either call site guessing.
+            const FUIFrameClock uiClock{
+                .gameDelta = app.isPaused() ? 0.0f : dt,
+                .realDelta = dt,
+            };
+            gameUIHost->update(uiClock);
             tickFrame.uiSnapshot = gameUIHost->buildSnapshot();
         }
     }

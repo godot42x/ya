@@ -207,9 +207,9 @@ UIFrameSnapshot GameUIHost::buildSnapshot()
     return _tree.buildSnapshot(ctx);
 }
 
-void GameUIHost::tick(float deltaSeconds)
+void GameUIHost::update(const FUIFrameClock& clock)
 {
-    _tree.tick(deltaSeconds);
+    _tree.tick(clock.forClock(_updateClock));
 }
 
 std::shared_ptr<Texture> resolveGameUITexture(const std::string& assetPath)

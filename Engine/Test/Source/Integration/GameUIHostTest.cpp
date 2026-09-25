@@ -41,6 +41,22 @@ struct TickCountingBehavior final : public UIBehavior
     }
 };
 
+/// Accumulates the delta a hosted tree was advanced by. The clock policy decides
+/// a VALUE (how much time passed), not whether the tree is visited at all: a
+/// paused gameplay frame still walks the tree, it just hands it zero seconds.
+/// Counting calls would measure the wrong thing.
+struct AdvancingBehavior final : public UIBehavior
+{
+    float seconds = 0.0f;
+
+    [[nodiscard]] bool wantsTick() const override { return true; }
+    void tick(UIElement& owner, float deltaSeconds) override
+    {
+        (void)owner;
+        seconds += deltaSeconds;
+    }
+};
+
 /// Publish one live document under a test asset path. The mount path resolves
 /// through the store, so a test does not need a file on disk.
 std::string publishDocument(UIDocumentStore&     store,
@@ -343,7 +359,7 @@ TEST(GameUIHostTest, DocumentReferenceSurvivesClone)
     EXPECT_EQ(content->getChildren()[0]->_typeId, "engine.text");
 }
 
-TEST(GameUIHostTest, TickAdvancesMountedTreeBehaviors)
+TEST(GameUIHostTest, UpdateAdvancesMountedTreeBehaviors)
 {
     GameUIHost host;
     UIDocumentStore documents;
@@ -365,9 +381,46 @@ TEST(GameUIHostTest, TickAdvancesMountedTreeBehaviors)
     (void)host.buildSnapshot();
     EXPECT_EQ(behavior->ticks, 0);
 
-    host.tick(1.0f / 60.0f);
-    host.tick(1.0f / 60.0f);
+    host.update(FUIFrameClock{.gameDelta = 1.0f / 60.0f, .realDelta = 1.0f / 60.0f});
+    host.update(FUIFrameClock{.gameDelta = 1.0f / 60.0f, .realDelta = 1.0f / 60.0f});
     EXPECT_EQ(behavior->ticks, 2);
+}
+
+TEST(GameUIHostTest, ClockPolicyDecidesWhetherPausedFramesAdvanceTheTree)
+{
+    // A paused frame carries no game time but real wall time. Which one drives
+    // the tree is the host's declared policy, so a pause menu can keep animating
+    // while a gameplay HUD holds still -- from the same two deltas.
+    const FUIFrameClock pausedFrame{.gameDelta = 0.0f, .realDelta = 1.0f / 60.0f};
+
+    GameUIHost host;
+    UIDocumentStore documents;
+    host.setDocumentStore(&documents);
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
+    Scene scene("World");
+    scene.addWidgetEntry(makeEntry("HUD", publishDocument(documents, "HUD", kTypeIdBorder), 0));
+    host.onSceneActivated(scene);
+
+    UIElement* content = host.getTree().getLayer(WidgetTree::ELayer::Content);
+    ASSERT_EQ(content->getChildren().size(), 1u);
+    auto behavior = std::make_shared<AdvancingBehavior>();
+    content->getChildren()[0]->addBehavior(behavior);
+
+    constexpr float kFrame = 1.0f / 60.0f;
+
+    // Default is RealTime: paused frames still advance (pause menus animate).
+    EXPECT_EQ(host.updateClock(), EUIUpdateClock::RealTime);
+    host.update(pausedFrame);
+    EXPECT_FLOAT_EQ(behavior->seconds, kFrame);
+
+    // Declared as gameplay UI, the same paused frame advances it by nothing.
+    host.setUpdateClock(EUIUpdateClock::GameTime);
+    host.update(pausedFrame);
+    EXPECT_FLOAT_EQ(behavior->seconds, kFrame);
+
+    // A running frame advances it again. Only pause was holding it back.
+    host.update(FUIFrameClock{.gameDelta = kFrame, .realDelta = kFrame});
+    EXPECT_FLOAT_EQ(behavior->seconds, 2.0f * kFrame);
 }
 
 } // namespace ya

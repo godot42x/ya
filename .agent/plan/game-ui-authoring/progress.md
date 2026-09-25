@@ -1,5 +1,43 @@
 # Progress
 
+## 2026-09-25 — Phase 0 收敛 + Phase 2b 落地
+
+**Phase 0（时间策略）**：上一版 `GameUIHost::tick(float)` 把「UI 时间策略」写死成一个
+说不清语义的 dt，且隐式等于真实时间。现在：
+
+- `FUIFrameClock{gameDelta, realDelta}` 在唯一知道暂停决定的地方（`buildGameRenderFrame`）
+  一次算出；`EUIUpdateClock` 由 host 声明它读哪一个（`updateClock()` / `setUpdateClock()`）。
+- 默认 RealTime，与上一版行为一致：暂停菜单继续动画。gameplay HUD 可切 GameTime 随游戏冻结。
+- 门禁两条：`UpdateAdvancesMountedTreeBehaviors`、`ClockPolicyDecidesWhetherPausedFramesAdvanceTheTree`。
+  后者第一版写错成「数访问次数」，实测发现暂停帧仍会拜访树（给 0 秒），改成累积秒数才对——
+  策略决定的是「推进多少时间」，不是「是否访问」。
+
+**Phase 2b（三棵树）**：
+
+- `EditorUIDesignerSession` 明确为 Authoring：预览树私有、无 tick / dispatch 入口，头注释
+  写清契约；新增门禁 `CanvasPickingSelectsAButtonWithoutRunningItsClickHandler`（画布拾取
+  选中按钮，但不触发 onClick）。
+- 场景 UI 预览改为持久宿主 `EditorGameUIPreview`：重建条件是 mount 输入（场景 / mount 列表 /
+  文档 revision / extent），不再是每帧。
+- `UIDocumentStore::revision(path)` 新增，供缓存派生结果的消费者判断文档是否被改过。
+- 新增 `EditorGameUIPreviewTest` 四条门禁。
+
+验证：
+
+- `xmake b ya-game-runtime / ya-game-editor / ya-testing` 全绿。
+- `xmake r ya-testing` 全量 1325 passed / 0 failed。
+- 运行时冒烟 HelloMaterial --exit-after-frame=90，viewport 截图 md5
+  `c775245ae636f15b41da8485319a2267`，与基线逐字节一致。
+- 编辑器冒烟（`run_widgettree_editor_smoke.py`）**本身 flaky**：同一份代码连续跑会
+  时而通过、时而报 `world view did not render: 0x0`。已用 `git stash` 在 HEAD 上对照，
+  基线同样复现（连跑 2 次即 1 次失败），与本次改动无关。判定本轮编辑器路径是否安全，
+  以 `ya-testing` 全量与运行时冒烟为准；编辑器冒烟的多跑一次通过不能当证据。
+
+剩余 / 未完成：
+
+- per-subtree 时钟（暂停菜单与 HUD 同帧不同速）——一个 host 一棵树，需要时再拆。
+- Interactive Preview（designer 内试跑输入 / 动画）未做，按需显式增加。
+
 ## 2026-09-20 — Phase 1 (landed)
 
 目标：Scene 存文档引用，不存内联文档。

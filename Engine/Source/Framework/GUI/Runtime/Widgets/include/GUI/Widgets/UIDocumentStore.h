@@ -14,9 +14,17 @@
 //   put(path, doc) publish an authoring edit (memory only, no file write)
 //   find(path)     the live document already known for a path, or nullptr
 //   save(path)     write the live document to disk
+//   revision(path) counter that changes whenever the live document changes
 //
 // The owner is the application (ya::App), not the GUI library: a pure GUI host
 // that never loads a document simply never calls into a store.
+//
+// `revision` exists because a consumer that CACHES work derived from a document
+// (the editor's scene-UI preview builds a WidgetTree from mounted documents)
+// must be able to tell "the document I mounted is the same one" from "it was
+// edited". Comparing shared_ptr identity would almost work, but an edit that
+// rewrites the document in place would be invisible to it; a counter is the
+// honest answer and does not constrain how an edit is applied.
 // ============================================================================
 
 #include "Core/Api.h"
@@ -55,9 +63,15 @@ struct YA_GUI_API UIDocumentStore
     /// write failed.
     [[nodiscard]] bool save(std::string_view path);
 
+    /// Monotonic counter for `path`, bumped by every `resolve` that loads it and
+    /// every `put`. 0 means "this store has never known the path". Consumers
+    /// that cache derived state key on this instead of on document identity.
+    [[nodiscard]] uint64_t revision(std::string_view path) const;
+
   private:
     std::unordered_map<std::string, std::shared_ptr<UIDocument>> _documents;
+    std::unordered_map<std::string, uint64_t>                    _revisions;
+    uint64_t                                                     _nextRevision = 1;
 };
 
 } // namespace ya
-

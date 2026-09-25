@@ -48,6 +48,7 @@ std::shared_ptr<UIDocument> UIDocumentStore::resolve(std::string_view path)
     }
 
     _documents.emplace(key, document);
+    _revisions[key] = _nextRevision++;
     return document;
 }
 
@@ -59,9 +60,12 @@ void UIDocumentStore::put(std::string_view path, std::shared_ptr<UIDocument> doc
     }
     if (!document) {
         _documents.erase(std::string(path));
+        _revisions[std::string(path)] = _nextRevision++;
         return;
     }
-    _documents[std::string(path)] = std::move(document);
+    const std::string key(path);
+    _documents[key] = std::move(document);
+    _revisions[key] = _nextRevision++;
 }
 
 std::shared_ptr<UIDocument> UIDocumentStore::find(std::string_view path) const
@@ -71,6 +75,15 @@ std::shared_ptr<UIDocument> UIDocumentStore::find(std::string_view path) const
     }
     const auto it = _documents.find(std::string(path));
     return it == _documents.end() ? nullptr : it->second;
+}
+
+uint64_t UIDocumentStore::revision(std::string_view path) const
+{
+    if (path.empty()) {
+        return 0;
+    }
+    const auto it = _revisions.find(std::string(path));
+    return it == _revisions.end() ? 0 : it->second;
 }
 
 bool UIDocumentStore::save(std::string_view path)
@@ -97,4 +110,3 @@ bool UIDocumentStore::save(std::string_view path)
 }
 
 } // namespace ya
-

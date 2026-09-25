@@ -4,6 +4,8 @@
 
 #include "GUI/Compose/Render2DComposePass.h"
 
+#include "GameEditor/UI/Viewport/EditorGameUIPreview.h"
+
 #include <memory>
 #include <string>
 
@@ -33,7 +35,8 @@ class EditorViewportCompositor
     std::shared_ptr<Texture>       _sourceViewportTexture;
     std::shared_ptr<IImage>        _sourceViewportImage;
     std::shared_ptr<IImageView>    _sourceViewportImageView;
-    std::string                    _scenePreviewErrors;
+    /// The current Scene's mounts, instantiated once and reused across frames.
+    EditorGameUIPreview            _scenePreview;
 
   public:
     void shutdown();

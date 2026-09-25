@@ -38,6 +38,36 @@ namespace ya
 struct Scene;
 struct UIDocumentStore;
 
+/// Which clock a hosted UI tree reads. A single `dt` parameter could not say
+/// this: a game HUD should freeze with the game, while a pause menu has to keep
+/// animating on the frame the game stopped. The app owns the pause decision and
+/// the caller knows which kind of UI this tree is, so the choice is an argument
+/// at the update site rather than a default baked into the host.
+enum class EUIUpdateClock : uint8_t
+{
+    /// Game time. Zero while the game is paused, so gameplay UI holds still.
+    GameTime,
+    /// Wall-clock frame time. Keeps running while the game is paused, which is
+    /// what a pause menu / loading overlay needs.
+    RealTime,
+};
+
+/// Both clocks for one frame. Carrying them together keeps the pause decision in
+/// one place: the caller computes them once and each tree reads the one it
+/// asked for.
+struct FUIFrameClock
+{
+    /// Frame delta with the game's pause applied. 0 while paused.
+    float gameDelta = 0.0f;
+    /// Frame delta untouched by pause.
+    float realDelta = 0.0f;
+
+    [[nodiscard]] float forClock(EUIUpdateClock clock) const
+    {
+        return clock == EUIUpdateClock::RealTime ? realDelta : gameDelta;
+    }
+};
+
 struct YA_GAME_RUNTIME_API GameUIHost
 {
     GameUIHost();
@@ -91,10 +121,25 @@ struct YA_GAME_RUNTIME_API GameUIHost
 
     // === Frame ===
     /// Advance the mounted tree's frame-driven state (behaviours, tweens,
-    /// self-refreshing widgets) for this logic tick. Separate from
-    /// buildSnapshot, which only lays out and paints: a widget that animates
-    /// needs this call, and recording must never be the thing that ticks it.
-    void tick(float deltaSeconds);
+    /// self-refreshing widgets). Separate from buildSnapshot, which only lays
+    /// out and paints: a widget that animates needs this call, and recording
+    /// must never be the thing that ticks it.
+    ///
+    /// Advance this tree by the delta its declared policy selects. Which clock
+    /// is a property of the host, not of the call site: the caller knows the
+    /// frame's two deltas, the host knows what kind of UI it carries.
+    void update(const FUIFrameClock& clock);
+    /// The clock this host's tree follows. Default RealTime keeps a pause menu
+    /// and any always-on overlay alive while the game is paused, which is what
+    /// the tree did before the choice was named. A pure gameplay HUD should set
+    /// GameTime so it freezes with the game.
+    ///
+    /// Host-wide on purpose: today one host carries one presentation tree, so a
+    /// per-subtree clock would be machinery with no second user. When a pause
+    /// menu and a HUD must run on different clocks at the same time, that is the
+    /// point to split the tree (or add a per-widget clock), not to guess here.
+    [[nodiscard]] EUIUpdateClock updateClock() const { return _updateClock; }
+    void setUpdateClock(EUIUpdateClock clock) { _updateClock = clock; }
     /// Layout + paint into an immutable snapshot for this frame's compose.
     [[nodiscard]] UIFrameSnapshot buildSnapshot();
 
@@ -105,6 +150,7 @@ struct YA_GAME_RUNTIME_API GameUIHost
     Scene*                         _mountedScene = nullptr;
     Rect2D                         _viewportPx{};
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};
+    EUIUpdateClock                 _updateClock = EUIUpdateClock::RealTime;
 };
 
 /// Lookup-only Game UI texture helper (cache hit / miss). Async load and

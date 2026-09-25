@@ -11,6 +11,7 @@
 #include "GUI/Widgets/UITypeIds.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Layout/UILayout.h"
 #include "Scene/Core/SceneWidgetEntry.h"
 
@@ -247,6 +248,60 @@ TEST(EditorUIDesignerSessionTest, OpenSceneEntrySharesDocumentSession)
     EXPECT_EQ(first.documentSession()->id(),
               makeEditorUIDocumentId(FDesignerFixture::kDocumentPath));
     EXPECT_TRUE(first.documentSession()->ownsPreview());
+}
+
+TEST(EditorUIDesignerSessionTest, CanvasPickingSelectsAButtonWithoutRunningItsClickHandler)
+{
+    // The designer is Authoring mode: a canvas click picks and manipulates, and
+    // must never reach a widget's runtime click handler. That handler belongs to
+    // the runtime instance (GameUIHost), which is a different tree for the same
+    // document.
+    auto& registry = UITypeRegistry::instance();
+    auto  root     = registry.createInstance(kTypeIdCanvasPanel);
+    auto  button   = registry.createInstance(kTypeIdButton);
+    ASSERT_NE(root, nullptr);
+    ASSERT_NE(button, nullptr);
+    root->_name   = "Root";
+    button->_name = "Button";
+
+    int clicks = 0;
+    auto* typed = dynamic_cast<UIButton*>(button.get());
+    ASSERT_NE(typed, nullptr);
+    typed->_onClick = [&clicks]() { ++clicks; };
+
+    root->addDetachedChild(button, [](UIElement&, UISlot& edge) {
+        auto* slot = edge.as<UICanvasSlot>();
+        ASSERT_NE(slot, nullptr);
+        FCanvasSlotArgs args;
+        args.fixedSize        = {120.0f, 40.0f};
+        args.widthSizeMode    = EWidgetSizeMode::Fixed;
+        args.heightSizeMode   = EWidgetSizeMode::Fixed;
+        args.offset           = {40.0f, 40.0f};
+        ASSERT_TRUE(slot->applyArgs(args));
+    });
+
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+
+    UIElement* previewRoot = designer.getPreviewRoot();
+    ASSERT_NE(previewRoot, nullptr);
+    ASSERT_EQ(previewRoot->getChildren().size(), 1u);
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+
+    // Picking finds the button and selects it -- geometry still works.
+    const Rect2D&   buttonRect = previewRoot->getChildren()[0]->_layoutRect;
+    const glm::vec2 inside     = buttonRect.pos + buttonRect.extent * 0.5f;
+    UIElement*      picked     = designer.pickAt(inside);
+    ASSERT_NE(picked, nullptr);
+    designer.select(picked);
+    EXPECT_EQ(designer.getSelectedWidget(), previewRoot->getChildren()[0].get());
+
+    // Selecting is not clicking: the preview has no dispatch path, so a canvas
+    // interaction cannot become a runtime interaction.
+    EXPECT_EQ(clicks, 0);
 }
 
 } // namespace ya

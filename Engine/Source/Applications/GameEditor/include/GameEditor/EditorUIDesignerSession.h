@@ -8,6 +8,16 @@
 // entries, so preview and PIE state never pollute each other.
 // Retained EditorSurface tab owns chrome controls; preview/canvas manipulation
 // stays on this data layer.
+//
+// The preview runs in AUTHORING mode, and that is a contract rather than a
+// coincidence: the tree lays out, paints and answers geometric picking, and it
+// does neither of the two things that would make it a second runtime --
+// `tick` (animation, self-refreshing widgets) and `dispatchEvent` (hover, focus,
+// capture, click handlers). The tree is private and no accessor exposes it, so a
+// canvas click can select and drag a widget but can never reach a UIButton's
+// onClick: that belongs to GameUIHost's runtime tree, which is a different
+// instance of the same document. Interactive Preview, if it is ever wanted,
+// should be an explicit mode with its own clock rather than the default here.
 // ============================================================================
 
 #include "GUI/Widgets/UIDocument.h"
