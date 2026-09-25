@@ -90,6 +90,11 @@ struct YA_GAME_RUNTIME_API GameUIHost
     [[nodiscard]] EWidgetRouteResult dispatchEvent(const Event& event, const glm::vec2& windowPoint);
 
     // === Frame ===
+    /// Advance the mounted tree's frame-driven state (behaviours, tweens,
+    /// self-refreshing widgets) for this logic tick. Separate from
+    /// buildSnapshot, which only lays out and paints: a widget that animates
+    /// needs this call, and recording must never be the thing that ticks it.
+    void tick(float deltaSeconds);
     /// Layout + paint into an immutable snapshot for this frame's compose.
     [[nodiscard]] UIFrameSnapshot buildSnapshot();
 

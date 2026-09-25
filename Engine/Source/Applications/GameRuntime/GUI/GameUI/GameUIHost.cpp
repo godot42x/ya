@@ -207,6 +207,11 @@ UIFrameSnapshot GameUIHost::buildSnapshot()
     return _tree.buildSnapshot(ctx);
 }
 
+void GameUIHost::tick(float deltaSeconds)
+{
+    _tree.tick(deltaSeconds);
+}
+
 std::shared_ptr<Texture> resolveGameUITexture(const std::string& assetPath)
 {
     return gameUITextureSource().lookup(assetPath).texture;

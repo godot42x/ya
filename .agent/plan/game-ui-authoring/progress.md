@@ -56,3 +56,33 @@
 - Scene/Core -> ya-gui-widgets 这条依赖还在（UIInstanceOverrideSet::applyTo 需要
   UIElement）。要真正切掉得先把 overrides 的表现层/实例层边界定下来（阶段四）。
 
+## 2026-09-25 — Phase 0 (landed)
+
+目标：运行时 Game UI 有明确的 tick 驱动。
+
+核对结论：`GameUIHost::buildSnapshot()` 只做 layout + paint，不推进 tick；全仓库
+对 `WidgetTree::tick` 的调用只有 `EditorSurface::tick` 一处（编辑器 chrome 树）。
+运行时挂载的 UI 树因此从不 tick，behavior / tween 不跑。
+
+已完成：
+
+- `GameUIHost::tick(dt)`，转发 `WidgetTree::tick`。
+- `RuntimeRenderContext::buildGameRenderFrame` 内，与 `setPresentation` / `buildSnapshot`
+  同一分支、同一顺序：先 tick 再 snapshot。选渲染侧而非 `tickLogic`，因为暂停只 gate
+  逻辑；暂停帧仍然提交，暂停菜单的输入反馈与动画必须继续跑。
+- 门禁 `GameUIHostTest.TickAdvancesMountedTreeBehaviors`：断言挂载不 tick、
+  buildSnapshot 不 tick、只有 `host.tick()` 推进计数。
+
+验证：
+
+- xmake b ya-game-runtime / ya-testing 全绿。
+- ya-testing 相关过滤器 282 tests 全过（GameUIHost/Scene/ScriptApi/Widget/
+  EditorUIDesigner/RenderRuntime/RenderView）。
+- 运行时冒烟 HelloMaterial --exit-after-frame=90，viewport 截图 md5
+  c775245ae636f15b41da8485319a2267，与基线逐字节一致（默认场景没有挂 UI 文档，
+  所以输出不变是预期的）。
+
+剩余 / 未完成：
+
+- editor designer preview tree 同样从不 tick（`EditorUIDesignerSession` 只
+  buildPreviewSnapshot）。同一类缺陷，归属 Phase 3 的预览渲染一起修。

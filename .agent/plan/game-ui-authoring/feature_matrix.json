@@ -1,7 +1,27 @@
 {
   "plan": "game-ui-authoring",
-  "status": "phase1_landed",
+  "status": "phase0_landed",
   "features": [
+    {
+      "id": "runtime_ui_tick_driver",
+      "phase": "P0",
+      "status": "verified",
+      "evidence": [
+        "GameUIHost::tick forwards to WidgetTree::tick; buildSnapshot only lays out and paints",
+        "RuntimeRenderContext::buildGameRenderFrame ticks the presented tree then snapshots it",
+        "placed on the render side because pause gates logic but paused frames still present",
+        "GameUIHostTest.TickAdvancesMountedTreeBehaviors counts behavior frames"
+      ]
+    },
+    {
+      "id": "designer_preview_tick_driver",
+      "phase": "P0",
+      "status": "not_started",
+      "evidence": [
+        "EditorUIDesignerSession only calls buildPreviewSnapshot; _previewTree is never ticked",
+        "belongs with the Phase 3 preview render work"
+      ]
+    },
     {
       "id": "document_is_an_asset",
       "phase": "P1",

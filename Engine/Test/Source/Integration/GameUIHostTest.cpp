@@ -25,6 +25,22 @@ namespace ya
 namespace
 {
 
+/// Counts frames the host tree actually ticked. A behaviour is the framework's
+/// own second door into the frame lifecycle, so this asserts the host drives
+/// `WidgetTree::tick` rather than only laying the tree out for a snapshot.
+struct TickCountingBehavior final : public UIBehavior
+{
+    int ticks = 0;
+
+    [[nodiscard]] bool wantsTick() const override { return true; }
+    void tick(UIElement& owner, float deltaSeconds) override
+    {
+        (void)owner;
+        (void)deltaSeconds;
+        ++ticks;
+    }
+};
+
 /// Publish one live document under a test asset path. The mount path resolves
 /// through the store, so a test does not need a file on disk.
 std::string publishDocument(UIDocumentStore&     store,
@@ -325,6 +341,33 @@ TEST(GameUIHostTest, DocumentReferenceSurvivesClone)
     UIElement* content = host.getTree().getLayer(WidgetTree::ELayer::Content);
     ASSERT_EQ(content->getChildren().size(), 1u);
     EXPECT_EQ(content->getChildren()[0]->_typeId, "engine.text");
+}
+
+TEST(GameUIHostTest, TickAdvancesMountedTreeBehaviors)
+{
+    GameUIHost host;
+    UIDocumentStore documents;
+    host.setDocumentStore(&documents);
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
+
+    Scene scene("World");
+    scene.addWidgetEntry(makeEntry("HUD", publishDocument(documents, "HUD", kTypeIdBorder), 0));
+    host.onSceneActivated(scene);
+
+    UIElement* content = host.getTree().getLayer(WidgetTree::ELayer::Content);
+    ASSERT_EQ(content->getChildren().size(), 1u);
+    auto behavior = std::make_shared<TickCountingBehavior>();
+    content->getChildren()[0]->addBehavior(behavior);
+
+    // Mounting alone never ticks: the frame driver owns that, and a snapshot is
+    // not a frame.
+    EXPECT_EQ(behavior->ticks, 0);
+    (void)host.buildSnapshot();
+    EXPECT_EQ(behavior->ticks, 0);
+
+    host.tick(1.0f / 60.0f);
+    host.tick(1.0f / 60.0f);
+    EXPECT_EQ(behavior->ticks, 2);
 }
 
 } // namespace ya

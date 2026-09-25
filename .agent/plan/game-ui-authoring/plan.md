@@ -36,6 +36,24 @@ GameRuntime     GameUIHost / SceneUIComposition / snapshot 生成
 GameEditor      EditorUIDesignerSession / 视口 Game UI 预览 / viewport compose
 ```
 
+## Phase 0 — 运行时 UI 有明确的 tick 驱动（已落地）
+
+缺陷：`GameUIHost::buildSnapshot()` 只 layout + paint；`WidgetTree::tick` 在全仓库
+只有编辑器 chrome 一处调用（`EditorSurface::tick`）。运行时挂载的树因此从不推进
+behavior / tween 状态，带动画或自刷新的 HUD 会永远停在第一帧。编辑器的 designer
+preview tree 同样只 buildSnapshot、从不 tick，是同一类缺陷的另一处。
+
+已落地：
+
+- `GameUIHost::tick(dt)` 转发到 `WidgetTree::tick`。
+- 驱动点在 `RuntimeRenderContext::buildGameRenderFrame`，与 `buildSnapshot()` 成对，
+  语义是「被展示的树必须被推进」。放渲染侧而非逻辑侧：暂停时逻辑被 gate，但暂停帧
+  仍然提交，暂停菜单自身的输入反馈/动画要继续跑。
+- 门禁 `GameUIHostTest.TickAdvancesMountedTreeBehaviors`：挂载本身不 tick、
+  buildSnapshot 不 tick、`host.tick()` 才计数。
+
+未完成：designer preview tree 的 tick 驱动（与 Phase 3 的预览渲染一起做）。
+
 ## Phase 1 — Scene 存文档引用，不存内联文档
 
 验收：
@@ -79,4 +97,3 @@ UI runtime state、动画轨道、binding。
   脚本/测试构造，编辑器侧只能「打开已存在的 entry 文档」。
 - overrides 语义保持现状（场景级字段覆盖），instance / appearance 边界的
   正式拆分留到阶段四。
-

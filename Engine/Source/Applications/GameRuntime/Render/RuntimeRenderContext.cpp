@@ -382,6 +382,14 @@ RuntimeRenderContext::TickFrame RuntimeRenderContext::buildGameRenderFrame(
         if (auto* gameUIHost = app.getGameUIHost()) {
             gameUIHost->setPresentation(displayRoot->desc.outputRect,
                                         glm::vec2(tickFrame.frame.renderScale));
+            // Advance the tree, then freeze the result into this frame's packet.
+            // Paired deliberately: a tree the host presents must be ticked, and
+            // buildSnapshot only lays out and paints, so a host that skipped
+            // this would show a frozen first frame forever. Sitting on the
+            // render side (not the logic side, which pause gates) is what keeps
+            // a pause menu alive -- paused frames still present, so its own
+            // input feedback and animations keep running.
+            gameUIHost->tick(dt);
             tickFrame.uiSnapshot = gameUIHost->buildSnapshot();
         }
     }
