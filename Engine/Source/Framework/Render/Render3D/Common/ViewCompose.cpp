@@ -6,7 +6,6 @@
 #include "Render2D/Render2D.h"
 
 #include <algorithm>
-#include <span>
 
 namespace ya
 {
@@ -35,47 +34,18 @@ YA_RENDER_3D_API Rect2D makeViewDisplayInsetRect(const glm::vec2& hostExtent, fl
     };
 }
 
-namespace
-{
-
-void recordViewDisplayInsets(std::span<const ViewDisplayInsetImage> insets)
-{
-    for (const auto& inset : insets) {
-        if (!inset.texture || inset.destRect.extent.x <= 0.0f || inset.destRect.extent.y <= 0.0f) {
-            continue;
-        }
-
-        constexpr float kBorder = 2.0f;
-        Render2D::makeSprite(glm::vec3(inset.destRect.pos.x - kBorder, inset.destRect.pos.y - kBorder, 0.0f),
-                             inset.destRect.extent + glm::vec2(kBorder * 2.0f),
-                             nullptr,
-                             glm::vec4(0.02f, 0.03f, 0.04f, 0.92f));
-        Render2D::makeSprite(glm::vec3(inset.destRect.pos, 0.0f),
-                             inset.destRect.extent,
-                             inset.texture.get(),
-                             glm::vec4(1.0f),
-                             {1.0f, 1.0f},
-                             {0.0f, 0.0f},
-                             true);
-    }
-}
-
-} // namespace
-
-YA_RENDER_3D_API void recordCameraViewCompose(ICommandBuffer*                        cmdBuf,
-                                              RenderTexture*                         cameraDisplayRT,
-                                              const UIFrameSnapshot*                 uiFrameSnapshot,
-                                              Extent2D                               logicalViewExtent,
-                                              std::span<const ViewDisplayInsetImage> insets)
+YA_RENDER_3D_API void recordCameraViewCompose(ICommandBuffer*        cmdBuf,
+                                              RenderTexture*         cameraDisplayRT,
+                                              const UIFrameSnapshot* uiFrameSnapshot,
+                                              Extent2D               logicalViewExtent)
 {
     if (!cmdBuf) {
         return;
     }
 
-    // UI + extra View insets: after graphics/post so Game UI never enters
-    // bloom or tonemapping. Target is the Camera WorldView display image.
-    const bool bHasInsets = !insets.empty();
-    if (cameraDisplayRT && (uiFrameSnapshot || bHasInsets)) {
+    // Game UI: after graphics/post so it never enters bloom or tonemapping.
+    // Target is the Camera WorldView display image.
+    if (cameraDisplayRT && uiFrameSnapshot) {
         recordRender2DComposePass(cmdBuf,
                                   *cameraDisplayRT,
                                   nullptr,
@@ -83,10 +53,8 @@ YA_RENDER_3D_API void recordCameraViewCompose(ICommandBuffer*                   
                                   FRender2DComposePassDesc{
                                       .kind                  = ERender2DComposePassKind::RuntimeUIComposite,
                                       .logicalExtent = logicalViewExtent,
-                                  },
-                                  [&]() { recordViewDisplayInsets(insets); });
+                                  });
     }
-
 }
 
 } // namespace ya

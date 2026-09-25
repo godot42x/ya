@@ -40,12 +40,12 @@ const SceneViewDesc* findView(const SceneViewCollector& collector, SceneViewId v
     return nullptr;
 }
 
-/// The inset a camera preview declares: it composes onto the authoring view
-/// instead of owning the host viewport.
-const SceneViewDesc* findComposedInset(const SceneViewCollector& collector)
+/// The camera preview, when one is declared: a non-display-root View whose
+/// image the viewport chrome samples.
+const SceneViewDesc* findNonDisplayRoot(const SceneViewCollector& collector)
 {
     for (const SceneViewDesc& view : collector.views()) {
-        if (view.composeOntoViewId != 0) {
+        if (!view.bDisplayRoot) {
             return &view;
         }
     }
@@ -86,7 +86,7 @@ TEST(EditorViewProducerTest, AuthoringViewportDrawsEditorFurnitureWhileAuthoring
     // what shows the scene while authoring, so it draws them without asking.
     EXPECT_TRUE(drawsGizmos(*primary));
     // No camera is selected, so there is no camera preview inset to declare.
-    EXPECT_EQ(findComposedInset(collector), nullptr);
+    EXPECT_EQ(findNonDisplayRoot(collector), nullptr);
 }
 
 TEST(EditorViewProducerTest, AuthoringViewportFallsBackToItsDefaultSizeBeforeLayout)
@@ -155,7 +155,7 @@ TEST(EditorViewProducerTest, GizmoViewOptionOnlyReachesViewsThatAskForIt)
 
     SceneViewCollector collector;
     producer.collectSceneViews(makeEditorContext(scene), collector);
-    const SceneViewDesc* preview = findComposedInset(collector);
+    const SceneViewDesc* preview = findNonDisplayRoot(collector);
     ASSERT_NE(preview, nullptr);
     // A camera preview shows what that camera sees: generated editor
     // companions are authoring furniture and never appear in it, whatever the
@@ -166,7 +166,7 @@ TEST(EditorViewProducerTest, GizmoViewOptionOnlyReachesViewsThatAskForIt)
 
     SceneViewCollector withOption;
     producer.collectSceneViews(makeEditorContext(scene), withOption);
-    const SceneViewDesc* previewWithOption = findComposedInset(withOption);
+    const SceneViewDesc* previewWithOption = findNonDisplayRoot(withOption);
     ASSERT_NE(previewWithOption, nullptr);
     EXPECT_FALSE(drawsGizmos(*previewWithOption));
 
@@ -198,7 +198,7 @@ TEST(EditorViewProducerTest, HidingTheViewportDeclaresNoEditorViewAtAll)
     SceneViewCollector shown;
     producer.collectSceneViews(makeEditorContext(scene), shown);
     ASSERT_NE(findView(shown, producer.authoringKey().viewId()), nullptr);
-    ASSERT_NE(findComposedInset(shown), nullptr);
+    ASSERT_NE(findNonDisplayRoot(shown), nullptr);
 
     // Selecting another tab in the viewport's stack -- or the level editor tab
     // that owns that stack -- detaches the widget. There is then no image to draw

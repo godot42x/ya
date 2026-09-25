@@ -5,7 +5,6 @@
 #include "RHI/Core/PresentFrame.h"
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/RecordedFrame.h"
-#include "Render3D/Common/ViewCompose.h"
 
 namespace ya
 {
@@ -153,19 +152,6 @@ class YA_GAME_RUNTIME_API RuntimeRenderContext
 
     /// Submits the recording (or an empty frame) and presents the surface.
     void submitRecordedFrame(App& app, FPresentFrame& presentFrame, const RecordedFrame& recorded);
-
-    /// The frame's View-inset list: what the host declared by hand
-    /// (`plan.viewCompose.insets`), plus one per View the plan composed onto
-    /// the display root, deduplicated by View.
-    [[nodiscard]] static std::vector<ViewDisplayInset> mergeViewComposeInsets(const RenderFramePlan& plan);
-    /// Lift each named View's published display image into a texture the UI
-    /// compose pass can sample, and keep it alive for this recording. Insets
-    /// are read by id from this frame's flight, not from "the current View".
-    [[nodiscard]] std::vector<ViewDisplayInsetImage> collectViewInsetImages(
-        uint32_t                             flightIndex,
-        const std::vector<ViewDisplayInset>& composeInsets,
-        RenderSubmission*                    submission,
-        ICommandBuffer&                      cmdBuf);
 
     RenderDeviceState* _device = nullptr;
 };

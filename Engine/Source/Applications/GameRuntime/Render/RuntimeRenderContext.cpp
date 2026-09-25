@@ -88,20 +88,13 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan, IFrameRe
 
     // This frame's display root, resolved once from the plan and after the
     // families published their outputs. Everything below -- the UI compose
-    // target, the insets, the surface backdrop -- reads this View's output, and
+    // target, the surface backdrop -- reads this View's output, and
     // the application asks for it by id rather than remembering it: the renderer
     // publishes every View and names none of them "the current one".
     const RenderViewOutput* displayOutput =
         displayRoot ? _device->getViewOutput(flightIndex, displayRoot->desc.viewId) : nullptr;
 
-    // The insets are this host's arrangement: what it declared by hand, plus
-    // one per View the plan composed onto the display root.
-    const std::vector<ViewDisplayInset> composeInsets = mergeViewComposeInsets(plan);
-
     RenderSubmission* submission = _device->getLiveSubmission(flightIndex);
-
-    const std::vector<ViewDisplayInsetImage> insetImages =
-        collectViewInsetImages(flightIndex, composeInsets, submission, *cmdBuf);
 
     // The game-UI compose lands on the display root's image, so its logical
     // viewport is that View's declared geometry rather than a host camera copy.
@@ -109,8 +102,7 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan, IFrameRe
     recordCameraViewCompose(cmdBuf.get(),
                             displayOutput ? displayOutput->displayImage().get() : nullptr,
                             plan.frame.uiFrameSnapshot,
-                            logicalViewExtent,
-                            insetImages);
+                            logicalViewExtent);
     if (extensions) {
         extensions->recordViewCompose(*cmdBuf, plan.frame.deltaTime);
     }
@@ -133,69 +125,6 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan, IFrameRe
 
     _device->endFrameCommandBuffer(cmdBuf.get());
     return _device->sealFrame(flightIndex, cmdBuf.get());
-}
-
-std::vector<ViewDisplayInset> RuntimeRenderContext::mergeViewComposeInsets(const RenderFramePlan& plan)
-{
-    // The frame's View-inset list: what the host declared by hand
-    // (`plan.viewCompose.insets`), plus one per View the plan composed onto the
-    // display root. Deduplicated by View, because a View is either declared
-    // once or not at all.
-    std::vector<ViewDisplayInset> composeInsets = plan.viewCompose.insets;
-    if (plan.sceneRender.empty()) {
-        return composeInsets;
-    }
-    for (const ViewDisplayInset& inset : viewDisplayInsetsFromPlan(plan.sceneRender.plan())) {
-        const bool bDeclared = std::any_of(composeInsets.begin(),
-                                           composeInsets.end(),
-                                           [&inset](const ViewDisplayInset& existing)
-                                           { return existing.viewId == inset.viewId; });
-        if (!bDeclared) {
-            composeInsets.push_back(inset);
-        }
-    }
-    return composeInsets;
-}
-
-std::vector<ViewDisplayInsetImage> RuntimeRenderContext::collectViewInsetImages(
-    uint32_t                             flightIndex,
-    const std::vector<ViewDisplayInset>& composeInsets,
-    RenderSubmission*                    submission,
-    ICommandBuffer&                      cmdBuf)
-{
-    // Lift each named View's published display image into a texture the UI
-    // compose pass can sample, and keep it alive for this recording. An inset
-    // names its own View, so it is read by id from this frame's flight -- not
-    // from "the current View".
-    std::vector<ViewDisplayInsetImage> insetImages;
-    insetImages.reserve(composeInsets.size());
-    for (const ViewDisplayInset& inset : composeInsets) {
-        const RenderViewOutput* output = _device->getViewOutput(flightIndex, inset.viewId);
-        if (!output || inset.viewId == 0) {
-            continue;
-        }
-        auto display = output->displayImage();
-        if (!display || !display->getImageShared() || !display->getImageViewShared()) {
-            continue;
-        }
-        cmdBuf.transitionImageLayoutAuto(display->getImage(), EImageLayout::ShaderReadOnlyOptimal);
-        auto texture = Texture::wrap(display->getImageShared(),
-                                     display->getImageViewShared(),
-                                     std::format("ViewDisplayInset.view{}", inset.viewId));
-        // The wrapper and the image it lifts are this recording's only owners:
-        // the pass reads them until the queue submit, so the flight keeps them.
-        if (submission) {
-            submission->retain(display);
-            submission->retain(texture);
-        }
-        cmdBuf.retireResource(display);
-        cmdBuf.retireResource(texture);
-        insetImages.push_back(ViewDisplayInsetImage{
-            .texture  = std::move(texture),
-            .destRect = inset.destRect,
-        });
-    }
-    return insetImages;
 }
 
 void RuntimeRenderContext::tick(App& app, float dt)
@@ -474,10 +403,6 @@ RecordedFrame RuntimeRenderContext::recordFrame(App&                 app,
     return record(RenderFramePlan{
         .sceneRender = std::move(sceneRender),
         .frame = frame.boundFrame(),
-        .viewCompose = {
-            // Empty: the host's View-inset list. Overlay recording is a host
-            // record stage, not data on the plan.
-        },
         .present = {
             .surface    = presentFrame.surface,
             // The app's own binding, carried so the renderer files this frame's

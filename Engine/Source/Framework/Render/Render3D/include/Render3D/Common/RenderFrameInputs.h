@@ -49,40 +49,6 @@ struct FramePacket
     const UIFrameSnapshot* uiFrameSnapshot = nullptr;
 };
 
-/// Blit a published View onto the primary Camera display RT. `destRect` is in
-/// that RT's pixel space (origin at the RT top-left).
-struct ViewDisplayInset
-{
-    SceneViewId viewId = 0;
-    Rect2D      destRect{};
-};
-
-[[nodiscard]] inline std::vector<ViewDisplayInset> viewDisplayInsetsFromPlan(const SceneRenderPlan& plan)
-{
-    std::vector<ViewDisplayInset> insets;
-    for (const auto& task : plan.viewTasks) {
-        const SceneViewDesc& desc = task.desc;
-        if (desc.isDisplayRoot() || desc.composeRect.extent.x <= 0.0f || desc.composeRect.extent.y <= 0.0f) {
-            continue;
-        }
-        insets.push_back(ViewDisplayInset{
-            .viewId   = desc.viewId,
-            .destRect = desc.composeRect,
-        });
-    }
-    return insets;
-}
-
-/// Host-declared insets: extra Views blitted onto the display root's RT after
-/// graphics + UI. Not a second Surface, and not behavior -- the host code that
-/// records overlays lives behind `IFrameRecordExtensions::recordViewCompose`.
-struct ViewComposeInput
-{
-    std::vector<ViewDisplayInset> insets;
-
-    [[nodiscard]] bool empty() const { return insets.empty(); }
-};
-
 /// Acquire / present destination for this frame. The host/present coordinator
 /// must call `acquirePresentFrame` before the application records the frame
 /// (`RuntimeRenderContext::record`) and `submitPresentFrame` after. The renderer
@@ -90,10 +56,9 @@ struct ViewComposeInput
 /// `imageIndex < 0` means this surface is not presenting this frame.
 ///
 /// What the window starts from is a host fact, not something the renderer may
-/// infer: an editor authoring View is a display root by compose structure
-/// (`composeOntoViewId == 0`) and is still not what the window shows, because
-/// the editor's chrome samples it inside a viewport widget. The host says which
-/// of the two this frame is.
+/// infer: an editor authoring View is a display root (`bDisplayRoot`) and is
+/// still not what the window shows, because the editor's chrome samples it
+/// inside a viewport widget. The host says which of the two this frame is.
 enum class ESurfaceBackdrop : uint8_t
 {
     /// The window is the View's display image this frame published. The
@@ -136,7 +101,6 @@ struct RenderFramePlan
 {
     ExtractedSceneRender sceneRender{};
     FramePacket          frame{};
-    ViewComposeInput     viewCompose{};
     PresentFrameInput    present{};
 };
 

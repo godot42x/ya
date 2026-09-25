@@ -139,18 +139,18 @@ struct SceneRenderPlan
     /// The View whose output the host viewport displays, or null when this tick
     /// declares none.
     ///
-    /// A View owns the host viewport by structure (`composeOntoViewId == 0`),
-    /// never by holding a well-known id, so this answers the same question every
-    /// caller asks: the pipelines' display-root branch, the publish identity and
-    /// the compose inset filter all read this one predicate. Null is a real
-    /// answer -- the tick still renders what its other Views asked for, nothing
-    /// is displayed on the host viewport, and no caller gets a substitute View
-    /// it did not ask for. With several display roots (one per surface, the
-    /// multi-window case) the first wins until a surface-scoped identity exists.
+    /// A View owns the host viewport by declaration (`bDisplayRoot`), never by
+    /// holding a well-known id, so this answers the same question every
+    /// caller asks: the pipelines' display-root branch and the publish identity
+    /// all read this one predicate. Null is a real answer -- the tick still
+    /// renders what its other Views asked for, nothing is displayed on the host
+    /// viewport, and no caller gets a substitute View it did not ask for. With
+    /// several display roots (one per surface, the multi-window case) the first
+    /// wins until a surface-scoped identity exists.
     [[nodiscard]] const SceneViewTask* displayRootTask() const
     {
         for (const auto& task : viewTasks) {
-            if (task.desc.isDisplayRoot()) {
+            if (task.desc.bDisplayRoot) {
                 return &task;
             }
         }
@@ -158,11 +158,11 @@ struct SceneRenderPlan
     }
 };
 
-/// A View owns the host viewport by structure. A recording without a task owns
-/// nothing: there is no View, so there is no host viewport belonging to it.
+/// A View owns the host viewport by declaration. A recording without a task
+/// owns nothing: there is no View, so there is no host viewport belonging to it.
 [[nodiscard]] inline bool sceneViewIsDisplayRoot(const SceneViewTask* task)
 {
-    return task && task->desc.isDisplayRoot();
+    return task && task->desc.bDisplayRoot;
 }
 
 /// Whether this tick declares the named View.

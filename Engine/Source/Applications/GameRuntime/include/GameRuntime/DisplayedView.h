@@ -19,8 +19,8 @@ namespace ya
 /// display.
 ///
 /// This is an **arrangement**, not renderer state and not a setting: the app
-/// derives it from the plan's display root (the View whose `composeOntoViewId == 0`),
-/// and the renderer only ever stores every View's output. It answers two
+/// derives it from the plan's display root (the View whose `bDisplayRoot` is
+/// set), and the renderer only ever stores every View's output. It answers two
 /// questions a reader cannot answer from the renderer: which View is shown, and
 /// in which flight its output was published.
 ///
@@ -30,11 +30,10 @@ namespace ya
 /// recording. It is a copy of that declaration's camera for the frame, named as
 /// the arrangement it belongs to, rather than a second "host state".
 ///
-/// Split-screen shape: extra Views compose onto this one as `ViewDisplayInset`s
-/// (declared on their own `SceneViewDesc::composeRect`), so this stays the one
-/// arrangement of the display root -- a second inset is not a second surface.
-/// A future presentation layout generalizes "one display root + N insets"; this
-/// struct is its N=1 spelling.
+/// A future layout that composes several Views into one image (split-screen)
+/// is a display-layer decision -- an app-declared per-surface composition, not
+/// a field on the View. This struct stays the arrangement of the one View the
+/// display shows.
 ///
 /// `viewId == 0` means this frame showed no View; `flightIndex ==
 /// MAX_FLIGHTS_IN_FLIGHT` means no frame has been recorded. Both are answers.

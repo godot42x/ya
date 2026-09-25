@@ -88,7 +88,6 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsFrameViewDisplayPresent)
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.frame), FramePacket>);
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.sceneRender), ExtractedSceneRender>);
     static_assert(std::is_same_v<decltype(ExtractedSceneRender{}.views()), const std::vector<SceneViewRecording>&>);
-    static_assert(std::is_same_v<decltype(RenderFramePlan{}.viewCompose), ViewComposeInput>);
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.present), PresentFrameInput>);
     /// The plan carries no behavior: the host's record stages are an explicit
     /// argument of the record call (`RuntimeRenderContext::record`), so a
@@ -110,13 +109,10 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsFrameViewDisplayPresent)
 
     RenderFramePlan plan{
         .frame          = {.deltaTime = 0.016f},
-        .viewCompose    = {},
         .present        = {.surface = nullptr, .imageIndex = -1},
     };
 
     EXPECT_FLOAT_EQ(plan.frame.deltaTime, 0.016f);
-    EXPECT_TRUE(plan.viewCompose.empty());
-    EXPECT_TRUE(plan.viewCompose.insets.empty());
     EXPECT_EQ(plan.present.surface, nullptr);
     EXPECT_EQ(plan.present.imageIndex, -1);
     /// The surface's backdrop is the host's declaration, and the default is the
@@ -521,28 +517,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRejectsRequestsOutsideFrame)
     EXPECT_EQ(scheduler.declaredViewCount(), 0u);
 }
 
-TEST(RenderRuntimeSnapshotTest, ViewComposeInsetsDescribePrimaryDisplayPreview)
-{
-    ViewComposeInput compose;
-    EXPECT_TRUE(compose.empty());
-
-    EXPECT_FLOAT_EQ(makeViewDisplayInsetRect({0.0f, 720.0f}).extent.x, 0.0f);
-
-    const Rect2D dest = makeViewDisplayInsetRect({1280.0f, 720.0f});
-    compose.insets.push_back(ViewDisplayInset{
-        .viewId   = 2,
-        .destRect = dest,
-    });
-    EXPECT_FALSE(compose.empty());
-    ASSERT_EQ(compose.insets.size(), 1u);
-    EXPECT_EQ(compose.insets.front().viewId, 2u);
-    EXPECT_GT(compose.insets.front().destRect.extent.x, 0.0f);
-    EXPECT_GT(compose.insets.front().destRect.pos.x, 640.0f);
-    EXPECT_GT(compose.insets.front().destRect.pos.y, 360.0f);
-    EXPECT_LE(compose.insets.front().destRect.pos.x + compose.insets.front().destRect.extent.x, 1280.0f);
-}
-
-TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
+TEST(RenderRuntimeSnapshotTest, NonDisplayRootViewIsMaterialForTheDisplayRoot)
 {
     Scene scene("Preview");
 
@@ -554,42 +529,25 @@ TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
     primary.viewId = kDisplayView.viewId();
     primary.outputRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
 
-    const Rect2D composeRect = makeViewDisplayInsetRect({1280.0f, 720.0f});
-    SceneViewDesc overlay;
-    overlay.scene = &scene;
-    overlay.viewId = kOverlayView.viewId();
-    overlay.outputRect = {.pos = {0.0f, 0.0f}, .extent = composeRect.extent};
-    overlay.composeOntoViewId = kDisplayView.viewId();
-    overlay.composeRect = composeRect;
+    SceneViewDesc preview;
+    preview.scene = &scene;
+    preview.viewId = kOverlayView.viewId();
+    // A smaller own output -- the preview renders into its own image at its own
+    // extent, and chrome samples it. It never claims the display.
+    preview.outputRect = {.pos = {0.0f, 0.0f}, .extent = {320.0f, 180.0f}};
+    preview.bDisplayRoot = false;
 
     ASSERT_TRUE(scheduler.submit(primary));
-    ASSERT_TRUE(scheduler.submit(overlay));
+    ASSERT_TRUE(scheduler.submit(preview));
 
     const ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
     const SceneRenderPlan&      plan      = extracted.plan();
     ASSERT_EQ(plan.viewTasks.size(), 2u);
-    EXPECT_TRUE(plan.viewTasks[0].desc.isDisplayRoot());
-    EXPECT_FALSE(plan.viewTasks[1].desc.isDisplayRoot());
+    EXPECT_TRUE(plan.viewTasks[0].desc.bDisplayRoot);
+    EXPECT_FALSE(plan.viewTasks[1].desc.bDisplayRoot);
     EXPECT_EQ(plan.snapshotFor(plan.viewTasks[0]), plan.snapshotFor(plan.viewTasks[1]));
     EXPECT_EQ(plan.displayRootTask(), &plan.viewTasks[0]);
     EXPECT_NE(plan.viewTasks[0].output.extent, plan.viewTasks[1].output.extent);
-    EXPECT_EQ(plan.viewTasks[1].output.extent.width,
-              static_cast<uint32_t>(composeRect.extent.x));
-    EXPECT_GT(plan.viewTasks[1].desc.composeRect.pos.x, 640.0f);
-    EXPECT_FLOAT_EQ(plan.viewTasks[1].desc.outputRect.pos.x, 0.0f);
-
-    const auto insets = viewDisplayInsetsFromPlan(plan);
-    ASSERT_EQ(insets.size(), 1u);
-    // The derived inset names the overlay View it composes onto the display
-    // root -- whichever key that View was declared with, not a literal.
-    EXPECT_EQ(insets.front().viewId, kOverlayView.viewId());
-    EXPECT_FLOAT_EQ(insets.front().destRect.pos.x, composeRect.pos.x);
-    EXPECT_FLOAT_EQ(insets.front().destRect.pos.y, composeRect.pos.y);
-
-    // The overlay View records into its own output extent, and its compose dest
-    // is a separate fact: the host view's rect plays no part in either.
-    EXPECT_EQ(plan.viewTasks[1].output.extent.width, static_cast<uint32_t>(composeRect.extent.x));
-    EXPECT_NE(plan.viewTasks[1].desc.composeRect.pos.x, plan.viewTasks[1].desc.outputRect.pos.x);
     EXPECT_LT(static_cast<float>(plan.viewTasks[1].output.extent.width),
               plan.viewTasks[0].output.extent.width);
 }

@@ -51,9 +51,9 @@ struct AppRenderState
     /// camera. Written once per tick from the plan (see
     /// GameRuntimeTickOrchestrator::tickRender) and read by every consumer
     /// that asks "the image this app displayed" -- the panels, automation
-    /// screenshots and the editor's viewport. The N=1 spelling of a display
-    /// arrangement: split-screen adds ViewDisplayInsets onto this one
-    /// display root, not a second surface (see DisplayedView).
+    /// screenshots and the editor's viewport. A future multi-View display
+    /// layout is a display-layer decision, not a field on this arrangement
+    /// (see DisplayedView).
     DisplayedView                          displayedView{};
 };
 

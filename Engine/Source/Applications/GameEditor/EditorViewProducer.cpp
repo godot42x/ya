@@ -115,18 +115,11 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
         .projection        = cameraProjectionForOutput(*cameraComponent, previewOutput.extent),
         .cameraPos         = transformComponent->getWorldPosition(),
         .outputRect      = previewOutput,
-        // The preview composes onto the authoring viewport of the *same* owner:
-        // the key names that owner rather than a global "primary" id, so a
-        // preview can only ever land on a View this producer declared.
-        .composeOntoViewId = authoringKey().viewId(),
-        // No inset rect: the runtime must not blit this View onto the world
-        // render target. The preview is viewport chrome, and chrome is composed
-        // by the GUI after the world image, so the world overlays (grid,
-        // manipulator, frustum wireframe) stay under it by construction instead
-        // of by recording order. Declaring the View as non-display-root but
-        // without an inset is exactly "rendered into its own image, shown by
-        // whoever asked for it".
-        .composeRect       = {},
+        // The preview is material, not the display: it renders into its own
+        // image, and the viewport chrome samples it. Declaring it
+        // non-display-root is what keeps the authoring viewport (declared by
+        // the same producer) as the display root.
+        .bDisplayRoot    = false,
         // What that camera sees, and only that: a preview is not an authoring
         // view, so it draws no generated editor companions.
         .features          = baseFeatures,
