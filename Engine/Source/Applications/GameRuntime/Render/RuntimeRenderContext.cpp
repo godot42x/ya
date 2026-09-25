@@ -94,54 +94,14 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan, IFrameRe
     const RenderViewOutput* displayOutput =
         displayRoot ? _device->getViewOutput(flightIndex, displayRoot->desc.viewId) : nullptr;
 
-    // The insets are this host's arrangement: what it declared by hand, plus one
-    // per View the plan composed onto the display root. Deduplicated by View,
-    // because a View is either declared once or not at all.
-    std::vector<ViewDisplayInset> composeInsets = plan.viewCompose.insets;
-    if (!plan.sceneRender.empty()) {
-        for (const ViewDisplayInset& inset : viewDisplayInsetsFromPlan(plan.sceneRender.plan())) {
-            const bool bDeclared = std::any_of(composeInsets.begin(),
-                                               composeInsets.end(),
-                                               [&inset](const ViewDisplayInset& existing)
-                                               { return existing.viewId == inset.viewId; });
-            if (!bDeclared) {
-                composeInsets.push_back(inset);
-            }
-        }
-    }
+    // The insets are this host's arrangement: what it declared by hand, plus
+    // one per View the plan composed onto the display root.
+    const std::vector<ViewDisplayInset> composeInsets = mergeViewComposeInsets(plan);
 
     RenderSubmission* submission = _device->getLiveSubmission(flightIndex);
 
-    std::vector<ViewDisplayInsetImage> insetImages;
-    insetImages.reserve(composeInsets.size());
-    for (const ViewDisplayInset& inset : composeInsets) {
-        // An inset names its own View, so it is read by id from this frame's
-        // flight -- not from "the current View".
-        const RenderViewOutput* output = _device->getViewOutput(flightIndex, inset.viewId);
-        if (!output || inset.viewId == 0) {
-            continue;
-        }
-        auto display = output->displayImage();
-        if (!display || !display->getImageShared() || !display->getImageViewShared()) {
-            continue;
-        }
-        cmdBuf->transitionImageLayoutAuto(display->getImage(), EImageLayout::ShaderReadOnlyOptimal);
-        auto texture = Texture::wrap(display->getImageShared(),
-                                     display->getImageViewShared(),
-                                     std::format("ViewDisplayInset.view{}", inset.viewId));
-        // The wrapper and the image it lifts are this recording's only owners:
-        // the pass reads them until the queue submit, so the flight keeps them.
-        if (submission) {
-            submission->retain(display);
-            submission->retain(texture);
-        }
-        cmdBuf->retireResource(display);
-        cmdBuf->retireResource(texture);
-        insetImages.push_back(ViewDisplayInsetImage{
-            .texture  = std::move(texture),
-            .destRect = inset.destRect,
-        });
-    }
+    const std::vector<ViewDisplayInsetImage> insetImages =
+        collectViewInsetImages(flightIndex, composeInsets, submission, *cmdBuf);
 
     // The game-UI compose lands on the display root's image, so its logical
     // viewport is that View's declared geometry rather than a host camera copy.
@@ -173,6 +133,69 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan, IFrameRe
 
     _device->endFrameCommandBuffer(cmdBuf.get());
     return _device->sealFrame(flightIndex, cmdBuf.get());
+}
+
+std::vector<ViewDisplayInset> RuntimeRenderContext::mergeViewComposeInsets(const RenderFramePlan& plan)
+{
+    // The frame's View-inset list: what the host declared by hand
+    // (`plan.viewCompose.insets`), plus one per View the plan composed onto the
+    // display root. Deduplicated by View, because a View is either declared
+    // once or not at all.
+    std::vector<ViewDisplayInset> composeInsets = plan.viewCompose.insets;
+    if (plan.sceneRender.empty()) {
+        return composeInsets;
+    }
+    for (const ViewDisplayInset& inset : viewDisplayInsetsFromPlan(plan.sceneRender.plan())) {
+        const bool bDeclared = std::any_of(composeInsets.begin(),
+                                           composeInsets.end(),
+                                           [&inset](const ViewDisplayInset& existing)
+                                           { return existing.viewId == inset.viewId; });
+        if (!bDeclared) {
+            composeInsets.push_back(inset);
+        }
+    }
+    return composeInsets;
+}
+
+std::vector<ViewDisplayInsetImage> RuntimeRenderContext::collectViewInsetImages(
+    uint32_t                             flightIndex,
+    const std::vector<ViewDisplayInset>& composeInsets,
+    RenderSubmission*                    submission,
+    ICommandBuffer&                      cmdBuf)
+{
+    // Lift each named View's published display image into a texture the UI
+    // compose pass can sample, and keep it alive for this recording. An inset
+    // names its own View, so it is read by id from this frame's flight -- not
+    // from "the current View".
+    std::vector<ViewDisplayInsetImage> insetImages;
+    insetImages.reserve(composeInsets.size());
+    for (const ViewDisplayInset& inset : composeInsets) {
+        const RenderViewOutput* output = _device->getViewOutput(flightIndex, inset.viewId);
+        if (!output || inset.viewId == 0) {
+            continue;
+        }
+        auto display = output->displayImage();
+        if (!display || !display->getImageShared() || !display->getImageViewShared()) {
+            continue;
+        }
+        cmdBuf.transitionImageLayoutAuto(display->getImage(), EImageLayout::ShaderReadOnlyOptimal);
+        auto texture = Texture::wrap(display->getImageShared(),
+                                     display->getImageViewShared(),
+                                     std::format("ViewDisplayInset.view{}", inset.viewId));
+        // The wrapper and the image it lifts are this recording's only owners:
+        // the pass reads them until the queue submit, so the flight keeps them.
+        if (submission) {
+            submission->retain(display);
+            submission->retain(texture);
+        }
+        cmdBuf.retireResource(display);
+        cmdBuf.retireResource(texture);
+        insetImages.push_back(ViewDisplayInsetImage{
+            .texture  = std::move(texture),
+            .destRect = inset.destRect,
+        });
+    }
+    return insetImages;
 }
 
 void RuntimeRenderContext::tick(App& app, float dt)
@@ -219,26 +242,7 @@ void RuntimeRenderContext::tick(App& app, float dt)
     prepareViews(app, sceneRender);
 
     TickFrame gameFrame = buildGameRenderFrame(app, dt, flightIndex, sceneRender);
-
-    // The app's arrangement for this frame: which View it displays, in which
-    // flight its output is published, and the camera it renders from. Written
-    // once, here, from the plan -- before the recording below, because the
-    // editor's compose and chrome stages run *inside* it and read this View.
-    // The renderer never learns it: it publishes every View and names none of
-    // them "the current one". Which declaration is the displayed one comes from
-    // the same structural predicate the plan uses for its display root, so a
-    // well-known view id here would be a second definition that can disagree
-    // with it.
-    {
-        const SceneViewTask* displayRoot = sceneRender.displayRootTask();
-        app._renderState->displayedView = DisplayedView{
-            .viewId      = displayRoot ? displayRoot->desc.viewId : 0,
-            .flightIndex = flightIndex,
-            .view        = displayRoot ? displayRoot->desc.view : glm::mat4(1.0f),
-            .projection  = displayRoot ? displayRoot->desc.projection : glm::mat4(1.0f),
-            .cameraPos   = displayRoot ? displayRoot->desc.cameraPos : glm::vec3(0.0f),
-        };
-    }
+    adoptDisplayedView(app, sceneRender, flightIndex);
 
     IRender*      render       = device->getRender();
     FPresentFrame presentFrame{.surface = app.getRenderServices().getHostSurface()};
@@ -278,6 +282,28 @@ void RuntimeRenderContext::tick(App& app, float dt)
     const RecordedFrame recorded = recordFrame(app, dt, std::move(sceneRender), gameFrame, presentFrame);
     submitRecordedFrame(app, presentFrame, recorded);
     app.presentModuleExtras(dt);
+}
+
+/// The app's arrangement for this frame: which View it displays, in which
+/// flight its output is published, and the camera it renders from. Written
+/// once, from the plan -- before the recording below reads it, because the
+/// editor's compose and chrome stages run *inside* the recording. The renderer
+/// never learns it: it publishes every View and names none of them "the
+/// current one". Which declaration is the displayed one comes from the same
+/// structural predicate the plan uses for its display root, so a well-known
+/// view id here would be a second definition that can disagree with it.
+void RuntimeRenderContext::adoptDisplayedView(App&                    app,
+                                              const ExtractedSceneRender& sceneRender,
+                                              uint32_t                    flightIndex)
+{
+    const SceneViewTask* displayRoot = sceneRender.displayRootTask();
+    app._renderState->displayedView = DisplayedView{
+        .viewId      = displayRoot ? displayRoot->desc.viewId : 0,
+        .flightIndex = flightIndex,
+        .view        = displayRoot ? displayRoot->desc.view : glm::mat4(1.0f),
+        .projection  = displayRoot ? displayRoot->desc.projection : glm::mat4(1.0f),
+        .cameraPos   = displayRoot ? displayRoot->desc.cameraPos : glm::vec3(0.0f),
+    };
 }
 
 void RuntimeRenderContext::pumpOffscreenTasks(App& app)

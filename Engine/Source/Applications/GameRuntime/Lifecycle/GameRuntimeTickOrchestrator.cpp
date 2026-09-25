@@ -114,7 +114,19 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
         TaskQueue::get().processMainThreadCallbacks();
     }
     ++App::_hostTick;
+    reportTickToAutomation(app);
 
+    return 0;
+}
+
+/// The tick's report to the automation plane, after the frame completed: which
+/// images this tick produced (the displayed View's world images, and the
+/// presenting surface's image), and -- when tick automation is enabled -- the
+/// capture / diagnostic hooks for this tick. Reporting is a step, not the
+/// frame skeleton: `iterate` reads as fps → logic → render → callbacks →
+/// tick++ → report.
+void GameRuntimeTickOrchestrator::reportTickToAutomation(App& app)
+{
     auto& renderServices = app.getRenderServices();
     auto* device         = renderServices.getDeviceState();
     auto* render         = renderServices.getRender();
@@ -177,8 +189,6 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
                                             .hostTick = App::_hostTick,
                                         });
     }
-
-    return 0;
 }
 
 void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)

@@ -22,6 +22,11 @@ class GameRuntimeTickOrchestrator
     /// submit → present extras. The steps live there now; see its class comment
     /// for the sequence and where each fact belongs.
     static void     tickRender(App& app, float dt);
+    /// The frame skeleton's last step: hand this tick's produced images and,
+    /// when tick automation is enabled, the capture / diagnostic hooks to the
+    /// automation plane. Kept out of `iterate` so the skeleton reads as
+    /// fps → logic → render → callbacks → tick++ → report.
+    static void     reportTickToAutomation(App& app);
 };
 
 } // namespace ya
