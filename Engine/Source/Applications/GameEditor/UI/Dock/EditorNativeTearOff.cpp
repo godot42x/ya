@@ -714,8 +714,11 @@ FEditorTearOffResult tearOffEditorPanelToNativeWindow(FEditorNativeTearOff& env,
 
     FEmptyGuiDelegate fallback;
     IGUIAppDelegate& content = env.content ? *env.content : fallback;
+    // Editor-owned window: keep the transparent title bar the editor opted
+    // into on its other windows (the framework default is Native).
     const GUIWindowId guiId =
-        realizeNativeDockPlacement(*env.coordinator, sourceDock, placementId, content, env.render);
+        realizeNativeDockPlacement(*env.coordinator, sourceDock, placementId, content, env.render,
+                                   EWindowChromeMode::Hybrid);
     if (guiId == 0) {
         return result;
     }

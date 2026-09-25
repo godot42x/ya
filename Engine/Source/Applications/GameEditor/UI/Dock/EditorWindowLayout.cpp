@@ -311,6 +311,10 @@ size_t restoreEditorExtraWindows(FEditorNativeTearOff&      env,
         const FWindowScreenPlacement placement = placementFromRecord(record);
         FGUIWindowHostConfig config;
         config.title        = "Editor";
+        // The editor opts into the transparent title bar on every window it
+        // owns, matching the primary window's Hybrid chrome (the framework
+        // default stays Native).
+        config.chromeMode   = EWindowChromeMode::Hybrid;
         config.width        = static_cast<uint32_t>(std::max(placement.w, 1));
         config.height       = static_cast<uint32_t>(std::max(placement.h, 1));
         config.posX         = placement.x;

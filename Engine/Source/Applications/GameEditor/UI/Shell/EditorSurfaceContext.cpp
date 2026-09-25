@@ -56,7 +56,7 @@ FEditorSurfaceContext makeEditorSurfaceContext(App& app,
     if (INativeWindow* window = surface.getNativeWindow()) {
         window->getWindowSize(windowW, windowH);
         windowDpi       = window->getDpiScale();
-        chromeLayout    = queryWindowChromeLayout(*window, defaultWindowChromeMode(), true);
+        chromeLayout    = queryWindowChromeLayout(*window, app.mainWindowChromeMode(), true);
         screenPlacement = queryWindowScreenPlacement(*window);
     }
     if (const ISwapchain* swapchain = surface.getSwapchain()) {

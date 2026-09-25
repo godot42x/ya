@@ -164,11 +164,11 @@ FWindowChromeCapabilities queryWindowChromeCapabilities()
 
 EWindowChromeMode defaultWindowChromeMode()
 {
-#if defined(__APPLE__)
-    return EWindowChromeMode::Hybrid;
-#else
+    // The framework provides the transparent-title-bar capability; it never
+    // imposes it. Unconfigured windows keep the standard OS chrome, and a
+    // product opts in explicitly (FGUIWindowHostConfig::chromeMode or a
+    // direct applyWindowChrome call with Hybrid/ClientDrawn).
     return EWindowChromeMode::Native;
-#endif
 }
 
 EWindowChromeMode resolveWindowChromeMode(EWindowChromeMode requested)

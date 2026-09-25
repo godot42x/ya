@@ -514,7 +514,7 @@ INativeWindow* App::getOrCreateMainNativeWindow(const WindowCreateInfo& ci)
     }
     INativeWindow* window = _nativeWindowManager->createMainWindow(ci);
     if (window) {
-        applyWindowChrome(*window, defaultWindowChromeMode(), ci.bResizable);
+        applyWindowChrome(*window, mainWindowChromeMode(), ci.bResizable);
     }
     return window;
 }

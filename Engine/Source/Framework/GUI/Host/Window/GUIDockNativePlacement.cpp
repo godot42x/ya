@@ -12,7 +12,8 @@ GUIWindowId realizeNativeDockPlacement(IGUIWindowCoordinator& coordinator,
                                        FDockContext&          dock,
                                        FDockFloatingWindowId  placementId,
                                        IGUIAppDelegate&       content,
-                                       IRender*               render)
+                                       IRender*               render,
+                                       EWindowChromeMode      chromeMode)
 {
     const FDockContext::FDockFloatingPlacement* placement = dock.findFloatingById(placementId);
     if (!placement || placement->projection != EDockFloatingProjection::NativeWindow) {
@@ -25,6 +26,7 @@ GUIWindowId realizeNativeDockPlacement(IGUIWindowCoordinator& coordinator,
     }
 
     FGUIWindowHostConfig config;
+    config.chromeMode = chromeMode;
     config.width  = static_cast<uint32_t>(std::max(placement->size.x, 1.0f));
     config.height = static_cast<uint32_t>(std::max(placement->size.y, 1.0f));
     if (placement->geometrySpace == EDockGeometrySpace::Screen) {

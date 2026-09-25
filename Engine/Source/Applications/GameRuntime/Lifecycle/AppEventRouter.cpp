@@ -60,7 +60,7 @@ int App::onEvent(const Event& event)
         if (isMainWindowEvent(static_cast<const WindowEvent&>(event))) {
             if (NativeWindowManager* nwm = getNativeWindowManager()) {
                 if (INativeWindow* window = nwm->getMainWindow()) {
-                    applyWindowChrome(*window, defaultWindowChromeMode(), true);
+                    applyWindowChrome(*window, mainWindowChromeMode(), true);
                 }
             }
         }
@@ -123,7 +123,7 @@ bool App::handleWindowResized(const WindowResizeEvent& event)
     YA_CORE_DEBUG("Window({}) resized to {}x{}, aspectRatio: {} ",event.getWindowID(), w, h, aspectRatio);
     if (NativeWindowManager* nwm = getNativeWindowManager()) {
         if (INativeWindow* window = nwm->getMainWindow()) {
-            applyWindowChrome(*window, defaultWindowChromeMode(), true);
+            applyWindowChrome(*window, mainWindowChromeMode(), true);
         }
     }
     return false;

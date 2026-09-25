@@ -99,6 +99,9 @@ struct FWindowChromeState
 };
 
 [[nodiscard]] YA_GUI_API FWindowChromeCapabilities queryWindowChromeCapabilities();
+/// Chrome for a window whose consumer did not choose: standard OS
+/// decorations. Transparent title bars (Hybrid) are an explicit downstream
+/// choice, not a platform default.
 [[nodiscard]] YA_GUI_API EWindowChromeMode         defaultWindowChromeMode();
 [[nodiscard]] YA_GUI_API EWindowChromeMode         resolveWindowChromeMode(EWindowChromeMode requested);
 

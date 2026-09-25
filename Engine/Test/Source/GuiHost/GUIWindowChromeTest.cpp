@@ -47,19 +47,18 @@ TEST(GUIWindowChromeTest, PlatformDefaultAndCapabilities)
     EXPECT_TRUE(caps.clientDrawn);
     EXPECT_TRUE(caps.fullscreenMaximize);
     EXPECT_TRUE(caps.accessibility);
+    // The framework ships standard OS decorations; the transparent title bar
+    // is a downstream choice (Hybrid stays resolvable where supported).
+    EXPECT_EQ(defaultWindowChromeMode(), EWindowChromeMode::Native);
+    EXPECT_EQ(resolveWindowChromeMode(EWindowChromeMode::Native), EWindowChromeMode::Native);
+    EXPECT_EQ(resolveWindowChromeMode(EWindowChromeMode::ClientDrawn), EWindowChromeMode::ClientDrawn);
 #if defined(__APPLE__)
-    EXPECT_EQ(defaultWindowChromeMode(), EWindowChromeMode::Hybrid);
     EXPECT_TRUE(caps.hybridTitleContent);
     EXPECT_TRUE(caps.systemButtons);
     EXPECT_EQ(resolveWindowChromeMode(EWindowChromeMode::Hybrid), EWindowChromeMode::Hybrid);
-    EXPECT_EQ(resolveWindowChromeMode(EWindowChromeMode::Native), EWindowChromeMode::Native);
-    EXPECT_EQ(resolveWindowChromeMode(EWindowChromeMode::ClientDrawn), EWindowChromeMode::ClientDrawn);
 #else
-    EXPECT_EQ(defaultWindowChromeMode(), EWindowChromeMode::Native);
     EXPECT_FALSE(caps.hybridTitleContent);
     EXPECT_EQ(resolveWindowChromeMode(EWindowChromeMode::Hybrid), EWindowChromeMode::Native);
-    EXPECT_EQ(resolveWindowChromeMode(EWindowChromeMode::Native), EWindowChromeMode::Native);
-    EXPECT_EQ(resolveWindowChromeMode(EWindowChromeMode::ClientDrawn), EWindowChromeMode::ClientDrawn);
 #endif
 }
 
@@ -168,7 +167,7 @@ TEST(GUIWindowChromeTest, ClientDrawnLayoutExposesResizeAndDrag)
     EXPECT_EQ(classifyWindowChromeHit(layout, 200.0f, 80.0f), EWindowChromeHit::Client);
 }
 
-TEST(GUIWindowChromeTest, ExtraSessionUsesPlatformDefaultChrome)
+TEST(GUIWindowChromeTest, ExtraSessionDefaultsToNativeAndHybridIsOptIn)
 {
     NamedWindowDelegate delegate;
     GUIWindowManager manager;
@@ -185,12 +184,27 @@ TEST(GUIWindowChromeTest, ExtraSessionUsesPlatformDefaultChrome)
 
     IGUIWindowSession* session = manager.findSession(id);
     ASSERT_NE(session, nullptr);
+    // Unconfigured sessions keep the standard OS chrome on every platform.
     EXPECT_EQ(session->chrome().mode, resolveWindowChromeMode(defaultWindowChromeMode()));
-#if defined(__APPLE__)
-    EXPECT_EQ(session->chrome().mode, EWindowChromeMode::Hybrid);
-    EXPECT_TRUE(session->chrome().capabilities.hybridTitleContent);
-#endif
+    EXPECT_EQ(session->chrome().mode, EWindowChromeMode::Native);
     manager.destroySession(id);
+
+    // The transparent title bar exists only where a product asks for it.
+    FGUIWindowHostConfig hybridConfig;
+    hybridConfig.title     = "MW-706-Hybrid";
+    hybridConfig.width     = 160;
+    hybridConfig.height    = 120;
+    hybridConfig.chromeMode = EWindowChromeMode::Hybrid;
+    const GUIWindowId hybridId = manager.create(hybridConfig, delegate);
+    ASSERT_NE(hybridId, 0);
+    IGUIWindowSession* hybridSession = manager.findSession(hybridId);
+    ASSERT_NE(hybridSession, nullptr);
+    EXPECT_EQ(hybridSession->chrome().mode, resolveWindowChromeMode(EWindowChromeMode::Hybrid));
+#if defined(__APPLE__)
+    EXPECT_EQ(hybridSession->chrome().mode, EWindowChromeMode::Hybrid);
+    EXPECT_TRUE(hybridSession->chrome().capabilities.hybridTitleContent);
+#endif
+    manager.destroySession(hybridId);
 }
 
 TEST(GUIWindowChromeTest, TitleDoubleClickIgnoresClientAndSystemButtonHits)
@@ -199,10 +213,12 @@ TEST(GUIWindowChromeTest, TitleDoubleClickIgnoresClientAndSystemButtonHits)
     GUIWindowManager manager;
     ASSERT_TRUE(manager.init());
 
+    // Hybrid title-band double-click semantics: opt the window in explicitly.
     FGUIWindowHostConfig config;
-    config.title  = "TitleDblClick";
-    config.width  = 800;
-    config.height = 600;
+    config.title      = "TitleDblClick";
+    config.width      = 800;
+    config.height     = 600;
+    config.chromeMode = EWindowChromeMode::Hybrid;
     const GUIWindowId id = manager.create(config, delegate);
     if (id == 0) {
         GTEST_SKIP() << "SDL native window create failed";

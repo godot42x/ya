@@ -15,6 +15,7 @@
 #include "Render3D/Common/FrameRecordExtensions.h"
 #include "GameRuntime/AppSceneServices.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
+#include "GUI/Host/GUIWindowChrome.h"
 #include "Core/Common/AppState.h"
 #include "GameRuntime/AppTaskManager.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
@@ -214,6 +215,13 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     [[nodiscard]] JSScriptingSystem*                  getJSScriptingSystem() const { return _jsScriptingSystem; }
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
+    /// Chrome policy of the App-owned main window. The framework default is
+    /// standard OS decorations; the editor form of the App opts into the
+    /// transparent title bar (Hybrid) so its chrome can draw the title band.
+    [[nodiscard]] EWindowChromeMode              mainWindowChromeMode() const
+    {
+        return _ci.bEditor ? EWindowChromeMode::Hybrid : EWindowChromeMode::Native;
+    }
     [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const;
     [[nodiscard]] TerrainProcessor*              getTerrainProcessor() const;
 
