@@ -28,6 +28,7 @@
 #include "Core/Api.h"
 
 #include "App/Kernel/AppKernel.h"
+#include "App/Control/AutomationControlServer.h"
 #include "App/Control/AutomationRun.h"
 #include "GUI/Host/GUIAppDelegate.h"
 #include "GUI/Host/GUIDragRouter.h"
@@ -239,6 +240,22 @@ public:
 private:
     void dispatchToTree(const Event& event, float mouseX, float mouseY);
     [[nodiscard]] bool requestWindowSize(uint32_t width, uint32_t height, std::string_view reason);
+
+    // === Automation control plane: framework-side verbs over one window ===
+    /// Registers this host's methods on its registry (called by init once the
+    /// control server is up; the frame loop only dispatches).
+    void registerAutomationMethods();
+    /// Consumes the control server's pending requests for this frame.
+    void dispatchAutomationRequests();
+    void onAutomationPing(const AppAutomationControlServer::RequestPtr& request);
+    void onAutomationQuit(const AppAutomationControlServer::RequestPtr& request);
+    void onAutomationDumpTree(const AppAutomationControlServer::RequestPtr& request);
+    void onAutomationSetWindowSize(const AppAutomationControlServer::RequestPtr& request);
+    void onAutomationMouseMove(const AppAutomationControlServer::RequestPtr& request);
+    void onAutomationMousePress(const AppAutomationControlServer::RequestPtr& request);
+    void onAutomationMouseRelease(const AppAutomationControlServer::RequestPtr& request);
+    void onAutomationCaptureScreenshot(const AppAutomationControlServer::RequestPtr& request);
+
     /// Write a scenario checkpoint tree dump (<scenarioDumpDir>/<tag>.json).
     void dumpScenarioCheckpoint(const std::string& tag);
     /// This window's contribution to the shared present sequence

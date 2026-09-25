@@ -266,9 +266,41 @@ void AppAutomationControlService::shutdown()
 
 void AppAutomationControlService::update(App& app)
 {
-    for (auto& call : _server.consumePendingRequests()) {
-        handleCall(app, call);
+    if (!_bMethodsBound) {
+        bindMethods(app);
+        _bMethodsBound = true;
     }
+    for (auto& call : _server.consumePendingRequests()) {
+        _methods.dispatch(call, _server);
+    }
+}
+
+void AppAutomationControlService::bindMethods(App& app)
+{
+    using RequestPtr = AppAutomationControlServer::RequestPtr;
+    _methods.add("ping", [this](const RequestPtr& call) { handlePing(call); });
+    _methods.add("get_point_light_pos", [this, &app](const RequestPtr& call) { handleGetPointLightPos(app, call); });
+    _methods.add("get_directional_light_info", [this, &app](const RequestPtr& call) { handleGetDirectionalLightInfo(app, call); });
+    _methods.add("set_render_pipeline", [this, &app](const RequestPtr& call) { handleSetRenderPipeline(app, call); });
+    _methods.add("set_shadow_settings", [this, &app](const RequestPtr& call) { handleSetShadowSettings(app, call); });
+    _methods.add("set_app_state", [this, &app](const RequestPtr& call) { handleSetAppState(app, call); });
+    _methods.add("set_editor_camera", [this, &app](const RequestPtr& call) { handleSetEditorCamera(app, call); });
+    _methods.add("capture_screenshot", [this, &app](const RequestPtr& call) { handleCaptureScreenshot(app, call); });
+    _methods.add("quit", [this, &app](const RequestPtr& call) { handleQuit(app, call); });
+    _methods.add("get_world_view_state", [this, &app](const RequestPtr& call) { handleGetWorldViewState(app, call); });
+    _methods.add("list_overlay_sprites", [this, &app](const RequestPtr& call) { handleListOverlaySprites(app, call); });
+    _methods.add("list_billboard_components", [this, &app](const RequestPtr& call) { handleListBillboardComponents(app, call); });
+    _methods.add("list_scene_entities", [this, &app](const RequestPtr& call) { handleListSceneEntities(app, call); });
+    _methods.add("get_entity_info", [this, &app](const RequestPtr& call) { handleGetEntityInfo(app, call); });
+    _methods.add("find_entities_near", [this, &app](const RequestPtr& call) { handleFindEntitiesNear(app, call); });
+    _methods.add("create_billboard_regression_scene", [this, &app](const RequestPtr& call) { handleCreateBillboardRegressionScene(app, call); });
+    _methods.add("set_editor_config_value", [this, &app](const RequestPtr& call) { handleSetEditorConfigValue(app, call); });
+    _methods.add("set_editor_gizmos_visible", [this, &app](const RequestPtr& call) { handleSetEditorGizmosVisible(app, call); });
+    _methods.add("entity_remove_component", [this, &app](const RequestPtr& call) { handleEntityRemoveComponent(app, call); });
+    _methods.add("entity_set_mesh_visible", [this, &app](const RequestPtr& call) { handleEntitySetMeshVisible(app, call); });
+    _methods.add("eval_js", [this, &app](const RequestPtr& call) { handleEvalJS(app, call); });
+    _methods.add("invoke", [this, &app](const RequestPtr& call) { handleInvoke(app, call); });
+    _methods.add("list_commands", [this, &app](const RequestPtr& call) { handleListCommands(app, call); });
 }
 
 void AppAutomationControlService::onTickCompleted(App&                         app,
@@ -338,104 +370,6 @@ bool AppAutomationControlService::appendPresentationCapture(uint64_t hostTick,
         graph,
         presentationOutput,
         presentationExtent);
-}
-
-void AppAutomationControlService::handleCall(App& app, const AppAutomationControlServer::RequestPtr& call)
-{
-    if (call->method == "ping") {
-        handlePing(call);
-        return;
-    }
-    if (call->method == "get_point_light_pos") {
-        handleGetPointLightPos(app, call);
-        return;
-    }
-    if (call->method == "get_directional_light_info") {
-        handleGetDirectionalLightInfo(app, call);
-        return;
-    }
-    if (call->method == "set_render_pipeline") {
-        handleSetRenderPipeline(app, call);
-        return;
-    }
-    if (call->method == "set_shadow_settings") {
-        handleSetShadowSettings(app, call);
-        return;
-    }
-    if (call->method == "set_app_state") {
-        handleSetAppState(app, call);
-        return;
-    }
-    if (call->method == "set_editor_camera") {
-        handleSetEditorCamera(app, call);
-        return;
-    }
-    if (call->method == "capture_screenshot") {
-        handleCaptureScreenshot(app, call);
-        return;
-    }
-    if (call->method == "quit") {
-        handleQuit(app, call);
-        return;
-    }
-    if (call->method == "get_world_view_state") {
-        handleGetWorldViewState(app, call);
-        return;
-    }
-    if (call->method == "list_overlay_sprites") {
-        handleListOverlaySprites(app, call);
-        return;
-    }
-    if (call->method == "list_billboard_components") {
-        handleListBillboardComponents(app, call);
-        return;
-    }
-    if (call->method == "list_scene_entities") {
-        handleListSceneEntities(app, call);
-        return;
-    }
-    if (call->method == "get_entity_info") {
-        handleGetEntityInfo(app, call);
-        return;
-    }
-    if (call->method == "find_entities_near") {
-        handleFindEntitiesNear(app, call);
-        return;
-    }
-    if (call->method == "create_billboard_regression_scene") {
-        handleCreateBillboardRegressionScene(app, call);
-        return;
-    }
-    if (call->method == "set_editor_config_value") {
-        handleSetEditorConfigValue(app, call);
-        return;
-    }
-    if (call->method == "set_editor_gizmos_visible") {
-        handleSetEditorGizmosVisible(app, call);
-        return;
-    }
-    if (call->method == "entity_remove_component") {
-        handleEntityRemoveComponent(app, call);
-        return;
-    }
-    if (call->method == "entity_set_mesh_visible") {
-        handleEntitySetMeshVisible(app, call);
-        return;
-    }
-    if (call->method == "eval_js") {
-        handleEvalJS(app, call);
-        return;
-    }
-    if (call->method == "invoke") {
-        handleInvoke(app, call);
-        return;
-    }
-    if (call->method == "list_commands") {
-        handleListCommands(app, call);
-        return;
-    }
-
-    completeCall(call, makeError(*call, std::string("unknown method: ") + call->method));
 }
 
 void AppAutomationControlService::handleEvalJS(App& app, const AppAutomationControlServer::RequestPtr& call)
@@ -1132,21 +1066,13 @@ void AppAutomationControlService::completeCall(const AppAutomationControlServer:
 nlohmann::json AppAutomationControlService::makeSuccess(const AppAutomationControlServer::Request& call,
                                                         nlohmann::json result) const
 {
-    return {
-        {"id", call.id},
-        {"ok", true},
-        {"result", std::move(result)},
-    };
+    return makeAutomationSuccess(call, std::move(result));
 }
 
 nlohmann::json AppAutomationControlService::makeError(const AppAutomationControlServer::Request& call,
                                                       std::string_view message) const
 {
-    return {
-        {"id", call.id},
-        {"ok", false},
-        {"error", std::string(message)},
-    };
+    return makeAutomationError(call, message);
 }
 
 } // namespace ya

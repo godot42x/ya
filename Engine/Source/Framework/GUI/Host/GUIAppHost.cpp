@@ -8,6 +8,7 @@
 #include "GUI/Host/AppBootstrap.h"
 #include "App/Control/BmpDiff.h"
 #include "App/Control/AutomationControlServer.h"
+#include "App/Control/AutomationMethodRegistry.h"
 #include "App/Control/AutomationRun.h"
 #include "App/Control/GuiEventDriver.h"
 #include "App/Kernel/SdlEventSource.h"
@@ -59,25 +60,6 @@ namespace
 
 constexpr uint32_t DEFAULT_WINDOW_WIDTH  = 1024;
 constexpr uint32_t DEFAULT_WINDOW_HEIGHT = 768;
-
-nlohmann::json makeAutomationSuccess(const AppAutomationControlServer::Request& request,
-                                     nlohmann::json result = nlohmann::json::object())
-{
-    return {
-        {"id", request.id},
-        {"ok", true},
-        {"result", std::move(result)},
-    };
-}
-
-nlohmann::json makeAutomationError(const AppAutomationControlServer::Request& request, std::string_view message)
-{
-    return {
-        {"id", request.id},
-        {"ok", false},
-        {"error", std::string(message)},
-    };
-}
 
 Extent2D queryWindowLogicalExtent(INativeWindow& window)
 {
@@ -481,6 +463,9 @@ struct GUIWindowHost::FImpl
     IRender*                 render  = nullptr;
     IRenderSurfaceContext*   present = nullptr;
     AppAutomationControlServer automationServer;
+    /// The methods this host answers on the automation port (see
+    /// registerAutomationMethods): the framework-side verbs over one window.
+    AutomationMethodRegistry automationMethods;
     std::shared_ptr<ShaderStorage> shaderStorage;
     std::unique_ptr<WidgetTree> tree;
     /// The layout this window last published (see tickContent). Held across the
@@ -680,6 +665,7 @@ bool GUIWindowHost::init()
         shutdown();
         return false;
     }
+    registerAutomationMethods();
     _impl->delegate->buildUI(*_impl->tree);
     if (!config.scenarioPath.empty()) {
         auto scenario = std::make_unique<GuiScenarioEventSource>();
@@ -800,6 +786,186 @@ bool GUIWindowHost::requestWindowSize(uint32_t width, uint32_t height, std::stri
     _impl->bWindowMinimized          = false;
     _impl->bSwapchainRecreatePending = true;
     return true;
+}
+
+// === Automation methods (registered in init, dispatched per frame) ===
+//
+// The control server's requests are the same verbs the CLI flags cover, so a
+// running app can be driven without restarting it. Each handler completes its
+// request; the frame loop only dispatches (see dispatchAutomationRequests).
+
+void GUIWindowHost::registerAutomationMethods()
+{
+    using RequestPtr = AppAutomationControlServer::RequestPtr;
+    AutomationMethodRegistry& methods = _impl->automationMethods;
+    methods.add("ping", [this](const RequestPtr& request) { onAutomationPing(request); });
+    methods.add("quit", [this](const RequestPtr& request) { onAutomationQuit(request); });
+    methods.add("dump_tree", [this](const RequestPtr& request) { onAutomationDumpTree(request); });
+    methods.add("set_window_size", [this](const RequestPtr& request) { onAutomationSetWindowSize(request); });
+    methods.add("mouse_move", [this](const RequestPtr& request) { onAutomationMouseMove(request); });
+    methods.add("mouse_press", [this](const RequestPtr& request) { onAutomationMousePress(request); });
+    methods.add("mouse_release", [this](const RequestPtr& request) { onAutomationMouseRelease(request); });
+    methods.add("capture_screenshot", [this](const RequestPtr& request) { onAutomationCaptureScreenshot(request); });
+}
+
+void GUIWindowHost::dispatchAutomationRequests()
+{
+    for (auto& request : _impl->automationServer.consumePendingRequests()) {
+        _impl->automationMethods.dispatch(request, _impl->automationServer);
+    }
+}
+
+void GUIWindowHost::onAutomationPing(const AppAutomationControlServer::RequestPtr& request)
+{
+    _impl->automationServer.completeRequest(
+        request,
+        makeAutomationSuccess(*request,
+                              {
+                                  {"service", "gui-automation-control"},
+                                  {"port", _impl->automationServer.getPort()},
+                                  {"title", _impl->config->title},
+                              }));
+}
+
+void GUIWindowHost::onAutomationQuit(const AppAutomationControlServer::RequestPtr& request)
+{
+    _impl->bQuitRequested = true;
+    _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
+}
+
+void GUIWindowHost::onAutomationDumpTree(const AppAutomationControlServer::RequestPtr& request)
+{
+    // Live tree dump for on-device assertions (the scenario dump
+    // equivalent when driving the app through the automation port).
+    _impl->automationServer.completeRequest(
+        request, makeAutomationSuccess(*request, dumpWidgetTree(*_impl->tree)));
+}
+
+void GUIWindowHost::onAutomationSetWindowSize(const AppAutomationControlServer::RequestPtr& request)
+{
+    const auto widthIt  = request->params.find("width");
+    const auto heightIt = request->params.find("height");
+    if (widthIt == request->params.end() || heightIt == request->params.end() ||
+        !widthIt->is_number_integer() || !heightIt->is_number_integer()) {
+        _impl->automationServer.completeRequest(
+            request,
+            makeAutomationError(*request, "set_window_size requires integer params {width,height}"));
+        return;
+    }
+    const int width  = widthIt->get<int>();
+    const int height = heightIt->get<int>();
+    if (width <= 0 || height <= 0) {
+        _impl->automationServer.completeRequest(
+            request,
+            makeAutomationError(*request, "set_window_size expects positive width and height"));
+        return;
+    }
+    if (!requestWindowSize(static_cast<uint32_t>(width), static_cast<uint32_t>(height), "automation")) {
+        _impl->automationServer.completeRequest(
+            request,
+            makeAutomationError(*request, std::format("failed to set window size to {}x{}", width, height)));
+        return;
+    }
+    _impl->automationServer.completeRequest(
+        request,
+        makeAutomationSuccess(*request, {{"width", width}, {"height", height}}));
+}
+
+void GUIWindowHost::onAutomationMouseMove(const AppAutomationControlServer::RequestPtr& request)
+{
+    // Pointer injection drives hover/click regressions deterministically:
+    // the same core events SDL emits, but scheduled from the control
+    // protocol so a test harness can assert on the hover owner afterward.
+    const auto xIt = request->params.find("x");
+    const auto yIt = request->params.find("y");
+    if (xIt == request->params.end() || yIt == request->params.end() ||
+        !xIt->is_number() || !yIt->is_number()) {
+        _impl->automationServer.completeRequest(
+            request,
+            makeAutomationError(*request, "mouse_move requires number params {x,y}"));
+        return;
+    }
+    const float x = xIt->get<float>();
+    const float y = yIt->get<float>();
+    _impl->lastMouseX = x;
+    _impl->lastMouseY = y;
+    dispatchToTree(MouseMoveEvent(x, y), x, y);
+    const UIElement* hovered = _impl->tree->getHovered();
+    _impl->automationServer.completeRequest(
+        request,
+        makeAutomationSuccess(*request,
+                              {{"hovered", hovered ? hovered->_name : std::string{}}}));
+}
+
+void GUIWindowHost::onAutomationMousePress(const AppAutomationControlServer::RequestPtr& request)
+{
+    const auto buttonIt = request->params.find("button");
+    const auto button   = (buttonIt != request->params.end() && buttonIt->is_number_integer())
+                              ? static_cast<EMouse::T>(buttonIt->get<int>())
+                              : EMouse::Left; // SDL codes: 1 = left, 3 = right
+    dispatchToTree(MouseButtonPressedEvent(button), _impl->lastMouseX, _impl->lastMouseY);
+    _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
+}
+
+void GUIWindowHost::onAutomationMouseRelease(const AppAutomationControlServer::RequestPtr& request)
+{
+    const auto buttonIt = request->params.find("button");
+    const auto button   = (buttonIt != request->params.end() && buttonIt->is_number_integer())
+                              ? static_cast<EMouse::T>(buttonIt->get<int>())
+                              : EMouse::Left; // SDL codes: 1 = left, 3 = right
+    dispatchToTree(MouseButtonReleasedEvent(button), _impl->lastMouseX, _impl->lastMouseY);
+    _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
+}
+
+void GUIWindowHost::onAutomationCaptureScreenshot(const AppAutomationControlServer::RequestPtr& request)
+{
+    // GUI offscreen parity capture: the request is deferred until the
+    // frame loop reaches the warmup frame, captures the requested
+    // surface(s) and (for parity) diffs them, then completes the request.
+    const auto targetIt = request->params.find("target");
+    const std::string target = (targetIt != request->params.end() && targetIt->is_string())
+                                   ? targetIt->get<std::string>()
+                                   : "parity";
+    if (target != "gpu" && target != "offscreen" && target != "parity") {
+        _impl->automationServer.completeRequest(
+            request,
+            makeAutomationError(*request,
+                                "capture_screenshot params.target must be 'gpu', 'offscreen' or 'parity'"));
+        return;
+    }
+    const auto pathIt = request->params.find("path");
+    if (pathIt == request->params.end() || !pathIt->is_string() ||
+        pathIt->get<std::string>().empty()) {
+        _impl->automationServer.completeRequest(
+            request,
+            makeAutomationError(*request, "capture_screenshot requires non-empty params.path"));
+        return;
+    }
+    if (_impl->pendingCapture) {
+        _impl->automationServer.completeRequest(
+            request,
+            makeAutomationError(*request, "a capture request is already in flight"));
+        return;
+    }
+
+    const std::string basePath      = pathIt->get<std::string>();
+    const uint64_t    warmupFrames  = request->params.value("warmup_frames", static_cast<uint64_t>(2));
+
+    PendingGuiCapture capture;
+    capture.waiter = request;
+    if (target == "gpu") {
+        capture.gpuPath = basePath;
+    }
+    else if (target == "offscreen") {
+        capture.offscreenPath = basePath;
+    }
+    else { // parity
+        capture.gpuPath       = basePath + ".gpu.bmp";
+        capture.offscreenPath = basePath + ".offscreen.bmp";
+        capture.diffPath      = basePath + ".diff.bmp";
+    }
+    capture.earliestFrame = _impl->frameCount + warmupFrames;
+    _impl->pendingCapture = std::move(capture);
 }
 
 int GUIWindowHost::run()
@@ -1048,156 +1214,7 @@ void GUIWindowHost::tickContent(float dt)
     ++_impl->frameCount;
     _impl->tree->tick(dt);
 
-    for (auto& request : _impl->automationServer.consumePendingRequests()) {
-        if (request->method == "ping") {
-            _impl->automationServer.completeRequest(
-                request,
-                makeAutomationSuccess(*request,
-                                      {
-                                          {"service", "gui-automation-control"},
-                                          {"port", _impl->automationServer.getPort()},
-                                          {"title", _impl->config->title},
-                                      }));
-            continue;
-        }
-        if (request->method == "quit") {
-            _impl->bQuitRequested = true;
-            _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
-            continue;
-        }
-        if (request->method == "dump_tree") {
-            // Live tree dump for on-device assertions (the scenario dump
-            // equivalent when driving the app through the automation port).
-            _impl->automationServer.completeRequest(
-                request, makeAutomationSuccess(*request, dumpWidgetTree(*_impl->tree)));
-            continue;
-        }
-        if (request->method == "set_window_size") {
-            const auto widthIt  = request->params.find("width");
-            const auto heightIt = request->params.find("height");
-            if (widthIt == request->params.end() || heightIt == request->params.end() ||
-                !widthIt->is_number_integer() || !heightIt->is_number_integer()) {
-                _impl->automationServer.completeRequest(
-                    request,
-                    makeAutomationError(*request, "set_window_size requires integer params {width,height}"));
-                continue;
-            }
-            const int width  = widthIt->get<int>();
-            const int height = heightIt->get<int>();
-            if (width <= 0 || height <= 0) {
-                _impl->automationServer.completeRequest(
-                    request,
-                    makeAutomationError(*request, "set_window_size expects positive width and height"));
-                continue;
-            }
-            if (!requestWindowSize(static_cast<uint32_t>(width), static_cast<uint32_t>(height), "automation")) {
-                _impl->automationServer.completeRequest(
-                    request,
-                    makeAutomationError(*request, std::format("failed to set window size to {}x{}", width, height)));
-                continue;
-            }
-            _impl->automationServer.completeRequest(
-                request,
-                makeAutomationSuccess(*request, {{"width", width}, {"height", height}}));
-            continue;
-        }
-        // Pointer injection drives hover/click regressions deterministically:
-        // the same core events SDL emits, but scheduled from the control
-        // protocol so a test harness can assert on the hover owner afterward.
-        if (request->method == "mouse_move") {
-            const auto xIt = request->params.find("x");
-            const auto yIt = request->params.find("y");
-            if (xIt == request->params.end() || yIt == request->params.end() ||
-                !xIt->is_number() || !yIt->is_number()) {
-                _impl->automationServer.completeRequest(
-                    request,
-                    makeAutomationError(*request, "mouse_move requires number params {x,y}"));
-                continue;
-            }
-            const float x = xIt->get<float>();
-            const float y = yIt->get<float>();
-            _impl->lastMouseX = x;
-            _impl->lastMouseY = y;
-            dispatchToTree(MouseMoveEvent(x, y), x, y);
-            const UIElement* hovered = _impl->tree->getHovered();
-            _impl->automationServer.completeRequest(
-                request,
-                makeAutomationSuccess(*request,
-                                      {{"hovered", hovered ? hovered->_name : std::string{}}}));
-            continue;
-        }
-        if (request->method == "mouse_press") {
-            const auto buttonIt = request->params.find("button");
-            const auto button   = (buttonIt != request->params.end() && buttonIt->is_number_integer())
-                                      ? static_cast<EMouse::T>(buttonIt->get<int>())
-                                      : EMouse::Left; // SDL codes: 1 = left, 3 = right
-            dispatchToTree(MouseButtonPressedEvent(button), _impl->lastMouseX, _impl->lastMouseY);
-            _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
-            continue;
-        }
-        if (request->method == "mouse_release") {
-            const auto buttonIt = request->params.find("button");
-            const auto button   = (buttonIt != request->params.end() && buttonIt->is_number_integer())
-                                      ? static_cast<EMouse::T>(buttonIt->get<int>())
-                                      : EMouse::Left; // SDL codes: 1 = left, 3 = right
-            dispatchToTree(MouseButtonReleasedEvent(button), _impl->lastMouseX, _impl->lastMouseY);
-            _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
-            continue;
-        }
-        // GUI offscreen parity capture: the request is deferred until the
-        // frame loop reaches the warmup frame, captures the requested
-        // surface(s) and (for parity) diffs them, then completes the request.
-        if (request->method == "capture_screenshot") {
-            const auto targetIt = request->params.find("target");
-            const std::string target = (targetIt != request->params.end() && targetIt->is_string())
-                                           ? targetIt->get<std::string>()
-                                           : "parity";
-            if (target != "gpu" && target != "offscreen" && target != "parity") {
-                _impl->automationServer.completeRequest(
-                    request,
-                    makeAutomationError(*request,
-                                        "capture_screenshot params.target must be 'gpu', 'offscreen' or 'parity'"));
-                continue;
-            }
-            const auto pathIt = request->params.find("path");
-            if (pathIt == request->params.end() || !pathIt->is_string() ||
-                pathIt->get<std::string>().empty()) {
-                _impl->automationServer.completeRequest(
-                    request,
-                    makeAutomationError(*request, "capture_screenshot requires non-empty params.path"));
-                continue;
-            }
-            if (_impl->pendingCapture) {
-                _impl->automationServer.completeRequest(
-                    request,
-                    makeAutomationError(*request, "a capture request is already in flight"));
-                continue;
-            }
-
-            const std::string basePath      = pathIt->get<std::string>();
-            const uint64_t    warmupFrames  = request->params.value("warmup_frames", static_cast<uint64_t>(2));
-
-            PendingGuiCapture capture;
-            capture.waiter = request;
-            if (target == "gpu") {
-                capture.gpuPath = basePath;
-            }
-            else if (target == "offscreen") {
-                capture.offscreenPath = basePath;
-            }
-            else { // parity
-                capture.gpuPath       = basePath + ".gpu.bmp";
-                capture.offscreenPath = basePath + ".offscreen.bmp";
-                capture.diffPath      = basePath + ".diff.bmp";
-            }
-            capture.earliestFrame = _impl->frameCount + warmupFrames;
-            _impl->pendingCapture = std::move(capture);
-            continue;
-        }
-        _impl->automationServer.completeRequest(
-            request,
-            makeAutomationError(*request, std::format("unknown method: {}", request->method)));
-    }
+    dispatchAutomationRequests();
 
     if (_impl->bSwapchainRecreatePending) {
         _impl->present->requestRecreate();

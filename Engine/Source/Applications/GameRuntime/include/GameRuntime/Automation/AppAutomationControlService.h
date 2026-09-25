@@ -2,6 +2,7 @@
 
 #include "Graph/RenderGraph.h"
 #include "App/Control/AutomationControlServer.h"
+#include "App/Control/AutomationMethodRegistry.h"
 #include "GameRuntime/AppOptions.h"
 #include "GameRuntime/Automation/AppScreenshotCapture.h"
 
@@ -52,7 +53,10 @@ class YA_GAME_RUNTIME_API AppAutomationControlService
         AppScreenshotCaptureState              state;
     };
 
-    void handleCall(App& app, const AppAutomationControlServer::RequestPtr& call);
+    /// The method table is bound on the first update: handlers are this
+    /// service's verbs over the App instance that owns it (its address is
+    /// stable for the process lifetime).
+    void bindMethods(App& app);
     void handlePing(const AppAutomationControlServer::RequestPtr& call);
     void handleGetPointLightPos(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleGetDirectionalLightInfo(App& app, const AppAutomationControlServer::RequestPtr& call);
@@ -83,6 +87,8 @@ class YA_GAME_RUNTIME_API AppAutomationControlService
     [[nodiscard]] nlohmann::json makeError(const AppAutomationControlServer::Request& call, std::string_view message) const;
 
     AppAutomationControlServer      _server;
+    AutomationMethodRegistry        _methods;
+    bool                            _bMethodsBound = false;
     std::optional<ScreenshotRequest> _pendingScreenshot;
 };
 
