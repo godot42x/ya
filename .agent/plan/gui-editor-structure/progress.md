@@ -1,5 +1,36 @@
 # Progress
 
+## C6 当前 checkpoint（2026-09-25）
+
+**目标**：删掉窗口级 tool scope，让每个 major editor 只显示/停靠自己的 tab。
+
+**根因**：`EEditorTabScope::WindowTool` 不属于任何 editor，住在 window-root 的 `tools`
+叶里，因此切页签只换 page 叶内容，Level 的工具面板恒在——这就是 UI 页里看到 Level
+Hierarchy/Viewport/Content/Stats 等面板的来源。
+
+**改动**：
+
+- 删除 `WindowTool`；`EEditorTabScope` 只剩 `WindowRootEditor` / `EditorOwnedTool`。
+- `canSpawnEditorTab` 成为唯一 placement 谓词（spawn/drop/redock/restore 共用）；
+  删 `canDockEditorTab`、`isLevelEditorSharedDockTab`、`materializeTab` 的
+  `bRestoreLayout` 参数。
+- 窗口 root 工厂布局改为单页签叶；Level owned nested 工厂新增 `tools` 叶，装 Level
+  的全部工具（content-browser / stats / runtime / render / assets / debug / fonts）。
+- 注册表里那 7 个工具改为 Level-owned，placement 改 `EditorOwnedNested`。
+- `repairPlacement`：页签井里的非页签面板关闭，不再造窗口级 tools 叶。
+- `makeSpawnContext` 的 documentKey 继承收窄到 Scene-kind root。
+
+**验证**：
+
+- `xmake b ya-game-editor / ya-testing` 全绿。
+- `xmake r ya-testing` 全量 1319 passed / 0 failed。
+- 新增 `PreOwnershipWindowRootLayoutMigratesToPageWellOnly`：老布局（page + tools）
+  恢复后 tools 叶被清除，只剩页签井。
+- 编辑器 smoke 截图：Level 页显示 Hierarchy/Viewport/Inspector + Content/Stats/Runtime/
+  Render，UI 页只显示 Palette/UI Preview/UI Tree/UI Inspector。
+
+**未做**：C5（page tab 由 dock 侧渲染）。
+
 ## C4d-2 当前 checkpoint（2026-09-19）
 
 **目标**：视口不在屏上时，compose 也不录。

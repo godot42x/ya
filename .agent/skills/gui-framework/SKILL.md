@@ -496,11 +496,15 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   viewport）。Material/Script 同样是 WindowRootEditor + nested document tools
   （identity/dirty/undo chrome，还不是 material graph / script AST）。Owned tool 带
   `ownerEditorId`，dock 政策是目标 dock scope + owner。`canSpawnEditorTab` 管
-  Window-menu / invoke（WindowTool 只进 window-root；owned tool 只进同 owner nested）。
-  `canDockEditorTab` 管 drop 与 layout restore：Level nested 可以保留 WindowTool，
-  window-root 可以保留 Level owned tool。UI/Material/Script nested 仍拒绝 WindowTool。
-  重启必须按保存布局 `materializeTab(id, /*bRestoreLayout=*/true)`，不能再用 spawn
-  政策把用户拖过的 tab 丢掉。`FDockContext`
+  Window-menu / invoke / drop / redock / layout restore，是唯一一处 placement 谓词：
+  window root 是**页签井**，只收 `WindowRootEditor`（Level / UI / Material / Script）；
+  owned tool 只进同 owner 的 nested dock。**不存在窗口级 tool scope**——那正是
+  「切到 UI 页仍看到 Level 工具面板」的根因：窗口级工具住在 window-root 的 tools 叶里，
+  与当前页签无关。Level 的 Content/Stats/Runtime/Render/Assets/Debug/Fonts 因此是
+  Level-owned tool，跟 Viewport/Hierarchy/Inspector 一起住在 Level 自己的 nested dock；
+  切页签＝整块工作区一起换。保存布局若把非页签面板留在页签井（老布局），
+  `repairPlacement` 关闭它们而不是再造一个 tools 叶：页签井不承载 tool，也没有可
+  re-home 的窗口级 dock。`FDockContext`
   不认识 editor root。UI/Material/Script 的 nested dock 由 `EditorNestedDockHost`
   持有，不把 Surface 做成 dock manager；这些 nested dock 关闭 floating/tear-off（C7）。
   C5 起 owned tool 只进同 owner 的 nested `FDockContext`（window-root 不再扁平物化）。

@@ -74,6 +74,19 @@
         "publishViewportRect is still the only last-valid geometry snapshot point",
         "open decision: does a collapsed viewport tab mean hidden or shown-but-not-laid-out"
       ]
+    },
+    {
+      "id": "editor_owned_tool_scope",
+      "status": "implemented",
+      "phase": "C6",
+      "evidence": [
+        "EEditorTabScope::WindowTool deleted; no window-level tool scope remains",
+        "canSpawnEditorTab is the single placement predicate for spawn/drop/redock/restore",
+        "window root factory is a single page leaf; Level's tools moved into Level's owned nested dock",
+        "repairPlacement closes non-page panels left in the page well instead of building a window-level tools leaf",
+        "PreOwnershipWindowRootLayoutMigratesToPageWellOnly covers the saved-layout migration",
+        "ya-testing 1319 passed / 0 failed; editor smoke shows Level page and UI page each showing only their own panels"
+      ]
     }
   ]
 }

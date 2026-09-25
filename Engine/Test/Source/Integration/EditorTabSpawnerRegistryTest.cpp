@@ -108,7 +108,8 @@ TEST(EditorTabSpawnerRegistryTest, BuiltinFontAtlasesSpawnDoesNotRequireHost)
     ASSERT_NE(fonts, nullptr);
     EXPECT_EQ(fonts->title, "Fonts");
     EXPECT_EQ(fonts->toolsMenuLabel, "Font Atlases");
-    EXPECT_EQ(fonts->scope, EEditorTabScope::WindowTool);
+    EXPECT_EQ(fonts->scope, EEditorTabScope::EditorOwnedTool);
+    EXPECT_EQ(fonts->ownerEditorId, kLevelEditorRootId);
 
     FEditorTabSpawnContext ctx;
     EXPECT_NE(fonts->spawn(ctx), nullptr);

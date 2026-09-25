@@ -58,28 +58,20 @@ TEST(EditorDockWorkspaceTest, FactoryLayoutPlacesDefaultTabs)
     ASSERT_TRUE(spawnLayoutPanels(context, factory));
     ASSERT_TRUE(context.importLayoutJson(factory));
 
-    EXPECT_EQ(context.dockModel().getRootNode()->kind, EDockNodeKind::Split);
-    EXPECT_EQ(context.dockModel().getRootNode()->orientation, EDockSplitOrientation::Vertical);
-    EXPECT_FLOAT_EQ(context.dockModel().getRootNode()->ratio, 0.78f);
-
+    // The window root is the page well and nothing else: one stack holding the
+    // major editors. Level's tool panels live in Level's own nested dock, so
+    // they cannot be visible, or dockable, while another page is active.
+    EXPECT_EQ(context.dockModel().getRootNode()->kind, EDockNodeKind::Stack);
     EXPECT_EQ(leafKeys(context, "level-editor"),
               (std::vector<std::string>{"level-editor", "ui-designer"}));
-    EXPECT_EQ(leafKeys(context, "content-browser"),
-              (std::vector<std::string>{"content-browser",
-                                        "frame-stats",
-                                        "runtime-tools",
-                                        "render-settings",
-                                        "asset-inspector",
-                                        "debug-images"}));
     const FDockNode* pageLeaf = context.dockModel().findLeafForPanel(
         context.findPanelByStableKey("level-editor")->id);
-    const FDockNode* toolsLeaf = context.dockModel().findLeafForPanel(
-        context.findPanelByStableKey("content-browser")->id);
     ASSERT_NE(pageLeaf, nullptr);
-    ASSERT_NE(toolsLeaf, nullptr);
     EXPECT_EQ(pageLeaf->leafRole, EDockLeafRole::Page);
     EXPECT_TRUE(pageLeaf->bHideTabBar);
-    EXPECT_EQ(toolsLeaf->leafRole, EDockLeafRole::Tools);
+    EXPECT_EQ(context.dockModel().findFirstLeafWithRole(EDockLeafRole::Tools),
+              kInvalidDockNodeId);
+    EXPECT_FALSE(context.hasPanel("content-browser"));
     EXPECT_TRUE(context.floatingWindows().empty());
 }
 
@@ -201,7 +193,7 @@ TEST(EditorDockWorkspaceTest, SavedLayoutWithUnknownSpawnerStillRestoresKnownTab
     EXPECT_FALSE(context.hasPanel("gui-workbench"));
 }
 
-TEST(EditorDockWorkspaceTest, PageLeafRejectsToolsAndToolsLeafRejectsPages)
+TEST(EditorDockWorkspaceTest, PageWellAcceptsPagesAndHasNoWindowLevelToolsLeaf)
 {
     EditorTabSpawnerRegistry registry;
     registerBuiltinEditorTabSpawners(registry);
@@ -220,18 +212,19 @@ TEST(EditorDockWorkspaceTest, PageLeafRejectsToolsAndToolsLeafRejectsPages)
     ASSERT_TRUE(context.importLayoutJson(factory));
 
     const DockNodeId pageLeaf  = context.dockModel().findFirstLeafWithRole(EDockLeafRole::Page);
-    const DockNodeId toolsLeaf = context.dockModel().findFirstLeafWithRole(EDockLeafRole::Tools);
     ASSERT_NE(pageLeaf, kInvalidDockNodeId);
-    ASSERT_NE(toolsLeaf, kInvalidDockNodeId);
 
+    // A page merges into the page well on the center target only; a cardinal
+    // split there would make a second page well the chrome cannot render.
     EXPECT_TRUE(context.acceptsLeafDrop("ui-designer", kUIEditorRootId, {}, pageLeaf, true));
     EXPECT_FALSE(context.acceptsLeafDrop("ui-designer", kUIEditorRootId, {}, pageLeaf, false));
-    EXPECT_FALSE(context.acceptsLeafDrop("ui-designer", kUIEditorRootId, {}, toolsLeaf, true));
-    EXPECT_TRUE(context.acceptsLeafDrop("content-browser", 0, {}, toolsLeaf, true));
-    EXPECT_FALSE(context.acceptsLeafDrop("content-browser", 0, {}, pageLeaf, true));
-    EXPECT_FALSE(context.acceptsLeafDrop("content-browser", 0, {}, pageLeaf, false));
     EXPECT_EQ(context.adoptLeafFor("script-editor", kScriptEditorRootId, {}), pageLeaf);
-    EXPECT_EQ(context.adoptLeafFor("content-browser", 0, {}), toolsLeaf);
+
+    // A Level-owned tool has no window-level home: it is refused by the page
+    // well and there is no tools leaf for it to land in.
+    EXPECT_FALSE(context.acceptsLeafDrop("content-browser", kLevelEditorRootId, {}, pageLeaf, true));
+    EXPECT_FALSE(context.acceptsLeafDrop("content-browser", kLevelEditorRootId, {}, pageLeaf, false));
+    EXPECT_EQ(context.dockModel().findFirstLeafWithRole(EDockLeafRole::Tools), kInvalidDockNodeId);
 }
 
 TEST(EditorDockWorkspaceTest, MaterializeTabInvokesSpawnCompletionAfterRegistration)
@@ -244,7 +237,9 @@ TEST(EditorDockWorkspaceTest, MaterializeTabInvokesSpawnCompletionAfterRegistrat
         .tabId = "callback-tab",
         .title = "Callback",
         .toolsMenuLabel = "Callback",
-        .scope = EEditorTabScope::WindowTool,
+        .scope = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId = kLevelEditorRootId,
+        .placement = EEditorTabPlacement::EditorOwnedNested,
         .spawn = [](FEditorTabSpawnContext&) {
             return std::make_shared<UICanvasPanel>("CallbackBody");
         },
@@ -259,7 +254,8 @@ TEST(EditorDockWorkspaceTest, MaterializeTabInvokesSpawnCompletionAfterRegistrat
     workspace.bind(EditorDockWorkspace::FHost{
         .spawners        = &registry,
         .dock            = &context,
-        .targetPlacement = EEditorTabPlacement::WindowRootDock,
+        .activeRootId    = kLevelEditorRootId,
+        .targetPlacement = EEditorTabPlacement::EditorOwnedNested,
     });
 
     ASSERT_TRUE(workspace.materializeTab("callback-tab"));
@@ -268,7 +264,7 @@ TEST(EditorDockWorkspaceTest, MaterializeTabInvokesSpawnCompletionAfterRegistrat
     EXPECT_TRUE(context.hasPanel("callback-tab"));
 }
 
-TEST(EditorDockWorkspaceTest, RepairMovesWindowToolsOutOfPageLeaf)
+TEST(EditorDockWorkspaceTest, RepairClosesNonPagePanelsLeftInThePageWell)
 {
     EditorTabSpawnerRegistry registry;
     registerBuiltinEditorTabSpawners(registry);
@@ -296,15 +292,15 @@ TEST(EditorDockWorkspaceTest, RepairMovesWindowToolsOutOfPageLeaf)
     });
     workspace.repairPlacement();
 
-    const DockNodeId pageLeaf  = context.dockModel().findFirstLeafWithRole(EDockLeafRole::Page);
-    const DockNodeId toolsLeaf = context.dockModel().findFirstLeafWithRole(EDockLeafRole::Tools);
+    // A pre-ownership layout parked Level's tools in the page well. The page
+    // well is pages-only and this object cannot re-home a panel into its
+    // owner's dock, so the honest result is "closed", not "shown here".
+    const DockNodeId pageLeaf = context.dockModel().findFirstLeafWithRole(EDockLeafRole::Page);
     ASSERT_NE(pageLeaf, kInvalidDockNodeId);
-    ASSERT_NE(toolsLeaf, kInvalidDockNodeId);
     EXPECT_EQ(leafKeys(context, "level-editor"), std::vector<std::string>({"level-editor"}));
-    EXPECT_EQ(leafKeys(context, "content-browser"),
-              (std::vector<std::string>{"content-browser", "frame-stats"}));
-    EXPECT_EQ(context.dockModel().findLeafForPanel(context.findPanelByStableKey("content-browser")->id)->id,
-              toolsLeaf);
+    EXPECT_FALSE(context.hasPanel("content-browser"));
+    EXPECT_FALSE(context.hasPanel("frame-stats"));
+    EXPECT_EQ(context.dockModel().findFirstLeafWithRole(EDockLeafRole::Tools), kInvalidDockNodeId);
 }
 
 TEST(EditorDockWorkspaceTest, RepairDoesNotCreateEmptyToolsWell)
@@ -368,7 +364,7 @@ TEST(EditorDockWorkspaceTest, RepairPrunesExistingEmptyToolsWell)
     EXPECT_EQ(context.dockModel().findFirstLeafWithRole(EDockLeafRole::Tools), kInvalidDockNodeId);
 }
 
-TEST(EditorDockWorkspaceTest, ToolsOnlyWindowAdoptsFullLeafWithoutPageSplit)
+TEST(EditorDockWorkspaceTest, WindowRootWithoutPageWellRefusesTools)
 {
     EditorTabSpawnerRegistry registry;
     registerBuiltinEditorTabSpawners(registry);
@@ -386,13 +382,12 @@ TEST(EditorDockWorkspaceTest, ToolsOnlyWindowAdoptsFullLeafWithoutPageSplit)
     ASSERT_NE(root, nullptr);
     ASSERT_EQ(root->kind, EDockNodeKind::Stack);
 
-    const DockNodeId leaf = context.adoptLeafFor("font-atlases", 0, {});
-    EXPECT_EQ(leaf, root->id);
-    EXPECT_EQ(context.dockModel().getRootNode()->kind, EDockNodeKind::Stack);
-    EXPECT_EQ(context.dockModel().getRootNode()->leafRole, EDockLeafRole::Tools);
-    EXPECT_TRUE(context.dockModel().getRootNode()->bHideTabBar);
+    // A tool panel has no window-level home. A window root that has no page
+    // well therefore refuses it instead of fabricating a tools leaf outside
+    // the ownership model.
+    EXPECT_EQ(context.adoptLeafFor("font-atlases", kLevelEditorRootId, {}), kInvalidDockNodeId);
     EXPECT_EQ(context.dockModel().leafIds().size(), 1u);
-    EXPECT_EQ(context.dockModel().findFirstLeafWithRole(EDockLeafRole::Page), kInvalidDockNodeId);
+    EXPECT_EQ(context.dockModel().findFirstLeafWithRole(EDockLeafRole::Tools), kInvalidDockNodeId);
 }
 
 TEST(EditorDockWorkspaceTest, NestedRepairPrunesEmptyGenericLeaf)

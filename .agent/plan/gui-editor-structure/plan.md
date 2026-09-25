@@ -43,6 +43,34 @@ Hierarchy / Viewport / Menu / Dock persist / dialogs 留在 Surface（chrome 编
 
 结构面 C0–C3 已完成。内核手感与 ImGui 工作流接线见 `.agent/plan/gui-kernel-ux-parity/`。
 
+## C6：窗口级 tool scope 删除，window root 只做页签井（2026-09-25）
+
+**症状**：切到 UI 页签时，Level 的 Hierarchy / Viewport / Inspector / Content / Stats /
+Runtime / Render / Assets / Debug 仍在窗口里，甚至可以被拖到 UI 页签下。
+
+**根因**：`EEditorTabScope::WindowTool` 是一种**不属于任何 editor** 的窗口级面板，
+它们住在 window-root 的 `tools` 叶里，与当前页签无关。所以「当前页签」只决定 page 叶的
+内容，tools 叶恒定可见 —— 泄漏不是画错，是所有权模型里根本没有「这块工具属于谁」。
+
+**改动**（UE 语义：每个 major editor 只显示/停靠自己的 tab）：
+
+- 删掉 `WindowTool`。只剩两种 scope：`WindowRootEditor`（页签）与 `EditorOwnedTool`
+  （某个 editor 的工具）。
+- `canSpawnEditorTab` 成为唯一 placement 谓词（spawn / drop / redock / layout restore
+  共用），`canDockEditorTab` 与 `isLevelEditorSharedDockTab` 删除；形参不再需要区分
+  restore 与 spawn，`materializeTab` 的 `bRestoreLayout` 随之消失。
+- 窗口 root 工厂布局从 `page + tools` 两叶改为单页签叶；Level 的 owned nested 工厂
+  增加一个 `tools` 叶，承载 Level 的全部工具面板。
+- `repairPlacement` 在页签井里发现非页签面板时关闭它们（页签井不承载 tool，且没有
+  窗口级 dock 可供 re-home），而不是像以前那样 `ensureToolsLeaf` 造一个窗口级叶。
+- Level tool 的 `documentKey` 继承收窄到 Scene-kind root：窗口的 documentKey 是场景，
+  UI/Material/Script 的工具不该认领它。
+
+**验证**：`ya-testing` 全绿（1319 passed）；`EditorDockWorkspaceTest` / `EditorRootSessionTest`
+新增/改写布局迁移与所有权断言；编辑器 smoke 截图确认 Level 页与 UI 页各自只显示自己的面板。
+
+**未做**：C5（page tab 交还 dock 侧渲染）仍未做，`EditorSurface` 仍持有 `_pageTabBar`。
+
 ## C4–C5：把 Surface 的 push 编排与 page tab 投影消掉（2026-09-19 复查）
 
 C0–C3 把 tab owner 抽出来了，但 C2 明确保留了"Hierarchy / Viewport / Menu / Dock persist / dialogs

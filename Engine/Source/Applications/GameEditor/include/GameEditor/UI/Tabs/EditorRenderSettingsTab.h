@@ -11,8 +11,8 @@ struct App;
 struct IRenderSurfaceContext;
 class RuntimeRenderSettingsSection;
 
-/// WindowTool tab for viewport render parameters (pipeline, post process,
-/// shadows, deferred SSAO/IBL). Runtime Tools stays diagnostics-only.
+/// Level-owned tool tab for viewport render parameters (pipeline, post
+/// process, shadows, deferred SSAO/IBL). Runtime Tools stays diagnostics-only.
 class EditorRenderSettingsTab : public UICompoundWidget
 {
   public:

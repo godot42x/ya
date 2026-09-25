@@ -26,14 +26,13 @@ struct WidgetTree;
 class EditorTabSpawnerRegistry;
 
 /// Inputs a tab factory may consume. selection / actions / undo / viewportHost
-/// come from the owner editor session and may be null (WindowTool). `app` and
-/// `presentSurface` are the window session's process/present handles and may
-/// be null. spawn() only constructs UI content; it does not hold EditorSurface,
-/// own the tree, or tick.
+/// come from the owner editor session. `app` and `presentSurface` are the
+/// window session's process/present handles and may be null. spawn() only
+/// constructs UI content; it does not hold EditorSurface, own the tree, or tick.
 struct FEditorTabSpawnContext
 {
     EditorWindowId   windowId = kDefaultEditorWindowId;
-    EEditorTabScope  scope    = EEditorTabScope::WindowTool;
+    EEditorTabScope  scope    = EEditorTabScope::WindowRootEditor;
     std::optional<EditorRootId> ownerEditorId;
     std::string      documentKey;
     EEditorTabPlacement    placement    = EEditorTabPlacement::WindowRootDock;
@@ -63,7 +62,7 @@ struct FEditorTabSpawner
     std::string            tabId;
     std::string            title;
     std::string            toolsMenuLabel;
-    EEditorTabScope        scope          = EEditorTabScope::WindowTool;
+    EEditorTabScope        scope          = EEditorTabScope::WindowRootEditor;
     EditorRootId           ownerEditorId  = kInvalidEditorRootId;
     std::string            documentKey;
     EEditorTabPlacement    placement      = EEditorTabPlacement::WindowRootDock;

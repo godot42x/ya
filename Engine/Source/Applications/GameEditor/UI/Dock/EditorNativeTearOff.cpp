@@ -71,7 +71,10 @@ namespace
         payload.sourcePlacement = EEditorTabPlacement::WindowRootDock;
     }
     else {
-        payload.scope = EEditorTabScope::WindowTool;
+        // A window-root panel with no owner is a page that lost its identity;
+        // keep page semantics (it may return to the page well) rather than
+        // inventing a window-level tool scope, which no longer exists.
+        payload.scope = EEditorTabScope::WindowRootEditor;
         payload.detachPolicy = EEditorTabDetachPolicy::IndependentWindow;
         payload.sourcePlacement = EEditorTabPlacement::WindowRootDock;
     }

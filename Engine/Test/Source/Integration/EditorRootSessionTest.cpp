@@ -24,44 +24,37 @@ TEST(EditorRootSessionTest, OwnedToolDocksOnlyUnderItsRoot)
         .scope          = EEditorTabScope::EditorOwnedTool,
         .ownerEditorId = kLevelEditorRootId,
     };
-    EXPECT_TRUE(canDockEditorTab(owned, EEditorTabPlacement::WindowRootDock, kLevelEditorRootId));
+    // An owned tool lives in exactly one place: its owner's dock. It is not a
+    // window-level panel, so it never lands in the window root (the page well)
+    // and never in another editor's dock.
     EXPECT_FALSE(canSpawnEditorTab(owned, EEditorTabPlacement::WindowRootDock, kLevelEditorRootId));
-    EXPECT_TRUE(canDockEditorTab(owned, EEditorTabPlacement::EditorOwnedNested, kLevelEditorRootId));
     EXPECT_TRUE(canSpawnEditorTab(owned, EEditorTabPlacement::EditorOwnedNested, kLevelEditorRootId));
-    EXPECT_FALSE(canDockEditorTab(owned, EEditorTabPlacement::EditorOwnedNested, 99));
-    EXPECT_FALSE(canDockEditorTab(owned, EEditorTabPlacement::WindowRootDock, 99));
-    EXPECT_FALSE(canDockEditorTab(FEditorTabOwnership{.scope = EEditorTabScope::EditorOwnedTool,
-                                                      .ownerEditorId = kInvalidEditorRootId},
-                                  EEditorTabPlacement::WindowRootDock,
-                                  kLevelEditorRootId));
+    EXPECT_FALSE(canSpawnEditorTab(owned, EEditorTabPlacement::EditorOwnedNested, 99));
+    EXPECT_FALSE(canSpawnEditorTab(owned, EEditorTabPlacement::WindowRootDock, 99));
+    EXPECT_FALSE(canSpawnEditorTab(FEditorTabOwnership{.scope = EEditorTabScope::EditorOwnedTool,
+                                                       .ownerEditorId = kInvalidEditorRootId},
+                                   EEditorTabPlacement::WindowRootDock,
+                                   kLevelEditorRootId));
 }
 
-TEST(EditorRootSessionTest, WindowToolAndRootEditorMayDockInWindowRoot)
+TEST(EditorRootSessionTest, OnlyRootEditorsOccupyThePageWell)
 {
-    EXPECT_TRUE(canDockEditorTab({.scope = EEditorTabScope::WindowTool},
-                                 EEditorTabPlacement::WindowRootDock,
-                                 99));
-    EXPECT_TRUE(canDockEditorTab({.scope = EEditorTabScope::WindowRootEditor},
-                                 EEditorTabPlacement::WindowRootDock,
-                                 kLevelEditorRootId));
-    EXPECT_FALSE(canSpawnEditorTab({.scope = EEditorTabScope::WindowTool},
-                                   EEditorTabPlacement::EditorOwnedNested,
-                                   kLevelEditorRootId));
-    EXPECT_TRUE(canDockEditorTab({.scope = EEditorTabScope::WindowTool},
-                                 EEditorTabPlacement::EditorOwnedNested,
-                                 kLevelEditorRootId));
-    EXPECT_FALSE(canDockEditorTab({.scope = EEditorTabScope::WindowTool},
-                                  EEditorTabPlacement::EditorOwnedNested,
-                                  kUIEditorRootId));
-    EXPECT_FALSE(canDockEditorTab({.scope = EEditorTabScope::WindowRootEditor},
-                                  EEditorTabPlacement::EditorOwnedNested,
+    // The window root is the page well, so it takes pages only -- that is what
+    // makes a page switch replace the whole workspace.
+    EXPECT_TRUE(canSpawnEditorTab({.scope = EEditorTabScope::WindowRootEditor},
+                                  EEditorTabPlacement::WindowRootDock,
                                   kLevelEditorRootId));
-    EXPECT_TRUE(canDockEditorTab({.scope = EEditorTabScope::WindowRootEditor},
-                                 EEditorTabPlacement::WindowPageTab,
-                                 kLevelEditorRootId));
-    EXPECT_FALSE(canDockEditorTab({.scope = EEditorTabScope::WindowTool},
+    EXPECT_TRUE(canSpawnEditorTab({.scope = EEditorTabScope::WindowRootEditor},
                                   EEditorTabPlacement::WindowPageTab,
                                   kLevelEditorRootId));
+    EXPECT_FALSE(canSpawnEditorTab({.scope = EEditorTabScope::WindowRootEditor},
+                                   EEditorTabPlacement::EditorOwnedNested,
+                                   kLevelEditorRootId));
+    // An owned tool never becomes a page.
+    EXPECT_FALSE(canSpawnEditorTab(
+        {.scope = EEditorTabScope::EditorOwnedTool, .ownerEditorId = kUIEditorRootId},
+        EEditorTabPlacement::WindowPageTab,
+        kLevelEditorRootId));
 }
 
 TEST(EditorRootSessionTest, TearOffAndDropPolicyFollowDetachAndScope)
@@ -84,9 +77,12 @@ TEST(EditorRootSessionTest, TearOffAndDropPolicyFollowDetachAndScope)
         .sourcePlacement = EEditorTabPlacement::EditorOwnedNested,
     };
     EXPECT_TRUE(canTearOffEditorTab(owned));
-    EXPECT_TRUE(canAcceptEditorDrop(owned, EEditorTabPlacement::WindowRootDock, kLevelEditorRootId));
     EXPECT_TRUE(canAcceptEditorDrop(owned, EEditorTabPlacement::EditorOwnedNested, kLevelEditorRootId));
     EXPECT_FALSE(canAcceptEditorDrop(owned, EEditorTabPlacement::EditorOwnedNested, kUIEditorRootId));
+    // A tool belongs to its owner's dock only: the page well is not a place a
+    // tool panel can be dropped into.
+    EXPECT_FALSE(canAcceptEditorDrop(owned, EEditorTabPlacement::WindowRootDock, kLevelEditorRootId));
+    EXPECT_FALSE(canAcceptEditorDrop(owned, EEditorTabPlacement::WindowPageTab, kLevelEditorRootId));
 
     const FEditorTabDragPayload root{
         .tabId         = "material-editor",
@@ -106,7 +102,7 @@ TEST(EditorRootSessionTest, TearOffAndDropPolicyFollowDetachAndScope)
     EXPECT_TRUE(canCloseEditorWindow(2));
 }
 
-TEST(EditorDockWorkspaceTest, WindowRootAdoptPolicyAcceptsLevelOwnedTool)
+TEST(EditorDockWorkspaceTest, WindowRootRefusesLevelOwnedTool)
 {
     EditorTabSpawnerRegistry spawners;
     spawners.add({
@@ -137,22 +133,23 @@ TEST(EditorDockWorkspaceTest, WindowRootAdoptPolicyAcceptsLevelOwnedTool)
         .targetPlacement = EEditorTabPlacement::WindowRootDock,
     });
     const DockPanelId moved = nested.transferPanelTo(windowRoot, id);
-    EXPECT_NE(moved, kInvalidDockPanelId);
-    EXPECT_EQ(nested.findPanel(id), nullptr);
-    ASSERT_NE(windowRoot.findPanel(moved), nullptr);
-    EXPECT_EQ(windowRoot.findPanel(moved)->widget, widget);
-    EXPECT_EQ(windowRoot.findPanel(moved)->ownerEditorId, kLevelEditorRootId);
-    EXPECT_EQ(windowRoot.findPanelByStableKey("hierarchy"), windowRoot.findPanel(moved));
+    // The window root is the page well. A Level-owned tool that a user drags
+    // over it must stay where it is rather than appear as a page.
+    EXPECT_EQ(moved, kInvalidDockPanelId);
+    EXPECT_EQ(windowRoot.findPanelByStableKey("hierarchy"), nullptr);
+    ASSERT_NE(nested.findPanel(id), nullptr);
+    EXPECT_EQ(nested.findPanel(id)->widget, widget);
 }
 
-TEST(EditorDockWorkspaceTest, LevelNestedAdoptPolicyAcceptsWindowTool)
+TEST(EditorDockWorkspaceTest, LevelNestedAdoptPolicyAcceptsLevelOwnedTool)
 {
     EditorTabSpawnerRegistry spawners;
     spawners.add({
         .tabId          = "content-browser",
         .title          = "Content",
         .toolsMenuLabel = "Content",
-        .scope          = EEditorTabScope::WindowTool,
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kLevelEditorRootId,
         .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
     });
 
@@ -265,11 +262,13 @@ TEST(EditorTabSpawnerRegistryTest, BuiltinOwnedToolsBindToLevelEditor)
     EXPECT_EQ(inspector->placement, EEditorTabPlacement::EditorOwnedNested);
     EXPECT_EQ(inspector->detachPolicy, EEditorTabDetachPolicy::TearOffKeepOwner);
 
+    // Level's tool panels are Level-owned: they live in Level's own dock, not
+    // in a window-level well, so they cannot outlive a page switch.
     const FEditorTabSpawner* content = registry.find("content-browser");
     ASSERT_NE(content, nullptr);
-    EXPECT_EQ(content->scope, EEditorTabScope::WindowTool);
-    EXPECT_EQ(content->ownerEditorId, kInvalidEditorRootId);
-    EXPECT_EQ(content->placement, EEditorTabPlacement::WindowRootDock);
+    EXPECT_EQ(content->scope, EEditorTabScope::EditorOwnedTool);
+    EXPECT_EQ(content->ownerEditorId, kLevelEditorRootId);
+    EXPECT_EQ(content->placement, EEditorTabPlacement::EditorOwnedNested);
     EXPECT_EQ(content->detachPolicy, EEditorTabDetachPolicy::IndependentWindow);
 
     const FEditorTabSpawner* designer = registry.find("ui-designer");
@@ -322,29 +321,6 @@ TEST(EditorDockWorkspaceTest, MaterializeRejectsOwnedToolForOtherRoot)
     });
     EXPECT_FALSE(workspace.materializeTab("hierarchy"));
     EXPECT_FALSE(dock.hasPanel("hierarchy"));
-}
-
-TEST(EditorDockWorkspaceTest, MaterializeRejectsWindowToolInOwnedNestedDock)
-{
-    EditorTabSpawnerRegistry spawners;
-    spawners.add({
-        .tabId          = "content-browser",
-        .title          = "Content",
-        .toolsMenuLabel = "Content Browser",
-        .scope          = EEditorTabScope::WindowTool,
-        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
-    });
-
-    FDockContext dock;
-    EditorDockWorkspace workspace;
-    workspace.bind({
-        .spawners        = &spawners,
-        .dock            = &dock,
-        .activeRootId    = kLevelEditorRootId,
-        .targetPlacement = EEditorTabPlacement::EditorOwnedNested,
-    });
-    EXPECT_FALSE(workspace.materializeTab("content-browser"));
-    EXPECT_FALSE(dock.hasPanel("content-browser"));
 }
 
 TEST(EditorDockWorkspaceTest, MaterializeRejectsOwnedToolInOtherRootNestedDock)
@@ -460,7 +436,8 @@ TEST(EditorDockWorkspaceTest, InvokeTabActivatesNestedWindowToolWithoutSpawningD
         .tabId          = "content-browser",
         .title          = "Content",
         .toolsMenuLabel = "Content Browser",
-        .scope          = EEditorTabScope::WindowTool,
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kLevelEditorRootId,
         .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
     });
     spawners.add({
@@ -515,14 +492,16 @@ TEST(EditorDockWorkspaceTest, InvokeTabActivatesNestedWindowToolWithoutSpawningD
     EXPECT_EQ(leaf->selectedPanel, panel->id);
 }
 
-TEST(EditorDockWorkspaceTest, InvokeTabSpawnsWindowToolOnWindowRootWhenMissingEverywhere)
+TEST(EditorDockWorkspaceTest, InvokeTabOpensOwnedToolInItsOwnerDockNeverInThePageWell)
 {
     EditorTabSpawnerRegistry spawners;
     spawners.add({
         .tabId          = "content-browser",
         .title          = "Content",
         .toolsMenuLabel = "Content Browser",
-        .scope          = EEditorTabScope::WindowTool,
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kLevelEditorRootId,
+        .placement      = EEditorTabPlacement::EditorOwnedNested,
         .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
     });
 
@@ -544,9 +523,11 @@ TEST(EditorDockWorkspaceTest, InvokeTabSpawnsWindowToolOnWindowRootWhenMissingEv
         .nestedWorkspace = &nestedWorkspace,
     });
 
+    // Asked from the window root, the request forwards to Level's own dock: a
+    // tool panel never materializes in the page well.
     EXPECT_TRUE(rootWorkspace.invokeTab("content-browser"));
-    EXPECT_TRUE(rootDock.hasPanel("content-browser"));
-    EXPECT_FALSE(nestedDock.hasPanel("content-browser"));
+    EXPECT_TRUE(nestedDock.hasPanel("content-browser"));
+    EXPECT_FALSE(rootDock.hasPanel("content-browser"));
 }
 
 TEST(EditorDockWorkspaceTest, LockedTabRejectsClose)
@@ -636,7 +617,8 @@ TEST(EditorDockWorkspaceTest, LayoutRestoresWindowToolInLevelNestedHost)
         .tabId          = "content-browser",
         .title          = "Content",
         .toolsMenuLabel = "Content Browser",
-        .scope          = EEditorTabScope::WindowTool,
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kLevelEditorRootId,
         .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
     });
 
@@ -664,9 +646,18 @@ TEST(EditorDockWorkspaceTest, LayoutRestoresWindowToolInLevelNestedHost)
     EXPECT_TRUE(dock.hasPanel("content-browser"));
 }
 
-TEST(EditorDockWorkspaceTest, LayoutRestoresOwnedToolOnWindowRootHost)
+TEST(EditorDockWorkspaceTest, WindowRootRestoreKeepsPagesAndDropsOwnedTools)
 {
     EditorTabSpawnerRegistry spawners;
+    spawners.add({
+        .tabId          = "level-editor",
+        .title          = "Level",
+        .toolsMenuLabel = "Level Editor",
+        .scope          = EEditorTabScope::WindowRootEditor,
+        .ownerEditorId  = kLevelEditorRootId,
+        .placement      = EEditorTabPlacement::WindowRootDock,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("L"); },
+    });
     spawners.add({
         .tabId          = "hierarchy",
         .title          = "Hierarchy",
@@ -679,7 +670,8 @@ TEST(EditorDockWorkspaceTest, LayoutRestoresOwnedToolOnWindowRootHost)
         .tabId          = "content-browser",
         .title          = "Content",
         .toolsMenuLabel = "Content Browser",
-        .scope          = EEditorTabScope::WindowTool,
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kLevelEditorRootId,
         .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
     });
 
@@ -697,14 +689,101 @@ TEST(EditorDockWorkspaceTest, LayoutRestoresOwnedToolOnWindowRootHost)
   "version": 2,
   "tree": { "kind": "leaf", "id": "main" },
   "dockSpace": {
-    "main": { "panels": ["content-browser", "hierarchy"], "selected": "content-browser" }
+    "main": { "panels": ["level-editor", "content-browser", "hierarchy"], "selected": "level-editor" }
   },
   "floating": []
 }
 )JSON");
     EXPECT_TRUE(workspace.applyLayoutDocument(layout, false));
-    EXPECT_TRUE(dock.hasPanel("content-browser"));
-    EXPECT_TRUE(dock.hasPanel("hierarchy"));
+    // The page well keeps its page and refuses the Level-owned tools a
+    // pre-ownership layout had parked beside it.
+    EXPECT_TRUE(dock.hasPanel("level-editor"));
+    EXPECT_FALSE(dock.hasPanel("content-browser"));
+    EXPECT_FALSE(dock.hasPanel("hierarchy"));
+}
+
+TEST(EditorDockWorkspaceTest, PreOwnershipWindowRootLayoutMigratesToPageWellOnly)
+{
+    // A layout saved before tools became editor-owned parks Level's panels in a
+    // window-level tools leaf beside the page well. On restore that leaf must
+    // disappear rather than keep showing another editor's tools.
+    EditorTabSpawnerRegistry spawners;
+    spawners.add({
+        .tabId          = "level-editor",
+        .title          = "Level",
+        .toolsMenuLabel = "Level Editor",
+        .scope          = EEditorTabScope::WindowRootEditor,
+        .ownerEditorId  = kLevelEditorRootId,
+        .placement      = EEditorTabPlacement::WindowRootDock,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("L"); },
+    });
+    spawners.add({
+        .tabId          = "ui-designer",
+        .title          = "UI",
+        .toolsMenuLabel = "UI Designer",
+        .scope          = EEditorTabScope::WindowRootEditor,
+        .ownerEditorId  = kUIEditorRootId,
+        .placement      = EEditorTabPlacement::WindowRootDock,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("U"); },
+    });
+    spawners.add({
+        .tabId          = "content-browser",
+        .title          = "Content",
+        .toolsMenuLabel = "Content Browser",
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kLevelEditorRootId,
+        .placement      = EEditorTabPlacement::EditorOwnedNested,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
+    });
+    spawners.add({
+        .tabId          = "frame-stats",
+        .title          = "Stats",
+        .toolsMenuLabel = "Frame Stats",
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kLevelEditorRootId,
+        .placement      = EEditorTabPlacement::EditorOwnedNested,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("S"); },
+    });
+
+    FDockContext dock;
+    EditorDockWorkspace workspace;
+    workspace.bind({
+        .spawners        = &spawners,
+        .dock            = &dock,
+        .activeRootId    = kLevelEditorRootId,
+        .targetPlacement = EEditorTabPlacement::WindowRootDock,
+    });
+
+    const nlohmann::json legacy = nlohmann::json::parse(R"JSON(
+{
+  "version": 2,
+  "tree": {
+    "kind": "split",
+    "orientation": "vertical",
+    "ratio": 0.78,
+    "minExtent": [120.0, 120.0],
+    "children": [
+      { "kind": "leaf", "id": "page" },
+      { "kind": "leaf", "id": "tools" }
+    ]
+  },
+  "dockSpace": {
+    "page":  { "role": "page", "hideTabBar": true, "panels": ["level-editor", "ui-designer"], "selected": "ui-designer" },
+    "tools": { "role": "tools", "panels": ["content-browser", "frame-stats"], "selected": "content-browser" }
+  },
+  "floating": []
+}
+)JSON");
+    EXPECT_TRUE(workspace.applyLayoutDocument(legacy, false));
+
+    EXPECT_TRUE(dock.hasPanel("level-editor"));
+    EXPECT_TRUE(dock.hasPanel("ui-designer"));
+    EXPECT_FALSE(dock.hasPanel("content-browser"));
+    EXPECT_FALSE(dock.hasPanel("frame-stats"));
+    EXPECT_EQ(dock.dockModel().findFirstLeafWithRole(EDockLeafRole::Tools), kInvalidDockNodeId);
+    // Only the page well survives: the emptied tools leaf is pruned.
+    EXPECT_EQ(dock.dockModel().leafIds().size(), 1u);
+    EXPECT_NE(dock.dockModel().findFirstLeafWithRole(EDockLeafRole::Page), kInvalidDockNodeId);
 }
 
 TEST(EditorDockWorkspaceTest, LayoutDropsWindowToolFromUIOwnedNestedHost)
@@ -716,13 +795,15 @@ TEST(EditorDockWorkspaceTest, LayoutDropsWindowToolFromUIOwnedNestedHost)
         .toolsMenuLabel = "UI Tree",
         .scope          = EEditorTabScope::EditorOwnedTool,
         .ownerEditorId  = kUIEditorRootId,
+        .placement      = EEditorTabPlacement::EditorOwnedNested,
         .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("U"); },
     });
     spawners.add({
         .tabId          = "content-browser",
         .title          = "Content",
         .toolsMenuLabel = "Content Browser",
-        .scope          = EEditorTabScope::WindowTool,
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kLevelEditorRootId,
         .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
     });
 
@@ -786,7 +867,8 @@ TEST(EditorTabSpawnerRegistryTest, RenderSettingsSpawnWithNullTreeAndLayer)
     const FEditorTabSpawner* spawner = registry.find("render-settings");
     ASSERT_NE(spawner, nullptr);
     EXPECT_EQ(spawner->toolsMenuLabel, "Render Settings");
-    EXPECT_EQ(spawner->scope, EEditorTabScope::WindowTool);
+    EXPECT_EQ(spawner->scope, EEditorTabScope::EditorOwnedTool);
+    EXPECT_EQ(spawner->ownerEditorId, kLevelEditorRootId);
     FEditorTabSpawnContext ctx;
     const std::shared_ptr<UIElement> widget = spawner->spawn(ctx);
     ASSERT_NE(widget, nullptr);
@@ -851,23 +933,28 @@ TEST(EditorDockWorkspaceTest, MakeSpawnContextCopiesWindowAndSpawnerIdentity)
     EXPECT_EQ(ctx.presentSurface, present);
 }
 
-TEST(EditorDockWorkspaceTest, WindowToolDoesNotInheritHostDocumentKey)
+TEST(EditorDockWorkspaceTest, ToolOfAnotherRootDoesNotInheritHostDocumentKey)
 {
+    // The window's documentKey is the scene. A UI-owned tool is not about the
+    // scene, so it must not be handed that key; its own root's document is the
+    // only honest answer. This is the rule that keeps a page switch from
+    // dragging another editor's document identity along with it.
     FEditorTabSpawner spawner{
-        .tabId          = "runtime-tools",
-        .title          = "Runtime",
-        .toolsMenuLabel = "Runtime Tools",
-        .scope          = EEditorTabScope::WindowTool,
-        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("R"); },
+        .tabId          = "ui-hierarchy",
+        .title          = "UI Tree",
+        .toolsMenuLabel = "UI Tree",
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kUIEditorRootId,
+        .placement      = EEditorTabPlacement::EditorOwnedNested,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("U"); },
     };
 
     EditorDockWorkspace workspace;
-    workspace.bind({.documentKey = "scene.yascene"});
+    workspace.bind({.documentKey = "scene.yascene", .activeRootId = kUIEditorRootId});
     const FEditorTabSpawnContext ctx = workspace.makeSpawnContext(spawner);
     EXPECT_TRUE(ctx.documentKey.empty());
-    EXPECT_FALSE(ctx.ownerEditorId.has_value());
-    EXPECT_EQ(ctx.placement, EEditorTabPlacement::WindowRootDock);
-    EXPECT_EQ(ctx.detachPolicy, EEditorTabDetachPolicy::IndependentWindow);
+    EXPECT_EQ(*ctx.ownerEditorId, kUIEditorRootId);
+    EXPECT_EQ(ctx.placement, EEditorTabPlacement::EditorOwnedNested);
 }
 
 TEST(EditorDockWorkspaceTest, TwoSessionsOwnIndependentRootAndNestedDocks)
@@ -889,7 +976,8 @@ TEST(EditorDockWorkspaceTest, TwoSessionsOwnIndependentRootAndNestedDocks)
         .tabId          = "content-browser",
         .title          = "Content",
         .toolsMenuLabel = "Content Browser",
-        .scope          = EEditorTabScope::WindowTool,
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kLevelEditorRootId,
         .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
     });
 
@@ -925,8 +1013,12 @@ TEST(EditorDockWorkspaceTest, TwoSessionsOwnIndependentRootAndNestedDocks)
     EXPECT_TRUE(nestedWorkspaceB.materializeTab("hierarchy"));
     EXPECT_TRUE(nestedA->hasPanel("hierarchy"));
     EXPECT_TRUE(nestedB->hasPanel("hierarchy"));
-    EXPECT_FALSE(nestedWorkspaceA.materializeTab("content-browser"));
-    EXPECT_FALSE(nestedWorkspaceB.materializeTab("content-browser"));
+    // Both panels are Level-owned, so each window's own Level dock takes them;
+    // neither window's page well does.
+    EXPECT_TRUE(nestedWorkspaceA.materializeTab("content-browser"));
+    EXPECT_TRUE(nestedWorkspaceB.materializeTab("content-browser"));
+    EXPECT_TRUE(nestedA->hasPanel("content-browser"));
+    EXPECT_TRUE(nestedB->hasPanel("content-browser"));
     EXPECT_FALSE(rootA->hasPanel("hierarchy"));
     EXPECT_FALSE(rootB->hasPanel("hierarchy"));
 
@@ -938,8 +1030,8 @@ TEST(EditorDockWorkspaceTest, TwoSessionsOwnIndependentRootAndNestedDocks)
         .targetPlacement = EEditorTabPlacement::WindowRootDock,
         .windowId        = extra->windowId(),
     });
-    EXPECT_TRUE(rootWorkspaceB.materializeTab("content-browser"));
-    EXPECT_TRUE(rootB->hasPanel("content-browser"));
+    EXPECT_FALSE(rootWorkspaceB.materializeTab("content-browser"));
+    EXPECT_FALSE(rootB->hasPanel("content-browser"));
     EXPECT_FALSE(rootA->hasPanel("content-browser"));
     EXPECT_FALSE(rootWorkspaceB.materializeTab("hierarchy"));
     EXPECT_FALSE(rootB->hasPanel("hierarchy"));
@@ -950,18 +1042,18 @@ TEST(EditorDockWorkspaceTest, TwoSessionsOwnIndependentRootAndNestedDocks)
 
 TEST(EditorRootSessionTest, UIOwnedToolCannotDockInLevelNested)
 {
-    EXPECT_FALSE(canDockEditorTab({.scope = EEditorTabScope::EditorOwnedTool,
+    EXPECT_FALSE(canSpawnEditorTab({.scope = EEditorTabScope::EditorOwnedTool,
+                                    .ownerEditorId = kUIEditorRootId},
+                                   EEditorTabPlacement::EditorOwnedNested,
+                                   kLevelEditorRootId));
+    EXPECT_TRUE(canSpawnEditorTab({.scope = EEditorTabScope::EditorOwnedTool,
                                    .ownerEditorId = kUIEditorRootId},
                                   EEditorTabPlacement::EditorOwnedNested,
-                                  kLevelEditorRootId));
-    EXPECT_TRUE(canDockEditorTab({.scope = EEditorTabScope::EditorOwnedTool,
-                                  .ownerEditorId = kUIEditorRootId},
-                                 EEditorTabPlacement::EditorOwnedNested,
-                                 kUIEditorRootId));
-    EXPECT_FALSE(canDockEditorTab({.scope = EEditorTabScope::EditorOwnedTool,
-                                   .ownerEditorId = kMaterialEditorRootId},
-                                  EEditorTabPlacement::EditorOwnedNested,
-                                  kLevelEditorRootId));
+                                  kUIEditorRootId));
+    EXPECT_FALSE(canSpawnEditorTab({.scope = EEditorTabScope::EditorOwnedTool,
+                                    .ownerEditorId = kMaterialEditorRootId},
+                                   EEditorTabPlacement::EditorOwnedNested,
+                                   kLevelEditorRootId));
 }
 
 TEST(EditorRootSessionTest, MaterialAndScriptRootsHaveIsolatedUndoAndSelection)

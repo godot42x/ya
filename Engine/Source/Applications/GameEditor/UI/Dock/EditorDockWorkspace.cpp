@@ -29,37 +29,22 @@ namespace
 // disk at runtime, so edit here. v2 documents split the two concerns:
 // `tree` is the node structure (splits + leaf references), `dockSpace` holds
 // each leaf's stack data (role, panels, selection) keyed by leaf id.
+//
+// The window root is the *page well*: it lists the major editors and nothing
+// else, so switching pages swaps the whole workspace. Each major editor's tool
+// panels live in that editor's own nested dock (the per-root documents below),
+// which is why Level's tools cannot be seen or docked while another editor's
+// page is active.
 constexpr std::string_view kFactoryWindowRootLayoutJson = R"JSON(
 {
   "version": 2,
-  "tree": {
-    "kind": "split",
-    "orientation": "vertical",
-    "ratio": 0.78,
-    "minExtent": [120.0, 120.0],
-    "children": [
-      { "kind": "leaf", "id": "page" },
-      { "kind": "leaf", "id": "tools" }
-    ]
-  },
+  "tree": { "kind": "leaf", "id": "page" },
   "dockSpace": {
     "page": {
       "role": "page",
       "hideTabBar": true,
       "panels": ["level-editor", "ui-designer"],
       "selected": "level-editor"
-    },
-    "tools": {
-      "role": "tools",
-      "panels": [
-        "content-browser",
-        "frame-stats",
-        "runtime-tools",
-        "render-settings",
-        "asset-inspector",
-        "debug-images"
-      ],
-      "selected": "content-browser"
     }
   },
   "floating": []
@@ -94,14 +79,36 @@ constexpr std::string_view kFactoryOwnedNestedLayoutJson = R"JSON(
           }
         ]
       },
-      { "kind": "leaf", "id": "inspector" }
+      {
+        "kind": "split",
+        "orientation": "vertical",
+        "ratio": 0.62,
+        "minExtent": [120.0, 120.0],
+        "children": [
+          { "kind": "leaf", "id": "inspector" },
+          { "kind": "leaf", "id": "tools" }
+        ]
+      }
     ]
   },
   "dockSpace": {
     "hierarchy":    { "panels": ["hierarchy"] },
     "play-toolbar": { "panels": ["play-toolbar"] },
     "viewport":     { "panels": ["viewport"] },
-    "inspector":    { "panels": ["inspector"] }
+    "inspector":    { "panels": ["inspector"] },
+    "tools": {
+      "role": "tools",
+      "panels": [
+        "content-browser",
+        "frame-stats",
+        "runtime-tools",
+        "render-settings",
+        "asset-inspector",
+        "debug-images",
+        "font-atlases"
+      ],
+      "selected": "content-browser"
+    }
   },
   "floating": []
 }
@@ -321,75 +328,36 @@ void EditorDockWorkspace::applyAdoptPolicy()
         _host.dock->chooseAdoptLeaf = nullptr;
         return;
     }
-    _host.dock->chooseAdoptLeaf = [this, dock, spawners](std::string_view stableKey,
-                                                          uint32_t ownerEditorId,
-                                                          std::string_view) -> DockNodeId {
-        if (!dock || !spawners) {
+    // The window root is the page well: it hosts major-editor pages and
+    // nothing else. A tool panel is owned by one editor and lives in that
+    // editor's own dock, so there is no window-level leaf for it to land in --
+    // which is exactly what keeps Level's tools from appearing under the UI
+    // editor's page.
+    _host.dock->chooseAdoptLeaf = [dock](std::string_view,
+                                         uint32_t,
+                                         std::string_view) -> DockNodeId {
+        if (!dock) {
             return kInvalidDockNodeId;
         }
-        const FEditorTabSpawner* spawner = spawners->find(stableKey);
-        if (!spawner) {
-            return kInvalidDockNodeId;
-        }
-        const FEditorTabOwnership ownership{
-            .scope = spawner->scope,
-            .ownerEditorId = ownerEditorId != 0 ? static_cast<EditorRootId>(ownerEditorId)
-                                                : spawner->ownerEditorId,
-        };
-        const bool bPage = spawner->scope == EEditorTabScope::WindowRootEditor;
-        if (!bPage && !isLevelEditorSharedDockTab(ownership)) {
-            return kInvalidDockNodeId;
-        }
-        if (bPage) {
-            const DockNodeId focused = dock->lastFocusedLeafId();
-            if (const FDockNode* leaf = dock->dockModel().findNode(focused);
-                leaf && leaf->kind == EDockNodeKind::Stack && leaf->leafRole == EDockLeafRole::Page) {
-                return focused;
-            }
-            return dock->dockModel().findFirstLeafWithRole(EDockLeafRole::Page);
-        }
-        return ensureToolsLeaf();
+        return dock->dockModel().findFirstLeafWithRole(EDockLeafRole::Page);
     };
-    _host.dock->canAdoptOntoLeaf = [dock, spawners, rootId](std::string_view stableKey,
-                                                            uint32_t ownerEditorId,
-                                                            std::string_view documentKey,
-                                                            DockNodeId leafId,
-                                                            bool bMerge) {
-        if (!dock || !spawners) {
+    _host.dock->canAdoptOntoLeaf = [dock, spawners](std::string_view stableKey,
+                                                    uint32_t,
+                                                    std::string_view,
+                                                    DockNodeId leafId,
+                                                    bool bMerge) {
+        if (!dock) {
             return true;
         }
-        const FEditorTabSpawner* spawner = spawners->find(stableKey);
-        if (!spawner) {
-            return false;
-        }
+        const FEditorTabSpawner* spawner = spawners ? spawners->find(stableKey) : nullptr;
         const FDockNode* leaf = dock->dockModel().findNode(leafId);
         if (!leaf || leaf->kind != EDockNodeKind::Stack) {
             return false;
         }
-        EDockLeafRole role = leaf->leafRole;
-        if (role == EDockLeafRole::Generic) {
-            role = leaf->bHideTabBar ? EDockLeafRole::Page : EDockLeafRole::Tools;
-        }
-        FEditorTabDragPayload payload;
-        payload.tabId = spawner->tabId;
-        payload.scope = spawner->scope;
-        payload.ownerEditorId =
-            ownerEditorId != 0 ? static_cast<EditorRootId>(ownerEditorId) : spawner->ownerEditorId;
-        payload.documentKey = std::string(documentKey);
-        payload.detachPolicy = spawner->detachPolicy;
-        if (role == EDockLeafRole::Page) {
-            if (spawner->scope == EEditorTabScope::WindowRootEditor) {
-                return canAcceptEditorDrop(payload, EEditorTabPlacement::WindowPageTab, rootId) &&
-                       bMerge;
-            }
-            return false;
-        }
-        if (role == EDockLeafRole::Tools) {
-            return isLevelEditorSharedDockTab({.scope = payload.scope,
-                                              .ownerEditorId = payload.ownerEditorId}) &&
-                   canAcceptEditorDrop(payload, EEditorTabPlacement::WindowRootDock, rootId);
-        }
-        return canAcceptEditorDrop(payload, EEditorTabPlacement::WindowRootDock, rootId);
+        // Only a page merges into the page well, and only on the center
+        // target: a cardinal split would create a second page well, which the
+        // chrome has no way to render.
+        return spawner && spawner->scope == EEditorTabScope::WindowRootEditor && bMerge;
     };
 }
 
@@ -443,14 +411,17 @@ FEditorTabSpawnContext EditorDockWorkspace::makeSpawnContext(const FEditorTabSpa
         }
     }
     ctx.documentKey = spawner.documentKey;
-    if (ctx.documentKey.empty() && spawner.scope != EEditorTabScope::WindowTool) {
+    if (ctx.documentKey.empty()) {
         const EditorRootId owner =
             spawner.ownerEditorId != kInvalidEditorRootId ? spawner.ownerEditorId : _host.activeRootId;
         if (ctx.ownerRoot && ctx.ownerRoot->document()) {
             ctx.documentKey = ctx.ownerRoot->document()->id().key;
         }
-        else if (editorDocumentKindForRoot(owner) == EEditorDocumentKind::Scene ||
-                 owner == _host.activeRootId) {
+        else if (editorDocumentKindForRoot(owner) == EEditorDocumentKind::Scene) {
+            // The window's documentKey is the scene. Only a Scene-kind root
+            // may inherit it: a UI/Material/Script tool belongs to a document
+            // of its own kind, and handing it the scene path would make the
+            // panel claim a document it does not edit.
             ctx.documentKey = _host.documentKey;
         }
         else if (_host.rootFor) {
@@ -537,7 +508,7 @@ bool EditorDockWorkspace::applyLayoutDocument(const nlohmann::json& layout, bool
         const std::vector<std::string> keys = FDockContext::collectLayoutPanelKeys(document);
         std::unordered_set<std::string> known;
         for (const std::string& id : keys) {
-            if (materializeTab(id, true)) {
+            if (materializeTab(id)) {
                 known.insert(id);
             }
         }
@@ -595,55 +566,6 @@ bool EditorDockWorkspace::applyLayoutDocument(const nlohmann::json& layout, bool
     return applyOnce(factory);
 }
 
-DockNodeId EditorDockWorkspace::ensureToolsLeaf()
-{
-    if (!_host.dock) {
-        return kInvalidDockNodeId;
-    }
-    FDockTreeModel& model = _host.dock->dockModel();
-    if (const DockNodeId tools = model.findFirstLeafWithRole(EDockLeafRole::Tools);
-        tools != kInvalidDockNodeId) {
-        return tools;
-    }
-    const DockNodeId page = model.findFirstLeafWithRole(EDockLeafRole::Page);
-    for (const DockNodeId id : model.leafIds()) {
-        if (id == page) {
-            continue;
-        }
-        FDockNode* leaf = model.findNode(id);
-        if (leaf && leaf->kind == EDockNodeKind::Stack && !leaf->bHideTabBar) {
-            (void)model.setLeafRole(id, EDockLeafRole::Tools);
-            if (model.leafIds().size() == 1) {
-                (void)model.setHideTabBar(id, true);
-            }
-            return id;
-        }
-    }
-    DockNodeId host = page;
-    if (host == kInvalidDockNodeId) {
-        const std::vector<DockNodeId> leaves = model.leafIds();
-        if (leaves.empty()) {
-            return kInvalidDockNodeId;
-        }
-        // Tools-only extra/native window: the root stack is the whole window.
-        // Do not fabricate an empty Page well just to host one WindowTool.
-        host = leaves.front();
-        (void)model.setLeafRole(host, EDockLeafRole::Tools);
-        (void)model.setHideTabBar(host, true);
-        return host;
-    }
-    if (!model.splitEmptyLeaf(host, EDockCardinalSide::South, 0.78f, true)) {
-        return kInvalidDockNodeId;
-    }
-    FDockNode* split = model.findNode(host);
-    if (!split || split->kind != EDockNodeKind::Split || !split->child[1]) {
-        return kInvalidDockNodeId;
-    }
-    const DockNodeId toolsId = split->child[1]->id;
-    (void)model.setLeafRole(toolsId, EDockLeafRole::Tools);
-    return toolsId;
-}
-
 void EditorDockWorkspace::repairPlacement()
 {
     if (!_host.dock) {
@@ -654,6 +576,11 @@ void EditorDockWorkspace::repairPlacement()
     if (_host.targetPlacement != EEditorTabPlacement::WindowRootDock) {
         return;
     }
+    // The page well is pages-only. A tool panel that a pre-ownership layout
+    // parked here cannot be re-homed by this object (its owner's dock may not
+    // exist yet); closing it is honest, and the Window menu reopens it in its
+    // owner's dock. Leaving it would show one editor's tools under another
+    // editor's page, which is the leak this policy removes.
     const DockNodeId page = model.findFirstLeafWithRole(EDockLeafRole::Page);
     const FDockNode* pageLeaf = model.findNode(page);
     if (!pageLeaf || pageLeaf->kind != EDockNodeKind::Stack) {
@@ -674,12 +601,11 @@ void EditorDockWorkspace::repairPlacement()
     if (stray.empty()) {
         return;
     }
-    const DockNodeId tools = ensureToolsLeaf();
-    if (tools == kInvalidDockNodeId) {
-        return;
-    }
     for (const DockPanelId id : stray) {
-        (void)model.movePanel(id, tools, SIZE_MAX, false);
+        if (const FDockPanelRecord* record = model.findPanel(id)) {
+            (void)_host.dock->setPanelClosable(record->stableKey, true);
+            (void)_host.dock->closePanel(record->stableKey);
+        }
     }
 }
 
@@ -698,7 +624,7 @@ void EditorDockWorkspace::applyWorkspaceLayout()
     }
 }
 
-bool EditorDockWorkspace::materializeTab(std::string_view tabId, bool bRestoreLayout)
+bool EditorDockWorkspace::materializeTab(std::string_view tabId)
 {
     if (!_host.dock || tabId.empty()) {
         return false;
@@ -714,14 +640,13 @@ bool EditorDockWorkspace::materializeTab(std::string_view tabId, bool bRestoreLa
     if (_host.spawners) {
         spawner = _host.spawners->find(tabId);
         if (spawner) {
-            const bool bAllowed = bRestoreLayout
-                                      ? canDockEditorTab(spawner->ownership(),
-                                                         _host.targetPlacement,
-                                                         _host.activeRootId)
-                                      : canSpawnEditorTab(spawner->ownership(),
-                                                          _host.targetPlacement,
-                                                          _host.activeRootId);
-            if (!bAllowed) {
+            // One predicate for spawn, restore, drop and redock: a saved
+            // layout and a Window-menu click must agree on where a tab may
+            // live, or a restore would materialize a panel the live policy
+            // would refuse.
+            if (!canSpawnEditorTab(spawner->ownership(),
+                                   _host.targetPlacement,
+                                   _host.activeRootId)) {
                 YA_CORE_WARN("EditorDockWorkspace: tab '{}' cannot dock at placement {} under root {}",
                              tabId,
                              static_cast<int>(_host.targetPlacement),

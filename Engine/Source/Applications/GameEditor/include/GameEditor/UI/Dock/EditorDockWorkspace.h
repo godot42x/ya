@@ -58,10 +58,8 @@ class EditorDockWorkspace
   private:
     FHost _host{};
     void applyAdoptPolicy();
-    [[nodiscard]] DockNodeId ensureToolsLeaf();
     /// This dock, or a nested dock that already hosts `tabId`. Spawn must not
-    /// run while an instance exists in the same window (WindowTool may live on
-    /// the Level nested dock after a user drag / layout restore).
+    /// run while an instance exists in the same window.
     [[nodiscard]] EditorDockWorkspace* workspaceHoldingTab(std::string_view tabId) const;
 
   public:
@@ -90,14 +88,13 @@ class EditorDockWorkspace
     /// Spawn known keys, sanitize unknown keys, import. Falls back to factory
     /// when `bFallbackToFactory` is true and the document cannot be applied.
     bool applyLayoutDocument(const nlohmann::json& layout, bool bFallbackToFactory);
-    /// Spawn a tab into this host. `bRestoreLayout` uses drop policy
-    /// (`canDockEditorTab`) so a saved layout that the user created by
-    /// dragging is not stripped on restart. Invoke / Window-menu keep
-    /// `canSpawnEditorTab`.
-    bool materializeTab(std::string_view tabId, bool bRestoreLayout = false);
-    /// Move window-tool tabs out of the chrome page well when they exist,
-    /// and prune abandoned empty Generic / Tools splits. Does not create an
-    /// empty Tools well just to host a drop placeholder.
+    /// Spawn a tab into this host when `canSpawnEditorTab` allows it there.
+    /// One predicate covers spawn, layout restore, drop and redock, so a
+    /// saved layout cannot materialize a panel the live policy would refuse.
+    bool materializeTab(std::string_view tabId);
+    /// Close non-page panels that a pre-ownership layout left in the chrome
+    /// page well, and prune abandoned empty Generic splits. The page well is
+    /// pages-only, so there is no window-level well to re-home them into.
     void repairPlacement();
     /// Activate an existing tab in this dock or a nested dock that already
     /// hosts it. Spawn only when no instance exists and this placement may

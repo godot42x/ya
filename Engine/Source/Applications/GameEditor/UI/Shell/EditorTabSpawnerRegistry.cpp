@@ -124,7 +124,9 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
         .tabId = "content-browser",
         .title = "Content",
         .toolsMenuLabel = "Content Browser",
-        .scope = EEditorTabScope::WindowTool,
+        .scope = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId = kLevelEditorRootId,
+        .placement = EEditorTabPlacement::EditorOwnedNested,
         .spawn = [](FEditorTabSpawnContext& ctx) -> std::shared_ptr<UIElement> {
             if (!ctx.layer) {
                 return nullptr;
@@ -136,7 +138,9 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
         .tabId = "runtime-tools",
         .title = "Runtime",
         .toolsMenuLabel = "Runtime Tools",
-        .scope = EEditorTabScope::WindowTool,
+        .scope = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId = kLevelEditorRootId,
+        .placement = EEditorTabPlacement::EditorOwnedNested,
         .spawn = [](FEditorTabSpawnContext& ctx) {
             return std::make_shared<EditorRuntimeToolsTab>(ctx.actions, ctx.app);
         },
@@ -145,7 +149,9 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
         .tabId = "render-settings",
         .title = "Render",
         .toolsMenuLabel = "Render Settings",
-        .scope = EEditorTabScope::WindowTool,
+        .scope = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId = kLevelEditorRootId,
+        .placement = EEditorTabPlacement::EditorOwnedNested,
         .spawn = [](FEditorTabSpawnContext& ctx) {
             return std::make_shared<EditorRenderSettingsTab>(ctx.app, ctx.presentSurface);
         },
@@ -288,7 +294,9 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
         .tabId = "asset-inspector",
         .title = "Assets",
         .toolsMenuLabel = "Asset Inspector",
-        .scope = EEditorTabScope::WindowTool,
+        .scope = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId = kLevelEditorRootId,
+        .placement = EEditorTabPlacement::EditorOwnedNested,
         .spawn = [](FEditorTabSpawnContext& ctx) -> std::shared_ptr<UIElement> {
             if (!ctx.layer) {
                 return nullptr;
@@ -300,7 +308,9 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
         .tabId = "debug-images",
         .title = "Debug",
         .toolsMenuLabel = "Debug Images",
-        .scope = EEditorTabScope::WindowTool,
+        .scope = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId = kLevelEditorRootId,
+        .placement = EEditorTabPlacement::EditorOwnedNested,
         .spawn = [](FEditorTabSpawnContext& ctx) -> std::shared_ptr<UIElement> {
             if (!ctx.layer) {
                 return nullptr;
@@ -312,7 +322,9 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
         .tabId = "font-atlases",
         .title = "Fonts",
         .toolsMenuLabel = "Font Atlases",
-        .scope = EEditorTabScope::WindowTool,
+        .scope = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId = kLevelEditorRootId,
+        .placement = EEditorTabPlacement::EditorOwnedNested,
         .spawn = [](FEditorTabSpawnContext&) -> std::shared_ptr<UIElement> {
             return std::make_shared<EditorFontAtlasTab>();
         },
@@ -321,7 +333,9 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
         .tabId = "frame-stats",
         .title = "Stats",
         .toolsMenuLabel = "Frame Stats",
-        .scope = EEditorTabScope::WindowTool,
+        .scope = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId = kLevelEditorRootId,
+        .placement = EEditorTabPlacement::EditorOwnedNested,
         .spawn = [](FEditorTabSpawnContext& ctx) -> std::shared_ptr<UIElement> {
             if (!ctx.layer) {
                 return nullptr;

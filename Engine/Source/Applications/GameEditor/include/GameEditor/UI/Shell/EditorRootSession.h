@@ -63,15 +63,20 @@ inline constexpr EditorWindowId kDefaultEditorWindowId = 1;
 
 enum class EEditorTabScope : uint8_t
 {
+    /// A major editor page (Level / UI / Material / Script). Exactly one is
+    /// active per window; it occupies the window's page well, and its content
+    /// is the dock that editor owns.
     WindowRootEditor,
+    /// A tool panel owned by one major editor. It lives in that editor's own
+    /// dock, so selecting another page swaps the whole tool set with it --
+    /// Level's tools are not shown, and cannot be docked, while the UI editor
+    /// page is active.
     EditorOwnedTool,
-    WindowTool,
 };
 
-/// Where a tab is allowed to live. Owned tools only dock in their owner's
-/// nested dock. WindowRootEditor pages occupy the chrome page-tab well
-/// (and the matching hideTabBar page leaf). WindowTool only docks as an
-/// inner window-root leaf.
+/// Where a tab is allowed to live. The window root is the page well: it holds
+/// major-editor pages and nothing else, so a page switch replaces the whole
+/// workspace instead of leaving another editor's tools on screen.
 enum class EEditorTabPlacement : uint8_t
 {
     WindowRootDock,
@@ -88,12 +93,14 @@ enum class EEditorTabDetachPolicy : uint8_t
 
 struct FEditorTabOwnership
 {
-    EEditorTabScope scope          = EEditorTabScope::WindowTool;
+    EEditorTabScope scope          = EEditorTabScope::WindowRootEditor;
     EditorRootId    ownerEditorId = kInvalidEditorRootId;
 };
 
-/// Spawn / Window-menu placement. Owned tools materialize in their owner's
-/// nested dock; WindowTool / WindowRootEditor materialize on the window-root.
+/// The single placement predicate: spawn, restore-from-layout, drop and
+/// redock all ask this. The window root takes pages; an owned tool takes the
+/// dock of the editor that owns it. There is no window-level tool scope, so
+/// no placement lets one editor's panel sit in another editor's workspace.
 [[nodiscard]] inline bool canSpawnEditorTab(const FEditorTabOwnership& tab,
                                             EEditorTabPlacement targetPlacement,
                                             EditorRootId targetRootId)
@@ -103,45 +110,7 @@ struct FEditorTabOwnership
                tab.ownerEditorId != kInvalidEditorRootId &&
                tab.ownerEditorId == targetRootId;
     }
-    if (targetPlacement == EEditorTabPlacement::WindowPageTab) {
-        return tab.scope == EEditorTabScope::WindowRootEditor;
-    }
-    if (targetPlacement != EEditorTabPlacement::WindowRootDock) {
-        return false;
-    }
-    return tab.scope == EEditorTabScope::WindowRootEditor || tab.scope == EEditorTabScope::WindowTool;
-}
-
-/// Drop / redock. Level Editor lets Viewport/Hierarchy/Inspector and window
-/// tools share both the window-root dock and the Level nested dock. Spawn
-/// still follows `canSpawnEditorTab` so Window-menu does not duplicate tabs.
-[[nodiscard]] inline bool canDockEditorTab(const FEditorTabOwnership& tab,
-                                           EEditorTabPlacement targetPlacement,
-                                           EditorRootId targetRootId)
-{
-    if (canSpawnEditorTab(tab, targetPlacement, targetRootId)) {
-        return true;
-    }
-    if (targetPlacement == EEditorTabPlacement::EditorOwnedNested &&
-        targetRootId == kLevelEditorRootId &&
-        tab.scope == EEditorTabScope::WindowTool) {
-        return true;
-    }
-    if (targetPlacement == EEditorTabPlacement::WindowRootDock &&
-        tab.scope == EEditorTabScope::EditorOwnedTool &&
-        tab.ownerEditorId == kLevelEditorRootId &&
-        (targetRootId == kLevelEditorRootId || targetRootId == kInvalidEditorRootId)) {
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] inline bool isLevelEditorSharedDockTab(const FEditorTabOwnership& tab)
-{
-    if (tab.scope == EEditorTabScope::WindowTool) {
-        return true;
-    }
-    return tab.scope == EEditorTabScope::EditorOwnedTool && tab.ownerEditorId == kLevelEditorRootId;
+    return tab.scope == EEditorTabScope::WindowRootEditor;
 }
 
 /// Typed GameEditor drag payload. GUI `FDockPanelDragDropOp` stays generic;
@@ -149,7 +118,7 @@ struct FEditorTabOwnership
 struct FEditorTabDragPayload
 {
     std::string            tabId;
-    EEditorTabScope        scope           = EEditorTabScope::WindowTool;
+    EEditorTabScope        scope           = EEditorTabScope::WindowRootEditor;
     EditorRootId           ownerEditorId   = kInvalidEditorRootId;
     std::string            documentKey;
     EEditorTabDetachPolicy detachPolicy    = EEditorTabDetachPolicy::IndependentWindow;
@@ -171,9 +140,9 @@ struct FEditorTabDragPayload
                                               EEditorTabPlacement targetPlacement,
                                               EditorRootId targetRootId)
 {
-    return canDockEditorTab({.scope = payload.scope, .ownerEditorId = payload.ownerEditorId},
-                            targetPlacement,
-                            targetRootId);
+    return canSpawnEditorTab({.scope = payload.scope, .ownerEditorId = payload.ownerEditorId},
+                             targetPlacement,
+                             targetRootId);
 }
 
 [[nodiscard]] inline EEditorTabPlacement homePlacementFor(const FEditorTabDragPayload& payload)
