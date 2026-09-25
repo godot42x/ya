@@ -14,19 +14,24 @@
 namespace ya
 {
 
+namespace ui
+{
+class UIContainerWidgetBuilder;
+}
+
+struct UIElement;
 struct UIDragFloat;
-struct UICheckBox;
-struct UITextField;
-struct UIComboBox;
-struct UIColorEdit;
-struct UIButton;
-struct UIImage;
-struct WidgetTree;
 class UndoStack;
+struct WidgetTree;
 
 /// Generic retained editor for the scalar/vector properties in a PropertyGraph.
 /// It owns controls, but not selection or component lifetime. Undo closures
 /// capture `PropertyHandle` copies; the stack type still has no ECS pointers.
+///
+/// Row construction and per-frame refresh share one dispatch: the builder that
+/// materializes an editor kind also installs that row's `pull`, so adding an
+/// editor kind means one builder function, not parallel switches in
+/// construct() and sync().
 class EditorAutoPropertySection final : public UICompoundWidget
 {
   public:
@@ -44,27 +49,14 @@ class EditorAutoPropertySection final : public UICompoundWidget
     void construct() override;
 
   private:
+    /// One editor row. Widgets live in the pull / push closures; container
+    /// rows (add/clear) carry no pull because they hold no live value.
     struct EditorSlot
     {
-        enum class Kind { Vec2, Vec3, Vec4, Float, Integer, Bool, String, Enum, Color, Asset, Container } kind;
         const PropertyNode* node = nullptr;
-        std::vector<std::shared_ptr<UIDragFloat>> vec2;
-        std::vector<std::shared_ptr<UIDragFloat>> vec3;
-        std::vector<std::shared_ptr<UIDragFloat>> vec4;
-        std::shared_ptr<UIDragFloat> scalar;
-        std::shared_ptr<UIDragFloat> integer;
-        std::shared_ptr<UICheckBox> boolean;
-        std::shared_ptr<UITextField> string;
-        std::shared_ptr<UIComboBox> enumeration;
-        std::shared_ptr<UIColorEdit> color;
-        std::shared_ptr<UITextField> assetPath;
-        std::shared_ptr<UIButton> browse;
-        std::shared_ptr<UIButton> locate;
-        std::shared_ptr<UIImage> preview;
-        std::shared_ptr<UIButton> add;
-        std::shared_ptr<UIButton> clear;
-        std::shared_ptr<UIButton> remove;
+        std::function<void(UIElement* focused)> pull;
     };
+
     PropertyGraph _graph;
     UndoStack* _undo = nullptr;
     std::string _mergeIdentity;
@@ -75,11 +67,43 @@ class EditorAutoPropertySection final : public UICompoundWidget
     std::string _structureFingerprint;
     std::unordered_map<std::string, bool> _groupExpanded;
 
-    void bindDragMerge(UIDragFloat& drag);
+    // construct() schedules rows; one builder per editor kind carries the
+    // detail. Builders receive the row's future _editors index and wire their
+    // own undo push and per-frame pull.
+    bool buildEditor(const PropertyNode& node, ui::UIContainerWidgetBuilder& row, EditorSlot& slot);
+    void buildContainerEditor(const PropertyNode& node, ui::UIContainerWidgetBuilder& row, size_t index);
+    void buildColorEditor(const PropertyNode& node, ui::UIContainerWidgetBuilder& row, EditorSlot& slot, size_t index);
+    template <int N>
+    void buildVecEditor(const PropertyNode& node, ui::UIContainerWidgetBuilder& row, EditorSlot& slot, size_t index);
+    void buildScalarEditor(const PropertyNode& node, ui::UIContainerWidgetBuilder& row, EditorSlot& slot, size_t index);
+    void buildIntegerEditor(const PropertyNode& node, ui::UIContainerWidgetBuilder& row, EditorSlot& slot, size_t index);
+    void buildBoolEditor(const PropertyNode& node, ui::UIContainerWidgetBuilder& row, EditorSlot& slot, size_t index);
+    void buildStringEditor(const PropertyNode& node, ui::UIContainerWidgetBuilder& row, EditorSlot& slot, size_t index);
+    void buildEnumEditor(const PropertyNode& node, ui::UIContainerWidgetBuilder& row, EditorSlot& slot, size_t index);
+    void buildAssetEditor(const PropertyNode& node, ui::UIContainerWidgetBuilder& row, EditorSlot& slot, size_t index);
+    void appendRemoveButton(const PropertyNode& node, ui::UIContainerWidgetBuilder& row, size_t index);
+
+    // One undo idiom: snapshot -> write -> snapshot -> push. The codec selects
+    // the PropertyHandle API per value kind (bool / enum / color / asset need
+    // their own snapshot calls); the vec-axis drag reuses a known snapshot.
+    template <typename Codec, typename V>
+    void commitWithCodec(size_t index, const V& value, std::string mergeKey);
+    template <typename Codec, typename V, typename S>
+    void pushValueUndo(size_t index, const V& value, std::string mergeKey, std::vector<S> before);
+    template <typename V>
+    void commitValue(size_t index, const V& value, std::string mergeKey = {});
+    template <typename V>
+    void commitKnownBefore(size_t index, const V& value, std::string mergeKey, std::vector<V> before);
+    void commitColor(size_t index, const glm::vec4& value);
+    void commitEnumIndex(size_t index, int selectedIndex);
     void commitAssetPath(size_t editorIndex, const std::string& value);
-    void rebuildRows();
+
+    void bindDragMerge(UIDragFloat& drag);
     void pushUndo(FUndoCommand command);
     [[nodiscard]] std::string mergeKey(const PropertyNode& node, int axis = -1) const;
+    /// Container sizes only: the structure signal behind rebuildRows().
+    [[nodiscard]] std::string structureFingerprint() const;
+    void rebuildRows();
 };
 
 } // namespace ya
