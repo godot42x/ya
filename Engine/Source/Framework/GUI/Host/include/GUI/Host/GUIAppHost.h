@@ -47,7 +47,7 @@
 namespace ya
 {
 
-struct IRender; // forward decl: only used as a pointer param in refreshDevicePixelRatio
+struct IRender; // forward decl: getRender() returns it, no definition needed here
 struct INativeWindow;
 struct FGUIPresentExtensionContext;
 struct RenderTexture;
@@ -258,9 +258,11 @@ private:
     void updateCursor();
 
     /// Acquire the system device-pixel-ratio (real HiDPI value from the
-    /// window-system, not an extent ratio) and publish it to FontManager.
-    /// Called at startup and on every resize / monitor move. Returns the ratio.
-    float refreshDevicePixelRatio(IRender* render = nullptr);
+    /// window-system, not an extent ratio) and publish it through the shared
+    /// DPI step (tree + font stack; the font stack alone before the tree
+    /// exists). Called at startup and on every resize / monitor move. Returns
+    /// the ratio.
+    float refreshDevicePixelRatio();
 
     struct FImpl;
     std::unique_ptr<FImpl> _impl;

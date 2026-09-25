@@ -740,6 +740,14 @@ void WidgetTree::setDpiScale(float scale)
     _dpiScale = scale;
 }
 
+void WidgetTree::publishDpiScale(float scale)
+{
+    setDpiScale(scale);
+    // Same value on both consumers: the tree folds it into target-pixel
+    // mapping at buildSnapshot; the font stack rasterizes glyphs at it.
+    FontManager::get()->setActiveDpiScale(_dpiScale);
+}
+
 void WidgetTree::setClipboardText(std::string text)
 {
     if (_clipboardWrite) {

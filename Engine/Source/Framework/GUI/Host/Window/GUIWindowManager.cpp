@@ -11,7 +11,6 @@
 #include "Core/Os/OsEvent.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderSurfaceContext.h"
-#include "Render/Resources/FontManager.h"
 #include "Render2D/Render2D.h"
 
 #include <algorithm>
@@ -129,7 +128,7 @@ GUIWindowId GUIWindowManager::createSession(const FGUIWindowHostConfig& config,
         (void)applyWindowScreenPlacement(*native, placement);
     }
     session->ownedTree    = std::make_unique<WidgetTree>(nativeLogicalExtent(*native));
-    session->ownedTree->setDpiScale(native->getDpiScale());
+    session->ownedTree->publishDpiScale(native->getDpiScale());
     bindSdlClipboard(*session->ownedTree);
     delegate.buildUI(*session->ownedTree);
     session->presentPassSlot   = Render2D::acquirePassSlot();
@@ -224,7 +223,7 @@ bool GUIWindowManager::adoptTree(GUIWindowId id, std::unique_ptr<WidgetTree> tre
     session->ownedTree = std::move(tree);
     if (session->native && session->ownedTree) {
         session->ownedTree->setLogicalExtent(nativeLogicalExtent(*session->native));
-        session->ownedTree->setDpiScale(session->native->getDpiScale());
+        session->ownedTree->publishDpiScale(session->native->getDpiScale());
     }
     return true;
 }
@@ -291,7 +290,6 @@ void GUIWindowManager::tickTrees(float dt)
         }
         if (session->native) {
             session->ownedTree->setLogicalExtent(nativeLogicalExtent(*session->native));
-            session->ownedTree->setDpiScale(session->native->getDpiScale());
         }
         if (session->delegate && session->delegate->shouldRequestClose()) {
             session->bCloseRequested = true;
@@ -301,7 +299,11 @@ void GUIWindowManager::tickTrees(float dt)
             session->delegate->updateUI();
         }
         session->ownedTree->tick(dt);
-        FontManager::get()->setActiveDpiScale(session->ownedTree->getDpiScale());
+        // One DPI publish per snapshot (see WidgetTree::publishDpiScale): the
+        // window's current scale when there is a window; a session without one
+        // (overlay host) keeps what its tree already carries.
+        session->ownedTree->publishDpiScale(session->native ? session->native->getDpiScale()
+                                                            : session->ownedTree->getDpiScale());
         session->ownedSnapshot = session->ownedTree->buildSnapshot(UIFrameBuildContext{});
     }
 }
@@ -524,7 +526,7 @@ void GUIWindowManager::dispatchToSession(GUIWindowSession& session, const Event&
             session.native->refreshDpiScale();
             session.chromeState = applyWindowChrome(*session.native, session.chromeState.mode, session.config.bResizable);
             if (session.ownedTree) {
-                session.ownedTree->setDpiScale(session.native->getDpiScale());
+                session.ownedTree->publishDpiScale(session.native->getDpiScale());
             }
         }
         return;

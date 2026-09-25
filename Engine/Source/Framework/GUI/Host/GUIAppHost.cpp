@@ -654,7 +654,7 @@ bool GUIWindowHost::init()
     // from the window-system, not an extent ratio) and publish it to the font
     // manager before any glyph is rasterized. Refreshed again on resize /
     // monitor move (see onResize).
-    refreshDevicePixelRatio(render);
+    refreshDevicePixelRatio();
 
     // 5. GUI Draw2D renderer (screen-space sprites, depth-less pipeline),
     //    matching the swapchain's real surface format.
@@ -922,7 +922,7 @@ void GUIWindowHost::onEvent(const Event& event)
         // old scale until refreshed. Re-read the window-system content scale
         // and republish so fonts re-raster at the new device resolution.
         _impl->window.refreshDpiScale();
-        refreshDevicePixelRatio(_impl->render);
+        refreshDevicePixelRatio();
         _impl->chrome = applyWindowChrome(_impl->window, _impl->chrome.mode, _impl->config->bResizable);
         return;
     }
@@ -931,7 +931,7 @@ void GUIWindowHost::onEvent(const Event& event)
         // WindowResize here, so re-read the display scale explicitly to keep
         // DPI / font raster in sync with the new monitor (Qt-style trap).
         _impl->window.refreshDpiScale();
-        refreshDevicePixelRatio(_impl->render);
+        refreshDevicePixelRatio();
         _impl->chrome = applyWindowChrome(_impl->window, _impl->chrome.mode, _impl->config->bResizable);
         return;
     }
@@ -996,28 +996,21 @@ void GUIWindowHost::onEvent(const Event& event)
     }
 }
 
-float GUIWindowHost::refreshDevicePixelRatio(IRender* render)
+float GUIWindowHost::refreshDevicePixelRatio()
 {
     float scale = _impl->window.getDpiScale();
     if (scale <= 0.0f) {
         scale = 1.0f;
     }
-    // Sanity fallback: if the window API gave nothing but we have a present
-    // surface, the device/logical ratio still reflects the active scale.
-    if (render != nullptr && scale <= 0.0f + 1e-3f) {
-        const Extent2D logical   = _impl->tree ? _impl->tree->getLogicalExtent() : Extent2D{};
-        const auto*     swapchain = _impl->present ? _impl->present->getSwapchain() : nullptr;
-        if (swapchain && logical.width > 0 && logical.height > 0) {
-            const Extent2D present = swapchain->getExtent();
-            const float    ratioX  = static_cast<float>(present.width) / static_cast<float>(logical.width);
-            const float    ratioY  = static_cast<float>(present.height) / static_cast<float>(logical.height);
-            if (ratioX > 0.0f && std::abs(ratioX - ratioY) < 0.01f) {
-                scale = ratioX;
-            }
-        }
-    }
     _impl->devicePixelRatio = scale;
-    FontManager::get()->setActiveDpiScale(scale);
+    if (_impl->tree) {
+        _impl->tree->publishDpiScale(scale);
+    }
+    else {
+        // init() calls this before the tree exists; the font stack is the
+        // consumer that early. The first tick publishes to the tree too.
+        FontManager::get()->setActiveDpiScale(scale);
+    }
     return scale;
 }
 
@@ -1222,8 +1215,7 @@ void GUIWindowHost::tickContent(float dt)
         // window's device-pixel-ratio (1.0 when headless) as the DPI mapping so
         // font scale matches the runtime path — no ad-hoc magic constant. The
         // user zoom stays separate (uiUserScale, default 1.0).
-        FontManager::get()->setActiveDpiScale(_impl->devicePixelRatio);
-        _impl->tree->setDpiScale(_impl->devicePixelRatio);
+        _impl->tree->publishDpiScale(_impl->devicePixelRatio);
         _impl->snapshot = _impl->tree->buildSnapshot(UIFrameBuildContext{
             .uiScale         = {_impl->uiUserScale, _impl->uiUserScale},
             .offset          = {0.0f, 0.0f},
@@ -1240,9 +1232,7 @@ void GUIWindowHost::tickContent(float dt)
 
     _impl->tree->setLogicalExtent(queryWindowLogicalExtent(_impl->window));
     _impl->delegate->updateUI();
-    const float dpiScale = _impl->devicePixelRatio;
-    FontManager::get()->setActiveDpiScale(dpiScale);
-    _impl->tree->setDpiScale(dpiScale);
+    _impl->tree->publishDpiScale(_impl->devicePixelRatio);
     UIFrameSnapshot snapshot = _impl->tree->buildSnapshot(UIFrameBuildContext{
         .uiScale         = {_impl->uiUserScale, _impl->uiUserScale},
         .offset          = {0.0f, 0.0f},

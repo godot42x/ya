@@ -185,6 +185,16 @@ struct YA_GUI_API WidgetTree final
     void setDpiScale(float scale);
     [[nodiscard]] float getDpiScale() const { return _dpiScale; }
 
+    /// The one DPI publish step for every host that presents a tree: `scale`
+    /// folds into this tree's layout/paint mapping AND is published to the
+    /// font stack, so glyph raster density always matches the scale the
+    /// snapshot is built at. Hosts call it when the window's device scale is
+    /// learned (init / resize / monitor move) and again right before each
+    /// buildSnapshot -- FontManager's active scale is process state shared by
+    /// every tree, so the sync belongs to the snapshot boundary, not to
+    /// window events alone.
+    void publishDpiScale(float scale);
+
     /// Clipboard used by focused text fields (primary+C/X/V). Default is an
     /// in-memory buffer so closure tests do not need SDL. Windowed hosts bind
     /// OS clipboard via `setClipboardHooks`.
