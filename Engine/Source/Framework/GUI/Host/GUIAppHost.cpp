@@ -802,6 +802,12 @@ bool GUIWindowHost::init()
             &static_cast<SdlEventSource*>(_impl->eventSource.get())->hostWindowID;
     }
 
+    // The shared present path reads this window's device and surface from the
+    // resources struct itself (the same shape the extra windows' sessions fill
+    // in) -- name them before building anything through it.
+    _impl->presentResources.render  = render;
+    _impl->presentResources.present = _impl->present;
+
     // Presentation resources for this window's surface: command buffers plus
     // one imported compose target per swapchain image, and the swapchain
     // identity the shared present path re-checks every frame. Built by the
