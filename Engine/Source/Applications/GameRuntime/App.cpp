@@ -40,24 +40,33 @@ IRuntimeModule* getRuntimeModule(IModule* module)
     return &s_default;
 }
 
+/// One-instance identity: two runs collide when they share a project and mode
+/// (they fight over the automation port and the build outputs, and the loser
+/// is silent). Two different projects are a legitimate pair, so the key is the
+/// project, not the executable; the mode suffix keeps an editor and a game run
+/// on the same project apart.
+Os::FInstanceRecord makeInstanceRecord(const AppDesc& desc)
+{
+    const char* mode = desc.bEditor ? "editor" : "game";
+    return Os::FInstanceRecord{
+        .key         = std::format("{}|{}",
+                                   desc.projectPath.value_or(desc.executablePath.value_or("ya")),
+                                   mode),
+        .project     = desc.projectPath.value_or(""),
+        .mode        = mode,
+        .controlPort = desc.automation.controlPort,
+    };
+}
+
 class GameRuntimeLoopDelegate final : public IAppLoopDelegate
 {
   public:
-    GameRuntimeLoopDelegate(App& inApp, Os::FInstanceRecord instanceRecord)
+    explicit GameRuntimeLoopDelegate(App& inApp)
         : app(inApp)
-        , record(std::move(instanceRecord))
     {
     }
 
-    void onInit() override
-    {
-        // Publish where this run can be reached. The kernel holds the claim ("may
-        // I start"); this record is the other half -- "a run is already here, and
-        // here is its automation port" -- which is what lets a tool attach to the
-        // live instance instead of launching a second one.
-        Os::writeInstanceRecord(record);
-    }
-
+    void onInit() override {}
     void onEvent(const Event& event) override
     {
         app.dispatchEvent(event);
@@ -77,7 +86,6 @@ class GameRuntimeLoopDelegate final : public IAppLoopDelegate
 
   private:
     App& app;
-    Os::FInstanceRecord record;
 };
 }
 
@@ -149,25 +157,11 @@ int App::run()
     _startTime = std::chrono::steady_clock::now();
     _lastTime  = _startTime;
 
-    // One instance per project and mode. Two editors on one project fight over
-    // the automation port and the build outputs, and the loser is silent: it
-    // starts, cannot bind, and keeps running with nothing attached to it. Two
-    // different projects are a legitimate pair, so the key is the project, not
-    // the executable.
-    const std::string instanceKey = std::format("{}{}",
-                                                _ci.projectPath.value_or(_ci.executablePath.value_or("ya")),
-                                                _ci.bEditor ? "|editor" : "|game");
-
-    Os::FInstanceRecord instanceRecord{
-        .key         = instanceKey,
-        .project     = _ci.projectPath.value_or(""),
-        .mode        = _ci.bEditor ? "editor" : "game",
-        .controlPort = _ci.automation.controlPort,
-    };
-
     HostSdlEventSource      eventSource;
-    GameRuntimeLoopDelegate delegate(*this, std::move(instanceRecord));
-    AppKernel               kernel({.eventSource = &eventSource, .instanceKey = instanceKey}, delegate);
+    GameRuntimeLoopDelegate delegate(*this);
+    AppKernel               kernel({.eventSource = &eventSource,
+                                    .instanceRecord = makeInstanceRecord(_ci)},
+                                   delegate);
     // The runtime owns frame-level automation completion (scene stability,
     // screenshots, RenderDoc), so exitAfterTick stays off here. The wall-clock
     // deadline is different: it is the one policy that has to hold even when

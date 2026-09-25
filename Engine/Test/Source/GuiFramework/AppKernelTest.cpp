@@ -164,7 +164,7 @@ TEST(AppKernelTest, KernelRefusesToRunWhenKeyIsHeld)
     ASSERT_TRUE(holder.tryAcquire(key, ownerPid));
 
     CountingDelegate delegate;
-    AppKernel        kernel({.instanceKey = key}, delegate);
+    AppKernel        kernel({.instanceRecord = {.key = key}}, delegate);
     const int        result = kernel.run();
 
     EXPECT_NE(result, 0);
@@ -201,41 +201,44 @@ TEST(AppKernelTest, InstanceRecordRoundTripsAndIsRemoved)
     EXPECT_FALSE(Os::readInstanceRecord(key).has_value());
 }
 
-// The product publishes the record, the kernel retracts it with the claim: a
-// record that outlives its instance would advertise a port nobody serves, and a
-// record dropped before the claim would leave a refusal that names nothing.
+// The kernel publishes the product's record after winning the claim and
+// retracts it with the claim: a record that outlives its instance would
+// advertise a port nobody serves, and a record dropped before the claim would
+// leave a refusal that names nothing.
 TEST(AppKernelTest, InstanceRecordLivesExactlyAsLongAsTheClaim)
 {
     const std::string key = "AppKernelTest.InstanceRecordLivesWithTheClaim";
     ASSERT_FALSE(Os::readInstanceRecord(key).has_value());
 
-    struct PublishingDelegate final : IAppLoopDelegate
+    struct ProbeDelegate final : IAppLoopDelegate
     {
-        std::string key;
-        bool        bPublishedWhileRunning = false;
-        int         ticks                  = 0;
+        std::string                        key;
+        std::optional<Os::FInstanceRecord> seenWhileRunning;
+        int                                ticks = 0;
 
-        void onInit() override
-        {
-            Os::writeInstanceRecord(Os::FInstanceRecord{.key = key, .mode = "editor", .controlPort = 8123});
-        }
+        void onInit() override {}
         void onEvent(const Event&) override {}
         void onTick(float) override { ++ticks; }
         void onShutdown() override
         {
             // Still published here, and still claimed: the kernel retracts both
             // at the very end, not when the loop stops.
-            bPublishedWhileRunning = Os::readInstanceRecord(key).has_value();
+            seenWhileRunning = Os::readInstanceRecord(key);
         }
         bool shouldClose() const override { return ticks >= 1; }
     } delegate;
     delegate.key = key;
 
-    AppKernel  kernel({.instanceKey = key}, delegate);
+    AppKernel  kernel({.instanceRecord = {.key = key, .mode = "editor", .controlPort = 8123}},
+                     delegate);
     const int  result = kernel.run();
 
     EXPECT_EQ(result, 0);
-    EXPECT_TRUE(delegate.bPublishedWhileRunning);
+    ASSERT_TRUE(delegate.seenWhileRunning.has_value());
+    // The Config payload went out verbatim, with the writer-filled pid.
+    EXPECT_EQ(delegate.seenWhileRunning->mode, "editor");
+    EXPECT_EQ(delegate.seenWhileRunning->controlPort, 8123u);
+    EXPECT_EQ(delegate.seenWhileRunning->pid, testProcessId());
     EXPECT_FALSE(Os::readInstanceRecord(key).has_value());
 
     // And the name is free again, so the next run can publish on the same key.

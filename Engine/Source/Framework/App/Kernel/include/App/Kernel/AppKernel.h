@@ -10,6 +10,7 @@
 #include "App/Control/AutomationRun.h"
 #include "Core/Common/Types.h"
 #include "Core/Event.h"
+#include "Core/Os/InstanceRegistry.h"
 #include "Core/Os/OsProcessLock.h"
 
 #include <functional>
@@ -44,13 +45,15 @@ public:
     {
         IAppEventSource* eventSource = nullptr;
 
-        /// Identifies "the same thing" for the one-instance rule; empty disables
-        /// it. The product line picks the key (a project path, a scenario name),
-        /// because only it knows which two runs would actually collide. When a
-        /// second live process holds the key, run() refuses to start instead of
-        /// piling up: the loser of that race is normally invisible, since it
-        /// cannot report anything and looks alive while doing nothing.
-        std::string instanceKey;
+        /// The one-instance identity. The product line fills it in (a project
+        /// path, a scenario name), because only it knows which two runs would
+        /// actually collide. An empty `record.key` disables the rule. While the
+        /// key is held, run() refuses a second start instead of piling up (the
+        /// loser of that race is normally invisible: it cannot report anything
+        /// and looks alive while doing nothing), publishes the record so tools
+        /// can attach instead of launching another run, and removes the record
+        /// on shutdown.
+        Os::FInstanceRecord instanceRecord;
     };
 
     AppKernel(Config config, IAppLoopDelegate& delegate);
