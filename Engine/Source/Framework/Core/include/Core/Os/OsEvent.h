@@ -35,4 +35,9 @@ struct YA_CORE_API OsEventPump
     static void warpGlobalMouse(float x, float y);
 };
 
+/// The window an event belongs to (0 = global / not windowed). Hosts route by
+/// this instead of re-deriving the id per event type; it is an OS-window fact,
+/// so it lives with the pump rather than with any GUI or product layer.
+[[nodiscard]] YA_CORE_API uint32_t guiEventWindowId(const Event& event);
+
 } // namespace ya

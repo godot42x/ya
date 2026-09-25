@@ -2,6 +2,7 @@
 
 #include "Core/Config/ConfigManager.h"
 #include "Core/Log.h"
+#include "Core/Os/OsEvent.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"

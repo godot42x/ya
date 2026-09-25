@@ -106,6 +106,4 @@ class YA_GUI_API GUIWindowManager final : public IGUIWindowCoordinator
     void                    dispatchToSession(GUIWindowSession& session, const Event& event);
 };
 
-[[nodiscard]] uint32_t guiEventWindowId(const Event& event);
-
 } // namespace ya

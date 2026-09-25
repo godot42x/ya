@@ -3,13 +3,15 @@
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/IRuntimeModule.h"
 #include "GameRuntime/Lifecycle/GameRuntimeTickOrchestrator.h"
-#include "Lifecycle/HostSdlEventSource.h"
+#include "App/Kernel/SdlEventSource.h"
 #include "GUI/Host/NativeWindowManager.h"
 #include "GUI/Widgets/UIDocumentStore.h"
 #include "GUI/Host/GUIWindowChrome.h"
 #include "App/Kernel/AppKernel.h"
 #include "Core/Config/ConfigManager.h"
 #include "Core/Os/InstanceRegistry.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 #include "Render3D/RenderDeviceState.h"
 
 #include "App/Module/ProjectDescriptor.h"
@@ -87,6 +89,23 @@ class GameRuntimeLoopDelegate final : public IAppLoopDelegate
   private:
     App& app;
 };
+
+/// The runtime measures the pump phase (trace zone + perf sample, game
+/// domain). The window-level protocol itself is the shared SdlEventSource;
+/// this adds only the measurement around it.
+class InstrumentedEventSource final : public IAppEventSource
+{
+  public:
+    void pollEvents(const std::function<void(const Event&)>& emit) override
+    {
+        YA_PROFILE_SCOPE("Tick/EventPump");
+        YA_PERF_SCOPE(perf::sample::tickEventPump(), perf::metric::cpuTimeMs(), perf::domain::game());
+        _source.pollEvents(emit);
+    }
+
+  private:
+    SdlEventSource _source;
+};
 }
 
 App*     App::_instance        = nullptr;
@@ -157,7 +176,7 @@ int App::run()
     _startTime = std::chrono::steady_clock::now();
     _lastTime  = _startTime;
 
-    HostSdlEventSource      eventSource;
+    InstrumentedEventSource eventSource;
     GameRuntimeLoopDelegate delegate(*this);
     AppKernel               kernel({.eventSource = &eventSource,
                                     .instanceRecord = makeInstanceRecord(_ci)},

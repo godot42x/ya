@@ -10,6 +10,7 @@
 #include "App/Control/AutomationControlServer.h"
 #include "App/Control/AutomationRun.h"
 #include "App/Control/GuiEventDriver.h"
+#include "App/Kernel/SdlEventSource.h"
 #include "App/Kernel/GuiScenarioEventSource.h"
 #include "Core/FName.h"
 #include "Core/KeyCode.h"
@@ -439,76 +440,6 @@ void writeRGBAtoBMP(const uint8_t* rgba, uint32_t width, uint32_t height,
     }
 }
 
-/// Host policy on top of Core Events from `OsEventPump`: window filter,
-/// first-pointer synthesis, and mouse enter/leave → pointer/focus.
-struct SdlEventSource final : IAppEventSource
-{
-    uint32_t hostWindowID = 0;
-    bool     bPointerKnown = false;
-
-    [[nodiscard]] bool isHostWindow(uint32_t windowID) const
-    {
-        return hostWindowID == 0 || windowID == 0 || windowID == hostWindowID;
-    }
-
-    void pollEvents(const std::function<void(const Event&)>& emit) override
-    {
-        OsEventPump::pump();
-        if (!bPointerKnown) {
-            const FOsMouseQuery mouse = OsEventPump::queryMouse();
-            if (mouse.bHasWindow && isHostWindow(mouse.windowID)) {
-                MouseMoveEvent move(mouse.x, mouse.y);
-                move._windowID = mouse.windowID;
-                emit(move);
-                bPointerKnown = true;
-            }
-        }
-
-        OsEventPump::poll([&](const Event& event) {
-            if (!isHostWindow(guiEventWindowId(event))) {
-                return;
-            }
-            switch (event.getEventType()) {
-            case EEvent::WindowMouseEnter: {
-                const auto& enter = static_cast<const WindowMouseEnterEvent&>(event);
-                const FOsMouseQuery mouse = OsEventPump::queryMouse();
-                MouseMoveEvent move(mouse.x, mouse.y);
-                move._windowID = enter.getWindowID();
-                emit(move);
-                emit(WindowFocusEvent(enter.getWindowID()));
-                bPointerKnown = true;
-                break;
-            }
-            case EEvent::WindowMouseLeave: {
-                const auto& leaveEvent = static_cast<const WindowMouseLeaveEvent&>(event);
-                MouseMoveEvent leave(-1000000.0f, -1000000.0f);
-                leave._windowID = leaveEvent.getWindowID();
-                emit(leave);
-                bPointerKnown = false;
-                // The leave itself still has to reach the app: it is the
-                // boundary where a pointer session the platform will not
-                // release any more has to be reconciled against the physical
-                // button state (the far-pointer move above only clears hover).
-                emit(leaveEvent);
-                break;
-            }
-            case EEvent::MouseMoved:
-            case EEvent::MouseButtonPressed:
-            case EEvent::MouseButtonReleased:
-            case EEvent::MouseScrolled: {
-                emit(event);
-                bPointerKnown = true;
-                break;
-            }
-            default: {
-                emit(event);
-                break;
-            }
-            }
-        });
-    }
-};
-
 
 } // namespace
 
@@ -578,7 +509,9 @@ struct GUIWindowHost::FImpl
     std::shared_ptr<IBuffer>           offscreenShotBuffer;
 
     std::unique_ptr<IAppEventSource> eventSource;
-    uint32_t* sdlHostWindowFilter = nullptr;
+    /// The SDL source's filter, when the event source is the SDL pump (not the
+    /// scenario driver): GUIApp toggles it so extras' events reach its router.
+    SdlEventSource* sdlEventSource = nullptr;
     std::string captureRequestPath;
     std::optional<PendingGuiCapture> pendingCapture;
     bool    bLoggedFirstSnapshot = false;
@@ -796,10 +729,9 @@ bool GUIWindowHost::init()
     }
     else {
         auto sdl = std::make_unique<SdlEventSource>();
-        sdl->hostWindowID = _impl->window.getWindowID();
+        sdl->setHostWindowId(_impl->window.getWindowID());
+        _impl->sdlEventSource = sdl.get();
         _impl->eventSource = std::move(sdl);
-        _impl->sdlHostWindowFilter =
-            &static_cast<SdlEventSource*>(_impl->eventSource.get())->hostWindowID;
     }
 
     // The shared present path reads this window's device and surface from the
@@ -918,10 +850,10 @@ IRender* GUIWindowHost::getRender() const
 
 void GUIWindowHost::setAcceptAllWindowEvents(bool enabled)
 {
-    if (!_impl->sdlHostWindowFilter) {
+    if (!_impl->sdlEventSource) {
         return;
     }
-    *_impl->sdlHostWindowFilter = enabled ? 0u : _impl->window.getWindowID();
+    _impl->sdlEventSource->setHostWindowId(enabled ? 0u : _impl->window.getWindowID());
 }
 
 int GUIWindowHost::finishRun(int kernelResult)

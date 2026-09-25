@@ -42,35 +42,6 @@ void applyHoveredCursor(const UIElement* hovered)
 
 } // namespace
 
-uint32_t guiEventWindowId(const Event& event)
-{
-    switch (event.getEventType()) {
-    case EEvent::WindowClose:
-    case EEvent::WindowResize:
-    case EEvent::WindowRestore:
-    case EEvent::WindowMinimize:
-    case EEvent::WindowFocus:
-    case EEvent::WindowFocusLost:
-    case EEvent::WindowMoved:
-    case EEvent::WindowMouseEnter:
-    case EEvent::WindowMouseLeave:
-        return static_cast<const WindowEvent&>(event).getWindowID();
-    case EEvent::MouseMoved:
-        return static_cast<const MouseMoveEvent&>(event).getWindowID();
-    case EEvent::MouseScrolled:
-        return static_cast<const MouseScrolledEvent&>(event).getWindowID();
-    case EEvent::MouseButtonPressed:
-    case EEvent::MouseButtonReleased:
-        return static_cast<const MouseButtonEvent&>(event).getWindowID();
-    case EEvent::KeyPressed:
-    case EEvent::KeyReleased:
-    case EEvent::KeyTyped:
-        return static_cast<const KeyEvent&>(event).getWindowID();
-    default:
-        return 0;
-    }
-}
-
 GUIWindowManager::~GUIWindowManager()
 {
     shutdown();
