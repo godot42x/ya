@@ -556,6 +556,7 @@ void ForwardRenderPipeline::beginViewRecording(const RenderPipelineFrameContext&
         .flightIndex    = frame.frame ? frame.frame->flightIndex : 0,
         .frameIndex     = frame.frame ? frame.frame->frameIndex : 0,
         .deltaTime      = frame.frame ? frame.frame->deltaTime : 0.0f,
+        .timeSeconds    = frame.frame ? frame.frame->elapsedTimeSeconds : 0.0f,
         .viewExtent     = frame.view.viewExtent,
         .derivedScene   = frame.derivedScene,
     };

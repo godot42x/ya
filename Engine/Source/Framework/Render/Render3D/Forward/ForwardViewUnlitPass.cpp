@@ -185,9 +185,9 @@ void ForwardViewUnlitPass::prepareUnlit(const RenderStageContext& ctx,
     outFrame.projMat    = ctx.frameData->projection;
     outFrame.viewMat    = ctx.frameData->view;
     outFrame.resolution = glm::ivec2(ctx.viewExtent.width, ctx.viewExtent.height);
-    // Frame constants come from the View's own prepared data (see the lit pass).
-    outFrame.frameIdx   = static_cast<int32_t>(fd.frameIndex);
-    outFrame.time       = fd.timeSeconds;
+    // Frame constants are stage-context facts (see the lit pass).
+    outFrame.frameIdx   = static_cast<int32_t>(ctx.frameIndex);
+    outFrame.time       = ctx.timeSeconds;
 
     prepareUnlitMaterials(fd);
     _unlitPoolRecreated = false;

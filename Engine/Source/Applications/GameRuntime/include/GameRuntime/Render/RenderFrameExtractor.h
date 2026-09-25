@@ -41,11 +41,6 @@ struct RenderFrameExtractor
         /// Features this view draws; the bucket binding filters the immutable
         /// snapshot against it (see RenderFeatures.h).
         FRenderFeatureMask viewFeatures = toMask(ERenderFeature::Game);
-        uint64_t       frameIndex = 0;
-        float          deltaTime  = 0.0f;
-        /// Seconds since the host clock started; the shader-facing frame UBO's
-        /// `time`. Not `deltaTime`.
-        float          elapsedTimeSeconds = 0.0f;
         const ShadowSettings* shadowSettings = nullptr;
     };
 

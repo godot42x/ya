@@ -216,7 +216,7 @@ void RuntimeRenderContext::tick(App& app, float dt)
 
     declareViews(app, dt, sceneScheduler);
     ExtractedSceneRender sceneRender = extractScenes(app, sceneScheduler);
-    prepareViews(app, dt, sceneRender);
+    prepareViews(app, sceneRender);
 
     TickFrame gameFrame = buildGameRenderFrame(app, dt, flightIndex, sceneRender);
 
@@ -357,7 +357,7 @@ ExtractedSceneRender RuntimeRenderContext::extractScenes(App& app, SceneRenderSc
     return sceneRender;
 }
 
-void RuntimeRenderContext::prepareViews(App& app, float dt, ExtractedSceneRender& sceneRender)
+void RuntimeRenderContext::prepareViews(App& app, ExtractedSceneRender& sceneRender)
 {
     sceneRender.pairViewFrames();
     if (sceneRender.empty()) {
@@ -379,9 +379,6 @@ void RuntimeRenderContext::prepareViews(App& app, float dt, ExtractedSceneRender
                 .viewExtent = Extent2D::fromVec2(desc.outputRect.extent),
                 .viewOwner = desc.viewOwner,
                 .viewFeatures = desc.features,
-                .frameIndex = App::_hostTick,
-                .deltaTime = dt,
-                .elapsedTimeSeconds = app._renderState->hostSettings.clock.elapsedTimeMS / 1000.0f,
                 .shadowSettings = &app.getRenderServices().getShadowSettings(),
             },
             sceneRender.snapshotFor(task),
@@ -405,6 +402,9 @@ RuntimeRenderContext::TickFrame RuntimeRenderContext::buildGameRenderFrame(
         .flightIndex   = flightIndex,
         .frameIndex    = App::_hostTick,
         .deltaTime     = dt,
+        // The shader-facing frame UBO's `time`, one answer per frame -- it used
+        // to be copied onto every View's prepared data as well.
+        .elapsedTimeSeconds = hostSettings.clock.elapsedTimeMS / 1000.0f,
         .renderScale = hostSettings.renderScale,
         .shadowSettings = &app.getRenderServices().getShadowSettings(),
     };

@@ -34,6 +34,9 @@ struct FramePacket
     uint32_t flightIndex = 0;
     uint64_t frameIndex  = 0;
     float    deltaTime   = 0.0f;
+    /// Seconds since the host clock started -- the value the shader-facing
+    /// frame UBO carries as `time`. Not the same as `deltaTime`.
+    float    elapsedTimeSeconds = 0.0f;
 
     /// Host render scale for this tick: a View's rect is divided by it to get
     /// the render target extent. One host setting, not a per-View property, so

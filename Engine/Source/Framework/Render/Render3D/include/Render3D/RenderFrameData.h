@@ -397,14 +397,9 @@ struct RenderFrameData
     /// is current (see RenderViewSceneResources.h).
     RenderViewSceneResources sceneResources{};
 
-    // ═══════════════════════════════════════════════════════════════
-    // Frame constants
-    // ═══════════════════════════════════════════════════════════════
-    uint64_t frameIndex = 0;
-    float    deltaTime  = 0.0f;
-    /// Seconds since the host clock started, the value the shader-facing frame
-    /// UBO carries as `time`. Not the same as `deltaTime`.
-    float    timeSeconds = 0.0f;
+    // Frame-level constants (tick, delta, clock) are NOT here: they are the
+    // frame packet's facts, carried once per frame (`FramePacket`) and surfaced
+    // to stages through `RenderStageContext` -- one answer, not a per-view copy.
 
     // ═══════════════════════════════════════════════════════════════
     // Helpers

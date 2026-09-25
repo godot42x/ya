@@ -68,7 +68,6 @@ ShadowPreparedView BasicShadowMapTechnique::prepare(RenderSubmission&           
     }
 
     auto payload = buildFramePayload(submission.flightIndex(), *view.frameData);
-    payload.frameIndex = submission.frameToken();
     payload.submission = &submission;
     if (!_frameResources.beginView(submission, view, payload)) {
         YA_CORE_ERROR("BasicShadowMapTechnique failed to prepare shadow frame resources");
@@ -210,7 +209,6 @@ BasicShadowFramePayload BasicShadowMapTechnique::buildFramePayload(uint32_t flig
 
     BasicShadowFramePayload payload{
         .flightIndex = flightIndex,
-        .frameIndex  = frameData.frameIndex,
         .frameData   = &frameData,
         .settings    = &_settings,
         .frameUBO    = FrameUBO{

@@ -411,11 +411,10 @@ void ForwardViewLitPasses::preparePhong(const RenderStageContext& ctx,
     outFrame.projMat    = fd.projection;
     outFrame.viewMat    = fd.view;
     outFrame.resolution = glm::ivec2(ctx.viewExtent.width, ctx.viewExtent.height);
-    // Frame constants come from the View's own prepared data, not from a clock
-    // the pass would have to locate: the View already carries the tick and the
-    // elapsed time it was prepared with.
-    outFrame.frameIdx   = static_cast<int32_t>(fd.frameIndex);
-    outFrame.time       = fd.timeSeconds;
+    // Frame constants are stage-context facts, filled from the frame packet in
+    // one place -- not a per-view copy the View's prepared data would carry.
+    outFrame.frameIdx   = static_cast<int32_t>(ctx.frameIndex);
+    outFrame.time       = ctx.timeSeconds;
     outFrame.cameraPos  = fd.cameraPos;
 
     fillPhongLightFromFrameData(fd, outLight);

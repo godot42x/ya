@@ -211,9 +211,6 @@ void RenderFrameExtractor::extractCamera(const ViewPrepareInput& input, RenderFr
     out.cameraPos      = input.cameraPos;
     out.viewExtent = input.viewExtent;
     out.viewOwner      = input.viewOwner;
-    out.frameIndex     = input.frameIndex;
-    out.deltaTime      = input.deltaTime;
-    out.timeSeconds    = input.elapsedTimeSeconds;
 }
 
 void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneSnapshot& out)

@@ -98,8 +98,9 @@ class YA_GAME_RUNTIME_API RuntimeRenderContext
     [[nodiscard]] ExtractedSceneRender extractScenes(App& app, SceneRenderScheduler& scheduler);
 
     /// Pairs this tick's View recordings with their frame data and prepares
-    /// one View's camera-dependent packet each.
-    void prepareViews(App& app, float dt, ExtractedSceneRender& sceneRender);
+    /// one View's camera-dependent packet each. Frame-level constants are not
+    /// part of it: they live on the frame packet (see `buildGameRenderFrame`).
+    void prepareViews(App& app, ExtractedSceneRender& sceneRender);
 
     /// One tick's frame facts together with the UI snapshot the packet borrows.
     /// They are built as one value because the packet points into the snapshot:

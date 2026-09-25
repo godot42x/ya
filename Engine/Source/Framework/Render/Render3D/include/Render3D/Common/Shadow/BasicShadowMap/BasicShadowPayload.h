@@ -25,7 +25,6 @@ struct BasicShadowFramePayload
     using PointFaceUBO = slang_types::Shadow::PointShadowIndirect::PointShadowFaceData;
 
     uint32_t                      flightIndex = 0;
-    uint64_t                      frameIndex  = 0;
     uint32_t                      viewSlot    = RenderViewRecordingContext::kInvalidViewSlot;
     const RenderFrameData*        frameData   = nullptr;
     const ShadowSettings*         settings    = nullptr;
