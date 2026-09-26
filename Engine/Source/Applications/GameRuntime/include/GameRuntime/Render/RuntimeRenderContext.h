@@ -69,10 +69,13 @@ class YA_GAME_RUNTIME_API RuntimeRenderContext
     /// The recording step of that order. `extensions` is the host's
     /// contribution at the stages the order defines (view compose, display
     /// compose, capture); null means the host contributes nothing, which is
-    /// what a headless or UI-only frame wants. It is a call argument, not plan
-    /// data: a sealed plan is values.
+    /// what a headless or UI-only frame wants. `uiSnapshot` is the app-side
+    /// Game UI packet this order composes onto the displayed View's image --
+    /// Render3D publishes View outputs and never learns it exists. Both are
+    /// call arguments, not plan data: a sealed plan is values.
     [[nodiscard]] RecordedFrame record(const RenderFramePlan& plan,
-                                       IFrameRecordExtensions* extensions);
+                                       IFrameRecordExtensions* extensions,
+                                       const UIFrameSnapshot* uiSnapshot);
 
   private:
     /// Pre-record prerequisite: waits for the previous tick's offscreen
@@ -111,13 +114,11 @@ class YA_GAME_RUNTIME_API RuntimeRenderContext
         UIFrameSnapshot uiSnapshot{};
         FramePacket     frame{};
 
-        /// The packet with `uiFrameSnapshot` bound to this value's snapshot.
-        /// Bound on read instead of stored, because this value is returned by
-        /// value and a stored pointer would be left behind on the moved-from
-        /// object.
+        /// The frame facts as built. The UI snapshot is NOT bound into the
+        /// packet anymore: it is an explicit argument of the record call
+        /// (`Render3D` never learns it exists).
         [[nodiscard]] const FramePacket& boundFrame()
         {
-            frame.uiFrameSnapshot = &uiSnapshot;
             return frame;
         }
     };

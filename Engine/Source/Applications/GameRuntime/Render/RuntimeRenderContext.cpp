@@ -19,7 +19,6 @@
 #include "GUI/Compose/Render2DComposePass.h"
 #include "Render3D/Common/FrameRecordExtensions.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
-#include "Render3D/Common/ViewCompose.h"
 #include "Render3D/RenderDeviceState.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
 #include "Render3D/Services/SurfacePresentation.h"
@@ -34,7 +33,9 @@
 namespace ya
 {
 
-RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan, IFrameRecordExtensions* extensions)
+RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan,
+                                           IFrameRecordExtensions* extensions,
+                                           const UIFrameSnapshot* uiSnapshot)
 {
     YA_PROFILE_SCOPE("RuntimeRenderContext::record");
     YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -99,10 +100,23 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan, IFrameRe
     // The game-UI compose lands on the display root's image, so its logical
     // viewport is that View's declared geometry rather than a host camera copy.
     const Extent2D logicalViewExtent = displayRoot ? displayRoot->output.extent : Extent2D{};
-    recordCameraViewCompose(cmdBuf.get(),
-                            displayOutput ? displayOutput->displayImage().get() : nullptr,
-                            plan.frame.uiFrameSnapshot,
-                            logicalViewExtent);
+
+    // Game UI compose onto the display root's image, inside the app's record
+    // order (after the world graph, before display compose): Render3D only
+    // publishes View outputs and never learns the UI snapshot exists. The
+    // logical viewport is that View's declared geometry rather than a host
+    // camera copy. Skipped when the world image isn't built yet (first frame)
+    // or the tick has no Game UI.
+    if (displayOutput && uiSnapshot) {
+        recordRender2DComposePass(cmdBuf.get(),
+                                  *displayOutput->displayImage(),
+                                  nullptr,
+                                  uiSnapshot,
+                                  FRender2DComposePassDesc{
+                                      .kind = ERender2DComposePassKind::RuntimeUIComposite,
+                                      .logicalExtent = logicalViewExtent,
+                                  });
+    }
     if (extensions) {
         extensions->recordViewCompose(*cmdBuf, plan.frame.deltaTime);
     }
@@ -443,7 +457,8 @@ RecordedFrame RuntimeRenderContext::recordFrame(App&                 app,
                                                                             : ESurfaceBackdrop::HostContent,
         },
     },
-    /* extensions = */ &app);
+    /* extensions = */ &app,
+    &frame.uiSnapshot);
 }
 
 void RuntimeRenderContext::submitRecordedFrame(App&                 app,

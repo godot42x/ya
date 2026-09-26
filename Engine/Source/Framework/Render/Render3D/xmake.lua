@@ -12,12 +12,14 @@ target("ya-render-3d")
     add_includedirs(path.join(os.projectdir(), "Engine/Shader/Slang/Generated/Common"), { public = true })
     add_deps(
         "ya-render-resources",
-        "ya-gui-compose",
         "ya-resource-core", "ya-resource-loader", "ya-resource-runtime",
         "ya-render-graph",
         { public = true })
-    add_deps("ya-ecs-core", "ya-ecs-systems")
-    -- Implementation-only deps: scene data/lifecycle and the backend builtin
+    add_deps("ya-ecs-core", "ya-ecs-systems", "ya-render-2d")
+    -- Implementation-only deps: scene data/lifecycle and the backend builtin.
+    -- ya-render-2d is the low-level 2D batcher whose GPU resources are
+    -- device-lifetime managed by PipelineCoordinator (see its init/shutdown);
+    -- it is a Framework/Render neighbor, not the GUI framework.
     -- texture library (GUI resources/compose are already public above: render-3d
     -- public headers expose them). No ya-physics: the physics collision debug
     -- draw is an ECS-to-render bridge and lives in ya-render-ecs-adapters.

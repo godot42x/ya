@@ -7,14 +7,46 @@
 #include "Core/Camera/Camera.h"
 #include "Core/Math/Math.h"
 #include "ECS/Systems/Components/CameraComponent.h"
-#include "Render3D/Common/ViewCompose.h"
 #include "Scene3D/TransformComponent.h"
+
+namespace
+{
+
+} // namespace
 
 namespace ya
 {
 
 namespace
 {
+/// Place a dest rect in the host display RT (origin at the RT top-left).
+/// Editor layout policy for the camera preview inside the authoring panel;
+/// moved out of Render3D, which never knew what a preview was.
+[[nodiscard]] Rect2D makeViewDisplayInsetRect(const glm::vec2& hostExtent,
+                                              float            widthFraction  = 0.22f,
+                                              float            marginFraction = 0.02f)
+{
+    if (hostExtent.x <= 1.0f || hostExtent.y <= 1.0f) {
+        return {};
+    }
+
+    const float safeWidthFraction  = std::clamp(widthFraction, 0.05f, 0.5f);
+    const float safeMarginFraction = std::clamp(marginFraction, 0.2f, 0.2f);
+    const float margin             = std::max(hostExtent.x, hostExtent.y) * safeMarginFraction;
+    float       width              = hostExtent.x * safeWidthFraction;
+    float       height             = width * (hostExtent.y / hostExtent.x);
+    if (height + margin * 2.0f > hostExtent.y) {
+        height = std::max(1.0f, hostExtent.y - margin * 2.0f);
+        width  = height * (hostExtent.x / hostExtent.y);
+    }
+    width  = std::max(1.0f, std::min(width, hostExtent.x - margin));
+    height = std::max(1.0f, std::min(height, hostExtent.y - margin));
+
+    return Rect2D{
+        .pos    = {hostExtent.x - margin - width, hostExtent.y - margin - height},
+        .extent = {width, height},
+    };
+}
 
 /// The preview renders into its own small RT, so its projection follows that
 /// rect's aspect unless the camera pins its own.

@@ -43,7 +43,6 @@
 #include "Core/Math/Math.h"
 #include "ECS/Component.h"
 #include "Render3D/Common/CameraFrustumOverlay.h"
-#include "Render3D/Common/ViewCompose.h"
 
 #include <algorithm>
 #include <format>

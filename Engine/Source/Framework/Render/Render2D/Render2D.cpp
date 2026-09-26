@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <cstdlib>
 #include <vector>
 
 namespace ya
@@ -145,40 +144,6 @@ FQuadRender::FRender2dFrameStats Render2D::recordRender2DList(const Render2DList
     constexpr uint32_t kUnmapped = ~0u;
     std::vector<uint32_t> localToGlobal(list.textures.size(), kUnmapped);
 
-    static const bool bDumpCommands = std::getenv("YA_R2D_DUMP") != nullptr;
-    if (bDumpCommands) {
-        YA_CORE_INFO("R2D dump record: commands={} screenVerts={} worldVerts={} lineVerts={} textures={}",
-                     list.commands.size(), list.screenVerts.size(), list.worldVerts.size(),
-                     list.lineVerts.size(), list.textures.size());
-        uint32_t dumpQuad = 0;
-        for (const Render2DList::Command& c : list.commands) {
-            uint32_t localSlot = 0u;
-            if (c.kind == ERender2dBatchKind::ScreenQuad && c.vertexCount > 0) {
-                localSlot = list.screenVerts[c.firstVertex].textureRef & FQuadRender::kTextureIndexMask;
-            }
-            else if (c.kind == ERender2dBatchKind::WorldQuad && c.vertexCount > 0) {
-                localSlot = list.worldVerts[c.firstVertex].textureRef & FQuadRender::kTextureIndexMask;
-            }
-            YA_CORE_INFO("R2D cmd kind={} first={} count={} clipped={} clip=({},{},{},{}) localTex={}",
-                         static_cast<int>(c.kind), c.firstVertex, c.vertexCount,
-                         c.bClipped, c.clip.pos.x, c.clip.pos.y, c.clip.extent.x, c.clip.extent.y,
-                         localSlot);
-            if (c.kind == ERender2dBatchKind::ScreenQuad && dumpQuad < 1) {
-                for (uint32_t v = 0; v < 4; ++v) {
-                    const auto& vert = list.screenVerts[c.firstVertex + v];
-                    YA_CORE_INFO("R2D v{} pos=({:.2f},{:.2f},{:.2f}) color=({:.3f},{:.3f},{:.3f},{:.3f}) uv=({:.3f},{:.3f}) texRef={:x} corner=({:.1f},{:.1f},{:.1f})",
-                                 v,
-                                 vert.pos.x, vert.pos.y, vert.pos.z,
-                                 vert.color.r, vert.color.g, vert.color.b, vert.color.a,
-                                 vert.texCoord.x, vert.texCoord.y,
-                                 vert.textureRef,
-                                 vert.corner.x, vert.corner.y, vert.corner.z);
-                }
-                ++dumpQuad;
-            }
-        }
-    }
-
     ERender2dBatchKind pending = ERender2dBatchKind::None;
     auto flushPending = [&]() {
         switch (pending) {
@@ -212,13 +177,6 @@ FQuadRender::FRender2dFrameStats Render2D::recordRender2DList(const Render2DList
         }
         state.bClipped = command.bClipped;
         state.clip     = command.clip;
-        if (bDumpCommands && command.kind == ERender2dBatchKind::ScreenQuad) {
-            const uint32_t ls = list.screenVerts[command.firstVertex].textureRef & FQuadRender::kTextureIndexMask;
-            YA_CORE_INFO("R2D rec cmd first={} local={} -> global={} texPtr={}",
-                         command.firstVertex, ls, localToGlobal[ls],
-                         static_cast<const void*>(list.textures[ls].get()));
-        }
-
         if (command.kind == ERender2dBatchKind::Line) {
             const FLineRender::Vertex* src = list.lineVerts.data() + command.firstVertex;
             uint32_t remaining = command.vertexCount;

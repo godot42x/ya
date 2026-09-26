@@ -19,7 +19,6 @@ struct RenderFrameData;
 class RenderSubmission;
 class ViewTargetStore;
 struct Scene;
-struct UIFrameSnapshot;
 
 /// Frame-level facts of one recorded host frame.
 ///
@@ -50,9 +49,6 @@ struct FramePacket
     float renderScale = 1.0f;
 
     const ShadowSettings* shadowSettings = nullptr;
-    /// Game UI snapshot for this tick, consumed by the display compose. Built
-    /// before graph build; the live WidgetTree is never read while recording.
-    const UIFrameSnapshot* uiFrameSnapshot = nullptr;
 };
 
 /// Acquire / present destination for this frame. The host/present coordinator

@@ -1,6 +1,5 @@
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
-#include "Render3D/Common/ViewCompose.h"
 #include "Render3D/RenderFrameData.h"
 #include "Render3D/RenderDeviceState.h"
 #include "Scene/Core/Scene.h"
