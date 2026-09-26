@@ -88,7 +88,7 @@ YA_GUI_API void recordRender2DComposePass(ICommandBuffer*                  cmdBu
                                           RenderTexture*                   depthTarget,
                                           const UIFrameSnapshot*           uiFrameSnapshot,
                                           const FRender2DComposePassDesc&  passDesc,
-                                          const std::function<void()>&     extraContent = {});
+                                          const std::function<void(Render2DList&)>& extraContent = {});
 
 /// Replay a UI snapshot into an already-open raster pass. Does not begin or
 /// end rendering and does not transition the target. Used by the editor
@@ -99,6 +99,6 @@ YA_GUI_API void replayUIFrameSnapshot(ICommandBuffer*                cmdBuf,
                                       const UIFrameSnapshot&         snapshot,
                                       Extent2D                       targetExtent,
                                       ERender2DComposePassKind       kind,
-                                      const std::function<void()>&   extraContent = {});
+                                      const std::function<void(Render2DList&)>& extraContent = {});
 
 } // namespace ya

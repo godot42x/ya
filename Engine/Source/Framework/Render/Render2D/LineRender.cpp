@@ -257,15 +257,15 @@ void FLineRender::begin(Render2DPassSlot passSlot, uint32_t flightSlot)
     batchStartVertex = 0;
 }
 
-void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
+void FLineRender::flush(ICommandBuffer* cmdBuf, const FQuadRender::FRender2dFlushState& state)
 {
     if (!cmdBuf || vertexCount == 0) {
         return;
     }
 
     FrameUBO ubo{
-        .viewProj = viewProj,
-        .view     = Render2D::session.view,
+        .viewProj = state.viewProjection,
+        .view     = state.view,
     };
     auto& resources = _passResources[static_cast<size_t>(_activePassSlot)].flights[_activeFlightIndex];
     resources.frameUBOBuffer->writeData(&ubo, sizeof(ubo), 0);
@@ -278,7 +278,7 @@ void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
                    "Render2D line pipeline for pass slot {} was not prepared before command recording",
                    static_cast<size_t>(_activePassSlot));
     cmdBuf->bindPipeline(pipeline);
-    setScreenViewportAndScissor(*cmdBuf, _render, Render2D::session.windowWidth, Render2D::session.windowHeight);
+    setScreenViewportAndScissor(*cmdBuf, _render, state.windowWidth, state.windowHeight);
 
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {resources.frameUboDS});
     cmdBuf->bindVertexBuffer(0, resources.vertexBuffer.get(), 0);
@@ -295,7 +295,13 @@ void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
 void FLineRender::addLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color)
 {
     if (vertexCount + 2 > MaxVertexCount) {
-        flush(Render2D::session.curCmdBuf, Render2D::session.viewProjection);
+        FQuadRender::FRender2dFlushState state{
+            .windowWidth  = Render2D::session.windowWidth,
+            .windowHeight = Render2D::session.windowHeight,
+            .view         = Render2D::session.view,
+            .viewProjection = Render2D::session.viewProjection,
+        };
+        flush(Render2D::session.curCmdBuf, state);
     }
 
     *vertexPtr++ = Vertex{.pos = from, .color = color};

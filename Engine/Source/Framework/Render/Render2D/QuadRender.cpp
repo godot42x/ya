@@ -613,11 +613,17 @@ void FQuadRender::end()
 {
     // Leftover drain only. Cross-pipeline draw order is owned by
     // Render2D::flushPending(); do not use this as the session-end path.
-    flushWorld(Render2D::session.curCmdBuf);
-    flush(Render2D::session.curCmdBuf);
+    FRender2dFlushState state{
+        .windowWidth  = Render2D::session.windowWidth,
+        .windowHeight = Render2D::session.windowHeight,
+        .view         = Render2D::session.view,
+        .viewProjection = Render2D::session.viewProjection,
+    };
+    flushWorld(Render2D::session.curCmdBuf, state);
+    flush(Render2D::session.curCmdBuf, state);
 }
 
-void FQuadRender::flush(ICommandBuffer* cmdBuf)
+void FQuadRender::flush(ICommandBuffer* cmdBuf, const FRender2dFlushState& state)
 {
     if (!cmdBuf || vertexCount == 0) {
         return;
@@ -640,22 +646,22 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
                    "Render2D pipeline for pass slot {} was not prepared before command recording",
                    static_cast<size_t>(_activePassSlot));
     cmdBuf->bindPipeline(pipeline);
-    setScreenViewportAndScissor(*cmdBuf, _render, Render2D::session.windowWidth, Render2D::session.windowHeight);
+    setScreenViewportAndScissor(*cmdBuf, _render, state.windowWidth, state.windowHeight);
     // Defensive: clamp the clip-derived scissor to the window bounds. Layout
     // already keeps rects non-negative, but a stale clip must never cast a
     // negative extent into a uint32 (VUID offset+extent overflow).
-    if (!Render2D::session.clipStack.empty()) {
-        const Rect2D& clip = Render2D::session.clipStack.back();
-        const int32_t sx = std::clamp(static_cast<int32_t>(clip.pos.x), 0, static_cast<int32_t>(Render2D::session.windowWidth));
-        const int32_t sy = std::clamp(static_cast<int32_t>(clip.pos.y), 0, static_cast<int32_t>(Render2D::session.windowHeight));
+    if (state.bClipped) {
+        const Rect2D& clip = state.clip;
+        const int32_t sx = std::clamp(static_cast<int32_t>(clip.pos.x), 0, static_cast<int32_t>(state.windowWidth));
+        const int32_t sy = std::clamp(static_cast<int32_t>(clip.pos.y), 0, static_cast<int32_t>(state.windowHeight));
         const int32_t sw = std::clamp(static_cast<int32_t>(clip.extent.x), 0,
-                                      static_cast<int32_t>(Render2D::session.windowWidth) - sx);
+                                      static_cast<int32_t>(state.windowWidth) - sx);
         const int32_t sh = std::clamp(static_cast<int32_t>(clip.extent.y), 0,
-                                      static_cast<int32_t>(Render2D::session.windowHeight) - sy);
+                                      static_cast<int32_t>(state.windowHeight) - sy);
         cmdBuf->setScissor(sx, sy, static_cast<uint32_t>(sw), static_cast<uint32_t>(sh));
     }
     else {
-        cmdBuf->setScissor(0, 0, Render2D::session.windowWidth, Render2D::session.windowHeight);
+        cmdBuf->setScissor(0, 0, state.windowWidth, state.windowHeight);
     }
     if (_render && _render->getCapabilities().dynamicCullMode) {
         cmdBuf->setCullMode(Render2D::debug.screenCullMode);
@@ -685,24 +691,24 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
                        MaxVertexCount * kFrameFlushSlots,
                    "Render2D screen frame exceeded vertex buffer capacity ({} batches)",
                    kFrameFlushSlots);
-    if (shouldLogFlush(Render2D::session.debugScreenFlushCount)) {
+    if (state.debugScreenFlushCount && shouldLogFlush(*state.debugScreenFlushCount)) {
         int32_t clipX = 0;
         int32_t clipY = 0;
-        uint32_t clipW = Render2D::session.windowWidth;
-        uint32_t clipH = Render2D::session.windowHeight;
-        if (!Render2D::session.clipStack.empty()) {
-            const Rect2D& clip = Render2D::session.clipStack.back();
-            clipX = std::clamp(static_cast<int32_t>(clip.pos.x), 0, static_cast<int32_t>(Render2D::session.windowWidth));
-            clipY = std::clamp(static_cast<int32_t>(clip.pos.y), 0, static_cast<int32_t>(Render2D::session.windowHeight));
+        uint32_t clipW = state.windowWidth;
+        uint32_t clipH = state.windowHeight;
+        if (state.bClipped) {
+            const Rect2D& clip = state.clip;
+            clipX = std::clamp(static_cast<int32_t>(clip.pos.x), 0, static_cast<int32_t>(state.windowWidth));
+            clipY = std::clamp(static_cast<int32_t>(clip.pos.y), 0, static_cast<int32_t>(state.windowHeight));
             clipW = static_cast<uint32_t>(std::clamp(static_cast<int32_t>(clip.extent.x), 0,
-                                                     static_cast<int32_t>(Render2D::session.windowWidth) - clipX));
+                                                     static_cast<int32_t>(state.windowWidth) - clipX));
             clipH = static_cast<uint32_t>(std::clamp(static_cast<int32_t>(clip.extent.y), 0,
-                                                     static_cast<int32_t>(Render2D::session.windowHeight) - clipY));
+                                                     static_cast<int32_t>(state.windowHeight) - clipY));
         }
         YA_CORE_INFO("Render2D screen flush: passSlot={} flight={} batch={} clip=({}, {}, {}, {}) startVertex={} cursorVertex={} vertexCount={} indexCount={} resourceVersion={} uploadedResourceVersion={} textures={}",
                      static_cast<size_t>(_activePassSlot),
                      _activeFlightIndex,
-                     Render2D::session.debugScreenFlushCount,
+                     state.stats ? state.stats->screenFlushCount : 0u,
                      clipX,
                      clipY,
                      clipW,
@@ -724,16 +730,21 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
     cmdBuf->drawIndexed(static_cast<uint32_t>(indexCount), 1, 0, static_cast<int32_t>(screenBatchStartVertex), 0);
 
-    ++Render2D::session.screenFlushCount;
-    Render2D::session.screenVertexCount += vertexCount;
-    Render2D::session.screenIndexCount += static_cast<uint32_t>(indexCount);
+    if (state.stats) {
+        ++state.stats->screenFlushCount;
+        state.stats->screenVertexCount += vertexCount;
+        state.stats->screenIndexCount += static_cast<uint32_t>(indexCount);
+    }
+    if (state.debugScreenFlushCount) {
+        ++*state.debugScreenFlushCount;
+    }
 
     screenBatchStartVertex = static_cast<uint32_t>(vertexPtr - vertexPtrHead);
     vertexCount = 0;
     indexCount  = 0;
 }
 
-void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
+void FQuadRender::flushWorld(ICommandBuffer* cmdBuf, const FRender2dFlushState& state)
 {
     if (!cmdBuf || worldVertexCount == 0) {
         return;
@@ -756,7 +767,7 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     YA_CORE_ASSERT(_worldPipeline != nullptr,
                    "Render2D world pipeline was not prepared before command recording");
     cmdBuf->bindPipeline(_worldPipeline.get());
-    setWorldViewportAndScissor(*cmdBuf, _render, Render2D::session.windowWidth, Render2D::session.windowHeight);
+    setWorldViewportAndScissor(*cmdBuf, _render, state.windowWidth, state.windowHeight);
     if (_render && _render->getCapabilities().dynamicCullMode) {
         cmdBuf->setCullMode(Render2D::debug.worldCullMode);
     }
@@ -771,11 +782,11 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
                        MaxVertexCount * kFrameFlushSlots,
                    "Render2D world frame exceeded vertex buffer capacity ({} batches)",
                    kFrameFlushSlots);
-    if (shouldLogFlush(Render2D::session.debugWorldFlushCount)) {
+    if (state.debugWorldFlushCount && shouldLogFlush(*state.debugWorldFlushCount)) {
         YA_CORE_INFO("Render2D world flush: passSlot={} flight={} batch={} startVertex={} cursorVertex={} vertexCount={} indexCount={} resourceVersion={} uploadedResourceVersion={} textures={}",
                      static_cast<size_t>(_activePassSlot),
                      _activeFlightIndex,
-                     Render2D::session.debugWorldFlushCount,
+                     state.stats ? state.stats->worldFlushCount : 0u,
                      worldBatchStartVertex,
                      cursorVertex,
                      worldVertexCount,
@@ -792,7 +803,12 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     cmdBuf->bindVertexBuffer(0, resources.worldVertexBuffer.get(), 0);
     cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
     cmdBuf->drawIndexed(static_cast<uint32_t>(worldIndexCount), 1, 0, static_cast<int32_t>(worldBatchStartVertex), 0);
-    ++Render2D::session.worldFlushCount;
+    if (state.stats) {
+        ++state.stats->worldFlushCount;
+    }
+    if (state.debugWorldFlushCount) {
+        ++*state.debugWorldFlushCount;
+    }
 
     worldBatchStartVertex = static_cast<uint32_t>(worldVertexPtr - worldVertexPtrHead);
     worldVertexCount = 0;
@@ -821,10 +837,20 @@ void FQuadRender::flushForTextureOverflow(ICommandBuffer* cmdBuf)
     YA_CORE_ASSERT(!(vertexCount > 0 && worldVertexCount > 0),
                    "Render2D texture overflow while both screen and world quads are pending");
     if (worldVertexCount > 0) {
-        flushWorld(cmdBuf);
+        flushWorld(cmdBuf, FRender2dFlushState{
+                               .windowWidth  = Render2D::session.windowWidth,
+                               .windowHeight = Render2D::session.windowHeight,
+                               .view         = Render2D::session.view,
+                               .viewProjection = Render2D::session.viewProjection,
+                           });
     }
     if (vertexCount > 0) {
-        flush(cmdBuf);
+        flush(cmdBuf, FRender2dFlushState{
+                          .windowWidth  = Render2D::session.windowWidth,
+                          .windowHeight = Render2D::session.windowHeight,
+                          .view         = Render2D::session.view,
+                          .viewProjection = Render2D::session.viewProjection,
+                      });
     }
     resetTextureBatch();
 }
@@ -923,7 +949,8 @@ FQuadRender::TextureRef FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture, 
     return TextureRef{.slot = textureIdx, .mode = mode};
 }
 
-void FQuadRender::emitScreenQuad(const glm::mat4&                transform,
+void FQuadRender::EmitScreenQuad(Vertex*                         out,
+                                 const glm::mat4&                transform,
                                  TextureRef                      textureRef,
                                  const std::array<glm::vec4, 4>& colorsYaOrder,
                                  const glm::vec2&                uvScale,
@@ -931,7 +958,7 @@ void FQuadRender::emitScreenQuad(const glm::mat4&                transform,
                                  const glm::vec3&                corner)
 {
     for (int i = 0; i < 4; i++) {
-        *vertexPtr = FQuadRender::Vertex{
+        out[i] = FQuadRender::Vertex{
             .pos            = transform * FQuadRender::vertices[i],
             .color          = colorsYaOrder[static_cast<size_t>(i)],
             .texCoord       = FQuadRender::defaultTexcoord[i] * uvScale + uvTranslation,
@@ -941,9 +968,43 @@ void FQuadRender::emitScreenQuad(const glm::mat4&                transform,
             .worldSize      = glm::vec2(0.0f),
             .corner         = corner,
         };
-        ++vertexPtr;
     }
+}
 
+void FQuadRender::EmitWorldQuad(Vertex*          out,
+                                const glm::vec3& center,
+                                const glm::vec3& direction,
+                                const glm::vec2& size,
+                                TextureRef       textureRef,
+                                const glm::vec4& tint,
+                                const glm::vec2& uvScale)
+{
+    const glm::vec3 normalizedDirection = glm::length2(direction) > std::numeric_limits<float>::epsilon()
+                                            ? glm::normalize(direction)
+                                            : glm::vec3(0.0f, -1.0f, 0.0f);
+
+    for (int i = 0; i < 4; i++) {
+        out[i] = FQuadRender::Vertex{
+            .pos         = glm::vec3(FQuadRender::vertices[i]),
+            .color       = tint,
+            .texCoord    = FQuadRender::defaultTexcoord[i] * uvScale,
+            .textureRef  = textureRef.encode(),
+            .worldCenter = center,
+            .worldDirection = normalizedDirection,
+            .worldSize   = size,
+        };
+    }
+}
+
+void FQuadRender::emitScreenQuad(const glm::mat4&                transform,
+                                 TextureRef                      textureRef,
+                                 const std::array<glm::vec4, 4>& colorsYaOrder,
+                                 const glm::vec2&                uvScale,
+                                 const glm::vec2&                uvTranslation,
+                                 const glm::vec3&                corner)
+{
+    EmitScreenQuad(vertexPtr, transform, textureRef, colorsYaOrder, uvScale, uvTranslation, corner);
+    vertexPtr += 4;
     vertexCount += 4;
     indexCount += 6;
 }
@@ -966,7 +1027,12 @@ void FQuadRender::drawRectFilledMultiColor(const glm::vec3&               positi
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
     if (vertexCount >= MaxVertexCount - 4) {
-        flush(Render2D::session.curCmdBuf);
+        flush(Render2D::session.curCmdBuf, FRender2dFlushState{
+                         .windowWidth  = Render2D::session.windowWidth,
+                         .windowHeight = Render2D::session.windowHeight,
+                         .view         = Render2D::session.view,
+                         .viewProjection = Render2D::session.viewProjection,
+                     });
     }
 
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
@@ -985,7 +1051,12 @@ void FQuadRender::drawRoundedRect(const glm::vec3& position,
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
     if (vertexCount >= MaxVertexCount - 4) {
-        flush(Render2D::session.curCmdBuf);
+        flush(Render2D::session.curCmdBuf, FRender2dFlushState{
+                         .windowWidth  = Render2D::session.windowWidth,
+                         .windowHeight = Render2D::session.windowHeight,
+                         .view         = Render2D::session.view,
+                         .viewProjection = Render2D::session.viewProjection,
+                     });
     }
 
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
@@ -1006,23 +1077,8 @@ void FQuadRender::drawWorldTextureInternal(const glm::vec3&            center,
                                            const glm::vec4&            tint,
                                            const glm::vec2&            uvScale)
 {
-    const glm::vec3 normalizedDirection = glm::length2(direction) > std::numeric_limits<float>::epsilon()
-                                            ? glm::normalize(direction)
-                                            : glm::vec3(0.0f, -1.0f, 0.0f);
-
-    for (int i = 0; i < 4; i++) {
-        *worldVertexPtr = FQuadRender::Vertex{
-            .pos         = glm::vec3(FQuadRender::vertices[i]),
-            .color       = tint,
-            .texCoord    = FQuadRender::defaultTexcoord[i] * uvScale,
-            .textureRef  = textureRef.encode(),
-            .worldCenter = center,
-            .worldDirection = normalizedDirection,
-            .worldSize   = size,
-        };
-        ++worldVertexPtr;
-    }
-
+    EmitWorldQuad(worldVertexPtr, center, direction, size, textureRef, tint, uvScale);
+    worldVertexPtr += 4;
     worldVertexCount += 4;
     worldIndexCount += 6;
 }
@@ -1038,7 +1094,12 @@ void FQuadRender::drawTexture(const glm::vec3& position,
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
     if (vertexCount >= MaxVertexCount - 4) {
-        flush(Render2D::session.curCmdBuf);
+        flush(Render2D::session.curCmdBuf, FRender2dFlushState{
+                         .windowWidth  = Render2D::session.windowWidth,
+                         .windowHeight = Render2D::session.windowHeight,
+                         .view         = Render2D::session.view,
+                         .viewProjection = Render2D::session.viewProjection,
+                     });
     }
 
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
@@ -1058,7 +1119,12 @@ void FQuadRender::drawTexture(const glm::mat4& transform,
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
     if (vertexCount >= MaxVertexCount - 4) {
-        flush(Render2D::session.curCmdBuf);
+        flush(Render2D::session.curCmdBuf, FRender2dFlushState{
+                         .windowWidth  = Render2D::session.windowWidth,
+                         .windowHeight = Render2D::session.windowHeight,
+                         .view         = Render2D::session.view,
+                         .viewProjection = Render2D::session.viewProjection,
+                     });
     }
 
     drawTextureInternal(transform,
@@ -1076,7 +1142,12 @@ void FQuadRender::drawWorldTexture(const glm::vec3&            center,
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
     if (worldVertexCount >= MaxVertexCount - 4) {
-        flushWorld(Render2D::session.curCmdBuf);
+        flushWorld(Render2D::session.curCmdBuf, FRender2dFlushState{
+            .windowWidth  = Render2D::session.windowWidth,
+            .windowHeight = Render2D::session.windowHeight,
+            .view         = Render2D::session.view,
+            .viewProjection = Render2D::session.viewProjection,
+        });
     }
 
     drawWorldTextureInternal(center, direction, size, findOrAddTexture(texture), tint, {uvScale.x, uvScale.y});
@@ -1091,7 +1162,12 @@ void FQuadRender::drawSubTexture(const glm::vec3& position,
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
     if (vertexCount >= MaxVertexCount - 4) {
-        flush(Render2D::session.curCmdBuf);
+        flush(Render2D::session.curCmdBuf, FRender2dFlushState{
+                         .windowWidth  = Render2D::session.windowWidth,
+                         .windowHeight = Render2D::session.windowHeight,
+                         .view         = Render2D::session.view,
+                         .viewProjection = Render2D::session.viewProjection,
+                     });
     }
 
     drawSubTextureInternal(position, size, texture, tint, uvRect, ETextureSampleMode::Coverage);
@@ -1107,7 +1183,12 @@ void FQuadRender::drawSubTextureInternal(const glm::vec3& position,
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
     if (vertexCount >= MaxVertexCount - 4) {
-        flush(Render2D::session.curCmdBuf);
+        flush(Render2D::session.curCmdBuf, FRender2dFlushState{
+                         .windowWidth  = Render2D::session.windowWidth,
+                         .windowHeight = Render2D::session.windowHeight,
+                         .view         = Render2D::session.view,
+                         .viewProjection = Render2D::session.viewProjection,
+                     });
     }
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
                       glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));

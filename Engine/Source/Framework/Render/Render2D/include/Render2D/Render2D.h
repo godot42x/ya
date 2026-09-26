@@ -13,6 +13,7 @@
 
 #include "Render2D/LineRender.h"
 #include "Render2D/QuadRender.h"
+#include "Render2D/Render2DList.h"
 
 #include <array>
 #include <vector>
@@ -22,17 +23,6 @@ namespace ya
 
 struct IRender;
 struct Font;
-
-/// Which Render2D backend currently holds unflushed geometry. The session
-/// keeps at most one of these live so GPU submit order matches emit order
-/// across screen quads, world quads, and debug lines.
-enum class ERender2dBatchKind : uint8_t
-{
-    None = 0,
-    ScreenQuad,
-    WorldQuad,
-    Line,
-};
 
 /// Diagnostics state adjusted live from the runtime tools panel. These are
 /// draw-time parameters only; they are not part of a recording session.
@@ -52,6 +42,11 @@ struct FRender2dDebugState
 /// State of one Render2D recording session, valid between begin()/end().
 /// After end() the command buffer is cleared; any draw call outside a session
 /// is asserted instead of silently no-op'ing.
+///
+/// Legacy immediate-mode session. Product code records through
+/// `Render2DList` + `Render2D::recordRender2DList`; this struct only backs
+/// the transitional facade and is removed once the last immediate caller is
+/// migrated.
 struct FRender2dSession
 {
     ICommandBuffer*  curCmdBuf   = nullptr;
@@ -69,21 +64,11 @@ struct FRender2dSession
     ERender2dBatchKind  pendingKind       = ERender2dBatchKind::None;
     uint32_t            debugClipLogCount = 0;
     uint32_t            debugScreenFlushCount = 0;
-    uint32_t            debugWorldFlushCount = 0;
+    uint32_t            debugWorldFlushCount  = 0;
     uint32_t            screenFlushCount      = 0;
     uint32_t            worldFlushCount       = 0;
     uint32_t            screenVertexCount     = 0;
     uint32_t            screenIndexCount      = 0;
-};
-
-/// GPU counters from the most recently ended Render2D session. Independent of
-/// `bLogFlushBatches` (that flag only limits log lines).
-struct FRender2dFrameStats
-{
-    uint32_t screenFlushCount  = 0;
-    uint32_t worldFlushCount   = 0;
-    uint32_t screenVertexCount = 0;
-    uint32_t screenIndexCount  = 0;
 };
 
 struct FRender2dContext
@@ -167,7 +152,7 @@ struct YA_RENDER_2D_API Render2D
     // symbol cannot be imported from another DLL).
     [[nodiscard]] static FRender2dDebugState& debugState();
     [[nodiscard]] static FRender2dSession&    sessionState();
-    [[nodiscard]] static const FRender2dFrameStats& lastFrameStats();
+    [[nodiscard]] static const FQuadRender::FRender2dFrameStats& lastFrameStats();
 
     static void makeSprite(const glm::vec3& position,
                            const glm::vec2& size,
@@ -260,6 +245,14 @@ struct YA_RENDER_2D_API Render2D
         beginBatch(ERender2dBatchKind::ScreenQuad);
         quadRender()->drawRectFilledMultiColor(position, size, colors, texture);
     }
+
+    /// Turn a recorded 2D draw list into GPU work inside `ctx`: resolves the
+    /// flight slot, binds the pass's per-slot/per-frame resources, re-keys the
+    /// list's local texture table into the pass binding table, and replays the
+    /// command stream through the same flush boundaries the immediate path
+    /// used (kind change, clip change, region and texture-table capacity).
+    [[nodiscard]] static FQuadRender::FRender2dFrameStats recordRender2DList(const Render2DList& list,
+                                                                            const FRender2dContext& ctx);
 };
 
 } // namespace ya

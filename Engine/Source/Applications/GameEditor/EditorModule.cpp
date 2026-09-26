@@ -626,9 +626,9 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                               snapshot,
                               targetExtent,
                               ERender2DComposePassKind::EditorToolSurface,
-                              [&]() {
+                              [&session, &snapshot, &targetExtent](Render2DList& composeList) {
                                   if (WidgetTree* tree = session->tree()) {
-                                      runGuiFrameInspectorOverlay(*tree, snapshot, targetExtent);
+                                      runGuiFrameInspectorOverlay(*tree, snapshot, composeList, targetExtent);
                                   }
                               });
     }

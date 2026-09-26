@@ -48,24 +48,24 @@ namespace
     return intersectRects(rect, fbRect);
 }
 
-void addFilled(const glm::vec2& pos, const glm::vec2& size, const glm::vec4& color)
+void addFilled(Render2DList& list, const glm::vec2& pos, const glm::vec2& size, const glm::vec4& color)
 {
     if (size.x <= 0.0f || size.y <= 0.0f) {
         return;
     }
-    Render2D::makeSprite(glm::vec3(pos, 0.0f), size, nullptr, color);
+    list.makeSprite(glm::vec3(pos, 0.0f), size, nullptr, color);
 }
 
-void addOutline(const Rect2D& rect, const glm::vec4& color)
+void addOutline(Render2DList& list, const Rect2D& rect, const glm::vec4& color)
 {
     constexpr float t = 1.0f;
     if (rect.extent.x <= 0.0f || rect.extent.y <= 0.0f) {
         return;
     }
-    addFilled(rect.pos, {rect.extent.x, t}, color);
-    addFilled({rect.pos.x, rect.pos.y + std::max(0.0f, rect.extent.y - t)}, {rect.extent.x, t}, color);
-    addFilled(rect.pos, {t, rect.extent.y}, color);
-    addFilled({rect.pos.x + std::max(0.0f, rect.extent.x - t), rect.pos.y}, {t, rect.extent.y}, color);
+    addFilled(list, rect.pos, {rect.extent.x, t}, color);
+    addFilled(list, {rect.pos.x, rect.pos.y + std::max(0.0f, rect.extent.y - t)}, {rect.extent.x, t}, color);
+    addFilled(list, rect.pos, {t, rect.extent.y}, color);
+    addFilled(list, {rect.pos.x + std::max(0.0f, rect.extent.x - t), rect.pos.y}, {t, rect.extent.y}, color);
 }
 
 [[nodiscard]] glm::vec4 overdrawColor(uint16_t coverage)
@@ -131,7 +131,7 @@ void stampOverdrawGrid(const UIFrameSnapshot& snapshot,
 
 void captureGuiComposeInspector(FGuiFrameInspectorRecord& record,
                                 const UIFrameSnapshot&    snapshot,
-                                const FRender2dFrameStats& gpuStats)
+                                const FQuadRender::FRender2dFrameStats& gpuStats)
 {
     const FUIFrameComposeReplayStats model = measureUIFrameComposeReplay(snapshot);
     record.modelScreenFlush = model.screenFlushCount;
@@ -163,7 +163,9 @@ void captureGuiOverdrawInspector(FGuiFrameInspectorRecord& record,
 
 void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& record,
                                   const UIFrameSnapshot&          snapshot,
-                                  const GuiPerfStats&             perf)
+                                  const GuiPerfStats&             perf,
+                                  Render2DList&                   list,
+                                  Extent2D                        framebuffer)
 {
 #if defined(YA_PROFILING_DISABLED)
     (void)record;
@@ -178,8 +180,7 @@ void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& record,
         std::vector<uint16_t> grid;
         float                 unusedFactor = 0.0f;
         constexpr uint32_t    kGrid = 64;
-        const Extent2D fb{.width = Render2D::sessionState().windowWidth,
-                          .height = Render2D::sessionState().windowHeight};
+        const Extent2D fb = framebuffer;
         stampOverdrawGrid(snapshot, fb, kGrid, kGrid, grid, unusedFactor);
         const float cellW = static_cast<float>(fb.width) / static_cast<float>(kGrid);
         const float cellH = static_cast<float>(fb.height) / static_cast<float>(kGrid);
@@ -189,7 +190,7 @@ void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& record,
                 if (coverage == 0) {
                     continue;
                 }
-                addFilled({static_cast<float>(x) * cellW, static_cast<float>(y) * cellH},
+                addFilled(list, {static_cast<float>(x) * cellW, static_cast<float>(y) * cellH},
                           {cellW, cellH},
                           overdrawColor(coverage));
             }
@@ -207,18 +208,17 @@ void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& record,
             Rect2D px = record.rebuiltRects[i].layoutRect;
             px.pos    = record.targetOffset + px.pos * record.targetScale;
             px.extent = px.extent * record.targetScale;
-            addOutline(px, kColors[i % 4]);
+            addOutline(list, px, kColors[i % 4]);
         }
     }
 
     if (inspectorChannelOn(EGuiFrameInspectorChannel::Hud)) {
-        const Extent2D fb{.width = Render2D::sessionState().windowWidth,
-                          .height = Render2D::sessionState().windowHeight};
+        const Extent2D fb = framebuffer;
         Rect2D hud = guiFrameInspectorHudRect();
         hud.pos.x = std::clamp(hud.pos.x, 0.0f, std::max(0.0f, static_cast<float>(fb.width) - hud.extent.x));
         hud.pos.y = std::clamp(hud.pos.y, 0.0f, std::max(0.0f, static_cast<float>(fb.height) - hud.extent.y));
         setGuiFrameInspectorHudPos(hud.pos);
-        addFilled(hud.pos, hud.extent, {0.05f, 0.06f, 0.08f, 0.72f});
+        addFilled(list, hud.pos, hud.extent, {0.05f, 0.06f, 0.08f, 0.72f});
         auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 14);
         if (font) {
             const glm::vec4 color{0.95f, 0.96f, 0.90f, 1.0f};
@@ -237,36 +237,33 @@ void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& record,
                                                   record.meanCoverage,
                                                   record.maxCoverage,
                                                   record.overdrawFactor);
-            Render2D::makeText(line0, glm::vec3(hud.pos.x + 6.0f, hud.pos.y + 4.0f, 0.0f), color, font.get());
-            Render2D::makeText(line1, glm::vec3(hud.pos.x + 6.0f, hud.pos.y + 20.0f, 0.0f), color, font.get());
-            Render2D::makeText(line2, glm::vec3(hud.pos.x + 6.0f, hud.pos.y + 36.0f, 0.0f), color, font.get());
+            list.makeText(line0, glm::vec3(hud.pos.x + 6.0f, hud.pos.y + 4.0f, 0.0f), color, font.get());
+            list.makeText(line1, glm::vec3(hud.pos.x + 6.0f, hud.pos.y + 20.0f, 0.0f), color, font.get());
+            list.makeText(line2, glm::vec3(hud.pos.x + 6.0f, hud.pos.y + 36.0f, 0.0f), color, font.get());
         }
     }
 #endif
 }
 
-void runGuiFrameInspectorOverlay(WidgetTree& tree, const UIFrameSnapshot& snapshot, Extent2D framebuffer)
+void runGuiFrameInspectorOverlay(WidgetTree& tree, const UIFrameSnapshot& snapshot, Render2DList& list, Extent2D framebuffer)
 {
 #if defined(YA_PROFILING_DISABLED)
     (void)tree;
     (void)snapshot;
+    (void)list;
     (void)framebuffer;
 #else
     if (!YA_GUI_INSPECTOR_IS_ENABLED()) {
         return;
     }
-    FGuiFrameInspectorRecord& record  = tree.getFrameInspectorRecord();
-    const FRender2dSession&   session = Render2D::sessionState();
+    FGuiFrameInspectorRecord& record = tree.getFrameInspectorRecord();
+    // Product content is already in the list; the overlay appends after the
+    // capture, so HUD GPU counts exclude overlay draws.
     captureGuiComposeInspector(record,
                                snapshot,
-                               FRender2dFrameStats{
-                                   .screenFlushCount  = session.screenFlushCount,
-                                   .worldFlushCount   = session.worldFlushCount,
-                                   .screenVertexCount = session.screenVertexCount,
-                                   .screenIndexCount  = session.screenIndexCount,
-                               });
+                               list.capturedStats());
     captureGuiOverdrawInspector(record, snapshot, framebuffer);
-    emitGuiFrameInspectorOverlay(record, snapshot, tree.getPerfStats());
+    emitGuiFrameInspectorOverlay(record, snapshot, tree.getPerfStats(), list, framebuffer);
 #endif
 }
 

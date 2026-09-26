@@ -109,6 +109,33 @@ struct YA_RENDER_2D_API FQuadRender
         glm::mat4  view     = glm::mat4(1.0f);
     };
 
+    /// GPU counters from one recorded 2D list. The record step accumulates
+    /// them; `Render2D::lastFrameStats()` surfaces the most recent.
+    struct FRender2dFrameStats
+    {
+        uint32_t screenFlushCount  = 0;
+        uint32_t worldFlushCount   = 0;
+        uint32_t screenVertexCount = 0;
+        uint32_t screenIndexCount  = 0;
+    };
+
+    /// Everything a flush needs from the recording, passed in instead of read
+    /// from a global session: the record step resolves it once and updates the
+    /// clip per command. `stats`/the debug log counters are owned by the
+    /// record step and accumulate across its flushes.
+    struct FRender2dFlushState
+    {
+        uint32_t  windowWidth  = 0;
+        uint32_t  windowHeight = 0;
+        bool      bClipped     = false;
+        Rect2D    clip{};
+        glm::mat4 view           = glm::mat4(1.0f);
+        glm::mat4 viewProjection = glm::mat4(1.0f);
+        FRender2dFrameStats* stats               = nullptr;
+        uint32_t*            debugScreenFlushCount = nullptr;
+        uint32_t*            debugWorldFlushCount  = nullptr;
+    };
+
     IRender* _render = nullptr;
 
     glm::mat4 _screenOrthoProj = glm::mat4(1.0f);
@@ -233,10 +260,14 @@ struct YA_RENDER_2D_API FQuadRender
 
     bool shouldFlush() { return vertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
     bool shouldFlushWorld() { return worldVertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
-    void flush(ICommandBuffer* cmdBuf);
-    void flushWorld(ICommandBuffer* cmdBuf);
+    void flush(ICommandBuffer* cmdBuf, const FRender2dFlushState& state);
+    void flushWorld(ICommandBuffer* cmdBuf, const FRender2dFlushState& state);
     void resetTextureBatch();
     void flushForTextureOverflow(ICommandBuffer* cmdBuf);
+    /// Whether one more texture would overflow the per-record binding table
+    /// (the record step checks this before registering list textures and
+    /// flushes + resets instead of relying on the lazy overflow path).
+    [[nodiscard]] bool textureTableFull() const { return _textureBindings.size() >= TEXTURE_SET_SIZE; }
 
     void updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, const glm::mat4& viewProj, const glm::mat4& view);
     void updateResources(DescriptorSetHandle dsHandle);
@@ -247,6 +278,24 @@ struct YA_RENDER_2D_API FQuadRender
         return _passResources[static_cast<size_t>(_activePassSlot)].flights[_activeFlightIndex];
     }
     PassPipelines& activePassPipelines() { return _passPipelines[static_cast<size_t>(_activePassSlot)]; }
+
+    /// Pure CPU vertex emit, shared by the immediate draw path and the
+    /// Render2DList builder: `out` receives exactly 4 vertices. No state, no
+    /// GPU -- the destination decides where the vertices live.
+    static void EmitScreenQuad(Vertex*                         out,
+                               const glm::mat4&                transform,
+                               TextureRef                      textureRef,
+                               const std::array<glm::vec4, 4>& colorsYaOrder,
+                               const glm::vec2&                uvScale,
+                               const glm::vec2&                uvTranslation,
+                               const glm::vec3&                corner);
+    static void EmitWorldQuad(Vertex*          out,
+                              const glm::vec3& center,
+                              const glm::vec3& direction,
+                              const glm::vec2& size,
+                              TextureRef       textureRef,
+                              const glm::vec4& tint,
+                              const glm::vec2& uvScale);
 
   public:
     void drawTexture(const glm::vec3& position,
@@ -299,7 +348,11 @@ struct YA_RENDER_2D_API FQuadRender
                   Font*              font,
                   const glm::vec2&   scale = glm::vec2(1.0f));
 
-  private:
+  public:
+    /// Resolve (or lazily add) a texture's slot in the per-record binding
+    /// table. Public because the record step registers list textures through
+    /// it; the caller guarantees room (`textureTableFull()`) so the lazy
+    /// overflow flush inside never fires on the list path.
     TextureRef findOrAddTexture(ya::Ptr<Texture> texture, ETextureSampleMode mode = ETextureSampleMode::Coverage);
 
     void drawTextureInternal(const glm::mat4& transform,

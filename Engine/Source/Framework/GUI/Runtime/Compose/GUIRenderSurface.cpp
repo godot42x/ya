@@ -62,7 +62,7 @@ void GUIRenderSurface::record(ICommandBuffer*              cmdBuf,
                               RenderTexture*               depthTarget,
                               const UIFrameSnapshot*       uiFrameSnapshot,
                               FRender2DComposePassDesc     passDesc,
-                              const std::function<void()>& extraContent) const
+                              const std::function<void(Render2DList&)>& extraContent) const
 {
     if (!isValid()) {
         return;

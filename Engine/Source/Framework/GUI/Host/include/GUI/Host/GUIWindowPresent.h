@@ -53,7 +53,8 @@ struct FGUIPresentExtensionContext
 /// The one present sequence for every GUI window, main or extra. A window adds
 /// its own content at two named points, both optional and both receiving
 /// `FGUIPresentExtensionContext`:
-/// - `composeExtra` records inside the surface's compose pass (overlays);
+/// - `composeExtra` records inside the surface's compose pass (overlays); it
+///   receives the list the compose builds so overlays append to it;
 /// - `preSubmit` records after the compose pass and before the command buffer
 ///   ends -- anything that must land in the same submission (readback copies).
 void presentGuiSnapshot(FGUISurfacePresentResources&  resources,
@@ -62,7 +63,7 @@ void presentGuiSnapshot(FGUISurfacePresentResources&  resources,
                         Render2DPassSlot              passSlot,
                         bool                          bMinimized,
                         bool&                         bSwapchainRecreatePending,
-                        const std::function<void(const FGUIPresentExtensionContext&)>& composeExtra = {},
+                        const std::function<void(const FGUIPresentExtensionContext&, Render2DList&)>& composeExtra = {},
                         const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit    = {});
 
 [[nodiscard]] inline bool guiPresentationIndexValid(int32_t imageIndex,

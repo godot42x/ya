@@ -100,29 +100,29 @@ const char* composePassLabel(ERender2DComposePassKind kind)
     return "Render2D Compose";
 }
 
-void emitSnapshotItem(const UIFrameDrawItem& item)
+void emitSnapshotItem(Render2DList& list, const UIFrameDrawItem& item)
 {
     if (item.kind == UIFrameDrawItem::EKind::Sprite) {
         if (item.bPerVertexColor) {
-            Render2D::makeRectFilledMultiColor(glm::vec3(item.pos, 0.0f),
-                                               item.size,
-                                               item.vertexColors,
-                                               item.texture);
+            list.makeRectFilledMultiColor(glm::vec3(item.pos, 0.0f),
+                                          item.size,
+                                          item.vertexColors,
+                                          item.texture);
         }
         else if (item.cornerRadius > 0.0f && !item.texture) {
-            Render2D::drawRoundedRect(glm::vec3(item.pos, 0.0f),
-                                      item.size,
-                                      item.color,
-                                      item.cornerRadius);
+            list.drawRoundedRect(glm::vec3(item.pos, 0.0f),
+                                 item.size,
+                                 item.color,
+                                 item.cornerRadius);
         }
         else {
-            Render2D::makeSprite(glm::vec3(item.pos, 0.0f),
-                                 item.size,
-                                 item.texture,
-                                 item.color,
-                                 item.uvScale,
-                                 item.uvOffset,
-                                 item.bOpaqueSample);
+            list.makeSprite(glm::vec3(item.pos, 0.0f),
+                            item.size,
+                            item.texture,
+                            item.color,
+                            item.uvScale,
+                            item.uvOffset,
+                            item.bOpaqueSample);
         }
     }
     else if (item.kind == UIFrameDrawItem::EKind::Line) {
@@ -130,8 +130,8 @@ void emitSnapshotItem(const UIFrameDrawItem& item)
         const float     len   = glm::length(delta);
         if (len <= 1e-4f) {
             const glm::vec2 t = glm::vec2(item.lineThickness);
-            Render2D::makeSprite(glm::vec3(item.lineFrom - t * 0.5f, 0.0f),
-                                 t, nullptr, item.color);
+            list.makeSprite(glm::vec3(item.lineFrom - t * 0.5f, 0.0f),
+                            t, nullptr, item.color);
         }
         else {
             const glm::vec2 dir = delta / len;
@@ -141,30 +141,30 @@ void emitSnapshotItem(const UIFrameDrawItem& item)
                 glm::vec4(nrm.x * item.lineThickness, nrm.y * item.lineThickness, 0.0f, 0.0f),
                 glm::vec4(0.0f, 0.0f, 1.0f, 0.0f),
                 glm::vec4(item.lineFrom.x, item.lineFrom.y, 0.0f, 1.0f));
-            Render2D::makeSprite(transform, nullptr, item.color);
+            list.makeSprite(transform, nullptr, item.color);
         }
     }
     else {
-        Render2D::makeText(item.text,
-                           glm::vec3(item.pos, 0.0f),
-                           item.color,
-                           item.font.get(),
-                           item.textScale);
+        list.makeText(item.text,
+                      glm::vec3(item.pos, 0.0f),
+                      item.color,
+                      item.font.get(),
+                      item.textScale);
     }
 }
 
-void replaySnapshotItems(const UIFrameSnapshot& snapshot)
+void replaySnapshotItems(Render2DList& list, const UIFrameSnapshot& snapshot)
 {
     walkComposeClipRuns(snapshot,
-                        emitSnapshotItem,
+                        [&list](const UIFrameDrawItem& item) { emitSnapshotItem(list, item); },
                         nullptr,
                         FComposeClipRunSink{
-                            .pushClip = &Render2D::pushClipRect,
-                            .popClip  = &Render2D::popClipRect,
+                            .pushClip = [&list](const Rect2D& rect) { list.pushClipRect(rect); },
+                            .popClip  = [&list]() { list.popClipRect(); },
                         });
 }
 
-void drawEditorCanvasGrid(const Extent2D& rtExtent, const glm::vec2& uiScale, const glm::vec2& canvasPan, float canvasZoom)
+void drawEditorCanvasGrid(Render2DList& list, const Extent2D& rtExtent, const glm::vec2& uiScale, const glm::vec2& canvasPan, float canvasZoom)
 {
     // Canvas grid is authored in logical pixels and transformed by the
     // same pan/zoom as the UI nodes. This keeps right-drag panning and
@@ -188,20 +188,20 @@ void drawEditorCanvasGrid(const Extent2D& rtExtent, const glm::vec2& uiScale, co
         if (x < 0.0f) {
             continue;
         }
-        Render2D::makeSprite(glm::vec3(x, 0.0f, 0.0f),
-                             glm::vec2(1.0f, static_cast<float>(rtExtent.height)),
-                             white,
-                             gridColor);
+        list.makeSprite(glm::vec3(x, 0.0f, 0.0f),
+                        glm::vec2(1.0f, static_cast<float>(rtExtent.height)),
+                        white,
+                        gridColor);
     }
     for (int32_t i = firstY; i * gridStepY + panPxY < static_cast<float>(rtExtent.height); ++i) {
         const float y = i * gridStepY + panPxY;
         if (y < 0.0f) {
             continue;
         }
-        Render2D::makeSprite(glm::vec3(0.0f, y, 0.0f),
-                             glm::vec2(static_cast<float>(rtExtent.width), 1.0f),
-                             white,
-                             gridColor);
+        list.makeSprite(glm::vec3(0.0f, y, 0.0f),
+                        glm::vec2(static_cast<float>(rtExtent.width), 1.0f),
+                        white,
+                        gridColor);
     }
 }
 
@@ -219,7 +219,7 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
                                RenderTexture*                  depthTarget,
                                const UIFrameSnapshot*          uiFrameSnapshot,
                                const FRender2DComposePassDesc& passDesc,
-                               const std::function<void()>&    extraContent)
+                               const std::function<void(Render2DList&)>& extraContent)
 {
     if (!cmdBuf) {
         return;
@@ -289,29 +289,31 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
         .viewProjection = passDesc.camera.viewProjection,
     };
 
-    Render2D::begin(render2dCtx);
+    // The 2D content is built as a pure CPU value first, then turned into GPU
+    // work in one record step -- the same build/record split the 3D graph uses.
+    Render2DList list;
     if (passDesc.kind == ERender2DComposePassKind::EditorViewportCompose) {
         if (passDesc.sceneSourceTexture) {
-            Render2D::makeSprite(glm::vec3(0.0f, 0.0f, 0.0f),
-                                 glm::vec2(static_cast<float>(rtExtent.width), static_cast<float>(rtExtent.height)),
-                                 passDesc.sceneSourceTexture.get(),
-                                 glm::vec4(1.0f),
-                                 {1.0f, 1.0f},
-                                 {0.0f, 0.0f},
-                                 true);
+            list.makeSprite(glm::vec3(0.0f, 0.0f, 0.0f),
+                            glm::vec2(static_cast<float>(rtExtent.width), static_cast<float>(rtExtent.height)),
+                            passDesc.sceneSourceTexture.get(),
+                            glm::vec4(1.0f),
+                            {1.0f, 1.0f},
+                            {0.0f, 0.0f},
+                            true);
         }
     }
     if (passDesc.kind == ERender2DComposePassKind::EditorCanvasPreview) {
-        drawEditorCanvasGrid(rtExtent, uiScale, passDesc.canvasPan, passDesc.canvasZoom);
+        drawEditorCanvasGrid(list, rtExtent, uiScale, passDesc.canvasPan, passDesc.canvasZoom);
     }
     if (uiFrameSnapshot) {
         logSnapshotItemsOnce(uiFrameSnapshot);
-        replaySnapshotItems(*uiFrameSnapshot);
+        replaySnapshotItems(list, *uiFrameSnapshot);
     }
     if (extraContent) {
-        extraContent();
+        extraContent(list);
     }
-    Render2D::end();
+    Render2D::recordRender2DList(list, render2dCtx);
 
     cmdBuf->endRendering();
     cmdBuf->transitionImageLayoutAuto(target.getImage(), passDesc.finalLayout);
@@ -324,7 +326,7 @@ void replayUIFrameSnapshot(ICommandBuffer*          cmdBuf,
                            const UIFrameSnapshot&   snapshot,
                            Extent2D                 targetExtent,
                            ERender2DComposePassKind kind,
-                           const std::function<void()>& extraContent)
+                           const std::function<void(Render2DList&)>& extraContent)
 {
     if (!cmdBuf || targetExtent.width == 0 || targetExtent.height == 0) {
         return;
@@ -351,13 +353,13 @@ void replayUIFrameSnapshot(ICommandBuffer*          cmdBuf,
         .viewProjection = glm::mat4(1.0f),
     };
 
-    Render2D::begin(render2dCtx);
+    Render2DList list;
     logSnapshotItemsOnce(&snapshot);
-    replaySnapshotItems(snapshot);
+    replaySnapshotItems(list, snapshot);
     if (extraContent) {
-        extraContent();
+        extraContent(list);
     }
-    Render2D::end();
+    Render2D::recordRender2DList(list, render2dCtx);
 }
 
 } // namespace ya

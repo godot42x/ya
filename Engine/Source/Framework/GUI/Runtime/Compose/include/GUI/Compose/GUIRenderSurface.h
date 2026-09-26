@@ -76,7 +76,7 @@ public:
                 RenderTexture*                  depthTarget,
                 const UIFrameSnapshot*          uiFrameSnapshot,
                 FRender2DComposePassDesc        passDesc,
-                const std::function<void()>&    extraContent = {}) const;
+                const std::function<void(Render2DList&)>& extraContent = {}) const;
 
 private:
     GUIRenderSurface(std::shared_ptr<RenderTexture> image, EImageLayout::T finalLayout);

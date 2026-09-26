@@ -138,9 +138,9 @@ void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
                                   .canvasPan  = layer.getCanvasPan(),
                                   .canvasZoom = layer.getCanvasZoom(),
                               },
-                              [&]() {
+                              [&pSelectionRect, &uiScale, &offset](Render2DList& composeList) {
                                   if (pSelectionRect) {
-                                      recordEditorCanvasSelectionOverlay(*pSelectionRect, uiScale, offset);
+                                      recordEditorCanvasSelectionOverlay(composeList, *pSelectionRect, uiScale, offset);
                                   }
                               });
 }
@@ -173,7 +173,7 @@ void EditorViewportCompositor::composeWorldFallback(IRender&                    
         nullptr,
         nullptr,
         desc,
-        [&]() { recordEditorWorldViewportOverlays(layer, /*bDepthTestedWorld=*/false); });
+        [&layer](Render2DList& composeList) { recordEditorWorldViewportOverlays(composeList, layer, /*bDepthTestedWorld=*/false); });
 }
 
 void EditorViewportCompositor::composeWorldFromScene(IRender&                            render,
@@ -217,7 +217,7 @@ void EditorViewportCompositor::composeWorldFromScene(IRender&                   
         bAttachDepth ? depthOwner.get() : nullptr,
         nullptr,
         desc,
-        [&]() { recordEditorWorldViewportOverlays(layer, bAttachDepth); });
+        [&layer, bAttachDepth](Render2DList& composeList) { recordEditorWorldViewportOverlays(composeList, layer, bAttachDepth); });
 }
 
 std::shared_ptr<Texture> EditorViewportCompositor::resolveSourceTexture(const RenderTexture& source)

@@ -106,9 +106,11 @@ struct YA_RENDER_2D_API FLineRender
     void preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFormat, EFormat::T depthFormat);
     /// Lazily allocate one pass slot's buffers + descriptor sets (all flights).
     void ensureSlotResources(Render2DPassSlot passSlot);
-    /// `flightSlot` as in `FQuadRender::begin` (resolved by `Render2D::begin`).
+    /// `flightSlot` as in `FQuadRender::begin` (resolved by the record step).
     void begin(Render2DPassSlot passSlot, uint32_t flightSlot);
-    void flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj);
+    /// Flush the pending line segment region. `state` carries the recording's
+    /// viewport and world camera (see `FQuadRender::FRender2dFlushState`).
+    void flush(ICommandBuffer* cmdBuf, const FQuadRender::FRender2dFlushState& state);
 
     void addLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color);
     void addWireBox(const glm::mat4& model, const glm::vec3& halfExtent, const glm::vec4& color);

@@ -27,7 +27,7 @@ namespace
 /// the view I am looking through".
 constexpr glm::vec4 kSelectedCameraFrustumColor = {1.0f, 0.85f, 0.2f, 1.0f};
 
-void recordEntityBounds(Entity* entity, const glm::vec4& color)
+void recordEntityBounds(Render2DList& list, Entity* entity, const glm::vec4& color)
 {
     if (!entity || !entity->isValid()) {
         return;
@@ -68,12 +68,12 @@ void recordEntityBounds(Entity* entity, const glm::vec4& color)
         return;
     }
 
-    Render2D::makeWireBox(glm::translate(glm::mat4(1.0f), worldBounds.getCenter()),
+    list.makeWireBox(glm::translate(glm::mat4(1.0f), worldBounds.getCenter()),
                           (worldBounds.max - worldBounds.min) * 0.5f,
                           color);
 }
 
-void recordSelectedEntityBounds(const EditorLayer& layer)
+void recordSelectedEntityBounds(Render2DList& list, const EditorLayer& layer)
 {
     const auto& selections = layer.getSelections();
     if (selections.empty()) {
@@ -82,11 +82,11 @@ void recordSelectedEntityBounds(const EditorLayer& layer)
     constexpr glm::vec4 kPrimarySelectionColor   = {0.98f, 0.69f, 0.23f, 1.0f};
     constexpr glm::vec4 kSecondarySelectionColor = {0.78f, 0.60f, 0.28f, 1.0f};
     for (size_t i = 0; i < selections.size(); ++i) {
-        recordEntityBounds(selections[i], i == 0 ? kPrimarySelectionColor : kSecondarySelectionColor);
+        recordEntityBounds(list, selections[i], i == 0 ? kPrimarySelectionColor : kSecondarySelectionColor);
     }
 }
 
-void recordEditorWorldGrid()
+void recordEditorWorldGrid(Render2DList& list)
 {
     constexpr int   kHalf  = 20;
     constexpr float kStep  = 1.0f;
@@ -96,18 +96,18 @@ void recordEditorWorldGrid()
     const float     extent = static_cast<float>(kHalf) * kStep;
     for (int i = -kHalf; i <= kHalf; ++i) {
         const float t = static_cast<float>(i) * kStep;
-        Render2D::makeWorldLine({-extent, 0.0f, t}, {extent, 0.0f, t}, i == 0 ? axisX : minor);
-        Render2D::makeWorldLine({t, 0.0f, -extent}, {t, 0.0f, extent}, i == 0 ? axisZ : minor);
+        list.makeWorldLine({-extent, 0.0f, t}, {extent, 0.0f, t}, i == 0 ? axisX : minor);
+        list.makeWorldLine({t, 0.0f, -extent}, {t, 0.0f, extent}, i == 0 ? axisZ : minor);
     }
 }
 
-void recordCameraHud(EditorLayer& layer)
+void recordCameraHud(Render2DList& list, EditorLayer& layer)
 {
     const auto texts = layer.buildViewportCameraOverlayTexts();
     if (texts.empty()) {
         return;
     }
-    Render2D::makeSprite(glm::vec3(6.0f, 6.0f, 0.0f),
+    list.makeSprite(glm::vec3(6.0f, 6.0f, 0.0f),
                          glm::vec2(240.0f, 46.0f),
                          TextureLibrary::get().getWhiteTexture().get(),
                          glm::vec4(0.0f, 0.0f, 0.0f, 0.36f));
@@ -116,7 +116,7 @@ void recordCameraHud(EditorLayer& layer)
         if (!font) {
             continue;
         }
-        Render2D::makeText(text.text, glm::vec3(text.viewPos, text.depth), text.color, font.get());
+        list.makeText(text.text, glm::vec3(text.viewPos, text.depth), text.color, font.get());
     }
 }
 
@@ -125,7 +125,7 @@ void recordCameraHud(EditorLayer& layer)
 /// (CameraMeshLinkageRule); these lines stay procedural so they follow FOV
 /// without a new pipeline, and they belong to the editor's overlay pass because
 /// they report the editor's own selection.
-void recordSelectedCameraFrustum(EditorLayer& layer)
+void recordSelectedCameraFrustum(Render2DList& list, EditorLayer& layer)
 {
     Entity* selected = layer.getCameraPreviewEntity();
     if (!selected) {
@@ -142,11 +142,11 @@ void recordSelectedCameraFrustum(EditorLayer& layer)
                                     camera->getProjection(),
                                     kSelectedCameraFrustumColor);
     for (const RenderOverlayLine3D& line : lines) {
-        Render2D::makeWorldLine(line.from, line.to, line.color);
+        list.makeWorldLine(line.from, line.to, line.color);
     }
 }
 
-void recordPhysicsCollision(EditorLayer& layer)
+void recordPhysicsCollision(Render2DList& list, EditorLayer& layer)
 {
     Scene* scene = layer.getViewportInteractionScene();
     if (!scene) {
@@ -155,31 +155,31 @@ void recordPhysicsCollision(EditorLayer& layer)
     drawPhysicsCollisionDebug(
         *scene,
         PhysicsDebugLineCollector{
-            .sphere = [](const glm::vec3& center, float radius, const glm::vec4& color) {
-                Render2D::makeWireSphere(center, radius, color);
+            .sphere = [&list](const glm::vec3& center, float radius, const glm::vec4& color) {
+                list.makeWireSphere(center, radius, color);
             },
-            .box = [](const glm::mat4& model, const glm::vec3& halfExtent, const glm::vec4& color) {
-                Render2D::makeWireBox(model, halfExtent, color);
+            .box = [&list](const glm::mat4& model, const glm::vec3& halfExtent, const glm::vec4& color) {
+                list.makeWireBox(model, halfExtent, color);
             },
         });
 }
 
 } // namespace
 
-void recordEditorWorldViewportOverlays(EditorLayer& layer, bool bDepthTestedWorld)
+void recordEditorWorldViewportOverlays(Render2DList& list, EditorLayer& layer, bool bDepthTestedWorld)
 {
-    recordEditorWorldGrid();
-    layer.gizmo().recordOverlay();
-    recordCameraHud(layer);
-    recordSelectedCameraFrustum(layer);
+    recordEditorWorldGrid(list);
+    layer.gizmo().recordOverlay(list);
+    recordCameraHud(list, layer);
+    recordSelectedCameraFrustum(list, layer);
     if (!bDepthTestedWorld) {
         return;
     }
-    recordPhysicsCollision(layer);
-    recordSelectedEntityBounds(layer);
+    recordPhysicsCollision(list, layer);
+    recordSelectedEntityBounds(list, layer);
 }
 
-void recordEditorCanvasSelectionOverlay(const Rect2D& rect, const glm::vec2& uiScale, const glm::vec2& offset)
+void recordEditorCanvasSelectionOverlay(Render2DList& list, const Rect2D& rect, const glm::vec2& uiScale, const glm::vec2& offset)
 {
     // Outline + resize handles in target pixels. The widget rect uses the
     // same uiScale/offset as the preview snapshot so pan/zoom stay coherent.
@@ -194,13 +194,13 @@ void recordEditorCanvasSelectionOverlay(const Rect2D& rect, const glm::vec2& uiS
     }
     const glm::vec4 color(0.25f, 0.62f, 1.0f, 1.0f);
     const float     thickness = 2.0f;
-    Render2D::makeSprite(glm::vec3(pos.x, pos.y, 0.0f), glm::vec2(size.x, thickness), white, color);
-    Render2D::makeSprite(glm::vec3(pos.x, pos.y + size.y - thickness, 0.0f), glm::vec2(size.x, thickness), white, color);
-    Render2D::makeSprite(glm::vec3(pos.x, pos.y, 0.0f), glm::vec2(thickness, size.y), white, color);
-    Render2D::makeSprite(glm::vec3(pos.x + size.x - thickness, pos.y, 0.0f), glm::vec2(thickness, size.y), white, color);
+    list.makeSprite(glm::vec3(pos.x, pos.y, 0.0f), glm::vec2(size.x, thickness), white, color);
+    list.makeSprite(glm::vec3(pos.x, pos.y + size.y - thickness, 0.0f), glm::vec2(size.x, thickness), white, color);
+    list.makeSprite(glm::vec3(pos.x, pos.y, 0.0f), glm::vec2(thickness, size.y), white, color);
+    list.makeSprite(glm::vec3(pos.x + size.x - thickness, pos.y, 0.0f), glm::vec2(thickness, size.y), white, color);
     const float handleSize = 7.0f;
     const auto  drawHandle = [&](const glm::vec2& center) {
-        Render2D::makeSprite(glm::vec3(center.x - handleSize * 0.5f, center.y - handleSize * 0.5f, 0.0f),
+        list.makeSprite(glm::vec3(center.x - handleSize * 0.5f, center.y - handleSize * 0.5f, 0.0f),
                              glm::vec2(handleSize, handleSize),
                              white,
                              color);

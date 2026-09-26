@@ -9,6 +9,11 @@
 
 namespace ya
 {
+struct Render2DList;
+}
+
+namespace ya
+{
 
 struct App;
 struct Entity;
@@ -81,7 +86,7 @@ class EditorViewportGizmoController
     void updateDrag(const glm::vec2& localPoint);
     void endDrag();
     void cancelDrag();
-    void recordOverlay() const;
+    void recordOverlay(Render2DList& list) const;
     void setOperation(EEditorViewportGizmoOperation operation);
 
     [[nodiscard]] bool isActive() const { return _bDragging || _bHovered; }

@@ -50,7 +50,7 @@ void presentGuiSnapshot(FGUISurfacePresentResources&  resources,
                         Render2DPassSlot              passSlot,
                         bool                          bMinimized,
                         bool&                         bSwapchainRecreatePending,
-                        const std::function<void(const FGUIPresentExtensionContext&)>& composeExtra,
+                        const std::function<void(const FGUIPresentExtensionContext&, Render2DList&)>& composeExtra,
                         const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit)
 {
     if (!resources.render || !resources.present) {
@@ -163,7 +163,9 @@ void presentGuiSnapshot(FGUISurfacePresentResources&  resources,
             .passSlot              = passSlot,
             .logicalExtent = logicalExtent,
         },
-        composeExtra ? [&]() { composeExtra(extensionContext); } : std::function<void()>{});
+        composeExtra
+            ? [&extensionContext, &composeExtra](Render2DList& list) { composeExtra(extensionContext, list); }
+            : std::function<void(Render2DList&)>{});
     if (preSubmit) {
         preSubmit(extensionContext);
     }

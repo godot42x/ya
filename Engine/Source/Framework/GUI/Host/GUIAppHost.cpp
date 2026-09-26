@@ -1403,12 +1403,13 @@ void GUIWindowHost::presentSnapshot()
                        _impl->presentPassSlot,
                        _impl->bWindowMinimized,
                        _impl->bSwapchainRecreatePending,
-                       /*composeExtra=*/[this, &snapshot](const FGUIPresentExtensionContext& ctx)
+                       /*composeExtra=*/[this, &snapshot](const FGUIPresentExtensionContext& ctx, Render2DList& list)
                        {
-                           runGuiFrameInspectorOverlay(
-                               *_impl->tree,
-                               snapshot,
-                               Extent2D{.width = ctx.presentExtent.width, .height = ctx.presentExtent.height});
+                           runGuiFrameInspectorOverlay(*_impl->tree,
+                                                       snapshot,
+                                                       list,
+                                                       Extent2D{.width = ctx.presentExtent.width,
+                                                                .height = ctx.presentExtent.height});
                        },
                        preSubmit);
 

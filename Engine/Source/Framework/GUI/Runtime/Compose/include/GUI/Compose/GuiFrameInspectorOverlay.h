@@ -16,7 +16,7 @@ struct WidgetTree;
 /// GPU fields are compiled out of `YA_PROFILING_DISABLED` builds.
 YA_GUI_API void captureGuiComposeInspector(FGuiFrameInspectorRecord& record,
                                            const UIFrameSnapshot&    snapshot,
-                                           const FRender2dFrameStats& gpuStats);
+                                           const FQuadRender::FRender2dFrameStats& gpuStats);
 
 /// Occupancy-grid overdraw of snapshot items (target pixels). Empty snapshot
 /// or empty extent yields zeros.
@@ -29,13 +29,16 @@ YA_GUI_API void captureGuiOverdrawInspector(FGuiFrameInspectorRecord& record,
 /// Never writes into `snapshot.items`.
 YA_GUI_API void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& record,
                                              const UIFrameSnapshot&          snapshot,
-                                             const GuiPerfStats&             perf);
+                                             const GuiPerfStats&             perf,
+                                             Extent2D                        framebuffer);
 
-/// Capture compose/overdraw stats from the live session (product replay already
-/// flushed) and emit the overlay. No-op when the inspector is off or compiled
-/// out. Call from `extraContent` so HUD GPU counts exclude overlay draws.
+/// Capture compose/overdraw stats from the product content already in `list`
+/// (the overlay appends after the capture, so HUD GPU counts exclude overlay
+/// draws) and emit the overlay. No-op when the inspector is off or compiled
+/// out. Call from `extraContent`.
 YA_GUI_API void runGuiFrameInspectorOverlay(WidgetTree&            tree,
                                             const UIFrameSnapshot& snapshot,
+                                            Render2DList&          list,
                                             Extent2D               framebuffer);
 
 } // namespace ya

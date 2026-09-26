@@ -145,7 +145,7 @@ float gizmoHandlePixels(bool highlighted, bool pressed)
     return kViewportGizmoHandlePixels;
 }
 
-void drawScreenLine(const glm::vec2& from,
+void drawScreenLine(Render2DList& list, const glm::vec2& from,
                     const glm::vec2& to,
                     const glm::vec4& color,
                     float            thickness,
@@ -162,10 +162,11 @@ void drawScreenLine(const glm::vec2& from,
         glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 0.0f, 1.0f)) *
         glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -thickness * 0.5f, 0.0f)) *
         glm::scale(glm::mat4(1.0f), glm::vec3(len, thickness, 1.0f));
-    Render2D::makeSprite(transform, white, color);
+    list.makeSprite(transform, white, color);
 }
 
-void drawScreenCircleOutline(const glm::vec2& center,
+void drawScreenCircleOutline(Render2DList& list,
+                             const glm::vec2& center,
                              float            radius,
                              const glm::vec4& color,
                              float            thickness,
@@ -177,12 +178,12 @@ void drawScreenCircleOutline(const glm::vec2& center,
         const float     angle = (2.0f * std::numbers::pi_v<float>) * static_cast<float>(i) /
                             static_cast<float>(kSegments);
         const glm::vec2 next = center + glm::vec2(std::cos(angle), std::sin(angle)) * radius;
-        drawScreenLine(prev, next, color, thickness, white);
+        drawScreenLine(list, prev, next, color, thickness, white);
         prev = next;
     }
 }
 
-void drawHatchedAxis(const glm::vec2& origin,
+void drawHatchedAxis(Render2DList& list, const glm::vec2& origin,
                      const glm::vec2& end,
                      const glm::vec4& color,
                      Texture*         white)
@@ -199,7 +200,7 @@ void drawHatchedAxis(const glm::vec2& origin,
         if (startT >= len) {
             break;
         }
-        drawScreenLine(origin + dir * startT,
+        drawScreenLine(list, origin + dir * startT,
                        origin + dir * std::min(endT, len),
                        color,
                        1.5f,
@@ -746,7 +747,7 @@ void EditorViewportGizmoController::setOperation(EEditorViewportGizmoOperation o
     }
 }
 
-void EditorViewportGizmoController::recordOverlay() const
+void EditorViewportGizmoController::recordOverlay(Render2DList& list) const
 {
     YA_PROFILE_FUNCTION();
     if (!hasViewportGizmoSelection()) {
@@ -783,7 +784,7 @@ void EditorViewportGizmoController::recordOverlay() const
                 glm::vec2 screen{};
                 const bool bOk = projectWorldToViewport(_hostState, world, screen);
                 if (bOk && bPrev) {
-                    drawScreenLine(prevScreen, screen, color, thickness, white);
+                    drawScreenLine(list, prevScreen, screen, color, thickness, white);
                 }
                 prevScreen = screen;
                 bPrev      = bOk;
@@ -801,18 +802,18 @@ void EditorViewportGizmoController::recordOverlay() const
         const glm::vec4 color       = gizmoAxisColor(axis.axis, highlighted, pressed);
         const float     thickness   = gizmoLineThickness(highlighted, pressed);
         const float     handle      = gizmoHandlePixels(highlighted, pressed);
-        drawScreenLine(frame->originScreen, axis.screenEnd, color, thickness, white);
+        drawScreenLine(list, frame->originScreen, axis.screenEnd, color, thickness, white);
         if (axis.bReversed) {
-            drawHatchedAxis(frame->originScreen, axis.screenEnd, color, white);
-            drawScreenCircleOutline(axis.screenEnd, handle * 0.55f, color, std::max(1.5f, thickness * 0.7f), white);
+            drawHatchedAxis(list, frame->originScreen, axis.screenEnd, color, white);
+            drawScreenCircleOutline(list, axis.screenEnd, handle * 0.55f, color, std::max(1.5f, thickness * 0.7f), white);
         }
         else {
-            Render2D::makeSprite(glm::vec3(axis.screenEnd.x - handle * 0.5f,
-                                           axis.screenEnd.y - handle * 0.5f,
-                                           0.0f),
-                                 glm::vec2(handle, handle),
-                                 white,
-                                 color);
+            list.makeSprite(glm::vec3(axis.screenEnd.x - handle * 0.5f,
+                                      axis.screenEnd.y - handle * 0.5f,
+                                      0.0f),
+                            glm::vec2(handle, handle),
+                            white,
+                            color);
         }
     }
 }
