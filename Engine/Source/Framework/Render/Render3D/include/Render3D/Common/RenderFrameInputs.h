@@ -32,7 +32,13 @@ struct UIFrameSnapshot;
 struct FramePacket
 {
     uint32_t flightIndex = 0;
-    uint64_t frameIndex  = 0;
+    /// The product tick this frame belongs to (`App::_hostTick`): the app's
+    /// clock, the axis UBO `frameIdx` and animations run on. Not a GPU sync
+    /// fact and not the device's frame ordinal (`IRender::recordedFrameIndex`)
+    /// -- the two counters advance 1:1 in a live window today, but they answer
+    /// different questions and diverge the moment rendering is skipped or
+    /// headless.
+    uint64_t hostTick    = 0;
     float    deltaTime   = 0.0f;
     /// Seconds since the host clock started -- the value the shader-facing
     /// frame UBO carries as `time`. Not the same as `deltaTime`.

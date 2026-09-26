@@ -23,23 +23,33 @@ namespace ya
 
 struct INativeWindow;
 
-/// Maximum number of frames that can be in-flight simultaneously.
-/// UBOs and descriptor sets that change per-frame must be allocated in arrays
-/// of this size. Shared by the 2D batch renderer and the 3D render stages.
+/// Capacity upper bound of every per-frame ring: UBOs and descriptor sets that
+/// change per-frame are allocated in arrays of this size. Shared by the 2D
+/// batch renderer and the 3D render stages. It bounds nothing at runtime --
+/// `kFramesInFlight` is the ring size; this only promises the tables are big
+/// enough for any ring this build can configure.
 constexpr uint32_t MAX_FLIGHTS_IN_FLIGHT = 2;
 
-/// How many frames the device actually keeps in flight. This is the depth of
-/// every per-frame GPU ring: each presentation surface's acquire/flight ring
-/// (image-available semaphores + in-flight fences) and the device's GPU-timing
-/// query ring. One means "beginning frame N waits frame N-1's work on that
-/// surface"; it also bounds which slot of any per-frame ring a recording may
-/// use, which is why `MAX_FLIGHTS_IN_FLIGHT` tables in production only ever
-/// touch slot 0.
+/// How many frames the device actually keeps in flight: the ONE ring-size
+/// source for the whole engine. Every per-frame ring derives its size or its
+/// slot from this (via `IRender::framesInFlight()` / the device frame ordinal):
+/// the device's frame fences and GPU-timing ring, each presentation surface's
+/// acquire ring (image-available semaphores), and the Render3D flight slot
+/// (`resolveFlightIndex`). One means "beginning frame N waits frame N-1's work
+/// on that surface"; it also bounds which slot of any per-frame ring a
+/// recording may use, which is why `MAX_FLIGHTS_IN_FLIGHT` tables in
+/// production only ever touch slot 0.
 ///
-/// Raising this is the CPU/GPU-overlap decision, not a rename: it must raise
-/// every ring above together and verify that the higher slots really rotate
-/// (see `.agent/plan/render-view-family/temporal_semantics.md` M4).
+/// This is NOT the swapchain image count and NOT a per-window quantity: it is
+/// the device's CPU/GPU-overlap depth, shared by every window. Swapchain image
+/// counts are negotiated with the presentation engine per surface and index
+/// images, not frames. Raising this is the overlap decision, not a rename: it
+/// must raise every ring above together and verify that the higher slots
+/// really rotate (see `.agent/plan/render-view-family/temporal_semantics.md` M4).
 constexpr uint32_t kFramesInFlight = 1;
+
+static_assert(kFramesInFlight <= MAX_FLIGHTS_IN_FLIGHT,
+              "the device ring must fit inside every per-frame table's capacity");
 
 // using slang_types::Common::Limits::MAX_POINT_LIGHTS;
 using slang_types::Common::Limits::MAX_BONE_COUNT;

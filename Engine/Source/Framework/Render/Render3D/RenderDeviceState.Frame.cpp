@@ -34,11 +34,14 @@ bool RenderDeviceState::beginFrameCommandBuffer(const RenderFramePlan& plan, std
         _render->beginFrameGpuTiming(cmdBuf.get());
     }
 
-    if (!_submissions.acquire(flightIndex, plan.frame.frameIndex, cmdBuf.get())) {
+    // The frame token is this recording's generation on the slot: the product
+    // tick it belongs to. A new tick on the same flight drops the previous
+    // keepalives; the same token is idempotent until finish().
+    if (!_submissions.acquire(flightIndex, plan.frame.hostTick, cmdBuf.get())) {
         YA_CORE_ERROR("Recording flight {} failed to begin a live submission", flightIndex);
         return false;
     }
-    if (!_viewTargets.beginPublication(flightIndex, plan.frame.frameIndex)) {
+    if (!_viewTargets.beginPublication(flightIndex, plan.frame.hostTick)) {
         YA_CORE_ERROR("Recording flight {} failed to begin view publication", flightIndex);
         return false;
     }

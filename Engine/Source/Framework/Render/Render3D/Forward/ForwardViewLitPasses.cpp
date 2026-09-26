@@ -413,7 +413,7 @@ void ForwardViewLitPasses::preparePhong(const RenderStageContext& ctx,
     outFrame.resolution = glm::ivec2(ctx.viewExtent.width, ctx.viewExtent.height);
     // Frame constants are stage-context facts, filled from the frame packet in
     // one place -- not a per-view copy the View's prepared data would carry.
-    outFrame.frameIdx   = static_cast<int32_t>(ctx.frameIndex);
+    outFrame.frameIdx   = static_cast<int32_t>(ctx.hostTick);
     outFrame.time       = ctx.timeSeconds;
     outFrame.cameraPos  = fd.cameraPos;
 

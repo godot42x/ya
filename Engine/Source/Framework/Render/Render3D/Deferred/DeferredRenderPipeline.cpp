@@ -1071,7 +1071,7 @@ void DeferredRenderPipeline::beginViewRecording(const RenderPipelineFrameContext
         .cmdBuf         = frame.cmdBuf,
         .frameData      = frame.view.frameData,
         .flightIndex    = frame.frame ? frame.frame->flightIndex : 0,
-        .frameIndex     = frame.frame ? frame.frame->frameIndex : 0,
+        .hostTick       = frame.frame ? frame.frame->hostTick : 0,
         .deltaTime      = frame.frame ? frame.frame->deltaTime : 0.0f,
         .timeSeconds    = frame.frame ? frame.frame->elapsedTimeSeconds : 0.0f,
         .viewExtent = {.width = vpW, .height = vpH},

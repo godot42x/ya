@@ -252,15 +252,15 @@ uint32_t RuntimeRenderContext::resolveFlightIndex(App& app) const
         return 0;
     }
 
-    // Which slot of a per-frame ring this recording may use: the device's frame
-    // ordinal modulo how many frames it keeps in flight. It used to read the
-    // primary surface's acquire-slot counter -- a swapchain detail that only
-    // worked because one window was assumed to be "the" window, and with one
-    // frame in flight it made every recording use slot 0 anyway. Raising
-    // `kFramesInFlight` is what would make these slots rotate (temporal_semantics
-    // M4), and that has to raise every ring above together.
-    const uint32_t framesInFlight = render->framesInFlight() > 0 ? render->framesInFlight() : 1u;
-    return static_cast<uint32_t>(render->recordedFrameIndex() % framesInFlight) % MAX_FLIGHTS_IN_FLIGHT;
+    // Which slot of the DEVICE's per-frame ring this recording may use: a pure
+    // function of the device frame ordinal. The ring size is the device's
+    // (`framesInFlight`); `MAX_FLIGHTS_IN_FLIGHT` is only that ring's table
+    // capacity, asserted to fit in RenderDefines.h -- there is no second ring
+    // to stay in sync with. Today the device keeps one frame in flight, so this
+    // is constant 0: a ring of size 1, not a bug. Per-surface rings (acquire
+    // slots) and swapchain image indices live on the surfaces and never enter
+    // this function.
+    return static_cast<uint32_t>(render->recordedFrameIndex() % render->framesInFlight());
 }
 
 void RuntimeRenderContext::declareViews(App& app, float dt, SceneRenderScheduler& scheduler)
@@ -355,7 +355,9 @@ RuntimeRenderContext::TickFrame RuntimeRenderContext::buildGameRenderFrame(
     // tick's clock and its render scale.
     tickFrame.frame = FramePacket{
         .flightIndex   = flightIndex,
-        .frameIndex    = App::_hostTick,
+        // The app's clock, not the device's frame ordinal: the UBO `frameIdx`
+        // and animations run on the product tick axis.
+        .hostTick      = App::_hostTick,
         .deltaTime     = dt,
         // The shader-facing frame UBO's `time`, one answer per frame -- it used
         // to be copied onto every View's prepared data as well.
