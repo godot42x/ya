@@ -1,5 +1,37 @@
 # Progress
 
+## 2026-09-26 — 计划一致性复审（仅改计划文档）
+
+### 本轮收敛
+
+- 保留已落地的 Render3D→GUI Compose 边界；feature matrix 改为 verified regression guard，
+  不再把删除 ViewCompose 或 FramePacket snapshot 当未来任务。
+- GUI Compose 与 Scene runtime sprite 各自拥有 graphics-pipeline owner/state contract；shader module、
+  几何、upload 和纹理缓存是否共享再按能力与生命周期证据决定。删除“pipeline 是否分开也待定”的模糊措辞，
+  同时不按 primitive 名称制造 shader/batch 层。
+- 撤回“World2D 必在 Forward/Deferred”“无 depth write”“bloom 后、tone-map 前”等预设。P0 必须用
+  混合场景结果冻结 Transform.z、sprite 排序、3D opaque/transparent 遮挡、blend/color encoding、
+  bloom/tone-map 规则；纯 2D 与空 workload 也要定义 clear 和 stage 成本。
+- World2D graph 仍可选为 active runtime graph 的可选 stage，或轻量 2D-only graph；不新增第二套
+  Scene scheduler/app loop。独立 graph 不再被“第三 renderer”禁令误伤。
+- 资源 resolve 责任改为 P0 审计项：先核对 TextureSlot、AssetManager、ResourceResolveSystem 的实际
+  owner，再确定唯一 pre-extraction resolved-binding producer；不让每个 View/renderer 各自 resolve。
+- 修正 hidden View 语义：不提交该 View 的 request/cull/order/pass，不表示同 Scene 其他可见 View 不做
+  共享 extraction，也不提前释放 registered View target。
+- 更新 game-ui-authoring 对应术语，避免把 Scene sprite workload 称作 World2D family；补充禁止仅用
+  pass 调用次数作为验收的要求。
+
+### 当前状态
+
+- P0 的 Render3D→GUI 边界已有实现与 parity/test 证据；P0 混合视觉契约、资源 resolve owner、纯 2D
+  graph 策略仍未冻结。
+- P1 Render2DList 值化已有独立历史记录；typed texture/draw contract、pipeline owner 落地状态仍需按
+  开工时工作区代码审计，不能把未提交改动自动视为完成。
+- 未改运行时代码，未运行 build/test；本轮检查计划一致性，不构成代码 checkpoint。
+- 当前工作区存在其他 shader/Render2D 改动，本轮未覆盖、暂存或提交。
+- 下一步：先填 P0-contract-matrix 的混合场景预期结果和证据，再开 P0/P1 实施；如果无法定义某个 MVP
+  遮挡场景，写明功能限制，不用模糊 pass 顺序掩盖。
+
 ## 2026-09-26 — Architecture review（本轮未改运行时代码）
 
 ### 保留的结论
@@ -156,4 +188,54 @@ build/record 分割），顺带完成了 P0 工作项 1/2 的审计目标：
 - capability matrix、textureRef typed 化（Phase 1 §4.2/4.3）、shader 拆分决策；
   World2D workload 与 Sprite2DComponent（Phase 3/4）；GameUI record packet 的
   结构化封装（等 Phase 4 一起定，本期 snapshot 走显式参数）。
+
+---
+
+## 2026-09-26 — P1 完成：shader/顶点布局按归属拆分 + textureRef typed 化
+
+Phase 1 §4.3（强制项：删除 textureRef 高位 bit 隐式协议）与 §4.2（capability matrix
+作为拆分依据）落地。引擎先例校准（用户拍板）：Godot 的 canvas 统一（一切 2D 同管线）
+与我们的两个硬约束冲突（World2D 需与 World3D 深度共存；Render3D 不得依赖 GUI），采用
+**UE 形状**——Slate 式 GUI compose shader 与场景 2D shader 分开。
+
+### 已落地
+
+- `Sprite2D.slang` 拆两个文件：`Sprite2DScreen.slang`（GUI compose 四类 target：
+  Coverage/Sdf/Opaque 采样 + rounded SDF + multicolor）与 `Sprite2DWorld.slang`
+  （场景 billboard 展开 + UV Y-flip，无 corner SDF 分支、无屏幕分支）。
+- 顶点布局拆分：`FQuadRender::Vertex` 拆为 `ScreenVertex`（屏空间，无 world 死载荷
+  32B）与 `WorldVertex`（billboard，无 corner 死载荷）；screen/world 两条管线各自
+  独立的属性注册与 slang stage files；`buildQuadWorldPipelineCI` 补上
+  `buildQuadWorldVertexAttributes`（漏接曾导致 VUID-07904 管线创建失败）。
+- **textureRef typed 化**：`kTextureIndexMask/kTextureModeShift/encode()` 删除，顶点
+  改为显式 `textureSlot` + `sampleMode` 两个字段；shader 侧两个
+  `nointerpolation uint` 直读（mode 值经 SAMPLE_MODE_* 编译 define 传入，枚举单一
+  来源）；record 步纹理重键只写 textureSlot，sampleMode 逐字节原样拷贝。
+- `Render2D::recordRender2DList` 的 quad copy 拆成 screen/world 两条显式路径
+  （typed 顶点类型不同），`emitted` 计数驱动容量分段；capacity flush 语义保留
+  （区域满 → flush 当前区域 → 同命令在新区域继续）。
+
+### 过程中抓到的两个真 bug（parity 抓到）
+
+1. **批边界丢失**：record 步最初只按 kind 变化 flush，同 kind 不同 clip 的连续命令
+   被合并进一个 region draw，整批用了最后一个 scissor（面板被按钮的裁剪框裁掉，
+   35995 像素差异）。修成"clip 变化也是批边界"。
+2. **quad 跳号**：copy 循环里 srcIndex 同时用了推进中的 src 指针和 q*4，每迭代跨 8
+   顶点，最后一条命令读到数组尾部之外（90 帧段错误，frame 10 不现形因为字形少）。
+   修成 emitted 计数单驱动。修后 parity 恢复基线。
+
+### 证据
+
+- `ya-testing` 1314 passed / 0 failed；parity 两图 md5
+  `c775245ae636f15b41da8485319a2267` 与基线一致；GUIWorkbench `--smoke-actions`
+  PASS；editor smoke exit=0。
+- `rg "kTextureIndexMask|kTextureModeShift|textureRef"` 产品代码零命中（TextureSlot
+  序列化字段同名是另一域，不受影响）。
+
+### 尚未执行
+
+- capability matrix 结论：**不新增 shader/pipeline 拆分**（screen 一条服务四类
+  target；世界内容走场景侧管线）；world quad 管线零调用方（Phase 4 World2D 定义
+  其最终形状）；batch owner 保持一个（§4.4）。
+- World2D workload、Sprite2DComponent、正交 Camera（Phase 3/4）。
 
