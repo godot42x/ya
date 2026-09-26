@@ -119,3 +119,41 @@ build/record 分割），顺带完成了 P0 工作项 1/2 的审计目标：
 - 未创建 Sprite2DComponent/World2D pass/正交 CameraComponent/新 shader；未动
   game-ui-authoring 运行时代码。
 
+
+---
+
+## 2026-09-26 — P0 收尾：Render3D 对 GUI 的依赖归零
+
+对 P0 工作项 6 与 Phase 1 §4.1 前半的落地（架构 review 修正表第一行）。
+
+### 已落地
+
+- `Render3D/Common/ViewCompose.h/.cpp` 删除。`recordCameraViewCompose`（唯一调用者
+  RuntimeRenderContext）的函数体收回应用 record 顺序：`RuntimeRenderContext::record`
+  增加第三参 `const UIFrameSnapshot* uiSnapshot`，直接调用 `recordRender2DComposePass`
+  （RuntimeUIComposite 落在显示根的 image 上，首帧/无 UI 跳过语义保留）。
+- `FramePacket::uiFrameSnapshot` 字段与前向声明删除；`TickFrame::uiSnapshot` 保留为
+  应用侧 GameUI record packet，`boundFrame()` 不再绑定；snapshot 是 record 的显式
+  调用参数，plan 仍是值。
+- `makeViewDisplayInsetRect` 移为 `EditorViewProducer.cpp` 文件内布局策略（Render3D
+  从不认识"preview"）。
+- `Render3D/xmake.lua` 公共 deps 去 `ya-gui-compose`，补实现性依赖 `ya-render-2d`
+  （PipelineCoordinator 在 device 生命周期里管理 2D batcher 的 GPU 资源——Render2D
+  是 Framework/Render 邻居，不是 GUI framework）。
+- `buildQuadViewportState` 的 session 读取改为固定占位（管线 viewport/scissor 是动态
+  状态）；`RuntimeRenderContextTest` 的 record 概念断言更新为三参形状。
+
+### 证据
+
+- `rg "GUI/Compose|UIFrameSnapshot|ya-gui-compose" Engine/Source/Framework/Render/Render3D`
+  → **零命中**（P0 校验口径）。
+- `ya-testing` 1314 passed / 0 failed；parity 两图 md5 `c775245ae636f15b41da8485319a2267`
+  与基线一致（移动的是调用位置，desc 构造等价，像素逐字节相同）；
+  GUIWorkbench `--smoke-actions` PASS；editor smoke exit=0。
+
+### 尚未执行
+
+- capability matrix、textureRef typed 化（Phase 1 §4.2/4.3）、shader 拆分决策；
+  World2D workload 与 Sprite2DComponent（Phase 3/4）；GameUI record packet 的
+  结构化封装（等 Phase 4 一起定，本期 snapshot 走显式参数）。
+
