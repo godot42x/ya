@@ -27,13 +27,12 @@ struct Font;
 }
 
 /// Which 2D backend a span of geometry belongs to. The list keeps at most one
-/// kind pending so record order matches emit order across screen quads, world
-/// quads, and debug lines.
+/// kind pending so record order matches emit order across screen quads and
+/// debug lines.
 enum class ERender2dBatchKind : uint8_t
 {
     None = 0,
     ScreenQuad,
-    WorldQuad,
     Line,
 };
 
@@ -45,11 +44,11 @@ enum class ERender2dBatchKind : uint8_t
 /// therefore be built anywhere (any thread, any time), inspected, and
 /// unit-tested without a renderer.
 ///
-/// Vertices are the same `FQuadRender::ScreenVertex` / `WorldVertex` /
-/// `FLineRender::Vertex` the GPU consumes, with one translation: a vertex's
-/// `textureSlot` names an entry in this list's local `textures` table, and the
-/// record step re-keys it into the pass's global binding table while copying
-/// into the mapped vertex buffers (`sampleMode` rides along unchanged).
+/// Vertices are the same `FQuadRender::ScreenVertex` / `FLineRender::Vertex`
+/// the GPU consumes, with one translation: a vertex's `textureSlot` names an
+/// entry in this list's local `textures` table, and the record step re-keys it
+/// into the pass's global binding table while copying into the mapped vertex
+/// buffers (`sampleMode` rides along unchanged).
 struct YA_RENDER_2D_API Render2DList
 {
     /// One contiguous batch of same-kind geometry under one clip rect.
@@ -66,7 +65,6 @@ struct YA_RENDER_2D_API Render2DList
 
     std::vector<Command>             commands;
     std::vector<ScreenVertex> screenVerts; // 4 per quad
-    std::vector<WorldVertex> worldVerts;  // 4 per quad
     std::vector<FLineRender::Vertex> lineVerts;   // 2 per segment
     /// List-local texture table (nullptr resolves to the white sprite at
     /// record time, exactly like the immediate path).
@@ -88,12 +86,6 @@ struct YA_RENDER_2D_API Render2DList
                     const glm::vec2& uvScale = {1.0f, 1.0f},
                     const glm::vec2& uvOffset = {0.0f, 0.0f},
                     bool             bOpaqueSample = false);
-    void makeWorldSprite(const glm::vec3& worldCenter,
-                         const glm::vec3& worldDirection,
-                         const glm::vec2& worldSize,
-                         ya::Ptr<Texture> texture = nullptr,
-                         const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                         const glm::vec2& uvScale = {1.0f, 1.0f});
     void makeWorldLine(const glm::vec3& from,
                        const glm::vec3& to,
                        const glm::vec4& color = {1.0f, 1.0f, 1.0f, 1.0f});
@@ -128,7 +120,6 @@ struct YA_RENDER_2D_API Render2DList
     void popClipRect();
 
     [[nodiscard]] uint32_t screenVertexCount() const { return screenVerts.size(); }
-    [[nodiscard]] uint32_t worldVertexCount() const { return worldVerts.size(); }
     [[nodiscard]] uint32_t lineVertexCount() const { return lineVerts.size(); }
 
     /// Flush-equivalent counters, incremented per closed command (the record
@@ -138,7 +129,6 @@ struct YA_RENDER_2D_API Render2DList
     {
         return FQuadRender::FRender2dFrameStats{
             .screenFlushCount  = screenCommandCount,
-            .worldFlushCount   = worldCommandCount,
             .screenVertexCount = static_cast<uint32_t>(screenVerts.size()),
             .screenIndexCount  = static_cast<uint32_t>(screenVerts.size()) * 6 / 4,
         };
@@ -159,13 +149,6 @@ struct YA_RENDER_2D_API Render2DList
                               const glm::vec2&                uvScale,
                               const glm::vec2&                uvTranslation,
                               const glm::vec3&                corner);
-    void     appendWorldQuad(const glm::vec3&  center,
-                             const glm::vec3&  direction,
-                             const glm::vec2&  size,
-                             uint32_t          textureSlot,
-                             uint32_t          sampleMode,
-                             const glm::vec4&  tint,
-                             const glm::vec2&  uvScale);
     void     appendLineSegment(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color);
     void     appendSubTexture(const glm::vec3&    position,
                               const glm::vec2&    size,
@@ -178,7 +161,6 @@ struct YA_RENDER_2D_API Render2DList
     /// next command boundary closes. None of it survives the build.
     std::unordered_map<const Texture*, uint32_t> texturePtr2Idx;
     uint32_t screenCommandCount = 0;
-    uint32_t worldCommandCount  = 0;
     ERender2dBatchKind pendingKind  = ERender2dBatchKind::None;
     uint32_t           pendingFirst = 0;
     uint32_t           pendingCount = 0;

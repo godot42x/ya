@@ -15,8 +15,7 @@ void Render2DList::beginBatch(ERender2dBatchKind kind)
     closePendingCommand();
     pendingKind  = kind;
     pendingFirst = kind == ERender2dBatchKind::ScreenQuad ? static_cast<uint32_t>(screenVerts.size())
-                 : kind == ERender2dBatchKind::WorldQuad  ? static_cast<uint32_t>(worldVerts.size())
-                 : static_cast<uint32_t>(lineVerts.size());
+                                                          : static_cast<uint32_t>(lineVerts.size());
     pendingCount = 0;
 }
 
@@ -37,9 +36,6 @@ void Render2DList::closePendingCommand()
     });
     if (pendingKind == ERender2dBatchKind::ScreenQuad) {
         ++screenCommandCount;
-    }
-    else if (pendingKind == ERender2dBatchKind::WorldQuad) {
-        ++worldCommandCount;
     }
     pendingCount = 0;
     pendingKind  = ERender2dBatchKind::None;
@@ -86,20 +82,6 @@ void Render2DList::appendScreenQuad(const glm::mat4&                transform,
     pendingCount += 4;
 }
 
-void Render2DList::appendWorldQuad(const glm::vec3&  center,
-                                   const glm::vec3&  direction,
-                                   const glm::vec2&  size,
-                                   uint32_t          textureSlot,
-                                   uint32_t          sampleMode,
-                                   const glm::vec4&  tint,
-                                   const glm::vec2&  uvScale)
-{
-    worldVerts.resize(worldVerts.size() + 4);
-    FQuadRender::EmitWorldQuad(worldVerts.data() + worldVerts.size() - 4,
-                               center, direction, size, textureSlot, sampleMode, tint, uvScale);
-    pendingCount += 4;
-}
-
 void Render2DList::appendLineSegment(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color)
 {
     lineVerts.push_back(FLineRender::Vertex{.pos = from, .color = color});
@@ -138,19 +120,6 @@ void Render2DList::makeSprite(const glm::mat4& transform,
                      static_cast<uint32_t>(bOpaqueSample ? FQuadRender::ETextureSampleMode::Opaque
                                    : FQuadRender::ETextureSampleMode::Coverage),
                      {tint, tint, tint, tint}, uvScale, uvOffset, {0.0f, 0.0f, 0.0f});
-}
-
-void Render2DList::makeWorldSprite(const glm::vec3& worldCenter,
-                                   const glm::vec3& worldDirection,
-                                   const glm::vec2& worldSize,
-                                   Ptr<Texture> texture,
-                                   const glm::vec4& tint,
-                                   const glm::vec2& uvScale)
-{
-    beginBatch(ERender2dBatchKind::WorldQuad);
-    appendWorldQuad(worldCenter, worldDirection, worldSize,
-                    findOrAddTexture(texture),
-                    static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Coverage), tint, uvScale);
 }
 
 void Render2DList::makeWorldLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color)

@@ -55,7 +55,6 @@ struct YA_GUI_API FGuiFrameInspectorRecord
 
     uint32_t modelScreenFlush   = 0;
     uint32_t gpuScreenFlush     = 0;
-    uint32_t gpuWorldFlush      = 0;
     uint32_t gpuScreenVertices  = 0;
     uint32_t gpuScreenIndices   = 0;
 

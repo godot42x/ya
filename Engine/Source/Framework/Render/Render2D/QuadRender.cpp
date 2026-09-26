@@ -163,60 +163,6 @@ std::vector<VertexAttribute> buildQuadScreenVertexAttributes()
     };
 }
 
-std::vector<VertexAttribute> buildQuadWorldVertexAttributes()
-{
-    return std::vector<VertexAttribute>{
-        VertexAttribute{
-            .bufferSlot = 0,
-            .location   = 0,
-            .format     = EVertexAttributeFormat::Float3,
-            .offset     = offsetof(WorldVertex, pos),
-        },
-        VertexAttribute{
-            .bufferSlot = 0,
-            .location   = 1,
-            .format     = EVertexAttributeFormat::Float4,
-            .offset     = offsetof(WorldVertex, color),
-        },
-        VertexAttribute{
-            .bufferSlot = 0,
-            .location   = 2,
-            .format     = EVertexAttributeFormat::Float2,
-            .offset     = offsetof(WorldVertex, texCoord),
-        },
-        VertexAttribute{
-            .bufferSlot = 0,
-            .location   = 3,
-            .format     = EVertexAttributeFormat::Uint,
-            .offset     = offsetof(WorldVertex, textureSlot),
-        },
-        VertexAttribute{
-            .bufferSlot = 0,
-            .location   = 4,
-            .format     = EVertexAttributeFormat::Uint,
-            .offset     = offsetof(WorldVertex, sampleMode),
-        },
-        VertexAttribute{
-            .bufferSlot = 0,
-            .location   = 5,
-            .format     = EVertexAttributeFormat::Float3,
-            .offset     = offsetof(WorldVertex, worldCenter),
-        },
-        VertexAttribute{
-            .bufferSlot = 0,
-            .location   = 6,
-            .format     = EVertexAttributeFormat::Float3,
-            .offset     = offsetof(WorldVertex, worldDirection),
-        },
-        VertexAttribute{
-            .bufferSlot = 0,
-            .location   = 7,
-            .format     = EVertexAttributeFormat::Float2,
-            .offset     = offsetof(WorldVertex, worldSize),
-        },
-    };
-}
-
 GraphicsPipelineCreateInfo buildQuadScreenPipelineCI(IPipelineLayout* pipelineLayout,
                                                      const std::string& label,
                                                      EFormat::T colorFormat,
@@ -293,105 +239,6 @@ GraphicsPipelineCreateInfo buildQuadScreenPipelineCI(IPipelineLayout* pipelineLa
     };
 }
 
-GraphicsPipelineCreateInfo buildQuadWorldPipelineCI(IPipelineLayout* pipelineLayout,
-                                                    EFormat::T colorFormat,
-                                                    EFormat::T depthFormat)
-{
-    return GraphicsPipelineCreateInfo{
-        .subPassRef            = 0,
-        .renderPass            = nullptr,
-        .pipelineRenderingInfo = PipelineRenderingInfo{
-            .label                  = "Sprite2D_World_Pipeline",
-            .viewMask               = 0,
-            .colorAttachmentFormats = {colorFormat},
-            .depthAttachmentFormat  = depthFormat,
-        },
-        .pipelineLayout = pipelineLayout,
-        .shaderDesc = ShaderDesc{
-            .sourceMode        = ShaderDesc::ESourceMode::StageFiles,
-            .stageFiles        = {
-                ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "Sprite2DWorld.slang", .entryName = "vertWorldMain"},
-                ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2DWorld.slang", .entryName = "fragWorldMain"},
-            },
-            .vertexBufferDescs = {
-                VertexBufferDescription{
-                    .slot  = 0,
-                    .pitch = sizeof(WorldVertex),
-                },
-            },
-            .vertexAttributes = buildQuadWorldVertexAttributes(),
-            .defines          = {
-                std::format("TEXTURE_SET_SIZE {}", FQuadRender::TEXTURE_SET_SIZE),
-                std::format("SAMPLE_MODE_COVERAGE {}", static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Coverage)),
-                std::format("SAMPLE_MODE_SDF {}", static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Sdf)),
-                std::format("SAMPLE_MODE_OPAQUE {}", static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Opaque)),
-            },
-        },
-        .dynamicFeatures = {
-            EPipelineDynamicFeature::Viewport,
-            EPipelineDynamicFeature::Scissor,
-            EPipelineDynamicFeature::CullMode,
-        },
-        .primitiveType      = EPrimitiveType::TriangleList,
-        .rasterizationState = RasterizationState{
-            .polygonMode = EPolygonMode::Fill,
-            .cullMode    = ECullMode::Back,
-            .frontFace   = EFrontFaceType::CounterClockWise,
-        },
-        .multisampleState  = MultisampleState{},
-        .depthStencilState = DepthStencilState{
-            .bDepthTestEnable       = false,
-            .bDepthWriteEnable      = false,
-            .depthCompareOp         = ECompareOp::Always,
-            .bDepthBoundsTestEnable = false,
-            .bStencilTestEnable     = false,
-            .minDepthBounds         = 0.0f,
-            .maxDepthBounds         = 1.0f,
-        },
-        .colorBlendState = ColorBlendState{
-            .bLogicOpEnable = false,
-            .attachments    = {
-                ColorBlendAttachmentState{
-                    .index               = 0,
-                    .bBlendEnable        = true,
-                    .srcColorBlendFactor = EBlendFactor::SrcAlpha,
-                    .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                    .colorBlendOp        = EBlendOp::Add,
-                    .srcAlphaBlendFactor = EBlendFactor::One,
-                    .dstAlphaBlendFactor = EBlendFactor::Zero,
-                    .alphaBlendOp        = EBlendOp::Add,
-                    .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
-                },
-            },
-        },
-        .viewportState = buildQuadViewportState(),
-    };
-}
-
-void ensureWorldPipeline(FQuadRender& quad,
-                         IRender* render,
-                         IPipelineLayout* pipelineLayout,
-                         EFormat::T colorFormat,
-                         EFormat::T depthFormat)
-{
-    if (!render || !pipelineLayout || colorFormat == EFormat::Undefined || depthFormat == EFormat::Undefined) {
-        return;
-    }
-    if (quad._worldPipeline &&
-        quad._worldColorFormat == colorFormat &&
-        quad._worldDepthFormat == depthFormat) {
-        return;
-    }
-
-    auto pipeline = IGraphicsPipeline::create(render);
-    pipeline->recreate(buildQuadWorldPipelineCI(pipelineLayout, colorFormat, depthFormat));
-    auto retired = std::move(quad._worldPipeline);
-    quad._worldPipeline     = std::move(pipeline);
-    quad._worldColorFormat  = colorFormat;
-    quad._worldDepthFormat  = depthFormat;
-    DeferredDeletionQueue::get().retire(std::move(retired));
-}
-
 } // namespace
 
 void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
@@ -426,8 +273,6 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_frameUboDSL, _resourceDSL};
     _pipelineLayout = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
 
-    ensureWorldPipeline(*this, render, _pipelineLayout.get(), colorFormat, depthFormat);
-
     std::vector<uint32_t> indices(MaxIndexCount);
     for (uint32_t i = 0; i < MaxIndexCount; i += 6) {
         const uint32_t vertexIndex = (i / 6) * 4;
@@ -457,24 +302,15 @@ void FQuadRender::destroy()
         for (auto& resources : pass.flights) {
             resources.vertexBuffer.reset();
             resources.vertexPtrHead = nullptr;
-            resources.worldVertexBuffer.reset();
-            resources.worldVertexPtrHead = nullptr;
             resources.frameUBOBuffer.reset();
-            resources.worldFrameUBOBuffer.reset();
             resources.frameUboDS      = {};
-            resources.worldFrameUboDS = {};
             resources.screenResourceDSPool.clear();
-            resources.worldResourceDSPool.clear();
             resources.activeScreenResourceDS = {};
-            resources.activeWorldResourceDS  = {};
             resources.nextScreenResourceDS   = 0;
-            resources.nextWorldResourceDS    = 0;
         }
     }
     vertexPtr         = nullptr;
     vertexPtrHead     = nullptr;
-    worldVertexPtr    = nullptr;
-    worldVertexPtrHead = nullptr;
     _frameUboDSL.reset();
 
     _descriptorPool.reset();
@@ -485,9 +321,6 @@ void FQuadRender::destroy()
         pipelines.uiPipeline.reset();
         pipelines.uiColorFormat = EFormat::Undefined;
     }
-    _worldPipeline.reset();
-    _worldColorFormat = EFormat::Undefined;
-    _worldDepthFormat = EFormat::Undefined;
     _pipelineLayout.reset();
 }
 
@@ -533,10 +366,6 @@ void FQuadRender::preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colo
         DeferredDeletionQueue::get().retire(std::move(retired));
     }
 
-    // Shared world sprites (overlay billboards, editor gizmos) key off the
-    // last depth-attached target. Runtime UI's depth-less prep must not
-    // clobber this; Deferred vs Forward depth must rebuild it.
-    ensureWorldPipeline(*this, _render, _pipelineLayout.get(), colorFormat, depthFormat);
 }
 
 void FQuadRender::ensureSlotResources(Render2DPassSlot passSlot)
@@ -546,23 +375,15 @@ void FQuadRender::ensureSlotResources(Render2DPassSlot passSlot)
         return; // already allocated
     }
 
-    // Frame UBO descriptor sets + buffers (screen + world) for all flights.
+    // Frame UBO descriptor sets + buffers for all flights.
     std::vector<ya::DescriptorSetHandle> descriptorSets;
-    _descriptorPool->allocateDescriptorSets(_frameUboDSL, MAX_FLIGHTS_IN_FLIGHT * 2, descriptorSets);
+    _descriptorPool->allocateDescriptorSets(_frameUboDSL, MAX_FLIGHTS_IN_FLIGHT, descriptorSets);
     for (uint32_t flight = 0; flight < MAX_FLIGHTS_IN_FLIGHT; ++flight) {
         auto& resources = slot.flights[flight];
-        resources.frameUboDS      = descriptorSets[flight * 2];
-        resources.worldFrameUboDS = descriptorSets[flight * 2 + 1];
+        resources.frameUboDS = descriptorSets[flight];
         resources.frameUBOBuffer = _render->getResourceFactory()->createBuffer(
             ya::BufferCreateInfo{
                 .label       = std::format("Sprite2D_{}_{}_FrameUBO", passSlot, flight),
-                .usage       = EBufferUsage::UniformBuffer,
-                .size        = sizeof(FrameUBO),
-                .memoryUsage = EMemoryUsage::CpuToGpu,
-            });
-        resources.worldFrameUBOBuffer = _render->getResourceFactory()->createBuffer(
-            ya::BufferCreateInfo{
-                .label       = std::format("Sprite2D_{}_{}_WorldFrameUBO", passSlot, flight),
                 .usage       = EBufferUsage::UniformBuffer,
                 .size        = sizeof(FrameUBO),
                 .memoryUsage = EMemoryUsage::CpuToGpu,
@@ -573,24 +394,21 @@ void FQuadRender::ensureSlotResources(Render2DPassSlot passSlot)
         // (no UPDATE_AFTER_BIND).
         _render->getDescriptorHelper()->updateDescriptorSets({
             IDescriptorSetHelper::writeOneUniformBuffer(resources.frameUboDS, 0, resources.frameUBOBuffer.get()),
-            IDescriptorSetHelper::writeOneUniformBuffer(resources.worldFrameUboDS, 0, resources.worldFrameUBOBuffer.get()),
         });
     }
 
-    // Texture-array resource descriptor sets (screen + world pools).
+    // Texture-array resource descriptor sets (screen pool).
     descriptorSets.clear();
     _descriptorPool->allocateDescriptorSets(
         _resourceDSL,
-        MAX_FLIGHTS_IN_FLIGHT * RESOURCE_DS_POOL_SIZE * 2,
+        MAX_FLIGHTS_IN_FLIGHT * RESOURCE_DS_POOL_SIZE,
         descriptorSets);
     for (uint32_t flight = 0; flight < MAX_FLIGHTS_IN_FLIGHT; ++flight) {
         auto& resources = slot.flights[flight];
         resources.screenResourceDSPool.reserve(RESOURCE_DS_POOL_SIZE);
-        resources.worldResourceDSPool.reserve(RESOURCE_DS_POOL_SIZE);
         for (uint32_t i = 0; i < RESOURCE_DS_POOL_SIZE; ++i) {
-            const size_t base = static_cast<size_t>(flight) * RESOURCE_DS_POOL_SIZE * 2;
-            resources.screenResourceDSPool.push_back(descriptorSets[base + i * 2]);
-            resources.worldResourceDSPool.push_back(descriptorSets[base + i * 2 + 1]);
+            const size_t base = static_cast<size_t>(flight) * RESOURCE_DS_POOL_SIZE;
+            resources.screenResourceDSPool.push_back(descriptorSets[base + i]);
         }
     }
 
@@ -605,15 +423,6 @@ void FQuadRender::ensureSlotResources(Render2DPassSlot passSlot)
                 .memoryUsage = EMemoryUsage::CpuToGpu,
             });
         resources.vertexPtrHead = resources.vertexBuffer->map<ScreenVertex>();
-
-        resources.worldVertexBuffer = _render->getResourceFactory()->createBuffer(
-            ya::BufferCreateInfo{
-                .label       = std::format("Sprite2D_{}_{}_World_VertexBuffer", passSlot, flight),
-                .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
-                .size        = sizeof(WorldVertex) * MaxVertexCount * kFrameFlushSlots,
-                .memoryUsage = EMemoryUsage::CpuToGpu,
-            });
-        resources.worldVertexPtrHead = resources.worldVertexBuffer->map<WorldVertex>();
     }
 }
 
@@ -623,25 +432,16 @@ void FQuadRender::begin(Render2DPassSlot passSlot, const Extent2D& extent, uint3
     _activeFlightIndex = flightSlot % MAX_FLIGHTS_IN_FLIGHT;
     ensureSlotResources(passSlot);
     auto& resources = activeFlightResources();
-    vertexPtrHead      = resources.vertexPtrHead;
-    vertexPtr          = vertexPtrHead;
-    worldVertexPtrHead = resources.worldVertexPtrHead;
-    worldVertexPtr     = worldVertexPtrHead;
+    vertexPtrHead = resources.vertexPtrHead;
+    vertexPtr     = vertexPtrHead;
     vertexCount        = 0;
     indexCount         = 0;
-    worldVertexCount   = 0;
-    worldIndexCount    = 0;
     screenBatchStartVertex = 0;
-    worldBatchStartVertex  = 0;
     _resourceVersion                    = 1;
     _uploadedScreenResourceVersion      = 0;
-    _uploadedWorldResourceVersion       = 0;
     _frameUboUploaded                   = false;
-    _worldFrameUboUploaded              = false;
     resources.activeScreenResourceDS    = {};
-    resources.activeWorldResourceDS     = {};
     resources.nextScreenResourceDS      = 0;
-    resources.nextWorldResourceDS       = 0;
     resetTextureBatch();
 
     float w      = static_cast<float>(extent.width);
@@ -782,75 +582,6 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf, const FRender2dFlushState& state
     indexCount  = 0;
 }
 
-void FQuadRender::flushWorld(ICommandBuffer* cmdBuf, const FRender2dFlushState& state)
-{
-    if (!cmdBuf || worldVertexCount == 0) {
-        return;
-    }
-
-    auto& resources = activeFlightResources();
-    if (_uploadedWorldResourceVersion != _resourceVersion) {
-        resources.activeWorldResourceDS = acquireWorldResourceDS(resources);
-        updateResources(resources.activeWorldResourceDS);
-        _uploadedWorldResourceVersion = _resourceVersion;
-    }
-    if (!_worldFrameUboUploaded) {
-        updateFrameUBO(resources.worldFrameUBOBuffer, state.viewProjection, state.view);
-        _worldFrameUboUploaded = true;
-    }
-    resources.worldVertexBuffer->flush();
-
-    YA_CORE_ASSERT(_worldPipeline != nullptr,
-                   "Render2D world pipeline was not prepared before command recording");
-    cmdBuf->bindPipeline(_worldPipeline.get());
-    setWorldViewportAndScissor(*cmdBuf, _render, state.windowWidth, state.windowHeight);
-    if (_render && _render->getCapabilities().dynamicCullMode) {
-        cmdBuf->setCullMode(Render2D::debug.worldCullMode);
-    }
-
-    const uint32_t cursorVertex = static_cast<uint32_t>(worldVertexPtr - worldVertexPtrHead);
-    YA_CORE_ASSERT(cursorVertex == worldBatchStartVertex + worldVertexCount,
-                   "Render2D world batch cursor mismatch: startVertex={} vertexCount={} cursorVertex={}",
-                   worldBatchStartVertex,
-                   worldVertexCount,
-                   cursorVertex);
-    YA_CORE_ASSERT(static_cast<uint64_t>(worldBatchStartVertex) + worldVertexCount <=
-                       MaxVertexCount * kFrameFlushSlots,
-                   "Render2D world frame exceeded vertex buffer capacity ({} batches)",
-                   kFrameFlushSlots);
-    if (state.debugWorldFlushCount && shouldLogFlush(*state.debugWorldFlushCount)) {
-        YA_CORE_INFO("Render2D world flush: passSlot={} flight={} batch={} startVertex={} cursorVertex={} vertexCount={} indexCount={} resourceVersion={} uploadedResourceVersion={} textures={}",
-                     static_cast<size_t>(_activePassSlot),
-                     _activeFlightIndex,
-                     state.stats ? state.stats->worldFlushCount : 0u,
-                     worldBatchStartVertex,
-                     cursorVertex,
-                     worldVertexCount,
-                     worldIndexCount,
-                     _resourceVersion,
-                     _uploadedWorldResourceVersion,
-                     _textureBindings.size());
-    }
-    std::vector<DescriptorSetHandle> descriptorSets = {
-        resources.worldFrameUboDS,
-        resources.activeWorldResourceDS,
-    };
-    cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
-    cmdBuf->bindVertexBuffer(0, resources.worldVertexBuffer.get(), 0);
-    cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
-    cmdBuf->drawIndexed(static_cast<uint32_t>(worldIndexCount), 1, 0, static_cast<int32_t>(worldBatchStartVertex), 0);
-    if (state.stats) {
-        ++state.stats->worldFlushCount;
-    }
-    if (state.debugWorldFlushCount) {
-        ++*state.debugWorldFlushCount;
-    }
-
-    worldBatchStartVertex = static_cast<uint32_t>(worldVertexPtr - worldVertexPtrHead);
-    worldVertexCount = 0;
-    worldIndexCount  = 0;
-}
-
 void FQuadRender::resetTextureBatch()
 {
     _textureBindings.clear();
@@ -862,7 +593,6 @@ void FQuadRender::resetTextureBatch()
     _lastPushTextureSlot              = static_cast<int>(_textureBindings.size() - 1);
     _resourceVersion                  = std::max<uint64_t>(_resourceVersion + 1, 1);
     _uploadedScreenResourceVersion    = 0;
-    _uploadedWorldResourceVersion     = 0;
 }
 
 void FQuadRender::updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer,
@@ -917,15 +647,6 @@ DescriptorSetHandle FQuadRender::acquireScreenResourceDS(FlightResources& resour
     return resources.screenResourceDSPool[resources.nextScreenResourceDS++];
 }
 
-DescriptorSetHandle FQuadRender::acquireWorldResourceDS(FlightResources& resources)
-{
-    YA_CORE_ASSERT(resources.nextWorldResourceDS < resources.worldResourceDSPool.size(),
-                   "Render2D exhausted world resource descriptor sets for pass slot {} flight {}",
-                   static_cast<uint32_t>(_activePassSlot),
-                   _activeFlightIndex);
-    return resources.worldResourceDSPool[resources.nextWorldResourceDS++];
-}
-
 uint32_t FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture)
 {
     uint32_t textureIdx = 0;
@@ -978,33 +699,6 @@ void FQuadRender::EmitScreenQuad(ScreenVertex*                   out,
             .textureSlot = textureSlot,
             .sampleMode  = sampleMode,
             .corner      = corner,
-        };
-    }
-}
-
-void FQuadRender::EmitWorldQuad(WorldVertex*     out,
-                                const glm::vec3& center,
-                                const glm::vec3& direction,
-                                const glm::vec2& size,
-                                uint32_t         textureSlot,
-                                uint32_t         sampleMode,
-                                const glm::vec4& tint,
-                                const glm::vec2& uvScale)
-{
-    const glm::vec3 normalizedDirection = glm::length2(direction) > std::numeric_limits<float>::epsilon()
-                                            ? glm::normalize(direction)
-                                            : glm::vec3(0.0f, -1.0f, 0.0f);
-
-    for (int i = 0; i < 4; i++) {
-        out[i] = WorldVertex{
-            .pos         = glm::vec3(FQuadRender::vertices[i]),
-            .color       = tint,
-            .texCoord    = FQuadRender::defaultTexcoord[i] * uvScale,
-            .textureSlot = textureSlot,
-            .sampleMode  = sampleMode,
-            .worldCenter = center,
-            .worldDirection = normalizedDirection,
-            .worldSize   = size,
         };
     }
 }

@@ -32,12 +32,9 @@ struct Font;
 using Render2DPassSlot = uint32_t;
 inline constexpr Render2DPassSlot kInvalidRender2DPassSlot = ~Render2DPassSlot{0};
 
-/// Screen/world quad batching used by Render2D: hosts vertex/index buffers,
-/// per-pass pipelines, frame/resource descriptor sets and the texture-array
-/// binding table shared by screen and world batches.
 /// Screen-space quad vertex for the GUI compose shader
 /// (Sprite2DScreen.slang): a transformed quad with typed texture draw data.
-/// No world payload -- world billboards are `WorldVertex` / the world pipeline.
+/// No world payload -- world billboards live in the scene-side 2D path.
 struct ScreenVertex
 {
     glm::vec3 pos;
@@ -55,21 +52,7 @@ struct ScreenVertex
     glm::vec3 corner;
 };
 
-/// World billboard vertex for the scene 2D shader (Sprite2DWorld.slang): the
-/// unit quad is expanded on the camera right/up axes around `worldCenter` in
-/// the world vertex shader. No corner/SDF payload (the world path never
-/// rounds corners).
-struct WorldVertex
-{
-    glm::vec3 pos;            // unit quad corner in [0,1]
-    glm::vec4 color;
-    glm::vec2 texCoord;
-    uint32_t  textureSlot;
-    uint32_t  sampleMode;
-    glm::vec3 worldCenter;
-    glm::vec3 worldDirection;
-    glm::vec2 worldSize;
-};
+;
 
 struct YA_RENDER_2D_API FQuadRender
 {
@@ -120,7 +103,6 @@ struct YA_RENDER_2D_API FQuadRender
     struct FRender2dFrameStats
     {
         uint32_t screenFlushCount  = 0;
-        uint32_t worldFlushCount   = 0;
         uint32_t screenVertexCount = 0;
         uint32_t screenIndexCount  = 0;
     };
@@ -139,7 +121,6 @@ struct YA_RENDER_2D_API FQuadRender
         glm::mat4 viewProjection = glm::mat4(1.0f);
         FRender2dFrameStats* stats               = nullptr;
         uint32_t*            debugScreenFlushCount = nullptr;
-        uint32_t*            debugWorldFlushCount  = nullptr;
     };
 
     IRender* _render = nullptr;
@@ -153,12 +134,6 @@ struct YA_RENDER_2D_API FQuadRender
     uint32_t             vertexCount   = 0;
     uint32_t             indexCount    = 0;
     uint32_t             screenBatchStartVertex = 0; // start of the pending batch in the shared buffer
-
-    WorldVertex* worldVertexPtr     = nullptr;
-    WorldVertex* worldVertexPtrHead = nullptr;
-    uint32_t             worldVertexCount   = 0;
-    uint32_t             worldIndexCount    = 0;
-    uint32_t             worldBatchStartVertex = 0; // start of the pending world batch
 
     PipelineLayoutDesc _pipelineDesc = PipelineLayoutDesc{
         .pushConstants        = {},
@@ -191,9 +166,6 @@ struct YA_RENDER_2D_API FQuadRender
     };
 
     std::shared_ptr<IPipelineLayout>   _pipelineLayout = nullptr;
-    std::shared_ptr<IGraphicsPipeline> _worldPipeline  = nullptr;
-    EFormat::T                         _worldColorFormat = EFormat::Undefined;
-    EFormat::T                         _worldDepthFormat = EFormat::Undefined;
     struct PassPipelines
     {
         std::shared_ptr<IGraphicsPipeline> screenPipeline{};
@@ -213,18 +185,11 @@ struct YA_RENDER_2D_API FQuadRender
     {
         DescriptorSetHandle      frameUboDS{};
         std::shared_ptr<IBuffer> frameUBOBuffer{};
-        DescriptorSetHandle      worldFrameUboDS{};
-        std::shared_ptr<IBuffer> worldFrameUBOBuffer{};
         std::vector<DescriptorSetHandle> screenResourceDSPool{};
-        std::vector<DescriptorSetHandle> worldResourceDSPool{};
         uint32_t                         nextScreenResourceDS = 0;
-        uint32_t                         nextWorldResourceDS  = 0;
         DescriptorSetHandle              activeScreenResourceDS{};
-        DescriptorSetHandle              activeWorldResourceDS{};
         std::shared_ptr<IBuffer> vertexBuffer{};
         ScreenVertex*            vertexPtrHead = nullptr;
-        std::shared_ptr<IBuffer> worldVertexBuffer{};
-        WorldVertex*             worldVertexPtrHead = nullptr;
     };
     struct PassResources
     {
@@ -235,9 +200,7 @@ struct YA_RENDER_2D_API FQuadRender
     uint32_t         _activeFlightIndex = 0;
     uint64_t            _resourceVersion = 0;
     uint64_t            _uploadedScreenResourceVersion = 0;
-    uint64_t            _uploadedWorldResourceVersion = 0;
     bool                _frameUboUploaded = false;
-    bool                _worldFrameUboUploaded = false;
     std::vector<TextureBinding>                _textureBindings;
     std::unordered_map<const Texture*, uint32_t> _texturePtr2Idx;
     // The packed GPU representation keeps texture slot and sampling semantics
@@ -258,16 +221,12 @@ struct YA_RENDER_2D_API FQuadRender
     void end();
     /// Ensure a pass slot's screen-space pipeline matches its target attachment
     /// formats. A depth-less target (depthFormat == Undefined) resolves to the
-    /// depth-less UI variant and does not touch the shared world pipeline.
-    /// A depth-attached target also rebuilds the world sprite pipeline when
-    /// color/depth change (Deferred vs Forward depth). Must be called before
-    /// command recording begins.
+    /// depth-less UI variant; a depth-attached target uses the depth-aware
+    /// screen variant. Must be called before command recording begins.
     void preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFormat, EFormat::T depthFormat);
 
     bool shouldFlush() { return vertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
-    bool shouldFlushWorld() { return worldVertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
     void flush(ICommandBuffer* cmdBuf, const FRender2dFlushState& state);
-    void flushWorld(ICommandBuffer* cmdBuf, const FRender2dFlushState& state);
     void resetTextureBatch();
     /// Whether one more texture would overflow the per-record binding table
     /// (the record step checks this before registering list textures and
@@ -277,7 +236,6 @@ struct YA_RENDER_2D_API FQuadRender
     void updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, const glm::mat4& viewProj, const glm::mat4& view);
     void updateResources(DescriptorSetHandle dsHandle);
     DescriptorSetHandle acquireScreenResourceDS(FlightResources& resources);
-    DescriptorSetHandle acquireWorldResourceDS(FlightResources& resources);
     FlightResources& activeFlightResources()
     {
         return _passResources[static_cast<size_t>(_activePassSlot)].flights[_activeFlightIndex];
@@ -295,14 +253,6 @@ struct YA_RENDER_2D_API FQuadRender
                                const glm::vec2&                uvScale,
                                const glm::vec2&                uvTranslation,
                                const glm::vec3&                corner);
-    static void EmitWorldQuad(WorldVertex*     out,
-                              const glm::vec3& center,
-                              const glm::vec3& direction,
-                              const glm::vec2& size,
-                              uint32_t         textureSlot,
-                              uint32_t         sampleMode,
-                              const glm::vec4& tint,
-                              const glm::vec2& uvScale);
 
     /// Resolve (or lazily add) a texture's slot in the per-record binding
     /// table. Public because the record step registers list textures through

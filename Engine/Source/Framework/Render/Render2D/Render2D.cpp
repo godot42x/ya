@@ -139,9 +139,6 @@ FQuadRender::FRender2dFrameStats Render2D::recordRender2DList(const Render2DList
         case ERender2dBatchKind::ScreenQuad:
             quadData->flush(ctx.cmdBuf, state);
             break;
-        case ERender2dBatchKind::WorldQuad:
-            quadData->flushWorld(ctx.cmdBuf, state);
-            break;
         case ERender2dBatchKind::Line:
             lineData->flush(ctx.cmdBuf, state);
             break;
@@ -219,38 +216,6 @@ FQuadRender::FRender2dFrameStats Render2D::recordRender2DList(const Render2DList
                     quadData->vertexPtr += 4;
                     quadData->vertexCount += 4;
                     quadData->indexCount += 6;
-                }
-                emitted += quads * 4;
-            }
-        }
-        else {
-            uint32_t emitted = 0;
-            while (emitted < command.vertexCount) {
-                if (quadData->worldVertexCount >= FQuadRender::MaxVertexCount - 4) {
-                    quadData->flushWorld(ctx.cmdBuf, state);
-                }
-                const uint32_t quads = std::min(
-                    static_cast<uint32_t>((FQuadRender::MaxVertexCount - quadData->worldVertexCount) / 4),
-                    (command.vertexCount - emitted) / 4);
-                for (uint32_t q = 0; q < quads; ++q) {
-                    const uint32_t srcIndex = command.firstVertex + emitted + q * 4;
-                    const uint32_t localSlot = list.worldVerts[srcIndex].textureSlot;
-                    if (localToGlobal[localSlot] == kUnmapped) {
-                        if (quadData->textureTableFull()) {
-                            flushPending();
-                            quadData->resetTextureBatch();
-                            std::fill(localToGlobal.begin(), localToGlobal.end(), kUnmapped);
-                        }
-                        localToGlobal[localSlot] = quadData->findOrAddTexture(list.textures[localSlot].get());
-                    }
-                    for (int vi = 0; vi < 4; ++vi) {
-                        WorldVertex v = list.worldVerts[srcIndex + vi];
-                        v.textureSlot = localToGlobal[localSlot];
-                        quadData->worldVertexPtr[vi] = v;
-                    }
-                    quadData->worldVertexPtr += 4;
-                    quadData->worldVertexCount += 4;
-                    quadData->worldIndexCount += 6;
                 }
                 emitted += quads * 4;
             }

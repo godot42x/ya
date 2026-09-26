@@ -19,7 +19,6 @@ void FGuiFrameInspectorRecord::resetForFrame()
     rebuiltRects.clear();
     modelScreenFlush  = 0;
     gpuScreenFlush    = 0;
-    gpuWorldFlush     = 0;
     gpuScreenVertices = 0;
     gpuScreenIndices  = 0;
     meanCoverage      = 0.0f;

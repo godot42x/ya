@@ -108,7 +108,6 @@ TEST(Render2DListTest, SameInputBuildsSameList)
     build(b);
     ASSERT_EQ(a.commands.size(), b.commands.size());
     ASSERT_EQ(a.screenVerts.size(), b.screenVerts.size());
-    ASSERT_EQ(a.worldVerts.size(), b.worldVerts.size());
     ASSERT_EQ(a.lineVerts.size(), b.lineVerts.size());
     for (size_t i = 0; i < a.commands.size(); ++i) {
         EXPECT_EQ(a.commands[i].kind, b.commands[i].kind);

@@ -139,7 +139,6 @@ void captureGuiComposeInspector(FGuiFrameInspectorRecord& record,
     (void)gpuStats;
 #else
     record.gpuScreenFlush    = gpuStats.screenFlushCount;
-    record.gpuWorldFlush     = gpuStats.worldFlushCount;
     record.gpuScreenVertices = gpuStats.screenVertexCount;
     record.gpuScreenIndices  = gpuStats.screenIndexCount;
 #endif
