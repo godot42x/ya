@@ -3,7 +3,7 @@
 -- only shader-common (limits/layout shared by every profile) and shader-gui
 -- (Sprite2D), so no 3D shader is compiled, generated or packaged for GUI.
 --   common    Slang/Common/**                         -> Generated/Common/
---   gui       Sprite2D.slang + Sprite2DLine.slang     -> Generated/
+--   gui       Sprite2DScreen/World/Line.slang          -> Generated/
 --   render3d  remaining Slang/**                      -> Generated/
 --
 -- Slang is the only shader language of the engine: the GLSL/shaderc backend was
@@ -14,7 +14,8 @@ local SHADER_MANIFEST = {
     },
     gui = {
         slang = {
-            "Engine/Shader/Slang/Sprite2D.slang",
+            "Engine/Shader/Slang/Sprite2DScreen.slang",
+            "Engine/Shader/Slang/Sprite2DWorld.slang",
             "Engine/Shader/Slang/Sprite2DLine.slang",
         },
     },

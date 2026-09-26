@@ -82,8 +82,8 @@ void RenderDeviceState::initShaderSystems()
         ShaderDesc{
             .sourceMode = ShaderDesc::ESourceMode::StageFiles,
             .stageFiles = {
-                ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "Sprite2D.slang"},
-                ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2D.slang"},
+                ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "Sprite2DScreen.slang"},
+                ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2DScreen.slang"},
             },
         },
         ShaderDesc{.shaderName = "DebugRender.slang"},

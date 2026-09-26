@@ -45,10 +45,11 @@ enum class ERender2dBatchKind : uint8_t
 /// therefore be built anywhere (any thread, any time), inspected, and
 /// unit-tested without a renderer.
 ///
-/// Vertices are the same `FQuadRender::Vertex` / `FLineRender::Vertex` the GPU
-/// consumes, with one translation: `textureRef` encodes a slot into this
-/// list's local `textures` table, and the record step re-keys it into the
-/// pass's global binding table while copying into the mapped vertex buffers.
+/// Vertices are the same `FQuadRender::ScreenVertex` / `WorldVertex` /
+/// `FLineRender::Vertex` the GPU consumes, with one translation: a vertex's
+/// `textureSlot` names an entry in this list's local `textures` table, and the
+/// record step re-keys it into the pass's global binding table while copying
+/// into the mapped vertex buffers (`sampleMode` rides along unchanged).
 struct YA_RENDER_2D_API Render2DList
 {
     /// One contiguous batch of same-kind geometry under one clip rect.
@@ -64,8 +65,8 @@ struct YA_RENDER_2D_API Render2DList
     };
 
     std::vector<Command>             commands;
-    std::vector<FQuadRender::Vertex> screenVerts; // 4 per quad
-    std::vector<FQuadRender::Vertex> worldVerts;  // 4 per quad
+    std::vector<ScreenVertex> screenVerts; // 4 per quad
+    std::vector<WorldVertex> worldVerts;  // 4 per quad
     std::vector<FLineRender::Vertex> lineVerts;   // 2 per segment
     /// List-local texture table (nullptr resolves to the white sprite at
     /// record time, exactly like the immediate path).
@@ -150,27 +151,28 @@ struct YA_RENDER_2D_API Render2DList
     /// encodes the LOCAL slot; the record step re-keys it into the pass's
     /// global binding table while copying. `mode` rides per-vertex, not per
     /// table entry.
-    [[nodiscard]] FQuadRender::TextureRef findOrAddTexture(const Ptr<Texture>& texture,
-                                                           FQuadRender::ETextureSampleMode mode);
+    [[nodiscard]] uint32_t findOrAddTexture(const Ptr<Texture>& texture);
     void     appendScreenQuad(const glm::mat4&                transform,
-                              FQuadRender::TextureRef         textureRef,
+                              uint32_t                        textureSlot,
+                              uint32_t                        sampleMode,
                               const std::array<glm::vec4, 4>& colorsYaOrder,
                               const glm::vec2&                uvScale,
                               const glm::vec2&                uvTranslation,
                               const glm::vec3&                corner);
-    void     appendWorldQuad(const glm::vec3&        center,
-                             const glm::vec3&        direction,
-                             const glm::vec2&        size,
-                             FQuadRender::TextureRef textureRef,
-                             const glm::vec4&        tint,
-                             const glm::vec2&        uvScale);
+    void     appendWorldQuad(const glm::vec3&  center,
+                             const glm::vec3&  direction,
+                             const glm::vec2&  size,
+                             uint32_t          textureSlot,
+                             uint32_t          sampleMode,
+                             const glm::vec4&  tint,
+                             const glm::vec2&  uvScale);
     void     appendLineSegment(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color);
-    void     appendSubTexture(const glm::vec3&                position,
-                              const glm::vec2&                size,
-                              const Ptr<Texture>&             texture,
-                              const glm::vec4&                tint,
-                              const glm::vec4&                uvRect,
-                              FQuadRender::ETextureSampleMode mode);
+    void     appendSubTexture(const glm::vec3&    position,
+                              const glm::vec2&    size,
+                              const Ptr<Texture>& texture,
+                              const glm::vec4&    tint,
+                              const glm::vec4&    uvRect,
+                              uint32_t            sampleMode);
 
     /// Builder-local lookup for the texture table, and the pending batch the
     /// next command boundary closes. None of it survives the build.

@@ -121,56 +121,98 @@ void setWorldViewportAndScissor(ICommandBuffer& cmdBuf, IRender* render, uint32_
     cmdBuf.setScissor(0, 0, width, height);
 }
 
-std::vector<VertexAttribute> buildQuadVertexAttributes()
+std::vector<VertexAttribute> buildQuadScreenVertexAttributes()
 {
     return std::vector<VertexAttribute>{
         VertexAttribute{
             .bufferSlot = 0,
             .location   = 0,
             .format     = EVertexAttributeFormat::Float3,
-            .offset     = offsetof(FQuadRender::Vertex, pos),
+            .offset     = offsetof(ScreenVertex, pos),
         },
         VertexAttribute{
             .bufferSlot = 0,
             .location   = 1,
             .format     = EVertexAttributeFormat::Float4,
-            .offset     = offsetof(FQuadRender::Vertex, color),
+            .offset     = offsetof(ScreenVertex, color),
         },
         VertexAttribute{
             .bufferSlot = 0,
             .location   = 2,
             .format     = EVertexAttributeFormat::Float2,
-            .offset     = offsetof(FQuadRender::Vertex, texCoord),
+            .offset     = offsetof(ScreenVertex, texCoord),
         },
         VertexAttribute{
             .bufferSlot = 0,
             .location   = 3,
             .format     = EVertexAttributeFormat::Uint,
-            .offset     = offsetof(FQuadRender::Vertex, textureRef),
+            .offset     = offsetof(ScreenVertex, textureSlot),
         },
         VertexAttribute{
             .bufferSlot = 0,
             .location   = 4,
-            .format     = EVertexAttributeFormat::Float3,
-            .offset     = offsetof(FQuadRender::Vertex, worldCenter),
+            .format     = EVertexAttributeFormat::Uint,
+            .offset     = offsetof(ScreenVertex, sampleMode),
         },
         VertexAttribute{
             .bufferSlot = 0,
             .location   = 5,
             .format     = EVertexAttributeFormat::Float3,
-            .offset     = offsetof(FQuadRender::Vertex, worldDirection),
+            .offset     = offsetof(ScreenVertex, corner),
+        },
+    };
+}
+
+std::vector<VertexAttribute> buildQuadWorldVertexAttributes()
+{
+    return std::vector<VertexAttribute>{
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 0,
+            .format     = EVertexAttributeFormat::Float3,
+            .offset     = offsetof(WorldVertex, pos),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 1,
+            .format     = EVertexAttributeFormat::Float4,
+            .offset     = offsetof(WorldVertex, color),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 2,
+            .format     = EVertexAttributeFormat::Float2,
+            .offset     = offsetof(WorldVertex, texCoord),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 3,
+            .format     = EVertexAttributeFormat::Uint,
+            .offset     = offsetof(WorldVertex, textureSlot),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 4,
+            .format     = EVertexAttributeFormat::Uint,
+            .offset     = offsetof(WorldVertex, sampleMode),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 5,
+            .format     = EVertexAttributeFormat::Float3,
+            .offset     = offsetof(WorldVertex, worldCenter),
         },
         VertexAttribute{
             .bufferSlot = 0,
             .location   = 6,
-            .format     = EVertexAttributeFormat::Float2,
-            .offset     = offsetof(FQuadRender::Vertex, worldSize),
+            .format     = EVertexAttributeFormat::Float3,
+            .offset     = offsetof(WorldVertex, worldDirection),
         },
         VertexAttribute{
             .bufferSlot = 0,
             .location   = 7,
-            .format     = EVertexAttributeFormat::Float3,
-            .offset     = offsetof(FQuadRender::Vertex, corner),
+            .format     = EVertexAttributeFormat::Float2,
+            .offset     = offsetof(WorldVertex, worldSize),
         },
     };
 }
@@ -193,18 +235,21 @@ GraphicsPipelineCreateInfo buildQuadScreenPipelineCI(IPipelineLayout* pipelineLa
         .shaderDesc = ShaderDesc{
             .sourceMode        = ShaderDesc::ESourceMode::StageFiles,
             .stageFiles        = {
-                ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "Sprite2D.slang", .entryName = "vertMain"},
-                ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2D.slang", .entryName = "fragMain"},
+                ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "Sprite2DScreen.slang", .entryName = "vertMain"},
+                ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2DScreen.slang", .entryName = "fragMain"},
             },
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,
-                    .pitch = sizeof(FQuadRender::Vertex),
+                    .pitch = sizeof(ScreenVertex),
                 },
             },
-            .vertexAttributes = buildQuadVertexAttributes(),
+            .vertexAttributes = buildQuadScreenVertexAttributes(),
             .defines          = {
                 std::format("TEXTURE_SET_SIZE {}", FQuadRender::TEXTURE_SET_SIZE),
+                std::format("SAMPLE_MODE_COVERAGE {}", static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Coverage)),
+                std::format("SAMPLE_MODE_SDF {}", static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Sdf)),
+                std::format("SAMPLE_MODE_OPAQUE {}", static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Opaque)),
             },
         },
         .dynamicFeatures = {
@@ -265,18 +310,21 @@ GraphicsPipelineCreateInfo buildQuadWorldPipelineCI(IPipelineLayout* pipelineLay
         .shaderDesc = ShaderDesc{
             .sourceMode        = ShaderDesc::ESourceMode::StageFiles,
             .stageFiles        = {
-                ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "Sprite2D.slang", .entryName = "vertWorldMain"},
-                ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2D.slang", .entryName = "fragMain"},
+                ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "Sprite2DWorld.slang", .entryName = "vertWorldMain"},
+                ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2DWorld.slang", .entryName = "fragWorldMain"},
             },
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,
-                    .pitch = sizeof(FQuadRender::Vertex),
+                    .pitch = sizeof(WorldVertex),
                 },
             },
-            .vertexAttributes = buildQuadVertexAttributes(),
+            .vertexAttributes = buildQuadWorldVertexAttributes(),
             .defines          = {
                 std::format("TEXTURE_SET_SIZE {}", FQuadRender::TEXTURE_SET_SIZE),
+                std::format("SAMPLE_MODE_COVERAGE {}", static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Coverage)),
+                std::format("SAMPLE_MODE_SDF {}", static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Sdf)),
+                std::format("SAMPLE_MODE_OPAQUE {}", static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Opaque)),
             },
         },
         .dynamicFeatures = {
@@ -553,19 +601,19 @@ void FQuadRender::ensureSlotResources(Render2DPassSlot passSlot)
             ya::BufferCreateInfo{
                 .label       = std::format("Sprite2D_{}_{}_Screen_VertexBuffer", passSlot, flight),
                 .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
-                .size        = sizeof(FQuadRender::Vertex) * MaxVertexCount * kFrameFlushSlots,
+                .size        = sizeof(ScreenVertex) * MaxVertexCount * kFrameFlushSlots,
                 .memoryUsage = EMemoryUsage::CpuToGpu,
             });
-        resources.vertexPtrHead = resources.vertexBuffer->map<FQuadRender::Vertex>();
+        resources.vertexPtrHead = resources.vertexBuffer->map<ScreenVertex>();
 
         resources.worldVertexBuffer = _render->getResourceFactory()->createBuffer(
             ya::BufferCreateInfo{
                 .label       = std::format("Sprite2D_{}_{}_World_VertexBuffer", passSlot, flight),
                 .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
-                .size        = sizeof(FQuadRender::Vertex) * MaxVertexCount * kFrameFlushSlots,
+                .size        = sizeof(WorldVertex) * MaxVertexCount * kFrameFlushSlots,
                 .memoryUsage = EMemoryUsage::CpuToGpu,
             });
-        resources.worldVertexPtrHead = resources.worldVertexBuffer->map<FQuadRender::Vertex>();
+        resources.worldVertexPtrHead = resources.worldVertexBuffer->map<WorldVertex>();
     }
 }
 
@@ -878,7 +926,7 @@ DescriptorSetHandle FQuadRender::acquireWorldResourceDS(FlightResources& resourc
     return resources.worldResourceDSPool[resources.nextWorldResourceDS++];
 }
 
-FQuadRender::TextureRef FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture, ETextureSampleMode mode)
+uint32_t FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture)
 {
     uint32_t textureIdx = 0;
     if (texture) {
@@ -910,36 +958,36 @@ FQuadRender::TextureRef FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture, 
             ++_resourceVersion;
         }
     }
-    return TextureRef{.slot = textureIdx, .mode = mode};
+    return textureIdx;
 }
 
-void FQuadRender::EmitScreenQuad(Vertex*                         out,
+void FQuadRender::EmitScreenQuad(ScreenVertex*                   out,
                                  const glm::mat4&                transform,
-                                 TextureRef                      textureRef,
+                                 uint32_t                        textureSlot,
+                                 uint32_t                        sampleMode,
                                  const std::array<glm::vec4, 4>& colorsYaOrder,
                                  const glm::vec2&                uvScale,
                                  const glm::vec2&                uvTranslation,
                                  const glm::vec3&                corner)
 {
     for (int i = 0; i < 4; i++) {
-        out[i] = FQuadRender::Vertex{
-            .pos            = transform * FQuadRender::vertices[i],
-            .color          = colorsYaOrder[static_cast<size_t>(i)],
-            .texCoord       = FQuadRender::defaultTexcoord[i] * uvScale + uvTranslation,
-            .textureRef     = textureRef.encode(),
-            .worldCenter    = glm::vec3(0.0f),
-            .worldDirection = glm::vec3(0.0f, 0.0f, -1.0f),
-            .worldSize      = glm::vec2(0.0f),
-            .corner         = corner,
+        out[i] = ScreenVertex{
+            .pos         = transform * FQuadRender::vertices[i],
+            .color       = colorsYaOrder[static_cast<size_t>(i)],
+            .texCoord    = FQuadRender::defaultTexcoord[i] * uvScale + uvTranslation,
+            .textureSlot = textureSlot,
+            .sampleMode  = sampleMode,
+            .corner      = corner,
         };
     }
 }
 
-void FQuadRender::EmitWorldQuad(Vertex*          out,
+void FQuadRender::EmitWorldQuad(WorldVertex*     out,
                                 const glm::vec3& center,
                                 const glm::vec3& direction,
                                 const glm::vec2& size,
-                                TextureRef       textureRef,
+                                uint32_t         textureSlot,
+                                uint32_t         sampleMode,
                                 const glm::vec4& tint,
                                 const glm::vec2& uvScale)
 {
@@ -948,11 +996,12 @@ void FQuadRender::EmitWorldQuad(Vertex*          out,
                                             : glm::vec3(0.0f, -1.0f, 0.0f);
 
     for (int i = 0; i < 4; i++) {
-        out[i] = FQuadRender::Vertex{
+        out[i] = WorldVertex{
             .pos         = glm::vec3(FQuadRender::vertices[i]),
             .color       = tint,
             .texCoord    = FQuadRender::defaultTexcoord[i] * uvScale,
-            .textureRef  = textureRef.encode(),
+            .textureSlot = textureSlot,
+            .sampleMode  = sampleMode,
             .worldCenter = center,
             .worldDirection = normalizedDirection,
             .worldSize   = size,

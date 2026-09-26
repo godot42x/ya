@@ -45,8 +45,7 @@ void Render2DList::closePendingCommand()
     pendingKind  = ERender2dBatchKind::None;
 }
 
-FQuadRender::TextureRef Render2DList::findOrAddTexture(const Ptr<Texture>& texture,
-                                                       FQuadRender::ETextureSampleMode mode)
+uint32_t Render2DList::findOrAddTexture(const Ptr<Texture>& texture)
 {
     // The list-local table has no 16-entry limit: it only records which
     // texture each local slot refers to. The 16-slot pressure (and the
@@ -69,11 +68,12 @@ FQuadRender::TextureRef Render2DList::findOrAddTexture(const Ptr<Texture>& textu
         textureIdx = static_cast<uint32_t>(textures.size() - 1);
         texturePtr2Idx.emplace(texture.get(), textureIdx);
     }
-    return FQuadRender::TextureRef{.slot = textureIdx, .mode = mode};
+    return textureIdx;
 }
 
 void Render2DList::appendScreenQuad(const glm::mat4&                transform,
-                                    FQuadRender::TextureRef         textureRef,
+                                    uint32_t                        textureSlot,
+                                    uint32_t                        sampleMode,
                                     const std::array<glm::vec4, 4>& colorsYaOrder,
                                     const glm::vec2&                uvScale,
                                     const glm::vec2&                uvTranslation,
@@ -81,20 +81,22 @@ void Render2DList::appendScreenQuad(const glm::mat4&                transform,
 {
     screenVerts.resize(screenVerts.size() + 4);
     FQuadRender::EmitScreenQuad(screenVerts.data() + screenVerts.size() - 4,
-                                transform, textureRef, colorsYaOrder, uvScale, uvTranslation, corner);
+                                transform, textureSlot, sampleMode,
+                                colorsYaOrder, uvScale, uvTranslation, corner);
     pendingCount += 4;
 }
 
-void Render2DList::appendWorldQuad(const glm::vec3&        center,
-                                   const glm::vec3&        direction,
-                                   const glm::vec2&        size,
-                                   FQuadRender::TextureRef textureRef,
-                                   const glm::vec4&        tint,
-                                   const glm::vec2&        uvScale)
+void Render2DList::appendWorldQuad(const glm::vec3&  center,
+                                   const glm::vec3&  direction,
+                                   const glm::vec2&  size,
+                                   uint32_t          textureSlot,
+                                   uint32_t          sampleMode,
+                                   const glm::vec4&  tint,
+                                   const glm::vec2&  uvScale)
 {
     worldVerts.resize(worldVerts.size() + 4);
     FQuadRender::EmitWorldQuad(worldVerts.data() + worldVerts.size() - 4,
-                               center, direction, size, textureRef, tint, uvScale);
+                               center, direction, size, textureSlot, sampleMode, tint, uvScale);
     pendingCount += 4;
 }
 
@@ -117,9 +119,9 @@ void Render2DList::makeSprite(const glm::vec3& position,
     glm::mat4 model = glm::translate(glm::mat4(1.0f), {position.x, position.y, position.z}) *
                       glm::scale(glm::mat4(1.0f), glm::vec3(size, 1.0f));
     appendScreenQuad(model,
-                     findOrAddTexture(texture,
-                                      bOpaqueSample ? FQuadRender::ETextureSampleMode::Opaque
-                                                    : FQuadRender::ETextureSampleMode::Coverage),
+                     findOrAddTexture(texture),
+                     static_cast<uint32_t>(bOpaqueSample ? FQuadRender::ETextureSampleMode::Opaque
+                                   : FQuadRender::ETextureSampleMode::Coverage),
                      {tint, tint, tint, tint}, uvScale, uvOffset, {0.0f, 0.0f, 0.0f});
 }
 
@@ -132,9 +134,9 @@ void Render2DList::makeSprite(const glm::mat4& transform,
 {
     beginBatch(ERender2dBatchKind::ScreenQuad);
     appendScreenQuad(transform,
-                     findOrAddTexture(texture,
-                                      bOpaqueSample ? FQuadRender::ETextureSampleMode::Opaque
-                                                    : FQuadRender::ETextureSampleMode::Coverage),
+                     findOrAddTexture(texture),
+                     static_cast<uint32_t>(bOpaqueSample ? FQuadRender::ETextureSampleMode::Opaque
+                                   : FQuadRender::ETextureSampleMode::Coverage),
                      {tint, tint, tint, tint}, uvScale, uvOffset, {0.0f, 0.0f, 0.0f});
 }
 
@@ -147,8 +149,8 @@ void Render2DList::makeWorldSprite(const glm::vec3& worldCenter,
 {
     beginBatch(ERender2dBatchKind::WorldQuad);
     appendWorldQuad(worldCenter, worldDirection, worldSize,
-                    findOrAddTexture(texture, FQuadRender::ETextureSampleMode::Coverage),
-                    tint, uvScale);
+                    findOrAddTexture(texture),
+                    static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Coverage), tint, uvScale);
 }
 
 void Render2DList::makeWorldLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color)
@@ -199,17 +201,18 @@ void Render2DList::makeWireSphere(const glm::vec3& center, float radius, const g
     addRing({0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}); // YZ
 }
 
-void Render2DList::appendSubTexture(const glm::vec3&                position,
-                                    const glm::vec2&                size,
-                                    const Ptr<Texture>&             texture,
-                                    const glm::vec4&                tint,
-                                    const glm::vec4&                uvRect,
-                                    FQuadRender::ETextureSampleMode mode)
+void Render2DList::appendSubTexture(const glm::vec3&    position,
+                                    const glm::vec2&    size,
+                                    const Ptr<Texture>& texture,
+                                    const glm::vec4&    tint,
+                                    const glm::vec4&    uvRect,
+                                    uint32_t            sampleMode)
 {
     glm::mat4 model = glm::translate(glm::mat4(1.0f), {position.x, position.y, position.z}) *
                       glm::scale(glm::mat4(1.0f), glm::vec3(size, 1.0f));
     appendScreenQuad(model,
-                     findOrAddTexture(texture, mode),
+                     findOrAddTexture(texture),
+                     sampleMode,
                      {tint, tint, tint, tint}, {uvRect.z, uvRect.w}, {uvRect.x, uvRect.y},
                      {0.0f, 0.0f, 0.0f});
 }
@@ -288,7 +291,7 @@ void Render2DList::makeText(const std::string& text,
                              atlasTexture,
                              character.bColor ? glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) : color,
                              character.uvRect,
-                             sampleMode);
+                             static_cast<uint32_t>(sampleMode));
         }
 
         cursorX += character.advance.x * scale.x;
@@ -308,7 +311,8 @@ void Render2DList::drawRoundedRect(const glm::vec3& position,
     glm::mat4 model = glm::translate(glm::mat4(1.0f), {position.x, position.y, position.z}) *
                       glm::scale(glm::mat4(1.0f), glm::vec3(size, 1.0f));
     appendScreenQuad(model,
-                     findOrAddTexture(nullptr, FQuadRender::ETextureSampleMode::Coverage),
+                     findOrAddTexture(nullptr),
+                     static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Coverage),
                      {tint, tint, tint, tint}, {1.0f, 1.0f}, {0.0f, 0.0f},
                      {cornerRadius, size.x, size.y});
 }
@@ -325,7 +329,8 @@ void Render2DList::makeRectFilledMultiColor(const glm::vec3&                posi
     // Public/ImGui order is TL, TR, BR, BL. Vertex buffer order is TL, TR, BL, BR.
     const std::array<glm::vec4, 4> yaColors{colors[0], colors[1], colors[3], colors[2]};
     appendScreenQuad(model,
-                     findOrAddTexture(texture, FQuadRender::ETextureSampleMode::Coverage),
+                     findOrAddTexture(texture),
+                     static_cast<uint32_t>(FQuadRender::ETextureSampleMode::Coverage),
                      yaColors, {1.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, 0.0f});
 }
 

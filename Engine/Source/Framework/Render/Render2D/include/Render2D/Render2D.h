@@ -67,11 +67,6 @@ struct YA_RENDER_2D_API Render2D
     [[nodiscard]] static Render2DPassSlot acquirePassSlot();
     static void                           releasePassSlot(Render2DPassSlot slot);
 
-    /// Pure clip intersection used by the clip stack: `rect` clipped to the
-    /// current `parentClip` (empty extent when disjoint). Extracted so the
-    /// nested-clip semantics are unit-testable without a render session.
-    [[nodiscard]] static Rect2D intersectClipRect(const Rect2D& rect, const Rect2D& parentClip);
-
     /// Lazily create the screen/line pipeline variants required by one pass
     /// slot. A depth-less target (depthFormat == Undefined) uses the depth-less
     /// UI variant; a depth-attached target uses the depth-aware screen variant

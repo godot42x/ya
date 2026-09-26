@@ -35,43 +35,49 @@ inline constexpr Render2DPassSlot kInvalidRender2DPassSlot = ~Render2DPassSlot{0
 /// Screen/world quad batching used by Render2D: hosts vertex/index buffers,
 /// per-pass pipelines, frame/resource descriptor sets and the texture-array
 /// binding table shared by screen and world batches.
+/// Screen-space quad vertex for the GUI compose shader
+/// (Sprite2DScreen.slang): a transformed quad with typed texture draw data.
+/// No world payload -- world billboards are `WorldVertex` / the world pipeline.
+struct ScreenVertex
+{
+    glm::vec3 pos;
+    glm::vec4 color;
+    glm::vec2 texCoord;
+    /// Typed draw data: descriptor-array slot and sampling mode are separate
+    /// fields (no bit packing). The same atlas is sampled Coverage or Sdf
+    /// depending on glyph size, and Opaque for targets that leave alpha
+    /// unused -- so the mode rides per quad next to the slot.
+    uint32_t  textureSlot;
+    uint32_t  sampleMode;
+    // Rounded-rect SDF params. cornerRadius = corner radius in target px;
+    // quadSize = quad size in target px. A positive cornerRadius routes the
+    // fragment shader into the SDF round-rect alpha branch (no texture needed).
+    glm::vec3 corner;
+};
+
+/// World billboard vertex for the scene 2D shader (Sprite2DWorld.slang): the
+/// unit quad is expanded on the camera right/up axes around `worldCenter` in
+/// the world vertex shader. No corner/SDF payload (the world path never
+/// rounds corners).
+struct WorldVertex
+{
+    glm::vec3 pos;            // unit quad corner in [0,1]
+    glm::vec4 color;
+    glm::vec2 texCoord;
+    uint32_t  textureSlot;
+    uint32_t  sampleMode;
+    glm::vec3 worldCenter;
+    glm::vec3 worldDirection;
+    glm::vec2 worldSize;
+};
+
 struct YA_RENDER_2D_API FQuadRender
 {
-    static constexpr uint32_t kTextureIndexMask = 0x3FFFFFFFu;
-    static constexpr uint32_t kTextureModeShift = 30u;
     enum class ETextureSampleMode : uint8_t
     {
         Coverage = 0,
         Sdf      = 1,
         Opaque   = 2,
-    };
-
-    struct TextureRef
-    {
-        uint32_t          slot = 0;
-        ETextureSampleMode mode = ETextureSampleMode::Coverage;
-
-        [[nodiscard]] constexpr uint32_t encode() const
-        {
-            return (slot & kTextureIndexMask) |
-                   (static_cast<uint32_t>(mode) << kTextureModeShift);
-        }
-    };
-
-    struct Vertex
-    {
-        glm::vec3 pos;
-        glm::vec4 color;
-        glm::vec2 texCoord;
-        uint32_t  textureRef;
-        glm::vec3 worldCenter;
-        glm::vec3 worldDirection;
-        glm::vec2 worldSize;
-        // Rounded-rect SDF params (screen quads only; world quads leave these 0).
-        // cornerRadius = corner radius in target px; cornerSize = quad size in
-        // target px. A positive cornerRadius routes the fragment shader into the
-        // SDF round-rect alpha branch (no texture needed).
-        glm::vec3 corner;
     };
 
     static constexpr const std::array<glm::vec4, 4> vertices        = {{
@@ -142,14 +148,14 @@ struct YA_RENDER_2D_API FQuadRender
 
     std::shared_ptr<IBuffer> _indexBuffer;
 
-    FQuadRender::Vertex* vertexPtr     = nullptr;
-    FQuadRender::Vertex* vertexPtrHead = nullptr;
+    ScreenVertex* vertexPtr     = nullptr;
+    ScreenVertex* vertexPtrHead = nullptr;
     uint32_t             vertexCount   = 0;
     uint32_t             indexCount    = 0;
     uint32_t             screenBatchStartVertex = 0; // start of the pending batch in the shared buffer
 
-    FQuadRender::Vertex* worldVertexPtr     = nullptr;
-    FQuadRender::Vertex* worldVertexPtrHead = nullptr;
+    WorldVertex* worldVertexPtr     = nullptr;
+    WorldVertex* worldVertexPtrHead = nullptr;
     uint32_t             worldVertexCount   = 0;
     uint32_t             worldIndexCount    = 0;
     uint32_t             worldBatchStartVertex = 0; // start of the pending world batch
@@ -216,9 +222,9 @@ struct YA_RENDER_2D_API FQuadRender
         DescriptorSetHandle              activeScreenResourceDS{};
         DescriptorSetHandle              activeWorldResourceDS{};
         std::shared_ptr<IBuffer> vertexBuffer{};
-        Vertex*                  vertexPtrHead = nullptr;
+        ScreenVertex*            vertexPtrHead = nullptr;
         std::shared_ptr<IBuffer> worldVertexBuffer{};
-        Vertex*                  worldVertexPtrHead = nullptr;
+        WorldVertex*             worldVertexPtrHead = nullptr;
     };
     struct PassResources
     {
@@ -281,18 +287,20 @@ struct YA_RENDER_2D_API FQuadRender
     /// Pure CPU vertex emit, shared by the immediate draw path and the
     /// Render2DList builder: `out` receives exactly 4 vertices. No state, no
     /// GPU -- the destination decides where the vertices live.
-    static void EmitScreenQuad(Vertex*                         out,
+    static void EmitScreenQuad(ScreenVertex*                   out,
                                const glm::mat4&                transform,
-                               TextureRef                      textureRef,
+                               uint32_t                        textureSlot,
+                               uint32_t                        sampleMode,
                                const std::array<glm::vec4, 4>& colorsYaOrder,
                                const glm::vec2&                uvScale,
                                const glm::vec2&                uvTranslation,
                                const glm::vec3&                corner);
-    static void EmitWorldQuad(Vertex*          out,
+    static void EmitWorldQuad(WorldVertex*     out,
                               const glm::vec3& center,
                               const glm::vec3& direction,
                               const glm::vec2& size,
-                              TextureRef       textureRef,
+                              uint32_t         textureSlot,
+                              uint32_t         sampleMode,
                               const glm::vec4& tint,
                               const glm::vec2& uvScale);
 
@@ -300,7 +308,7 @@ struct YA_RENDER_2D_API FQuadRender
     /// table. Public because the record step registers list textures through
     /// it; the caller guarantees room (`textureTableFull()`) so the lazy
     /// overflow flush inside never fires on the list path.
-    TextureRef findOrAddTexture(ya::Ptr<Texture> texture, ETextureSampleMode mode = ETextureSampleMode::Coverage);
+    [[nodiscard]] uint32_t findOrAddTexture(ya::Ptr<Texture> texture);
 
 };
 

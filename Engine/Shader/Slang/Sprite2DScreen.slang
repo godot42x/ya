@@ -1,13 +1,27 @@
+// GUI compose shader (screen-space): the UIFrameSnapshot replay paths
+// (chrome / game UI / designer canvas / offscreen mirror / tool surface).
+// Owns the screen-space UI primitive set: textured sprites with
+// Coverage/Sdf/Opaque sampling, SDF round-rect corners, per-vertex color.
+// World-space billboards live in Sprite2DWorld.slang; debug lines in
+// Sprite2DLine.slang.
+
 #include "Common/Limits.slang"
 
 #ifndef TEXTURE_SET_SIZE
 #define TEXTURE_SET_SIZE 16
 #endif
 
-static const uint kTextureIndexMask = 0x3FFFFFFFu;
-static const uint kTextureModeShift = 30u;
-static const uint kSampleModeSdf = 1u;
-static const uint kSampleModeOpaque = 2u;
+#ifndef SAMPLE_MODE_COVERAGE
+#define SAMPLE_MODE_COVERAGE 0
+#endif
+
+#ifndef SAMPLE_MODE_SDF
+#define SAMPLE_MODE_SDF 1
+#endif
+
+#ifndef SAMPLE_MODE_OPAQUE
+#define SAMPLE_MODE_OPAQUE 2
+#endif
 
 struct FrameData
 {
@@ -24,11 +38,12 @@ struct VertexInput
     [[vk::location(0)]] float3 pos         : POSITION;
     [[vk::location(1)]] float4 color       : COLOR0;
     [[vk::location(2)]] float2 texCoord    : TEXCOORD;
-    [[vk::location(3)]] uint   textureRef  : TEXCOORD_TEXTURE_REF;
-    [[vk::location(4)]] float3 worldCenter : TEXCOORD_WORLD_CENTER;
-    [[vk::location(5)]] float3 worldDirection : TEXCOORD_WORLD_DIR;
-    [[vk::location(6)]] float2 worldSize   : TEXCOORD_WORLD_SIZE;
-    [[vk::location(7)]] float3 corner     : TEXCOORD_CORNER;
+    // Typed draw data: the descriptor-array slot and the sampling mode are
+    // separate fields (no bit packing). The mode is per quad -- the same
+    // font atlas is sampled Coverage or Sdf depending on glyph size.
+    [[vk::location(3)]] uint   textureSlot : TEXCOORD_TEXTURE_SLOT;
+    [[vk::location(4)]] uint   sampleMode  : TEXCOORD_SAMPLE_MODE;
+    [[vk::location(5)]] float3 corner      : TEXCOORD_CORNER;
 };
 
 struct VertexOutput
@@ -36,26 +51,25 @@ struct VertexOutput
     float4 sv_position : SV_Position;
     float4 color       : COLOR0;
     float2 texCoord    : TEXCOORD;
-    nointerpolation uint textureRef : TEXCOORD_TEXTURE_REF;
+    nointerpolation uint  textureSlot : TEXCOORD_TEXTURE_SLOT;
+    nointerpolation uint  sampleMode  : TEXCOORD_SAMPLE_MODE;
     // corner = (radiusPx, quadW, quadH); radiusPx > 0 routes the fragment into
-    // the SDF round-rect alpha branch (screen quads only).
+    // the SDF round-rect alpha branch.
     nointerpolation float3 corner : TEXCOORD_CORNER;
 };
 
 float4 sampleTexturedSprite(VertexOutput input)
 {
-    // The draw carries its descriptor-array slot and sampling mode together.
-    // Slots are recycled after texture-overflow flushes, so this metadata must
-    // remain per draw rather than live in a frame-level mask.
-    const uint textureRef = input.textureRef;
-    const uint textureIdx = textureRef & kTextureIndexMask;
-    const uint sampleMode = textureRef >> kTextureModeShift;
-    // SDF glyph atlas (high bit set): the R channel carries the signed
-    // distance (128 = boundary, FreeType FT_RENDER_MODE_SDF). Convert to
-    // coverage with SCREEN-SPACE AA: the transition width is one screen
-    // pixel regardless of scale (fwidth measures d's change per pixel), so
-    // text stays crisp at any size.
-    if (sampleMode == kSampleModeSdf) {
+    // The draw carries its descriptor-array slot explicitly; slots are
+    // recycled after texture-overflow flushes, so this must remain per draw
+    // rather than live in a frame-level mask.
+    const uint textureIdx = input.textureSlot;
+    // SDF glyph atlas: the R channel carries the signed distance (128 =
+    // boundary, FreeType FT_RENDER_MODE_SDF). Convert to coverage with
+    // SCREEN-SPACE AA: the transition width is one screen pixel regardless of
+    // scale (fwidth measures d's change per pixel), so text stays crisp at
+    // any size.
+    if (input.sampleMode == SAMPLE_MODE_SDF) {
         float d = uTextures[textureIdx].Sample(input.texCoord).r;
         // HALF-pixel AA: fwidth(d) is d's change per screen pixel; spanning
         // +-0.25*fwidth gives a 0.5px transition. A 1px stroke then keeps a
@@ -69,19 +83,15 @@ float4 sampleTexturedSprite(VertexOutput input)
     }
     float4 texColor = uTextures[textureIdx].Sample(input.texCoord);
     // Viewport / scene RTs often leave alpha unused (0). Discard would punch
-    // the whole sprite to the panel behind it. Bit 30 requests opaque RGB.
-    if (sampleMode == kSampleModeOpaque) {
+    // the whole sprite to the panel behind it. The opaque sample mode
+    // requests opaque RGB.
+    if (input.sampleMode == SAMPLE_MODE_OPAQUE) {
         texColor.a = 1.0;
     }
     else if (texColor.a < 0.01) {
         discard;
     }
     return texColor * input.color;
-}
-
-float2 flipWorldUv(float2 uv)
-{
-    return float2(uv.x, 1.0 - uv.y);
 }
 
 [shader("vertex")]
@@ -91,24 +101,9 @@ VertexOutput vertMain(VertexInput input)
     output.sv_position = mul(uFrame.viewProj, float4(input.pos, 1.0));
     output.color       = input.color;
     output.texCoord    = input.texCoord;
-    output.textureRef  = input.textureRef;
+    output.textureSlot = input.textureSlot;
+    output.sampleMode  = input.sampleMode;
     output.corner      = input.corner;
-    return output;
-}
-
-[shader("vertex")]
-VertexOutput vertWorldMain(VertexInput input)
-{
-    float3 cameraRight = normalize(uFrame.view[0].xyz);
-    float3 cameraUp    = normalize(uFrame.view[1].xyz);
-    float2 centered    = (input.pos.xy - float2(0.5, 0.5)) * input.worldSize;
-    float3 worldPos    = input.worldCenter + cameraRight * centered.x + cameraUp * centered.y;
-
-    VertexOutput output;
-    output.sv_position = mul(uFrame.viewProj, float4(worldPos, 1.0));
-    output.color       = input.color;
-    output.texCoord    = flipWorldUv(input.texCoord);
-    output.textureRef  = input.textureRef;
     return output;
 }
 

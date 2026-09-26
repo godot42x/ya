@@ -17,9 +17,8 @@ IRender*            Render2D::device   = nullptr;
 
 namespace
 {
-FQuadRender::FQuadRender::FRender2dFrameStats gLastFrameStats{};
-uint32_t sRecordDebugScreenFlushCount = 0;
-uint32_t sRecordDebugWorldFlushCount  = 0;
+
+FQuadRender::FRender2dFrameStats gLastFrameStats{};
 
 struct PassSlotPool
 {
@@ -32,7 +31,8 @@ PassSlotPool& passSlotPool()
     static PassSlotPool pool;
     return pool;
 }
-}
+
+} // namespace
 
 FQuadRender* Render2D::quadRender() { return quadData; }
 FLineRender* Render2D::lineRender() { return lineData; }
@@ -95,11 +95,6 @@ void Render2D::releasePassSlot(Render2DPassSlot slot)
     passSlotPool().free.push_back(slot);
 }
 
-Rect2D Render2D::intersectClipRect(const Rect2D& rect, const Rect2D& parentClip)
-{
-    return intersectClipRect(rect, parentClip);
-}
-
 void Render2D::preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFormat, EFormat::T depthFormat)
 {
     if (quadData) {
@@ -109,7 +104,6 @@ void Render2D::preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFo
         lineData->preparePassPipeline(passSlot, colorFormat, depthFormat);
     }
 }
-
 
 FQuadRender::FRender2dFrameStats Render2D::recordRender2DList(const Render2DList& list, const FRender2dContext& ctx)
 {
@@ -131,12 +125,7 @@ FQuadRender::FRender2dFrameStats Render2D::recordRender2DList(const Render2DList
         .windowHeight = ctx.windowHeight,
         .view         = ctx.view,
         .viewProjection = ctx.viewProjection,
-        .stats        = &stats,
-        .debugScreenFlushCount = &sRecordDebugScreenFlushCount,
-        .debugWorldFlushCount  = &sRecordDebugWorldFlushCount,
     };
-    sRecordDebugScreenFlushCount = 0;
-    sRecordDebugWorldFlushCount  = 0;
 
     // List-local texture slot -> pass-global binding slot. Rebuilt whenever
     // the global table overflows (16 textures), exactly like the immediate
@@ -177,6 +166,7 @@ FQuadRender::FRender2dFrameStats Render2D::recordRender2DList(const Render2DList
         }
         state.bClipped = command.bClipped;
         state.clip     = command.clip;
+
         if (command.kind == ERender2dBatchKind::Line) {
             const FLineRender::Vertex* src = list.lineVerts.data() + command.firstVertex;
             uint32_t remaining = command.vertexCount;
@@ -195,48 +185,74 @@ FQuadRender::FRender2dFrameStats Render2D::recordRender2DList(const Render2DList
             continue;
         }
 
-        const bool          bScreen = command.kind == ERender2dBatchKind::ScreenQuad;
-        FQuadRender::Vertex* dst    = bScreen ? quadData->vertexPtr : quadData->worldVertexPtr;
-        const FQuadRender::Vertex* src =
-            (bScreen ? list.screenVerts.data() : list.worldVerts.data()) + command.firstVertex;
-        uint32_t remaining = command.vertexCount;
-        while (remaining > 0) {
-            if (quadData->vertexCount >= FQuadRender::MaxVertexCount - 4) {
-                quadData->flush(ctx.cmdBuf, state);
-            }
-            uint32_t room  = (FQuadRender::MaxVertexCount - quadData->vertexCount) / 4;
-            uint32_t quads = std::min(room, remaining / 4);
-            for (uint32_t q = 0; q < quads; ++q) {
-                const uint32_t localSlot = src->textureRef & FQuadRender::kTextureIndexMask;
-                if (localToGlobal[localSlot] == kUnmapped) {
-                    if (quadData->textureTableFull()) {
-                        // Draw what the current table covers, then re-key the
-                        // rest against a fresh table.
-                        flushPending();
-                        quadData->resetTextureBatch();
-                        std::fill(localToGlobal.begin(), localToGlobal.end(), kUnmapped);
+        // Screen and world quads differ in typed vertex layout, so the copy
+        // paths are spelled out. Each quad's textureSlot is re-keyed into the
+        // pass's global binding table; sampleMode is typed data carried per
+        // quad and never part of the table. A capacity flush closes the
+        // current region and continues the same command in a fresh region;
+        // `emitted` counts vertices already copied for THIS command.
+        if (command.kind == ERender2dBatchKind::ScreenQuad) {
+            uint32_t emitted = 0;
+            while (emitted < command.vertexCount) {
+                if (quadData->vertexCount >= FQuadRender::MaxVertexCount - 4) {
+                    quadData->flush(ctx.cmdBuf, state);
+                }
+                const uint32_t quads = std::min(
+                    static_cast<uint32_t>((FQuadRender::MaxVertexCount - quadData->vertexCount) / 4),
+                    (command.vertexCount - emitted) / 4);
+                for (uint32_t q = 0; q < quads; ++q) {
+                    const uint32_t srcIndex = command.firstVertex + emitted + q * 4;
+                    const uint32_t localSlot = list.screenVerts[srcIndex].textureSlot;
+                    if (localToGlobal[localSlot] == kUnmapped) {
+                        if (quadData->textureTableFull()) {
+                            flushPending();
+                            quadData->resetTextureBatch();
+                            std::fill(localToGlobal.begin(), localToGlobal.end(), kUnmapped);
+                        }
+                        localToGlobal[localSlot] = quadData->findOrAddTexture(list.textures[localSlot].get());
                     }
-                    localToGlobal[localSlot] =
-                        quadData->findOrAddTexture(list.textures[localSlot].get()).slot;
+                    for (int vi = 0; vi < 4; ++vi) {
+                        ScreenVertex v = list.screenVerts[srcIndex + vi];
+                        v.textureSlot = localToGlobal[localSlot];
+                        quadData->vertexPtr[vi] = v;
+                    }
+                    quadData->vertexPtr += 4;
+                    quadData->vertexCount += 4;
+                    quadData->indexCount += 6;
                 }
-                std::memcpy(dst, src, 4 * sizeof(FQuadRender::Vertex));
-                for (int vi = 0; vi < 4; ++vi) {
-                    dst[vi].textureRef = (dst[vi].textureRef & ~FQuadRender::kTextureIndexMask)
-                                       | localToGlobal[localSlot];
+                emitted += quads * 4;
+            }
+        }
+        else {
+            uint32_t emitted = 0;
+            while (emitted < command.vertexCount) {
+                if (quadData->worldVertexCount >= FQuadRender::MaxVertexCount - 4) {
+                    quadData->flushWorld(ctx.cmdBuf, state);
                 }
-                dst += 4;
-                src += 4;
-                remaining -= 4;
-            }
-            if (bScreen) {
-                quadData->vertexPtr += quads * 4;
-                quadData->vertexCount += quads * 4;
-                quadData->indexCount += quads * 6;
-            }
-            else {
-                quadData->worldVertexPtr += quads * 4;
-                quadData->worldVertexCount += quads * 4;
-                quadData->worldIndexCount += quads * 6;
+                const uint32_t quads = std::min(
+                    static_cast<uint32_t>((FQuadRender::MaxVertexCount - quadData->worldVertexCount) / 4),
+                    (command.vertexCount - emitted) / 4);
+                for (uint32_t q = 0; q < quads; ++q) {
+                    const uint32_t srcIndex = command.firstVertex + emitted + q * 4;
+                    const uint32_t localSlot = list.worldVerts[srcIndex].textureSlot;
+                    if (localToGlobal[localSlot] == kUnmapped) {
+                        if (quadData->textureTableFull()) {
+                            flushPending();
+                            quadData->resetTextureBatch();
+                            std::fill(localToGlobal.begin(), localToGlobal.end(), kUnmapped);
+                        }
+                        localToGlobal[localSlot] = quadData->findOrAddTexture(list.textures[localSlot].get());
+                    }
+                    for (int vi = 0; vi < 4; ++vi) {
+                        WorldVertex v = list.worldVerts[srcIndex + vi];
+                        v.textureSlot = localToGlobal[localSlot];
+                        quadData->worldVertexPtr[vi] = v;
+                    }
+                    quadData->worldVertexPtr += 4;
+                    quadData->worldVertexCount += 4;
+                    quadData->worldIndexCount += 6;
+                }
+                emitted += quads * 4;
             }
         }
     }
