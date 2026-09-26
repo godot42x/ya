@@ -57,20 +57,24 @@ void setScreenViewportAndScissor(ICommandBuffer& cmdBuf, IRender* render, uint32
 
 ViewportState buildQuadViewportState()
 {
+    // The pipelines' viewport/scissor are DYNAMIC state (see dynamicFeatures):
+    // this CI placeholder is overridden by setScreenViewportAndScissor on
+    // every flush, so it carries a fixed legal value instead of reading a
+    // recording's extent.
     return ViewportState{
         .viewports = {Viewport{
             .x        = 0.0f,
             .y        = 0.0f,
-            .width    = static_cast<float>(Render2D::session.windowWidth),
-            .height   = static_cast<float>(Render2D::session.windowHeight),
+            .width    = 1.0f,
+            .height   = 1.0f,
             .minDepth = 0.0f,
             .maxDepth = 1.0f,
         }},
         .scissors = {Scissor{
             .offsetX = 0,
             .offsetY = 0,
-            .width   = Render2D::session.windowWidth,
-            .height  = Render2D::session.windowHeight,
+            .width   = 1,
+            .height  = 1,
         }},
     };
 }
@@ -609,20 +613,6 @@ void FQuadRender::begin(Render2DPassSlot passSlot, const Extent2D& extent, uint3
     _screenOrthoProj = glm::orthoRH_ZO(0.0f, w, h, 0.0f, -1.0f, 1.0f);
 }
 
-void FQuadRender::end()
-{
-    // Leftover drain only. Cross-pipeline draw order is owned by
-    // Render2D::flushPending(); do not use this as the session-end path.
-    FRender2dFlushState state{
-        .windowWidth  = Render2D::session.windowWidth,
-        .windowHeight = Render2D::session.windowHeight,
-        .view         = Render2D::session.view,
-        .viewProjection = Render2D::session.viewProjection,
-    };
-    flushWorld(Render2D::session.curCmdBuf, state);
-    flush(Render2D::session.curCmdBuf, state);
-}
-
 void FQuadRender::flush(ICommandBuffer* cmdBuf, const FRender2dFlushState& state)
 {
     if (!cmdBuf || vertexCount == 0) {
@@ -757,9 +747,7 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf, const FRender2dFlushState& 
         _uploadedWorldResourceVersion = _resourceVersion;
     }
     if (!_worldFrameUboUploaded) {
-        updateFrameUBO(resources.worldFrameUBOBuffer,
-                       Render2D::session.viewProjection,
-                       Render2D::session.view);
+        updateFrameUBO(resources.worldFrameUBOBuffer, state.viewProjection, state.view);
         _worldFrameUboUploaded = true;
     }
     resources.worldVertexBuffer->flush();
@@ -827,32 +815,6 @@ void FQuadRender::resetTextureBatch()
     _resourceVersion                  = std::max<uint64_t>(_resourceVersion + 1, 1);
     _uploadedScreenResourceVersion    = 0;
     _uploadedWorldResourceVersion     = 0;
-}
-
-void FQuadRender::flushForTextureOverflow(ICommandBuffer* cmdBuf)
-{
-    // Texture slots are shared by screen and world quads. The session batcher
-    // keeps at most one of those backends pending, so this must not impose a
-    // world-then-screen drain order.
-    YA_CORE_ASSERT(!(vertexCount > 0 && worldVertexCount > 0),
-                   "Render2D texture overflow while both screen and world quads are pending");
-    if (worldVertexCount > 0) {
-        flushWorld(cmdBuf, FRender2dFlushState{
-                               .windowWidth  = Render2D::session.windowWidth,
-                               .windowHeight = Render2D::session.windowHeight,
-                               .view         = Render2D::session.view,
-                               .viewProjection = Render2D::session.viewProjection,
-                           });
-    }
-    if (vertexCount > 0) {
-        flush(cmdBuf, FRender2dFlushState{
-                          .windowWidth  = Render2D::session.windowWidth,
-                          .windowHeight = Render2D::session.windowHeight,
-                          .view         = Render2D::session.view,
-                          .viewProjection = Render2D::session.viewProjection,
-                      });
-    }
-    resetTextureBatch();
 }
 
 void FQuadRender::updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer,
@@ -932,9 +894,11 @@ FQuadRender::TextureRef FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture, 
             }
         }
         else {
-            if (_textureBindings.size() >= TEXTURE_SET_SIZE) {
-                flushForTextureOverflow(Render2D::session.curCmdBuf);
-            }
+            // The record step guarantees room (textureTableFull() checked
+            // before registering list textures); an overflow here is a record
+            // step contract violation, not a flush point.
+            YA_CORE_ASSERT(_textureBindings.size() < TEXTURE_SET_SIZE,
+                           "Render2D texture table overflow without a record-step check");
             _textureBindings.push_back(TextureBinding{
                 .texture = texture,
                 .sampler = resolveSamplerForTexture(texture.get()),
@@ -993,293 +957,6 @@ void FQuadRender::EmitWorldQuad(Vertex*          out,
             .worldDirection = normalizedDirection,
             .worldSize   = size,
         };
-    }
-}
-
-void FQuadRender::emitScreenQuad(const glm::mat4&                transform,
-                                 TextureRef                      textureRef,
-                                 const std::array<glm::vec4, 4>& colorsYaOrder,
-                                 const glm::vec2&                uvScale,
-                                 const glm::vec2&                uvTranslation,
-                                 const glm::vec3&                corner)
-{
-    EmitScreenQuad(vertexPtr, transform, textureRef, colorsYaOrder, uvScale, uvTranslation, corner);
-    vertexPtr += 4;
-    vertexCount += 4;
-    indexCount += 6;
-}
-
-void FQuadRender::drawTextureInternal(const glm::mat4& transform,
-                                      TextureRef       textureRef,
-                                      const glm::vec4& tint,
-                                      const glm::vec2& uvScale,
-                                      const glm::vec2& uvTranslation,
-                                      const glm::vec3& corner)
-{
-    emitScreenQuad(transform, textureRef, {tint, tint, tint, tint}, uvScale, uvTranslation, corner);
-}
-
-void FQuadRender::drawRectFilledMultiColor(const glm::vec3&               position,
-                                           const glm::vec2&               size,
-                                           const std::array<glm::vec4, 4>& colors,
-                                           ya::Ptr<Texture>               texture)
-{
-    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
-                   "Render2D draw called outside a begin()/end() recording session");
-    if (vertexCount >= MaxVertexCount - 4) {
-        flush(Render2D::session.curCmdBuf, FRender2dFlushState{
-                         .windowWidth  = Render2D::session.windowWidth,
-                         .windowHeight = Render2D::session.windowHeight,
-                         .view         = Render2D::session.view,
-                         .viewProjection = Render2D::session.viewProjection,
-                     });
-    }
-
-    glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
-                      glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
-
-    // Public/ImGui order is TL, TR, BR, BL. Vertex buffer order is TL, TR, BL, BR.
-    const std::array<glm::vec4, 4> yaColors{colors[0], colors[1], colors[3], colors[2]};
-    emitScreenQuad(model, findOrAddTexture(texture), yaColors, {1.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, 0.0f});
-}
-
-void FQuadRender::drawRoundedRect(const glm::vec3& position,
-                                  const glm::vec2& size,
-                                  const glm::vec4& tint,
-                                  float            cornerRadius)
-{
-    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
-                   "Render2D draw called outside a begin()/end() recording session");
-    if (vertexCount >= MaxVertexCount - 4) {
-        flush(Render2D::session.curCmdBuf, FRender2dFlushState{
-                         .windowWidth  = Render2D::session.windowWidth,
-                         .windowHeight = Render2D::session.windowHeight,
-                         .view         = Render2D::session.view,
-                         .viewProjection = Render2D::session.viewProjection,
-                     });
-    }
-
-    glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
-                      glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
-
-    // No texture: the white sprite fills the quad, the SDF round-rect branch in
-    // the shader carves the corners from the quad's alpha. corner = (radius, w, h)
-    // so the fragment shader can build the local-space signed distance.
-    auto textureRef = findOrAddTexture(nullptr);
-    drawTextureInternal(model, textureRef, tint, {1.0f, 1.0f}, {0.0f, 0.0f},
-                        {cornerRadius, size.x, size.y});
-}
-
-void FQuadRender::drawWorldTextureInternal(const glm::vec3&            center,
-                                           const glm::vec3&            direction,
-                                           const glm::vec2&            size,
-                                           TextureRef                  textureRef,
-                                           const glm::vec4&            tint,
-                                           const glm::vec2&            uvScale)
-{
-    EmitWorldQuad(worldVertexPtr, center, direction, size, textureRef, tint, uvScale);
-    worldVertexPtr += 4;
-    worldVertexCount += 4;
-    worldIndexCount += 6;
-}
-
-void FQuadRender::drawTexture(const glm::vec3& position,
-                              const glm::vec2& size,
-                              ya::Ptr<Texture> texture,
-                              const glm::vec4& tint,
-                              const glm::vec2& uvScale,
-                              const glm::vec2& uvTranslation,
-                              bool             bOpaqueSample)
-{
-    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
-                   "Render2D draw called outside a begin()/end() recording session");
-    if (vertexCount >= MaxVertexCount - 4) {
-        flush(Render2D::session.curCmdBuf, FRender2dFlushState{
-                         .windowWidth  = Render2D::session.windowWidth,
-                         .windowHeight = Render2D::session.windowHeight,
-                         .view         = Render2D::session.view,
-                         .viewProjection = Render2D::session.viewProjection,
-                     });
-    }
-
-    glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
-                      glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
-
-    drawTextureInternal(model, findOrAddTexture(texture, bOpaqueSample ? ETextureSampleMode::Opaque : ETextureSampleMode::Coverage),
-                        tint, uvScale, uvTranslation);
-}
-
-void FQuadRender::drawTexture(const glm::mat4& transform,
-                              ya::Ptr<Texture> texture,
-                              const glm::vec4& tint,
-                              const glm::vec2& uvScale,
-                              const glm::vec2& uvTranslation,
-                              bool             bOpaqueSample)
-{
-    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
-                   "Render2D draw called outside a begin()/end() recording session");
-    if (vertexCount >= MaxVertexCount - 4) {
-        flush(Render2D::session.curCmdBuf, FRender2dFlushState{
-                         .windowWidth  = Render2D::session.windowWidth,
-                         .windowHeight = Render2D::session.windowHeight,
-                         .view         = Render2D::session.view,
-                         .viewProjection = Render2D::session.viewProjection,
-                     });
-    }
-
-    drawTextureInternal(transform,
-                        findOrAddTexture(texture, bOpaqueSample ? ETextureSampleMode::Opaque : ETextureSampleMode::Coverage),
-                        tint, uvScale, uvTranslation);
-}
-
-void FQuadRender::drawWorldTexture(const glm::vec3&            center,
-                                   const glm::vec3&            direction,
-                                   const glm::vec2&            size,
-                                   ya::Ptr<Texture>            texture,
-                                   const glm::vec4&            tint,
-                                   const glm::vec2&            uvScale)
-{
-    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
-                   "Render2D draw called outside a begin()/end() recording session");
-    if (worldVertexCount >= MaxVertexCount - 4) {
-        flushWorld(Render2D::session.curCmdBuf, FRender2dFlushState{
-            .windowWidth  = Render2D::session.windowWidth,
-            .windowHeight = Render2D::session.windowHeight,
-            .view         = Render2D::session.view,
-            .viewProjection = Render2D::session.viewProjection,
-        });
-    }
-
-    drawWorldTextureInternal(center, direction, size, findOrAddTexture(texture), tint, {uvScale.x, uvScale.y});
-}
-
-void FQuadRender::drawSubTexture(const glm::vec3& position,
-                                 const glm::vec2& size,
-                                 ya::Ptr<Texture> texture,
-                                 const glm::vec4& tint,
-                                 const glm::vec4& uvRect)
-{
-    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
-                   "Render2D draw called outside a begin()/end() recording session");
-    if (vertexCount >= MaxVertexCount - 4) {
-        flush(Render2D::session.curCmdBuf, FRender2dFlushState{
-                         .windowWidth  = Render2D::session.windowWidth,
-                         .windowHeight = Render2D::session.windowHeight,
-                         .view         = Render2D::session.view,
-                         .viewProjection = Render2D::session.viewProjection,
-                     });
-    }
-
-    drawSubTextureInternal(position, size, texture, tint, uvRect, ETextureSampleMode::Coverage);
-}
-
-void FQuadRender::drawSubTextureInternal(const glm::vec3& position,
-                                         const glm::vec2& size,
-                                         ya::Ptr<Texture> texture,
-                                         const glm::vec4& tint,
-                                         const glm::vec4& uvRect,
-                                         ETextureSampleMode mode)
-{
-    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
-                   "Render2D draw called outside a begin()/end() recording session");
-    if (vertexCount >= MaxVertexCount - 4) {
-        flush(Render2D::session.curCmdBuf, FRender2dFlushState{
-                         .windowWidth  = Render2D::session.windowWidth,
-                         .windowHeight = Render2D::session.windowHeight,
-                         .view         = Render2D::session.view,
-                         .viewProjection = Render2D::session.viewProjection,
-                     });
-    }
-    glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
-                      glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
-    drawTextureInternal(model, findOrAddTexture(texture, mode), tint, {uvRect.z, uvRect.w}, {uvRect.x, uvRect.y});
-}
-
-void FQuadRender::drawText(const std::string& text,
-                           const glm::vec3&   position,
-                           const glm::vec4&   color,
-                           Font*              font,
-                           const glm::vec2&   scale)
-{
-    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
-                   "Render2D draw called outside a begin()/end() recording session");
-    float cursorX = position.x;
-    float cursorY = position.y;
-
-    YA_CORE_ASSERT(font != nullptr, "TODO: font is null in Render2D::drawText, should make a default font");
-    YA_CORE_ASSERT(_render, "Render2D requires a render backend");
-    // Glyph capture is deferred to a safe frame point (requestGlyphs at
-    // snapshot build + flushPendingGlyphs before recording — Core Rule 6).
-    // Missing glyphs resolve to '?' here and render correctly next frame.
-    const auto codePoints = utf8::decode(text);
-    for (uint32_t codePoint : codePoints) {
-        if (codePoint == '\r') {
-            continue;
-        }
-        if (codePoint == '\n') {
-            cursorX = position.x;
-            cursorY += font->lineHeight * scale.y;
-            continue;
-        }
-        if (utf8::isIgnorableFormatCodePoint(codePoint)) {
-            continue;
-        }
-
-        const Character& character = font->getCharacter(codePoint);
-        if (codePoint == ' ') {
-            cursorX += character.advance.x * scale.x;
-            continue;
-        }
-        if (codePoint == '\t') {
-            cursorX += font->getCharacter(' ').advance.x * 4.0f * scale.x;
-            continue;
-        }
-
-        // Skip glyphs that haven't been captured yet (atlasSlot == ~0u): the
-        // first frame after a new codepoint is requested renders the previous
-        // frame's fallback instead of a degenerate quad that would sample a
-        // single texel and look like a stray block. Deferred capture lives in
-        // FontManager::flushPendingGlyphs (Core Rule 6).
-        if (character.atlasSlot == ~0u || character.size.x <= 0 || character.size.y <= 0) {
-            cursorX += character.advance.x * scale.x;
-            continue;
-        }
-
-        float xpos = cursorX + static_cast<float>(character.bearing.x) * scale.x;
-        float ypos = cursorY + static_cast<float>(font->ascent - character.bearing.y) * scale.y;
-        // Pixel-snap glyph quads: subpixel positions cause uneven stroke
-        // weight and a wavy baseline (the "blurry / misaligned" look). Snap
-        // the DRAW position to device pixels; the advance stays fractional
-        // so inter-glyph spacing keeps its accumulated precision.
-        xpos = std::round(xpos);
-        ypos = std::round(ypos);
-        glm::vec3 pos  = glm::vec3(xpos, ypos, position.z);
-
-        // Snap the glyph quad to an integer device-pixel footprint (ImGui's
-        // pixel-perfect RenderText). The atlas texel count equals
-        // round(size * dpiScale), so an integer quad gives Nearest sampling an
-        // exact texel->pixel map — no fractional minification, hence no per-glyph
-        // brightness/edge-blur variance. SDF is unaffected (scale-free, Linear).
-        const glm::vec2 scaledGlyphSize = glm::round(glm::vec2(character.size) * scale);
-
-        // Glyphs live in the dynamic atlas of their face (primary or
-        // fallback, font-framework plan Phase 3). Color glyphs (emoji) draw
-        // with a WHITE tint so the bitmap's own colors show through; coverage
-        // and SDF glyphs use the text color as before.
-        const auto atlasTexture = font->atlasTextureFor(character);
-        if (atlasTexture) {
-            const auto sampleMode = font->renderModeFor(character) == EFontRenderMode::SDF
-                                        ? ETextureSampleMode::Sdf
-                                        : ETextureSampleMode::Coverage;
-            drawSubTextureInternal(pos,
-                                   scaledGlyphSize,
-                                   atlasTexture,
-                                   character.bColor ? glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) : color,
-                                   character.uvRect,
-                                   sampleMode);
-        }
-
-        cursorX += character.advance.x * scale.x;
     }
 }
 

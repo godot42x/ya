@@ -112,9 +112,7 @@ struct YA_RENDER_2D_API FLineRender
     /// viewport and world camera (see `FQuadRender::FRender2dFlushState`).
     void flush(ICommandBuffer* cmdBuf, const FQuadRender::FRender2dFlushState& state);
 
-    void addLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color);
-    void addWireBox(const glm::mat4& model, const glm::vec3& halfExtent, const glm::vec4& color);
-    void addWireSphere(const glm::vec3& center, float radius, const glm::vec4& color);
+
 };
 
 } // namespace ya

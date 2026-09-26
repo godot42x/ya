@@ -263,7 +263,6 @@ struct YA_RENDER_2D_API FQuadRender
     void flush(ICommandBuffer* cmdBuf, const FRender2dFlushState& state);
     void flushWorld(ICommandBuffer* cmdBuf, const FRender2dFlushState& state);
     void resetTextureBatch();
-    void flushForTextureOverflow(ICommandBuffer* cmdBuf);
     /// Whether one more texture would overflow the per-record binding table
     /// (the record step checks this before registering list textures and
     /// flushes + resets instead of relying on the lazy overflow path).
@@ -297,91 +296,12 @@ struct YA_RENDER_2D_API FQuadRender
                               const glm::vec4& tint,
                               const glm::vec2& uvScale);
 
-  public:
-    void drawTexture(const glm::vec3& position,
-                     const glm::vec2& size,
-                     ya::Ptr<Texture> texture = nullptr,
-                     const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                     const glm::vec2& uvScale = {1.0f, 1.0f},
-                     const glm::vec2& uvTranslation = {0.0f, 0.0f},
-                     bool             bOpaqueSample = false);
-
-    void drawTexture(const glm::mat4& transform,
-                     ya::Ptr<Texture> texture = nullptr,
-                     const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                     const glm::vec2& uvScale = {1.0f, 1.0f},
-                     const glm::vec2& uvTranslation = {0.0f, 0.0f},
-                     bool             bOpaqueSample = false);
-
-    void drawWorldTexture(const glm::vec3& center,
-                          const glm::vec3& direction,
-                          const glm::vec2& size,
-                          ya::Ptr<Texture> texture = nullptr,
-                          const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                          const glm::vec2& uvScale = {1.0f, 1.0f});
-
-    void drawSubTexture(const glm::vec3& position,
-                        const glm::vec2& size,
-                        ya::Ptr<Texture> texture = nullptr,
-                        const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                        const glm::vec4& uvRect  = glm::vec4(0.0f));
-
-    // Draws a filled rounded rectangle. cornerRadius is in target px; the shader
-    // derives the SDF round-rect alpha from the quad size (passed via corner attr).
-    // No texture sampling is required.
-    void drawRoundedRect(const glm::vec3& position,
-                        const glm::vec2& size,
-                        const glm::vec4& tint,
-                        float            cornerRadius);
-
-    /// Screen quad with a different color on each vertex. `colors` is Y-down
-    /// ImGui `AddRectFilledMultiColor` order: top-left, top-right, bottom-right,
-    /// bottom-left. The GPU interpolates; `texture` nullptr uses the white sprite.
-    void drawRectFilledMultiColor(const glm::vec3&               position,
-                                  const glm::vec2&               size,
-                                  const std::array<glm::vec4, 4>& colors,
-                                  ya::Ptr<Texture>               texture = nullptr);
-
-    void drawText(const std::string& text,
-                  const glm::vec3&   position,
-                  const glm::vec4&   color,
-                  Font*              font,
-                  const glm::vec2&   scale = glm::vec2(1.0f));
-
-  public:
     /// Resolve (or lazily add) a texture's slot in the per-record binding
     /// table. Public because the record step registers list textures through
     /// it; the caller guarantees room (`textureTableFull()`) so the lazy
     /// overflow flush inside never fires on the list path.
     TextureRef findOrAddTexture(ya::Ptr<Texture> texture, ETextureSampleMode mode = ETextureSampleMode::Coverage);
 
-    void drawTextureInternal(const glm::mat4& transform,
-                             TextureRef textureRef,
-                             const glm::vec4& tint,
-                             const glm::vec2& uvScale,
-                             const glm::vec2& uvTranslation = {0, 0},
-                             const glm::vec3& corner        = {0.0f, 0.0f, 0.0f});
-
-    void emitScreenQuad(const glm::mat4&                 transform,
-                        TextureRef                       textureRef,
-                        const std::array<glm::vec4, 4>&  colorsYaOrder,
-                        const glm::vec2&                 uvScale,
-                        const glm::vec2&                 uvTranslation,
-                        const glm::vec3&                 corner);
-
-    void drawWorldTextureInternal(const glm::vec3& center,
-                                  const glm::vec3& direction,
-                                  const glm::vec2& size,
-                                  TextureRef textureRef,
-                                  const glm::vec4& tint,
-                                  const glm::vec2& uvScale);
-
-    void drawSubTextureInternal(const glm::vec3& position,
-                                const glm::vec2& size,
-                                ya::Ptr<Texture> texture,
-                                const glm::vec4& tint,
-                                const glm::vec4& uvRect,
-                                ETextureSampleMode mode);
 };
 
 } // namespace ya

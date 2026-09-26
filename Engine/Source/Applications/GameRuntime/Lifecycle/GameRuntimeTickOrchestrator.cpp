@@ -227,11 +227,6 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
                                app._renderState->hostSettings.renderResolution);
     }
 
-    {
-        YA_PROFILE_SCOPE("Logic/Render2DUpdate");
-        Render2D::onUpdate(dt);
-    }
-
     switch (app._appState) {
     case AppState::Stopped:
         break;
