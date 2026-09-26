@@ -1,0 +1,44 @@
+{
+  "plan": "scene-2d-world-and-game-ui",
+  "status": "planned",
+  "architecture_review": "2026-09-26",
+  "decisions": {
+    "separate_ui_pipeline": true,
+    "world2d_is_top_level_renderer": false,
+    "render3d_depends_on_gui_compose": false,
+    "introduce_transform2d": false,
+    "introduce_camera2d": false,
+    "reuse_scene_snapshot": true,
+    "world2d_pass_in_active_forward_deferred": true,
+    "render2d_backend_seam_audited_before_split": true,
+    "render2d_session_is_pass_local": "decision_gate",
+    "multi_window_surface_scoped_output": "dependency_gate",
+    "ui_is_scene_ecs_node": false,
+    "glsl_is_supported_shader_language": false
+  },
+  "features": [
+    {"id":"pipeline_contract_audit","phase":"P0","status":"not_started","reference":"Render2D/Render2D.h, Render2D/QuadRender.h, GUI/Runtime/Compose/Render2DComposePass.cpp","verification":"call-site inventory and owner table"},
+    {"id":"render3d_gui_boundary","phase":"P0","status":"not_started","reference":"Render3D/Common/ViewCompose.*, Render3D/Common/RenderFrameInputs.h, Render3D/xmake.lua, GameRuntime/Render/RuntimeRenderContext.cpp","verification":"ya-render-3d has no GUI/Compose or UIFrameSnapshot dependency"},
+    {"id":"ui_world2d_capability_audit","phase":"P1","status":"not_started","reference":"Engine/Shader/Slang/Sprite2D.slang, Render2D/QuadRender.cpp, GUI/Runtime/Compose/Render2DComposePass.cpp","verification":"capability matrix and removal of mixed texture flags; shader count justified by evidence"},
+    {"id":"ui_world2d_batch_split","phase":"P1","status":"not_started","reference":"Render2D::begin/end, FRender2dSession, FQuadRender","verification":"explicit pass ownership; no cross-domain flag or shared flush overwrite"},
+    {"id":"camera_component_orthographic","phase":"P2","status":"not_started","reference":"ECS/Systems/Components/CameraComponent.h/.cpp, Core/Camera/Camera.h, RuntimeGameViewProducer.cpp, EditorViewProducer.cpp","verification":"pure projection input + perspective regression + orthographic aspect tests"},
+    {"id":"authored_sprite2d_component","phase":"P3","status":"not_started","reference":"Render3D/include/ECS/Component/2D/Sprite2DComponent.h, Scene/Core/Scene.cpp, SceneSerializer.cpp, ResourceResolveSystem","verification":"scene round-trip, clone/destroy, pending/placeholder, no GPU owner in component"},
+    {"id":"shared_scene_sprite_snapshot","phase":"P4","status":"not_started","reference":"RenderFrameData.h, RenderFrameExtractor.cpp, HostSceneExtract.cpp","verification":"same Scene/revision extracted once and shared by views"},
+    {"id":"world2d_scene_pass","phase":"P4","status":"not_started","reference":"Forward/Deferred frame graph passes, RenderFrameData.h, RenderFrameExtractor.cpp","verification":"same active renderer records 2D/3D/mixed views; SceneColor graph contract and hidden-view gating"},
+    {"id":"runtime_2d_view","phase":"P5","status":"not_started","reference":"RuntimeGameViewProducer.cpp, RuntimeRenderContext.cpp","verification":"orthographic game scene renders authored sprites before UI"},
+    {"id":"editor_2d_authoring_profile","phase":"P5","status":"not_started","reference":"EditorViewProducer.cpp, EditorLayer, EditorViewport compositor/tools","verification":"same hierarchy, selection, gizmo, save, no UI-canvas ambiguity"},
+    {"id":"game_ui_runtime_designer_boundary","phase":"P6","status":"not_started","reference":"GameUIHost.cpp, EditorUIDesignerSession.cpp, game-ui-authoring plan","verification":"runtime and designer trees have explicit time/input policies"},
+    {"id":"multi_view_snapshot_reuse","phase":"P7","status":"not_started","reference":"SceneRenderScheduler, ViewTargetStore, RenderSubmission","verification":"no duplicate extraction/copy; GPU resources retained through submit"},
+    {"id":"legacy_pipeline_removed","phase":"P7","status":"not_started","reference":"Sprite2D.slang, textureRef flags, BillboardComponent call sites","verification":"rg audit shows no UI/World2D mixed legacy path"}
+  ],
+  "known_baseline_failures": ["See game-ui-authoring/feature_matrix.json and current repository baseline; do not reclassify unrelated failures as regressions here."],
+  "review_notes": [
+    "Do not create a third ISceneViewFamilyRenderer for World2D.",
+    "Do not pre-commit to four shader files or multiple batch facades; use a capability matrix.",
+    "World2D MVP is a linear SceneColor pass after bloom graph and before finalize/tone-map.",
+    "CameraComponent must not read View/window state or mutate Transform while producing a view.",
+    "Game UI placement is separate from World2D and has four explicit target scopes.",
+    "Do not duplicate Render2D Vulkan checks or global session state in new paths.",
+    "Do not claim multi-window completion while displayRootTask remains first-root scoped."
+  ]
+}

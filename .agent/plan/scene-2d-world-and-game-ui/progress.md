@@ -1,0 +1,121 @@
+# Progress
+
+## 2026-09-26 — Architecture review（本轮未改运行时代码）
+
+### 保留的结论
+
+- Game UI compose 与 Scene runtime rendering 继续分开；不引入 Transform2D、Camera2D、Node2D 或
+  第二套 Scene tree。
+- 同一个 Scene/revision 的 snapshot 在同一 tick 只 extraction 一次；View 只持有自己的 camera、
+  cull、order 和 output。
+- 2D authored sprite 使用现有 TransformComponent；正交只是 CameraComponent 的 projection mode。
+- Game UI runtime/designer 继续使用不同 WidgetTree 和 UIFrameSnapshot 生命周期。
+
+### 本轮发现并已写回 plan.md 的问题
+
+1. 当前 Render3D 仍依赖 GUI compose：RenderFrameInputs 携带 UIFrameSnapshot，ViewCompose.cpp
+   include GUI/Compose，ya-render-3d xmake 还 public 依赖 ya-gui-compose。必须在 P0 收回到
+   GameRuntime/Editor 的应用侧 compose。
+2. World2D 不应成为第三个 ISceneViewFamilyRenderer；它应作为 active Forward/Deferred graph
+   中的一个 typed sprite pass。
+3. 不再预先承诺四套 UI/World2D shader，也不为分层制造 QuadResourcePool/多个 batch facade；先
+   做 capability matrix，只拆数据/状态/生命周期真正不兼容的部分。
+4. 不增加 EViewRenderFamilyMask；如确需关闭内容域，只使用小型 SceneViewContents，不表达
+   renderer identity，也不加入 family key。
+5. World2D MVP 的 graph contract 固定为线性 SceneColor load/store、无 GBuffer、无 depth write，
+   放在 bloom graph 之后、finalize/tone-map 之前，避免意外进入 bloom。
+6. CameraComponent 最终只负责纯 projection；producer 传 effective aspect，view 由 producer/
+   controller 根据 Transform 计算。现有 getOrbitView 的 Transform 写入副作用列为迁移项。
+7. Sprite2DComponent 默认沿用 Render3D authored component domain，不放进 gameplay ECS systems；
+   ResourceResolveSystem 负责资产 ready/pending/version，extractor 不直接 resolve GPU 资源。
+8. 2D picking MVP 采用 editor CPU quad hit-test，不为第一版新增 EntityId GPU pass。
+9. Game UI、editor surface、designer offscreen、standalone GUI 是四类 compose target，不能再用
+   一个 helper 隐含它们的 layout/load/store/input 语义。
+10. Render2D 仍有 Vulkan 判断、Backend TextureLibrary 和 process-global session/cursor；P0 必须
+    先冻结 backend seam 与 pass-local state 规则，不能在 UI/World2D 新路径中复制这些分支。
+11. 当前 displayRootTask() 只取第一个 bDisplayRoot；多 OS window 的 surface-scoped View output
+    尚未在本线解决，不能把本计划误写成多窗口闭环。
+
+### 新增审计工件
+
+- P0-contract-matrix.md：记录当前/目标 owner、producer、consumer、生命周期与待确认的 bloom/
+  resourceVersion 契约。
+
+### 当前状态
+
+- P0–P7 仍为 not started；本轮只是把原计划中会导致过度设计或错误依赖的假设改正。
+- 尚未创建 Sprite2DComponent、World2D pass、正交 CameraComponent 实现或新 shader。
+- 未运行构建/测试；下一步应先完成 P0 调用方表与 Render3D→GUI 边界修正设计。
+
+## 2026-09-25 — 计划建立
+
+### 本轮已核对
+
+- TransformComponent 已经保存 vec3 position/rotation/scale，Node3D/TransformSystem 负责层级和
+  world matrix；没有必要新增 Transform2D。
+- CameraComponent::getProjection() 当前只有 perspective，但 Core/Camera/FreeCamera 已经存在
+  EProjectionType::Orthographic 和 FMath::orthographic，因此正交能力应收敛到 CameraComponent。
+- SceneViewDesc、SceneRenderScheduler、ExtractedSceneRender 已经支持同 Scene 多 View 共享 immutable
+  snapshot；后续只需补 World2D candidates/view buckets/family mask，不应另造 scene scheduler。
+- Render2D 当前通过 FQuadRender/Sprite2D.slang 同时承担 screen/UI 与 world quad，并用 textureRef
+  编码采样模式；这是 UI pipeline 与 world runtime pipeline 混杂的主要来源。
+- GameUIHost/UIFrameSnapshot/ya-gui-compose 已具备 UI 独立快照和 compose 链路，UI 不应进入
+  World3D/World2D extraction。
+- EditorGameUIPreview 已经有单独 preview WidgetTree，但尚未具备完整 preview clock/input policy。
+
+### 尚未执行
+
+- 未创建 Sprite2DComponent、World2D pipeline、CameraComponent 正交实现或 shader 文件。
+- 未改动旧 game-ui-authoring 计划的运行时代码。
+- 未运行构建/测试；本文件只是后续执行的基线。
+
+### 执行纪律
+
+- 每个 phase 只形成一个可运行闭环后提交；不得以移动文件、加 registry、加空接口冒充完成。
+- 保留用户工作区已有修改，不 blanket stage；计划与代码、测试在同一 checkpoint 提交。
+- 若实现过程中发现需要 Transform2D、Camera2D 或第二个 Scene tree，先停止并回到架构评审，不能临时引入。
+
+---
+
+## 2026-09-26 — P1 前置落地：Render2DList builder（会话所有权值化）
+
+对 Phase 1 §4.5（"Render2D session 所有权改成调用方明确传入，不得依赖 process-global
+pending kind 或跨窗口隐式状态"）与 §2.3 review 中 "Render2D 当前有 process-global
+session/cursor" 修正项的落地。本轮把 2D 录制改成**先产值再录制**（同 3D graph 的
+build/record 分割），顺带完成了 P0 工作项 1/2 的审计目标：
+
+### 已落地
+
+- `Render2DList`（Render2D 模块新值类型）：makeSprite/makeWorldSprite/makeText/
+  drawRoundedRect/makeRectFilledMultiColor/makeWorldLine/makeWireBox/makeWireSphere/
+  pushClipRect/popClipRect；命令流（kind/firstVertex/count/clip 快照）+ 每 kind 顶点数组 +
+  builder 本地纹理表 + clip 栈。构建期不接触 cmdBuf/passSlot/device。
+- `Render2D::recordRender2DList(list, ctx)`：唯一 record 步——解析 flight slot（device 环，
+  不问 swapchain）、按 per-slot/per-flight 资源提交、局部纹理表重键进全局绑定表、
+  按（kind 变化/clip 变化/容量/纹理表满）边界重放，与原立即 flusher 的边界一致。
+- 旧立即面删除：`Render2D::begin/end/session/makeXxx/pushClip/popClip/beginBatch/
+  flushPending/onUpdate/onRender` 全部移除；FQuadRender 的立即 draw 方法与 CPU 游标、
+  FLineRender 的 addLine/addWireBox/addWireSphere 一并移除；`FRender2dSession` 类型删除。
+  Emit 纯函数（`FQuadRender::EmitScreenQuad/EmitWorldQuad`）保留，list 与 record 共用。
+- 顺带修正：`buildQuadViewportState` 不再读 session（管线 viewport/scissor 是动态状态，
+  CI 里只留合法占位）；`PrimitiveMeshCache` 恢复其声明的锁（现存竞态 bug 修复）。
+
+### 证据
+
+- `ya-testing` 1314 passed / 0 failed；新增 `Render2DListTest`（同输入产出一致 list、
+  clip 变化关闭旧命令、kind 变化分裂命令）——全部纯 CPU，无渲染设备。
+- parity 两图 md5 `c775245ae636f15b41da8485319a2267` 与基线一致（像素逐字节相同）；
+  GUIWorkbench `--smoke-actions` PASS；editor smoke exit=0。
+- `rg "Render2D::(begin|end|makeSprite|makeWorldSprite|makeText)|pushClipRect"` 在产品代码
+  零命中（P0 校验项之一提前达成）。
+
+### 对后续 phase 的影响
+
+- Phase 4 的 World2D workload 可直接构建 Render2DList（builder 无 cmdBuf/slot/device，
+  支持并行构建）；record 步是唯一触 GPU 的点。
+- Phase 1 §4.3（删 textureRef 高位 bit 隐式协议）尚未做：list 顶点仍复用
+  FQuadRender::Vertex 布局（局部 slot + mode 位编码），值化已为 typed 化铺好插入点
+  （builder 发射方法改 typed data、record 步消费）。
+- 未创建 Sprite2DComponent/World2D pass/正交 CameraComponent/新 shader；未动
+  game-ui-authoring 运行时代码。
+

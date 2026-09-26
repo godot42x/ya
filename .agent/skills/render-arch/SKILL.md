@@ -243,6 +243,22 @@ C++
 3. 多 layer image 的 barrier 必须覆盖所有 layer / mip，避免只过渡 layer 0。
 4. 若怀疑 layout 问题，先看 `VulkanCommandBuffer`、`VulkanImage`、`VulkanRenderTarget` 的 transition 路径是否一致。
 
+## 2D draw path（Render2DList）
+
+- 2D 内容是**值**：产品代码构建 `Render2DList`（纯 CPU，无 cmdBuf/passSlot/device，clip 栈与
+  纹理表 builder 本地），再经 `Render2D::recordRender2DList(list, ctx)` 一步变成 GPU 工作。
+  不存在 process-global session/pending kind；两个 list 可并行构建（未来 family/面板级并行）。
+- record 步的批边界与旧立即 flusher 一致：**kind 变化、clip 变化、区域容量（MaxVertexCount）、
+  纹理表容量（16）**各成一次 region draw。合并不同 clip 的同 kind 命令会让后面的 scissor
+  裁掉前面的几何——这是 parity 曾抓到的真 bug，改动 record 顺序时先跑
+  `run_display_compose_parity.py`。
+- 顶点布局仍是 `FQuadRender::Vertex`（局部纹理 slot + 高位 mode 位编码）；typed 化（删除高位
+  bit 隐式协议）是 `scene-2d-world-and-game-ui` P1 的后续项，builder 发射方法是其插入点。
+- 纹理表翻译：list 顶点编码**局部**表 slot，record 步重键进 pass 全局表（≤16）；局部表无
+  容量限制，null 纹理也占独立槽位（否则 null draw 会与首个真实纹理撞号）。
+- Render2D 的裸单例只剩资源层（quadData/lineData 的 per-slot/per-flight GPU 资源、PassSlotPool）
+  与诊断（debug/lastFrameStats）；会话层已消失。
+
 ## 退出条件
 
 - 能明确回答一段逻辑属于抽象层、Renderer / pipeline 编排层，还是平台后端层
