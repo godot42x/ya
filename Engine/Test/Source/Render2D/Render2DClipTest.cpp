@@ -145,4 +145,25 @@ TEST(Render2DListTest, KindChangeSplitsCommands)
     EXPECT_EQ(list.lineVerts.size(), 24u);
 }
 
+TEST(Render2DListTest, QuadLineQuadSandwichKeepsEmitOrder)
+{
+    // widget A 画 quad → 画 line → widget B 画 quad：kind 边界把三次绘制
+    // 拆成三个命令，record 步按命令序 flush（kind 变化即边界），后画的
+    // quad 不会盖住中间的 line——painter's order 跨管线保序。
+    Render2DList list;
+    list.makeSprite(glm::vec3(1.0f, 1.0f, 0.0f), glm::vec2(10.0f, 10.0f));
+    list.makeWorldLine(glm::vec3(0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec4(1.0f));
+    list.makeSprite(glm::vec3(50.0f, 50.0f, 0.0f), glm::vec2(10.0f, 10.0f));
+    list.pushClipRect(Rect2D{.pos = {0.0f, 0.0f}, .extent = {100.0f, 100.0f}});
+
+    ASSERT_EQ(list.commands.size(), 3u);
+    EXPECT_EQ(list.commands[0].kind, ERender2dBatchKind::ScreenQuad);
+    EXPECT_EQ(list.commands[1].kind, ERender2dBatchKind::Line);
+    EXPECT_EQ(list.commands[2].kind, ERender2dBatchKind::ScreenQuad);
+    // 中间的 line 命令持有自己的 2 顶点；前后 quad 各 4 顶点。
+    EXPECT_EQ(list.commands[1].vertexCount, 2u);
+    EXPECT_EQ(list.commands[0].vertexCount, 4u);
+    EXPECT_EQ(list.commands[2].vertexCount, 4u);
+}
+
 } // namespace ya
