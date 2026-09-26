@@ -36,3 +36,48 @@ callback 或 global state 不得进入后续 phase。
   依赖；默认不能让 World2D 意外进入 bloom。
 - TextureSlot/resourceVersion 的 ready/pending/failed 行为如何在 extraction 前收敛成一个
   immutable candidate，不允许每个 renderer 自己处理资源 resolve。
+
+## 2D Capability Matrix（2026-09-26，P0 收口）
+
+调用方普查方法：沿 `Render2DList` 全部方法的调用链（UI snapshot replay / extraContent）逐点
+归档，按 plan §9.5 的四类 target 分组。**结论先行：UI 与 overlay 的屏空间能力集兼容——一条
+screen shader 服务四类 target；世界内容（billboard/线）归场景侧管线；不新增 shader/pipeline
+拆分（engine 先例：UE Slate 与世界内容分开——我们已采用；Godot canvas 统一，但其世界 2D 无
+深度语义且管线归 GUI 所有，与"World2D 需与 World3D 深度共存""Render3D 不依赖 GUI"两个硬
+约束冲突）。**
+
+### 调用方 × 能力（普查实测）
+
+| 能力 | UI replay（chrome/gameUI/offscreen） | CanvasPreview | ViewportCompose（编辑器 3D） | ToolSurface+inspector |
+| --- | --- | --- | --- | --- |
+| makeSprite(pos/transform) | ✓ | ✓（网格/选择） | ✓（HUD/场景 blit opaque） | ✓（inspector） |
+| makeText（SDF>48px / Coverage≤48px，chooseModeForSize） | ✓ | ✓ | ✓ | ✓ |
+| drawRoundedRect（SDF corner） | ✓ | – | – | – |
+| makeRectFilledMultiColor | ✓ | – | – | – |
+| makeWorldLine / makeWireBox / makeWireSphere | – | – | ✓（网格/视锥/物理/AABB） | – |
+| makeWorldSprite | –（**全仓零生产调用方**，Phase 4 World2D 前瞻） | – | – | – |
+| push/popClipRect | ✓ | ✓（经 snapshot） | – | ✓（经 snapshot） |
+| depth 附件 | 无（uiPipeline 深度变体） | 无 | 有（**仅 Line 管线** depth-test：LessOrEqual/Always） | 无 |
+
+### 四类 target 的 load/depth 差异
+
+| kind | load/clear | clear 值 | depthTarget |
+| --- | --- | --- | --- |
+| RuntimeUIComposite | Load | 不生效 | 无 |
+| RuntimeUIOffscreen | Clear | (0.05,0.06,0.07,1) | 无 |
+| EditorCanvasPreview | Clear | (0.055,0.06,0.07,1) | 无 |
+| EditorViewportCompose | Clear | (0.07,0.075,0.09,1) | **唯一可带深度**（bAttachDepth），depth loadOp=Load |
+| EditorToolSurface | 无 rendering（回放进已开 presentation pass） | – | 无 |
+
+### 管线契约结论
+
+- uiPipeline 与 screenPipeline 的全部差异 = depth attachment 格式（数据驱动变体，保留）；
+  quad（screen/world）两套管线深度测试恒关；**唯一启用深度测试的是 Line 管线**（世界
+  overlay 对 scene depth 做测试）——UE 的 PDI 形状。
+- textureRef 的 30-bit 槽 + 2-bit 采样模式是纯每顶点载荷，三种消费分支全在 FS
+  （Coverage discard / Sdf smoothstep / Opaque force-a=1）；re-key 只动槽位。
+- **world quad 管线（vertWorldMain）零生产调用方**：登记为 Phase 4 World2D 的前瞻路径
+  （届时由 Forward/Deferred graph pass 使用或删除）；overlay 现用的世界内容全部是
+  FLineRender 线（独立 shader + depth 变体，已与 quad 分离）。
+- 结论：**不新增 shader/pipeline 拆分**（一条 screen shader 服务四类 target；世界内容
+  走场景侧）；P1 §4.3 的 textureRef 位协议删除按 typed 化执行。
