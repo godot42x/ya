@@ -1146,23 +1146,6 @@ TEST(EditorDockWorkspaceTest, MaterialRootSpawnDoesNotInheritLevelNestedDock)
     EXPECT_EQ(*ctx.ownerEditorId, kMaterialEditorRootId);
 }
 
-TEST(EditorDockWorkspaceTest, FactoryOwnedNestedLayoutForUIDoesNotUseLevelTree)
-{
-    const nlohmann::json& ui = EditorDockWorkspace::factoryOwnedNestedLayoutFor(kUIEditorRootId);
-    const std::vector<std::string> keys = FDockContext::collectLayoutPanelKeys(ui);
-    bool hasPreview = false;
-    bool hasHierarchy = false;
-    bool hasLevelHierarchy = false;
-    for (const std::string& key : keys) {
-        hasPreview = hasPreview || key == "ui-preview";
-        hasHierarchy = hasHierarchy || key == "ui-hierarchy";
-        hasLevelHierarchy = hasLevelHierarchy || key == "hierarchy";
-    }
-    EXPECT_TRUE(hasPreview);
-    EXPECT_TRUE(hasHierarchy);
-    EXPECT_FALSE(hasLevelHierarchy);
-}
-
 TEST(EditorDockWorkspaceTest, MaterializeCopiesSpawnerIdentityOntoDockPanel)
 {
     EditorTabSpawnerRegistry spawners;

@@ -1,6 +1,5 @@
 #include "GameEditor/UI/Dock/EditorWindowLayout.h"
 
-#include "Core/Config/ConfigManager.h"
 #include "Core/Log.h"
 #include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Host/GUIWindowPlacement.h"
@@ -10,6 +9,7 @@
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/UI/Dock/EditorDockWorkspace.h"
+#include "GameEditor/UI/Dock/EditorLayoutLibrary.h"
 #include "EditorDockSupport.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 #include "GameEditor/UI/Shell/EditorWindowRegistry.h"
@@ -225,9 +225,32 @@ void persistEditorWindowLayout(const EditorWindowRegistry& windows,
                                INativeWindow*              mainNative,
                                IGUIWindowCoordinator*      coordinator)
 {
-    ConfigManager::Editor("editor")
-        .set("dockLayout", exportEditorWindowLayout(windows, mainNative, coordinator))
-        .flush();
+    // The local arrangement is its own document under the overrides root, not
+    // a corner of Editor.json: it is rewritten on every split drag, and mixing
+    // it with real preferences makes that file churn and merge badly.
+    const nlohmann::json document = exportEditorWindowLayout(windows, mainNative, coordinator);
+    // A window record with no dock document describes nothing anyone arranged:
+    // it is what an unbuilt (or already torn down) window exports. Writing it
+    // would replace a good arrangement with an empty one -- and, on a first
+    // run, would freeze the shipped default before the user touched anything.
+    // A dock document is present even when nothing is docked in it, so the test
+    // is whether any record PLACES a panel -- an unbuilt window exports the
+    // fields with nothing in them.
+    bool bHasArrangement = false;
+    if (document.contains("windows") && document["windows"].is_array()) {
+        for (const nlohmann::json& record : document["windows"]) {
+            if (record.is_object() &&
+                recordHasDockPanels(windowField(record, EEditorTabPlacement::WindowRootDock),
+                                    windowField(record, EEditorTabPlacement::EditorOwnedNested))) {
+                bHasArrangement = true;
+                break;
+            }
+        }
+    }
+    if (!bHasArrangement) {
+        return;
+    }
+    (void)EditorLayoutLibrary::get().saveOverride(kEditorLayoutWorkspace, document);
 }
 
 const nlohmann::json* findMainEditorWindowRecord(const nlohmann::json& document)

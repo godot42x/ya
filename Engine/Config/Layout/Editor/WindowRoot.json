@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "tree": { "kind": "leaf", "id": "page" },
+  "dockSpace": {
+    "page": {
+      "role": "page",
+      "hideTabBar": true,
+      "panels": ["level-editor", "ui-designer"],
+      "selected": "level-editor"
+    }
+  },
+  "floating": []
+}

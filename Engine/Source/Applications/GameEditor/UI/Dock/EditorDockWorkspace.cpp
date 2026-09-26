@@ -1,6 +1,5 @@
 #include "GameEditor/UI/Dock/EditorDockWorkspace.h"
 
-#include "Core/Config/ConfigManager.h"
 #include "Core/Log.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
@@ -9,6 +8,7 @@
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GameEditor/UI/Dock/EditorNestedDockHost.h"
+#include "GameEditor/UI/Dock/EditorLayoutLibrary.h"
 #include "GameEditor/UI/Dock/EditorWindowLayout.h"
 #include "GameEditor/UI/Viewport/EditorViewportHost.h"
 
@@ -24,188 +24,6 @@ namespace ya
 namespace
 {
 
-// Factory dock layout documents (first-run / Window>Reset / fallback). These
-// literals are the single source of truth: nothing reads a layout JSON from
-// disk at runtime, so edit here. v2 documents split the two concerns:
-// `tree` is the node structure (splits + leaf references), `dockSpace` holds
-// each leaf's stack data (role, panels, selection) keyed by leaf id.
-//
-// The window root is the *page well*: it lists the major editors and nothing
-// else, so switching pages swaps the whole workspace. Each major editor's tool
-// panels live in that editor's own nested dock (the per-root documents below),
-// which is why Level's tools cannot be seen or docked while another editor's
-// page is active.
-constexpr std::string_view kFactoryWindowRootLayoutJson = R"JSON(
-{
-  "version": 2,
-  "tree": { "kind": "leaf", "id": "page" },
-  "dockSpace": {
-    "page": {
-      "role": "page",
-      "hideTabBar": true,
-      "panels": ["level-editor", "ui-designer"],
-      "selected": "level-editor"
-    }
-  },
-  "floating": []
-}
-)JSON";
-
-constexpr std::string_view kFactoryOwnedNestedLayoutJson = R"JSON(
-{
-  "version": 2,
-  "tree": {
-    "kind": "split",
-    "orientation": "horizontal",
-    "ratio": 0.78,
-    "minExtent": [120.0, 120.0],
-    "children": [
-      {
-        "kind": "split",
-        "orientation": "vertical",
-        "ratio": 0.22,
-        "minExtent": [120.0, 120.0],
-        "children": [
-          { "kind": "leaf", "id": "hierarchy" },
-          {
-            "kind": "split",
-            "orientation": "vertical",
-            "ratio": 0.0,
-            "minExtent": [54.0, 80.0],
-            "children": [
-              { "kind": "leaf", "id": "play-toolbar" },
-              { "kind": "leaf", "id": "viewport" }
-            ]
-          }
-        ]
-      },
-      {
-        "kind": "split",
-        "orientation": "vertical",
-        "ratio": 0.62,
-        "minExtent": [120.0, 120.0],
-        "children": [
-          { "kind": "leaf", "id": "inspector" },
-          { "kind": "leaf", "id": "tools" }
-        ]
-      }
-    ]
-  },
-  "dockSpace": {
-    "hierarchy":    { "panels": ["hierarchy"] },
-    "play-toolbar": { "panels": ["play-toolbar"] },
-    "viewport":     { "panels": ["viewport"] },
-    "inspector":    { "panels": ["inspector"] },
-    "tools": {
-      "role": "tools",
-      "panels": [
-        "content-browser",
-        "frame-stats",
-        "runtime-tools",
-        "render-settings",
-        "asset-inspector",
-        "debug-images",
-        "font-atlases"
-      ],
-      "selected": "content-browser"
-    }
-  },
-  "floating": []
-}
-)JSON";
-
-constexpr std::string_view kFactoryUIOwnedNestedLayoutJson = R"JSON(
-{
-  "version": 2,
-  "tree": {
-    "kind": "split",
-    "orientation": "vertical",
-    "ratio": 0.72,
-    "minExtent": [120.0, 120.0],
-    "children": [
-      {
-        "kind": "split",
-        "orientation": "horizontal",
-        "ratio": 0.28,
-        "minExtent": [80.0, 80.0],
-        "children": [
-          { "kind": "leaf", "id": "ui-parameters" },
-          { "kind": "leaf", "id": "ui-preview" }
-        ]
-      },
-      { "kind": "leaf", "id": "ui-inspector" }
-    ]
-  },
-  "dockSpace": {
-    "ui-parameters": { "panels": ["ui-parameters"] },
-    "ui-preview":    { "panels": ["ui-preview", "ui-hierarchy"], "selected": "ui-preview" },
-    "ui-inspector":  { "panels": ["ui-inspector"] }
-  },
-  "floating": []
-}
-)JSON";
-
-constexpr std::string_view kFactoryMaterialOwnedNestedLayoutJson = R"JSON(
-{
-  "version": 2,
-  "tree": {
-    "kind": "split",
-    "orientation": "vertical",
-    "ratio": 0.72,
-    "minExtent": [120.0, 120.0],
-    "children": [
-      {
-        "kind": "split",
-        "orientation": "horizontal",
-        "ratio": 0.55,
-        "minExtent": [80.0, 80.0],
-        "children": [
-          { "kind": "leaf", "id": "material-preview" },
-          { "kind": "leaf", "id": "material-parameters" }
-        ]
-      },
-      { "kind": "leaf", "id": "material-inspector" }
-    ]
-  },
-  "dockSpace": {
-    "material-preview":    { "panels": ["material-preview", "material-hierarchy"], "selected": "material-preview" },
-    "material-parameters": { "panels": ["material-parameters"] },
-    "material-inspector":  { "panels": ["material-inspector"] }
-  },
-  "floating": []
-}
-)JSON";
-
-constexpr std::string_view kFactoryScriptOwnedNestedLayoutJson = R"JSON(
-{
-  "version": 2,
-  "tree": {
-    "kind": "split",
-    "orientation": "vertical",
-    "ratio": 0.72,
-    "minExtent": [120.0, 120.0],
-    "children": [
-      {
-        "kind": "split",
-        "orientation": "horizontal",
-        "ratio": 0.55,
-        "minExtent": [80.0, 80.0],
-        "children": [
-          { "kind": "leaf", "id": "script-preview" },
-          { "kind": "leaf", "id": "script-parameters" }
-        ]
-      },
-      { "kind": "leaf", "id": "script-inspector" }
-    ]
-  },
-  "dockSpace": {
-    "script-preview":    { "panels": ["script-preview", "script-hierarchy"], "selected": "script-preview" },
-    "script-parameters": { "panels": ["script-parameters"] },
-    "script-inspector":  { "panels": ["script-inspector"] }
-  },
-  "floating": []
-}
-)JSON";
 
 /// Pixel floor for a split edge. This is a min, not an allocation: do not
 /// rewrite `ratio` (that steals divider drag and can pin pointer capture).
@@ -232,35 +50,35 @@ void applyHostedSplitMinExtent(FDockContext* dock, DockPanelId id, float extent)
 
 } // namespace
 
-const nlohmann::json& EditorDockWorkspace::factoryLayout()
+nlohmann::json EditorDockWorkspace::factoryLayout()
 {
-    static const nlohmann::json kLayout = nlohmann::json::parse(kFactoryWindowRootLayoutJson);
-    return kLayout;
+    return EditorLayoutLibrary::get().document(kEditorLayoutWindowRoot);
 }
 
-const nlohmann::json& EditorDockWorkspace::factoryOwnedNestedLayout()
+nlohmann::json EditorDockWorkspace::factoryOwnedNestedLayout()
 {
-    static const nlohmann::json kLayout = nlohmann::json::parse(kFactoryOwnedNestedLayoutJson);
-    return kLayout;
+    return EditorLayoutLibrary::get().document(nestedLayoutDocumentName(kLevelEditorRootId));
 }
 
-const nlohmann::json& EditorDockWorkspace::factoryOwnedNestedLayoutFor(EditorRootId rootId)
+nlohmann::json EditorDockWorkspace::factoryOwnedNestedLayoutFor(EditorRootId rootId)
+{
+    return EditorLayoutLibrary::get().document(nestedLayoutDocumentName(rootId));
+}
+
+std::string_view EditorDockWorkspace::nestedLayoutDocumentName(EditorRootId rootId)
 {
     switch (rootId) {
     case kUIEditorRootId: {
-        static const nlohmann::json kUI = nlohmann::json::parse(kFactoryUIOwnedNestedLayoutJson);
-        return kUI;
+        return "UI";
     }
     case kMaterialEditorRootId: {
-        static const nlohmann::json kMaterial = nlohmann::json::parse(kFactoryMaterialOwnedNestedLayoutJson);
-        return kMaterial;
+        return "Material";
     }
     case kScriptEditorRootId: {
-        static const nlohmann::json kScript = nlohmann::json::parse(kFactoryScriptOwnedNestedLayoutJson);
-        return kScript;
+        return "Script";
     }
     default: {
-        return factoryOwnedNestedLayout();
+        return "Level";
     }
     }
 }
@@ -268,7 +86,7 @@ const nlohmann::json& EditorDockWorkspace::factoryOwnedNestedLayoutFor(EditorRoo
 namespace
 {
 
-const nlohmann::json& factoryForPlacement(EEditorTabPlacement placement)
+nlohmann::json factoryForPlacement(EEditorTabPlacement placement)
 {
     return placement == EEditorTabPlacement::EditorOwnedNested
                ? EditorDockWorkspace::factoryOwnedNestedLayout()
@@ -554,7 +372,7 @@ bool EditorDockWorkspace::applyLayoutDocument(const nlohmann::json& layout, bool
     }
 
     YA_CORE_WARN("EditorDockWorkspace: layout document failed; applying factory layout");
-    const nlohmann::json& factory = factoryForPlacement(_host.targetPlacement);
+    const nlohmann::json factory = factoryForPlacement(_host.targetPlacement);
     const std::vector<std::string> factoryKeys = FDockContext::collectLayoutPanelKeys(factory);
     std::unordered_set<std::string> factorySet(factoryKeys.begin(), factoryKeys.end());
     for (const std::string& key : _host.dock->panelStableKeys()) {
@@ -611,9 +429,12 @@ void EditorDockWorkspace::repairPlacement()
 
 void EditorDockWorkspace::applyWorkspaceLayout()
 {
-    nlohmann::json user;
-    const nlohmann::json& factory = factoryForPlacement(_host.targetPlacement);
-    if (ConfigManager::get().tryGet("editor", "dockLayout", user)) {
+    // One document, two placements. The window root takes its `windowRoot`
+    // field and an owned dock takes `ownedNested` -- the same envelope, which is
+    // why this reads the document once and lets the placement pick the field.
+    const nlohmann::json factory = factoryForPlacement(_host.targetPlacement);
+    const nlohmann::json user    = EditorLayoutLibrary::get().document(kEditorLayoutWorkspace);
+    if (user.is_object() && !user.empty()) {
         (void)applyLayoutDocument(layoutDocumentForPlacement(user, _host.targetPlacement), true);
     }
     else {
@@ -799,12 +620,13 @@ void EditorDockWorkspace::persistLayout()
         _host.persistAll();
         return;
     }
-    if (!_host.dock) {
+    if (!_host.dock || _host.targetPlacement != EEditorTabPlacement::WindowRootDock) {
+        // An owned dock is persisted by its window (the page's own listener
+        // reports into the window envelope). Writing it here would store a bare
+        // dock document over that envelope and lose every other window's state.
         return;
     }
-    ConfigManager::Editor("editor")
-        .set("dockLayout", _host.dock->exportLayoutJson())
-        .flush();
+    (void)EditorLayoutLibrary::get().saveOverride(kEditorLayoutWorkspace, _host.dock->exportLayoutJson());
 }
 
 } // namespace ya

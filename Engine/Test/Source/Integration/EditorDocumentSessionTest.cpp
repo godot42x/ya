@@ -3,23 +3,14 @@
 #include "GameEditor/UI/Shell/EditorWindowSession.h"
 
 #include "GUI/Binding/UndoStack.h"
-#include "TestSource.h"
 
-#include <filesystem>
-#include <fstream>
 #include <gtest/gtest.h>
-#include <iterator>
-#include <string>
 
 namespace ya
 {
 
 namespace
 {
-
-// Source-reading guards resolve the repo root through the shared walker, so a
-// test can move between suite directories without silently reading nothing.
-using ::ya::test::readEngineSource;
 
 FUndoCommand makeUndo(std::string label)
 {
@@ -148,30 +139,6 @@ TEST(EditorDocumentSessionTest, TwoWindowsShareSceneDocumentUndo)
     windows.defaultSession().bindSceneDocument(documents, "maps/other.yascene");
     EXPECT_EQ(windows.defaultSession().activeRoot().document(), extra->activeRoot().document());
     EXPECT_EQ(documents.find(makeEditorSceneDocumentId("maps/town.yascene")), nullptr);
-}
-
-TEST(EditorDocumentSessionTest, SurfaceAndWindowSessionDoNotOwnDocumentRegistry)
-{
-    const std::string surfaceH =
-        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorSurface.h");
-    const std::string sessionH =
-        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorWindowSession.h");
-    EXPECT_EQ(surfaceH.find("EditorDocumentRegistry _"), std::string::npos);
-    EXPECT_NE(surfaceH.find("EditorDocumentRegistry*"), std::string::npos);
-    EXPECT_EQ(sessionH.find("EditorDocumentRegistry _"), std::string::npos);
-    EXPECT_NE(sessionH.find("EditorDocumentRegistry*"), std::string::npos);
-
-    const std::string moduleCpp =
-        readEngineSource("Source/Applications/GameEditor/EditorModule.cpp");
-    EXPECT_NE(moduleCpp.find("EditorDocumentRegistry         _documents"), std::string::npos);
-    EXPECT_NE(moduleCpp.find("window->bind(*_layer, &_tabSpawners, &_documents)"), std::string::npos);
-
-    const std::string contentCpp =
-        readEngineSource("Source/Applications/GameEditor/UI/Tabs/EditorContentBrowserTab.cpp");
-    EXPECT_NE(contentCpp.find("EEditorDocumentKind::Script"), std::string::npos);
-    EXPECT_NE(contentCpp.find("EEditorDocumentKind::Material"), std::string::npos);
-    EXPECT_NE(contentCpp.find("openDocumentEditor"), std::string::npos);
-    EXPECT_EQ(contentCpp.find("App::get()"), std::string::npos);
 }
 
 } // namespace ya

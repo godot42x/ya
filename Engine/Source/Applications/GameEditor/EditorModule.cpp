@@ -27,6 +27,7 @@
 #include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
 #include "GameEditor/UI/Viewport/EditorViewportCompositor.h"
 #include "GameEditor/UI/Dock/EditorWindowLayout.h"
+#include "GameEditor/UI/Dock/EditorLayoutLibrary.h"
 #include "GameEditor/UI/Shell/EditorWindowRegistry.h"
 #include "GameRuntime/App.h"
 #include "GameRuntime/Automation/EditorAutomationControl.h"
@@ -745,6 +746,30 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         YA_CORE_ASSERT(renderServices.hasRenderer(),
                        "Editor extension requires an initialized renderer");
 
+        // Layout roots are the product's decision, not the framework's: the
+        // editor here, and a standalone GUI app its own pair. Command line
+        // wins over the editor config, so a run can point at a scratch tree
+        // (tests, a packaged build) without editing anything on disk.
+        {
+            FEditorLayoutRoots roots = EditorLayoutLibrary::get().roots();
+            const AppDesc& desc = app.getDesc();
+            if (desc.layoutDefaultsRoot && !desc.layoutDefaultsRoot->empty()) {
+                roots.defaults = *desc.layoutDefaultsRoot;
+            }
+            else {
+                roots.defaults = ConfigManager::get().getOr<std::string>(
+                    "editor", "layout.defaultsRoot", roots.defaults);
+            }
+            if (desc.layoutOverridesRoot && !desc.layoutOverridesRoot->empty()) {
+                roots.overrides = *desc.layoutOverridesRoot;
+            }
+            else {
+                roots.overrides = ConfigManager::get().getOr<std::string>(
+                    "editor", "layout.overridesRoot", roots.overrides);
+            }
+            EditorLayoutLibrary::get().bindRoots(std::move(roots));
+        }
+
         _layer = std::make_unique<EditorLayer>(&app);
         initializeEditorCamera(app, *_layer);
         _layer->setCurrentScenePath(app.getDesc().defaultScenePath.value_or(std::string{}));
@@ -763,8 +788,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         INativeWindow* mainNative = mainNativeWindow();
         window->surface().setPersistLayout([this]() { persistLayout(); });
         hookNativeTearOff(*window);
-        nlohmann::json savedLayout;
-        if (mainNative && ConfigManager::get().tryGet("editor", "dockLayout", savedLayout)) {
+        // The arrangement is a document of its own under the layout overrides
+        // root, not a key in Editor.json (see EditorLayoutLibrary).
+        const nlohmann::json savedLayout =
+            EditorLayoutLibrary::get().document(kEditorLayoutWorkspace);
+        if (mainNative && savedLayout.is_object() && !savedLayout.empty()) {
             if (const nlohmann::json* main = findMainEditorWindowRecord(savedLayout)) {
                 (void)recoverEditorWindowPlacement(*mainNative, *main);
             }
@@ -891,6 +919,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _inputNodeRegistration.reset();
         _inputNode.unbind();
         _dragRouter.unbind();
+        // The docks only exist until the sessions are shut down below, and this
+        // is the last point that still has them. `onStop` cannot be relied on
+        // for this: it runs from ModuleManager's teardown, by which time the
+        // arrangement has already been destroyed.
+        persistLayout();
         if (_layer && _scenePathHandle != INVALID_HANDLE) {
             _layer->onScenePathChanged.remove(_scenePathHandle);
             _scenePathHandle = INVALID_HANDLE;

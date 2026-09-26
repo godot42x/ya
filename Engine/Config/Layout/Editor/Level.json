@@ -1,0 +1,68 @@
+{
+  "version": 2,
+  "tree": {
+    "kind": "split",
+    "orientation": "horizontal",
+    "ratio": 0.78,
+    "minExtent": [120.0, 120.0],
+    "children": [
+      {
+        "kind": "split",
+        "orientation": "vertical",
+        "ratio": 0.62,
+        "minExtent": [120.0, 120.0],
+        "children": [
+          {
+            "kind": "split",
+            "orientation": "horizontal",
+            "ratio": 0.28,
+            "minExtent": [80.0, 80.0],
+            "children": [
+              { "kind": "leaf", "id": "hierarchy" },
+              {
+                "kind": "split",
+                "orientation": "vertical",
+                "ratio": 0.0,
+                "minExtent": [54.0, 80.0],
+                "children": [
+                  { "kind": "leaf", "id": "play-toolbar" },
+                  { "kind": "leaf", "id": "viewport" }
+                ]
+              }
+            ]
+          },
+          { "kind": "leaf", "id": "content-browser" }
+        ]
+      },
+      {
+        "kind": "split",
+        "orientation": "vertical",
+        "ratio": 0.55,
+        "minExtent": [120.0, 120.0],
+        "children": [
+          { "kind": "leaf", "id": "stats" },
+          { "kind": "leaf", "id": "inspector" }
+        ]
+      }
+    ]
+  },
+  "dockSpace": {
+    "hierarchy":       { "panels": ["hierarchy"] },
+    "play-toolbar":    { "panels": ["play-toolbar"] },
+    "viewport":        { "panels": ["viewport"] },
+    "content-browser": { "panels": ["content-browser"] },
+    "inspector":       { "panels": ["inspector"] },
+    "stats": {
+      "panels": [
+        "frame-stats",
+        "runtime-tools",
+        "render-settings",
+        "asset-inspector",
+        "debug-images",
+        "font-atlases"
+      ],
+      "selected": "frame-stats"
+    }
+  },
+  "floating": []
+}

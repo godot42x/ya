@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "tree": {
+    "kind": "split",
+    "orientation": "vertical",
+    "ratio": 0.72,
+    "minExtent": [120.0, 120.0],
+    "children": [
+      {
+        "kind": "split",
+        "orientation": "horizontal",
+        "ratio": 0.28,
+        "minExtent": [80.0, 80.0],
+        "children": [
+          { "kind": "leaf", "id": "ui-parameters" },
+          { "kind": "leaf", "id": "ui-preview" }
+        ]
+      },
+      { "kind": "leaf", "id": "ui-inspector" }
+    ]
+  },
+  "dockSpace": {
+    "ui-parameters": { "panels": ["ui-parameters"] },
+    "ui-preview":    { "panels": ["ui-preview", "ui-hierarchy"], "selected": "ui-preview" },
+    "ui-inspector":  { "panels": ["ui-inspector"] }
+  },
+  "floating": []
+}

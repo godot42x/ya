@@ -3,6 +3,7 @@
 #include "Core/Api.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
+#include <functional>
 #include <vector>
 
 namespace ya
@@ -39,13 +40,17 @@ struct FComposeScissorState
     return state;
 }
 
-/// GPU clip stack hooks. Null function pointers make this a CPU-only walk
+/// GPU clip stack hooks. Empty callbacks make this a CPU-only walk
 /// (`measureUIFrameComposeReplay`). Texture/capacity overflow flushes inside
 /// Render2D are not modeled here.
+///
+/// `std::function` rather than function pointers because a sink that records
+/// into a builder has to carry that builder: the immediate path names the
+/// Render2D statics, the list path names its own `Render2DList`.
 struct FComposeClipRunSink
 {
-    void (*pushClip)(const Rect2D& clip) = nullptr;
-    void (*popClip)()                    = nullptr;
+    std::function<void(const Rect2D& clip)> pushClip;
+    std::function<void()>                   popClip;
 };
 
 /// CPU-only observation of the compose clip-run protocol. Adjacent items that
@@ -104,7 +109,7 @@ void walkComposeClipRuns(const UIFrameSnapshot&    snapshot,
             if (stats != nullptr) {
                 ++stats->clipPopCount;
             }
-            if (sink.popClip != nullptr) {
+            if (sink.popClip) {
                 sink.popClip();
             }
         }
@@ -116,7 +121,7 @@ void walkComposeClipRuns(const UIFrameSnapshot&    snapshot,
             if (stats != nullptr) {
                 ++stats->clipPushCount;
             }
-            if (sink.pushClip != nullptr) {
+            if (sink.pushClip) {
                 sink.pushClip(next.clip);
             }
         }

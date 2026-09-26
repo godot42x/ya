@@ -3,6 +3,7 @@
 #include "GUI/Declarative/Build.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
+#include "GameEditor/UI/Dock/EditorLayoutLibrary.h"
 #include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
 
 namespace ya
@@ -36,6 +37,8 @@ EditorNestedDockHost::EditorNestedDockHost(const char* name, EditorRootId rootId
     });
 }
 
+EditorNestedDockHost::~EditorNestedDockHost() = default;
+
 void EditorNestedDockHost::construct()
 {
     if (!_nestedDock) {
@@ -46,7 +49,37 @@ void EditorNestedDockHost::construct()
 
 void EditorNestedDockHost::applyNestedFactoryLayout(const nlohmann::json& layout)
 {
-    (void)_nested.applyLayoutDocument(layout, false);
+    // The saved arrangement is the user's, so it wins over the shipped one. It
+    // takes the same sanitize path as every other layout document, so a panel
+    // whose spawner is gone is dropped rather than restored blindly.
+    const std::string_view name = EditorDockWorkspace::nestedLayoutDocumentName(_rootId);
+    const nlohmann::json   saved = EditorLayoutLibrary::get().document(name);
+    (void)_nested.applyLayoutDocument(saved.is_object() && !saved.empty() ? saved : layout, false);
+
+    // Subscribe only now: a page's tools live inside this widget, so the
+    // arrangement dies with the tab unless it is written where the next
+    // instance will read it -- but the apply above is not an arrangement.
+    if (!_bPersistsArrangement) {
+        _bPersistsArrangement = true;
+        _nestedDock->appendOnDockUpdated([this]() { rememberLayout(); });
+        _nestedDock->appendOnFloatingUpdated([this]() { rememberLayout(); });
+    }
+}
+
+void EditorNestedDockHost::rememberLayout()
+{
+    if (!_nestedDock) {
+        return;
+    }
+    const nlohmann::json arrangement = _nestedDock->exportLayoutJson();
+    // A dock with no panels describes nothing anyone arranged. Writing it would
+    // replace a good arrangement with an empty one, so the arrangement is only
+    // recorded once there is something in it to record.
+    if (FDockContext::collectLayoutPanelKeys(arrangement).empty()) {
+        return;
+    }
+    (void)EditorLayoutLibrary::get().saveOverride(
+        EditorDockWorkspace::nestedLayoutDocumentName(_rootId), arrangement);
 }
 
 } // namespace ya

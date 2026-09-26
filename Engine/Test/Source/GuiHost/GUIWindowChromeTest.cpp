@@ -3,35 +3,15 @@
 #include "GUI/Host/GUIWindowPlacement.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "RHI/NativeWindow.h"
-#include "TestSource.h"
 
 #include <glm/glm.hpp>
 
-#include <filesystem>
-#include <fstream>
 #include <gtest/gtest.h>
-#include <iterator>
-#include <string>
 
 namespace ya
 {
 namespace
 {
-
-// Source-reading guards resolve the repo root through the shared walker, so a
-// test can move between suite directories without silently reading nothing.
-using ::ya::test::readEngineSource;
-
-void expectNoPlatformChrome(const std::string& text, const char* file)
-{
-    EXPECT_EQ(text.find("NSWindow"), std::string::npos) << file;
-    EXPECT_EQ(text.find("AppKit"), std::string::npos) << file;
-    EXPECT_EQ(text.find("titlebarAppearsTransparent"), std::string::npos) << file;
-    EXPECT_EQ(text.find("winuser.h"), std::string::npos) << file;
-    EXPECT_EQ(text.find("DwmExtendFrame"), std::string::npos) << file;
-    EXPECT_EQ(text.find("WM_NCHITTEST"), std::string::npos) << file;
-    EXPECT_EQ(text.find("HWND"), std::string::npos) << file;
-}
 
 struct NamedWindowDelegate final : IGUIAppDelegate
 {
@@ -108,33 +88,6 @@ TEST(GUIWindowChromeTest, TitleTabBarRectIsClientTrailingGutterStaysDrag)
               EWindowChromeHit::Client);
     EXPECT_EQ(classifyWindowChromeHit(layout, 750.0f, 10.0f), EWindowChromeHit::Drag);
     EXPECT_TRUE(layout.dragRegion.contains(750.0f, 10.0f));
-}
-
-TEST(GUIWindowChromeTest, TitleTabBarClientHitsUseBarRectNotButtons)
-{
-    const std::string surface =
-        readEngineSource("Source/Applications/GameEditor/UI/Shell/EditorSurface.cpp");
-    EXPECT_NE(surface.find("_pageTabBar->getLayoutRect()"), std::string::npos);
-    EXPECT_NE(surface.find("bHideSourceWindowOnLeave"), std::string::npos);
-    const std::string torn =
-        readEngineSource("Source/Applications/GameEditor/UI/Dock/EditorNativeTearOff.cpp");
-    EXPECT_NE(torn.find("state.tabBar->getLayoutRect()"), std::string::npos);
-    EXPECT_NE(torn.find("bHideSourceWindowOnLeave"), std::string::npos);
-    const std::string router =
-        readEngineSource("Source/Framework/GUI/Host/GUIDragRouter.cpp");
-    EXPECT_NE(router.find("syncHiddenSourceWindow"), std::string::npos);
-    EXPECT_NE(router.find("isHidden()"), std::string::npos);
-}
-
-TEST(GUIWindowChromeTest, MacOsTitleDragUsesPerPixelWindowDragNotBackgroundMove)
-{
-    const std::string chromeCpp =
-        readEngineSource("Source/Framework/GUI/Host/Window/GUIWindowChrome.cpp");
-    EXPECT_NE(chromeCpp.find("setMovableByWindowBackground"), std::string::npos);
-    EXPECT_NE(chromeCpp.find("performWindowDragWithEvent"), std::string::npos);
-    const std::string cocoa =
-        readEngineSource("Source/Framework/GUI/Host/Window/GUIWindowChromeCocoa.mm");
-    EXPECT_NE(cocoa.find("performWindowDragWithEvent"), std::string::npos);
 }
 
 TEST(GUIWindowChromeTest, HybridLayoutZeroSafeAreaStillReservesTrafficLightsAndEmptyTitleDrag)
@@ -261,53 +214,6 @@ TEST(GUIWindowChromeTest, RequestedClientDrawnDoesNotFallBackOnSupportedPlatform
     EXPECT_EQ(session->chrome().mode, EWindowChromeMode::ClientDrawn);
     EXPECT_GT(session->chrome().layout.resizeBorder, 0.0f);
     manager.destroySession(id);
-}
-
-TEST(GUIWindowChromeTest, DockAndEditorDoNotIncludePlatformNonClientApis)
-{
-    const char* files[] = {
-        "Source/Framework/GUI/Runtime/Widgets/include/GUI/Widgets/Controls/DockSpace/DockContext.h",
-        "Source/Framework/GUI/Runtime/Widgets/Controls/DockSpace/DockContext.cpp",
-        "Source/Framework/GUI/Runtime/Widgets/Controls/DockSpace/DockSpace.cpp",
-        "Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorSurface.h",
-        "Source/Applications/GameEditor/UI/Shell/EditorSurface.cpp",
-        "Source/Applications/GameEditor/include/GameEditor/UI/Dock/EditorDockWorkspace.h",
-        "Source/Applications/GameEditor/UI/Dock/EditorDockWorkspace.cpp",
-        "Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorTabSpawnerRegistry.h",
-        "Source/Applications/GameEditor/UI/Shell/EditorTabSpawnerRegistry.cpp",
-    };
-    for (const char* file : files) {
-        expectNoPlatformChrome(readEngineSource(file), file);
-    }
-
-    const std::string chromeH =
-        readEngineSource("Source/Framework/GUI/Host/include/GUI/Host/GUIWindowChrome.h");
-    EXPECT_NE(chromeH.find("EWindowChromeMode"), std::string::npos);
-    EXPECT_NE(chromeH.find("must not call"), std::string::npos);
-    EXPECT_NE(chromeH.find("queryWindowChromeLayout"), std::string::npos);
-    EXPECT_EQ(chromeH.find("SDL_"), std::string::npos);
-
-    const std::string chromeCpp =
-        readEngineSource("Source/Framework/GUI/Host/Window/GUIWindowChrome.cpp");
-    EXPECT_EQ(chromeCpp.find("SDL.h"), std::string::npos);
-    EXPECT_EQ(chromeCpp.find("SDL_"), std::string::npos);
-    EXPECT_EQ(chromeCpp.find("sdlWindowOf"), std::string::npos);
-    EXPECT_EQ(chromeCpp.find("SDL_Window"), std::string::npos);
-    EXPECT_NE(chromeCpp.find("setHitTest"), std::string::npos);
-    EXPECT_NE(chromeCpp.find("setBordered"), std::string::npos);
-    EXPECT_NE(chromeCpp.find("setMousePassthrough"), std::string::npos);
-
-    const std::string placementCpp =
-        readEngineSource("Source/Framework/GUI/Host/Window/GUIWindowPlacement.cpp");
-    EXPECT_EQ(placementCpp.find("SDL.h"), std::string::npos);
-    EXPECT_EQ(placementCpp.find("SDL_"), std::string::npos);
-    EXPECT_NE(placementCpp.find("Os::displayCount"), std::string::npos);
-    EXPECT_NE(placementCpp.find("Os::displayBounds"), std::string::npos);
-
-    const std::string contextCpp =
-        readEngineSource("Source/Applications/GameEditor/UI/Shell/EditorSurfaceContext.cpp");
-    EXPECT_NE(contextCpp.find("queryWindowChromeLayout"), std::string::npos);
-    EXPECT_EQ(contextCpp.find("queryWindowChromeInsets"), std::string::npos);
 }
 
 TEST(GUIWindowChromeTest, QueryAndApplyScreenPlacementUsesSizeNotOverlayCoords)

@@ -10,13 +10,13 @@
 #include "GameEditor/UI/Ops/EditorCreateMenu.h"
 #include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
 
-#include "Core/Config/ConfigManager.h"
 #include "Core/Event.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
 #include "GameEditor/UI/Viewport/EditorViewportHost.h"
 #include "GameEditor/UI/Viewport/EditorViewportGizmoOverlay.h"
 #include "GameEditor/UI/Dock/EditorWindowLayout.h"
+#include "GameEditor/UI/Dock/EditorLayoutLibrary.h"
 #include "GameEditor/UI/Shell/EditorListRows.h"
 #include "GUI/Declarative/Build.h"
 #include "GameEditor/EditorLayer.h"
@@ -643,7 +643,7 @@ void EditorSurface::persistDockLayouts()
     nlohmann::json document;
     document["version"] = kEditorWindowLayoutVersion;
     document["windows"] = nlohmann::json::array({std::move(window)});
-    ConfigManager::Editor("editor").set("dockLayout", document).flush();
+    (void)EditorLayoutLibrary::get().saveOverride(kEditorLayoutWorkspace, document);
 }
 
 void EditorSurface::setOnDockNoTargetTearOff(

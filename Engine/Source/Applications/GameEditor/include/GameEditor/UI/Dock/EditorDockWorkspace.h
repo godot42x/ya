@@ -66,13 +66,21 @@ class EditorDockWorkspace
     void bind(FHost host);
     void clear() { _host = {}; }
 
-    /// Window-root factory (level-editor + window tools). The factory
-    /// documents are the JSON literals in EditorDockWorkspace.cpp.
-    [[nodiscard]] static const nlohmann::json& factoryLayout();
-    /// Level-owned nested factory (play-toolbar / viewport / hierarchy / inspector).
-    [[nodiscard]] static const nlohmann::json& factoryOwnedNestedLayout();
+    /// Shipped workspace documents, read through EditorLayoutLibrary (see that
+    /// header for the defaults/overrides split). Data rather than literals: the
+    /// arrangement is content, and a local override must not need a rebuild.
+    ///
+    /// Window-root factory (the page well: level-editor + ui-designer).
+    [[nodiscard]] static nlohmann::json factoryLayout();
+    /// Level-owned nested factory (play-toolbar / viewport / hierarchy / ...).
+    [[nodiscard]] static nlohmann::json factoryOwnedNestedLayout();
     /// Nested factory for a document WindowRootEditor (UI / Material / Script).
-    [[nodiscard]] static const nlohmann::json& factoryOwnedNestedLayoutFor(EditorRootId rootId);
+    [[nodiscard]] static nlohmann::json factoryOwnedNestedLayoutFor(EditorRootId rootId);
+    /// The layout document a root's own tool dock is stored under. One name for
+    /// both directions: the shipped default and this machine's arrangement are
+    /// the same document in two roots, so a page that is closed and reopened
+    /// reads back what the user arranged.
+    [[nodiscard]] static std::string_view nestedLayoutDocumentName(EditorRootId rootId);
     /// Map a persisted `editor.dockLayout` document onto this host's placement.
     /// v5 envelopes carry `windowRoot` / `ownedNested` v2 dock documents on
     /// their main window record; anything older or malformed falls back to

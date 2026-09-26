@@ -71,6 +71,40 @@ Runtime / Render / Assets / Debug 仍在窗口里，甚至可以被拖到 UI 页
 
 **未做**：C5（page tab 交还 dock 侧渲染）仍未做，`EditorSurface` 仍持有 `_pageTabBar`。
 
+## C7：dock 布局是数据，本地排列归 Saved（2026-09-26）
+
+**症状**：工厂布局是 `EditorDockWorkspace.cpp` 里的 `R"JSON("` 字面量，而用户的排列塞在
+`Engine/Saved/Config/Editor.json` 的 `dockLayout` 键里。改一个区域要重新编译；拆一个 split
+会把 Editor.json 整份重写。UI 页签自己的工具排列更糟：它住在页签 widget 里，页签关掉就
+回工厂值。
+
+**改动**：
+
+- 新增 `EditorLayoutLibrary`：两个由产品绑定的根，`defaults` 是随仓库发布的只读文档，
+  `overrides` 是本机的排列；同名时 override 优先。读写都走 VFS，找不到就是「还没有」，
+  不打日志。
+- 工厂布局成为 `Engine/Config/Layout/Editor/{WindowRoot,Level,UI,Material,Script}.json`；
+  `factoryLayout()` / `factoryOwnedNestedLayout[For]` 改为按名字取文档，返回值不再是
+  `const&`。
+- 本机排列成为 `Engine/Saved/Layout/Editor/Workspace.json`（v5 窗口信封）；
+  `EditorLayoutLibrary::saveOverride` 写它。`Editor.json` 的 `dockLayout` 键不再是来源。
+- 只有窗口 root 读写 workspace 文档；owned dock 的持久化由窗口信封承担（页签自己
+  `rememberLayout` 上报），避免把一份裸 dock 文档盖到信封上。
+- 两个根都可配：`--layout-defaults` / `--layout-overrides`，或 editor 文档的
+  `layout.defaultsRoot` / `layout.overridesRoot`；命令行优先。Editor 产品默认绑定
+  `Engine/{Config,Saved}/Layout/Editor`，单体 GUI app 绑自己的一对，因此这套读取不在任何
+  一侧写死。
+
+**删除的无意义测试**：默认布局的形状断言（`FactoryLayoutPlacesDefaultTabs` /
+`FactoryOwnedNestedLayoutPlacesOwnedTools` / `FactoryOwnedNestedLayoutForUIDoesNotUseLevelTree`）
+与「读源码文本找字符串」的守卫（`TestSource.h` 及 `DockWorkspaceSourceDoesNotCreateNativeWindows`
+`DockContextDoesNotKnowEditorRoots` `ChromeStacksPageTabsThenMenu` `ImeUsesTreeCapabilityNotInspectorCast`
+`ComposeTargetDoesNotAcquirePresentOrReadLiveTree` 等）。这类测试改一行实现就红，不表达行为，
+却要维护：删。`TestSource.h` 随最后两个使用者一起删除。保留的是真行为断言（drop/adopt 策略、
+restore 跳过规则、page well 拒绝 tool、nested 布局往返）。
+
+**验证**：`ya-game-editor` / `ya-testing` 构建通过；`EditorDockWorkspaceTest` 只留行为用例。
+
 ## C4–C5：把 Surface 的 push 编排与 page tab 投影消掉（2026-09-19 复查）
 
 C0–C3 把 tab owner 抽出来了，但 C2 明确保留了"Hierarchy / Viewport / Menu / Dock persist / dialogs

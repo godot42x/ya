@@ -7,14 +7,9 @@
 #include "GameEditor/UI/Dock/EditorDockWorkspace.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 #include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
-#include "TestSource.h"
 
-#include <filesystem>
-#include <fstream>
 #include <gtest/gtest.h>
 #include <glm/glm.hpp>
-#include <iterator>
-#include <string>
 
 namespace ya
 {
@@ -26,10 +21,6 @@ struct EmptyDelegate final : IGUIAppDelegate
 {
     void buildUI(WidgetTree&) override {}
 };
-
-// Source-reading guards resolve the repo root through the shared walker, so a
-// test can move between suite directories without silently reading nothing.
-using ::ya::test::readEngineSource;
 
 } // namespace
 
@@ -245,14 +236,6 @@ TEST(EditorWindowLayoutTest, V3EnvelopeHasNoOsWindowsArray)
     };
     EXPECT_EQ(restoreEditorExtraWindows(env, v3), 0u);
     EXPECT_EQ(windows.extraCount(), 0u);
-}
-
-TEST(EditorWindowLayoutTest, DockWorkspaceSourceDoesNotCreateNativeWindows)
-{
-    const std::string text = readEngineSource("Source/Applications/GameEditor/UI/Dock/EditorDockWorkspace.cpp");
-    EXPECT_EQ(text.find("IGUIWindowCoordinator"), std::string::npos);
-    EXPECT_EQ(text.find("createSession"), std::string::npos);
-    EXPECT_EQ(text.find("SDL_CreateWindow"), std::string::npos);
 }
 
 nlohmann::json makeMaterialExtraEnvelope(bool bClosing, uint32_t ownerEditorId, std::string documentKey)

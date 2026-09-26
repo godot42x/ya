@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "tree": {
+    "kind": "split",
+    "orientation": "vertical",
+    "ratio": 0.72,
+    "minExtent": [120.0, 120.0],
+    "children": [
+      {
+        "kind": "split",
+        "orientation": "horizontal",
+        "ratio": 0.55,
+        "minExtent": [80.0, 80.0],
+        "children": [
+          { "kind": "leaf", "id": "script-preview" },
+          { "kind": "leaf", "id": "script-parameters" }
+        ]
+      },
+      { "kind": "leaf", "id": "script-inspector" }
+    ]
+  },
+  "dockSpace": {
+    "script-preview":    { "panels": ["script-preview", "script-hierarchy"], "selected": "script-preview" },
+    "script-parameters": { "panels": ["script-parameters"] },
+    "script-inspector":  { "panels": ["script-inspector"] }
+  },
+  "floating": []
+}

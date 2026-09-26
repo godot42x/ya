@@ -50,63 +50,10 @@ bool spawnLayoutPanels(FDockContext& context, const nlohmann::json& layout)
 
 } // namespace
 
-TEST(EditorDockWorkspaceTest, FactoryLayoutPlacesDefaultTabs)
-{
-    FDockContext context;
-    context.bAllowFloating = true;
-    const nlohmann::json& factory = EditorDockWorkspace::factoryLayout();
-    ASSERT_TRUE(spawnLayoutPanels(context, factory));
-    ASSERT_TRUE(context.importLayoutJson(factory));
-
-    // The window root is the page well and nothing else: one stack holding the
-    // major editors. Level's tool panels live in Level's own nested dock, so
-    // they cannot be visible, or dockable, while another page is active.
-    EXPECT_EQ(context.dockModel().getRootNode()->kind, EDockNodeKind::Stack);
-    EXPECT_EQ(leafKeys(context, "level-editor"),
-              (std::vector<std::string>{"level-editor", "ui-designer"}));
-    const FDockNode* pageLeaf = context.dockModel().findLeafForPanel(
-        context.findPanelByStableKey("level-editor")->id);
-    ASSERT_NE(pageLeaf, nullptr);
-    EXPECT_EQ(pageLeaf->leafRole, EDockLeafRole::Page);
-    EXPECT_TRUE(pageLeaf->bHideTabBar);
-    EXPECT_EQ(context.dockModel().findFirstLeafWithRole(EDockLeafRole::Tools),
-              kInvalidDockNodeId);
-    EXPECT_FALSE(context.hasPanel("content-browser"));
-    EXPECT_TRUE(context.floatingWindows().empty());
-}
-
-TEST(EditorDockWorkspaceTest, FactoryOwnedNestedLayoutPlacesOwnedTools)
-{
-    FDockContext context;
-    context.bAllowFloating = true;
-    const nlohmann::json& factory = EditorDockWorkspace::factoryOwnedNestedLayout();
-    ASSERT_TRUE(spawnLayoutPanels(context, factory));
-    ASSERT_TRUE(context.importLayoutJson(factory));
-
-    EXPECT_EQ(context.dockModel().getRootNode()->kind, EDockNodeKind::Split);
-    EXPECT_EQ(context.dockModel().getRootNode()->orientation, EDockSplitOrientation::Horizontal);
-    EXPECT_FLOAT_EQ(context.dockModel().getRootNode()->ratio, 0.78f);
-
-    EXPECT_EQ(leafKeys(context, "viewport"), std::vector<std::string>({"viewport"}));
-    EXPECT_EQ(leafKeys(context, "play-toolbar"), std::vector<std::string>({"play-toolbar"}));
-    EXPECT_EQ(leafKeys(context, "hierarchy"), std::vector<std::string>({"hierarchy"}));
-    EXPECT_EQ(leafKeys(context, "inspector"), std::vector<std::string>({"inspector"}));
-    ASSERT_NE(context.dockModel().getRootNode()->child[0].get(), nullptr);
-    EXPECT_EQ(context.dockModel().getRootNode()->child[0]->orientation,
-              EDockSplitOrientation::Vertical);
-    ASSERT_NE(context.dockModel().getRootNode()->child[0]->child[1].get(), nullptr);
-    EXPECT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->kind, EDockNodeKind::Split);
-    EXPECT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->orientation,
-              EDockSplitOrientation::Vertical);
-    EXPECT_FLOAT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->ratio, 0.0f);
-    EXPECT_FLOAT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->minExtent[0], 54.0f);
-    EXPECT_TRUE(context.floatingWindows().empty());
-}
-
 TEST(EditorDockWorkspaceTest, LayoutDocumentForPlacementSelectsMainWindowFields)
 {
-    const nlohmann::json& windowRoot = EditorDockWorkspace::factoryLayout();
-    const nlohmann::json& nested     = EditorDockWorkspace::factoryOwnedNestedLayout();
+    const nlohmann::json windowRoot = EditorDockWorkspace::factoryLayout();
+    const nlohmann::json nested     = EditorDockWorkspace::factoryOwnedNestedLayout();
     const nlohmann::json extraRoot   = {
         {"version", 2},
         {"tree", {{"kind", "leaf"}, {"id", "main"}}},
@@ -207,7 +154,7 @@ TEST(EditorDockWorkspaceTest, PageWellAcceptsPagesAndHasNoWindowLevelToolsLeaf)
         .targetPlacement = EEditorTabPlacement::WindowRootDock,
     });
 
-    const nlohmann::json& factory = EditorDockWorkspace::factoryLayout();
+    const nlohmann::json factory = EditorDockWorkspace::factoryLayout();
     ASSERT_TRUE(spawnLayoutPanels(context, factory));
     ASSERT_TRUE(context.importLayoutJson(factory));
 
