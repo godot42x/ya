@@ -21,7 +21,7 @@
   具体投影矩阵由 view owner 提供有效 aspect，CameraComponent 不读取 Window/View 全局状态。
 - Game UI 仍是 UIDocument + WidgetTree + UIFrameSnapshot；不挂回 ECS hierarchy。
 - 2D draw 语义（2026-09-27 review，见 §2.4）：底层上传机制共用；坐标系由 draw list 类型固定
-  （`ScreenDrawList` 像素 / `WorldAnnotationList` 世界）；时序由 pass owner 固定。全局 `Render2D`
+  （`ScreenDrawList` 像素 / `WorldDrawList` 世界）；时序由 pass owner 固定。全局 `Render2D`
   删除，共享 pipeline 归持有 `IRender` 的一方，录制器归画这个目标的一方。GUI 只见屏幕类型；
   场景 sprite 是 SceneSnapshot candidate，不是即时列表。
 - 分屏不在本计划范围；多窗口合并提交（render-application-boundary AB4-2d）延后，本计划不依赖它。
@@ -65,7 +65,7 @@
 | ECS/Scene | authored entity、Node3D、Transform、Scene serialization | GPU material、WidgetTree、swapchain |
 | ECS/Scene data | CameraComponent、Sprite2D authored data（具体模块待依赖审计） | command recording、GPU 资源 |
 | ya-render-2d（目标） | 上传 ring、flush、纹理槽表；`ScreenDrawList` + `ScreenDrawPipelines` + `ScreenDrawRecorder` | 相机、深度、Scene/ECS、全局单例 |
-| View overlay 世界标注（目标，Render3D 侧） | `WorldAnnotationList` + `WorldAnnotationPipelines` + `WorldAnnotationRecorder`，需要 View 相机与深度 | GUI include、场景 authored 内容 |
+| 世界空间即时绘制（目标，Render3D 侧） | `WorldDrawList` + `WorldDrawPipelines` + `WorldDrawRecorder`，需要 View 相机与深度 | GUI include、场景 authored 内容 |
 | GUI Compose | UIFrameSnapshot 到 `ScreenDrawList` 的 replay，目标由调用方给出 | 相机、深度、scene color、Scene/ECS、World2D extraction |
 | Scene runtime renderer | Forward/Deferred 3D stages 与 authored sprite draw；具体纯 2D graph 方案由 P0 决定 | GUI compose、读取 live WidgetTree |
 | GUI Widgets | WidgetTree、UIDocument、UIFrameSnapshot、输入/时间策略 | Scene/ECS、Render3D |
@@ -173,19 +173,21 @@ P1 拆开了 screen/world shader 与顶点，但 draw list、录制上下文和 
 | --- | --- | --- |
 | RHI / RenderGraph | 不关心 space | 共用 |
 | 上传机制 | 顶点/索引 ring × flight、flush 分段、纹理槽表 | 共用一份实现（内部类型），屏幕与世界录制器各自持有实例 |
-| shader / PSO | `Sprite2DScreen`（屏幕）、`Sprite2DLine`（世界标注）、`Sprite2DWorld`（场景 sprite，P4） | 按图元语义拆分；同一 shader 按目标格式出 PSO 变体不算拆分 |
-| draw list 类型 | `ScreenDrawList`：像素坐标、左上原点、clip 栈、2D 仿射。`WorldAnnotationList`：世界坐标，录制需要 `viewProjection` 与深度策略，无 clip 栈 | 按坐标系拆分 |
+| shader / PSO | `Sprite2DScreen`（屏幕）、`Sprite2DLine`（世界空间即时绘制）、`Sprite2DWorld`（场景 sprite，P4） | 按图元语义拆分；同一 shader 按目标格式出 PSO 变体不算拆分 |
+| draw list 类型 | `ScreenDrawList`：像素坐标、左上原点、clip 栈、2D 仿射。`WorldDrawList`：世界坐标，录制需要 `viewProjection` 与深度策略，无 clip 栈 | 按坐标系拆分 |
 | pass 时机 | 场景 sprite（scene graph）→ View overlay（先世界相位、再屏幕相位）→ 屏幕 compose（每 surface） | 按 owner 拆分 |
 
 归属判据：**一个命令能否不知道相机就被正确画出来？** 能 → `ScreenDrawList`；不能 →
-`WorldAnnotationList`。区分轴是坐标系，不是 line/quad：像素空间的线属于屏幕列表，
-世界空间的调试点/文字以后也进世界标注列表。
+`WorldDrawList`。区分轴是坐标系，不是 line/quad：像素空间的线属于屏幕列表，
+世界空间的调试点/文字以后也进 `WorldDrawList`。名字只表达坐标系，不绑定用途（编辑器标注、
+runtime 调试线、脚本 DebugDraw 都是其内容）；“不装场景 authored 内容”由契约保证：列表即时、
+每帧丢弃、不进 SceneSnapshot。
 
 ### 三类“带深度的世界 2D”不共用一个列表
 
-| | 世界标注（网格、视锥、线框、包围盒、物理 debug、脚本 DebugDraw） | 场景 sprite（`Sprite2DComponent`） | Billboard（`BillboardComponent`） |
+| | 世界空间即时绘制（网格、视锥、线框、包围盒、物理 debug、脚本 DebugDraw） | 场景 sprite（`Sprite2DComponent`） | Billboard（`BillboardComponent`） |
 | --- | --- | --- | --- |
-| 形状 | 即时列表 `WorldAnnotationList` | SceneSnapshot 里的不可变 candidate，instanced draw | `ViewOverlayStage` push constant + quad mesh |
+| 形状 | 即时列表 `WorldDrawList` | SceneSnapshot 里的不可变 candidate，instanced draw | `ViewOverlayStage` push constant + quad mesh |
 | 生命周期 | 每 View 每帧，用完即弃 | Scene+revision 抽取一次，多 View 共享，保活到 fence | 每 View 每帧从 ECS 读取 |
 | 画面位置 | View 输出之上，建议 tone map 之后，不进 bloom | SceneColor 内，随 3D 后处理 | forward-transparent overlay |
 | 深度 | 测试，不写 | P0 冻结 | 测试 `LessOrEqual`，不写 |
@@ -196,12 +198,12 @@ P1 拆开了 screen/world shader 与顶点，但 draw list、录制上下文和 
 
 ### 持有者
 
-共享层与目标层分开持有（名字为暂定名，D1 开工前可改）：
+共享层与目标层分开持有（命名只表达坐标系，`ScreenDraw*` / `WorldDraw*` 对称）：
 
 | 层 | 内容 | 数量 |
 | --- | --- | --- |
-| `ScreenDrawPipelines` / `WorldAnnotationPipelines` | shader module、pipeline layout / DSL、按（颜色格式，深度格式）懒建的 PSO 缓存、白纹理引用、静态索引 | 每个 `IRender` 一份 |
-| `ScreenDrawRecorder` / `WorldAnnotationRecorder` | 上传 ring × flight、frame UBO、descriptor set、flush 游标 | 每个“画到某张图”的 owner 一份；取代 pass slot |
+| `ScreenDrawPipelines` / `WorldDrawPipelines` | shader module、pipeline layout / DSL、按（颜色格式，深度格式）懒建的 PSO 缓存、白纹理引用、静态索引 | 每个 `IRender` 一份 |
+| `ScreenDrawRecorder` / `WorldDrawRecorder` | 上传 ring × flight、frame UBO、descriptor set、flush 游标 | 每个“画到某张图”的 owner 一份；取代 pass slot |
 
 录制器开销与今天一个 pass slot 按需分配的资源相同；销毁走 `DeferredDeletionQueue`。flight 槽位
 由录制器在 begin 时向设备取（`framesInFlight` / `recordedFrameIndex`）。record 签名显式带目标：
@@ -344,13 +346,13 @@ extent 与相机、GUI Compose 仍拥有编辑器 View overlay、全局 `Render2
 
 ### D1：draw list 按坐标系拆分，删除全局 Render2D
 
-1. `Render2DList` 拆成 `ScreenDrawList`（ya-render-2d）与 `WorldAnnotationList`（Render3D 的 View
+1. `Render2DList` 拆成 `ScreenDrawList`（ya-render-2d）与 `WorldDrawList`（Render3D 的 View
    overlay 一侧，复用 ya-render-2d 导出的上传机制）。GUI 模块 include 不到世界类型。
 2. `ScreenDrawList` 的变换重载收 2D 仿射（3×2），不收 `mat4`。
 3. `recordRender2DList` 拆成屏幕 / 世界两个 record；删除 `FRender2dContext` 与
    `ERender2dBatchKind::Line`。屏幕录制签名不出现相机字段。
-4. 删除静态 `Render2D`：`ScreenDrawPipelines` / `WorldAnnotationPipelines` 按 §2.4 持有者表创建；
-   `ScreenDrawRecorder` / `WorldAnnotationRecorder` 由目标 owner 持有。删除
+4. 删除静态 `Render2D`：`ScreenDrawPipelines` / `WorldDrawPipelines` 按 §2.4 持有者表创建；
+   `ScreenDrawRecorder` / `WorldDrawRecorder` 由目标 owner 持有。删除
    `acquirePassSlot/releasePassSlot`、`composePassSlot` 静态池、`FRender2DComposePassDesc::passSlot`，
    以及 `PipelineCoordinator` 与 `GUIAppHost` 对 `Render2D::init/destroy` 的调用。
    `FRender2dDebugState` 随录制器或 diagnostics 走。
@@ -358,12 +360,12 @@ extent 与相机、GUI Compose 仍拥有编辑器 View overlay、全局 `Render2
 
 验收：parity md5 不变；编辑器截图不变；GUIWorkbench 链接图不含 ya-render-3d；
 `rg "Render2D::|acquirePassSlot|FRender2dContext" Engine/Source` 零命中；
-`rg "WorldAnnotation|viewProjection" Engine/Source/Framework/GUI` 零命中。
+`rg "WorldDraw|viewProjection" Engine/Source/Framework/GUI` 零命中。
 
 ### D2：编辑器 View overlay 离开 GUI Compose
 
 1. GameEditor 自己拥有 View overlay pass：在 View display image 上先以 View 深度画
-   `WorldAnnotationList`（测试不写），再画 gizmo / HUD 的 `ScreenDrawList`。
+   `WorldDrawList`（测试不写），再画 gizmo / HUD 的 `ScreenDrawList`。
 2. 删除 `ERender2DComposePassKind::EditorViewportCompose`、`FRender2DComposePassDesc::camera`、
    `sceneSourceTexture` 与 `recordRender2DComposePass` 的 `depthTarget` 参数。
 3. 开工前冻结：overlay 在 tone map 之前（HDR scene color）还是之后（display image）。建议之后，
@@ -378,7 +380,7 @@ extent 与相机、GUI Compose 仍拥有编辑器 View overlay、全局 `Render2
 2. `ScreenDrawList` 增加 `strokeLine`、`strokePolyline`、`strokeRect`、`fillConvexPoly`；arc / bezier
    先采样为路径。AA 用几何羽化，`Sprite2DScreen` 不新增分支；圆角矩形 SDF 分支保留。
 3. `UIFrameDrawItem::EKind::Line` 与 gizmo 轴线迁到 `strokeLine`，修正线段偏向法线一侧。
-4. 世界标注的粗线不在本项；需要时由世界 shader 在 VS 按屏幕空间展开，单独决策。
+4. `WorldDrawList` 的粗线不在本项；需要时由世界 shader 在 VS 按屏幕空间展开，单独决策。
 
 验收：parity 基线仅线段像素变化，且变化来自居中修正（逐项说明）；新增 stroke 单测覆盖闭合、
 退化段、羽化宽度。
@@ -476,7 +478,7 @@ World2D work。Scene snapshot 共享不意味着所有 View 必须执行同一�
 
 1. 扩展 SceneSnapshot，增加只读 world sprite candidates；candidate 中只保留 extraction 后可消费的
    immutable transform/UV/tint/order/resolved-resource binding，资源引用至少活到 command submit/fence 完成。
-   场景 sprite 是 retained candidate，不是即时 draw list：不经 `ScreenDrawList` / `WorldAnnotationList`，
+   场景 sprite 是 retained candidate，不是即时 draw list：不经 `ScreenDrawList` / `WorldDrawList`，
    也不新增通用 World2DList。默认形状是一个 quad + per-instance buffer 的 instanced draw；是否复用
    ya-render-2d 上传机制由 P0 按生命周期与数量决定，不预设。
 2. RenderFrameExtractor::extractSceneSnapshot() 一次遍历 Sprite2DComponent；不能按 View 重复遍历 ECS，
@@ -541,7 +543,7 @@ effective aspect 和 camera view，不读取已发布的上一帧 View output。
   不能同时表达 UI canvas 和 World2D。
 - editor grid/gizmo/selection 在 World2D/World3D 输出之后作为 editor overlay compose，不能进入
   authored Sprite snapshot；它们也不能偷偷进入 runtime Game UI snapshot。overlay 由 D2 的
-  GameEditor View overlay pass 承载（世界标注相位 → 屏幕相位），2D profile 只换相机与 gizmo 约束。
+  GameEditor View overlay pass 承载（世界相位 → 屏幕相位），2D profile 只换相机与 gizmo 约束。
 - World2D authoring 的隐藏/显示由 View producer 的声明控制；隐藏后不提交该 View 的 scene request、
   cull/order 或 graph pass。若同一 Scene 仍被其他可见 View 请求，共享 Scene extraction 继续服务它们。
   视口从 tab 中移除时，不用在 pipeline 里“录空 pass”补齐。

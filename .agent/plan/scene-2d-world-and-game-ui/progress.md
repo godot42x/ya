@@ -258,17 +258,18 @@ Phase 1 §4.3（强制项：删除 textureRef 高位 bit 隐式协议）与 §4.
 ### 结论（写入 plan.md §0/§1/§2.4/§4A、P0-contract-matrix.md、feature_matrix.json）
 
 - 分层：上传机制共用；shader 按图元语义拆分（已完成）；draw list 按坐标系拆分为
-  `ScreenDrawList` / `WorldAnnotationList`；时序按 pass owner 拆分（场景 sprite → View overlay 世界相位 →
+  `ScreenDrawList` / `WorldDrawList`；时序按 pass owner 拆分（场景 sprite → View overlay 世界相位 →
   屏幕相位 → 屏幕 compose）。判据：命令能否不知道相机就被正确画出。
-- 删除全局 `Render2D`：`ScreenDrawPipelines` / `WorldAnnotationPipelines` 归持有 `IRender` 的一方，
-  `ScreenDrawRecorder` / `WorldAnnotationRecorder` 归目标 owner，取代 pass slot。GUIApp 只创建屏幕层，
+- 删除全局 `Render2D`：`ScreenDrawPipelines` / `WorldDrawPipelines` 归持有 `IRender` 的一方，
+  `ScreenDrawRecorder` / `WorldDrawRecorder` 归目标 owner，取代 pass slot。GUIApp 只创建屏幕层，
   不链接 Render3D；ya::App 的共享层放 App 设备状态，不放 `PipelineCoordinator`。
 - GUI 模块只见屏幕类型；编辑器 View overlay 从 GUI Compose 的 `EditorViewportCompose` 移到 GameEditor。
-- 不建通用 World2DList：世界标注（即时）、场景 sprite（snapshot candidate）、Billboard（ViewOverlayStage）
+- 不建通用 World2DList：世界空间即时绘制（`WorldDrawList`）、场景 sprite（snapshot candidate）、Billboard（ViewOverlayStage）
   三者生命周期与画面位置不同。
 - 屏幕空间补 stroke / path（任意三角形 + 几何羽化），不用 GPU line 拓扑。
 - Billboard：像素尺寸公式隐含 90° FOV、正交需改公式、`worldDirection` 未被使用，随 P2 修正/登记。
-- 命名：不用 `Device` 后缀与 `F` 前缀；上述名字为暂定名。
+- 命名：不用 `Device` 后缀与 `F` 前缀。世界侧初稿 `WorldAnnotation*` 绑定了用途，改为只表达坐标系的
+  `WorldDraw{List,Pipelines,Recorder}`，与 `ScreenDraw{List,Pipelines,Recorder}` 对称（用户确认）。
 
 ### 更正
 

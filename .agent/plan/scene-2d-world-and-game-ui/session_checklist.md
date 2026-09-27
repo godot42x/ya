@@ -23,7 +23,7 @@
 2. 每次新增 GPU 资源都确认 safe point、flight slot、retire/submit 生命周期。
 3. 同一 Scene 多 View 的 shared snapshot 与 view-owned order 必须分开；禁止把 view camera 写回 shared snapshot。
 4. UI pipeline 不 include Scene/ECS；World2D pipeline 不 include WidgetTree/UIFrameSnapshot。
-   GUI 模块不 include 世界标注类型，不接收相机/深度/scene color；不恢复全局 2D 绘制单例或 pass slot。
+   GUI 模块不 include `WorldDraw*` 类型，不接收相机/深度/scene color；不恢复全局 2D 绘制单例或 pass slot。
 5. 不引入 Transform2D、Camera2D、中心 bus、第二个 app loop 或 IRenderRuntimeServices。
 6. P0 比较 optional runtime stage 与轻量 2D-only graph；无论选择哪种，都复用 Scene declaration、
    snapshot、target/submission 生命周期和应用主时序，不新增第二 scheduler/app loop。
