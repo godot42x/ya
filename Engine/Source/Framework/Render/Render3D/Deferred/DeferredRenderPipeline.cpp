@@ -5,7 +5,6 @@
 #include "Core/Profiling/Profiling.h"
 #include "Render3D/Deferred/DeferredAttachmentFormats.h"
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "Render3D/Common/BillboardScale.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Systems/Components/DirectionComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
@@ -1132,11 +1131,12 @@ ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
                     continue;
                 }
 
-                const float size = billboardWorldSize(frame.view.frameData->projection,
-                                                       viewHeight,
-                                                       distance,
-                                                       billboard.screenSizePixels,
-                                                       billboard.minWorldScale);
+                // Authored world size. Perspective makes it look smaller when far;
+                // the quad is not resized from camera distance or FOV.
+                const float size = billboard.minWorldScale;
+                if (size <= 0.0f) {
+                    continue;
+                }
 
                 ViewOverlayStage::FrameInputs::BillboardInput input{};
                 input.worldCenter    = worldCenter;

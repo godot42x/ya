@@ -411,11 +411,10 @@ extent 与相机、GUI Compose 仍拥有编辑器 View overlay、全局 `Render2
    EditorViewProducer。所有调用点必须明确传入 output aspect；不保留旧无参接口。
 6. Editor 的“正交 XY profile”只修改普通 CameraComponent/编辑器相机与 gizmo 约束，不持有第二套
    camera state；World2D 的坐标约定不能复用 GUI 的 Y-down 逻辑像素。
-7. Billboard 恒定像素尺寸随投影模式修正（`DeferredRenderPipeline::buildOverlayFrameInputs`）：
-   透视为 `pixels / viewHeight * distance * 2 * tan(fovY/2)`（现公式隐含 90° FOV）；正交为
-   `orthoHeight * pixels / viewHeight`，与距离无关。另登记：`worldDirection` 写入 push constant
-   但顶点展开未使用，billboard 永远正对相机；“可侧看的牌”属于 Sprite2DComponent，不给
-   Billboard 加屏幕模式。
+7. Billboard 的世界边长是 `minWorldScale`，不按相机距离或 FOV 放大。透视下远处看起来更小，
+   那是投影，不是把 quad 改大。`screenSizePixels` 不再参与绘制和拾取（字段保留，旧场景能加载）。
+   `worldDirection` 写入 push constant 但顶点展开未使用，billboard 永远正对相机；“可侧看的牌”
+   属于 Sprite2DComponent。
 
 ### 参考与校验
 
@@ -626,7 +625,7 @@ Applications/GameEditor/EditorUIDesignerSession.cpp、.agent/plan/game-ui-author
 | D1 | draw list 按坐标系拆分；删除全局 Render2D / pass slot / FRender2dContext；Pipelines 与 Recorder 按 §2.4 持有 | [render-2d] split draw lists by coordinate frame |
 | D2 | 编辑器 View overlay 由 GameEditor 拥有（世界相位 → 屏幕相位）；GUI Compose 不再持相机/深度/scene color | [editor/viewport] own the view overlay pass |
 | D3 | 屏幕 stroke / path（任意三角形 + 几何羽化），GUI 线段与 gizmo 轴线迁移 | [render-2d] add screen-space stroke |
-| P2 | CameraComponent 只负责纯 projection，正交模式可序列化并被 runtime/editor 使用；billboard 像素尺寸随投影修正 | [scene/camera] add explicit projection input |
+| P2 | CameraComponent 只负责纯 projection，正交模式可序列化并被 runtime/editor 使用；billboard 边长是世界尺寸，不随相机距离缩放 | [scene/camera] add explicit projection input |
 | P3 | Sprite2DComponent 可创建、保存、复制、删除，无 GPU 状态 | [ecs/sprite2d] add authored sprite component |
 | P4 | 同 Scene 多 View 共享 snapshot；按 P0 选择的 Scene graph/workload 录制 World2D，纯 2D 不承担无用 3D stages | [render/world2d] add shared extraction and sprite pass |
 | P5 | runtime 2D view 与 editor 2D authoring profile 可用 | [editor/world2d] add orthographic authoring flow |

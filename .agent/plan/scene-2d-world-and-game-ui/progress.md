@@ -253,6 +253,11 @@ Phase 1 §4.3（强制项：删除 textureRef 高位 bit 隐式协议）与 §4.
 
 ---
 
+## 2026-09-27 — Billboard 尺寸更正
+
+按距离把世界边长放大、用来维持屏幕像素，是错的。绘制和拾取都改为只用 `minWorldScale`。
+远处看起来更小来自投影。`screenSizePixels` 不再参与尺寸（字段保留）。`BillboardScale.h` 删除。
+
 ## 2026-09-27 — P2：CameraComponent 投影与正交
 
 ### 完成
@@ -261,7 +266,7 @@ Phase 1 §4.3（强制项：删除 textureRef 高位 bit 隐式协议）与 §4.
 - `getProjection(float outputAspect)` 是唯一投影入口。`_fixedAspectRatio` 为真时用组件保存的 aspect，否则用调用方传入的 View 输出 aspect。无参 `getProjection()` 删除。
 - `getFreeView` / `getOrbitView` / `getViewProjection` / `getOrbitViewProjection` 删除。`getOrbitView` 写 Transform 的路径随之消失。view 由 `cameraViewFromOwner` 从 owner 世界姿态计算，`SceneCameraQuery::cameraView` 是应用侧入口，不写 Transform。
 - Runtime / Editor producer 在声明 View 时传入 output aspect。`syncRuntimeCameraAspect` 以及两个 controller 把窗口 extent 写进组件的代码删除。
-- Billboard 世界尺寸改为从该 View 的投影矩阵读取：透视乘 `tan(fovY/2)`，正交与距离无关（`BillboardScale.h`）。
+- Billboard 世界边长是 `minWorldScale`，不随相机距离或 FOV 变化（见本节之前的更正）。
 - `worldDirection` 仍未参与朝向（billboard 永远正对相机）；“可侧看的牌”留给 Sprite2DComponent。
 
 ### 未做
@@ -291,7 +296,7 @@ Phase 1 §4.3（强制项：删除 textureRef 高位 bit 隐式协议）与 §4.
 - 不建通用 World2DList：世界空间即时绘制（`WorldDrawList`）、场景 sprite（snapshot candidate）、Billboard（ViewOverlayStage）
   三者生命周期与画面位置不同。
 - 屏幕空间补 stroke / path（任意三角形 + 几何羽化），不用 GPU line 拓扑。
-- Billboard：像素尺寸公式隐含 90° FOV、正交需改公式、`worldDirection` 未被使用，随 P2 修正/登记。
+- Billboard：边长是 `minWorldScale`，不按距离补偿屏幕像素；`worldDirection` 未被使用。
 - 命名：不用 `Device` 后缀与 `F` 前缀。世界侧初稿 `WorldAnnotation*` 绑定了用途，改为只表达坐标系的
   `WorldDraw{List,Pipelines,Recorder}`，与 `ScreenDraw{List,Pipelines,Recorder}` 对称（用户确认）。
 

@@ -35,7 +35,10 @@ struct YA_RENDER_3D_API BillboardComponent : public IComponent
     TextureSlot image;
     glm::vec4  tint             = glm::vec4(1.0f);
     glm::vec3  worldDirection   = glm::vec3(0.0f, 0.0f, -1.0f);
+    /// Not a draw size. Drawing uses `minWorldScale` (world units) and does not
+    /// resize the quad from camera distance. Kept so existing scenes load.
     float      screenSizePixels = 30.0f;
+    /// World-space edge length of the camera-facing quad.
     float      minWorldScale    = 0.0f;
 
     /// Which views may draw this sprite (see RenderFeatures.h). Authored

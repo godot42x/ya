@@ -129,9 +129,7 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycastBillboards(Scene* sc
             continue;
         }
 
-        const float screenSizePixels = std::max(billboard.screenSizePixels, 1.0f);
-        const float scaleFactor = screenSizePixels / viewportHeight;
-        const float halfExtent = std::max(billboard.minWorldScale, scaleFactor * distanceToCamera * 2.0f) * 0.5f;
+        const float halfExtent = billboard.minWorldScale * 0.5f;
         if (halfExtent <= 0.0f) {
             continue;
         }
