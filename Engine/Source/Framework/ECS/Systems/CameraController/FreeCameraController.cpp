@@ -20,7 +20,7 @@ void FreeCameraController::update(FreeCamera &camera, const InputManager &inputM
     }
 }
 
-void FreeCameraController::update(TransformComponent &tc, CameraComponent &cc, const InputManager &inputManager, const Extent2D &extent, float dt)
+void FreeCameraController::update(TransformComponent &tc, CameraComponent &cc, const InputManager &inputManager, float dt)
 {
     bool tcDirty = false;
     if (handleKeyboardInput(tc._position, tc._rotation, inputManager, dt)) {
@@ -33,10 +33,7 @@ void FreeCameraController::update(TransformComponent &tc, CameraComponent &cc, c
         tc._localDirty = true;
         tc._worldDirty = true;
     }
-
-    if (extent.height > 0) {
-        cc._aspectRatio = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-    }
+    (void)cc;
 }
 
 bool FreeCameraController::handleKeyboardInput(glm::vec3 &pos, const glm::vec3 &rot, const InputManager &inputManager, float deltaTime)

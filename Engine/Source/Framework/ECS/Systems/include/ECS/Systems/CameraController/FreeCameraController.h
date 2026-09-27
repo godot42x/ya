@@ -33,7 +33,7 @@ struct YA_ECS_SYSTEMS_API FreeCameraController : public CameraController
     void update(FreeCamera &camera, const InputManager &inputManager, float deltaTime);
 
     // update ecs component
-    void update(TransformComponent &tc, CameraComponent &cc, const InputManager &inputManager, const Extent2D &extent, float dt);
+    void update(TransformComponent &tc, CameraComponent &cc, const InputManager &inputManager, float dt);
 
   private:
     bool handleKeyboardInput(glm::vec3 &pos, const glm::vec3 &rot, const InputManager &inputManager, float deltaTime);

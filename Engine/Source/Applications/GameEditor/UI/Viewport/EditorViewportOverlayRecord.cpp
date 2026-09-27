@@ -8,6 +8,7 @@
 #include "ECS/Systems/TransformSystem.h"
 #include "Scene3D/TransformComponent.h"
 #include "GameEditor/EditorLayer.h"
+#include "GameRuntime/Render/SceneCameraQuery.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "Render/Resources/FontManager.h"
 #include "Render2D/Render2D.h"
@@ -138,8 +139,8 @@ void recordSelectedCameraFrustum(Render2DList& list, EditorLayer& layer)
 
     std::vector<RenderOverlayLine3D> lines;
     appendCameraFrustumOverlayLines(lines,
-                                    camera->getFreeView(),
-                                    camera->getProjection(),
+                                    cameraView(*selected),
+                                    camera->getProjection(camera->_aspectRatio),
                                     kSelectedCameraFrustumColor);
     for (const RenderOverlayLine3D& line : lines) {
         list.makeWorldLine(line.from, line.to, line.color);

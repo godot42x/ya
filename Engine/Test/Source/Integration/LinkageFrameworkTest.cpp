@@ -11,6 +11,7 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/RenderComponent.h"
 #include "ECS/Systems/Components/CameraComponent.h"
+#include "GameRuntime/Render/SceneCameraQuery.h"
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Systems/Components/PointLightComponent.h"
 #include "Scene/Core/Scene.h"
@@ -398,7 +399,7 @@ TEST(LinkageFrameworkTest, CameraViewAgreesWithItsBodyUnderAParentTransform)
     EXPECT_NEAR(glm::dot(glm::normalize(bodyForward), glm::normalize(worldForward)), 1.0f, 1e-4f);
 
     // The view the preview and the wireframe use has to be the same pose.
-    const glm::mat4 inverseView = glm::inverse(camera->getFreeView());
+    const glm::mat4 inverseView = glm::inverse(cameraView(*cameraNode->getEntity()));
     const glm::vec3 viewEye     = glm::vec3(inverseView[3]);
     const glm::vec3 viewForward = -glm::vec3(inverseView[2]);
     EXPECT_NEAR(glm::length(viewEye - worldEye), 0.0f, 1e-4f);

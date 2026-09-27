@@ -5,6 +5,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "Render3D/Deferred/DeferredAttachmentFormats.h"
 #include "ECS/Component/2D/BillboardComponent.h"
+#include "Render3D/Common/BillboardScale.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Systems/Components/DirectionComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
@@ -1131,9 +1132,11 @@ ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
                     continue;
                 }
 
-                const float screenSizePixels = std::max(billboard.screenSizePixels, 1.0f);
-                const float scaleFactor      = screenSizePixels / viewHeight;
-                const float size             = std::max(billboard.minWorldScale, scaleFactor * distance * 2.0f);
+                const float size = billboardWorldSize(frame.view.frameData->projection,
+                                                       viewHeight,
+                                                       distance,
+                                                       billboard.screenSizePixels,
+                                                       billboard.minWorldScale);
 
                 ViewOverlayStage::FrameInputs::BillboardInput input{};
                 input.worldCenter    = worldCenter;

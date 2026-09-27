@@ -303,14 +303,24 @@ void LuaScriptingSystem::init()
                                               return q * glm::vec3(0.0f, 1.0f, 0.0f); // WorldUp
                                           });
 
+    _lua.new_enum("CameraProjection",
+                  "Perspective",
+                  ECameraProjection::Perspective,
+                  "Orthographic",
+                  ECameraProjection::Orthographic);
+
     _lua.new_usertype<CameraComponent>("CameraComponent",
                                        sol::no_constructor,
                                        "primary",
                                        &CameraComponent::bPrimary,
                                        "fixedAspectRatio",
                                        &CameraComponent::_fixedAspectRatio,
+                                       "projection",
+                                       &CameraComponent::_projection,
                                        "fov",
                                        &CameraComponent::_fov,
+                                       "orthoHalfHeight",
+                                       &CameraComponent::_orthoHalfHeight,
                                        "aspectRatio",
                                        &CameraComponent::_aspectRatio,
                                        "nearClip",

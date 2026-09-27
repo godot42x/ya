@@ -61,69 +61,25 @@ bool resolveOwnerWorldPose(Entity* owner, FOwnerWorldPose& out)
 
 } // namespace
 
-// TODO: a camera should only define the effect:
-//  1. projection or orthographic
-//  2. other fov some camera effect
-// So we should not take the view form there, Should there
-// come a CameraController to do this work...
-glm::mat4 CameraComponent::getOrbitView() const
+glm::mat4 CameraComponent::getProjection(float outputAspect) const
 {
-    if (getOwner() && getOwner()->hasComponent<TransformComponent>()) {
-        auto tc = getOwner()->getComponent<TransformComponent>();
-
-        float pitch = glm::radians(tc->_rotation.x);
-        float yaw   = glm::radians(tc->_rotation.y);
-
-        glm::vec3 dir;
-
-        // euler angle 计算顺序: yaw (dir.x) -> pitch (dir.y) -> roll (dir.z)
-
-        // 我们希望 roll 不影响视角的产生奇怪的旋转, 比如把头横过来或者倒过来看东西
-        // 且按照欧拉角的计算顺序, roll 是最后一个旋转, 所以我们忽略 roll 的影响
-        // 所以 dir.y 只和 pitch 有关
-        // pitch 就是绕 x 轴旋转的角度
-        // sin(pitch): 角度在 Y 轴的投影长度
-        dir.y = std::sin(pitch);
-
-        // 然后我们看 xoz 平面, yaw 就是绕 y 轴旋转的角度
-        // 当 pitch = 0 时, (dir.x, dir.z) 就是 xoz 上的一个坐标/vec2
-        dir.x = std::sin(yaw);
-        dir.z = std::cos(yaw);
-        // 受到了 pitch 的影响(绕 x 轴旋转), 需要乘以 cost(pitch)
-        // 想象这个平面向量进行了抬升/降低的操作
-        dir.x *= std::cos(pitch);
-        dir.z *= std::cos(pitch);
-
-        dir = glm::normalize(glm::radians(dir));
-        dir = -dir; // 取逆，因为是相机到目标点的方向
-
-        tc->_position = _focusPoint + dir * _distance;
-
-
-        return FMath::lookAt(
-            tc->_position,
-            _focusPoint,
-            FMath::Vector::WorldUp);
+    const float aspect = _fixedAspectRatio ? _aspectRatio : outputAspect;
+    if (_projection == ECameraProjection::Orthographic) {
+        const float halfHeight = _orthoHalfHeight;
+        const float halfWidth  = halfHeight * aspect;
+        return FMath::orthographic(-halfWidth, halfWidth, -halfHeight, halfHeight, _nearClip, _farClip);
     }
-    return FMath::lookAt(
-        glm::vec3(0, 0, _distance) + _focusPoint,
-        _focusPoint,
-        FMath::Vector::WorldUp);
+    return FMath::perspective(glm::radians(_fov), aspect, _nearClip, _farClip);
 }
 
-glm::mat4 CameraComponent::getFreeView() const
+glm::mat4 cameraViewFromOwner(Entity* owner)
 {
-    if (FOwnerWorldPose pose; resolveOwnerWorldPose(getOwner(), pose)) {
+    if (FOwnerWorldPose pose; resolveOwnerWorldPose(owner, pose)) {
         const glm::vec3 forward = pose.rotation * FMath::Vector::WorldForward;
         const glm::vec3 up      = pose.rotation * FMath::Vector::WorldUp;
-
         return FMath::lookAt(pose.position, pose.position + forward, up);
     }
-
-    return FMath::lookAt(
-        glm::vec3(0, 0, _distance) + _focusPoint,
-        _focusPoint,
-        FMath::Vector::WorldUp);
+    return glm::mat4(1.0f);
 }
 
 } // namespace ya

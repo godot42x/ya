@@ -385,7 +385,10 @@ extent 与相机、GUI Compose 仍拥有编辑器 View overlay、全局 `Render2
 验收：parity 基线仅线段像素变化，且变化来自居中修正（逐项说明）；新增 stroke 单测覆盖闭合、
 退化段、羽化宽度。
 
-## 5. Phase 2：CameraComponent 增加正交模式
+## 5. Phase 2：CameraComponent 增加正交模式（已完成）
+
+编辑器正交 XY profile（工作项 6 的工具面）仍属于 Phase 5：本 phase 只让 CameraComponent
+能表达正交投影，不新增第二套相机，也不把 `EViewportMode::Mode2D` 改成 World2D。
 
 ### 目标
 

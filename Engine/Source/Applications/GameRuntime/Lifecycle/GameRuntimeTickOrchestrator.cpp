@@ -6,7 +6,6 @@
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
 #include "GameRuntime/Lifecycle/FPSCtrl.h"
-#include "GameRuntime/Render/SceneCameraQuery.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
 
 #include "Core/Async/TaskQueue.h"
@@ -16,7 +15,6 @@
 #include "Core/System/FileWatcher.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/Systems/Components/CameraComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Systems/LuaScriptingSystem.h"
 
@@ -51,26 +49,6 @@
 
 namespace ya
 {
-
-namespace
-{
-void syncRuntimeCameraAspect(Entity* runtimeCamera, const Extent2D& viewExtent)
-{
-    if (!runtimeCamera || !runtimeCamera->isValid() || !runtimeCamera->hasComponent<CameraComponent>()) {
-        return;
-    }
-    if (viewExtent.width == 0 || viewExtent.height == 0) {
-        return;
-    }
-
-    auto* camera = runtimeCamera->getComponent<CameraComponent>();
-    if (!camera->_fixedAspectRatio) {
-        camera->setAspectRatio(static_cast<float>(viewExtent.width) /
-                               static_cast<float>(viewExtent.height));
-    }
-}
-
-} // namespace
 
 int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
 {
@@ -211,19 +189,6 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
         for (auto& sys : app._systems) {
             sys->onUpdate(dt);
         }
-    }
-
-    if (app.getSceneServices().getActiveScene()) {
-        YA_PROFILE_SCOPE("Logic/RuntimeCamera");
-        // The game camera's aspect follows the resolution its viewport renders
-        // at: a setting this tick reads directly. Not last tick's published View
-        // output (that made the aspect depend on what was rendered before), and
-        // not the window (the window only decides how the image is presented, so
-        // following it would change what is rendered on a resize that changes
-        // nothing about the image).
-        // `syncRuntimeCameraAspect` ignores a degenerate extent.
-        syncRuntimeCameraAspect(findPrimaryCamera(*app.getSceneServices().getActiveScene()),
-                               app._renderState->hostSettings.renderResolution);
     }
 
     switch (app._appState) {

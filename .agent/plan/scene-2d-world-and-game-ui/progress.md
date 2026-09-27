@@ -253,6 +253,30 @@ Phase 1 §4.3（强制项：删除 textureRef 高位 bit 隐式协议）与 §4.
 
 ---
 
+## 2026-09-27 — P2：CameraComponent 投影与正交
+
+### 完成
+
+- `ECameraProjection`（Perspective / Orthographic）+ `_orthoHalfHeight`（垂直半高）进入反射、序列化和 Lua。
+- `getProjection(float outputAspect)` 是唯一投影入口。`_fixedAspectRatio` 为真时用组件保存的 aspect，否则用调用方传入的 View 输出 aspect。无参 `getProjection()` 删除。
+- `getFreeView` / `getOrbitView` / `getViewProjection` / `getOrbitViewProjection` 删除。`getOrbitView` 写 Transform 的路径随之消失。view 由 `cameraViewFromOwner` 从 owner 世界姿态计算，`SceneCameraQuery::cameraView` 是应用侧入口，不写 Transform。
+- Runtime / Editor producer 在声明 View 时传入 output aspect。`syncRuntimeCameraAspect` 以及两个 controller 把窗口 extent 写进组件的代码删除。
+- Billboard 世界尺寸改为从该 View 的投影矩阵读取：透视乘 `tan(fovY/2)`，正交与距离无关（`BillboardScale.h`）。
+- `worldDirection` 仍未参与朝向（billboard 永远正对相机）；“可侧看的牌”留给 Sprite2DComponent。
+
+### 未做
+
+- 编辑器正交 XY 工具 profile（plan §5 工作项 6 的编辑器面）留在 P5，避免把 `Mode2D` 同时变成 UI canvas 和 World2D。
+
+### 验证
+
+- `xmake b ya-testing`
+- `xmake r ya-testing --gtest_filter='*Camera*:*EditorView*:*SceneSerializer*'`：36 passed。
+
+### 下一步
+
+- D1：按坐标系拆 draw list，删除全局 `Render2D`。
+
 ## 2026-09-27 — 2D draw 语义与持有者 review（仅改计划文档）
 
 ### 结论（写入 plan.md §0/§1/§2.4/§4A、P0-contract-matrix.md、feature_matrix.json）

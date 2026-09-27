@@ -36,4 +36,9 @@ Entity* findSecondaryCamera(Scene& scene, Entity* primaryCamera)
     return nullptr;
 }
 
+glm::mat4 cameraView(Entity& camera)
+{
+    return cameraViewFromOwner(&camera);
+}
+
 } // namespace ya

@@ -35,8 +35,12 @@ void RuntimeGameViewProducer::collectSceneViews(const SceneViewCollectContext& c
     if (camera && camera->isValid() && camera->hasComponent<CameraComponent>()) {
         auto* cameraComponent    = camera->getComponent<CameraComponent>();
         auto* transformComponent = camera->getComponent<TransformComponent>();
-        primary.view       = cameraComponent->getFreeView();
-        primary.projection = cameraComponent->getProjection();
+        const glm::vec2 outputExtent = context.renderResolution.toVec2();
+        const float     outputAspect = (outputExtent.x > 0.0f && outputExtent.y > 0.0f)
+                ? outputExtent.x / outputExtent.y
+                : cameraComponent->_aspectRatio;
+        primary.view       = cameraView(*camera);
+        primary.projection = cameraComponent->getProjection(outputAspect);
         primary.cameraPos  = transformComponent ? transformComponent->getWorldPosition() : glm::vec3(0.0f);
         // The view is rendered from that camera, so that camera's own generated
         // body is not part of what it sees.

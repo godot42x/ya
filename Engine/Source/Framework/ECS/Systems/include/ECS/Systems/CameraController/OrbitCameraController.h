@@ -20,12 +20,8 @@ struct OrbitCameraController : public CameraController
 
   public:
 
-    void update(TransformComponent &tc, CameraComponent &cc, const InputManager &inputManager, const Extent2D &extent, float dt)
+    void update(TransformComponent &tc, CameraComponent &cc, const InputManager &inputManager, float dt)
     {
-        if (extent.height > 0) {
-            cc.setAspectRatio(static_cast<float>(extent.width) / static_cast<float>(extent.height));
-        }
-
         if (inputManager.isMouseButtonPressed(_rotateButton)) {
             glm::vec2 mouseDelta = inputManager.getMouseDelta();
             if (glm::length(mouseDelta) > 0.0f) {

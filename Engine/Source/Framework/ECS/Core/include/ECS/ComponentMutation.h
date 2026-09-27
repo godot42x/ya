@@ -20,8 +20,7 @@ namespace ya::detail_component_mutation
 {
 /// The one place a component instance is created.
 ///
-/// A component has to know the entity that owns it: CameraComponent reads its
-/// owner's transform to build a view, for one. The registry cannot answer that
+/// A component has to know the entity that owns it. The registry cannot answer that
 /// question on its own -- `Entity` wrappers belong to the Scene -- so ownership
 /// is an argument here rather than something the caller patches afterwards.
 /// Every creation funnel (typed, name-based, type-erased) passes through this

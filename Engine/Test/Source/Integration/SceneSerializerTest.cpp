@@ -5,6 +5,7 @@
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Systems/Components/CameraComponent.h"
+#include "GameRuntime/Render/SceneCameraQuery.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "ECS/Entity.h"
 #include "GUI/Widgets/Controls/Button.h"
@@ -427,14 +428,14 @@ TEST(SceneSerializerTest, LoadedCameraViewAndWireframeUseItsAuthoredPose)
     auto* loadedCamera = loaded->getComponent<CameraComponent>();
     EXPECT_EQ(loadedCamera->getOwner(), loaded);
 
-    const glm::mat4 inverseView = glm::inverse(loadedCamera->getFreeView());
+    const glm::mat4 inverseView = glm::inverse(cameraView(*loaded));
     const glm::vec3 viewEye     = glm::vec3(inverseView[3]);
     EXPECT_NEAR(glm::length(viewEye - worldEye), 0.0f, 1e-3f);
 
     std::vector<RenderOverlayLine3D> lines;
     appendCameraFrustumOverlayLines(lines,
-                                    loadedCamera->getFreeView(),
-                                    loadedCamera->getProjection(),
+                                    cameraView(*loaded),
+                                    loadedCamera->getProjection(loadedCamera->_aspectRatio),
                                     glm::vec4(1.0f));
     ASSERT_FALSE(lines.empty());
     // The wireframe eye is the view eye: the drawn frustum has to sit on the

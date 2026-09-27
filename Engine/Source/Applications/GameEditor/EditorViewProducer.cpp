@@ -3,9 +3,9 @@
 #include "GameEditor/EditorLayer.h"
 #include "GameRuntime/App.h"
 #include "GameRuntime/AppRenderServices.h"
+#include "GameRuntime/Render/SceneCameraQuery.h"
 
 #include "Core/Camera/Camera.h"
-#include "Core/Math/Math.h"
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "Scene3D/TransformComponent.h"
 
@@ -52,13 +52,10 @@ namespace
 /// rect's aspect unless the camera pins its own.
 glm::mat4 cameraProjectionForOutput(const CameraComponent& camera, const glm::vec2& outputExtent)
 {
-    if (camera._fixedAspectRatio || outputExtent.x <= 0.0f || outputExtent.y <= 0.0f) {
-        return camera.getProjection();
-    }
-    return FMath::perspective(glm::radians(camera._fov),
-                              outputExtent.x / outputExtent.y,
-                              camera._nearClip,
-                              camera._farClip);
+    const float outputAspect = (outputExtent.x > 0.0f && outputExtent.y > 0.0f)
+        ? outputExtent.x / outputExtent.y
+        : camera._aspectRatio;
+    return camera.getProjection(outputAspect);
 }
 
 } // namespace
@@ -143,7 +140,7 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
     collector.declare(SceneViewDesc{
         .scene             = context.activeScene,
         .viewId            = previewKey().viewId(),
-        .view              = cameraComponent->getFreeView(),
+        .view              = cameraView(*previewCamera),
         .projection        = cameraProjectionForOutput(*cameraComponent, previewOutput.extent),
         .cameraPos         = transformComponent->getWorldPosition(),
         .outputRect      = previewOutput,
