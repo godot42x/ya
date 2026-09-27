@@ -4,6 +4,7 @@
 #include "Core/Event.h"
 #include "GUI/Host/GUIWindowSession.h"
 #include "GUI/Host/NativeWindowManager.h"
+#include "RHI/Core/PresentFrame.h"
 
 #include <cstdint>
 #include <functional>
@@ -82,8 +83,12 @@ class YA_GUI_API GUIWindowManager final : public IGUIWindowCoordinator
     /// Tick extra trees and rebuild snapshots without flushing close-requested
     /// sessions. GameEditor redocks extras before destroy; GUIApp uses tickAll.
     void tickTrees(float dt);
-    /// Present each extra's latest snapshot to its own swapchain. No-op when
-    /// a session has no surface (tests without a shared device).
+    /// Record each extra's latest snapshot into `submission`. No-op when a
+    /// session has no surface (tests without a shared device). Does not submit.
+    void recordAll(FFrameSubmission& submission);
+    /// Record every extra window and submit that set once. A caller that
+    /// already has a frame submission uses `recordAll` instead, so these
+    /// windows join that submission rather than starting another.
     void renderAll();
 
     /// Destroy any requestClose'd sessions except windows listed as deferred

@@ -479,7 +479,7 @@ struct GUIWindowHost::FImpl
     /// per-frame state (command buffers, imported compose targets, the
     /// swapchain identity it re-checks). One struct, not four loose fields --
     /// the same shape every GUI window presents through (see
-    /// `FGUISurfacePresentResources` / `presentGuiSnapshot`).
+    /// `FGUISurfacePresentResources` / `recordGuiSnapshot`).
     FGUISurfacePresentResources presentResources;
     Render2DPassSlot presentPassSlot   = kInvalidRender2DPassSlot;
     Render2DPassSlot offscreenPassSlot = kInvalidRender2DPassSlot;
@@ -499,6 +499,19 @@ struct GUIWindowHost::FImpl
     SdlEventSource* sdlEventSource = nullptr;
     std::string captureRequestPath;
     std::optional<PendingGuiCapture> pendingCapture;
+    /// Filled by `recordSnapshot`'s pre-submit hook and consumed by
+    /// `completeCaptures` after the frame submission that contains this
+    /// window's command buffer. Split so several windows can record before
+    /// the one submit.
+    struct CaptureRetirement
+    {
+        std::optional<PendingGuiCapture> captured;
+        std::string                      capturePath;
+        std::string                      offscreenPath;
+        bool                             bCaptureOffscreen = false;
+        Extent2D                         presentedExtent{};
+        std::shared_ptr<RenderTexture>   offscreenImage;
+    } capture;
     bool    bLoggedFirstSnapshot = false;
     bool    bQuitRequested       = false;
     bool    bScenarioMode        = false;
@@ -1318,8 +1331,9 @@ bool GUIWindowHost::closeRequested() const
     return _impl->bQuitRequested;
 }
 
-void GUIWindowHost::presentSnapshot()
+void GUIWindowHost::recordSnapshot(FFrameSubmission& submission)
 {
+    _impl->capture = {};
     // Scenario frames have no presentable swapchain (see tickContent); the
     // snapshot they built is still the window's current content.
     if (_impl->config && _impl->config->bScenarioRender && _impl->bScenarioMode) {
@@ -1330,21 +1344,15 @@ void GUIWindowHost::presentSnapshot()
     }
     const UIFrameSnapshot& snapshot = _impl->snapshot;
 
-    // The present sequence itself is the shared one every GUI window runs
-    // (`presentGuiSnapshot`). What this window adds, per acquired image, is
-    // captured by the two hooks below and spelled out in
-    // `recordPresentExtensions`: the first-frame stats line, the inspector
-    // overlay inside the compose pass, and the automation captures whose
-    // readback copies must land in the same submission.
-    std::optional<PendingGuiCapture> captured; // automation request consumed this frame
-    std::string                      capturePath;   // non-empty: a GPU shot was recorded
-    std::string                      offscreenPath; // decided path (mirror recorded iff bCaptureOffscreen)
-    bool                             bCaptureOffscreen = false;
-    Extent2D                         presentedExtent{};
-    std::shared_ptr<RenderTexture>   offscreenImage;
-    auto preSubmit = [this, &snapshot, &captured, &capturePath, &offscreenPath, &bCaptureOffscreen,
-                      &presentedExtent, &offscreenImage](const FGUIPresentExtensionContext& ctx)
+    // The record sequence itself is the shared one every GUI window runs
+    // (`recordGuiSnapshot`). What this window adds, per acquired image, is
+    // captured by the two hooks below: the first-frame stats line, the
+    // inspector overlay inside the compose pass, and the automation captures
+    // whose readback copies must land in the same submission. The copies are
+    // mapped in `completeCaptures`, after that submission.
+    auto preSubmit = [this, &snapshot](const FGUIPresentExtensionContext& ctx)
     {
+        FImpl::CaptureRetirement& capture = _impl->capture;
         if (!_impl->bLoggedFirstSnapshot) {
             _impl->bLoggedFirstSnapshot = true;
             const GuiPerfStats& stats   = _impl->tree->getPerfStats();
@@ -1364,110 +1372,126 @@ void GUIWindowHost::presentSnapshot()
         // Consumed here -- the point where the old inline sequence decided it --
         // so a skipped frame (minimized / acquire refused) keeps the request.
         if (_impl->pendingCapture && _impl->frameCount >= _impl->pendingCapture->earliestFrame) {
-            captured = std::move(_impl->pendingCapture);
+            capture.captured = std::move(_impl->pendingCapture);
             _impl->pendingCapture.reset();
         }
-        offscreenPath = captured && !captured->offscreenPath.empty()
-                            ? captured->offscreenPath
-                            : _impl->config->offscreenShotPath;
-        bCaptureOffscreen =
-            (captured && !captured->offscreenPath.empty()) ||
+        capture.offscreenPath = capture.captured && !capture.captured->offscreenPath.empty()
+                                    ? capture.captured->offscreenPath
+                                    : _impl->config->offscreenShotPath;
+        capture.bCaptureOffscreen =
+            (capture.captured && !capture.captured->offscreenPath.empty()) ||
             (_impl->config->offscreenShotFrame != 0 &&
              _impl->frameCount == _impl->config->offscreenShotFrame &&
              !_impl->config->offscreenShotPath.empty());
-        if (bCaptureOffscreen) {
-            bCaptureOffscreen = recordOffscreenParityCapture(ctx, snapshot, offscreenImage);
+        if (capture.bCaptureOffscreen) {
+            capture.bCaptureOffscreen = recordOffscreenParityCapture(ctx, snapshot, capture.offscreenImage);
         }
 
-        if (captured && !captured->gpuPath.empty()) {
-            capturePath = captured->gpuPath;
+        if (capture.captured && !capture.captured->gpuPath.empty()) {
+            capture.capturePath = capture.captured->gpuPath;
         }
         else if (_impl->config->gpuShotFrame != 0 &&
                  _impl->frameCount == _impl->config->gpuShotFrame &&
                  !_impl->config->gpuShotPath.empty()) {
-            capturePath = _impl->config->gpuShotPath;
+            capture.capturePath = _impl->config->gpuShotPath;
         }
         else if (!_impl->captureRequestPath.empty()) {
-            capturePath = _impl->captureRequestPath;
+            capture.capturePath = _impl->captureRequestPath;
             _impl->captureRequestPath.clear();
         }
-        if (!capturePath.empty()) {
+        if (!capture.capturePath.empty()) {
             recordGpuShotCopy(ctx);
         }
-        presentedExtent = ctx.presentExtent;
+        capture.presentedExtent = ctx.presentExtent;
     };
 
-    presentGuiSnapshot(_impl->presentResources,
-                       snapshot,
-                       _impl->tree->getLogicalExtent(),
-                       _impl->presentPassSlot,
-                       _impl->bWindowMinimized,
-                       _impl->bSwapchainRecreatePending,
-                       /*composeExtra=*/[this, &snapshot](const FGUIPresentExtensionContext& ctx, Render2DList& list)
-                       {
-                           runGuiFrameInspectorOverlay(*_impl->tree,
-                                                       snapshot,
-                                                       list,
-                                                       Extent2D{.width = ctx.presentExtent.width,
-                                                                .height = ctx.presentExtent.height});
-                       },
-                       preSubmit);
+    recordGuiSnapshot(_impl->presentResources,
+                      snapshot,
+                      _impl->tree->getLogicalExtent(),
+                      _impl->presentPassSlot,
+                      _impl->bWindowMinimized,
+                      _impl->bSwapchainRecreatePending,
+                      submission,
+                      /*composeExtra=*/[this, &snapshot](const FGUIPresentExtensionContext& ctx, Render2DList& list)
+                      {
+                          runGuiFrameInspectorOverlay(*_impl->tree,
+                                                      snapshot,
+                                                      list,
+                                                      Extent2D{.width = ctx.presentExtent.width,
+                                                               .height = ctx.presentExtent.height});
+                      },
+                      preSubmit);
+}
 
+void GUIWindowHost::completeCaptures()
+{
+    FImpl::CaptureRetirement& capture = _impl->capture;
     // The captures are complete once the submit retires: map the readback
     // staging buffers and encode. Parity additionally diffs gpu vs offscreen
     // at zero tolerance before completing the automation request.
-    if (!capturePath.empty() || bCaptureOffscreen) {
+    if (!capture.capturePath.empty() || capture.bCaptureOffscreen) {
         _impl->present->waitInFlight();
-        if (!capturePath.empty() && _impl->gpuShotBuffer) {
+        if (!capture.capturePath.empty() && _impl->gpuShotBuffer) {
             if (uint8_t* pixels = _impl->gpuShotBuffer->map<uint8_t>()) {
                 auto* swapchain = _impl->present->getSwapchain();
                 writeRGBAtoBMP(pixels,
-                               presentedExtent.width,
-                               presentedExtent.height,
+                               capture.presentedExtent.width,
+                               capture.presentedExtent.height,
                                swapchain && swapchain->getFormat() == EFormat::B8G8R8A8_UNORM,
-                               capturePath);
+                               capture.capturePath);
                 _impl->gpuShotBuffer->unmap();
                 YA_CORE_INFO("GUIAppHost wrote GPU shot to '{}' ({}x{})",
-                             capturePath,
-                             presentedExtent.width,
-                             presentedExtent.height);
+                             capture.capturePath,
+                             capture.presentedExtent.width,
+                             capture.presentedExtent.height);
             }
         }
-        if (bCaptureOffscreen && _impl->offscreenShotBuffer) {
+        if (capture.bCaptureOffscreen && _impl->offscreenShotBuffer) {
             if (uint8_t* pixels = _impl->offscreenShotBuffer->map<uint8_t>()) {
                 writeRGBAtoBMP(pixels,
-                               presentedExtent.width,
-                               presentedExtent.height,
-                               offscreenImage && offscreenImage->getFormat() == EFormat::B8G8R8A8_UNORM,
-                               offscreenPath);
+                               capture.presentedExtent.width,
+                               capture.presentedExtent.height,
+                               capture.offscreenImage && capture.offscreenImage->getFormat() == EFormat::B8G8R8A8_UNORM,
+                               capture.offscreenPath);
                 _impl->offscreenShotBuffer->unmap();
                 YA_CORE_INFO("GUIAppHost wrote offscreen shot to '{}' ({}x{})",
-                             offscreenPath,
-                             presentedExtent.width,
-                             presentedExtent.height);
+                             capture.offscreenPath,
+                             capture.presentedExtent.width,
+                             capture.presentedExtent.height);
             }
         }
     }
-    if (captured) {
+    if (capture.captured) {
         nlohmann::json result = {
-            {"gpu_path", captured->gpuPath},
-            {"offscreen_path", captured->offscreenPath},
+            {"gpu_path", capture.captured->gpuPath},
+            {"offscreen_path", capture.captured->offscreenPath},
         };
-        if (!captured->diffPath.empty()) {
-            const BmpDiffResult diff = diffBmpFiles(captured->gpuPath,
-                                                    captured->offscreenPath,
-                                                    captured->diffPath,
+        if (!capture.captured->diffPath.empty()) {
+            const BmpDiffResult diff = diffBmpFiles(capture.captured->gpuPath,
+                                                    capture.captured->offscreenPath,
+                                                    capture.captured->diffPath,
                                                     0, 0.0f);
-            result["diff_path"]        = captured->diffPath;
+            result["diff_path"]        = capture.captured->diffPath;
             result["pass"]             = diff.bPass;
             result["differing_pixels"] = diff.differingPixels;
             result["diff_ratio"]       = diff.diffRatio;
             YA_CORE_INFO("GUIAppHost offscreen parity diff: pass={} differing={} ratio={:.4f}",
                          diff.bPass, diff.differingPixels, diff.diffRatio);
         }
-        _impl->automationServer.completeRequest(captured->waiter,
-                                                makeAutomationSuccess(*captured->waiter, std::move(result)));
+        _impl->automationServer.completeRequest(capture.captured->waiter,
+                                                makeAutomationSuccess(*capture.captured->waiter, std::move(result)));
     }
+    _impl->capture = {};
+}
+
+void GUIWindowHost::presentSnapshot()
+{
+    FFrameSubmission submission;
+    recordSnapshot(submission);
+    if (_impl->render) {
+        (void)submission.submitAndPresent(*_impl->render);
+    }
+    completeCaptures();
 }
 
 bool GUIWindowHost::recordOffscreenParityCapture(const FGUIPresentExtensionContext& ctx,
@@ -1813,10 +1837,19 @@ void GUIApp::onTick(float dt)
     // which is what keeps every window's content a frame ahead of the first
     // window's presentation.
     _extraWindows->tickAll(dt);
+    // Every window records into one submission, then the frame submits once
+    // and presents each acquired image. Captures wait on that submit.
+    FFrameSubmission submission;
     if (_primaryWindow.isInitialized()) {
-        _primaryWindow.presentSnapshot();
+        _primaryWindow.recordSnapshot(submission);
     }
-    _extraWindows->renderAll();
+    _extraWindows->recordAll(submission);
+    if (IRender* render = _primaryWindow.isInitialized() ? _primaryWindow.getRender() : nullptr) {
+        (void)submission.submitAndPresent(*render);
+    }
+    if (_primaryWindow.isInitialized()) {
+        _primaryWindow.completeCaptures();
+    }
     if (_extraWindows->extraWindowCount() == 0) {
         _primaryWindow.setAcceptAllWindowEvents(false);
     }

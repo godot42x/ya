@@ -24,7 +24,7 @@ enum class EWidgetRouteResult : uint8_t;
 ///
 /// `tick` is the Module-side chrome entry for one window. The default window
 /// is ticked from `EditorModule::onPresentation`; extra windows tick from
-/// `EditorModule::onAfterPresent` via `GUIWindowManager`.
+/// `EditorModule::recordExtraSurfaces` via `GUIWindowManager`.
 struct EditorWindowSession
 {
 private:

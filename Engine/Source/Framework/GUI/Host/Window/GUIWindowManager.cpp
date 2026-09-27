@@ -9,7 +9,9 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "Core/Os/OsCursor.h"
 #include "Core/Os/OsEvent.h"
+#include "GUI/Host/GUIWindowPresent.h"
 #include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/PresentFrame.h"
 #include "RHI/Core/RenderSurfaceContext.h"
 #include "Render2D/Render2D.h"
 
@@ -308,18 +310,35 @@ void GUIWindowManager::tickTrees(float dt)
     }
 }
 
-void GUIWindowManager::renderAll()
+void GUIWindowManager::recordAll(FFrameSubmission& submission)
 {
     for (auto& session : _sessions) {
         if (!session || !session->present) {
             continue;
         }
-        presentGuiSnapshot(session->presentResources,
-                           session->ownedSnapshot,
-                           session->ownedTree ? session->ownedTree->getLogicalExtent() : Extent2D{},
-                           session->presentPassSlot,
-                           session->bMinimized || (session->native && session->native->isHidden()),
-                           session->bSwapchainRecreatePending);
+        recordGuiSnapshot(session->presentResources,
+                          session->ownedSnapshot,
+                          session->ownedTree ? session->ownedTree->getLogicalExtent() : Extent2D{},
+                          session->presentPassSlot,
+                          session->bMinimized || (session->native && session->native->isHidden()),
+                          session->bSwapchainRecreatePending,
+                          submission);
+    }
+}
+
+void GUIWindowManager::renderAll()
+{
+    FFrameSubmission submission;
+    recordAll(submission);
+    IRender* render = nullptr;
+    for (const auto& session : _sessions) {
+        if (session && session->presentResources.render) {
+            render = session->presentResources.render;
+            break;
+        }
+    }
+    if (render) {
+        (void)submission.submitAndPresent(*render);
     }
 }
 

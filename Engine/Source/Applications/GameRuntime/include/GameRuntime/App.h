@@ -48,6 +48,7 @@ struct LuaScriptingSystem;
 struct JSScriptingSystem;
 struct FProjectDescriptor;
 struct AppRenderState;
+struct FFrameSubmission;
 class NativeWindowManager;
 struct GameplayResourceBinding;
 struct EnvironmentLightingProcessor;
@@ -329,7 +330,9 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     [[nodiscard]] bool appendDisplayCapture(RenderGraph& graph,
                                             RGTextureHandle presentationOutput,
                                             Extent2D presentationExtent) override;
-    void presentModuleExtras(float dt);
+    /// Each module records its extra windows into this tick's submission.
+    /// The caller submits once after every module has contributed.
+    void recordModuleExtraSurfaces(float dt, FFrameSubmission& submission);
     [[nodiscard]] bool notifyModulesBeforeAppStateChange(AppState nextState);
     void notifyModulesAfterAppStateChange(AppState previousState);
     void notifyModulesSceneActivated(Scene* scene);

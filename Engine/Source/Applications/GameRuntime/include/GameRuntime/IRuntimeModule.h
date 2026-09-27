@@ -7,6 +7,7 @@ namespace ya
 
 struct App;
 struct AppDesc;
+struct FFrameSubmission;
 struct IRenderSurfaceContext;
 class Event;
 struct ICommandBuffer;
@@ -95,14 +96,16 @@ struct IRuntimeModule
         (void)commandBuffer;
         (void)dt;
     }
-    /// After the primary surface has been submitted/presented. Extra OS
-    /// windows must present here, not during onPresentation (that records
-    /// into the primary command buffer). Do not recreate GPU resources that
-    /// the just-submitted primary frame still references.
-    virtual void onAfterPresent(App& app, float dt)
+    /// Record this module's extra OS windows into the frame's one submission.
+    /// Called after the host surface's command buffer is sealed and before
+    /// that submission is queued, so an extra window gets its own command
+    /// buffer and its own acquire/present sync pair without a second
+    /// `submitFrame`. Do not submit or present here.
+    virtual void recordExtraSurfaces(App& app, float dt, FFrameSubmission& submission)
     {
         (void)app;
         (void)dt;
+        (void)submission;
     }
 
     /// Display-compose coverage for ONE surface: do this module's own passes

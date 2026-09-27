@@ -44,14 +44,15 @@ void rebuildGuiSurfacePresentation(FGUISurfacePresentResources& resources,
     resources.cachedSwapchainExtent = swapchain->getExtent();
 }
 
-void presentGuiSnapshot(FGUISurfacePresentResources&  resources,
-                        const UIFrameSnapshot&        snapshot,
-                        Extent2D                      logicalExtent,
-                        Render2DPassSlot              passSlot,
-                        bool                          bMinimized,
-                        bool&                         bSwapchainRecreatePending,
-                        const std::function<void(const FGUIPresentExtensionContext&, Render2DList&)>& composeExtra,
-                        const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit)
+void recordGuiSnapshot(FGUISurfacePresentResources&  resources,
+                       const UIFrameSnapshot&        snapshot,
+                       Extent2D                      logicalExtent,
+                       Render2DPassSlot              passSlot,
+                       bool                          bMinimized,
+                       bool&                         bSwapchainRecreatePending,
+                       FFrameSubmission&             submission,
+                       const std::function<void(const FGUIPresentExtensionContext&, Render2DList&)>& composeExtra,
+                       const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit)
 {
     if (!resources.render || !resources.present) {
         return;
@@ -69,14 +70,14 @@ void presentGuiSnapshot(FGUISurfacePresentResources&  resources,
         return;
     }
     if (!presentFrame.acquired()) {
-        submitPresentFrame(*resources.render, presentFrame, {});
+        (void)submission.add(presentFrame, {});
         return;
     }
     const int32_t imageIndex = presentFrame.imageIndex;
 
     ISwapchain* swapchain = resources.present->getSwapchain();
     if (!swapchain) {
-        submitPresentFrame(*resources.render, presentFrame, {});
+        (void)submission.add(presentFrame, {});
         return;
     }
     const Extent2D swapchainExtent = swapchain->getExtent();
@@ -87,21 +88,21 @@ void presentGuiSnapshot(FGUISurfacePresentResources&  resources,
         rebuildGuiSurfacePresentation(resources, "GUIExtra", /*bWaitForGpu=*/false);
         swapchain = resources.present->getSwapchain();
         if (!swapchain) {
-            submitPresentFrame(*resources.render, presentFrame, {});
+            (void)submission.add(presentFrame, {});
             return;
         }
     }
     if (!guiPresentationIndexValid(imageIndex, resources.presentationTargets.size(),
                                    resources.commandBuffers.size())) {
         YA_CORE_ERROR("GUI extra present: image index {} out of range", imageIndex);
-        submitPresentFrame(*resources.render, presentFrame, {});
+        (void)submission.add(presentFrame, {});
         return;
     }
 
     const auto& presentation = resources.presentationTargets[static_cast<size_t>(imageIndex)];
     if (!presentation || !presentation->renderSurface || !presentation->renderSurface->isValid()) {
         YA_CORE_ERROR("GUI extra present: presentation surface {} is invalid", imageIndex);
-        submitPresentFrame(*resources.render, presentFrame, {});
+        (void)submission.add(presentFrame, {});
         return;
     }
     const auto& renderSurface = presentation->renderSurface;
@@ -170,7 +171,7 @@ void presentGuiSnapshot(FGUISurfacePresentResources&  resources,
         preSubmit(extensionContext);
     }
     cmdBuf->end();
-    submitPresentFrame(*resources.render, presentFrame, {cmdBuf->getHandle()});
+    (void)submission.add(presentFrame, {cmdBuf->getHandle()});
 }
 
 } // namespace ya

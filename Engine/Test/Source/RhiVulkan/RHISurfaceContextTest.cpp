@@ -30,40 +30,26 @@ bool createTestWindow(SDLNativeWindow& window, const char* title, uint32_t width
 
 /// One frame that presents `surfaces`, spelled the way a real frame is: the
 /// device opens the frame (waiting the previous frame's GPU work), each surface
-/// acquires, the frame submits each surface's sync pair plus the surface's own
-/// legalizing command, then each presents.
+/// acquires, ONE submission carries every acquired surface's sync pair plus
+/// that surface's legalizing command, then each presents.
 bool presentOneFrame(IRender& render, std::span<IRenderSurfaceContext*> surfaces)
 {
     render.beginRecordedFrame();
 
-    std::vector<int32_t> imageIndex(surfaces.size(), -1);
-    for (size_t i = 0; i < surfaces.size(); ++i) {
-        if (!surfaces[i]->begin(&imageIndex[i])) {
+    FFrameSubmission submission;
+    for (IRenderSurfaceContext* surface : surfaces) {
+        FPresentFrame frame{.surface = surface};
+        if (!acquirePresentFrame(frame)) {
+            return false;
+        }
+        // Nothing is drawn here, so an acquired image's work is the surface's
+        // own legalizing command -- which is also what a product frame submits
+        // when it has nothing to fill an image with. `add` inserts that command.
+        if (!submission.add(frame, {})) {
             return false;
         }
     }
-    for (size_t i = 0; i < surfaces.size(); ++i) {
-        if (imageIndex[i] < 0) {
-            continue;
-        }
-        // Nothing is drawn here, so this image's work is the surface's own
-        // legalizing command -- which is also what a product frame submits when it
-        // has nothing to fill an image with.
-        ICommandBuffer* legalize = surfaces[i]->presentFallbackCommand(static_cast<uint32_t>(imageIndex[i]));
-        if (!legalize) {
-            return false;
-        }
-        const FPresentSync sync = presentSyncOf(*surfaces[i], imageIndex[i]);
-        if (!render.submitFrame({legalize->getHandle()}, sync.waits, sync.signals)) {
-            return false;
-        }
-    }
-    for (size_t i = 0; i < surfaces.size(); ++i) {
-        if (imageIndex[i] >= 0 && !surfaces[i]->present(imageIndex[i])) {
-            return false;
-        }
-    }
-    return true;
+    return submission.submitAndPresent(render);
 }
 
 bool presentOneFrame(IRender& render, IRenderSurfaceContext& surface)

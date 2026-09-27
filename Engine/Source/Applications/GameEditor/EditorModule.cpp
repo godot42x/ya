@@ -39,6 +39,7 @@
 #include "GUI/Host/GUIDragRouter.h"
 #include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Host/GUIWindowManager.h"
+#include "RHI/Core/PresentFrame.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "RHI/Core/CommandBuffer.h"
@@ -93,11 +94,11 @@ namespace
 //             shell dialogs → pushViewportDisplay → buildSnapshot
 //             publishViewportRect → viewport overlay host
 //           replayUIFrameSnapshot(EditorToolSurface) + frame inspector
-//     submitPresentFrame
-//     EditorModule::onAfterPresent               [after swapchain present]
-//         sweepAndPresentExtraWindows
+//     EditorModule::recordExtraSurfaces          [before the frame submit]
+//         sweepAndRecordExtraWindows
 //           close requested extras | reclaim empty | orphan GUI sessions
-//           GUIWindowManager::tickTrees + renderAll
+//           GUIWindowManager::tickTrees + recordAll
+//     one submitFrame (host + every acquired extra) then present each
 //
 // Input is not in this render chain: EditorInputNode → session.dispatchEvent
 //   → WidgetTree. Viewport gizmo overlay is Exclusive only during LMB drag.
@@ -633,7 +634,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                               });
     }
 
-    void sweepAndPresentExtraWindows(float dt)
+    void sweepAndRecordExtraWindows(float dt, FFrameSubmission& submission)
     {
         FEditorNativeTearOff env = tearOffEnv();
         std::vector<EditorWindowId> closing;
@@ -684,7 +685,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             return;
         }
         _guiWindows.tickTrees(dt);
-        _guiWindows.renderAll();
+        _guiWindows.recordAll(submission);
     }
 
   public:
@@ -1021,7 +1022,8 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     }
 
     // Per-frame GUI drive. Kernel order: onLogic → onViewportCompose →
-    // onPresentation → onAfterPresent. See the file-level map above.
+    // onPresentation → recordExtraSurfaces (then the frame submits once).
+    // See the file-level map above.
 
     void onLogic(App& app, float dt) override
     {
@@ -1057,10 +1059,10 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         presentDefaultChrome(app, commandBuffer, dt);
     }
 
-    void onAfterPresent(App& app, float dt) override
+    void recordExtraSurfaces(App& app, float dt, FFrameSubmission& submission) override
     {
         (void)app;
-        sweepAndPresentExtraWindows(dt);
+        sweepAndRecordExtraWindows(dt, submission);
     }
 };
 

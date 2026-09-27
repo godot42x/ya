@@ -34,6 +34,7 @@
 #include "GUI/Host/GUIDragRouter.h"
 #include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Host/IGUIWindowSession.h"
+#include "RHI/Core/PresentFrame.h"
 #include "RHI/RenderDefines.h"
 
 #include <cstdint>
@@ -214,6 +215,12 @@ public:
     /// presenting every window keeps each frame's content and its presentation
     /// in the same frame for all of them.
     void tickContent(float dt);
+    /// Record this window into `submission`. Does not submit or present.
+    void recordSnapshot(FFrameSubmission& submission);
+    /// Read back captures recorded by `recordSnapshot`, after the submission
+    /// that contains this window has been submitted and presented.
+    void completeCaptures();
+    /// `recordSnapshot` + submit this window alone + `completeCaptures`.
     void presentSnapshot();
     /// The snapshot `tickContent` most recently published. Null before the first
     /// tick, which is the honest answer for "what does this window show" before
@@ -259,7 +266,7 @@ private:
     /// Write a scenario checkpoint tree dump (<scenarioDumpDir>/<tag>.json).
     void dumpScenarioCheckpoint(const std::string& tag);
     /// This window's contribution to the shared present sequence
-    /// (`presentGuiSnapshot`), recorded into the acquired image's command
+    /// (`recordGuiSnapshot`), recorded into the acquired image's command
     /// buffer before it is submitted.
     /// Offscreen parity mirror: the same snapshot onto an offscreen surface
     /// plus a GPU->CPU copy, so parity can diff "what the window shows" against

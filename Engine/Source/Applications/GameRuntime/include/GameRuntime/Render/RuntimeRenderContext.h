@@ -38,11 +38,13 @@ class ExtractedSceneRender;
 ///   acquire         → the device's frame bookkeeping first, then the frame's
 ///                     surface acquired; a frame whose surface cannot be
 ///                     acquired still ran everything above (host policy: skip
-///                     record, run module extras)
+///                     the host recording; extra windows may still present)
 ///   record          → present target → prepare → begin → graphics → insets +
 ///                     UI → view compose → display compose → end + seal
-///   submit + extras → the recording (or an empty frame) submitted, the image
-///                     presented, then the modules' own windows
+///   extras          → each module records its other windows into the same
+///                     submission (own command buffers, own sync pairs)
+///   submit          → one submitFrame for every acquired surface, then present
+///                     each of them
 ///
 /// `record` is that sequence's middle, spelled out on its own because it is
 /// what a test pins and a reader traces: the plan is values, the host's own
@@ -150,9 +152,6 @@ class YA_GAME_RUNTIME_API RuntimeRenderContext
                                             ExtractedSceneRender sceneRender,
                                             TickFrame&           frame,
                                             const FPresentFrame& presentFrame);
-
-    /// Submits the recording (or an empty frame) and presents the surface.
-    void submitRecordedFrame(App& app, FPresentFrame& presentFrame, const RecordedFrame& recorded);
 
     RenderDeviceState* _device = nullptr;
 };

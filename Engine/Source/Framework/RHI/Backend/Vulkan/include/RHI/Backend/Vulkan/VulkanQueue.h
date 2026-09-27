@@ -4,6 +4,7 @@
 #include "Core/Base.h"
 #include "RHI/Backend/Vulkan/VulkanUtils.h"
 
+#include <vector>
 #include <vulkan/vulkan.h>
 namespace ya
 {
@@ -45,17 +46,21 @@ struct VulkanQueue
                 const std::vector<VkSemaphore> &signalSemaphores = {}, // trigger/signal semaphore after submission completed
                 VkFence                         emitFence        = VK_NULL_HANDLE)
     {
-        VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        VkSubmitInfo         info{
-                    .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                    .pNext                = nullptr,
-                    .waitSemaphoreCount   = static_cast<uint32_t>(waitSemaphores.size()),
-                    .pWaitSemaphores      = waitSemaphores.data(),
-                    .pWaitDstStageMask    = &waitStageMask,
-                    .commandBufferCount   = size,
-                    .pCommandBuffers      = static_cast<const VkCommandBuffer *>(commandBuffers),
-                    .signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size()),
-                    .pSignalSemaphores    = signalSemaphores.data(),
+        // One stage per wait semaphore. A combined frame submits every
+        // surface's image-available semaphore together; a single mask with
+        // waitSemaphoreCount > 1 is not a legal pWaitDstStageMask.
+        std::vector<VkPipelineStageFlags> waitStages(
+            waitSemaphores.size(), VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+        VkSubmitInfo info{
+            .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .pNext                = nullptr,
+            .waitSemaphoreCount   = static_cast<uint32_t>(waitSemaphores.size()),
+            .pWaitSemaphores      = waitSemaphores.data(),
+            .pWaitDstStageMask    = waitStages.empty() ? nullptr : waitStages.data(),
+            .commandBufferCount   = size,
+            .pCommandBuffers      = size == 0 ? nullptr : static_cast<const VkCommandBuffer*>(commandBuffers),
+            .signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size()),
+            .pSignalSemaphores    = signalSemaphores.data(),
         };
 
         VK_CALL(vkQueueSubmit(_handle, 1, &info, emitFence));

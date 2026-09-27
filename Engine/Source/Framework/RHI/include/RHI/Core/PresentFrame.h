@@ -57,38 +57,93 @@ struct FPresentSync
     };
 }
 
+/// One tick's queue submission: every acquired surface's commands and sync
+/// pair, submitted once, then presented per surface.
+///
+/// A surface whose image was not acquired (`imageIndex < 0`) contributes
+/// nothing, so a minimized window does not add a wait that never signals.
+/// An acquired image with no recorded commands is legalized by that surface's
+/// `presentFallbackCommand` and still joins this submission. An empty
+/// submission does not call `submitFrame`: the frame fence stays signaled.
+struct FFrameSubmission
+{
+    std::vector<void*> commandBuffers;
+    FPresentSync       sync;
+
+    struct Present
+    {
+        IRenderSurfaceContext* surface    = nullptr;
+        int32_t                imageIndex = -1;
+    };
+    std::vector<Present> presents;
+
+    /// Consume `frame`. Returns false when the surface is missing, or when an
+    /// acquired image cannot be legalized. `imageIndex < 0` succeeds and adds
+    /// nothing.
+    bool add(FPresentFrame& frame, std::vector<void*> commands)
+    {
+        if (!frame.surface) {
+            return false;
+        }
+        const int32_t imageIndex = frame.imageIndex;
+        frame.imageIndex         = -1;
+        if (imageIndex < 0) {
+            return true;
+        }
+
+        if (commands.empty()) {
+            ICommandBuffer* barrier = frame.surface->presentFallbackCommand(static_cast<uint32_t>(imageIndex));
+            if (!barrier) {
+                return false;
+            }
+            commands.push_back(barrier->getHandle());
+        }
+
+        commandBuffers.insert(commandBuffers.end(), commands.begin(), commands.end());
+        const FPresentSync surfaceSync = presentSyncOf(*frame.surface, imageIndex);
+        sync.waits.insert(sync.waits.end(), surfaceSync.waits.begin(), surfaceSync.waits.end());
+        sync.signals.insert(sync.signals.end(), surfaceSync.signals.begin(), surfaceSync.signals.end());
+        presents.push_back(Present{
+            .surface    = frame.surface,
+            .imageIndex = imageIndex,
+        });
+        return true;
+    }
+
+    /// One `submitFrame` for every contributed surface, then `present` each.
+    /// No contributed surface is success and does not submit.
+    [[nodiscard]] bool submitAndPresent(IRender& render)
+    {
+        if (presents.empty()) {
+            return true;
+        }
+        if (!render.submitFrame(commandBuffers, sync.waits, sync.signals)) {
+            return false;
+        }
+        bool bPresented = true;
+        for (const Present& present : presents) {
+            bPresented = present.surface->present(present.imageIndex) && bPresented;
+        }
+        commandBuffers.clear();
+        sync = {};
+        presents.clear();
+        return bPresented;
+    }
+};
+
 /// Submit `commandBuffers` as the work that fills the acquired image, then
 /// present it. An empty command list still legalizes the image (see
 /// `presentFallbackCommand`), and `imageIndex < 0` is a no-op for both steps.
 ///
-/// This is the single-window spelling of submit-then-present. A frame that
-/// presents several windows builds ONE submission from every acquired surface's
-/// `presentSyncOf` and calls `present` per surface afterwards.
+/// One surface. A frame that presents several windows adds each acquired image
+/// to one `FFrameSubmission` and calls `submitAndPresent` once.
 inline bool submitPresentFrame(IRender& render, FPresentFrame& frame, std::vector<void*> commandBuffers)
 {
-    if (!frame.surface) {
+    FFrameSubmission submission;
+    if (!submission.add(frame, std::move(commandBuffers))) {
         return false;
     }
-    const int32_t imageIndex = frame.imageIndex;
-    frame.imageIndex         = -1;
-    if (imageIndex < 0) {
-        return true;
-    }
-
-    std::vector<void*> submits = std::move(commandBuffers);
-    if (submits.empty()) {
-        // Nothing filled this image, but it was acquired and must still reach the
-        // display: the barrier is what makes that legal.
-        ICommandBuffer* barrier = frame.surface->presentFallbackCommand(static_cast<uint32_t>(imageIndex));
-        if (!barrier) {
-            return false;
-        }
-        submits.push_back(barrier->getHandle());
-    }
-
-    const FPresentSync sync = presentSyncOf(*frame.surface, imageIndex);
-    return render.submitFrame(submits, sync.waits, sync.signals) &&
-           frame.surface->present(imageIndex);
+    return submission.submitAndPresent(render);
 }
 
 } // namespace ya

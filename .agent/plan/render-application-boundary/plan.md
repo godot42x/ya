@@ -402,10 +402,9 @@ AB4-step2（待做）不是一个改动，而是以下有依赖关系的闭环�
    GUIWorkbench `--smoke-actions` exit=0 且无 VMA leak；parity 两张图 md5 仍
    `c775245ae636f15b41da8485319a2267`；editor smoke exit=0。
 
-   未完成/如实记录（step 2）：今天的落地是**每个窗口一次 `submitFrame`**（GUI 的
-   `presentSnapshot` / `presentGuiSnapshot` 与 GameRuntime 的 `tickRender` 各呈现各自那一个 surface），
-   共享的是设备的 frame fence；真正“一帧一次提交、合并所有 surface 的同步对”要等 AB4-2d 的
-   per-surface display plan 把多个 surface 收进同一个位置（届时不需要新接口，`FPresentSync` 已经能拼）。
+   未完成/如实记录（step 2 当时）：落地形态仍是每个窗口一次 `submitFrame`。这一条已在
+   2026-09-27 由 `FFrameSubmission` 收口（一个 tick 一次 `submitFrame`，带上每个已 acquire
+   surface 的同步对，再逐 surface `present`）。AB4-2d 剩下的是 `SurfaceDisplayPlan`，不是再做一次合并提交。
 
    AB4-2b step 1b（已落地 2026-09-24）：per-surface 的 GPU 状态也按身份归位。
    `SurfacePresentation` 记录 `SurfaceId`；`RenderDeviceState::acquireSurfacePresentation(id, surface)`

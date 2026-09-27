@@ -95,8 +95,8 @@ TEST(RuntimeRenderContextTest, TheApplicationsOrderIsWrittenWithTheRenderersOwnS
 }
 
 /// The gate itself: a plan with no acquired present opens no recording at all.
-/// The host's `submitRecordedFrame` submits an empty frame in that case, so the
-/// renderer must not have left a half-open submission behind for that flight.
+/// The host then adds nothing for that surface, so the renderer must not have
+/// left a half-open submission behind for that flight.
 TEST(RuntimeRenderContextTest, APlanWithoutAnAcquiredPresentOpensNoRecording)
 {
     RenderDeviceState    device;

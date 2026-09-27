@@ -1372,3 +1372,19 @@ review 指出的问题：compositor 的世界 compose 路径把 `DisplayedView`�
   orchestrator——它们是 app-shell 准备，不是帧渲染顺序的步骤。
 - 保留：iterate() 里的 automation 回读（facade 查询）不动。
 - 偏离：无。
+
+## 2026-09-27 — 一个 tick 一次提交（多 surface 同步对）
+
+`FFrameSubmission` 收集本 tick 每个已 acquire surface 的命令缓冲和 `FPresentSync`，`submitAndPresent` 调用一次 `submitFrame`，然后逐 surface `present`。没有 acquire 到的窗口不进入这组同步（最小化不会挂上一个永不 signal 的 semaphore）。空 submission 不调用 `submitFrame`，frame fence 保持 signaled。
+
+Vulkan 的 `pWaitDstStageMask` 改成每个 wait semaphore 一项。合并提交后 wait 数量大于 1，单个 mask 不合法。
+
+时序：额外窗口在提交之前录进同一份 submission，不再在主窗 present 之后各自 `submitFrame`。
+
+- GameRuntime：`tick` 录完宿主表面后 `recordModuleExtraSurfaces`，再一次 `submitAndPresent`。`IRuntimeModule::onAfterPresent` 换成 `recordExtraSurfaces`。编辑器的关闭/回收/tick/record 都在这次提交之前。
+- GUIApp：全部窗口 `tickContent` 之后，主窗 `recordSnapshot` + extras `recordAll`，一次提交，然后主窗 `completeCaptures`。单窗 `presentSnapshot` 仍是「录进一份只含自己的 submission 再提交」。
+- `presentOneFrame`（RHI 测试）改成同一写法。
+
+未做：AB4-2d 的 `SurfaceDisplayPlan`（View 与每个 surface 的 display layer）、AB4-2e tear-off 视口画世界。合并提交不依赖那两步。
+
+证据：`ya-testing` 1316 tests / 1315 passed / 1 skipped（`ExtraWindowUnpresentableDoesNotBlockStartupWindowPresent`，platform minimize guard）/ 0 failed；`ya-rhi-vulkan-smoke` 9 passed / 1 skipped（同一 guard）；`ya-gui-closure-test` 599 passed；`ya-gui-headless-host-test` 44 passed。

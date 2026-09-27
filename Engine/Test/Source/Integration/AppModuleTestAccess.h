@@ -34,9 +34,9 @@ class AppModuleTestAccess
     {
         app.recordDisplayExtensions(commandBuffer, dt);
     }
-    static void presentExtras(App& app, float dt)
+    static void recordExtraSurfaces(App& app, float dt, FFrameSubmission& submission)
     {
-        app.presentModuleExtras(dt);
+        app.recordModuleExtraSurfaces(dt, submission);
     }
     static std::string resolveStartupScenePath(const AppDesc& desc)
     {

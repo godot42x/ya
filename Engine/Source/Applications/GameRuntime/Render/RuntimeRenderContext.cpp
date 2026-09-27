@@ -208,23 +208,33 @@ void RuntimeRenderContext::tick(App& app, float dt)
         YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());
         bAcquireAttempted = acquirePresentFrame(presentFrame);
     }
-    // Both early returns below are this app's policy, not a renderer rule:
-    // when its one window shows nothing (no surface, or acquire refused), no
-    // consumer reads its Views this frame, so recording them is skipped. The
-    // renderer itself records a present-less plan fine.
-    if (!bAcquireAttempted) {
-        app.presentModuleExtras(dt);
-        return;
+    // Host policy, not a renderer rule: when this window shows nothing (no
+    // surface, or acquire refused), no consumer reads its Views this frame, so
+    // that recording is skipped. Other windows of this tick still record into
+    // the same submission. The renderer itself records a present-less plan fine.
+    FFrameSubmission submission;
+    // Lives through the submit below: the command-buffer handle it names is
+    // what that submission queues.
+    RecordedFrame recorded;
+    if (bAcquireAttempted && presentFrame.acquired()) {
+        recorded = recordFrame(app, dt, std::move(sceneRender), gameFrame, presentFrame);
+        std::vector<void*> commands;
+        if (recorded.valid()) {
+            commands.push_back(recorded.commandBuffer->getHandle());
+        }
+        (void)submission.add(presentFrame, std::move(commands));
     }
-    if (!presentFrame.acquired()) {
-        submitPresentFrame(*render, presentFrame, {});
-        app.presentModuleExtras(dt);
-        return;
+    else if (bAcquireAttempted) {
+        (void)submission.add(presentFrame, {});
     }
 
-    const RecordedFrame recorded = recordFrame(app, dt, std::move(sceneRender), gameFrame, presentFrame);
-    submitRecordedFrame(app, presentFrame, recorded);
-    app.presentModuleExtras(dt);
+    // Extra windows acquire and record here, before the one submit, so their
+    // sync pairs join the host's instead of starting a later submission.
+    app.recordModuleExtraSurfaces(dt, submission);
+    if (render) {
+        YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
+        (void)submission.submitAndPresent(*render);
+    }
 }
 
 /// The app's arrangement for this frame: which View it displays, in which
@@ -459,18 +469,6 @@ RecordedFrame RuntimeRenderContext::recordFrame(App&                 app,
     },
     /* extensions = */ &app,
     &frame.uiSnapshot);
-}
-
-void RuntimeRenderContext::submitRecordedFrame(App&                 app,
-                                               FPresentFrame&       presentFrame,
-                                               const RecordedFrame& recorded)
-{
-    YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
-    // The host submits what the renderer recorded, or an empty frame when the
-    // recording was refused; the image is presented either way.
-    submitPresentFrame(*app.getRenderServices().getRender(), presentFrame,
-                       recorded.valid() ? std::vector<void*>{recorded.commandBuffer->getHandle()}
-                                        : std::vector<void*>{});
 }
 
 } // namespace ya

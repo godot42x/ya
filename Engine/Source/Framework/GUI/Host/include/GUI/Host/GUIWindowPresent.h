@@ -3,6 +3,7 @@
 #include "GUI/Host/GUIPresentationTarget.h"
 #include "Render2D/Render2D.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
+#include "RHI/Core/PresentFrame.h"
 
 #include <cstdint>
 #include <cstddef>
@@ -46,25 +47,27 @@ struct FGUIPresentExtensionContext
     Extent2D          presentExtent;
 };
 
-/// Acquire, compose `snapshot` onto this surface, present. Skips when
-/// unpresentable. Serial Render2D session: caller must not be inside another
-/// `Render2D::begin`.
+/// Acquire and record this window's snapshot into `submission`. Does not
+/// submit or present: the frame that owns the submission does that once, for
+/// every window it acquired. Skips when unpresentable. Serial Render2D
+/// session: caller must not be inside another `Render2D::begin`.
 ///
-/// The one present sequence for every GUI window, main or extra. A window adds
+/// The one record sequence for every GUI window, main or extra. A window adds
 /// its own content at two named points, both optional and both receiving
 /// `FGUIPresentExtensionContext`:
 /// - `composeExtra` records inside the surface's compose pass (overlays); it
 ///   receives the list the compose builds so overlays append to it;
 /// - `preSubmit` records after the compose pass and before the command buffer
 ///   ends -- anything that must land in the same submission (readback copies).
-void presentGuiSnapshot(FGUISurfacePresentResources&  resources,
-                        const UIFrameSnapshot&        snapshot,
-                        Extent2D                      logicalExtent,
-                        Render2DPassSlot              passSlot,
-                        bool                          bMinimized,
-                        bool&                         bSwapchainRecreatePending,
-                        const std::function<void(const FGUIPresentExtensionContext&, Render2DList&)>& composeExtra = {},
-                        const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit    = {});
+void recordGuiSnapshot(FGUISurfacePresentResources&  resources,
+                       const UIFrameSnapshot&        snapshot,
+                       Extent2D                      logicalExtent,
+                       Render2DPassSlot              passSlot,
+                       bool                          bMinimized,
+                       bool&                         bSwapchainRecreatePending,
+                       FFrameSubmission&             submission,
+                       const std::function<void(const FGUIPresentExtensionContext&, Render2DList&)>& composeExtra = {},
+                       const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit    = {});
 
 [[nodiscard]] inline bool guiPresentationIndexValid(int32_t imageIndex,
                                                     size_t  targetCount,

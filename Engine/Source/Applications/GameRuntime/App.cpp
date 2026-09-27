@@ -17,6 +17,7 @@
 #include "App/Module/ProjectDescriptor.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "RHI/Core/PresentFrame.h"
 #include "RHI/NativeWindow.h"
 #include "Scene/Core/GameMounts.h"
 #include "Scene/Core/Scene.h"
@@ -474,10 +475,10 @@ bool App::appendDisplayCapture(RenderGraph&    graph,
     return bAppended;
 }
 
-void App::presentModuleExtras(float dt)
+void App::recordModuleExtraSurfaces(float dt, FFrameSubmission& submission)
 {
     for (const auto& slot : _modules) {
-        getRuntimeModule(slot.module)->onAfterPresent(*this, dt);
+        getRuntimeModule(slot.module)->recordExtraSurfaces(*this, dt, submission);
     }
 }
 
