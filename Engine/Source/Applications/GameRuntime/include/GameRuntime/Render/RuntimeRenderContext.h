@@ -158,7 +158,11 @@ class YA_GAME_RUNTIME_API RuntimeRenderContext
                                             TickFrame&           frame,
                                             const FPresentFrame& presentFrame);
 
-    void ensureGameUiRecorder();
+    /// Create the Game UI recorder against the device's screen pipeline cache.
+    /// False when there is nothing to create it against: a device whose cache is
+    /// not initialized has no UI path, and `record()` on such a device stays a
+    /// legal call that opens no frame.
+    [[nodiscard]] bool ensureGameUiRecorder();
 
     RenderDeviceState* _device = nullptr;
     ScreenDrawRecorder _gameUiRecorder;

@@ -38,13 +38,27 @@ RuntimeRenderContext::~RuntimeRenderContext()
     _gameUiRecorder.destroy();
 }
 
-void RuntimeRenderContext::ensureGameUiRecorder()
+bool RuntimeRenderContext::ensureGameUiRecorder()
 {
-    if (_bGameUiRecorder || !_device) {
-        return;
+    if (_bGameUiRecorder) {
+        return true;
     }
-    _gameUiRecorder.init(_device->screenDrawPipelines());
+    if (!_device) {
+        return false;
+    }
+
+    // The device owns the screen pipeline cache. A device that has not built it
+    // has no UI path to record through, and initializing the recorder against an
+    // empty cache is not a recoverable state -- so this frame simply carries no
+    // UI work (the plan may be one that opens no recording at all).
+    ScreenDrawPipelines& pipelines = _device->screenDrawPipelines();
+    if (pipelines.render() == nullptr) {
+        return false;
+    }
+
+    _gameUiRecorder.init(pipelines);
     _bGameUiRecorder = true;
+    return true;
 }
 
 RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan,
@@ -83,8 +97,9 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan,
     // and it prepares them itself, so the renderer carries no GUI headers for
     // either. The format is the active strategy's postprocess output, asked
     // after `prepareFrameRecord` applied any pending pipeline switch.
-    ensureGameUiRecorder();
-    _gameUiRecorder.prepare(_device->getPostprocessColorFormat(), EFormat::Undefined);
+    if (ensureGameUiRecorder()) {
+        _gameUiRecorder.prepare(_device->getPostprocessColorFormat(), EFormat::Undefined);
+    }
 
     std::shared_ptr<ICommandBuffer> cmdBuf;
     if (!_device->beginFrameCommandBuffer(plan, cmdBuf)) {
