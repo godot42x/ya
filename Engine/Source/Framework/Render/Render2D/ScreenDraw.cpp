@@ -205,24 +205,6 @@ void ScreenDrawPipelines::init(IRender* render)
     _frameUboDSL = IDescriptorSetLayout::create(render, layoutDesc.descriptorSetLayouts[0]);
     _resourceDSL = IDescriptorSetLayout::create(render, layoutDesc.descriptorSetLayouts[1]);
     _pipelineLayout = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", layoutDesc.pushConstants, {_frameUboDSL, _resourceDSL});
-
-    std::vector<uint32_t> indices(MaxIndexCount);
-    for (uint32_t i = 0; i < MaxIndexCount; i += 6) {
-        const uint32_t vertexIndex = (i / 6) * 4;
-        indices[i + 0] = vertexIndex + 0;
-        indices[i + 1] = vertexIndex + 1;
-        indices[i + 2] = vertexIndex + 3;
-        indices[i + 3] = vertexIndex + 0;
-        indices[i + 4] = vertexIndex + 3;
-        indices[i + 5] = vertexIndex + 2;
-    }
-    _indexBuffer = render->getResourceFactory()->createBuffer(BufferCreateInfo{
-        .label       = "Sprite2D_IndexBuffer",
-        .usage       = EBufferUsage::IndexBuffer | EBufferUsage::TransferDst,
-        .data        = indices.data(),
-        .size        = sizeof(uint32_t) * MaxIndexCount,
-        .memoryUsage = EMemoryUsage::GpuOnly,
-    });
 }
 
 void ScreenDrawPipelines::destroy()
@@ -232,7 +214,6 @@ void ScreenDrawPipelines::destroy()
     }
     _variants.clear();
     auto& queue = DeferredDeletionQueue::get();
-    queue.retire(std::move(_indexBuffer));
     queue.retire(std::move(_pipelineLayout));
     queue.retire(std::move(_frameUboDSL));
     queue.retire(std::move(_resourceDSL));
@@ -288,8 +269,10 @@ void ScreenDrawRecorder::destroy()
     auto& queue = DeferredDeletionQueue::get();
     for (auto& flight : _flights) {
         queue.retire(std::move(flight.vertexBuffer));
+        queue.retire(std::move(flight.indexBuffer));
         queue.retire(std::move(flight.frameUBOBuffer));
         flight.vertexPtrHead = nullptr;
+        flight.indexPtrHead = nullptr;
         flight.frameUboDS = {};
         flight.resourceDSPool.clear();
         flight.activeResourceDS = {};
@@ -298,6 +281,7 @@ void ScreenDrawRecorder::destroy()
     queue.retire(std::move(_descriptorPool));
     _vertexPtr = nullptr;
     _vertexPtrHead = nullptr;
+    _indexPtr = nullptr;
     _pipeline = nullptr;
     _pipelines = nullptr;
     _render = nullptr;
@@ -355,6 +339,13 @@ void ScreenDrawRecorder::ensureResources()
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
         resources.vertexPtrHead = resources.vertexBuffer->map<ScreenVertex>();
+        resources.indexBuffer = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
+            .label       = std::format("Sprite2D_{}_Screen_IndexBuffer", flight),
+            .usage       = EBufferUsage::IndexBuffer | EBufferUsage::TransferDst,
+            .size        = sizeof(uint32_t) * ScreenDrawPipelines::MaxIndexCount * ScreenDrawPipelines::kFrameFlushSlots,
+            .memoryUsage = EMemoryUsage::CpuToGpu,
+        });
+        resources.indexPtrHead = resources.indexBuffer->map<uint32_t>();
     }
 }
 
@@ -364,9 +355,11 @@ void ScreenDrawRecorder::begin(const Extent2D& extent, uint32_t flightSlot)
     auto& resources = activeFlight();
     _vertexPtrHead = resources.vertexPtrHead;
     _vertexPtr = _vertexPtrHead;
+    _indexPtr = resources.indexPtrHead;
     _vertexCount = 0;
     _indexCount = 0;
     _batchStartVertex = 0;
+    _batchStartIndex = 0;
     _resourceVersion = 1;
     _uploadedResourceVersion = 0;
     _frameUboUploaded = false;
@@ -381,11 +374,12 @@ void ScreenDrawRecorder::begin(const Extent2D& extent, uint32_t flightSlot)
 
 void ScreenDrawRecorder::flush(ICommandBuffer* cmdBuf, uint32_t width, uint32_t height, bool bClipped, const Rect2D& clip, ScreenDrawFrameStats* stats)
 {
-    if (!cmdBuf || _vertexCount == 0) {
+    if (!cmdBuf || _vertexCount == 0 || _indexCount == 0) {
         return;
     }
     auto& resources = activeFlight();
     resources.vertexBuffer->flush();
+    resources.indexBuffer->flush();
     YA_CORE_ASSERT(_pipeline != nullptr, "Screen draw pipeline was not prepared before command recording");
     cmdBuf->bindPipeline(_pipeline);
     setScreenViewportAndScissor(*cmdBuf, _render, width, height);
@@ -419,6 +413,9 @@ void ScreenDrawRecorder::flush(ICommandBuffer* cmdBuf, uint32_t width, uint32_t 
     YA_CORE_ASSERT(static_cast<uint64_t>(_batchStartVertex) + _vertexCount <=
                        ScreenDrawPipelines::MaxVertexCount * ScreenDrawPipelines::kFrameFlushSlots,
                    "Screen draw frame exceeded vertex buffer capacity");
+    YA_CORE_ASSERT(static_cast<uint64_t>(_batchStartIndex) + _indexCount <=
+                       ScreenDrawPipelines::MaxIndexCount * ScreenDrawPipelines::kFrameFlushSlots,
+                   "Screen draw frame exceeded index buffer capacity");
     if (gScreenDrawDiagnostics.bLogFlushBatches) {
         uint32_t counter = stats ? stats->screenFlushCount : 0u;
         if (shouldLogFlush(counter)) {
@@ -429,8 +426,8 @@ void ScreenDrawRecorder::flush(ICommandBuffer* cmdBuf, uint32_t width, uint32_t 
 
     cmdBuf->bindDescriptorSets(_pipelines->layout(), 0, {resources.frameUboDS, resources.activeResourceDS});
     cmdBuf->bindVertexBuffer(0, resources.vertexBuffer.get(), 0);
-    cmdBuf->bindIndexBuffer(_pipelines->indexBuffer(), 0, false);
-    cmdBuf->drawIndexed(static_cast<uint32_t>(_indexCount), 1, 0, static_cast<int32_t>(_batchStartVertex), 0);
+    cmdBuf->bindIndexBuffer(resources.indexBuffer.get(), 0, false);
+    cmdBuf->drawIndexed(static_cast<uint32_t>(_indexCount), 1, _batchStartIndex, static_cast<int32_t>(_batchStartVertex), 0);
 
     if (stats) {
         ++stats->screenFlushCount;
@@ -438,6 +435,7 @@ void ScreenDrawRecorder::flush(ICommandBuffer* cmdBuf, uint32_t width, uint32_t 
         stats->screenIndexCount += _indexCount;
     }
     _batchStartVertex = static_cast<uint32_t>(_vertexPtr - _vertexPtrHead);
+    _batchStartIndex += _indexCount;
     _vertexCount = 0;
     _indexCount = 0;
 }
@@ -528,16 +526,91 @@ ScreenDrawFrameStats ScreenDrawRecorder::record(ScreenDrawList& list, const Scre
 
     constexpr uint32_t kUnmapped = ~0u;
     std::vector<uint32_t> localToGlobal(list.textures.size(), kUnmapped);
+    std::unordered_map<uint32_t, uint32_t> copied;
     bool bOpen = false;
     bool bClipped = false;
     Rect2D clip{};
 
+    auto flushBatch = [&]() {
+        flush(target.cmd, target.width, target.height, bClipped, clip, &stats);
+        copied.clear();
+    };
     auto flushOpen = [&]() {
         if (!bOpen) {
             return;
         }
-        flush(target.cmd, target.width, target.height, bClipped, clip, &stats);
+        flushBatch();
         bOpen = false;
+    };
+
+    auto placeTriangle = [&](uint32_t i0, uint32_t i1, uint32_t i2) {
+        const uint32_t src[3] = {i0, i1, i2};
+        for (int attempt = 0; attempt < 8; ++attempt) {
+            uint32_t uniqueNew[3]{};
+            uint32_t newVerts = 0;
+            bool bNeedTextureFlush = false;
+            for (uint32_t s : src) {
+                if (copied.contains(s)) {
+                    continue;
+                }
+                bool bSeen = false;
+                for (uint32_t n = 0; n < newVerts; ++n) {
+                    if (uniqueNew[n] == s) {
+                        bSeen = true;
+                        break;
+                    }
+                }
+                if (bSeen) {
+                    continue;
+                }
+                uniqueNew[newVerts++] = s;
+                const uint32_t slot = list.vertices[s].textureSlot;
+                YA_CORE_ASSERT(slot < localToGlobal.size(), "Screen draw texture slot out of range");
+                if (localToGlobal[slot] == kUnmapped && textureTableFull()) {
+                    bNeedTextureFlush = true;
+                }
+            }
+            if (bNeedTextureFlush) {
+                if (_vertexCount > 0) {
+                    flushBatch();
+                }
+                resetTextureBatch();
+                std::fill(localToGlobal.begin(), localToGlobal.end(), kUnmapped);
+                bOpen = true;
+                continue;
+            }
+            const bool bFits = _vertexCount + newVerts <= ScreenDrawPipelines::MaxVertexCount
+                && _indexCount + 3 <= ScreenDrawPipelines::MaxIndexCount;
+            if (!bFits) {
+                YA_CORE_ASSERT(_vertexCount > 0 || _indexCount > 0,
+                               "Screen draw triangle does not fit in an empty batch");
+                flushBatch();
+                continue;
+            }
+            auto put = [&](uint32_t s) -> uint32_t {
+                if (const auto it = copied.find(s); it != copied.end()) {
+                    return it->second;
+                }
+                const uint32_t slot = list.vertices[s].textureSlot;
+                if (localToGlobal[slot] == kUnmapped) {
+                    localToGlobal[slot] = findOrAddTexture(list.textures[slot].get());
+                }
+                ScreenVertex vertex = list.vertices[s];
+                vertex.textureSlot = localToGlobal[slot];
+                *_vertexPtr++ = vertex;
+                const uint32_t local = _vertexCount++;
+                copied.emplace(s, local);
+                return local;
+            };
+            YA_CORE_ASSERT(_indexPtr != nullptr, "Screen draw index buffer is not mapped");
+            uint32_t* dst = _indexPtr + _batchStartIndex + _indexCount;
+            dst[0] = put(i0);
+            dst[1] = put(i1);
+            dst[2] = put(i2);
+            _indexCount += 3;
+            return;
+        }
+        YA_CORE_ASSERT(false, "Screen draw failed to place a triangle");
     };
 
     for (const ScreenDrawList::Command& command : list.commands) {
@@ -549,37 +622,10 @@ ScreenDrawFrameStats ScreenDrawRecorder::record(ScreenDrawList& list, const Scre
             bClipped = command.bClipped;
             clip = command.clip;
         }
-
-        uint32_t emitted = 0;
-        while (emitted < command.vertexCount) {
-            if (_vertexCount >= ScreenDrawPipelines::MaxVertexCount - 4) {
-                flush(target.cmd, target.width, target.height, bClipped, clip, &stats);
-            }
-            const uint32_t quads = std::min(
-                static_cast<uint32_t>((ScreenDrawPipelines::MaxVertexCount - _vertexCount) / 4),
-                (command.vertexCount - emitted) / 4);
-            for (uint32_t q = 0; q < quads; ++q) {
-                const uint32_t srcIndex = command.firstVertex + emitted + q * 4;
-                const uint32_t localSlot = list.vertices[srcIndex].textureSlot;
-                if (localToGlobal[localSlot] == kUnmapped) {
-                    if (textureTableFull()) {
-                        flushOpen();
-                        resetTextureBatch();
-                        std::fill(localToGlobal.begin(), localToGlobal.end(), kUnmapped);
-                        bOpen = true;
-                    }
-                    localToGlobal[localSlot] = findOrAddTexture(list.textures[localSlot].get());
-                }
-                for (int vi = 0; vi < 4; ++vi) {
-                    ScreenVertex vertex = list.vertices[srcIndex + vi];
-                    vertex.textureSlot = localToGlobal[localSlot];
-                    _vertexPtr[vi] = vertex;
-                }
-                _vertexPtr += 4;
-                _vertexCount += 4;
-                _indexCount += 6;
-            }
-            emitted += quads * 4;
+        YA_CORE_ASSERT(command.indexCount % 3 == 0, "Screen draw command index count is not a triangle list");
+        const uint32_t indexEnd = command.firstIndex + command.indexCount;
+        for (uint32_t index = command.firstIndex; index < indexEnd; index += 3) {
+            placeTriangle(list.indices[index], list.indices[index + 1], list.indices[index + 2]);
         }
     }
     flushOpen();

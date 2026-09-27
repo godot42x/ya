@@ -57,7 +57,9 @@ struct YA_RENDER_2D_API ScreenDrawPipelines
     ScreenDrawPipelines& operator=(ScreenDrawPipelines&&) = default;
 
     static constexpr size_t   MaxVertexCount = 10000;
-    static constexpr size_t   MaxIndexCount  = MaxVertexCount * 6 / 4;
+    /// A batch is a triangle list. Three indices per vertex covers a fan and
+    /// a feathered stroke; quads use fewer.
+    static constexpr size_t   MaxIndexCount  = MaxVertexCount * 3;
     static constexpr uint32_t kFrameFlushSlots = 4;
 
     void init(IRender* render);
@@ -71,14 +73,12 @@ struct YA_RENDER_2D_API ScreenDrawPipelines
     [[nodiscard]] IPipelineLayout* layout() const { return _pipelineLayout.get(); }
     [[nodiscard]] IDescriptorSetLayout* frameLayout() const { return _frameUboDSL.get(); }
     [[nodiscard]] IDescriptorSetLayout* resourceLayout() const { return _resourceDSL.get(); }
-    [[nodiscard]] IBuffer* indexBuffer() const { return _indexBuffer.get(); }
 
     IRender* _render = nullptr;
 
     std::shared_ptr<IDescriptorSetLayout> _frameUboDSL;
     std::shared_ptr<IDescriptorSetLayout> _resourceDSL;
     std::shared_ptr<IPipelineLayout>      _pipelineLayout;
-    std::shared_ptr<IBuffer>              _indexBuffer;
 
     struct Variant
     {
@@ -129,6 +129,8 @@ struct YA_RENDER_2D_API ScreenDrawRecorder
         DescriptorSetHandle              activeResourceDS{};
         std::shared_ptr<IBuffer>         vertexBuffer{};
         ScreenVertex*                    vertexPtrHead = nullptr;
+        std::shared_ptr<IBuffer>         indexBuffer{};
+        uint32_t*                        indexPtrHead = nullptr;
     };
 
     void ensureResources();
@@ -151,11 +153,13 @@ struct YA_RENDER_2D_API ScreenDrawRecorder
     uint32_t _activeFlightIndex = 0;
 
     glm::mat4     _screenOrthoProj = glm::mat4(1.0f);
-    ScreenVertex* _vertexPtr       = nullptr;
-    ScreenVertex* _vertexPtrHead   = nullptr;
-    uint32_t      _vertexCount     = 0;
-    uint32_t      _indexCount      = 0;
+    ScreenVertex* _vertexPtr        = nullptr;
+    ScreenVertex* _vertexPtrHead    = nullptr;
+    uint32_t*     _indexPtr         = nullptr;
+    uint32_t      _vertexCount      = 0;
+    uint32_t      _indexCount       = 0;
     uint32_t      _batchStartVertex = 0;
+    uint32_t      _batchStartIndex  = 0;
     uint64_t      _resourceVersion = 0;
     uint64_t      _uploadedResourceVersion = 0;
     bool          _frameUboUploaded = false;

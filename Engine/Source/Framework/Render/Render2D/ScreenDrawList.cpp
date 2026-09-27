@@ -3,6 +3,9 @@
 #include "Render/Resources/FontManager.h"
 
 #include <algorithm>
+#include <cmath>
+#include <numbers>
+#include <vector>
 
 namespace ya
 {
@@ -58,12 +61,50 @@ void ScreenDrawList::closePendingCommand()
     commands.push_back(Command{
         .firstVertex = pendingFirst,
         .vertexCount = pendingCount,
+        .firstIndex  = pendingFirstIndex,
+        .indexCount  = pendingIndexCount,
         .bClipped    = !clipStack.empty(),
         .clip        = clipStack.empty() ? Rect2D{} : clipStack.back(),
     });
     ++commandCount;
-    pendingCount = 0;
-    bPending     = false;
+    pendingCount      = 0;
+    pendingIndexCount = 0;
+    bPending          = false;
+}
+
+void ScreenDrawList::ensurePending()
+{
+    if (bPending) {
+        return;
+    }
+    bPending           = true;
+    pendingFirst       = static_cast<uint32_t>(vertices.size());
+    pendingCount       = 0;
+    pendingFirstIndex  = static_cast<uint32_t>(indices.size());
+    pendingIndexCount  = 0;
+}
+
+uint32_t ScreenDrawList::appendVertex(const ScreenVertex& vertex)
+{
+    ensurePending();
+    vertices.push_back(vertex);
+    ++pendingCount;
+    return static_cast<uint32_t>(vertices.size() - 1);
+}
+
+void ScreenDrawList::appendTriangle(uint32_t a, uint32_t b, uint32_t c)
+{
+    ensurePending();
+    indices.push_back(a);
+    indices.push_back(b);
+    indices.push_back(c);
+    pendingIndexCount += 3;
+}
+
+void ScreenDrawList::appendQuadIndices(uint32_t a, uint32_t b, uint32_t c, uint32_t d)
+{
+    appendTriangle(a, b, d);
+    appendTriangle(a, d, c);
 }
 
 uint32_t ScreenDrawList::findOrAddTexture(const Ptr<Texture>& texture)
@@ -89,16 +130,20 @@ void ScreenDrawList::appendQuad(const ScreenAffine&             transform,
                                 const glm::vec2&                uvTranslation,
                                 const glm::vec3&                corner)
 {
-    if (!bPending) {
-        bPending     = true;
-        pendingFirst = static_cast<uint32_t>(vertices.size());
-        pendingCount = 0;
-    }
+    ensurePending();
+    const uint32_t base = static_cast<uint32_t>(vertices.size());
     vertices.resize(vertices.size() + 4);
     emitQuad(vertices.data() + vertices.size() - 4,
              transform, textureSlot, sampleMode,
              colorsYaOrder, uvScale, uvTranslation, corner);
+    indices.push_back(base + 0);
+    indices.push_back(base + 1);
+    indices.push_back(base + 3);
+    indices.push_back(base + 0);
+    indices.push_back(base + 3);
+    indices.push_back(base + 2);
     pendingCount += 4;
+    pendingIndexCount += 6;
 }
 
 void ScreenDrawList::makeSprite(const glm::vec3& position,
@@ -257,6 +302,249 @@ void ScreenDrawList::popClipRect()
     }
     closePendingCommand();
     clipStack.pop_back();
+}
+
+namespace
+{
+
+constexpr float kStrokeDegenerateLength = 1e-4f;
+
+ScreenVertex coverageVertex(const glm::vec2& xy, float z, const glm::vec4& color, uint32_t textureSlot)
+{
+    return ScreenVertex{
+        .pos         = {xy.x, xy.y, z},
+        .color       = color,
+        .texCoord    = {0.0f, 0.0f},
+        .textureSlot = textureSlot,
+        .sampleMode  = static_cast<uint32_t>(EScreenTextureSampleMode::Coverage),
+        .corner      = {0.0f, 0.0f, 0.0f},
+    };
+}
+
+} // namespace
+
+void ScreenDrawList::strokeLine(const glm::vec2& from,
+                                const glm::vec2& to,
+                                const glm::vec4& color,
+                                float            thickness,
+                                float            feather,
+                                float            z)
+{
+    thickness = std::max(thickness, 0.0f);
+    feather   = std::max(feather, 0.0f);
+    if (thickness <= 0.0f && feather <= 0.0f) {
+        return;
+    }
+
+    const glm::vec2 delta = to - from;
+    const float     len   = glm::length(delta);
+    const float     half  = thickness * 0.5f;
+    const uint32_t  slot  = findOrAddTexture(nullptr);
+
+    if (feather <= 0.0f) {
+        if (len <= kStrokeDegenerateLength) {
+            const glm::vec2 extent{thickness, thickness};
+            makeSprite(glm::vec3(from - extent * 0.5f, z), extent, nullptr, color);
+            return;
+        }
+        const glm::vec2 dir = delta / len;
+        const glm::vec2 nrm{-dir.y, dir.x};
+        makeSprite(ScreenAffine{
+                       .xAxis  = dir * len,
+                       .yAxis  = nrm * thickness,
+                       .origin = from - nrm * half,
+                       .z      = z,
+                   },
+                   nullptr,
+                   color);
+        return;
+    }
+
+    auto push = [&](const glm::vec2& xy, float alpha) {
+        glm::vec4 tint = color;
+        tint.a *= alpha;
+        return appendVertex(coverageVertex(xy, z, tint, slot));
+    };
+
+    if (len <= kStrokeDegenerateLength) {
+        const float outer = half + feather;
+        const uint32_t inner[4] = {
+            push(from + glm::vec2(-half, -half), 1.0f),
+            push(from + glm::vec2(half, -half), 1.0f),
+            push(from + glm::vec2(-half, half), 1.0f),
+            push(from + glm::vec2(half, half), 1.0f),
+        };
+        const uint32_t outerIds[4] = {
+            push(from + glm::vec2(-outer, -outer), 0.0f),
+            push(from + glm::vec2(outer, -outer), 0.0f),
+            push(from + glm::vec2(-outer, outer), 0.0f),
+            push(from + glm::vec2(outer, outer), 0.0f),
+        };
+        appendQuadIndices(inner[0], inner[1], inner[2], inner[3]);
+        appendQuadIndices(outerIds[0], outerIds[1], inner[0], inner[1]);
+        appendQuadIndices(outerIds[1], outerIds[3], inner[1], inner[3]);
+        appendQuadIndices(outerIds[3], outerIds[2], inner[3], inner[2]);
+        appendQuadIndices(outerIds[2], outerIds[0], inner[2], inner[0]);
+        return;
+    }
+
+    const glm::vec2 dir = delta / len;
+    const glm::vec2 nrm{-dir.y, dir.x};
+    const float     offsets[4] = {-half - feather, -half, half, half + feather};
+    const float     alphas[4]  = {0.0f, 1.0f, 1.0f, 0.0f};
+    uint32_t        ids[4][2]{};
+    for (int row = 0; row < 4; ++row) {
+        const glm::vec2 shift = nrm * offsets[row];
+        ids[row][0]           = push(from + shift, alphas[row]);
+        ids[row][1]           = push(to + shift, alphas[row]);
+    }
+    for (int row = 0; row < 3; ++row) {
+        appendQuadIndices(ids[row][0], ids[row][1], ids[row + 1][0], ids[row + 1][1]);
+    }
+}
+
+void ScreenDrawList::strokePolyline(std::span<const glm::vec2> points,
+                                    bool                       bClosed,
+                                    const glm::vec4&           color,
+                                    float                      thickness,
+                                    float                      feather,
+                                    float                      z)
+{
+    if (points.empty()) {
+        return;
+    }
+    if (points.size() == 1) {
+        strokeLine(points[0], points[0], color, thickness, feather, z);
+        return;
+    }
+
+    const size_t count    = points.size();
+    const size_t segments = bClosed ? count : count - 1;
+    uint32_t     drawn    = 0;
+    for (size_t i = 0; i < segments; ++i) {
+        const glm::vec2& a = points[i];
+        const glm::vec2& b = points[(i + 1) % count];
+        if (glm::length(b - a) <= kStrokeDegenerateLength) {
+            continue;
+        }
+        strokeLine(a, b, color, thickness, feather, z);
+        ++drawn;
+    }
+    if (drawn == 0) {
+        strokeLine(points[0], points[0], color, thickness, feather, z);
+    }
+}
+
+void ScreenDrawList::strokeRect(const Rect2D&   rect,
+                                const glm::vec4& color,
+                                float            thickness,
+                                float            feather,
+                                float            z)
+{
+    const glm::vec2 corners[4] = {
+        rect.pos,
+        rect.pos + glm::vec2(rect.extent.x, 0.0f),
+        rect.pos + rect.extent,
+        rect.pos + glm::vec2(0.0f, rect.extent.y),
+    };
+    strokePolyline(corners, true, color, thickness, feather, z);
+}
+
+void ScreenDrawList::fillConvexPoly(std::span<const glm::vec2> points,
+                                    const glm::vec4&           color,
+                                    float                      feather,
+                                    float                      z)
+{
+    feather = std::max(feather, 0.0f);
+    if (points.size() < 3) {
+        return;
+    }
+
+    const uint32_t slot = findOrAddTexture(nullptr);
+    std::vector<uint32_t> ids;
+    ids.reserve(points.size());
+    glm::vec2 centroid{0.0f};
+    for (const glm::vec2& point : points) {
+        centroid += point;
+        ids.push_back(appendVertex(coverageVertex(point, z, color, slot)));
+    }
+    centroid /= static_cast<float>(points.size());
+    for (size_t i = 1; i + 1 < points.size(); ++i) {
+        appendTriangle(ids[0], ids[i], ids[i + 1]);
+    }
+    if (feather <= 0.0f) {
+        return;
+    }
+
+    glm::vec4 clear = color;
+    clear.a         = 0.0f;
+    const size_t count = points.size();
+    for (size_t i = 0; i < count; ++i) {
+        const glm::vec2& a     = points[i];
+        const glm::vec2& b     = points[(i + 1) % count];
+        const glm::vec2  edge  = b - a;
+        const float      len   = glm::length(edge);
+        if (len <= kStrokeDegenerateLength) {
+            continue;
+        }
+        glm::vec2 normal{-edge.y / len, edge.x / len};
+        const glm::vec2 mid = (a + b) * 0.5f;
+        if (glm::dot(normal, mid - centroid) < 0.0f) {
+            normal = -normal;
+        }
+        const glm::vec2 shift = normal * feather;
+        const uint32_t  outerA = appendVertex(coverageVertex(a + shift, z, clear, slot));
+        const uint32_t  outerB = appendVertex(coverageVertex(b + shift, z, clear, slot));
+        appendQuadIndices(ids[i], ids[(i + 1) % count], outerA, outerB);
+    }
+}
+
+void ScreenDrawList::strokeArc(const glm::vec2& center,
+                               float            radius,
+                               float            startRadians,
+                               float            endRadians,
+                               uint32_t         segments,
+                               const glm::vec4& color,
+                               float            thickness,
+                               float            feather,
+                               float            z)
+{
+    if (segments == 0) {
+        return;
+    }
+    const bool bClosed = std::abs(endRadians - startRadians) >= std::numbers::pi_v<float> * 2.0f - 1e-3f;
+    const uint32_t pointCount = bClosed ? segments : segments + 1;
+    std::vector<glm::vec2> points;
+    points.reserve(pointCount);
+    for (uint32_t i = 0; i < pointCount; ++i) {
+        const float u = static_cast<float>(i) / static_cast<float>(segments);
+        const float t = startRadians + (endRadians - startRadians) * u;
+        points.push_back(center + glm::vec2(std::cos(t), std::sin(t)) * radius);
+    }
+    strokePolyline(points, bClosed, color, thickness, feather, z);
+}
+
+void ScreenDrawList::strokeBezierCubic(const glm::vec2& p0,
+                                       const glm::vec2& p1,
+                                       const glm::vec2& p2,
+                                       const glm::vec2& p3,
+                                       uint32_t         segments,
+                                       const glm::vec4& color,
+                                       float            thickness,
+                                       float            feather,
+                                       float            z)
+{
+    if (segments == 0) {
+        return;
+    }
+    std::vector<glm::vec2> points;
+    points.reserve(static_cast<size_t>(segments) + 1);
+    for (uint32_t i = 0; i <= segments; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(segments);
+        const float u = 1.0f - t;
+        points.push_back(u * u * u * p0 + 3.0f * u * u * t * p1 + 3.0f * u * t * t * p2 + t * t * t * p3);
+    }
+    strokePolyline(points, false, color, thickness, feather, z);
 }
 
 } // namespace ya

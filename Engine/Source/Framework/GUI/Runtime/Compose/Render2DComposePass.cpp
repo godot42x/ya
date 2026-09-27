@@ -99,24 +99,7 @@ void emitSnapshotItem(ScreenDrawList& list, const UIFrameDrawItem& item)
         }
     }
     else if (item.kind == UIFrameDrawItem::EKind::Line) {
-        const glm::vec2 delta = item.lineTo - item.lineFrom;
-        const float     len   = glm::length(delta);
-        if (len <= 1e-4f) {
-            const glm::vec2 t = glm::vec2(item.lineThickness);
-            list.makeSprite(glm::vec3(item.lineFrom - t * 0.5f, 0.0f),
-                            t, nullptr, item.color);
-        }
-        else {
-            const glm::vec2 dir = delta / len;
-            const glm::vec2 nrm = glm::vec2(-dir.y, dir.x);
-            const ScreenAffine transform{
-                .xAxis  = dir * len,
-                .yAxis  = nrm * item.lineThickness,
-                .origin = item.lineFrom,
-                .z      = 0.0f,
-            };
-            list.makeSprite(transform, nullptr, item.color);
-        }
+        list.strokeLine(item.lineFrom, item.lineTo, item.color, item.lineThickness);
     }
     else {
         list.makeText(item.text,

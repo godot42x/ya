@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -65,18 +66,24 @@ struct ScreenDrawFrameStats
 
 /// CPU draw list in target pixels, top-left origin, Y-down. A command in this
 /// list can be drawn without a camera. Building one touches no device.
+/// Each command owns an index segment into `indices`. Those indices are
+/// absolute positions in `vertices`, so a command can be any triangle list.
+/// Quads still emit two triangles; they are not a special record path.
 struct YA_RENDER_2D_API ScreenDrawList
 {
     struct Command
     {
         uint32_t firstVertex = 0;
         uint32_t vertexCount = 0;
+        uint32_t firstIndex  = 0;
+        uint32_t indexCount  = 0;
         bool     bClipped    = false;
         Rect2D   clip{};
     };
 
     std::vector<Command>          commands;
     std::vector<ScreenVertex>     vertices;
+    std::vector<uint32_t>         indices;
     std::vector<ya::Ptr<Texture>> textures;
     std::vector<Rect2D>           clipStack;
 
@@ -107,6 +114,50 @@ struct YA_RENDER_2D_API ScreenDrawList
                                   const std::array<glm::vec4, 4>& colors,
                                   ya::Ptr<Texture>                texture = nullptr);
 
+    /// Centered screen stroke. `feather` is the geometric AA fringe outside
+    /// the core, in pixels; 0 keeps a hard edge. A zero-length segment becomes
+    /// a square centered on `from`. Arc and bezier callers sample to points
+    /// and then use the polyline.
+    void strokeLine(const glm::vec2& from,
+                    const glm::vec2& to,
+                    const glm::vec4& color,
+                    float            thickness,
+                    float            feather = 0.0f,
+                    float            z       = 0.0f);
+    void strokePolyline(std::span<const glm::vec2> points,
+                        bool                       bClosed,
+                        const glm::vec4&           color,
+                        float                      thickness,
+                        float                      feather = 0.0f,
+                        float                      z       = 0.0f);
+    void strokeRect(const Rect2D&   rect,
+                    const glm::vec4& color,
+                    float            thickness,
+                    float            feather = 0.0f,
+                    float            z       = 0.0f);
+    void fillConvexPoly(std::span<const glm::vec2> points,
+                        const glm::vec4&           color,
+                        float                      feather = 0.0f,
+                        float                      z       = 0.0f);
+    void strokeArc(const glm::vec2& center,
+                   float            radius,
+                   float            startRadians,
+                   float            endRadians,
+                   uint32_t         segments,
+                   const glm::vec4& color,
+                   float            thickness,
+                   float            feather = 0.0f,
+                   float            z       = 0.0f);
+    void strokeBezierCubic(const glm::vec2& p0,
+                           const glm::vec2& p1,
+                           const glm::vec2& p2,
+                           const glm::vec2& p3,
+                           uint32_t         segments,
+                           const glm::vec4& color,
+                           float            thickness,
+                           float            feather = 0.0f,
+                           float            z       = 0.0f);
+
     void pushClipRect(const Rect2D& rect);
     void popClipRect();
     /// Close the open quad run. Record does this so the last run is not dropped.
@@ -119,13 +170,17 @@ struct YA_RENDER_2D_API ScreenDrawList
         return ScreenDrawFrameStats{
             .screenFlushCount  = commandCount,
             .screenVertexCount = static_cast<uint32_t>(vertices.size()),
-            .screenIndexCount  = static_cast<uint32_t>(vertices.size()) * 6 / 4,
+            .screenIndexCount  = static_cast<uint32_t>(indices.size()),
         };
     }
 
   private:
     void closePendingCommand();
+    void ensurePending();
     [[nodiscard]] uint32_t findOrAddTexture(const Ptr<Texture>& texture);
+    [[nodiscard]] uint32_t appendVertex(const ScreenVertex& vertex);
+    void appendTriangle(uint32_t a, uint32_t b, uint32_t c);
+    void appendQuadIndices(uint32_t a, uint32_t b, uint32_t c, uint32_t d);
     void appendQuad(const ScreenAffine&             transform,
                     uint32_t                        textureSlot,
                     uint32_t                        sampleMode,
@@ -143,8 +198,10 @@ struct YA_RENDER_2D_API ScreenDrawList
     std::unordered_map<const Texture*, uint32_t> texturePtr2Idx;
     uint32_t commandCount  = 0;
     bool     bPending      = false;
-    uint32_t pendingFirst  = 0;
-    uint32_t pendingCount  = 0;
+    uint32_t pendingFirst      = 0;
+    uint32_t pendingCount      = 0;
+    uint32_t pendingFirstIndex = 0;
+    uint32_t pendingIndexCount = 0;
 };
 
 [[nodiscard]] inline ScreenAffine screenAffineFromPositionSize(const glm::vec3& position, const glm::vec2& size)

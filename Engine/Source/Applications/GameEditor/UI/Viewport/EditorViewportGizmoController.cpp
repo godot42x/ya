@@ -148,31 +148,19 @@ float gizmoHandlePixels(bool highlighted, bool pressed)
 void drawScreenLine(ScreenDrawList& list, const glm::vec2& from,
                     const glm::vec2& to,
                     const glm::vec4& color,
-                    float            thickness,
-                    Texture*         white)
+                    float            thickness)
 {
-    const glm::vec2 delta = to - from;
-    const float     len   = glm::length(delta);
-    if (len < 0.5f || !white) {
+    if (glm::length(to - from) < 0.5f) {
         return;
     }
-    const glm::vec2 dir = delta / len;
-    const glm::vec2 nrm(-dir.y, dir.x);
-    const ScreenAffine transform{
-        .xAxis  = dir * len,
-        .yAxis  = nrm * thickness,
-        .origin = from - nrm * (thickness * 0.5f),
-        .z      = 0.0f,
-    };
-    list.makeSprite(transform, white, color);
+    list.strokeLine(from, to, color, thickness);
 }
 
 void drawScreenCircleOutline(ScreenDrawList& list,
                              const glm::vec2& center,
                              float            radius,
                              const glm::vec4& color,
-                             float            thickness,
-                             Texture*         white)
+                             float            thickness)
 {
     constexpr int kSegments = 16;
     glm::vec2     prev      = center + glm::vec2(radius, 0.0f);
@@ -180,15 +168,14 @@ void drawScreenCircleOutline(ScreenDrawList& list,
         const float     angle = (2.0f * std::numbers::pi_v<float>) * static_cast<float>(i) /
                             static_cast<float>(kSegments);
         const glm::vec2 next = center + glm::vec2(std::cos(angle), std::sin(angle)) * radius;
-        drawScreenLine(list, prev, next, color, thickness, white);
+        drawScreenLine(list, prev, next, color, thickness);
         prev = next;
     }
 }
 
 void drawHatchedAxis(ScreenDrawList& list, const glm::vec2& origin,
                      const glm::vec2& end,
-                     const glm::vec4& color,
-                     Texture*         white)
+                     const glm::vec4& color)
 {
     const glm::vec2 delta = end - origin;
     const float     len   = glm::length(delta);
@@ -205,8 +192,7 @@ void drawHatchedAxis(ScreenDrawList& list, const glm::vec2& origin,
         drawScreenLine(list, origin + dir * startT,
                        origin + dir * std::min(endT, len),
                        color,
-                       1.5f,
-                       white);
+                       1.5f);
     }
 }
 
@@ -762,10 +748,6 @@ void EditorViewportGizmoController::recordOverlay(ScreenDrawList& list) const
     }
 
     const EEditorViewportGizmoAxis highlightedAxis = _bDragging ? _activeAxis : _hoveredAxis;
-    auto*                          white           = TextureLibrary::get().getWhiteTexture().get();
-    if (!white) {
-        return;
-    }
 
     if (_operation == EEditorViewportGizmoOperation::Rotate) {
         for (const auto& axis : frame->axes) {
@@ -786,7 +768,7 @@ void EditorViewportGizmoController::recordOverlay(ScreenDrawList& list) const
                 glm::vec2 screen{};
                 const bool bOk = projectWorldToViewport(_hostState, world, screen);
                 if (bOk && bPrev) {
-                    drawScreenLine(list, prevScreen, screen, color, thickness, white);
+                    drawScreenLine(list, prevScreen, screen, color, thickness);
                 }
                 prevScreen = screen;
                 bPrev      = bOk;
@@ -804,12 +786,13 @@ void EditorViewportGizmoController::recordOverlay(ScreenDrawList& list) const
         const glm::vec4 color       = gizmoAxisColor(axis.axis, highlighted, pressed);
         const float     thickness   = gizmoLineThickness(highlighted, pressed);
         const float     handle      = gizmoHandlePixels(highlighted, pressed);
-        drawScreenLine(list, frame->originScreen, axis.screenEnd, color, thickness, white);
+        drawScreenLine(list, frame->originScreen, axis.screenEnd, color, thickness);
         if (axis.bReversed) {
-            drawHatchedAxis(list, frame->originScreen, axis.screenEnd, color, white);
-            drawScreenCircleOutline(list, axis.screenEnd, handle * 0.55f, color, std::max(1.5f, thickness * 0.7f), white);
+            drawHatchedAxis(list, frame->originScreen, axis.screenEnd, color);
+            drawScreenCircleOutline(list, axis.screenEnd, handle * 0.55f, color, std::max(1.5f, thickness * 0.7f));
         }
         else {
+            auto* white = TextureLibrary::get().getWhiteTexture().get();
             list.makeSprite(glm::vec3(axis.screenEnd.x - handle * 0.5f,
                                       axis.screenEnd.y - handle * 0.5f,
                                       0.0f),

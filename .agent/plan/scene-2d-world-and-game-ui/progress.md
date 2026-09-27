@@ -429,3 +429,41 @@ GameEditor 在已经 tone-map 的 View display image 上画 overlay：先世界�
 ### 下一步
 
 - D3。P4 仍在 D3 之后。
+
+## 2026-09-27 — D3：屏幕空间 stroke
+
+### 目标与边界
+
+屏幕录制支持任意三角形，并提供居中的 stroke。GUI 线段和 gizmo 轴线改走这条路径。不改 `Sprite2DScreen`，不改圆角矩形 SDF，不改 `WorldDrawList` 粗线。
+
+### 完成
+
+- 每条屏幕命令带 `firstIndex` / `indexCount`。索引跟顶点一起按 flight 上传。管线里那块写死的 quad 索引缓冲删掉了。
+- `ScreenDrawList` 增加 `strokeLine`、`strokePolyline`、`strokeRect`、`fillConvexPoly`。`strokeArc` 和 `strokeBezierCubic` 先采样成点，再走 polyline。羽化是几何外沿，顶点 alpha 从 1 收到 0，shader 不新增分支。默认羽化宽度是 0，所以现有调用仍是硬边。
+- `UIFrameDrawItem::EKind::Line` 和 gizmo 的轴线、虚线、旋转环改用 `strokeLine`。
+
+### 相对旧像素的变化
+
+- Sprite、文字、圆角矩形、多色矩形仍走 `appendQuad`，索引仍是 `0,1,3, 0,3,2`。三角形没变。
+- GUI 线段以前以 `lineFrom` 为原点，整条 quad 落在法线正侧。现在原点是 `from - normal * thickness/2`，像素沿负法线移了半个线宽。长度不超过 `1e-4` 的退化段仍是以该点为中心的正方形，和原来一样。
+- Gizmo 轴线本来就是这个居中 quad（`origin = from - normal * thickness/2`），短于 0.5px 的段仍然跳过。手柄方块仍是 `makeSprite`。这些像素不该变。
+- 羽化默认 0，所以这次没有额外的软边像素。
+
+### 保留
+
+- P4：抽取 WorldSpriteCandidate、真正画 sprite、深度写入与半透明排序。
+- 世界空间粗线仍不在屏幕 stroke 里。需要时由世界 shader 在 VS 按屏幕空间展开。
+
+### 偏离
+
+- 无。
+
+### 验证
+
+- `ya-render-2d-test`：`ScreenStrokeTest` 7 passed（quad 索引、闭合、居中、退化正方形、羽化宽度、arc/bezier 采样、凸多边形 fan），`ScreenDrawListTest` 4 passed。
+- `ya-game-editor` 与 `GUIWorkbench` 编过。GUIWorkbench 同帧 GPU / offscreen parity：`pass=true differing=0`。
+- `Sprite2DScreen.slang` 与 `WorldDrawList` 无改动。
+
+### 下一步
+
+- P4。
