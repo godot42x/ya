@@ -17,7 +17,6 @@ namespace ya
 
 struct RenderStageContext;
 struct RenderDrawItem;
-class DrawCandidateView;
 class ForwardFrameResourceSet;
 struct Scene;
 struct Mesh;

@@ -12,6 +12,7 @@ struct Scene;
 class TerrainProcessor;
 struct RenderRuntime;
 struct SkeletonAnimatorComponent;
+struct Sprite2DComponent;
 
 struct RenderFrameExtractor
 {
@@ -54,13 +55,24 @@ struct RenderFrameExtractor
                             std::shared_ptr<const SceneSnapshot>      sceneSnapshot,
                             RenderFrameData& outFrame);
 
+    /// One entity's candidate: the world matrix and the component are everything
+    /// the quad needs (see WorldSpriteCandidate). Split out of the ECS walk so
+    /// the transform/UV math is checkable on its own, and so the walk stays a
+    /// gate plus this call.
+    [[nodiscard]] static WorldSpriteCandidate buildSpriteCandidate(const glm::mat4&         world,
+                                                                   const Sprite2DComponent& sprite,
+                                                                   uint32_t                 entityId);
+
   private:
     static void extractCamera(const ViewPrepareInput& input, RenderFrameData& out);
     static void extractSceneLights(entt::registry& reg, SceneSnapshot& out);
+    static void extractSprites(Scene* scene, entt::registry& reg, SceneSnapshot& out);
     static void prepareViewLights(const ViewPrepareInput& input, RenderFrameData& out);
     static int32_t registerSkinningPalette(DrawItemExtractionContext& ctx, entt::entity entity, Mesh* mesh);
     static void extractDrawItems(DrawItemExtractionContext& ctx);
-    static void sortDrawItems(const glm::vec3& cameraPos, RenderFrameData& out);
+    /// Order every View-owned bucket: candidate visibility is already decided,
+    /// this only writes the camera-dependent order.
+    static void sortViewBuckets(const glm::vec3& cameraPos, RenderFrameData& out);
 };
 
 } // namespace ya

@@ -4,6 +4,7 @@
 #include "Render3D/Common/RenderFeatures.h"
 #include "Render3D/Common/RenderViewSceneResources.h"
 #include "Resource/Mesh.h"
+#include "RHI/Core/Texture.h"
 #include "RHI/RenderDefines.h"
 #include "Common.Limits.slang.h"
 
@@ -49,29 +50,70 @@ struct RenderDrawItem
     uint32_t  hostEntityId = 0;
 };
 
-/// Read-only view over extracted draw candidates.
+/// One authored scene sprite, ready for the scene's sprite pass.
 ///
-/// The view wraps the existing RenderDrawItem snapshot instead of introducing
-/// another ownership or shader-facing representation.
-class DrawCandidateView
+/// Extracted once per (Scene, sceneRevision) and shared by every View, so it
+/// holds no camera state: which sprites a View sees and in which order is the
+/// View's own bucket (ViewSpriteBucket). The component's transform is already
+/// folded into the world axes, so expanding the quad needs no view matrix, and
+/// the resolved texture binding keeps the GPU texture alive for as long as the
+/// candidate exists -- a recording may not reference a texture that dies before
+/// its submission completed.
+struct WorldSpriteCandidate
+{
+    /// Quad center in world space: the entity's world position.
+    glm::vec3 worldCenter = glm::vec3(0.0f);
+    /// World axes scaled by the authored size: the quad corner at quad-space
+    /// (cx, cy) sits at `worldCenter + axisX * cx + axisY * cy`, with cx and cy
+    /// in [-0.5, 0.5]. Projection is what makes a far sprite look smaller; the
+    /// quad itself is never resized from camera distance or FOV.
+    glm::vec3 axisX = glm::vec3(0.5f, 0.0f, 0.0f);
+    glm::vec3 axisY = glm::vec3(0.0f, 0.5f, 0.0f);
+    /// Atlas window (u0, v0, u1, v1) with the component's flip flags applied.
+    glm::vec4 uvRect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+    glm::vec4 tint   = glm::vec4(1.0f);
+    /// Resolved texture + sampler. Only drawable sprites are extracted, so this
+    /// is never the "still loading" empty binding.
+    TextureBinding texture{};
+    uint32_t       entityId  = 0;
+    int32_t        layer     = 0;
+    int32_t        sortOrder = 0;
+    /// `tint.a` < 1: the sprite blends, so it must not write depth (see the
+    /// component's draw policy). The pass picks its pipeline from this.
+    bool bTranslucent = false;
+    /// Which views may draw this sprite; a generated companion would take its
+    /// host's set, exactly like RenderDrawItem::features.
+    FRenderFeatureMask features = toMask(ERenderFeature::Game);
+    /// Host entity when this candidate is a generated companion; 0 for authored
+    /// sprites.
+    uint32_t hostEntityId = 0;
+};
+
+/// Read-only view over extracted scene candidates.
+///
+/// The view wraps an existing immutable candidate vector instead of introducing
+/// another ownership or shader-facing representation: the Scene owns the
+/// storage, only the camera-dependent order belongs to the View.
+template <typename Candidate>
+class CandidateOrderView
 {
   public:
-    using value_type     = RenderDrawItem;
+    using value_type     = Candidate;
     class const_iterator
     {
       public:
         using difference_type   = std::ptrdiff_t;
-        using value_type        = const RenderDrawItem;
-        using pointer           = const RenderDrawItem*;
-        using reference         = const RenderDrawItem&;
+        using value_type        = const Candidate;
+        using pointer           = const Candidate*;
+        using reference         = const Candidate&;
         using iterator_concept  = std::forward_iterator_tag;
         using iterator_category = std::forward_iterator_tag;
 
         const_iterator() = default;
-        const_iterator(std::span<const RenderDrawItem> candidates,
-                       std::span<const uint32_t>        order,
-                       size_t                           position,
-                       bool                             indexed)
+        const_iterator(std::span<const Candidate> candidates,
+                       std::span<const uint32_t>  order,
+                       size_t                     position,
+                       bool                       indexed)
             : _candidates(candidates), _order(order), _position(position), _indexed(indexed)
         {}
 
@@ -96,19 +138,19 @@ class DrawCandidateView
         friend bool operator!=(const const_iterator& lhs, const const_iterator& rhs) { return !(lhs == rhs); }
 
       private:
-        std::span<const RenderDrawItem> _candidates{};
-        std::span<const uint32_t>       _order{};
-        size_t                          _position = 0;
-        bool                            _indexed  = false;
+        std::span<const Candidate> _candidates{};
+        std::span<const uint32_t>  _order{};
+        size_t                     _position = 0;
+        bool                       _indexed  = false;
     };
 
-    DrawCandidateView() = default;
+    CandidateOrderView() = default;
 
-    explicit DrawCandidateView(std::span<const value_type> candidates)
+    explicit CandidateOrderView(std::span<const value_type> candidates)
         : _candidates(candidates)
     {}
 
-    DrawCandidateView(std::span<const value_type> candidates, std::span<const uint32_t> order)
+    CandidateOrderView(std::span<const value_type> candidates, std::span<const uint32_t> order)
         : _candidates(candidates), _order(order), _indexed(true)
     {}
 
@@ -124,12 +166,12 @@ class DrawCandidateView
     [[nodiscard]] const_iterator begin() const { return const_iterator{_candidates, _order, 0, _indexed}; }
     [[nodiscard]] const_iterator end() const { return const_iterator{_candidates, _order, size(), _indexed}; }
 
-    [[nodiscard]] DrawCandidateView subview(size_t offset, size_t count) const
+    [[nodiscard]] CandidateOrderView subview(size_t offset, size_t count) const
     {
         if (!_indexed) {
-            return DrawCandidateView{_candidates.subspan(offset, count)};
+            return CandidateOrderView{_candidates.subspan(offset, count)};
         }
-        return DrawCandidateView{_candidates, _order.subspan(offset, count)};
+        return CandidateOrderView{_candidates, _order.subspan(offset, count)};
     }
 
   private:
@@ -137,6 +179,12 @@ class DrawCandidateView
     std::span<const uint32_t>   _order{};
     bool                        _indexed = false;
 };
+
+/// Mesh draw candidates ordered by the View.
+using DrawCandidateView = CandidateOrderView<RenderDrawItem>;
+
+/// World sprite candidates ordered by the View.
+using WorldSpriteView = CandidateOrderView<WorldSpriteCandidate>;
 
 /// Backend-neutral draw grouping metadata.
 ///
@@ -249,10 +297,11 @@ struct RenderMeshClassDrawBuckets
 /// View-owned ordering over immutable scene candidates. The source vector is
 /// borrowed from SceneSnapshot; only the camera-dependent order is owned
 /// by the view.
-struct ViewDrawBucket
+template <typename Candidate>
+struct ViewCandidateBucket
 {
-    const std::vector<RenderDrawItem>* source = nullptr;
-    std::vector<uint32_t>              order;
+    const std::vector<Candidate>* source = nullptr;
+    std::vector<uint32_t>          order;
 
     void clear()
     {
@@ -260,21 +309,27 @@ struct ViewDrawBucket
         order.clear();
     }
 
-    [[nodiscard]] DrawCandidateView view() const
+    [[nodiscard]] CandidateOrderView<Candidate> view() const
     {
         if (!source) {
             return {};
         }
-        return DrawCandidateView{std::span<const RenderDrawItem>(*source), std::span<const uint32_t>(order)};
+        return CandidateOrderView<Candidate>{std::span<const Candidate>(*source), std::span<const uint32_t>(order)};
     }
 
     [[nodiscard]] size_t size() const { return source ? order.size() : 0; }
     [[nodiscard]] bool   empty() const { return size() == 0; }
-    [[nodiscard]] const RenderDrawItem& operator[](size_t index) const { return view()[index]; }
+    [[nodiscard]] const Candidate& operator[](size_t index) const { return view()[index]; }
     [[nodiscard]] auto begin() const { return view().begin(); }
     [[nodiscard]] auto end() const { return view().end(); }
-    [[nodiscard]] operator DrawCandidateView() const { return view(); }
+    [[nodiscard]] operator CandidateOrderView<Candidate>() const { return view(); }
 };
+
+/// Mesh draw candidates ordered by the View.
+using ViewDrawBucket = ViewCandidateBucket<RenderDrawItem>;
+
+/// World sprite candidates ordered by the View.
+using ViewSpriteBucket = ViewCandidateBucket<WorldSpriteCandidate>;
 
 struct ViewShadingDrawBuckets
 {
@@ -359,6 +414,9 @@ struct SceneSnapshot
 
     RenderMeshClassDrawBuckets drawBuckets;
     std::vector<RenderSkinningPalette> skinningPalettes;
+    /// Authored scene sprites (Sprite2DComponent), extracted once for this
+    /// Scene+revision and shared by every View.
+    std::vector<WorldSpriteCandidate> worldSprites;
 
     void clearScene()
     {
@@ -368,6 +426,7 @@ struct SceneSnapshot
         pointLightSources      = {};
         drawBuckets.clear();
         skinningPalettes.clear();
+        worldSprites.clear();
     }
 };
 
@@ -378,6 +437,9 @@ struct RenderFrameData
 {
     std::shared_ptr<const SceneSnapshot>                        sceneSnapshot;
     ViewMeshClassDrawBuckets                                    drawBuckets;
+    /// This View's authored sprites: an order over the shared candidates. The
+    /// sprite pass reads it, so recording never walks the Scene's ECS again.
+    ViewSpriteBucket                                            worldSprites;
     FrameContext::DirectionalLightData                          directionalLight;
     uint32_t                                                   numPointLights = 0;
     std::array<FrameContext::PointLightData, MAX_POINT_LIGHTS> pointLights;
@@ -408,6 +470,7 @@ struct RenderFrameData
     {
         sceneSnapshot.reset();
         drawBuckets.clear();
+        worldSprites.clear();
         directionalLight = {};
         numPointLights = 0;
         pointLights = {};

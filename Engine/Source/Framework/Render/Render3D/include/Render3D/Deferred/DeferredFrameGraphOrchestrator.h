@@ -23,6 +23,7 @@ struct SSAOStage;
 struct PostProcessingStage;
 struct RenderTargetCreateInfo;
 struct EntityIdPass;
+struct Sprite2DStage;
 struct ViewTargetLease;
 
 struct DeferredFrameGraphOrchestrator
@@ -36,6 +37,7 @@ struct DeferredFrameGraphOrchestrator
         PostProcessingStage*  postProcessStage     = nullptr;
         SSAOStage*            ssaoStage            = nullptr;
         EntityIdPass* entityIdPass         = nullptr;
+        Sprite2DStage* spriteStage         = nullptr;
     };
 
     struct BuildInputs

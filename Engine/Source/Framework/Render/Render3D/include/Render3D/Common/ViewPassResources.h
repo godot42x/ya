@@ -49,6 +49,14 @@ struct OverlayPassBindings
     CombinedImageSamplerPassBinding billboardTextures;
 };
 
+/// One View's scene-sprite pass: its frame constant plus the sprite texture
+/// table the View's candidates were deduped into.
+struct Sprite2DPassBindings
+{
+    UniformBufferPassBinding        frame;
+    CombinedImageSamplerPassBinding textures;
+};
+
 struct ForwardDebugPassBindings
 {
     UniformBufferPassBinding ubo;

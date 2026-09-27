@@ -1,8 +1,10 @@
-// Scene 2D shader (world-space): world billboards expanded on the camera
-// right/up axes. Owned by the scene side -- the editor's world overlays and
-// the Phase 4 World2D workload sample it; the GUI compose paths (UIFrameSnapshot
-// replay) use Sprite2DScreen.slang. Debug world lines live in
-// Sprite2DLine.slang (the only 2D pipeline that depth-tests).
+// Scene sprite shader (world space). Draws the authored `Sprite2DComponent`
+// candidates of a scene graph: quads that lie on the entity's own local XY
+// plane, so rotating the entity turns the quad (the Unity-style world quad).
+//
+// A camera-facing quad is a billboard, not a sprite, and belongs to
+// Misc/BillboardWorld.slang. Screen-space GUI compose (UIFrameSnapshot replay)
+// uses Sprite2DScreen.slang; debug world lines use Sprite2DLine.slang.
 //
 // No SDF branches here: glyph text and round-rect SDF are screen-space UI
 // primitives (see Sprite2DScreen.slang).
@@ -13,80 +15,76 @@
 #define TEXTURE_SET_SIZE 16
 #endif
 
-#ifndef SAMPLE_MODE_COVERAGE
-#define SAMPLE_MODE_COVERAGE 0
-#endif
-
-#ifndef SAMPLE_MODE_OPAQUE
-#define SAMPLE_MODE_OPAQUE 2
-#endif
-
 struct FrameData
 {
     float4x4 viewProj;
-    float4x4 view;
 };
 
 [[vk::binding(0, 0)]] ConstantBuffer<FrameData, Std140DataLayout> uFrame;
 
 [[vk::binding(0, 1)]] Sampler2D uTextures[TEXTURE_SET_SIZE];
 
-struct VertexInput
+// Per-sprite draw data. The quad mesh is shared by every sprite, so the
+// authored placement rides here: the world center plus the two world axes the
+// quad is expanded along. `axisX`/`axisY` already carry the entity's rotation,
+// scale and the component's size, so a far sprite looks smaller only because
+// projection makes it smaller.
+struct SpritePushConstant
 {
-    [[vk::location(0)]] float3 pos         : POSITION;
-    [[vk::location(1)]] float4 color       : COLOR0;
-    [[vk::location(2)]] float2 texCoord    : TEXCOORD;
-    [[vk::location(3)]] uint   textureSlot : TEXCOORD_TEXTURE_SLOT;
-    [[vk::location(4)]] uint   sampleMode  : TEXCOORD_SAMPLE_MODE;
-    [[vk::location(5)]] float3 worldCenter : TEXCOORD_WORLD_CENTER;
-    [[vk::location(6)]] float3 worldDirection : TEXCOORD_WORLD_DIR;
-    [[vk::location(7)]] float2 worldSize   : TEXCOORD_WORLD_SIZE;
+    float3 worldCenter;
+    uint   textureIndex;
+    float3 axisX;
+    uint   _pad0;
+    float3 axisY;
+    uint   _pad1;
+    // Atlas window (u0, v0, u1, v1); the component's flip flags are baked in by
+    // the extraction step.
+    float4 uvRect;
+    float4 tint;
 };
 
-struct VertexOutput
+[[vk::push_constant]] SpritePushConstant pc;
+
+struct SpriteVertexInput
+{
+    [[vk::location(0)]] float3 pos      : POSITION;
+    [[vk::location(1)]] float2 texCoord : TEXCOORD;
+    [[vk::location(2)]] float3 normal   : NORMAL;
+};
+
+struct SpriteVertexOutput
 {
     float4 sv_position : SV_Position;
-    float4 color       : COLOR0;
     float2 texCoord    : TEXCOORD;
-    nointerpolation uint textureSlot : TEXCOORD_TEXTURE_SLOT;
-    nointerpolation uint sampleMode  : TEXCOORD_SAMPLE_MODE;
+    float4 tint        : COLOR0;
+    nointerpolation uint textureIndex : TEXCOORD_TEXTURE_SLOT;
 };
 
-float2 flipWorldUv(float2 uv)
-{
-    return float2(uv.x, 1.0 - uv.y);
-}
-
 [shader("vertex")]
-VertexOutput vertWorldMain(VertexInput input)
+SpriteVertexOutput vertWorldMain(SpriteVertexInput input)
 {
-    float3 cameraRight = normalize(uFrame.view[0].xyz);
-    float3 cameraUp    = normalize(uFrame.view[1].xyz);
-    float2 centered    = (input.pos.xy - float2(0.5, 0.5)) * input.worldSize;
-    float3 worldPos    = input.worldCenter + cameraRight * centered.x + cameraUp * centered.y;
+    // The shared primitive quad spans [-1, 1]; the authored quad is `size` world
+    // units across, so half of the primitive range is the quad-space corner.
+    float2 corner   = input.pos.xy * 0.5;
+    float3 worldPos = pc.worldCenter + pc.axisX * corner.x + pc.axisY * corner.y;
 
-    VertexOutput output;
-    output.sv_position = mul(uFrame.viewProj, float4(worldPos, 1.0));
-    output.color       = input.color;
-    output.texCoord    = flipWorldUv(input.texCoord);
-    output.textureSlot = input.textureSlot;
-    output.sampleMode  = input.sampleMode;
+    SpriteVertexOutput output;
+    output.sv_position  = mul(uFrame.viewProj, float4(worldPos, 1.0));
+    output.texCoord     = lerp(pc.uvRect.xy, pc.uvRect.zw, input.texCoord);
+    output.tint         = pc.tint;
+    output.textureIndex = pc.textureIndex;
     return output;
 }
 
 [shader("fragment")]
-float4 fragWorldMain(VertexOutput input) : SV_Target
+float4 fragWorldMain(SpriteVertexOutput input) : SV_Target
 {
-    const uint textureIdx = input.textureSlot;
-    float4 texColor = uTextures[textureIdx].Sample(input.texCoord);
-    // Viewport / scene RTs often leave alpha unused (0). Discard would punch
-    // the whole sprite to the background. The opaque sample mode requests
-    // opaque RGB.
-    if (input.sampleMode == SAMPLE_MODE_OPAQUE) {
-        texColor.a = 1.0;
-    }
-    else if (texColor.a < 0.01) {
+    float4 color = uTextures[input.textureIndex].Sample(input.texCoord) * input.tint;
+    // An opaque sprite is cut out by its own texture rather than blended: the
+    // pass binds it without blending and writes depth, so dropping fully
+    // transparent texels here is what keeps its silhouette clean.
+    if (color.a < 0.01) {
         discard;
     }
-    return texColor * input.color;
+    return color;
 }

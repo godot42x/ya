@@ -6,6 +6,7 @@
 #include "RHI/Core/RenderTargetCreateInfo.h"
 #include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/IRenderPipeline.h"
+#include "Render3D/Common/Sprite2DStage.h"
 #include "Render3D/Deferred/GBufferStage.h"
 #include "Render3D/Deferred/LightStage.h"
 #include "Render3D/Deferred/SSAOStage.h"
@@ -51,6 +52,7 @@ struct DeferredFrameGraphPassContext
     PostProcessingStage&  postProcessStage;
     SSAOStage*            ssaoStage = nullptr;
     EntityIdPass* entityIdPass = nullptr;
+    Sprite2DStage*        spriteStage = nullptr;
 };
 
 struct DeferredGBufferPassParams
@@ -146,6 +148,18 @@ struct DeferredForwardTransparentPassParams
     OverlayPassBindings               overlayBindings{};
 };
 
+/// Scene sprites render into the lit scene color before bloom, so scene depth
+/// occludes them and they are graded with everything else. Their own draw
+/// policy (opaque writes depth, translucent only tests) is pipeline state.
+struct DeferredSprite2DPassParams
+{
+    RGTextureHandle     color{};
+    RGTextureHandle     depth{};
+    Rect2D              renderArea{};
+    uint32_t            layerCount = 1;
+    Sprite2DPassBindings bindings{};
+};
+
 namespace deferred_frame_graph_passes
 {
 
@@ -156,6 +170,7 @@ void appendSSAO(DeferredFrameGraphPassContext& context);
 void appendLight(DeferredFrameGraphPassContext& context);
 void appendForwardOpaque(DeferredFrameGraphPassContext& context);
 void appendSkybox(DeferredFrameGraphPassContext& context);
+void appendSprite2D(DeferredFrameGraphPassContext& context);
 void appendBloom(DeferredFrameGraphPassContext& context);
 void appendForwardTransparent(DeferredFrameGraphPassContext& context);
 void appendEntityId(DeferredFrameGraphPassContext& context);

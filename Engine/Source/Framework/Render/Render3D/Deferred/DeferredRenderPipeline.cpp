@@ -246,6 +246,7 @@ void allocateDeferredViewPassResources(
     LightStage*                               lightStage,
     EntityIdPass*                     entityIdPass,
     ViewOverlayStage*                     overlayStage,
+    Sprite2DStage*                        spriteStage,
     PostProcessingStage*                      postStage,
     ViewOverlayStage::FrameInputs*        overlayInputs,
     DeferredFrameResourceSet::ViewResources&  resources)
@@ -295,6 +296,24 @@ void allocateDeferredViewPassResources(
         if (overlayInputs) {
             overlayStage->updateBillboardTextures(*overlayInputs, resources.overlay);
         }
+    }
+    if (spriteStage && frameData) {
+        const Sprite2DStage::FrameData frame = Sprite2DStage::FrameData{
+            .viewProj = frameData->viewProjection,
+        };
+        writeUniformPassBinding(
+            submission,
+            render,
+            spriteStage->getFrameDSL(),
+            alignment,
+            &frame,
+            sizeof(frame),
+            resources.sprite.frame);
+        resources.sprite.textures.set = allocateCombinedImageSamplerSet(
+            submission,
+            spriteStage->getTextureDSL(),
+            Sprite2DStage::kTextureTableSize);
+        spriteStage->updateTextures(*frameData, resources.sprite);
     }
     if (postStage) {
         allocateBloomPassBindings(
@@ -501,6 +520,11 @@ void DeferredRenderPipeline::applyPendingSettings()
     }
     if (_lightStage) {
         _lightStage->setIBLSettings(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL);
+    }
+    if (_spriteStage) {
+        // Sprites rasterize against the same depth buffer as the opaque pass, so
+        // they share its viewport convention.
+        _spriteStage->setReverseViewportY(_bReverseViewportY);
     }
 }
 
@@ -826,6 +850,10 @@ void DeferredRenderPipeline::initStages()
     _overlayStage->setDebugRenderSystem(_debugRenderSystem);
     _overlayStage->init(_render, _frameResources->getSkyboxFrameDSL());
 
+    _spriteStage = ya::makeShared<Sprite2DStage>();
+    _spriteStage->init(_render);
+    _spriteStage->setReverseViewportY(_bReverseViewportY);
+
     refreshGBufferStageState();
     refreshViewStageState();
 }
@@ -840,6 +868,10 @@ void DeferredRenderPipeline::shutdown()
     }
     _graphExecutor.reset();
 
+    if (_spriteStage) {
+        _spriteStage->destroy();
+        _spriteStage.reset();
+    }
     if (_overlayStage) {
         _overlayStage->destroy();
         _overlayStage.reset();
@@ -1282,6 +1314,15 @@ void DeferredRenderPipeline::refreshViewStageState()
     if (_overlayStage) {
         _overlayStage->refreshPipelineFormats(buildViewSnapshotFormats());
     }
+
+    if (_spriteStage) {
+        // Sprites draw into the View's color attachment with the GBuffer depth;
+        // refreshViewStageState already reports exactly that pair.
+        const auto formats = buildViewSnapshotFormats();
+        _spriteStage->refreshPipelineFormats(
+            formats.colorFormats.empty() ? EFormat::Undefined : formats.colorFormats.front(),
+            formats.depthFormat.value_or(EFormat::Undefined));
+    }
 }
 
 void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
@@ -1392,6 +1433,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         _lightStage.get(),
         &_entityIdPass,
         _overlayStage.get(),
+        _spriteStage.get(),
         &_postProcessStage,
         &overlayInputs,
         *viewResources);
@@ -1423,6 +1465,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
             .postProcessStage = &_postProcessStage,
             .ssaoStage        = _ssaoStage.get(),
             .entityIdPass     = &_entityIdPass,
+            .spriteStage      = _spriteStage.get(),
         },
         DeferredFrameGraphOrchestrator::BuildInputs{
             .graph                    = &graph,

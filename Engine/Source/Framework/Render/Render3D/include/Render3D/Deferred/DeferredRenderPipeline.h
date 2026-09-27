@@ -22,6 +22,7 @@
 #include "Render3D/Common/Shadow/ShadowStage.h"
 #include "Render3D/Services/RenderSharedResourceProvider.h"
 #include "Render3D/Deferred/SSAOStage.h"
+#include "Render3D/Common/Sprite2DStage.h"
 #include "Render3D/Deferred/ViewOverlayStage.h"
 
 
@@ -109,6 +110,8 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     stdptr<SSAOStage>            _ssaoStage;
     stdptr<LightStage>           _lightStage;
     stdptr<ViewOverlayStage> _overlayStage;
+    /// Authored scene sprites drawn into the lit scene color (see Sprite2DStage).
+    stdptr<Sprite2DStage>    _spriteStage;
     PostProcessingStage          _postProcessStage;
 
     ShadowMapResources                                              _shadowResources;

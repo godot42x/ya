@@ -9,6 +9,7 @@
 
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/2D/Sprite2DComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -23,11 +24,13 @@
 #include "ECS/Systems/TransformSystem.h"
 #include "Scene/Core/Scene.h"
 #include "Render/Adapters/Companion/CompanionManager.h"
+#include "Render/Resources/TextureSlotBinding.h"
 #include "Render3D/Common/Shadow/Common/DirectionalShadowMath.h"
 
 #include <algorithm>
 #include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
+#include <utility>
 
 namespace ya
 {
@@ -106,6 +109,28 @@ glm::mat4 buildDirectionalShadowViewProjection(const glm::vec3& lightDirection,
     return projection * view;
 }
 
+/// View visibility is policy, not component state: authored content keeps the
+/// `Game` default while a generated companion takes the feature set and host
+/// declared for its host component. Only companions pay the lookup.
+void tagCompanionFeatures(Scene*           scene,
+                          entt::registry&  reg,
+                          entt::entity     entity,
+                          FRenderFeatureMask& features,
+                          uint32_t&        hostEntityId)
+{
+    if (!reg.all_of<ManagedChildComponent>(entity)) {
+        return;
+    }
+
+    Entity* owner = scene ? scene->getEntityByEnttID(entity) : nullptr;
+    if (!owner || !owner->isValid()) {
+        return;
+    }
+
+    features     = CompanionManager::featureMaskOf(*owner);
+    hostEntityId = CompanionManager::hostEntityIdOf(*owner);
+}
+
 } // namespace
 
 void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, SceneSnapshot& outSnapshot)
@@ -120,6 +145,7 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
 
     auto& registry = input.scene->getRegistry();
     extractSceneLights(registry, outSnapshot);
+    extractSprites(input.scene, registry, outSnapshot);
     auto drawCtx = DrawItemExtractionContext{
         .registry         = &registry,
         .sceneSnapshot    = &outSnapshot,
@@ -127,6 +153,58 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
         .terrainProcessor = input.terrainProcessor,
     };
     extractDrawItems(drawCtx);
+}
+
+WorldSpriteCandidate RenderFrameExtractor::buildSpriteCandidate(const glm::mat4&         world,
+                                                               const Sprite2DComponent& sprite,
+                                                               uint32_t                 entityId)
+{
+    WorldSpriteCandidate candidate{};
+    candidate.worldCenter = glm::vec3(world[3]);
+    // The quad is the entity's local XY rectangle scaled by the authored size,
+    // so the world axes carry rotation, scale and size together.
+    candidate.axisX = glm::vec3(world[0]) * sprite.size.x;
+    candidate.axisY = glm::vec3(world[1]) * sprite.size.y;
+    candidate.uvRect = sprite.uvRect;
+    if (sprite.bFlipU) {
+        std::swap(candidate.uvRect.x, candidate.uvRect.z);
+    }
+    if (sprite.bFlipV) {
+        std::swap(candidate.uvRect.y, candidate.uvRect.w);
+    }
+    candidate.tint = sprite.tint;
+    // Only a slot that named a texture resolves to one: an unnamed slot must not
+    // ask the texture library for its white stand-in, which is the same "no
+    // substitute image" rule `spriteIsDrawable` applies one layer up.
+    if (sprite.image.hasPath()) {
+        candidate.texture = slotToTextureBinding(sprite.image);
+    }
+    candidate.entityId     = entityId;
+    candidate.layer        = sprite.layer;
+    candidate.sortOrder    = sprite.sortOrder;
+    candidate.bTranslucent = sprite.tint.a < 1.0f;
+    return candidate;
+}
+
+void RenderFrameExtractor::extractSprites(Scene* scene, entt::registry& reg, SceneSnapshot& out)
+{
+    for (const auto& [entity, sprite, transform] : reg.view<Sprite2DComponent, TransformComponent>().each()) {
+        // Unset, loading and failed textures are not drawn, and there is no
+        // substitute image: the component owns that rule, and this is the only
+        // place a sprite becomes a draw candidate.
+        if (!spriteIsDrawable(sprite)) {
+            continue;
+        }
+        if (sprite.size.x <= 0.0f || sprite.size.y <= 0.0f) {
+            continue;
+        }
+
+        TransformSystem::computeWorldMatrix(&transform);
+        WorldSpriteCandidate candidate =
+            buildSpriteCandidate(transform.getTransform(), sprite, static_cast<uint32_t>(entity));
+        tagCompanionFeatures(scene, reg, entity, candidate.features, candidate.hostEntityId);
+        out.worldSprites.push_back(std::move(candidate));
+    }
 }
 
 void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
@@ -178,6 +256,27 @@ void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
     };
     bindBuckets(outFrame.sceneSnapshot->drawBuckets.staticMeshes, outFrame.drawBuckets.staticMeshes);
     bindBuckets(outFrame.sceneSnapshot->drawBuckets.skinnedMeshes, outFrame.drawBuckets.skinnedMeshes);
+
+    // Sprites pass the same two gates as mesh candidates: what the component
+    // declares it belongs to, and whether this View is allowed to see the
+    // entity it came from.
+    const auto& spriteSource = outFrame.sceneSnapshot->worldSprites;
+    outFrame.worldSprites.source = &spriteSource;
+    outFrame.worldSprites.order.clear();
+    outFrame.worldSprites.order.reserve(spriteSource.size());
+    for (uint32_t index = 0; index < spriteSource.size(); ++index) {
+        const WorldSpriteCandidate& sprite = spriteSource[index];
+        if (!rendersFeature(sprite.features, input.viewFeatures)) {
+            continue;
+        }
+        if (input.viewOwner != entt::null &&
+            sprite.hostEntityId != 0 &&
+            sprite.hostEntityId == static_cast<uint32_t>(input.viewOwner)) {
+            continue;
+        }
+        outFrame.worldSprites.order.push_back(index);
+    }
+
     outFrame.numPointLights = outFrame.sceneSnapshot->pointLightSourceCount;
     for (uint32_t index = 0; index < outFrame.sceneSnapshot->pointLightSourceCount; ++index) {
         const auto& source = outFrame.sceneSnapshot->pointLightSources[index];
@@ -200,7 +299,7 @@ void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
     outFrame.directionalLight.intensity = outFrame.sceneSnapshot->directionalLightSource.intensity;
     extractCamera(input, outFrame);
     prepareViewLights(input, outFrame);
-    sortDrawItems(outFrame.cameraPos, outFrame);
+    sortViewBuckets(outFrame.cameraPos, outFrame);
 }
 
 void RenderFrameExtractor::extractCamera(const ViewPrepareInput& input, RenderFrameData& out)
@@ -348,18 +447,9 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     // host declared for its host component. Only companions pay the lookup.
     const auto tagCompanion = [&](RenderDrawItem& item, entt::entity entity)
     {
-        if (!reg.all_of<ManagedChildComponent>(entity)) {
-            return;
-        }
-
-        Entity* owner = ctx.scene ? ctx.scene->getEntityByEnttID(entity) : nullptr;
-        if (!owner || !owner->isValid()) {
-            return;
-        }
-
-        item.features     = CompanionManager::featureMaskOf(*owner);
-        item.hostEntityId = CompanionManager::hostEntityIdOf(*owner);
+        tagCompanionFeatures(ctx.scene, reg, entity, item.features, item.hostEntityId);
     };
+
 
     // Emit a RenderDrawItem for every (MeshComp, TransformComponent, MaterialComp)
     // triple. Runs once per mesh component type (Static/Skinned) so both authoring
@@ -480,7 +570,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     }
 }
 
-void RenderFrameExtractor::sortDrawItems(const glm::vec3& cameraPos, RenderFrameData& out)
+void RenderFrameExtractor::sortViewBuckets(const glm::vec3& cameraPos, RenderFrameData& out)
 {
     const auto distanceToCamera = [&cameraPos](const RenderDrawItem& item)
     {
@@ -527,6 +617,32 @@ void RenderFrameExtractor::sortDrawItems(const glm::vec3& cameraPos, RenderFrame
 
     sortBuckets(out.drawBuckets.staticMeshes);
     sortBuckets(out.drawBuckets.skinnedMeshes);
+
+    // Sprites are painted in this order, so it doubles as the answer to which
+    // sprite is on top: opaque pairs first (a blended quad drawn before an
+    // opaque one would be overwritten by a pass that only cares about depth),
+    // then the authored layer and sort order, both ascending so the bigger one
+    // paints last -- the same pair the ray pick prefers at equal distance --
+    // and finally far to near so the nearest quad blends last.
+    const auto distanceToCamera2 = [&cameraPos](const WorldSpriteCandidate& sprite)
+    {
+        return glm::distance2(cameraPos, sprite.worldCenter);
+    };
+    std::sort(out.worldSprites.order.begin(), out.worldSprites.order.end(), [&](uint32_t lhs, uint32_t rhs)
+              {
+                  const auto& a = (*out.worldSprites.source)[lhs];
+                  const auto& b = (*out.worldSprites.source)[rhs];
+                  if (a.bTranslucent != b.bTranslucent) {
+                      return !a.bTranslucent;
+                  }
+                  if (a.layer != b.layer) {
+                      return a.layer < b.layer;
+                  }
+                  if (a.sortOrder != b.sortOrder) {
+                      return a.sortOrder < b.sortOrder;
+                  }
+                  return distanceToCamera2(a) > distanceToCamera2(b);
+              });
 }
 
 } // namespace ya

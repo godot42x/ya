@@ -467,3 +467,69 @@ GameEditor 在已经 tone-map 的 View display image 上画 overlay：先世界�
 ### 下一步
 
 - P4。
+
+## 2026-09-27 — P4：共享 snapshot 抽取 + 场景 sprite pass
+
+### 目标与边界
+
+Phase 4 的 sprite 半边：同 Scene/revision 只抽取一次、多 View 共享；View 只拥有自己的顺序；
+按 P0 图策略录制。不写纯 2D-only graph，不做 P5 的 producer/profile。
+
+### 完成
+
+- `WorldSpriteCandidate`（RenderFrameData.h，进 `SceneSnapshot::worldSprites`）：世界轴（已含 size、
+  旋转、缩放）、uvRect（flip 已烘焙）、tint、resolved `TextureBinding`、entityId、layer/sortOrder、
+  `bTranslucent`（tint.a < 1）、features/hostEntityId。抽取一次，多 View 共享，不含任何相机状态。
+- View 侧 `ViewCandidateBucket<T>` / `CandidateOrderView<T>`：把“View 只拥有 order”这套机制模板化，
+  `DrawCandidateView` / `ViewDrawBucket` 变成别名；sprite bucket 不复制 shared 向量。
+- `RenderFrameExtractor::extractSprites`：一次 ECS 遍历，`spriteIsDrawable` 是唯一闸门；单实体的
+  `buildSpriteCandidate` 抽成可单测的纯函数。`prepareView` 复用同一套 features / viewOwner 闸门，
+  `sortViewBuckets` 按 opaque → layer → sortOrder → 远到近排序（与 ray pick 的 layer/sortOrder
+  优先级一致，保证“画在最上面的就是选中的”）。
+- `Sprite2DWorld.slang` 重写为场景 sprite shader：实体局部 XY 四边形按自身世界轴展开 + 每 sprite
+  push constant（生成头 `SpritePushConstant`，80B）。相机朝向的 quad 是 billboard，仍在
+  `Misc/BillboardWorld.slang`；GUI 仍是 `Sprite2DScreen.slang`。
+- `Sprite2DStage`（Render3D/Common）：两条 PSO——opaque 深度测试**并写入**、translucent 只测不写；
+  16 槽纹理表只有一个实现（`buildTextureTable`），写入 DS 与解析 slot 都走它（否则 slot 会错位）；
+  quad 来自 `PrimitiveMeshCache`。
+- Deferred graph：`appendSprite2D` 在 skybox 之后、bloom 之前，写 SceneColor + GBuffer depth；
+  View 没有 sprite 时不建 pass。录制只读 `RenderStageContext::frameData` 的 bucket，不再遍历 ECS。
+
+### 关键决定（原 P0 决策闸门）
+
+- **graph 策略**：本 checkpoint 选“active Deferred graph 内的内容闸门 pass”。纯 2D-only graph 仍留给
+  P5：它需要 View 级 workload 声明，而计划本身禁止“从 candidate 为空推断 stage 不需要”，所以
+  “纯 2D View 不承担无用 3D stages”这一条**未完成**，不当作已达成。
+- **绘制机制偏离计划默认值**：计划默认“quad + per-instance buffer 的 instanced draw”，但 RHI 没有
+  per-instance input rate（Vulkan 后端把 `VK_VERTEX_INPUT_RATE` 写死成 VERTEX，留着 TODO
+  “instance drawing refactor?”），今日无法表达。实现改为共享 quad + 每 sprite push constant，
+  批处理留待 RHI 支持实例属性后再谈。
+- **颜色/bloom 位置**：pass 在 bloom 之前，sprite 参与 bloom 并随场景一起 tone-map；透明 sprite 与
+  billboard 的相对顺序（sprite 先、billboard 后）记为本 MVP 语义，不假装是 renderer 不变量。
+
+### 保留
+
+- P5：runtime/editor 的 2D view producer 与正交 authoring profile。
+- 16 槽纹理上限：超出者不画（不采样替代图，与组件的“没有替代图”规则一致）。
+- Forward 管线未接 sprite（billboard 同样只在 Deferred）。
+
+### 验证
+
+- `ya-testing`：1335 tests，1290 passed，1 failed
+  （`GUIWindowManagerTest.DragOverlaySessionIsExemptFromFocusAndInput`，窗口/停靠会话，属既有红灯）。
+  另有 `RuntimeRenderContextTest.APlanWithoutAnAcquiredPresentOpensNoRecording` 在
+  `RuntimeRenderContext::ensureGameUiRecorder` → `ScreenDrawRecorder::init` 断言（无 render 的
+  `RenderDeviceState` 上 `pipelines.render() == nullptr`）处 abort，来自 D1 的 recorder 改动；
+  本次未改这两个文件，故未处理，需单独决定修法（测试侧跳过 or recorder 容忍未初始化 cache）。
+- 新增 `WorldSpriteExtractionTest`：6 passed（世界轴/UV flip/透明度分类、不可画不抽取、View 排序、
+  View 闸门、两 View 共享同一 snapshot 各自 order）。
+- 新增 `Script/automation/sprite2d/`（在 game runtime 上跑，RPC + 像素计数）：遮挡侧 0 像素；
+  隐藏遮挡网格后 34410 像素出现；开阔侧 86180 → 86800（±1%）；相机 6 → 12 时总像素
+  121210 → 37172（0.31 ≤ 0.45），证明是按世界尺寸画而非按屏幕尺寸补偿。截图在
+  `Engine/Saved/Automation/Sprite2DRegression-{occluded,revealed,far}.png`。
+  新增测试资产 `Engine/Content/TestTextures/sprite2d_probe_64.png`（纯色，便于像素判定）。
+- HelloMaterial 90 帧 exit=0；editor 120 帧 exit=0；GUIWorkbench GPU parity exit=0。
+
+### 下一步
+
+- P5（runtime/editor 2D view producer + 正交 authoring profile），或先处理上面两个既有红灯。

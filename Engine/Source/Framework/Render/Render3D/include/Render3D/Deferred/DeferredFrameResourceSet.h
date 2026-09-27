@@ -68,7 +68,7 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
     };
 
     /// Typed View owner: frame UBO Binding plus per-pass DS/UBO. Do not fold
-    /// SSAO/Light/EntityId/overlay/post CIS into Binding.
+    /// SSAO/Light/EntityId/overlay/sprite/post CIS into Binding.
     struct ViewResources
     {
         Binding                     frame{};
@@ -76,6 +76,7 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
         DeferredLightingPassBindings lighting{};
         EntityIdPassBindings        entityId{};
         OverlayPassBindings         overlay{};
+        Sprite2DPassBindings        sprite{};
         PostprocessPassBindings     post{};
     };
 

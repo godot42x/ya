@@ -4,6 +4,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "Render3D/Common/Shadow/ShadowStage.h"
 #include "Render3D/Common/ViewGraphName.h"
+#include "Render3D/Deferred/DeferredFrameGraphPasses.h"
 
 namespace ya
 {
@@ -64,6 +65,7 @@ void DeferredFrameGraphOrchestrator::build(
         .postProcessStage         = *deps.postProcessStage,
         .ssaoStage                = deps.ssaoStage,
         .entityIdPass             = deps.entityIdPass,
+        .spriteStage              = deps.spriteStage,
     };
 
     deferred_frame_graph_passes::importFrameBuffers(context);
@@ -73,6 +75,10 @@ void DeferredFrameGraphOrchestrator::build(
     deferred_frame_graph_passes::appendLight(context);
     deferred_frame_graph_passes::appendForwardOpaque(context);
     deferred_frame_graph_passes::appendSkybox(context);
+    // Sprites belong to the lit scene color, not to the finished image: they run
+    // with opaque geometry behind them (depth proves occlusion) and before bloom,
+    // so they are graded like the rest of the scene.
+    deferred_frame_graph_passes::appendSprite2D(context);
     deferred_frame_graph_passes::appendBloom(context);
     deferred_frame_graph_passes::appendForwardTransparent(context);
     deferred_frame_graph_passes::appendEntityId(context);

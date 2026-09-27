@@ -502,6 +502,11 @@ World2D work。Scene snapshot 共享不意味着所有 View 必须执行同一�
 6. 按 P0 选择的 runtime graph 组织 World2D raster：可以是 Forward/Deferred 中显式可选的 stage，
    也可以是轻量 2D-only graph。两种路径都消费 immutable WorldSprite candidate，不依赖
    UIFrameSnapshot/WidgetTree；不能复制 Scene scheduler、frame loop 或应用级 surface/present 编排。
+   2026-09-27 落地：先取“Deferred graph 内的内容闸门 pass”（View 无 sprite 时不建 pass，
+   `appendSprite2D` 在 skybox 之后、bloom 之前）。纯 2D-only graph 仍待 P5 的 View 级 workload
+   声明；在它落地前，“纯 2D View 不承担无用 3D stages”不算达成。绘制机制受 RHI 限制：没有
+   per-instance input rate（Vulkan 后端写死 VERTEX），故用共享 quad + 每 sprite push constant，
+   而非计划默认的 instanced draw。
 7. RuntimeRenderContext 只负责应用层顺序和 UI compose；RenderDeviceState 继续提供
    prepare/begin/record selected Scene workload/end/seal 机制，不新增一个 World3D/World2D 双入口 coordinator。
 
@@ -628,7 +633,7 @@ Applications/GameEditor/EditorUIDesignerSession.cpp、.agent/plan/game-ui-author
 | D3 | 屏幕 stroke / path（任意三角形 + 几何羽化），GUI 线段与 gizmo 轴线迁移 | [render-2d] add screen-space stroke |
 | P2 | CameraComponent 只负责纯 projection，正交模式可序列化并被 runtime/editor 使用；billboard 边长是世界尺寸，不随相机距离缩放 | [scene/camera] add explicit projection input |
 | P3 | Sprite2DComponent 可创建、保存、复制、删除，无 GPU 状态 | [ecs/sprite2d] add authored sprite component |
-| P4 | 同 Scene 多 View 共享 snapshot；按 P0 选择的 Scene graph/workload 录制 World2D，纯 2D 不承担无用 3D stages | [render/world2d] add shared extraction and sprite pass |
+| P4 | 同 Scene 多 View 共享 snapshot（已完成）；World2D 以 active graph 的内容闸门 pass 录制（已完成）；纯 2D View 的 2D-only graph 仍未做，留给 P5 | [render/world2d] add shared extraction and sprite pass |
 | P5 | runtime 2D view 与 editor 2D authoring profile 可用 | [editor/world2d] add orthographic authoring flow |
 | P6 | Game UI runtime/designer/preview 的 tree、clock、input 边界闭环 | [gui/game-ui] close runtime and designer loop |
 | P7 | 旧 mixed path 删除，资源生命周期和性能门禁通过 | [render] remove mixed sprite path |

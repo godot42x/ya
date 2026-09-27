@@ -21,6 +21,7 @@ constexpr std::string_view kTopologyPassGBuffer            = "Deferred GBuffer";
 constexpr std::string_view kTopologyPassLight             = "Deferred Light";
 constexpr std::string_view kTopologyPassForwardOpaque     = "Deferred Forward Opaque";
 constexpr std::string_view kTopologyPassSkybox            = "Deferred Skybox";
+constexpr std::string_view kTopologyPassSprites           = "Deferred Sprites";
 constexpr std::string_view kTopologyPassForwardTransparent = "Deferred Forward Transparent";
 
 RGImportedTextureDesc makeEnvironmentImportedDesc(const std::shared_ptr<ImageResource>& resource,
@@ -433,6 +434,56 @@ void appendSkybox(DeferredFrameGraphPassContext& context)
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
             overlayStage->executeSkybox(stageCtx, params.skybox);
+            rgCtx.endRendering();
+        });
+}
+
+void appendSprite2D(DeferredFrameGraphPassContext& context)
+{
+    if (!context.spriteStage) {
+        return;
+    }
+
+    // Content gate: a View without sprites has no sprite workload at all, so the
+    // pass is not even added. Recording reads the View's own candidates, so the
+    // gate is a bucket lookup, not an ECS walk.
+    const RenderFrameData* frameData = context.stageCtx.frameData;
+    if (!frameData || frameData->worldSprites.empty()) {
+        return;
+    }
+
+    DeferredSprite2DPassParams params{
+        .color      = context.graphResources.textures.viewColor,
+        .depth      = context.graphResources.textures.gBufferDepth,
+        .renderArea = {.pos = {0, 0}, .extent = context.viewExtent.toVec2()},
+        .layerCount = 1,
+        .bindings   = context.viewResources ? context.viewResources->sprite : Sprite2DPassBindings{},
+    };
+
+    context.graph.addPass(
+        makeViewGraphName(kTopologyPassSprites, context.viewId),
+        [&params](RGPassBuilder& passBuilder) {
+            passBuilder.declareRaster({
+                .renderArea = params.renderArea,
+                .layerCount = params.layerCount,
+                .colors = {{
+                    .color       = params.color,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
+                .depth = RGDepthAttachmentDesc{
+                    .depth       = params.depth,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                },
+            });
+        },
+        [stageCtx = context.stageCtx, params, spriteStage = context.spriteStage](RGRenderContext& rgCtx) {
+            [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
+            rgCtx.beginDeclaredRasterRendering();
+            spriteStage->executeSprites(stageCtx, params.bindings);
             rgCtx.endRendering();
         });
 }

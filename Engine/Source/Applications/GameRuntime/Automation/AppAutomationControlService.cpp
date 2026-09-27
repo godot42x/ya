@@ -13,8 +13,10 @@
 #include "ECS/ECSRegistry.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/2D/Sprite2DComponent.h"
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Systems/Components/PointLightComponent.h"
 #include "ECS/Component/RenderComponent.h"
@@ -235,6 +237,110 @@ Scene* createBillboardRegressionScene(App& app)
     return rawScene;
 }
 
+/// Sprite regression scene: two authored sprites side by side, one of them with
+/// a scene mesh in front of it, so a single camera shows both halves of the
+/// sprite policy.
+///
+///     z = +d          camera, looking down -Z (yaw 0)
+///     x = +2.5, z = 0  open sprite  (opaque, flat probe texture)
+///     x = -2.5, z = -2 occluder cube (an ordinary scene mesh)
+///     x = -2.5, z = -4 hidden sprite (same texture: only its silhouette shows
+///                      while the cube is there)
+///
+/// The probe texture is a single flat colour so the smoke can count its pixels:
+/// "the pass ran" is not the claim, "the sprite is visible, at world size, and
+/// scene geometry hides the one behind the mesh" is. The camera distance and the
+/// occluder are parameters because the smoke compares frames taken with and
+/// without them.
+Scene* createSprite2DRegressionScene(App& app, float cameraDistance, bool bOccluderVisible)
+{
+    auto* sceneManager = app.getSceneServices().getSceneManager();
+    if (!sceneManager) {
+        return nullptr;
+    }
+
+    auto   scene    = makeShared<Scene>("Sprite2DRegression");
+    Scene* rawScene = scene.get();
+    if (!sceneManager->activateScene(scene)) {
+        return nullptr;
+    }
+
+    auto* cameraNode = rawScene->createNode3D("RegressionCamera");
+    if (cameraNode) {
+        auto* entity    = cameraNode->getEntity();
+        auto* transform = entity->getComponent<TransformComponent>();
+        auto* camera    = entity->addComponent<CameraComponent>();
+        if (transform) {
+            // WorldForward is (0, 0, -1): from +Z, looking down -Z is yaw 0.
+            transform->setPosition(glm::vec3(0.0f, 0.0f, cameraDistance));
+            transform->setRotation(glm::vec3(0.0f, 0.0f, 0.0f));
+        }
+        if (camera) {
+            camera->bPrimary  = true;
+            camera->_nearClip = 0.1f;
+            camera->_farClip  = 200.0f;
+        }
+    }
+
+    auto* directionalNode = rawScene->createNode3D("RegressionDirectionalLight");
+    if (directionalNode) {
+        auto* entity    = directionalNode->getEntity();
+        auto* transform = entity->getComponent<TransformComponent>();
+        auto* light     = entity->addComponent<DirectionalLightComponent>();
+        if (transform) {
+            transform->setPosition(glm::vec3(2.0f, 3.5f, -1.0f));
+            transform->setRotation(glm::vec3(-35.0f, 45.0f, 0.0f));
+        }
+        if (light) {
+            light->_color    = glm::vec3(1.0f, 0.97f, 0.8f);
+            light->intensity = 3.0f;
+            light->bEnable   = true;
+        }
+        CompanionManager::reconcileNow(*rawScene, entity->getHandle());
+    }
+
+    const auto addSprite = [rawScene](const std::string& name, const glm::vec3& position, int32_t layer) -> Node*
+    {
+        Node* node = rawScene->createNode3D(name);
+        if (!node) {
+            return nullptr;
+        }
+        auto* entity    = node->getEntity();
+        auto* transform = entity->getComponent<TransformComponent>();
+        auto* sprite    = entity->addComponent<Sprite2DComponent>();
+        if (transform) {
+            transform->setPosition(position);
+        }
+        if (sprite) {
+            sprite->image.fromPath("Engine:Content/TestTextures/sprite2d_probe_64.png");
+            sprite->size  = glm::vec2(2.0f, 2.0f);
+            sprite->layer = layer;
+        }
+        return node;
+    };
+
+    addSprite("RegressionOpenSprite", glm::vec3(2.5f, 0.0f, 0.0f), 1);
+    addSprite("RegressionHiddenSprite", glm::vec3(-2.5f, 0.0f, -4.0f), 0);
+
+    auto* occluderNode = rawScene->createNode3D("RegressionOccluder");
+    if (occluderNode) {
+        auto* entity    = occluderNode->getEntity();
+        auto* transform = entity->getComponent<TransformComponent>();
+        auto* mesh      = entity->addComponent<StaticMeshComponent>();
+        entity->addComponent<PhongMaterialComponent>();
+        if (transform) {
+            transform->setPosition(glm::vec3(-2.5f, 0.0f, -2.0f));
+            transform->setScale(glm::vec3(3.0f));
+        }
+        if (mesh) {
+            mesh->setPrimitiveGeometry(bOccluderVisible ? EPrimitiveGeometry::Cube : EPrimitiveGeometry::None);
+        }
+    }
+
+    app.getSceneServices().refreshSceneDerivedState(rawScene);
+    return rawScene;
+}
+
 } // namespace
 
 AppAutomationControlService::AppAutomationControlService() = default;
@@ -294,6 +400,7 @@ void AppAutomationControlService::bindMethods(App& app)
     _methods.add("get_entity_info", [this, &app](const RequestPtr& call) { handleGetEntityInfo(app, call); });
     _methods.add("find_entities_near", [this, &app](const RequestPtr& call) { handleFindEntitiesNear(app, call); });
     _methods.add("create_billboard_regression_scene", [this, &app](const RequestPtr& call) { handleCreateBillboardRegressionScene(app, call); });
+    _methods.add("create_sprite2d_regression_scene", [this, &app](const RequestPtr& call) { handleCreateSprite2DRegressionScene(app, call); });
     _methods.add("set_editor_config_value", [this, &app](const RequestPtr& call) { handleSetEditorConfigValue(app, call); });
     _methods.add("set_editor_gizmos_visible", [this, &app](const RequestPtr& call) { handleSetEditorGizmosVisible(app, call); });
     _methods.add("entity_remove_component", [this, &app](const RequestPtr& call) { handleEntityRemoveComponent(app, call); });
@@ -928,6 +1035,35 @@ void AppAutomationControlService::handleCreateBillboardRegressionScene(App& app,
                              {
                                  {"scene_name", scene->getName()},
                                  {"entity_count", scene->_entityMap.size()},
+                             }));
+}
+
+void AppAutomationControlService::handleCreateSprite2DRegressionScene(App& app, const AppAutomationControlServer::RequestPtr& call)
+{
+    const float cameraDistance  = call->params.value("camera_distance", 6.0f);
+    const bool  bOccluderVisible = call->params.value("occluder_visible", true);
+
+    Scene* scene = createSprite2DRegressionScene(app, cameraDistance, bOccluderVisible);
+    if (!scene) {
+        completeCall(call, makeError(*call, "failed to create sprite2d regression scene"));
+        return;
+    }
+
+    // The smoke toggles the occluder to compare occluded and unoccluded frames,
+    // so the id has to come back with the scene.
+    uint32_t occluderEntityId = 0;
+    if (Node* occluder = scene->findNodeByPath("/RegressionOccluder")) {
+        if (Entity* entity = occluder->getEntity()) {
+            occluderEntityId = static_cast<uint32_t>(entity->getHandle());
+        }
+    }
+
+    completeCall(call,
+                 makeSuccess(*call,
+                             {
+                                 {"scene_name", scene->getName()},
+                                 {"entity_count", scene->_entityMap.size()},
+                                 {"occluder_entity_id", occluderEntityId},
                              }));
 }
 

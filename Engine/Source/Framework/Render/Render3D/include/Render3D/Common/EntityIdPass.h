@@ -17,7 +17,6 @@ struct IRender;
 class RenderSubmission;
 struct RenderDrawItem;
 struct RenderFrameData;
-class DrawCandidateView;
 
 /// Camera-facing billboard quad written into the entity-id target, mirroring
 /// the world-size math of the billboard overlay pass so the id under the
