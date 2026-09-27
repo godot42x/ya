@@ -59,6 +59,7 @@
 | `source-layout-subtraction/` | 目录/头文件布局减法（S1 已落地，S2–S5 进行中） |
 | `editor-ui-grouping/` | GameEditor/UI 关切分组（G1 已落地） |
 | `display-compose-encoding/` | display compose 只搬运不改色，且 surface 层不再持管线（F1–F3 已落地；仅剩 gamma 开关语义待定） |
+| `scene-2d-world-and-game-ui/` | 现有 Scene/Transform/Camera 上补 authored sprite，并与 UI Compose 分层形成 2D 游戏闭环（Render2DList 值化、screen/world draw contract、Render3D→GUI 解耦已落地；D1–D3 按坐标系拆 draw list / 删全局 Render2D / View overlay 归编辑器待做；P0 混合语义和 Scene graph integration 未完成） |
 
 ## 归档判据
 

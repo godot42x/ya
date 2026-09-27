@@ -249,3 +249,43 @@ Phase 1 §4.3（强制项：删除 textureRef 高位 bit 隐式协议）与 §4.
   quad"的归属就是场景管线（Phase 4 World2D 同理），与 §9.5 四类 target 划分一致。
 - Render2DList 的 makeSprite（vec3/mat4 两个重载）均为屏空间（mat4 是目标像素空间的
   任意变换，用于旋转的 UI 线/gizmo 轴线）；Render2D 里不存在世界空间的绘制入口。
+  （2026-09-27 更正：后半句不成立，makeWorldLine/makeWireBox/makeWireSphere 是世界入口，见下一节。）
+
+---
+
+## 2026-09-27 — 2D draw 语义与持有者 review（仅改计划文档）
+
+### 结论（写入 plan.md §0/§1/§2.4/§4A、P0-contract-matrix.md、feature_matrix.json）
+
+- 分层：上传机制共用；shader 按图元语义拆分（已完成）；draw list 按坐标系拆分为
+  `ScreenDrawList` / `WorldAnnotationList`；时序按 pass owner 拆分（场景 sprite → View overlay 世界相位 →
+  屏幕相位 → 屏幕 compose）。判据：命令能否不知道相机就被正确画出。
+- 删除全局 `Render2D`：`ScreenDrawPipelines` / `WorldAnnotationPipelines` 归持有 `IRender` 的一方，
+  `ScreenDrawRecorder` / `WorldAnnotationRecorder` 归目标 owner，取代 pass slot。GUIApp 只创建屏幕层，
+  不链接 Render3D；ya::App 的共享层放 App 设备状态，不放 `PipelineCoordinator`。
+- GUI 模块只见屏幕类型；编辑器 View overlay 从 GUI Compose 的 `EditorViewportCompose` 移到 GameEditor。
+- 不建通用 World2DList：世界标注（即时）、场景 sprite（snapshot candidate）、Billboard（ViewOverlayStage）
+  三者生命周期与画面位置不同。
+- 屏幕空间补 stroke / path（任意三角形 + 几何羽化），不用 GPU line 拓扑。
+- Billboard：像素尺寸公式隐含 90° FOV、正交需改公式、`worldDirection` 未被使用，随 P2 修正/登记。
+- 命名：不用 `Device` 后缀与 `F` 前缀；上述名字为暂定名。
+
+### 更正
+
+- 早先称切换 Forward/Deferred 会 destroy `Render2D`，不成立：`PipelineCoordinator` 只在 `shutdown()`
+  destroy。问题是 init owner 由先到者决定、设备级资源挂在 Render3D 管线协调器下、`composePassSlot`
+  藏有 static slot 池。
+- Phase 1“无剩余必做项”不成立：shader 拆分完成，但 draw list / 录制上下文 / compose owner 仍混装，
+  由新增 D1–D3 承接，不重新打开 P1。
+
+### 范围调整
+
+- 分屏：不在本计划范围。
+- 多窗口合并提交（AB4-2d）：延后到撕出视口需要第二扇窗画世界时；`FPresentSync` 已可拼同步对，
+  剩余是应用侧 per-surface display plan 与额外窗口 tick 顺序。
+
+### 状态
+
+- 未改运行时代码，未运行 build/test；不构成代码 checkpoint。
+- 待用户拍板：D2 的 View overlay 放 tone map 前还是后（建议后）。
+- 下一步：P2（CameraComponent 正交）或 D1，二者无依赖。

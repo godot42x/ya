@@ -2,19 +2,29 @@
 
 ## 0. 计划状态与架构结论
 
-- 状态：planned。本轮只建立计划，不改运行时代码。
+- 状态：planned / 部分前置工作已落地。Render2DList 值化、screen/world shader 与顶点布局拆分、
+  textureRef typed 化，以及 Render3D→GUI Compose 解耦均有实现和验证记录。P0 混合语义、资源责任与
+  graph 策略未冻结；World2D 仍未接入 Scene workload。
 - Game UI compose 与 Scene runtime rendering 必须分开：WidgetTree/UIFrameSnapshot 只进入 GUI
   compose；authored sprites 属于 Scene rendering。不要让 GUI framework 变成 World2D renderer，
   也不要为 UI 复制 RHI device、RenderGraph 或应用主循环。
-- World2D 是现有 Scene runtime pipeline 中的一种 draw workload，不是第二个
-  ISceneViewFamilyRenderer，不新增 active pipeline、family registry 或第二条 frame loop。
-- Render3D 不依赖 ya-gui-compose。现状里 FramePacket 暴露 UIFrameSnapshot，且 Render3D 的
-  ViewCompose 调 GUI compose；先在现有 GameRuntime 编排点收回这条依赖。
+- World2D 属于 Scene runtime rendering，与 GUI Compose 是不同的 graphics path。不能新增第二套
+  Scene scheduler / app frame loop；但纯 2D View 也不能被迫支付 3D attachments/stages。具体由
+  runtime graph 里的可选 stage 还是轻量 2D-only graph 承载，留给 P0 按真实成本作决定。
+- Render3D 不依赖 ya-gui-compose，也不携带 UIFrameSnapshot。当前代码已由
+  GameRuntime::RuntimeRenderContext 在应用录制顺序中显式调用 GUI compose；这条边界已落地，P0
+  只需防止后续把它塞回 Render3D。
 - 不新增 Transform2D、Camera2D、Node2D 或第二套 Scene 树。
-- authored 2D 对象使用现有 Node3D + TransformComponent；XY 是平面，vec3.z 是前后/排序层次。
+- authored 2D 对象使用现有 Node3D + TransformComponent；XY 是候选平面，vec3.z 如何影响深度遮挡
+  或 sprite 顺序由 P0 冻结，不预先把 world depth 和 painter order 当成同一语义。
 - 相机仍使用 CameraComponent + owner 的 TransformComponent；正交只是 projection mode。
   具体投影矩阵由 view owner 提供有效 aspect，CameraComponent 不读取 Window/View 全局状态。
 - Game UI 仍是 UIDocument + WidgetTree + UIFrameSnapshot；不挂回 ECS hierarchy。
+- 2D draw 语义（2026-09-27 review，见 §2.4）：底层上传机制共用；坐标系由 draw list 类型固定
+  （`ScreenDrawList` 像素 / `WorldAnnotationList` 世界）；时序由 pass owner 固定。全局 `Render2D`
+  删除，共享 pipeline 归持有 `IRender` 的一方，录制器归画这个目标的一方。GUI 只见屏幕类型；
+  场景 sprite 是 SceneSnapshot candidate，不是即时列表。
+- 分屏不在本计划范围；多窗口合并提交（render-application-boundary AB4-2d）延后，本计划不依赖它。
 
 ## 1. 当前链路与必须保留的边界
 
@@ -32,7 +42,7 @@
       → UIDocumentStore
       → WidgetTree
       → UIFrameSnapshot
-      → ya-gui-compose / recordCameraViewCompose
+      → GameRuntime/GameEditor 显式调用 ya-gui-compose
 
 主要代码锚点：
 
@@ -54,11 +64,12 @@
 | --- | --- | --- |
 | ECS/Scene | authored entity、Node3D、Transform、Scene serialization | GPU material、WidgetTree、swapchain |
 | ECS/Scene data | CameraComponent、Sprite2D authored data（具体模块待依赖审计） | command recording、GPU 资源 |
-| Render2D | 当前低层屏幕/世界 2D draw 机制；具体复用边界经 P0 调用方审计后决定 | Scene/ECS 遍历、UI document |
-| Render3D | View target、RenderGraph、当前 Forward/Deferred family recording；集成 Scene sprite workload | GUI compose、读取 live WidgetTree |
+| ya-render-2d（目标） | 上传 ring、flush、纹理槽表；`ScreenDrawList` + `ScreenDrawPipelines` + `ScreenDrawRecorder` | 相机、深度、Scene/ECS、全局单例 |
+| View overlay 世界标注（目标，Render3D 侧） | `WorldAnnotationList` + `WorldAnnotationPipelines` + `WorldAnnotationRecorder`，需要 View 相机与深度 | GUI include、场景 authored 内容 |
+| GUI Compose | UIFrameSnapshot 到 `ScreenDrawList` 的 replay，目标由调用方给出 | 相机、深度、scene color、Scene/ECS、World2D extraction |
+| Scene runtime renderer | Forward/Deferred 3D stages 与 authored sprite draw；具体纯 2D graph 方案由 P0 决定 | GUI compose、读取 live WidgetTree |
 | GUI Widgets | WidgetTree、UIDocument、UIFrameSnapshot、输入/时间策略 | Scene/ECS、Render3D |
-| GUI Compose | UIFrameSnapshot 到 UI pipeline 的 replay | Scene/ECS、World2D extraction |
-| GameRuntime | 一帧的 declaration、extraction 和 World3D→World2D→UI 顺序 | 把产品顺序隐藏在 Framework |
+| GameRuntime | 一帧的 declaration、extraction、Scene runtime record 与 Game UI compose 顺序 | 把产品顺序隐藏在 Framework |
 | GameEditor | 2D/3D authoring camera profile、UI preview、editor overlays | 改写 GUI pipeline |
 
 ## 2. 当前真实链路与目标插入点
@@ -73,23 +84,32 @@ SceneViewFamilyPlan 按 Scene/revision/policy 分组；RenderDeviceState::record
 family graph 并发布 View output。现在没有 World2D recording step，因此不能把目标顺序写成
 已经成立的「World3D → World2D → UI」。
 
-目标是在现有 active Forward/Deferred family graph 内加入 sprite workload；不增加第三个
-top-level renderer。Game UI 仍在 world graph 之后写入 View 的 display image；display compose
+目标是把 sprite workload 加入 Scene runtime rendering，同时保证纯 2D 不走无用的 3D graph stages；
+不新增第二套 Scene scheduler 或 app loop。Game UI 仍在 world graph 之后写入 View 的 display image；display compose
 最后才写 surface/swapchain。World2D 的 graph 插入点必须在 P0 冻结它与 3D opaque、3D
 transparent、depth 和 postprocess 的视觉关系之后，不能借用 GUI 的 view-compose 扩展点。
 
-### 2.1 三条 pipeline 的语义
+### 2.1 三条渲染职责的语义
 
-1. Scene runtime：现有 Forward 或 Deferred renderer 是单个 View family 的顶层 executor。
-   World2D sprite workload 集成到这一执行链，不新增第二个 renderer/family selector。
-2. GUI Compose：只消费不可变 UIFrameSnapshot；screen-space、Y-down、clip、文字和圆角属于
+1. Scene runtime：负责 Scene authored content。World3D 的 Forward/Deferred 与 World2D sprite
+   raster 是 runtime rendering 能力；它们可以共享 RHI、RenderGraph、资源和明确的录制顺序，
+   但不能因此共用一套混合语义的 GUI shader / draw state。
+2. GUI Compose：单独的 screen-space graphics path，只消费不可变 UIFrameSnapshot；Y-down、clip、
+   文字和圆角属于
    GUI compose。它不遍历 Scene/ECS，也不参加 Scene snapshot extraction。
-3. 最小 shader/pipeline 数量由 P0 的调用方与状态矩阵决定。不得预先规定 GUIPrimitive、
+3. GUI Compose 与 Scene runtime sprite draw 使用不同的 graphics-pipeline configuration/state contract；
+   不同 contract 不强迫创建两套高层 renderer class，二者仍可由同一低层 Render2D resource owner 管理。
+   这也不要求 GUI 拥有独立 device、queue、frame loop 或复制 RenderGraph。仅在证明兼容时复用 shader
+   module、geometry、upload 等机制。
+4. shader module 的最小数量由 P0 的调用方与状态矩阵决定；screen 与 world pipeline config/state
+   必须可区分，底层资源 owner 可共用。不得预先规定 GUIPrimitive、
    GUIImage、GUIText 三套 pipeline，也不以拆分为目标制造 QuadResourcePool、多个 batch owner
    或策略层；只拆已经证明有不兼容数据/状态或资源生命周期的路径。
 
 共用 RHI/RenderGraph/command buffer 等底层能力不等于共用 shader 状态、draw item、排序或
-生命周期。反过来，概念分开也不自动要求复制一套完整 quad batching 实现。
+生命周期。反过来，概念分开也不自动要求复制一套完整 quad batching 实现。P1 已完成 screen/world
+shader 与顶点布局拆分、typed texture slot 和 Render2DList 值化；World2D 的真实 Scene graph producer
+尚未实现。禁止继续由 textureRef bit、global session 或 mode flag 暗中切换语义。
 
 ### 2.2 空间与生命周期
 
@@ -97,8 +117,9 @@ transparent、depth 和 postprocess 的视觉关系之后，不能借用 GUI 的
   P0 必须冻结 World2D 的 up/forward、sprite 朝向、z/depth/sort 关系；不能把 GUI 的 Y-down
   坐标直接扩散进 TransformComponent。
 - View 的 outputRect 是 View 自己声明的 offscreen rect；窗口尺寸只属于 presentation。
-- View 不存在于本 tick 时不提交 task；已注册 target 的销毁仍由 ViewTargetStore::unregisterView
-  管理，不能用“连续 N 帧没看到”猜 GC。
+- View 不存在于本 tick 时不提交该 View 的 task/request；同 Scene 的其他可见 View 仍可需要共享
+  Scene extraction。已注册 target 的销毁仍由 ViewTargetStore::unregisterView 管理，不能用“连续 N 帧
+  没看到”猜 GC。
 - Scene snapshot 由 Scene+revision 共享；camera、cull、排序、view output 只属于 View。
 - Scene revision 不代表异步资产状态版本。sprite 的 authored asset reference 留在组件；每 tick
   的抽取在同一 Scene 遍历中读取当前 resource version/state，输出不可变、保活到 submit/fence
@@ -110,48 +131,136 @@ transparent、depth 和 postprocess 的视觉关系之后，不能借用 GUI 的
 
 | 发现 | 原计划风险 | 修正后的执行口径 |
 | --- | --- | --- |
-| Render3D 当前 include GUI/Compose、FramePacket 携带 UIFrameSnapshot | Framework 方向反转；纯 runtime renderer 被 GUI 类型锁死 | P0 先把 UI compose 调用收回 GameRuntime/Editor；Render3D 只发布 View output |
-| 把 World2D 写成第三个 World2DRenderPipeline | active pipeline/family selector 变成三套，recording 主链再次分叉 | World2D 是 Forward/Deferred graph 的一个 typed pass/workload |
+| 把已完成的 Render3D→GUI 解耦误列为待办 | 计划会重复改已落地的边界，且进度与代码不一致 | 当前 RuntimeRenderContext 显式 compose UI；RenderFrameInputs / Render3D xmake 不再依赖 GUI Compose；P0 只做回归守卫 |
+| 把“不要第三个 renderer”写成绝对规则 | 纯 2D View 可能被迫创建 3D GBuffer/lighting/shadow/bloom 资源，省概念却增加 GPU 成本 | P0 比较同一 runtime graph 的 content-gated path 与独立 2D-only graph；必须证明纯 2D 不运行/分配 3D stages，再选最小方案；不复制 scheduler/frame loop |
 | 在 SceneViewDesc 增加 family mask | View 逐渐变成 renderer policy flags 垃圾桶 | 不加 family mask；确有需要时只加小型 SceneViewContents，不表达 renderer identity |
 | 预先规定 GUIPrimitive/GUIImage/GUIText/WorldSprite 四套 shader | 通过“拆文件”制造 PSO、descriptor、batch 和缓存复杂度 | 先做 capability matrix，只拆真正不兼容的 shader/pipeline |
-| World2D 直接写“World3D 之后、postprocess/bloom 之前” | 当前 bloom graph 从 SceneColor 读取，实际会把 sprite 带入 bloom | MVP pass 放在 bloom graph 之后、finalize/tone-map 之前；需在 graph topology 中验证 |
+| 把 World2D 固定在 bloom/finalize 某个位置 | 位置同时决定与 3D transparent 的遮挡、是否进 bloom、tone-map 与 alpha blend 语义 | P0 定义并用混合场景验证 MVP 合成顺序；不能只看 pass 名或避免 bloom 来定位置。若 MVP 不支持 sprite bloom，应明说是产品限制，不把它伪装成 renderer 不变量 |
 | CameraComponent 读取 outputRect 或继续提供隐式最终 projection/view | 组件依赖窗口/View，或 getOrbitView 修改 Transform | producer 传 effective aspect；CameraComponent 只生成 projection，view 由 producer/controller 生成 |
 | Sprite2DComponent 放在 ECS/Systems | gameplay systems 被迫依赖 renderer/asset 语义 | 默认沿用现有 Render3D authored component domain，P0 再确认是否抽到中性 Scene/RenderScene |
-| 只写“texture asset reference” | 执行时容易在 component/extractor 内偷偷 resolve GPU 资源 | ResourceResolveSystem 负责 resolve/version；snapshot 只消费 resolved binding，pending 行为单一化 |
+| 只写“texture asset reference” | 执行时容易在 component/extractor 内偷偷 resolve GPU 资源 | P0 审计 TextureSlot / AssetManager / ResourceResolveSystem 的现有职责，选唯一的 pre-extraction resolved-binding producer；snapshot 只消费 resolved binding |
 | 只提到 entity-id/picking | 2D editor 可能先实现 GPU picking，增加 pass 和同步 | MVP 先用 CPU quad hit-test；GPU picking 单独决策 |
-| Game UI 与 editor UI 的 target 没分开 | compose helper 继续吞掉 View/surface/display 三种语义 | 明确 View display、editor surface、designer offscreen、standalone surface 四类 target |
+| Game UI 与 editor UI 的 target 没分开 | compose helper 继续吞掉 View/surface/display 三种语义 | 调用方提供明确 target 数据（image、extent、encoding、load/store 与输入逻辑尺寸）；列出的场景是验收样例，不据此创建四套产品 renderer |
 | 新计划重复 game-ui-authoring 的 mount/designer phase | 两条计划会同时改 GameUIHost/Scene UI composition | game-ui-authoring 负责 UIDocument/mount/designer；本计划只定义交接契约 |
-| Render2D 仍在 QuadRender.cpp 里直接判断 Vulkan，并依赖 Backend TextureLibrary | UI/World2D 拆分后把后端耦合复制到多个 batch；OpenGL 路径更难维护 | P0 把 viewport convention、sampler lookup、backend resource access 收敛到 RHI/resource seam；World2D 不得再复制 Vulkan 分支 |
-| Render2D 当前有 process-global session/cursor | 多窗口或并行录制时，后一次 begin/flush 可能覆盖前一次状态 | P0 明确 pass-local mutable state；global 只保留 immutable/device-owned resources，或明确禁止并行录制并加断言 |
+| Render2D 仍在 QuadRender.cpp 里直接判断 Vulkan，并依赖 Backend TextureLibrary | UI/World2D 拆分后把后端耦合复制到多个 batch；OpenGL 路径更难维护 | P0 查清现有 backend/resource owner 与目标支持范围；只抽确有跨后端消费者的 seam，不预先为未来后端造抽象；新路径不得复制 Vulkan 分支 |
+| 旧 Render2D process-global session/cursor | 后一次 begin/flush 可能覆盖前一次状态，且隐式承载 draw kind | 已由 Render2DList build/record 值化移除；P0 保留回归检查，并继续核对 record 阶段 GPU upload/flight 生命周期，不重新引入 begin/end 全局会话 |
 | SceneRenderPlan::displayRootTask() 取第一个 bDisplayRoot | 多 OS window 下一个全局 display root 不能表达多个 surface 的输出归属 | 本计划不再扩展 root bool；多窗口先由 surface-scoped View output/presentation 计划解决，2D feature 依赖其契约 |
 
 这些修正不是可选优化，而是后续 checkpoint 的前置条件。若实施中再次出现“新增一个总 pipeline、
 一个中心 registry、一个跨域 service 或一个 shader bit 就能接上”的建议，应先退回本节重新审查。
+
+## 2.4 Architecture Review：2026-09-27（2D draw 语义与持有者）
+
+P1 拆开了 screen/world shader 与顶点，但 draw list、录制上下文和 compose owner 仍然混在一起。
+本节冻结 2D draw 的语义分层；执行见 §4A（D1–D3）。
+
+### 现状问题（代码可证）
+
+| 发现 | 位置 | 问题 |
+| --- | --- | --- |
+| 一个列表装两套坐标 | `Render2DList`：`makeSprite/makeText/drawRoundedRect` 是目标像素；`makeWorldLine/makeWireBox/makeWireSphere` 是世界坐标 | 名字叫 2D，内容一半需要相机；读调用方无法判断坐标系 |
+| 录制上下文混装 | `FRender2dContext` 同时带 `windowWidth/Height` 与 `view/viewProjection` | GUI 调用方传单位矩阵，同一字段在一半调用里无意义 |
+| GUI Compose 替编辑器画 View overlay | `ERender2DComposePassKind::EditorViewportCompose`：`FRender2DComposePassDesc::camera`、`sceneSourceTexture`、`depthTarget` | GUI 模块持有相机、scene color 和场景深度；“GUI 不碰场景”边界的最后一个反向依赖 |
+| overlay 相位靠调用顺序 | `recordEditorWorldViewportOverlays`：网格线 → gizmo 屏幕 quad → HUD → 视锥线 → 物理线 → 包围盒线 | 屏幕 quad 不写深度，后画的世界线会盖住 gizmo handle |
+| 全局 `Render2D` 无单一 owner | `GUIAppHost` 用 swapchain 格式 init；`PipelineCoordinator` 用 3D 管线格式 init、shutdown 时 destroy；`composePassSlot` 函数级 static slot 池 | 谁先到谁决定格式；设备级资源挂在 Render3D 管线协调器下；pass slot 是给全局单例打的隔离补丁 |
+| `makeSprite(mat4)` 收 `mat4` | GUI 线段、gizmo 轴线 | 像素空间旋转与世界矩阵同形，世界矩阵能从这里漏进来 |
+| GUI 线段偏向一侧 | `Render2DComposePass.cpp` 的 `EKind::Line`：第二条边是 `lineFrom + nrm * thickness` | 线没有以端点连线为中心 |
+| 屏幕空间没有 line / path | 屏幕批次索引是初始化时写死的 quad 模式 `0,1,3,0,3,2` | 只能画 quad；`Line` batch 从来都是世界线（GUI 传单位矩阵时坐标被当成裁剪空间） |
+
+### 目标语义：四层
+
+| 层 | 内容 | 共用 / 拆分 |
+| --- | --- | --- |
+| RHI / RenderGraph | 不关心 space | 共用 |
+| 上传机制 | 顶点/索引 ring × flight、flush 分段、纹理槽表 | 共用一份实现（内部类型），屏幕与世界录制器各自持有实例 |
+| shader / PSO | `Sprite2DScreen`（屏幕）、`Sprite2DLine`（世界标注）、`Sprite2DWorld`（场景 sprite，P4） | 按图元语义拆分；同一 shader 按目标格式出 PSO 变体不算拆分 |
+| draw list 类型 | `ScreenDrawList`：像素坐标、左上原点、clip 栈、2D 仿射。`WorldAnnotationList`：世界坐标，录制需要 `viewProjection` 与深度策略，无 clip 栈 | 按坐标系拆分 |
+| pass 时机 | 场景 sprite（scene graph）→ View overlay（先世界相位、再屏幕相位）→ 屏幕 compose（每 surface） | 按 owner 拆分 |
+
+归属判据：**一个命令能否不知道相机就被正确画出来？** 能 → `ScreenDrawList`；不能 →
+`WorldAnnotationList`。区分轴是坐标系，不是 line/quad：像素空间的线属于屏幕列表，
+世界空间的调试点/文字以后也进世界标注列表。
+
+### 三类“带深度的世界 2D”不共用一个列表
+
+| | 世界标注（网格、视锥、线框、包围盒、物理 debug、脚本 DebugDraw） | 场景 sprite（`Sprite2DComponent`） | Billboard（`BillboardComponent`） |
+| --- | --- | --- | --- |
+| 形状 | 即时列表 `WorldAnnotationList` | SceneSnapshot 里的不可变 candidate，instanced draw | `ViewOverlayStage` push constant + quad mesh |
+| 生命周期 | 每 View 每帧，用完即弃 | Scene+revision 抽取一次，多 View 共享，保活到 fence | 每 View 每帧从 ECS 读取 |
+| 画面位置 | View 输出之上，建议 tone map 之后，不进 bloom | SceneColor 内，随 3D 后处理 | forward-transparent overlay |
+| 深度 | 测试，不写 | P0 冻结 | 测试 `LessOrEqual`，不写 |
+| 可见性 | 编辑器 / 调试 View | 所有 View | 按 `FRenderFeatureMask` |
+
+不建通用 `World2DList`：让游戏代码每帧往世界列表推 sprite，等于在场景里重建全局 `Render2D`，
+绕过 snapshot 去重和唯一 resolve producer。
+
+### 持有者
+
+共享层与目标层分开持有（名字为暂定名，D1 开工前可改）：
+
+| 层 | 内容 | 数量 |
+| --- | --- | --- |
+| `ScreenDrawPipelines` / `WorldAnnotationPipelines` | shader module、pipeline layout / DSL、按（颜色格式，深度格式）懒建的 PSO 缓存、白纹理引用、静态索引 | 每个 `IRender` 一份 |
+| `ScreenDrawRecorder` / `WorldAnnotationRecorder` | 上传 ring × flight、frame UBO、descriptor set、flush 游标 | 每个“画到某张图”的 owner 一份；取代 pass slot |
+
+录制器开销与今天一个 pass slot 按需分配的资源相同；销毁走 `DeferredDeletionQueue`。flight 槽位
+由录制器在 begin 时向设备取（`framesInFlight` / `recordedFrameIndex`）。record 签名显式带目标：
+屏幕 `{cmd, extent, colorFormat}`；世界 `{cmd, extent, formats, viewProjection, depth}`。
+
+| 分叉 | 共享层 owner | 录制器 owner |
+| --- | --- | --- |
+| GUIApp（GUIWorkbench 等） | `GUIAppHost`（它创建 `IRender`）持有 `ScreenDrawPipelines`；无世界层，也不链接 Render3D | 每个窗口 session（主窗与 `GUIWindowManager` extras）各持 present / offscreen 两个 `ScreenDrawRecorder` |
+| `ya::App`（GameRuntime / GameEditor） | App 设备状态（`RenderDeviceState` 一侧）持有两种 Pipelines；**不放 `PipelineCoordinator`** | Game UI compose owner（`RuntimeRenderContext`）；编辑器窗口 session；`EditorViewportCompositor` 每 View 一对（世界 + 屏幕）；`EditorUIDesignerSession`；以后 runtime 调试线归 runtime View producer |
+
+`TextureLibrary` / `FontManager` 是资产级单例，本计划不动，只登记。
+
+### 业界参照（只取分层，不取命名）
+
+- Unreal：共用 `FBatchedElements`；`FCanvas`（屏幕，按目标实例化）与 `FPrimitiveDrawInterface`
+  （世界编辑器图元，场景渲染器里带深度）分开；Slate 按窗口批次、不碰相机。编辑器图元 → foreground
+  gizmo → canvas 的相位顺序。
+- Unity SRP：Gizmo 是相机渲染阶段（`DrawGizmos(camera, Pre/PostImageEffects)`）；UI Toolkit / uGUI
+  Screen Space Overlay 在相机栈之后。
+- Godot：`canvas_item` 与 3D immediate 从服务器接口起就分开；canvas 统一 GUI 与玩法 2D 与本项目
+  “场景 sprite 与 3D 共用深度”冲突，不采用。
+- ImGui / Slate：屏幕线与路径 CPU 三角化进同一 UI shader，外圈羽化做 AA；不用 GPU `LINE_LIST`
+  （1px、`wideLines` 不可移植、无 AA / cap / join）。
+
+### 命名约束
+
+不使用 `Device` 后缀（与 `IRender` / RHI device 混淆），不使用 `F` 前缀一类 UE 风格命名。
 
 ## 3. Phase 0：审计并冻结契约
 
 ### 目标
 
 先把 UI screen、world billboard、editor overlay、UI canvas preview、未来 World2D 分开命名；
-没有完成本 phase 不新增 Sprite2DComponent 或新 shader。这个 phase 还必须修正当前
-Framework 依赖方向：Render3D 不能以 `UIFrameSnapshot` / `GUI/Compose` 作为公开或实现依赖。
+没有完成本 phase 不新增 Sprite2DComponent 或新 shader。Render3D 与 GUI Compose 的依赖边界
+已经由应用侧 RuntimeRenderContext 显式 compose 收口；本 phase 只校验该边界，并冻结 Scene
+runtime draw 与 GUI draw 的能力、目标和生命周期契约。
 
 ### 工作项与参考
 
-1. 审计 Render2D::begin/end、FRender2dContext、FRender2dSession、FQuadRender::PassPipelines。
+1. 审计 Render2DList builder/recordRender2DList、FRender2dContext、FQuadRender::PassPipelines；
+   旧 begin/end/session API 已移除，不把它们列为待实现接口。
    参考：Render/Render2D/include/Render2D/Render2D.h、QuadRender.h、Render2D.cpp、QuadRender.cpp。
-2. 列出 makeSprite、makeWorldSprite、makeText、makeRectFilledMultiColor、drawRoundedRect、
-   makeWorldLine 的全部调用方，按 UI/World2D/EditorOverlay 归类。
-3. 审计 Render2DPassSlot owner；确认 slot 只表达资源隔离，不表达 runtime/editor/UI 语义。
+2. 列出 makeSprite、makeText、makeRectFilledMultiColor、drawRoundedRect、makeWorldLine、
+   makeWireBox、makeWireSphere 的全部调用方，按 UI/World2D/EditorOverlay 归类（makeWorldSprite
+   已删除）。结论已写入 §2.4，由 §4A D1 执行。
+3. 审计 Render2DPassSlot owner。2026-09-27 结论：slot 是全局单例的隔离补丁，D1 以按 owner 持有的
+   录制器取代，不再保留 slot 概念。
 4. 审计 SceneSnapshot 多 View 共享边界，记录 extraction 与排序是否重复。
 5. 审计 EditorViewportCompositor、EditorGameUIPreview、recordCameraViewCompose 的顺序，
    明确 UI Designer canvas 与 World2D authoring 不是同一模式。
-6. 审计 `Render3D/Common/ViewCompose.*`、`Render3D/Common/RenderFrameInputs.h`、
-   `Render3D/xmake.lua`：把 Game UI compose 从 Render3D 收回 GameRuntime/GUI integration；
-   `makeViewDisplayInsetRect` 这种 editor layout helper 移出 Render3D。目标是 `ya-render-3d`
-   不 include `GUI/Compose`、不暴露 `UIFrameSnapshot`。
+6. 回归核对 Render3D/Common/RenderFrameInputs.h、Render3D/xmake.lua 与
+   GameRuntime/Render/RuntimeRenderContext.cpp：确认 ya-render-3d 不 include GUI/Compose、
+   不暴露 UIFrameSnapshot，UI compose 仍由应用在 View output 与 surface display compose 之间
+   显式调用。若 editor layout helper 或 GUI 类型重新进入 Render3D，先归还所属层，不在本计划
+   添加兼容桥。
 7. 审计 Forward/Deferred graph 的真实阶段：opaque、skybox、transparent、entity-id、
-   bloom、finalize。记录 World2D 的唯一插入点和 target layout，不先创建 `World2DRenderPipeline`。
+   bloom、finalize。记录 3D opaque/transparent、World2D sprite、bloom、tone-map 的可见性和颜色
+   顺序。纯 2D View 必须避免无用的 3D attachment 与 stage；P0 可以批准独立 2D-only graph，
+   但不新增第二套 Scene scheduler / frame loop。
 8. 审计 CameraComponent 的 view/projection 责任：当前 `getOrbitView()` 会修改 owner's
    TransformComponent，`getFreeView()` 在组件中解析 owner。把这类 view 计算列为迁移项；
    CameraComponent 最终只保存 projection data，view 由 producer/controller 根据 Transform 生成。
@@ -172,39 +281,52 @@ Framework 依赖方向：Render3D 不能以 `UIFrameSnapshot` / `GUI/Compose` �
   2. 纯 World2D View；
   3. 只有 Game UI 或只有 Editor UI 的 target。
 
-P0 还必须标明 Render2D 是否允许同一提交中并行/嵌套 begin；若不允许，代码必须在入口断言，
-而不是让 global session 的限制成为未记录的约定。
+P0 还必须冻结 Render2DList build 与 record 的并发边界：list 构建是否并行、record 是否串行、
+资源上传与 GPU 引用如何跨同一提交保活。`begin/end` 已移除，不再讨论嵌套 begin 的接口契约。
 
-## 4. Phase 1：先收回 GUI/Render3D 边界，再按证据拆 2D draw path
+上述 UI target 是“场景 × target contract”的验证样例，不是按产品名称创建 renderer/API 的依据。compose
+入口消费显式 target 数据；只有证明存在不同的生命周期或录制 owner 后，才增加实现类型。
+
+## 4. Phase 1：GUI/Scene runtime draw 边界与 2D draw path（已完成）
 
 ### 目标
 
-先消除 Render3D 对 GUI compose 的反向依赖，再消除 UI 和运行时场景共同使用 Sprite2D.slang、
-world/screen 字段和 `textureRef` 高位 flag 的情况，同时保持现有 GUI 像素基线。
+保持已落地的应用级 GUI composition 边界；确保 GUI Compose 与 Scene runtime sprite 使用可区分的
+graphics-pipeline config/state，删除 world/screen 混用字段和 textureRef 高位 flag。shader module、
+geometry、upload 是否共享由 capability/lifetime 证据决定，同时保持现有 GUI 像素基线。已记录的
+Render2DList 值化、screen/world shader/vertex split 与 textureRef typed 化不重复实施；未完成项是把
+Scene runtime sprite workload 接入 Scene graph。
 
-### 目标文件与实现
+### 已完成的 P1 结果（不重复实施）
 
-1. 第一件事不是拆四个 shader，而是移除 `Render3D/Common/ViewCompose` 对 `GUI/Compose` 的依赖。
-   GameRuntime 在自己的 record 顺序中显式调用 GUI compose；Render3D 只发布 View output。
-   `FramePacket` 不再携带 `UIFrameSnapshot`，GUI snapshot 归应用侧的 GameUI record packet。
-2. 建立 capability matrix：primitive、image、text/SDF、world sprite、opaque/alpha、clip、
-   transform、depth、blend、resource binding。只有当两类 draw 在这些维度上不兼容时才拆 shader
-   或 pipeline；禁止把 `GUIPrimitive/GUIImage/GUIText/WorldSprite` 四个名字当作预先批准的设计。
-3. 无论拆不拆 shader，都必须删除 `textureRef` 高位 bit 同时表达 SDF、opaque、world/screen
-   的隐式协议。采样模式、alpha mode、坐标空间和资源绑定改成 draw/pipeline 的 typed data。
-4. 先保持一个可读的低层 batch owner；只有 UI 与 World2D 需要不同的 cursor、descriptor、
-   resource-retain 或 flush 生命周期时，才拆成两个实现。不得为了“看起来分层”新增
-   `QuadResourcePool + GUIQuadBatch + WorldSpriteBatch` 三层空壳。
-5. Render2D session 的所有权改成调用方明确传入的 pass/session；不得依赖 process-global
-   pending kind 或跨窗口隐式状态。
-6. 目标顺序由 GameRuntime 的 record 函数明确写出，但 World2D 的实际 graph pass 必须由
-   active Forward/Deferred pipeline append；不能通过 GUI compose 或 `recordViewCompose` 偷塞。
+- GameRuntime 显式持有 GUI compose 顺序；Render3D 不依赖 GUI/Compose，也不携带 UIFrameSnapshot。
+- Render2DList 把绘制构建与 GPU record 分开；旧的 global begin/end/session/立即绘制 API 已删除。
+- GUI screen 与 world draw 使用不同 shader/vertex layouts 和 pipeline config；`textureRef` 的 packed
+  texture/mode flags 已改为 typed `textureSlot` + `sampleMode`。没有按 primitive 创建多套 batch facade。
+- progress.md 记录了 build/test、GUI parity 与 smoke 证据；feature_matrix.json 对应项标为 verified。
+  若后续改动触及这些路径，再运行对应回归，不把 P1 重新打开作为新 checkpoint。
 
-### 参考与校验
+### 后续仍适用的约束
 
-- 参考：Engine/Shader/Slang/Sprite2D.slang、Render/Render2D/QuadRender.h/.cpp、
+- 低层 batch/resource owner 可继续共享；只有 cursor、descriptor、resource-retain 或 flush 生命周期
+  被证明不兼容时才拆分，不制造 `QuadResourcePool + GUIQuadBatch + WorldSpriteBatch` 空壳。
+- 不恢复 process-global pending kind/cursor 或跨窗口隐式状态；P7 仍需验证 GPU upload 在同一提交中不被
+  覆写，且引用活到 submit/fence 安全点。
+- Game UI compose 顺序仍由应用 record 函数明确写出；World2D 归 Scene runtime rendering，后续按 P0
+  选定的 graph/workload 接入，不能通过 GUI compose 或 recordViewCompose 偷塞。
+
+### 2026-09-27 更正
+
+P1 完成的是 shader、顶点布局与 texture 字段的拆分。draw list 仍混装两套坐标、录制上下文仍混装
+extent 与相机、GUI Compose 仍拥有编辑器 View overlay、全局 `Render2D` 仍无单一 owner——
+这些不是 P1 的遗留 bug，而是 §4A 的新 checkpoint。P1 不重新打开。
+
+### 回归参考（代码改动触及时运行）
+
+- 参考：Engine/Shader/Slang/Sprite2DScreen.slang、Sprite2DWorld.slang（迁移中的路径，开工时以仓库
+  实际状态为准）、Render/Render2D/QuadRender.h/.cpp、
   GUI/Runtime/Compose/Render2DComposePass.cpp、GameRuntime/Render/RuntimeRenderContext.cpp、
-  Render3D/Common/ViewCompose.cpp、Render3D/Common/RenderFrameInputs.h、
+  Render3D/Common/RenderFrameInputs.h、
   Engine/Shader/Shader.xmake.lua。
 - xmake ya-shader
 - xmake b ya-render-2d ya-gui-compose ya-render-3d ya-game-runtime ya-game-editor
@@ -212,8 +334,54 @@ world/screen 字段和 `textureRef` 高位 flag 的情况，同时保持现有 G
 - 运行 Script/automation/gui/run_workbench_gpu_parity.py 和 HelloMaterial 90 帧冒烟。
 - rg 检查 Render3D 无 GUI/Compose 或 UIFrameSnapshot 依赖；UI/world draw 的坐标空间、采样模式、
   alpha mode 不再由高位 bit 隐式编码。
-- 未经 capability matrix 证明，不接受“创建四套 shader/pipeline”作为 checkpoint 完成条件。
+- 不接受按 primitive 名称制造四套 shader/batch；但必须能从代码中分别找到 GUI Compose 与 Scene
+  runtime sprite 的 pipeline owner/state contract。
 - UI Workbench、EditorSurface、Game UI compose 截图与迁移前一致；只允许 label 变化。
+
+## 4A. 2D draw 语义收口（D1–D3）
+
+依据 §2.4。三个 checkpoint 与 Phase 2 互不依赖，可排在 Phase 2 前或后；D2 依赖 D1，D3 依赖 D1。
+
+### D1：draw list 按坐标系拆分，删除全局 Render2D
+
+1. `Render2DList` 拆成 `ScreenDrawList`（ya-render-2d）与 `WorldAnnotationList`（Render3D 的 View
+   overlay 一侧，复用 ya-render-2d 导出的上传机制）。GUI 模块 include 不到世界类型。
+2. `ScreenDrawList` 的变换重载收 2D 仿射（3×2），不收 `mat4`。
+3. `recordRender2DList` 拆成屏幕 / 世界两个 record；删除 `FRender2dContext` 与
+   `ERender2dBatchKind::Line`。屏幕录制签名不出现相机字段。
+4. 删除静态 `Render2D`：`ScreenDrawPipelines` / `WorldAnnotationPipelines` 按 §2.4 持有者表创建；
+   `ScreenDrawRecorder` / `WorldAnnotationRecorder` 由目标 owner 持有。删除
+   `acquirePassSlot/releasePassSlot`、`composePassSlot` 静态池、`FRender2DComposePassDesc::passSlot`，
+   以及 `PipelineCoordinator` 与 `GUIAppHost` 对 `Render2D::init/destroy` 的调用。
+   `FRender2dDebugState` 随录制器或 diagnostics 走。
+5. quad-line-quad 夹层测试改为“同一列表内保序”；在 D2 补“世界相位先于屏幕相位”。
+
+验收：parity md5 不变；编辑器截图不变；GUIWorkbench 链接图不含 ya-render-3d；
+`rg "Render2D::|acquirePassSlot|FRender2dContext" Engine/Source` 零命中；
+`rg "WorldAnnotation|viewProjection" Engine/Source/Framework/GUI` 零命中。
+
+### D2：编辑器 View overlay 离开 GUI Compose
+
+1. GameEditor 自己拥有 View overlay pass：在 View display image 上先以 View 深度画
+   `WorldAnnotationList`（测试不写），再画 gizmo / HUD 的 `ScreenDrawList`。
+2. 删除 `ERender2DComposePassKind::EditorViewportCompose`、`FRender2DComposePassDesc::camera`、
+   `sceneSourceTexture` 与 `recordRender2DComposePass` 的 `depthTarget` 参数。
+3. 开工前冻结：overlay 在 tone map 之前（HDR scene color）还是之后（display image）。建议之后，
+   与 Unreal 编辑器图元一致；这会改变当前线条观感，需用户确认。
+
+验收：`rg "viewProjection|depthTarget|sceneSourceTexture" Engine/Source/Framework/GUI/Runtime/Compose`
+零命中；gizmo handle 不再被线框覆盖（截图证据）；编辑器 smoke 通过。
+
+### D3：屏幕空间 stroke / path
+
+1. 屏幕录制支持任意三角形：每条命令自带索引段，取代写死的 quad 索引模式。
+2. `ScreenDrawList` 增加 `strokeLine`、`strokePolyline`、`strokeRect`、`fillConvexPoly`；arc / bezier
+   先采样为路径。AA 用几何羽化，`Sprite2DScreen` 不新增分支；圆角矩形 SDF 分支保留。
+3. `UIFrameDrawItem::EKind::Line` 与 gizmo 轴线迁到 `strokeLine`，修正线段偏向法线一侧。
+4. 世界标注的粗线不在本项；需要时由世界 shader 在 VS 按屏幕空间展开，单独决策。
+
+验收：parity 基线仅线段像素变化，且变化来自居中修正（逐项说明）；新增 stroke 单测覆盖闭合、
+退化段、羽化宽度。
 
 ## 5. Phase 2：CameraComponent 增加正交模式
 
@@ -238,6 +406,11 @@ world/screen 字段和 `textureRef` 高位 flag 的情况，同时保持现有 G
    EditorViewProducer。所有调用点必须明确传入 output aspect；不保留旧无参接口。
 6. Editor 的“正交 XY profile”只修改普通 CameraComponent/编辑器相机与 gizmo 约束，不持有第二套
    camera state；World2D 的坐标约定不能复用 GUI 的 Y-down 逻辑像素。
+7. Billboard 恒定像素尺寸随投影模式修正（`DeferredRenderPipeline::buildOverlayFrameInputs`）：
+   透视为 `pixels / viewHeight * distance * 2 * tan(fovY/2)`（现公式隐含 90° FOV）；正交为
+   `orthoHeight * pixels / viewHeight`，与距离无关。另登记：`worldDirection` 写入 push constant
+   但顶点展开未使用，billboard 永远正对相机；“可侧看的牌”属于 Sprite2DComponent，不给
+   Billboard 加屏幕模式。
 
 ### 参考与校验
 
@@ -273,13 +446,14 @@ BillboardComponent 继承、组件内资源 resolve、组件内修改 Render2D g
 ### 工作项与校验
 
 1. 增加 reflection、serialization、必要的 script binding；TextureSlot 只保存 authoring reference。
-2. ResourceResolveSystem/资产链负责 resolve、pending、placeholder、resourceVersion；组件和
-   RenderFrameExtractor 不直接访问 AssetManager、MaterialFactory 或创建 GPU descriptor。
+2. 按 P0 冻结的资源责任，由唯一 pre-extraction producer 处理 resolve、pending、placeholder、
+   resourceVersion；组件和 RenderFrameExtractor 不直接访问 AssetManager、MaterialFactory 或创建 GPU descriptor。
 3. extraction 只消费已经可读的 resolved binding，生成不可变 WorldSpriteCandidate；pending/failed
    的显示规则（跳过或统一 missing-texture placeholder）只允许有一个实现，并写进测试。
-4. 明确坐标和排序：World2D 默认 XY 平面、Y-up、camera 沿 -Z 看，transform 的 z 是世界深度输入；
-   MVP 使用 (layer, sortOrder, worldZ, entityId) 的稳定 painter order，禁用深度写入。不要把 UI 的
-   左上/Y-down 逻辑像素语义传入 TransformComponent。
+4. 冻结坐标与混合语义：先定义 World2D 平面的 up/forward、sprite 朝向、Transform.z、深度测试/写入、
+   sprite-sprite 顺序、与 3D opaque/transparent 遮挡的关系，再定排序键。不得同时声称“z 是世界深度”
+   又无条件禁用 depth write，或用 painter order 假装解决与 3D 几何的遮挡。验收覆盖 P0 matrix 中的
+   混合场景；UI 左上/Y-down 逻辑像素不得传入 TransformComponent。
 5. 在 Scene create/remove/clone/serialize 路径补行为测试；editor companion 继续遵守
    ManagedChildComponent/CompanionSpec，不能把生成图标伪装成 authored sprite。
 6. picking 先做 editor 侧 CPU quad hit-test（按 View inverse、sprite bounds、排序回退），不要为了
@@ -294,29 +468,37 @@ BillboardComponent 继承、组件内资源 resolve、组件内修改 Render2D g
 ### 目标
 
 同一个 Scene/revision 只 extraction 一次；每个 View 只拥有 camera 相关 cull/order。隐藏 View 不提交
-World2D work。World2D 不创建独立的 SceneViewFamilyRenderer，也不改变现有 family key 的含义。
+World2D work。Scene snapshot 共享不意味着所有 View 必须执行同一批 render stages；纯 2D、纯 3D、
+混合 View 的工作集合必须在 View declaration / prepared workload 中明确表达，并保持现有 Scene snapshot
+去重语义。
 
 ### 工作项
 
 1. 扩展 SceneSnapshot，增加只读 world sprite candidates；candidate 中只保留 extraction 后可消费的
-   immutable transform/UV/tint/order/resource binding，资源引用至少活到 command submit/fence 完成。
+   immutable transform/UV/tint/order/resolved-resource binding，资源引用至少活到 command submit/fence 完成。
+   场景 sprite 是 retained candidate，不是即时 draw list：不经 `ScreenDrawList` / `WorldAnnotationList`，
+   也不新增通用 World2DList。默认形状是一个 quad + per-instance buffer 的 instanced draw；是否复用
+   ya-render-2d 上传机制由 P0 按生命周期与数量决定，不预设。
 2. RenderFrameExtractor::extractSceneSnapshot() 一次遍历 Sprite2DComponent；不能按 View 重复遍历 ECS，
-   也不能让每个 View 自己 resolve asset。Scene snapshot 的 dedupe key 仍是 (Scene, sceneRevision)；
-   不做跨 tick 的 snapshot cache，除非额外把资源 resultVersion 纳入 key。
+   也不能让每个 View 自己 resolve asset。P0 先核对 TextureSlot / AssetManager / ResourceResolveSystem
+   的现有写入和版本责任，再选唯一的 pre-extraction resolved-binding producer；不把“所有 sprite 资源
+   必须由 ResourceResolveSystem 负责”当未经审计的前提。Scene snapshot 的 dedupe key 仍是
+   (Scene, sceneRevision)，异步资源变化在同 tick 的明确阶段反映；不做跨 tick snapshot cache，除非
+   resource resultVersion 也进入缓存有效性条件。
 3. RenderFrameData 增加 World2DViewData 或等价 view-owned bucket，只保存该 View 的 visible/order
    index，不复制 shared sprite vector。View 的 cull 和 sort 不能回写 SceneSnapshot。
-4. 不增加 EViewRenderFamilyMask。若确实需要关闭某个内容域，增加小而明确的
-   SceneViewContents（World3D/World2D 两个内容选择），它不是 renderer identity、不是 family key、
-   也不和 Game/Gizmo/Debug 的 FRenderFeatureMask 混用。若空 candidates 已经足够，优先不加字段。
-5. SceneRenderScheduler/family key 继续按 (Scene, revision, policy) 分组。一个 family 内的每个 View
-   都由当前 Forward/Deferred pipeline 消费自己的 3D 与 World2D view data；不能让一个 family 再拆成
-   两个 active renderer。
-6. 在 Render3D 的公共或私有 graph helper 中新增 World2D sprite pass builder，由 Forward 和 Deferred
-   在各自的唯一 graph 编排点调用。不要新增 World2DRenderPipeline、第二个 active pipeline 或
-   World2D family registry。该 pass 只依赖 RenderFrameData/WorldSprite candidate 和低层 2D draw
-   mechanism，不依赖 UIFrameSnapshot/WidgetTree。
-7. RuntimeRenderContext 只负责应用层顺序和 UI compose；RenderDeviceState 继续只提供
-   prepare/begin/record active family/end/seal 机制，不新增一个 World3D/World2D 双入口 coordinator。
+4. 不增加 renderer identity mask。P0 需确定是否需要显式 SceneViewWorkload（例如 World3D、
+   World2D）；不能从 candidate 列表为空推断不需要某 stage，因为空的 3D Scene 仍可能需要
+   clear、skybox 或 postprocess。若需要该声明，它只表达 View 请求哪些内容，不进入 Scene family
+   identity，且不与 Game/Gizmo/Debug 的 FRenderFeatureMask 混用。
+5. SceneRenderScheduler 的 Scene snapshot 去重不因 World2D 改变；但只有确实共享 pipeline
+   configuration、resource preparation 与 graph scheduling policy 的 View 才放在同一 rendering
+   family。不能为了合并 family 而让纯 2D View 带上 3D attachments。
+6. 按 P0 选择的 runtime graph 组织 World2D raster：可以是 Forward/Deferred 中显式可选的 stage，
+   也可以是轻量 2D-only graph。两种路径都消费 immutable WorldSprite candidate，不依赖
+   UIFrameSnapshot/WidgetTree；不能复制 Scene scheduler、frame loop 或应用级 surface/present 编排。
+7. RuntimeRenderContext 只负责应用层顺序和 UI compose；RenderDeviceState 继续提供
+   prepare/begin/record selected Scene workload/end/seal 机制，不新增一个 World3D/World2D 双入口 coordinator。
 
 ### 参考与校验
 
@@ -326,14 +508,17 @@ World2D work。World2D 不创建独立的 SceneViewFamilyRenderer，也不改变
 - Render3D/RenderDeviceState.Frame.cpp
 - GameRuntime/Render/RuntimeRenderContext.cpp
 - SceneViewDesc.h
-- 两个 View 同 Scene/revision：shared snapshot 地址相同，sprite extraction 计数为 1；两个 View 的
-  World2D order/cull 独立。
-- 隐藏 View：无本 tick View request、无新 target、无 sprite pass。
-- 纯 2D/纯 3D/Mixed View 的 active Forward/Deferred graph 均符合预期，没有第三种 top-level renderer。
-- graph topology 明确验证：World2D 是 SceneColor 上的 unlit forward raster pass，load existing color、
-  store color；MVP 在 bloom graph 之后、finalize/tone-map 之前；UI compose 不复用此 pass。
-- MVP World2D 不写 GBuffer、不投 shadow、不参加 lighting；是否进入 bloom 必须通过 graph 顺序明确
-  （默认不进入 bloom extract），不能靠“它是 unlit”猜测。
+- 两个 View 同 Scene/revision：同 tick 共用同一个 immutable Scene snapshot，World2D candidate
+  extraction 只有一次；两个 View 的 cull/output 独立。identity/count 只能作辅助证据，核心验收应验证
+  不同视角的可见结果正确，避免把测试退化成对实现细节的单侧计数断言。
+- 隐藏 View：无本 tick View request、无新 target allocation、无该 View 的 sprite pass；其他 View 仍可
+  消费同一 Scene snapshot，registered target allocation 按 ViewTargetStore 生命周期保留。
+- 纯 2D View 不分配/运行无用 GBuffer、lighting、shadow stages；纯 3D View 不运行 sprite workload；
+  mixed View 的两类内容按 P0 冻结的遮挡/颜色规则合成。验收可以支持轻量 2D-only graph，但不得
+  新增第二套 Scene scheduler 或应用 loop。
+- graph topology 与可见输出共同验证 sprite pass 的 target load/store、depth-test/write、blend、与
+  3D opaque/transparent、bloom 及 finalize/tone-map 的顺序。P0 matrix 必须给出各场景的预期遮挡和颜色
+  结果；测试不能只断言 pass 被调用/跳过。UI compose 不复用 World2D scene pass。
 - xmake r ya-testing --gtest_filter='*SceneRenderScheduler*:*RenderView*:*World2D*:*Snapshot*'
 
 ## 8. Phase 5：Runtime 与 Editor 的 2D View producer
@@ -355,9 +540,11 @@ effective aspect 和 camera view，不读取已发布的上一帧 View output。
 - UI Designer canvas 继续由 EditorUIDesignerSession 的独立 WidgetTree 提供；EViewportMode::Mode2D
   不能同时表达 UI canvas 和 World2D。
 - editor grid/gizmo/selection 在 World2D/World3D 输出之后作为 editor overlay compose，不能进入
-  authored Sprite snapshot；它们也不能偷偷进入 runtime Game UI snapshot。
-- World2D authoring 的隐藏/显示由 View producer 的声明控制；没有可见 View 就没有 ECS extraction
-  consumer 和 graph pass。视口从 tab 中移除时，不用在 pipeline 里“录空 pass”补齐。
+  authored Sprite snapshot；它们也不能偷偷进入 runtime Game UI snapshot。overlay 由 D2 的
+  GameEditor View overlay pass 承载（世界标注相位 → 屏幕相位），2D profile 只换相机与 gizmo 约束。
+- World2D authoring 的隐藏/显示由 View producer 的声明控制；隐藏后不提交该 View 的 scene request、
+  cull/order 或 graph pass。若同一 Scene 仍被其他可见 View 请求，共享 Scene extraction 继续服务它们。
+  视口从 tab 中移除时，不用在 pipeline 里“录空 pass”补齐。
 
 校验：Hierarchy 中 sprite 与普通 Node3D 并列，可选取/移动/保存/撤销；UI Designer 不接 game input；
 World2D、Game UI、gizmo 可独立关闭；切 tab 隐藏 viewport 后不再提交 scene render task；2D hit-test
@@ -394,10 +581,12 @@ Applications/GameEditor/EditorUIDesignerSession.cpp、.agent/plan/game-ui-author
 
 删除条件：
 
-- Sprite2D.slang 不再同时服务 UI/World2D；迁移后删除或改名，不保留含糊兼容入口。具体 shader
-  数量以 P0 capability matrix 的最小结果为准。
+- 旧 screen/world 混合 shader interface 与 textureRef flags 删除，不保留含糊兼容入口。shader module
+  是否共用以 P0 capability matrix 为准；不得因新 shader 名称出现就默认旧路径已迁完。
 - UI/World2D 不再共享 textureRef 高位采样 flag、共享未命名的 global session state 或隐式 layout。
 - BillboardComponent 只保留 billboard/editor companion 语义。
+- 全局 `Render2D`、pass slot、`FRender2dContext`、`EditorViewportCompose` compose kind 已由 D1/D2 删除
+  （P7 只做回归审计）。
 - 不新增 IRenderRuntimeServices、中心 UI bus、EditorPanel、第二个 Scene tree 或第二个 app loop。
 - EViewportMode::Mode2D 不再同时表示 UI canvas；旧分支迁到明确 profile/preview 后删除。
 
@@ -409,10 +598,10 @@ Applications/GameEditor/EditorUIDesignerSession.cpp、.agent/plan/game-ui-author
   的 GPU 数据不会在同一提交中被后续 flush 覆写，不能只靠“调用顺序”假设安全。
 - command recording 引用的 texture/view/descriptor/vertex buffer 至少活到 submit/fence 完成。
 - pipeline/target replacement 只在 safe point，不在录制中重建。
-- World2D pass 的 graph contract 固定为：输入/输出同一线性 SceneColor，load existing color，store
-  color，无 GBuffer attachment、无 depth write；默认追加在 bloom graph 之后、finalize/tone-map
-  之前，以避免 sprite 被默认 bloom，同时保持与场景同一 tone-map。任何改变都必须新增明确的
-  render mode，不在 shader 里加隐式 bit。
+- World2D graph contract 由 P0 的混合规则决定：target、load/store、depth-test/write、blend、bloom
+  和 tone-map 行为必须与可见遮挡规则一致。纯 2D workload 不得无故创建 GBuffer/lighting/shadow；
+  但不能为了避免 bloom 就机械固定在某个 pass 名之前/之后。最终语义用 typed graph data 表达，
+  不能靠 shader 隐式 bit 或临时 render mode patch。
 
 全量校验：
 
@@ -427,18 +616,26 @@ Applications/GameEditor/EditorUIDesignerSession.cpp、.agent/plan/game-ui-author
 
 | checkpoint | 单一可验收目标 | 建议提交标题 |
 | --- | --- | --- |
-| P0 | 完成调用方/owner/时序审计，收回 Render3D→GUI 依赖，冻结 target/坐标/资源契约 | [plan/render] freeze 2d and ui contracts |
-| P1 | 在不预设 shader 数量的前提下移除 mixed flag，并完成最小 draw-path 分离 | [render-2d] separate ui and world draw contracts |
-| P2 | CameraComponent 只负责纯 projection，正交模式可序列化并被 runtime/editor 使用 | [scene/camera] add explicit projection input |
+| P0 | 完成调用方/owner/时序审计；验证已落地的 Render3D→GUI 边界；冻结混合、target、坐标、资源契约 | [plan/render] freeze 2d and ui contracts |
+| P1 | 已完成：screen/world shader 与 vertex contract 分离、textureRef typed 化、保留单一低层 batch owner；见 progress.md parity/test 记录 | [render-2d] separate ui and world draw contracts |
+| D1 | draw list 按坐标系拆分；删除全局 Render2D / pass slot / FRender2dContext；Pipelines 与 Recorder 按 §2.4 持有 | [render-2d] split draw lists by coordinate frame |
+| D2 | 编辑器 View overlay 由 GameEditor 拥有（世界相位 → 屏幕相位）；GUI Compose 不再持相机/深度/scene color | [editor/viewport] own the view overlay pass |
+| D3 | 屏幕 stroke / path（任意三角形 + 几何羽化），GUI 线段与 gizmo 轴线迁移 | [render-2d] add screen-space stroke |
+| P2 | CameraComponent 只负责纯 projection，正交模式可序列化并被 runtime/editor 使用；billboard 像素尺寸随投影修正 | [scene/camera] add explicit projection input |
 | P3 | Sprite2DComponent 可创建、保存、复制、删除，无 GPU 状态 | [ecs/sprite2d] add authored sprite component |
-| P4 | 同 Scene 多 View 共享 snapshot，World2D 作为 active Forward/Deferred graph workload 录制 | [render/world2d] add shared extraction and sprite pass |
+| P4 | 同 Scene 多 View 共享 snapshot；按 P0 选择的 Scene graph/workload 录制 World2D，纯 2D 不承担无用 3D stages | [render/world2d] add shared extraction and sprite pass |
 | P5 | runtime 2D view 与 editor 2D authoring profile 可用 | [editor/world2d] add orthographic authoring flow |
 | P6 | Game UI runtime/designer/preview 的 tree、clock、input 边界闭环 | [gui/game-ui] close runtime and designer loop |
 | P7 | 旧 mixed path 删除，资源生命周期和性能门禁通过 | [render] remove mixed sprite path |
 
-停止条件：发现需要 Transform2D/Camera2D、第二个 Scene scheduler、第三个 active renderer、中心
-bus、录制期 live 查询，或 UI/World2D 需要共享新的 bit-packed shader flag 时，停止当前 phase，先
-更新架构评审，不用补丁继续推进。
+建议顺序：P2 → D1 → D2 → P3 → D3 → P4/P5 → P6/P7。D1/D2 可提前到 P2 之前，二者与 P2 无依赖。
+不在范围：分屏产品层；多窗口合并提交（AB4-2d，等撕出视口需要第二扇窗画世界时再做）。
+
+停止条件：若设计要求新增第二个 Scene scheduler/app loop、跨 UI/Scene 的中心 bus、录制期 live 查询，
+或恢复 UI/World2D 共用 bit-packed shader 协议，停止当前 phase 并更新架构评审。同样停止：
+恢复全局 2D 绘制单例、让一个 draw list 同时收像素与世界坐标、GUI 模块重新接收相机/深度。纯 2D 为避免无用
+3D stages 而采用独立 graph/workload，本身不违规；但必须复用既有 Scene declaration、snapshot、
+target/submission 生命周期与应用主时序，不能顺手长成另一套 renderer owner。
 
 ## 12. 参考结论
 
@@ -450,5 +647,5 @@ bus、录制期 live 查询，或 UI/World2D 需要共享新的 bit-packed shade
   边界，但不造 UMG 平行控件族。
 
 最终验收不是“像哪个引擎”，而是读者可以从 RuntimeRenderContext::tick/record 一眼读出：
-声明 View → 共享 Scene snapshot → active Forward/Deferred graph（World3D + World2D workload）
+声明 View → 共享 Scene snapshot → 按 workload 选择的 Scene graph（World3D/World2D/mixed）
 → Game UI compose → display compose → present；GUI framework 可以在没有 Scene/ECS 的情况下单独运行。

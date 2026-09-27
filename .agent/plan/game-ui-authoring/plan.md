@@ -22,7 +22,7 @@ Scene
 ## 与 Scene 2D 计划的关系
 
 本计划只负责 Game UI 的 UIDocument、WidgetTree、mount、designer 和 UI compose；
-Scene 中的 authored 2D sprite、正交 camera 和 World2D graphics pipeline 由
+Scene 中的 authored 2D sprite、正交 camera 和 Scene runtime sprite-rendering workload 由
 .agent/plan/scene-2d-world-and-game-ui/ 负责。两条线共享 View/Present 时序，但不共享
 Scene/ECS 与 WidgetTree 数据结构。
 
@@ -30,7 +30,7 @@ Scene/ECS 与 WidgetTree 数据结构。
 
 - 不引入 UMG 那一整套 UWidget / UUserWidget 平行类型。
 - 不在本计划内引入 Node2D、Transform2D、Camera2D 或第二套 Scene 树。若需要 2D 世界对象，
-  统一按新计划使用现有 Node3D/TransformComponent + CameraComponent 正交模式 + World2D family；
+  统一按新计划使用现有 Node3D/TransformComponent + CameraComponent 正交模式 + Scene sprite workload；
   不把这条能力偷偷塞进 Game UI。
 - 不把屏幕空间 UI 挂进 3D Scene hierarchy / ECS。
 - 不造统管 UI+Scene+Editor+Viewport 的 UIManager，不造中心事件总线。
