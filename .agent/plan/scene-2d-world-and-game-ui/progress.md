@@ -6,7 +6,7 @@
 
 - 保留已落地的 Render3D→GUI Compose 边界；feature matrix 改为 verified regression guard，
   不再把删除 ViewCompose 或 FramePacket snapshot 当未来任务。
-- GUI Compose 与 Scene runtime sprite 各自拥有 graphics-pipeline owner/state contract；shader module、
+- GUI Compose 与 Scene runtime sprite 使用不同 graphics-pipeline config/state contract；shader module、
   几何、upload 和纹理缓存是否共享再按能力与生命周期证据决定。删除“pipeline 是否分开也待定”的模糊措辞，
   同时不按 primitive 名称制造 shader/batch 层。
 - 撤回“World2D 必在 Forward/Deferred”“无 depth write”“bloom 后、tone-map 前”等预设。P0 必须用
@@ -25,8 +25,9 @@
 
 - P0 的 Render3D→GUI 边界已有实现与 parity/test 证据；P0 混合视觉契约、资源 resolve owner、纯 2D
   graph 策略仍未冻结。
-- P1 Render2DList 值化已有独立历史记录；typed texture/draw contract、pipeline owner 落地状态仍需按
-  开工时工作区代码审计，不能把未提交改动自动视为完成。
+- P1 的 Render2DList 值化、screen/world shader+vertex split、textureRef typed 化均已有 parity/test
+  记录，feature matrix 标为 verified。World2D 仍无 Scene graph 生产调用方；GPU upload/submit 生命周期
+  和后续 Scene integration 仍待做，不能把这些前置完成等同于 2D 游戏闭环完成。
 - 未改运行时代码，未运行 build/test；本轮检查计划一致性，不构成代码 checkpoint。
 - 当前工作区存在其他 shader/Render2D 改动，本轮未覆盖、暂存或提交。
 - 下一步：先填 P0-contract-matrix 的混合场景预期结果和证据，再开 P0/P1 实施；如果无法定义某个 MVP
@@ -239,3 +240,12 @@ Phase 1 §4.3（强制项：删除 textureRef 高位 bit 隐式协议）与 §4.
   其最终形状）；batch owner 保持一个（§4.4）。
 - World2D workload、Sprite2DComponent、正交 Camera（Phase 3/4）。
 
+### 2026-09-26 补记（P0 矩阵补充）
+
+- **世界 billboard 的场景侧路径已存在**：BillboardComponent 经 DeferredRenderPipeline 的
+  ViewOverlayStage（BillboardFrameUBO）绘制——世界空间、深度测试走场景管线，不经过
+  Render2D。Render2DList 删除的 makeWorldSprite/WorldQuad（屏像素尺寸 billboard、无深度
+  测试）从来不是世界 2D 内容的正确载体；Unity 式"世界中可旋转、被遮挡、固定尺寸的 2D
+  quad"的归属就是场景管线（Phase 4 World2D 同理），与 §9.5 四类 target 划分一致。
+- Render2DList 的 makeSprite（vec3/mat4 两个重载）均为屏空间（mat4 是目标像素空间的
+  任意变换，用于旋转的 UI 线/gizmo 轴线）；Render2D 里不存在世界空间的绘制入口。
