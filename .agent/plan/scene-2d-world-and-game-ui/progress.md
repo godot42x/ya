@@ -361,3 +361,38 @@ Phase 1 §4.3（强制项：删除 textureRef 高位 bit 隐式协议）与 §4.
 ### 下一步
 
 - D2。开工前需要确认 View overlay 画在 tone-map 之前还是之后。建议之后。
+
+## 2026-09-27 — D2：View overlay 画在 tone-map 之后
+
+### 目标与边界
+
+GameEditor 在已经 tone-map 的 View display image 上画 overlay：先世界线（测场景深度、不写），再 gizmo/HUD。GUI compose 不再持有场景颜色、场景深度或视口 compose kind。不开始 D3。
+
+### 完成
+
+- `EditorViewportCompositor` 直接画进 `RenderViewportSnapshot::viewportImageOwner`（display image）和配套的 View depth。颜色 Load，深度 Load，结束后都回到 `ShaderReadOnlyOptimal`。
+- 同一 pass 内先 `WorldDrawList`，再 `ScreenDrawList`。没有 display image 时不发布新图，调用方保留上一帧；深度缺失或范围/格式对不上时跳过 overlay，仍然发布这张已经分级的图。
+- 删除 `ERender2DComposePassKind::EditorViewportCompose`、`sceneSourceTexture`、`recordRender2DComposePass` 的 `depthTarget` 与 `afterScreen`。画布预览仍是 GUI screen compose，格式常量改为 `kEditorCanvasPreviewColorFormat`。
+- 3D recorder 按 `getPostprocessColorFormat()` 与 `getViewDepthFormat()` 准备。相机预览 View 不画 overlay。
+
+### 保留
+
+- D3：屏幕 stroke / 任意三角形。
+- 游戏 UI 仍在 view compose 之前画到同一张 display image 上，所以留在 overlay 下面。
+- `GUIWindowSession.offscreenRecorder` 仍未使用，本项不删。
+
+### 偏离
+
+- 无。
+
+### 验证
+
+- `xmake b ya-game-editor` 通过。
+- `rg "viewProjection|depthTarget|sceneSourceTexture" Engine/Source/Framework/GUI/Runtime/Compose` 无匹配。
+- `rg "Render2D::|acquirePassSlot|composePassSlot|FRender2dContext|EditorViewportCompose|makeWorldLine" Engine/Source` 无匹配。
+- `run_widgettree_editor_smoke.py --skip-build`：第一次查询赶在视口发布前，`rendered_viewport_extent` 为 0；重跑 exit 0。日志无 validation error。
+- 选中立方体后的 presentation 截图（`Engine/Saved/Automation/d2-view-overlay-selection.png`，635×426）：橙色包围盒线框围着立方体，RGB gizmo 轴线从中心穿出并盖在线框之上。窗口尺寸与 9 月 25 日的 1024×768 旧图不同，不作像素对比。
+
+### 下一步
+
+- D3。不在本项开始。

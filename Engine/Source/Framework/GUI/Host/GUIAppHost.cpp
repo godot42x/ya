@@ -1527,7 +1527,6 @@ bool GUIWindowHost::recordOffscreenParityCapture(const FGUIPresentExtensionConte
     _impl->offscreenSurface->prepare(_impl->offscreenRecorder);
     _impl->offscreenSurface->record(
         &ctx.cmdBuf,
-        nullptr,
         &snapshot,
         FRender2DComposePassDesc{
             .kind          = ERender2DComposePassKind::RuntimeUIOffscreen,

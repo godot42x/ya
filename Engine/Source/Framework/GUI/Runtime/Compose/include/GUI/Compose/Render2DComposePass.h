@@ -15,9 +15,8 @@ namespace ya
 struct ICommandBuffer;
 struct RenderTexture;
 
-/// Shared 2D compose pass used by every viewport-facing UI/overlay path:
-/// runtime UI presentation/offscreen parity, editor 2D canvas preview, and
-/// the editor 3D viewport composition (scene color + overlay + debug lines).
+/// Shared screen compose pass: runtime UI presentation, offscreen parity, and
+/// the editor 2D canvas preview. View overlays are not recorded here.
 enum class ERender2DComposePassKind : uint8_t
 {
     RuntimeUIComposite = 0,
@@ -27,14 +26,11 @@ enum class ERender2DComposePassKind : uint8_t
     /// Render2D's per-pass vertex/descriptor resources.
     RuntimeUIOffscreen,
     EditorCanvasPreview,
-    EditorViewportCompose,
     EditorToolSurface,
 };
 
-/// Editor viewport compose / 2D canvas always write this HDR target. Pipeline
-/// prep must use the same format; it is independent of Deferred vs Forward
-/// color, but depth still follows the active 3D pipeline.
-inline constexpr EFormat::T kEditorViewportComposeColorFormat = EFormat::R16G16B16A16_SFLOAT;
+/// 2D canvas preview writes this target. It is not a scene image.
+inline constexpr EFormat::T kEditorCanvasPreviewColorFormat = EFormat::R16G16B16A16_SFLOAT;
 
 struct FRender2DComposePassDesc
 {
@@ -43,15 +39,12 @@ struct FRender2DComposePassDesc
     glm::vec2                canvasPan  = glm::vec2(0.0f);
     float                    canvasZoom = 1.0f;
 
-    /// Layout the target is transitioned to after the pass. Intermediate
-    /// targets (world composite, editor preview) stay ShaderReadOnlyOptimal so
-    /// they can be sampled later; a direct-to-swapchain presentation pass
-    /// passes PresentSrcKHR (swapchain images are not created with SAMPLED
-    /// usage, so the sampled layout would be invalid).
+    /// Layout the target is transitioned to after the pass. An offscreen
+    /// target stays ShaderReadOnlyOptimal so it can be sampled later; a
+    /// direct-to-swapchain presentation pass passes PresentSrcKHR (swapchain
+    /// images are not created with SAMPLED usage, so the sampled layout would
+    /// be invalid).
     EImageLayout::T finalLayout = EImageLayout::ShaderReadOnlyOptimal;
-
-    /// EditorViewportCompose: full-screen scene color sampled as a sprite.
-    std::shared_ptr<Texture> sceneSourceTexture = nullptr;
 };
 
 /// Prepare the screen PSO this recorder will bind. Must be called before
@@ -60,21 +53,17 @@ YA_GUI_API void prepareRender2DComposePassPipeline(ScreenDrawRecorder& recorder,
                                                    EFormat::T          colorFormat,
                                                    EFormat::T          depthFormat = EFormat::Undefined);
 
-/// Record one shared 2D compose pass into `target`. `uiFrameSnapshot` is the
+/// Record one screen compose pass into `target`. `uiFrameSnapshot` is the
 /// immutable per-frame Game UI packet (already resolved to render-target
 /// pixels); command recording never touches the live widget tree. May be null
-/// for passes without Game UI (editor viewport). `depthTarget` is optional
-/// (the editor viewport depth-tests debug overlays against it).
-/// `extraContent` runs inside the Render2D recording window for caller-owned
-/// content such as camera overlay text and physics debug lines.
+/// for a canvas that only draws its grid. `extraContent` appends more screen
+/// draws before the list is recorded.
 YA_GUI_API void recordRender2DComposePass(ICommandBuffer*                  cmdBuf,
                                           RenderTexture&                   target,
-                                          RenderTexture*                   depthTarget,
                                           const UIFrameSnapshot*           uiFrameSnapshot,
                                           const FRender2DComposePassDesc&  passDesc,
                                           ScreenDrawRecorder&              recorder,
-                                          const std::function<void(ScreenDrawList&)>& extraContent = {},
-                                          const std::function<void(ICommandBuffer*)>& afterScreen = {});
+                                          const std::function<void(ScreenDrawList&)>& extraContent = {});
 
 /// Replay a UI snapshot into an already-open raster pass. Does not begin or
 /// end rendering and does not transition the target. Used by the editor

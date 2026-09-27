@@ -154,7 +154,6 @@ void recordGuiSnapshot(FGUISurfacePresentResources&  resources,
     };
     renderSurface->record(
         cmdBuf.get(),
-        nullptr,
         &snapshot,
         FRender2DComposePassDesc{
             .kind          = ERender2DComposePassKind::RuntimeUIComposite,

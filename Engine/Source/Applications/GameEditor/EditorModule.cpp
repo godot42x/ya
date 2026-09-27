@@ -86,7 +86,7 @@ namespace
 //       EditorModule::onViewportCompose          [command recording]
 //         viewport snapshot → EditorViewportCompositor
 //           2D: canvas preview + recordEditorCanvasSelectionOverlay
-//           3D: world RT + recordEditorWorldViewportOverlays
+//           3D: overlays on the tone-mapped display image (world, then screen)
 //         setViewportDisplayImage  (chrome UIImage samples this RT)
 //       EditorModule::onPresentation             [same command buffer]
 //         presentDefaultChrome
@@ -476,16 +476,23 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                                         editorCamera._nearClip,
                                         editorCamera._farClip);
         }
-        // The editor compositor always targets an HDR color image. Keep
-        // the screen-space sprite pipeline's dynamic-rendering formats in
-        // sync before presentation starts; recreating a pipeline while a
+        // Prepare before command recording. Recreating a pipeline while a
         // command buffer is recording invalidates that command buffer.
-        // The depth format of the active strategy's View targets, asked of the
-        // renderer rather than read off a pipeline object.
+        // 3D overlays draw into the tone-mapped display image and test the
+        // View depth. The canvas preview is a separate target.
         const EFormat::T depthFormat = renderServices.getViewDepthFormat();
-        _viewportCompositor.prepare(kEditorViewportComposeColorFormat,
-                                    depthFormat,
-                                    _layer->isViewportMode2D());
+        EFormat::T overlayColor = EFormat::R8G8B8A8_UNORM;
+        if (RenderDeviceState* device = renderServices.getDeviceState()) {
+            overlayColor = device->getPostprocessColorFormat();
+        }
+        if (_layer->isViewportMode2D()) {
+            _viewportCompositor.prepare(kEditorCanvasPreviewColorFormat,
+                                        EFormat::Undefined,
+                                        true);
+        }
+        else {
+            _viewportCompositor.prepare(overlayColor, depthFormat, false);
+        }
         EFormat::T chromeFormat = EFormat::B8G8R8A8_UNORM;
         if (auto* surface = renderServices.getHostSurface(); surface && surface->getSwapchain()) {
             chromeFormat = surface->getSwapchain()->getFormat();

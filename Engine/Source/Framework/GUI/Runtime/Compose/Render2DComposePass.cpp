@@ -59,9 +59,6 @@ ClearValue composeClearValue(ERender2DComposePassKind kind)
     if (kind == ERender2DComposePassKind::EditorToolSurface) {
         return ClearValue(0.075f, 0.082f, 0.10f, 1.0f);
     }
-    if (kind == ERender2DComposePassKind::EditorViewportCompose) {
-        return ClearValue(0.07f, 0.075f, 0.09f, 1.0f);
-    }
     return ClearValue(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
@@ -71,7 +68,6 @@ const char* composePassLabel(ERender2DComposePassKind kind)
         case ERender2DComposePassKind::RuntimeUIComposite: return "UI Compositor";
         case ERender2DComposePassKind::RuntimeUIOffscreen: return "UI Offscreen Mirror";
         case ERender2DComposePassKind::EditorCanvasPreview: return "Editor Canvas Preview";
-        case ERender2DComposePassKind::EditorViewportCompose: return "EditorViewportComposition";
         case ERender2DComposePassKind::EditorToolSurface: return "EditorToolSurface";
     }
     return "Render2D Compose";
@@ -194,12 +190,10 @@ void prepareRender2DComposePassPipeline(ScreenDrawRecorder& recorder,
 
 void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
                                RenderTexture&                  target,
-                               RenderTexture*                  depthTarget,
                                const UIFrameSnapshot*          uiFrameSnapshot,
                                const FRender2DComposePassDesc& passDesc,
                                ScreenDrawRecorder&             recorder,
-                               const std::function<void(ScreenDrawList&)>& extraContent,
-                               const std::function<void(ICommandBuffer*)>& afterScreen)
+                               const std::function<void(ScreenDrawList&)>& extraContent)
 {
     if (!cmdBuf) {
         return;
@@ -219,13 +213,6 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
     cmdBuf->retireResource(target.getImageShared());
     cmdBuf->retireResource(target.getImageViewShared());
     cmdBuf->transitionImageLayoutAuto(target.getImage(), EImageLayout::ColorAttachmentOptimal);
-
-    if (depthTarget) {
-        cmdBuf->retireResource(depthTarget->getImageShared());
-        cmdBuf->retireResource(depthTarget->getImageViewShared());
-        cmdBuf->retireResources(depthTarget->getRetainedResources());
-        cmdBuf->transitionImageLayoutAuto(depthTarget->getImage(), EImageLayout::DepthStencilAttachmentOptimal);
-    }
 
     cmdBuf->beginRendering(RenderingInfo{
         .label                         = composePassLabel(passDesc.kind),
@@ -247,31 +234,10 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
                     .finalLayout   = EImageLayout::ColorAttachmentOptimal,
                 },
             },
-            .depth = depthTarget
-                         ? std::optional<RenderAttachment>{RenderAttachment{
-                               .image         = depthTarget->getImage(),
-                               .imageView     = depthTarget->getImageView(),
-                               .loadOp        = EAttachmentLoadOp::Load,
-                               .storeOp       = EAttachmentStoreOp::Store,
-                               .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
-                               .finalLayout   = EImageLayout::DepthStencilAttachmentOptimal,
-                           }}
-                         : std::nullopt,
         },
     });
 
     ScreenDrawList list;
-    if (passDesc.kind == ERender2DComposePassKind::EditorViewportCompose) {
-        if (passDesc.sceneSourceTexture) {
-            list.makeSprite(glm::vec3(0.0f, 0.0f, 0.0f),
-                            glm::vec2(static_cast<float>(rtExtent.width), static_cast<float>(rtExtent.height)),
-                            passDesc.sceneSourceTexture.get(),
-                            glm::vec4(1.0f),
-                            {1.0f, 1.0f},
-                            {0.0f, 0.0f},
-                            true);
-        }
-    }
     if (passDesc.kind == ERender2DComposePassKind::EditorCanvasPreview) {
         drawEditorCanvasGrid(list, rtExtent, uiScale, passDesc.canvasPan, passDesc.canvasZoom);
     }
@@ -288,15 +254,9 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
         .height      = rtExtent.height,
         .colorFormat = target.getFormat(),
     });
-    if (afterScreen) {
-        afterScreen(cmdBuf);
-    }
 
     cmdBuf->endRendering();
     cmdBuf->transitionImageLayoutAuto(target.getImage(), passDesc.finalLayout);
-    if (depthTarget) {
-        cmdBuf->transitionImageLayoutAuto(depthTarget->getImage(), EImageLayout::ShaderReadOnlyOptimal);
-    }
 }
 
 void replayUIFrameSnapshot(ICommandBuffer*          cmdBuf,

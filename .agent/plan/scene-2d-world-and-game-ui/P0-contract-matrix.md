@@ -17,7 +17,7 @@ callback 或 global state 不得进入后续 phase。
 | Render2D list / batch cursor | `Render2DList` value builder（像素 + 世界混装）+ 静态 `Render2D::recordRender2DList` | GUI compose、editor overlay；World2D 尚无生产者 | D1：`ScreenDrawList` / `WorldDrawList` 分类型；`ScreenDrawRecorder` / `WorldDrawRecorder` 由目标 owner 持有（见 plan §2.4） | flight/submit 范围内保活；禁止后续 flush 覆写在提交中的数据；录制器销毁走 DeferredDeletionQueue |
 | 2D 共享 pipeline / PSO 缓存 | 静态 `Render2D::init`：`GUIAppHost`（swapchain 格式）与 `PipelineCoordinator`（3D 管线格式）谁先到谁生效；`PipelineCoordinator::shutdown` destroy | 所有 2D 录制 | D1：`ScreenDrawPipelines` 归持有 `IRender` 的一方（GUIApp：`GUIAppHost`；ya::App：App 设备状态）；`WorldDrawPipelines` 只在 ya::App 创建 | 设备 init 之后建、设备销毁之前毁；PSO 变体按格式懒建，只在录制外 |
 | Pass slot | `Render2D::acquirePassSlot`；GUI session 持 present/offscreen slot；`composePassSlot` 函数级 static 池 | Render2D 内部资源隔离 | D1 删除：隔离由录制器实例天然提供 | — |
-| 编辑器 View overlay | GUI Compose `EditorViewportCompose`（持 camera、scene color、depth）+ `recordEditorWorldViewportOverlays` 回调 | 编辑器 3D 视口 | D2：GameEditor View overlay pass，先世界相位（测 View 深度不写）再屏幕相位 | 每 View 每帧；D2 前冻结 tone map 前/后 |
+| 编辑器 View overlay | GameEditor `EditorViewOverlay`：tone-map 后的 display image 上先 `WorldDrawList`（测 View 深度不写）再 gizmo/HUD | 编辑器 3D 视口 widget | GameEditor。GUI compose 不持相机、scene color、深度 | 每帧写 authoring View 的 display image；相机预览 View 不画 overlay |
 | Render2D backend resource access | 当前 `QuadRender` 存在 Vulkan/backend texture access（需复核工作区实现） | screen/world pipeline record | P0 冻结 RHI capability 与后端资源访问 seam；Render2D 不直接拥有 Vulkan-only policy | 核对 Vulkan/OpenGL 实现、texture/sampler/pipeline/buffer owner；只抽真实需要的公共机制，不加空 facade |
 | Swapchain / presentation | Host acquire/present + SurfacePresentation | display compose | presentation layer | 不属于 View/Scene/World2D；仅 display compose 触碰 |
 | View content selection | 当前 FRenderFeatureMask 只表达 Game/Gizmo/Debug | extraction buckets | P0 决定是否有必要增加明确的 SceneViewWorkload | 不能用空 candidates 推断不需要 stages；若加，只表达内容请求，不表达 renderer identity，不进入 Scene family key |
@@ -78,13 +78,14 @@ pipeline 可合并的证据。GUI 与 Scene sprite 必须有分离的 typed draw
 
 ### 当前 destination 的 load/depth 差异
 
-| kind | load/clear | clear 值 | depthTarget |
-| --- | --- | --- | --- |
-| RuntimeUIComposite | Load | 不生效 | 无 |
-| RuntimeUIOffscreen | Clear | (0.05,0.06,0.07,1) | 无 |
-| EditorCanvasPreview | Clear | (0.055,0.06,0.07,1) | 无 |
-| EditorViewportCompose | Clear | (0.07,0.075,0.09,1) | **唯一可带深度**（bAttachDepth），depth loadOp=Load |
-| EditorToolSurface | 无 rendering（回放进已开 presentation pass） | – | 无 |
+| kind | load/clear | clear 值 |
+| --- | --- | --- |
+| RuntimeUIComposite | Load | 不生效 |
+| RuntimeUIOffscreen | Clear | (0.05,0.06,0.07,1) |
+| EditorCanvasPreview | Clear | (0.055,0.06,0.07,1) |
+| EditorToolSurface | 无 rendering（回放进已开 presentation pass） | – |
+
+View overlay 不在这张表里：它是 GameEditor 自己的 pass，颜色 Load（不清除已 tone-map 的 display），深度 Load。
 
 ### 现有能力结论（不是目标架构冻结）
 

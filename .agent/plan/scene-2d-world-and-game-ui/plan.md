@@ -368,8 +368,8 @@ extent 与相机、GUI Compose 仍拥有编辑器 View overlay、全局 `Render2
    `WorldDrawList`（测试不写），再画 gizmo / HUD 的 `ScreenDrawList`。
 2. 删除 `ERender2DComposePassKind::EditorViewportCompose`、`FRender2DComposePassDesc::camera`、
    `sceneSourceTexture` 与 `recordRender2DComposePass` 的 `depthTarget` 参数。
-3. 开工前冻结：overlay 在 tone map 之前（HDR scene color）还是之后（display image）。建议之后，
-   与 Unreal 编辑器图元一致；这会改变当前线条观感，需用户确认。
+3. Overlay 画在 tone map 之后的 display image 上（用户确认）。线条在已分级的颜色上
+   混合，不再写进 HDR scene color。
 
 验收：`rg "viewProjection|depthTarget|sceneSourceTexture" Engine/Source/Framework/GUI/Runtime/Compose`
 零命中；gizmo handle 不再被线框覆盖（截图证据）；编辑器 smoke 通过。

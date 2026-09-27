@@ -73,7 +73,6 @@ public:
     /// the final layout; callers cannot accidentally leave an offscreen
     /// target in PresentSrcKHR or a swapchain target in ShaderReadOnlyOptimal.
     void record(ICommandBuffer*                 cmdBuf,
-                RenderTexture*                  depthTarget,
                 const UIFrameSnapshot*          uiFrameSnapshot,
                 FRender2DComposePassDesc        passDesc,
                 ScreenDrawRecorder&             recorder,

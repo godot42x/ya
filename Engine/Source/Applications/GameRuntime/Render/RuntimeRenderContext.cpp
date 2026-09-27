@@ -121,7 +121,6 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan,
     if (displayOutput && uiSnapshot) {
         recordRender2DComposePass(cmdBuf.get(),
                                   *displayOutput->displayImage(),
-                                  nullptr,
                                   uiSnapshot,
                                   FRender2DComposePassDesc{
                                       .kind = ERender2DComposePassKind::RuntimeUIComposite,

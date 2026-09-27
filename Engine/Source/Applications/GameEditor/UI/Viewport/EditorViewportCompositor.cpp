@@ -8,7 +8,6 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderTexture.h"
-#include "RHI/Core/Texture.h"
 #include "RHI/Render.h"
 #include "Render3D/Common/RenderViewportSnapshot.h"
 #include "Render3D/WorldDraw.h"
@@ -24,7 +23,7 @@ namespace ya
 namespace
 {
 
-std::shared_ptr<RenderTexture> createEditorViewportImage(IRender& render, const Extent2D& extent)
+std::shared_ptr<RenderTexture> createCanvasPreviewImage(IRender& render, const Extent2D& extent)
 {
     if (extent.width == 0 || extent.height == 0) {
         return nullptr;
@@ -32,20 +31,13 @@ std::shared_ptr<RenderTexture> createEditorViewportImage(IRender& render, const 
     return RenderTexture::create(
         *render.getResourceFactory(),
         RenderTextureCreateInfo{
-            .label   = "EditorViewportComposed",
+            .label   = "EditorCanvasPreview",
             .width   = extent.width,
             .height  = extent.height,
-            .format  = kEditorViewportComposeColorFormat,
+            .format  = kEditorCanvasPreviewColorFormat,
             .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
             .samples = ESampleCount::Sample_1,
         });
-}
-
-FRender2DComposePassDesc worldComposeDesc()
-{
-    return FRender2DComposePassDesc{
-        .kind = ERender2DComposePassKind::EditorViewportCompose,
-    };
 }
 
 } // namespace
@@ -72,7 +64,8 @@ void EditorViewportCompositor::prepare(EFormat::T colorFormat, EFormat::T depthF
         _canvasScreen.prepare(colorFormat, EFormat::Undefined);
         return;
     }
-    _worldDepthFormat = depthFormat;
+    _overlayColorFormat = colorFormat;
+    _worldDepthFormat   = depthFormat;
     _viewportScreen.prepare(colorFormat, depthFormat);
     _world.prepare(colorFormat, depthFormat);
 }
@@ -86,32 +79,24 @@ void EditorViewportCompositor::shutdown()
     _screenPipelines = nullptr;
     _worldPipelines  = nullptr;
     _scenePreview.shutdown();
-    _composedViewportImage.reset();
-    _sourceViewportTexture.reset();
-    _sourceViewportImage.reset();
-    _sourceViewportImageView.reset();
+    _canvasImage.reset();
+    _publishedOutput.reset();
 }
 
-void EditorViewportCompositor::compose(IRender&                            render,
-                                       ICommandBuffer&                     commandBuffer,
-                                       const RenderViewportSnapshot&       snapshot,
-                                       EditorLayer&                        layer,
-                                       const EditorComposeCamera&          worldCamera,
-                                       const Extent2D&                     canvasTargetExtent)
+void EditorViewportCompositor::compose(IRender&                      render,
+                                       ICommandBuffer&               commandBuffer,
+                                       const RenderViewportSnapshot& snapshot,
+                                       EditorLayer&                  layer,
+                                       const EditorComposeCamera&    worldCamera,
+                                       const Extent2D&               canvasTargetExtent)
 {
-    // 2D always takes the canvas path: the world graph is disabled, so a
-    // world-sourced compose would leave the viewport empty during startup.
+    // 2D always takes the canvas path: the world graph is disabled, so there
+    // is no display image to draw into.
     if (layer.isViewportMode2D()) {
         composeCanvasPreview(render, commandBuffer, layer, canvasTargetExtent);
         return;
     }
-
-    auto source = snapshot.viewportImageOwner;
-    if (!source || !source->getImageShared() || !source->getImageView()) {
-        composeWorldFallback(render, commandBuffer, layer, worldCamera, canvasTargetExtent);
-        return;
-    }
-    composeWorldFromScene(render, commandBuffer, snapshot, layer, worldCamera);
+    composeAuthoringView(commandBuffer, snapshot, layer, worldCamera);
 }
 
 void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
@@ -120,7 +105,8 @@ void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
                                                     const Extent2D& canvasTargetExtent)
 {
     ensureCanvasTarget(render, canvasTargetExtent);
-    if (!_composedViewportImage || !_composedViewportImage->isValid()) {
+    if (!_canvasImage || !_canvasImage->isValid()) {
+        _publishedOutput.reset();
         return;
     }
 
@@ -130,9 +116,9 @@ void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
         .height = static_cast<uint32_t>(std::max(logicalViewport.y, 0.0f)),
     };
     const glm::vec2 targetScale{
-        static_cast<float>(_composedViewportImage->getExtent().width) /
+        static_cast<float>(_canvasImage->getExtent().width) /
             std::max(static_cast<float>(logicalExtent.width), 1.0f),
-        static_cast<float>(_composedViewportImage->getExtent().height) /
+        static_cast<float>(_canvasImage->getExtent().height) /
             std::max(static_cast<float>(logicalExtent.height), 1.0f),
     };
     // Tree-local logical px -> canvas target px (framebuffer scale), then
@@ -162,8 +148,7 @@ void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
     }
 
     recordRender2DComposePass(&commandBuffer,
-                              *_composedViewportImage,
-                              nullptr,
+                              *_canvasImage,
                               pUiPreviewSnapshot,
                               FRender2DComposePassDesc{
                                   .kind = ERender2DComposePassKind::EditorCanvasPreview,
@@ -177,158 +162,112 @@ void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
                                       recordEditorCanvasSelectionOverlay(composeList, *pSelectionRect, uiScale, offset);
                                   }
                               });
+    _publishedOutput = _canvasImage;
 }
 
-void EditorViewportCompositor::composeWorldFallback(IRender&                            render,
-                                                    ICommandBuffer&                     commandBuffer,
-                                                    EditorLayer&                        layer,
-                                                    const EditorComposeCamera&          worldCamera,
-                                                    const Extent2D&                     canvasTargetExtent)
+void EditorViewportCompositor::composeAuthoringView(ICommandBuffer&               commandBuffer,
+                                                    const RenderViewportSnapshot& snapshot,
+                                                    EditorLayer&                  layer,
+                                                    const EditorComposeCamera&    worldCamera)
 {
-    Extent2D fallback = canvasTargetExtent;
-    if (fallback.width == 0 || fallback.height == 0) {
-        fallback = Extent2D::fromVec2(layer.getViewportSize());
-    }
-    if (fallback.width == 0 || fallback.height == 0) {
-        fallback = {.width = 1280, .height = 720};
-    }
-    ensureCanvasTarget(render, fallback);
-    if (!_composedViewportImage || !_composedViewportImage->isValid()) {
-        return;
-    }
-    commandBuffer.retireResource(_composedViewportImage->getImageShared());
-    commandBuffer.retireResource(_composedViewportImage->getImageViewShared());
-    commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(),
-                                            EImageLayout::ColorAttachmentOptimal);
-    const Extent2D targetExtent = _composedViewportImage->getExtent();
-    const EFormat::T colorFormat = _composedViewportImage->getFormat();
-    recordRender2DComposePass(
-        &commandBuffer,
-        *_composedViewportImage,
-        nullptr,
-        nullptr,
-        worldComposeDesc(),
-        _viewportScreen,
-        [&layer](ScreenDrawList& composeList) { recordEditorViewportScreenOverlays(composeList, layer); },
-        [this, &layer, &worldCamera, targetExtent, colorFormat](ICommandBuffer* cmd) {
-            WorldDrawList world;
-            recordEditorViewportWorldOverlays(world, layer, /*bDepthTestedWorld=*/false);
-            _world.record(world, WorldDrawTarget{
-                .cmd            = cmd,
-                .width          = targetExtent.width,
-                .height         = targetExtent.height,
-                .colorFormat    = colorFormat,
-                .depthFormat    = _worldDepthFormat,
-                .viewProjection = worldCamera.viewProjection,
-            });
-        });
-}
-
-void EditorViewportCompositor::composeWorldFromScene(IRender&                            render,
-                                                     ICommandBuffer&                     commandBuffer,
-                                                     const RenderViewportSnapshot&       snapshot,
-                                                     EditorLayer&                        layer,
-                                                     const EditorComposeCamera& worldCamera)
-{
-    auto source = snapshot.viewportImageOwner;
-    ensureTarget(render, *source);
-    if (!_composedViewportImage || !_composedViewportImage->isValid()) {
+    auto color = snapshot.viewportImageOwner;
+    if (!color || !color->isValid() || !color->getImageView()) {
+        _publishedOutput.reset();
         return;
     }
 
-    commandBuffer.retireResource(source->getImageShared());
-    commandBuffer.retireResource(source->getImageViewShared());
-    commandBuffer.retireResources(source->getRetainedResources());
-    commandBuffer.retireResource(_composedViewportImage->getImageShared());
-    commandBuffer.retireResource(_composedViewportImage->getImageViewShared());
-
-    commandBuffer.transitionImageLayoutAuto(source->getImage(), EImageLayout::ShaderReadOnlyOptimal);
-    commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(),
-                                            EImageLayout::ColorAttachmentOptimal);
-
-    const auto depthOwner   = snapshot.viewDepthOwner;
-    const bool bAttachDepth = depthOwner && depthOwner->isValid() &&
-                              depthOwner->getExtent() == _composedViewportImage->getExtent();
-    if (bAttachDepth) {
-        commandBuffer.retireResource(depthOwner->getImageShared());
-        commandBuffer.retireResource(depthOwner->getImageViewShared());
-        commandBuffer.retireResources(depthOwner->getRetainedResources());
-        commandBuffer.transitionImageLayoutAuto(depthOwner->getImage(),
-                                                EImageLayout::DepthStencilAttachmentOptimal);
+    auto depth = snapshot.viewDepthOwner;
+    const bool bCanOverlay = depth && depth->isValid() && depth->getImageView() &&
+                             depth->getExtent() == color->getExtent() &&
+                             color->getFormat() == _overlayColorFormat &&
+                             depth->getFormat() == _worldDepthFormat;
+    if (bCanOverlay) {
+        recordViewOverlay(commandBuffer, *color, *depth, layer, worldCamera);
     }
-
-    FRender2DComposePassDesc desc = worldComposeDesc();
-    desc.sceneSourceTexture = resolveSourceTexture(*source);
-    const Extent2D targetExtent = _composedViewportImage->getExtent();
-    const EFormat::T colorFormat = _composedViewportImage->getFormat();
-    recordRender2DComposePass(
-        &commandBuffer,
-        *_composedViewportImage,
-        bAttachDepth ? depthOwner.get() : nullptr,
-        nullptr,
-        desc,
-        _viewportScreen,
-        [&layer](ScreenDrawList& composeList) { recordEditorViewportScreenOverlays(composeList, layer); },
-        [this, &layer, &worldCamera, bAttachDepth, targetExtent, colorFormat](ICommandBuffer* cmd) {
-            WorldDrawList world;
-            recordEditorViewportWorldOverlays(world, layer, bAttachDepth);
-            _world.record(world, WorldDrawTarget{
-                .cmd            = cmd,
-                .width          = targetExtent.width,
-                .height         = targetExtent.height,
-                .colorFormat    = colorFormat,
-                .depthFormat    = _worldDepthFormat,
-                .viewProjection = worldCamera.viewProjection,
-            });
-        });
+    _publishedOutput = std::move(color);
 }
 
-std::shared_ptr<Texture> EditorViewportCompositor::resolveSourceTexture(const RenderTexture& source)
+void EditorViewportCompositor::recordViewOverlay(ICommandBuffer&            commandBuffer,
+                                                 RenderTexture&             color,
+                                                 RenderTexture&             depth,
+                                                 EditorLayer&               layer,
+                                                 const EditorComposeCamera& worldCamera)
 {
-    auto sourceImage     = source.getImageShared();
-    auto sourceImageView = source.getImageViewShared();
-    if (!sourceImage || !sourceImageView) {
-        _sourceViewportTexture.reset();
-        _sourceViewportImage.reset();
-        _sourceViewportImageView.reset();
-        return nullptr;
-    }
+    commandBuffer.retireResource(color.getImageShared());
+    commandBuffer.retireResource(color.getImageViewShared());
+    commandBuffer.retireResources(color.getRetainedResources());
+    commandBuffer.transitionImageLayoutAuto(color.getImage(), EImageLayout::ColorAttachmentOptimal);
 
-    if (_sourceViewportTexture &&
-        _sourceViewportImage == sourceImage &&
-        _sourceViewportImageView == sourceImageView) {
-        return _sourceViewportTexture;
-    }
+    commandBuffer.retireResource(depth.getImageShared());
+    commandBuffer.retireResource(depth.getImageViewShared());
+    commandBuffer.retireResources(depth.getRetainedResources());
+    commandBuffer.transitionImageLayoutAuto(depth.getImage(), EImageLayout::DepthStencilAttachmentOptimal);
 
-    _sourceViewportImage     = std::move(sourceImage);
-    _sourceViewportImageView = std::move(sourceImageView);
-    _sourceViewportTexture   = Texture::wrap(_sourceViewportImage,
-                                           _sourceViewportImageView,
-                                           "EditorViewportCompositionSource");
-    return _sourceViewportTexture;
-}
+    const Extent2D extent = color.getExtent();
+    commandBuffer.beginRendering(RenderingInfo{
+        .label                         = "EditorViewOverlay",
+        .bExternalTransitionManagement = true,
+        .attachments                   = RenderAttachmentSet{
+            .renderArea = Rect2D{
+                .pos    = {0.0f, 0.0f},
+                .extent = {static_cast<float>(extent.width), static_cast<float>(extent.height)},
+            },
+            .layerCount = 1,
+            .colors     = {
+                RenderAttachment{
+                    .image         = color.getImage(),
+                    .imageView     = color.getImageView(),
+                    .loadOp        = EAttachmentLoadOp::Load,
+                    .storeOp       = EAttachmentStoreOp::Store,
+                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ColorAttachmentOptimal,
+                },
+            },
+            .depth = RenderAttachment{
+                .image         = depth.getImage(),
+                .imageView     = depth.getImageView(),
+                .loadOp        = EAttachmentLoadOp::Load,
+                .storeOp       = EAttachmentStoreOp::Store,
+                .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
+                .finalLayout   = EImageLayout::DepthStencilAttachmentOptimal,
+            },
+        },
+    });
 
-void EditorViewportCompositor::ensureTarget(IRender& render, const RenderTexture& source)
-{
-    const Extent2D sourceExtent = source.getExtent();
-    if (_composedViewportImage &&
-        _composedViewportImage->getWidth() == sourceExtent.width &&
-        _composedViewportImage->getHeight() == sourceExtent.height &&
-        _composedViewportImage->getFormat() == kEditorViewportComposeColorFormat) {
-        return;
-    }
-    _composedViewportImage = createEditorViewportImage(render, sourceExtent);
+    WorldDrawList world;
+    recordEditorViewportWorldOverlays(world, layer, /*bDepthTestedWorld=*/true);
+    _world.record(world, WorldDrawTarget{
+        .cmd            = &commandBuffer,
+        .width          = extent.width,
+        .height         = extent.height,
+        .colorFormat    = color.getFormat(),
+        .depthFormat    = depth.getFormat(),
+        .viewProjection = worldCamera.viewProjection,
+    });
+
+    ScreenDrawList screen;
+    recordEditorViewportScreenOverlays(screen, layer);
+    (void)_viewportScreen.record(screen, ScreenDrawTarget{
+        .cmd         = &commandBuffer,
+        .width       = extent.width,
+        .height      = extent.height,
+        .colorFormat = color.getFormat(),
+    });
+
+    commandBuffer.endRendering();
+    commandBuffer.transitionImageLayoutAuto(color.getImage(), EImageLayout::ShaderReadOnlyOptimal);
+    commandBuffer.transitionImageLayoutAuto(depth.getImage(), EImageLayout::ShaderReadOnlyOptimal);
 }
 
 void EditorViewportCompositor::ensureCanvasTarget(IRender& render, const Extent2D& extent)
 {
-    if (_composedViewportImage &&
-        _composedViewportImage->getWidth() == extent.width &&
-        _composedViewportImage->getHeight() == extent.height &&
-        _composedViewportImage->getFormat() == kEditorViewportComposeColorFormat) {
+    if (_canvasImage &&
+        _canvasImage->getWidth() == extent.width &&
+        _canvasImage->getHeight() == extent.height &&
+        _canvasImage->getFormat() == kEditorCanvasPreviewColorFormat) {
         return;
     }
-    _composedViewportImage = createEditorViewportImage(render, extent);
+    _canvasImage = createCanvasPreviewImage(render, extent);
 }
 
 } // namespace ya

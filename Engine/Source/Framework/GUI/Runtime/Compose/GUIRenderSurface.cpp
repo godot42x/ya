@@ -59,7 +59,6 @@ void GUIRenderSurface::prepare(ScreenDrawRecorder& recorder, EFormat::T depthFor
 }
 
 void GUIRenderSurface::record(ICommandBuffer*              cmdBuf,
-                              RenderTexture*               depthTarget,
                               const UIFrameSnapshot*       uiFrameSnapshot,
                               FRender2DComposePassDesc     passDesc,
                               ScreenDrawRecorder&          recorder,
@@ -69,7 +68,7 @@ void GUIRenderSurface::record(ICommandBuffer*              cmdBuf,
         return;
     }
     passDesc.finalLayout = _finalLayout;
-    recordRender2DComposePass(cmdBuf, *_image, depthTarget, uiFrameSnapshot, passDesc, recorder, extraContent);
+    recordRender2DComposePass(cmdBuf, *_image, uiFrameSnapshot, passDesc, recorder, extraContent);
 }
 
 } // namespace ya
