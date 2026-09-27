@@ -3,6 +3,7 @@
 #include "Core/Common/Types.h"
 
 #include "GUI/Compose/Render2DComposePass.h"
+#include "Render3D/WorldDraw.h"
 
 #include "GameEditor/UI/Viewport/EditorGameUIPreview.h"
 
@@ -21,6 +22,16 @@ struct RenderTexture;
 struct RenderViewportSnapshot;
 struct Texture;
 
+/// Camera matrices for world-space overlay lines. They stay on the editor
+/// side of the compose pass; the GUI pass description does not carry them.
+struct EditorComposeCamera
+{
+    glm::vec3 position{0.0f};
+    glm::mat4 view{1.0f};
+    glm::mat4 projection{1.0f};
+    glm::mat4 viewProjection{1.0f};
+};
+
 /// Offscreen 2D compose of the authoring viewport: world color + overlays, or
 /// the 2D canvas preview. Output is sampled by chrome `UIImage`; this object
 /// does not present to the swapchain.
@@ -37,8 +48,19 @@ class EditorViewportCompositor
     std::shared_ptr<IImageView>    _sourceViewportImageView;
     /// The current Scene's mounts, instantiated once and reused across frames.
     EditorGameUIPreview            _scenePreview;
+    ScreenDrawPipelines*           _screenPipelines = nullptr;
+    WorldDrawPipelines*            _worldPipelines  = nullptr;
+    ScreenDrawRecorder             _viewportScreen;
+    ScreenDrawRecorder             _canvasScreen;
+    WorldDrawRecorder              _world;
+    bool                           _bRecordersBound = false;
+    EFormat::T                     _worldDepthFormat = EFormat::Undefined;
 
   public:
+    void bindDraw(ScreenDrawPipelines& screen, WorldDrawPipelines& world);
+    /// `bCanvas` prepares the canvas recorder. Otherwise the viewport screen
+    /// recorder and the world recorder are prepared for `depthFormat`.
+    void prepare(EFormat::T colorFormat, EFormat::T depthFormat, bool bCanvas);
     void shutdown();
     [[nodiscard]] std::shared_ptr<RenderTexture> getOutputImage() const
     {
@@ -49,7 +71,7 @@ class EditorViewportCompositor
                  ICommandBuffer&                     commandBuffer,
                  const RenderViewportSnapshot&       snapshot,
                  EditorLayer&                        layer,
-                 const FRender2DComposePassDesc::Camera& worldCamera,
+                 const EditorComposeCamera&          worldCamera,
                  const Extent2D&                     canvasTargetExtent);
 
   private:
@@ -60,13 +82,13 @@ class EditorViewportCompositor
     void composeWorldFallback(IRender&                         render,
                               ICommandBuffer&                  commandBuffer,
                               EditorLayer&                     layer,
-                              const FRender2DComposePassDesc::Camera& worldCamera,
+                              const EditorComposeCamera&          worldCamera,
                               const Extent2D&                  canvasTargetExtent);
     void composeWorldFromScene(IRender&                         render,
                                ICommandBuffer&                  commandBuffer,
                                const RenderViewportSnapshot&    snapshot,
                                EditorLayer&                     layer,
-                               const FRender2DComposePassDesc::Camera& worldCamera);
+                               const EditorComposeCamera& worldCamera);
     std::shared_ptr<Texture> resolveSourceTexture(const RenderTexture& source);
     void ensureTarget(IRender& render, const RenderTexture& source);
     void ensureCanvasTarget(IRender& render, const Extent2D& extent);

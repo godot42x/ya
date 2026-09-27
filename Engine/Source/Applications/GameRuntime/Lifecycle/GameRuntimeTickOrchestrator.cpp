@@ -26,7 +26,6 @@
 #include "RHI/Render.h"
 #include "RHI/RenderDefines.h"
 
-#include "Render2D/Render2D.h"
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/RecordedFrame.h"

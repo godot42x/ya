@@ -13,7 +13,7 @@
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/PresentFrame.h"
 #include "RHI/Core/RenderSurfaceContext.h"
-#include "Render2D/Render2D.h"
+#include "Render2D/ScreenDraw.h"
 
 #include <algorithm>
 #include <format>
@@ -133,8 +133,10 @@ GUIWindowId GUIWindowManager::createSession(const FGUIWindowHostConfig& config,
     session->ownedTree->publishDpiScale(native->getDpiScale());
     bindSdlClipboard(*session->ownedTree);
     delegate.buildUI(*session->ownedTree);
-    session->presentPassSlot   = Render2D::acquirePassSlot();
-    session->offscreenPassSlot = Render2D::acquirePassSlot();
+    if (_screenPipelines) {
+        session->presentRecorder.init(*_screenPipelines);
+        session->offscreenRecorder.init(*_screenPipelines);
+    }
 
     if (render) {
         // Same policy the device's startup window used: a later window is a
@@ -145,10 +147,8 @@ GUIWindowId GUIWindowManager::createSession(const FGUIWindowHostConfig& config,
         if (!session->present) {
             YA_CORE_ERROR("GUIWindowManager: the device cannot present to extra window '{}' (its surface was refused)",
                           config.title);
-            Render2D::releasePassSlot(session->presentPassSlot);
-            Render2D::releasePassSlot(session->offscreenPassSlot);
-            session->presentPassSlot   = kInvalidRender2DPassSlot;
-            session->offscreenPassSlot = kInvalidRender2DPassSlot;
+            session->presentRecorder.destroy();
+            session->offscreenRecorder.destroy();
             session->ownedTree.reset();
             session->native = nullptr;
             _nativeWindows.destroyWindow(native->getWindowID());
@@ -319,7 +319,7 @@ void GUIWindowManager::recordAll(FFrameSubmission& submission)
         recordGuiSnapshot(session->presentResources,
                           session->ownedSnapshot,
                           session->ownedTree ? session->ownedTree->getLogicalExtent() : Extent2D{},
-                          session->presentPassSlot,
+                          session->presentRecorder,
                           session->bMinimized || (session->native && session->native->isHidden()),
                           session->bSwapchainRecreatePending,
                           submission);
@@ -471,10 +471,8 @@ void GUIWindowManager::destroyOwnedSession(GUIWindowSession& session)
     }
     session.present   = nullptr;
     session.surfaceId = {};
-    Render2D::releasePassSlot(session.presentPassSlot);
-    Render2D::releasePassSlot(session.offscreenPassSlot);
-    session.presentPassSlot   = kInvalidRender2DPassSlot;
-    session.offscreenPassSlot = kInvalidRender2DPassSlot;
+    session.presentRecorder.destroy();
+    session.offscreenRecorder.destroy();
     session.ownedSnapshot     = {};
     session.ownedTree.reset();
     session.delegate = nullptr;

@@ -1,11 +1,10 @@
 // Clip-stack regression guards (Phase 0 of ui-widget-tree-refactor): the
 // nested-clip intersection math used by the 2D clip stack is extracted into a
 // pure helper so widget clip hierarchy semantics are testable without a
-// render session. The Render2DList tests cover the builder's value semantics
+// render session. The ScreenDrawList tests cover the builder's value semantics
 // (command boundaries, clip snapshots) with no GPU device.
 
-#include "Render2D/Render2D.h"
-#include "Render2D/Render2DList.h"
+#include "Render2D/ScreenDrawList.h"
 
 #include <gtest/gtest.h>
 
@@ -78,47 +77,30 @@ TEST(Render2DClipTest, NestedClipsChainIdempotently)
     expectRectEq(intersectClipRect(intersectClipRect(inner, middle), outer), expected);
 }
 
-TEST(Render2DPassSlotTest, AcquireReturnsDistinctSlotsAndReleaseRecycles)
+TEST(ScreenDrawListTest, SameInputBuildsSameList)
 {
-    const Render2DPassSlot a = Render2D::acquirePassSlot();
-    const Render2DPassSlot b = Render2D::acquirePassSlot();
-    EXPECT_NE(a, b);
-    EXPECT_NE(a, kInvalidRender2DPassSlot);
-    EXPECT_NE(b, kInvalidRender2DPassSlot);
-
-    Render2D::releasePassSlot(a);
-    const Render2DPassSlot recycled = Render2D::acquirePassSlot();
-    EXPECT_EQ(recycled, a);
-    Render2D::releasePassSlot(b);
-    Render2D::releasePassSlot(recycled);
-}
-
-TEST(Render2DListTest, SameInputBuildsSameList)
-{
-    Render2DList a;
-    Render2DList b;
-    const auto build = [](Render2DList& list)
+    ScreenDrawList a;
+    ScreenDrawList b;
+    const auto build = [](ScreenDrawList& list)
     {
         list.pushClipRect(Rect2D{.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}});
         list.makeSprite(glm::vec3(10.0f, 10.0f, 0.0f), glm::vec2(64.0f, 32.0f));
-        list.makeWireBox(glm::mat4(1.0f), glm::vec3(1.0f), glm::vec4(1.0f));
         list.popClipRect();
     };
     build(a);
     build(b);
     ASSERT_EQ(a.commands.size(), b.commands.size());
-    ASSERT_EQ(a.screenVerts.size(), b.screenVerts.size());
-    ASSERT_EQ(a.lineVerts.size(), b.lineVerts.size());
+    ASSERT_EQ(a.vertices.size(), b.vertices.size());
     for (size_t i = 0; i < a.commands.size(); ++i) {
-        EXPECT_EQ(a.commands[i].kind, b.commands[i].kind);
         EXPECT_EQ(a.commands[i].firstVertex, b.commands[i].firstVertex);
         EXPECT_EQ(a.commands[i].vertexCount, b.commands[i].vertexCount);
+        EXPECT_EQ(a.commands[i].bClipped, b.commands[i].bClipped);
     }
 }
 
-TEST(Render2DListTest, ClipChangeClosesCommandWithOldClip)
+TEST(ScreenDrawListTest, ClipChangeClosesCommandWithOldClip)
 {
-    Render2DList list;
+    ScreenDrawList list;
     list.pushClipRect(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}});
     list.makeSprite(glm::vec3(1.0f, 1.0f, 0.0f), glm::vec2(10.0f, 10.0f));
     list.pushClipRect(Rect2D{.pos = {0.0f, 0.0f}, .extent = {400.0f, 300.0f}});
@@ -129,40 +111,32 @@ TEST(Render2DListTest, ClipChangeClosesCommandWithOldClip)
     EXPECT_EQ(list.commands[0].clip.extent.x, 800.0f);
 }
 
-TEST(Render2DListTest, KindChangeSplitsCommands)
+TEST(ScreenDrawListTest, SpritesStayOneCommandUntilABoundary)
 {
-    Render2DList list;
+    ScreenDrawList list;
     list.makeSprite(glm::vec3(1.0f, 1.0f, 0.0f), glm::vec2(10.0f, 10.0f));
-    list.makeWireBox(glm::mat4(1.0f), glm::vec3(1.0f), glm::vec4(1.0f));
-    list.pushClipRect(Rect2D{.pos = {0.0f, 0.0f}, .extent = {100.0f, 100.0f}});
-    // The kind change and the clip change each close a command; the pending
-    // Line batch is not materialized until its own boundary.
-    ASSERT_EQ(list.commands.size(), 2u);
-    EXPECT_EQ(list.commands[0].kind, ERender2dBatchKind::ScreenQuad);
-    EXPECT_EQ(list.commands[1].kind, ERender2dBatchKind::Line);
-    EXPECT_EQ(list.commands[0].bClipped, false);
-    EXPECT_EQ(list.lineVerts.size(), 24u);
+    list.makeSprite(glm::vec3(20.0f, 20.0f, 0.0f), glm::vec2(10.0f, 10.0f));
+    EXPECT_TRUE(list.commands.empty());
+    list.seal();
+    ASSERT_EQ(list.commands.size(), 1u);
+    EXPECT_EQ(list.commands[0].vertexCount, 8u);
 }
 
-TEST(Render2DListTest, QuadLineQuadSandwichKeepsEmitOrder)
+TEST(ScreenDrawListTest, OrderPreservedWithinTheList)
 {
-    // widget A 画 quad → 画 line → widget B 画 quad：kind 边界把三次绘制
-    // 拆成三个命令，record 步按命令序 flush（kind 变化即边界），后画的
-    // quad 不会盖住中间的 line——painter's order 跨管线保序。
-    Render2DList list;
+    ScreenDrawList list;
     list.makeSprite(glm::vec3(1.0f, 1.0f, 0.0f), glm::vec2(10.0f, 10.0f));
-    list.makeWorldLine(glm::vec3(0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec4(1.0f));
+    list.seal();
     list.makeSprite(glm::vec3(50.0f, 50.0f, 0.0f), glm::vec2(10.0f, 10.0f));
-    list.pushClipRect(Rect2D{.pos = {0.0f, 0.0f}, .extent = {100.0f, 100.0f}});
+    list.seal();
 
-    ASSERT_EQ(list.commands.size(), 3u);
-    EXPECT_EQ(list.commands[0].kind, ERender2dBatchKind::ScreenQuad);
-    EXPECT_EQ(list.commands[1].kind, ERender2dBatchKind::Line);
-    EXPECT_EQ(list.commands[2].kind, ERender2dBatchKind::ScreenQuad);
-    // 中间的 line 命令持有自己的 2 顶点；前后 quad 各 4 顶点。
-    EXPECT_EQ(list.commands[1].vertexCount, 2u);
+    ASSERT_EQ(list.commands.size(), 2u);
     EXPECT_EQ(list.commands[0].vertexCount, 4u);
-    EXPECT_EQ(list.commands[2].vertexCount, 4u);
+    EXPECT_EQ(list.commands[1].vertexCount, 4u);
+    EXPECT_EQ(list.commands[0].firstVertex, 0u);
+    EXPECT_EQ(list.commands[1].firstVertex, 4u);
+    EXPECT_FLOAT_EQ(list.vertices[0].pos.x, 1.0f);
+    EXPECT_FLOAT_EQ(list.vertices[4].pos.x, 50.0f);
 }
 
 } // namespace ya

@@ -4,7 +4,7 @@
 #include "RHI/Core/Texture.h"
 #include "RHI/RenderDefines.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
-#include "Render2D/Render2D.h"
+#include "Render2D/ScreenDraw.h"
 
 #include <functional>
 #include <memory>
@@ -39,10 +39,6 @@ inline constexpr EFormat::T kEditorViewportComposeColorFormat = EFormat::R16G16B
 struct FRender2DComposePassDesc
 {
     ERender2DComposePassKind kind = ERender2DComposePassKind::RuntimeUIComposite;
-    /// Per-window slot. `kInvalidRender2DPassSlot` falls back to the process
-    /// kind pool (single-window editor/runtime). Multi-window hosts must set
-    /// a slot from `Render2D::acquirePassSlot()`.
-    Render2DPassSlot         passSlot = kInvalidRender2DPassSlot;
     Extent2D                 logicalExtent{};
     glm::vec2                canvasPan  = glm::vec2(0.0f);
     float                    canvasZoom = 1.0f;
@@ -56,25 +52,13 @@ struct FRender2DComposePassDesc
 
     /// EditorViewportCompose: full-screen scene color sampled as a sprite.
     std::shared_ptr<Texture> sceneSourceTexture = nullptr;
-
-    /// EditorViewportCompose: camera used by world-space content (debug
-    /// lines). Only `view` / `viewProjection` are forwarded to Render2D (it
-    /// has no camera concept); `position` / `projection` stay local to this
-    /// layer. UI-only passes leave these at identity.
-    struct Camera
-    {
-        glm::vec3 position      = glm::vec3(0.0f);
-        glm::mat4 view          = glm::mat4(1.0f);
-        glm::mat4 projection    = glm::mat4(1.0f);
-        glm::mat4 viewProjection = glm::mat4(1.0f);
-    } camera;
 };
 
-/// Prepare the Render2D pipeline variant required by one shared compose pass.
-/// Must be called before command recording begins.
-YA_GUI_API void prepareRender2DComposePassPipeline(const FRender2DComposePassDesc& passDesc,
-                                                   EFormat::T                      colorFormat,
-                                                   EFormat::T                      depthFormat = EFormat::Undefined);
+/// Prepare the screen PSO this recorder will bind. Must be called before
+/// command recording begins.
+YA_GUI_API void prepareRender2DComposePassPipeline(ScreenDrawRecorder& recorder,
+                                                   EFormat::T          colorFormat,
+                                                   EFormat::T          depthFormat = EFormat::Undefined);
 
 /// Record one shared 2D compose pass into `target`. `uiFrameSnapshot` is the
 /// immutable per-frame Game UI packet (already resolved to render-target
@@ -88,7 +72,9 @@ YA_GUI_API void recordRender2DComposePass(ICommandBuffer*                  cmdBu
                                           RenderTexture*                   depthTarget,
                                           const UIFrameSnapshot*           uiFrameSnapshot,
                                           const FRender2DComposePassDesc&  passDesc,
-                                          const std::function<void(Render2DList&)>& extraContent = {});
+                                          ScreenDrawRecorder&              recorder,
+                                          const std::function<void(ScreenDrawList&)>& extraContent = {},
+                                          const std::function<void(ICommandBuffer*)>& afterScreen = {});
 
 /// Replay a UI snapshot into an already-open raster pass. Does not begin or
 /// end rendering and does not transition the target. Used by the editor
@@ -98,7 +84,8 @@ YA_GUI_API void recordRender2DComposePass(ICommandBuffer*                  cmdBu
 YA_GUI_API void replayUIFrameSnapshot(ICommandBuffer*                cmdBuf,
                                       const UIFrameSnapshot&         snapshot,
                                       Extent2D                       targetExtent,
-                                      ERender2DComposePassKind       kind,
-                                      const std::function<void(Render2DList&)>& extraContent = {});
+                                      EFormat::T                     colorFormat,
+                                      ScreenDrawRecorder&            recorder,
+                                      const std::function<void(ScreenDrawList&)>& extraContent = {});
 
 } // namespace ya

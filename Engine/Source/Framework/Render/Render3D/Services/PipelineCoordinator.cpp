@@ -2,7 +2,6 @@
 
 #include "Render3D/Common/RenderRuntimeHostServices.h"
 #include "Render3D/Services/RenderSharedResourceProvider.h"
-#include "Render2D/Render2D.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/Profiling/Instrumentor.h"
@@ -31,9 +30,6 @@ void PipelineCoordinator::init(const InitDesc& desc)
 void PipelineCoordinator::shutdown()
 {
     shutdownActivePipeline();
-    if (Render2D::isInitialized()) {
-        Render2D::destroy();
-    }
     _render                = nullptr;
     _hostServices          = nullptr;
     _sharedResourceProvider = nullptr;
@@ -97,12 +93,6 @@ void PipelineCoordinator::initActivePipeline()
         initDeferredPipeline(windowWidth, windowHeight);
     }
 
-    // Render2D is device-lifetime. Switching Deferred/Forward must not
-    // destroy it: editor compose/chrome already hold pass slots, and
-    // preparePassPipeline recreates format-specific variants.
-    if (auto* pipeline = getActivePipeline(); pipeline && !Render2D::isInitialized()) {
-        Render2D::init(_render, pipeline->getViewColorFormat(), pipeline->getViewDepthFormat());
-    }
 }
 
 void PipelineCoordinator::initForwardPipeline(int viewWidth, int viewHeight)

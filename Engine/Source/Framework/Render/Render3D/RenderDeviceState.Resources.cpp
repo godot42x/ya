@@ -202,6 +202,9 @@ void RenderDeviceState::initSharedRenderResources()
         .initialViewWidth      = static_cast<int>(_initialViewExtent.width),
         .initialViewHeight     = static_cast<int>(_initialViewExtent.height),
     });
+
+    _screenDrawPipelines.init(_render);
+    _worldDrawPipelines.init(_render);
 }
 
 void RenderDeviceState::initSurfacePresentations()
@@ -346,6 +349,8 @@ void RenderDeviceState::shutdown(bool bRenderAlreadyIdle)
     _submissions.clear();
     _viewTargets.clear();
     _pipelineCoordinator.shutdown();
+    _screenDrawPipelines.destroy();
+    _worldDrawPipelines.destroy();
     // Owned derived-processing systems must release their GPU resources
     // before the render backend is destroyed.
     if (_environmentLightingProcessor) {

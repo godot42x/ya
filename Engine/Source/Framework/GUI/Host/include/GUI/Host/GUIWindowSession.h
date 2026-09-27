@@ -10,7 +10,7 @@
 #include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/NativeWindow.h"
 #include "RHI/Render.h"
-#include "Render2D/Render2D.h"
+#include "Render2D/ScreenDraw.h"
 
 #include <memory>
 
@@ -34,8 +34,8 @@ class YA_GUI_API GUIWindowSession final : public IGUIWindowSession
     bool                                 bCloseRequested           = false;
     bool                                 bMinimized                = false;
     bool                                 bSwapchainRecreatePending = false;
-    Render2DPassSlot                     presentPassSlot   = kInvalidRender2DPassSlot;
-    Render2DPassSlot                     offscreenPassSlot = kInvalidRender2DPassSlot;
+    ScreenDrawRecorder                   presentRecorder;
+    ScreenDrawRecorder                   offscreenRecorder;
     /// The device's surface for this window, named by `surfaceId`. The device
     /// owns it (see `IRender::createSurfaceContext`), so a session holds the id
     /// and the resolved pointer, never a `unique_ptr` that would make surface

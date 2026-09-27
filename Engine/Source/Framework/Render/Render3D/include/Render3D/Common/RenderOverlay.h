@@ -10,10 +10,10 @@
 namespace ya
 {
 
-/// Overlay items an owner hands to its own Render2D recording window.
+/// Overlay items an owner hands to its own screen or world draw list.
 ///
 /// These are values, not a pipeline feature: whoever records the overlay reads
-/// them straight into `Render2D::makeText` / `makeWorldLine`. There is no
+/// them into `ScreenDrawList::makeText` or `WorldDrawList::makeLine`. There is no
 /// central overlay pass -- the editor draws its HUD and gizmo overlays inside
 /// its viewport compose, which is what makes "the editor's overlay" the
 /// editor's own fact rather than a snapshot the renderer has to carry.

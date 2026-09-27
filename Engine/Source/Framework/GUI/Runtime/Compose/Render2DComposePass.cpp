@@ -1,7 +1,7 @@
 #include "GUI/Compose/Render2DComposePass.h"
 #include "GUI/Compose/UIFrameComposeReplay.h"
 
-#include "Render2D/Render2D.h"
+#include "Render2D/ScreenDraw.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Backend/TextureLibrary.h"
@@ -17,7 +17,7 @@ namespace
 void logSnapshotItemsOnce(const UIFrameSnapshot* uiFrameSnapshot)
 {
     static int sLoggedFrames = 0;
-    if (!Render2D::debugState().bLogSessionLifecycle ||
+    if (!screenDrawDiagnostics().bLogSessionLifecycle ||
         sLoggedFrames >= 3 || !uiFrameSnapshot) {
         return;
     }
@@ -41,29 +41,6 @@ void logSnapshotItemsOnce(const UIFrameSnapshot* uiFrameSnapshot)
                      item.clip.extent.y,
                      item.kind == UIFrameDrawItem::EKind::Text ? item.text : "");
     }
-}
-
-/// One Render2D pass slot per compose kind for the process-wide kind pool.
-/// Multi-window hosts pass `FRender2DComposePassDesc::passSlot` instead so
-/// two windows composing the same kind in one CPU frame do not share UBO.
-Render2DPassSlot composePassSlot(ERender2DComposePassKind kind)
-{
-    static const std::array<Render2DPassSlot, 5> sSlots = []() {
-        std::array<Render2DPassSlot, 5> out{};
-        for (auto& slot : out) {
-            slot = Render2D::acquirePassSlot();
-        }
-        return out;
-    }();
-    return sSlots[static_cast<size_t>(kind)];
-}
-
-Render2DPassSlot resolveComposePassSlot(const FRender2DComposePassDesc& desc)
-{
-    if (desc.passSlot != kInvalidRender2DPassSlot) {
-        return desc.passSlot;
-    }
-    return composePassSlot(desc.kind);
 }
 
 bool shouldClearComposeTarget(ERender2DComposePassKind kind)
@@ -100,7 +77,7 @@ const char* composePassLabel(ERender2DComposePassKind kind)
     return "Render2D Compose";
 }
 
-void emitSnapshotItem(Render2DList& list, const UIFrameDrawItem& item)
+void emitSnapshotItem(ScreenDrawList& list, const UIFrameDrawItem& item)
 {
     if (item.kind == UIFrameDrawItem::EKind::Sprite) {
         if (item.bPerVertexColor) {
@@ -136,11 +113,12 @@ void emitSnapshotItem(Render2DList& list, const UIFrameDrawItem& item)
         else {
             const glm::vec2 dir = delta / len;
             const glm::vec2 nrm = glm::vec2(-dir.y, dir.x);
-            const glm::mat4 transform(
-                glm::vec4(dir.x * len, dir.y * len, 0.0f, 0.0f),
-                glm::vec4(nrm.x * item.lineThickness, nrm.y * item.lineThickness, 0.0f, 0.0f),
-                glm::vec4(0.0f, 0.0f, 1.0f, 0.0f),
-                glm::vec4(item.lineFrom.x, item.lineFrom.y, 0.0f, 1.0f));
+            const ScreenAffine transform{
+                .xAxis  = dir * len,
+                .yAxis  = nrm * item.lineThickness,
+                .origin = item.lineFrom,
+                .z      = 0.0f,
+            };
             list.makeSprite(transform, nullptr, item.color);
         }
     }
@@ -153,7 +131,7 @@ void emitSnapshotItem(Render2DList& list, const UIFrameDrawItem& item)
     }
 }
 
-void replaySnapshotItems(Render2DList& list, const UIFrameSnapshot& snapshot)
+void replaySnapshotItems(ScreenDrawList& list, const UIFrameSnapshot& snapshot)
 {
     walkComposeClipRuns(snapshot,
                         [&list](const UIFrameDrawItem& item) { emitSnapshotItem(list, item); },
@@ -164,7 +142,7 @@ void replaySnapshotItems(Render2DList& list, const UIFrameSnapshot& snapshot)
                         });
 }
 
-void drawEditorCanvasGrid(Render2DList& list, const Extent2D& rtExtent, const glm::vec2& uiScale, const glm::vec2& canvasPan, float canvasZoom)
+void drawEditorCanvasGrid(ScreenDrawList& list, const Extent2D& rtExtent, const glm::vec2& uiScale, const glm::vec2& canvasPan, float canvasZoom)
 {
     // Canvas grid is authored in logical pixels and transformed by the
     // same pan/zoom as the UI nodes. This keeps right-drag panning and
@@ -207,11 +185,11 @@ void drawEditorCanvasGrid(Render2DList& list, const Extent2D& rtExtent, const gl
 
 } // namespace
 
-void prepareRender2DComposePassPipeline(const FRender2DComposePassDesc& passDesc,
-                                        EFormat::T                      colorFormat,
-                                        EFormat::T                      depthFormat)
+void prepareRender2DComposePassPipeline(ScreenDrawRecorder& recorder,
+                                        EFormat::T          colorFormat,
+                                        EFormat::T          depthFormat)
 {
-    Render2D::preparePassPipeline(resolveComposePassSlot(passDesc), colorFormat, depthFormat);
+    recorder.prepare(colorFormat, depthFormat);
 }
 
 void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
@@ -219,7 +197,9 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
                                RenderTexture*                  depthTarget,
                                const UIFrameSnapshot*          uiFrameSnapshot,
                                const FRender2DComposePassDesc& passDesc,
-                               const std::function<void(Render2DList&)>& extraContent)
+                               ScreenDrawRecorder&             recorder,
+                               const std::function<void(ScreenDrawList&)>& extraContent,
+                               const std::function<void(ICommandBuffer*)>& afterScreen)
 {
     if (!cmdBuf) {
         return;
@@ -280,18 +260,7 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
         },
     });
 
-    FRender2dContext render2dCtx{
-        .cmdBuf       = cmdBuf,
-        .windowWidth  = rtExtent.width,
-        .windowHeight = rtExtent.height,
-        .passSlot     = resolveComposePassSlot(passDesc),
-        .view         = passDesc.camera.view,
-        .viewProjection = passDesc.camera.viewProjection,
-    };
-
-    // The 2D content is built as a pure CPU value first, then turned into GPU
-    // work in one record step -- the same build/record split the 3D graph uses.
-    Render2DList list;
+    ScreenDrawList list;
     if (passDesc.kind == ERender2DComposePassKind::EditorViewportCompose) {
         if (passDesc.sceneSourceTexture) {
             list.makeSprite(glm::vec3(0.0f, 0.0f, 0.0f),
@@ -313,7 +282,15 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
     if (extraContent) {
         extraContent(list);
     }
-    Render2D::recordRender2DList(list, render2dCtx);
+    recorder.record(list, ScreenDrawTarget{
+        .cmd         = cmdBuf,
+        .width       = rtExtent.width,
+        .height      = rtExtent.height,
+        .colorFormat = target.getFormat(),
+    });
+    if (afterScreen) {
+        afterScreen(cmdBuf);
+    }
 
     cmdBuf->endRendering();
     cmdBuf->transitionImageLayoutAuto(target.getImage(), passDesc.finalLayout);
@@ -325,8 +302,9 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
 void replayUIFrameSnapshot(ICommandBuffer*          cmdBuf,
                            const UIFrameSnapshot&   snapshot,
                            Extent2D                 targetExtent,
-                           ERender2DComposePassKind kind,
-                           const std::function<void(Render2DList&)>& extraContent)
+                           EFormat::T               colorFormat,
+                           ScreenDrawRecorder&      recorder,
+                           const std::function<void(ScreenDrawList&)>& extraContent)
 {
     if (!cmdBuf || targetExtent.width == 0 || targetExtent.height == 0) {
         return;
@@ -344,22 +322,18 @@ void replayUIFrameSnapshot(ICommandBuffer*          cmdBuf,
         }
     }
 
-    FRender2dContext render2dCtx{
-        .cmdBuf         = cmdBuf,
-        .windowWidth    = targetExtent.width,
-        .windowHeight   = targetExtent.height,
-        .passSlot       = composePassSlot(kind),
-        .view           = glm::mat4(1.0f),
-        .viewProjection = glm::mat4(1.0f),
-    };
-
-    Render2DList list;
+    ScreenDrawList list;
     logSnapshotItemsOnce(&snapshot);
     replaySnapshotItems(list, snapshot);
     if (extraContent) {
         extraContent(list);
     }
-    Render2D::recordRender2DList(list, render2dCtx);
+    recorder.record(list, ScreenDrawTarget{
+        .cmd         = cmdBuf,
+        .width       = targetExtent.width,
+        .height      = targetExtent.height,
+        .colorFormat = colorFormat,
+    });
 }
 
 } // namespace ya

@@ -11,7 +11,7 @@
 #include "Render/Adapters/Companion/CompanionManager.h"
 #include "GameRuntime/App.h"
 #include "RHI/Backend/TextureLibrary.h"
-#include "Render2D/Render2D.h"
+#include "Render2D/ScreenDrawList.h"
 #include "Scene/Core/Scene.h"
 #include "Scene3D/TransformComponent.h"
 
@@ -145,7 +145,7 @@ float gizmoHandlePixels(bool highlighted, bool pressed)
     return kViewportGizmoHandlePixels;
 }
 
-void drawScreenLine(Render2DList& list, const glm::vec2& from,
+void drawScreenLine(ScreenDrawList& list, const glm::vec2& from,
                     const glm::vec2& to,
                     const glm::vec4& color,
                     float            thickness,
@@ -156,16 +156,18 @@ void drawScreenLine(Render2DList& list, const glm::vec2& from,
     if (len < 0.5f || !white) {
         return;
     }
-    const float angle = std::atan2(delta.y, delta.x);
-    const glm::mat4 transform =
-        glm::translate(glm::mat4(1.0f), glm::vec3(from.x, from.y, 0.0f)) *
-        glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 0.0f, 1.0f)) *
-        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -thickness * 0.5f, 0.0f)) *
-        glm::scale(glm::mat4(1.0f), glm::vec3(len, thickness, 1.0f));
+    const glm::vec2 dir = delta / len;
+    const glm::vec2 nrm(-dir.y, dir.x);
+    const ScreenAffine transform{
+        .xAxis  = dir * len,
+        .yAxis  = nrm * thickness,
+        .origin = from - nrm * (thickness * 0.5f),
+        .z      = 0.0f,
+    };
     list.makeSprite(transform, white, color);
 }
 
-void drawScreenCircleOutline(Render2DList& list,
+void drawScreenCircleOutline(ScreenDrawList& list,
                              const glm::vec2& center,
                              float            radius,
                              const glm::vec4& color,
@@ -183,7 +185,7 @@ void drawScreenCircleOutline(Render2DList& list,
     }
 }
 
-void drawHatchedAxis(Render2DList& list, const glm::vec2& origin,
+void drawHatchedAxis(ScreenDrawList& list, const glm::vec2& origin,
                      const glm::vec2& end,
                      const glm::vec4& color,
                      Texture*         white)
@@ -747,7 +749,7 @@ void EditorViewportGizmoController::setOperation(EEditorViewportGizmoOperation o
     }
 }
 
-void EditorViewportGizmoController::recordOverlay(Render2DList& list) const
+void EditorViewportGizmoController::recordOverlay(ScreenDrawList& list) const
 {
     YA_PROFILE_FUNCTION();
     if (!hasViewportGizmoSelection()) {

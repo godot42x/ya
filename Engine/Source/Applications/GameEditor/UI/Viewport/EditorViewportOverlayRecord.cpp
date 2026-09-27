@@ -11,7 +11,8 @@
 #include "GameRuntime/Render/SceneCameraQuery.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "Render/Resources/FontManager.h"
-#include "Render2D/Render2D.h"
+#include "Render2D/ScreenDrawList.h"
+#include "Render3D/WorldDraw.h"
 #include "Render3D/Common/CameraFrustumOverlay.h"
 #include "Render/Adapters/Debug/PhysicsDebugDraw.h"
 #include "Scene/Core/Scene.h"
@@ -28,7 +29,7 @@ namespace
 /// the view I am looking through".
 constexpr glm::vec4 kSelectedCameraFrustumColor = {1.0f, 0.85f, 0.2f, 1.0f};
 
-void recordEntityBounds(Render2DList& list, Entity* entity, const glm::vec4& color)
+void recordEntityBounds(WorldDrawList& list, Entity* entity, const glm::vec4& color)
 {
     if (!entity || !entity->isValid()) {
         return;
@@ -74,7 +75,7 @@ void recordEntityBounds(Render2DList& list, Entity* entity, const glm::vec4& col
                           color);
 }
 
-void recordSelectedEntityBounds(Render2DList& list, const EditorLayer& layer)
+void recordSelectedEntityBounds(WorldDrawList& list, const EditorLayer& layer)
 {
     const auto& selections = layer.getSelections();
     if (selections.empty()) {
@@ -87,7 +88,7 @@ void recordSelectedEntityBounds(Render2DList& list, const EditorLayer& layer)
     }
 }
 
-void recordCameraHud(Render2DList& list, EditorLayer& layer)
+void recordCameraHud(ScreenDrawList& list, EditorLayer& layer)
 {
     const auto texts = layer.buildViewportCameraOverlayTexts();
     if (texts.empty()) {
@@ -111,7 +112,7 @@ void recordCameraHud(Render2DList& list, EditorLayer& layer)
 /// (CameraMeshLinkageRule); these lines stay procedural so they follow FOV
 /// without a new pipeline, and they belong to the editor's overlay pass because
 /// they report the editor's own selection.
-void recordSelectedCameraFrustum(Render2DList& list, EditorLayer& layer)
+void recordSelectedCameraFrustum(WorldDrawList& list, EditorLayer& layer)
 {
     Entity* selected = layer.getCameraPreviewEntity();
     if (!selected) {
@@ -128,11 +129,11 @@ void recordSelectedCameraFrustum(Render2DList& list, EditorLayer& layer)
                                     camera->getProjection(camera->_aspectRatio),
                                     kSelectedCameraFrustumColor);
     for (const RenderOverlayLine3D& line : lines) {
-        list.makeWorldLine(line.from, line.to, line.color);
+        list.makeLine(line.from, line.to, line.color);
     }
 }
 
-void recordPhysicsCollision(Render2DList& list, EditorLayer& layer)
+void recordPhysicsCollision(WorldDrawList& list, EditorLayer& layer)
 {
     Scene* scene = layer.getViewportInteractionScene();
     if (!scene) {
@@ -152,10 +153,14 @@ void recordPhysicsCollision(Render2DList& list, EditorLayer& layer)
 
 } // namespace
 
-void recordEditorWorldViewportOverlays(Render2DList& list, EditorLayer& layer, bool bDepthTestedWorld)
+void recordEditorViewportScreenOverlays(ScreenDrawList& list, EditorLayer& layer)
 {
     layer.gizmo().recordOverlay(list);
     recordCameraHud(list, layer);
+}
+
+void recordEditorViewportWorldOverlays(WorldDrawList& list, EditorLayer& layer, bool bDepthTestedWorld)
+{
     recordSelectedCameraFrustum(list, layer);
     if (!bDepthTestedWorld) {
         return;
@@ -164,7 +169,7 @@ void recordEditorWorldViewportOverlays(Render2DList& list, EditorLayer& layer, b
     recordSelectedEntityBounds(list, layer);
 }
 
-void recordEditorCanvasSelectionOverlay(Render2DList& list, const Rect2D& rect, const glm::vec2& uiScale, const glm::vec2& offset)
+void recordEditorCanvasSelectionOverlay(ScreenDrawList& list, const Rect2D& rect, const glm::vec2& uiScale, const glm::vec2& offset)
 {
     // Outline + resize handles in target pixels. The widget rect uses the
     // same uiScale/offset as the preview snapshot so pan/zoom stay coherent.

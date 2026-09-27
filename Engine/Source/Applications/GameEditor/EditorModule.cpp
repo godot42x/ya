@@ -43,6 +43,7 @@
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "RHI/Core/CommandBuffer.h"
+#include "Render3D/RenderDeviceState.h"
 #include "RHI/Core/Swapchain.h"
 #include "RHI/Core/Texture.h"
 #include "RHI/NativeWindow.h"
@@ -137,6 +138,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     EditorPlaySession              _playSession;
     FreeCameraController           _cameraController;
     EditorViewportCompositor       _viewportCompositor;
+    ScreenDrawRecorder             _toolRecorder;
     EditorDocumentRegistry         _documents;
     EditorWindowRegistry           _windows;
     EditorTabSpawnerRegistry       _tabSpawners;
@@ -481,29 +483,14 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         // The depth format of the active strategy's View targets, asked of the
         // renderer rather than read off a pipeline object.
         const EFormat::T depthFormat = renderServices.getViewDepthFormat();
-        prepareRender2DComposePassPipeline(
-            FRender2DComposePassDesc{
-                .kind = ERender2DComposePassKind::EditorViewportCompose,
-            },
-            kEditorViewportComposeColorFormat,
-            depthFormat);
-
-        if (_layer->isViewportMode2D()) {
-            prepareRender2DComposePassPipeline(
-                FRender2DComposePassDesc{
-                    .kind = ERender2DComposePassKind::EditorCanvasPreview,
-                },
-                kEditorViewportComposeColorFormat);
-        }
+        _viewportCompositor.prepare(kEditorViewportComposeColorFormat,
+                                    depthFormat,
+                                    _layer->isViewportMode2D());
         EFormat::T chromeFormat = EFormat::B8G8R8A8_UNORM;
         if (auto* surface = renderServices.getHostSurface(); surface && surface->getSwapchain()) {
             chromeFormat = surface->getSwapchain()->getFormat();
         }
-        prepareRender2DComposePassPipeline(
-            FRender2DComposePassDesc{
-                .kind = ERender2DComposePassKind::EditorToolSurface,
-            },
-            chromeFormat);
+        _toolRecorder.prepare(chromeFormat, EFormat::Undefined);
     }
 
     void composeAuthoringViewport(App& app, ICommandBuffer& commandBuffer)
@@ -545,7 +532,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         // answers with the displayed View's camera today; another View's camera
         // composes just as well.
         const DisplayedView& displayedArrangement = renderServices.getDisplayedView();
-        const FRender2DComposePassDesc::Camera worldCamera{
+        const EditorComposeCamera worldCamera{
             .position       = displayedArrangement.cameraPos,
             .view           = displayedArrangement.view,
             .projection     = displayedArrangement.projection,
@@ -623,11 +610,16 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         const Extent2D targetExtent = surface->getSwapchain()
                                           ? surface->getSwapchain()->getExtent()
                                           : Extent2D{};
+        EFormat::T chromeFormat = EFormat::B8G8R8A8_UNORM;
+        if (surface->getSwapchain()) {
+            chromeFormat = surface->getSwapchain()->getFormat();
+        }
         replayUIFrameSnapshot(&commandBuffer,
                               snapshot,
                               targetExtent,
-                              ERender2DComposePassKind::EditorToolSurface,
-                              [&session, &snapshot, &targetExtent](Render2DList& composeList) {
+                              chromeFormat,
+                              _toolRecorder,
+                              [&session, &snapshot, &targetExtent](ScreenDrawList& composeList) {
                                   if (WidgetTree* tree = session->tree()) {
                                       runGuiFrameInspectorOverlay(*tree, snapshot, composeList, targetExtent);
                                   }
@@ -781,6 +773,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         YA_CORE_ASSERT(window, "EditorWindowRegistry always owns the default editor window");
         window->bind(*_layer, &_tabSpawners, &_documents);
         _app = &app;
+        if (RenderDeviceState* device = renderServices.getDeviceState()) {
+            _guiWindows.setScreenDrawPipelines(&device->screenDrawPipelines());
+            _viewportCompositor.bindDraw(device->screenDrawPipelines(), device->worldDrawPipelines());
+            _toolRecorder.init(device->screenDrawPipelines());
+        }
         if (!_guiWindows.init()) {
             YA_CORE_WARN("EditorModule: extra native window coordinator failed to init");
         }
@@ -940,6 +937,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         gEditorAuthoringScene = nullptr;
         app.removeSceneViewProducer(_viewProducer);
         _viewportCompositor.shutdown();
+        _toolRecorder.destroy();
         if (_layer) {
             _layer->setViewportDisplayImage(nullptr);
             _layer->onDetach();

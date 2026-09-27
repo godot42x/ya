@@ -66,8 +66,8 @@ public:
 
     /// Prepare the exact format variant that record() will use. Must run
     /// before command recording.
-    void prepare(const FRender2DComposePassDesc& passDesc,
-                 EFormat::T                     depthFormat = EFormat::Undefined) const;
+    void prepare(ScreenDrawRecorder& recorder,
+                 EFormat::T          depthFormat = EFormat::Undefined) const;
 
     /// Record the shared 2D compose pass into this surface. The surface owns
     /// the final layout; callers cannot accidentally leave an offscreen
@@ -76,7 +76,8 @@ public:
                 RenderTexture*                  depthTarget,
                 const UIFrameSnapshot*          uiFrameSnapshot,
                 FRender2DComposePassDesc        passDesc,
-                const std::function<void(Render2DList&)>& extraContent = {}) const;
+                ScreenDrawRecorder&             recorder,
+                const std::function<void(ScreenDrawList&)>& extraContent = {}) const;
 
 private:
     GUIRenderSurface(std::shared_ptr<RenderTexture> image, EImageLayout::T finalLayout);

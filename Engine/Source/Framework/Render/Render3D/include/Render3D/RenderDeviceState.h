@@ -20,6 +20,8 @@
 #include "Render3D/Common/RenderViewportSnapshot.h"
 #include "Render3D/Debug/ViewportDebugCatalogBuilder.h"
 #include "Render3D/Services/OffscreenTaskService.h"
+#include "Render2D/ScreenDraw.h"
+#include "Render3D/WorldDraw.h"
 #include "Render3D/Services/PipelineCoordinator.h"
 #include "Render3D/Services/SurfacePresentation.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
@@ -112,6 +114,8 @@ struct YA_RENDER_3D_API RenderDeviceState
     RenderSharedResourceProvider  _sharedResourceProvider{};
     RenderDiagnosticsService     _diagnostics{};
     PipelineCoordinator          _pipelineCoordinator{};
+    ScreenDrawPipelines          _screenDrawPipelines{};
+    WorldDrawPipelines           _worldDrawPipelines{};
     /// One per OS-window present target this renderer has recorded for. Built
     /// on demand from `plan.present.surface` and torn down with the device, so a
     /// second window is a second entry here, not a second renderer. Every
@@ -203,6 +207,8 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// its raw colour, comes back as an invalid image or as `Linear`.
     [[nodiscard]] FSurfaceImage surfaceImageFor(const RenderViewOutput* output) const;
     [[nodiscard]] bool     isGradingEnabled() const;
+    [[nodiscard]] ScreenDrawPipelines& screenDrawPipelines() { return _screenDrawPipelines; }
+    [[nodiscard]] WorldDrawPipelines&  worldDrawPipelines() { return _worldDrawPipelines; }
     [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _pipelineCoordinator.getRenderPipeline(); }
     [[nodiscard]] ERenderPipeline getPendingRenderPipeline() const { return _pipelineCoordinator.getPendingRenderPipeline(); }
     void setPendingRenderPipeline(ERenderPipeline renderPipeline) { _pipelineCoordinator.setPendingRenderPipeline(renderPipeline); }

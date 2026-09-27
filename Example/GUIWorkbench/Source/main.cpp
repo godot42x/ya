@@ -9,7 +9,7 @@
 #include "App/Kernel/GuiScenarioEventSource.h"
 #include "GUI/Host/GUIAppHost.h"
 #include "GUI/Host/GUIHeadlessHost.h"
-#include "Render2D/Render2D.h"
+#include "Render2D/ScreenDraw.h"
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
 #include "GUI/Widgets/WidgetTreeDump.h"
@@ -167,7 +167,7 @@ int main(int argc, char** argv)
             config.guiFrameInspector = result["gui-frame-inspector"].as<std::string>();
         }
         if (result.count("debug-render2d-log") > 0) {
-            auto& debug = ya::Render2D::debugState();
+            auto& debug = ya::screenDrawDiagnostics();
             debug.bLogSessionLifecycle = true;
             debug.bLogClipStack        = true;
             debug.bLogFlushBatches     = true;

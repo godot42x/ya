@@ -32,6 +32,7 @@ class YA_GUI_API GUIWindowManager final : public IGUIWindowCoordinator
     GUIWindowId                                   _deferCloseA   = 0;
     GUIWindowId                                   _deferCloseB   = 0;
     bool                                          _bInitialized  = false;
+    ScreenDrawPipelines*                          _screenPipelines = nullptr;
 
   public:
     GUIWindowManager() = default;
@@ -42,6 +43,10 @@ class YA_GUI_API GUIWindowManager final : public IGUIWindowCoordinator
 
     [[nodiscard]] bool init();
     void               shutdown();
+
+    /// Screen PSO cache shared by every session this manager opens. Set
+    /// before `createSession` whenever those windows present.
+    void setScreenDrawPipelines(ScreenDrawPipelines* pipelines) { _screenPipelines = pipelines; }
 
     [[nodiscard]] GUIWindowId createSession(const FGUIWindowHostConfig& config,
                                             IGUIAppDelegate&            delegate,

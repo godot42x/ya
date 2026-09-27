@@ -3,7 +3,7 @@
 #include "Core/Api.h"
 #include "GUI/Widgets/GuiFrameInspector.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
-#include "Render2D/Render2D.h"
+#include "Render2D/ScreenDrawList.h"
 
 namespace ya
 {
@@ -16,7 +16,7 @@ struct WidgetTree;
 /// GPU fields are compiled out of `YA_PROFILING_DISABLED` builds.
 YA_GUI_API void captureGuiComposeInspector(FGuiFrameInspectorRecord& record,
                                            const UIFrameSnapshot&    snapshot,
-                                           const FQuadRender::FRender2dFrameStats& gpuStats);
+                                           const ScreenDrawFrameStats& gpuStats);
 
 /// Occupancy-grid overdraw of snapshot items (target pixels). Empty snapshot
 /// or empty extent yields zeros.
@@ -30,6 +30,7 @@ YA_GUI_API void captureGuiOverdrawInspector(FGuiFrameInspectorRecord& record,
 YA_GUI_API void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& record,
                                              const UIFrameSnapshot&          snapshot,
                                              const GuiPerfStats&             perf,
+                                             ScreenDrawList&                 list,
                                              Extent2D                        framebuffer);
 
 /// Capture compose/overdraw stats from the product content already in `list`
@@ -38,7 +39,7 @@ YA_GUI_API void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& rec
 /// out. Call from `extraContent`.
 YA_GUI_API void runGuiFrameInspectorOverlay(WidgetTree&            tree,
                                             const UIFrameSnapshot& snapshot,
-                                            Render2DList&          list,
+                                            ScreenDrawList&        list,
                                             Extent2D               framebuffer);
 
 } // namespace ya

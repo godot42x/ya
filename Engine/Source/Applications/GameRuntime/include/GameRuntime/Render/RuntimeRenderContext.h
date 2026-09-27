@@ -3,6 +3,7 @@
 #include "Core/Api.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "RHI/Core/PresentFrame.h"
+#include "Render2D/ScreenDraw.h"
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/RecordedFrame.h"
 
@@ -57,6 +58,10 @@ class YA_GAME_RUNTIME_API RuntimeRenderContext
         : _device(&device)
     {
     }
+    ~RuntimeRenderContext();
+
+    RuntimeRenderContext(const RuntimeRenderContext&) = delete;
+    RuntimeRenderContext& operator=(const RuntimeRenderContext&) = delete;
 
     /// The renderer this frame records through. Bound when the device is
     /// created; the context is only meaningful while that device lives.
@@ -153,7 +158,11 @@ class YA_GAME_RUNTIME_API RuntimeRenderContext
                                             TickFrame&           frame,
                                             const FPresentFrame& presentFrame);
 
+    void ensureGameUiRecorder();
+
     RenderDeviceState* _device = nullptr;
+    ScreenDrawRecorder _gameUiRecorder;
+    bool               _bGameUiRecorder = false;
 };
 
 } // namespace ya

@@ -47,11 +47,11 @@ void rebuildGuiSurfacePresentation(FGUISurfacePresentResources& resources,
 void recordGuiSnapshot(FGUISurfacePresentResources&  resources,
                        const UIFrameSnapshot&        snapshot,
                        Extent2D                      logicalExtent,
-                       Render2DPassSlot              passSlot,
+                       ScreenDrawRecorder&           recorder,
                        bool                          bMinimized,
                        bool&                         bSwapchainRecreatePending,
                        FFrameSubmission&             submission,
-                       const std::function<void(const FGUIPresentExtensionContext&, Render2DList&)>& composeExtra,
+                       const std::function<void(const FGUIPresentExtensionContext&, ScreenDrawList&)>& composeExtra,
                        const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit)
 {
     if (!resources.render || !resources.present) {
@@ -108,10 +108,7 @@ void recordGuiSnapshot(FGUISurfacePresentResources&  resources,
     const auto& renderSurface = presentation->renderSurface;
     const auto& renderImage   = renderSurface->getRenderImage();
     const Extent2D presentExtent = renderImage->getExtent();
-    renderSurface->prepare(FRender2DComposePassDesc{
-        .kind     = ERender2DComposePassKind::RuntimeUIComposite,
-        .passSlot = passSlot,
-    });
+    renderSurface->prepare(recorder);
 
     FontManager::get()->flushPendingGlyphs(*resources.render);
     (void)FontManager::get()->consumeNewGlyphCapture();
@@ -160,13 +157,13 @@ void recordGuiSnapshot(FGUISurfacePresentResources&  resources,
         nullptr,
         &snapshot,
         FRender2DComposePassDesc{
-            .kind                  = ERender2DComposePassKind::RuntimeUIComposite,
-            .passSlot              = passSlot,
+            .kind          = ERender2DComposePassKind::RuntimeUIComposite,
             .logicalExtent = logicalExtent,
         },
+        recorder,
         composeExtra
-            ? [&extensionContext, &composeExtra](Render2DList& list) { composeExtra(extensionContext, list); }
-            : std::function<void(Render2DList&)>{});
+            ? [&extensionContext, &composeExtra](ScreenDrawList& list) { composeExtra(extensionContext, list); }
+            : std::function<void(ScreenDrawList&)>{});
     if (preSubmit) {
         preSubmit(extensionContext);
     }

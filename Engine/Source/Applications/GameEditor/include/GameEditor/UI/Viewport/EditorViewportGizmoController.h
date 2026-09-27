@@ -9,7 +9,7 @@
 
 namespace ya
 {
-struct Render2DList;
+struct ScreenDrawList;
 }
 
 namespace ya
@@ -86,7 +86,7 @@ class EditorViewportGizmoController
     void updateDrag(const glm::vec2& localPoint);
     void endDrag();
     void cancelDrag();
-    void recordOverlay(Render2DList& list) const;
+    void recordOverlay(ScreenDrawList& list) const;
     void setOperation(EEditorViewportGizmoOperation operation);
 
     [[nodiscard]] bool isActive() const { return _bDragging || _bHovered; }

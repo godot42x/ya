@@ -51,10 +51,10 @@ bool GUIRenderSurface::isValid() const
     return _image && _image->isValid();
 }
 
-void GUIRenderSurface::prepare(const FRender2DComposePassDesc& passDesc, EFormat::T depthFormat) const
+void GUIRenderSurface::prepare(ScreenDrawRecorder& recorder, EFormat::T depthFormat) const
 {
     if (isValid()) {
-        prepareRender2DComposePassPipeline(passDesc, _image->getFormat(), depthFormat);
+        prepareRender2DComposePassPipeline(recorder, _image->getFormat(), depthFormat);
     }
 }
 
@@ -62,13 +62,14 @@ void GUIRenderSurface::record(ICommandBuffer*              cmdBuf,
                               RenderTexture*               depthTarget,
                               const UIFrameSnapshot*       uiFrameSnapshot,
                               FRender2DComposePassDesc     passDesc,
-                              const std::function<void(Render2DList&)>& extraContent) const
+                              ScreenDrawRecorder&          recorder,
+                              const std::function<void(ScreenDrawList&)>& extraContent) const
 {
     if (!isValid()) {
         return;
     }
     passDesc.finalLayout = _finalLayout;
-    recordRender2DComposePass(cmdBuf, *_image, depthTarget, uiFrameSnapshot, passDesc, extraContent);
+    recordRender2DComposePass(cmdBuf, *_image, depthTarget, uiFrameSnapshot, passDesc, recorder, extraContent);
 }
 
 } // namespace ya

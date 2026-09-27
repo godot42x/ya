@@ -1,7 +1,7 @@
 #pragma once
 
 #include "GUI/Host/GUIPresentationTarget.h"
-#include "Render2D/Render2D.h"
+#include "Render2D/ScreenDraw.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "RHI/Core/PresentFrame.h"
 
@@ -50,7 +50,7 @@ struct FGUIPresentExtensionContext
 /// Acquire and record this window's snapshot into `submission`. Does not
 /// submit or present: the frame that owns the submission does that once, for
 /// every window it acquired. Skips when unpresentable. Serial Render2D
-/// session: caller must not be inside another `Render2D::begin`.
+/// session: one recorder per surface, not shared across windows.
 ///
 /// The one record sequence for every GUI window, main or extra. A window adds
 /// its own content at two named points, both optional and both receiving
@@ -62,11 +62,11 @@ struct FGUIPresentExtensionContext
 void recordGuiSnapshot(FGUISurfacePresentResources&  resources,
                        const UIFrameSnapshot&        snapshot,
                        Extent2D                      logicalExtent,
-                       Render2DPassSlot              passSlot,
+                       ScreenDrawRecorder&           recorder,
                        bool                          bMinimized,
                        bool&                         bSwapchainRecreatePending,
                        FFrameSubmission&             submission,
-                       const std::function<void(const FGUIPresentExtensionContext&, Render2DList&)>& composeExtra = {},
+                       const std::function<void(const FGUIPresentExtensionContext&, ScreenDrawList&)>& composeExtra = {},
                        const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit    = {});
 
 [[nodiscard]] inline bool guiPresentationIndexValid(int32_t imageIndex,

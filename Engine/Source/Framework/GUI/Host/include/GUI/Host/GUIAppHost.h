@@ -50,6 +50,7 @@ namespace ya
 {
 
 struct IRender; // forward decl: getRender() returns it, no definition needed here
+struct ScreenDrawPipelines;
 struct INativeWindow;
 struct FGUIPresentExtensionContext;
 struct RenderTexture;
@@ -194,6 +195,9 @@ public:
     [[nodiscard]] INativeWindow* getNativeWindow();
     [[nodiscard]] const INativeWindow* getNativeWindow() const;
     [[nodiscard]] IRender* getRender() const;
+    /// Screen PSO cache for this window and any extra windows that present
+    /// through the same device. Valid after a successful `init`.
+    [[nodiscard]] ScreenDrawPipelines* screenDrawPipelines();
     /// When true, the SDL source emits events for every OS window so GUIApp
     /// can route extras. Default filters to this host's window.
     void setAcceptAllWindowEvents(bool enabled);

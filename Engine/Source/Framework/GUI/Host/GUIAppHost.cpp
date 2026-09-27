@@ -32,7 +32,7 @@
 #include "GUI/Compose/GuiFrameInspectorOverlay.h"
 #include "GUI/Compose/Render2DComposePass.h"
 #include "Render/Resources/FontManager.h"
-#include "Render2D/Render2D.h"
+#include "Render2D/ScreenDraw.h"
 #include "GUI/Widgets/GuiFrameInspector.h"
 #include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
@@ -481,8 +481,9 @@ struct GUIWindowHost::FImpl
     /// the same shape every GUI window presents through (see
     /// `FGUISurfacePresentResources` / `recordGuiSnapshot`).
     FGUISurfacePresentResources presentResources;
-    Render2DPassSlot presentPassSlot   = kInvalidRender2DPassSlot;
-    Render2DPassSlot offscreenPassSlot = kInvalidRender2DPassSlot;
+    ScreenDrawPipelines screenPipelines;
+    ScreenDrawRecorder  presentRecorder;
+    ScreenDrawRecorder  offscreenRecorder;
     uint64_t frameCount = 0;
     float    lastMouseX = -1.0f;
     float    lastMouseY = -1.0f;
@@ -658,9 +659,9 @@ bool GUIWindowHost::init()
     //    matching the swapchain's real surface format.
     ISwapchain* swapchain = _impl->present->getSwapchain();
     YA_CORE_ASSERT(swapchain != nullptr, "GUIAppHost requires a present swapchain");
-    Render2D::init(render, swapchain->getFormat(), EFormat::Undefined);
-    _impl->presentPassSlot   = Render2D::acquirePassSlot();
-    _impl->offscreenPassSlot = Render2D::acquirePassSlot();
+    _impl->screenPipelines.init(render);
+    _impl->presentRecorder.init(_impl->screenPipelines);
+    _impl->offscreenRecorder.init(_impl->screenPipelines);
 
     // 5b. Game UI WidgetTree closure: layout + immutable snapshot without any
     //     Scene / ECS / Host / Render3D dependency. SDL input is routed into
@@ -1025,6 +1026,11 @@ const INativeWindow* GUIWindowHost::getNativeWindow() const
 IRender* GUIWindowHost::getRender() const
 {
     return _impl->bInitialized ? _impl->render : nullptr;
+}
+
+ScreenDrawPipelines* GUIWindowHost::screenDrawPipelines()
+{
+    return _impl->bInitialized ? &_impl->screenPipelines : nullptr;
 }
 
 void GUIWindowHost::setAcceptAllWindowEvents(bool enabled)
@@ -1408,11 +1414,11 @@ void GUIWindowHost::recordSnapshot(FFrameSubmission& submission)
     recordGuiSnapshot(_impl->presentResources,
                       snapshot,
                       _impl->tree->getLogicalExtent(),
-                      _impl->presentPassSlot,
+                      _impl->presentRecorder,
                       _impl->bWindowMinimized,
                       _impl->bSwapchainRecreatePending,
                       submission,
-                      /*composeExtra=*/[this, &snapshot](const FGUIPresentExtensionContext& ctx, Render2DList& list)
+                      /*composeExtra=*/[this, &snapshot](const FGUIPresentExtensionContext& ctx, ScreenDrawList& list)
                       {
                           runGuiFrameInspectorOverlay(*_impl->tree,
                                                       snapshot,
@@ -1518,19 +1524,16 @@ bool GUIWindowHost::recordOffscreenParityCapture(const FGUIPresentExtensionConte
         YA_CORE_ERROR("GUIAppHost: unable to create offscreen parity surface");
         return false;
     }
-    _impl->offscreenSurface->prepare(FRender2DComposePassDesc{
-        .kind     = ERender2DComposePassKind::RuntimeUIOffscreen,
-        .passSlot = _impl->offscreenPassSlot,
-    });
+    _impl->offscreenSurface->prepare(_impl->offscreenRecorder);
     _impl->offscreenSurface->record(
         &ctx.cmdBuf,
         nullptr,
         &snapshot,
         FRender2DComposePassDesc{
-            .kind                  = ERender2DComposePassKind::RuntimeUIOffscreen,
-            .passSlot              = _impl->offscreenPassSlot,
+            .kind          = ERender2DComposePassKind::RuntimeUIOffscreen,
             .logicalExtent = _impl->tree->getLogicalExtent(),
-        });
+        },
+        _impl->offscreenRecorder);
     outImage = _impl->offscreenSurface->getRenderImage();
 
     const uint32_t requiredReadbackSize = ctx.presentExtent.width * ctx.presentExtent.height * 4;
@@ -1642,10 +1645,8 @@ void GUIWindowHost::shutdown()
     // released BEFORE the Vulkan device / VMA allocator is destroyed below
     // (a later ~VulkanBuffer would call vmaDestroyBuffer on a dead allocator).
     _impl->render->waitIdle();
-    Render2D::releasePassSlot(_impl->presentPassSlot);
-    Render2D::releasePassSlot(_impl->offscreenPassSlot);
-    _impl->presentPassSlot   = kInvalidRender2DPassSlot;
-    _impl->offscreenPassSlot = kInvalidRender2DPassSlot;
+    _impl->presentRecorder.destroy();
+    _impl->offscreenRecorder.destroy();
     if (_impl->pendingCapture) {
         _impl->automationServer.completeRequest(
             _impl->pendingCapture->waiter,
@@ -1654,7 +1655,7 @@ void GUIWindowHost::shutdown()
         _impl->pendingCapture.reset();
     }
     _impl->automationServer.shutdown();
-    Render2D::destroy();
+    _impl->screenPipelines.destroy();
     _impl->presentResources.commandBuffers.clear();   // releases command-buffer resource retention
     _impl->presentResources.presentationTargets.clear();
     _impl->gpuShotBuffer.reset();    // readback staging buffer (RHI-owned)
@@ -1689,7 +1690,13 @@ GUIApp::~GUIApp()
 
 bool GUIApp::init()
 {
-    return _primaryWindow.init();
+    if (!_primaryWindow.init()) {
+        return false;
+    }
+    if (_extraWindows) {
+        _extraWindows->setScreenDrawPipelines(_primaryWindow.screenDrawPipelines());
+    }
+    return true;
 }
 
 int GUIApp::run()

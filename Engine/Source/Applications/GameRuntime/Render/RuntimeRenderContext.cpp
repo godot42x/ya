@@ -33,6 +33,20 @@
 namespace ya
 {
 
+RuntimeRenderContext::~RuntimeRenderContext()
+{
+    _gameUiRecorder.destroy();
+}
+
+void RuntimeRenderContext::ensureGameUiRecorder()
+{
+    if (_bGameUiRecorder || !_device) {
+        return;
+    }
+    _gameUiRecorder.init(_device->screenDrawPipelines());
+    _bGameUiRecorder = true;
+}
+
 RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan,
                                            IFrameRecordExtensions* extensions,
                                            const UIFrameSnapshot* uiSnapshot)
@@ -69,11 +83,8 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan,
     // and it prepares them itself, so the renderer carries no GUI headers for
     // either. The format is the active strategy's postprocess output, asked
     // after `prepareFrameRecord` applied any pending pipeline switch.
-    prepareRender2DComposePassPipeline(
-        FRender2DComposePassDesc{
-            .kind = ERender2DComposePassKind::RuntimeUIComposite,
-        },
-        _device->getPostprocessColorFormat());
+    ensureGameUiRecorder();
+    _gameUiRecorder.prepare(_device->getPostprocessColorFormat(), EFormat::Undefined);
 
     std::shared_ptr<ICommandBuffer> cmdBuf;
     if (!_device->beginFrameCommandBuffer(plan, cmdBuf)) {
@@ -115,7 +126,8 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan,
                                   FRender2DComposePassDesc{
                                       .kind = ERender2DComposePassKind::RuntimeUIComposite,
                                       .logicalExtent = logicalViewExtent,
-                                  });
+                                  },
+                                  _gameUiRecorder);
     }
     if (extensions) {
         extensions->recordViewCompose(*cmdBuf, plan.frame.deltaTime);

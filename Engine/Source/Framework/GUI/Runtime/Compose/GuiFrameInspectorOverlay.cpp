@@ -48,7 +48,7 @@ namespace
     return intersectRects(rect, fbRect);
 }
 
-void addFilled(Render2DList& list, const glm::vec2& pos, const glm::vec2& size, const glm::vec4& color)
+void addFilled(ScreenDrawList& list, const glm::vec2& pos, const glm::vec2& size, const glm::vec4& color)
 {
     if (size.x <= 0.0f || size.y <= 0.0f) {
         return;
@@ -56,7 +56,7 @@ void addFilled(Render2DList& list, const glm::vec2& pos, const glm::vec2& size, 
     list.makeSprite(glm::vec3(pos, 0.0f), size, nullptr, color);
 }
 
-void addOutline(Render2DList& list, const Rect2D& rect, const glm::vec4& color)
+void addOutline(ScreenDrawList& list, const Rect2D& rect, const glm::vec4& color)
 {
     constexpr float t = 1.0f;
     if (rect.extent.x <= 0.0f || rect.extent.y <= 0.0f) {
@@ -131,7 +131,7 @@ void stampOverdrawGrid(const UIFrameSnapshot& snapshot,
 
 void captureGuiComposeInspector(FGuiFrameInspectorRecord& record,
                                 const UIFrameSnapshot&    snapshot,
-                                const FQuadRender::FRender2dFrameStats& gpuStats)
+                                const ScreenDrawFrameStats& gpuStats)
 {
     const FUIFrameComposeReplayStats model = measureUIFrameComposeReplay(snapshot);
     record.modelScreenFlush = model.screenFlushCount;
@@ -163,7 +163,7 @@ void captureGuiOverdrawInspector(FGuiFrameInspectorRecord& record,
 void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& record,
                                   const UIFrameSnapshot&          snapshot,
                                   const GuiPerfStats&             perf,
-                                  Render2DList&                   list,
+                                  ScreenDrawList&                 list,
                                   Extent2D                        framebuffer)
 {
 #if defined(YA_PROFILING_DISABLED)
@@ -244,7 +244,7 @@ void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& record,
 #endif
 }
 
-void runGuiFrameInspectorOverlay(WidgetTree& tree, const UIFrameSnapshot& snapshot, Render2DList& list, Extent2D framebuffer)
+void runGuiFrameInspectorOverlay(WidgetTree& tree, const UIFrameSnapshot& snapshot, ScreenDrawList& list, Extent2D framebuffer)
 {
 #if defined(YA_PROFILING_DISABLED)
     (void)tree;

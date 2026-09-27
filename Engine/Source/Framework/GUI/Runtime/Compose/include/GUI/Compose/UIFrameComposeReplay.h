@@ -151,7 +151,7 @@ void walkComposeClipRuns(const UIFrameSnapshot&    snapshot,
         active = {};
     }
     else {
-        // Models Render2D::end() flushing leftover unclipped geometry.
+        // Models the recorder sealing leftover unclipped geometry.
         noteFlush();
     }
 }

@@ -319,3 +319,43 @@ Phase 1 §4.3（强制项：删除 textureRef 高位 bit 隐式协议）与 §4.
 - 未改运行时代码，未运行 build/test；不构成代码 checkpoint。
 - 待用户拍板：D2 的 View overlay 放 tone map 前还是后（建议后）。
 - 下一步：P2（CameraComponent 正交）或 D1，二者无依赖。
+
+## 2026-09-27 — D1：draw list 按坐标系拆分
+
+### 目标与边界
+
+拆 `Render2DList` / 全局 `Render2D` / pass slot。不开始 D2：`EditorViewportCompose`、
+`sceneSourceTexture`、`depthTarget` 仍留在 GUI compose。
+
+### 完成
+
+- `ScreenDrawList` / `ScreenDrawPipelines` / `ScreenDrawRecorder` 在 ya-render-2d。屏幕变换是 `ScreenAffine`（3×2 + z），录制目标没有相机字段。
+- `WorldDrawList` / `WorldDrawPipelines` / `WorldDrawRecorder` 在 ya-render-3d。GUI 源码不含 `WorldDraw` 或 `viewProjection`。
+- 删除 `Render2D`、`Render2DList`、`FQuadRender`、`FLineRender`、`acquirePassSlot`、`composePassSlot`、`FRender2dContext`。
+- Pipelines：`GUIWindowHost` 只持有屏幕缓存；`RenderDeviceState` 持有屏幕和世界缓存。`PipelineCoordinator` 不再 init/destroy 它们。
+- Recorders：GUI 主窗 present/offscreen、每个 `GUIWindowSession`、`RuntimeRenderContext` 游戏 UI、`EditorModule` 工具表面、`EditorViewportCompositor` 的视口屏幕 / 画布屏幕 / 世界各一份。
+- 编辑器世界线在屏幕录制之后、`endRendering` 之前，经 `std::function<void(ICommandBuffer*)>` 回调画进仍打开的 compose pass。相机矩阵在 `EditorComposeCamera`，不在 GUI desc。
+- 诊断改为进程级 `screenDrawDiagnostics()`。
+
+### 保留
+
+- D2：`ERender2DComposePassKind::EditorViewportCompose`、`sceneSourceTexture`、`depthTarget`。世界相位仍在屏幕相位之后（与当前像素顺序一致：gizmo/HUD 然后 frustum/物理/AABB）。
+- 无深度的 fallback 仍用 3D depth format 准备世界 PSO（原行为）。
+- `record()` 会 `seal()` 最后一批。旧 list 只在 kind/clip 边界关闭命令，末尾那一批会被丢掉；现在会画出来。编辑器调试线像素可能因此变化。
+
+### 偏离
+
+- 无。D2 的 tone-map 先后未拍板，本轮未做。
+
+### 验证
+
+- `xmake b ya-game-editor`、`xmake b GUIWorkbench`、`xmake b ya-render-2d-test`、`xmake b ya-render-3d-test` 通过。
+- `Render2DClipTest.*` + `ScreenDrawListTest.*`：10 passed。`WorldDrawListTest.*`：1 passed。
+- `rg "Render2D::|acquirePassSlot|FRender2dContext" Engine/Source` 无匹配。`composePassSlot` / `makeWorldLine` 同样无匹配。
+- `rg "WorldDraw|viewProjection" Engine/Source/Framework/GUI` 无匹配。
+- `GUIWorkbench` 链接 `libya-render-2d.dylib`，不链接 `ya-render-3d`（直接依赖与 GUI dylib 均如此）。
+- 未跑 parity md5，未跑编辑器截图。`draw_list_by_coordinate_frame` 因此仍是 `not_started`。
+
+### 下一步
+
+- D1 视觉证据（parity md5、编辑器截图），或在确认 View overlay 相对 tone-map 的位置之后进入 D2。建议 overlay 在 tone-map 之后。

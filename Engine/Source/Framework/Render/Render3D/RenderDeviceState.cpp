@@ -12,7 +12,6 @@
 #include "RHI/Core/Texture.h"
 #include "RHI/Core/Swapchain.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
-#include "Render2D/Render2D.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
 #include "Render3D/Services/PipelineCoordinator.h"
 
