@@ -249,10 +249,10 @@ Scene* createBillboardRegressionScene(App& app)
 ///
 /// The probe texture is a single flat colour so the smoke can count its pixels:
 /// "the pass ran" is not the claim, "the sprite is visible, at world size, and
-/// scene geometry hides the one behind the mesh" is. The camera distance and the
-/// occluder are parameters because the smoke compares frames taken with and
-/// without them.
-Scene* createSprite2DRegressionScene(App& app, float cameraDistance, bool bOccluderVisible)
+/// scene geometry hides the one behind the mesh" is. Camera distance, projection,
+/// orthographic scale and the occluder are parameters because the smoke compares
+/// frames taken with and without them.
+Scene* createSprite2DRegressionScene(App& app, float cameraDistance, bool bOccluderVisible, bool bOrthographic, float orthoHalfHeight)
 {
     auto* sceneManager = app.getSceneServices().getSceneManager();
     if (!sceneManager) {
@@ -279,6 +279,13 @@ Scene* createSprite2DRegressionScene(App& app, float cameraDistance, bool bOcclu
             camera->bPrimary  = true;
             camera->_nearClip = 0.1f;
             camera->_farClip  = 200.0f;
+            // The projection mode is authored on the ordinary camera component:
+            // an orthographic game view is the same CameraComponent, not a second
+            // camera type.
+            if (bOrthographic) {
+                camera->_projection     = ECameraProjection::Orthographic;
+                camera->_orthoHalfHeight = orthoHalfHeight;
+            }
         }
     }
 
@@ -1040,10 +1047,12 @@ void AppAutomationControlService::handleCreateBillboardRegressionScene(App& app,
 
 void AppAutomationControlService::handleCreateSprite2DRegressionScene(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
-    const float cameraDistance  = call->params.value("camera_distance", 6.0f);
-    const bool  bOccluderVisible = call->params.value("occluder_visible", true);
+    const float  cameraDistance   = call->params.value("camera_distance", 6.0f);
+    const bool   bOccluderVisible = call->params.value("occluder_visible", true);
+    const bool   bOrthographic    = call->params.value("projection", std::string{"perspective"}) == "orthographic";
+    const float  orthoHalfHeight  = call->params.value("ortho_half_height", 2.0f);
 
-    Scene* scene = createSprite2DRegressionScene(app, cameraDistance, bOccluderVisible);
+    Scene* scene = createSprite2DRegressionScene(app, cameraDistance, bOccluderVisible, bOrthographic, orthoHalfHeight);
     if (!scene) {
         completeCall(call, makeError(*call, "failed to create sprite2d regression scene"));
         return;

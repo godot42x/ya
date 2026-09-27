@@ -87,12 +87,15 @@ def main() -> int:
             raise RuntimeError(f"{label} failed: {result.get('error')}")
         return result.get("result", {})
 
-    def create_scene(camera_distance: float, occluder_visible: bool) -> dict:
+    def create_scene(camera_distance: float, occluder_visible: bool,
+                     projection: str = "perspective", ortho_half_height: float = 2.0) -> dict:
         return require_ok(
             client.call(
                 "create_sprite2d_regression_scene",
                 camera_distance=camera_distance,
                 occluder_visible=occluder_visible,
+                projection=projection,
+                ortho_half_height=ortho_half_height,
             ),
             "create_sprite2d_regression_scene",
         )
@@ -165,7 +168,41 @@ def main() -> int:
             f"{far_open + far_hidden} at z=12 (a distance-compensated quad would keep its screen size)"
         )
 
-    print("5. quit")
+    print("5. orthographic game view: same scene through a plain CameraComponent in ortho mode")
+    # Half-heights are chosen so both sprites sit fully inside the horizontal
+    # extent (half-width = half-height * aspect), otherwise the counts would
+    # measure clipping instead of scale.
+    create_scene(camera_distance=6.0, occluder_visible=False, projection="orthographic", ortho_half_height=4.0)
+    ortho_shot = capture("ortho")
+    ortho_pixels = probe_pixels(ortho_shot)
+    print(f"   half-height 4 at z=6: {ortho_pixels} pixels")
+    if ortho_pixels < 20000:
+        raise RuntimeError(f"the orthographic view did not draw the sprites: {ortho_pixels} probe pixels")
+
+    # Distance must not change an orthographic quad's screen size: that is what
+    # separates an ortho game view from the perspective one measured in step 4.
+    create_scene(camera_distance=12.0, occluder_visible=False, projection="orthographic", ortho_half_height=4.0)
+    ortho_far_pixels = probe_pixels(capture("ortho-far"))
+    print(f"   half-height 4 at z=12: {ortho_far_pixels} pixels")
+    if abs(ortho_far_pixels - ortho_pixels) > ortho_pixels * 0.1:
+        raise RuntimeError(
+            f"an orthographic view resized the sprite with distance: {ortho_pixels} pixels at z=6 vs "
+            f"{ortho_far_pixels} at z=12 (ortho scale is the camera's half-height, not the distance)"
+        )
+
+    # The authored scale of an ortho view is the vertical half-height: doubling it
+    # halves the quad in world-to-pixel terms, so its area must quarter.
+    create_scene(camera_distance=6.0, occluder_visible=False, projection="orthographic", ortho_half_height=8.0)
+    ortho_wide_pixels = probe_pixels(capture("ortho-half"))
+    print(f"   half-height 8 at z=6: {ortho_wide_pixels} pixels")
+    ratio = ortho_wide_pixels / max(ortho_pixels, 1)
+    if not 0.18 <= ratio <= 0.35:
+        raise RuntimeError(
+            f"the orthographic scale is not the camera half-height: area ratio {ratio:.3f} for a doubled "
+            "half-height (expected about 0.25)"
+        )
+
+    print("6. quit")
     require_ok(client.call("quit"), "quit")
     return 0
 

@@ -532,4 +532,50 @@ Phase 4 的 sprite 半边：同 Scene/revision 只抽取一次、多 View 共享
 
 ### 下一步
 
-- P5（runtime/editor 2D view producer + 正交 authoring profile），或先处理上面两个既有红灯。
+- P5（runtime/editor 的 2D view producer + 正交 authoring profile），或先处理上面两个既有红灯。
+
+## 2026-09-27 — P5（runtime 半边）：正交游戏视图画 authored sprite
+
+### 目标与边界
+
+Phase 5 的 runtime 验收：“orthographic game scene renders authored sprites before UI”。只补证据与
+必要的缺口，不动 GameEditor 的 2D authoring profile（它依赖 `EViewportMode::Mode2D` 的归属决定，
+仍等用户拍板）。
+
+### 完成
+
+- 结论：runtime 半边本已由 P2（`CameraComponent::getProjection(aspect)` + 正交模式）+ P4（内容闸门
+  sprite pass）构成，缺的是**证据**而不是实现——所以本项没有新增渲染代码。
+- 现有结构已满足其余条件：游戏视图由 `RuntimeGameViewProducer` 声明（effective aspect 自算，不读
+  上一帧 View output）；UI 不经 SceneViewProducer，由 `GameUIHost` 提交；`RuntimeRenderContext::record`
+  的顺序是 prepare → 世界 family 录制（sprite pass 在 family graph 内）→ **Game UI compose** →
+  display compose → present，即 sprite 一定在 UI 之前。
+- `Script/automation/sprite2d/` 扩出正交用例：回归场景相机可用 `projection=orthographic` 与
+  `ortho_half_height` 参数化，用的仍是普通 `CameraComponent`（`_projection` / `_orthoHalfHeight`）。
+
+### 验证（正交的签名）
+
+- 半高 4、z=6：73728 探针像素；同半高 z=12：**仍是 73728**（逐像素相同）——正交视图不随距离改变
+  屏幕尺寸，与透视用例（6→12 时 121210→37172，比值 0.31）形成对照。
+- 半高 8（其余不变）：18432 像素，比值 0.25 = (4/8)²——正交的缩放量纲确实是相机的垂直半高，
+  不是 FOV。
+- 半高 2 时数字为 172032，与“半宽 = 半高 × aspect，横向被裁掉一部分”的解析值逐像素吻合
+  （故测试改用不裁切的半高做比值判定）。
+- HelloMaterial 90 帧 exit=0；editor 120 帧 exit=0。
+- `ya-testing`：1336 tests，1291 passed，1 failed（`GUIWindowManagerTest.DragOverlay…`，实测是环境问题：
+  测试进程里 “Installed Vulkan Portability library doesn't implement the VK_KHR_surface extension”，
+  建不出原生窗口；与代码无关），44 skipped（同为需要真实窗口/surface 的用例）。
+- 顺带修掉一个真 bug：`RuntimeRenderContext::record` 在还没建 screen pipeline cache 的 device 上会
+  在 `ScreenDrawRecorder::init` 断言（`RuntimeRenderContextTest` 构造的正是这种 device，导致整个
+  suite 在该用例处 abort、后面的用例根本没跑）。现在 recorder 只在设备能支撑它时创建，`record()`
+  对这种情况照常返回无效帧（`00e9a9b5`）。
+
+### 保留
+
+- GameEditor 的 2D authoring profile（正交 XY 工具面、XY gizmo、sprite picking 的 editor 面）与
+  `EViewportMode::Mode2D` 的归属：等用户拍板。本机环境下编辑器视口不会发布
+  （`rendered_viewport_extent` 恒 0，编辑器 smoke 只验证 exit=0），所以这条也不适合用像素自动判定。
+
+### 下一步
+
+- P5 的 editor 半边（等 `Mode2D` 决定），或 P6（Game UI runtime/designer 边界），或 P7 收口审计。
