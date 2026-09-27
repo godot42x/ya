@@ -2,6 +2,8 @@
 #include "Core/Camera/Camera.h"
 #include "Render/Adapters/Companion/CompanionManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/2D/Sprite2DComponent.h"
+#include "ECS/Systems/TransformSystem.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "Scene3D/TransformComponent.h"
@@ -73,6 +75,82 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
         [&](entt::entity handle, SkinnedMeshComponent &mc, TransformComponent &tc) {
             testMeshComponent(handle, tc, mc);
         });
+
+    // Authored sprites are a local XY quad. Overlapping hits at the same
+    // distance fall back to layer, then sortOrder, so the front sprite wins.
+    struct SpritePick
+    {
+        Entity* entity = nullptr;
+        float   distance = 0.0f;
+        int32_t layer = 0;
+        int32_t sortOrder = 0;
+    };
+    std::optional<SpritePick> bestSprite;
+    registry.view<Sprite2DComponent, TransformComponent>().each(
+        [&](entt::entity handle, Sprite2DComponent& sprite, TransformComponent& tc) {
+            if (!sprite.bVisible || sprite.size.x <= 0.0f || sprite.size.y <= 0.0f) {
+                return;
+            }
+            TransformSystem::computeWorldMatrix(&tc);
+            const glm::mat4 world = tc.getTransform();
+            if (std::abs(glm::determinant(world)) <= 1e-8f) {
+                return;
+            }
+            const glm::mat4 inverse = glm::inverse(world);
+            const glm::vec3 localOrigin = glm::vec3(inverse * glm::vec4(ray.origin, 1.0f));
+            const glm::vec3 localDirection = glm::vec3(inverse * glm::vec4(ray.direction, 0.0f));
+            if (std::abs(localDirection.z) <= 1e-6f) {
+                return;
+            }
+            const float tLocal = -localOrigin.z / localDirection.z;
+            if (tLocal < 0.0f) {
+                return;
+            }
+            const glm::vec2 localHit{
+                localOrigin.x + localDirection.x * tLocal,
+                localOrigin.y + localDirection.y * tLocal,
+            };
+            if (std::abs(localHit.x) > sprite.size.x * 0.5f ||
+                std::abs(localHit.y) > sprite.size.y * 0.5f) {
+                return;
+            }
+            const glm::vec3 worldHit = glm::vec3(world * glm::vec4(localHit, 0.0f, 1.0f));
+            const float distance = glm::dot(worldHit - ray.origin, ray.direction);
+            if (distance < 0.0f) {
+                return;
+            }
+            Entity* entity = scene->getEntityByEnttID(handle);
+            if (!entity) {
+                return;
+            }
+            const SpritePick candidate{
+                .entity    = entity,
+                .distance  = distance,
+                .layer     = sprite.layer,
+                .sortOrder = sprite.sortOrder,
+            };
+            if (!bestSprite) {
+                bestSprite = candidate;
+                return;
+            }
+            constexpr float kTie = 1e-3f;
+            const bool bCloser = candidate.distance + kTie < bestSprite->distance;
+            const bool bTie = std::abs(candidate.distance - bestSprite->distance) <= kTie;
+            const bool bInFront = candidate.layer > bestSprite->layer ||
+                                  (candidate.layer == bestSprite->layer &&
+                                   candidate.sortOrder > bestSprite->sortOrder);
+            if (bCloser || (bTie && bInFront)) {
+                bestSprite = candidate;
+            }
+        });
+
+    if (bestSprite && (!closestHit || bestSprite->distance < closestHit->distance)) {
+        closestHit = RaycastHit{
+            .entity   = bestSprite->entity,
+            .distance = bestSprite->distance,
+            .point    = ray.at(bestSprite->distance),
+        };
+    }
 
     return closestHit;
 }

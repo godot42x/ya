@@ -6,6 +6,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/2D/Sprite2DComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/CameraController/FreeCameraController.h"
@@ -237,6 +238,20 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         auto& registry = editor::NodeCreateRegistry::get();
 
         registry.registerPreset(
+            "2D Object",
+            "Sprite",
+            "Scene sprite on the entity XY plane. Texture, size, and tint are authored data.",
+            [](Scene& scene, const std::string& name, Node* parent) -> Node* {
+                Node* node = scene.createNode3D(name, parent);
+                if (node) {
+                    if (auto* node3D = dynamic_cast<Node3D*>(node)) {
+                        node3D->getEntity()->addComponent<Sprite2DComponent>();
+                    }
+                }
+                return node;
+            });
+
+        registry.registerPreset(
             "3D Object",
             "Cube",
             "Static cube with a Phong material",
@@ -399,7 +414,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         api.registerFunction(
             "scene.create_preset",
             "Creates a node from the editor create registry. Args: {preset, name?, parent_path?}. "
-            "Presets: Cube, Sphere, Plane, Terrain, Point Light, Directional Light, Camera.",
+            "Presets: Sprite, Cube, Sphere, Plane, Terrain, Point Light, Directional Light, Camera.",
             Json{{"preset", {{"type", "string"}}},
                  {"name", {{"type", "string"}}},
                  {"parent_path", {{"type", "string"}}}},

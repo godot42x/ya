@@ -1,6 +1,7 @@
 #include "Render3D/Services/GameplayResourceBinding.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/2D/Sprite2DComponent.h"
 #include "ECS/Systems/Components/UIComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
@@ -56,6 +57,10 @@ void GameplayResourceBinding::prepareScenes(std::span<Scene* const> scenes, floa
         {
             YA_PROFILE_SCOPE("ResourceResolve/Billboards");
             resolvePendingBillboards(*scene);
+        }
+        {
+            YA_PROFILE_SCOPE("ResourceResolve/Sprites");
+            resolvePendingSprites(*scene);
         }
     }
 }
@@ -301,6 +306,18 @@ void GameplayResourceBinding::resolvePendingBillboards(Scene& scene)
         (void)entity;
         if (comp.bDirty) {
             comp.resolve();
+        }
+    }
+}
+
+void GameplayResourceBinding::resolvePendingSprites(Scene& scene)
+{
+    auto& registry = scene.getRegistry();
+
+    for (const auto& [entity, comp] : registry.view<Sprite2DComponent>().each()) {
+        (void)entity;
+        if (comp.image.needsResolve()) {
+            (void)comp.image.resolve();
         }
     }
 }

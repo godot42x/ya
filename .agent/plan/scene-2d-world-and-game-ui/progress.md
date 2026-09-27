@@ -395,4 +395,37 @@ GameEditor 在已经 tone-map 的 View display image 上画 overlay：先世界�
 
 ### 下一步
 
-- D3。不在本项开始。
+- 计划顺序的下一项是 P3（D3 在 P3 之后）。
+
+## 2026-09-27 — P3：Sprite2DComponent 可创建、保存、复制、删除
+
+### 目标与边界
+
+场景里增加 authored sprite：能创建、序列化、复制、删除，组件不持有 GPU 对象。不实现 World2D pass，不开始 D3。
+
+### 完成
+
+- `Sprite2DComponent`：TextureSlot、局部 `size`、`uvRect`、翻转、tint、可见、layer、sortOrder、pickId。局部四边形在实体 XY 平面，朝向局部 +Z。Transform 仍是唯一的位置/旋转/缩放。
+- 反射注册后，序列化、clone、duplicate 走现有组件路径。编辑器创建菜单增加 Sprite 预设。
+- 纹理解析只在 `GameplayResourceBinding::resolvePendingSprites`。未设置、加载中、失败都不画，没有替代图。`spriteIsDrawable` 是这条规则的唯一实现。
+- 拾取是现有射线对局部 XY 四边形的测试。同一距离时 layer 更大者优先，其次 sortOrder。
+
+### 保留
+
+- P4：抽取 WorldSpriteCandidate、真正画 sprite、深度写入与半透明排序。
+- D3：屏幕 stroke。
+- 带路径的 TextureSlot 在反序列化时会向 TextureLibrary 要棋盘格。测试因此核对保存下来的路径，再清空路径做字段往返。缺图的 GPU 占位不在本项。
+
+### 偏离
+
+- Forward 图导入补上 `RenderGraphImportUtils.h`。新 cpp 打乱 unity 批次后，这个文件不再能靠同批的别的 include 看见 `makeImportedTextureDesc`。
+
+### 验证
+
+- `xmake b ya-testing` 通过。
+- `Sprite2DComponentTest`：3 passed（往返/复制/删除、未加载纹理不可画、射线打中靠前的 quad）。
+- 公开头不含 MaterialFactory、ICommandBuffer、Render2D、Transform2D、Camera2D、FRenderFeatureMask。
+
+### 下一步
+
+- D3。P4 仍在 D3 之后。

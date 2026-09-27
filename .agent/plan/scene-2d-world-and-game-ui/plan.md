@@ -114,8 +114,9 @@ shader 与顶点布局拆分、typed texture slot 和 Render2DList 值化；Worl
 ### 2.2 空间与生命周期
 
 - World2D 使用 Scene 世界坐标；UI 使用 Render2D 左上角/Y-down 逻辑像素，二者不混用。
-  P0 必须冻结 World2D 的 up/forward、sprite 朝向、z/depth/sort 关系；不能把 GUI 的 Y-down
-  坐标直接扩散进 TransformComponent。
+  P3 已冻结：sprite 是实体局部 XY 矩形，`size` 是未缩放的宽高，朝向局部 +Z；位置/旋转/缩放
+  只在 Transform 上。不透明 sprite 做深度测试并写入，半透明只测试、按 layer、sortOrder、
+  视深排序。未设置、加载中、失败的纹理不画，不用替代图。不能把 GUI 的 Y-down 坐标写入 Transform。
 - View 的 outputRect 是 View 自己声明的 offscreen rect；窗口尺寸只属于 presentation。
 - View 不存在于本 tick 时不提交该 View 的 task/request；同 Scene 的其他可见 View 仍可需要共享
   Scene extraction。已注册 target 的销毁仍由 ViewTargetStore::unregisterView 管理，不能用“连续 N 帧
