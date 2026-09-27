@@ -354,8 +354,10 @@ Phase 1 §4.3（强制项：删除 textureRef 高位 bit 隐式协议）与 §4.
 - `rg "Render2D::|acquirePassSlot|FRender2dContext" Engine/Source` 无匹配。`composePassSlot` / `makeWorldLine` 同样无匹配。
 - `rg "WorldDraw|viewProjection" Engine/Source/Framework/GUI` 无匹配。
 - `GUIWorkbench` 链接 `libya-render-2d.dylib`，不链接 `ya-render-3d`（直接依赖与 GUI dylib 均如此）。
-- 未跑 parity md5，未跑编辑器截图。`draw_list_by_coordinate_frame` 因此仍是 `not_started`。
+- `run_workbench_gpu_parity.py --skip-build`：offscreen parity `pass=true differing=0`。
+- `run_display_compose_parity.py`：viewport 与 presentation 的 md5 都是 `c775245ae636f15b41da8485319a2267`，与既有基线逐字节相同。
+- `run_widgettree_editor_smoke.py --skip-build`：第一次在视口发布前查询，`rendered_viewport_extent` 为 0；同一进程日志里随后出现 635×426 的 `EditorViewportCompositionSource`。重跑通过（exit 0），并写出 presentation 截图。仓库里 9 月 25 日的旧截图是 1024×768，这次窗口是 1450×816，不能当作同一基线。
 
 ### 下一步
 
-- D1 视觉证据（parity md5、编辑器截图），或在确认 View overlay 相对 tone-map 的位置之后进入 D2。建议 overlay 在 tone-map 之后。
+- D2。开工前需要确认 View overlay 画在 tone-map 之前还是之后。建议之后。
