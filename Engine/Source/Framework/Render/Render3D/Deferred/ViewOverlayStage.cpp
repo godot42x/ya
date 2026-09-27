@@ -1,6 +1,7 @@
 #include "Render3D/Deferred/ViewOverlayStage.h"
 
 #include "Core/Profiling/Instrumentor.h"
+#include "Render3D/Common/RenderFeatures.h"
 
 #include "Core/Math/Geometry.h"
 #include "Core/Math/Math.h"
@@ -21,6 +22,7 @@
 
 #include <algorithm>
 #include <format>
+#include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya
@@ -85,6 +87,13 @@ void ViewOverlayStage::refreshPipelineFormats(const DeferredAttachmentFormats& f
         _billboardPipeline->updateDesc(std::move(ci));
     }
 
+    if (_worldGridPipeline) {
+        auto ci                                         = _worldGridPipeline->getDesc();
+        ci.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
+        ci.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        _worldGridPipeline->updateDesc(std::move(ci));
+    }
+
     if (_overlayPipeline) {
         auto ci                                         = _overlayPipeline->getDesc();
         ci.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
@@ -114,6 +123,7 @@ void ViewOverlayStage::init(IRender* render, stdptr<IDescriptorSetLayout> skybox
     YA_CORE_ASSERT(_debugRenderSystem != nullptr, "ViewOverlayStage requires debug render system instance");
     initSkybox(std::move(skyboxFrameDSL));
     initBillboards();
+    initWorldGrid();
     initOverlay();
     _debugRenderSystem->init(_render);
     _debugRenderSystem->setReverseViewportY(bReverseViewportY);
@@ -229,6 +239,45 @@ void ViewOverlayStage::initBillboards()
     YA_CORE_ASSERT(_billboardPipeline && _billboardPipeline->recreate(ci), "Failed to create billboard overlay pipeline");
 }
 
+void ViewOverlayStage::initWorldGrid()
+{
+    _worldGridPPL = IPipelineLayout::create(
+        _render,
+        "EditorWorldGrid_PPL",
+        {PushConstantRange{.offset = 0, .size = sizeof(WorldGridPushConstant), .stageFlags = EShaderStage::Fragment}},
+        {});
+
+    GraphicsPipelineCreateInfo ci{
+        .pipelineRenderingInfo = {
+            .label                  = "Deferred Editor World Grid",
+            .colorAttachmentFormats = {LINEAR_FORMAT},
+            .depthAttachmentFormat  = DEPTH_FORMAT,
+        },
+        .pipelineLayout = _worldGridPPL.get(),
+        .shaderDesc     = ShaderDesc{
+            .shaderName = "Misc/EditorWorldGrid.slang",
+        },
+        .dynamicFeatures    = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor},
+        .primitiveType      = EPrimitiveType::TriangleList,
+        .rasterizationState = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::None, .frontFace = EFrontFaceType::CounterClockWise},
+        .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::LessOrEqual},
+        .colorBlendState    = {.attachments = {{
+            .index               = 0,
+            .bBlendEnable        = true,
+            .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+            .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+            .colorBlendOp        = EBlendOp::Add,
+            .srcAlphaBlendFactor = EBlendFactor::One,
+            .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+            .alphaBlendOp        = EBlendOp::Add,
+            .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+        }}},
+        .viewportState = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
+    };
+    _worldGridPipeline = IGraphicsPipeline::create(_render);
+    YA_CORE_ASSERT(_worldGridPipeline && _worldGridPipeline->recreate(ci), "Failed to create editor world grid pipeline");
+}
+
 void ViewOverlayStage::initOverlay()
 {
     constexpr auto pcSize = sizeof(OverlayPushConstant);
@@ -275,6 +324,9 @@ void ViewOverlayStage::destroy()
     _billboardTextureDSL.reset();
     _billboardMesh = nullptr;
 
+    _worldGridPipeline.reset();
+    _worldGridPPL.reset();
+
     _overlayPipeline.reset();
     _overlayPPL.reset();
     _directionCone = nullptr;
@@ -299,6 +351,9 @@ void ViewOverlayStage::beginFrame()
     }
     if (_billboardPipeline) {
         _billboardPipeline->beginFrame();
+    }
+    if (_worldGridPipeline) {
+        _worldGridPipeline->beginFrame();
     }
     if (_debugRenderSystem) {
         _debugRenderSystem->beginFrame();
@@ -335,6 +390,7 @@ void ViewOverlayStage::executeOverlay(const RenderStageContext& ctx, const Frame
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
+    drawWorldGrid(ctx);
     drawBillboards(ctx, frameInputs, overlay);
     drawOverlay(ctx, frameInputs);
 }
@@ -391,6 +447,45 @@ void ViewOverlayStage::updateBillboardTextures(FrameInputs& frameInputs, Overlay
     _render->getDescriptorHelper()->updateDescriptorSets({
         IDescriptorSetHelper::genImageWrite(overlay.billboardTextures.set, 0, 0, EPipelineDescriptorType::CombinedImageSampler, std::move(imageInfos)),
     });
+}
+
+void ViewOverlayStage::drawWorldGrid(const RenderStageContext& ctx)
+{
+    if (!_worldGridPipeline || !_worldGridPPL || !ctx.frameData || !ctx.cmdBuf) {
+        return;
+    }
+    if ((ctx.frameData->viewFeatures & toMask(ERenderFeature::Gizmo)) == 0) {
+        return;
+    }
+
+    const auto vpW = ctx.viewExtent.width;
+    const auto vpH = ctx.viewExtent.height;
+    if (vpW == 0 || vpH == 0) {
+        return;
+    }
+
+    const glm::mat4& vp = ctx.frameData->viewProjection;
+    WorldGridPushConstant pc{};
+    pc.invViewProjection = glm::inverse(vp);
+    pc.clipZRow          = glm::vec4(vp[0][2], vp[1][2], vp[2][2], vp[3][2]);
+    pc.clipWRow          = glm::vec4(vp[0][3], vp[1][3], vp[2][3], vp[3][3]);
+    pc.cameraPos         = glm::vec4(ctx.frameData->cameraPos, 180.0f);
+
+    auto* cmdBuf = ctx.cmdBuf;
+    cmdBuf->debugBeginLabel("EditorWorldGrid");
+    cmdBuf->bindPipeline(_worldGridPipeline.get());
+
+    float viewportY  = 0.0f;
+    float viewHeight = static_cast<float>(vpH);
+    if (bReverseViewportY) {
+        viewportY  = static_cast<float>(vpH);
+        viewHeight = -static_cast<float>(vpH);
+    }
+    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(vpW), viewHeight);
+    cmdBuf->setScissor(0, 0, vpW, vpH);
+    cmdBuf->pushConstants(_worldGridPPL.get(), EShaderStage::Fragment, 0, sizeof(pc), &pc);
+    cmdBuf->draw(3, 1, 0, 0);
+    cmdBuf->debugEndLabel();
 }
 
 void ViewOverlayStage::drawBillboards(const RenderStageContext& ctx, const FrameInputs& frameInputs, const OverlayPassBindings& overlay)

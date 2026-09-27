@@ -87,21 +87,6 @@ void recordSelectedEntityBounds(Render2DList& list, const EditorLayer& layer)
     }
 }
 
-void recordEditorWorldGrid(Render2DList& list)
-{
-    constexpr int   kHalf  = 20;
-    constexpr float kStep  = 1.0f;
-    const glm::vec4 minor{0.22f, 0.24f, 0.28f, 1.0f};
-    const glm::vec4 axisX{0.62f, 0.24f, 0.24f, 1.0f};
-    const glm::vec4 axisZ{0.24f, 0.38f, 0.72f, 1.0f};
-    const float     extent = static_cast<float>(kHalf) * kStep;
-    for (int i = -kHalf; i <= kHalf; ++i) {
-        const float t = static_cast<float>(i) * kStep;
-        list.makeWorldLine({-extent, 0.0f, t}, {extent, 0.0f, t}, i == 0 ? axisX : minor);
-        list.makeWorldLine({t, 0.0f, -extent}, {t, 0.0f, extent}, i == 0 ? axisZ : minor);
-    }
-}
-
 void recordCameraHud(Render2DList& list, EditorLayer& layer)
 {
     const auto texts = layer.buildViewportCameraOverlayTexts();
@@ -169,7 +154,6 @@ void recordPhysicsCollision(Render2DList& list, EditorLayer& layer)
 
 void recordEditorWorldViewportOverlays(Render2DList& list, EditorLayer& layer, bool bDepthTestedWorld)
 {
-    recordEditorWorldGrid(list);
     layer.gizmo().recordOverlay(list);
     recordCameraHud(list, layer);
     recordSelectedCameraFrustum(list, layer);

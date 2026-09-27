@@ -88,6 +88,17 @@ struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
         glm::vec4 tint           = glm::vec4(1.0f);
     };
 
+    /// Matches Misc/EditorWorldGrid.slang. Two rows of viewProjection stand in
+    /// for the full matrix so the block stays inside the 128-byte push limit.
+    struct WorldGridPushConstant
+    {
+        glm::mat4 invViewProjection = glm::mat4(1.0f);
+        glm::vec4 clipZRow          = glm::vec4(0.0f);
+        glm::vec4 clipWRow          = glm::vec4(0.0f);
+        glm::vec4 cameraPos         = glm::vec4(0.0f);
+    };
+    static_assert(sizeof(WorldGridPushConstant) <= 128);
+
     static constexpr EFormat::T LINEAR_FORMAT = EFormat::R16G16B16A16_SFLOAT;
     static constexpr EFormat::T DEPTH_FORMAT  = EFormat::D32_SFLOAT;
 
@@ -104,6 +115,9 @@ struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
     stdptr<IDescriptorSetLayout> _billboardFrameDSL;
     stdptr<IDescriptorSetLayout> _billboardTextureDSL;
     Mesh* _billboardMesh = nullptr;
+
+    stdptr<IGraphicsPipeline> _worldGridPipeline;
+    stdptr<IPipelineLayout>   _worldGridPPL;
 
     bool bReverseViewportY = true;
 
@@ -149,7 +163,9 @@ struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
     void initSkybox(stdptr<IDescriptorSetLayout> skyboxFrameDSL);
     void initOverlay();
     void initBillboards();
+    void initWorldGrid();
     uint32_t resolveBillboardTextureIndex(std::vector<TextureBinding>& bindings, const TextureBinding& binding);
+    void drawWorldGrid(const RenderStageContext& ctx);
     void drawBillboards(const RenderStageContext& ctx, const FrameInputs& frameInputs, const OverlayPassBindings& overlay);
     void drawSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput);
     void drawOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs);
