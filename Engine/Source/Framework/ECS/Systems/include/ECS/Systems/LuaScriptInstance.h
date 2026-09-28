@@ -4,6 +4,7 @@
 
 #include <any>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <sol/sol.hpp>
 #include <string>
@@ -13,6 +14,8 @@
 
 namespace ya
 {
+
+struct LuaListenerScope;
 
 /// One editable script property: the C++ copy of a `_PROPERTIES` row, safe to
 /// keep after the Lua state that produced it is gone.
@@ -41,6 +44,9 @@ struct LuaScriptInstance
     uint64_t    runtimeId = 0;
 
     sol::table self;
+    /// Lua listeners this instance added to delegates; made with each new
+    /// `self` and dropped with it, which ends those listeners.
+    std::shared_ptr<LuaListenerScope> listeners;
 
     sol::function onInit;
     sol::function onStart;

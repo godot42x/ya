@@ -27,7 +27,7 @@
 4. **帧顺序是契约。** 事件 → 游戏逻辑（受游戏暂停控制）→ UI 逻辑（按各自时钟）→ 结构变更
    统一生效 → 渲染（只布局和快照，不调脚本）。
 5. **界面与玩法之间不造事件总线。** 玩法调用界面实例上的方法（`ui.get("HUD"):setScore(n)`）；
-   界面意图由关心它的脚本直接监听控件事件获得（`btn:onClick(self, fn)`，UMG 式）；
+   界面意图由关心它的脚本直接监听控件事件获得（`btn.onClicked:add(self, fn)`，UMG 式）；
    控件不携带动作字符串，GUI 不冒泡（`ui-behavior-capabilities` C1c / B6）。
 
 ## 1. 现状基线（硬编码与缺口盘点）
@@ -130,7 +130,7 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 | `onUpdate(dt)` | 世界：GameLogic 每帧，按顺序键。UI：默认不调用；`self:setTickEnabled(true)` 后由 `WidgetTree::tick` 在控件可见时调用（树顺序），`false` 关闭 |
 | 计时器回调 | 仅 UI：`self:after(sec, fn)` / `self:every(sec, fn)` 返回可 `cancel()` 的句柄；UILogic 中按 host 时钟触发，隐藏不停；实例销毁时自动取消 |
 | `onShow` / `onHide` | 仅 UI：条目或控件可见性变化后，下一个 UILogic 调用 |
-| `btn:onClick(target, fn)` | 不是生命周期回调：任意脚本直接监听按钮，`fn(target, button)`；返回 `UIConnection:disconnect()`；UI 脚本实例释放 / 热重载换 `self` / 按钮销毁时自动断开，世界脚本在 `onDestroy` 自行断开 |
+| `btn.onClicked:add(self, fn)` | 不是生命周期回调：任意脚本直接监听控件事件，`fn(self, ...)`；返回 handle，`remove(handle)` / `removeAll(self)`；监听归 `self` 所属脚本实例，实例销毁 / Stop / 热重载换 `self` 时结束（`ui-behavior-capabilities` C1d） |
 | `onCancel()` | 取消动作，返回 true 停止 |
 | `onKey(key, pressed, repeat)` | 仅世界：按键，返回 true 消费 |
 | `onDestroy` | StructuralFlush；Stop / 场景切换 / 卸载 / 热重载替换时 |
@@ -259,7 +259,7 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 目标：`script.lua` 行为可以挂在任意控件上，脚本拿到控件句柄，按钮先交给所在界面。
 
 > 按钮动作冒泡（下文 `_action` / `emitAction` / `onAction` / `onUiAction` / `Button.action`）已被
-> `ui-behavior-capabilities` C1c 取代：按钮只广播 `onClicked`，脚本 `btn:onClick(self, fn)` 直接监听。
+> `ui-behavior-capabilities` C1c 取代：按钮只广播 `onClicked`，脚本 `btn.onClicked:add(self, fn)` 直接监听（C1d）。
 > 下文保留为 S3 当时的设计与落地记录。
 
 - `LuaWidgetScriptBehavior`（GameRuntime）：`IUIBehaviorActivator` 为 `type == "script.lua"`
@@ -410,7 +410,7 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
   （复用 `EditorLuaPreview` 的属性发现；设计器仍不运行 `onInit/onUpdate`）。
 - 层级面板 Game UI 条目：检查面板编辑 `modal` / `pausesGame` / `clock` / `zOrder`。
 - 新建 Game UI（H7）：在内容浏览器当前目录创建、询问名称，`zOrder` 取现有最大值 + 10。
-- 内容浏览器：新建 UI 脚本模板（`onInit/onUpdate/onCancel` 骨架，`onInit` 内示范 `self:find(...):onClick(self, fn)`）。
+- 内容浏览器：新建 UI 脚本模板（`onInit/onUpdate/onCancel` 骨架，`onInit` 内示范 `self:find(...).onClicked:add(self, fn)`）。
 - 验收：编辑器 smoke exit 0；`EditorUIDesignerSessionTest` 扩展「给按钮挂脚本 → 保存 → 重开仍在」；
   预览不运行脚本的既有测试保持绿。
 

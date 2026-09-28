@@ -2,6 +2,8 @@
 
 #include "Core/Log.h"
 
+#include "ECS/Systems/LuaEvent.h"
+
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 
 #include "GUI/Widgets/Controls/Border.h"
@@ -195,6 +197,13 @@ void bindLuaWidgetHandles(sol::state& lua)
         sol::no_constructor,
         base,
         bases,
+        "onClicked",
+        sol::readonly_property([](const LuaButtonHandle& h) {
+            auto* button = h.as<UIButton>("onClicked");
+            return makeLuaEvent(button ? std::static_pointer_cast<UIButton>(button->shared_from_this()) : nullptr,
+                                &UIButton::onClicked,
+                                "Button.onClicked");
+        }),
         "enabled",
         sol::property(
             [](const LuaButtonHandle& h) -> std::optional<bool> {

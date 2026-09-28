@@ -442,16 +442,20 @@ TEST(GameUIScriptTest, ScriptsListenToButtonsDirectly)
     ui.addScript("Menu", R"(
 local S = {}
 function S:onInit()
-    self:find("Restart"):onClick(self, self.onRestart)
-    muteConnection = self:find("Mute"):onClick(self, function(s, button) table.insert(trace, "mute:" .. button.name) end)
+    self:find("Restart").onClicked:add(self, self.onRestart)
+    mute = self:find("Mute")
+    muteHandle = mute.onClicked:add(self, function(s) table.insert(trace, s.widget.name .. ":mute") end)
 end
-function S:onRestart(button) table.insert(trace, self.widget.name .. ":restart:" .. button.name) end
+function S:onRestart() table.insert(trace, self.widget.name .. ":restart") end
 return S
 )");
     ui.addScript("World", R"(
 local S = {}
 function S:onInit()
-    ui.get("Menu"):find("Restart"):onClick(self, function(s) table.insert(trace, "world:restart") end)
+    world = self
+    local restart = ui.get("Menu"):find("Restart")
+    restart.onClicked:add(self, function() table.insert(trace, "world:restart") end)
+    restart.onClicked:add(self, function() table.insert(trace, "world:again") end)
 end
 return S
 )");
@@ -464,22 +468,33 @@ return S
     ui.addWorldScript("World");
 
     ui.press(ui.mounted("Menu", "Restart"));
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("Panel:restart:Restart", "world:restart"))
-        << "every listener hears the click, in connection order";
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Panel:restart", "world:restart", "world:again"))
+        << "every listener hears the click with its owner as self, in add order";
+
+    ui.run(R"(removed = ui.get("Menu"):find("Restart").onClicked:removeAll(world))");
+    EXPECT_EQ(ui.global<int>("removed"), 2);
+    ui.press(ui.mounted("Menu", "Restart"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Panel:restart")) << "removeAll(owner) drops only that owner's listeners";
 
     ui.press(ui.mounted("Menu", "Mute"));
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("mute:Mute"));
-    ui.run("muteConnection:disconnect()");
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Panel:mute"));
+    ui.run("removedMute = mute.onClicked:remove(muteHandle)");
+    EXPECT_TRUE(ui.global<bool>("removedMute"));
     ui.press(ui.mounted("Menu", "Mute"));
-    EXPECT_THAT(ui.takeTrace(), IsEmpty()) << "a disconnected listener is gone";
+    EXPECT_THAT(ui.takeTrace(), IsEmpty()) << "remove(handle) drops that listener";
 }
 
-TEST(GameUIScriptTest, ClickListenersEndWithTheScriptOrTheRuntime)
+TEST(GameUIScriptTest, ListenersEndWithTheirScriptInstance)
 {
     FUIScripts ui;
     ui.addScript("Listener", R"(
 local S = {}
-function S:onInit() self:find("Go"):onClick(self, function() table.insert(trace, "listener") end) end
+function S:onInit() self:find("Go").onClicked:add(self, function() table.insert(trace, "listener") end) end
+return S
+)");
+    ui.addScript("World", R"(
+local S = {}
+function S:onInit() ui.get("HUD"):find("Go").onClicked:add(self, function() table.insert(trace, "world") end) end
 return S
 )");
     UIElementRef hud = FUIScripts::widget(kTypeIdCanvasPanel, "HUD");
@@ -488,20 +503,33 @@ return S
     ui.addEntry("HUD", hud);
     ui.host.onSceneActivated(ui.scene);
     ui.frame();
-    ui.run(R"(ui.get("HUD"):find("Go"):onClick(nil, function() table.insert(trace, "global") end))");
+    ui.addWorldScript("World");
 
     auto* go = dynamic_cast<UIButton*>(ui.mounted("HUD", "Go"));
     ASSERT_NE(go, nullptr);
+    ui.run(R"(
+local go = ui.get("HUD"):find("Go")
+noOwner = go.onClicked:add(nil, function() end)
+plainTable = go.onClicked:add({}, function() end)
+)");
+    EXPECT_EQ(ui.global<int>("noOwner"), 0) << "a listener must have a script instance as owner";
+    EXPECT_EQ(ui.global<int>("plainTable"), 0);
+    EXPECT_EQ(go->onClicked.size(), 2u);
     ui.press(go);
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("listener", "global"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("listener", "world"));
 
     ui.run(R"(ui.get("HUD"):find("Ear"):destroy())");
     ui.host.flushStructuralChanges();
     ui.press(go);
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("global")) << "a released script's listeners are disconnected";
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("world")) << "a destroyed widget script's listeners end with it";
 
-    ui.host.setBehaviorRuntime(nullptr);
-    EXPECT_EQ(go->onClicked.size(), 0u) << "the runtime drops every Lua listener before the Lua state can go";
+    ui.lua.reloadScript(FUIScripts::scriptPath("World"));
+    EXPECT_EQ(go->onClicked.size(), 1u) << "a hot reload ends the old self's listeners; the new onInit adds one";
+    ui.press(go);
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("world"));
+
+    ui.lua.destroyAll();
+    EXPECT_EQ(go->onClicked.size(), 0u) << "a world script's listeners end with the script, not the button";
     ui.press(go);
     EXPECT_THAT(ui.takeTrace(), IsEmpty());
 }
@@ -513,10 +541,10 @@ TEST(GameUIScriptTest, SpawnedButtonCanBeListenedToBeforeItIsAttached)
 local S = {}
 function S:onInit()
     item = self:spawn("Test/UI/Item.yaui", self.widget)
-    item:find("Buy"):onClick(self, self.onBuy)
+    item:find("Buy").onClicked:add(self, self.onBuy)
     pendingValid = item.valid
 end
-function S:onBuy(button) table.insert(trace, "shop:buy:" .. button.name) end
+function S:onBuy() table.insert(trace, "shop:buy") end
 return S
 )");
     ui.addScript("Item", R"(
@@ -541,7 +569,7 @@ return S
     EXPECT_THAT(ui.takeTrace(), ElementsAre("item.init:Shop")) << "spawned scripts join the parent's entry";
 
     ui.press(buy);
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("shop:buy:Buy"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("shop:buy"));
 }
 
 TEST(GameUIScriptTest, DestroyWaitsForStructuralFlushAndDropsSpawnsUnderIt)

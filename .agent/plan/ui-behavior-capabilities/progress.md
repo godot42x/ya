@@ -61,3 +61,22 @@
 偏离：无。
 
 下一步：C2 树 tick 登记表。
+
+## 2026-09-28 — C1d Lua 监听归属脚本实例（B7）
+
+完成：
+- 用户指出 C1c 的 `UIConnection` 只服务按钮一个事件、与 Core add/remove/removeAll 两套心智，且世界脚本监听无归属
+  （活到按钮销毁；编辑器里 Lua 状态与 App 同寿，只靠 Stop 重挂 UI 才不跨局泄露）。
+- Core `addWeakLambda`；ECS `LuaEvent.h`（`LuaListenerScope` / `FLuaListenerToken` / `TLuaEvent`）；
+  `LuaScriptInstance::listeners` 随 `self` 生灭（新 `self` 新 scope，热重载自动结束旧监听）。
+- Button 句柄 `onClicked`；删除 `Button:onClick`、`UIConnection`、`connectClick` / `disconnectClicks`；
+  GreedSnake 直接 `onClicked:add(self, ...)`，`onDestroy` 不再手动断开。
+- 验证：`ya-testing` 1392 全绿；`ya-gui-closure-test` 612 全绿；GUIWorkbench `--smoke-actions` PASS；
+  GreedySnake runtime / editor、HelloMaterial `--exit-after-frame=60` 无 Error。
+
+保留：失效令牌在事件源不再 broadcast 时留到源析构（不持 Lua 引用）；事件参数只支持 Lua 可直接推送的值，
+控件类参数需要句柄转换时再加。UI 计时器仍用 `sameTable` 判定归属，未并入 scope。
+
+偏离：C1c 的 `fn(target, button)` 改为严格对齐委托签名 `fn(self, ...Args)`。
+
+下一步：C2 树 tick 登记表。

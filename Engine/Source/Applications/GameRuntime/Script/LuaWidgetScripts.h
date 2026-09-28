@@ -8,14 +8,11 @@
 //   visibility change       -> onShow / onHide in the next UILogic
 //   self:setTickEnabled(b)  -> onUpdate from the tree tick while visible
 //   self:after / self:every -> host-clock timers, visible or not
-//   button:onClick(self, fn) -> fn(self, button) on each click
-//   widget leaves the tree  -> timers cancelled, click listeners it made
-//                              disconnected, onDestroy
+//   widget leaves the tree  -> timers cancelled, onDestroy
 //
-// Any script (UI or world) listens to a button directly through its handle;
-// the button names no handler. A listener whose target is not a widget
-// script's `self` lives until the button goes, disconnect(), or this runtime
-// is destroyed (always before the Lua state).
+// Any script (UI or world) listens to a control directly through its handle,
+// `btn.onClicked:add(self, fn)` (ECS/Systems/LuaEvent.h); the listener ends
+// with that script instance.
 //
 // Names written on `self` (reserved): widget, root, setTickEnabled, after,
 // every, find, spawn.
@@ -24,7 +21,6 @@
 
 #include "GameRuntime/GUI/GameUI/IGameUIBehaviorRuntime.h"
 
-#include "Core/Delegate.h"
 #include "GUI/Widgets/UIBehavior.h"
 
 #include <memory>
@@ -36,9 +32,7 @@ namespace ya
 {
 
 struct GameUIHost;
-struct LuaButtonHandle;
 struct LuaWidgetScripts;
-struct UIButton;
 
 struct LuaWidgetScriptBehavior final : UIBehaviorWith<LuaWidgetScriptBehavior, IUITickable>
 {
@@ -65,15 +59,6 @@ struct LuaWidgetScripts final : IGameUIBehaviorRuntime
     GameUIHost&         host;
 
   private:
-    struct FClickConnection
-    {
-        std::weak_ptr<UIButton> button;
-        DelegateHandle          handle = INVALID_HANDLE;
-        /// The widget script whose `self` is the target (disconnected when it
-        /// is released), or null.
-        const LuaWidgetScriptBehavior* owner = nullptr;
-    };
-
     /// Activated, not yet started.
     std::vector<std::weak_ptr<LuaWidgetScriptBehavior>> _fresh;
     std::vector<std::weak_ptr<LuaWidgetScriptBehavior>> _started;
@@ -83,7 +68,6 @@ struct LuaWidgetScripts final : IGameUIBehaviorRuntime
     sol::table                      _selfApi;
     uint64_t                        _nextActivation = 0;
     std::unordered_set<std::string> _warnedTypes;
-    std::vector<FClickConnection>   _clickConnections;
 
   public:
     LuaWidgetScripts(LuaScriptingSystem& inScripting, GameUIHost& inHost);
@@ -100,13 +84,6 @@ struct LuaWidgetScripts final : IGameUIBehaviorRuntime
     void bindSelf(const std::shared_ptr<LuaWidgetScriptBehavior>& behavior, sol::table& self);
     /// The `self` of the first loaded script on `widget`, or nil.
     [[nodiscard]] static sol::object scriptSelfOf(const UIElement& widget);
-
-  private:
-    /// `button:onClick(target, fn)`: a connection with `disconnect()`, or nil.
-    sol::object connectClick(const LuaButtonHandle& button, const sol::object& target, const sol::protected_function& fn,
-                             sol::this_state state);
-    /// Disconnect the listeners made for `owner`'s `self`; null: all of them.
-    void disconnectClicks(const LuaWidgetScriptBehavior* owner);
 };
 
 } // namespace ya

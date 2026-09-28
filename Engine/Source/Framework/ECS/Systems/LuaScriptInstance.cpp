@@ -152,6 +152,7 @@ void LuaScriptInstance::capturePropertiesFrom(sol::table table)
 
 void LuaScriptInstance::releaseLuaHandles()
 {
+    listeners.reset();
     self      = sol::lua_nil;
     onInit    = sol::lua_nil;
     onStart   = sol::lua_nil;

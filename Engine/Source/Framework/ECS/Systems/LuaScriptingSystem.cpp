@@ -1,4 +1,5 @@
 #include "ECS/Systems/LuaScriptingSystem.h"
+#include "ECS/Systems/LuaEvent.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/Reflection/MetadataSupport.h"
@@ -108,6 +109,7 @@ void invokeLuaCallback(const sol::function& callback,
 void bindScriptTable(sol::state_view lua, ya::LuaScriptInstance& script, sol::table scriptTable)
 {
     script.self      = scriptTable;
+    script.listeners = ya::LuaListenerScope::bind(scriptTable, script.scriptPath);
     script.onInit    = functionField(lua, scriptTable, "onInit");
     script.onStart   = functionField(lua, scriptTable, "onStart");
     script.onUpdate  = functionField(lua, scriptTable, "onUpdate");
@@ -268,6 +270,7 @@ void LuaScriptingSystem::init()
                         sol::lib::math,
                         sol::lib::table,
                         sol::lib::os);
+    LuaListenerScope::registerTypes(lua);
 
     // 设置全局环境标识
     lua["IS_EDITOR"]  = false;

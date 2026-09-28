@@ -6,7 +6,6 @@
 
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 
-#include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <algorithm>
@@ -22,22 +21,6 @@ namespace
 struct FWidgetScriptRef
 {
     std::weak_ptr<LuaWidgetScriptBehavior> behavior;
-};
-
-/// What `button:onClick` returns. Holds no Lua reference and no runtime
-/// pointer, so it is safe to keep past either.
-struct FLuaUIConnection
-{
-    std::weak_ptr<UIButton> button;
-    DelegateHandle          handle = INVALID_HANDLE;
-
-    void disconnect()
-    {
-        if (auto live = button.lock(); live && handle != INVALID_HANDLE) {
-            live->onClicked.remove(handle);
-        }
-        handle = INVALID_HANDLE;
-    }
 };
 
 struct FLuaUITimer
@@ -156,14 +139,7 @@ LuaWidgetScripts::LuaWidgetScripts(LuaScriptingSystem& inScripting, GameUIHost& 
     sol::state& lua = scripting.lua();
     lua.new_usertype<FWidgetScriptRef>("__WidgetScriptRef", sol::no_constructor);
     lua.new_usertype<FLuaUITimer>("UITimer", sol::no_constructor, "cancel", &FLuaUITimer::cancel);
-    lua.new_usertype<FLuaUIConnection>("UIConnection", sol::no_constructor, "disconnect", &FLuaUIConnection::disconnect);
-
     bindLuaWidgetHandles(lua);
-    sol::usertype<LuaButtonHandle> buttonType = lua["Button"];
-    buttonType.set_function("onClick", [this](const LuaButtonHandle& button, const sol::object& target,
-                                              const sol::protected_function& fn, sol::this_state state) {
-        return connectClick(button, target, fn, state);
-    });
 
     _selfApi = lua.create_table();
     _selfApi.set_function("setTickEnabled", [](const sol::table& self, bool bEnabled) {
@@ -198,7 +174,6 @@ LuaWidgetScripts::LuaWidgetScripts(LuaScriptingSystem& inScripting, GameUIHost& 
 
 LuaWidgetScripts::~LuaWidgetScripts()
 {
-    disconnectClicks(nullptr);
     std::vector<std::weak_ptr<LuaWidgetScriptBehavior>> all = std::move(_fresh);
     all.insert(all.end(), _started.begin(), _started.end());
     _started.clear();
@@ -301,61 +276,6 @@ void LuaWidgetScripts::release(LuaWidgetScriptBehavior& behavior)
     // instance gone and drops itself.
     scripting.destroy(behavior.instance);
     host.cancelTimersOf(&behavior);
-    disconnectClicks(&behavior);
-}
-
-sol::object LuaWidgetScripts::connectClick(const LuaButtonHandle& button, const sol::object& target,
-                                           const sol::protected_function& fn, sol::this_state state)
-{
-    sol::state_view lua(state);
-    auto*           widget = button.as<UIButton>("onClick");
-    if (!widget) {
-        return sol::make_object(lua, sol::lua_nil);
-    }
-    if (!fn.valid() || fn.get_type() != sol::type::function) {
-        YA_CORE_WARN("Lua button:onClick ('{}'): callback is not a function", widget->_name);
-        return sol::make_object(lua, sol::lua_nil);
-    }
-    std::erase_if(_clickConnections, [](const FClickConnection& c) { return c.button.expired(); });
-
-    // A listener for a widget script's `self` lives as long as that instance:
-    // it stops on release and after a hot reload replaced `self`.
-    std::shared_ptr<LuaWidgetScriptBehavior> owner = target.is<sol::table>() ? behaviorOf(target.as<sol::table>()) : nullptr;
-    const std::weak_ptr<UIButton> weakButton = std::static_pointer_cast<UIButton>(widget->shared_from_this());
-    const DelegateHandle          handle     = widget->onClicked.addLambda(
-        [weakButton, weakOwner = std::weak_ptr(owner), bOwned = owner != nullptr, fn, target, ui = &host]() {
-            if (bOwned) {
-                auto live = weakOwner.lock();
-                if (!live || !live->runtime || !live->instance.bLoaded ||
-                    !sameTable(live->instance.self, target.as<sol::table>())) {
-                    return;
-                }
-            }
-            const std::shared_ptr<UIButton> clicked = weakButton.lock();
-            if (!clicked) {
-                return;
-            }
-            const sol::protected_function_result result = fn(target, makeLuaWidgetHandle(fn.lua_state(), *ui, clicked));
-            if (!result.valid()) {
-                const sol::error error = result;
-                YA_CORE_ERROR("Lua button:onClick ('{}') error: {}", clicked->_name, error.what());
-            }
-        });
-    _clickConnections.push_back({.button = weakButton, .handle = handle, .owner = owner.get()});
-    return sol::make_object(lua, FLuaUIConnection{.button = weakButton, .handle = handle});
-}
-
-void LuaWidgetScripts::disconnectClicks(const LuaWidgetScriptBehavior* owner)
-{
-    std::erase_if(_clickConnections, [owner](const FClickConnection& connection) {
-        if (owner && connection.owner != owner) {
-            return false;
-        }
-        if (auto button = connection.button.lock()) {
-            button->onClicked.remove(connection.handle);
-        }
-        return true;
-    });
 }
 
 void LuaWidgetScripts::bindSelf(const std::shared_ptr<LuaWidgetScriptBehavior>& behavior, sol::table& self)

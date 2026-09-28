@@ -87,6 +87,11 @@ class MulticastDelegate<void(Args...)>
         DelegateHandle        handle;
         std::optional<void *> caller;
         FunctionType          func;
+        /// Set by addWeakLambda: the listener is gone once this expires.
+        std::weak_ptr<const void> lifetime;
+        bool                      bWeak = false;
+
+        [[nodiscard]] bool expired() const { return bWeak && lifetime.expired(); }
     };
 
   private:
@@ -152,6 +157,27 @@ class MulticastDelegate<void(Args...)>
         return handle;
     }
 
+    // Add lambda that lives only as long as `owner`: once it expires the
+    // lambda is skipped and dropped. removeAll(owner.get()) removes it too.
+    // The lambda should not own what `owner` guards (capture a weak ref).
+    template <typename Obj>
+    DelegateHandle addWeakLambda(const std::weak_ptr<Obj> &owner, std::function<void(Args...)> lambda)
+    {
+        const std::shared_ptr<Obj> live = owner.lock();
+        if (!live) {
+            return INVALID_HANDLE;
+        }
+        DelegateHandle handle = generateHandle();
+        m_Functions.push_back({
+            .handle   = handle,
+            .caller   = const_cast<void *>(static_cast<const void *>(live.get())),
+            .func     = std::move(lambda),
+            .lifetime = std::weak_ptr<const void>(live),
+            .bWeak    = true,
+        });
+        return handle;
+    }
+
     // TODO: use map for faster removal?
     // Remove delegate by handle
     bool remove(DelegateHandle handle)
@@ -192,10 +218,12 @@ class MulticastDelegate<void(Args...)>
         m_Functions.clear();
     }
 
-    // Get number of bound delegates
+    // Number of bound delegates whose owner (if weak) is still alive
     size_t size() const
     {
-        return m_Functions.size();
+        return static_cast<size_t>(std::count_if(m_Functions.begin(), m_Functions.end(), [](const FunctorImpl &item) {
+            return !item.expired();
+        }));
     }
 
     // Broadcast to all delegates. A listener may add or remove listeners
@@ -203,17 +231,17 @@ class MulticastDelegate<void(Args...)>
     // a listener removed before its turn is skipped.
     void broadcast(Args... args)
     {
-        // Remove delegates with null owner pointers (auto cleanup)
+        // Drop delegates with a null owner pointer or an expired weak owner
         m_Functions.erase(
             std::remove_if(m_Functions.begin(), m_Functions.end(), [](const FunctorImpl &item) {
-                return item.caller.has_value() && item.caller.value() == nullptr;
+                return (item.caller.has_value() && item.caller.value() == nullptr) || item.expired();
             }),
             m_Functions.end());
 
         const std::vector<FunctorImpl> snapshot = m_Functions;
         for (const FunctorImpl &item : snapshot)
         {
-            const bool bStillBound = std::any_of(m_Functions.begin(), m_Functions.end(), [&item](const FunctorImpl &live) {
+            const bool bStillBound = !item.expired() && std::any_of(m_Functions.begin(), m_Functions.end(), [&item](const FunctorImpl &live) {
                 return live.handle == item.handle;
             });
             if (bStillBound) {

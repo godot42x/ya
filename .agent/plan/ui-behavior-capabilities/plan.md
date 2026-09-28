@@ -1,6 +1,6 @@
 # UIBehavior 能力化与热路径
 
-状态：决策门已确认（2026-09-28），排在 `game-ui-script-framework` S4 之前；C1、C1b、C1c 完成，下一步 C2。
+状态：决策门已确认（2026-09-28），排在 `game-ui-script-framework` S4 之前；C1、C1b、C1c、C1d 完成，下一步 C2。
 来源：`game-ui-script-framework` 性能检查点时用户指出 `UIBehavior` 权责不分、实现性能低。
 
 ## 1. 现状（2026-09-28 核对）
@@ -61,7 +61,8 @@ GameEditor，新增行为不改引擎 GUI 源码，GUI 也不认识它们。
 | B3 | 排期 | `game-ui-script-framework` S4 之前 |
 | B4 | 同类行为是否可多个（2026-09-28 用户追加） | 不可；tween 改为 animator + 多 tween，规则对所有类型一律生效，并入 C1 |
 | B5 | 拖 / 放是否为能力（2026-09-28 用户追加） | 否：删除 `IUIDragSource` / `IUIDropTarget`，拖放是具体行为种类；按类型查找用 CRTP 编译期种类键 `type_index_v<Self>`，不用 `typeid`（C1b） |
-| B6 | 控件事件如何到达脚本（2026-09-28 用户追加） | 删除「动作」概念（`IUIActionHandler`、`UIButton::_action` 字符串、`emitAction` / 世界 sink / `onUiAction`）；`UIButton::onClicked` 是 `MulticastDelegate<void()>`，脚本 `btn:onClick(target, fn)` 直接监听（UMG 式），不做编辑器信号槽、不做 UI↔玩法中转总线（C1c） |
+| B6 | 控件事件如何到达脚本（2026-09-28 用户追加） | 删除「动作」概念（`IUIActionHandler`、`UIButton::_action` 字符串、`emitAction` / 世界 sink / `onUiAction`）；`UIButton::onClicked` 是 `MulticastDelegate<void()>`，脚本直接监听（UMG 式），不做编辑器信号槽、不做 UI↔玩法中转总线（C1c） |
+| B7 | Lua 监听的生命周期边界（2026-09-28 用户追加） | 委托只持弱令牌，Lua 引用归 owner 脚本实例（`LuaScriptInstance::listeners`，随 `self` 生灭）；owner 必须是活脚本实例的 `self`，不提供无 owner 的 add；Lua 写法与 Core 一致：`event:add(self, fn)` 返回 handle，`remove(handle)` / `removeAll(self)`（C1d） |
 
 ## 4. Checkpoints
 
@@ -106,6 +107,19 @@ GameEditor，新增行为不改引擎 GUI 源码，GUI 也不认识它们。
 - 验收：同 C1；`WidgetTreeTest.ButtonClickReachesEveryListenerWhileListenersChange`；
   `GameUIScriptTest.ScriptsListenToButtonsDirectly` / `ClickListenersEndWithTheScriptOrTheRuntime` /
   `SpawnedButtonCanBeListenedToBeforeItIsAttached`。
+
+### C1d — Lua 监听归属脚本实例（B7）
+
+- Core `MulticastDelegate::addWeakLambda(weak_ptr owner, fn)`：`caller = owner.get()`（`removeAll` 可用），
+  owner 失效后 `broadcast` 跳过并清除、`size()` 不计。
+- ECS `ECS/Systems/LuaEvent.h`：`LuaListenerScope`（持 Lua 回调与 `self`，`bindScriptTable` 随每个新 `self`
+  创建并写入 `self.__listeners`，`releaseLuaHandles` 释放）；`FLuaListenerToken`（委托里唯一的东西：弱 scope +
+  slot，最后一份拷贝析构时释放 slot）；`TLuaEvent<Args...>`（`add` / `remove` / `removeAll`，按签名注册 Lua 类型，
+  `void()` 为 `Event`）；`makeLuaEvent(owner, &T::member, name)`。
+- GameRuntime：Button 句柄 `onClicked` 属性；删除 C1c 的 `Button:onClick` / `UIConnection` /
+  `LuaWidgetScripts` 连接登记。GreedSnake 改 `onClicked:add(self, ...)`，删除手动断开。
+- 验收：同 C1；`DelegateTest.*`；`GameUIScriptTest.ScriptsListenToButtonsDirectly`（`removeAll` / `remove`）、
+  `ListenersEndWithTheirScriptInstance`（拒无 owner、控件脚本销毁、热重载、世界脚本销毁）。
 
 ### C2 — 树 tick 登记表
 
