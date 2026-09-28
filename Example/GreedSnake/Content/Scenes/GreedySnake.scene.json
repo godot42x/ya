@@ -1,0 +1,113 @@
+{
+  "name": "GreedySnake",
+  "entities": [
+    {
+      "id": 1001,
+      "name": "Game",
+      "components": {
+        "TransformComponent": {
+          "_position": [0.0, 0.0, 24.0],
+          "_rotation": [0.0, 0.0, 0.0],
+          "_scale": [1.0, 1.0, 1.0]
+        },
+        "CameraComponent": {
+          "bPrimary": true,
+          "_projection": "Orthographic",
+          "_orthoHalfHeight": 12.0,
+          "_fov": 45.0,
+          "_aspectRatio": 1.7777778,
+          "_nearClip": 0.1,
+          "_farClip": 1000.0,
+          "_fixedAspectRatio": false,
+          "_distance": 24.0,
+          "_focusPoint": [0.0, 0.0, 0.0]
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Snake.lua"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "nodeTree": {
+    "name": "scene_root",
+    "children": [
+      {
+        "name": "Game",
+        "entityRef": 1001
+      }
+    ]
+  },
+  "widgetEntries": [
+    {
+      "entryId": "HUD",
+      "zOrder": 0,
+      "autoMount": true,
+      "document": "Content:UI/HUD.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [0.0, 0.0],
+        "anchorMax": [1.0, 1.0],
+        "offset": [0.0, 0.0],
+        "minSize": [0.0, 0.0],
+        "maxSize": [1000000.0, 1000000.0],
+        "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [0.0, 0.0],
+        "preferredSize": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0]
+      }
+    },
+    {
+      "entryId": "GameOver",
+      "zOrder": 10,
+      "autoMount": true,
+      "document": "Content:UI/GameOver.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [0.0, 0.0],
+        "anchorMax": [1.0, 1.0],
+        "offset": [0.0, 0.0],
+        "minSize": [0.0, 0.0],
+        "maxSize": [1000000.0, 1000000.0],
+        "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [0.0, 0.0],
+        "preferredSize": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0]
+      }
+    },
+    {
+      "entryId": "Settings",
+      "zOrder": 20,
+      "autoMount": true,
+      "document": "Content:UI/Settings.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [0.0, 0.0],
+        "anchorMax": [1.0, 1.0],
+        "offset": [0.0, 0.0],
+        "minSize": [0.0, 0.0],
+        "maxSize": [1000000.0, 1000000.0],
+        "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [0.0, 0.0],
+        "preferredSize": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0]
+      }
+    }
+  ]
+}

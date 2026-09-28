@@ -579,3 +579,20 @@ Phase 5 的 runtime 验收：“orthographic game scene renders authored sprites
 ### 下一步
 
 - P5 的 editor 半边（等 `Mode2D` 决定），或 P6（Game UI runtime/designer 边界），或 P7 收口审计。
+
+## 2026-09-28 — 贪吃蛇示例驱动
+
+`Mode2D` 仍是 UI 画布。世界 2D 留在现有视口里，用正交相机看 XY。
+
+### 完成
+
+- GameRuntime 在 `LuaScriptingSystem::init` 之后绑定玩法面：`Entity:hasSprite/getSprite`（只暴露 `bVisible`、`size`、`tint`）、`world.spawnSprite` / `world.destroyEntity`。生成路径与编辑器 Sprite 预设相同：`createNode3D` 再挂 `Sprite2DComponent`，并指定探针贴图，否则精灵不会画。反射自动绑定仍是空的。
+- `UIButton._action` 可序列化。`GameUIHost` 在挂载后把非空动作名绑到 Lua 全局 `onUiAction`。`ui.setText` / `ui.setVisible` 按 `entryId` + 控件名改已挂载的 `UIText` 和显隐。GUI 模块不 include Lua。
+- `Example/GreedSnake`：正交场景、`HUD.yaui.json`、默认隐藏的 `GameOver.yaui.json`、`Content/Scripts/Snake.lua`。方向键移动，吃到变长加分，撞墙或自身后显示结束面板，Restart 重开。
+- 编辑器：`viewport.ortho` 把相机锁在俯视 XY，平移 gizmo 不改 Z。大纲可新建并挂载 `.yaui.json`，内容浏览器双击打开设计器并切到画布。未进入 Play 时，视口在世界上叠已挂载 HUD（独立的 screen recorder，Load 进显示图，gizmo 仍在其上）。Play / Simulate 不再叠这层，避免和运行时合成打两遍。
+
+### 验证
+
+- `xmake b ya-game-editor`、`xmake b ya-testing`、`xmake b GreedySnake` 通过。
+- `GameUIHostTest.*` 13 个通过，含 `MountedTextVisibilityAndButtonAction`。
+- `python3 Script/ya.py run --project Example/GreedSnake/GreedySnake.yaproject -- --exit-after-frame=60` 退出码 0。场景与 `Snake.lua` 的 `onInit` 无 Lua 异常；HUD / 标题 / 按钮三个字号的字体被建出来，说明两份文档已挂上。方向键、吃食物、死亡和按钮重开没有自动注入输入，这一轮没有在窗口里手点。

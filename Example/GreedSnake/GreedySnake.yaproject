@@ -4,5 +4,6 @@
   "mainModule": "GreedySnake",
   "modules": ["GreedySnake.yamodule"],
   "plugins": [],
-  "contentDir": "Content"
+  "contentDir": "Content",
+  "defaultScene": "Content/Scenes/GreedySnake.scene.json"
 }

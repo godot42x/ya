@@ -1,0 +1,331 @@
+{
+  "version": 2,
+  "typeId": "engine.panel",
+  "fields": {
+    "__base__": {
+      "UIElement": {
+        "_name": "Settings",
+        "_visibility": "Hidden"
+      }
+    }
+  },
+  "children": [
+    {
+      "version": 2,
+      "typeId": "engine.border",
+      "fields": {
+        "_color": [0.0, 0.0, 0.0, 0.45],
+        "__base__": {
+          "UIElement": {
+            "_name": "Dim"
+          }
+        }
+      },
+      "children": [],
+      "childSlots": []
+    },
+    {
+      "version": 2,
+      "typeId": "engine.border",
+      "fields": {
+        "_color": [0.16, 0.17, 0.21, 0.96],
+        "_cornerRadius": 8.0,
+        "__base__": {
+          "UIElement": {
+            "_name": "Card"
+          }
+        }
+      },
+      "children": [],
+      "childSlots": []
+    },
+    {
+      "version": 2,
+      "typeId": "engine.text",
+      "fields": {
+        "_text": "Settings",
+        "_fontSize": 28,
+        "_color": [1.0, 1.0, 1.0, 1.0],
+        "_hAlign": 1,
+        "__base__": {
+          "UIElement": {
+            "_name": "Title"
+          }
+        }
+      },
+      "children": [],
+      "childSlots": []
+    },
+    {
+      "version": 2,
+      "typeId": "engine.text",
+      "fields": {
+        "_text": "Speed: Normal",
+        "_fontSize": 18,
+        "_color": [0.86, 0.88, 0.92, 1.0],
+        "_hAlign": 1,
+        "__base__": {
+          "UIElement": {
+            "_name": "SpeedValue"
+          }
+        }
+      },
+      "children": [],
+      "childSlots": []
+    },
+    {
+      "version": 2,
+      "typeId": "engine.button",
+      "fields": {
+        "_action": "speed.slow",
+        "__base__": { "UIElement": { "_name": "Slow" } }
+      },
+      "children": [
+        {
+          "version": 2,
+          "typeId": "engine.text",
+          "fields": {
+            "_text": "Slow",
+            "_fontSize": 16,
+            "_color": [0.08, 0.09, 0.11, 1.0],
+            "_hAlign": 1
+          },
+          "children": [],
+          "childSlots": []
+        }
+      ],
+      "childSlots": [
+        {
+          "type": "content",
+          "hAlign": 2,
+          "vAlign": 2,
+          "padding": { "left": 8.0, "top": 4.0, "right": 8.0, "bottom": 4.0 },
+          "preferredSize": [80.0, 24.0]
+        }
+      ]
+    },
+    {
+      "version": 2,
+      "typeId": "engine.button",
+      "fields": {
+        "_action": "speed.normal",
+        "__base__": { "UIElement": { "_name": "Normal" } }
+      },
+      "children": [
+        {
+          "version": 2,
+          "typeId": "engine.text",
+          "fields": {
+            "_text": "Normal",
+            "_fontSize": 16,
+            "_color": [0.08, 0.09, 0.11, 1.0],
+            "_hAlign": 1
+          },
+          "children": [],
+          "childSlots": []
+        }
+      ],
+      "childSlots": [
+        {
+          "type": "content",
+          "hAlign": 2,
+          "vAlign": 2,
+          "padding": { "left": 8.0, "top": 4.0, "right": 8.0, "bottom": 4.0 },
+          "preferredSize": [80.0, 24.0]
+        }
+      ]
+    },
+    {
+      "version": 2,
+      "typeId": "engine.button",
+      "fields": {
+        "_action": "speed.fast",
+        "__base__": { "UIElement": { "_name": "Fast" } }
+      },
+      "children": [
+        {
+          "version": 2,
+          "typeId": "engine.text",
+          "fields": {
+            "_text": "Fast",
+            "_fontSize": 16,
+            "_color": [0.08, 0.09, 0.11, 1.0],
+            "_hAlign": 1
+          },
+          "children": [],
+          "childSlots": []
+        }
+      ],
+      "childSlots": [
+        {
+          "type": "content",
+          "hAlign": 2,
+          "vAlign": 2,
+          "padding": { "left": 8.0, "top": 4.0, "right": 8.0, "bottom": 4.0 },
+          "preferredSize": [80.0, 24.0]
+        }
+      ]
+    },
+    {
+      "version": 2,
+      "typeId": "engine.button",
+      "fields": {
+        "_action": "settings.close",
+        "__base__": { "UIElement": { "_name": "Resume" } }
+      },
+      "children": [
+        {
+          "version": 2,
+          "typeId": "engine.text",
+          "fields": {
+            "_text": "Resume",
+            "_fontSize": 16,
+            "_color": [0.08, 0.09, 0.11, 1.0],
+            "_hAlign": 1
+          },
+          "children": [],
+          "childSlots": []
+        }
+      ],
+      "childSlots": [
+        {
+          "type": "content",
+          "hAlign": 2,
+          "vAlign": 2,
+          "padding": { "left": 8.0, "top": 4.0, "right": 8.0, "bottom": 4.0 },
+          "preferredSize": [80.0, 24.0]
+        }
+      ]
+    }
+  ],
+  "childSlots": [
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [1.0, 1.0],
+      "offset": [0.0, 0.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 0,
+      "alignmentV": 0,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [0.0, 0.0]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [0.0, 0.0],
+      "offset": [0.0, 0.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 1,
+      "alignmentV": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [480.0, 280.0]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [0.0, 0.0],
+      "offset": [0.0, -96.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 1,
+      "alignmentV": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [280.0, 40.0]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [0.0, 0.0],
+      "offset": [0.0, -48.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 1,
+      "alignmentV": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [280.0, 28.0]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [0.0, 0.0],
+      "offset": [-140.0, 16.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 1,
+      "alignmentV": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [120.0, 40.0]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [0.0, 0.0],
+      "offset": [0.0, 16.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 1,
+      "alignmentV": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [120.0, 40.0]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [0.0, 0.0],
+      "offset": [140.0, 16.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 1,
+      "alignmentV": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [120.0, 40.0]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [0.0, 0.0],
+      "offset": [0.0, 88.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 1,
+      "alignmentV": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [160.0, 40.0]
+    }
+  ]
+}

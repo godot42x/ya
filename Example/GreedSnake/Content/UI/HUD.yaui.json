@@ -1,0 +1,47 @@
+{
+  "version": 2,
+  "typeId": "engine.panel",
+  "fields": {
+    "__base__": {
+      "UIElement": {
+        "_name": "HUD"
+      }
+    }
+  },
+  "children": [
+    {
+      "version": 2,
+      "typeId": "engine.text",
+      "fields": {
+        "_text": "Score: 0",
+        "_fontSize": 22,
+        "_color": [1.0, 1.0, 1.0, 1.0],
+        "__base__": {
+          "UIElement": {
+            "_name": "Score"
+          }
+        }
+      },
+      "children": [],
+      "childSlots": []
+    }
+  ],
+  "childSlots": [
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [0.0, 0.0],
+      "offset": [24.0, 16.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 0,
+      "alignmentV": 0,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [280.0, 36.0]
+    }
+  ]
+}

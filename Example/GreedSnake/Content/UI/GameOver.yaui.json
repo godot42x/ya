@@ -1,0 +1,161 @@
+{
+  "version": 2,
+  "typeId": "engine.panel",
+  "fields": {
+    "__base__": {
+      "UIElement": {
+        "_name": "GameOver",
+        "_visibility": "Hidden"
+      }
+    }
+  },
+  "children": [
+    {
+      "version": 2,
+      "typeId": "engine.border",
+      "fields": {
+        "_color": [0.05, 0.06, 0.08, 0.72],
+        "__base__": {
+          "UIElement": {
+            "_name": "Dim"
+          }
+        }
+      },
+      "children": [],
+      "childSlots": []
+    },
+    {
+      "version": 2,
+      "typeId": "engine.border",
+      "fields": {
+        "_color": [0.16, 0.17, 0.21, 0.96],
+        "_cornerRadius": 8.0,
+        "__base__": {
+          "UIElement": {
+            "_name": "Card"
+          }
+        }
+      },
+      "children": [],
+      "childSlots": []
+    },
+    {
+      "version": 2,
+      "typeId": "engine.text",
+      "fields": {
+        "_text": "Game Over",
+        "_fontSize": 32,
+        "_color": [1.0, 1.0, 1.0, 1.0],
+        "_hAlign": 1,
+        "__base__": {
+          "UIElement": {
+            "_name": "Title"
+          }
+        }
+      },
+      "children": [],
+      "childSlots": []
+    },
+    {
+      "version": 2,
+      "typeId": "engine.button",
+      "fields": {
+        "_action": "restart",
+        "__base__": {
+          "UIElement": {
+            "_name": "Restart"
+          }
+        }
+      },
+      "children": [
+        {
+          "version": 2,
+          "typeId": "engine.text",
+          "fields": {
+            "_text": "Restart",
+            "_fontSize": 18,
+            "_color": [0.08, 0.09, 0.11, 1.0],
+            "_hAlign": 1
+          },
+          "children": [],
+          "childSlots": []
+        }
+      ],
+      "childSlots": [
+        {
+          "type": "content",
+          "hAlign": 2,
+          "vAlign": 2,
+          "padding": { "left": 8.0, "top": 4.0, "right": 8.0, "bottom": 4.0 },
+          "preferredSize": [120.0, 28.0]
+        }
+      ]
+    }
+  ],
+  "childSlots": [
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [1.0, 1.0],
+      "offset": [0.0, 0.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 0,
+      "alignmentV": 0,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [0.0, 0.0]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [0.0, 0.0],
+      "offset": [0.0, 0.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 1,
+      "alignmentV": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [420.0, 200.0]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [0.0, 0.0],
+      "offset": [0.0, -36.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 1,
+      "alignmentV": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [320.0, 48.0]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [0.0, 0.0],
+      "offset": [0.0, 36.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 1,
+      "alignmentV": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [180.0, 44.0]
+    }
+  ]
+}
