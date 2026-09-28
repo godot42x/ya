@@ -241,6 +241,9 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
                               [this]() { openSceneSaveDialog(); },
                               [this]() { openEditorSettingsDialog(); });
     }
+    if (_roots.ui && !_roots.ui->actions().find("edit.undo")) {
+        registerUIDesignerActions(_roots.ui->actions(), _layer->getEditorUIDesignerSession());
+    }
     if (_windowId == kDefaultEditorWindowId) {
         _layer->setUnsavedGuard([this](std::function<void()> proceed) {
             promptUnsavedChanges(std::move(proceed));
@@ -387,12 +390,13 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
         });
     });
     _menuBar->addItem("Edit", [this]() {
+        ActionMap& actions = activePageRoot()->actions();
         return UIMenu::create({
-            UIMenu::FItem::fromAction(_rootSession->actions(), "edit.undo"),
-            UIMenu::FItem::fromAction(_rootSession->actions(), "edit.redo"),
+            UIMenu::FItem::fromAction(actions, "edit.undo"),
+            UIMenu::FItem::fromAction(actions, "edit.redo"),
             UIMenu::FItem::separator(),
-            UIMenu::FItem::fromAction(_rootSession->actions(), "selection.duplicate"),
-            UIMenu::FItem::fromAction(_rootSession->actions(), "selection.delete"),
+            UIMenu::FItem::fromAction(actions, "selection.duplicate"),
+            UIMenu::FItem::fromAction(actions, "selection.delete"),
         });
     });
     _menuBar->addItem("View", [this]() {
@@ -1092,9 +1096,11 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
     if (routed != EWidgetRouteResult::NotHandled) {
         return routed;
     }
-    if (event.getEventType() == EEvent::KeyPressed && _rootSession &&
-        _rootSession->actions().dispatchKey(static_cast<const KeyPressedEvent&>(event), wantsTextInput())) {
-        return EWidgetRouteResult::HandledExclusive;
+    if (event.getEventType() == EEvent::KeyPressed) {
+        EditorRootSession* root = activePageRoot();
+        if (root && root->actions().dispatchKey(static_cast<const KeyPressedEvent&>(event), wantsTextInput())) {
+            return EWidgetRouteResult::HandledExclusive;
+        }
     }
     return routed;
 }
@@ -1122,6 +1128,22 @@ bool EditorSurface::isViewportFocused() const
 bool EditorSurface::wantsTextInput() const
 {
     return _tree && _tree->wantsTextInput();
+}
+
+EditorRootSession* EditorSurface::activePageRoot() const
+{
+    if (_pageTabBar && _tabSpawners) {
+        const int index = _pageTabBar->getSelectedIndex();
+        if (index >= 0 && index < static_cast<int>(_pageTabKeys.size())) {
+            const FEditorTabSpawner* spawner = _tabSpawners->find(_pageTabKeys[static_cast<size_t>(index)]);
+            if (spawner && spawner->ownerEditorId != kInvalidEditorRootId) {
+                if (EditorRootSession* root = _roots.find(spawner->ownerEditorId)) {
+                    return root;
+                }
+            }
+        }
+    }
+    return _rootSession;
 }
 
 void EditorSurface::syncPageTabs()

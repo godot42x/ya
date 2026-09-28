@@ -349,6 +349,19 @@ std::string EditorAutoPropertySection::mergeKey(const PropertyNode& node, int ax
 
 void EditorAutoPropertySection::bindDragMerge(UIDragFloat& drag)
 {
+    if (_commitSink.commit) {
+        drag._onDragBegan = [this]() {
+            if (_commitSink.beginGesture) {
+                _commitSink.beginGesture();
+            }
+        };
+        drag._onDragEnded = [this]() {
+            if (_commitSink.endGesture) {
+                _commitSink.endGesture();
+            }
+        };
+        return;
+    }
     if (!_undo) {
         return;
     }
@@ -358,7 +371,10 @@ void EditorAutoPropertySection::bindDragMerge(UIDragFloat& drag)
 
 void EditorAutoPropertySection::pushUndo(FUndoCommand command)
 {
-    if (_undo) {
+    if (_commitSink.commit) {
+        _commitSink.commit(command.label, command.mergeKey);
+    }
+    else if (_undo) {
         (void)_undo->push(std::move(command));
     }
     if (_onMutated) {

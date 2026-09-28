@@ -52,6 +52,7 @@ EditorUIDesignerSession::EditorUIDesignerSession(EditorLayer* owner) : _owner(ow
 EditorUIDesignerSession::~EditorUIDesignerSession()
 {
     abandonDocument();
+    *_lifetime = nullptr;
 }
 
 EditorDocumentRegistry* EditorUIDesignerSession::documents() const
@@ -73,12 +74,125 @@ void EditorUIDesignerSession::markDirty()
 
 void EditorUIDesignerSession::dropLocalDocument()
 {
+    cancelDrag();
     _document.reset();
     _previewTree.reset();
     _previewRoot.reset();
     _selected = nullptr;
     _documentPath.clear();
-    endDrag();
+    _committedJson = nlohmann::json();
+    _committedSelection.reset();
+    _localUndo.clear();
+    ++_previewGeneration;
+}
+
+UndoStack& EditorUIDesignerSession::undoStack()
+{
+    return _session ? _session->undo() : _localUndo;
+}
+
+void EditorUIDesignerSession::publishDocument()
+{
+    // The hierarchy and every mounted tree read the store, so an edit is
+    // visible there before an explicit save writes the file.
+    if (_documentPath.empty() || !_document) {
+        return;
+    }
+    if (UIDocumentStore* store = documentStore()) {
+        store->put(_documentPath, _document);
+    }
+}
+
+std::optional<std::vector<size_t>> EditorUIDesignerSession::childPathOf(const UIElement* widget) const
+{
+    if (!widget || !_previewRoot) {
+        return std::nullopt;
+    }
+    std::vector<size_t> path;
+    for (const UIElement* node = widget; node != _previewRoot.get(); node = node->getParent()) {
+        const UIElement* parent = node ? node->getParent() : nullptr;
+        if (!parent) {
+            return std::nullopt;
+        }
+        const auto& siblings = parent->getChildren();
+        const auto  it       = std::find_if(siblings.begin(), siblings.end(), [node](const UIElementRef& child) {
+            return child.get() == node;
+        });
+        if (it == siblings.end()) {
+            return std::nullopt;
+        }
+        path.push_back(static_cast<size_t>(std::distance(siblings.begin(), it)));
+    }
+    std::reverse(path.begin(), path.end());
+    return path;
+}
+
+void EditorUIDesignerSession::commitEdit(std::string label, std::string mergeKey)
+{
+    if (!_previewRoot) {
+        return;
+    }
+    std::shared_ptr<UIDocument> edited = UIDocument::fromWidget(*_previewRoot);
+    if (!edited) {
+        YA_CORE_ERROR("EditorUIDesignerSession::commitEdit: '{}' produced no document", label);
+        return;
+    }
+    auto after          = std::make_shared<const nlohmann::json>(edited->toJson());
+    auto afterSelection = childPathOf(getSelectedWidget());
+    if (*after == _committedJson) {
+        _committedSelection = std::move(afterSelection);
+        return;
+    }
+    auto before          = std::make_shared<const nlohmann::json>(std::move(_committedJson));
+    auto beforeSelection = std::move(_committedSelection);
+
+    // Snapshots, not widget pointers: restoring rebuilds the preview tree.
+    const FEditorDocumentId documentId = _session ? _session->id() : FEditorDocumentId{};
+    const std::weak_ptr<EditorUIDesignerSession*> lifetime = _lifetime;
+    auto restore = [lifetime, documentId](const std::shared_ptr<const nlohmann::json>& snapshot,
+                                          const std::optional<std::vector<size_t>>& selection) {
+        const auto owner = lifetime.lock();
+        EditorUIDesignerSession* self = owner ? *owner : nullptr;
+        if (!self) {
+            return;
+        }
+        const FEditorDocumentId openId = self->_session ? self->_session->id() : FEditorDocumentId{};
+        if (openId != documentId) {
+            YA_CORE_WARN("EditorUIDesignerSession: undo step belongs to a document that is no longer open");
+            return;
+        }
+        self->restoreSnapshot(*snapshot, selection);
+    };
+    (void)undoStack().push({
+        .label    = label,
+        .mergeKey = std::move(mergeKey),
+        .undo     = [restore, before, beforeSelection]() { restore(before, beforeSelection); },
+        .redo     = [restore, after, afterSelection]() { restore(after, afterSelection); },
+    });
+
+    _document           = std::move(edited);
+    _committedJson      = *after;
+    _committedSelection = std::move(afterSelection);
+    markDirty();
+    publishDocument();
+}
+
+void EditorUIDesignerSession::restoreSnapshot(const nlohmann::json& snapshot,
+                                              const std::optional<std::vector<size_t>>& selection)
+{
+    std::shared_ptr<UIDocument> document = UIDocument::fromJson(snapshot);
+    if (!document) {
+        YA_CORE_ERROR("EditorUIDesignerSession::restoreSnapshot: snapshot does not parse");
+        return;
+    }
+    cancelDrag();
+    if (!installPreview(document)) {
+        return;
+    }
+    _selected           = selection ? findByChildPath(*selection) : nullptr;
+    _committedSelection = childPathOf(_selected);
+    markDirty();
+    publishDocument();
 }
 
 bool EditorUIDesignerSession::closeSession(EEditorDocumentCloseMode mode)
@@ -214,6 +328,12 @@ bool EditorUIDesignerSession::installPreview(const std::shared_ptr<UIDocument>& 
                                                                      fillArgs);
     YA_CORE_ASSERT(attachment.valid(), "EditorUIDesignerSession: failed to attach preview root");
     _selected = _previewRoot.get();
+    ++_previewGeneration;
+    // The baseline is the preview's own round trip, so an untouched preview
+    // never commits a spurious edit against the stored form.
+    const std::shared_ptr<UIDocument> baseline = UIDocument::fromWidget(*_previewRoot);
+    _committedJson      = baseline ? baseline->toJson() : nlohmann::json();
+    _committedSelection = childPathOf(_selected);
     return true;
 }
 
@@ -322,30 +442,15 @@ UIElement* EditorUIDesignerSession::findByChildPath(const std::vector<size_t>& p
     return node;
 }
 
-void EditorUIDesignerSession::selectByChildPath(const std::vector<size_t>& path)
+void EditorUIDesignerSession::select(UIElement* widget)
 {
-    _selected = findByChildPath(path);
+    _selected           = widget;
+    _committedSelection = childPathOf(widget);
 }
 
-void EditorUIDesignerSession::syncPreviewToDocument()
+void EditorUIDesignerSession::selectByChildPath(const std::vector<size_t>& path)
 {
-    if (!_previewRoot) {
-        return;
-    }
-    auto synced = UIDocument::fromWidget(*_previewRoot);
-    if (!synced) {
-        return;
-    }
-    _document = std::move(synced);
-    markDirty();
-
-    // Publish the edit so the Scene Hierarchy / inspector read the same
-    // document. The file is only written on an explicit save.
-    if (!_documentPath.empty()) {
-        if (UIDocumentStore* store = documentStore()) {
-            store->put(_documentPath, _document);
-        }
-    }
+    select(findByChildPath(path));
 }
 
 EditorUIDesignerSession::EDropPos EditorUIDesignerSession::computeDropPos(float itemMinY, float itemMaxY, float mouseY)
@@ -394,9 +499,7 @@ void EditorUIDesignerSession::applyWidgetDrop(UIElement* dragged, UIElement& tar
         _previewTree->reparentAfter(target, ref);
         break;
     }
-    // The document must follow the preview, and the hierarchy must follow
-    // the document (UMG-style live editing).
-    syncPreviewToDocument();
+    commitEdit("Move " + dragged->_name);
 }
 
 std::string EditorUIDesignerSession::paletteDisplayName(const std::string& typeId)
@@ -423,7 +526,7 @@ bool EditorUIDesignerSession::addPaletteWidget(const std::string& typeId)
     }
     _previewTree->attach(*parent, widget);
     _selected = widget.get();
-    syncPreviewToDocument();
+    commitEdit("Add " + widget->_name);
     return true;
 }
 
@@ -448,11 +551,12 @@ bool EditorUIDesignerSession::deleteWidget(UIElement* widget)
     if (!tree) {
         return false;
     }
+    const std::string label = "Delete " + widget->_name;
     tree->detach(*widget);
     if (_selected == widget) {
         _selected = nullptr;
     }
-    syncPreviewToDocument();
+    commitEdit(label);
     return true;
 }
 
@@ -648,15 +752,25 @@ bool EditorUIDesignerSession::applyDragDelta(const glm::vec2& canvasDelta)
     return true;
 }
 
-void EditorUIDesignerSession::endDrag()
+void EditorUIDesignerSession::cancelDrag()
 {
-    const bool moved = _bDragMoved;
     _dragMode   = EDragMode::None;
     _dragWidget = nullptr;
     _resizeMask = 0;
     _bDragMoved = false;
-    if (moved) {
-        markDirty();
+}
+
+void EditorUIDesignerSession::endDrag()
+{
+    const bool      moved = _bDragMoved;
+    const EDragMode mode  = _dragMode;
+    UIElement*      widget = _dragWidget;
+    _dragMode   = EDragMode::None;
+    _dragWidget = nullptr;
+    _resizeMask = 0;
+    _bDragMoved = false;
+    if (moved && widget) {
+        commitEdit((mode == EDragMode::Resize ? "Resize " : "Move ") + widget->_name);
     }
 }
 

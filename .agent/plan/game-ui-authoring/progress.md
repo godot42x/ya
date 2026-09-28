@@ -130,3 +130,30 @@
 
 - editor designer preview tree 同样从不 tick（`EditorUIDesignerSession` 只
   buildPreviewSnapshot）。同一类缺陷，归属 Phase 3 的预览渲染一起修。
+
+## 2026-09-29 — Phase 6 立项：UI Designer 可用性
+
+用户判断保留模式设计器基本不可用，要求先对照 `origin/main`（`91ded16e`）的 ImGui 版。核对结论写入
+plan.md Phase 6 基线表：新建硬编码 `"panel"` 必失败、无 Open / Save As、几何迁到父侧 slot 后检查器
+无任何布局字段（slot 编辑器从未实现）、层级无右键菜单、预览固定 800×600；两版都没有设计器撤销。
+
+决定：撤销用文档快照；计划并入本计划作为 Phase 6；其余体验项延后。本轮只做设计器内部编辑闭环
+（U2 → U3 → U4），U1 排在之后。
+
+### U2 文档事务与撤销（落地）
+
+- `EditorUIDesignerSession::commitEdit(label, mergeKey)` 取代 `syncPreviewToDocument`：比对快照，
+  有变化才推一步、标 dirty、`UIDocumentStore::put`。Palette 添加 / 删除 / 层级拖放 / 画布拖拽（一次
+  手势在 `endDrag` 提交一次）/ 检查器改属性（`FEditCommitSink`，拖动字段用 beginMerge/endMerge）全部
+  走它。撤销中途有拖拽时 `cancelDrag`，不会反向提交把 redo 清掉。
+- 重建预览后 `previewGeneration()` 自增，检查器指纹带上它，避免复用旧地址。
+- 键盘：之前快捷键只派发给 Level root，UI 页按 Ctrl+Z 会撤销关卡。现在派发给当前页 root；
+  UI root 注册 `edit.undo/redo`、`selection.delete`、`ui.save`；Edit 菜单同样取当前页。
+  画布 tab 自己的 Delete 分支删除。
+- 已知限制：两个设计器会话共享同一文档撤销栈时，一方推的步在它销毁后出栈为空操作。编辑器每层只有
+  一个设计器会话，暂不处理。UI 页 Edit 菜单的 Duplicate 在 U4 注册前显示为禁用。
+- 验证：`ya-testing` 1398 通过 / 1 跳过；`ya-gui-closure-test` 612 通过；HelloMaterial、GreedySnake
+  编辑器 120 帧 exit 0。
+- 手测（待用户）：UI 页 Palette 加控件 → Ctrl+Z 消失 / Ctrl+Shift+Z 回来；画布拖一个控件松手后
+  Ctrl+Z 一步回原位；检查器拖数值字段一次松手撤销一步；UI 页 Ctrl+Z 不影响关卡；Level 页 Ctrl+Z
+  不影响 UI 文档。

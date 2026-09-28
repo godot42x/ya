@@ -5,6 +5,7 @@
 #include "GUI/Binding/ActionMap.h"
 #include "GUI/Binding/UndoStack.h"
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/EditorUIDesignerSession.h"
 #include "GameEditor/UI/Ops/EditorHierarchyOps.h"
 #include "GameRuntime/App.h"
 
@@ -150,6 +151,50 @@ void registerEditorActions(ActionMap& actions,
                     }
                 });
             }
+        },
+    });
+}
+
+void registerUIDesignerActions(ActionMap& actions, EditorUIDesignerSession& designer)
+{
+    auto define = [&actions](FAction action) {
+        if (!actions.define(std::move(action))) {
+            YA_CORE_ERROR("EditorSurface: failed to define UI Designer action");
+        }
+    };
+    define({
+        .id         = "ui.save",
+        .label      = "Save UI",
+        .chord      = FActionChord::primary(EKey::K_S),
+        .execute    = [&designer]() { (void)designer.saveDocument(); },
+        .canExecute = [&designer]() { return designer.hasDocument(); },
+    });
+    define({
+        .id         = "edit.undo",
+        .label      = "Undo",
+        .chord      = FActionChord::primary(EKey::K_Z),
+        .execute    = [&designer]() { (void)designer.undoStack().undo(); },
+        .canExecute = [&designer]() { return designer.undoStack().canUndo(); },
+    });
+    define({
+        .id    = "edit.redo",
+        .label = "Redo",
+#if defined(__APPLE__)
+        .chord = FActionChord::primary(EKey::K_Z, true),
+#else
+        .chord = FActionChord::primary(EKey::K_Y),
+#endif
+        .execute    = [&designer]() { (void)designer.undoStack().redo(); },
+        .canExecute = [&designer]() { return designer.undoStack().canRedo(); },
+    });
+    define({
+        .id         = "selection.delete",
+        .label      = "Delete Widget",
+        .chord      = {.key = EKey::Delete},
+        .execute    = [&designer]() { (void)designer.deleteWidget(designer.getSelectedWidget()); },
+        .canExecute = [&designer]() {
+            UIElement* selected = designer.getSelectedWidget();
+            return selected && selected != designer.getPreviewRoot();
         },
     });
 }

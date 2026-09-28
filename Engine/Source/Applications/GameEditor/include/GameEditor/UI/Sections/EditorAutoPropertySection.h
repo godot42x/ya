@@ -35,6 +35,18 @@ struct WidgetTree;
 class EditorAutoPropertySection final : public UICompoundWidget
 {
   public:
+    /// Who records undo for this section's writes. By default the section
+    /// pushes one PropertyHandle command per edit onto `undo`. An owner that
+    /// snapshots its whole document instead installs a sink: the section still
+    /// writes the value, then reports the edit and each drag gesture, and never
+    /// pushes to `undo`.
+    struct FEditCommitSink
+    {
+        std::function<void(const std::string& label, const std::string& mergeKey)> commit;
+        std::function<void()> beginGesture;
+        std::function<void()> endGesture;
+    };
+
     EditorAutoPropertySection(std::string name,
                               PropertyGraph graph,
                               UndoStack* undo = nullptr,
@@ -44,6 +56,8 @@ class EditorAutoPropertySection final : public UICompoundWidget
 
     void sync(WidgetTree& tree);
     void setOnMutated(std::function<void()> fn) { _onMutated = std::move(fn); }
+    /// Install before the section is attached (rows bind gestures on construct).
+    void setEditCommitSink(FEditCommitSink sink) { _commitSink = std::move(sink); }
 
   protected:
     void construct() override;
@@ -63,6 +77,7 @@ class EditorAutoPropertySection final : public UICompoundWidget
     EditorAssetPickerCallback _assetPicker;
     EditorRevealAssetCallback _revealAsset;
     std::function<void()> _onMutated;
+    FEditCommitSink _commitSink;
     std::vector<EditorSlot> _editors;
     std::string _structureFingerprint;
     std::unordered_map<std::string, bool> _groupExpanded;

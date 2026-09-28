@@ -5,7 +5,6 @@
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
 #include "Core/Event.h"
-#include "Core/KeyCode.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Image.h"
@@ -23,6 +22,7 @@
 #include "RHI/Core/Texture.h"
 
 #include <cmath>
+#include <format>
 #include <optional>
 #include <vector>
 
@@ -202,10 +202,9 @@ void EditorUIHierarchyTab::refresh()
     }
 }
 
-EditorUIInspectorTab::EditorUIInspectorTab(EditorLayer& layer, UndoStack* undo)
+EditorUIInspectorTab::EditorUIInspectorTab(EditorLayer& layer)
     : UICompoundWidget("UIDesignerInspectorBody", "panel.canvas")
     , _layer(&layer)
-    , _undo(undo)
 {
     enableTick();
 }
@@ -242,9 +241,6 @@ void EditorUIInspectorTab::refresh()
         return;
     }
     EditorUIDesignerSession& designer = _layer->getEditorUIDesignerSession();
-    if (EditorDocumentSession* session = designer.documentSession()) {
-        _undo = &session->undo();
-    }
     rebuildInspector(*tree, designer.getSelectedWidget());
     if (_inspectorSection) {
         _inspectorSection->sync(*tree);
@@ -254,9 +250,14 @@ void EditorUIInspectorTab::refresh()
 
 void EditorUIInspectorTab::rebuildInspector(WidgetTree& tree, UIElement* selected)
 {
+    EditorUIDesignerSession& designer = _layer->getEditorUIDesignerSession();
+    // Undo rebuilds the preview, so an address alone can name a new widget.
     std::string fingerprint = "none";
     if (selected) {
-        fingerprint = selected->_typeId + ":" + std::to_string(reinterpret_cast<uintptr_t>(selected));
+        fingerprint = std::format("{}:{}:{}",
+                                  designer.previewGeneration(),
+                                  selected->_typeId,
+                                  reinterpret_cast<uintptr_t>(selected));
     }
     if (fingerprint == _inspectorFingerprint) {
         return;
@@ -277,13 +278,28 @@ void EditorUIInspectorTab::rebuildInspector(WidgetTree& tree, UIElement* selecte
         return;
     }
 
+    std::string pathKey = "uidesigner";
+    if (const auto path = designer.childPathOf(selected)) {
+        for (const size_t index : *path) {
+            pathKey += "/" + std::to_string(index);
+        }
+    }
     auto section = std::make_shared<EditorAutoPropertySection>(
         "UIDesignerInspectorSection",
         std::move(graph),
-        _undo,
-        std::string("uidesigner:") + selected->_name,
+        nullptr,
+        std::move(pathKey),
         EditorAssetPickerCallback{},
         nullptr);
+    EditorUIDesignerSession* session = &designer;
+    section->setEditCommitSink({
+        .commit = [session](const std::string& label, const std::string& mergeKey) {
+            session->invalidatePreview();
+            session->commitEdit(label, mergeKey);
+        },
+        .beginGesture = [session]() { session->undoStack().beginMerge(); },
+        .endGesture   = [session]() { session->undoStack().endMerge(); },
+    });
     _inspectorHost->addDetachedChild(section);
     _inspectorSection = std::move(section);
 }
@@ -332,7 +348,8 @@ void EditorUICanvasTab::construct()
     auto image = ui::image("UIDesignerCanvasImage");
     _image     = image.share();
     // The picture is the input surface: presses stop here and bubble to this
-    // tab, and it takes keyboard focus so Delete reaches the designer.
+    // tab, and it takes keyboard focus so a text field elsewhere does not keep
+    // the UI page's shortcuts (Delete, Ctrl+Z).
     _image->_hitFilter   = EWidgetHitFilter::Stop;
     _image->_focusPolicy = EWidgetFocusPolicy::Focusable;
     _image->setOpaqueSample(true);
@@ -489,14 +506,6 @@ bool EditorUICanvasTab::handleInputEvent(const Event& event, const WidgetEventCo
         }
         const float factor = std::exp(static_cast<const MouseScrolledEvent&>(event).getOffsetY() * 0.12f);
         _designer->canvas().zoomAt(toView(ctx.logicalPoint), factor);
-        return true;
-    }
-    case EEvent::KeyPressed: {
-        if (static_cast<const KeyPressedEvent&>(event).getKeyCode() != EKey::Delete) {
-            return false;
-        }
-        endGesture();
-        (void)_designer->deleteWidget(_designer->getSelectedWidget());
         return true;
     }
     default:

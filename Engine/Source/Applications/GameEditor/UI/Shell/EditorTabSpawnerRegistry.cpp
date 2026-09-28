@@ -213,7 +213,7 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
             if (!ctx.layer) {
                 return nullptr;
             }
-            return std::make_shared<EditorUIInspectorTab>(*ctx.layer, ctx.undo);
+            return std::make_shared<EditorUIInspectorTab>(*ctx.layer);
         },
     });
     registry.add({

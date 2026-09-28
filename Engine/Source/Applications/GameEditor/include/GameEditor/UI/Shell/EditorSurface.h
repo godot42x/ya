@@ -132,6 +132,9 @@ struct EditorSurface : IEditorViewportHostSink
     [[nodiscard]] bool isViewportFocused() const;
     [[nodiscard]] bool isPointInViewport(const glm::vec2& windowPoint) const;
     [[nodiscard]] bool wantsTextInput() const;
+    /// Root editor of the selected page tab (Level / UI / ...); shortcuts go
+    /// to its actions only. Falls back to the window's active root.
+    [[nodiscard]] EditorRootSession* activePageRoot() const;
     [[nodiscard]] WidgetTree* tree() const { return _tree.get(); }
     [[nodiscard]] FDockContext* windowRootDock() const { return _dockContext.get(); }
     [[nodiscard]] FDockContext* ownedNestedDock() const { return _ownedDockContext.get(); }

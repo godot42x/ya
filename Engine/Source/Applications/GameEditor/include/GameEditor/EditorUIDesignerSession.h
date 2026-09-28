@@ -22,8 +22,15 @@
 // The preview is shown by the UI Designer's Canvas tab (EditorUICanvasTab),
 // never by the Level viewport. The tab owns the pointer gestures; this session
 // owns the edited widget, the drag session and the canvas view state.
+//
+// This session is the only writer of the open document. Every edit, whichever
+// tool made it, ends in `commitEdit`: the document JSON before and after goes
+// onto the document's undo stack, the document is marked dirty and published
+// to the store. Undo rebuilds the preview from a snapshot, so every preview
+// widget pointer is invalidated by it; holders compare `previewGeneration()`.
 // ============================================================================
 
+#include "GUI/Binding/UndoStack.h"
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -31,6 +38,7 @@
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -82,10 +90,21 @@ struct EditorUIDesignerSession
     void clearDocument();
     /// Detach-time drop: ignore dirty, still honor Locked.
     void abandonDocument();
-    /// Rebuild the document from the preview after a structural edit and
-    /// publish it to the store (memory only), so the Scene Hierarchy and the
-    /// inspector see the edit before an explicit save.
-    void syncPreviewToDocument();
+
+    // === Edit transactions ===
+    /// Record the preview's current state as one undoable edit: snapshot the
+    /// document, push before/after onto the undo stack, mark dirty and publish
+    /// to the store (memory only). No-op when nothing changed. Commits with
+    /// the same non-empty `mergeKey` inside one UndoStack merge session become
+    /// one step.
+    void commitEdit(std::string label, std::string mergeKey = {});
+    /// The open document's undo history (a local stack when no registry).
+    [[nodiscard]] UndoStack& undoStack();
+    /// Bumped whenever the preview tree is rebuilt (open, undo, redo, close).
+    [[nodiscard]] uint64_t previewGeneration() const { return _previewGeneration; }
+    /// Child-index path of `widget` from the preview root (`{}` is the root);
+    /// nullopt when it is not in the preview.
+    [[nodiscard]] std::optional<std::vector<size_t>> childPathOf(const UIElement* widget) const;
 
     // === Canvas view (the Canvas tab's navigation and picture) ===
     [[nodiscard]] EditorUICanvasView&       canvas() { return _canvas; }
@@ -99,8 +118,10 @@ struct EditorUIDesignerSession
     [[nodiscard]] UIFrameSnapshot buildPreviewSnapshot(const glm::vec2& uiScale, const glm::vec2& offset);
     /// Topmost widget under a canvas-logical point (for editor picking).
     [[nodiscard]] UIElement* pickAt(const glm::vec2& logicalPoint);
-    void select(UIElement* widget) { _selected = widget; }
-    void clearSelection() { _selected = nullptr; }
+    /// Selection is not a document edit, but it is the selection an undo of
+    /// the next edit returns to.
+    void select(UIElement* widget);
+    void clearSelection() { select(nullptr); }
     /// Currently selected preview widget (nullptr when none / not attached).
     [[nodiscard]] UIElement* getSelectedWidget() const
     {
@@ -143,6 +164,7 @@ struct EditorUIDesignerSession
     /// Apply a canvas-logical-pixel delta (move or resize per the session
     /// mode). Returns false when the session is invalid (widget detached).
     bool applyDragDelta(const glm::vec2& canvasDelta);
+    /// End the session; a drag that moved commits one edit.
     void endDrag();
     /// Whether a move/resize session is active on the given widget.
     [[nodiscard]] bool isDragging(UIElement* widget) const { return _dragWidget == widget && _dragMode != EDragMode::None; }
@@ -166,6 +188,10 @@ struct EditorUIDesignerSession
   private:
     void rebuildDocumentFromPreview();
     void markDirty();
+    void publishDocument();
+    /// Drop the drag session without committing (the preview is being replaced).
+    void cancelDrag();
+    void restoreSnapshot(const nlohmann::json& snapshot, const std::optional<std::vector<size_t>>& selection);
     /// Install an in-memory document under a fresh untitled session key.
     void openUntitled(const std::shared_ptr<UIDocument>& document);
     [[nodiscard]] EditorDocumentRegistry* documents() const;
@@ -187,6 +213,16 @@ struct EditorUIDesignerSession
     std::string _documentPath;
 
     EditorUICanvasView _canvas;
+
+    // === Edit transaction state ===
+    /// The preview as of the last commit: the "before" of the next edit.
+    nlohmann::json                     _committedJson;
+    std::optional<std::vector<size_t>> _committedSelection;
+    UndoStack                          _localUndo;
+    uint64_t                           _previewGeneration = 0;
+    /// Undo closures outlive this session on a shared document stack; they
+    /// hold this weakly and do nothing once it is gone.
+    std::shared_ptr<EditorUIDesignerSession*> _lifetime = std::make_shared<EditorUIDesignerSession*>(this);
 
     // === Canvas direct-manipulation session state ===
     enum class EDragMode : uint8_t

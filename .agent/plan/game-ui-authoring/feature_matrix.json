@@ -154,6 +154,45 @@
       "evidence": [
         "needs a separate renderer feature, not a scene-model change"
       ]
+    },
+    {
+      "id": "designer_document_lifecycle",
+      "phase": "P6/U1",
+      "status": "planned",
+      "evidence": [
+        "New picks a container root type; Open .yaui; Save As; untitled Save routes to Save As"
+      ]
+    },
+    {
+      "id": "designer_edits_are_document_transactions",
+      "phase": "P6/U2",
+      "status": "done",
+      "evidence": [
+        "every designer edit commits before/after UIDocument JSON to the document undo stack, marks dirty and publishes to the store; undo rebuilds the preview and restores selection by child path",
+        "EditorUIDesignerSessionTest.EveryEditUndoesAndRedoesToTheSameDocumentAndSelection",
+        "EditorUIDesignerSessionTest.AnUndoneDeleteReselectsTheDeletedWidget",
+        "EditorUIDesignerSessionTest.ADragIsOneUndoStepAndAnUnmovedDragIsNone",
+        "EditorUIDesignerSessionTest.CommitsInsideOneMergeGestureCollapseToOneStep",
+        "EditorUIDesignerSessionTest.ACommitPublishesTheDocumentAndAnUnchangedCommitDoesNothing",
+        "EditorUIDesignerSessionTest.AnUndoStepIsInertOnceItsDesignerIsGoneOrOnAnotherDocument",
+        "shortcuts and the Edit menu resolve on the active page root (EditorSurface::activePageRoot); UI root binds edit.undo/redo, selection.delete, ui.save"
+      ]
+    },
+    {
+      "id": "designer_slot_inspector",
+      "phase": "P6/U3",
+      "status": "planned",
+      "evidence": [
+        "inspector projects the parent-owned slot (canvas/box/overlay) through reflection; anchor presets; slot edits are undoable"
+      ]
+    },
+    {
+      "id": "designer_canvas_baseline",
+      "phase": "P6/U4",
+      "status": "planned",
+      "evidence": [
+        "preview extent = design resolution; design frame drawn; zoom-to-fit on open; tree context menu Delete/Duplicate; palette never nests under leaf widgets"
+      ]
     }
   ],
   "known_baseline_failures": [

@@ -17,6 +17,9 @@
 
 #include <gtest/gtest.h>
 
+#include <functional>
+#include <memory>
+
 namespace ya
 {
 
@@ -42,6 +45,59 @@ struct FDesignerFixture
         uiDocuments.put(kDocumentPath, UIDocument::fromWidget(widget));
     }
 };
+
+/// Root canvas with two fixed-size canvas children, "First" and "Second".
+UIElementRef makeTwoChildCanvas()
+{
+    auto& registry = UITypeRegistry::instance();
+    auto  root     = registry.createInstance(kTypeIdCanvasPanel);
+    root->_name    = "Root";
+    for (const char* name : {"First", "Second"}) {
+        auto child   = registry.createInstance(kTypeIdCanvasPanel);
+        child->_name = name;
+        root->addDetachedChild(child, [](UIElement&, UISlot& edge) {
+            FCanvasSlotArgs args;
+            args.offset    = {20.0f, 30.0f};
+            args.fixedSize = {80.0f, 40.0f};
+            edge.as<UICanvasSlot>()->apply(args);
+        });
+    }
+    return root;
+}
+
+nlohmann::json previewJson(const EditorUIDesignerSession& designer)
+{
+    return UIDocument::fromWidget(*designer.getPreviewRoot())->toJson();
+}
+
+std::optional<std::vector<size_t>> selectionPath(const EditorUIDesignerSession& designer)
+{
+    return designer.childPathOf(designer.getSelectedWidget());
+}
+
+/// Run one edit and require: exactly one undo step, undo restores the document
+/// and selection it started from, redo restores the edited ones.
+void expectOneUndoableStep(EditorUIDesignerSession& designer, const std::function<void()>& edit)
+{
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+    const nlohmann::json before          = previewJson(designer);
+    const auto           beforeSelection = selectionPath(designer);
+    const size_t         steps           = designer.undoStack().undoCount();
+
+    edit();
+    const nlohmann::json after          = previewJson(designer);
+    const auto           afterSelection = selectionPath(designer);
+    ASSERT_NE(after, before);
+    ASSERT_EQ(designer.undoStack().undoCount(), steps + 1);
+
+    ASSERT_TRUE(designer.undoStack().undo());
+    EXPECT_EQ(previewJson(designer), before);
+    EXPECT_EQ(selectionPath(designer), beforeSelection);
+
+    ASSERT_TRUE(designer.undoStack().redo());
+    EXPECT_EQ(previewJson(designer), after);
+    EXPECT_EQ(selectionPath(designer), afterSelection);
+}
 
 } // namespace
 
@@ -302,6 +358,159 @@ TEST(EditorUIDesignerSessionTest, CanvasPickingSelectsAButtonWithoutRunningItsCl
     // Selecting is not clicking: the preview has no dispatch path, so a canvas
     // interaction cannot become a runtime interaction.
     EXPECT_EQ(clicks, 0);
+}
+
+TEST(EditorUIDesignerSessionTest, EveryEditUndoesAndRedoesToTheSameDocumentAndSelection)
+{
+    auto             root = makeTwoChildCanvas();
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    ASSERT_NE(designer.getPreviewRoot(), nullptr);
+
+    designer.selectByChildPath({0});
+    expectOneUndoableStep(designer, [&designer]() {
+        ASSERT_TRUE(designer.addPaletteWidget(kTypeIdButton));
+    });
+    expectOneUndoableStep(designer, [&designer]() {
+        designer.applyWidgetDrop(designer.findByChildPath({0}),
+                                 *designer.findByChildPath({1}),
+                                 EditorUIDesignerSession::EDropPos::After);
+    });
+    expectOneUndoableStep(designer, [&designer]() {
+        designer.applyWidgetDrop(designer.findByChildPath({1}),
+                                 *designer.findByChildPath({0}),
+                                 EditorUIDesignerSession::EDropPos::Into);
+    });
+    designer.selectByChildPath({0});
+    expectOneUndoableStep(designer, [&designer]() {
+        ASSERT_TRUE(designer.deleteWidget(designer.getSelectedWidget()));
+    });
+}
+
+TEST(EditorUIDesignerSessionTest, AnUndoneDeleteReselectsTheDeletedWidget)
+{
+    auto             root = makeTwoChildCanvas();
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+
+    designer.selectByChildPath({1});
+    ASSERT_TRUE(designer.deleteWidget(designer.getSelectedWidget()));
+    EXPECT_EQ(designer.getSelectedWidget(), nullptr);
+
+    ASSERT_TRUE(designer.undoStack().undo());
+    ASSERT_NE(designer.getSelectedWidget(), nullptr);
+    EXPECT_EQ(designer.getSelectedWidget()->_name, "Second");
+}
+
+TEST(EditorUIDesignerSessionTest, ADragIsOneUndoStepAndAnUnmovedDragIsNone)
+{
+    auto             root = makeTwoChildCanvas();
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+    const nlohmann::json original = previewJson(designer);
+
+    UIElement* first = designer.findByChildPath({0});
+    designer.beginMove(first, {0.0f, 0.0f});
+    designer.endDrag();
+    EXPECT_EQ(designer.undoStack().undoCount(), 0u);
+    EXPECT_FALSE(designer.isDocumentDirty());
+
+    designer.beginResize(first, {0.0f, 0.0f}, EditorUIDesignerSession::kResizeHandleRight);
+    for (float dx : {5.0f, 10.0f, 15.0f}) {
+        ASSERT_TRUE(designer.applyDragDelta({dx, 0.0f}));
+    }
+    designer.endDrag();
+    EXPECT_EQ(designer.undoStack().undoCount(), 1u);
+    EXPECT_TRUE(designer.isDocumentDirty());
+
+    ASSERT_TRUE(designer.undoStack().undo());
+    EXPECT_EQ(previewJson(designer), original);
+}
+
+TEST(EditorUIDesignerSessionTest, CommitsInsideOneMergeGestureCollapseToOneStep)
+{
+    auto             root = makeTwoChildCanvas();
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+
+    // What an inspector drag field does: one gesture, many writes.
+    designer.undoStack().beginMerge();
+    for (const char* name : {"F", "Fi", "Fir"}) {
+        designer.findByChildPath({0})->_name = name;
+        designer.commitEdit("Rename", "uidesigner/0/name");
+    }
+    designer.undoStack().endMerge();
+    EXPECT_EQ(designer.undoStack().undoCount(), 1u);
+    EXPECT_EQ(designer.findByChildPath({0})->_name, "Fir");
+
+    ASSERT_TRUE(designer.undoStack().undo());
+    EXPECT_EQ(designer.findByChildPath({0})->_name, "First");
+    ASSERT_TRUE(designer.undoStack().redo());
+    EXPECT_EQ(designer.findByChildPath({0})->_name, "Fir");
+}
+
+TEST(EditorUIDesignerSessionTest, ACommitPublishesTheDocumentAndAnUnchangedCommitDoesNothing)
+{
+    auto             root = makeTwoChildCanvas();
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    const uint64_t revision = fixture.uiDocuments.revision(FDesignerFixture::kDocumentPath);
+
+    designer.commitEdit("Nothing");
+    EXPECT_EQ(designer.undoStack().undoCount(), 0u);
+    EXPECT_FALSE(designer.isDocumentDirty());
+    EXPECT_EQ(fixture.uiDocuments.revision(FDesignerFixture::kDocumentPath), revision);
+
+    designer.findByChildPath({1})->_name = "Renamed";
+    designer.commitEdit("Rename");
+    EXPECT_TRUE(designer.isDocumentDirty());
+    EXPECT_GT(fixture.uiDocuments.revision(FDesignerFixture::kDocumentPath), revision);
+    const auto published = fixture.uiDocuments.resolve(FDesignerFixture::kDocumentPath);
+    ASSERT_NE(published, nullptr);
+    EXPECT_EQ(published->toJson(), previewJson(designer));
+}
+
+TEST(EditorUIDesignerSessionTest, AnUndoStepIsInertOnceItsDesignerIsGoneOrOnAnotherDocument)
+{
+    // Both designers share the document's undo stack; a step pushed by one
+    // must not touch the other, or a document it no longer shows.
+    auto             root = makeTwoChildCanvas();
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    fixture.uiDocuments.put("Test/UI/Other.yaui", UIDocument::fromWidget(*root));
+
+    EditorUIDesignerSession keeper(&fixture.layer);
+    keeper.openDocument(FDesignerFixture::kDocumentPath);
+    {
+        EditorUIDesignerSession editor(&fixture.layer);
+        editor.openDocument(FDesignerFixture::kDocumentPath);
+        ASSERT_EQ(&editor.undoStack(), &keeper.undoStack());
+        editor.findByChildPath({0})->_name = "Gone";
+        editor.commitEdit("Rename");
+    }
+    const nlohmann::json kept = previewJson(keeper);
+    ASSERT_TRUE(keeper.undoStack().undo());
+    EXPECT_EQ(previewJson(keeper), kept);
+
+    EditorUIDesignerSession mover(&fixture.layer);
+    mover.openDocument(FDesignerFixture::kDocumentPath);
+    mover.findByChildPath({0})->_name = "Moved";
+    mover.commitEdit("Rename");
+    mover.openDocument("Test/UI/Other.yaui");
+    const nlohmann::json other = previewJson(mover);
+    ASSERT_TRUE(keeper.undoStack().undo());
+    EXPECT_EQ(previewJson(mover), other);
 }
 
 } // namespace ya

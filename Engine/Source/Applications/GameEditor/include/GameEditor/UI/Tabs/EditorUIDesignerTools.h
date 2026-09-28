@@ -18,7 +18,6 @@ struct Texture;
 struct UIElement;
 struct UIImage;
 struct WidgetTree;
-class UndoStack;
 
 class EditorUIHierarchyTab : public UICompoundWidget
 {
@@ -44,7 +43,7 @@ class EditorUIHierarchyTab : public UICompoundWidget
 class EditorUIInspectorTab : public UICompoundWidget
 {
   public:
-    explicit EditorUIInspectorTab(EditorLayer& layer, UndoStack* undo);
+    explicit EditorUIInspectorTab(EditorLayer& layer);
     void onAttached() override;
     void tick(float deltaSeconds) override;
 
@@ -53,7 +52,6 @@ class EditorUIInspectorTab : public UICompoundWidget
 
   private:
     EditorLayer* _layer = nullptr;
-    UndoStack*   _undo  = nullptr;
     std::shared_ptr<struct UIContainer> _inspectorHost;
     std::shared_ptr<class EditorAutoPropertySection> _inspectorSection;
     std::string _inspectorFingerprint;
