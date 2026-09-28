@@ -461,6 +461,37 @@ UIElement* findNamed(UIElement* node, std::string_view name)
     return nullptr;
 }
 
+TEST(GameUIHostTest, DueTimersFireEarliestFirstOncePerUpdate)
+{
+    GameUIHost       host;
+    std::vector<int> fired;
+    auto             record = [&fired](int tag) {
+        return [&fired, tag]() {
+            fired.push_back(tag);
+            return true;
+        };
+    };
+    (void)host.addTimer(nullptr, 0.3f, 0.0f, record(3));
+    const uint64_t cancelled = host.addTimer(nullptr, 0.1f, 0.0f, record(0));
+    (void)host.addTimer(nullptr, 0.2f, 0.0f, record(2));
+    (void)host.addTimer(nullptr, 0.1f, 0.0f, record(1));
+    (void)host.addTimer(nullptr, 0.05f, 0.1f, record(9));
+    (void)host.addTimer(nullptr, 0.0f, 0.0f, [&]() {
+        fired.push_back(-1);
+        (void)host.addTimer(nullptr, 0.0f, 0.0f, record(5));
+        return false;
+    });
+    host.cancelTimer(cancelled);
+
+    host.update(FUIFrameClock{.gameDelta = 0.5f, .realDelta = 0.5f});
+    EXPECT_EQ(fired, (std::vector<int>{-1, 9, 1, 2, 3}))
+        << "by due time, ties in creation order; a repeat that fell behind fires once";
+
+    fired.clear();
+    host.update(FUIFrameClock{.gameDelta = 0.0f, .realDelta = 0.0f});
+    EXPECT_EQ(fired, (std::vector<int>{5})) << "a timer added by a callback waits for the next update";
+}
+
 TEST(GameUIHostTest, MountedTextVisibilityAndButtonAction)
 {
     GameUIHost host;

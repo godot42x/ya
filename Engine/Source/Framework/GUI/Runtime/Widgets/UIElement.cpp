@@ -377,6 +377,13 @@ void UIElement::markLayoutDirty(EUIInvalidationReason reason)
     }
 }
 
+void UIElement::noteRenderVisibilityChanged()
+{
+    if (_tree) {
+        ++_tree->_visibilityRevision;
+    }
+}
+
 void UIElement::markArrangeDirty(EUIInvalidationReason reason)
 {
     ++_layoutRevision;

@@ -177,8 +177,8 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
   - 暂停 API 名为 `App::pushGamePause` / `popGamePause`。
   - 保持现有逻辑步骤顺序、逐步门控，不把模块 onLogic 挪到最前（挪动会改变编辑器时序，无收益）。
   - `setPresentation` 留在 `buildSnapshot` 旁：`GameUIHost::update` 不读 presentation。
-  - 顺序不缓存：没有场景结构版本号可作失效依据；每帧 O(脚本数 × 树深) 求树路径，到有
-    性能证据再加缓存。
+  - ~~顺序不缓存~~：这条违背了 D5「排序缓存」，已由「性能检查点」修正（`Node` 树修订号 +
+    前序排名缓存）。
   - 只有玩法 Lua 的 `world.destroyEntity` 入队；`Scene::destroyNode` 仍立即执行（编辑器、
     自动化、场景切换依赖立即语义）。
   - 热重载跳过尚未加载的实例（它首次加载就会读新源，避免 onInit 两次）；重载的实例按单实例
@@ -308,7 +308,8 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
     runtime `update` → 计时器 → 树 tick。实现 `LuaWidgetScripts` 在 `bindGameplayLua` 时装上；
     App 析构先 `setBehaviorRuntime(nullptr)` 再关 Lua。
   - 激活只创建行为、不跑脚本；下一次 UILogic 把新批按（条目 zOrder、激活序）加载，全部 onInit
-    后再全部 onStart。onShow / onHide 在 `update` 轮询 `isVisibleInTree` 变化得到。
+    后再全部 onStart。onShow / onHide 在 `update` 比较 `isVisibleInTree` 变化得到（性能检查点起
+    只在树的可见性修订号变化时比较）。
   - 控件离开树（`onDetached`）即 onDestroy 并取消计时器；树内换父不通知。
   - 计时器：`addTimer(owner, delay, interval, fire)`，重复计时器每次 `update` 最多触发一次；
     `fire` 通过 `self` 身份判断实例是否已被热重载替换，替换后自动失效。
@@ -340,6 +341,29 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
     `GameUIScriptTest.DestroyWaitsForStructuralFlushAndDropsSpawnsUnderIt`、
     `AddToWorldWidgetRunsScriptsAndFinds`；`GameUIHostTest.MountedTextVisibilityAndButtonAction`
     改为经键盘激活、断言按钮不再被绑定 `_onClick`。
+
+### 性能检查点（S3 之后、S4 之前，2026-09-28）
+
+只修本计划 F0 / S3 引入的三处每帧开销；行为语义不变。`UIBehavior` 能力拆分、树 tick 注册表与
+`LuaScriptingSystem::call` 单次调用开销另起计划 `ui-behavior-capabilities/`。
+
+- 世界脚本顺序（D5 本应缓存）：`Hierarchy/Node` 增加树修订号（挂接、脱离、同父重排时推进树根的值，
+  取自进程级递增序列，根节点重建也不会撞值）；`LuaScriptingSystem` 只在活动场景树的修订号变化时
+  重算「实体下标 → 前序排名」，每帧排序键为三个整数（`executionOrder` 仍每帧现读）。不在
+  `Scene` 上放版本号：`ya-scene-3d` 不依赖 `ya-scene-core`，而所有层级写入都经过 `Node`。
+  顺带：路径规范化只在加载时做，不再每帧每行分配。
+- onShow / onHide：`WidgetTree::getVisibilityRevision()` 在 `setVisibility` 跨越「渲染 / 不渲染」
+  或子树挂接、脱离、换父时推进；`LuaWidgetScripts::update` 只在它变化时比较，且不再每帧复制
+  `_started`。反射 / 文档加载直接写 `_visibility` 不推进（均发生在挂载前）。S4 条目可见性可复用。
+- UI 计时器：按 (到期, id) 的最小堆，取消只删表项、堆内残留在浮出时跳过，残留过多时整堆重建。
+  同一次 `update` 内按到期先后触发（原实现按 id 序），同到期按创建序。
+- 临时基准（debug 构建，未提交）：400 个世界脚本 onUpdate 2468 → 604 µs/帧；300 个 UI 脚本 +
+  300 个计时器的 `host.update` 24.7 → 10.3 µs/帧。剩余主要是 `call()` 每次的 `protected_function`
+  引用、`bindSelf` 与路径复制，以及全树 tick 遍历（归新计划）。
+- 追加测试：`WidgetTreeTest.VisibilityRevisionMovesOnlyWhenEffectiveVisibilityMayChange`、
+  `GameUIScriptTest.WidgetScriptSeesShowWhenMovedOutOfHiddenParent`、
+  `TickOrderTest.WorldScriptOrderFollowsTreeChanges`、
+  `GameUIHostTest.DueTimersFireEarliestFirstOncePerUpdate`。
 
 ### S4 — 条目模态、暂停与取消
 

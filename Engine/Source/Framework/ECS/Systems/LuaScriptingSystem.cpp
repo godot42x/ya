@@ -117,19 +117,6 @@ void bindScriptTable(sol::state_view lua, ya::LuaScriptInstance& script, sol::ta
     script.scriptExecutionOrder = scriptTable.get<sol::optional<int>>("executionOrder").value_or(0);
 }
 
-/// Child indices from the scene root down to the entity's node. Comparing two
-/// paths lexicographically is scene-tree pre-order (an ancestor's path is a
-/// prefix of its descendants'). An entity without a node has an empty path.
-std::vector<size_t> treePath(ya::Scene& scene, entt::entity handle)
-{
-    std::vector<size_t> path;
-    for (ya::Node* node = scene.getNodeByEntity(handle); node && node->getParent(); node = node->getParent()) {
-        path.push_back(node->getParent()->getChildIndex(node));
-    }
-    std::reverse(path.begin(), path.end());
-    return path;
-}
-
 /// The script with `id` on `handle`, or null. Scripts live in
 /// `LuaScriptComponent::scripts`, which moves with the registry's storage and
 /// with the vector, so they are found by id each time rather than by address.
@@ -179,12 +166,12 @@ struct FEntityScriptHost final : ya::ILuaScriptHost
 
 struct FScriptSlot
 {
-    entt::entity        handle;
-    size_t              index;
-    uint64_t            id;
-    int                 order;
-    std::vector<size_t> path;
-    bool                bFresh;
+    entt::entity handle;
+    size_t       index;
+    uint64_t     id;
+    int          order;
+    uint32_t     treeRank;
+    bool         bFresh;
 };
 
 bool runsBefore(const FScriptSlot& a, const FScriptSlot& b)
@@ -192,8 +179,8 @@ bool runsBefore(const FScriptSlot& a, const FScriptSlot& b)
     if (a.order != b.order) {
         return a.order < b.order;
     }
-    if (a.path != b.path) {
-        return std::lexicographical_compare(a.path.begin(), a.path.end(), b.path.begin(), b.path.end());
+    if (a.treeRank != b.treeRank) {
+        return a.treeRank < b.treeRank;
     }
     if (a.handle != b.handle) {
         return entt::to_integral(a.handle) < entt::to_integral(b.handle);
@@ -201,9 +188,12 @@ bool runsBefore(const FScriptSlot& a, const FScriptSlot& b)
     return a.index < b.index;
 }
 
-/// Loaded world scripts of `scene` in execution order. `loadPending` gets each
-/// unloaded row that has a path and returns whether it loaded it just now.
+/// Loaded world scripts of `scene` in execution order. `treeRanks` is the
+/// scene-tree pre-order rank by entity index (0 when unranked). `loadPending`
+/// gets each unloaded row that has a path and returns whether it loaded it
+/// just now.
 std::vector<FScriptSlot> collectWorldSlots(ya::Scene&                                                       scene,
+                                           const std::vector<uint32_t>&                                     treeRanks,
                                            const std::function<bool(entt::entity, ya::LuaScriptInstance&)>& loadPending)
 {
     entt::registry& registry = scene.getRegistry();
@@ -220,7 +210,8 @@ std::vector<FScriptSlot> collectWorldSlots(ya::Scene&                           
         if (!scene.getEntityByEnttID(handle) || !registry.all_of<ya::LuaScriptComponent>(handle)) {
             continue;
         }
-        const std::vector<size_t> path = treePath(scene, handle);
+        const auto     entityIndex = static_cast<size_t>(entt::to_entity(handle));
+        const uint32_t treeRank    = entityIndex < treeRanks.size() ? treeRanks[entityIndex] : 0;
         for (size_t index = 0;; ++index) {
             // Re-fetch every step: a loading chunk can grow this vector.
             auto& scripts = registry.get<ya::LuaScriptComponent>(handle).scripts;
@@ -228,12 +219,10 @@ std::vector<FScriptSlot> collectWorldSlots(ya::Scene&                           
                 break;
             }
             auto& script = scripts[index];
-            if (!script.scriptPath.empty()) {
-                script.scriptPath = ya::LuaScriptInstance::normalizeScriptPath(script.scriptPath);
-            }
-            bool bFresh = false;
+            bool  bFresh = false;
             if (!script.bLoaded && !script.scriptPath.empty() && loadPending) {
-                bFresh = loadPending(handle, script);
+                script.scriptPath = ya::LuaScriptInstance::normalizeScriptPath(script.scriptPath);
+                bFresh            = loadPending(handle, script);
             }
             const auto& loaded = registry.get<ya::LuaScriptComponent>(handle).scripts[index];
             if (loaded.bLoaded) {
@@ -241,9 +230,9 @@ std::vector<FScriptSlot> collectWorldSlots(ya::Scene&                           
                     .handle = handle,
                     .index  = index,
                     .id     = loaded.runtimeId,
-                    .order  = loaded.executionOrder(),
-                    .path   = path,
-                    .bFresh = bFresh,
+                    .order    = loaded.executionOrder(),
+                    .treeRank = treeRank,
+                    .bFresh   = bFresh,
                 });
             }
         }
@@ -563,7 +552,7 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
     if (!scene) return;
 
     const std::vector<FScriptSlot> slots =
-        collectWorldSlots(*scene, [this](entt::entity handle, LuaScriptInstance& script) {
+        collectWorldSlots(*scene, treeRanks(*scene), [this](entt::entity handle, LuaScriptInstance& script) {
             return load(script, std::make_unique<FEntityScriptHost>(&_services.activeScene, handle));
         });
 
@@ -602,13 +591,41 @@ bool LuaScriptingSystem::invokeWorld(const char* callback, const std::vector<sol
     if (!scene) {
         return false;
     }
-    for (const FScriptSlot& slot : collectWorldSlots(*scene, {})) {
+    for (const FScriptSlot& slot : collectWorldSlots(*scene, treeRanks(*scene), {})) {
         auto* script = findScript(*scene, slot.handle, slot.id);
         if (script && script->enabled && invoke(*script, callback, args)) {
             return true;
         }
     }
     return false;
+}
+
+const std::vector<uint32_t>& LuaScriptingSystem::treeRanks(Scene& scene)
+{
+    const Node* root = scene.getRootNode();
+    if (!root || root->getTreeRevision() == _rankedTreeRevision) {
+        return _treeRanks;
+    }
+    _rankedTreeRevision = root->getTreeRevision();
+    _treeRanks.clear();
+
+    uint32_t                 rank = 0;
+    std::vector<const Node*> stack{root};
+    while (!stack.empty()) {
+        const Node* node = stack.back();
+        stack.pop_back();
+        if (const Entity* entity = node->getEntity()) {
+            const auto index = static_cast<size_t>(entt::to_entity(entity->getHandle()));
+            if (index >= _treeRanks.size()) {
+                _treeRanks.resize(index + 1, 0);
+            }
+            _treeRanks[index] = rank;
+        }
+        ++rank;
+        const auto& children = node->getChildren();
+        stack.insert(stack.end(), children.rbegin(), children.rend());
+    }
+    return _treeRanks;
 }
 
 void LuaScriptingSystem::onEntityDestroying(Entity& entity)

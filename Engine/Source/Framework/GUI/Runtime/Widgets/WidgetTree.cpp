@@ -287,6 +287,12 @@ EWidgetRouteResult WidgetTree::dispatchCapturedPointerEvent(const Event& event,
 
 void WidgetTree::markSubtreeMembership(UIElement* widget, WidgetTree* tree)
 {
+    if (widget->_tree) {
+        ++widget->_tree->_visibilityRevision;
+    }
+    if (tree && tree != widget->_tree) {
+        ++tree->_visibilityRevision;
+    }
     std::vector<UIElement*> pending{widget};
     while (!pending.empty()) {
         UIElement* node = pending.back();
@@ -700,6 +706,7 @@ void WidgetTree::detach(UIElement& widget)
     }
 
     notifyDetachedSubtree(&widget);
+    ++_visibilityRevision;
     // Recursively clear tree membership for the whole subtree; internal
     // parent links inside the subtree remain valid (parents own children).
     std::vector<UIElement*> pending{&widget};

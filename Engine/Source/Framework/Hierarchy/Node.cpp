@@ -1,5 +1,6 @@
 #include "Hierarchy/Node.h"
 
+#include <atomic>
 
 namespace ya
 {
@@ -23,6 +24,31 @@ size_t Node::getChildIndex(const Node *child) const
 {
     auto it = std::find(_children.begin(), _children.end(), child);
     return it != _children.end() ? static_cast<size_t>(std::distance(_children.begin(), it)) : NPOS;
+}
+
+const Node *Node::getRoot() const
+{
+    const Node *root = this;
+    while (root->_parent) {
+        root = root->_parent;
+    }
+    return root;
+}
+
+uint64_t Node::nextTreeRevision()
+{
+    // Scenes may be built off the main thread.
+    static std::atomic<uint64_t> sequence{0};
+    return sequence.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
+void Node::markTreeChanged()
+{
+    Node *root = this;
+    while (root->_parent) {
+        root = root->_parent;
+    }
+    root->_treeRevision = nextTreeRevision();
 }
 
 bool Node::isAncestorOf(const Node *node) const
@@ -75,6 +101,10 @@ void Node::setParent(Node *parent, size_t childIndex)
         childIndex = std::min(childIndex, parent->_children.size());
         parent->_children.insert(parent->_children.begin() + static_cast<std::ptrdiff_t>(childIndex), this);
     }
+    if (oldParent) {
+        oldParent->markTreeChanged();
+    }
+    markTreeChanged();
 
     // Notify derived classes (Node3D will update cached parent TC)
     onParentChanged();
@@ -110,6 +140,8 @@ void Node::removeChild(Node *child)
 
     child->_parent = nullptr;
     removeChildInternal(child);
+    markTreeChanged();
+    child->markTreeChanged();
 
     // Notify the removed child
     child->onParentChanged();
@@ -125,8 +157,10 @@ void Node::removeFromParent()
 
 void Node::clearChildren()
 {
+    markTreeChanged();
     for (auto *child : _children) {
         child->_parent = nullptr;
+        child->markTreeChanged();
         child->onParentChanged();
         child->onHierarchyDirty();
     }

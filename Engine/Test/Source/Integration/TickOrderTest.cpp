@@ -164,6 +164,25 @@ TEST(TickOrderTest, WorldScriptsRunByExecutionOrderThenTreeOrder)
     EXPECT_EQ(world.takeTrace(), (Trace{"update:W", "update:X", "update:Z", "update:Y"}));
 }
 
+TEST(TickOrderTest, WorldScriptOrderFollowsTreeChanges)
+{
+    FLuaWorld world;
+    world.addScripted("A");
+    world.addScripted("B");
+    world.lua.onUpdate(0.016f);
+    (void)world.takeTrace();
+
+    world.scene.moveNode(world.findNode("B"), nullptr, 0);
+    world.lua.onUpdate(0.016f);
+    EXPECT_EQ(world.takeTrace(), (Trace{"update:B", "update:A"})) << "sibling reorder";
+
+    world.scene.moveNode(world.findNode("B"), world.findNode("A"), 0);
+    world.addScripted("C", world.findNode("A"));
+    world.lua.onUpdate(0.016f);
+    EXPECT_EQ(world.takeTrace(), (Trace{"init:C", "start:C", "update:A", "update:B", "update:C"}))
+        << "reparent under A, then a new child after it";
+}
+
 TEST(TickOrderTest, InstanceOrderOverridesScriptDefault)
 {
     FLuaWorld world;

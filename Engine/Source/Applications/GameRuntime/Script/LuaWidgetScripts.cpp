@@ -252,10 +252,19 @@ void LuaWidgetScripts::update()
         }
     }
 
+    // onShow / onHide: effective visibility can only have changed if the
+    // tree's visibility revision moved. Read before the callbacks, so a change
+    // they make is seen next update.
+    const uint64_t visibilityRevision = host.getTree().getVisibilityRevision();
+    if (visibilityRevision == _seenVisibilityRevision) {
+        return;
+    }
+    _seenVisibilityRevision = visibilityRevision;
     std::erase_if(_started, [](const auto& weak) { return weak.expired(); });
-    const std::vector<std::weak_ptr<LuaWidgetScriptBehavior>> started = _started;
-    for (const auto& weak : started) {
-        auto             behavior = weak.lock();
+    // Only this function appends to `_started`; a callback can end behaviours
+    // (their weak refs expire) but not add any.
+    for (size_t i = 0; i < _started.size(); ++i) {
+        auto             behavior = _started[i].lock();
         const UIElement* owner    = behavior ? behavior->getOwner() : nullptr;
         if (!owner || behavior->runtime != this || !behavior->instance.bLoaded) {
             continue;

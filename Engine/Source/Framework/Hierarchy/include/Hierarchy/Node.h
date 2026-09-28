@@ -33,6 +33,10 @@ struct YA_HIERARCHY_API Node : public disable_copy
     Node               *_parent = nullptr;
     std::vector<Node *> _children;
     Entity             *_entity = nullptr;
+    /// Structure revision of the tree rooted here; only a root's is read.
+    /// Values come from one process-wide sequence, so a value names a single
+    /// tree state even across roots that reuse an address.
+    uint64_t _treeRevision = nextTreeRevision();
 
   public:
     explicit Node(std::string name, Entity *entity) : _name(std::move(name)), _entity(entity) {}
@@ -57,6 +61,10 @@ struct YA_HIERARCHY_API Node : public disable_copy
     }
     [[nodiscard]] size_t getChildIndex(const Node *child) const;
     [[nodiscard]] bool   isAncestorOf(const Node *node) const;
+    [[nodiscard]] const Node *getRoot() const;
+    /// Changes whenever a node joins, leaves or moves within this node's tree
+    /// (sibling reorders included). Caches of tree order key on it.
+    [[nodiscard]] uint64_t getTreeRevision() const { return getRoot()->_treeRevision; }
 
     void setParent(Node *parent);
     void setParent(Node *parent, size_t childIndex);
@@ -96,5 +104,9 @@ struct YA_HIERARCHY_API Node : public disable_copy
      * @brief Internal: Remove child from children list without notifying
      */
     void removeChildInternal(Node *child);
+
+  private:
+    static uint64_t nextTreeRevision();
+    void            markTreeChanged();
 };
 } // namespace ya

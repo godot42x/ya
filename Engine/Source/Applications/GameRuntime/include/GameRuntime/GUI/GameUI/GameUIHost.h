@@ -28,7 +28,6 @@
 #include "GameRuntime/GUI/GameUI/IGameUIController.h"
 
 #include <functional>
-#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -221,6 +220,17 @@ struct YA_GAME_RUNTIME_API GameUIHost
         float                 interval;
         std::function<bool()> fire;
     };
+    struct FTimerDue
+    {
+        double   due;
+        uint64_t id;
+
+        /// Heap order for a min-heap on (due, id).
+        static bool firesAfter(const FTimerDue& a, const FTimerDue& b)
+        {
+            return a.due != b.due ? a.due > b.due : a.id > b.id;
+        }
+    };
     struct FPendingSpawn
     {
         UIElementRef             widget;
@@ -228,6 +238,8 @@ struct YA_GAME_RUNTIME_API GameUIHost
     };
 
     void advanceTimers(float deltaSeconds);
+    void scheduleTimer(uint64_t id, double due);
+    void compactTimerQueue();
     void addEntry(std::string entryId, const UIElementRef& root);
     void mountWorldWidget(const UIElementRef& widget);
     [[nodiscard]] UIElement* findMountedWidget(std::string_view entryId, std::string_view widgetName) const;
@@ -246,7 +258,10 @@ struct YA_GAME_RUNTIME_API GameUIHost
     std::vector<FMountedEntry>     _entries;
     std::vector<FPendingSpawn>     _pendingSpawns;
     std::vector<std::weak_ptr<UIElement>> _pendingDestroys;
-    std::map<uint64_t, FTimer>     _timers; ///< by id: equal due times fire in creation order
+    std::unordered_map<uint64_t, FTimer> _timers;
+    /// Min-heap on (due, id): due timers fire earliest first, ties in creation
+    /// order. A cancelled timer's entry stays until it surfaces and is skipped.
+    std::vector<FTimerDue>         _timerQueue;
     uint64_t                       _nextTimerId = 1;
     double                         _clockSeconds = 0.0;
 };

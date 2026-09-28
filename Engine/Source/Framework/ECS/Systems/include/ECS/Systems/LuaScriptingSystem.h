@@ -68,6 +68,10 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     std::map<uint64_t, std::unique_ptr<ILuaScriptHost>> _live;
     uint64_t _nextId           = 1;
     bool     _hotReloadEnabled = false;
+    /// Scene-tree pre-order rank by entity index, for world-script order;
+    /// rebuilt only when the active scene tree's revision moves.
+    std::vector<uint32_t> _treeRanks;
+    uint64_t              _rankedTreeRevision = 0;
 
   public:
     LuaScriptingSystem() = default;
@@ -136,6 +140,7 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     bool bindChunk(LuaScriptInstance& instance, const std::string& source);
     [[nodiscard]] ILuaScriptHost* hostOf(const LuaScriptInstance& instance) const;
     [[nodiscard]] std::vector<uint64_t> liveIds() const;
+    [[nodiscard]] const std::vector<uint32_t>& treeRanks(Scene& scene);
 
     // 自动绑定所有已注册的反射组件到Lua
     void bindReflectedComponents();

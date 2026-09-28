@@ -213,6 +213,13 @@ struct YA_GUI_API WidgetTree final
     /// resolveThemeStyle) so a theme switch repaints them.
     [[nodiscard]] const std::shared_ptr<Reactive<uint64_t>>& getThemeGeneration() const { return _themeGeneration; }
 
+    /// Moves whenever an attached widget's isVisibleInTree() may have changed:
+    /// setVisibility crossing rendered / not rendered, or a subtree joining,
+    /// leaving or moving within the tree. Direct `_visibility` writes
+    /// (reflection, document load) do not move it. Consumers that react to
+    /// effective visibility re-check only when it moved.
+    [[nodiscard]] uint64_t getVisibilityRevision() const { return _visibilityRevision; }
+
     /// Path-keyed async textures. The source adapter lives in the product host
     /// (AssetManager) or Workbench (builtin lookup); the catalog is tree-owned
     /// so paint never holds AssetManager or widget-pointer listeners.
@@ -539,6 +546,7 @@ struct YA_GUI_API WidgetTree final
     std::function<void(const std::string&)> _clipboardWrite;
     bool          _bLayoutDirty = true;
     uint8_t       _layoutInvalidationMask = static_cast<uint8_t>(EWidgetLayoutInvalidation::Structure);
+    uint64_t      _visibilityRevision = 0;
     GuiPerfStats               _perfStats;
     FGuiFrameInspectorRecord   _inspectorRecord;
     uint64_t                   _inspectorPrevPaintDirty   = 0;

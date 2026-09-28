@@ -1,0 +1,10 @@
+{
+  "plan": "ui-behavior-capabilities",
+  "status": "proposed",
+  "created": "2026-09-28",
+  "features": [
+    {"id":"behavior_capability_registration","phase":"C1","status":"not_started","reference":"UIBehavior, UIElement behavior dispatch","verification":"existing GUI behavior tests stay green; dispatch visits registered behaviors only"},
+    {"id":"tree_tick_registry","phase":"C2","status":"not_started","reference":"WidgetTree::tick/tickSubtree","verification":"tick cost independent of node count when nothing ticks; tree order preserved"},
+    {"id":"lua_call_hot_path","phase":"C3","status":"not_started","reference":"LuaScriptingSystem::call/invoke, invokeLuaCallback, ILuaScriptHost::bindSelf","verification":"TickOrderTest.* and GameUIScriptTest.* green; benchmark before/after"}
+  ]
+}

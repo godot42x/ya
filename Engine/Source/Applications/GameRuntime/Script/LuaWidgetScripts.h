@@ -60,6 +60,8 @@ struct LuaWidgetScripts final : IGameUIBehaviorRuntime
     /// Activated, not yet started.
     std::vector<std::weak_ptr<LuaWidgetScriptBehavior>> _fresh;
     std::vector<std::weak_ptr<LuaWidgetScriptBehavior>> _started;
+    /// The tree visibility revision `_started` was last checked against.
+    uint64_t _seenVisibilityRevision = 0;
     /// Functions every widget script finds on `self`.
     sol::table                      _selfApi;
     uint64_t                        _nextActivation = 0;

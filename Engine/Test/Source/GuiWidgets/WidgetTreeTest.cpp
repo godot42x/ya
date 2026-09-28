@@ -35,6 +35,7 @@
 
 #include <memory>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace ya
@@ -1214,6 +1215,44 @@ TEST(WidgetTreeTest, ExplicitReparentMovesWidget)
     EXPECT_EQ(parentA->getChildren().size(), 0u);
     EXPECT_EQ(parentB->getChildren().size(), 1u);
     EXPECT_TRUE(tree.contains(*child));
+}
+
+TEST(WidgetTreeTest, VisibilityRevisionMovesOnlyWhenEffectiveVisibilityMayChange)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       hidden  = std::make_shared<UICanvasPanel>("Hidden");
+    auto       shown   = std::make_shared<UICanvasPanel>("Shown");
+    auto       child   = std::make_shared<UIButton>("Child");
+    auto       offTree = std::make_shared<UIButton>("OffTree");
+    hidden->setVisibility(EWidgetVisibility::Hidden);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), hidden);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), shown);
+    tree.attach(*hidden, child);
+
+    uint64_t last  = tree.getVisibilityRevision();
+    auto     moved = [&] {
+        const uint64_t now = tree.getVisibilityRevision();
+        return std::exchange(last, now) != now;
+    };
+
+    child->setVisibility(EWidgetVisibility::HitTestInvisible);
+    EXPECT_FALSE(moved()) << "still rendered";
+    child->setVisibility(EWidgetVisibility::Collapsed);
+    EXPECT_TRUE(moved());
+    child->setVisibility(EWidgetVisibility::Hidden);
+    EXPECT_FALSE(moved()) << "still not rendered";
+    child->setVisibility(EWidgetVisibility::Visible);
+    EXPECT_TRUE(moved());
+
+    tree.reparent(*shown, child);
+    EXPECT_TRUE(moved()) << "leaving a hidden parent";
+    tree.detach(*child);
+    EXPECT_TRUE(moved());
+    tree.attach(*hidden, child);
+    EXPECT_TRUE(moved());
+
+    offTree->setVisibility(EWidgetVisibility::Hidden);
+    EXPECT_FALSE(moved()) << "a detached widget is no one's business";
 }
 
 TEST(WidgetTreeTest, CrossTreeReparentMovesExplicitly)

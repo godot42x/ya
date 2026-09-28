@@ -249,33 +249,58 @@ uint64_t GameUIHost::addTimer(const void* owner, float delaySeconds, float inter
     if (!fire) {
         return 0;
     }
-    const uint64_t id = _nextTimerId++;
+    const uint64_t id  = _nextTimerId++;
+    const double   due = _clockSeconds + std::max(delaySeconds, 0.0f);
     _timers.emplace(id, FTimer{
                             .owner    = owner,
-                            .due      = _clockSeconds + std::max(delaySeconds, 0.0f),
+                            .due      = due,
                             .interval = std::max(intervalSeconds, 0.0f),
                             .fire     = std::move(fire),
                         });
+    scheduleTimer(id, due);
     return id;
 }
 
 void GameUIHost::cancelTimer(uint64_t timerId)
 {
-    _timers.erase(timerId);
+    if (_timers.erase(timerId) != 0) {
+        compactTimerQueue();
+    }
 }
 
 void GameUIHost::cancelTimersOf(const void* owner)
 {
-    std::erase_if(_timers, [owner](const auto& entry) { return entry.second.owner == owner; });
+    if (std::erase_if(_timers, [owner](const auto& entry) { return entry.second.owner == owner; }) != 0) {
+        compactTimerQueue();
+    }
+}
+
+void GameUIHost::scheduleTimer(uint64_t id, double due)
+{
+    _timerQueue.push_back(FTimerDue{.due = due, .id = id});
+    std::push_heap(_timerQueue.begin(), _timerQueue.end(), FTimerDue::firesAfter);
+}
+
+void GameUIHost::compactTimerQueue()
+{
+    if (_timerQueue.size() <= 2 * _timers.size() + 32) {
+        return;
+    }
+    std::erase_if(_timerQueue, [this](const FTimerDue& entry) { return !_timers.contains(entry.id); });
+    std::make_heap(_timerQueue.begin(), _timerQueue.end(), FTimerDue::firesAfter);
 }
 
 void GameUIHost::advanceTimers(float deltaSeconds)
 {
     _clockSeconds += deltaSeconds;
-    // Snapshot the due ids: a callback may add or cancel timers.
+    // Take every due id first: a timer a callback adds or reschedules fires
+    // next update at the earliest.
     std::vector<uint64_t> due;
-    for (const auto& [id, timer] : _timers) {
-        if (timer.due <= _clockSeconds) {
+    while (!_timerQueue.empty() && _timerQueue.front().due <= _clockSeconds) {
+        std::pop_heap(_timerQueue.begin(), _timerQueue.end(), FTimerDue::firesAfter);
+        const uint64_t id = _timerQueue.back().id;
+        _timerQueue.pop_back();
+        if (_timers.contains(id)) {
             due.push_back(id);
         }
     }
@@ -295,6 +320,7 @@ void GameUIHost::advanceTimers(float deltaSeconds)
             continue;
         }
         it->second.due = std::max(it->second.due + it->second.interval, _clockSeconds + 1e-6);
+        scheduleTimer(id, it->second.due);
     }
 }
 

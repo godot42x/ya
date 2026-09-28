@@ -539,7 +539,11 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
         }
         const bool bPrevKeepsSpace = (_visibility != EWidgetVisibility::Collapsed);
         const bool bNextKeepsSpace = (value != EWidgetVisibility::Collapsed);
+        const bool bWasRendered    = isVisibleForRender();
         _visibility = value;
+        if (bWasRendered != isVisibleForRender()) {
+            noteRenderVisibilityChanged();
+        }
         invalidateProperty(bPrevKeepsSpace != bNextKeepsSpace
                                ? EUIPropertyImpact::Layout
                                : EUIPropertyImpact::SubtreePaintContext);
@@ -775,6 +779,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void removeChildEdge(UIElement& child);
     void finalizeInsertedChild(const UIElementRef& child);
     void clearLayoutDirtyRecursive();
+    void noteRenderVisibilityChanged();
 };
 
 /// A paint-affecting boolean flag whose only write path marks the owning

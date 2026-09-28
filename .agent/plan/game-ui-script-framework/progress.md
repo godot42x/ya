@@ -184,3 +184,25 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
   `--exit-after-frame=60` exit 0、无 Error。
 
 下一步：S4 需先确认 D3（模态条目不做成 `UIScreen`，只复用 `EInputBlocking` 语义）。
+
+## 2026-09-28 — 性能检查点（F0 / S3 引入的三处每帧开销）
+
+用户反馈实现性能低，决定只修本计划引入的三处，`UIBehavior` 拆分与 tick 注册表另起计划。
+
+完成：
+
+- 世界脚本顺序：`Node` 树修订号 + `LuaScriptingSystem` 前序排名缓存，取代每帧逐实体求树路径（补上 D5 的缓存）。
+- onShow / onHide：`WidgetTree` 可见性修订号，未变化时不比较。
+- UI 计时器：最小堆，取代每帧全量扫描。
+- 新计划 `ui-behavior-capabilities/`（未开始，待确认）。
+
+偏离与取舍：见 `plan.md`「性能检查点」（同一次 update 内计时器改按到期先后触发）。
+
+验证：
+
+- 临时基准（debug）：世界 400 脚本 2468 → 604 µs/帧；UI 300 脚本 + 300 计时器 24.7 → 10.3 µs/帧。
+- `ya-testing` 全量 1379 通过；`ya-gui-closure-test` 604 通过。
+- GUIWorkbench `--smoke-actions` PASS；GreedSnake runtime / editor、HelloMaterial runtime
+  `--exit-after-frame=60` exit 0、无 Error。
+
+下一步：S4（D3 已确认：不做 `UIScreen`）。

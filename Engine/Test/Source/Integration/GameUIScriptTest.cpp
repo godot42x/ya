@@ -314,6 +314,27 @@ TEST(GameUIScriptTest, WidgetScriptSeesShowAndHide)
     EXPECT_THAT(ui.takeTrace(), ElementsAre("Pause.hide", "Resume.hide"));
 }
 
+TEST(GameUIScriptTest, WidgetScriptSeesShowWhenMovedOutOfHiddenParent)
+{
+    FUIScripts   ui;
+    ui.addScript("Probe", kProbe);
+    UIElementRef root   = FUIScripts::widget(kTypeIdCanvasPanel, "Root");
+    UIElementRef drawer = FUIScripts::widget(kTypeIdCanvasPanel, "Drawer");
+    drawer->setVisibility(EWidgetVisibility::Hidden);
+    drawer->addDetachedChild(FUIScripts::widget(kTypeIdButton, "Item", "Probe"));
+    root->addDetachedChild(drawer);
+    ui.addEntry("Inventory", root);
+    ui.host.onSceneActivated(ui.scene);
+    ui.frame();
+    (void)ui.takeTrace();
+
+    UIElement* item = ui.mounted("Inventory", "Item");
+    ASSERT_NE(item, nullptr);
+    ui.host.getTree().reparent(*ui.host.findEntryRoot("Inventory"), item->shared_from_this());
+    ui.frame();
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Item.show"));
+}
+
 TEST(GameUIScriptTest, FindIsScopedToOwningEntry)
 {
     FUIScripts ui;
