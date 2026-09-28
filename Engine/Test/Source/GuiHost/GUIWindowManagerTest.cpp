@@ -1151,6 +1151,43 @@ TEST(GUIDragRouterTest, RoutesCapturedMoveFromForeignTreeWithoutSdl)
     EXPECT_FALSE(router.isCaptureActive());
 }
 
+TEST(GUIDragRouterTest, TreeDestructionDropsCachedBindings)
+{
+    // The editor rebuilds its chrome into a fresh WidgetTree after opening a
+    // project. The crash this guards: updateCursor dereferenced the router's
+    // stale capture tree in the window between that rebuild and the next
+    // bindPrimary. The tree's onDestroyed must drop every cached pointer.
+    GUIDragRouter router;
+    {
+        WidgetTree tree({.width = 120, .height = 80});
+        auto probe = std::make_shared<CaptureProbe>("capture-probe");
+        FCanvasSlotArgs slot;
+        slot.offset = {4.0f, 4.0f};
+        slot.fixedSize = {40.0f, 20.0f};
+        (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe, slot);
+        tree.layout();
+        router.bindPrimary(7, &tree);
+
+        WidgetEventContext pressCtx;
+        pressCtx.logicalPoint = {20.0f, 20.0f};
+        (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pressCtx);
+        ASSERT_EQ(tree.getPointerCapture(), probe.get());
+        router.adoptCapture();
+        ASSERT_TRUE(router.isCaptureActive());
+    } // tree destroyed here -> onDestroyed drops every cached pointer
+
+    EXPECT_EQ(router.findTree(7), nullptr);
+    EXPECT_FALSE(router.isActive());
+    EXPECT_FALSE(router.isCaptureActive());
+    EXPECT_EQ(router.cursor(), ECursorType::Arrow);
+
+    // The next event rebinds to the fresh tree; the router keeps working.
+    WidgetTree replacement({.width = 120, .height = 80});
+    router.bindPrimary(7, &replacement);
+    EXPECT_EQ(router.findTree(7), &replacement);
+    EXPECT_EQ(router.cursor(), ECursorType::Arrow);
+}
+
 TEST(GUIDragRouterTest, ModalBlocksForeignWindowPointerWithoutSdl)
 {
     WidgetTree modalTree({.width = 160, .height = 120});

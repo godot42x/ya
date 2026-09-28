@@ -17,6 +17,7 @@
 // Project code cannot override system layers through ordinary child zOrder.
 // ============================================================================
 
+#include "Core/Delegate.h"
 #include "GUI/Binding/Reactive.h"
 #include "GUI/Layout/UICanvasLayout.h"
 #include "GUI/Widgets/GuiFrameInspector.h"
@@ -169,6 +170,12 @@ struct YA_GUI_API WidgetTree final
 
     explicit WidgetTree(Extent2D logicalExtent = {});
     ~WidgetTree();
+
+    /// Broadcast first thing in the destructor: hosts and routers that cache
+    /// raw `WidgetTree*` bindings (GUIDragRouter, editor sessions) drop them
+    /// here, so no consumer can dereference a tree its owner just replaced.
+    /// Handlers must not reach back into the tree.
+    MulticastDelegate<void()> onDestroyed;
 
     WidgetTree(const WidgetTree&)            = delete;
     WidgetTree& operator=(const WidgetTree&) = delete;

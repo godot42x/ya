@@ -80,11 +80,61 @@ struct FDragOverlayDelegate final : IGUIAppDelegate
 
 } // namespace
 
+GUIDragRouter::~GUIDragRouter()
+{
+    // Remaining watches are for trees that outlive this router: unsubscribe so
+    // a later tree death does not broadcast into freed router state. Trees
+    // that died first already erased their own entries from forgetTree.
+    for (auto& [tree, handle] : _treeDeathWatches) {
+        tree->onDestroyed.remove(handle);
+    }
+}
+
+void GUIDragRouter::watchTree(WidgetTree* tree)
+{
+    if (tree == nullptr || _treeDeathWatches.contains(tree)) {
+        return;
+    }
+    _treeDeathWatches.emplace(tree, tree->onDestroyed.addLambda([this, tree]() { forgetTree(tree); }));
+}
+
+void GUIDragRouter::forgetTree(WidgetTree* tree)
+{
+    if (_primaryTree == tree) {
+        _primaryTree = nullptr;
+    }
+    if (_sourceTree == tree) {
+        _sourceTree     = nullptr;
+        _sourceWindowId = 0;
+    }
+    if (_hoverTree == tree) {
+        _hoverTree     = nullptr;
+        _hoverWindowId = 0;
+    }
+    if (_captureTree == tree) {
+        // A pointer capture / drag owned by the dying tree cannot continue.
+        setMouseCapture(false);
+        _captureTree     = nullptr;
+        _captureWindowId = 0;
+    }
+    for (auto it = _windows.begin(); it != _windows.end();) {
+        if (it->second == tree) {
+            it = _windows.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+    // The dying tree's delegate goes away with it; drop the watch entry.
+    _treeDeathWatches.erase(tree);
+}
+
 void GUIDragRouter::bindPrimary(uint32_t id, WidgetTree* tree, INativeWindow* native)
 {
     _primaryId     = id;
     _primaryTree   = tree;
     _primaryNative = native;
+    watchTree(tree);
 }
 
 void GUIDragRouter::bindExtras(GUIWindowManager* extras)
@@ -103,6 +153,7 @@ void GUIDragRouter::bindWindow(uint32_t id, WidgetTree* tree)
         return;
     }
     _windows[id] = tree;
+    watchTree(tree);
 }
 
 void GUIDragRouter::unbind()
@@ -112,6 +163,10 @@ void GUIDragRouter::unbind()
     }
     destroyOverlay();
     setMouseCapture(false);
+    for (auto& [tree, handle] : _treeDeathWatches) {
+        tree->onDestroyed.remove(handle);
+    }
+    _treeDeathWatches.clear();
     _primaryId     = 0;
     _primaryTree   = nullptr;
     _primaryNative = nullptr;

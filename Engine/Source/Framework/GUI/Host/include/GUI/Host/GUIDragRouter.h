@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/Delegate.h"
 #include "Core/Event.h"
 #include "Core/Input/Cursor.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -59,6 +60,12 @@ class YA_GUI_API GUIDragRouter
     std::string                    _overlayLabel;
     glm::vec2                      _lastScreen{};
 
+    /// Bound trees can be destroyed by their owners (the editor rebuilds its
+    /// chrome into a fresh WidgetTree). Each bound tree's onDestroyed drops
+    /// every cached pointer to it, so no consumer dereferences a dead tree in
+    /// the window between the rebuild and the next bindPrimary.
+    std::unordered_map<WidgetTree*, DelegateHandle> _treeDeathWatches;
+
 public:
     void bindPrimary(uint32_t id, WidgetTree* tree, INativeWindow* native = nullptr);
     void bindExtras(GUIWindowManager* extras);
@@ -66,6 +73,7 @@ public:
     /// Extra lookup for tests / hosts that are not GUIWindowManager sessions.
     void bindWindow(uint32_t id, WidgetTree* tree);
     void unbind();
+    ~GUIDragRouter();
 
     [[nodiscard]] WidgetTree*    findTree(uint32_t id) const;
     [[nodiscard]] INativeWindow* findNative(uint32_t id) const;
@@ -95,6 +103,8 @@ public:
 
 private:
     void runQueuedAfterDrag();
+    void watchTree(WidgetTree* tree);
+    void forgetTree(WidgetTree* tree);
     void setHoverWindow(uint32_t id, WidgetTree* tree, glm::vec2 point);
     void rememberPointer(const Event& event);
     [[nodiscard]] glm::vec2 pointerForEvent(const Event& event) const;

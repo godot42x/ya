@@ -390,6 +390,11 @@ void WidgetTree::collectFocusables(std::vector<UIElement*>& outFocusables) const
 
 WidgetTree::~WidgetTree()
 {
+    // Routers and hosts cache raw bindings to this tree; let them drop those
+    // pointers before any state below goes away. Handlers must not reach back
+    // into the tree from here on.
+    onDestroyed.broadcast();
+
     // Recursively tear down membership for every element (layers and their
     // whole subtree) before the strong refs are released: a widget destroyed
     // after the tree must never still point into the dying tree.
