@@ -1,0 +1,13 @@
+{
+  "plan": "rdg-cache-dx",
+  "updated": "2026-09-29",
+  "rows": [
+    {"area": "skinning SSBO", "owner": "SceneSkinningCache (device)", "phase": "P0", "status": "done", "proof": "commit 533003be, 200 帧零 flush"},
+    {"area": "graph dump + 悬空依赖 warning", "owner": "RenderGraphExecutor", "phase": "P1", "status": "todo", "proof": ""},
+    {"area": "import 条目瘦身 (borrow+保活)", "owner": "RenderGraphResourceRegistry", "phase": "P2", "status": "todo", "proof": ""},
+    {"area": "view 附件双份 (ViewTargetStore/import)", "owner": "待定", "phase": "P2", "status": "todo", "proof": ""},
+    {"area": "arena 切片双份 (arena/imported buffer)", "owner": "待定", "phase": "P2", "status": "todo", "proof": ""},
+    {"area": "统一失效语言", "owner": "各缓存", "phase": "P3", "status": "todo", "proof": ""},
+    {"area": "pass 登记入口收敛", "owner": "RenderGraphImportUtils", "phase": "P4", "status": "todo", "proof": ""}
+  ]
+}
