@@ -18,8 +18,6 @@ namespace
 /// YA branding mark shown on the open splash.
 constexpr const char* kProjectBannerMark = "Engine/Content/Branding/ya-icon.png";
 
-constexpr glm::vec2 kProjectBannerSize{420.0f, 190.0f};
-
 } // namespace
 
 void EditorOpenSplashPage::build(const std::string& projectPath, WidgetTree& tree)
@@ -47,13 +45,11 @@ void EditorOpenSplashPage::build(const std::string& projectPath, WidgetTree& tre
                                                 .setStyleKey("text.muted")
                                                 .setHAlign(EWidgetAlignH::Center)));
     _banner = bannerRoot.share();
+    // The window is exactly the banner's size: fill it, corners included.
     (void)ui::attach(tree,
                      *tree.getLayer(WidgetTree::ELayer::Content),
                      std::move(bannerRoot).release(),
-                     ui::canvasSlot()
-                         .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
-                         .pivot({0.5f, 0.5f})
-                         .size(kProjectBannerSize));
+                     ui::canvasSlot().fill());
 }
 
 } // namespace ya

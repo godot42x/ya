@@ -6,6 +6,7 @@
 #include "Core/Log.h"
 #include "Core/Os/Os.h"
 #include "RHI/NativeWindow.h"
+#include "GameRuntime/GUI/GameUI/GameUIHost.h"
 
 #include <chrono>
 #include <filesystem>
@@ -19,6 +20,26 @@ namespace
 /// The browser window leads the flow: dialog-scale, normal chrome.
 constexpr uint32_t kBrowserWindowWidth  = 880;
 constexpr uint32_t kBrowserWindowHeight = 560;
+
+/// The splash mirrors the drag-ghost overlay approach: a banner-sized
+/// click-through window floating over the display, because a macOS Vulkan
+/// swapchain composites opaquely -- a display-sized transparent window would
+/// just cover the screen in black.
+constexpr uint32_t kSplashWindowWidth  = 440;
+constexpr uint32_t kSplashWindowHeight = 210;
+
+/// Session trees build snapshots without a texture resolver (the host
+/// manager knows nothing of app texture bridges); phase windows show editor
+/// assets (folder icons, YA mark), so they must resolve through the same
+/// bridge the main chrome uses.
+void bindEditorTextureSource(GUIWindowManager& windows, GUIWindowId id)
+{
+    if (const IGUIWindowSession* session = windows.findSession(id)) {
+        if (WidgetTree* tree = session->tree()) {
+            tree->setTextureSource(&gameUITextureSource());
+        }
+    }
+}
 
 /// The splash stays up at least this long so a fast open still reads as
 /// "the editor is opening <project>" instead of a one-frame flash.
@@ -99,6 +120,9 @@ void EditorLaunchFlow::openBrowserWindow()
         config.posY         = dy + (dh - static_cast<int>(kBrowserWindowHeight)) / 2;
     }
     _browserSession = _windows->createSession(config, *_browserDelegate, _render);
+    if (_browserSession != 0) {
+        bindEditorTextureSource(*_windows, _browserSession);
+    }
     if (_browserSession == 0) {
         YA_CORE_ERROR("EditorLaunchFlow: browser window failed to create; showing the shell window");
         if (_mainWindow) {
@@ -118,24 +142,26 @@ void EditorLaunchFlow::openSplashWindow(const std::string& projectPath)
 
     FGUIWindowHostConfig config;
     config.title         = "YA Editor";
-    config.width         = 800;
-    config.height        = 600;
-    // Fullscreen overlay on the primary display: borderless, on top,
-    // transparent outside the banner, never taking focus.
+    config.width         = kSplashWindowWidth;
+    config.height        = kSplashWindowHeight;
+    // Banner-sized, centered on the primary display: borderless client-drawn
+    // chrome (no title bar), on top, utility (no Dock entry), no focus.
+    config.chromeMode    = EWindowChromeMode::ClientDrawn;
     int dx = 0, dy = 0, dw = 0, dh = 0;
     if (Os::displayBounds(0, dx, dy, dw, dh, /*usableWorkArea=*/false)) {
-        config.width        = static_cast<uint32_t>(dw);
-        config.height       = static_cast<uint32_t>(dh);
         config.bHasPosition = true;
-        config.posX         = dx;
-        config.posY         = dy;
+        config.posX         = dx + (dw - static_cast<int>(kSplashWindowWidth)) / 2;
+        config.posY         = dy + (dh - static_cast<int>(kSplashWindowHeight)) / 2;
     }
     config.bBorderless   = true;
     config.bAlwaysOnTop  = true;
-    config.bTransparent  = true;
     config.bNotFocusable = true;
+    config.bUtility      = true;
 
     _splashSession = _windows->createSession(config, *_splashDelegate, _render);
+    if (_splashSession != 0) {
+        bindEditorTextureSource(*_windows, _splashSession);
+    }
     if (_splashSession == 0) {
         // No overlay to look at; run the load right away and show the editor.
         YA_CORE_WARN("EditorLaunchFlow: splash window failed to create; loading without it");
