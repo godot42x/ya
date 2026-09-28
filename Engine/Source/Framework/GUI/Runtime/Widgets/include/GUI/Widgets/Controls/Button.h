@@ -31,6 +31,7 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
     using SlotArgs = FContentSlotArgs;
 
     YA_REFLECT_BEGIN(UIButton, UIElement)
+    YA_REFLECT_FIELD(_action)
     YA_REFLECT_END()
 
     YA_GUI_AUTHORED_STYLE_IO(FButtonStyle)
@@ -64,6 +65,10 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
     VisualFlag            _bHovered{*this};
     VisualFlag            _bPressed{*this};
     VisualFlag            _bFocused{*this};
+    /// Authoring name of a gameplay action. Empty buttons keep a code-only
+    /// `_onClick`. GameRuntime binds a non-empty name after the document mounts;
+    /// the widget type itself does not know about Lua.
+    std::string           _action;
     std::function<void()> _onClick;
 
     /// Reactive enabled binding (paint-dirty). Disabled dims the fill color.

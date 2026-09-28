@@ -50,6 +50,9 @@ FInputReply GameInputNode::route(FInputRouteContext& context, const FInputEvent&
     if (_inputManager) {
         _inputManager->processEvent(event);
     }
+    if (context.router.dispatchGameKey(event)) {
+        return FInputReply{.handled = true};
+    }
     return FInputReply{
         .handled = context.router.routeUnhandledInput(event),
     };
@@ -98,6 +101,23 @@ void InputRouter::FNodeRegistration::reset()
     }
     _owner = nullptr;
     _id    = 0;
+}
+
+void InputRouter::setGameKeyHandler(std::function<bool(const Event&)> handler)
+{
+    _gameKeyHandler = std::move(handler);
+}
+
+bool InputRouter::dispatchGameKey(const Event& event) const
+{
+    if (!_gameKeyHandler) {
+        return false;
+    }
+    const EEvent::T type = event.getEventType();
+    if (type != EEvent::KeyPressed && type != EEvent::KeyReleased) {
+        return false;
+    }
+    return _gameKeyHandler(event);
 }
 
 void InputRouter::setDefaultNode(IInputNode& node)

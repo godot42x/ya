@@ -22,14 +22,24 @@ void DefaultGameUIController::onSceneActivated(Scene& scene, GameUIHost& host)
         attachment.detach();
     }
     attachments.clear();
+    host.clearMountedRoots();
     // Single mount path shared with the editor canvas preview; the
     // controller keeps the attachments for scene-lifecycle tracking.
-    attachments = mountSceneAutoMountEntries(scene, host.getTree(), host.getDocumentStore());
+    std::vector<std::pair<std::string, std::weak_ptr<UIElement>>> roots;
+    for (FSceneUIMount& mount : mountSceneAutoMountEntries(scene, host.getTree(), host.getDocumentStore())) {
+        if (UIElementRef widget = mount.attachment.widget.lock()) {
+            roots.emplace_back(mount.entryId, widget);
+        }
+        if (mount.attachment.valid()) {
+            attachments.push_back(std::move(mount.attachment));
+        }
+    }
+    host.setMountedRoots(std::move(roots));
 }
 
 void DefaultGameUIController::onSceneDeactivated(Scene& scene, GameUIHost& host)
 {
-    (void)host;
+    host.clearMountedRoots();
     auto it = _sceneAttachments.find(&scene);
     if (it == _sceneAttachments.end()) {
         return;

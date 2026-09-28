@@ -143,7 +143,25 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// Layout + paint into an immutable snapshot for this frame's compose.
     [[nodiscard]] UIFrameSnapshot buildSnapshot();
 
+    /// Called when a mounted button with a non-empty action name is clicked.
+    /// The widget stores the name; this host is the only place that turns it
+    /// into a gameplay callback.
+    void setUiActionHandler(std::function<void(std::string_view action)> handler);
+
+    /// Remember which content-layer root came from which scene entry. Replaces
+    /// the previous map. Called by the controller after a mount.
+    void setMountedRoots(std::vector<std::pair<std::string, std::weak_ptr<UIElement>>> roots);
+
+    void clearMountedRoots();
+
+    /// `widgetName` matches `UIElement::_name` on the entry root or a descendant.
+    /// Returns false when the entry or the widget is not in the mounted tree.
+    bool setMountedText(std::string_view entryId, std::string_view widgetName, const std::string& text);
+    bool setMountedVisible(std::string_view entryId, std::string_view widgetName, bool visible);
+
   private:
+    void bindMountedButtonActions();
+    [[nodiscard]] UIElement* findMountedWidget(std::string_view entryId, std::string_view widgetName) const;
     WidgetTree                     _tree;
     std::unique_ptr<IGameUIController> _controller;
     UIDocumentStore*               _documents = nullptr;
@@ -151,6 +169,15 @@ struct YA_GAME_RUNTIME_API GameUIHost
     Rect2D                         _viewportPx{};
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};
     EUIUpdateClock                 _updateClock = EUIUpdateClock::RealTime;
+    std::function<void(std::string_view)> _uiActionHandler;
+    std::vector<std::pair<std::string, std::weak_ptr<UIElement>>> _mountedRoots;
+};
+
+/// One auto-mounted scene entry: the authoring id plus the content-layer attachment.
+struct YA_GAME_RUNTIME_API FSceneUIMount
+{
+    std::string      entryId;
+    WidgetAttachment attachment;
 };
 
 /// Lookup-only Game UI texture helper (cache hit / miss). Async load and
@@ -171,7 +198,7 @@ struct YA_GAME_RUNTIME_API GameUIHost
 /// reported through `onError` and mounts nothing for that entry.
 /// Errors go to `onError` (entryId included); a null sink logs through
 /// YA_CORE_ERROR.
-[[nodiscard]] YA_GAME_RUNTIME_API std::vector<WidgetAttachment>
+[[nodiscard]] YA_GAME_RUNTIME_API std::vector<FSceneUIMount>
 mountSceneAutoMountEntries(Scene&                                       scene,
                            WidgetTree&                                  tree,
                            UIDocumentStore*                             documents,

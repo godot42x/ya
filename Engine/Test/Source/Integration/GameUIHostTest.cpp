@@ -423,4 +423,115 @@ TEST(GameUIHostTest, ClockPolicyDecidesWhetherPausedFramesAdvanceTheTree)
     EXPECT_FLOAT_EQ(behavior->seconds, 2.0f * kFrame);
 }
 
+nlohmann::json testCanvasSlot(float x, float y, float w, float h)
+{
+    return {
+        {"type", "canvas"},
+        {"anchorMin", {0.0f, 0.0f}},
+        {"anchorMax", {0.0f, 0.0f}},
+        {"offset", {x, y}},
+        {"minSize", {0.0f, 0.0f}},
+        {"maxSize", {1000000.0f, 1000000.0f}},
+        {"offsets", {{"left", 0.0f}, {"top", 0.0f}, {"right", 0.0f}, {"bottom", 0.0f}}},
+        {"alignmentH", 0},
+        {"alignmentV", 0},
+        {"widthSizeMode", 0},
+        {"heightSizeMode", 0},
+        {"pivot", {0.0f, 0.0f}},
+        {"preferredSize", {0.0f, 0.0f}},
+        {"fixedSize", {w, h}},
+    };
+}
+
+UIElement* findNamed(UIElement* node, std::string_view name)
+{
+    if (!node) {
+        return nullptr;
+    }
+    if (node->_name == name) {
+        return node;
+    }
+    for (const UIElementRef& child : node->getChildren()) {
+        if (UIElement* found = findNamed(child.get(), name)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+TEST(GameUIHostTest, MountedTextVisibilityAndButtonAction)
+{
+    GameUIHost host;
+    UIDocumentStore documents;
+    host.setDocumentStore(&documents);
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
+
+    std::string fired;
+    host.setUiActionHandler([&fired](std::string_view action) { fired = std::string(action); });
+
+    auto score = std::make_shared<UIDocument>();
+    score->typeId = "engine.text";
+    score->fields = nlohmann::json{
+        {"_text", "Score: 0"},
+        {"__base__", {{"UIElement", {{"_name", "Score"}}}}},
+    };
+
+    auto label = std::make_shared<UIDocument>();
+    label->typeId = "engine.text";
+    label->fields = nlohmann::json{{"_text", "Restart"}};
+
+    auto button = std::make_shared<UIDocument>();
+    button->typeId = "engine.button";
+    button->fields = nlohmann::json{
+        {"_action", "restart"},
+        {"__base__", {{"UIElement", {{"_name", "Restart"}}}}},
+    };
+    button->children.push_back(label);
+    button->childSlots.push_back(nlohmann::json{
+        {"type", "content"},
+        {"hAlign", 2},
+        {"vAlign", 2},
+        {"padding", {{"left", 0.0f}, {"top", 0.0f}, {"right", 0.0f}, {"bottom", 0.0f}}},
+        {"preferredSize", {80.0f, 24.0f}},
+    });
+
+    auto panel = std::make_shared<UIDocument>();
+    panel->typeId = "engine.panel";
+    panel->fields = nlohmann::json{
+        {"__base__", {{"UIElement", {{"_name", "GameOver"}, {"_visibility", "Hidden"}}}}},
+    };
+    panel->children.push_back(score);
+    panel->children.push_back(button);
+    panel->childSlots.push_back(testCanvasSlot(16.0f, 16.0f, 200.0f, 32.0f));
+    panel->childSlots.push_back(testCanvasSlot(16.0f, 64.0f, 120.0f, 36.0f));
+
+    const std::string path = "Test/UI/Bridge.yaui.json";
+    documents.put(path, panel);
+
+    Scene scene("World");
+    scene.addWidgetEntry(makeEntry("GameOver", path, 0));
+    host.onSceneActivated(scene);
+
+    EXPECT_TRUE(host.setMountedText("GameOver", "Score", "Score: 4"));
+    UIElement* content = host.getTree().getLayer(WidgetTree::ELayer::Content);
+    auto* text = dynamic_cast<UIText*>(findNamed(content, "Score"));
+    ASSERT_NE(text, nullptr);
+    EXPECT_EQ(text->getText(), "Score: 4");
+
+    UIElement* root = findNamed(content, "GameOver");
+    ASSERT_NE(root, nullptr);
+    EXPECT_EQ(root->getVisibility(), EWidgetVisibility::Hidden);
+    EXPECT_TRUE(host.setMountedVisible("GameOver", "GameOver", true));
+    EXPECT_EQ(root->getVisibility(), EWidgetVisibility::Visible);
+
+    auto* restart = dynamic_cast<UIButton*>(findNamed(content, "Restart"));
+    ASSERT_NE(restart, nullptr);
+    ASSERT_TRUE(static_cast<bool>(restart->_onClick));
+    restart->_onClick();
+    EXPECT_EQ(fired, "restart");
+
+    EXPECT_FALSE(host.setMountedText("Missing", "Score", "nope"));
+    EXPECT_FALSE(host.setMountedVisible("GameOver", "Missing", false));
+}
+
 } // namespace ya

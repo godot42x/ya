@@ -8,6 +8,8 @@
 #include "RHI/Core/Texture.h"
 
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/UIDocumentStore.h"
 
@@ -217,10 +219,44 @@ std::shared_ptr<Texture> resolveGameUITexture(const std::string& assetPath)
     return gameUITextureSource().lookup(assetPath).texture;
 }
 
-std::vector<WidgetAttachment> mountSceneAutoMountEntries(Scene&                                       scene,
-                                                         WidgetTree&                                  tree,
-                                                         UIDocumentStore*                             documents,
-                                                         const std::function<void(std::string_view)>& onError)
+namespace
+{
+
+UIElement* findNamedWidget(UIElement* node, std::string_view name)
+{
+    if (!node) {
+        return nullptr;
+    }
+    if (node->_name == name) {
+        return node;
+    }
+    for (const UIElementRef& child : node->getChildren()) {
+        if (UIElement* found = findNamedWidget(child.get(), name)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+void bindButtonActions(UIElement& node, const std::function<void(std::string_view)>& handler)
+{
+    if (auto* button = dynamic_cast<UIButton*>(&node); button && !button->_action.empty() && handler) {
+        const std::string action = button->_action;
+        button->_onClick = [handler, action]() { handler(action); };
+    }
+    for (const UIElementRef& child : node.getChildren()) {
+        if (child) {
+            bindButtonActions(*child, handler);
+        }
+    }
+}
+
+} // namespace
+
+std::vector<FSceneUIMount> mountSceneAutoMountEntries(Scene&                                       scene,
+                                                      WidgetTree&                                  tree,
+                                                      UIDocumentStore*                             documents,
+                                                      const std::function<void(std::string_view)>& onError)
 {
     const auto report = [&onError](const std::string& message) {
         if (onError) {
@@ -231,7 +267,7 @@ std::vector<WidgetAttachment> mountSceneAutoMountEntries(Scene&                 
         }
     };
 
-    std::vector<WidgetAttachment> attachments;
+    std::vector<FSceneUIMount> mounts;
     for (const auto& entry : scene.getWidgetEntries()) {
         if (!entry.autoMount) {
             continue;
@@ -258,10 +294,74 @@ std::vector<WidgetAttachment> mountSceneAutoMountEntries(Scene&                 
 
         WidgetAttachment attachment = tree.attachToLayer(WidgetTree::ELayer::Content, widget, entry.rootSlot);
         if (attachment.valid()) {
-            attachments.push_back(std::move(attachment));
+            mounts.push_back(FSceneUIMount{
+                .entryId     = entry.entryId,
+                .attachment = std::move(attachment),
+            });
         }
     }
-    return attachments;
+    return mounts;
+}
+
+void GameUIHost::setUiActionHandler(std::function<void(std::string_view action)> handler)
+{
+    _uiActionHandler = std::move(handler);
+}
+
+void GameUIHost::setMountedRoots(std::vector<std::pair<std::string, std::weak_ptr<UIElement>>> roots)
+{
+    _mountedRoots = std::move(roots);
+    bindMountedButtonActions();
+}
+
+void GameUIHost::clearMountedRoots()
+{
+    _mountedRoots.clear();
+}
+
+void GameUIHost::bindMountedButtonActions()
+{
+    if (!_uiActionHandler) {
+        return;
+    }
+    for (const auto& [entryId, weakRoot] : _mountedRoots) {
+        (void)entryId;
+        if (UIElementRef root = weakRoot.lock()) {
+            bindButtonActions(*root, _uiActionHandler);
+        }
+    }
+}
+
+UIElement* GameUIHost::findMountedWidget(std::string_view entryId, std::string_view widgetName) const
+{
+    for (const auto& [id, weakRoot] : _mountedRoots) {
+        if (id != entryId) {
+            continue;
+        }
+        UIElementRef root = weakRoot.lock();
+        return findNamedWidget(root.get(), widgetName);
+    }
+    return nullptr;
+}
+
+bool GameUIHost::setMountedText(std::string_view entryId, std::string_view widgetName, const std::string& text)
+{
+    auto* textWidget = dynamic_cast<UIText*>(findMountedWidget(entryId, widgetName));
+    if (!textWidget) {
+        return false;
+    }
+    textWidget->setText(text);
+    return true;
+}
+
+bool GameUIHost::setMountedVisible(std::string_view entryId, std::string_view widgetName, bool visible)
+{
+    UIElement* widget = findMountedWidget(entryId, widgetName);
+    if (!widget) {
+        return false;
+    }
+    widget->setVisibility(visible ? EWidgetVisibility::Visible : EWidgetVisibility::Hidden);
+    return true;
 }
 
 } // namespace ya

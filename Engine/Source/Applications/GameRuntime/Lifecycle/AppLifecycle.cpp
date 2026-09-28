@@ -1,4 +1,5 @@
 #include "GameRuntime/App.h"
+#include "GameRuntime/Script/GameplayLua.h"
 #include "GameRuntime/AppRenderState.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
@@ -365,6 +366,9 @@ void App::init(AppDesc ci)
         .activeScene     = [&app]() -> Scene* { return app.getSceneServices().getActiveScene(); },
     });
     app._luaScriptingSystem->init();
+    if (GameUIHost* gameUI = app.getGameUIHost()) {
+        bindGameplayLua(*app._luaScriptingSystem, *gameUI);
+    }
     app._deleter.push("LuaScriptingSystem", [&app](void*)
                       {
         app._luaScriptingSystem->shutdown();
