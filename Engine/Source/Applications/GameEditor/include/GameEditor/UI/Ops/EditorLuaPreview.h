@@ -21,7 +21,7 @@ class EditorLuaPreview
     /// Execute `script.scriptPath` in the editor state and copy `_PROPERTIES`
     /// into C++ rows. Never leaves sol handles on `script` — the preview
     /// table dies with this function, while `_lua` is still alive.
-    bool load(LuaScriptComponent::ScriptInstance& script);
+    bool load(LuaScriptInstance& script);
 
     /// Unref any handles on `component` that belong to this preview state.
     /// Must run before `~EditorLuaPreview`.

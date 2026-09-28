@@ -62,7 +62,7 @@ void EditorLuaPreview::releaseMatching(LuaScriptComponent& component)
     }
 }
 
-bool EditorLuaPreview::load(LuaScriptComponent::ScriptInstance& script)
+bool EditorLuaPreview::load(LuaScriptInstance& script)
 {
     ensureReady();
     script.bAuthoringPreviewAttempted = true;

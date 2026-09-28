@@ -1,4 +1,4 @@
-#include "ECS/Systems/Components/LuaScriptComponent.h"
+#include "ECS/Systems/LuaScriptInstance.h"
 #include "Core/Log.h"
 #include "Core/System/PathUtils.h"
 #include "Resource/AssetManager.h"
@@ -68,12 +68,12 @@ std::any solToAny(const sol::object& value, std::string_view typeHint)
 
 } // namespace
 
-std::string LuaScriptComponent::ScriptInstance::normalizeScriptPath(std::string_view path)
+std::string LuaScriptInstance::normalizeScriptPath(std::string_view path)
 {
     return AssetManager::normalizeScriptAssetPath(path);
 }
 
-void LuaScriptComponent::ScriptInstance::refreshProperties()
+void LuaScriptInstance::refreshProperties()
 {
     if (!self.valid()) {
         properties.clear();
@@ -82,7 +82,7 @@ void LuaScriptComponent::ScriptInstance::refreshProperties()
     capturePropertiesFrom(self);
 }
 
-void LuaScriptComponent::ScriptInstance::capturePropertiesFrom(sol::table table)
+void LuaScriptInstance::capturePropertiesFrom(sol::table table)
 {
     properties.clear();
     if (!table.valid()) {
@@ -126,7 +126,7 @@ void LuaScriptComponent::ScriptInstance::capturePropertiesFrom(sol::table table)
             continue;
         }
 
-        ScriptProperty prop;
+        LuaScriptProperty prop;
         prop.name = propName;
 
         sol::optional<std::string> typeHint = propDef["type"];
@@ -150,7 +150,7 @@ void LuaScriptComponent::ScriptInstance::capturePropertiesFrom(sol::table table)
     }
 }
 
-void LuaScriptComponent::ScriptInstance::releaseLuaHandles()
+void LuaScriptInstance::releaseLuaHandles()
 {
     self      = sol::lua_nil;
     onInit    = sol::lua_nil;
@@ -161,12 +161,12 @@ void LuaScriptComponent::ScriptInstance::releaseLuaHandles()
     onDisable = sol::lua_nil;
 }
 
-void LuaScriptComponent::ScriptInstance::applyPropertyOverrides(sol::state& lua)
+void LuaScriptInstance::applyPropertyOverrides(sol::state& lua)
 {
     applyPropertyOverridesTo(self, lua);
 }
 
-void LuaScriptComponent::ScriptInstance::applyPropertyOverridesTo(sol::table table, sol::state& lua)
+void LuaScriptInstance::applyPropertyOverridesTo(sol::table table, sol::state& lua)
 {
     if (!table.valid() || propertyOverrides.empty()) {
         return;

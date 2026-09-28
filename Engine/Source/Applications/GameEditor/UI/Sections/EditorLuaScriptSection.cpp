@@ -46,8 +46,8 @@ LuaScriptComponent* scriptComponentOn(EditorLayer* layer, uint64_t uuid)
     return entity->tryGetComponent<LuaScriptComponent>();
 }
 
-void storeOverride(LuaScriptComponent::ScriptInstance& script,
-                   LuaScriptComponent::ScriptProperty& prop,
+void storeOverride(LuaScriptInstance& script,
+                   LuaScriptProperty& prop,
                    std::any value)
 {
     script.propertyOverrides[prop.name] = value;
@@ -217,7 +217,7 @@ void EditorLuaScriptSection::rebuildRows()
                 return;
             }
             auto& row = target->scripts[i];
-            row.scriptPath = LuaScriptComponent::ScriptInstance::normalizeScriptPath(text);
+            row.scriptPath = LuaScriptInstance::normalizeScriptPath(text);
             row.releaseLuaHandles();
             row.bLoaded = false;
             row.bAuthoringPreviewAttempted = false;
@@ -239,7 +239,7 @@ void EditorLuaScriptSection::rebuildRows()
                     return;
                 }
                 inner->scripts[i].scriptPath =
-                    LuaScriptComponent::ScriptInstance::normalizeScriptPath(path);
+                    LuaScriptInstance::normalizeScriptPath(path);
                 inner->scripts[i].releaseLuaHandles();
                 inner->scripts[i].bLoaded = false;
                 inner->scripts[i].bAuthoringPreviewAttempted = false;

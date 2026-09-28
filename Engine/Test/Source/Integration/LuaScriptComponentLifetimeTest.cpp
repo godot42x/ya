@@ -11,7 +11,7 @@ namespace ya
 
 TEST(LuaScriptComponentLifetimeTest, CapturedPropertiesSurviveLuaStateDeath)
 {
-    LuaScriptComponent::ScriptInstance script;
+    LuaScriptInstance script;
     script.scriptPath = "Content/Scripts/Spin.lua";
     script.propertyOverrides["radius"] = 3.5f;
 
@@ -68,11 +68,11 @@ TEST(LuaScriptComponentLifetimeTest, CapturePropertiesFromMultipleEntries)
     addProp("name", std::string{"camera"}, "string", 0.0f, 0.0f);
     table["_PROPERTIES"] = props;
 
-    LuaScriptComponent::ScriptInstance script;
+    LuaScriptInstance script;
     script.capturePropertiesFrom(table);
 
     ASSERT_EQ(script.properties.size(), 4u);
-    std::unordered_map<std::string, LuaScriptComponent::ScriptProperty> byName;
+    std::unordered_map<std::string, LuaScriptProperty> byName;
     for (auto& prop : script.properties) {
         byName.emplace(prop.name, prop);
     }

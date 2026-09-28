@@ -33,13 +33,14 @@ namespace
 struct FLuaWorld
 {
     Scene                              scene{"World"};
+    Scene*                             active = &scene;
     LuaScriptingSystem                 lua;
     std::map<std::string, std::string> sources;
 
     FLuaWorld()
     {
         lua.setRuntimeServices({
-            .activeScene = [this]() { return &scene; },
+            .activeScene = [this]() { return active; },
             .readScript  = [this](const std::string& path, std::string& out) {
                 auto it = sources.find(path);
                 if (it == sources.end()) {
@@ -50,13 +51,19 @@ struct FLuaWorld
             },
         });
         lua.init();
-        lua._lua["TRACE"] = lua._lua.create_table();
-        lua._lua.set_function("queueDestroy", [this](const std::string& name) {
+        lua.lua()["TRACE"] = lua.lua().create_table();
+        lua.lua().set_function("queueDestroy", [this](const std::string& name) {
             if (Node* node = findNode(name)) {
                 scene.queueDestroyNode(node);
             }
         });
-        lua._lua.set_function("spawnScripted", [this](const std::string& name) { addScripted(name); });
+        lua.lua().set_function("spawnScripted", [this](const std::string& name) { addScripted(name); });
+        lua.lua().set_function("removeScript", [this](const std::string& node, const std::string& script) {
+            if (Node* target = findNode(node)) {
+                target->getEntity()->getComponent<LuaScriptComponent>()->removeScript(
+                    LuaScriptInstance::normalizeScriptPath("Test/Scripts/" + script + ".lua"));
+            }
+        });
     }
 
     ~FLuaWorld() { lua.onStop(); }
@@ -64,7 +71,7 @@ struct FLuaWorld
     /// `order` is the script-declared default; nullopt declares none.
     std::string defineScript(const std::string& name, std::optional<int> order = std::nullopt, std::string onUpdateBody = {})
     {
-        const std::string path = LuaScriptComponent::ScriptInstance::normalizeScriptPath("Test/Scripts/" + name + ".lua");
+        const std::string path = LuaScriptInstance::normalizeScriptPath("Test/Scripts/" + name + ".lua");
         std::string source = "local S = {}\n";
         if (order) {
             source += std::format("S.executionOrder = {}\n", *order);
@@ -82,9 +89,9 @@ struct FLuaWorld
     }
 
     /// Node named `name` under `parent`, running Test/Scripts/<name>.lua.
-    LuaScriptComponent::ScriptInstance* addScripted(const std::string& name, Node* parent = nullptr)
+    LuaScriptInstance* addScripted(const std::string& name, Node* parent = nullptr)
     {
-        const std::string path = LuaScriptComponent::ScriptInstance::normalizeScriptPath("Test/Scripts/" + name + ".lua");
+        const std::string path = LuaScriptInstance::normalizeScriptPath("Test/Scripts/" + name + ".lua");
         if (!sources.contains(path)) {
             defineScript(name);
         }
@@ -108,11 +115,11 @@ struct FLuaWorld
     std::vector<std::string> takeTrace()
     {
         std::vector<std::string> out;
-        sol::table trace = lua._lua["TRACE"];
+        sol::table trace = lua.lua()["TRACE"];
         for (size_t i = 1; i <= trace.size(); ++i) {
             out.push_back(trace.get<std::string>(i));
         }
-        lua._lua["TRACE"] = lua._lua.create_table();
+        lua.lua()["TRACE"] = lua.lua().create_table();
         return out;
     }
 
@@ -192,7 +199,7 @@ TEST(TickOrderTest, NewInstancesInitAllThenStartAllBeforeAnyUpdate)
 TEST(TickOrderTest, ScriptBaseInstanceResolvesUndefinedCallbacksThroughItsClass)
 {
     FLuaWorld world;
-    const std::string path = LuaScriptComponent::ScriptInstance::normalizeScriptPath("Test/Scripts/Derived.lua");
+    const std::string path = LuaScriptInstance::normalizeScriptPath("Test/Scripts/Derived.lua");
     world.sources[path] =
         "local S = require('ScriptBase'):new()\n"
         "function S:onUpdate(dt) table.insert(TRACE, 'update:Derived') end\n"
@@ -203,6 +210,40 @@ TEST(TickOrderTest, ScriptBaseInstanceResolvesUndefinedCallbacksThroughItsClass)
     ASSERT_TRUE(script->bLoaded);
     EXPECT_EQ(script->executionOrder(), 0);
     EXPECT_EQ(world.takeTrace(), (Trace{"update:Derived"}));
+}
+
+TEST(TickOrderTest, ScriptRemovedDuringUpdateDoesNotSkipItsSiblings)
+{
+    FLuaWorld world;
+    auto* comp = world.scene.createNode3D("E")->getEntity()->addComponent<LuaScriptComponent>();
+    comp->addScript(world.defineScript("A", std::nullopt, "if self.armed then removeScript('E', 'A') end; self.armed = true"));
+    comp->addScript(world.defineScript("B"));
+
+    world.lua.onUpdate(0.016f);
+    (void)world.takeTrace();
+    // A removes itself mid-frame; B moves from index 1 to 0 and must still run.
+    world.lua.onUpdate(0.016f);
+    EXPECT_EQ(world.takeTrace(), (Trace{"update:A", "update:B"}));
+    world.lua.onUpdate(0.016f);
+    EXPECT_EQ(world.takeTrace(), (Trace{"update:B"}));
+}
+
+TEST(TickOrderTest, SceneGoneWithoutStopLeavesNoLiveHost)
+{
+    FLuaWorld world;
+    world.addScripted("A");
+    world.lua.onUpdate(0.016f);
+    ASSERT_EQ(world.lua.liveCount(), 1u);
+    (void)world.takeTrace();
+
+    // The scene stops being active without a play stop (unload during play).
+    world.active = nullptr;
+    EXPECT_EQ(world.lua.liveCount(), 0u);
+    world.lua.onStop();
+    EXPECT_TRUE(world.takeTrace().empty());
+
+    // Back so teardown's onStop drops the rows' handles before the state dies.
+    world.active = &world.scene;
 }
 
 TEST(TickOrderTest, InstanceCreatedDuringUpdateStartsNextFrame)
@@ -310,7 +351,7 @@ TEST_F(TickOrderAppTest, PauseStopsGameLogicButNotUILogicOrInputState)
     scene->createNode3D("Scripted")->getEntity()->addComponent<LuaScriptComponent>()->addScript("Test/Scripts/Count.lua");
 
     AppModuleTestAccess::tickLogic(app, 0.016f);
-    EXPECT_EQ(lua._lua.get<int>("UPDATES"), 1);
+    EXPECT_EQ(lua.lua().get<int>("UPDATES"), 1);
     EXPECT_EQ(uiBehavior->ticks, 1);
 
     app.pushGamePause();
@@ -320,7 +361,7 @@ TEST_F(TickOrderAppTest, PauseStopsGameLogicButNotUILogicOrInputState)
     EXPECT_TRUE(app.getInputManager().wasKeyPressed(EKey::K_A));
 
     AppModuleTestAccess::tickLogic(app, 0.016f);
-    EXPECT_EQ(lua._lua.get<int>("UPDATES"), 1);
+    EXPECT_EQ(lua.lua().get<int>("UPDATES"), 1);
     EXPECT_EQ(uiBehavior->ticks, 2);
     // The press edge is consumed by this frame even though the game is paused.
     EXPECT_FALSE(app.getInputManager().wasKeyPressed(EKey::K_A));

@@ -193,18 +193,34 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 
 目标：一个脚本实例可以挂在实体上，也可以挂在任意宿主上，加载/回调/热重载/属性走同一份代码。
 
-- 从 `LuaScriptingSystem` 抽出 `LuaScriptRuntime`（仍在 ECS/Systems 模块，共享同一个 `sol::state`）：
-  `load(instance, host)`、`call(instance, callback, args...)`、`reload(path)`、`destroy(instance)`。
+- `LuaScriptingSystem`（全局唯一，持有唯一的 `sol::state`）提供与宿主无关的实例接口：
+  `load(instance, host)`、`call(instance, callback, args...)`、`reloadScript(path)`、`destroy(instance)`。
 - 宿主接口 `ILuaScriptHost`：给 `self` 注入宿主字段（实体宿主注入 `self.entity`，控件宿主注入
   `self.widget`），回答「是否仍存活」。
 - 活实例登记表：热重载遍历登记表，不再只扫当前场景的 `LuaScriptComponent` 视图。
 - 错误隔离：单个实例回调报错只记日志、不影响同帧其他实例（沿用 `invokeLuaCallback`）。
 - 实体宿主行为与现在完全一致（`LuaScriptComponent` 序列化不变）。
 - 测试：现有 `LuaScriptComponentLifetimeTest` 全绿；新增
-  `LuaScriptRuntimeTest.SameScriptOnTwoHostsHasIndependentSelf`、
-  `LuaScriptRuntimeTest.HotReloadReachesNonEntityHosts`、
-  `LuaScriptRuntimeTest.CallbackErrorDoesNotStopOtherInstances`。
+  `LuaScriptHostTest.SameScriptOnTwoHostsHasIndependentSelf`、
+  `LuaScriptHostTest.HotReloadReachesNonEntityHosts`、
+  `LuaScriptHostTest.CallbackErrorDoesNotStopOtherInstances`。
 - 验收：GreedSnake / HelloMaterial runtime smoke 行为不变；编辑器 Lua 预览（`EditorLuaPreview`）不回退。
+- 已落地（2026-09-28），实施取舍：
+  - 不单独抽 runtime 类：`LuaScriptingSystem` 本就是 App 里唯一的实例，一对一的拆分只会多出
+    转发层。系统自己持有 `sol::state` 与活实例登记表，实体只是它直接驱动的一种宿主；
+    `_lua` 改为私有，经 `lua()` 暴露。
+  - 实例类型从组件里抽出：`LuaScriptInstance` / `LuaScriptProperty`（`ECS/Systems/LuaScriptInstance.h`），
+    `LuaScriptComponent::scripts` 持有它，序列化不变；调用点直接改名，不留别名。
+  - 登记表以 `runtimeId`（单调递增、不复用）为键，宿主 `resolve(id)` 找回实例：组件存储与
+    vector 移动都不影响；顺带消除 F0 记录的「同帧删除脚本导致下标错位」。
+  - 实体宿主不保存 `Scene*`，每次向 active scene 服务取：播放中卸载场景（未经 `onStop`）时
+    宿主只会解析不到，登记项被剔除，不会悬空。
+  - `destroy` 先摘除登记再调 onDestroy：回调里再次销毁同一实例是空操作而非递归。
+  - `call` 只覆盖现有生命周期回调（枚举 `ELuaScriptCallback`）；带返回值的具名回调
+    （onAction / onCancel / onKey）留到 S3–S5 需要时扩展。
+  - `EditorLuaPreview` 保持独立状态（IS_EDITOR、不跑回调），只随类型改名。
+  - 追加测试：`LuaScriptHostTest.DestroyFromOwnOnDestroyRunsOnce`、`GoneHostLeavesTheRegistry`、
+    `TickOrderTest.ScriptRemovedDuringUpdateDoesNotSkipItsSiblings`、`SceneGoneWithoutStopLeavesNoLiveHost`。
 
 ### S2 — GUI 通用行为描述（与 Lua 无关）
 

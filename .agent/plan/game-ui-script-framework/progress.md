@@ -76,3 +76,31 @@
 目前无调用方，S1 统一脚本宿主时一并处理。
 
 下一步：S1（与宿主无关的 Lua 脚本运行时）。
+
+## 2026-09-28 — S1 与宿主无关的 Lua 脚本运行时
+
+完成：
+
+- `LuaScriptingSystem` 增加与宿主无关的实例接口与活实例登记表：
+  `load(instance, host)` / `call(instance, callback, dt)` / `destroy` / `destroyAll` / `reloadScript(path)` /
+  `liveCount()`；不另设 runtime 类（系统全局唯一，拆分只多一层转发）。
+- `ILuaScriptHost`：`resolve(id)` 找回所承载实例（找不到即视为已消失并剔除）、`bindSelf(self)`
+  注入宿主字段；每次回调前重绑。
+- `LuaScriptInstance` / `LuaScriptProperty` 从 `LuaScriptComponent` 抽出（`LuaScriptComponent.cpp`
+  更名为 `LuaScriptInstance.cpp`），新增 `runtimeId`；组件序列化与克隆不变。
+- `LuaScriptingSystem`：实体宿主 `FEntityScriptHost`（按 active scene + entt 句柄 + id 解析）；
+  world 帧按 id 重新解析；`onStop` = `destroyAll` + 重置行状态；热重载遍历登记表，覆盖所有宿主。
+- 调用点改名：`EditorLuaPreview`、`EditorLuaScriptSection`、`GameplayLua`（`scripting.lua()`）、测试。
+
+偏离与取舍：见 `plan.md` S1「已落地」。F0 的「同帧删除脚本下标错位」边界已消除。
+
+验证：
+
+- `ya-testing` 全量 1355 通过；`LuaScriptHostTest.*` 5 个、`TickOrderTest.*` / `TickOrderAppTest.*`
+  12 个、`LuaScriptComponentLifetimeTest.*` 3 个。
+- 冒烟 `--exit-after-frame=60`：GreedSnake runtime、HelloMaterial runtime、GreedSnake editor exit 0；
+  无关闭时实例残留警告；HelloMaterial 仍只有既有的两条属性类型 panic。
+
+未做：`onEnable` / `onDisable` 仍只绑定不调用（既有状态，非 S1 范围）。
+
+下一步：S2（GUI 通用行为描述，与 Lua 无关）。

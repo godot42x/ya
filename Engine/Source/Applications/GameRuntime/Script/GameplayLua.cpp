@@ -72,7 +72,7 @@ float viewAspect()
 
 void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui)
 {
-    sol::state& lua = scripting._lua;
+    sol::state& lua = scripting.lua();
 
     lua.new_usertype<glm::vec4>("Vec4",
                                 sol::constructors<glm::vec4(), glm::vec4(float), glm::vec4(float, float, float, float)>(),

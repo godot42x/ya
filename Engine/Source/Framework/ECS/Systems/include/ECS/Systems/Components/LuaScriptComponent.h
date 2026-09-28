@@ -6,13 +6,10 @@
 
 #include "Core/Api.h"
 #include "ECS/Component.h"
+#include "ECS/Systems/LuaScriptInstance.h"
 
 #include <algorithm>
-#include <any>
-#include <optional>
-#include <sol/sol.hpp>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -25,72 +22,21 @@ struct LuaScriptComponent : public IComponent
     YA_REFLECT_BEGIN(LuaScriptComponent)
     YA_REFLECT_END()
 
-    struct ScriptProperty
-    {
-        std::string name;
-        std::any    value;
-        std::string typeHint;
-        float       min     = 0.0f;
-        float       max     = 100.0f;
-        std::string tooltip = "";
-        std::string serializedValue = "";
-    };
-
-    struct ScriptInstance
-    {
-        std::string scriptPath;
-        bool        bLoaded                    = false;
-        bool        bAuthoringPreviewAttempted = false;
-        bool        bAuthoringPreviewLoaded    = false;
-
-        sol::table self;
-
-        sol::function onInit;
-        sol::function onStart;
-        sol::function onUpdate;
-        sol::function onDestroy;
-        sol::function onEnable;
-        sol::function onDisable;
-
-        std::vector<ScriptProperty> properties;
-        std::unordered_map<std::string, std::any> propertyOverrides;
-
-        bool enabled = true;
-
-        /// `executionOrder` declared by the script table; read on load, not serialized.
-        int                scriptExecutionOrder = 0;
-        /// Per-instance override, serialized only when set.
-        std::optional<int> executionOrderOverride;
-
-        /// Lower runs first. Ties fall back to scene-tree order.
-        [[nodiscard]] int executionOrder() const { return executionOrderOverride.value_or(scriptExecutionOrder); }
-
-        YA_ECS_SYSTEMS_API void refreshProperties();
-        YA_ECS_SYSTEMS_API void capturePropertiesFrom(sol::table table);
-        YA_ECS_SYSTEMS_API void applyPropertyOverrides(sol::state& lua);
-        YA_ECS_SYSTEMS_API void applyPropertyOverridesTo(sol::table table, sol::state& lua);
-        /// Drop sol handles while their lua_State is still alive. Keeps path,
-        /// enabled, propertyOverrides, and captured C++ property rows.
-        YA_ECS_SYSTEMS_API void releaseLuaHandles();
-
-        static YA_ECS_SYSTEMS_API std::string normalizeScriptPath(std::string_view path);
-    };
-
-    std::vector<ScriptInstance> scripts;
+    std::vector<LuaScriptInstance> scripts;
 
     // Unity-like API
-    ScriptInstance *addScript(const std::string &path)
+    LuaScriptInstance *addScript(const std::string &path)
     {
-        scripts.push_back({.scriptPath = ScriptInstance::normalizeScriptPath(path)});
+        scripts.push_back({.scriptPath = LuaScriptInstance::normalizeScriptPath(path)});
         return &scripts.back();
     }
 
-    ScriptInstance *attachScript(const std::string &path)
+    LuaScriptInstance *attachScript(const std::string &path)
     {
         return addScript(path);
     }
 
-    ScriptInstance *getScript(const std::string &path)
+    LuaScriptInstance *getScript(const std::string &path)
     {
         auto it = std::find_if(scripts.begin(), scripts.end(), [&](auto &s) { return s.scriptPath == path; });
         return it != scripts.end() ? &(*it) : nullptr;
@@ -126,7 +72,7 @@ struct LuaScriptComponent : public IComponent
         auto scriptsJson = nlohmann::json::array();
         for (const auto& script : scripts) {
             nlohmann::json s;
-            s["scriptPath"] = ScriptInstance::normalizeScriptPath(script.scriptPath);
+            s["scriptPath"] = LuaScriptInstance::normalizeScriptPath(script.scriptPath);
             s["enabled"]    = script.enabled;
             if (script.executionOrderOverride) {
                 s["executionOrder"] = *script.executionOrderOverride;
@@ -205,7 +151,7 @@ struct LuaScriptComponent : public IComponent
         scripts.reserve(srcLua.scripts.size());
         for (const auto& sourceScript : srcLua.scripts) {
             auto& script = scripts.emplace_back();
-            script.scriptPath = ScriptInstance::normalizeScriptPath(sourceScript.scriptPath);
+            script.scriptPath = LuaScriptInstance::normalizeScriptPath(sourceScript.scriptPath);
             script.enabled = sourceScript.enabled;
             script.executionOrderOverride = sourceScript.executionOrderOverride;
             script.propertyOverrides = sourceScript.propertyOverrides;
