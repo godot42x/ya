@@ -19,34 +19,47 @@ namespace ya
 /// both a setting and a copy of a View's declaration, and a reader could not
 /// tell which of the two it was looking at.
 ///
-/// **The window is the presentation surface, not the render size.** The render
-/// resolution is a setting: the host viewport's View is sized from it and the
-/// presentation pass stretches that image onto the swapchain image, which may be
-/// a different size. Resizing the window therefore never changes what is
-/// rendered, only how it is shown, and lowering the resolution is a supported way
-/// to spend less time rendering. Nothing here is derived from the window.
+/// **Default: the window and the render resolution are the same size.** A
+/// resize of the main window writes `renderResolution` (`FollowWindow`), so
+/// the view, the game UI, and the swapchain stay 1:1: square pixels stay
+/// square, and a click lands on the widget that was drawn. `ExplicitStretch`
+/// is the opt-out a caller asks for (automation, a settings UI): the window
+/// keeps its size and the presentation pass stretches that image onto the
+/// swapchain, so pointer hits are mapped from window space back into the
+/// resolution. `Hold` leaves the seed alone — an editor panel is the
+/// viewport, not the window.
 ///
-/// (The aspect consequence is deliberate and pre-existing: the presentation
-/// stretch is 1:1 in pixels of the *render* image, so a window whose aspect
-/// differs from the resolution's shows that difference. Letterboxing or fitting
-/// would be a presentation feature with its own pixels to choose, not a value to
-/// smuggle in here.)
+/// The stretch, when a caller asked for it, fills the swapchain. A window
+/// whose aspect differs from the resolution shows that difference.
+/// Letterboxing would be a presentation feature with its own pixels to
+/// choose, not a value to smuggle in here.
 ///
 /// Every field has exactly one per-tick writer, so "who set this, and when" is
 /// answered here instead of by reading the tick in order:
 /// - `clock`: `GameRuntimeTickOrchestrator::prepareHostViewState`.
-/// - `renderResolution` and `renderScale`: the render settings,
-///   through `AppRenderServices`. Seeded once from the size the window was
-///   created with, then only changed by a caller asking for a different
-///   resolution (the control plane, a settings UI); a resize of the window is
-///   not such a caller.
+/// - `renderResolution`, `renderScale`, `resolutionPolicy`: `AppRenderServices`.
+///   Seeded from the window at init under `FollowWindow`.
+///   `App::handleWindowResized` writes the client size while that policy holds.
+///   `setRenderResolution` switches to `ExplicitStretch`.
+enum class EHostResolutionPolicy : uint8_t
+{
+    /// Resize writes the window client size. Presentation stays 1:1.
+    FollowWindow = 0,
+    /// A caller chose the resolution. The window stays put and the image stretches.
+    ExplicitStretch,
+    /// Leave the seeded resolution alone. The window is not this view.
+    Hold,
+};
+
 struct HostRenderSettings
 {
     HostClockState clock{};
-    /// Offscreen resolution of the host viewport's View, in pixels. The setting
-    /// above; never the window's client size.
-    Extent2D  renderResolution         = {};
-    float     renderScale = 1.0f;
+    /// Offscreen resolution of the host viewport's View, in pixels. Under
+    /// `FollowWindow` this is the window client size; under `ExplicitStretch`
+    /// it is the caller's resolution and the window may differ.
+    EHostResolutionPolicy resolutionPolicy = EHostResolutionPolicy::FollowWindow;
+    Extent2D              renderResolution = {};
+    float                 renderScale      = 1.0f;
 };
 
 } // namespace ya

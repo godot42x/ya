@@ -121,6 +121,14 @@ bool App::handleWindowResized(const WindowResizeEvent& event)
     auto  h           = event.GetHeight();
     float aspectRatio = h > 0 ? static_cast<float>(w) / static_cast<float>(h) : 1.f;
     YA_CORE_DEBUG("Window({}) resized to {}x{}, aspectRatio: {} ",event.getWindowID(), w, h, aspectRatio);
+    if (w > 0 && h > 0) {
+        // Same space as the mouse (SDL client points). While the resolution
+        // follows the window, the view, the UI, and this size stay 1:1.
+        getRenderServices().adoptWindowClientSize(Extent2D{
+            .width  = static_cast<uint32_t>(w),
+            .height = static_cast<uint32_t>(h),
+        });
+    }
     if (NativeWindowManager* nwm = getNativeWindowManager()) {
         if (INativeWindow* window = nwm->getMainWindow()) {
             applyWindowChrome(*window, mainWindowChromeMode(), true);

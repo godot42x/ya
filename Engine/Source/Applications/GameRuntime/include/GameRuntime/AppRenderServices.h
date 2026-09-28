@@ -55,11 +55,19 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] bool                                   wasSceneRenderedLastTick(const Scene* scene) const;
     void                                                 setRenderScale(float scale);
     [[nodiscard]] float                                  getRenderScale() const;
-    /// The resolution the host viewport's View renders at, in pixels. A render
-    /// setting, not a window measurement: the window only decides how the
-    /// resulting image is presented. Seeded from the size the window was created
-    /// with; changing it resizes what is rendered, not the window.
+    /// Caller-chosen resolution. Switches the policy to `ExplicitStretch`: the
+    /// window keeps its size and the presentation pass stretches this image
+    /// onto it. The init seed and a window resize do not come through here.
     void                                                 setRenderResolution(Extent2D resolution);
+    /// Init seed. Writes the size and leaves the policy as it is, so a
+    /// standalone window stays on `FollowWindow`.
+    void                                                 seedRenderResolution(Extent2D resolution);
+    /// Editor: the panel is the viewport, so a window resize must not retarget
+    /// the host resolution.
+    void                                                 holdRenderResolution();
+    /// While policy is `FollowWindow`, copy the window client size into the
+    /// render resolution. A zero extent (minimize) is ignored. No-op otherwise.
+    void                                                 adoptWindowClientSize(Extent2D clientSize);
     /// The *requested* resolution. It is what the host viewport's View will be
     /// sized from, so it is the honest answer for reporting and for a
     /// read-modify-write in the control plane. The rectangle actually rendered

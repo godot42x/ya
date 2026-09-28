@@ -549,8 +549,9 @@ void applyScheduledSmokeActions(App& app, uint64_t hostTick)
     if (automation.renderResolution &&
         !runtimeState.bRenderResolutionApplied &&
         hostTick >= automation.renderResolution->hostTick) {
-        // A render-resolution change, not a window resize: the window keeps its
-        // size and the presentation pass stretches the new resolution onto it.
+        // Opts into ExplicitStretch: the window keeps its size and the
+        // presentation pass stretches the new resolution onto it. Hits are
+        // mapped back in App::dispatchUIInputEvent.
         // The View that fills the host viewport declares this resolution and the
         // device extent follows that declaration, so nothing is pushed at the
         // device from here; an editor's authoring viewport is sized by its panel.

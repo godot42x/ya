@@ -238,14 +238,10 @@ void App::init(AppDesc ci)
         }
         app.inputRouter.setWindow(mainWindow);
 
-        // Seed the render resolution through the render services, so the setting
-        // has one write path: this init-time seed and the control plane both go
-        // through AppRenderServices::setRenderResolution (see HostRenderSettings.h).
-        // The window is only the presentation surface, so this is the *default*
-        // resolution, chosen to match the window the surface was created with -
-        // out of the box the image is presented 1:1 - and any later resolution
-        // change is a setting change rather than a reaction to a resize.
-        app.getRenderServices().setRenderResolution(Extent2D{
+        // Seed to the window so the first frame is 1:1. This does not opt out of
+        // FollowWindow: a later resize keeps that match. An explicit resolution
+        // (automation) goes through setRenderResolution and then stretches.
+        app.getRenderServices().seedRenderResolution(Extent2D{
             .width  = app._ci.width > 0 ? static_cast<uint32_t>(app._ci.width) : static_cast<uint32_t>(winW),
             .height = app._ci.height > 0 ? static_cast<uint32_t>(app._ci.height) : static_cast<uint32_t>(winH),
         });

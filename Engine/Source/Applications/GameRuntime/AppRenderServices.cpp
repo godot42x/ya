@@ -70,6 +70,33 @@ void AppRenderServices::setRenderResolution(Extent2D resolution)
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
     _state->hostSettings.renderResolution = resolution;
+    _state->hostSettings.resolutionPolicy = EHostResolutionPolicy::ExplicitStretch;
+}
+
+void AppRenderServices::seedRenderResolution(Extent2D resolution)
+{
+    YA_CORE_ASSERT(_state, "Render services are not available");
+    if (resolution.width == 0 || resolution.height == 0) {
+        return;
+    }
+    _state->hostSettings.renderResolution = resolution;
+}
+
+void AppRenderServices::holdRenderResolution()
+{
+    YA_CORE_ASSERT(_state, "Render services are not available");
+    _state->hostSettings.resolutionPolicy = EHostResolutionPolicy::Hold;
+}
+
+void AppRenderServices::adoptWindowClientSize(Extent2D clientSize)
+{
+    if (!_state || _state->hostSettings.resolutionPolicy != EHostResolutionPolicy::FollowWindow) {
+        return;
+    }
+    if (clientSize.width == 0 || clientSize.height == 0) {
+        return;
+    }
+    _state->hostSettings.renderResolution = clientSize;
 }
 
 Extent2D AppRenderServices::getRenderResolution() const

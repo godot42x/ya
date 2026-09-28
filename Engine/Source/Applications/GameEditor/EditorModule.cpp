@@ -760,6 +760,9 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         auto& renderServices = app.getRenderServices();
         YA_CORE_ASSERT(renderServices.hasRenderer(),
                        "Editor extension requires an initialized renderer");
+        // The game view inside the editor is a panel, not the window. Leave
+        // the seeded resolution where init put it.
+        renderServices.holdRenderResolution();
 
         // Layout roots are the product's decision, not the framework's: the
         // editor here, and a standalone GUI app its own pair. Command line

@@ -387,7 +387,28 @@ EWidgetRouteResult App::dispatchUIInputEvent(const Event& event)
         return EWidgetRouteResult::NotHandled;
     }
 
-    switch (gameUIHost->dispatchEvent(event, _lastMousePos)) {
+    // An explicit resolution is stretched onto the window. Widgets were laid
+    // out in that resolution, so a window-space click has to be mapped back
+    // before the hit test. FollowWindow keeps the two sizes equal, and Hold
+    // (the editor panel) is already in window pixels.
+    glm::vec2 presentedPoint = _lastMousePos;
+    if (_renderState &&
+        _renderState->hostSettings.resolutionPolicy == EHostResolutionPolicy::ExplicitStretch) {
+        int winW = 0;
+        int winH = 0;
+        if (NativeWindowManager* nwm = getNativeWindowManager()) {
+            if (INativeWindow* window = nwm->getMainWindow()) {
+                window->getWindowSize(winW, winH);
+            }
+        }
+        const Extent2D resolution = _renderState->hostSettings.renderResolution;
+        if (winW > 0 && winH > 0 && resolution.width > 0 && resolution.height > 0) {
+            presentedPoint.x = _lastMousePos.x * static_cast<float>(resolution.width) / static_cast<float>(winW);
+            presentedPoint.y = _lastMousePos.y * static_cast<float>(resolution.height) / static_cast<float>(winH);
+        }
+    }
+
+    switch (gameUIHost->dispatchEvent(event, presentedPoint)) {
     case EWidgetRouteResult::HandledExclusive:
         return EWidgetRouteResult::HandledExclusive;
     case EWidgetRouteResult::HandledPass:
