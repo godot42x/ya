@@ -17,6 +17,7 @@
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/EditorUIDesignerSession.h"
+#include "GameEditor/EditorUISlotEdit.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Texture.h"
@@ -95,6 +96,42 @@ std::string designerSelectionPath(const UIElement& root, const UIElement& target
         }
     }
     return {};
+}
+
+struct FAnchorPresetButton
+{
+    const char*         label;
+    ECanvasAnchorPreset preset;
+};
+
+constexpr FAnchorPresetButton kAnchorPresetRows[4][3] = {
+    {{"TL", ECanvasAnchorPreset::TopLeft}, {"Top", ECanvasAnchorPreset::Top}, {"TR", ECanvasAnchorPreset::TopRight}},
+    {{"Left", ECanvasAnchorPreset::Left}, {"Center", ECanvasAnchorPreset::Center}, {"Right", ECanvasAnchorPreset::Right}},
+    {{"BL", ECanvasAnchorPreset::BottomLeft}, {"Bottom", ECanvasAnchorPreset::Bottom}, {"BR", ECanvasAnchorPreset::BottomRight}},
+    {{"Stretch H", ECanvasAnchorPreset::StretchHorizontal},
+     {"Stretch V", ECanvasAnchorPreset::StretchVertical},
+     {"Fill", ECanvasAnchorPreset::Fill}},
+};
+
+/// Anchor presets for the selected canvas child. The click reads the selection
+/// then, so a stale grid cannot re-anchor a widget it was not built for.
+UIElementRef makeAnchorPresetGrid(EditorUIDesignerSession& designer)
+{
+    auto grid = ui::column("UIDesignerAnchorPresets").setSpacing(2.0f);
+    int  row  = 0;
+    for (const auto& buttons : kAnchorPresetRows) {
+        auto line = ui::row("UIDesignerAnchorPresetRow" + std::to_string(row++)).setSpacing(2.0f);
+        for (const FAnchorPresetButton& button : buttons) {
+            const ECanvasAnchorPreset preset = button.preset;
+            line = line.child(labeledButton(std::string("UIDesignerAnchor_") + button.label, button.label)
+                                  .setOnClick([&designer, preset]() {
+                                      (void)designer.applyCanvasAnchorPreset(designer.getSelectedWidget(), preset);
+                                  }),
+                              ui::boxSlot().fill().preferredSize({0.0f, 22.0f}));
+        }
+        grid = grid.child(line.share());
+    }
+    return grid.share();
 }
 
 } // namespace
@@ -209,6 +246,8 @@ EditorUIInspectorTab::EditorUIInspectorTab(EditorLayer& layer)
     enableTick();
 }
 
+EditorUIInspectorTab::~EditorUIInspectorTab() = default;
+
 void EditorUIInspectorTab::construct()
 {
     _inspectorHost = ui::column("UIDesignerInspectorHost").setSpacing(6.0f).share();
@@ -242,39 +281,57 @@ void EditorUIInspectorTab::refresh()
     }
     EditorUIDesignerSession& designer = _layer->getEditorUIDesignerSession();
     rebuildInspector(*tree, designer.getSelectedWidget());
+    // Canvas drags and undo change the slot underneath the args copy.
+    if (_slotEdit && !_slotEdit->pull()) {
+        _inspectorFingerprint.clear();
+        rebuildInspector(*tree, designer.getSelectedWidget());
+    }
     if (_inspectorSection) {
         _inspectorSection->sync(*tree);
+    }
+    if (_slotSection) {
+        _slotSection->sync(*tree);
+    }
+    if (_inspectorSection || _slotSection) {
         designer.invalidatePreview();
     }
+}
+
+void EditorUIInspectorTab::clearInspector(WidgetTree& tree)
+{
+    if (_inspectorSection && _inspectorSection->isAttached()) {
+        tree.detach(*_inspectorSection);
+    }
+    if (_slotGroup && _slotGroup->isAttached()) {
+        tree.detach(*_slotGroup);
+    }
+    _inspectorSection.reset();
+    _slotSection.reset();
+    _slotGroup.reset();
+    _slotEdit.reset();
 }
 
 void EditorUIInspectorTab::rebuildInspector(WidgetTree& tree, UIElement* selected)
 {
     EditorUIDesignerSession& designer = _layer->getEditorUIDesignerSession();
-    // Undo rebuilds the preview, so an address alone can name a new widget.
+    // Undo rebuilds the preview, so an address alone can name a new widget;
+    // a reparent keeps the widget but replaces its slot.
     std::string fingerprint = "none";
     if (selected) {
-        fingerprint = std::format("{}:{}:{}",
+        const UIElement* parent = selected->getParent();
+        fingerprint = std::format("{}:{}:{}:{}",
                                   designer.previewGeneration(),
                                   selected->_typeId,
-                                  reinterpret_cast<uintptr_t>(selected));
+                                  reinterpret_cast<uintptr_t>(selected),
+                                  reinterpret_cast<uintptr_t>(parent ? parent->getSlotForChild(*selected) : nullptr));
     }
     if (fingerprint == _inspectorFingerprint) {
         return;
     }
-
-    if (_inspectorSection && _inspectorSection->isAttached()) {
-        tree.detach(*_inspectorSection);
-    }
-    _inspectorSection.reset();
+    clearInspector(tree);
     _inspectorFingerprint = std::move(fingerprint);
 
     if (!selected || !_inspectorHost) {
-        return;
-    }
-
-    PropertyGraph graph = PropertyGraph::project(selected->getTypeIndex(), {selected});
-    if (!graph.hasRetainedEditors()) {
         return;
     }
 
@@ -284,24 +341,58 @@ void EditorUIInspectorTab::rebuildInspector(WidgetTree& tree, UIElement* selecte
             pathKey += "/" + std::to_string(index);
         }
     }
-    auto section = std::make_shared<EditorAutoPropertySection>(
-        "UIDesignerInspectorSection",
-        std::move(graph),
-        nullptr,
-        std::move(pathKey),
-        EditorAssetPickerCallback{},
-        nullptr);
     EditorUIDesignerSession* session = &designer;
-    section->setEditCommitSink({
+    const EditorAutoPropertySection::FEditCommitSink sink{
         .commit = [session](const std::string& label, const std::string& mergeKey) {
             session->invalidatePreview();
             session->commitEdit(label, mergeKey);
         },
         .beginGesture = [session]() { session->undoStack().beginMerge(); },
         .endGesture   = [session]() { session->undoStack().endMerge(); },
-    });
-    _inspectorHost->addDetachedChild(section);
-    _inspectorSection = std::move(section);
+    };
+
+    PropertyGraph graph = PropertyGraph::project(selected->getTypeIndex(), {selected});
+    if (graph.hasRetainedEditors()) {
+        auto section = std::make_shared<EditorAutoPropertySection>("UIDesignerInspectorSection",
+                                                                   std::move(graph),
+                                                                   nullptr,
+                                                                   pathKey,
+                                                                   EditorAssetPickerCallback{},
+                                                                   nullptr);
+        section->setEditCommitSink(sink);
+        _inspectorHost->addDetachedChild(section);
+        _inspectorSection = std::move(section);
+    }
+
+    std::unique_ptr<EditorUISlotEdit> slotEdit = designer.editSlot(selected);
+    if (!slotEdit) {
+        return;
+    }
+    PropertyGraph slotGraph = PropertyGraph::project(slotEdit->argsType(), {slotEdit->args()});
+    EditorUISlotEdit* edit = slotEdit.get();
+    for (PropertyNode& node : slotGraph.getNodesMutable()) {
+        node.binding.setChangeHook([edit]() { (void)edit->push(); });
+    }
+    auto slotSection = std::make_shared<EditorAutoPropertySection>("UIDesignerSlotSection",
+                                                                   std::move(slotGraph),
+                                                                   nullptr,
+                                                                   pathKey + "/slot",
+                                                                   EditorAssetPickerCallback{},
+                                                                   nullptr);
+    slotSection->setEditCommitSink(sink);
+    auto group = ui::column("UIDesignerSlotGroup")
+                     .setSpacing(4.0f)
+                     .child(ui::text("UIDesignerSlotTitle")
+                                .setText(std::string(slotEdit->displayName()))
+                                .setStyleKey("text.eyebrow"));
+    if (slotEdit->argsType() == type_index_v<FCanvasSlotArgs>) {
+        group = group.child(makeAnchorPresetGrid(designer));
+    }
+    group = group.child(slotSection);
+    _slotGroup   = group.share();
+    _slotSection = std::move(slotSection);
+    _slotEdit    = std::move(slotEdit);
+    _inspectorHost->addDetachedChild(_slotGroup);
 }
 
 EditorUIPaletteTab::EditorUIPaletteTab(EditorLayer& layer)

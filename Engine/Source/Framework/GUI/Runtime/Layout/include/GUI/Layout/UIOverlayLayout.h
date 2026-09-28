@@ -30,6 +30,10 @@ public:
     void setPreferredSize(glm::vec2 value);
     void setPadding(glm::vec2 value) { setPadding(FMargin::hv(value)); }
     void apply(const struct FOverlaySlotArgs& args);
+    /// Exact slot state as args: `assign(toArgs())` is the identity. `apply`
+    /// is the construct-time form and treats a zero size as "unset".
+    [[nodiscard]] struct FOverlaySlotArgs toArgs() const;
+    void assign(const struct FOverlaySlotArgs& args);
     void appendRuntimeDiagnostics(nlohmann::json& node) const override;
     void serialize(nlohmann::json& node) const override;
     void deserialize(const nlohmann::json& node) override;

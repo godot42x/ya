@@ -24,6 +24,10 @@ public:
 
     void setCell(int row, int column);
     void apply(const struct FTableSlotArgs& args);
+    /// Exact slot state as args: `assign(toArgs())` is the identity. `apply`
+    /// is the construct-time form and treats a zero size as "unset".
+    [[nodiscard]] struct FTableSlotArgs toArgs() const;
+    void assign(const struct FTableSlotArgs& args);
     void serialize(nlohmann::json& node) const override;
     void deserialize(const nlohmann::json& node) override;
 

@@ -70,6 +70,10 @@ public:
     void setParticipatesInLayout(bool value);
     void setReserveSpaceWhenHidden(bool value);
     void apply(const struct FBoxSlotArgs& args);
+    /// Exact slot state as args: `assign(toArgs())` is the identity. `apply`
+    /// is the construct-time form and treats a zero size as "unset".
+    [[nodiscard]] struct FBoxSlotArgs toArgs() const;
+    void assign(const struct FBoxSlotArgs& args);
     void appendRuntimeDiagnostics(nlohmann::json& node) const override;
     void serialize(nlohmann::json& node) const override;
     void deserialize(const nlohmann::json& node) override;

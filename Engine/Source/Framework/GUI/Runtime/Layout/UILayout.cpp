@@ -398,6 +398,71 @@ void UICanvasSlot::apply(const FCanvasSlotArgs& args)
     }
 }
 
+FCanvasSlotArgs UICanvasSlot::toArgs() const
+{
+    return FCanvasSlotArgs{
+        .anchorMin      = _anchorMin,
+        .anchorMax      = _anchorMax,
+        .offset         = _offset,
+        .minSize        = _minSize,
+        .maxSize        = _maxSize,
+        .offsets        = _offsets,
+        .alignmentH     = _alignmentH,
+        .alignmentV     = _alignmentV,
+        .widthSizeMode  = _widthSizeMode,
+        .heightSizeMode = _heightSizeMode,
+        .pivot          = _pivot,
+        .preferredSize  = _preferredSize,
+        .fixedSize      = _fixedSize,
+    };
+}
+
+void UICanvasSlot::assign(const FCanvasSlotArgs& args)
+{
+    apply(args);
+    if (_fixedSize != args.fixedSize) {
+        _fixedSize = args.fixedSize;
+        invalidateArrange();
+    }
+}
+
+FCanvasSlotArgs withCanvasAnchorPreset(FCanvasSlotArgs args, ECanvasAnchorPreset preset, glm::vec2 size)
+{
+    args.offset         = {0.0f, 0.0f};
+    args.offsets        = FMargin{};
+    args.alignmentH     = EWidgetAlignH::Left;
+    args.alignmentV     = EWidgetAlignV::Top;
+    args.widthSizeMode  = EWidgetSizeMode::Fixed;
+    args.heightSizeMode = EWidgetSizeMode::Fixed;
+    args.fixedSize      = size;
+    switch (preset) {
+    case ECanvasAnchorPreset::StretchHorizontal:
+        args.anchorMin = {0.0f, 0.5f};
+        args.anchorMax = {1.0f, 0.5f};
+        args.pivot     = {0.0f, 0.5f};
+        break;
+    case ECanvasAnchorPreset::StretchVertical:
+        args.anchorMin = {0.5f, 0.0f};
+        args.anchorMax = {0.5f, 1.0f};
+        args.pivot     = {0.5f, 0.0f};
+        break;
+    case ECanvasAnchorPreset::Fill:
+        args.anchorMin = {0.0f, 0.0f};
+        args.anchorMax = {1.0f, 1.0f};
+        args.pivot     = {0.0f, 0.0f};
+        break;
+    default: {
+        const int       index = static_cast<int>(preset);
+        const glm::vec2 point{static_cast<float>(index % 3) * 0.5f, static_cast<float>(index / 3) * 0.5f};
+        args.anchorMin = point;
+        args.anchorMax = point;
+        args.pivot     = point;
+        break;
+    }
+    }
+    return args;
+}
+
 void UICanvasSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
 {
     node["type"] = "canvas";
@@ -680,6 +745,27 @@ void UIBoxSlot::apply(const FBoxSlotArgs& args)
     }
     setParticipatesInLayout(args.participatesInLayout);
     setReserveSpaceWhenHidden(args.reserveSpaceWhenHidden);
+}
+
+FBoxSlotArgs UIBoxSlot::toArgs() const
+{
+    return FBoxSlotArgs{
+        .sizeRule               = _sizeRule,
+        .weight                 = _weight,
+        .margin                 = _margin,
+        .crossAlignment         = _crossAlignment,
+        .minSize                = _minSize,
+        .maxSize                = _maxSize,
+        .preferredSize          = _preferredSize,
+        .participatesInLayout   = _bParticipatesInLayout,
+        .reserveSpaceWhenHidden = _bReserveSpaceWhenHidden,
+    };
+}
+
+void UIBoxSlot::assign(const FBoxSlotArgs& args)
+{
+    apply(args);
+    setPreferredSize(args.preferredSize);
 }
 
 void UIBoxSlot::setCrossAlignment(EUIBoxSlotCrossAlignment value)
@@ -1137,6 +1223,22 @@ void UIOverlaySlot::apply(const FOverlaySlotArgs& args)
     }
 }
 
+FOverlaySlotArgs UIOverlaySlot::toArgs() const
+{
+    return FOverlaySlotArgs{
+        .hAlign        = _hAlign,
+        .vAlign        = _vAlign,
+        .padding       = _padding,
+        .preferredSize = _preferredSize,
+    };
+}
+
+void UIOverlaySlot::assign(const FOverlaySlotArgs& args)
+{
+    apply(args);
+    setPreferredSize(args.preferredSize);
+}
+
 void UIOverlaySlot::setPreferredSize(glm::vec2 value)
 {
     value = glm::max(value, glm::vec2(0.0f));
@@ -1229,6 +1331,22 @@ void UIContentSlot::apply(const FContentSlotArgs& args)
     if (args.preferredSize.x != 0.0f || args.preferredSize.y != 0.0f) {
         setPreferredSize(args.preferredSize);
     }
+}
+
+FContentSlotArgs UIContentSlot::toArgs() const
+{
+    return FContentSlotArgs{
+        .hAlign        = _hAlign,
+        .vAlign        = _vAlign,
+        .padding       = _padding,
+        .preferredSize = _preferredSize,
+    };
+}
+
+void UIContentSlot::assign(const FContentSlotArgs& args)
+{
+    apply(args);
+    setPreferredSize(args.preferredSize);
 }
 
 void UIContentSlot::setPreferredSize(glm::vec2 value)
@@ -1592,6 +1710,16 @@ void UITableSlot::apply(const FTableSlotArgs& args)
     setCell(args.row, args.column);
 }
 
+FTableSlotArgs UITableSlot::toArgs() const
+{
+    return FTableSlotArgs{.row = _row, .column = _column};
+}
+
+void UITableSlot::assign(const FTableSlotArgs& args)
+{
+    apply(args);
+}
+
 void UITableSlot::serialize(nlohmann::json& node) const
 {
     node["type"] = "table";
@@ -1772,3 +1900,83 @@ YA_REFLECT_ENUM_BEGIN(ya::EScrollAxis)
 YA_REFLECT_ENUM_VALUE(Vertical)
 YA_REFLECT_ENUM_VALUE(Horizontal)
 YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EWidgetSizeMode)
+YA_REFLECT_ENUM_VALUE(Fixed)
+YA_REFLECT_ENUM_VALUE(Auto)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EUIOverlayAlignment)
+YA_REFLECT_ENUM_VALUE(Fill)
+YA_REFLECT_ENUM_VALUE(Start)
+YA_REFLECT_ENUM_VALUE(Center)
+YA_REFLECT_ENUM_VALUE(End)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EUIBoxSlotSizeRule)
+YA_REFLECT_ENUM_VALUE(Auto)
+YA_REFLECT_ENUM_VALUE(Fill)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EUIBoxSlotCrossAlignment)
+YA_REFLECT_ENUM_VALUE(Stretch)
+YA_REFLECT_ENUM_VALUE(Start)
+YA_REFLECT_ENUM_VALUE(Center)
+YA_REFLECT_ENUM_VALUE(End)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_BEGIN_EXTERNAL(ya::FMargin)
+YA_REFLECT_FIELD(left)
+YA_REFLECT_FIELD(top)
+YA_REFLECT_FIELD(right)
+YA_REFLECT_FIELD(bottom)
+YA_REFLECT_END_EXTERNAL()
+
+// Slot args are the authoring form of a parent-owned slot: the designer
+// inspector edits a reflected args copy and writes it back with assign().
+YA_REFLECT_BEGIN_EXTERNAL(ya::FCanvasSlotArgs)
+YA_REFLECT_FIELD(anchorMin)
+YA_REFLECT_FIELD(anchorMax)
+YA_REFLECT_FIELD(pivot)
+YA_REFLECT_FIELD(offset)
+YA_REFLECT_FIELD(offsets)
+YA_REFLECT_FIELD(alignmentH)
+YA_REFLECT_FIELD(alignmentV)
+YA_REFLECT_FIELD(widthSizeMode)
+YA_REFLECT_FIELD(heightSizeMode)
+YA_REFLECT_FIELD(fixedSize)
+YA_REFLECT_FIELD(preferredSize)
+YA_REFLECT_FIELD(minSize)
+YA_REFLECT_FIELD(maxSize)
+YA_REFLECT_END_EXTERNAL()
+
+YA_REFLECT_BEGIN_EXTERNAL(ya::FBoxSlotArgs)
+YA_REFLECT_FIELD(sizeRule)
+YA_REFLECT_FIELD(weight)
+YA_REFLECT_FIELD(margin)
+YA_REFLECT_FIELD(crossAlignment)
+YA_REFLECT_FIELD(preferredSize)
+YA_REFLECT_FIELD(minSize)
+YA_REFLECT_FIELD(maxSize)
+YA_REFLECT_FIELD(participatesInLayout)
+YA_REFLECT_FIELD(reserveSpaceWhenHidden)
+YA_REFLECT_END_EXTERNAL()
+
+YA_REFLECT_BEGIN_EXTERNAL(ya::FOverlaySlotArgs)
+YA_REFLECT_FIELD(hAlign)
+YA_REFLECT_FIELD(vAlign)
+YA_REFLECT_FIELD(padding)
+YA_REFLECT_FIELD(preferredSize)
+YA_REFLECT_END_EXTERNAL()
+
+YA_REFLECT_BEGIN_EXTERNAL(ya::FContentSlotArgs)
+YA_REFLECT_FIELD(hAlign)
+YA_REFLECT_FIELD(vAlign)
+YA_REFLECT_FIELD(padding)
+YA_REFLECT_FIELD(preferredSize)
+YA_REFLECT_END_EXTERNAL()
+
+YA_REFLECT_BEGIN_EXTERNAL(ya::FTableSlotArgs)
+YA_REFLECT_FIELD(row)
+YA_REFLECT_FIELD(column)
+YA_REFLECT_END_EXTERNAL()

@@ -45,6 +45,9 @@
 namespace ya
 {
 
+enum class ECanvasAnchorPreset : uint8_t;
+class EditorUISlotEdit;
+
 struct EditorDocumentRegistry;
 struct EditorLayer;
 struct SceneWidgetEntry;
@@ -144,6 +147,12 @@ struct EditorUIDesignerSession
     /// deleted (a UIDocument always has exactly one root). Returns true when
     /// the widget was removed.
     bool deleteWidget(UIElement* widget);
+    /// The document slot of a preview widget. nullptr for the document root:
+    /// its parent edge belongs to the designer host, not to the document.
+    [[nodiscard]] std::unique_ptr<EditorUISlotEdit> editSlot(UIElement* widget) const;
+    /// Re-anchor a canvas child to a preset, keeping its current size; one
+    /// edit. False when the widget is not a canvas child.
+    bool applyCanvasAnchorPreset(UIElement* widget, ECanvasAnchorPreset preset);
 
     // === Canvas direct manipulation (the Canvas tab drives the pointer, this
     // session owns the edited widget and the drag session) ===

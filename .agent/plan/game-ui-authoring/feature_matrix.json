@@ -181,9 +181,17 @@
     {
       "id": "designer_slot_inspector",
       "phase": "P6/U3",
-      "status": "planned",
+      "status": "done",
       "evidence": [
-        "inspector projects the parent-owned slot (canvas/box/overlay) through reflection; anchor presets; slot edits are undoable"
+        "inspector projects the parent-owned slot (canvas/box/overlay/content/table) through its reflected args copy (EditorUISlotEdit), written back with UISlot::assign; anchor presets; slot edits are undoable",
+        "WidgetLayoutTest.SlotAssignRestoresExactStateWhereApplyTreatsZeroAsUnset",
+        "WidgetLayoutTest.CanvasAnchorPresetsPlaceTheChildFlushAndKeepItsSize",
+        "EditorUIDesignerSessionTest.ASlotEditWritesThroughTheSlotAndIsOneUndoStep",
+        "EditorUIDesignerSessionTest.SlotEditsFollowTheParentLayoutType",
+        "EditorUIDesignerSessionTest.AnAnchorPresetIsOneUndoableEdit"
+      ],
+      "open": [
+        "container / size box / scroll / split / overlay / expander layout properties are neither reflected nor serialized in UIDocument"
       ]
     },
     {

@@ -3,6 +3,7 @@
 #include "Core/Log.h"
 
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/EditorUISlotEdit.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
 #include "GUI/Layout/UILayout.h"
@@ -749,6 +750,32 @@ bool EditorUIDesignerSession::applyDragDelta(const glm::vec2& canvasDelta)
     }
 
     invalidatePreview();
+    return true;
+}
+
+std::unique_ptr<EditorUISlotEdit> EditorUIDesignerSession::editSlot(UIElement* widget) const
+{
+    if (!widget || widget == _previewRoot.get() || !childPathOf(widget)) {
+        return nullptr;
+    }
+    return EditorUISlotEdit::forChild(*widget);
+}
+
+bool EditorUIDesignerSession::applyCanvasAnchorPreset(UIElement* widget, ECanvasAnchorPreset preset)
+{
+    if (!widget || widget == _previewRoot.get() || !childPathOf(widget)) {
+        return false;
+    }
+    UIElement* parent = widget->getParent();
+    auto*      slot   = parent ? dynamic_cast<UICanvasSlot*>(parent->getSlotForChild(*widget)) : nullptr;
+    if (!slot) {
+        return false;
+    }
+    const FCanvasSlotArgs current = slot->toArgs();
+    const glm::vec2       size    = widget->_layoutRect.extent;
+    slot->assign(withCanvasAnchorPreset(current, preset, size.x > 0.0f && size.y > 0.0f ? size : current.fixedSize));
+    invalidatePreview();
+    commitEdit("Anchor " + widget->_name);
     return true;
 }
 

@@ -4,6 +4,8 @@
 
 #include "GameEditor/EditorUIDesignerSession.h"
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/EditorUISlotEdit.h"
+#include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
 #include "GUI/Widgets/UIDocument.h"
@@ -511,6 +513,91 @@ TEST(EditorUIDesignerSessionTest, AnUndoStepIsInertOnceItsDesignerIsGoneOrOnAnot
     const nlohmann::json other = previewJson(mover);
     ASSERT_TRUE(keeper.undoStack().undo());
     EXPECT_EQ(previewJson(mover), other);
+}
+
+TEST(EditorUIDesignerSessionTest, ASlotEditWritesThroughTheSlotAndIsOneUndoStep)
+{
+    auto             root = makeTwoChildCanvas();
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    designer.selectByChildPath({0});
+    const nlohmann::json original = previewJson(designer);
+
+    // The inspector's path: a reflected write on the args copy, the change
+    // hook pushes it into the slot, the section commits.
+    std::unique_ptr<EditorUISlotEdit> edit = designer.editSlot(designer.getSelectedWidget());
+    ASSERT_NE(edit, nullptr);
+    ASSERT_EQ(edit->argsType(), type_index_v<FCanvasSlotArgs>);
+    PropertyGraph graph = PropertyGraph::project(edit->argsType(), {edit->args()});
+    ASSERT_TRUE(graph.hasRetainedEditors());
+    PropertyNode* offset = graph.find("offset");
+    ASSERT_NE(offset, nullptr);
+    EditorUISlotEdit* raw = edit.get();
+    offset->binding.setChangeHook([raw]() { ASSERT_TRUE(raw->push()); });
+    ASSERT_TRUE(offset->binding.set(glm::vec2{64.0f, 12.0f}));
+    designer.commitEdit("Slot", "uidesigner/0/slot/offset");
+
+    const nlohmann::json edited = previewJson(designer);
+    EXPECT_EQ(edited["childSlots"][0]["offset"], nlohmann::json::array({64.0f, 12.0f}));
+    EXPECT_EQ(designer.undoStack().undoCount(), 1u);
+    ASSERT_TRUE(designer.undoStack().undo());
+    EXPECT_EQ(previewJson(designer), original);
+
+    // Undo rebuilt the preview: the old edit's child is gone, a fresh one reads the restored slot.
+    auto fresh = designer.editSlot(designer.findByChildPath({0}));
+    ASSERT_NE(fresh, nullptr);
+    EXPECT_EQ(static_cast<FCanvasSlotArgs*>(fresh->args())->offset, glm::vec2(20.0f, 30.0f));
+}
+
+TEST(EditorUIDesignerSessionTest, SlotEditsFollowTheParentLayoutType)
+{
+    auto& registry = UITypeRegistry::instance();
+    auto  root     = registry.createInstance(kTypeIdCanvasPanel);
+    auto  column   = registry.createInstance(kTypeIdContainer);
+    auto  label    = registry.createInstance(kTypeIdText);
+    ASSERT_NE(column, nullptr);
+    ASSERT_NE(label, nullptr);
+    column->addDetachedChild(label);
+    root->addDetachedChild(column);
+
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+
+    EXPECT_EQ(designer.editSlot(designer.getPreviewRoot()), nullptr) << "the root's edge is the designer host's";
+    auto boxEdit = designer.editSlot(designer.findByChildPath({0, 0}));
+    ASSERT_NE(boxEdit, nullptr);
+    EXPECT_EQ(boxEdit->argsType(), type_index_v<FBoxSlotArgs>);
+    PropertyGraph graph = PropertyGraph::project(boxEdit->argsType(), {boxEdit->args()});
+    const PropertyNode* sizeRule = graph.find("sizeRule");
+    ASSERT_NE(sizeRule, nullptr);
+    EXPECT_TRUE(sizeRule->binding.isEnum()) << "slot enums are reflected, so the row is a combo";
+}
+
+TEST(EditorUIDesignerSessionTest, AnAnchorPresetIsOneUndoableEdit)
+{
+    auto             root = makeTwoChildCanvas();
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+    const nlohmann::json original = previewJson(designer);
+
+    EXPECT_FALSE(designer.applyCanvasAnchorPreset(designer.getPreviewRoot(), ECanvasAnchorPreset::Fill));
+    ASSERT_TRUE(designer.applyCanvasAnchorPreset(designer.findByChildPath({1}), ECanvasAnchorPreset::BottomRight));
+    const nlohmann::json edited = previewJson(designer);
+    const nlohmann::json& slot  = edited["childSlots"][1];
+    EXPECT_EQ(slot["anchorMin"], nlohmann::json::array({1.0f, 1.0f}));
+    EXPECT_EQ(slot["pivot"], nlohmann::json::array({1.0f, 1.0f}));
+    EXPECT_EQ(slot["fixedSize"], nlohmann::json::array({80.0f, 40.0f})) << "the preset keeps the laid-out size";
+    EXPECT_EQ(designer.undoStack().undoCount(), 1u);
+
+    ASSERT_TRUE(designer.undoStack().undo());
+    EXPECT_EQ(previewJson(designer), original);
 }
 
 } // namespace ya

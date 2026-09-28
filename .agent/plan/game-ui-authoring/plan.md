@@ -190,6 +190,14 @@ U2 → U3 → U4；U1 文档生命周期排在本轮之后。
   不另写一套 slot 控件；slot 写入走 setter（触发 layout 失效）再 `commitEdit`。Canvas slot 带锚点
   预设（四角 / 边中 / 居中 / 拉伸）。同时核对各控件类型检查器缺的行。
   门禁：改 anchor / offset / size / padding 后 `UIDocument::toJson` 的 `childSlots` 对应变化且可撤销。
+  落地形态：反射的是 slot 的 authoring args（`FCanvasSlotArgs` 等，公开聚合），不是 slot 私有字段；
+  `EditorUISlotEdit` 持有 args 副本，PropertyHandle change hook 用 `UISlot::assign` 写回（`apply`
+  保持 construct-time 语义不变）。锚点预设 = `withCanvasAnchorPreset`（GUI Layout，贴齐语义，保留尺寸）。
+  文档根的父边属于设计器宿主，不可编辑（`EditorUIDesignerSession::editSlot`）。
+- **U3 发现（未做，待定）**：`UIContainer`（row/column）、`SizeBox`、`ScrollViewport`、`SplitPane`、
+  `Overlay`、`Expander` 没有反射字段；它们的布局属性（spacing / padding / direction / 主轴对齐 /
+  SizeBox 覆盖尺寸 / split 比例）既不能在检查器编辑，也**不进 UIDocument**（控件序列化走反射）。
+  这是文档格式问题，不属于 slot 检查器，需要单独立项。
 - **U4 画布与层级补齐基线**：预览树尺寸 = 设计分辨率（预设 + 自定义，存设计器会话，不进文档），
   画布画出设计框，打开文档时缩放到适配；层级右键菜单 Delete / Duplicate；Palette 选中叶子控件时
   插到其后而不是塞进去。

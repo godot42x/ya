@@ -2911,4 +2911,75 @@ TEST(WidgetLayoutTest, DockSplitArrangeKeepsClampedRatioAndSecondPaneHittable)
     EXPECT_EQ(tree.getHovered(), viewport.get());
 }
 
+// === Slot args: exact state and anchor presets ===
+
+TEST(WidgetLayoutTest, SlotAssignRestoresExactStateWhereApplyTreatsZeroAsUnset)
+{
+    WidgetTree tree({.width = 200, .height = 100});
+    auto       panel = ui::canvasPanel("Panel").release();
+    auto       box   = ui::column("Box").release();
+    auto       inCanvas = ui::column("InCanvas").release();
+    auto       inBox    = ui::column("InBox").release();
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box).valid());
+    panel->addDetachedChild(inCanvas);
+    box->addDetachedChild(inBox);
+
+    auto* canvasSlot = dynamic_cast<UICanvasSlot*>(panel->getSlotForChild(*inCanvas));
+    ASSERT_NE(canvasSlot, nullptr);
+    FCanvasSlotArgs sized;
+    sized.fixedSize = {80.0f, 40.0f};
+    canvasSlot->apply(sized);
+    FCanvasSlotArgs cleared = canvasSlot->toArgs();
+    cleared.fixedSize       = {0.0f, 0.0f};
+    canvasSlot->apply(cleared);
+    EXPECT_EQ(canvasSlot->getFixedSize(), glm::vec2(80.0f, 40.0f)) << "apply keeps a size it reads as unset";
+    canvasSlot->assign(cleared);
+    EXPECT_EQ(canvasSlot->getFixedSize(), glm::vec2(0.0f, 0.0f));
+    EXPECT_EQ(canvasSlot->getWidthSizeMode(), cleared.widthSizeMode) << "assign does not promote the size mode";
+
+    auto* boxSlot = dynamic_cast<UIBoxSlot*>(box->getSlotForChild(*inBox));
+    ASSERT_NE(boxSlot, nullptr);
+    boxSlot->apply(FBoxSlotArgs{.preferredSize = {0.0f, 24.0f}});
+    FBoxSlotArgs boxArgs  = boxSlot->toArgs();
+    boxArgs.preferredSize = {0.0f, 0.0f};
+    boxSlot->assign(boxArgs);
+    EXPECT_EQ(boxSlot->getPreferredSize(), glm::vec2(0.0f, 0.0f));
+}
+
+TEST(WidgetLayoutTest, CanvasAnchorPresetsPlaceTheChildFlushAndKeepItsSize)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       panel = ui::canvasPanel("Panel").release();
+    auto       child = ui::column("Child").release();
+    FCanvasSlotArgs fill;
+    fill.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, fill).valid());
+    panel->addDetachedChild(child);
+    auto* slot = dynamic_cast<UICanvasSlot*>(panel->getSlotForChild(*child));
+    ASSERT_NE(slot, nullptr);
+
+    const glm::vec2 size{100.0f, 50.0f};
+    const auto placed = [&](ECanvasAnchorPreset preset) {
+        slot->assign(withCanvasAnchorPreset(slot->toArgs(), preset, size));
+        tree.layout();
+        return child->_layoutRect;
+    };
+    EXPECT_EQ(placed(ECanvasAnchorPreset::TopLeft).pos, glm::vec2(0.0f, 0.0f));
+    EXPECT_EQ(placed(ECanvasAnchorPreset::Center).pos, glm::vec2(150.0f, 125.0f));
+    const Rect2D bottomRight = placed(ECanvasAnchorPreset::BottomRight);
+    EXPECT_EQ(bottomRight.pos, glm::vec2(300.0f, 250.0f));
+    EXPECT_EQ(bottomRight.extent, size);
+
+    const Rect2D stretchH = placed(ECanvasAnchorPreset::StretchHorizontal);
+    EXPECT_EQ(stretchH.pos, glm::vec2(0.0f, 125.0f));
+    EXPECT_EQ(stretchH.extent, glm::vec2(400.0f, 50.0f));
+    const Rect2D stretchV = placed(ECanvasAnchorPreset::StretchVertical);
+    EXPECT_EQ(stretchV.pos, glm::vec2(150.0f, 0.0f));
+    EXPECT_EQ(stretchV.extent, glm::vec2(100.0f, 300.0f));
+    const Rect2D filled = placed(ECanvasAnchorPreset::Fill);
+    EXPECT_EQ(filled.pos, glm::vec2(0.0f, 0.0f));
+    EXPECT_EQ(filled.extent, glm::vec2(400.0f, 300.0f));
+}
+
 } // namespace ya

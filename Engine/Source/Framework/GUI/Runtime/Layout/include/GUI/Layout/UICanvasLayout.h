@@ -69,6 +69,10 @@ public:
     void setPreferredSize(glm::vec2 value);
     void setFixedSize(glm::vec2 value);
     void apply(const FCanvasSlotArgs& args);
+    /// Exact slot state as args: `assign(toArgs())` is the identity. `apply`
+    /// is the construct-time form and treats a zero size as "unset".
+    [[nodiscard]] FCanvasSlotArgs toArgs() const;
+    void assign(const FCanvasSlotArgs& args);
     void appendRuntimeDiagnostics(nlohmann::json& node) const override;
     void serialize(nlohmann::json& node) const override;
     void deserialize(const nlohmann::json& node) override;
@@ -124,6 +128,33 @@ struct FCanvasSlotArgs
     glm::vec2       preferredSize  = {0.0f, 0.0f};
     glm::vec2       fixedSize      = {0.0f, 0.0f};
 };
+
+/// Designer anchor presets. A point preset anchors and pivots the child on the
+/// same parent point, so it sits flush in that corner / edge / the centre. A
+/// stretch preset spans the axis with pivot 0 on it: a stretched axis takes
+/// its position from the anchor span, and a pivot would shift it out.
+enum class ECanvasAnchorPreset : uint8_t
+{
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    Center,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+    StretchHorizontal,
+    StretchVertical,
+    Fill,
+};
+
+/// `args` re-anchored to `preset`, keeping `size` on the axes that do not
+/// stretch. Offset and insets are cleared and alignment is Left/Top (on a
+/// point axis alignment works against the whole parent, not the anchor).
+[[nodiscard]] YA_GUI_API FCanvasSlotArgs withCanvasAnchorPreset(FCanvasSlotArgs      args,
+                                                                ECanvasAnchorPreset preset,
+                                                                glm::vec2           size);
 
 /// Canvas layout: children are positioned by anchor rects against the parent
 /// content rect. This is the layout form of the historical "path-B" panel

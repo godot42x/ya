@@ -12,6 +12,7 @@ namespace ya
 
 struct EditorLayer;
 struct EditorUIDesignerSession;
+class EditorUISlotEdit;
 struct IImage;
 struct IImageView;
 struct Texture;
@@ -44,6 +45,7 @@ class EditorUIInspectorTab : public UICompoundWidget
 {
   public:
     explicit EditorUIInspectorTab(EditorLayer& layer);
+    ~EditorUIInspectorTab() override;
     void onAttached() override;
     void tick(float deltaSeconds) override;
 
@@ -54,10 +56,16 @@ class EditorUIInspectorTab : public UICompoundWidget
     EditorLayer* _layer = nullptr;
     std::shared_ptr<struct UIContainer> _inspectorHost;
     std::shared_ptr<class EditorAutoPropertySection> _inspectorSection;
+    /// The selected widget's parent-owned slot: its own group below the
+    /// widget's properties, edited through `_slotEdit`'s args copy.
+    UIElementRef _slotGroup;
+    std::shared_ptr<class EditorAutoPropertySection> _slotSection;
+    std::unique_ptr<EditorUISlotEdit> _slotEdit;
     std::string _inspectorFingerprint;
 
     void refresh();
     void rebuildInspector(WidgetTree& tree, UIElement* selected);
+    void clearInspector(WidgetTree& tree);
 };
 
 class EditorUIPaletteTab : public UICompoundWidget
@@ -74,7 +82,7 @@ class EditorUIPaletteTab : public UICompoundWidget
 
 /// The UI Designer's canvas: shows the picture EditorUICanvasCompositor records
 /// for the open document and turns pointer input on it into designer edits
-/// (select, move, resize, pan, zoom, delete). The gesture is this widget's own
+/// (select, move, resize, pan, zoom). The gesture is this widget's own
 /// WidgetTree input; the edit itself goes through EditorUIDesignerSession.
 class EditorUICanvasTab : public UICompoundWidget
 {

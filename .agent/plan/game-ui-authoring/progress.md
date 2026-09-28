@@ -157,3 +157,27 @@ plan.md Phase 6 基线表：新建硬编码 `"panel"` 必失败、无 Open / Sav
 - 手测（待用户）：UI 页 Palette 加控件 → Ctrl+Z 消失 / Ctrl+Shift+Z 回来；画布拖一个控件松手后
   Ctrl+Z 一步回原位；检查器拖数值字段一次松手撤销一步；UI 页 Ctrl+Z 不影响关卡；Level 页 Ctrl+Z
   不影响 UI 文档。
+
+### U3 Slot 检查器（落地）
+
+- 选中控件的检查器下方加「<类型> Slot」分组。反射对象是 slot 的 authoring args（`FCanvasSlotArgs` /
+  `FBoxSlotArgs` / `FOverlaySlotArgs` / `FContentSlotArgs` / `FTableSlotArgs`，在 `UILayout.cpp` 外部
+  反射，连同 `FMargin` 与 `EWidgetSizeMode` / `EUIOverlayAlignment` / `EUIBoxSlotSizeRule` /
+  `EUIBoxSlotCrossAlignment` 枚举），不是 slot 私有字段：私有字段直写会绕过 setter 与
+  `promoteStretchedAutoAxes`。`EditorUISlotEdit` 持有 args 副本，每次从 child 重新找 slot（reparent 会
+  换 slot 对象），change hook 用新增的 `UISlot::assign` 写回；检查器每 tick `pull` 跟随画布拖拽和撤销。
+- 为什么新增 `toArgs()` / `assign()` 而不改 `apply`：`apply` 把零尺寸当「未设置」，dock 浮窗、popup、
+  设计器拖拽都在运行时对活 slot 做部分 `apply`，改语义会波及它们。`assign(toArgs())` 是精确往返。
+- 锚点预设 12 个（九点 + 横向 / 纵向拉伸 + 填充），`withCanvasAnchorPreset` 放在 GUI Layout：点锚
+  需要 pivot = 锚点且对齐 Left/Top（点轴上对齐作用于整个父尺寸），拉伸轴 pivot 必须为 0——这是 canvas
+  布局语义，不该由编辑器知道。预设保留当前布局尺寸、清空 offset / insets。
+- 文档根的父边是设计器宿主的 canvas slot，不属于文档：`EditorUIDesignerSession::editSlot` /
+  `applyCanvasAnchorPreset` 对根返回空。
+- 反射注册后这些枚举在反射序列化里写名字；读取仍接受整数，旧文档可读。slot 本身的 JSON 仍是手写
+  `serialize`，不受影响。
+- 发现（未做）：容器类控件的布局属性不反射也不进文档，见 plan.md U3 发现。
+- 验证：`ya-testing` 1403 通过 / 1 跳过；`ya-gui-closure-test` 614 通过；HelloMaterial、GreedySnake
+  编辑器 120 帧 exit 0。
+- 手测（待用户）：选中画布子控件看到「Canvas Slot」分组与锚点按钮；点 BR 贴右下、Fill 铺满，
+  Ctrl+Z 一步回退；拖 offset 数值一次松手一步撤销；选 column 里的子控件看到「Box Slot」，
+  Size Rule 是下拉框；画布拖动控件时 Slot 分组的 offset 跟着变。
