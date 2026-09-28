@@ -19,6 +19,7 @@ local stepSeconds = STEP_NORMAL
 local score = 0
 local alive = true
 local settingsOpen = false
+local clickConnections = {}
 
 local function place(entity, x, y)
     local transform = entity:getTransform()
@@ -232,19 +233,14 @@ function Script:onInit()
         transform:setPosition(Vec3.new(0, 0, 24))
         transform:setRotation(Vec3.new(0, 0, 0))
     end
-    onUiAction = function(name)
-        if name == "restart" then
-            restart()
-        elseif name == "settings.close" then
-            showSettings(false)
-        elseif name == "speed.slow" then
-            setSpeed("Slow", STEP_SLOW)
-        elseif name == "speed.normal" then
-            setSpeed("Normal", STEP_NORMAL)
-        elseif name == "speed.fast" then
-            setSpeed("Fast", STEP_FAST)
-        end
-    end
+    local settings = ui.get("Settings")
+    clickConnections = {
+        ui.get("GameOver"):find("Restart"):onClick(self, restart),
+        settings:find("Resume"):onClick(self, function() showSettings(false) end),
+        settings:find("Slow"):onClick(self, function() setSpeed("Slow", STEP_SLOW) end),
+        settings:find("Normal"):onClick(self, function() setSpeed("Normal", STEP_NORMAL) end),
+        settings:find("Fast"):onClick(self, function() setSpeed("Fast", STEP_FAST) end),
+    }
     input:setKeyHandler(function(key, pressed, repeated)
         if key ~= EKey.Escape then
             return false
@@ -260,6 +256,10 @@ end
 
 function Script:onDestroy()
     input:setKeyHandler(nil)
+    for _, connection in ipairs(clickConnections) do
+        connection:disconnect()
+    end
+    clickConnections = {}
 end
 
 function Script:onUpdate(dt)

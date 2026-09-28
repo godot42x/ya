@@ -103,10 +103,10 @@ void HelloMaterialModule::createUIDemo(ya::App& app, ya::Scene* scene)
 
     auto button = registry.createInstance("engine.button");
     auto* buttonWidget = static_cast<ya::UIButton*>(button.get());
-    buttonWidget->_onClick = [label]() {
+    buttonWidget->onClicked.addLambda([label]() {
         auto* text = static_cast<ya::UIText*>(label.get());
         text->setText((text->getText() == "Button clicked!") ? "Click the button below" : "Button clicked!");
-    };
+    });
     ya::FCanvasSlotArgs buttonSlot;
     buttonSlot.offset = {36.0f, 96.0f};
     buttonSlot.fixedSize = {140.0f, 30.0f};

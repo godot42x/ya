@@ -269,7 +269,7 @@ void EditorInspectorTab::construct()
     auto openDesigner = ui::button("InspectorOpenDesigner")
                             .child(ui::text("InspectorOpenDesignerLabel").setText("Open in UI Designer"));
     _openDesignerButton = openDesigner.share();
-    _openDesignerButton->_onClick = [this]() {
+    _openDesignerButton->onClicked.addLambda([this]() {
         if (!_layer) {
             return;
         }
@@ -278,7 +278,7 @@ void EditorInspectorTab::construct()
             return;
         }
         _layer->getEditorUIDesignerSession().openSceneEntry(*entry);
-    };
+    });
 
     auto widgetEntryForm = ui::column("InspectorWidgetEntryForm")
                                .setSpacing(editor_density::kRowSpacing)

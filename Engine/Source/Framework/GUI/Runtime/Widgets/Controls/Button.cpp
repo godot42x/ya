@@ -119,16 +119,9 @@ bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ct
 
 void UIButton::activate()
 {
-    // `_onClick` may detach this button; the action still leaves from it.
+    // A listener may detach or release this button; it outlives the broadcast.
     const UIElementRef self = shared_from_this();
-    if (_onClick) {
-        _onClick();
-    }
-    if (!_action.empty()) {
-        if (WidgetTree* tree = getTree()) {
-            tree->emitAction(*this, _action);
-        }
-    }
+    onClicked.broadcast();
 }
 
 void UIButton::clearTransientInputState()

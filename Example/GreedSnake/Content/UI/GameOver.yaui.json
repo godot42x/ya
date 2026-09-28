@@ -60,7 +60,6 @@
       "version": 2,
       "typeId": "engine.button",
       "fields": {
-        "_action": "restart",
         "__base__": {
           "UIElement": {
             "_name": "Restart"

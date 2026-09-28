@@ -5,6 +5,7 @@
 #include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
+#include "Core/Delegate.h"
 
 #include <functional>
 #include <memory>
@@ -21,17 +22,18 @@ namespace ya
 ///   - pointer press requests tree focus and starts a pointer capture
 ///     session; release completes the click (also when the pointer left the
 ///     widget mid-press, via capture) and ends the session;
-///   - Enter / Space on the focused button activates the same _onClick
-///     callback as the mouse click;
+///   - Enter / Space on the focused button broadcasts the same onClicked as
+///     the mouse click;
 ///   - detach while pressed clears all transient state (tree + widget).
-/// Click callback is runtime-only (not serialized); hit testing is driven by
-/// the tree walker.
+/// Whoever cares about the click listens to onClicked (C++, or a script via
+/// its button handle); the button names no handler and carries no action id.
+/// Listeners are runtime-only (not serialized); hit testing is driven by the
+/// tree walker.
 struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, FButtonStyle>
 {
     using SlotArgs = FContentSlotArgs;
 
     YA_REFLECT_BEGIN(UIButton, UIElement)
-    YA_REFLECT_FIELD(_action)
     YA_REFLECT_END()
 
     YA_GUI_AUTHORED_STYLE_IO(FButtonStyle)
@@ -65,11 +67,8 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
     VisualFlag            _bHovered{*this};
     VisualFlag            _bPressed{*this};
     VisualFlag            _bFocused{*this};
-    /// Authoring name of an action. A click runs `_onClick`, then a non-empty
-    /// action bubbles from the button through WidgetTree::emitAction; the
-    /// widget type itself does not know who handles it.
-    std::string           _action;
-    std::function<void()> _onClick;
+    /// Pointer click or keyboard activation. Listeners may detach the button.
+    MulticastDelegate<void()> onClicked;
 
     /// Reactive enabled binding (paint-dirty). Disabled dims the fill color.
     void               bindEnabled(std::shared_ptr<Reactive<bool>> ref) { _enabledBinding = std::move(ref); }

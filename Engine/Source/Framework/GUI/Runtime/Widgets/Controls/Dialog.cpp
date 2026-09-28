@@ -84,11 +84,11 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     };
 
     auto okButton = makeButton("DialogOK", "OK");
-    okButton->_onClick = [dialog]() { dialog->closeWithResult(true); };
+    okButton->onClicked.addLambda([dialog]() { dialog->closeWithResult(true); });
     buttons->addDetachedChild(okButton);
 
     auto cancelButton = makeButton("DialogCancel", "Cancel");
-    cancelButton->_onClick = [dialog]() { dialog->closeWithResult(false); };
+    cancelButton->onClicked.addLambda([dialog]() { dialog->closeWithResult(false); });
     buttons->addDetachedChild(cancelButton);
 
     dialog->addDetachedChild(panel);

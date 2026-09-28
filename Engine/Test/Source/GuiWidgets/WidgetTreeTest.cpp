@@ -977,7 +977,7 @@ TEST(WidgetTreeTest, ModalOverlayConsumesDismissClickBeforeUnderlyingContent)
     WidgetTree tree({.width = 400, .height = 300});
     auto       button = makeButton("Content", {150.0f, 120.0f}, {80.0f, 32.0f});
     int        clicks = 0;
-    button->_onClick = [&] { ++clicks; };
+    button->onClicked.addLambda([&] { ++clicks; });
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({150.0f, 120.0f}, {80.0f, 32.0f}));
 
     auto overlay = std::make_shared<UIPopupOverlay>("ModalOverlay");
@@ -1562,8 +1562,8 @@ TEST(WidgetTreeTest, ZOrderDefinesHitOrderWithinLayer)
 
     int behindClicks = 0;
     int frontClicks  = 0;
-    behind->_onClick = [&] { ++behindClicks; };
-    front->_onClick  = [&] { ++frontClicks; };
+    behind->onClicked.addLambda([&] { ++behindClicks; });
+    front->onClicked.addLambda([&] { ++frontClicks; });
 
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(120.0f, 110.0f), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
@@ -1593,10 +1593,10 @@ TEST(WidgetTreeTest, SystemLayersStackAboveProjectContent)
     tree.layout();
 
     int clicks = 0;
-    content->_onClick = [&] { clicks = 1; };
-    popup->_onClick   = [&] { clicks = 2; };
-    tooltip->_onClick = [&] { clicks = 3; };
-    dragIme->_onClick = [&] { clicks = 4; };
+    content->onClicked.addLambda([&] { clicks = 1; });
+    popup->onClicked.addLambda([&] { clicks = 2; });
+    tooltip->onClicked.addLambda([&] { clicks = 3; });
+    dragIme->onClicked.addLambda([&] { clicks = 4; });
 
     // Topmost layer consumes first (drag/ime > tooltip > popup > content).
     tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
@@ -1748,8 +1748,8 @@ TEST(WidgetTreeTest, PointerCaptureOverridesHitWalk)
 
     int capturedClicks = 0;
     int otherClicks    = 0;
-    captured->_onClick = [&] { ++capturedClicks; };
-    other->_onClick    = [&] { ++otherClicks; };
+    captured->onClicked.addLambda([&] { ++capturedClicks; });
+    other->onClicked.addLambda([&] { ++otherClicks; });
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
@@ -2085,7 +2085,7 @@ TEST(WidgetTreeTest, ButtonPressRequestsFocusAndCapture)
     tree.layout();
 
     int clicks = 0;
-    button->_onClick = [&] { ++clicks; };
+    button->onClicked.addLambda([&] { ++clicks; });
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
@@ -2114,8 +2114,8 @@ TEST(WidgetTreeTest, ButtonDragOutReleaseFiresClickViaCapture)
 
     int buttonClicks = 0;
     int otherClicks  = 0;
-    button->_onClick = [&] { ++buttonClicks; };
-    other->_onClick  = [&] { ++otherClicks; };
+    button->onClicked.addLambda([&] { ++buttonClicks; });
+    other->onClicked.addLambda([&] { ++otherClicks; });
 
     // Press inside, drag out, release over the other button: the capture
     // session keeps the press and completes the click on release.
@@ -2183,7 +2183,7 @@ TEST(WidgetTreeTest, FocusedButtonActivatesOnEnterAndSpace)
     tree.layout();
 
     int clicks = 0;
-    button->_onClick = [&] { ++clicks; };
+    button->onClicked.addLambda([&] { ++clicks; });
     tree.setFocus(button.get());
 
     EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f)),
@@ -2203,63 +2203,37 @@ TEST(WidgetTreeTest, FocusedButtonActivatesOnEnterAndSpace)
     EXPECT_EQ(clicks, 2);
 }
 
-TEST(WidgetTreeTest, ButtonActionBubblesThroughBehavioursToTheSink)
+TEST(WidgetTreeTest, ButtonClickReachesEveryListenerWhileListenersChange)
 {
-    struct Recorder final : UIBehaviorWith<Recorder, IUIActionHandler>
-    {
-        std::vector<std::string>* log = nullptr;
-        std::string               tag;
-        bool                      bConsume = false;
-
-        bool onAction(UIElement& owner, UIElement& source, std::string_view action) override
-        {
-            (void)owner;
-            log->push_back(tag + ":" + std::string(action) + ":" + source._name);
-            return bConsume;
-        }
-    };
-
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UICanvasPanel>("Panel");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel,
-                FCanvasSlotArgs{.anchorMin = {0.0f, 0.0f}, .anchorMax = {1.0f, 1.0f}});
-    auto button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
-    tree.attach(*panel, button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    auto       button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     std::vector<std::string> log;
-    auto onButton = std::make_shared<Recorder>();
-    onButton->log = &log;
-    onButton->tag = "button";
-    button->addBehavior(onButton);
-    auto onPanel = std::make_shared<Recorder>();
-    onPanel->log = &log;
-    onPanel->tag = "panel";
-    panel->addBehavior(onPanel);
-    std::vector<std::string> sunk;
-    tree.setActionSink([&sunk](UIElement& source, std::string_view action) {
-        sunk.push_back(std::string(action) + ":" + source._name);
-        return true;
+    DelegateHandle           once = INVALID_HANDLE;
+    once = button->onClicked.addLambda([&] {
+        log.push_back("once");
+        button->onClicked.remove(once);
+        button->onClicked.addLambda([&log] { log.push_back("late"); });
     });
+    button->onClicked.addLambda([&log] { log.push_back("always"); });
 
-    int clicks      = 0;
-    button->_onClick = [&clicks] { ++clicks; };
-    button->_action  = "go";
     tree.setFocus(button.get());
     (void)tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f));
-    EXPECT_EQ(clicks, 1) << "the code callback still runs";
-    EXPECT_EQ(log, (std::vector<std::string>{"button:go:B", "panel:go:B"}));
-    EXPECT_EQ(sunk, (std::vector<std::string>{"go:B"}));
+    EXPECT_EQ(log, (std::vector<std::string>{"once", "always"})) << "a listener added mid-click waits for the next one";
 
     log.clear();
-    sunk.clear();
-    onPanel->bConsume = true;
     (void)tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f));
-    EXPECT_EQ(log, (std::vector<std::string>{"button:go:B", "panel:go:B"}));
-    EXPECT_TRUE(sunk.empty()) << "a consumed action does not reach the sink";
+    EXPECT_EQ(log, (std::vector<std::string>{"always", "late"}));
 
-    tree.detach(*button);
-    EXPECT_FALSE(tree.emitAction(*button, "go"));
+    log.clear();
+    button->onClicked.addLambda([&] { tree.detach(*button); });
+    const std::weak_ptr<UIButton> alive = button;
+    (void)tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f));
+    EXPECT_EQ(log, (std::vector<std::string>{"always", "late"}));
+    EXPECT_FALSE(button->isAttached());
+    EXPECT_FALSE(alive.expired());
 }
 
 TEST(WidgetTreeTest, DetachWhilePressedClearsButtonTransientState)
@@ -2270,7 +2244,7 @@ TEST(WidgetTreeTest, DetachWhilePressedClearsButtonTransientState)
     tree.layout();
 
     int clicks = 0;
-    button->_onClick = [&] { ++clicks; };
+    button->onClicked.addLambda([&] { ++clicks; });
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);

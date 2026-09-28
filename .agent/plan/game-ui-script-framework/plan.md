@@ -27,7 +27,8 @@
 4. **帧顺序是契约。** 事件 → 游戏逻辑（受游戏暂停控制）→ UI 逻辑（按各自时钟）→ 结构变更
    统一生效 → 渲染（只布局和快照，不调脚本）。
 5. **界面与玩法之间不造事件总线。** 玩法调用界面实例上的方法（`ui.get("HUD"):setScore(n)`）；
-   界面通过按钮动作冒泡把意图交给上层（控件脚本 → 条目根脚本 → 世界脚本）。
+   界面意图由关心它的脚本直接监听控件事件获得（`btn:onClick(self, fn)`，UMG 式）；
+   控件不携带动作字符串，GUI 不冒泡（`ui-behavior-capabilities` C1c / B6）。
 
 ## 1. 现状基线（硬编码与缺口盘点）
 
@@ -69,7 +70,7 @@
 - `UIScreen` / `ScreenStack`：挂卸、z 顺序、输入拦截策略（`EInputBlocking`），GameRuntime 未使用。
 - `Reactive` / `bindText` / `bindEnabled`：C++ 侧响应式绑定。
 - `LuaScriptComponent::ScriptInstance`：`self` 表、属性发现与覆盖、`releaseLuaHandles`。
-- `UIButton::_action`（已反射、可在设计器编辑）。
+- `UIButton::onClicked`（`MulticastDelegate<void()>`，C1c 起取代 `_action` / `_onClick`）。
 - `mountSceneAutoMountEntries`：运行时与预览共用的唯一挂载路径。
 
 ## 2. 边界（不可越过）
@@ -90,7 +91,7 @@
 ```text
 Tick
 ├─ EventPump（同步）
-│   ├─ UI 路由：命中测试 → 控件事件 → 按钮动作冒泡（控件脚本 → 条目根脚本 → 世界脚本）
+│   ├─ UI 路由：命中测试 → 控件事件 → 控件委托广播（如 `onClicked`）→ 直接监听的脚本
 │   ├─ 模态拦截：最上层可见模态条目存在时，世界输入到此为止
 │   ├─ 取消动作（Esc/返回）：最上层条目脚本 onCancel → 世界脚本 onCancel → 兜底
 │   └─ 世界脚本按键：onKey 按执行顺序派发，返回 true 即消费 → 兜底（退出等）
@@ -129,7 +130,7 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 | `onUpdate(dt)` | 世界：GameLogic 每帧，按顺序键。UI：默认不调用；`self:setTickEnabled(true)` 后由 `WidgetTree::tick` 在控件可见时调用（树顺序），`false` 关闭 |
 | 计时器回调 | 仅 UI：`self:after(sec, fn)` / `self:every(sec, fn)` 返回可 `cancel()` 的句柄；UILogic 中按 host 时钟触发，隐藏不停；实例销毁时自动取消 |
 | `onShow` / `onHide` | 仅 UI：条目或控件可见性变化后，下一个 UILogic 调用 |
-| `onAction(name, widget)` | 仅 UI 与世界：按钮动作冒泡，返回 true 停止 |
+| `btn:onClick(target, fn)` | 不是生命周期回调：任意脚本直接监听按钮，`fn(target, button)`；返回 `UIConnection:disconnect()`；UI 脚本实例释放 / 热重载换 `self` / 按钮销毁时自动断开，世界脚本在 `onDestroy` 自行断开 |
 | `onCancel()` | 取消动作，返回 true 停止 |
 | `onKey(key, pressed, repeat)` | 仅世界：按键，返回 true 消费 |
 | `onDestroy` | StructuralFlush；Stop / 场景切换 / 卸载 / 热重载替换时 |
@@ -219,7 +220,7 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
     宿主只会解析不到，登记项被剔除，不会悬空。
   - `destroy` 先摘除登记再调 onDestroy：回调里再次销毁同一实例是空操作而非递归。
   - `call` 只覆盖现有生命周期回调（枚举 `ELuaScriptCallback`）；带返回值的具名回调
-    （onAction / onCancel / onKey）留到 S3–S5 需要时扩展。
+    （onCancel / onKey）留到 S3–S5 需要时扩展。
   - `EditorLuaPreview` 保持独立状态（IS_EDITOR、不跑回调），只随类型改名。
   - 追加测试：`LuaScriptHostTest.DestroyFromOwnOnDestroyRunsOnce`、`GoneHostLeavesTheRegistry`、
     `TickOrderTest.ScriptRemovedDuringUpdateDoesNotSkipItsSiblings`、`SceneGoneWithoutStopLeavesNoLiveHost`。
@@ -256,6 +257,10 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 ### S3 — GameRuntime 控件脚本、句柄与按钮动作冒泡
 
 目标：`script.lua` 行为可以挂在任意控件上，脚本拿到控件句柄，按钮先交给所在界面。
+
+> 按钮动作冒泡（下文 `_action` / `emitAction` / `onAction` / `onUiAction` / `Button.action`）已被
+> `ui-behavior-capabilities` C1c 取代：按钮只广播 `onClicked`，脚本 `btn:onClick(self, fn)` 直接监听。
+> 下文保留为 S3 当时的设计与落地记录。
 
 - `LuaWidgetScriptBehavior`（GameRuntime）：`IUIBehaviorActivator` 为 `type == "script.lua"`
   创建它，内含一个 S1 脚本实例，宿主 = 该控件。
@@ -298,7 +303,7 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 - 验收：GreedSnake 暂不迁移也能编译运行；旧 API 在 S7 与迁移同一提交删除（D8）。
 - 分两批交付：
   - **S3a**：控件脚本运行时（生命周期、按需 tick、计时器）、句柄、条目内查找、`ui.get`。
-  - **S3b**：按钮动作冒泡、`destroy()` / `spawn`、`addToWorld` 参与索引与激活。
+  - **S3b**：按钮动作冒泡（C1c 取代）、`destroy()` / `spawn`、`addToWorld` 参与索引与激活。
     脚本可见的旧 API（Lua 全局 `onUiAction`、`ui.setText/setVisible` 及其背后的
     `setMountedText/Visible`）S3 只保留不扩展，删除随 S7。`bindButtonActions` 与
     `setUiActionHandler` 是 C++ 内部接线，被冒泡取代，S3b 直接删除。
@@ -399,13 +404,13 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 
 ### S6 — 编辑器 authoring
 
-目标：脚本、条目模态/时钟、按钮动作都能在编辑器里编辑，不手改 JSON。
+目标：脚本、条目模态/时钟都能在编辑器里编辑，不手改 JSON（按钮不再有可编辑的动作字段，C1c）。
 
 - UI 设计器检查面板：选中控件显示行为列表，增删 `script.lua`、选择脚本路径、属性行
   （复用 `EditorLuaPreview` 的属性发现；设计器仍不运行 `onInit/onUpdate`）。
 - 层级面板 Game UI 条目：检查面板编辑 `modal` / `pausesGame` / `clock` / `zOrder`。
 - 新建 Game UI（H7）：在内容浏览器当前目录创建、询问名称，`zOrder` 取现有最大值 + 10。
-- 内容浏览器：新建 UI 脚本模板（`onInit/onUpdate/onAction/onCancel` 骨架）。
+- 内容浏览器：新建 UI 脚本模板（`onInit/onUpdate/onCancel` 骨架，`onInit` 内示范 `self:find(...):onClick(self, fn)`）。
 - 验收：编辑器 smoke exit 0；`EditorUIDesignerSessionTest` 扩展「给按钮挂脚本 → 保存 → 重开仍在」；
   预览不运行脚本的既有测试保持绿。
 
@@ -415,9 +420,9 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 
 - 新增 `Content/UI/HUD.lua`、`GameOver.lua`、`Settings.lua`，挂在各自文档根上；
   `Settings` 条目 `modal + pausesGame + clock=real`。
-- `Snake.lua` 删除全部 UI 字符串、`settingsOpen`、`setKeyHandler`、`onUiAction` 全局；
+- `Snake.lua` 删除全部 UI 字符串、`settingsOpen`、`setKeyHandler`（`onUiAction` 全局 C1c 已删）；
   通过 `ui.get("HUD"):setScore(n)`、`ui.get("GameOver"):show(score)` 驱动界面，
-  通过 `Script:onUiAction("restart")` 接收重开，通过 `Script:onCancel` 打开设置。
+  界面脚本监听自己的按钮、向玩法暴露方法或由玩法 `ui.get(...)` 后监听，通过 `Script:onCancel` 打开设置。
 - 自动化（`ScriptApiRegistry`，仅验证用）：`input.inject_key`、`ui.click({entry, widget})`，
   并提供对应 CLI 驱动脚本放 `Script/automation/greedy-snake/`。
 - 端到端脚本：开局 → 注入方向键 → 撞墙 → 截图确认 Game Over → 点击 Restart → 确认分数归零 →

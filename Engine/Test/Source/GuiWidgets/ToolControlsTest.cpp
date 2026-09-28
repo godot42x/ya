@@ -435,7 +435,7 @@ TEST(ToolControlsTest, SplitPanePressOnPaneFallsThroughToChild)
     tree.layout();
 
     int clicks = 0;
-    button->_onClick = [&] { ++clicks; };
+    button->onClicked.addLambda([&] { ++clicks; });
 
     // Click inside the left pane over the button: the button consumes it and
     // the split never starts a divider drag.
@@ -2066,7 +2066,7 @@ TEST(ToolControlsTest, ExpanderClickHeaderTogglesAndHidesChildren)
     expander->setExpanded(true);
     int clicks = 0;
     auto body = std::make_shared<UIButton>("BodyBtn");
-    body->_onClick = [&clicks]() { ++clicks; };
+    body->onClicked.addLambda([&clicks]() { ++clicks; });
     expander->addDetachedChild(body, [](UIElement&, UISlot& childSlot) {
         if (auto* box = childSlot.as<UIBoxSlot>()) {
             box->setPreferredSize({180.0f, 28.0f});

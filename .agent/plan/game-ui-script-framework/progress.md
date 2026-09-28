@@ -206,3 +206,12 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
   `--exit-after-frame=60` exit 0、无 Error。
 
 下一步：S4（D3 已确认：不做 `UIScreen`）。
+
+## 2026-09-28 — S3b 按钮动作冒泡被 `ui-behavior-capabilities` C1c 取代
+
+- 删除 `_action` / `emitAction` / `setActionSink` / `IUIActionHandler` / 世界 sink / `invokeWorld` /
+  `onUiAction` / `Button.action`；按钮广播 `onClicked`，脚本 `btn:onClick(target, fn)` 直接监听。
+- H2（全局 `onUiAction` 覆盖、Stop 后残留）随之消失；GreedSnake 已改为直接监听。
+- plan.md §0 原则 5、§1.3、§3 帧顺序与回调表、S3 / S6 / S7 相应改写；S3 落地记录保留并标注。
+
+下一步不变：S4（排在 `ui-behavior-capabilities` C2 / C3 之后）。

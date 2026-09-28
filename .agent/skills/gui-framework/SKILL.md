@@ -156,7 +156,9 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   不派生它们；树只调自由函数 `detectDrag/acceptsDrop/previewsDrop/dropOnto/highlightDrop/hoverDrop`
   （内部 `findBehavior`），`UIElement` 没有拖放虚函数。
 - 行为模型（`UIBehavior.h`）：**能力封闭、种类开放**。能力 = GUI 的派发点（`EUIBehaviorCapability`：
-  Tick / Input / Action），每个一个接口；拖、放、tween 是种类不是能力。行为用
+  Tick / Input），每个一个接口；拖、放、tween 是种类不是能力。控件自身事件是控件上的
+  `MulticastDelegate`（如 `UIButton::onClicked`），不是能力；GUI 没有「动作字符串」与冒泡 sink，
+  脚本直接监听控件（Lua `btn:onClick(self, fn)`）。行为用
   `UIBehaviorWith<Self, IUITickable, ...>`（`Self` final）在编译期声明能力与种类键 `type_index_v<Self>`，
   `addBehavior` 时进入 `UIElement` 的按能力索引，
   派发只读 `behaviorsOf<I>()`（同能力按挂上顺序），无 `dynamic_cast`。接口构造私有，不经

@@ -267,7 +267,7 @@ TEST(EditorUIDesignerSessionTest, CanvasPickingSelectsAButtonWithoutRunningItsCl
     int clicks = 0;
     auto* typed = dynamic_cast<UIButton*>(button.get());
     ASSERT_NE(typed, nullptr);
-    typed->_onClick = [&clicks]() { ++clicks; };
+    typed->onClicked.addLambda([&clicks]() { ++clicks; });
 
     root->addDetachedChild(button, [](UIElement&, UISlot& edge) {
         auto* slot = edge.as<UICanvasSlot>();

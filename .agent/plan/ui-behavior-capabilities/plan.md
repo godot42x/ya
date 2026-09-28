@@ -1,6 +1,6 @@
 # UIBehavior 能力化与热路径
 
-状态：决策门已确认（2026-09-28），排在 `game-ui-script-framework` S4 之前；C1、C1b 完成，下一步 C2。
+状态：决策门已确认（2026-09-28），排在 `game-ui-script-framework` S4 之前；C1、C1b、C1c 完成，下一步 C2。
 来源：`game-ui-script-framework` 性能检查点时用户指出 `UIBehavior` 权责不分、实现性能低。
 
 ## 1. 现状（2026-09-28 核对）
@@ -26,9 +26,9 @@
 本来就要改 GUI。行为种类开放：`LuaWidgetScriptBehavior` 在 GameRuntime、编辑器行为在
 GameEditor，新增行为不改引擎 GUI 源码，GUI 也不认识它们。
 
-- 能力接口（`GUI/Widgets/UIBehavior.h`）：`IUITickable`、`IUIInputHandler`、
-  `IUIActionHandler`，各带 `kCapability`（`EUIBehaviorCapability`）。能力只能是通用派发点
-  （帧 / 输入路由 / 动作冒泡）；拖、放、tween 是行为种类，不是能力（B5）。接口构造函数私有、只对 `UIBehaviorWith` 开放：
+- 能力接口（`GUI/Widgets/UIBehavior.h`）：`IUITickable`、`IUIInputHandler`，
+  各带 `kCapability`（`EUIBehaviorCapability`）。能力只能是通用派发点（帧 / 输入路由）；
+  拖、放、tween 是行为种类，不是能力（B5）；控件自身事件（点击等）是控件上的委托，不是能力（B6）。接口构造函数私有、只对 `UIBehaviorWith` 开放：
   绕过声明直接继承接口是编译错误，不会出现「实现了接口却没登记」的静默失效。
 - `UIBehavior` 只剩所有权、生命周期与种类键（`getOwner` / `onAttached` / `onDetached` / `getKind`）。
 - `UIBehaviorWith<Self, Caps...>`（CRTP，`Self` 必须 final）：编译期得到能力掩码与种类键
@@ -61,6 +61,7 @@ GameEditor，新增行为不改引擎 GUI 源码，GUI 也不认识它们。
 | B3 | 排期 | `game-ui-script-framework` S4 之前 |
 | B4 | 同类行为是否可多个（2026-09-28 用户追加） | 不可；tween 改为 animator + 多 tween，规则对所有类型一律生效，并入 C1 |
 | B5 | 拖 / 放是否为能力（2026-09-28 用户追加） | 否：删除 `IUIDragSource` / `IUIDropTarget`，拖放是具体行为种类；按类型查找用 CRTP 编译期种类键 `type_index_v<Self>`，不用 `typeid`（C1b） |
+| B6 | 控件事件如何到达脚本（2026-09-28 用户追加） | 删除「动作」概念（`IUIActionHandler`、`UIButton::_action` 字符串、`emitAction` / 世界 sink / `onUiAction`）；`UIButton::onClicked` 是 `MulticastDelegate<void()>`，脚本 `btn:onClick(target, fn)` 直接监听（UMG 式），不做编辑器信号槽、不做 UI↔玩法中转总线（C1c） |
 
 ## 4. Checkpoints
 
@@ -91,6 +92,20 @@ GameEditor，新增行为不改引擎 GUI 源码，GUI 也不认识它们。
   改裸指针，animator 析构时清空）。
 - 验收：同 C1；`UIBehaviorCapabilityTest.DragAndDropAreKindsNotCapabilities`、
   `KindLookupStaysAlignedAfterRemoval`；`GuiAnimationTest.HeldTweenOutlivesItsWidget`。
+
+### C1c — 控件委托取代动作字符串（B6）
+
+- Core `MulticastDelegate::broadcast` 可重入：遍历快照，调用前复核 handle 仍在；广播中新增的监听下次生效。
+- `UIButton`：删 `_action` / `_onClick`，加 `onClicked` 多播；`setOnClick` 与全部直接赋值改 `addLambda`。
+- 删 `IUIActionHandler`、Action 能力、`WidgetTree::emitAction` / `setActionSink`、`GameUIHost` 世界 sink、
+  `LuaScriptingSystem::invokeWorld`、Lua `onUiAction` 与 `Button.action`。
+- Lua `Button:onClick(target, fn)` → `fn(target, button)`，返回 `UIConnection:disconnect()`；
+  登记在 `LuaWidgetScripts`：按钮销毁、所属 UI 脚本实例释放 / 热重载换 `self`、runtime 析构时自动断开
+  （runtime 先于 Lua state 析构）；世界脚本自行在 `onDestroy` 断开。
+- GreedSnake：UI 文档删 `_action`，`Snake.lua` 在 `onInit` 直接监听按钮。
+- 验收：同 C1；`WidgetTreeTest.ButtonClickReachesEveryListenerWhileListenersChange`；
+  `GameUIScriptTest.ScriptsListenToButtonsDirectly` / `ClickListenersEndWithTheScriptOrTheRuntime` /
+  `SpawnedButtonCanBeListenedToBeforeItIsAttached`。
 
 ### C2 — 树 tick 登记表
 

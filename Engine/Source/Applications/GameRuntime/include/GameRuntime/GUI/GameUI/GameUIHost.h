@@ -173,11 +173,6 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// order and warns once.
     [[nodiscard]] UIElementRef findInEntry(const UIElement& entryRoot, std::string_view name);
 
-    /// Receiver of actions that bubbled out of the tree unconsumed
-    /// (WidgetTree::emitAction): the world's turn. Buttons are never bound, so
-    /// one spawned at any time routes the same way.
-    void setWorldActionHandler(std::function<bool(UIElement& source, std::string_view action)> handler);
-
     // === Structural changes (applied by flushStructuralChanges) ===
     /// Instantiate `documentPath` now; attach it under `parent` at the next
     /// flush and activate its behaviour specs with the parent's entry. Until
@@ -254,7 +249,6 @@ struct YA_GAME_RUNTIME_API GameUIHost
     Rect2D                         _viewportPx{};
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};
     EUIUpdateClock                 _updateClock = EUIUpdateClock::RealTime;
-    std::function<bool(UIElement&, std::string_view)> _worldActionHandler;
     std::vector<FMountedEntry>     _entries;
     std::vector<FPendingSpawn>     _pendingSpawns;
     std::vector<std::weak_ptr<UIElement>> _pendingDestroys;

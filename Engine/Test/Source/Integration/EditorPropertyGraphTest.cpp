@@ -749,16 +749,12 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionAssetPathCommitBrowseAndUndo)
     }
     EXPECT_EQ(value.model.getPath(), "Content/Models/Typed.glb");
 
-    if (browse->_onClick) {
-        browse->_onClick();
-    }
+    browse->onClicked.broadcast();
     EXPECT_EQ(requestedKind, EEditorAssetPickerKind::Model);
     EXPECT_EQ(requestedPath, "Content/Models/Typed.glb");
     EXPECT_EQ(value.model.getPath(), "Content/Textures/Picked.png");
 
-    if (locate->_onClick) {
-        locate->_onClick();
-    }
+    locate->onClicked.broadcast();
     EXPECT_EQ(revealedPath, "Content/Textures/Picked.png");
 
     EXPECT_TRUE(stack.undo());
@@ -918,9 +914,7 @@ TEST(EditorPropertyGraphTest, DynamicSequenceAddRemoveRebuildsRowsAndUndo)
     const UIElementRef& header = section->getChildren()[0]->getChildren()[0];
     auto* add = dynamic_cast<UIButton*>(header->getChildren()[1].get());
     ASSERT_NE(add, nullptr);
-    if (add->_onClick) {
-        add->_onClick();
-    }
+    add->onClicked.broadcast();
     EXPECT_EQ(value.tags.size(), 3u);
     EXPECT_EQ(section->getChildren()[0]->getChildren().size(), 4u);
 

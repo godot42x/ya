@@ -366,7 +366,7 @@ TEST(BindingContractTest, WidgetEnabledGateRemainsAuthoritativeOverButtonDisplay
     button->bindEnabled(enabled);
     button->setEnabled(false);
     int clicks = 0;
-    button->_onClick = [&]() { ++clicks; };
+    button->onClicked.addLambda([&]() { ++clicks; });
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     tree.layout();
 
@@ -397,7 +397,7 @@ TEST(BindingContractTest, DisablingPressedButtonStillClearsPressSessionOnRelease
     FCanvasSlotArgs buttonSlot;
     buttonSlot.offset = {20.0f, 20.0f};
     buttonSlot.fixedSize = {120.0f, 40.0f};
-    button->_onClick = [&]() { ++clicks; };
+    button->onClicked.addLambda([&]() { ++clicks; });
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     tree.layout();
 

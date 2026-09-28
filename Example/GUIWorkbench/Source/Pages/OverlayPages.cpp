@@ -160,12 +160,12 @@ void buildDialogDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState
                              stack->addDetachedChild(buttons);
 
                              auto okButton      = makeDemoButton("ModalOK", "OK", 80.0f);
-                             okButton->_onClick = [&state, overlay, nameField, log]
+                             okButton->onClicked.addLambda([&state, overlay, nameField, log]
                              {
                                  state.modalName = nameField->_text;
                                  log(std::format("Modal OK: '{}'", state.modalName));
                                  overlay->close();
-                             };
+                             });
                              buttons->addDetachedChild(okButton, [](ya::UIElement&, ya::UISlot& edge) {
                                  if (auto* slot = edge.as<ya::UIBoxSlot>()) {
                                      slot->setPreferredSize({80.0f, 26.0f});
@@ -173,11 +173,11 @@ void buildDialogDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState
                              });
 
                              auto cancelButton      = makeDemoButton("ModalCancel", "Cancel", 80.0f);
-                             cancelButton->_onClick = [&state, overlay, log]
+                             cancelButton->onClicked.addLambda([&state, overlay, log]
                              {
                                  log("Modal cancelled");
                                  overlay->close();
-                             };
+                             });
                              buttons->addDetachedChild(cancelButton, [](ya::UIElement&, ya::UISlot& edge) {
                                  if (auto* slot = edge.as<ya::UIBoxSlot>()) {
                                      slot->setPreferredSize({80.0f, 26.0f});

@@ -42,3 +42,22 @@
 偏离：无。
 
 下一步：C2 树 tick 登记表。
+
+## 2026-09-28 — C1c 控件委托取代动作字符串（B6）
+
+完成：
+- `MulticastDelegate::broadcast` 快照 + handle 复核，监听者可在广播中增删（含自身）。
+- `UIButton::onClicked` 多播取代 `_onClick` / `_action`；33 处赋值与构建器改 `addLambda`。
+- 删除 `IUIActionHandler`（能力只剩 Tick / Input）、`emitAction` / `setActionSink`、世界动作 sink、
+  `invokeWorld`、`onUiAction`、Lua `Button.action`。
+- Lua `Button:onClick(target, fn)` + `UIConnection`，`LuaWidgetScripts` 登记并在按钮 / UI 脚本实例 / runtime
+  结束时断开；GreedSnake 直接监听 Restart / Resume / Slow / Normal / Fast，`onDestroy` 断开。
+- 验证：`ya-testing` 1389 全绿；`ya-gui-closure-test` 612 全绿；GUIWorkbench `--smoke-actions` PASS；
+  GreedySnake runtime / editor、HelloMaterial `--exit-after-frame=60` 无 Error、无 `ui.get` 告警。
+
+保留：输入 / tick 派发遍历 `behaviorsOf<>` 视图，处理者在派发中移除行为仍不安全（先前已有）；tick 侧由 C2 处理，
+输入侧未在本计划内。LuaEvent（脚本层任意参数委托）用户确认暂不需要。
+
+偏离：无。
+
+下一步：C2 树 tick 登记表。

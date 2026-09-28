@@ -55,20 +55,20 @@ void RuntimeDiagnosticsSection::construct()
             }
         }
     };
-    _captureNextFrame->_onClick = []() {
+    _captureNextFrame->onClicked.addLambda([]() {
         if (auto* app = App::get()) if (auto& renderServices = app->getRenderServices(); renderServices.hasRenderer()) {
             if (renderServices.getRenderDocPanelState().bCaptureEnabled) {
                 renderServices.requestRenderDocCaptureNextFrame();
             }
         }
-    };
-    _captureAfterFrames->_onClick = []() {
+    });
+    _captureAfterFrames->onClicked.addLambda([]() {
         if (auto* app = App::get()) if (auto& renderServices = app->getRenderServices(); renderServices.hasRenderer()) {
             if (renderServices.getRenderDocPanelState().bCaptureEnabled) {
                 renderServices.requestRenderDocCaptureAfterFrames(120);
             }
         }
-    };
+    });
 
     auto rows = ui::column("RuntimeDiagnosticsRows")
                     .setSpacing(3.0f)

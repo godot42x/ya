@@ -365,13 +365,13 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
     closeText->setText("x");
     closeText->_fontSize = 12;
     close->addDetachedChild(closeText);
-    close->_onClick = [this]()
+    close->onClicked.addLambda([this]()
     {
         if (_context && _context->dockPanelHome(_panelId) && _context->floatingHost()) {
             // Host observes floating drift via the context; the window is
             // removed by the host once it re-syncs its window set.
         }
-    };
+    });
     header->addDetachedChild(close);
 
     _content = std::make_shared<UIContainer>(std::format("{}_Content", _name));

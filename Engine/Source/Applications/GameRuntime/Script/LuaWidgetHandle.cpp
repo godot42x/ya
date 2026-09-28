@@ -207,19 +207,6 @@ void bindLuaWidgetHandles(sol::state& lua)
                 if (auto* button = h.as<UIButton>("enabled")) {
                     button->setEnabled(bEnabled);
                 }
-            }),
-        "action",
-        sol::property(
-            [](const LuaButtonHandle& h) -> std::optional<std::string> {
-                if (auto* button = h.as<UIButton>("action")) {
-                    return button->_action;
-                }
-                return std::nullopt;
-            },
-            [](LuaButtonHandle& h, const std::string& value) {
-                if (auto* button = h.as<UIButton>("action")) {
-                    button->_action = value;
-                }
             }));
 
     lua.new_usertype<LuaImageHandle>(

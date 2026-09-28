@@ -54,12 +54,12 @@ void buildRenderDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState
     ya::ui::attach(tree, *imageRow, image, ya::ui::boxSlot().preferredSize({128.0f, 96.0f}));
 
     state.renderProbeButton           = makeDemoButton("RenderProbe", "Render Probe", 160.0f);
-    state.renderProbeButton->_onClick = [&state, log]
+    state.renderProbeButton->onClicked.addLambda([&state, log]
     {
         ++state.renderProbeClicks;
         state.renderLog = std::format("Render probe clicked ({})", state.renderProbeClicks);
         log(state.renderLog);
-    };
+    });
     ya::ui::attach(tree, *form, state.renderProbeButton, ya::ui::boxSlot().preferredSize({160.0f, 26.0f}));
 
     tree.attach(*form, makeBodyText("Expected: readable left-to-right text, stable clipping, no inversion, no flicker on resize."));

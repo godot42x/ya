@@ -5,7 +5,7 @@
 1. 读本目录 `plan.md` §3 决策门与 `progress.md` 最近一轮；决策门未确认时先问用户，不开工。
 2. 读根 `AGENTS.md`、`.agent/skills/gui-framework/SKILL.md`。
 3. `git status --short`；保留他人脏改动，禁止 blanket stage。
-4. 核对调用方：`rg -n "UIBehavior|wantsTick|tickSubtree|onAction|canAcceptDrop|onDragDetected" Engine/Source Engine/Test`。
+4. 核对调用方：`rg -n "UIBehavior|wantsTick|tickSubtree|onClicked|onClick|canAcceptDrop|onDragDetected" Engine/Source Engine/Test`。
 5. 先跑基准记下改前数据（临时测试，不提交）。
 
 ## 收尾

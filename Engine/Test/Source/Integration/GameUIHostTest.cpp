@@ -206,7 +206,7 @@ TEST(GameUIHostTest, InputRoutesThroughPresentationMapping)
     host.addToWorld(scene, button, buttonSlot);
 
     int clicks = 0;
-    button->_onClick = [&] { ++clicks; };
+    button->onClicked.addLambda([&] { ++clicks; });
     // The frame builds the snapshot (layout) before input dispatch, matching
     // the runtime order; without it the hit test would see stale rects.
     host.buildSnapshot();
@@ -492,18 +492,12 @@ TEST(GameUIHostTest, DueTimersFireEarliestFirstOncePerUpdate)
     EXPECT_EQ(fired, (std::vector<int>{5})) << "a timer added by a callback waits for the next update";
 }
 
-TEST(GameUIHostTest, MountedTextVisibilityAndButtonAction)
+TEST(GameUIHostTest, MountedTextVisibilityAndButtonClick)
 {
     GameUIHost host;
     UIDocumentStore documents;
     host.setDocumentStore(&documents);
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
-
-    std::string fired;
-    host.setWorldActionHandler([&fired](UIElement& source, std::string_view action) {
-        fired = std::string(action) + ":" + source._name;
-        return true;
-    });
 
     auto score = std::make_shared<UIDocument>();
     score->typeId = "engine.text";
@@ -519,7 +513,6 @@ TEST(GameUIHostTest, MountedTextVisibilityAndButtonAction)
     auto button = std::make_shared<UIDocument>();
     button->typeId = "engine.button";
     button->fields = nlohmann::json{
-        {"_action", "restart"},
         {"__base__", {{"UIElement", {{"_name", "Restart"}}}}},
     };
     button->children.push_back(label);
@@ -562,12 +555,14 @@ TEST(GameUIHostTest, MountedTextVisibilityAndButtonAction)
 
     auto* restart = dynamic_cast<UIButton*>(findNamed(content, "Restart"));
     ASSERT_NE(restart, nullptr);
-    EXPECT_FALSE(static_cast<bool>(restart->_onClick)) << "action buttons are not bound";
+    EXPECT_EQ(restart->onClicked.size(), 0u) << "a mounted button carries no handler of its own";
+    int clicks = 0;
+    restart->onClicked.addLambda([&clicks] { ++clicks; });
     host.getTree().setFocus(restart);
     KeyPressedEvent enter{};
     enter._keyCode = EKey::Enter;
     (void)host.getTree().dispatchEvent(enter, WidgetEventContext{});
-    EXPECT_EQ(fired, "restart:Restart");
+    EXPECT_EQ(clicks, 1);
 
     EXPECT_FALSE(host.setMountedText("Missing", "Score", "nope"));
     EXPECT_FALSE(host.setMountedVisible("GameOver", "Missing", false));

@@ -804,37 +804,6 @@ void WidgetTree::invalidateLayout(EWidgetLayoutInvalidation scope)
     _bLayoutDirty = true;
 }
 
-bool WidgetTree::emitAction(UIElement& source, std::string_view action)
-{
-    if (action.empty() || source.getTree() != this) {
-        return false;
-    }
-    // Hold the route and each behaviour list: a handler may detach or
-    // release any widget on the way.
-    std::vector<UIElementRef> route;
-    for (UIElement* node = &source; node; node = node->getParent()) {
-        route.push_back(node->shared_from_this());
-    }
-    for (const UIElementRef& node : route) {
-        const std::span<IUIActionHandler* const> live = node->behaviorsOf<IUIActionHandler>();
-        if (live.empty()) {
-            continue;
-        }
-        const std::vector<UIBehaviorRef>     keepAlive = node->getBehaviors();
-        const std::vector<IUIActionHandler*> handlers(live.begin(), live.end());
-        for (IUIActionHandler* handler : handlers) {
-            if (!node->isAttached() || std::ranges::find(node->behaviorsOf<IUIActionHandler>(), handler) ==
-                                           node->behaviorsOf<IUIActionHandler>().end()) {
-                continue;
-            }
-            if (handler->onAction(*node, source, action)) {
-                return true;
-            }
-        }
-    }
-    return _actionSink && _actionSink(source, action);
-}
-
 void WidgetTree::tick(float deltaSeconds)
 {
     repairPointerSession("tick");

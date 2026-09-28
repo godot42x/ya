@@ -171,15 +171,16 @@ class UIButtonWidgetBuilder final : public TUIWidgetChildrenBuilder<UIButton, UI
         return std::move(*this);
     }
 
+    /// Adds a listener to UIButton::onClicked.
     UIButtonWidgetBuilder& setOnClick(std::function<void()> value) &
     {
-        _widget->_onClick = std::move(value);
+        _widget->onClicked.addLambda(std::move(value));
         return *this;
     }
 
     UIButtonWidgetBuilder&& setOnClick(std::function<void()> value) &&
     {
-        _widget->_onClick = std::move(value);
+        _widget->onClicked.addLambda(std::move(value));
         return std::move(*this);
     }
 

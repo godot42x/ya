@@ -585,21 +585,6 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
     }
 }
 
-bool LuaScriptingSystem::invokeWorld(const char* callback, const std::vector<sol::object>& args)
-{
-    auto* scene = _services.activeScene ? _services.activeScene() : nullptr;
-    if (!scene) {
-        return false;
-    }
-    for (const FScriptSlot& slot : collectWorldSlots(*scene, treeRanks(*scene), {})) {
-        auto* script = findScript(*scene, slot.handle, slot.id);
-        if (script && script->enabled && invoke(*script, callback, args)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 const std::vector<uint32_t>& LuaScriptingSystem::treeRanks(Scene& scene)
 {
     const Node* root = scene.getRootNode();

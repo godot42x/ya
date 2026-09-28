@@ -1,6 +1,6 @@
 // `script.lua` widget behaviours (game-ui-script-framework S3): lifecycle,
 // opt-in tick, host-clock timers, visibility callbacks, entry-scoped handles,
-// action bubbling to UI then world scripts, deferred spawn / destroy.
+// scripts listening to buttons directly, deferred spawn / destroy.
 // Each test runs a real Lua state with injected script sources; widgets are
 // mounted through the scene-entry path like a running game.
 
@@ -100,12 +100,7 @@ struct FUIScripts
         return w;
     }
 
-    static UIElementRef button(const std::string& name, const std::string& action)
-    {
-        UIElementRef b                     = widget(kTypeIdButton, name);
-        static_cast<UIButton&>(*b)._action = action;
-        return b;
-    }
+    static UIElementRef button(const std::string& name) { return widget(kTypeIdButton, name); }
 
     /// A world script on its own entity, loaded and started.
     void addWorldScript(const std::string& name)
@@ -441,61 +436,87 @@ TEST(GameUIScriptTest, RemovingTheRuntimeDestroysRunningScripts)
     EXPECT_THAT(ui.takeTrace(), IsEmpty());
 }
 
-TEST(GameUIScriptTest, ButtonActionBubblesToNearestScriptThenWorld)
+TEST(GameUIScriptTest, ScriptsListenToButtonsDirectly)
 {
     FUIScripts ui;
-    ui.addScript("Relay", R"(
+    ui.addScript("Menu", R"(
 local S = {}
-function S:onAction(name, source)
-    table.insert(trace, self.widget.name .. ":" .. name .. ":" .. source.name)
-    return self.widget.name == "Panel" and name == "local"
+function S:onInit()
+    self:find("Restart"):onClick(self, self.onRestart)
+    muteConnection = self:find("Mute"):onClick(self, function(s, button) table.insert(trace, "mute:" .. button.name) end)
 end
+function S:onRestart(button) table.insert(trace, self.widget.name .. ":restart:" .. button.name) end
 return S
 )");
     ui.addScript("World", R"(
 local S = {}
-function S:onUiAction(name, source)
-    table.insert(trace, "world:" .. name .. ":" .. source.name)
-    return name ~= "old"
+function S:onInit()
+    ui.get("Menu"):find("Restart"):onClick(self, function(s) table.insert(trace, "world:restart") end)
 end
 return S
 )");
-    UIElementRef panel = FUIScripts::widget(kTypeIdCanvasPanel, "Panel", "Relay");
-    UIElementRef row   = FUIScripts::widget(kTypeIdCanvasPanel, "Row", "Relay");
-    row->addDetachedChild(FUIScripts::button("Local", "local"));
-    row->addDetachedChild(FUIScripts::button("Restart", "restart"));
-    row->addDetachedChild(FUIScripts::button("Old", "old"));
-    panel->addDetachedChild(row);
+    UIElementRef panel = FUIScripts::widget(kTypeIdCanvasPanel, "Panel", "Menu");
+    panel->addDetachedChild(FUIScripts::button("Restart"));
+    panel->addDetachedChild(FUIScripts::button("Mute"));
     ui.addEntry("Menu", panel);
     ui.host.onSceneActivated(ui.scene);
-    ui.addWorldScript("World");
     ui.frame();
-    ui.run(R"(onUiAction = function(name) table.insert(trace, "legacy:" .. name) end)");
-
-    ui.press(ui.mounted("Menu", "Local"));
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("Row:local:Local", "Panel:local:Local"));
+    ui.addWorldScript("World");
 
     ui.press(ui.mounted("Menu", "Restart"));
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("Row:restart:Restart", "Panel:restart:Restart", "world:restart:Restart"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Panel:restart:Restart", "world:restart"))
+        << "every listener hears the click, in connection order";
 
-    ui.press(ui.mounted("Menu", "Old"));
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("Row:old:Old", "Panel:old:Old", "world:old:Old", "legacy:old"));
+    ui.press(ui.mounted("Menu", "Mute"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("mute:Mute"));
+    ui.run("muteConnection:disconnect()");
+    ui.press(ui.mounted("Menu", "Mute"));
+    EXPECT_THAT(ui.takeTrace(), IsEmpty()) << "a disconnected listener is gone";
 }
 
-TEST(GameUIScriptTest, SpawnedButtonRoutesActionWithoutRemount)
+TEST(GameUIScriptTest, ClickListenersEndWithTheScriptOrTheRuntime)
+{
+    FUIScripts ui;
+    ui.addScript("Listener", R"(
+local S = {}
+function S:onInit() self:find("Go"):onClick(self, function() table.insert(trace, "listener") end) end
+return S
+)");
+    UIElementRef hud = FUIScripts::widget(kTypeIdCanvasPanel, "HUD");
+    hud->addDetachedChild(FUIScripts::button("Go"));
+    hud->addDetachedChild(FUIScripts::widget(kTypeIdBorder, "Ear", "Listener"));
+    ui.addEntry("HUD", hud);
+    ui.host.onSceneActivated(ui.scene);
+    ui.frame();
+    ui.run(R"(ui.get("HUD"):find("Go"):onClick(nil, function() table.insert(trace, "global") end))");
+
+    auto* go = dynamic_cast<UIButton*>(ui.mounted("HUD", "Go"));
+    ASSERT_NE(go, nullptr);
+    ui.press(go);
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("listener", "global"));
+
+    ui.run(R"(ui.get("HUD"):find("Ear"):destroy())");
+    ui.host.flushStructuralChanges();
+    ui.press(go);
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("global")) << "a released script's listeners are disconnected";
+
+    ui.host.setBehaviorRuntime(nullptr);
+    EXPECT_EQ(go->onClicked.size(), 0u) << "the runtime drops every Lua listener before the Lua state can go";
+    ui.press(go);
+    EXPECT_THAT(ui.takeTrace(), IsEmpty());
+}
+
+TEST(GameUIScriptTest, SpawnedButtonCanBeListenedToBeforeItIsAttached)
 {
     FUIScripts ui;
     ui.addScript("Shop", R"(
 local S = {}
 function S:onInit()
     item = self:spawn("Test/UI/Item.yaui", self.widget)
-    item:find("Buy").action = "buy.sword"
+    item:find("Buy"):onClick(self, self.onBuy)
     pendingValid = item.valid
 end
-function S:onAction(name, source)
-    table.insert(trace, "shop:" .. name .. ":" .. source.name)
-    return true
-end
+function S:onBuy(button) table.insert(trace, "shop:buy:" .. button.name) end
 return S
 )");
     ui.addScript("Item", R"(
@@ -504,7 +525,7 @@ function S:onInit() table.insert(trace, "item.init:" .. self.root.name) end
 return S
 )");
     UIElementRef item = FUIScripts::widget(kTypeIdCanvasPanel, "Item", "Item");
-    item->addDetachedChild(FUIScripts::button("Buy", "buy"));
+    item->addDetachedChild(FUIScripts::button("Buy"));
     ui.documents.put("Test/UI/Item.yaui", UIDocument::fromWidget(*item));
     ui.addEntry("Shop", FUIScripts::widget(kTypeIdCanvasPanel, "Shop", "Shop"));
     ui.host.onSceneActivated(ui.scene);
@@ -520,7 +541,7 @@ return S
     EXPECT_THAT(ui.takeTrace(), ElementsAre("item.init:Shop")) << "spawned scripts join the parent's entry";
 
     ui.press(buy);
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("shop:buy.sword:Buy"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("shop:buy:Buy"));
 }
 
 TEST(GameUIScriptTest, DestroyWaitsForStructuralFlushAndDropsSpawnsUnderIt)

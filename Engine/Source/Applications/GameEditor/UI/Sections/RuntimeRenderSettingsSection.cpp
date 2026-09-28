@@ -436,12 +436,12 @@ void RuntimeRenderSettingsSection::bindCallbacks()
         const auto mode = static_cast<EPresentMode::T>(value);
         _app->getTaskManager().registerTickTask([sc, mode]() { sc->setPresentMode(mode); });
     };
-    _reload->_onClick = [this]() {
+    _reload->onClicked.addLambda([this]() {
         if (!_app) {
             return;
         }
         _app->getRenderServices().requestRenderPipelineReload();
-    };
+    });
 
     _inversion->_onChanged = [this](bool value) {
         if (!_bSyncing) {

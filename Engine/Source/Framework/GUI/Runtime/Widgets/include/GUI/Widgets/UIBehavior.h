@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <vector>
@@ -22,15 +21,15 @@ struct WidgetEventContext;
 class Event;
 
 /// What a behaviour can be asked to do. The set is closed: each value is a
-/// generic dispatch point owned by the GUI framework (frame, input route,
-/// action bubble). Behaviour *kinds* stay open -- any module derives new ones
-/// without touching this list or the engine. A feature (drag, drop, tween) is
-/// a behaviour kind, never a capability.
+/// generic dispatch point owned by the GUI framework (frame, input route).
+/// Behaviour *kinds* stay open -- any module derives new ones without
+/// touching this list or the engine. A feature (drag, drop, tween) is a
+/// behaviour kind, never a capability; a control's own events (a click) are
+/// delegates on the control that listeners subscribe to directly.
 enum class EUIBehaviorCapability : uint8_t
 {
     Tick,
     Input,
-    Action,
     Count,
 };
 
@@ -77,25 +76,8 @@ struct IUIInputHandler
     IUIInputHandler() = default;
 };
 
-/// A named action emitted by `source` (the owner or a descendant) is bubbling
-/// through the owner (WidgetTree::emitAction). Return true to consume it.
-struct IUIActionHandler
-{
-    static constexpr EUIBehaviorCapability kCapability = EUIBehaviorCapability::Action;
-
-    virtual bool onAction(UIElement& owner, UIElement& source, std::string_view action) = 0;
-
-  protected:
-    ~IUIActionHandler() = default;
-
-  private:
-    template <typename, typename...>
-    friend struct UIBehaviorWith;
-    IUIActionHandler() = default;
-};
-
 /// The capability table: one interface per EUIBehaviorCapability, in enum order.
-using FUIBehaviorCapabilities = std::tuple<IUITickable, IUIInputHandler, IUIActionHandler>;
+using FUIBehaviorCapabilities = std::tuple<IUITickable, IUIInputHandler>;
 
 namespace detail
 {

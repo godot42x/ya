@@ -93,9 +93,6 @@ IGuiTextureSource& gameUITextureSource()
 GameUIHost::GameUIHost() : _controller(std::make_unique<DefaultGameUIController>())
 {
     _tree.setTextureSource(&gameUITextureSource());
-    _tree.setActionSink([this](UIElement& source, std::string_view action) {
-        return _worldActionHandler && _worldActionHandler(source, action);
-    });
 }
 
 GameUIHost::~GameUIHost() = default;
@@ -430,11 +427,6 @@ std::vector<FSceneUIMount> mountSceneAutoMountEntries(Scene&                    
         }
     }
     return mounts;
-}
-
-void GameUIHost::setWorldActionHandler(std::function<bool(UIElement& source, std::string_view action)> handler)
-{
-    _worldActionHandler = std::move(handler);
 }
 
 void GameUIHost::setMountedRoots(std::vector<std::pair<std::string, std::weak_ptr<UIElement>>> roots)

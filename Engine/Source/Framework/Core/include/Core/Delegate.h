@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -197,7 +198,9 @@ class MulticastDelegate<void(Args...)>
         return m_Functions.size();
     }
 
-    // Broadcast to all delegates
+    // Broadcast to all delegates. A listener may add or remove listeners
+    // (itself included) while it runs: the call list is the one at entry, and
+    // a listener removed before its turn is skipped.
     void broadcast(Args... args)
     {
         // Remove delegates with null owner pointers (auto cleanup)
@@ -207,9 +210,15 @@ class MulticastDelegate<void(Args...)>
             }),
             m_Functions.end());
 
-        for (const auto &item : m_Functions)
+        const std::vector<FunctorImpl> snapshot = m_Functions;
+        for (const FunctorImpl &item : snapshot)
         {
-            item.func(std::forward<Args>(args)...);
+            const bool bStillBound = std::any_of(m_Functions.begin(), m_Functions.end(), [&item](const FunctorImpl &live) {
+                return live.handle == item.handle;
+            });
+            if (bStillBound) {
+                item.func(args...);
+            }
         }
     }
 };

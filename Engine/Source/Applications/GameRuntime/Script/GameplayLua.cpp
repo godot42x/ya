@@ -147,27 +147,6 @@ void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui)
     world.set_function("destroyEntity", [](Entity* entity) { destroySpriteEntity(entity); });
     world.set_function("viewAspect", []() { return viewAspect(); });
 
-    // An action no UI script consumed: world scripts in execution order, then
-    // the legacy global `onUiAction` (removed with the GreedSnake migration, D8).
-    ui.setWorldActionHandler([&scripting, &lua, &ui](UIElement& source, std::string_view action) {
-        const std::vector<sol::object> args{sol::make_object(lua, std::string(action)),
-                                            makeLuaWidgetHandle(lua, ui, source.shared_from_this())};
-        if (scripting.invokeWorld("onUiAction", args)) {
-            return true;
-        }
-        sol::protected_function callback = lua["onUiAction"];
-        if (!callback.valid()) {
-            return false;
-        }
-        const sol::protected_function_result result = callback(std::string(action));
-        if (!result.valid()) {
-            const sol::error error = result;
-            YA_CORE_ERROR("Lua onUiAction error: {}", error.what());
-        }
-        return true;
-    });
-
-    bindLuaWidgetHandles(lua);
     ui.setBehaviorRuntime(std::make_unique<LuaWidgetScripts>(scripting, ui));
 
     sol::table uiTable = lua.create_named_table("ui");

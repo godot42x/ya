@@ -85,11 +85,11 @@ void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
     // Shared state captured by value: the lambda stays valid even if the demo
     // struct goes out of scope (the tree owns the widgets either way).
     auto clickCount = std::make_shared<uint32_t>(0);
-    demo.button->_onClick = [counter = demo.counter, clickCount]() {
+    demo.button->onClicked.addLambda([counter = demo.counter, clickCount]() {
         ++(*clickCount);
         counter->setText(std::format("Clicked: {}", *clickCount));
         YA_CORE_INFO("Minimal host button clicked (count {})", *clickCount);
-    };
+    });
 
     FCanvasSlotArgs panelSlot;
     panelSlot.anchorMin = {0.0f, 0.0f};

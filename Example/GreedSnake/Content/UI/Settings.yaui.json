@@ -77,7 +77,6 @@
       "version": 2,
       "typeId": "engine.button",
       "fields": {
-        "_action": "speed.slow",
         "__base__": { "UIElement": { "_name": "Slow" } }
       },
       "children": [
@@ -108,7 +107,6 @@
       "version": 2,
       "typeId": "engine.button",
       "fields": {
-        "_action": "speed.normal",
         "__base__": { "UIElement": { "_name": "Normal" } }
       },
       "children": [
@@ -139,7 +137,6 @@
       "version": 2,
       "typeId": "engine.button",
       "fields": {
-        "_action": "speed.fast",
         "__base__": { "UIElement": { "_name": "Fast" } }
       },
       "children": [
@@ -170,7 +167,6 @@
       "version": 2,
       "typeId": "engine.button",
       "fields": {
-        "_action": "settings.close",
         "__base__": { "UIElement": { "_name": "Resume" } }
       },
       "children": [
