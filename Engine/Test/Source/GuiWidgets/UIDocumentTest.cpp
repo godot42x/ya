@@ -432,6 +432,101 @@ TEST(UIDocumentTest, ChildSlotCountMustMatchChildren)
     EXPECT_EQ(UIDocument::fromJson(json), nullptr);
 }
 
+TEST(UIDocumentTest, BehaviorSpecsRoundtripOnEveryNode)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+
+    auto root   = registry.createInstance("test.doc_container");
+    auto middle = registry.createInstance("test.doc_container");
+    auto leaf   = registry.createInstance("test.doc_button");
+    ASSERT_NE(root, nullptr);
+    ASSERT_NE(middle, nullptr);
+    ASSERT_NE(leaf, nullptr);
+    root->_behaviorSpecs   = {{.type = "script.lua", .data = {{"script", "UI/Menu.lua"}}}};
+    middle->_behaviorSpecs = {};
+    leaf->_behaviorSpecs   = {{.type = "script.lua", .data = {{"script", "UI/Start.lua"}}},
+                              {.type = "anim.pulse", .data = {{"period", 0.5}}}};
+    middle->addDetachedChild(leaf);
+    root->addDetachedChild(middle);
+
+    auto reloaded = UIDocument::fromJson(UIDocument::fromWidget(*root)->toJson());
+    ASSERT_NE(reloaded, nullptr);
+    UIElementRef instance = reloaded->instantiate();
+    ASSERT_NE(instance, nullptr);
+    ASSERT_EQ(instance->getChildren().size(), 1u);
+    UIElement& middleInstance = *instance->getChildren()[0];
+    ASSERT_EQ(middleInstance.getChildren().size(), 1u);
+    UIElement& leafInstance = *middleInstance.getChildren()[0];
+
+    EXPECT_EQ(instance->_behaviorSpecs, root->_behaviorSpecs);
+    EXPECT_TRUE(middleInstance._behaviorSpecs.empty());
+    EXPECT_EQ(leafInstance._behaviorSpecs, leaf->_behaviorSpecs);
+    // Descriptions only: instantiating turns nothing into a live behaviour.
+    EXPECT_TRUE(instance->getBehaviors().empty());
+    EXPECT_TRUE(leafInstance.getBehaviors().empty());
+
+    // A node without specs writes no key, so existing documents stay unchanged.
+    const nlohmann::json json = UIDocument::fromWidget(*instance)->toJson();
+    EXPECT_TRUE(json.contains("behaviors"));
+    EXPECT_FALSE(json["children"][0].contains("behaviors"));
+    EXPECT_EQ(json["children"][0]["children"][0]["behaviors"].size(), 2u);
+}
+
+TEST(UIDocumentTest, UnknownBehaviorTypeIsKeptOpaque)
+{
+    ensureTestTypesRegistered();
+    const nlohmann::json behaviors = nlohmann::json::array({
+        {{"type", "vendor.never_registered"},
+         {"data", {{"nested", {{"list", {1, "two", nullptr}}, {"flag", true}}}}}},
+        {{"type", "vendor.no_data"}},
+    });
+    nlohmann::json json;
+    json["version"]    = UIDocument::kFormatVersion;
+    json["typeId"]     = "test.doc_panel";
+    json["fields"]     = nlohmann::json::object();
+    json["behaviors"]  = behaviors;
+    json["children"]   = nlohmann::json::array();
+    json["childSlots"] = nlohmann::json::array();
+
+    auto document = UIDocument::fromJson(json);
+    ASSERT_NE(document, nullptr);
+    UIElementRef instance = document->instantiate();
+    ASSERT_NE(instance, nullptr);
+    ASSERT_EQ(instance->_behaviorSpecs.size(), 2u);
+    EXPECT_EQ(instance->_behaviorSpecs[0].type, "vendor.never_registered");
+    EXPECT_EQ(instance->_behaviorSpecs[0].data, behaviors[0]["data"]);
+    EXPECT_EQ(instance->_behaviorSpecs[1].data, nlohmann::json::object());
+
+    const nlohmann::json written = UIDocument::fromWidget(*instance)->toJson();
+    EXPECT_EQ(written["behaviors"][0], behaviors[0]);
+    EXPECT_EQ(written["behaviors"][1]["type"], "vendor.no_data");
+}
+
+TEST(UIDocumentTest, MalformedBehaviorEnvelopeIsRejected)
+{
+    ensureTestTypesRegistered();
+    const auto withBehaviors = [](nlohmann::json behaviors) {
+        nlohmann::json json;
+        json["version"]    = UIDocument::kFormatVersion;
+        json["typeId"]     = "test.doc_panel";
+        json["behaviors"]  = std::move(behaviors);
+        json["children"]   = nlohmann::json::array();
+        json["childSlots"] = nlohmann::json::array();
+        return json;
+    };
+    const auto one = [](nlohmann::json item) {
+        nlohmann::json list = nlohmann::json::array();
+        list.push_back(std::move(item));
+        return list;
+    };
+    ASSERT_NE(UIDocument::fromJson(withBehaviors(one({{"type", "script.lua"}}))), nullptr);
+    EXPECT_EQ(UIDocument::fromJson(withBehaviors(nlohmann::json::object())), nullptr);
+    EXPECT_EQ(UIDocument::fromJson(withBehaviors(one({{"data", nlohmann::json::object()}}))), nullptr);
+    EXPECT_EQ(UIDocument::fromJson(withBehaviors(one({{"type", ""}}))), nullptr);
+    EXPECT_EQ(UIDocument::fromJson(withBehaviors(one({{"type", "script.lua"}, {"data", 3}}))), nullptr);
+}
+
 TEST(UIDocumentTest, FromWidgetRequiresRegistryTypeId)
 {
     ensureTestTypesRegistered();

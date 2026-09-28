@@ -23,6 +23,7 @@
 #include "Core/Reflection/Reflection.h"
 #include "GUI/Widgets/DragDropOperation.h"
 #include "GUI/Widgets/UIBehavior.h"
+#include "GUI/Widgets/UIBehaviorSpec.h"
 
 #include <glm/glm.hpp>
 
@@ -220,6 +221,11 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Theme catalog key. Empty disables theme lookup. Styled subclasses pass
     /// their family default through the constructor ("button", "panel", ...).
     std::string _styleKey;
+    /// Authored behaviour descriptions (UIDocument `behaviors`). Opaque here:
+    /// not reflected, not painted, not laid out, never turned into behaviours
+    /// by the GUI (see IUIBehaviorActivator). Kept on the widget so a document
+    /// survives instantiate -> fromWidget.
+    std::vector<FUIBehaviorSpec> _behaviorSpecs;
 
     /// Runtime type identity for reflection-based field serialization
     /// (UIDocument). Registry owns the authoring type ID; this is the C++

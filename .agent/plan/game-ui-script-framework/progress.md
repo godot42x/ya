@@ -104,3 +104,37 @@
 未做：`onEnable` / `onDisable` 仍只绑定不调用（既有状态，非 S1 范围）。
 
 下一步：S2（GUI 通用行为描述，与 Lua 无关）。
+
+## 2026-09-28 — 决策门 D4 确认
+
+用户确认（替换原建议「隐藏仍每帧 onUpdate」）：UI 脚本参照 UMG / Godot，默认不 tick、走事件驱动；
+需要每帧时 `self:setTickEnabled(true)`，沿用 `UIBehavior::wantsTick` 协议（只在可见时、树顺序）；
+定时逻辑用 `self:after` / `self:every`，计时器队列归 `GameUIHost`，按 host 时钟推进、隐藏不停、
+随实例销毁取消。
+
+计划同步：`plan.md` §3 UILogic、生命周期表、S3 驱动方式与测试、§6 D4、H15；`feature_matrix.json`
+decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`）。
+
+仍待确认：D3（S4）、D6 / D7 / D9（S5）、D8（S3）。
+
+## 2026-09-28 — S2 GUI 通用行为描述
+
+完成：
+
+- `UIDocument` 节点新增可选 `behaviors: [{type, data}]`，`fromWidget` / `instantiate` / `toJson` /
+  `fromJson` 往返；`UIElement::_behaviorSpecs` 承载（非反射、不参与绘制与布局）。
+- `GUI/Widgets/UIBehaviorSpec.h`：`FUIBehaviorSpec`、`FUIBehaviorActivation`、`IUIBehaviorActivator`
+  （GUI 定义、不实现）、`activateBehaviorSpecs`。
+- `mountSceneAutoMountEntries` 增加 activator 参数：`DefaultGameUIController` 传
+  `GameUIHost::getBehaviorActivator()`，`EditorGameUIPreview` 传 null。
+
+偏离与取舍：见 `plan.md` S2「已落地」。
+
+验证：
+
+- `ya-testing` 全量 1360 通过；`ya-gui-closure-test` 602 通过、`ya-gui-widgets-test` 的
+  `UIDocumentTest.*` 22 个通过（两者都不链 Scene / ECS / Lua）。
+- 依赖审计：未改任何 `xmake.lua`；新文件只引 `Core/Common/Types.h`、nlohmann、`UIElement.h`。
+- GUIWorkbench `--smoke-actions` PASS、exit 0；GreedSnake runtime / editor `--exit-after-frame=60` exit 0、无 Error。
+
+下一步：S3 需先确认 D8。

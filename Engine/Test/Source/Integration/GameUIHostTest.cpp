@@ -534,4 +534,72 @@ TEST(GameUIHostTest, MountedTextVisibilityAndButtonAction)
     EXPECT_FALSE(host.setMountedVisible("GameOver", "Missing", false));
 }
 
+namespace
+{
+
+struct RecordingActivator final : public IUIBehaviorActivator
+{
+    struct FCall
+    {
+        std::string widget;
+        std::string type;
+        std::string entryId;
+        UIElement*  entryRoot;
+    };
+    std::vector<FCall>* calls;
+
+    explicit RecordingActivator(std::vector<FCall>& out) : calls(&out) {}
+
+    void activate(UIElement& widget, const FUIBehaviorSpec& spec, const FUIBehaviorActivation& context) override
+    {
+        calls->push_back({widget._name, spec.type, std::string(context.entryId), &context.entryRoot});
+    }
+};
+
+} // namespace
+
+TEST(GameUIHostTest, MountActivatesBehaviorSpecsInPreorderWithEntryContext)
+{
+    auto& registry = UITypeRegistry::instance();
+    UIElementRef panel = registry.createInstance("engine.panel");
+    UIElementRef start = registry.createInstance("engine.button");
+    UIElementRef quit  = registry.createInstance("engine.button");
+    panel->_name = "Menu";
+    start->_name = "Start";
+    quit->_name  = "Quit";
+    panel->_behaviorSpecs = {{.type = "a"}};
+    start->_behaviorSpecs = {{.type = "b"}, {.type = "c"}};
+    quit->_behaviorSpecs  = {{.type = "d"}};
+    panel->addDetachedChild(start);
+    panel->addDetachedChild(quit);
+
+    UIDocumentStore documents;
+    documents.put("Test/UI/Menu.yaui", UIDocument::fromWidget(*panel));
+    GameUIHost host;
+    host.setDocumentStore(&documents);
+    Scene scene("World");
+    scene.addWidgetEntry(makeEntry("Menu", "Test/UI/Menu.yaui", 0));
+
+    // Without an activator the specs mount inert.
+    host.onSceneActivated(scene);
+    UIElement* content = host.getTree().getLayer(WidgetTree::ELayer::Content);
+    ASSERT_EQ(content->getChildren().size(), 1u);
+    EXPECT_EQ(content->getChildren()[0]->_behaviorSpecs.size(), 1u);
+
+    // Installing one re-mounts the presented scene through it.
+    std::vector<RecordingActivator::FCall> calls;
+    host.setBehaviorActivator(std::make_unique<RecordingActivator>(calls));
+    ASSERT_EQ(content->getChildren().size(), 1u);
+    UIElement* root = content->getChildren()[0].get();
+    ASSERT_EQ(calls.size(), 4u);
+    const std::vector<std::pair<std::string, std::string>> expected = {
+        {"Menu", "a"}, {"Start", "b"}, {"Start", "c"}, {"Quit", "d"}};
+    for (size_t i = 0; i < calls.size(); ++i) {
+        EXPECT_EQ(calls[i].widget, expected[i].first);
+        EXPECT_EQ(calls[i].type, expected[i].second);
+        EXPECT_EQ(calls[i].entryId, "Menu");
+        EXPECT_EQ(calls[i].entryRoot, root);
+    }
+}
+
 } // namespace ya

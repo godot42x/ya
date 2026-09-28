@@ -8,6 +8,7 @@
 //     "version": 1,
 //     "typeId":  "engine.panel",
 //     "fields":  { ...reflected field values... },
+//     "behaviors": [ { "type": "...", "data": { ... } } ],   (optional)
 //     "children": [ ...nested UIDocument... ]
 //   }
 //
@@ -38,6 +39,8 @@ struct YA_GUI_API UIDocument
     std::string typeId;
     /// Reflected field values of the root widget (base + own).
     nlohmann::json fields;
+    /// Opaque behaviour descriptions of the root widget, in authored order.
+    std::vector<FUIBehaviorSpec> behaviors;
     /// Child documents, attached as children of the instantiated root.
     std::vector<std::shared_ptr<UIDocument>> children;
     /// Parent-owned slot intent for each child, kept index-aligned with

@@ -70,7 +70,8 @@ UIFrameSnapshot EditorGameUIPreview::buildSnapshot(Scene&           scene,
         ++_rebuildCount;
 
         std::string errors;
-        (void)mountSceneAutoMountEntries(scene, *_tree, documents,
+        // No activator: authoring shows behaviour-carrying widgets but never runs them.
+        (void)mountSceneAutoMountEntries(scene, *_tree, documents, nullptr,
                                         [&errors](std::string_view message) {
                                             errors.append(message);
                                             errors.push_back('\n');

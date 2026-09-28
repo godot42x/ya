@@ -4,6 +4,7 @@
 // widget's runtime click handler -- that is the runtime tree's job).
 
 #include "GameEditor/UI/Viewport/EditorGameUIPreview.h"
+#include "GameRuntime/GUI/GameUI/GameUIHost.h"
 
 #include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Button.h"
@@ -127,6 +128,39 @@ TEST(EditorGameUIPreviewTest, AuthoringModeDoesNotDispatchInputToWidgets)
         (void)preview.buildSnapshot(scene, &documents, Extent2D{800, 600}, {1.0f, 1.0f}, {0.0f, 0.0f});
     }
     EXPECT_EQ(preview.rebuildCount(), rebuilds);
+}
+
+TEST(EditorGameUIPreviewTest, PreviewDoesNotActivateBehaviors)
+{
+    struct CountingActivator final : public IUIBehaviorActivator
+    {
+        int* count;
+        explicit CountingActivator(int& out) : count(&out) {}
+        void activate(UIElement&, const FUIBehaviorSpec&, const FUIBehaviorActivation&) override { ++*count; }
+    };
+
+    UIDocumentStore documents;
+    auto document       = std::make_shared<UIDocument>();
+    document->typeId    = kTypeIdBorder;
+    document->behaviors = {{.type = "script.lua", .data = {{"script", "UI/HUD.lua"}}}};
+    documents.put("Test/UI/PreviewScripted.yaui", document);
+    Scene scene("World");
+    scene.addWidgetEntry(makeMount("HUD", "Test/UI/PreviewScripted.yaui"));
+
+    // Positive control: the runtime host presenting the same scene activates.
+    int activations = 0;
+    GameUIHost host;
+    host.setDocumentStore(&documents);
+    host.setBehaviorActivator(std::make_unique<CountingActivator>(activations));
+    host.onSceneActivated(scene);
+    ASSERT_EQ(activations, 1);
+
+    // The preview takes no activator; the widget is shown, its spec stays inert.
+    EditorGameUIPreview preview;
+    const UIFrameSnapshot snapshot =
+        preview.buildSnapshot(scene, &documents, Extent2D{800, 600}, {1.0f, 1.0f}, {0.0f, 0.0f});
+    EXPECT_EQ(snapshot.items.size(), 1u);
+    EXPECT_EQ(activations, 1);
 }
 
 } // namespace ya

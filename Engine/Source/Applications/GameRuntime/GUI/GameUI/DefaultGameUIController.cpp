@@ -26,7 +26,7 @@ void DefaultGameUIController::onSceneActivated(Scene& scene, GameUIHost& host)
     // Single mount path shared with the editor canvas preview; the
     // controller keeps the attachments for scene-lifecycle tracking.
     std::vector<std::pair<std::string, std::weak_ptr<UIElement>>> roots;
-    for (FSceneUIMount& mount : mountSceneAutoMountEntries(scene, host.getTree(), host.getDocumentStore())) {
+    for (FSceneUIMount& mount : mountSceneAutoMountEntries(scene, host.getTree(), host.getDocumentStore(), host.getBehaviorActivator())) {
         if (UIElementRef widget = mount.attachment.widget.lock()) {
             roots.emplace_back(mount.entryId, widget);
         }

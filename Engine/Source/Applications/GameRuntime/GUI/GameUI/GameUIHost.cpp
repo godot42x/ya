@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <format>
+#include <utility>
 
 namespace ya
 {
@@ -147,6 +148,13 @@ void GameUIHost::onSceneDeactivated(Scene& scene)
     _mountedScene = nullptr;
 }
 
+void GameUIHost::setBehaviorActivator(std::unique_ptr<IUIBehaviorActivator> activator)
+{
+    // The old activator outlives the remount, which drops the behaviours it made.
+    std::unique_ptr<IUIBehaviorActivator> previous = std::exchange(_behaviorActivator, std::move(activator));
+    reloadMountedSceneUI();
+}
+
 void GameUIHost::reloadMountedSceneUI()
 {
     if (!_mountedScene) {
@@ -256,6 +264,7 @@ void bindButtonActions(UIElement& node, const std::function<void(std::string_vie
 std::vector<FSceneUIMount> mountSceneAutoMountEntries(Scene&                                       scene,
                                                       WidgetTree&                                  tree,
                                                       UIDocumentStore*                             documents,
+                                                      IUIBehaviorActivator*                        activator,
                                                       const std::function<void(std::string_view)>& onError)
 {
     const auto report = [&onError](const std::string& message) {
@@ -294,6 +303,9 @@ std::vector<FSceneUIMount> mountSceneAutoMountEntries(Scene&                    
 
         WidgetAttachment attachment = tree.attachToLayer(WidgetTree::ELayer::Content, widget, entry.rootSlot);
         if (attachment.valid()) {
+            if (activator) {
+                activateBehaviorSpecs(*widget, *activator, FUIBehaviorActivation{.entryId = entry.entryId, .entryRoot = *widget});
+            }
             mounts.push_back(FSceneUIMount{
                 .entryId     = entry.entryId,
                 .attachment = std::move(attachment),

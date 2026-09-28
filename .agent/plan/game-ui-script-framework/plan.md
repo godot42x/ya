@@ -51,7 +51,7 @@
 | H12 | `GameRuntimeTickOrchestrator::tick` | 暂停时 `tickLogic` 整段跳过：系统、Lua、文件监视、模块、输入状态更新一起停 | F0 |
 | H13 | `LuaScriptingSystem::onUpdate` | 执行顺序 = EnTT 存储顺序；`onInit` 在第一次 `onUpdate` 循环里顺带调用，没有「全部 init 完再 update」 | F0 |
 | H14 | `RuntimeRenderContext::buildGameRenderFrame` | UI `update` 在渲染阶段、且只有存在 display root 时才跑；没有渲染器就不更新 | F0 |
-| H15 | `WidgetTree::tickSubtree` | 隐藏子树不 tick；子节点按挂载顺序而不是 `zOrder` | F0（契约只约束脚本，见 D4） |
+| H15 | `WidgetTree::tickSubtree` | 隐藏子树不 tick；子节点按挂载顺序而不是 `zOrder` | 保留：D4 让 UI 脚本 tick 按需开启并沿用此语义 |
 | H16 | `GameUIHost::_updateClock` | 整棵树一个时钟，HUD（游戏时间）和暂停菜单（真实时间）没法各选各的 | S4 |
 | H17 | `world.destroyEntity` | 在 Lua 视图遍历中立即销毁；删到带脚本的实体会破坏遍历 | F0 |
 
@@ -107,9 +107,10 @@ Tick
 │   ├─ presentation 仍在渲染侧 buildSnapshot 前设置：update 不读它，布局在 buildSnapshot 里
 │   ├─ 新挂载条目：整条目实例化完成后，按 (zOrder, 条目顺序, 树前序) 调 onInit，再调 onStart
 │   ├─ 显隐变化：onShow / onHide
-│   └─ onUpdate(dt)：dt 取该条目声明的时钟（game / real），顺序同上
+│   ├─ UI 脚本计时器（self:after / self:every）：按 host 时钟推进，与可见性无关（D4）
+│   └─ WidgetTree::tick（host 时钟，只走可见子树）：tween 等视觉行为，以及**显式开启 tick**
+│       的 UI 脚本 onUpdate(dt)。UI 脚本默认不 tick，走事件驱动（D4）
 │       脚本读到的控件几何是上一帧布局结果；需要本帧结果时显式请求立即布局（S3 句柄）
-│       控件视觉行为（tween 等）仍由 WidgetTree::tick 驱动，放在这一步末尾
 ├─ StructuralFlush
 │   └─ 本帧排队的实体销毁、控件 spawn/destroy、条目挂卸统一生效（脚本 onDestroy 在此调用）
 ├─ InputStateUpdate（postUpdate / preUpdate，不受暂停）
@@ -119,13 +120,14 @@ Tick
 F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中的控件/条目部分（S3/S4）外均由
 `GameRuntimeTickOrchestrator::tickLogic` 实现，`TickOrderTest.*` / `TickOrderAppTest.*` 钉住。
 
-生命周期约定（世界与 UI 一致）：
+生命周期约定（世界与 UI 共用名字；UI 默认不 tick，见 D4）：
 
 | 回调 | 时机 |
 | --- | --- |
 | `onInit` | 实例创建后；同一批新实例全部创建完成后再逐个调用，因此可以互相查找，但对方状态未必已初始化 |
 | `onStart` | 同一批新实例的 `onInit` 全部执行完后、首次 `onUpdate` 之前；此时可以依赖其他实例在 `onInit` 里准备的状态 |
-| `onUpdate(dt)` | GameLogic（世界）/ UILogic（UI），按顺序键 |
+| `onUpdate(dt)` | 世界：GameLogic 每帧，按顺序键。UI：默认不调用；`self:setTickEnabled(true)` 后由 `WidgetTree::tick` 在控件可见时调用（树顺序），`false` 关闭 |
+| 计时器回调 | 仅 UI：`self:after(sec, fn)` / `self:every(sec, fn)` 返回可 `cancel()` 的句柄；UILogic 中按 host 时钟触发，隐藏不停；实例销毁时自动取消 |
 | `onShow` / `onHide` | 仅 UI：条目或控件可见性变化后，下一个 UILogic 调用 |
 | `onAction(name, widget)` | 仅 UI 与世界：按钮动作冒泡，返回 true 停止 |
 | `onCancel()` | 取消动作，返回 true 停止 |
@@ -237,6 +239,19 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
   `UIDocumentTest.UnknownBehaviorTypeIsKeptOpaque`、
   `EditorGameUIPreviewTest.PreviewDoesNotActivateBehaviors`。
 - 验收：GUI closure 依赖审计（`ya-gui-widgets` 不新增依赖）；GUIWorkbench smoke exit 0。
+- 已落地（2026-09-28），实施取舍：
+  - 描述、激活上下文与激活接口同在 `GUI/Widgets/UIBehaviorSpec.h`：`FUIBehaviorSpec{type, data}`、
+    `FUIBehaviorActivation{entryId, entryRoot}`、`IUIBehaviorActivator`，以及遍历函数
+    `activateBehaviorSpecs`（子树前序、节点内按书写顺序，每条描述调用一次）。
+  - `fromJson` 只校验外壳（数组、`type` 为非空字符串、`data` 缺省为 `{}`、存在时必须是对象），
+    外壳不合法整份文档拒绝，与现有子节点错误一致；`type` / `data` 内容原样保留。
+  - `toJson` 只在节点有描述时写 `behaviors`，已有文档不变；格式版本不升（新增可选字段）。
+  - 激活器归 `GameUIHost` 所有（`setBehaviorActivator`，默认空 = 描述惰性挂载），声明在 `_tree`
+    之前以便它创建的行为先于它销毁；替换激活器时重挂当前场景，旧激活器活到重挂结束。
+  - 激活时机：条目挂进树之后（行为可见到树）。`addToWorld` 动态挂载的激活留到 S3 与条目
+    句柄一起做；设计器会话本就只 `instantiate` / `fromWidget`，不经过挂载函数。
+  - 追加测试：`UIDocumentTest.MalformedBehaviorEnvelopeIsRejected`、
+    `GameUIHostTest.MountActivatesBehaviorSpecsInPreorderWithEntryContext`。
 
 ### S3 — GameRuntime 控件脚本、句柄与按钮动作冒泡
 
@@ -245,6 +260,13 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 - `LuaWidgetScriptBehavior`（GameRuntime）：`IUIBehaviorActivator` 为 `type == "script.lua"`
   创建它，内含一个 S1 脚本实例，宿主 = 该控件。
 - 句柄提供显式立即布局入口（UILogic 中读取本帧几何时使用，D1）。
+- 驱动方式（D4）：UI 脚本默认只收生命周期与事件（onInit / onStart / onShow / onHide / onAction /
+  onCancel / onDestroy），不每帧调用。
+  - 按需 tick：`self:setTickEnabled(bool)` 切换 `LuaWidgetScriptBehavior::wantsTick()`，沿用
+    `UIBehavior` 的 tick 协议——`WidgetTree` 每帧轮询、只走可见子树、按树顺序，不另建调度表。
+  - 计时器：`self:after` / `self:every`，队列归 `GameUIHost`，在 `update` 里先于树 tick 按同一
+    host 时钟推进；与可见性无关（弹窗自动关闭、倒计时在隐藏时也要走）；句柄 `cancel()`；
+    实例销毁时连带取消。GUI 框架不引入计时器（与 Lua 无关的 tween 已有 `UIAnimation`）。
 - `self.widget`：所在控件句柄；`self.root`：所在条目根句柄；`self:find(name)`：在**所属条目
   实例**内按名字查找（挂载时建索引，重名报 WARN，结果弱引用）。
 - 显式句柄类型（弱引用，控件失效后操作 no-op 并记一次 WARN）：
@@ -264,7 +286,10 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
   激活其中的行为，返回根句柄（生效前句柄为 pending，访问时 WARN）。
 - `addToWorld` 挂上的控件同样参与名字索引与动作路由。
 - 测试（`GameUIHostTest` 扩展）：
-  - `WidgetScriptReceivesLifecycleInOrder`（onInit → onUpdate → onDestroy）
+  - `WidgetScriptReceivesLifecycleInOrder`（onInit → onStart → onDestroy，期间无 onUpdate）
+  - `WidgetScriptTicksOnlyAfterEnablingAndWhileVisible`
+  - `WidgetTimerFiresWhileHiddenAndStopsWithItsScript`
+  - `WidgetTimerFollowsHostClock`（GameTime host 暂停时计时器不走）
   - `ButtonActionBubblesToNearestScriptThenWorld`
   - `SpawnedButtonRoutesActionWithoutRemount`
   - `FindIsScopedToOwningEntry`（两个条目同名控件互不干扰）
@@ -345,14 +370,14 @@ S6 依赖 S2/S3/S4 的数据形态，可与 S7 并行
 
 ## 6. 决策门（开工前需确认）
 
-状态：D1、D2、D5 已于 2026-09-28 确认（F0 可开工）；其余仍为建议。
+状态：D1、D2、D5、D4 已于 2026-09-28 确认；其余仍为建议（S3 还差 D8，S4 差 D3）。
 
 | # | 问题 | 结论 / 建议 |
 | --- | --- | --- |
 | D1 | UI 更新从渲染侧移到逻辑 tick 之后，推翻 `game-ui-authoring` P0 的放置理由 | **已确认**：移动；暂停不再跳过 UILogic，原理由不再成立。接受 UI 脚本读到上一帧布局（需要时显式请求立即布局）；`setPresentation` 在 UILogic 之前确定 |
 | D2 | 暂停门控范围 | **已确认**：系统按「玩法模拟 / 引擎维护」分组，由系统自己声明：物理、骨骼动画受暂停控制；模型实例化、Transform、LinkageFramework、TaskManager、自动化、文件监视、输入状态更新不受控。模块 onLogic 不受控，需要时自己读 `isPaused()`。`TimerManager` 先审计调用方，玩法与引擎共用则拆成两个时钟。暂停 API 单一写入口、计数语义 |
 | D3 | 模态条目是否直接做成 `UIScreen` 进 `ScreenStack` | 不做；条目是持久挂载 + 显隐切换，只复用 `EInputBlocking` 语义。若以后要 push/pop 临时界面，再接 `ScreenStack` |
-| D4 | UI 脚本在控件隐藏时是否 onUpdate | 跟挂载走，隐藏仍 onUpdate（弹窗计时器不停）；视觉行为（tween）维持现状只在可见时 tick |
+| D4 | UI 脚本是否每帧 onUpdate、隐藏时是否继续 | **已确认**（参照 UMG / Godot）：默认不 tick，事件驱动；需要时 `self:setTickEnabled(true)` 开启，走现有 `UIBehavior::wantsTick` 协议，只在可见时、按树顺序调用；定时逻辑用 `self:after` / `self:every` 计时器，按 host 时钟推进、隐藏不停、随实例销毁取消 |
 | D5 | 世界脚本顺序键与初始化 | **已确认**：`(executionOrder, 场景树前序, 实体内脚本下标)`；脚本声明默认 `executionOrder`，实例可覆盖（仅显式设置时序列化）；排序缓存、结构变化时重排。增加 `onStart`（同批全部 onInit 之后、首次 onUpdate 之前），世界与 UI 一致 |
 | D6 | 精灵是否在本计划支持预制体实例化 | 不做；只做参数化 `spawnSprite`，预制体另起计划 |
 | D7 | 点锚点语义 | 点锚点轴：以锚点为基准点，`pos = 锚点 + offset − pivot × size`，alignment 只在拉伸轴生效；需与 `gui-anchor-to-slot` 确认后再改 |

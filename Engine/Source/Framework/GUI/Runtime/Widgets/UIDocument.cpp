@@ -66,6 +66,41 @@ void applySlotJson(UISlot& slot, const nlohmann::json& j)
     }
     slot.deserialize(j);
 }
+
+nlohmann::json behaviorsToJson(const std::vector<FUIBehaviorSpec>& behaviors)
+{
+    nlohmann::json j = nlohmann::json::array();
+    for (const FUIBehaviorSpec& spec : behaviors) {
+        j.push_back({{"type", spec.type}, {"data", spec.data}});
+    }
+    return j;
+}
+
+/// Only the envelope is checked; `type` and `data` stay opaque.
+bool parseBehaviors(const nlohmann::json& j, std::vector<FUIBehaviorSpec>& out)
+{
+    if (!j.is_array()) {
+        return false;
+    }
+    for (const auto& item : j) {
+        if (!item.is_object()) {
+            return false;
+        }
+        auto typeIt = item.find("type");
+        if (typeIt == item.end() || !typeIt->is_string() || typeIt->get_ref<const std::string&>().empty()) {
+            return false;
+        }
+        FUIBehaviorSpec spec{.type = typeIt->get<std::string>()};
+        if (auto dataIt = item.find("data"); dataIt != item.end()) {
+            if (!dataIt->is_object()) {
+                return false;
+            }
+            spec.data = *dataIt;
+        }
+        out.push_back(std::move(spec));
+    }
+    return true;
+}
 }
 
 namespace ya
@@ -84,6 +119,7 @@ std::shared_ptr<UIDocument> UIDocument::fromWidget(const UIElement& widget)
     document->typeId  = widget._typeId;
     document->fields  = widget.serializeFields();
     stripUIElementGeometry(document->fields);
+    document->behaviors = widget._behaviorSpecs;
     for (const auto& child : widget.getChildren()) {
         if (auto childDoc = fromWidget(*child)) {
             document->children.push_back(std::move(childDoc));
@@ -102,6 +138,7 @@ UIElementRef UIDocument::instantiate() const
     }
 
     root->deserializeFields(fields);
+    root->_behaviorSpecs = behaviors;
 
     for (size_t i = 0; i < children.size(); ++i) {
         const auto& childDoc = children[i];
@@ -126,6 +163,9 @@ nlohmann::json UIDocument::toJson() const
     j["typeId"]  = typeId;
     j["fields"]  = fields;
     stripUIElementGeometry(j["fields"]);
+    if (!behaviors.empty()) {
+        j["behaviors"] = behaviorsToJson(behaviors);
+    }
     j["children"] = nlohmann::json::array();
     for (const auto& child : children) {
         j["children"].push_back(child->toJson());
@@ -154,6 +194,11 @@ std::shared_ptr<UIDocument> UIDocument::fromJson(const nlohmann::json& json)
             YA_CORE_ERROR("UIDocument::fromJson: widget geometry must be stored on parent-owned slots");
             return nullptr;
         }
+    }
+    if (auto it = json.find("behaviors"); it != json.end() && !parseBehaviors(*it, document->behaviors)) {
+        YA_CORE_ERROR("UIDocument::fromJson: '{}' behaviors must be [{{\"type\": non-empty string, \"data\": object}}]",
+                      document->typeId);
+        return nullptr;
     }
     if (json.contains("children") && json["children"].is_array()) {
         for (const auto& childJson : json["children"]) {

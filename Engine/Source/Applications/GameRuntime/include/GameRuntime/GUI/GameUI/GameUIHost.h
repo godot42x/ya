@@ -94,6 +94,11 @@ struct YA_GAME_RUNTIME_API GameUIHost
     void setDocumentStore(UIDocumentStore* documents) { _documents = documents; }
     [[nodiscard]] UIDocumentStore* getDocumentStore() const { return _documents; }
 
+    /// Turns authored behaviour specs of mounted entries into live behaviours.
+    /// Null (the default) mounts documents with their specs inert.
+    void setBehaviorActivator(std::unique_ptr<IUIBehaviorActivator> activator);
+    [[nodiscard]] IUIBehaviorActivator* getBehaviorActivator() const { return _behaviorActivator.get(); }
+
     /// The host's tree is only presented while a scene is mounted.
     [[nodiscard]] Scene* getMountedScene() const { return _mountedScene; }
 
@@ -162,6 +167,9 @@ struct YA_GAME_RUNTIME_API GameUIHost
   private:
     void bindMountedButtonActions();
     [[nodiscard]] UIElement* findMountedWidget(std::string_view entryId, std::string_view widgetName) const;
+    /// Declared before `_tree`: behaviours it created live on tree widgets and
+    /// must be torn down before it.
+    std::unique_ptr<IUIBehaviorActivator> _behaviorActivator;
     WidgetTree                     _tree;
     std::unique_ptr<IGameUIController> _controller;
     UIDocumentStore*               _documents = nullptr;
@@ -196,12 +204,15 @@ struct YA_GAME_RUNTIME_API FSceneUIMount
 /// preview (stateless per-frame rebuild, drops them after the snapshot).
 /// Documents come from `documents`; a null store (or an unresolvable path) is
 /// reported through `onError` and mounts nothing for that entry.
+/// Each attached entry's behaviour specs go through `activator`; the editor
+/// preview passes null so authoring never runs behaviours.
 /// Errors go to `onError` (entryId included); a null sink logs through
 /// YA_CORE_ERROR.
 [[nodiscard]] YA_GAME_RUNTIME_API std::vector<FSceneUIMount>
 mountSceneAutoMountEntries(Scene&                                       scene,
                            WidgetTree&                                  tree,
                            UIDocumentStore*                             documents,
+                           IUIBehaviorActivator*                        activator,
                            const std::function<void(std::string_view)>& onError = {});
 
 } // namespace ya
