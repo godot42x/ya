@@ -12,8 +12,10 @@
 #include "GameEditor/UI/Shell/EditorSurfaceContext.h"
 #include "GameEditor/UI/Viewport/EditorViewportHost.h"
 
+#include <chrono>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -169,6 +171,16 @@ struct EditorSurface : IEditorViewportHostSink
     /// A tree row id is an index into the filtered browser rows; map it back to
     /// the discovered-projects index and mirror the path into the footer.
     void selectProjectBrowserRow(const std::string& rowId);
+    /// UE-style open splash: raise the banner now, defer the (blocking) load
+    /// past the next present so the banner is actually on screen while the
+    /// project loads.
+    void showProjectOpenSplash(const std::string& projectPath);
+    void consumePendingProjectOpen();
+
+    /// Raised with the banner; consumed (load runs) once the splash has been
+    /// on screen for a legible minimum.
+    std::optional<std::string>                    _pendingProjectOpen;
+    std::chrono::steady_clock::time_point         _pendingProjectOpenSince{};
     void publishViewportRect();
     /// The camera preview panel's rect in viewport-local logical pixels. Empty
     /// when no preview is shown.

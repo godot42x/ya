@@ -76,6 +76,9 @@ struct FEditorProjectBrowser
     std::shared_ptr<ReactiveList<UITreeView::FNode>> roots;
     std::shared_ptr<UIText> errorText;
     std::shared_ptr<UIText> pathText;
+    /// Open splash (UE-style, borderless widget centered over the page).
+    std::shared_ptr<UIElement> banner;
+    std::shared_ptr<UIText>    bannerProject;
     /// Case-insensitive substring filter on the project file name and path.
     std::string      filter;
     /// Filtered row -> index into EditorLayer::getDiscoveredProjects().
@@ -90,6 +93,13 @@ constexpr float kMenuHeight = editor_density::kMenuHeight;
 /// The launcher card (UE/Godot-style compact chooser) centered in the window;
 /// the selector is a dialog-scale surface, not a fullscreen page.
 constexpr glm::vec2 kProjectBrowserCardSize{880.0f, 560.0f};
+
+/// The open splash stays up at least this long so a fast open still reads as
+/// "the editor is opening <project>" instead of a one-frame flash.
+constexpr int kProjectBannerMinDisplayMs = 400;
+
+/// YA branding mark shown on the open splash.
+constexpr const char* kProjectBannerMark = "Engine/Content/Branding/ya-icon.png";
 
 } // namespace
 
@@ -172,6 +182,10 @@ void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
     if (!_layer || !context.app) {
         return;
     }
+
+    // Consumed at tick start: the banner frame has already been presented by
+    // the previous tick, so the blocking load below keeps it on screen.
+    consumePendingProjectOpen();
 
     const bool bProjectBrowser = !_layer->isProjectLoaded();
     _presentSurface = context.presentSurface;
@@ -294,8 +308,7 @@ void EditorSurface::buildProjectBrowser(App& app)
                            const auto& projects = _layer->getDiscoveredProjects();
                            const int   index    = _layer->getProjectBrowserSelection();
                            if (index >= 0 && index < static_cast<int>(projects.size())) {
-                               _layer->requestOpenProject(projects[static_cast<size_t>(index)]);
-                               refreshProjectBrowserRows();
+                               showProjectOpenSplash(projects[static_cast<size_t>(index)]);
                            }
                        });
 
@@ -352,6 +365,42 @@ void EditorSurface::buildProjectBrowser(App& app)
                          .release(),
                      cardSlot);
     (void)ui::attach(*_tree, *contentLayer, std::move(card).release(), cardSlot);
+
+    // The open splash: a small borderless card centered over the page, above
+    // the selector. Raised by Open Project, dismissed by the chrome rebuild
+    // once the load completes (or explicitly when the open fails).
+    auto bannerProject = ui::text("ProjectOpenBannerName")
+                             .setText("")
+                             .setStyleKey("text.header")
+                             .setHAlign(EWidgetAlignH::Center);
+    _projectBrowser->bannerProject = bannerProject.share();
+    auto bannerRoot = ui::border("ProjectOpenBanner")
+                          .setStyleKey("panel.surface")
+                          .setPadding(FMargin::all(20.0f))
+                          .setVisibility(EWidgetVisibility::Collapsed)
+                          .child(ui::column("ProjectOpenBannerContent")
+                                     .setSpacing(6.0f)
+                                     .child(ui::image("ProjectOpenBannerMark")
+                                                .setAssetPath(kProjectBannerMark)
+                                                .setScaleMode(EImageScaleMode::Contain),
+                                            ui::boxSlot().preferredSize({0.0f, 56.0f}))
+                                     .child(ui::text("ProjectOpenBannerEyebrow")
+                                                .setText("OPENING PROJECT")
+                                                .setStyleKey("text.eyebrow")
+                                                .setHAlign(EWidgetAlignH::Center))
+                                     .child(std::move(bannerProject))
+                                     .child(ui::text("ProjectOpenBannerStatus")
+                                                .setText("Loading scene, modules and content…")
+                                                .setStyleKey("text.muted")
+                                                .setHAlign(EWidgetAlignH::Center)));
+    _projectBrowser->banner = bannerRoot.share();
+    (void)ui::attach(*_tree,
+                     *contentLayer,
+                     std::move(bannerRoot).release(),
+                     ui::canvasSlot()
+                         .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
+                         .pivot({0.5f, 0.5f})
+                         .size({420.0f, 190.0f}));
     refreshProjectBrowserRows();
 }
 
@@ -895,6 +944,47 @@ void EditorSurface::selectProjectBrowserRow(const std::string& rowId)
         _projectBrowser->pathText->setText(discovered[static_cast<size_t>(index)]);
         _projectBrowser->pathText->setVisibility(EWidgetVisibility::Visible);
     }
+}
+
+void EditorSurface::showProjectOpenBanner(const std::string& projectPath)
+{
+    if (!_projectBrowser) {
+        return;
+    }
+    if (_projectBrowser->bannerProject) {
+        _projectBrowser->bannerProject->setText(std::filesystem::path(projectPath).stem().string());
+    }
+    if (_projectBrowser->banner) {
+        // Renders over the selector but never intercepts its clicks.
+        _projectBrowser->banner->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
+    }
+    _pendingProjectOpen      = projectPath;
+    _pendingProjectOpenSince = std::chrono::steady_clock::now();
+}
+
+void EditorSurface::consumePendingProjectOpen()
+{
+    if (!_pendingProjectOpen || !_layer) {
+        return;
+    }
+    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - _pendingProjectOpenSince).count();
+    if (elapsedMs < kProjectBannerMinDisplayMs) {
+        return;
+    }
+
+    const std::string path = *_pendingProjectOpen;
+    _pendingProjectOpen.reset();
+    if (_layer->requestOpenProject(path)) {
+        // Loaded: the browser->chrome rebuild below replaces the tree, banner
+        // included. While the load blocked, the last presented frame (the
+        // banner) stayed on screen.
+        return;
+    }
+    if (_projectBrowser && _projectBrowser->banner) {
+        _projectBrowser->banner->setVisibility(EWidgetVisibility::Collapsed);
+    }
+    refreshProjectBrowserRows();
 }
 
 void EditorSurface::setViewportHost(IEditorViewportHost* host)
