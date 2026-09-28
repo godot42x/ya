@@ -38,6 +38,7 @@ struct UIMenu;
 struct UIMenuBar;
 struct UITabBar;
 struct UICanvasPanel;
+class UICanvasSlot;
 struct UITheme;
 struct WidgetTree;
 struct IImage;
@@ -181,6 +182,11 @@ struct EditorSurface : IEditorViewportHostSink
     /// on screen for a legible minimum.
     std::optional<std::string>                    _pendingProjectOpen;
     std::chrono::steady_clock::time_point         _pendingProjectOpenSince{};
+    /// Canvas slots of the selector card and the open splash; applyWindowMetrics
+    /// clamps their max size to the live window extent so the fixed preferred
+    /// sizes never overflow a smaller window. Rebuilt with the browser page.
+    UICanvasSlot*                                 _projectCardSlot   = nullptr;
+    UICanvasSlot*                                 _projectSplashSlot = nullptr;
     void publishViewportRect();
     /// The camera preview panel's rect in viewport-local logical pixels. Empty
     /// when no preview is shown.

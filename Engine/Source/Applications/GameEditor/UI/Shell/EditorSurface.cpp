@@ -27,6 +27,7 @@
 #include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Host/OsClipboard.h"
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Layout/UICanvasLayout.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
@@ -94,12 +95,31 @@ constexpr float kMenuHeight = editor_density::kMenuHeight;
 /// the selector is a dialog-scale surface, not a fullscreen page.
 constexpr glm::vec2 kProjectBrowserCardSize{880.0f, 560.0f};
 
+/// The open splash: a small borderless card centered over the page.
+constexpr glm::vec2 kProjectBannerSize{420.0f, 190.0f};
+
+/// Breathing room kept around the card / banner; a window smaller than that
+/// clamps them to these floors instead of letting them overflow.
+constexpr glm::vec2 kProjectBrowserMinCardSize{320.0f, 240.0f};
+constexpr glm::vec2 kProjectBrowserMinBannerSize{280.0f, 120.0f};
+constexpr glm::vec2 kProjectBrowserWindowMargin{48.0f, 48.0f};
+
 /// The open splash stays up at least this long so a fast open still reads as
 /// "the editor is opening <project>" instead of a one-frame flash.
 constexpr int kProjectBannerMinDisplayMs = 400;
 
 /// YA branding mark shown on the open splash.
 constexpr const char* kProjectBannerMark = "Engine/Content/Branding/ya-icon.png";
+
+/// The canvas slot hosting `widget`, if the layer gave it one — the browser
+/// keeps the card / splash slots to clamp them against the live window extent.
+UICanvasSlot* projectCanvasSlot(UIElement& parent, UIElement& widget)
+{
+    if (UISlot* slot = parent.getSlotForChild(widget)) {
+        return dynamic_cast<UICanvasSlot*>(slot);
+    }
+    return nullptr;
+}
 
 } // namespace
 
@@ -231,6 +251,8 @@ void EditorSurface::rebuild(const FEditorSurfaceContext& context)
     _viewOverlayHost.clearOverlay();
     _projectBrowser.reset();
     _projectSelection.reset();
+    _projectCardSlot   = nullptr;
+    _projectSplashSlot = nullptr;
     if (_filePicker) {
         _filePicker->reset();
     }
@@ -364,7 +386,9 @@ void EditorSurface::buildProjectBrowser(App& app)
                          .setStyleKey("panel.surface")
                          .release(),
                      cardSlot);
-    (void)ui::attach(*_tree, *contentLayer, std::move(card).release(), cardSlot);
+    auto cardWidget = std::shared_ptr<UIElement>(std::move(card).release());
+    (void)ui::attach(*_tree, *contentLayer, cardWidget, cardSlot);
+    _projectCardSlot = projectCanvasSlot(*contentLayer, *cardWidget);
 
     // The open splash: a small borderless card centered over the page, above
     // the selector. Raised by Open Project, dismissed by the chrome rebuild
@@ -394,13 +418,15 @@ void EditorSurface::buildProjectBrowser(App& app)
                                                 .setStyleKey("text.muted")
                                                 .setHAlign(EWidgetAlignH::Center)));
     _projectBrowser->banner = bannerRoot.share();
+    auto splashWidget = std::shared_ptr<UIElement>(std::move(bannerRoot).release());
     (void)ui::attach(*_tree,
                      *contentLayer,
-                     std::move(bannerRoot).release(),
+                     splashWidget,
                      ui::canvasSlot()
                          .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
                          .pivot({0.5f, 0.5f})
-                         .size({420.0f, 190.0f}));
+                         .size(kProjectBannerSize));
+    _projectSplashSlot = projectCanvasSlot(*contentLayer, *splashWidget);
     refreshProjectBrowserRows();
 }
 
@@ -718,6 +744,18 @@ void EditorSurface::applyWindowMetrics(const EditorWindowMetrics& metrics)
     if (auto* fonts = FontManager::get()) {
         fonts->setActiveDpiScale(_tree->getDpiScale());
     }
+    // The selector card and the open splash keep their preferred sizes while
+    // the window is large enough, and shrink (staying centered by their pivot)
+    // once it is not — the selector adapts to the window, never overflows it.
+    const glm::vec2 extent{static_cast<float>(metrics.logicalExtent.width),
+                           static_cast<float>(metrics.logicalExtent.height)};
+    const glm::vec2 usable = glm::max(extent - kProjectBrowserWindowMargin, glm::vec2{0.0f});
+    if (_projectCardSlot) {
+        _projectCardSlot->setMaxSize(glm::clamp(usable, kProjectBrowserMinCardSize, kProjectBrowserCardSize));
+    }
+    if (_projectSplashSlot) {
+        _projectSplashSlot->setMaxSize(glm::clamp(usable, kProjectBrowserMinBannerSize, kProjectBannerSize));
+    }
 }
 
 void EditorSurface::persistDockLayouts()
@@ -946,7 +984,7 @@ void EditorSurface::selectProjectBrowserRow(const std::string& rowId)
     }
 }
 
-void EditorSurface::showProjectOpenBanner(const std::string& projectPath)
+void EditorSurface::showProjectOpenSplash(const std::string& projectPath)
 {
     if (!_projectBrowser) {
         return;
