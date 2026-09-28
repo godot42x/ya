@@ -8,6 +8,8 @@
 
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 
+#include "Core/Event.h"
+
 #include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Panel.h"
@@ -467,7 +469,10 @@ TEST(GameUIHostTest, MountedTextVisibilityAndButtonAction)
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
 
     std::string fired;
-    host.setUiActionHandler([&fired](std::string_view action) { fired = std::string(action); });
+    host.setWorldActionHandler([&fired](UIElement& source, std::string_view action) {
+        fired = std::string(action) + ":" + source._name;
+        return true;
+    });
 
     auto score = std::make_shared<UIDocument>();
     score->typeId = "engine.text";
@@ -526,9 +531,12 @@ TEST(GameUIHostTest, MountedTextVisibilityAndButtonAction)
 
     auto* restart = dynamic_cast<UIButton*>(findNamed(content, "Restart"));
     ASSERT_NE(restart, nullptr);
-    ASSERT_TRUE(static_cast<bool>(restart->_onClick));
-    restart->_onClick();
-    EXPECT_EQ(fired, "restart");
+    EXPECT_FALSE(static_cast<bool>(restart->_onClick)) << "action buttons are not bound";
+    host.getTree().setFocus(restart);
+    KeyPressedEvent enter{};
+    enter._keyCode = EKey::Enter;
+    (void)host.getTree().dispatchEvent(enter, WidgetEventContext{});
+    EXPECT_EQ(fired, "restart:Restart");
 
     EXPECT_FALSE(host.setMountedText("Missing", "Score", "nope"));
     EXPECT_FALSE(host.setMountedVisible("GameOver", "Missing", false));

@@ -88,6 +88,9 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     /// then every loaded instance gets onUpdate. Instances that appear while
     /// this runs join next frame.
     void onUpdate(float deltaTime) override;
+    /// Offer an event to the loaded, enabled world scripts in onUpdate order
+    /// until one returns true from `self:<callback>(args...)`. Loads nothing.
+    bool invokeWorld(const char* callback, const std::vector<sol::object>& args = {});
     /// Play stopped: onDestroy every live instance, whatever hosts it, and
     /// reset the active scene's script rows for the next play.
     void onStop();

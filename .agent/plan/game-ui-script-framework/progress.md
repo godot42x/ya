@@ -162,3 +162,25 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 未做：旧 API 仍在（D8）；按钮冒泡、`destroy` / `spawn`、`addToWorld` 激活属 S3b。
 
 下一步：S3b。
+
+## 2026-09-28 — S3b 按钮动作冒泡与结构变更
+
+完成：
+
+- GUI 动作出口：`UIBehavior::onAction`、`WidgetTree::emitAction` / `setActionSink`；`UIButton`
+  激活后发出 `_action`。`bindButtonActions` 与 `setUiActionHandler` 删除，改为
+  `GameUIHost::setWorldActionHandler`。
+- 路由：源控件 → 祖先上的 UI 脚本 `onAction` → 世界脚本 `Script:onUiAction`
+  （`LuaScriptingSystem::invokeWorld`，按执行顺序）→ 旧全局 `onUiAction`（S7 删）。
+- `Widget:destroy()`、`self:spawn(documentPath, parent)` 在 StructuralFlush 生效；spawn 的行为按
+  父节点所在条目激活；`addToWorld` 控件自成条目并激活行为。
+
+偏离与取舍：见 `plan.md` S3「S3b 已落地」（pending 句柄可用、`spawn` 暂不带 slot）。
+
+验证：
+
+- `ya-testing` 全量 1375 通过；`ya-gui-closure-test` 603 通过。
+- GUIWorkbench `--smoke-actions` PASS；GreedSnake runtime / editor、HelloMaterial runtime
+  `--exit-after-frame=60` exit 0、无 Error。
+
+下一步：S4 需先确认 D3（模态条目不做成 `UIScreen`，只复用 `EInputBlocking` 语义）。

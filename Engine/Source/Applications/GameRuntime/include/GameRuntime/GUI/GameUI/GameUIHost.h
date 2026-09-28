@@ -169,14 +169,30 @@ struct YA_GAME_RUNTIME_API GameUIHost
     [[nodiscard]] UIElementRef findEntryRoot(std::string_view entryId) const;
     /// The mounted entry root that `widget` belongs to (itself or an ancestor), or null.
     [[nodiscard]] UIElement* entryRootOf(const UIElement& widget) const;
-    /// Widget named `name` inside the entry rooted at `entryRoot` (index built at
-    /// mount). An ambiguous name returns the first in tree order and warns once.
+    /// Widget named `name` inside the entry rooted at `entryRoot` (index rebuilt
+    /// after structural changes). An ambiguous name returns the first in tree
+    /// order and warns once.
     [[nodiscard]] UIElementRef findInEntry(const UIElement& entryRoot, std::string_view name);
 
-    /// Called when a mounted button with a non-empty action name is clicked.
-    /// The widget stores the name; this host is the only place that turns it
-    /// into a gameplay callback.
-    void setUiActionHandler(std::function<void(std::string_view action)> handler);
+    /// Receiver of actions that bubbled out of the tree unconsumed
+    /// (WidgetTree::emitAction): the world's turn. Buttons are never bound, so
+    /// one spawned at any time routes the same way.
+    void setWorldActionHandler(std::function<bool(UIElement& source, std::string_view action)> handler);
+
+    // === Structural changes (applied by flushStructuralChanges) ===
+    /// Instantiate `documentPath` now; attach it under `parent` at the next
+    /// flush and activate its behaviour specs with the parent's entry. Until
+    /// then the subtree is pending: detached but safe to configure. Null when
+    /// the document does not resolve.
+    [[nodiscard]] UIElementRef queueSpawn(std::string_view documentPath, UIElement& parent);
+    /// Detach `widget` with its subtree at the next flush. A pending spawn is
+    /// cancelled right away.
+    void queueDestroy(UIElement& widget);
+    /// `widget` belongs to a subtree queued by queueSpawn and not attached yet.
+    [[nodiscard]] bool isPendingSpawn(const UIElement& widget) const;
+    /// StructuralFlush: queued destroys, then spawns whose parent is still in
+    /// the tree (a spawn under a destroyed parent is dropped).
+    void flushStructuralChanges();
 
     /// Remember which content-layer root came from which scene entry. Replaces
     /// the previous map. Called by the controller after a mount.
@@ -196,6 +212,7 @@ struct YA_GAME_RUNTIME_API GameUIHost
         std::weak_ptr<UIElement>                                root;
         std::unordered_map<std::string, std::weak_ptr<UIElement>> names;
         std::unordered_map<std::string, bool>                   ambiguous; ///< name -> already warned
+        bool                                                    bIndexDirty = false;
     };
     struct FTimer
     {
@@ -204,9 +221,15 @@ struct YA_GAME_RUNTIME_API GameUIHost
         float                 interval;
         std::function<bool()> fire;
     };
+    struct FPendingSpawn
+    {
+        UIElementRef             widget;
+        std::weak_ptr<UIElement> parent;
+    };
 
-    void bindMountedButtonActions();
     void advanceTimers(float deltaSeconds);
+    void addEntry(std::string entryId, const UIElementRef& root);
+    void mountWorldWidget(const UIElementRef& widget);
     [[nodiscard]] UIElement* findMountedWidget(std::string_view entryId, std::string_view widgetName) const;
     [[nodiscard]] FMountedEntry* entryFor(const UIElement& entryRoot);
     /// Declared before `_tree`: behaviours it created live on tree widgets and
@@ -219,8 +242,10 @@ struct YA_GAME_RUNTIME_API GameUIHost
     Rect2D                         _viewportPx{};
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};
     EUIUpdateClock                 _updateClock = EUIUpdateClock::RealTime;
-    std::function<void(std::string_view)> _uiActionHandler;
+    std::function<bool(UIElement&, std::string_view)> _worldActionHandler;
     std::vector<FMountedEntry>     _entries;
+    std::vector<FPendingSpawn>     _pendingSpawns;
+    std::vector<std::weak_ptr<UIElement>> _pendingDestroys;
     std::map<uint64_t, FTimer>     _timers; ///< by id: equal due times fire in creation order
     uint64_t                       _nextTimerId = 1;
     double                         _clockSeconds = 0.0;

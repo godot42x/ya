@@ -50,6 +50,14 @@ bool UIBehavior::bubbleInputEvent(UIElement& owner, const Event& event, const Wi
     return false;
 }
 
+bool UIBehavior::onAction(UIElement& owner, UIElement& source, std::string_view action)
+{
+    (void)owner;
+    (void)source;
+    (void)action;
+    return false;
+}
+
 bool UIBehavior::canAcceptDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
     (void)owner; (void)operation; (void)logicalPoint; return false;

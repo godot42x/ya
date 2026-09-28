@@ -5,6 +5,7 @@
 
 #include <functional>
 #include <memory>
+#include <string_view>
 
 namespace ya
 {
@@ -28,6 +29,9 @@ struct YA_GUI_API UIBehavior
     virtual bool previewInputEvent(UIElement& owner, const Event& event, const WidgetEventContext& ctx);
     virtual bool handleInputEvent(UIElement& owner, const Event& event, const WidgetEventContext& ctx);
     virtual bool bubbleInputEvent(UIElement& owner, const Event& event, const WidgetEventContext& ctx);
+    /// A named action emitted by `source` (the owner or a descendant) is
+    /// bubbling through the owner. Return true to consume it.
+    virtual bool onAction(UIElement& owner, UIElement& source, std::string_view action);
 
     virtual bool canAcceptDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
     /// Hover preview may be shown before the point is a valid drop (dock

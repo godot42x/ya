@@ -14,11 +14,34 @@
 namespace ya
 {
 
+namespace
+{
+
+UIElement* findInSubtree(UIElement& node, std::string_view name)
+{
+    if (node._name == name) {
+        return &node;
+    }
+    for (const UIElementRef& child : node.getChildren()) {
+        if (UIElement* found = child ? findInSubtree(*child, name) : nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+} // namespace
+
+bool LuaWidgetHandle::live() const
+{
+    UIElementRef locked = widget.lock();
+    return locked && (locked->isAttached() || (host && host->isPendingSpawn(*locked)));
+}
+
 UIElement* LuaWidgetHandle::get(const char* operation) const
 {
-    UIElementRef live = widget.lock();
-    if (live && live->isAttached()) {
-        return live.get();
+    if (live()) {
+        return widget.lock().get();
     }
     if (!bWarned) {
         bWarned = true;
@@ -63,10 +86,7 @@ void bindLuaWidgetHandles(sol::state& lua)
         "Widget",
         sol::no_constructor,
         "valid",
-        sol::readonly_property([](const LuaWidgetHandle& h) {
-            UIElementRef live = h.widget.lock();
-            return live && live->isAttached();
-        }),
+        sol::readonly_property([](const LuaWidgetHandle& h) { return h.live(); }),
         "name",
         sol::readonly_property([](const LuaWidgetHandle& h) -> std::optional<std::string> {
             if (UIElement* w = h.get("name")) {
@@ -90,9 +110,22 @@ void bindLuaWidgetHandles(sol::state& lua)
         "find",
         [](const LuaWidgetHandle& h, const std::string& name, sol::this_state state) -> sol::object {
             UIElement* w = h.get("find");
-            UIElement* root = w ? h.host->entryRootOf(*w) : nullptr;
-            UIElementRef found = root ? h.host->findInEntry(*root, name) : nullptr;
-            return makeLuaWidgetHandle(state, *h.host, found);
+            if (!w) {
+                return sol::make_object(state, sol::lua_nil);
+            }
+            // A pending spawn is in no entry yet: search what it will bring.
+            if (!w->isAttached()) {
+                UIElement* found = findInSubtree(*w, name);
+                return makeLuaWidgetHandle(state, *h.host, found ? found->shared_from_this() : nullptr);
+            }
+            UIElement* root = h.host->entryRootOf(*w);
+            return makeLuaWidgetHandle(state, *h.host, root ? h.host->findInEntry(*root, name) : nullptr);
+        },
+        "destroy",
+        [](const LuaWidgetHandle& h) {
+            if (UIElement* w = h.get("destroy")) {
+                h.host->queueDestroy(*w);
+            }
         },
         "layout",
         [](const LuaWidgetHandle& h) {

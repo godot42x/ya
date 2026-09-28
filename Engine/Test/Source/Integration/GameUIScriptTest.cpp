@@ -1,12 +1,16 @@
 // `script.lua` widget behaviours (game-ui-script-framework S3): lifecycle,
-// opt-in tick, host-clock timers, visibility callbacks, entry-scoped handles.
+// opt-in tick, host-clock timers, visibility callbacks, entry-scoped handles,
+// action bubbling to UI then world scripts, deferred spawn / destroy.
 // Each test runs a real Lua state with injected script sources; widgets are
 // mounted through the scene-entry path like a running game.
 
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "GameRuntime/Script/GameplayLua.h"
 
+#include "Core/Event.h"
+#include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "ECS/Systems/LuaScriptingSystem.h"
+#include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UIDocumentStore.h"
@@ -55,7 +59,7 @@ struct FUIScripts
     FUIScripts()
     {
         lua.setRuntimeServices({
-            .activeScene = []() -> Scene* { return nullptr; },
+            .activeScene = [this]() -> Scene* { return &scene; },
             .readScript  = [this](const std::string& path, std::string& out) {
                 auto it = sources.find(path);
                 if (it == sources.end()) {
@@ -94,6 +98,30 @@ struct FUIScripts
             w->_behaviorSpecs = {{.type = "script.lua", .data = {{"script", scriptPath(script)}}}};
         }
         return w;
+    }
+
+    static UIElementRef button(const std::string& name, const std::string& action)
+    {
+        UIElementRef b                     = widget(kTypeIdButton, name);
+        static_cast<UIButton&>(*b)._action = action;
+        return b;
+    }
+
+    /// A world script on its own entity, loaded and started.
+    void addWorldScript(const std::string& name)
+    {
+        scene.createNode3D(name)->getEntity()->addComponent<LuaScriptComponent>()->addScript(scriptPath(name));
+        lua.onUpdate(0.0f);
+    }
+
+    /// Activate a focused button from the keyboard (the same path as a click).
+    void press(UIElement* target)
+    {
+        ASSERT_NE(target, nullptr);
+        host.getTree().setFocus(target);
+        KeyPressedEvent enter{};
+        enter._keyCode = EKey::Enter;
+        (void)host.getTree().dispatchEvent(enter, WidgetEventContext{});
     }
 
     /// Publish `root` as a document and add an autoMount entry for it.
@@ -390,6 +418,149 @@ TEST(GameUIScriptTest, RemovingTheRuntimeDestroysRunningScripts)
     // Remounted without a runtime: the spec stays inert.
     ui.frame();
     EXPECT_THAT(ui.takeTrace(), IsEmpty());
+}
+
+TEST(GameUIScriptTest, ButtonActionBubblesToNearestScriptThenWorld)
+{
+    FUIScripts ui;
+    ui.addScript("Relay", R"(
+local S = {}
+function S:onAction(name, source)
+    table.insert(trace, self.widget.name .. ":" .. name .. ":" .. source.name)
+    return self.widget.name == "Panel" and name == "local"
+end
+return S
+)");
+    ui.addScript("World", R"(
+local S = {}
+function S:onUiAction(name, source)
+    table.insert(trace, "world:" .. name .. ":" .. source.name)
+    return name ~= "old"
+end
+return S
+)");
+    UIElementRef panel = FUIScripts::widget(kTypeIdCanvasPanel, "Panel", "Relay");
+    UIElementRef row   = FUIScripts::widget(kTypeIdCanvasPanel, "Row", "Relay");
+    row->addDetachedChild(FUIScripts::button("Local", "local"));
+    row->addDetachedChild(FUIScripts::button("Restart", "restart"));
+    row->addDetachedChild(FUIScripts::button("Old", "old"));
+    panel->addDetachedChild(row);
+    ui.addEntry("Menu", panel);
+    ui.host.onSceneActivated(ui.scene);
+    ui.addWorldScript("World");
+    ui.frame();
+    ui.run(R"(onUiAction = function(name) table.insert(trace, "legacy:" .. name) end)");
+
+    ui.press(ui.mounted("Menu", "Local"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Row:local:Local", "Panel:local:Local"));
+
+    ui.press(ui.mounted("Menu", "Restart"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Row:restart:Restart", "Panel:restart:Restart", "world:restart:Restart"));
+
+    ui.press(ui.mounted("Menu", "Old"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Row:old:Old", "Panel:old:Old", "world:old:Old", "legacy:old"));
+}
+
+TEST(GameUIScriptTest, SpawnedButtonRoutesActionWithoutRemount)
+{
+    FUIScripts ui;
+    ui.addScript("Shop", R"(
+local S = {}
+function S:onInit()
+    item = self:spawn("Test/UI/Item.yaui", self.widget)
+    item:find("Buy").action = "buy.sword"
+    pendingValid = item.valid
+end
+function S:onAction(name, source)
+    table.insert(trace, "shop:" .. name .. ":" .. source.name)
+    return true
+end
+return S
+)");
+    ui.addScript("Item", R"(
+local S = {}
+function S:onInit() table.insert(trace, "item.init:" .. self.root.name) end
+return S
+)");
+    UIElementRef item = FUIScripts::widget(kTypeIdCanvasPanel, "Item", "Item");
+    item->addDetachedChild(FUIScripts::button("Buy", "buy"));
+    ui.documents.put("Test/UI/Item.yaui", UIDocument::fromWidget(*item));
+    ui.addEntry("Shop", FUIScripts::widget(kTypeIdCanvasPanel, "Shop", "Shop"));
+    ui.host.onSceneActivated(ui.scene);
+
+    ui.frame();
+    EXPECT_TRUE(ui.global<bool>("pendingValid")) << "a pending spawn can be configured";
+    EXPECT_EQ(ui.mounted("Shop", "Buy"), nullptr) << "a spawn waits for StructuralFlush";
+
+    ui.host.flushStructuralChanges();
+    UIElement* buy = ui.mounted("Shop", "Buy");
+    ASSERT_NE(buy, nullptr);
+    ui.frame();
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("item.init:Shop")) << "spawned scripts join the parent's entry";
+
+    ui.press(buy);
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("shop:buy.sword:Buy"));
+}
+
+TEST(GameUIScriptTest, DestroyWaitsForStructuralFlushAndDropsSpawnsUnderIt)
+{
+    FUIScripts ui;
+    ui.addScript("Probe", kProbe);
+    ui.addScript("Spawner", R"(
+local S = {}
+function S:onInit() spawner = self end
+return S
+)");
+    UIElementRef hud = FUIScripts::widget(kTypeIdCanvasPanel, "HUD", "Spawner");
+    hud->addDetachedChild(FUIScripts::widget(kTypeIdBorder, "Toast", "Probe"));
+    hud->addDetachedChild(FUIScripts::widget(kTypeIdCanvasPanel, "Slot"));
+    ui.documents.put("Test/UI/Box.yaui", UIDocument::fromWidget(*FUIScripts::widget(kTypeIdBorder, "Box")));
+    UIElementRef crate = FUIScripts::widget(kTypeIdCanvasPanel, "Crate");
+    crate->addDetachedChild(FUIScripts::widget(kTypeIdBorder, "Lid"));
+    ui.documents.put("Test/UI/Crate.yaui", UIDocument::fromWidget(*crate));
+    ui.addEntry("HUD", hud);
+    ui.host.onSceneActivated(ui.scene);
+    ui.frame();
+    (void)ui.takeTrace();
+
+    ui.run(R"(
+toast = spawner:find("Toast")
+toast:destroy()
+box = spawner:spawn("Test/UI/Box.yaui", spawner:find("Slot"))
+spawner:find("Slot"):destroy()
+crate = spawner:spawn("Test/UI/Crate.yaui", spawner.widget)
+crate:find("Lid"):destroy()
+)");
+    EXPECT_NE(ui.mounted("HUD", "Toast"), nullptr);
+    EXPECT_THAT(ui.takeTrace(), IsEmpty());
+
+    ui.host.flushStructuralChanges();
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Toast.destroy"));
+    EXPECT_EQ(ui.mounted("HUD", "Toast"), nullptr);
+    EXPECT_EQ(ui.mounted("HUD", "Slot"), nullptr);
+    EXPECT_EQ(ui.mounted("HUD", "Box"), nullptr);
+    EXPECT_NE(ui.mounted("HUD", "Crate"), nullptr);
+    EXPECT_EQ(ui.mounted("HUD", "Lid"), nullptr) << "destroying inside a pending spawn takes effect";
+    ui.run("gone = not toast.valid and not box.valid");
+    EXPECT_TRUE(ui.global<bool>("gone"));
+}
+
+TEST(GameUIScriptTest, AddToWorldWidgetRunsScriptsAndFinds)
+{
+    FUIScripts ui;
+    ui.addScript("Probe", kProbe);
+    ui.host.onSceneActivated(ui.scene);
+
+    UIElementRef toast = FUIScripts::widget(kTypeIdCanvasPanel, "Toast", "Probe");
+    toast->addDetachedChild(FUIScripts::widget(kTypeIdText, "Message"));
+    ASSERT_TRUE(ui.host.addToWorld(ui.scene, toast).valid());
+    ui.frame();
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Toast.init", "Toast.start"));
+
+    ui.run(R"(ui.get("Toast"):find("Message").text = "saved")");
+    auto* message = dynamic_cast<UIText*>(ui.mounted("Toast", "Message"));
+    ASSERT_NE(message, nullptr);
+    EXPECT_EQ(message->getText(), "saved");
 }
 
 } // namespace ya

@@ -371,8 +371,10 @@ void App::init(AppDesc ci)
     }
     app._deleter.push("LuaScriptingSystem", [&app](void*)
                       {
-        // Widget scripts live in this Lua state; the UI host outlives it.
+        // Widget scripts and the world action handler live in this Lua state;
+        // the UI host outlives it.
         if (GameUIHost* gameUI = app.getGameUIHost()) {
+            gameUI->setWorldActionHandler(nullptr);
             gameUI->setBehaviorRuntime(nullptr);
         }
         app._luaScriptingSystem->shutdown();

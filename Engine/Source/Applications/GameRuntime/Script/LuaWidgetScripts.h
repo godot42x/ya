@@ -8,10 +8,11 @@
 //   visibility change       -> onShow / onHide in the next UILogic
 //   self:setTickEnabled(b)  -> onUpdate from the tree tick while visible
 //   self:after / self:every -> host-clock timers, visible or not
+//   action from the subtree -> onAction(name, widget); true consumes it
 //   widget leaves the tree  -> timers cancelled, onDestroy
 //
 // Names written on `self` (reserved): widget, root, setTickEnabled, after,
-// every, find.
+// every, find, spawn.
 
 #include "ECS/Systems/LuaScriptingSystem.h"
 
@@ -47,6 +48,7 @@ struct LuaWidgetScriptBehavior final : UIBehavior
     [[nodiscard]] bool wantsTick() const override { return bTickEnabled && runtime && instance.bLoaded; }
     void               tick(UIElement& owner, float deltaSeconds) override;
     void               onDetached(UIElement& owner) override;
+    bool               onAction(UIElement& owner, UIElement& source, std::string_view action) override;
 };
 
 struct LuaWidgetScripts final : IGameUIBehaviorRuntime

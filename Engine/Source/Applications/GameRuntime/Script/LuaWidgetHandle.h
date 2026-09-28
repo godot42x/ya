@@ -2,8 +2,9 @@
 
 // Lua handles to Game UI widgets. A handle is a weak reference: once its widget
 // leaves the tree, reads return nil, writes do nothing, and the handle warns
-// once. Each widget kind gets its own explicit handle type; nothing is bound
-// through reflection.
+// once. A widget from `self:spawn` works before it is attached (it can be
+// configured while pending). Each widget kind gets its own explicit handle
+// type; nothing is bound through reflection.
 
 #include "GUI/Widgets/UIElement.h"
 
@@ -22,8 +23,9 @@ struct LuaWidgetHandle
     GameUIHost*              host    = nullptr;
     mutable bool             bWarned = false;
 
-    /// The live widget, or null (warning once) when it is gone.
+    /// The widget if it is in the UI or pending a spawn; else null, warning once.
     [[nodiscard]] UIElement* get(const char* operation) const;
+    [[nodiscard]] bool       live() const;
     template <typename T>
     [[nodiscard]] T* as(const char* operation) const
     {

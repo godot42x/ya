@@ -65,9 +65,9 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
     VisualFlag            _bHovered{*this};
     VisualFlag            _bPressed{*this};
     VisualFlag            _bFocused{*this};
-    /// Authoring name of a gameplay action. Empty buttons keep a code-only
-    /// `_onClick`. GameRuntime binds a non-empty name after the document mounts;
-    /// the widget type itself does not know about Lua.
+    /// Authoring name of an action. A click runs `_onClick`, then a non-empty
+    /// action bubbles from the button through WidgetTree::emitAction; the
+    /// widget type itself does not know who handles it.
     std::string           _action;
     std::function<void()> _onClick;
 
@@ -98,6 +98,8 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
     [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 
   private:
+    void activate();
+
     UISingleChildLayout             _contentLayout;
     std::shared_ptr<Reactive<bool>> _enabledBinding;
 };

@@ -66,9 +66,7 @@ bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ct
         const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
         if (!keyEvent.bRepeat && (keyEvent._keyCode == EKey::Enter || keyEvent._keyCode == EKey::Space)) {
             YA_CORE_INFO("UIButton '{}' activated by keyboard", _name);
-            if (_onClick) {
-                _onClick();
-            }
+            activate();
             return true;
         }
         // Other keys are not the button's business: they bubble as
@@ -107,9 +105,7 @@ bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ct
         // the pointer left the widget (standard drag-release semantics).
         if (bPointInside || ctx.bViaCapture) {
             YA_CORE_INFO("UIButton '{}' clicked", _name);
-            if (_onClick) {
-                _onClick();
-            }
+            activate();
         }
         return true;
     case EEvent::MouseMoved:
@@ -118,6 +114,20 @@ bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ct
         return true;
     default:
         return false;
+    }
+}
+
+void UIButton::activate()
+{
+    // `_onClick` may detach this button; the action still leaves from it.
+    const UIElementRef self = shared_from_this();
+    if (_onClick) {
+        _onClick();
+    }
+    if (!_action.empty()) {
+        if (WidgetTree* tree = getTree()) {
+            tree->emitAction(*this, _action);
+        }
     }
 }
 

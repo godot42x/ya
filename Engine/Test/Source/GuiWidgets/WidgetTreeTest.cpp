@@ -2164,6 +2164,65 @@ TEST(WidgetTreeTest, FocusedButtonActivatesOnEnterAndSpace)
     EXPECT_EQ(clicks, 2);
 }
 
+TEST(WidgetTreeTest, ButtonActionBubblesThroughBehavioursToTheSink)
+{
+    struct Recorder final : UIBehavior
+    {
+        std::vector<std::string>* log = nullptr;
+        std::string               tag;
+        bool                      bConsume = false;
+
+        bool onAction(UIElement& owner, UIElement& source, std::string_view action) override
+        {
+            (void)owner;
+            log->push_back(tag + ":" + std::string(action) + ":" + source._name);
+            return bConsume;
+        }
+    };
+
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UICanvasPanel>("Panel");
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel,
+                FCanvasSlotArgs{.anchorMin = {0.0f, 0.0f}, .anchorMax = {1.0f, 1.0f}});
+    auto button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
+    tree.attach(*panel, button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    tree.layout();
+
+    std::vector<std::string> log;
+    auto onButton = std::make_shared<Recorder>();
+    onButton->log = &log;
+    onButton->tag = "button";
+    button->addBehavior(onButton);
+    auto onPanel = std::make_shared<Recorder>();
+    onPanel->log = &log;
+    onPanel->tag = "panel";
+    panel->addBehavior(onPanel);
+    std::vector<std::string> sunk;
+    tree.setActionSink([&sunk](UIElement& source, std::string_view action) {
+        sunk.push_back(std::string(action) + ":" + source._name);
+        return true;
+    });
+
+    int clicks      = 0;
+    button->_onClick = [&clicks] { ++clicks; };
+    button->_action  = "go";
+    tree.setFocus(button.get());
+    (void)tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f));
+    EXPECT_EQ(clicks, 1) << "the code callback still runs";
+    EXPECT_EQ(log, (std::vector<std::string>{"button:go:B", "panel:go:B"}));
+    EXPECT_EQ(sunk, (std::vector<std::string>{"go:B"}));
+
+    log.clear();
+    sunk.clear();
+    onPanel->bConsume = true;
+    (void)tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f));
+    EXPECT_EQ(log, (std::vector<std::string>{"button:go:B", "panel:go:B"}));
+    EXPECT_TRUE(sunk.empty()) << "a consumed action does not reach the sink";
+
+    tree.detach(*button);
+    EXPECT_FALSE(tree.emitAction(*button, "go"));
+}
+
 TEST(WidgetTreeTest, DetachWhilePressedClearsButtonTransientState)
 {
     WidgetTree tree({.width = 800, .height = 600});

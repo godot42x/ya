@@ -15,6 +15,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <iterator>
 #include <optional>
 #include <unordered_map>
@@ -198,6 +199,57 @@ bool runsBefore(const FScriptSlot& a, const FScriptSlot& b)
         return entt::to_integral(a.handle) < entt::to_integral(b.handle);
     }
     return a.index < b.index;
+}
+
+/// Loaded world scripts of `scene` in execution order. `loadPending` gets each
+/// unloaded row that has a path and returns whether it loaded it just now.
+std::vector<FScriptSlot> collectWorldSlots(ya::Scene&                                                       scene,
+                                           const std::function<bool(entt::entity, ya::LuaScriptInstance&)>& loadPending)
+{
+    entt::registry& registry = scene.getRegistry();
+    // Snapshot the handles first: loading runs script chunks, which may add
+    // entities or scripts, and the storage must not change under a live view.
+    std::vector<entt::entity> handles;
+    {
+        auto view = registry.view<ya::LuaScriptComponent>();
+        handles.assign(view.begin(), view.end());
+    }
+
+    std::vector<FScriptSlot> slots;
+    for (const entt::entity handle : handles) {
+        if (!scene.getEntityByEnttID(handle) || !registry.all_of<ya::LuaScriptComponent>(handle)) {
+            continue;
+        }
+        const std::vector<size_t> path = treePath(scene, handle);
+        for (size_t index = 0;; ++index) {
+            // Re-fetch every step: a loading chunk can grow this vector.
+            auto& scripts = registry.get<ya::LuaScriptComponent>(handle).scripts;
+            if (index >= scripts.size()) {
+                break;
+            }
+            auto& script = scripts[index];
+            if (!script.scriptPath.empty()) {
+                script.scriptPath = ya::LuaScriptInstance::normalizeScriptPath(script.scriptPath);
+            }
+            bool bFresh = false;
+            if (!script.bLoaded && !script.scriptPath.empty() && loadPending) {
+                bFresh = loadPending(handle, script);
+            }
+            const auto& loaded = registry.get<ya::LuaScriptComponent>(handle).scripts[index];
+            if (loaded.bLoaded) {
+                slots.push_back(FScriptSlot{
+                    .handle = handle,
+                    .index  = index,
+                    .id     = loaded.runtimeId,
+                    .order  = loaded.executionOrder(),
+                    .path   = path,
+                    .bFresh = bFresh,
+                });
+            }
+        }
+    }
+    std::stable_sort(slots.begin(), slots.end(), runsBefore);
+    return slots;
 }
 
 } // namespace
@@ -509,50 +561,11 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
 
     auto *scene = _services.activeScene ? _services.activeScene() : nullptr;
     if (!scene) return;
-    entt::registry& registry = scene->getRegistry();
 
-    // Snapshot the handles first: loading runs script chunks, which may add
-    // entities or scripts, and the storage must not change under a live view.
-    std::vector<entt::entity> handles;
-    {
-        auto view = registry.view<LuaScriptComponent>();
-        handles.assign(view.begin(), view.end());
-    }
-
-    std::vector<FScriptSlot> slots;
-    for (const entt::entity handle : handles) {
-        if (!scene->getEntityByEnttID(handle) || !registry.all_of<LuaScriptComponent>(handle)) {
-            continue;
-        }
-        const std::vector<size_t> path = treePath(*scene, handle);
-        for (size_t index = 0;; ++index) {
-            // Re-fetch every step: a loading chunk can grow this vector.
-            auto& scripts = registry.get<LuaScriptComponent>(handle).scripts;
-            if (index >= scripts.size()) {
-                break;
-            }
-            auto& script = scripts[index];
-            if (!script.scriptPath.empty()) {
-                script.scriptPath = LuaScriptInstance::normalizeScriptPath(script.scriptPath);
-            }
-            bool bFresh = false;
-            if (!script.bLoaded && !script.scriptPath.empty()) {
-                bFresh = load(script, std::make_unique<FEntityScriptHost>(&_services.activeScene, handle));
-            }
-            const auto& loaded = registry.get<LuaScriptComponent>(handle).scripts[index];
-            if (loaded.bLoaded) {
-                slots.push_back(FScriptSlot{
-                    .handle = handle,
-                    .index  = index,
-                    .id     = loaded.runtimeId,
-                    .order  = loaded.executionOrder(),
-                    .path   = path,
-                    .bFresh = bFresh,
-                });
-            }
-        }
-    }
-    std::stable_sort(slots.begin(), slots.end(), runsBefore);
+    const std::vector<FScriptSlot> slots =
+        collectWorldSlots(*scene, [this](entt::entity handle, LuaScriptInstance& script) {
+            return load(script, std::make_unique<FEntityScriptHost>(&_services.activeScene, handle));
+        });
 
     // A callback may destroy or reshape any slot, so each step resolves again.
     auto resolve = [&](const FScriptSlot& slot) { return findScript(*scene, slot.handle, slot.id); };
@@ -581,6 +594,21 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
         YA_PROFILE_SCOPE("LuaScriptingSystem::scriptOnUpdate");
         call(*script, ELuaScriptCallback::Update, deltaTime);
     }
+}
+
+bool LuaScriptingSystem::invokeWorld(const char* callback, const std::vector<sol::object>& args)
+{
+    auto* scene = _services.activeScene ? _services.activeScene() : nullptr;
+    if (!scene) {
+        return false;
+    }
+    for (const FScriptSlot& slot : collectWorldSlots(*scene, {})) {
+        auto* script = findScript(*scene, slot.handle, slot.id);
+        if (script && script->enabled && invoke(*script, callback, args)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void LuaScriptingSystem::onEntityDestroying(Entity& entity)

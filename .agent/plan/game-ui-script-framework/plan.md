@@ -280,7 +280,8 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
   源控件向上找最近的脚本实例调 `onAction`，未消费继续向上，到条目根后交给世界脚本
   `onUiAction`（按执行顺序）。动态生成的按钮天然生效。
 - 删除：Lua 全局 `onUiAction`、`GameUIHost::setUiActionHandler`、`bindButtonActions`、
-  `ui.setText` / `ui.setVisible`、`setMountedText/Visible`、`findMountedWidget` 的字符串三元组查询。
+  `ui.setText` / `ui.setVisible`、`setMountedText/Visible`、`findMountedWidget` 的字符串三元组查询
+  （前两项 C++ 接线 S3b 已删，其余随 S7）。
 - `ui.get(entryId)`：返回条目根脚本实例的 `self`（没有脚本时返回根句柄），玩法用它调用界面方法。
 - 动态实例化：`self:spawn(documentPath, parentHandle[, slot])` 入队，StructuralFlush 挂上并
   激活其中的行为，返回根句柄（生效前句柄为 pending，访问时 WARN）。
@@ -298,8 +299,9 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 - 分两批交付：
   - **S3a**：控件脚本运行时（生命周期、按需 tick、计时器）、句柄、条目内查找、`ui.get`。
   - **S3b**：按钮动作冒泡、`destroy()` / `spawn`、`addToWorld` 参与索引与激活。
-    旧 API（`setUiActionHandler`、`bindButtonActions`、`ui.setText/setVisible`、
-    `setMountedText/Visible`）S3 只保留不扩展，删除随 S7。
+    脚本可见的旧 API（Lua 全局 `onUiAction`、`ui.setText/setVisible` 及其背后的
+    `setMountedText/Visible`）S3 只保留不扩展，删除随 S7。`bindButtonActions` 与
+    `setUiActionHandler` 是 C++ 内部接线，被冒泡取代，S3b 直接删除。
 - S3a 已落地（2026-09-28），实施取舍：
   - `IGameUIBehaviorRuntime : IUIBehaviorActivator` 多一个 `update()`（GameRuntime 定义）；
     `GameUIHost::setBehaviorRuntime` 取代 S2 的 `setBehaviorActivator`，`update` 顺序为
@@ -317,6 +319,27 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
     否则被 `onStop` 销毁的脚本不会在下一次 Play 重启，Play 期间改过的文字、显隐也会留到编辑态。
   - 追加测试：`WidgetScriptSeesShowAndHide`、`UiGetReturnsTheEntryScriptOrItsRoot`、
     `RemovingTheRuntimeDestroysRunningScripts`、`TickOrderAppTest.StopRemountsSceneUIFromItsDocuments`。
+- S3b 已落地（2026-09-28），实施取舍：
+  - GUI：`UIBehavior::onAction(owner, source, action)`（默认不消费）、`WidgetTree::emitAction` /
+    `setActionSink`；`UIButton` 激活时先 `_onClick`，再从自身发出非空 `_action`。冒泡持有路径
+    强引用，处理函数可以安全地摘除控件。
+  - GameRuntime：`GameUIHost` 把树的 sink 接到 `setWorldActionHandler`（取代
+    `setUiActionHandler`）；`GameplayLua` 的处理顺序为世界脚本 `Script:onUiAction(name, widget)`
+    （`LuaScriptingSystem::invokeWorld`，与 onUpdate 同序，返回 true 即停）→ 旧全局 `onUiAction`。
+    世界脚本排序抽成 `collectWorldSlots`，onUpdate 与 invokeWorld 共用。
+  - `Widget:destroy()` / `self:spawn(documentPath, parent)` 入 `GameUIHost` 队列，
+    `GameRuntimeTickOrchestrator::flushStructuralChanges` 先于场景实体执行：先销毁，再挂载父节点
+    仍在树上的 spawn（父节点同帧被销毁则丢弃），挂上后按父节点所在条目激活行为，条目名字索引
+    标脏、下次 `find` 重建。卸载 / 重挂时清空两个队列。销毁 pending 根即取消 spawn；销毁
+    pending 子树内的控件立即解链（尚无树见过它）。
+  - 偏离：pending 句柄**可用**（不是访问即 WARN）——spawn 后立即配置是最常见写法；pending 子树
+    上的 `find` 在该子树内查找。`spawn` 暂不收 slot 参数，挂到父节点的默认边；带 slot 的重载等
+    有真实调用方再加（S7 不需要）。
+  - `addToWorld` 挂上的控件自成一个条目（id = 控件名），激活其行为描述，参与 `find` / `ui.get`。
+  - 追加测试：`WidgetTreeTest.ButtonActionBubblesThroughBehavioursToTheSink`、
+    `GameUIScriptTest.DestroyWaitsForStructuralFlushAndDropsSpawnsUnderIt`、
+    `AddToWorldWidgetRunsScriptsAndFinds`；`GameUIHostTest.MountedTextVisibilityAndButtonAction`
+    改为经键盘激活、断言按钮不再被绑定 `_onClick`。
 
 ### S4 — 条目模态、暂停与取消
 

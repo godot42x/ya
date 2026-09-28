@@ -306,6 +306,18 @@ struct YA_GUI_API WidgetTree final
     /// Tab / Shift+Tab is handled by the tree first.
     [[nodiscard]] EWidgetRouteResult dispatchEvent(const Event& event, const WidgetEventContext& ctx);
 
+    // === Actions ===
+    /// Bubble a named action from `source` toward the root: the behaviours of
+    /// each widget on the way get UIBehavior::onAction until one consumes it,
+    /// then the action sink. Returns whether anything consumed it. A source
+    /// that is not in this tree emits nothing.
+    bool emitAction(UIElement& source, std::string_view action);
+    /// Receiver of actions no widget consumed (the tree's owner decides).
+    void setActionSink(std::function<bool(UIElement& source, std::string_view action)> sink)
+    {
+        _actionSink = std::move(sink);
+    }
+
     /// Topmost-first pick of the widget under `logicalPoint` (children before
     /// self, zOrder descending, respecting subtree culling). Shared by the
     /// editor preview picking and hit-test diagnostics; null when nothing is
@@ -625,6 +637,7 @@ struct YA_GUI_API WidgetTree final
     UIElementRef      _dragGhost;
     UIElementRef      _externalGhost;
     DragSessionObserver _dragObserver;
+    std::function<bool(UIElement& source, std::string_view action)> _actionSink;
 };
 
 } // namespace ya

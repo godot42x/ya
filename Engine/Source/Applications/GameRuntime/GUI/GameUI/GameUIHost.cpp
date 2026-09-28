@@ -8,7 +8,6 @@
 #include "RHI/Core/Texture.h"
 
 #include "GUI/Layout/UILayout.h"
-#include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/UIDocumentStore.h"
@@ -94,6 +93,9 @@ IGuiTextureSource& gameUITextureSource()
 GameUIHost::GameUIHost() : _controller(std::make_unique<DefaultGameUIController>())
 {
     _tree.setTextureSource(&gameUITextureSource());
+    _tree.setActionSink([this](UIElement& source, std::string_view action) {
+        return _worldActionHandler && _worldActionHandler(source, action);
+    });
 }
 
 GameUIHost::~GameUIHost() = default;
@@ -175,7 +177,11 @@ WidgetAttachment GameUIHost::addToWorld(Scene& world, const UIElementRef& widget
                       world.getName());
         return {};
     }
-    return _controller->addToWorld(world, widget, *this);
+    WidgetAttachment attachment = _controller->addToWorld(world, widget, *this);
+    if (attachment.valid()) {
+        mountWorldWidget(widget);
+    }
+    return attachment;
 }
 
 WidgetAttachment GameUIHost::addToWorld(Scene& world,
@@ -188,7 +194,11 @@ WidgetAttachment GameUIHost::addToWorld(Scene& world,
                       world.getName());
         return {};
     }
-    return _controller->addToWorld(world, widget, args, *this);
+    WidgetAttachment attachment = _controller->addToWorld(world, widget, args, *this);
+    if (attachment.valid()) {
+        mountWorldWidget(widget);
+    }
+    return attachment;
 }
 
 EWidgetRouteResult GameUIHost::dispatchEvent(const Event& event, const glm::vec2& windowPoint)
@@ -340,19 +350,6 @@ void indexNamedWidgets(UIElement&                                               
     }
 }
 
-void bindButtonActions(UIElement& node, const std::function<void(std::string_view)>& handler)
-{
-    if (auto* button = dynamic_cast<UIButton*>(&node); button && !button->_action.empty() && handler) {
-        const std::string action = button->_action;
-        button->_onClick = [handler, action]() { handler(action); };
-    }
-    for (const UIElementRef& child : node.getChildren()) {
-        if (child) {
-            bindButtonActions(*child, handler);
-        }
-    }
-}
-
 } // namespace
 
 std::vector<FSceneUIMount> mountSceneAutoMountEntries(Scene&                                       scene,
@@ -409,36 +406,113 @@ std::vector<FSceneUIMount> mountSceneAutoMountEntries(Scene&                    
     return mounts;
 }
 
-void GameUIHost::setUiActionHandler(std::function<void(std::string_view action)> handler)
+void GameUIHost::setWorldActionHandler(std::function<bool(UIElement& source, std::string_view action)> handler)
 {
-    _uiActionHandler = std::move(handler);
+    _worldActionHandler = std::move(handler);
 }
 
 void GameUIHost::setMountedRoots(std::vector<std::pair<std::string, std::weak_ptr<UIElement>>> roots)
 {
-    _entries.clear();
+    clearMountedRoots();
     for (auto& [entryId, weakRoot] : roots) {
-        FMountedEntry& entry = _entries.emplace_back(FMountedEntry{.entryId = std::move(entryId), .root = weakRoot});
-        if (UIElementRef root = weakRoot.lock()) {
-            indexNamedWidgets(*root, entry.names, entry.ambiguous);
-        }
+        addEntry(std::move(entryId), weakRoot.lock());
     }
-    bindMountedButtonActions();
 }
 
 void GameUIHost::clearMountedRoots()
 {
+    // Queued changes target what is being unmounted.
     _entries.clear();
+    _pendingSpawns.clear();
+    _pendingDestroys.clear();
 }
 
-void GameUIHost::bindMountedButtonActions()
+void GameUIHost::addEntry(std::string entryId, const UIElementRef& root)
 {
-    if (!_uiActionHandler) {
+    FMountedEntry& entry = _entries.emplace_back(FMountedEntry{.entryId = std::move(entryId), .root = root});
+    if (root) {
+        indexNamedWidgets(*root, entry.names, entry.ambiguous);
+    }
+}
+
+void GameUIHost::mountWorldWidget(const UIElementRef& widget)
+{
+    // A widget joined by code is its own entry, named after itself.
+    addEntry(widget->_name, widget);
+    if (_behaviorRuntime) {
+        activateBehaviorSpecs(*widget, *_behaviorRuntime, FUIBehaviorActivation{.entryId = widget->_name, .entryRoot = *widget});
+    }
+}
+
+UIElementRef GameUIHost::queueSpawn(std::string_view documentPath, UIElement& parent)
+{
+    std::shared_ptr<UIDocument> document = _documents ? _documents->resolve(documentPath) : nullptr;
+    UIElementRef                widget   = document ? document->instantiate() : nullptr;
+    if (!widget) {
+        YA_CORE_WARN("Game UI spawn: document '{}' does not resolve to a widget", documentPath);
+        return nullptr;
+    }
+    _pendingSpawns.push_back(FPendingSpawn{.widget = widget, .parent = parent.weak_from_this()});
+    return widget;
+}
+
+void GameUIHost::queueDestroy(UIElement& widget)
+{
+    const auto pending = std::find_if(_pendingSpawns.begin(), _pendingSpawns.end(),
+                                      [&widget](const FPendingSpawn& spawn) { return spawn.widget.get() == &widget; });
+    if (pending != _pendingSpawns.end()) {
+        _pendingSpawns.erase(pending);
         return;
     }
-    for (const FMountedEntry& entry : _entries) {
-        if (UIElementRef root = entry.root.lock()) {
-            bindButtonActions(*root, _uiActionHandler);
+    if (isPendingSpawn(widget)) {
+        // Inside a subtree no tree has seen yet: unlinking it now is safe.
+        _tree.detach(widget);
+        return;
+    }
+    _pendingDestroys.push_back(widget.weak_from_this());
+}
+
+bool GameUIHost::isPendingSpawn(const UIElement& widget) const
+{
+    const UIElement* top = &widget;
+    while (top->getParent()) {
+        top = top->getParent();
+    }
+    return std::any_of(_pendingSpawns.begin(), _pendingSpawns.end(),
+                       [top](const FPendingSpawn& spawn) { return spawn.widget.get() == top; });
+}
+
+void GameUIHost::flushStructuralChanges()
+{
+    // A destroy may run onDestroy, which may queue more: those wait for the next flush.
+    for (const std::weak_ptr<UIElement>& weak : std::exchange(_pendingDestroys, {})) {
+        UIElementRef widget = weak.lock();
+        if (!widget || widget->getTree() != &_tree) {
+            continue;
+        }
+        if (UIElement* root = entryRootOf(*widget)) {
+            if (FMountedEntry* entry = entryFor(*root)) {
+                entry->bIndexDirty = true;
+            }
+        }
+        _tree.detach(*widget);
+    }
+    for (const FPendingSpawn& spawn : std::exchange(_pendingSpawns, {})) {
+        UIElementRef parent = spawn.parent.lock();
+        if (!parent || parent->getTree() != &_tree || !_tree.attach(*parent, spawn.widget).valid()) {
+            continue;
+        }
+        UIElement*     root  = entryRootOf(*spawn.widget);
+        FMountedEntry* entry = root ? entryFor(*root) : nullptr;
+        if (entry) {
+            entry->bIndexDirty = true;
+        }
+        if (_behaviorRuntime) {
+            activateBehaviorSpecs(*spawn.widget, *_behaviorRuntime,
+                                  FUIBehaviorActivation{
+                                      .entryId   = entry ? std::string_view(entry->entryId) : std::string_view{},
+                                      .entryRoot = root ? *root : *spawn.widget,
+                                  });
         }
     }
 }
@@ -453,7 +527,8 @@ UIElementRef GameUIHost::findEntryRoot(std::string_view entryId) const
 {
     for (const FMountedEntry& entry : _entries) {
         if (entry.entryId == entryId) {
-            return entry.root.lock();
+            UIElementRef root = entry.root.lock();
+            return root && root->getTree() == &_tree ? root : nullptr;
         }
     }
     return nullptr;
@@ -486,6 +561,18 @@ UIElementRef GameUIHost::findInEntry(const UIElement& entryRoot, std::string_vie
     FMountedEntry* entry = entryFor(entryRoot);
     if (!entry) {
         return nullptr;
+    }
+    if (entry->bIndexDirty) {
+        entry->bIndexDirty = false;
+        std::unordered_map<std::string, bool> warned = std::exchange(entry->ambiguous, {});
+        entry->names.clear();
+        if (UIElementRef root = entry->root.lock()) {
+            indexNamedWidgets(*root, entry->names, entry->ambiguous);
+        }
+        for (auto& [ambiguousName, bWarned] : entry->ambiguous) {
+            const auto previous = warned.find(ambiguousName);
+            bWarned = previous != warned.end() && previous->second;
+        }
     }
     const std::string key(name);
     auto it = entry->names.find(key);

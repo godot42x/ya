@@ -251,6 +251,9 @@ void GameRuntimeTickOrchestrator::tickUILogic(App& app, float dt)
 void GameRuntimeTickOrchestrator::flushStructuralChanges(App& app)
 {
     YA_PROFILE_SCOPE("Logic/StructuralFlush");
+    if (GameUIHost* gameUIHost = app.getGameUIHost()) {
+        gameUIHost->flushStructuralChanges();
+    }
     Scene* scene = app.getSceneServices().getActiveScene();
     if (!scene) {
         return;

@@ -133,6 +133,18 @@ void LuaWidgetScriptBehavior::onDetached(UIElement& owner)
     }
 }
 
+bool LuaWidgetScriptBehavior::onAction(UIElement& owner, UIElement& source, std::string_view action)
+{
+    (void)owner;
+    if (!runtime || !instance.bLoaded) {
+        return false;
+    }
+    sol::state& lua = runtime->scripting.lua();
+    return runtime->scripting.invoke(instance, "onAction",
+                                     {sol::make_object(lua, std::string(action)),
+                                      makeLuaWidgetHandle(lua, runtime->host, source.shared_from_this())});
+}
+
 LuaWidgetScripts::LuaWidgetScripts(LuaScriptingSystem& inScripting, GameUIHost& inHost)
     : scripting(inScripting), host(inHost)
 {
@@ -158,6 +170,16 @@ LuaWidgetScripts::LuaWidgetScripts(LuaScriptingSystem& inScripting, GameUIHost& 
         }
         GameUIHost& host = behavior->runtime->host;
         return makeLuaWidgetHandle(state, host, host.findInEntry(*root, name));
+    });
+    _selfApi.set_function("spawn", [](const sol::table& self, const std::string& documentPath,
+                                      const LuaWidgetHandle& parent, sol::this_state state) -> sol::object {
+        auto        behavior = behaviorOf(self);
+        UIElement*  under    = behavior && behavior->runtime ? parent.get("spawn") : nullptr;
+        if (!under) {
+            return sol::make_object(state, sol::lua_nil);
+        }
+        GameUIHost& host = behavior->runtime->host;
+        return makeLuaWidgetHandle(state, host, host.queueSpawn(documentPath, *under));
     });
 }
 
