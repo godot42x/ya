@@ -95,14 +95,16 @@ AppKernel
   └─ ya::App                    游戏 / 编辑器产品壳
        GameRuntimeFrameOrchestrator
          tickLogic → EditorModule::onLogic
-           play-mode viewport | editor camera | prepare compose pipelines
+           scene context | editor camera | prepare compose pipelines
            EditorLayer::onUpdate | pending viewport resize
          tickRender → RenderRuntime world graph
            EditorModule::onViewportCompose
              EditorViewportCompositor
-               2D: canvas preview + recordEditorCanvasSelectionOverlay
-               3D: world RT + recordEditorWorldViewportOverlays
+               world RT + recordEditorWorldViewportOverlays
              setViewportDisplayImage
+             EditorUICanvasCompositor（仅 Canvas tab attach 时）
+               preview tree + grid + recordEditorCanvasSelectionOverlay
+               → designer.canvas().image（Canvas tab tick 时包成 Texture）
            EditorModule::onPresentation
              EditorWindowSession::tick（default window）
                → EditorSurface::tick
@@ -510,8 +512,11 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   `(kind, key)` 单例；两扇窗绑同一 scene key 共享 undo。Surface / WindowSession
   不拥有 registry。UI Designer 是 `WindowRootEditor`（`kUIEditorRootId`），Preview /
   Palette / Tree / Inspector 是 nested owned tools，走 UI document 的 dirty /
-  RejectIfDirty close / per-kind preview claim（不是 Camera；画布仍是 Level 2D
-  viewport）。Material/Script 同样是 WindowRootEditor + nested document tools
+  RejectIfDirty close / per-kind preview claim（不是 Camera）。画布是 UI Designer 自己的
+  Canvas tab（`EditorUICanvasTab`，stable key `ui-preview`）：pan/zoom/extent/image 在
+  `EditorUIDesignerSession::canvas()`，手势在 tab 的 `handleInputEvent`（pointer capture），
+  `EditorUICanvasCompositor` 只在 tab attach 时录制；Level 视口没有 2D 模式，
+  `EditorLayer` / `EditorInputNode` 不含任何画布分支。Material/Script 同样是 WindowRootEditor + nested document tools
   （identity/dirty/undo chrome，还不是 material graph / script AST）。Owned tool 带
   `ownerEditorId`，dock 政策是目标 dock scope + owner。`canSpawnEditorTab` 管
   Window-menu / invoke / drop / redock / layout restore，是唯一一处 placement 谓词：
@@ -589,7 +594,7 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   的输入排除不会各自漂移。**世界交互必须先问宿主**：`EditorViewportTab::isWorldPoint`（= `pickAt(point)
   == ViewportImage`）为 false 时 `screenToViewport` 直接返回 false、overlay candidate 也不成立，
   否则点在预览面板上会去 pick 面板下面的世界对象。收起预览 = 推 null 纹理（Collapsed），不保留空面板。
-- **视口不在屏上就不声明 View**。视口是 dock tab，`UIDockSpace::rebuildStack` 在非选中时把它的 widget 从树上 detach（detach 递归到持有该 stack 的 level editor tab），所以“用户在看 Inspector”是常规情况而不是错误态。可见性由 widget 自己的 attach/detach 边写进 `EditorLayer`（`_shownViewportCount`，**计数不是 bool**——第二个编辑器窗口有自己的 chrome 和视口，一个窗口切 tab 不能停掉另一个），`EditorViewProducer::collectSceneViews` 先读 `isViewportShown()`，为假直接 return，和既有的 `isViewportMode2D()` 同一条声明式路径。没声明就没有 View，也就没有 family / target / graph——**不要**让各 pass 自己去跳过，也不要用退化几何（extent 0）表达隐藏：可见性是 widget 树的事实，几何是布局的事实，混在一起每个读点都得重新猜，而且折叠 / 未布局 / `describesPixels` 刚失败三种情况都会产生退化几何，判不准。detach 时同时清 hover/focus，否则编辑器相机会继续吃本该给新 tab 的输入。
+- **视口不在屏上就不声明 View**。视口是 dock tab，`UIDockSpace::rebuildStack` 在非选中时把它的 widget 从树上 detach（detach 递归到持有该 stack 的 level editor tab），所以“用户在看 Inspector”是常规情况而不是错误态。可见性由 widget 自己的 attach/detach 边写进 `EditorLayer`（`_shownViewportCount`，**计数不是 bool**——第二个编辑器窗口有自己的 chrome 和视口，一个窗口切 tab 不能停掉另一个），`EditorViewProducer::collectSceneViews` 先读 `isViewportShown()`，为假直接 return。没声明就没有 View，也就没有 family / target / graph——**不要**让各 pass 自己去跳过，也不要用退化几何（extent 0）表达隐藏：可见性是 widget 树的事实，几何是布局的事实，混在一起每个读点都得重新猜，而且折叠 / 未布局 / `describesPixels` 刚失败三种情况都会产生退化几何，判不准。detach 时同时清 hover/focus，否则编辑器相机会继续吃本该给新 tab 的输入。
 - `onImGuiRender` 编辑器 chrome shell（menu/toolbar/dockspace/viewport/debug/settings/project browser）已删除。
 - GUIWorkbench 是独立 Feature Gallery（`FWorkbenchSurface` 挂 GUIApp）。左侧 rail 是
   分组 `UISelectableRow` 列表（`UIScrollViewport` + group `UIText`），**不是**垂直 `UITabBar`。

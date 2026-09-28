@@ -63,8 +63,7 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
 13. 宿主视口的图片/尺寸访问器只有**一个来源**，没有兜底链：
     `getActiveViewportImageShared` / `getViewportDisplayImageShared` /
     `getViewportExtent` / `getViewOutput` 都只读本帧 published 的 display root，
-    未发布就返回 `nullptr` / `{}`。要回落的调用方自己回落（编辑器 2D 画布用面板
-    尺寸、host camera 用 `hostView.viewportRect.extent`），因为只有调用方知道“没有视口时该显示
+    未发布就返回 `nullptr` / `{}`。要回落的调用方自己回落（host camera 用 `hostView.viewportRect.extent`），因为只有调用方知道“没有视口时该显示
     什么”。回落必须落在**本 tick 的输入**上：不要写 `resolveViewportExtent` 那种“先读 device
     已发布的尺寸、读不到再回落”的投影函数（2026-09-19 已删除）——它把上一帧的输出尺寸当成了这一帧
     的输入尺寸，而且 init 之后那个分支恒非零，后面的兜底永远不可达。

@@ -18,11 +18,16 @@
 // onClick: that belongs to GameUIHost's runtime tree, which is a different
 // instance of the same document. Interactive Preview, if it is ever wanted,
 // should be an explicit mode with its own clock rather than the default here.
+//
+// The preview is shown by the UI Designer's Canvas tab (EditorUICanvasTab),
+// never by the Level viewport. The tab owns the pointer gestures; this session
+// owns the edited widget, the drag session and the canvas view state.
 // ============================================================================
 
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "GameEditor/EditorUICanvasView.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
 #include <memory>
@@ -82,9 +87,13 @@ struct EditorUIDesignerSession
     /// inspector see the edit before an explicit save.
     void syncPreviewToDocument();
 
+    // === Canvas view (the Canvas tab's navigation and picture) ===
+    [[nodiscard]] EditorUICanvasView&       canvas() { return _canvas; }
+    [[nodiscard]] const EditorUICanvasView& canvas() const { return _canvas; }
+
     // === Preview (independent WidgetTree, never shared with the runtime) ===
     /// Build the immutable preview frame. `uiScale`/`offset` map tree-local
-    /// logical pixels to render-target pixels (the 2D canvas passes its
+    /// logical pixels to render-target pixels (the canvas passes its
     /// framebuffer scale * zoom and pan so the preview stays coherent with
     /// the canvas grid and with canvas picking).
     [[nodiscard]] UIFrameSnapshot buildPreviewSnapshot(const glm::vec2& uiScale, const glm::vec2& offset);
@@ -115,13 +124,17 @@ struct EditorUIDesignerSession
     /// the widget was removed.
     bool deleteWidget(UIElement* widget);
 
-    // === Canvas direct manipulation (EditorLayer drives the mouse, this
-    // panel owns the edited widget and the drag session) ===
-    /// Resize-handle edge bits (shared with EditorLayer's handle hit test).
+    // === Canvas direct manipulation (the Canvas tab drives the pointer, this
+    // session owns the edited widget and the drag session) ===
+    /// Resize-handle edge bits.
     static constexpr uint8_t kResizeHandleLeft   = 1u << 0;
     static constexpr uint8_t kResizeHandleRight  = 1u << 1;
     static constexpr uint8_t kResizeHandleTop    = 1u << 2;
     static constexpr uint8_t kResizeHandleBottom = 1u << 3;
+    /// Resize handles of the selection under a canvas-view point (0 when none).
+    /// Handles are fixed-size squares in view pixels, matching the selection
+    /// overlay the canvas compose draws.
+    [[nodiscard]] uint8_t hitTestResizeHandles(const glm::vec2& viewPoint) const;
     /// Begin a move session; snapshots position/size/anchors so deltas are
     /// always relative to the press point.
     void beginMove(UIElement* widget, const glm::vec2& canvasPoint);
@@ -152,7 +165,6 @@ struct EditorUIDesignerSession
 
   private:
     void rebuildDocumentFromPreview();
-    void applyPreviewExtent();
     void markDirty();
     /// Install an in-memory document under a fresh untitled session key.
     void openUntitled(const std::shared_ptr<UIDocument>& document);
@@ -173,6 +185,8 @@ struct EditorUIDesignerSession
 
     /// Asset path of the open document; empty for an untitled one.
     std::string _documentPath;
+
+    EditorUICanvasView _canvas;
 
     // === Canvas direct-manipulation session state ===
     enum class EDragMode : uint8_t

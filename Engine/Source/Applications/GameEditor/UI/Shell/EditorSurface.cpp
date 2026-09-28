@@ -397,8 +397,6 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
     });
     _menuBar->addItem("View", [this]() {
         std::vector<UIMenu::FItem> items = {
-            UIMenu::FItem::fromAction(_rootSession->actions(), "viewport.mode3d"),
-            UIMenu::FItem::fromAction(_rootSession->actions(), "viewport.mode2d"),
             UIMenu::FItem::fromAction(_rootSession->actions(), "viewport.ortho"),
             UIMenu::FItem::separator(),
             UIMenu::FItem::fromAction(_rootSession->actions(), "editor.settings"),

@@ -26,6 +26,7 @@
 #include "GameEditor/UI/Dock/EditorNativeTearOff.h"
 #include "GameEditor/UI/Shell/EditorSurfaceContext.h"
 #include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
+#include "GameEditor/UI/Viewport/EditorUICanvasCompositor.h"
 #include "GameEditor/UI/Viewport/EditorViewportCompositor.h"
 #include "GameEditor/UI/Dock/EditorWindowLayout.h"
 #include "GameEditor/UI/Dock/EditorLayoutLibrary.h"
@@ -77,19 +78,20 @@ namespace
 //   GameRuntimeTickOrchestrator::iterate
 //     tickLogic
 //       EditorModule::onLogic
-//         syncPlayViewportMode
+//         setSceneContext (play clone while running)
 //         updateEditorCameraAndPrepareCompose   (world graph on/off, camera,
 //                                                Render2D pipeline prep)
 //         EditorLayer::onUpdate
 //         (the authoring View's rect is declared by EditorViewProducer, not
 //          pushed at the renderer from here)
 //     tickRender
-//       Renderer record world graph (disabled in 2D canvas)
+//       Renderer record world graph
 //       EditorModule::onViewportCompose          [command recording]
 //         viewport snapshot → EditorViewportCompositor
-//           2D: canvas preview + recordEditorCanvasSelectionOverlay
-//           3D: overlays on the tone-mapped display image (world, then screen)
+//           overlays on the tone-mapped display image (world, then screen)
 //         setViewportDisplayImage  (chrome UIImage samples this RT)
+//         EditorUICanvasCompositor (only while the UI Designer Canvas tab is
+//           attached): preview tree + grid + selection → designer.canvas().image
 //       EditorModule::onPresentation             [same command buffer]
 //         presentDefaultChrome
 //           EditorWindowSession::tick → EditorSurface::tick
@@ -140,6 +142,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     EditorPlaySession              _playSession;
     FreeCameraController           _cameraController;
     EditorViewportCompositor       _viewportCompositor;
+    EditorUICanvasCompositor       _canvasCompositor;
     ScreenDrawRecorder             _toolRecorder;
     EditorDocumentRegistry         _documents;
     EditorWindowRegistry           _windows;
@@ -156,8 +159,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     DelegateHandle                 _scenePathHandle = INVALID_HANDLE;
     App*                           _app             = nullptr;
     EEditorChromeHost              _chromeHost      = EEditorChromeHost::WidgetTree;
-    bool                           _bWasRunning     = false;
-    std::optional<EViewportMode>   _viewportModeBeforePlay;
 
     [[nodiscard]] INativeWindow* mainNativeWindow() const
     {
@@ -385,48 +386,17 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             });
 
         api.registerFunction(
-            "viewport.set_mode",
-            "Switches the editor viewport between '3d' (world) and '2d' (Game UI designer canvas).",
-            Json{{"mode", {{"type", "string"}}}},
-            [this](const Json& args) -> Json {
-                const std::string mode = args.value("mode", "3d");
-                if (mode == "2d") {
-                    _layer->setViewportMode(EViewportMode::Mode2D);
-                }
-                else if (mode == "3d") {
-                    _layer->setViewportMode(EViewportMode::Mode3D);
-                }
-                else {
-                    throw ScriptApiRegistry::Error("viewport.set_mode: mode must be '3d' or '2d'");
-                }
-                return Json{{"mode", _layer->isViewportMode2D() ? "2d" : "3d"}};
-            });
-
-        api.registerFunction(
-            "viewport.get_mode",
-            "Returns the current editor viewport mode: {mode: '3d'|'2d'}.",
-            Json::object(),
-            [this](const Json&) -> Json {
-                return Json{{"mode", _layer->isViewportMode2D() ? "2d" : "3d"}};
-            });
-
-        api.registerFunction(
-            "viewport.pan_zoom",
-            "Sets the 2D canvas preview navigation. Args: {pan_x?, pan_y?, zoom?}.",
+            "ui_designer.pan_zoom",
+            "Sets the UI Designer Canvas navigation. Args: {pan_x?, pan_y?, zoom?}.",
             Json{{"pan_x", {{"type", "number"}}}, {"pan_y", {{"type", "number"}}}, {"zoom", {{"type", "number"}}}},
             [this](const Json& args) -> Json {
-                if (args.contains("pan_x") || args.contains("pan_y")) {
-                    glm::vec2 pan = _layer->getCanvasPan();
-                    pan.x = args.value("pan_x", pan.x);
-                    pan.y = args.value("pan_y", pan.y);
-                    _layer->setCanvasPan(pan);
-                }
+                EditorUICanvasView& canvas = _layer->getEditorUIDesignerSession().canvas();
+                canvas.pan.x = args.value("pan_x", canvas.pan.x);
+                canvas.pan.y = args.value("pan_y", canvas.pan.y);
                 if (args.contains("zoom")) {
-                    _layer->setCanvasZoom(args.at("zoom").get<float>());
+                    canvas.setZoom(args.at("zoom").get<float>());
                 }
-                return Json{{"pan_x", _layer->getCanvasPan().x},
-                            {"pan_y", _layer->getCanvasPan().y},
-                            {"zoom", _layer->getCanvasZoom()}};
+                return Json{{"pan_x", canvas.pan.x}, {"pan_y", canvas.pan.y}, {"zoom", canvas.zoom}};
             });
 
         api.registerFunction(
@@ -466,24 +436,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     // table of contents; these helpers are the named steps in that map.
     // -----------------------------------------------------------------
 
-    void syncPlayViewportMode(App& app)
-    {
-        // Entering runtime from the UI workspace mirrors Godot-style flow:
-        // runtime starts in the 3D workspace, but the user may switch back to
-        // the 2D authoring workspace while the play session keeps running.
-        const bool bRunning = app.isRuntimeMode() || app.isSimulationMode();
-        if (bRunning && !_bWasRunning && _layer->isViewportMode2D()) {
-            _viewportModeBeforePlay = _layer->getViewportMode();
-            _layer->setViewportMode(EViewportMode::Mode3D, /*bPersist=*/false);
-        }
-        else if (!bRunning && _bWasRunning && _viewportModeBeforePlay.has_value()) {
-            _layer->setViewportMode(*_viewportModeBeforePlay, /*bPersist=*/false);
-            _viewportModeBeforePlay.reset();
-        }
-        _bWasRunning = bRunning;
-        _layer->setSceneContext(_layer->getViewportInteractionScene());
-    }
-
     void updateEditorCameraAndPrepareCompose(App& app, float dt)
     {
         auto& renderServices = app.getRenderServices();
@@ -498,14 +450,13 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         const RenderViewOutput* displayedView = renderServices.getDisplayedViewOutput();
         const Extent2D viewExtent = displayedView ? displayedView->desc.extent : Extent2D{};
         // Keep the editor camera controllable during simulation; only full
-        // runtime (PIE) hands viewport input over to the game. 2D canvas
-        // preview uses its own pan/zoom navigation instead of the camera.
-        if (!app.isRuntimeMode() && !_layer->isViewportMode2D() && _layer->shouldCaptureInput()) {
+        // runtime (PIE) hands viewport input over to the game.
+        if (!app.isRuntimeMode() && _layer->shouldCaptureInput()) {
             _cameraController.update(editorCamera, app.getInputManager(), dt);
         }
         if (viewExtent.height > 0) {
             const float aspect = static_cast<float>(viewExtent.width) / static_cast<float>(viewExtent.height);
-            if (_layer->isEditorOrthoXY() && !_layer->isViewportMode2D()) {
+            if (_layer->isEditorOrthoXY()) {
                 editorCamera.setRotation({0.0f, 0.0f, 0.0f});
                 constexpr float kHalfHeight = 12.0f;
                 editorCamera.setOrthographic(-kHalfHeight * aspect,
@@ -515,7 +466,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                                              editorCamera._nearClip,
                                              editorCamera._farClip);
             }
-            else if (!_layer->isEditorOrthoXY()) {
+            else {
                 editorCamera.setPerspective(editorCamera._fov,
                                             aspect,
                                             editorCamera._nearClip,
@@ -525,20 +476,14 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         // Prepare before command recording. Recreating a pipeline while a
         // command buffer is recording invalidates that command buffer.
         // 3D overlays draw into the tone-mapped display image and test the
-        // View depth. The canvas preview is a separate target.
+        // View depth. The UI Designer canvas is a separate target.
         const EFormat::T depthFormat = renderServices.getViewDepthFormat();
         EFormat::T overlayColor = EFormat::R8G8B8A8_UNORM;
         if (RenderDeviceState* device = renderServices.getDeviceState()) {
             overlayColor = device->getPostprocessColorFormat();
         }
-        if (_layer->isViewportMode2D()) {
-            _viewportCompositor.prepare(kEditorCanvasPreviewColorFormat,
-                                        EFormat::Undefined,
-                                        true);
-        }
-        else {
-            _viewportCompositor.prepare(overlayColor, depthFormat, false);
-        }
+        _viewportCompositor.prepare(overlayColor, depthFormat);
+        _canvasCompositor.prepare();
         EFormat::T chromeFormat = EFormat::B8G8R8A8_UNORM;
         if (auto* surface = renderServices.getHostSurface(); surface && surface->getSwapchain()) {
             chromeFormat = surface->getSwapchain()->getFormat();
@@ -572,15 +517,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         const auto snapshot = renderServices.buildViewportSnapshot(app.getSceneServices().getActiveScene());
         _layer->setViewportContext(snapshot);
         _layer->setEntityIdPickImage(snapshot.entityIdImageOwner);
-        // 2D mode disables the world scene graph, so no View is declared and
-        // there is no displayed-View output; size the canvas target from the
-        // editor panel instead (the same fallback guards a degenerate extent in 3D).
-        const RenderViewOutput* displayedView = renderServices.getDisplayedViewOutput();
-        Extent2D canvasTargetExtent = displayedView ? displayedView->desc.extent : Extent2D{};
-        if (_layer->isViewportMode2D() ||
-            canvasTargetExtent.width == 0 || canvasTargetExtent.height == 0) {
-            canvasTargetExtent = Extent2D::fromVec2(_layer->getViewportSize());
-        }
         // The compositor wants a camera, not "the displayed View": this caller
         // answers with the displayed View's camera today; another View's camera
         // composes just as well.
@@ -591,12 +527,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             .projection     = displayedArrangement.projection,
             .viewProjection = displayedArrangement.viewProjection(),
         };
-        _viewportCompositor.compose(*render,
-                                    commandBuffer,
-                                    snapshot,
-                                    *_layer,
-                                    worldCamera,
-                                    canvasTargetExtent);
+        _viewportCompositor.compose(commandBuffer, snapshot, *_layer, worldCamera);
         // Keep the last valid frame instead of clobbering the display with a
         // transiently null output (startup / mode-switch / resize gaps).
         if (auto output = _viewportCompositor.getOutputImage();
@@ -609,8 +540,8 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         // recorded it, this flight is still open) and hand it to the layer, the
         // same three steps the world viewport uses: device -> layer -> chrome
         // widget. The chrome composes it after the world image, which is what
-        // keeps the world overlays under it. No preview this tick (2D mode, no
-        // camera selected) publishes null, which collapses the panel.
+        // keeps the world overlays under it. No preview this tick (no camera
+        // selected) publishes null, which collapses the panel.
         _layer->setViewportPreviewImage(
             previewImageForChrome(app, commandBuffer));
     }
@@ -839,6 +770,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         if (RenderDeviceState* device = renderServices.getDeviceState()) {
             _guiWindows.setScreenDrawPipelines(&device->screenDrawPipelines());
             _viewportCompositor.bindDraw(device->screenDrawPipelines(), device->worldDrawPipelines());
+            _canvasCompositor.bindDraw(device->screenDrawPipelines());
             _toolRecorder.init(device->screenDrawPipelines());
         }
         if (!_guiWindows.init()) {
@@ -891,6 +823,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _layer->setShowContentBrowserHandler([this]() {
             if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
                 session->surface().showContentBrowser();
+            }
+        });
+        _layer->setShowUIDesignerCanvasHandler([this]() {
+            if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
+                (void)session->surface().invokeTab("ui-preview");
             }
         });
         _layer->setOpenDocumentEditorHandler([this](EEditorDocumentKind kind, std::string key) {
@@ -1002,6 +939,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         gEditorAuthoringScene = nullptr;
         app.removeSceneViewProducer(_viewProducer);
         _viewportCompositor.shutdown();
+        _canvasCompositor.shutdown();
         _toolRecorder.destroy();
         if (_layer) {
             _layer->setViewportDisplayImage(nullptr);
@@ -1093,7 +1031,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         if (!_layer) {
             return;
         }
-        syncPlayViewportMode(app);
+        _layer->setSceneContext(_layer->getViewportInteractionScene());
         updateEditorCameraAndPrepareCompose(app, dt);
         _layer->onUpdate(dt);
     }
@@ -1105,6 +1043,9 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             return;
         }
         composeAuthoringViewport(app, commandBuffer);
+        if (IRender* render = app.getRenderServices().getRender()) {
+            _canvasCompositor.compose(*render, commandBuffer, _layer->getEditorUIDesignerSession());
+        }
     }
 
     void onBeforePresentation(App& app, ICommandBuffer& commandBuffer, float dt) override

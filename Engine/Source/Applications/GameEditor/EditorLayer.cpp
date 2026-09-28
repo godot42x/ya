@@ -19,7 +19,6 @@ EditorLayer::EditorLayer(App* app)
         .getSelectedEntity = [this]() { return getSelectedEntity(); },
         .getSelections = [this]() -> const std::vector<Entity*>& { return getSelections(); },
         .getViewportInteractionScene = [this]() { return getViewportInteractionScene(); },
-        .isViewportMode2D = [this]() { return isViewportMode2D(); },
         .isEditorOrthoXY = [this]() { return isEditorOrthoXY(); },
         .onTransformCommitted = [this]() { markSceneDirty(); },
     });
@@ -95,9 +94,6 @@ void EditorLayer::onUpdate(float dt)
 
 Entity* EditorLayer::getCameraPreviewEntity() const
 {
-    if (isViewportMode2D()) {
-        return nullptr;
-    }
     Entity* selected = getSelectedEntity();
     if (!selected || !selected->isValid() || !selected->hasComponent<CameraComponent>() ||
         !selected->hasComponent<TransformComponent>()) {
@@ -125,33 +121,6 @@ void EditorLayer::setCurrentScenePath(std::string scenePath)
     }
     _currentScenePath = std::move(scenePath);
     onScenePathChanged.broadcast();
-}
-
-void EditorLayer::setViewportMode(EViewportMode mode, bool bPersist)
-{
-    if (_viewportMode == mode) {
-        return;
-    }
-
-    _viewportMode = mode;
-    _gizmo.cancelDrag();
-    _selection.setContext(getSceneHierarchyContext());
-
-    // Cancel any in-flight 2D canvas manipulation on mode switch.
-    _canvasPressHit     = nullptr;
-    _canvasPressPoint   = {0.0f, 0.0f};
-    _bCanvasPressActive = false;
-    _uiDesignerSession.endDrag();
-
-    if (_app && mode == EViewportMode::Mode2D) {
-        _app->getInputRouter().cancelInput(EInputCancelReason::CaptureReleased);
-    }
-
-    if (bPersist) {
-        ConfigManager::Editor(kEditorConfigDocument)
-            .set("viewport.mode", mode == EViewportMode::Mode2D ? "2d" : "3d")
-            .flush();
-    }
 }
 
 void EditorLayer::setEditorOrthoXY(bool enabled)
@@ -302,21 +271,6 @@ void EditorLayer::unmountGameUIEntry(const std::string& entryId)
     }
     markSceneDirty();
     notifyHierarchyChanged();
-}
-
-bool EditorLayer::viewportToCanvas(const glm::vec2& viewportLocal, glm::vec2& outCanvas) const
-{
-    if (_canvasZoom <= 0.0f) {
-        return false;
-    }
-    outCanvas = (viewportLocal - _canvasPan) / _canvasZoom;
-    return outCanvas.x >= 0.0f && outCanvas.y >= 0.0f &&
-           outCanvas.x <= _viewportSize.x && outCanvas.y <= _viewportSize.y;
-}
-
-glm::vec2 EditorLayer::canvasToViewport(const glm::vec2& canvasPoint) const
-{
-    return canvasPoint * _canvasZoom + _canvasPan;
 }
 
 

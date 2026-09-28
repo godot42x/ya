@@ -173,8 +173,8 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
     });
     registry.add({
         .tabId = "ui-preview",
-        .title = "UI Preview",
-        .toolsMenuLabel = "UI Preview",
+        .title = "Canvas",
+        .toolsMenuLabel = "UI Canvas",
         .scope = EEditorTabScope::EditorOwnedTool,
         .ownerEditorId = kUIEditorRootId,
         .placement = EEditorTabPlacement::EditorOwnedNested,
@@ -183,7 +183,7 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
             if (!ctx.layer) {
                 return nullptr;
             }
-            return std::make_shared<EditorUIPreviewTab>(*ctx.layer);
+            return std::make_shared<EditorUICanvasTab>(*ctx.layer);
         },
     });
     registry.add({

@@ -82,13 +82,6 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
         return;
     }
 
-    // The 2D canvas workspace draws no world view at all, so it has neither a
-    // primary view nor a preview inset. That is a declaration the editor makes
-    // here rather than a switch the runtime has to honour.
-    if (_layer->isViewportMode2D()) {
-        return;
-    }
-
     // Generated editor companions are editor furniture: the authoring view draws
     // them while the app is stopped and on request afterwards, a camera preview
     // shows what that camera sees, and the game view never draws them. The

@@ -14,7 +14,6 @@ namespace ya
 
 struct EditorLayer;
 struct ICommandBuffer;
-struct IRender;
 struct RenderTexture;
 struct RenderViewportSnapshot;
 
@@ -30,12 +29,12 @@ struct EditorComposeCamera
 
 /// Pictures the authoring viewport widget samples.
 ///
-/// 3D draws into the View's tone-mapped display image: world lines with the
-/// View depth (test, no write), then gizmo / HUD. 2D owns a canvas preview.
-/// This object does not present to the swapchain.
+/// Draws into the View's tone-mapped display image: mounted Game UI while
+/// authoring, then world lines with the View depth (test, no write), then
+/// gizmo / HUD. This object does not present to the swapchain. The UI
+/// Designer canvas is EditorUICanvasCompositor, not a mode of this one.
 class EditorViewportCompositor
 {
-    std::shared_ptr<RenderTexture> _canvasImage;
     std::shared_ptr<RenderTexture> _publishedOutput;
     EditorGameUIPreview            _scenePreview;
     ScreenDrawPipelines*           _screenPipelines = nullptr;
@@ -44,7 +43,6 @@ class EditorViewportCompositor
     /// Game UI overlay on the 3D display image. Separate from `_viewportScreen`
     /// because one recorder resets its flight buffer at the start of a record.
     ScreenDrawRecorder             _gameUiScreen;
-    ScreenDrawRecorder             _canvasScreen;
     WorldDrawRecorder              _world;
     bool                           _bRecordersBound    = false;
     EFormat::T                     _overlayColorFormat = EFormat::Undefined;
@@ -52,32 +50,21 @@ class EditorViewportCompositor
 
   public:
     void bindDraw(ScreenDrawPipelines& screen, WorldDrawPipelines& world);
-    /// `bCanvas` prepares the canvas recorder. Otherwise the viewport screen
-    /// recorder and the world recorder are prepared for the display image and
-    /// the View depth.
-    void prepare(EFormat::T colorFormat, EFormat::T depthFormat, bool bCanvas);
+    /// Prepare the screen and world recorders for the display image and the
+    /// View depth.
+    void prepare(EFormat::T colorFormat, EFormat::T depthFormat);
     void shutdown();
     [[nodiscard]] std::shared_ptr<RenderTexture> getOutputImage() const
     {
         return _publishedOutput;
     }
 
-    void compose(IRender&                      render,
-                 ICommandBuffer&               commandBuffer,
+    void compose(ICommandBuffer&               commandBuffer,
                  const RenderViewportSnapshot& snapshot,
                  EditorLayer&                  layer,
-                 const EditorComposeCamera&    worldCamera,
-                 const Extent2D&               canvasTargetExtent);
+                 const EditorComposeCamera&    worldCamera);
 
   private:
-    void composeCanvasPreview(IRender&        render,
-                              ICommandBuffer& commandBuffer,
-                              EditorLayer&    layer,
-                              const Extent2D& canvasTargetExtent);
-    void composeAuthoringView(ICommandBuffer&            commandBuffer,
-                              const RenderViewportSnapshot& snapshot,
-                              EditorLayer&               layer,
-                              const EditorComposeCamera& worldCamera);
     void composeMountedGameUI(ICommandBuffer& commandBuffer,
                               RenderTexture&  color,
                               EditorLayer&    layer);
@@ -86,7 +73,6 @@ class EditorViewportCompositor
                            RenderTexture&             depth,
                            EditorLayer&               layer,
                            const EditorComposeCamera& worldCamera);
-    void ensureCanvasTarget(IRender& render, const Extent2D& extent);
 };
 
 } // namespace ya

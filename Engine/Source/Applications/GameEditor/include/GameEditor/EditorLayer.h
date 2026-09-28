@@ -43,15 +43,6 @@ struct Texture;
 using EditorViewportContext      = RenderViewportSnapshot;
 using EditorViewportDebugCatalog = RenderViewportDebugCatalog;
 
-/// Editor viewport viewing mode (development-time only; the game always
-/// renders 3D + 2D together). Mode2D previews the Game UI designer canvas
-/// over a grid, hiding the 3D world.
-enum class EViewportMode : uint8_t
-{
-    Mode3D = 0,
-    Mode2D = 1,
-};
-
 struct EditorLayer
 {
   private:
@@ -103,24 +94,10 @@ struct EditorLayer
     std::vector<std::string> _discoveredProjects;
     std::string              _projectBrowserError;
 
-    // 2D canvas preview state (Mode2D): pan in viewport pixels, zoom scale
-    // around the viewport center. Lightweight navigation state - no camera
-    // entity (Unity Scene-view 2D mode semantics).
-    EViewportMode _viewportMode       = EViewportMode::Mode3D;
-    /// World-2D authoring stays in this viewport: an orthographic camera
-    /// looking down local +Z onto the XY plane. Mode2D remains the UI canvas.
+    /// World-2D authoring is this viewport with an orthographic camera looking
+    /// down local +Z onto the XY plane. The UI Designer canvas is not a mode of
+    /// this viewport; it is the UI Designer's own Canvas tab.
     bool          _bEditorOrthoXY     = false;
-    glm::vec2     _canvasPan          = {0.0f, 0.0f};
-    float         _canvasZoom         = 1.0f;
-    bool          _bCanvasPanning     = false;
-    glm::vec2     _canvasPanLastMouse = {0.0f, 0.0f};
-
-    // 2D canvas widget direct manipulation (designer preview). The drag
-    // session itself (snapshots + delta application) lives in the UI
-    // Designer panel; this layer owns the mouse mapping and handle hit test.
-    UIElement* _canvasPressHit     = nullptr;      // widget the press hit (drag target)
-    glm::vec2  _canvasPressPoint   = {0.0f, 0.0f}; // canvas logical point at press
-    bool       _bCanvasPressActive = false;        // press handled selection/drag this gesture
 
     // Editor settings
     glm::vec4 _clearColor                  = {0.1f, 0.1f, 0.1f, 1.0f};
@@ -183,6 +160,7 @@ struct EditorLayer
     EditorAssetPickerCallback _assetPickerHandler;
     EditorFilePickerCallback  _filePickerHandler;
     std::function<void()>     _showContentBrowser;
+    std::function<void()>     _showUIDesignerCanvas;
     std::function<void(EEditorDocumentKind, std::string)> _openDocumentEditor;
     std::string               _pendingContentReveal;
     std::string _currentScenePath; // Current scene file path
@@ -330,19 +308,13 @@ struct EditorLayer
             }
         }
 
-        if (!_selections.empty() && isViewportMode2D()) {
-            setViewportMode(EViewportMode::Mode3D, /*bPersist=*/false);
-        }
         ++_selectionGeneration;
         onSelectionChanged.broadcast();
     }
 
     [[nodiscard]] uint64_t selectionGeneration() const { return _selectionGeneration; }
 
-    // === 2D canvas preview mode ===
-    [[nodiscard]] EViewportMode    getViewportMode() const { return _viewportMode; }
-    void                           setViewportMode(EViewportMode mode, bool bPersist = true);
-    [[nodiscard]] bool             isViewportMode2D() const { return _viewportMode == EViewportMode::Mode2D; }
+    // === World-2D authoring and Game UI mounts ===
     [[nodiscard]] bool             isEditorOrthoXY() const { return _bEditorOrthoXY; }
     /// Snap the editor camera onto the XY plane when enabling. Sprites face
     /// local +Z, so this is the view that shows them.
@@ -358,16 +330,6 @@ struct EditorLayer
     void                           openGameUIEntry(const std::string& entryId);
     /// Remove the entry from the editable scene. The document stays on disk.
     void                           unmountGameUIEntry(const std::string& entryId);
-    [[nodiscard]] const glm::vec2& getCanvasPan() const { return _canvasPan; }
-    [[nodiscard]] float            getCanvasZoom() const { return _canvasZoom; }
-    void                           setCanvasPan(const glm::vec2& pan) { _canvasPan = pan; }
-    void                           setCanvasZoom(float zoom) { _canvasZoom = std::clamp(zoom, 0.1f, 16.0f); }
-    /// Map a viewport-local pixel to canvas logical pixels under the current
-    /// 2D pan/zoom transform. Returns false when the point is outside the
-    /// visible canvas region.
-    bool viewportToCanvas(const glm::vec2& viewportLocal, glm::vec2& outCanvas) const;
-    /// Inverse of viewportToCanvas (viewport-local px from canvas logical px).
-    [[nodiscard]] glm::vec2 canvasToViewport(const glm::vec2& canvasPoint) const;
 
     // === Editor view options (what the editor's own views draw) ===
     [[nodiscard]] bool isEditorGizmoShown() const { return _bShowEditorGizmos; }
@@ -448,21 +410,6 @@ struct EditorLayer
     void                                              persistDebugGroupState(int groupIndex);
 
     void pickEntity(float viewportX, float viewportY);
-    /// 2D mode picking: hit-test the UI Designer preview tree (canvas coords).
-    void pickNode2D(float viewportX, float viewportY);
-
-    // === 2D canvas direct manipulation (designer preview) ===
-    /// Left-press in the 2D canvas: resize handle of the selection takes
-    /// priority, then hit the preview tree (select + start move), then clear
-    /// the selection on empty canvas.
-    void beginCanvasPress();
-    /// Left-drag while a manipulation session is active.
-    void updateCanvasDrag();
-    /// Left-release: end the manipulation session (no pick when a drag ran).
-    void endCanvasPress();
-    /// Resize-handle hit test of `widget` in viewport-local mouse pixels
-    /// (0 when the cursor is not over a handle).
-    uint8_t hitTestCanvasResizeHandles(const UIElement& widget) const;
     /// Frame the camera on the merged world bounds of the whole selection.
     void focusCameraOnSelection();
 
@@ -482,12 +429,10 @@ struct EditorLayer
     Entity*  getSelectedEntity() const { return _selections.empty() ? nullptr : _selections.front(); }
     uint64_t getSelectedEntityUUID() const { return _selectedEntityUUID; }
     /// The camera the camera-preview inset shows: the selected entity when it
-    /// holds a camera, otherwise nothing. Null in the 2D canvas workspace, which
-    /// has no world view to inset onto.
+    /// holds a camera, otherwise nothing.
     [[nodiscard]] Entity* getCameraPreviewEntity() const;
-    /// Active scene used for viewport interaction. In the 2D workspace this is
-    /// always the authoring scene so runtime UI editing never mutates the play
-    /// clone. In the 3D workspace it follows the active scene.
+    /// Active scene used for viewport interaction: it follows the active scene,
+    /// so during a play session it is the play clone.
     Scene* getViewportInteractionScene() const;
 
     void cmdNewScene();
@@ -510,6 +455,15 @@ struct EditorLayer
     void clearFilePickerHandler() { _filePickerHandler = nullptr; }
     void setShowContentBrowserHandler(std::function<void()> handler) { _showContentBrowser = std::move(handler); }
     void clearShowContentBrowserHandler() { _showContentBrowser = nullptr; }
+    void setShowUIDesignerCanvasHandler(std::function<void()> handler) { _showUIDesignerCanvas = std::move(handler); }
+    void clearShowUIDesignerCanvasHandler() { _showUIDesignerCanvas = nullptr; }
+    /// Bring the UI Designer's Canvas tab forward (a document was just opened).
+    void showUIDesignerCanvas()
+    {
+        if (_showUIDesignerCanvas) {
+            _showUIDesignerCanvas();
+        }
+    }
     void setOpenDocumentEditorHandler(std::function<void(EEditorDocumentKind, std::string)> handler)
     {
         _openDocumentEditor = std::move(handler);

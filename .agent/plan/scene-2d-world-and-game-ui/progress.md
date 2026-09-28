@@ -596,3 +596,26 @@ Phase 5 的 runtime 验收：“orthographic game scene renders authored sprites
 - `xmake b ya-game-editor`、`xmake b ya-testing`、`xmake b GreedySnake` 通过。
 - `GameUIHostTest.*` 13 个通过，含 `MountedTextVisibilityAndButtonAction`。
 - `python3 Script/ya.py run --project Example/GreedSnake/GreedySnake.yaproject -- --exit-after-frame=60` 退出码 0。场景与 `Snake.lua` 的 `onInit` 无 Lua 异常；HUD / 标题 / 按钮三个字号的字体被建出来，说明两份文档已挂上。方向键、吃食物、死亡和按钮重开没有自动注入输入，这一轮没有在窗口里手点。
+
+## 2026-09-28 — UI Designer 画布归位，删除 `EViewportMode`（V1+V2）
+
+用户拍板：画布属于 UI Designer 页（UMG Designer 形态），Level 视口没有 2D 模式；`Node3D` 保留。
+
+### 完成
+
+- `EditorUICanvasTab`（stable key 仍是 `ui-preview`，标题 Canvas）：`UIImage` 作输入面，LMB 选中/移动/缩放把手，RMB/MMB 平移，滚轮以光标为锚缩放，Delete 删控件；手势走 pointer capture。
+- `EditorUICanvasView` 进 `EditorUIDesignerSession::canvas()`（pan / zoom / extent / image / shownCount）；把手命中 `hitTestResizeHandles` 进会话。
+- `EditorUICanvasCompositor` 从 `EditorViewportCompositor` 拆出，自有离屏目标，只在 Canvas tab attach 时录制；`EditorViewportCompositor` 只剩 3D。
+- 打开 / 新建 `.yaui` 调 `EditorLayer::showUIDesignerCanvas()` → `invokeTab("ui-preview")`。
+- 删除：`EViewportMode` 与 `EditorLayer` / `EditorInputNode` / `EditorViewProducer` / gizmo / 相机 / Play 自动切 3D 的全部 2D 分支，`K_2`/`K_3`，`viewport.mode` 配置，`viewport.mode3d/mode2d` action、View 菜单项与工具栏按钮，`viewport.set_mode/get_mode`；`viewport.pan_zoom` 改名 `ui_designer.pan_zoom` 并改读画布；无文档时的场景 HUD 画布分支；死代码 `applyPreviewExtent`。
+- UI 页出厂布局：UI Tree 与 Palette 同列上下分，不再和 Canvas 叠在一个 stack。
+
+### 验证
+
+- `xmake b ya-game-editor ya-testing ya-gui-closure-test` 通过；`ya-testing` 1392 passed / 1 skipped；`ya-gui-closure-test` 612 passed。
+- HelloMaterial、GreedySnake 编辑器 120 帧 exit=0，无 error。画布手势需在 UI 页手点验证（自动化进不到 UI 页）。
+
+### 保留 / 未完成
+
+- 画布目标按逻辑像素建（与旧 Level 2D 路径一致），HiDPI 下偏糊；预览树仍固定 800×600。
+- V3（Ortho 移出 Play 工具栏）单独提交。

@@ -495,9 +495,6 @@ bool EditorViewportGizmoController::hasViewportGizmoSelection() const
     if (!_bHostValid) {
         return false;
     }
-    if (_sources.isViewportMode2D && _sources.isViewportMode2D()) {
-        return false;
-    }
     Entity* entity = selectedEntity();
     return entity && entity->isValid() && entity->hasComponent<TransformComponent>() &&
            entity->getComponent<IDComponent>() != nullptr;

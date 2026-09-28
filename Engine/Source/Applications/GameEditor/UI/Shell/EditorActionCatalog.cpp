@@ -114,16 +114,6 @@ void registerEditorActions(ActionMap& actions,
         },
     });
     define({
-        .id      = "viewport.mode3d",
-        .label   = "Viewport 3D",
-        .execute = [&layer]() { layer.setViewportMode(EViewportMode::Mode3D); },
-    });
-    define({
-        .id      = "viewport.mode2d",
-        .label   = "Viewport 2D",
-        .execute = [&layer]() { layer.setViewportMode(EViewportMode::Mode2D); },
-    });
-    define({
         .id      = "viewport.ortho",
         .label   = "Viewport Ortho XY",
         .execute = [&layer]() { layer.setEditorOrthoXY(!layer.isEditorOrthoXY()); },

@@ -4,8 +4,11 @@
 
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
+#include "Core/Event.h"
+#include "Core/KeyCode.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -16,7 +19,10 @@
 #include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/EditorUIDesignerSession.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
+#include "RHI/Core/RenderTexture.h"
+#include "RHI/Core/Texture.h"
 
+#include <cmath>
 #include <optional>
 #include <vector>
 
@@ -314,61 +320,188 @@ void EditorUIPaletteTab::construct()
                          .release());
 }
 
-EditorUIPreviewTab::EditorUIPreviewTab(EditorLayer& layer)
-    : UICompoundWidget("UIDesignerPreviewBody", "panel.canvas")
-    , _layer(&layer)
+EditorUICanvasTab::EditorUICanvasTab(EditorLayer& layer)
+    : UICompoundWidget("UIDesignerCanvasBody", "panel.canvas")
+    , _designer(&layer.getEditorUIDesignerSession())
 {
     enableTick();
 }
 
-void EditorUIPreviewTab::construct()
+void EditorUICanvasTab::construct()
 {
-    auto status = ui::text("UIDesignerStatus").setText("No document open").setStyleKey("text.muted").share();
-    auto selection = ui::text("UIDesignerSelection").setText("No widget selected").setStyleKey("text.muted").share();
-    _statusText = status;
-    _selectionText = selection;
-    addDetachedChild(ui::column("UIDesignerPreviewColumn")
-                         .setSpacing(8.0f)
-                         .child(ui::text("UIDesignerPreviewTitle")
-                                    .setText("Preview")
-                                    .setStyleKey("text.eyebrow"))
-                         .child(status)
-                         .child(selection)
-                         .child(ui::text("UIDesignerPreviewHint")
-                                    .setText("Canvas is the Level 2D viewport (PreviewTarget, not a Camera).")
-                                    .setStyleKey("text.muted"))
-                         .release());
+    auto image = ui::image("UIDesignerCanvasImage");
+    _image     = image.share();
+    // The picture is the input surface: presses stop here and bubble to this
+    // tab, and it takes keyboard focus so Delete reaches the designer.
+    _image->_hitFilter   = EWidgetHitFilter::Stop;
+    _image->_focusPolicy = EWidgetFocusPolicy::Focusable;
+    _image->setOpaqueSample(true);
+    addDetachedChild(image.release());
 }
 
-void EditorUIPreviewTab::onAttached()
+void EditorUICanvasTab::onAttached()
 {
-    refresh();
+    ++_designer->canvas().shownCount;
 }
 
-void EditorUIPreviewTab::tick(float)
+void EditorUICanvasTab::onDetached()
 {
-    refresh();
+    endGesture();
+    EditorUICanvasView& view = _designer->canvas();
+    if (view.shownCount > 0) {
+        --view.shownCount;
+    }
 }
 
-void EditorUIPreviewTab::refresh()
+void EditorUICanvasTab::tick(float deltaSeconds)
 {
-    if (!_layer || !_statusText) {
+    UICompoundWidget::tick(deltaSeconds);
+    // Next frame's canvas is sized from where this tab is laid out now.
+    _designer->canvas().extent = _image->_layoutRect.extent;
+    pushPicture();
+}
+
+void EditorUICanvasTab::pushPicture()
+{
+    const std::shared_ptr<RenderTexture>& picture = _designer->canvas().image;
+    std::shared_ptr<IImage>     image = picture ? picture->getImageShared() : nullptr;
+    std::shared_ptr<IImageView> view  = picture ? picture->getImageViewShared() : nullptr;
+    if (!image || !view) {
+        _image->setTexture(nullptr);
+        _texture.reset();
+        _textureImage.reset();
+        _textureView.reset();
         return;
     }
-    const auto& designer = _layer->getEditorUIDesignerSession();
-    const auto& document = designer.getOpenDocument();
-    std::string status = document ? "Document: " + document->typeId : "No document open";
-    if (designer.isDocumentDirty()) {
-        status += " *";
+    if (image != _textureImage || view != _textureView) {
+        _textureImage = std::move(image);
+        _textureView  = std::move(view);
+        _texture      = Texture::wrap(_textureImage, _textureView, "EditorUICanvas");
+        _image->setTexture(_texture);
     }
-    if (const EditorDocumentSession* session = designer.documentSession()) {
-        if (session->ownsPreview()) {
-            status += " [preview]";
+    // Live RT contents change every frame even when the wrap does not.
+    _image->markPaintDirty();
+}
+
+glm::vec2 EditorUICanvasTab::toView(const glm::vec2& logicalPoint) const
+{
+    return logicalPoint - _image->_layoutRect.pos;
+}
+
+void EditorUICanvasTab::beginPress(const glm::vec2& viewPoint)
+{
+    _bPressing  = true;
+    _pressHit   = nullptr;
+    _pressPoint = _designer->canvas().viewToCanvas(viewPoint);
+
+    // Resize handles of the selection win over picking, so an edge can be
+    // grabbed without re-selecting whatever lies under it.
+    if (UIElement* selected = _designer->getSelectedWidget()) {
+        if (const uint8_t mask = _designer->hitTestResizeHandles(viewPoint)) {
+            _pressHit = selected;
+            _designer->beginResize(selected, _pressPoint, mask);
+            return;
         }
     }
-    _statusText->setText(status);
-    UIElement* selected = designer.getSelectedWidget();
-    _selectionText->setText(selected ? "Selected: " + selected->_name : "No widget selected");
+    if (UIElement* picked = _designer->pickAt(_pressPoint)) {
+        _designer->select(picked);
+        _pressHit = picked;
+        _designer->beginMove(picked, _pressPoint);
+        return;
+    }
+    _designer->clearSelection();
+}
+
+void EditorUICanvasTab::endGesture()
+{
+    if (_bPressing) {
+        _designer->endDrag();
+    }
+    _bPressing = false;
+    _bPanning  = false;
+    _pressHit  = nullptr;
+}
+
+void EditorUICanvasTab::clearTransientInputState()
+{
+    endGesture();
+    UICompoundWidget::clearTransientInputState();
+}
+
+bool EditorUICanvasTab::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
+{
+    WidgetTree* tree = getTree();
+    if (!tree) {
+        return false;
+    }
+    const bool bOnImage = _image->hitTestLayoutRect(ctx.logicalPoint);
+
+    switch (event.getEventType()) {
+    case EEvent::MouseButtonPressed: {
+        if (!bOnImage || _bPressing || _bPanning) {
+            return bOnImage;
+        }
+        const EMouse::T button = static_cast<const MouseButtonPressedEvent&>(event).GetMouseButton();
+        if (button == EMouse::Left) {
+            beginPress(toView(ctx.logicalPoint));
+        }
+        else if (button == EMouse::Right || button == EMouse::Middle) {
+            _bPanning = true;
+            _panLast  = toView(ctx.logicalPoint);
+        }
+        else {
+            return false;
+        }
+        tree->setFocus(_image.get());
+        tree->setPointerCapture(this);
+        return true;
+    }
+    case EEvent::MouseMoved: {
+        const glm::vec2 viewPoint = toView(ctx.logicalPoint);
+        if (_bPanning) {
+            _designer->canvas().pan += viewPoint - _panLast;
+            _panLast = viewPoint;
+            return true;
+        }
+        if (_bPressing && _pressHit && _designer->isDragging(_pressHit)) {
+            const glm::vec2 canvasPoint = _designer->canvas().viewToCanvas(viewPoint);
+            if (!_designer->applyDragDelta(canvasPoint - _pressPoint)) {
+                _pressHit = nullptr;
+            }
+            return true;
+        }
+        return false;
+    }
+    case EEvent::MouseButtonReleased: {
+        const EMouse::T button = static_cast<const MouseButtonReleasedEvent&>(event).GetMouseButton();
+        const bool bEndsPress = _bPressing && button == EMouse::Left;
+        const bool bEndsPan   = _bPanning && (button == EMouse::Right || button == EMouse::Middle);
+        if (!bEndsPress && !bEndsPan) {
+            return false;
+        }
+        endGesture();
+        tree->releasePointerCapture(this);
+        return true;
+    }
+    case EEvent::MouseScrolled: {
+        if (!bOnImage) {
+            return false;
+        }
+        const float factor = std::exp(static_cast<const MouseScrolledEvent&>(event).getOffsetY() * 0.12f);
+        _designer->canvas().zoomAt(toView(ctx.logicalPoint), factor);
+        return true;
+    }
+    case EEvent::KeyPressed: {
+        if (static_cast<const KeyPressedEvent&>(event).getKeyCode() != EKey::Delete) {
+            return false;
+        }
+        endGesture();
+        (void)_designer->deleteWidget(_designer->getSelectedWidget());
+        return true;
+    }
+    default:
+        return false;
+    }
 }
 
 } // namespace ya

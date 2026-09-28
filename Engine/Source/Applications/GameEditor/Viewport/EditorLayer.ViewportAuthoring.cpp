@@ -10,7 +10,7 @@ namespace ya
 
 bool EditorLayer::canViewportAuthor() const
 {
-    return _app && _app->isStopped() && hasProjectLoaded() && !isViewportMode2D();
+    return _app && _app->isStopped() && hasProjectLoaded();
 }
 
 void EditorLayer::cmdCreateEmptyNode(Node* parent)

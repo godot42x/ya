@@ -47,7 +47,6 @@ struct FEditorViewportGizmoSources
     std::function<Entity*()> getSelectedEntity;
     std::function<const std::vector<Entity*>&()> getSelections;
     std::function<Scene*()> getViewportInteractionScene;
-    std::function<bool()> isViewportMode2D;
     /// Translate stays on the sprite's XY plane: the Z handle does not move Z.
     std::function<bool()> isEditorOrthoXY;
     std::function<void()> onTransformCommitted;

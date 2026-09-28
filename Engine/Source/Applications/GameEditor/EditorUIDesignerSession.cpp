@@ -16,6 +16,7 @@
 #include "GameRuntime/App.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace ya
 {
@@ -169,7 +170,7 @@ void EditorUIDesignerSession::openDocument(std::string_view path)
     }
     _documentPath = std::string(path);
     if (_owner) {
-        _owner->setViewportMode(EViewportMode::Mode2D);
+        _owner->showUIDesignerCanvas();
     }
 }
 
@@ -187,7 +188,7 @@ void EditorUIDesignerSession::openUntitled(const std::shared_ptr<UIDocument>& do
     }
     _documentPath.clear();
     if (_owner) {
-        _owner->setViewportMode(EViewportMode::Mode2D);
+        _owner->showUIDesignerCanvas();
     }
 }
 
@@ -659,15 +660,31 @@ void EditorUIDesignerSession::endDrag()
     }
 }
 
-void EditorUIDesignerSession::applyPreviewExtent()
+uint8_t EditorUIDesignerSession::hitTestResizeHandles(const glm::vec2& viewPoint) const
 {
-    if (!_previewTree || !_owner) {
-        return;
+    const Rect2D* selected = getSelectedLayoutRect();
+    if (!selected) {
+        return 0;
     }
-    const glm::vec2 viewportSize = _owner->getViewportSize();
-    if (viewportSize.x > 1.0f && viewportSize.y > 1.0f) {
-        _previewTree->setLogicalExtent(Extent2D::fromVec2(viewportSize));
-    }
+    const glm::vec2 lo  = _canvas.canvasToView(selected->pos);
+    const glm::vec2 hi  = _canvas.canvasToView(selected->pos + selected->extent);
+    const glm::vec2 mid = (lo + hi) * 0.5f;
+
+    constexpr float kHalf = 5.0f; // 10x10 px grab box, independent of zoom
+    const auto onHandle = [&](float x, float y) {
+        return std::fabs(viewPoint.x - x) <= kHalf && std::fabs(viewPoint.y - y) <= kHalf;
+    };
+
+    uint8_t mask = 0;
+    if (onHandle(lo.x, lo.y)) mask |= kResizeHandleLeft | kResizeHandleTop;
+    if (onHandle(hi.x, lo.y)) mask |= kResizeHandleRight | kResizeHandleTop;
+    if (onHandle(lo.x, hi.y)) mask |= kResizeHandleLeft | kResizeHandleBottom;
+    if (onHandle(hi.x, hi.y)) mask |= kResizeHandleRight | kResizeHandleBottom;
+    if (onHandle(mid.x, lo.y)) mask |= kResizeHandleTop;
+    if (onHandle(mid.x, hi.y)) mask |= kResizeHandleBottom;
+    if (onHandle(lo.x, mid.y)) mask |= kResizeHandleLeft;
+    if (onHandle(hi.x, mid.y)) mask |= kResizeHandleRight;
+    return mask;
 }
 
 } // namespace ya

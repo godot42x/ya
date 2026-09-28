@@ -108,7 +108,7 @@ FInputReply routeCapturedViewportInput(
     FInputRouteContext& context,
     const FInputEvent& event)
 {
-    if (app.isStopped() || layer.isViewportMode2D() || !context.router.isMouseCaptured()) {
+    if (app.isStopped() || !context.router.isMouseCaptured()) {
         return {};
     }
 
@@ -125,7 +125,7 @@ FInputReply routeViewportToolInput(
     bool wantPointer,
     bool wantKeys)
 {
-    if (app.isRuntimeMode() && !layer.isViewportMode2D()) {
+    if (app.isRuntimeMode()) {
         return {};
     }
 
@@ -135,14 +135,6 @@ FInputReply routeViewportToolInput(
     }
 
     layer.onEvent(event);
-
-    if (layer.isViewportMode2D()) {
-        if ((snapshot.pointerEvent && snapshot.pointerInViewport) ||
-            (snapshot.keyboardEvent && snapshot.viewportFocused && !snapshot.textInput)) {
-            return FInputReply{.handled = true};
-        }
-        return {};
-    }
 
     if ((snapshot.pointerEvent && wantPointer) || (snapshot.keyboardEvent && wantKeys)) {
         app.getInputManager().processEvent(event);
@@ -158,7 +150,7 @@ FInputReply routeGameplayViewportInput(
     const FEditorInputSnapshot& snapshot,
     const FInputEvent& event)
 {
-    if (!app.isRuntimeMode() || layer.isViewportMode2D()) {
+    if (!app.isRuntimeMode()) {
         return {};
     }
 
@@ -192,7 +184,7 @@ FInputReply routeGameplayViewportInput(
 
 FInputReply routeGameUIInput(App& app, EditorLayer& layer, const FInputEvent& event)
 {
-    if (app.isStopped() || layer.isViewportMode2D()) {
+    if (app.isStopped()) {
         return {};
     }
 

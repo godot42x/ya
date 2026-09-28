@@ -556,6 +556,26 @@ effective aspect 和 camera view，不读取已发布的上一帧 View output。
   cull/order 或 graph pass。若同一 Scene 仍被其他可见 View 请求，共享 Scene extraction 继续服务它们。
   视口从 tab 中移除时，不用在 pipeline 里“录空 pass”补齐。
 
+### GameEditor：`Mode2D` 归属决定（2026-09-28，用户拍板）
+
+UI Designer 画布不属于 Level 视口。不做 Godot 式“2D/3D 同一棵树 + 视口切模式”，画布归 UI Designer
+页签（UE UMG 的 Designer 视图），`EViewportMode` 整体删除。Level 视口只有一种：世界视图，正交 XY 是它的
+相机选项。
+
+- **V1+V2（一个闭环，一次提交）**：画布进 UI Designer 的 Canvas tab（stable key 仍为 `ui-preview`）。
+  - 画布有自己的离屏目标，尺寸取该 tab 的图像矩形。合成器 `EditorUICanvasCompositor` 只在 tab 显示时录制，
+    从 `EditorViewportCompositor` 拆出，后者只剩 3D。
+  - 视图状态（pan / zoom / 显示计数 / 本帧画面）在设计器会话的 `EditorUICanvasView`。
+  - 手势（选中、移动、改尺寸、平移、缩放、Delete）是 tab 自己的 WidgetTree 输入；拖拽会话仍在会话里。
+    `EditorLayer` 与 `EditorInputNode` 不再有画布分支。
+  - 删除 `EViewportMode` 及其全部分支：视口 2D 快捷键、进 Play 自动切 3D、`viewport.mode` 配置、
+    `viewport.mode3d/mode2d` action 与按钮、自动化 `viewport.set_mode/get_mode`（`viewport.pan_zoom`
+    改为作用于设计器画布），以及“没有文档时画布显示场景已挂载 HUD”的分支（Level 视口编辑态本来就叠 HUD）。
+  - 打开 `.yaui` 不再切视口，改为激活 UI Designer 的 Canvas tab。
+  - 只拆 V1 会让同一画布存在两处，所以 V1 与 V2 合并提交。
+- **V3**：Ortho XY 从 Play 工具栏移到 View 菜单（可勾选项）；工具栏只剩 Play / Simulate / Stop 与状态文字。
+- 不在本批：`Node3D` 保留（用户决定）；编辑器 2D authoring 的 XY gizmo / sprite picking 仍是 P5 余项。
+
 校验：Hierarchy 中 sprite 与普通 Node3D 并列，可选取/移动/保存/撤销；UI Designer 不接 game input；
 World2D、Game UI、gizmo 可独立关闭；切 tab 隐藏 viewport 后不再提交 scene render task；2D hit-test
 与 3D ray-pick 不共享错误的 viewport mode 分支。
