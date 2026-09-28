@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <any>
+#include <optional>
 #include <sol/sol.hpp>
 #include <string>
 #include <unordered_map>
@@ -45,6 +46,7 @@ struct LuaScriptComponent : public IComponent
         sol::table self;
 
         sol::function onInit;
+        sol::function onStart;
         sol::function onUpdate;
         sol::function onDestroy;
         sol::function onEnable;
@@ -54,6 +56,14 @@ struct LuaScriptComponent : public IComponent
         std::unordered_map<std::string, std::any> propertyOverrides;
 
         bool enabled = true;
+
+        /// `executionOrder` declared by the script table; read on load, not serialized.
+        int                scriptExecutionOrder = 0;
+        /// Per-instance override, serialized only when set.
+        std::optional<int> executionOrderOverride;
+
+        /// Lower runs first. Ties fall back to scene-tree order.
+        [[nodiscard]] int executionOrder() const { return executionOrderOverride.value_or(scriptExecutionOrder); }
 
         YA_ECS_SYSTEMS_API void refreshProperties();
         YA_ECS_SYSTEMS_API void capturePropertiesFrom(sol::table table);
@@ -118,6 +128,9 @@ struct LuaScriptComponent : public IComponent
             nlohmann::json s;
             s["scriptPath"] = ScriptInstance::normalizeScriptPath(script.scriptPath);
             s["enabled"]    = script.enabled;
+            if (script.executionOrderOverride) {
+                s["executionOrder"] = *script.executionOrderOverride;
+            }
 
             if (!script.propertyOverrides.empty()) {
                 nlohmann::json overrides = nlohmann::json::object();
@@ -160,6 +173,9 @@ struct LuaScriptComponent : public IComponent
             if (!script) continue;
 
             script->enabled = scriptJson.value("enabled", true);
+            if (scriptJson.contains("executionOrder") && scriptJson.at("executionOrder").is_number_integer()) {
+                script->executionOrderOverride = scriptJson.at("executionOrder").get<int>();
+            }
             if (!scriptJson.contains("propertyOverrides") || !scriptJson.at("propertyOverrides").is_object())
                 continue;
 
@@ -191,6 +207,7 @@ struct LuaScriptComponent : public IComponent
             auto& script = scripts.emplace_back();
             script.scriptPath = ScriptInstance::normalizeScriptPath(sourceScript.scriptPath);
             script.enabled = sourceScript.enabled;
+            script.executionOrderOverride = sourceScript.executionOrderOverride;
             script.propertyOverrides = sourceScript.propertyOverrides;
         }
     }

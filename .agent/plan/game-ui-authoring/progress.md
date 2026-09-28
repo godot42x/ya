@@ -1,5 +1,11 @@
 # Progress
 
+## 2026-09-28 — P0 驱动点被 game-ui-script-framework F0 取代
+
+`GameUIHost::update` 从 `buildGameRenderFrame` 移到 `GameRuntimeTickOrchestrator::tickUILogic`。
+原先放渲染侧的理由是「暂停 gate 整段逻辑」；F0 起暂停只停玩法模拟系统与世界脚本，UI 逻辑
+每帧都跑（`FUIFrameClock` 语义不变）。见 `game-ui-script-framework/progress.md`。
+
 ## 2026-09-25 — Phase 0 收敛 + Phase 2b 落地
 
 **Phase 0（时间策略）**：上一版 `GameUIHost::tick(float)` 把「UI 时间策略」写死成一个

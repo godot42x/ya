@@ -9,24 +9,16 @@ local Class = {}
 function Class.new(base)
     local class = {}
     
-    -- 设置元表
-    local mt = {
-        __index = class,
-        __call = function(cls, ...)
-            -- 支持 MyClass(...) 语法创建实例
-            return cls:new(...)
-        end
-    }
-    
-    -- 如果有基类，继承基类
-    if base then
-        setmetatable(class, {
-            __index = base,
-            __call = mt.__call
-        })
-    else
-        setmetatable(class, mt)
+    -- 支持 MyClass(...) 语法创建实例
+    local function construct(cls, ...)
+        return cls:new(...)
     end
+
+    -- 根类不能 __index 到自身：查一个不存在的字段会无限循环，而不是返回 nil
+    setmetatable(class, {
+        __index = base,
+        __call = construct
+    })
     
     -- 默认构造函数（子类可覆盖）
     ---@generic T:table

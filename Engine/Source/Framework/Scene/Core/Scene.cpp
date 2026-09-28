@@ -9,6 +9,7 @@
 
 #include "Core/UUID.h"
 
+#include <algorithm>
 
 namespace ya
 {
@@ -240,6 +241,47 @@ void Scene::destroyNode(Node *node)
     auto entity = node->getEntity();
     if (entity) {
         destroyEntity(entity);
+    }
+}
+
+void Scene::queueDestroyNode(Node *node)
+{
+    Entity* entity = node ? node->getEntity() : nullptr;
+    if (!isValidEntity(entity)) {
+        return;
+    }
+    const entt::entity handle = entity->getHandle();
+    if (std::find(_queuedDestroys.begin(), _queuedDestroys.end(), handle) == _queuedDestroys.end()) {
+        _queuedDestroys.push_back(handle);
+    }
+}
+
+void Scene::flushQueuedDestroys(const std::function<void(Entity&)>& beforeDestroy)
+{
+    YA_PROFILE_FUNCTION();
+
+    while (!_queuedDestroys.empty()) {
+        std::vector<entt::entity> batch;
+        batch.swap(_queuedDestroys);
+        for (const entt::entity handle : batch) {
+            Entity* root = getEntityByEnttID(handle);
+            if (!isValidEntity(root)) {
+                // An earlier root in the batch already took this one with it.
+                continue;
+            }
+            if (beforeDestroy) {
+                std::vector<Entity*> subtree{root};
+                if (auto nodeIt = _nodeMap.find(handle); nodeIt != _nodeMap.end()) {
+                    collectSubtreeEntities(nodeIt->second.get(), subtree);
+                }
+                for (Entity* entity : subtree) {
+                    if (isValidEntity(entity)) {
+                        beforeDestroy(*entity);
+                    }
+                }
+            }
+            destroyEntity(getEntityByEnttID(handle));
+        }
     }
 }
 

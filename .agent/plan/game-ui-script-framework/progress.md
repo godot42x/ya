@@ -39,3 +39,40 @@
 仍待确认：D3、D4、D6、D7、D8、D9（不阻塞 F0）。
 
 下一步：开始 F0。
+
+## 2026-09-28 — F0 帧顺序、暂停与结构变更时机
+
+完成：
+
+- 暂停：`App::_bPause`（无写入点）→ `_gamePauseDepth` + `pushGamePause` / `popGamePause`，
+  多弹一次 WARN 且不下溢；`isPaused()` = 深度 > 0。`iterate` 不再整段跳过 `tickLogic`。
+- 系统类别：`ESystemTickGroup{Engine, Simulation}`，`App::_systems` 存 `FRegisteredSystem`，
+  `AppLifecycle` 注册时显式给出；暂停只跳过 Simulation（SkeletonAnimation、Physics）。
+- 世界脚本：先快照句柄再加载，排序键 (executionOrder, 树前序, 句柄, 下标)，
+  onInit 全部 → onStart 全部 → onUpdate 全部，每步按句柄/下标重新解析；`ScriptInstance`
+  增加 `onStart`、脚本默认 `executionOrder`、可选实例覆盖（仅显式设置时序列化）。
+  `LuaRuntimeServices::readScript` 可注入脚本源（测试用，默认走 VFS）。
+- UILogic：`tickUILogic` 在模块 onLogic 之后推进 `GameUIHost`；`buildGameRenderFrame`
+  只留 `setPresentation` + `buildSnapshot`。
+- StructuralFlush：`Scene::queueDestroyNode` / `flushQueuedDestroys(beforeDestroy)`；
+  `world.destroyEntity` 入队，flush 时对整棵子树调 `LuaScriptingSystem::onEntityDestroying`
+  （onDestroy + 释放 Lua 句柄）再销毁。
+- `TimerManager` 审计：唯一调用方是编辑器 `delayCall`，常跑，不拆时钟。
+- `Class.lua` 根类 `__index` 自引用死循环修复；`ScriptBase` 补默认 `onStart`。
+
+偏离计划：见 `plan.md` F0「实施偏离」（类别在注册处声明、保持现有步骤顺序、presentation
+留渲染侧、不缓存排序、只有玩法 Lua 销毁入队、热重载跳过未加载实例）。
+
+验证：
+
+- `ya-testing` 全量 1345 通过；`TickOrderTest.*` / `TickOrderAppTest.*` 10 个通过，
+  `ScriptBaseInstance…` 在回退 `Class.lua` 时复现 `'__index' chain too long`。
+- 冒烟 `--exit-after-frame=60`：GreedSnake runtime、HelloMaterial runtime、GreedSnake editor
+  均 exit 0；GreedSnake 无 Error。
+- HelloMaterial 两条 sol2 panic（`PlayerCamera.lua` 的 `8.0` / `45.0` 被 `ScriptBase:properties`
+  用 `% 1 == 0` 推断为 int，`as<int>` 失败被捕获）为既有问题，与 F0 无关，未修。
+
+已知边界：同一帧内删除实体上的脚本会使后续下标错位（解析时按下标，最坏跳过/错调一个实例一帧）；
+目前无调用方，S1 统一脚本宿主时一并处理。
+
+下一步：S1（与宿主无关的 Lua 脚本运行时）。

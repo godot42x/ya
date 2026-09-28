@@ -49,7 +49,7 @@ void destroySpriteEntity(Entity* entity)
         return;
     }
     if (Node* node = scene->getNodeByEntity(entity)) {
-        scene->destroyNode(node);
+        scene->queueDestroyNode(node);
     }
 }
 

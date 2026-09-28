@@ -7,6 +7,8 @@ struct App;
 
 class GameRuntimeTickOrchestrator
 {
+    friend class AppModuleTestAccess;
+
   public:
     /// Run one product frame. Direct callers retain the legacy native event
     /// pump; AppKernel-backed run() passes false because its event source has
@@ -15,6 +17,12 @@ class GameRuntimeTickOrchestrator
 
   private:
     static void     tickLogic(App& app, float dt);
+    /// Advance the game UI tree. Independent of the renderer: a tick that
+    /// presents nothing still runs UI logic.
+    static void     tickUILogic(App& app, float dt);
+    /// Apply structural changes queued during logic (entity destroys), after
+    /// every script of the frame has run.
+    static void     flushStructuralChanges(App& app);
     static void     prepareHostViewState(App& app, float dt);
     /// App-shell preparation (module prepare-for-render, the host clock), then
     /// one call into `RuntimeRenderContext::tick`, which owns the frame's whole

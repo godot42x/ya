@@ -72,7 +72,7 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
         dt += FPSControl::get()->update(dt);
     }
 
-    if (!app._bPause) {
+    {
         YA_PROFILE_SCOPE("Tick/Logic");
         YA_PERF_SCOPE(perf::sample::tickLogic(), perf::metric::cpuTimeMs(), perf::domain::game());
         tickLogic(app, dt);
@@ -166,9 +166,21 @@ void GameRuntimeTickOrchestrator::reportTickToAutomation(App& app)
     }
 }
 
+/// The logic half of a frame, in contract order. Game pause (`App::isPaused`)
+/// stops only Simulation systems and world scripts; everything else keeps the
+/// engine, the editor and the UI responsive on a paused frame.
+///   task queue, timers, automation          always
+///   systems in registration order           Simulation group skipped on pause
+///   world Lua (Runtime / Simulation)        skipped on pause
+///   file watcher (hot reload), modules      always
+///   UI logic                                always (per-tree clock)
+///   structural flush (queued destroys)      always
+///   input state edges                       always
 void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
 {
     YA_PROFILE_FUNCTION()
+    const bool bGamePaused = app.isPaused();
+    const bool bPlaying    = app.isRuntimeMode() || app.isSimulationMode();
     {
         YA_PROFILE_SCOPE("Logic/TaskManager");
         app.taskManager.update();
@@ -185,20 +197,17 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
     }
     {
         YA_PROFILE_SCOPE("Logic/Systems");
-        for (auto& sys : app._systems) {
-            sys->onUpdate(dt);
+        for (auto& entry : app._systems) {
+            if (bGamePaused && entry.group == ESystemTickGroup::Simulation) {
+                continue;
+            }
+            entry.system->onUpdate(dt);
         }
     }
 
-    switch (app._appState) {
-    case AppState::Stopped:
-        break;
-    case AppState::Simulation:
-    case AppState::Runtime:
-    {
+    if (bPlaying && !bGamePaused && app._luaScriptingSystem) {
         YA_PROFILE_SCOPE("Logic/Lua");
         app._luaScriptingSystem->onUpdate(dt);
-    } break;
     }
 
     if (auto* watcher = FileWatcher::get()) {
@@ -208,6 +217,8 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
     }
 
     app.tickModules(dt);
+    tickUILogic(app, dt);
+    flushStructuralChanges(app);
     {
         YA_PROFILE_SCOPE("Logic/InputPostUpdate");
         app.inputManager.postUpdate();
@@ -217,6 +228,39 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
         YA_PROFILE_SCOPE("Logic/InputPreUpdate");
         app.inputManager.preUpdate();
     }
+}
+
+void GameRuntimeTickOrchestrator::tickUILogic(App& app, float dt)
+{
+    YA_PROFILE_SCOPE("Logic/UI");
+    if (!app.isRuntimeMode() && !app.isSimulationMode()) {
+        return;
+    }
+    GameUIHost* gameUIHost = app.getGameUIHost();
+    if (!gameUIHost || !gameUIHost->getMountedScene()) {
+        return;
+    }
+    // A paused frame still advances real time; the host decides which clock
+    // its tree follows, so a pause menu keeps animating while a HUD holds.
+    gameUIHost->update(FUIFrameClock{
+        .gameDelta = app.isPaused() ? 0.0f : dt,
+        .realDelta = dt,
+    });
+}
+
+void GameRuntimeTickOrchestrator::flushStructuralChanges(App& app)
+{
+    YA_PROFILE_SCOPE("Logic/StructuralFlush");
+    Scene* scene = app.getSceneServices().getActiveScene();
+    if (!scene) {
+        return;
+    }
+    LuaScriptingSystem* lua = app._luaScriptingSystem;
+    scene->flushQueuedDestroys([lua](Entity& entity) {
+        if (lua) {
+            lua->onEntityDestroying(entity);
+        }
+    });
 }
 
 void GameRuntimeTickOrchestrator::prepareHostViewState(App& app, float dt)

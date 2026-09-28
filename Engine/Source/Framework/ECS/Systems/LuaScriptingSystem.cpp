@@ -14,6 +14,10 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
+#include <optional>
+#include <vector>
+
 namespace
 {
 
@@ -98,6 +102,54 @@ void invokeLuaCallback(const sol::function& callback,
     }
 }
 
+void bindScriptTable(sol::state_view lua, ya::LuaScriptComponent::ScriptInstance& script, sol::table scriptTable)
+{
+    script.self      = scriptTable;
+    script.onInit    = functionField(lua, scriptTable, "onInit");
+    script.onStart   = functionField(lua, scriptTable, "onStart");
+    script.onUpdate  = functionField(lua, scriptTable, "onUpdate");
+    script.onDestroy = functionField(lua, scriptTable, "onDestroy");
+    script.onEnable  = functionField(lua, scriptTable, "onEnable");
+    script.onDisable = functionField(lua, scriptTable, "onDisable");
+    script.scriptExecutionOrder = scriptTable.get<sol::optional<int>>("executionOrder").value_or(0);
+}
+
+/// Child indices from the scene root down to the entity's node. Comparing two
+/// paths lexicographically is scene-tree pre-order (an ancestor's path is a
+/// prefix of its descendants'). An entity without a node has an empty path.
+std::vector<size_t> treePath(ya::Scene& scene, entt::entity handle)
+{
+    std::vector<size_t> path;
+    for (ya::Node* node = scene.getNodeByEntity(handle); node && node->getParent(); node = node->getParent()) {
+        path.push_back(node->getParent()->getChildIndex(node));
+    }
+    std::reverse(path.begin(), path.end());
+    return path;
+}
+
+struct FScriptSlot
+{
+    entt::entity        handle;
+    size_t              index;
+    int                 order;
+    std::vector<size_t> path;
+    bool                bFresh;
+};
+
+bool runsBefore(const FScriptSlot& a, const FScriptSlot& b)
+{
+    if (a.order != b.order) {
+        return a.order < b.order;
+    }
+    if (a.path != b.path) {
+        return std::lexicographical_compare(a.path.begin(), a.path.end(), b.path.begin(), b.path.end());
+    }
+    if (a.handle != b.handle) {
+        return entt::to_integral(a.handle) < entt::to_integral(b.handle);
+    }
+    return a.index < b.index;
+}
+
 } // namespace
 
 
@@ -130,7 +182,8 @@ void LuaScriptingSystem::init()
     _lua["IS_RUNTIME"] = true;
 
     std::string projectScriptRoot;
-    if (const auto contentRoot = VirtualFileSystem::get()->getMountPoint(game::mounts::Content); contentRoot.has_value()) {
+    VirtualFileSystem* vfs = VirtualFileSystem::get();
+    if (const auto contentRoot = vfs ? vfs->getMountPoint(game::mounts::Content) : std::nullopt; contentRoot.has_value()) {
         projectScriptRoot = (*contentRoot / "Scripts").lexically_normal().string();
         std::replace(projectScriptRoot.begin(), projectScriptRoot.end(), '\\', '/');
     }
@@ -399,88 +452,146 @@ void LuaScriptingSystem::init()
     enableHotReload();
 }
 
+bool LuaScriptingSystem::readScriptSource(const std::string& path, std::string& out) const
+{
+    if (_services.readScript) {
+        return _services.readScript(path, out);
+    }
+    VirtualFileSystem* vfs = VirtualFileSystem::get();
+    return vfs && vfs->readFileToString(path, out);
+}
+
+bool LuaScriptingSystem::loadInstance(LuaScriptComponent::ScriptInstance& script, Entity& entity)
+{
+    YA_PROFILE_SCOPE("LuaScriptingSystem::loadScript");
+    std::string scriptContent;
+    if (!readScriptSource(script.scriptPath, scriptContent)) {
+        YA_CORE_ERROR("Failed to load Lua script: {}", script.scriptPath);
+        return false;
+    }
+    try {
+        // Shared global environment so require() and common helper modules
+        // work; a script returns a local table to avoid polluting globals.
+        sol::table scriptTable = _lua.script(scriptContent);
+        bindScriptTable(_lua, script, scriptTable);
+        script.self["entity"] = &entity;
+        script.refreshProperties();
+        script.applyPropertyOverrides(_lua);
+        script.bLoaded = true;
+        YA_CORE_INFO("Loaded Lua script: {}", script.scriptPath);
+        return true;
+    }
+    catch (const sol::error& e) {
+        YA_CORE_ERROR("Lua script error ({}): {}", script.scriptPath, e.what());
+    }
+    catch (const std::exception& e) {
+        YA_CORE_ERROR("Lua script error ({}): {}", script.scriptPath, e.what());
+    }
+    return false;
+}
+
 void LuaScriptingSystem::onUpdate(float deltaTime)
 {
     YA_PROFILE_FUNCTION();
 
     auto *scene = _services.activeScene ? _services.activeScene() : nullptr;
     if (!scene) return;
+    entt::registry& registry = scene->getRegistry();
 
-    auto view = scene->getRegistry().view<LuaScriptComponent>();
-    for (const auto &[entityHandle, luaComp] : view->each()) {
+    // Snapshot the handles first: loading runs script chunks, which may add
+    // entities or scripts, and the storage must not change under a live view.
+    std::vector<entt::entity> handles;
+    {
+        auto view = registry.view<LuaScriptComponent>();
+        handles.assign(view.begin(), view.end());
+    }
 
-        Entity* entity = scene->getEntityByEnttID(entityHandle);
-        if (!entity) {
-            YA_CORE_WARN("LuaScriptingSystem: Entity {} no longer exists in scene", static_cast<uint32_t>(entityHandle));
+    std::vector<FScriptSlot> slots;
+    for (const entt::entity handle : handles) {
+        Entity* entity = scene->getEntityByEnttID(handle);
+        if (!entity || !registry.all_of<LuaScriptComponent>(handle)) {
             continue;
         }
-
-        // 遍历所有脚本实例
-        for (auto &script : luaComp.scripts) {
+        const std::vector<size_t> path = treePath(*scene, handle);
+        for (size_t index = 0;; ++index) {
+            // Re-fetch every step: a loading chunk can grow this vector.
+            auto& scripts = registry.get<LuaScriptComponent>(handle).scripts;
+            if (index >= scripts.size()) {
+                break;
+            }
+            auto& script = scripts[index];
             if (!script.scriptPath.empty()) {
                 script.scriptPath = LuaScriptComponent::ScriptInstance::normalizeScriptPath(script.scriptPath);
             }
-
-            // 首次加载脚本
+            bool bFresh = false;
             if (!script.bLoaded && !script.scriptPath.empty()) {
-                YA_PROFILE_SCOPE("LuaScriptingSystem::loadScript");
-                std::string scriptContent;
-                if (VirtualFileSystem::get()->readFileToString(script.scriptPath, scriptContent)) {
-                    try {
-                        // 【重要】不再使用独立环境，改为共享全局环境
-                        // 原因：
-                        // 1. 支持 require() 导入公共模块
-                        // 2. 脚本间可以共享工具库（如 Vector3 工具函数）
-                        // 3. 减少内存开销
-                        // 注意：脚本应该返回 local 表避免全局污染
-
-                        sol::table scriptTable = _lua.script(scriptContent);
-
-                        script.self      = scriptTable;
-                        script.onInit    = functionField(_lua, scriptTable, "onInit");
-                        script.onUpdate  = functionField(_lua, scriptTable, "onUpdate");
-                        script.onDestroy = functionField(_lua, scriptTable, "onDestroy");
-                        script.onEnable  = functionField(_lua, scriptTable, "onEnable");
-                        script.onDisable = functionField(_lua, scriptTable, "onDisable");
-
-                        // 设置 entity 引用
-                        script.self["entity"] = entity;
-
-                        // 刷新属性列表并应用编辑器修改的覆盖值
-                        script.refreshProperties();
-                        script.applyPropertyOverrides(_lua);
-
-                        invokeLuaCallback(script.onInit, "onInit", script.scriptPath, script.self);
-
-                        script.bLoaded = true;
-                        YA_CORE_INFO("Loaded Lua script: {}", script.scriptPath);
-                    }
-                    catch (const sol::error &e) {
-                        YA_CORE_ERROR("Lua script error ({}): {}", script.scriptPath, e.what());
-                    }
-                    catch (const std::exception &e) {
-                        YA_CORE_ERROR("Lua script error: {}", e.what());
-                    }
-                }
-                else {
-                    YA_CORE_ERROR("Failed to load Lua script: {}", script.scriptPath);
-                }
+                bFresh = loadInstance(script, *entity);
             }
-
-            // 调用 onUpdate（如果脚本已加载且启用）
-            if (script.enabled && script.bLoaded && script.onUpdate.valid()) {
-                YA_PROFILE_SCOPE("LuaScriptingSystem::scriptOnUpdate");
-                try {
-                    // 更新 entity 引用（防止 entity 被移动）
-                    script.self["entity"] = entity;
-
-                    invokeLuaCallback(script.onUpdate, "onUpdate", script.scriptPath, script.self, deltaTime);
-                }
-                catch (const sol::error &e) {
-                    YA_CORE_ERROR("Lua onUpdate error ({}): {}", script.scriptPath, e.what());
-                }
+            if (registry.get<LuaScriptComponent>(handle).scripts[index].bLoaded) {
+                slots.push_back(FScriptSlot{
+                    .handle = handle,
+                    .index  = index,
+                    .order  = registry.get<LuaScriptComponent>(handle).scripts[index].executionOrder(),
+                    .path   = path,
+                    .bFresh = bFresh,
+                });
             }
         }
+    }
+    std::stable_sort(slots.begin(), slots.end(), runsBefore);
+
+    // A callback may destroy or reshape any slot, so each step resolves again.
+    auto resolve = [&](const FScriptSlot& slot) -> LuaScriptComponent::ScriptInstance* {
+        if (!registry.valid(slot.handle) || !registry.all_of<LuaScriptComponent>(slot.handle)) {
+            return nullptr;
+        }
+        auto& scripts = registry.get<LuaScriptComponent>(slot.handle).scripts;
+        if (slot.index >= scripts.size() || !scripts[slot.index].bLoaded) {
+            return nullptr;
+        }
+        auto& script = scripts[slot.index];
+        script.self["entity"] = scene->getEntityByEnttID(slot.handle);
+        return &script;
+    };
+
+    for (const FScriptSlot& slot : slots) {
+        if (!slot.bFresh) {
+            continue;
+        }
+        if (auto* script = resolve(slot)) {
+            invokeLuaCallback(script->onInit, "onInit", script->scriptPath, script->self);
+        }
+    }
+    for (const FScriptSlot& slot : slots) {
+        if (!slot.bFresh) {
+            continue;
+        }
+        if (auto* script = resolve(slot)) {
+            invokeLuaCallback(script->onStart, "onStart", script->scriptPath, script->self);
+        }
+    }
+    for (const FScriptSlot& slot : slots) {
+        auto* script = resolve(slot);
+        if (!script || !script->enabled) {
+            continue;
+        }
+        YA_PROFILE_SCOPE("LuaScriptingSystem::scriptOnUpdate");
+        invokeLuaCallback(script->onUpdate, "onUpdate", script->scriptPath, script->self, deltaTime);
+    }
+}
+
+void LuaScriptingSystem::onEntityDestroying(Entity& entity)
+{
+    auto* luaComp = entity.hasComponent<LuaScriptComponent>() ? entity.getComponent<LuaScriptComponent>() : nullptr;
+    if (!luaComp) {
+        return;
+    }
+    for (auto& script : luaComp->scripts) {
+        if (script.bLoaded) {
+            invokeLuaCallback(script.onDestroy, "onDestroy", script.scriptPath, script.self);
+        }
+        script.bLoaded = false;
+        script.releaseLuaHandles();
     }
 }
 
@@ -583,7 +694,9 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
 
         for (auto &script : luaComp.scripts) {
             script.scriptPath = LuaScriptComponent::ScriptInstance::normalizeScriptPath(script.scriptPath);
-            if (script.scriptPath != normalizedScriptPath) continue;
+            // An instance that has not loaded yet reads the new source on its
+            // first load; reloading it here would run onInit twice.
+            if (script.scriptPath != normalizedScriptPath || !script.bLoaded) continue;
 
             // 保存当前属性值
             std::unordered_map<std::string, sol::object> savedProperties;
@@ -605,16 +718,10 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
 
             // 重新加载脚本
             std::string scriptContent;
-            if (VirtualFileSystem::get()->readFileToString(normalizedScriptPath, scriptContent)) {
+            if (readScriptSource(normalizedScriptPath, scriptContent)) {
                 try {
                     sol::table scriptTable = _lua.script(scriptContent);
-
-                    script.self      = scriptTable;
-                    script.onInit    = functionField(_lua, scriptTable, "onInit");
-                    script.onUpdate  = functionField(_lua, scriptTable, "onUpdate");
-                    script.onDestroy = functionField(_lua, scriptTable, "onDestroy");
-                    script.onEnable  = functionField(_lua, scriptTable, "onEnable");
-                    script.onDisable = functionField(_lua, scriptTable, "onDisable");
+                    bindScriptTable(_lua, script, scriptTable);
 
                     // 设置 entity 引用
                     script.self["entity"] = entity;
@@ -630,8 +737,9 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
                     // 应用编辑器覆盖值
                     script.applyPropertyOverrides(_lua);
 
-                    // 调用 onInit
+                    // A reloaded instance is a batch of one: onInit, then onStart.
                     invokeLuaCallback(script.onInit, "onInit", script.scriptPath, script.self);
+                    invokeLuaCallback(script.onStart, "onStart", script.scriptPath, script.self);
 
                     YA_CORE_INFO("[Hot Reload] Successfully reloaded: {}", normalizedScriptPath);
                 }

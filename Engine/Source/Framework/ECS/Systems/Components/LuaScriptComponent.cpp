@@ -154,6 +154,7 @@ void LuaScriptComponent::ScriptInstance::releaseLuaHandles()
 {
     self      = sol::lua_nil;
     onInit    = sol::lua_nil;
+    onStart   = sol::lua_nil;
     onUpdate  = sol::lua_nil;
     onDestroy = sol::lua_nil;
     onEnable  = sol::lua_nil;

@@ -1,6 +1,6 @@
 {
   "plan": "game-ui-script-framework",
-  "status": "planned",
+  "status": "in_progress",
   "created": "2026-09-28",
   "acceptance_case": "Example/GreedSnake",
   "decisions": {
@@ -28,14 +28,14 @@
     "esc_quit_fallback_kept": "decision_gate D9 (proposal: yes, last)"
   },
   "features": [
-    {"id":"tick_phase_split","phase":"F0","status":"not_started","reference":"GameRuntimeTickOrchestrator.cpp tick/tickLogic","verification":"TickOrderTest.PauseStopsGameLogicButNotUILogicOrInputState"},
-    {"id":"game_pause_api","phase":"F0","status":"not_started","reference":"App::_bPause (read-only today)","verification":"single counted writer; TickOrderTest.NestedPauseRequiresMatchingResume"},
-    {"id":"system_pause_class","phase":"F0","status":"not_started","reference":"AppLifecycle.cpp _systems registration","verification":"TickOrderTest.PauseKeepsEngineMaintenanceSystemsRunning; class must be declared explicitly"},
-    {"id":"timer_manager_audit","phase":"F0","status":"not_started","reference":"TimerManager callers","verification":"audit recorded in progress; game/real split if shared"},
-    {"id":"world_script_order","phase":"F0","status":"not_started","reference":"LuaScriptingSystem::onUpdate, ScriptInstance","verification":"TickOrderTest.WorldScriptsRunByExecutionOrderThenTreeOrder, InstanceOrderOverridesScriptDefault"},
-    {"id":"script_init_start_update_passes","phase":"F0","status":"not_started","reference":"LuaScriptingSystem::onUpdate lazy onInit","verification":"TickOrderTest.AllNewInstancesInitBeforeAnyUpdate, AllInitsRunBeforeAnyStart, InstanceCreatedDuringUpdateStartsNextFrame"},
-    {"id":"ui_logic_step","phase":"F0","status":"not_started","reference":"RuntimeRenderContext::buildGameRenderFrame gameUIHost->update/setPresentation","verification":"TickOrderTest.UILogicRunsWithoutRenderer"},
-    {"id":"structural_flush","phase":"F0","status":"not_started","reference":"GameplayLua destroySpriteEntity, Scene::destroyNode","verification":"TickOrderTest.DestroyDuringUpdateIsDeferredToFlush"},
+    {"id":"tick_phase_split","phase":"F0","status":"verified","reference":"GameRuntimeTickOrchestrator::tickLogic/tickUILogic/flushStructuralChanges","verification":"TickOrderAppTest.PauseStopsGameLogicButNotUILogicOrInputState"},
+    {"id":"game_pause_api","phase":"F0","status":"verified","reference":"App::pushGamePause/popGamePause, _gamePauseDepth","verification":"TickOrderAppTest.NestedPauseRequiresMatchingResume"},
+    {"id":"system_pause_class","phase":"F0","status":"verified","reference":"ESystemTickGroup, FRegisteredSystem in AppLifecycle.cpp","verification":"TickOrderAppTest.PauseKeepsEngineMaintenanceSystemsRunning; group is a required registration argument"},
+    {"id":"timer_manager_audit","phase":"F0","status":"verified","reference":"TimerManager callers","verification":"only caller is editor delayCall (EditorLayer.ViewportAuthoring.cpp); stays always-running, no clock split"},
+    {"id":"world_script_order","phase":"F0","status":"verified","reference":"LuaScriptingSystem::onUpdate, ScriptInstance::executionOrder()","verification":"TickOrderTest.WorldScriptsRunByExecutionOrderThenTreeOrder, InstanceOrderOverridesScriptDefault"},
+    {"id":"script_init_start_update_passes","phase":"F0","status":"verified","reference":"LuaScriptingSystem::onUpdate, Class.lua root __index","verification":"TickOrderTest.NewInstancesInitAllThenStartAllBeforeAnyUpdate, InstanceCreatedDuringUpdateStartsNextFrame, ScriptBaseInstanceResolvesUndefinedCallbacksThroughItsClass"},
+    {"id":"ui_logic_step","phase":"F0","status":"verified","reference":"GameRuntimeTickOrchestrator::tickUILogic; buildGameRenderFrame keeps setPresentation+buildSnapshot","verification":"TickOrderAppTest.UILogicRunsWithoutRenderer"},
+    {"id":"structural_flush","phase":"F0","status":"verified","reference":"Scene::queueDestroyNode/flushQueuedDestroys, LuaScriptingSystem::onEntityDestroying, GameplayLua destroySpriteEntity","verification":"TickOrderTest.DestroyDuringUpdateIsDeferredToFlush"},
     {"id":"host_agnostic_lua_runtime","phase":"S1","status":"not_started","reference":"LuaScriptingSystem load/reload, LuaScriptComponent::ScriptInstance","verification":"LuaScriptRuntimeTest.*; LuaScriptComponentLifetimeTest stays green"},
     {"id":"gui_behavior_specs","phase":"S2","status":"not_started","reference":"UIDocument.cpp toJson/fromJson/instantiate/fromWidget, UIElement","verification":"UIDocumentTest.BehaviorSpecsRoundtripOnEveryNode, UnknownBehaviorTypeIsKeptOpaque"},
     {"id":"preview_does_not_activate","phase":"S2","status":"not_started","reference":"mountSceneAutoMountEntries, EditorGameUIPreview","verification":"EditorGameUIPreviewTest.PreviewDoesNotActivateBehaviors"},

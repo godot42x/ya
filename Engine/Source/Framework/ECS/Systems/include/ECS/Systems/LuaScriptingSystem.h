@@ -1,5 +1,6 @@
 #pragma once
 #include "ECS/Systems/ScriptingSystem.h"
+#include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "Core/Input/InputManager.h"
 #include <functional>
 #include <sol/sol.hpp>
@@ -12,6 +13,7 @@ namespace ya
 {
 
 struct Scene;
+struct Entity;
 
 /// Narrow runtime services for the Lua bindings, injected by the Host. The
 /// system never reaches Host/App types.
@@ -22,6 +24,8 @@ struct LuaRuntimeServices
     std::function<double()>     elapsedSeconds;    ///< Seconds since app start
     std::function<uint64_t()>   frameIndex;        ///< App frame counter
     std::function<Scene*()>     activeScene;
+    /// Script source by normalized path. Unset reads through the VFS.
+    std::function<bool(const std::string& path, std::string& out)> readScript;
 };
 
 struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
@@ -36,8 +40,16 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     std::unordered_set<std::string> _watchedScripts;
 
     void init() override;
+    /// One world-script frame. Instances are ordered by
+    /// (executionOrder, scene-tree pre-order, index on the entity). Instances
+    /// loaded this frame get onInit (all of them), then onStart (all of them),
+    /// then every loaded instance gets onUpdate. Instances that appear while
+    /// this runs join next frame.
     void onUpdate(float deltaTime) override;
     void onStop();
+    /// `entity` is about to be destroyed: onDestroy its loaded scripts and
+    /// drop their Lua handles.
+    void onEntityDestroying(Entity& entity);
 
     /**
      * @brief 重新加载指定脚本（热重载）
@@ -57,6 +69,11 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
 
   private:
     LuaRuntimeServices _services;
+
+    [[nodiscard]] bool readScriptSource(const std::string& path, std::string& out) const;
+    /// Run the chunk and bind callbacks, self.entity, properties and the
+    /// declared execution order. Does not call onInit.
+    bool loadInstance(LuaScriptComponent::ScriptInstance& script, Entity& entity);
 
     // 自动绑定所有已注册的反射组件到Lua
     void bindReflectedComponents();

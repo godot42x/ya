@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GameRuntime/App.h"
+#include "GameRuntime/Lifecycle/GameRuntimeTickOrchestrator.h"
 #include "Scene/Runtime/SceneManager.h"
 
 namespace ya
@@ -26,6 +27,14 @@ class AppModuleTestAccess
     static void setSceneManager(App& app, SceneManager* sceneManager) { app._sceneManager = sceneManager; }
     static void setAppState(App& app, AppState state) { app._appState = state; }
     static void setJSScriptingSystem(App& app, JSScriptingSystem* js) { app._jsScriptingSystem = js; }
+    static void setLuaScriptingSystem(App& app, LuaScriptingSystem* lua) { app._luaScriptingSystem = lua; }
+    static void addSystem(App& app, stdptr<ISystem> system, ESystemTickGroup group)
+    {
+        app._systems.emplace_back(std::move(system), group);
+    }
+    static void clearSystems(App& app) { app._systems.clear(); }
+    static void setGameUIHost(App& app, std::unique_ptr<GameUIHost> host) { app._gameUIHost = std::move(host); }
+    static void tickLogic(App& app, float dt) { GameRuntimeTickOrchestrator::tickLogic(app, dt); }
     static AppAutomationControlService* getAutomationControlService(App& app) { return app.getAutomationControlService(); }
     static bool dispatchEvent(App& app, const Event& event) { return app.dispatchModuleEvent(event); }
     static void tick(App& app, float dt) { app.tickModules(dt); }

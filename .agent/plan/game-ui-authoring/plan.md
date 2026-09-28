@@ -57,6 +57,9 @@ preview tree 同样只 buildSnapshot、从不 tick，是同一类缺陷的另一
 - `GameUIHost::update(FUIFrameClock)` 转发到 `WidgetTree::tick`。驱动点仍在
   `RuntimeRenderContext::buildGameRenderFrame`，与 `buildSnapshot()` 成对，语义是
   「被展示的树必须被推进」。放渲染侧而非逻辑侧：暂停时逻辑被 gate，但暂停帧仍然提交。
+  **已被取代（2026-09-28，`game-ui-script-framework` F0 / D1）**：暂停不再跳过整段逻辑，
+  驱动点移到 `GameRuntimeTickOrchestrator::tickUILogic`；渲染侧只留 `setPresentation` +
+  `buildSnapshot`。
 - 时间策略不再是一个说不清语义的 `dt`：`FUIFrameClock{gameDelta, realDelta}` 由调用点
   一次算出（暂停只影响 gameDelta），`EUIUpdateClock` 由 host 声明它读哪一个。默认
   RealTime，保持上一版行为（暂停菜单继续动画）；纯 gameplay HUD 可改 GameTime 随游戏冻结。

@@ -18,6 +18,7 @@
 #include <atomic>
 #include <cstdint>
 #include <concepts>
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -51,6 +52,9 @@ struct YA_SCENE_CORE_API Scene
     /// Top-level Game UI authoring entries (new format; the runtime instantiates
     /// them into a WidgetTree via GameUIHost, Phase 3).
     std::vector<SceneWidgetEntry> _widgetEntries;
+
+    /// Roots queued by `queueDestroyNode`, destroyed at the next flush.
+    std::vector<entt::entity> _queuedDestroys;
 
   public:
     Scene(const std::string& name = "Untitled Scene");
@@ -112,6 +116,16 @@ struct YA_SCENE_CORE_API Scene
     void destroyNode(Node* node);
 
     void destroyEntity(Entity* entity);
+
+    /// Destroy `node` and its subtree at the next `flushQueuedDestroys`, not
+    /// now. Gameplay code uses this while the frame is still iterating the
+    /// registry; the node stays valid (and visible) until the flush.
+    void queueDestroyNode(Node* node);
+    /// Destroy every queued subtree. `beforeDestroy` sees each entity of a
+    /// subtree while it is still intact. Destroys queued from inside it are
+    /// flushed in the same call.
+    void flushQueuedDestroys(const std::function<void(Entity&)>& beforeDestroy = {});
+    [[nodiscard]] bool hasQueuedDestroys() const { return !_queuedDestroys.empty(); }
 
 
     /**

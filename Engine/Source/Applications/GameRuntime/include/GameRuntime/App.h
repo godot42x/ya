@@ -58,6 +58,28 @@ class AppModuleTestAccess;
 class AppAutomationControlService;
 class InputRouter;
 
+/// Which part of the logic tick a host system belongs to. Game pause is a host
+/// decision, so the host states it where it registers the system; framework
+/// systems do not know the game can pause.
+enum class ESystemTickGroup : uint8_t
+{
+    /// Keeps the engine consistent (asset instancing, transforms, render
+    /// linkage). Runs while the game is paused, so editing a paused game works.
+    Engine,
+    /// Advances the game world (physics, animation). Stops while paused.
+    Simulation,
+};
+
+/// No default group: a new system has to say which side of pause it is on.
+struct FRegisteredSystem
+{
+    FRegisteredSystem(stdptr<ISystem> inSystem, ESystemTickGroup inGroup)
+        : system(std::move(inSystem)), group(inGroup) {}
+
+    stdptr<ISystem>  system;
+    ESystemTickGroup group;
+};
+
 struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
                                  public IFrameRecordExtensions
 {
@@ -105,7 +127,8 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     time_point_t _startTime;
 
     static uint32_t _hostTick;
-    bool            _bPause     = false;
+    /// Outstanding game-pause requests (pushGamePause / popGamePause).
+    uint32_t        _gamePauseDepth = 0;
     /// Main present surface unpresentable (minimize). Not a process pause:
     /// logic still ticks; coordinator skips GPU when `begin` returns -1.
     bool            _bMinimized = false;
@@ -122,7 +145,7 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     std::vector<EInputMode>   _inputModeStack;
     glm::vec2 _lastMousePos = {0, 0};
 
-    std::vector<stdptr<ISystem>> _systems;
+    std::vector<FRegisteredSystem> _systems;
 
     struct FModuleSlot
     {
@@ -250,7 +273,13 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
 
     /// Broadcast after every app mode transition (Runtime / Simulation / Stopped).
     MulticastDelegate<void(AppState)> onAppStateChanged;
-    bool                   isPaused() const { return _bPause; }
+    /// Game time is stopped: Simulation systems and world scripts skip their
+    /// tick. Engine systems, modules, UI logic and input state keep running.
+    [[nodiscard]] bool     isPaused() const { return _gamePauseDepth > 0; }
+    /// Counted, so independent owners (a pause menu, an editor pause) compose:
+    /// the game resumes when every push has been popped.
+    void                   pushGamePause();
+    void                   popGamePause();
 
     // === Input mode (game / UI routing + cursor baseline) ===
     [[nodiscard]] EInputMode getInputMode() const { return _inputMode; }

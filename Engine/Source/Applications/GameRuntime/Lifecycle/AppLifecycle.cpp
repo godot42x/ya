@@ -276,14 +276,14 @@ void App::init(AppDesc ci)
         return app.getSceneServices().getActiveScene();
     });
     sys->init();
-    app._systems.push_back(sys);
+    app._systems.emplace_back(sys, ESystemTickGroup::Engine);
     auto sys3 = ya::makeShared<TransformSystem>();
     sys3->setSceneProvider([&app]() -> Scene*
     {
         return app.getSceneServices().getActiveScene();
     });
     sys3->init();
-    app._systems.push_back(sys3);
+    app._systems.emplace_back(sys3, ESystemTickGroup::Engine);
     auto sys4 = ya::makeShared<SkeletonAnimationSystem>();
     sys4->setSceneProvider([&app]() -> Scene*
     {
@@ -298,7 +298,7 @@ void App::init(AppDesc ci)
         return !activeScene || app.getRenderServices().wasSceneRenderedLastTick(activeScene);
     });
     sys4->init();
-    app._systems.push_back(sys4);
+    app._systems.emplace_back(sys4, ESystemTickGroup::Simulation);
     auto sys5 = ya::makeShared<LinkageFramework>();
     // Light billboard policy is injected here (Host owns the config source);
     // the adapter never reaches Host/Config.
@@ -327,16 +327,16 @@ void App::init(AppDesc ci)
         app.getTaskManager().registerTickTask(std::move(task));
     });
     sys5->init();
-    app._systems.push_back(sys5);
+    app._systems.emplace_back(sys5, ESystemTickGroup::Engine);
     auto sysPhysics = ya::makeShared<PhysicsSystem>();
     sysPhysics->setSceneManager(app.getSceneServices().getSceneManager());
     sysPhysics->setAppStateChangedSource(&app.onAppStateChanged);
     sysPhysics->init();
-    app._systems.push_back(sysPhysics);
+    app._systems.emplace_back(sysPhysics, ESystemTickGroup::Simulation);
     app._deleter.push("Systems", [&app](void*)
                       {
-        for (auto& sys : app._systems) {
-            sys->shutdown();
+        for (auto& entry : app._systems) {
+            entry.system->shutdown();
         }
         app._systems.clear(); });
 

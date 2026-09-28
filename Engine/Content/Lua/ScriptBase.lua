@@ -125,6 +125,7 @@ ScriptBase.defineProperties = ScriptBase.properties
 
 -- 默认生命周期回调（子类覆盖）
 function ScriptBase:onInit() end
+function ScriptBase:onStart() end
 function ScriptBase:onUpdate(dt) end
 function ScriptBase:onDestroy() end
 function ScriptBase:onEnable() end

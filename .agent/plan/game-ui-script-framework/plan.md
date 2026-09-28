@@ -94,17 +94,17 @@ Tick
 │   ├─ 模态拦截：最上层可见模态条目存在时，世界输入到此为止
 │   ├─ 取消动作（Esc/返回）：最上层条目脚本 onCancel → 世界脚本 onCancel → 兜底
 │   └─ 世界脚本按键：onKey 按执行顺序派发，返回 true 即消费 → 兜底（退出等）
-├─ AlwaysLogic（不受游戏暂停）
-│   ├─ TaskManager、自动化、文件监视/热重载、模块 onLogic（编辑器；需要时自己读 isPaused()）
-│   └─ 引擎维护类系统：ModelInstantiation、Transform、LinkageFramework
-├─ GameLogic（游戏时间，暂停时整段跳过）
-│   ├─ 玩法模拟类系统：Physics、SkeletonAnimation（系统自己声明类别，编排器不写名单）
-│   └─ 世界脚本（在玩法模拟系统之后：读到本帧物理结果，写入的变换下一帧被物理消费）
-│       ├─ 本帧新实例：全部按顺序 onInit，再全部按顺序 onStart
-│       └─ 全部实例按顺序 onUpdate；本帧 onUpdate 中新建的实例排到下一帧
-│       顺序键 = (executionOrder, 场景树前序, 实体内脚本下标)
-├─ UILogic（不依赖渲染器是否存在）
-│   ├─ 进入前确定 presentation（渲染分辨率 / 上一帧显示输出），不再等渲染阶段
+├─ Logic（保持现有顺序，逐步门控；「暂停」= App::isPaused()，只停标 ▲ 的步骤）
+│   ├─ TaskManager、TimerManager、自动化
+│   ├─ 系统按注册顺序：引擎维护类（ModelInstantiation、Transform、LinkageFramework）常跑，
+│   │   ▲ 玩法模拟类（SkeletonAnimation、Physics）暂停跳过；类别在注册处显式声明
+│   ├─ ▲ 世界脚本（Runtime / Simulation；在玩法模拟系统之后：读到本帧物理结果）
+│   │   ├─ 本帧新实例：全部按顺序 onInit，再全部按顺序 onStart
+│   │   └─ 全部实例按顺序 onUpdate；本帧 onUpdate 中新建的实例排到下一帧
+│   │   顺序键 = (executionOrder, 场景树前序, 实体句柄, 实体内脚本下标)
+│   └─ 文件监视/热重载、模块 onLogic（编辑器；需要时自己读 isPaused()）
+├─ UILogic（不依赖渲染器是否存在；Runtime / Simulation 且有挂载场景时）
+│   ├─ presentation 仍在渲染侧 buildSnapshot 前设置：update 不读它，布局在 buildSnapshot 里
 │   ├─ 新挂载条目：整条目实例化完成后，按 (zOrder, 条目顺序, 树前序) 调 onInit，再调 onStart
 │   ├─ 显隐变化：onShow / onHide
 │   └─ onUpdate(dt)：dt 取该条目声明的时钟（game / real），顺序同上
@@ -113,8 +113,11 @@ Tick
 ├─ StructuralFlush
 │   └─ 本帧排队的实体销毁、控件 spawn/destroy、条目挂卸统一生效（脚本 onDestroy 在此调用）
 ├─ InputStateUpdate（postUpdate / preUpdate，不受暂停）
-└─ Render：layout + buildSnapshot + 录制；不调用任何脚本
+└─ Render：setPresentation + layout + buildSnapshot + 录制；不调用任何脚本
 ```
+
+F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中的控件/条目部分（S3/S4）外均由
+`GameRuntimeTickOrchestrator::tickLogic` 实现，`TickOrderTest.*` / `TickOrderAppTest.*` 钉住。
 
 生命周期约定（世界与 UI 一致）：
 
@@ -158,14 +161,31 @@ Tick
 - 测试（`ya-testing`）：
   - `TickOrderTest.WorldScriptsRunByExecutionOrderThenTreeOrder`
   - `TickOrderTest.InstanceOrderOverridesScriptDefault`
-  - `TickOrderTest.AllNewInstancesInitBeforeAnyUpdate`
-  - `TickOrderTest.AllInitsRunBeforeAnyStart`
+  - `TickOrderTest.NewInstancesInitAllThenStartAllBeforeAnyUpdate`（合并原 AllNewInstancesInitBeforeAnyUpdate / AllInitsRunBeforeAnyStart）
+  - `TickOrderTest.ScriptBaseInstanceResolvesUndefinedCallbacksThroughItsClass`
   - `TickOrderTest.InstanceCreatedDuringUpdateStartsNextFrame`
-  - `TickOrderTest.PauseStopsGameLogicButNotUILogicOrInputState`
-  - `TickOrderTest.PauseKeepsEngineMaintenanceSystemsRunning`
-  - `TickOrderTest.NestedPauseRequiresMatchingResume`
-  - `TickOrderTest.UILogicRunsWithoutRenderer`
   - `TickOrderTest.DestroyDuringUpdateIsDeferredToFlush`
+  - `TickOrderAppTest.PauseStopsGameLogicButNotUILogicOrInputState`
+  - `TickOrderAppTest.PauseKeepsEngineMaintenanceSystemsRunning`
+  - `TickOrderAppTest.NestedPauseRequiresMatchingResume`
+  - `TickOrderAppTest.UILogicRunsWithoutRenderer`
+- 实施偏离（已接受）：
+  - 类别在注册处（`AppLifecycle`，`FRegisteredSystem`）声明，不放 `ISystem`：类别是宿主策略，
+    同一系统在别的宿主里可以归不同组；注册必须给出类别，没有默认值。
+  - 暂停 API 名为 `App::pushGamePause` / `popGamePause`。
+  - 保持现有逻辑步骤顺序、逐步门控，不把模块 onLogic 挪到最前（挪动会改变编辑器时序，无收益）。
+  - `setPresentation` 留在 `buildSnapshot` 旁：`GameUIHost::update` 不读 presentation。
+  - 顺序不缓存：没有场景结构版本号可作失效依据；每帧 O(脚本数 × 树深) 求树路径，到有
+    性能证据再加缓存。
+  - 只有玩法 Lua 的 `world.destroyEntity` 入队；`Scene::destroyNode` 仍立即执行（编辑器、
+    自动化、场景切换依赖立即语义）。
+  - 热重载跳过尚未加载的实例（它首次加载就会读新源，避免 onInit 两次）；重载的实例按单实例
+    批次 onInit → onStart。
+  - `TimerManager` 审计：唯一调用方是编辑器 `EditorLayer.ViewportAuthoring.cpp` 的 `delayCall`，
+    归 AlwaysLogic，不拆时钟。
+  - 顺带修 `Engine/Content/Lua/Class.lua`：根类 `__index` 指向自身，查任何缺失字段死循环；
+    C++ 开始读 `onStart` / `executionOrder` 后必然触发（GreedSnake 冒烟暴露）。`ScriptBase`
+    补默认 `onStart`。
 - 验收：上述测试绿；HelloMaterial / GreedSnake runtime smoke、editor smoke exit 0；
   GreedSnake 行为不变（这一步不改游戏脚本）。
 

@@ -434,24 +434,9 @@ RuntimeRenderContext::TickFrame RuntimeRenderContext::buildGameRenderFrame(
         if (auto* gameUIHost = app.getGameUIHost()) {
             gameUIHost->setPresentation(displayRoot->desc.outputRect,
                                         glm::vec2(tickFrame.frame.renderScale));
-            // Advance the tree, then freeze the result into this frame's packet.
-            // Paired deliberately: a tree the host presents must be ticked, and
-            // buildSnapshot only lays out and paints, so a host that skipped
-            // this would show a frozen first frame forever. Sitting on the
-            // render side (not the logic side, which pause gates) is what keeps
-            // a pause menu alive -- paused frames still present.
-            //
-            // Both clocks are named here because this is the only place that
-            // knows the pause decision: a paused frame still renders `dt` of
-            // wall time, but the game advanced by none of it. The host picks
-            // which one its tree follows (`updateClock`), so a HUD on GameTime
-            // freezes with the game while a pause menu on RealTime keeps
-            // animating, without either call site guessing.
-            const FUIFrameClock uiClock{
-                .gameDelta = app.isPaused() ? 0.0f : dt,
-                .realDelta = dt,
-            };
-            gameUIHost->update(uiClock);
+            // Lay out and paint only. The tree was advanced in the logic
+            // tick's UI step (GameRuntimeTickOrchestrator::tickUILogic), so no
+            // UI logic runs while the frame is being built.
             tickFrame.uiSnapshot = gameUIHost->buildSnapshot();
         }
     }

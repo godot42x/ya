@@ -361,6 +361,20 @@ void App::popInputMode()
     inputRouter.applyInputMode(_inputMode);
 }
 
+void App::pushGamePause()
+{
+    ++_gamePauseDepth;
+}
+
+void App::popGamePause()
+{
+    if (_gamePauseDepth == 0) {
+        YA_CORE_WARN("App::popGamePause: no pause to release");
+        return;
+    }
+    --_gamePauseDepth;
+}
+
 EWidgetRouteResult App::dispatchUIInputEvent(const Event& event)
 {
     if (isStopped() || _inputMode == EInputMode::GameOnly) {
