@@ -148,10 +148,10 @@ void GameUIHost::onSceneDeactivated(Scene& scene)
     _mountedScene = nullptr;
 }
 
-void GameUIHost::setBehaviorActivator(std::unique_ptr<IUIBehaviorActivator> activator)
+void GameUIHost::setBehaviorRuntime(std::unique_ptr<IGameUIBehaviorRuntime> runtime)
 {
-    // The old activator outlives the remount, which drops the behaviours it made.
-    std::unique_ptr<IUIBehaviorActivator> previous = std::exchange(_behaviorActivator, std::move(activator));
+    // The old runtime outlives the remount, which drops the behaviours it made.
+    std::unique_ptr<IGameUIBehaviorRuntime> previous = std::exchange(_behaviorRuntime, std::move(runtime));
     reloadMountedSceneUI();
 }
 
@@ -219,7 +219,73 @@ UIFrameSnapshot GameUIHost::buildSnapshot()
 
 void GameUIHost::update(const FUIFrameClock& clock)
 {
-    _tree.tick(clock.forClock(_updateClock));
+    const float deltaSeconds = clock.forClock(_updateClock);
+    if (_behaviorRuntime) {
+        _behaviorRuntime->update();
+    }
+    advanceTimers(deltaSeconds);
+    _tree.tick(deltaSeconds);
+}
+
+void GameUIHost::layoutNow()
+{
+    if (!_tree.isLayoutValid()) {
+        _tree.layout();
+    }
+}
+
+uint64_t GameUIHost::addTimer(const void* owner, float delaySeconds, float intervalSeconds, std::function<bool()> fire)
+{
+    if (!fire) {
+        return 0;
+    }
+    const uint64_t id = _nextTimerId++;
+    _timers.emplace(id, FTimer{
+                            .owner    = owner,
+                            .due      = _clockSeconds + std::max(delaySeconds, 0.0f),
+                            .interval = std::max(intervalSeconds, 0.0f),
+                            .fire     = std::move(fire),
+                        });
+    return id;
+}
+
+void GameUIHost::cancelTimer(uint64_t timerId)
+{
+    _timers.erase(timerId);
+}
+
+void GameUIHost::cancelTimersOf(const void* owner)
+{
+    std::erase_if(_timers, [owner](const auto& entry) { return entry.second.owner == owner; });
+}
+
+void GameUIHost::advanceTimers(float deltaSeconds)
+{
+    _clockSeconds += deltaSeconds;
+    // Snapshot the due ids: a callback may add or cancel timers.
+    std::vector<uint64_t> due;
+    for (const auto& [id, timer] : _timers) {
+        if (timer.due <= _clockSeconds) {
+            due.push_back(id);
+        }
+    }
+    for (const uint64_t id : due) {
+        auto it = _timers.find(id);
+        if (it == _timers.end()) {
+            continue;
+        }
+        const std::function<bool()> fire = it->second.fire;
+        const bool bKeep = fire();
+        it = _timers.find(id);
+        if (it == _timers.end()) {
+            continue;
+        }
+        if (!bKeep || it->second.interval <= 0.0f) {
+            _timers.erase(it);
+            continue;
+        }
+        it->second.due = std::max(it->second.due + it->second.interval, _clockSeconds + 1e-6);
+    }
 }
 
 std::shared_ptr<Texture> resolveGameUITexture(const std::string& assetPath)
@@ -244,6 +310,34 @@ UIElement* findNamedWidget(UIElement* node, std::string_view name)
         }
     }
     return nullptr;
+}
+
+/// Name -> first widget with it, in tree pre-order. Names seen again are
+/// recorded as ambiguous (not yet warned) instead of replacing the first.
+void indexNamedWidgets(UIElement&                                                  root,
+                       std::unordered_map<std::string, std::weak_ptr<UIElement>>& names,
+                       std::unordered_map<std::string, bool>&                     ambiguous)
+{
+    std::vector<UIElement*> pending{&root};
+    while (!pending.empty()) {
+        UIElement* node = pending.back();
+        pending.pop_back();
+        if (!node->_name.empty()) {
+            auto [it, bInserted] = names.try_emplace(node->_name);
+            if (bInserted) {
+                it->second = node->weak_from_this();
+            }
+            else {
+                ambiguous.try_emplace(node->_name, false);
+            }
+        }
+        const auto& children = node->getChildren();
+        for (auto child = children.rbegin(); child != children.rend(); ++child) {
+            if (*child) {
+                pending.push_back(child->get());
+            }
+        }
+    }
 }
 
 void bindButtonActions(UIElement& node, const std::function<void(std::string_view)>& handler)
@@ -322,13 +416,19 @@ void GameUIHost::setUiActionHandler(std::function<void(std::string_view action)>
 
 void GameUIHost::setMountedRoots(std::vector<std::pair<std::string, std::weak_ptr<UIElement>>> roots)
 {
-    _mountedRoots = std::move(roots);
+    _entries.clear();
+    for (auto& [entryId, weakRoot] : roots) {
+        FMountedEntry& entry = _entries.emplace_back(FMountedEntry{.entryId = std::move(entryId), .root = weakRoot});
+        if (UIElementRef root = weakRoot.lock()) {
+            indexNamedWidgets(*root, entry.names, entry.ambiguous);
+        }
+    }
     bindMountedButtonActions();
 }
 
 void GameUIHost::clearMountedRoots()
 {
-    _mountedRoots.clear();
+    _entries.clear();
 }
 
 void GameUIHost::bindMountedButtonActions()
@@ -336,9 +436,8 @@ void GameUIHost::bindMountedButtonActions()
     if (!_uiActionHandler) {
         return;
     }
-    for (const auto& [entryId, weakRoot] : _mountedRoots) {
-        (void)entryId;
-        if (UIElementRef root = weakRoot.lock()) {
+    for (const FMountedEntry& entry : _entries) {
+        if (UIElementRef root = entry.root.lock()) {
             bindButtonActions(*root, _uiActionHandler);
         }
     }
@@ -346,14 +445,59 @@ void GameUIHost::bindMountedButtonActions()
 
 UIElement* GameUIHost::findMountedWidget(std::string_view entryId, std::string_view widgetName) const
 {
-    for (const auto& [id, weakRoot] : _mountedRoots) {
-        if (id != entryId) {
-            continue;
+    UIElementRef root = findEntryRoot(entryId);
+    return findNamedWidget(root.get(), widgetName);
+}
+
+UIElementRef GameUIHost::findEntryRoot(std::string_view entryId) const
+{
+    for (const FMountedEntry& entry : _entries) {
+        if (entry.entryId == entryId) {
+            return entry.root.lock();
         }
-        UIElementRef root = weakRoot.lock();
-        return findNamedWidget(root.get(), widgetName);
     }
     return nullptr;
+}
+
+UIElement* GameUIHost::entryRootOf(const UIElement& widget) const
+{
+    for (const UIElement* node = &widget; node; node = node->getParent()) {
+        for (const FMountedEntry& entry : _entries) {
+            if (entry.root.lock().get() == node) {
+                return const_cast<UIElement*>(node);
+            }
+        }
+    }
+    return nullptr;
+}
+
+GameUIHost::FMountedEntry* GameUIHost::entryFor(const UIElement& entryRoot)
+{
+    for (FMountedEntry& entry : _entries) {
+        if (entry.root.lock().get() == &entryRoot) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+UIElementRef GameUIHost::findInEntry(const UIElement& entryRoot, std::string_view name)
+{
+    FMountedEntry* entry = entryFor(entryRoot);
+    if (!entry) {
+        return nullptr;
+    }
+    const std::string key(name);
+    auto it = entry->names.find(key);
+    if (it == entry->names.end()) {
+        return nullptr;
+    }
+    if (auto ambiguous = entry->ambiguous.find(key); ambiguous != entry->ambiguous.end() && !ambiguous->second) {
+        ambiguous->second = true;
+        YA_CORE_WARN("Game UI entry '{}' has more than one widget named '{}'; find returns the first",
+                     entry->entryId, key);
+    }
+    return it->second.lock();
 }
 
 bool GameUIHost::setMountedText(std::string_view entryId, std::string_view widgetName, const std::string& text)

@@ -103,6 +103,10 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     /// Call one lifecycle callback with `self` rebound by its host. Errors are
     /// logged and contained to this instance. False if the instance is not live.
     bool call(LuaScriptInstance& instance, ELuaScriptCallback callback, float deltaTime = 0.0f);
+    /// Call `self:<callback>(args...)` if the script defines it (own field or
+    /// class chain). True only when the callback returned `true`; a missing
+    /// callback, an error or any other result is false. Errors stay contained.
+    bool invoke(LuaScriptInstance& instance, const char* callback, const std::vector<sol::object>& args = {});
     /// onDestroy, drop Lua handles and unregister. No-op if not live.
     void destroy(LuaScriptInstance& instance);
     /// destroy() every live instance, in load order.

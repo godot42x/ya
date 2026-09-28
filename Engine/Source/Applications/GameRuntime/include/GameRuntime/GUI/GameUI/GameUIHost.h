@@ -24,12 +24,15 @@
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
+#include "GameRuntime/GUI/GameUI/IGameUIBehaviorRuntime.h"
 #include "GameRuntime/GUI/GameUI/IGameUIController.h"
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -94,10 +97,11 @@ struct YA_GAME_RUNTIME_API GameUIHost
     void setDocumentStore(UIDocumentStore* documents) { _documents = documents; }
     [[nodiscard]] UIDocumentStore* getDocumentStore() const { return _documents; }
 
-    /// Turns authored behaviour specs of mounted entries into live behaviours.
-    /// Null (the default) mounts documents with their specs inert.
-    void setBehaviorActivator(std::unique_ptr<IUIBehaviorActivator> activator);
-    [[nodiscard]] IUIBehaviorActivator* getBehaviorActivator() const { return _behaviorActivator.get(); }
+    /// Turns authored behaviour specs of mounted entries into live behaviours
+    /// and starts them in UILogic. Null (the default) mounts documents with
+    /// their specs inert. Replacing it remounts the presented scene.
+    void setBehaviorRuntime(std::unique_ptr<IGameUIBehaviorRuntime> runtime);
+    [[nodiscard]] IGameUIBehaviorRuntime* getBehaviorRuntime() const { return _behaviorRuntime.get(); }
 
     /// The host's tree is only presented while a scene is mounted.
     [[nodiscard]] Scene* getMountedScene() const { return _mountedScene; }
@@ -147,6 +151,27 @@ struct YA_GAME_RUNTIME_API GameUIHost
     void setUpdateClock(EUIUpdateClock clock) { _updateClock = clock; }
     /// Layout + paint into an immutable snapshot for this frame's compose.
     [[nodiscard]] UIFrameSnapshot buildSnapshot();
+    /// Lay the tree out now if it is dirty. UILogic runs before this frame's
+    /// layout, so code that must read this frame's geometry asks for it.
+    void layoutNow();
+
+    // === Timers (host clock) ===
+    /// `fire` runs once `delaySeconds` of this host's clock have passed, then
+    /// every `intervalSeconds` while it returns true (0 = once). Timers run in
+    /// update() before the tree tick, whether or not anything is visible; a
+    /// timer that falls behind fires once per update, not in a burst.
+    uint64_t addTimer(const void* owner, float delaySeconds, float intervalSeconds, std::function<bool()> fire);
+    void     cancelTimer(uint64_t timerId);
+    void     cancelTimersOf(const void* owner);
+
+    // === Mounted entries ===
+    /// Root of the mounted entry `entryId`, or null.
+    [[nodiscard]] UIElementRef findEntryRoot(std::string_view entryId) const;
+    /// The mounted entry root that `widget` belongs to (itself or an ancestor), or null.
+    [[nodiscard]] UIElement* entryRootOf(const UIElement& widget) const;
+    /// Widget named `name` inside the entry rooted at `entryRoot` (index built at
+    /// mount). An ambiguous name returns the first in tree order and warns once.
+    [[nodiscard]] UIElementRef findInEntry(const UIElement& entryRoot, std::string_view name);
 
     /// Called when a mounted button with a non-empty action name is clicked.
     /// The widget stores the name; this host is the only place that turns it
@@ -165,11 +190,28 @@ struct YA_GAME_RUNTIME_API GameUIHost
     bool setMountedVisible(std::string_view entryId, std::string_view widgetName, bool visible);
 
   private:
+    struct FMountedEntry
+    {
+        std::string                                             entryId;
+        std::weak_ptr<UIElement>                                root;
+        std::unordered_map<std::string, std::weak_ptr<UIElement>> names;
+        std::unordered_map<std::string, bool>                   ambiguous; ///< name -> already warned
+    };
+    struct FTimer
+    {
+        const void*           owner;
+        double                due;
+        float                 interval;
+        std::function<bool()> fire;
+    };
+
     void bindMountedButtonActions();
+    void advanceTimers(float deltaSeconds);
     [[nodiscard]] UIElement* findMountedWidget(std::string_view entryId, std::string_view widgetName) const;
+    [[nodiscard]] FMountedEntry* entryFor(const UIElement& entryRoot);
     /// Declared before `_tree`: behaviours it created live on tree widgets and
     /// must be torn down before it.
-    std::unique_ptr<IUIBehaviorActivator> _behaviorActivator;
+    std::unique_ptr<IGameUIBehaviorRuntime> _behaviorRuntime;
     WidgetTree                     _tree;
     std::unique_ptr<IGameUIController> _controller;
     UIDocumentStore*               _documents = nullptr;
@@ -178,7 +220,10 @@ struct YA_GAME_RUNTIME_API GameUIHost
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};
     EUIUpdateClock                 _updateClock = EUIUpdateClock::RealTime;
     std::function<void(std::string_view)> _uiActionHandler;
-    std::vector<std::pair<std::string, std::weak_ptr<UIElement>>> _mountedRoots;
+    std::vector<FMountedEntry>     _entries;
+    std::map<uint64_t, FTimer>     _timers; ///< by id: equal due times fire in creation order
+    uint64_t                       _nextTimerId = 1;
+    double                         _clockSeconds = 0.0;
 };
 
 /// One auto-mounted scene entry: the authoring id plus the content-layer attachment.

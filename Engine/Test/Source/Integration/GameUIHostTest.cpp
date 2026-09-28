@@ -537,7 +537,7 @@ TEST(GameUIHostTest, MountedTextVisibilityAndButtonAction)
 namespace
 {
 
-struct RecordingActivator final : public IUIBehaviorActivator
+struct RecordingActivator final : public IGameUIBehaviorRuntime
 {
     struct FCall
     {
@@ -554,6 +554,8 @@ struct RecordingActivator final : public IUIBehaviorActivator
     {
         calls->push_back({widget._name, spec.type, std::string(context.entryId), &context.entryRoot});
     }
+
+    void update() override {}
 };
 
 } // namespace
@@ -588,7 +590,7 @@ TEST(GameUIHostTest, MountActivatesBehaviorSpecsInPreorderWithEntryContext)
 
     // Installing one re-mounts the presented scene through it.
     std::vector<RecordingActivator::FCall> calls;
-    host.setBehaviorActivator(std::make_unique<RecordingActivator>(calls));
+    host.setBehaviorRuntime(std::make_unique<RecordingActivator>(calls));
     ASSERT_EQ(content->getChildren().size(), 1u);
     UIElement* root = content->getChildren()[0].get();
     ASSERT_EQ(calls.size(), 4u);

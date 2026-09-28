@@ -371,6 +371,10 @@ void App::init(AppDesc ci)
     }
     app._deleter.push("LuaScriptingSystem", [&app](void*)
                       {
+        // Widget scripts live in this Lua state; the UI host outlives it.
+        if (GameUIHost* gameUI = app.getGameUIHost()) {
+            gameUI->setBehaviorRuntime(nullptr);
+        }
         app._luaScriptingSystem->shutdown();
         delete app._luaScriptingSystem;
         app._luaScriptingSystem = nullptr; });
@@ -730,6 +734,11 @@ void App::stopRuntime()
     const AppState previousState = app._appState;
     app._appState = AppState::Stopped;
     app.onAppStateChanged.broadcast(app._appState);
+    // Play leaves widget state behind (texts, visibility, scripts that ran);
+    // editing and the next play start again from the authored documents.
+    if (GameUIHost* gameUI = app.getGameUIHost()) {
+        gameUI->reloadMountedSceneUI();
+    }
     app.getSceneServices().refreshActiveSceneDerivedState();
     app.notifyModulesAfterAppStateChange(previousState);
 }
@@ -756,6 +765,11 @@ void App::stopSimulation()
     const AppState previousState = app._appState;
     app._appState = AppState::Stopped;
     app.onAppStateChanged.broadcast(app._appState);
+    // Play leaves widget state behind (texts, visibility, scripts that ran);
+    // editing and the next play start again from the authored documents.
+    if (GameUIHost* gameUI = app.getGameUIHost()) {
+        gameUI->reloadMountedSceneUI();
+    }
     app.getSceneServices().refreshActiveSceneDerivedState();
     app.notifyModulesAfterAppStateChange(previousState);
 

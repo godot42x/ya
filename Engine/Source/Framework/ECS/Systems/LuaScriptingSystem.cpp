@@ -789,6 +789,36 @@ bool LuaScriptingSystem::call(LuaScriptInstance& instance, ELuaScriptCallback ca
     return true;
 }
 
+bool LuaScriptingSystem::invoke(LuaScriptInstance& instance, const char* callback, const std::vector<sol::object>& args)
+{
+    ILuaScriptHost* host = hostOf(instance);
+    if (!host || !instance.bLoaded) {
+        return false;
+    }
+    host->bindSelf(instance.self);
+    const sol::function function = functionField(_lua, instance.self, callback);
+    if (!function.valid()) {
+        return false;
+    }
+    const std::string       path = instance.scriptPath;
+    const sol::table        self = instance.self;
+    lua_State*              L    = function.lua_state();
+    function.push(L);
+    sol::protected_function protectedCallback(L, -1);
+    lua_pop(L, 1);
+    const sol::protected_function_result result = protectedCallback(self, sol::as_args(args));
+    if (!result.valid()) {
+        const sol::error error = result;
+        YA_CORE_ERROR("Lua {} error ({}): {}", callback, path, error.what());
+        return false;
+    }
+    if (result.return_count() == 0) {
+        return false;
+    }
+    const sol::object value = result.get<sol::object>();
+    return value.is<bool>() && value.as<bool>();
+}
+
 void LuaScriptingSystem::destroy(LuaScriptInstance& instance)
 {
     const uint64_t id   = instance.runtimeId;

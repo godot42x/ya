@@ -9,6 +9,8 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "ECS/Systems/LuaScriptingSystem.h"
+#include "GUI/Widgets/UIDocument.h"
+#include "GUI/Widgets/UIDocumentStore.h"
 #include "GUI/Widgets/UITypeIds.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
@@ -396,6 +398,33 @@ TEST_F(TickOrderAppTest, UILogicRunsWithoutRenderer)
     AppModuleTestAccess::setAppState(app, AppState::Stopped);
     AppModuleTestAccess::tickLogic(app, 0.016f);
     EXPECT_EQ(uiBehavior->ticks, 1);
+}
+
+TEST_F(TickOrderAppTest, StopRemountsSceneUIFromItsDocuments)
+{
+    GameUIHost*     host = app.getGameUIHost();
+    UIDocumentStore documents;
+    auto            document = std::make_shared<UIDocument>();
+    document->typeId         = kTypeIdBorder;
+    documents.put("Test/UI/HUD.yaui", document);
+    host->setDocumentStore(&documents);
+    SceneWidgetEntry entry;
+    entry.entryId      = "HUD";
+    entry.documentPath = "Test/UI/HUD.yaui";
+    entry.autoMount    = true;
+    scene->addWidgetEntry(entry);
+    host->reloadMountedSceneUI();
+
+    UIElementRef played = host->findEntryRoot("HUD");
+    ASSERT_NE(played, nullptr);
+    played->setVisibility(EWidgetVisibility::Hidden);
+
+    app.stopRuntime();
+    UIElementRef stopped = host->findEntryRoot("HUD");
+    ASSERT_NE(stopped, nullptr);
+    EXPECT_NE(stopped, played) << "the played instance is not kept into editing";
+    EXPECT_EQ(stopped->getVisibility(), EWidgetVisibility::Visible);
+    host->setDocumentStore(nullptr);
 }
 
 } // namespace ya

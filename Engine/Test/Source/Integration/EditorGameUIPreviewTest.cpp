@@ -132,11 +132,12 @@ TEST(EditorGameUIPreviewTest, AuthoringModeDoesNotDispatchInputToWidgets)
 
 TEST(EditorGameUIPreviewTest, PreviewDoesNotActivateBehaviors)
 {
-    struct CountingActivator final : public IUIBehaviorActivator
+    struct CountingActivator final : public IGameUIBehaviorRuntime
     {
         int* count;
         explicit CountingActivator(int& out) : count(&out) {}
         void activate(UIElement&, const FUIBehaviorSpec&, const FUIBehaviorActivation&) override { ++*count; }
+        void update() override {}
     };
 
     UIDocumentStore documents;
@@ -151,7 +152,7 @@ TEST(EditorGameUIPreviewTest, PreviewDoesNotActivateBehaviors)
     int activations = 0;
     GameUIHost host;
     host.setDocumentStore(&documents);
-    host.setBehaviorActivator(std::make_unique<CountingActivator>(activations));
+    host.setBehaviorRuntime(std::make_unique<CountingActivator>(activations));
     host.onSceneActivated(scene);
     ASSERT_EQ(activations, 1);
 

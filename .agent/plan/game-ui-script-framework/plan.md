@@ -285,7 +285,7 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 - 动态实例化：`self:spawn(documentPath, parentHandle[, slot])` 入队，StructuralFlush 挂上并
   激活其中的行为，返回根句柄（生效前句柄为 pending，访问时 WARN）。
 - `addToWorld` 挂上的控件同样参与名字索引与动作路由。
-- 测试（`GameUIHostTest` 扩展）：
+- 测试（新套件 `GameUIScriptTest`，需要 Lua 与 GameUIHost 同时在场，不塞进 `GameUIHostTest`）：
   - `WidgetScriptReceivesLifecycleInOrder`（onInit → onStart → onDestroy，期间无 onUpdate）
   - `WidgetScriptTicksOnlyAfterEnablingAndWhileVisible`
   - `WidgetTimerFiresWhileHiddenAndStopsWithItsScript`
@@ -294,8 +294,29 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
   - `SpawnedButtonRoutesActionWithoutRemount`
   - `FindIsScopedToOwningEntry`（两个条目同名控件互不干扰）
   - `DanglingHandleIsNoOp`
-- 验收：GreedSnake 暂不迁移也能编译运行（旧 API 删除前先在 S7 前完成迁移，或 S3 与 S7 同批提交，
-  见 D8）。
+- 验收：GreedSnake 暂不迁移也能编译运行；旧 API 在 S7 与迁移同一提交删除（D8）。
+- 分两批交付：
+  - **S3a**：控件脚本运行时（生命周期、按需 tick、计时器）、句柄、条目内查找、`ui.get`。
+  - **S3b**：按钮动作冒泡、`destroy()` / `spawn`、`addToWorld` 参与索引与激活。
+    旧 API（`setUiActionHandler`、`bindButtonActions`、`ui.setText/setVisible`、
+    `setMountedText/Visible`）S3 只保留不扩展，删除随 S7。
+- S3a 已落地（2026-09-28），实施取舍：
+  - `IGameUIBehaviorRuntime : IUIBehaviorActivator` 多一个 `update()`（GameRuntime 定义）；
+    `GameUIHost::setBehaviorRuntime` 取代 S2 的 `setBehaviorActivator`，`update` 顺序为
+    runtime `update` → 计时器 → 树 tick。实现 `LuaWidgetScripts` 在 `bindGameplayLua` 时装上；
+    App 析构先 `setBehaviorRuntime(nullptr)` 再关 Lua。
+  - 激活只创建行为、不跑脚本；下一次 UILogic 把新批按（条目 zOrder、激活序）加载，全部 onInit
+    后再全部 onStart。onShow / onHide 在 `update` 轮询 `isVisibleInTree` 变化得到。
+  - 控件离开树（`onDetached`）即 onDestroy 并取消计时器；树内换父不通知。
+  - 计时器：`addTimer(owner, delay, interval, fire)`，重复计时器每次 `update` 最多触发一次；
+    `fire` 通过 `self` 身份判断实例是否已被热重载替换，替换后自动失效。
+  - 名字索引按条目建（前序、首个同名胜出、重名首次查询 WARN 一次）；句柄的 `find` 找所在条目。
+  - 句柄额外提供 `layout()`（立即布局）与 `rect()`；控件失效或已离树时操作 no-op、WARN 一次，
+    getter 返回 nil。`Widget:destroy()` 属 S3b。
+  - 编辑器 Stop：`stopRuntime` / `stopSimulation` 在 Lua `onStop` 之后按文档重挂当前场景 UI。
+    否则被 `onStop` 销毁的脚本不会在下一次 Play 重启，Play 期间改过的文字、显隐也会留到编辑态。
+  - 追加测试：`WidgetScriptSeesShowAndHide`、`UiGetReturnsTheEntryScriptOrItsRoot`、
+    `RemovingTheRuntimeDestroysRunningScripts`、`TickOrderAppTest.StopRemountsSceneUIFromItsDocuments`。
 
 ### S4 — 条目模态、暂停与取消
 
@@ -366,11 +387,11 @@ S6 依赖 S2/S3/S4 的数据形态，可与 S7 并行
 ```
 
 - F0 是所有脚本时序的前提，先做。
-- S3 删除旧字符串 API 与 S7 迁移必须同一批提交（D8），否则中间态 GreedSnake 不能运行。
+- 旧字符串 API 的删除随 S7 迁移同一提交（D8），否则中间态 GreedSnake 不能运行。
 
 ## 6. 决策门（开工前需确认）
 
-状态：D1、D2、D5、D4 已于 2026-09-28 确认；其余仍为建议（S3 还差 D8，S4 差 D3）。
+状态：D1、D2、D5、D4 已于 2026-09-28 确认；D8 按建议采纳（用户可推翻）；其余仍为建议（S4 差 D3）。
 
 | # | 问题 | 结论 / 建议 |
 | --- | --- | --- |
@@ -381,7 +402,7 @@ S6 依赖 S2/S3/S4 的数据形态，可与 S7 并行
 | D5 | 世界脚本顺序键与初始化 | **已确认**：`(executionOrder, 场景树前序, 实体内脚本下标)`；脚本声明默认 `executionOrder`，实例可覆盖（仅显式设置时序列化）；排序缓存、结构变化时重排。增加 `onStart`（同批全部 onInit 之后、首次 onUpdate 之前），世界与 UI 一致 |
 | D6 | 精灵是否在本计划支持预制体实例化 | 不做；只做参数化 `spawnSprite`，预制体另起计划 |
 | D7 | 点锚点语义 | 点锚点轴：以锚点为基准点，`pos = 锚点 + offset − pivot × size`，alignment 只在拉伸轴生效；需与 `gui-anchor-to-slot` 确认后再改 |
-| D8 | 旧 API 删除与 GreedSnake 迁移同批提交 | 是 |
+| D8 | 旧 API 删除与 GreedSnake 迁移同批提交 | **按建议采纳**：S3 只新增，旧 API 在 S7 与 GreedSnake 迁移同一提交删除 |
 | D9 | 独立运行时 Esc 兜底是否仍退出程序 | 保留为最后兜底；游戏脚本或模态条目消费后不触发 |
 
 ## 7. 不在本计划
@@ -402,7 +423,9 @@ S6 依赖 S2/S3/S4 的数据形态，可与 S7 并行
   新增全局写入，发现时 WARN。
 - **弱句柄的生命周期**：控件在 StructuralFlush 前被父级销毁时，pending spawn 需要随之取消。
 - **编辑器 PIE 与 Stop**：Stop 时 UI 脚本实例必须在 Lua 状态销毁前 `releaseLuaHandles`，
-  沿用 `LuaScriptComponentLifetimeTest` 的约束，新增 UI 宿主同类测试。
+  沿用 `LuaScriptComponentLifetimeTest` 的约束。S3a：Stop 后按文档重挂场景 UI，下一次 Play
+  从作者态开始（`TickOrderAppTest.StopRemountsSceneUIFromItsDocuments`、
+  `GameUIScriptTest.RemovingTheRuntimeDestroysRunningScripts`）。
 - **性能**：按名字索引在挂载时建一次；每帧排序世界脚本可缓存，结构变化时失效。
 - **UI 读上一帧布局**：UILogic 先于布局，依赖本帧几何的脚本若忘记请求立即布局会差一帧；
   S3 句柄文档与模板里写明。

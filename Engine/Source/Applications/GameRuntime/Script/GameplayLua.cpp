@@ -1,5 +1,8 @@
 #include "GameRuntime/Script/GameplayLua.h"
 
+#include "LuaWidgetHandle.h"
+#include "LuaWidgetScripts.h"
+
 #include "GameRuntime/App.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "GameRuntime/InputRouter.h"
@@ -156,7 +159,21 @@ void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui)
         }
     });
 
+    bindLuaWidgetHandles(lua);
+    ui.setBehaviorRuntime(std::make_unique<LuaWidgetScripts>(scripting, ui));
+
     sol::table uiTable = lua.create_named_table("ui");
+    // The entry's interface: its root script's `self` when it has one (so
+    // gameplay calls methods the UI script defines), else the root handle.
+    uiTable.set_function("get", [&ui](const std::string& entryId, sol::this_state state) -> sol::object {
+        UIElementRef root = ui.findEntryRoot(entryId);
+        if (!root) {
+            YA_CORE_WARN("ui.get: no mounted Game UI entry '{}'", entryId);
+            return sol::make_object(state, sol::lua_nil);
+        }
+        sol::object self = LuaWidgetScripts::scriptSelfOf(*root);
+        return self.valid() ? self : makeLuaWidgetHandle(state, ui, root);
+    });
     uiTable.set_function("setText", [&ui](const std::string& entryId, const std::string& widgetName, const std::string& text) {
         return ui.setMountedText(entryId, widgetName, text);
     });

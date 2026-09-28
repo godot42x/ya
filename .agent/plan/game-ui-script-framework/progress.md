@@ -138,3 +138,27 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 - GUIWorkbench `--smoke-actions` PASS、exit 0；GreedSnake runtime / editor `--exit-after-frame=60` exit 0、无 Error。
 
 下一步：S3 需先确认 D8。
+
+## 2026-09-28 — S3a 控件脚本运行时与句柄
+
+决策：D8 按建议采纳（S3 只新增，旧 API 在 S7 与迁移同一提交删除）。S3 拆成 S3a / S3b。
+
+完成：
+
+- `IGameUIBehaviorRuntime`（激活 + `update`）取代 S2 的激活器入口；`LuaWidgetScripts` 为
+  `script.lua` 创建 `LuaWidgetScriptBehavior`，UILogic 中按批 onInit → onStart，轮询 onShow / onHide，
+  `self:setTickEnabled` 按需 tick，`self:after` / `self:every` 走 `GameUIHost` 计时器。
+- 类型化弱句柄（Widget / Text / Button / Image / Border），条目内名字索引与 `find`，`ui.get(entryId)`。
+- `LuaScriptingSystem::invoke`：带参数、取布尔返回值的回调调用（onShow / onHide，S3b 的 onAction 复用）。
+- 编辑器 Stop 后按文档重挂场景 UI。
+
+偏离与取舍：见 `plan.md` S3「S3a 已落地」；测试放新套件 `GameUIScriptTest`。
+
+验证：
+
+- `ya-testing` 全量 1370 通过（`GameUIScriptTest.*` 9 个、`TickOrderAppTest.StopRemountsSceneUIFromItsDocuments`）。
+- GUIWorkbench `--smoke-actions` PASS；GreedSnake runtime / editor `--exit-after-frame=60` exit 0、无 Error。
+
+未做：旧 API 仍在（D8）；按钮冒泡、`destroy` / `spawn`、`addToWorld` 激活属 S3b。
+
+下一步：S3b。
