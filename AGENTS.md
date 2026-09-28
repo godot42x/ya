@@ -109,5 +109,6 @@ xmake project -k compile_commands
 ## Git
 
 提交格式：`[module] message`
+消息内容: 需要足够精炼，不要废话连篇，说出精髓和代码一一映证即可。
 
 例如：`[vulkan] fix swapchain resize`、`[material/phong] add specular`
