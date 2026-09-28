@@ -166,6 +166,9 @@ struct EditorSurface : IEditorViewportHostSink
     void buildEditorChrome(const FEditorSurfaceContext& context);
     void pushViewportDisplay();
     void refreshProjectBrowserRows();
+    /// A tree row id is an index into the filtered browser rows; map it back to
+    /// the discovered-projects index and mirror the path into the footer.
+    void selectProjectBrowserRow(const std::string& rowId);
     void publishViewportRect();
     /// The camera preview panel's rect in viewport-local logical pixels. Empty
     /// when no preview is shown.

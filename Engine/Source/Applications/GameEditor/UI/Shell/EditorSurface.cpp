@@ -58,6 +58,7 @@
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <filesystem>
 #include <format>
@@ -74,12 +75,21 @@ struct FEditorProjectBrowser
     std::shared_ptr<UITreeView> list;
     std::shared_ptr<ReactiveList<UITreeView::FNode>> roots;
     std::shared_ptr<UIText> errorText;
+    std::shared_ptr<UIText> pathText;
+    /// Case-insensitive substring filter on the project file name and path.
+    std::string      filter;
+    /// Filtered row -> index into EditorLayer::getDiscoveredProjects().
+    std::vector<int> rowToProject;
 };
 
 namespace
 {
 
 constexpr float kMenuHeight = editor_density::kMenuHeight;
+
+/// The launcher card (UE/Godot-style compact chooser) centered in the window;
+/// the selector is a dialog-scale surface, not a fullscreen page.
+constexpr glm::vec2 kProjectBrowserCardSize{880.0f, 560.0f};
 
 } // namespace
 
@@ -245,39 +255,40 @@ void EditorSurface::buildProjectBrowser(App& app)
     (void)app;
     _layer->requestRefreshProjectBrowser();
 
-    auto title = ui::text("ProjectTitle").setText("YA Editor").setStyleKey("text.header");
-    auto blurb = ui::text("ProjectBlurb")
-                     .setText("Select a project to open. The WidgetTree chrome stays isolated until a project is loaded.")
-                     .setStyleKey("text.muted");
+    _projectBrowser       = std::make_unique<FEditorProjectBrowser>();
+    _projectSelection     = std::make_shared<SelectionModel>();
+    _projectBrowser->roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
 
-    auto refresh = labeledButton("RefreshProjects", "Refresh Projects")
-                       .setOnClick([this]() {
-                           _layer->requestRefreshProjectBrowser();
-                           refreshProjectBrowserRows();
-                       });
-    auto exitBtn = labeledButton("ExitEditor", "Exit Editor")
+    auto exitBtn = labeledButton("ExitEditor", "Exit")
                        .setOnClick([this]() {
                            if (_layer) {
                                _layer->cmdRequestQuit();
                            }
                        });
 
-    _projectBrowser = std::make_unique<FEditorProjectBrowser>();
-    _projectSelection = std::make_shared<SelectionModel>();
-    _projectBrowser->roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    auto searchField = ui::textField("ProjectSearch")
+                           .setStyleKey(editorStyle(StyleKey::TextField))
+                           .setOnTextChanged([this](const std::string& text) {
+                               if (_projectBrowser) {
+                                   _projectBrowser->filter = text;
+                                   refreshProjectBrowserRows();
+                               }
+                           });
+
     auto list = ui::treeView("ProjectList")
                     .bindData(_projectBrowser->roots)
                     .bindSelection(_projectSelection->primaryRef())
                     .setOnSelectionChanged([this](const std::string& id) {
                         _projectSelection->select(id);
-                        int index = 0;
-                        if (auto [ptr, ec] = std::from_chars(id.data(), id.data() + id.size(), index);
-                            ec == std::errc{} && ptr == id.data() + id.size()) {
-                            _layer->setProjectBrowserSelection(index);
-                        }
+                        selectProjectBrowserRow(id);
                     });
     _projectBrowser->list = list.share();
 
+    auto refreshBtn = labeledButton("RefreshProjects", "Refresh")
+                          .setOnClick([this]() {
+                              _layer->requestRefreshProjectBrowser();
+                              refreshProjectBrowserRows();
+                          });
     auto openBtn = labeledButton("OpenProject", "Open Project")
                        .setOnClick([this]() {
                            const auto& projects = _layer->getDiscoveredProjects();
@@ -290,20 +301,57 @@ void EditorSurface::buildProjectBrowser(App& app)
 
     auto errorText = ui::text("ProjectError").setStyleKey("text.error");
     _projectBrowser->errorText = errorText.share();
+    auto pathText = ui::text("SelectedProjectPath").setStyleKey("text.muted");
+    _projectBrowser->pathText = pathText.share();
 
-    auto page = ui::column("ProjectBrowser")
-                    .setPadding({48.0f, 48.0f})
-                    .setSpacing(12.0f)
-                    .child(std::move(title))
-                    .child(std::move(blurb), ui::boxSlot().preferredSize({720.0f, 40.0f}))
-                    .child(ui::row("ProjectActions")
-                                  .setSpacing(8.0f)
-                                  .child(std::move(refresh), ui::boxSlot().preferredSize({160.0f, 26.0f}))
-                                  .child(std::move(exitBtn), ui::boxSlot().preferredSize({160.0f, 26.0f})))
-                    .child(std::move(list), ui::boxSlot().preferredSize({720.0f, 320.0f}))
-                    .child(std::move(openBtn), ui::boxSlot().preferredSize({160.0f, 26.0f}))
-                    .child(std::move(errorText));
-    (void)ui::attach(*_tree, *_tree->getLayer(WidgetTree::ELayer::Content), std::move(page).release(), ui::canvasSlot().fill());
+    auto headerTitle = ui::column("ProjectBrowserTitle")
+                           .setSpacing(2.0f)
+                           .child(ui::text("ProjectTitle").setText("YA Editor").setStyleKey("text.header"))
+                           .child(ui::text("ProjectSubtitle")
+                                      .setText("Select a project to open")
+                                      .setStyleKey("text.muted"));
+    auto headerRow = ui::row("ProjectBrowserHeader")
+                         .setSpacing(8.0f)
+                         .child(std::move(headerTitle), ui::boxSlot().fillWidth())
+                         .child(std::move(exitBtn), ui::boxSlot().preferredSize({96.0f, 26.0f}));
+
+    auto statusColumn = ui::column("ProjectBrowserStatus")
+                            .setSpacing(2.0f)
+                            .child(std::move(errorText))
+                            .child(std::move(pathText));
+    auto footerRow = ui::row("ProjectBrowserFooter")
+                         .setSpacing(8.0f)
+                         .child(std::move(statusColumn), ui::boxSlot().fillWidth())
+                         .child(std::move(refreshBtn), ui::boxSlot().preferredSize({110.0f, 26.0f}))
+                         .child(std::move(openBtn), ui::boxSlot().preferredSize({150.0f, 26.0f}));
+
+    auto card = ui::column("ProjectBrowserCard")
+                    .setPadding({20.0f, 20.0f})
+                    .setSpacing(10.0f)
+                    .child(std::move(headerRow))
+                    .child(std::move(searchField), ui::boxSlot().preferredSize({0.0f, 26.0f}))
+                    .child(std::move(list), ui::boxSlot().fill())
+                    .child(std::move(footerRow), ui::boxSlot().preferredSize({0.0f, 40.0f}));
+
+    auto* contentLayer = _tree->getLayer(WidgetTree::ELayer::Content);
+    const auto cardSlot = ui::canvasSlot()
+                              .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
+                              .pivot({0.5f, 0.5f})
+                              .size(kProjectBrowserCardSize);
+    (void)ui::attach(*_tree,
+                     *contentLayer,
+                     ui::border("ProjectBrowserBackdrop")
+                         .setStyleKey("panel.canvas")
+                         .setVisibility(EWidgetVisibility::HitTestInvisible)
+                         .release(),
+                     ui::canvasSlot().fill());
+    (void)ui::attach(*_tree,
+                     *contentLayer,
+                     ui::border("ProjectBrowserCardFill")
+                         .setStyleKey("panel.surface")
+                         .release(),
+                     cardSlot);
+    (void)ui::attach(*_tree, *contentLayer, std::move(card).release(), cardSlot);
     refreshProjectBrowserRows();
 }
 
@@ -748,23 +796,104 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
 
 void EditorSurface::refreshProjectBrowserRows()
 {
-    if (!_layer) {
+    if (!_layer || !_projectBrowser) {
         return;
     }
-    std::vector<UITreeView::FNode> projects;
+
+    const auto matchesFilter = [](const std::string& projectPath, const std::string& filter) {
+        if (filter.empty()) {
+            return true;
+        }
+        const auto containsFolded = [&filter](const std::string& haystack) {
+            const auto folded = [](const std::string& text) {
+                std::string lower;
+                lower.reserve(text.size());
+                for (char c : text) {
+                    lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+                }
+                return lower;
+            };
+            return folded(haystack).find(folded(filter)) != std::string::npos;
+        };
+        return containsFolded(std::filesystem::path(projectPath).filename().string()) ||
+               containsFolded(projectPath);
+    };
+
     const auto& discovered = _layer->getDiscoveredProjects();
-    projects.reserve(discovered.size());
+    std::vector<UITreeView::FNode> rows;
+    rows.reserve(discovered.size());
+    _projectBrowser->rowToProject.clear();
     for (int i = 0; i < static_cast<int>(discovered.size()); ++i) {
-        projects.push_back(UITreeView::FNode{
-            .id    = std::to_string(i),
-            .label = discovered[static_cast<size_t>(i)],
+        const std::string& projectPath = discovered[static_cast<size_t>(i)];
+        if (!matchesFilter(projectPath, _projectBrowser->filter)) {
+            continue;
+        }
+        rows.push_back(UITreeView::FNode{
+            .id    = std::to_string(rows.size()),
+            .label = std::filesystem::path(projectPath).stem().string(),
+            .icon  = {.resource = editor_icons::kFolder},
         });
+        _projectBrowser->rowToProject.push_back(i);
     }
-    if (_projectBrowser && _projectBrowser->roots) {
-        _projectBrowser->roots->replace(std::move(projects));
+    if (_projectBrowser->roots) {
+        _projectBrowser->roots->replace(std::move(rows));
     }
-    if (_projectBrowser && _projectBrowser->errorText) {
-        _projectBrowser->errorText->setText(_layer->getProjectBrowserError());
+
+    // Keep the selection pointing at the same project across filter changes;
+    // when it left the filtered view (or is unset), take the first row.
+    const auto& mapping   = _projectBrowser->rowToProject;
+    const int   current   = _layer->getProjectBrowserSelection();
+    const auto  rowOfCurrent = std::find(mapping.begin(), mapping.end(), current);
+    if (!mapping.empty()) {
+        const int row = rowOfCurrent != mapping.end()
+                            ? static_cast<int>(rowOfCurrent - mapping.begin())
+                            : 0;
+        if (rowOfCurrent == mapping.end()) {
+            _layer->setProjectBrowserSelection(mapping.front());
+        }
+        if (_projectSelection) {
+            _projectSelection->select(std::to_string(row));
+        }
+    }
+    else {
+        _layer->setProjectBrowserSelection(-1);
+        if (_projectSelection) {
+            _projectSelection->select("");
+        }
+    }
+
+    if (_projectBrowser->errorText) {
+        const std::string& error = _layer->getProjectBrowserError();
+        _projectBrowser->errorText->setText(error);
+        _projectBrowser->errorText->setVisibility(error.empty() ? EWidgetVisibility::Collapsed
+                                                                : EWidgetVisibility::Visible);
+    }
+    if (_projectBrowser->pathText) {
+        const int   selected     = _layer->getProjectBrowserSelection();
+        const bool  bHasSelection = selected >= 0 && selected < static_cast<int>(discovered.size());
+        _projectBrowser->pathText->setText(bHasSelection ? discovered[static_cast<size_t>(selected)] : std::string{});
+        _projectBrowser->pathText->setVisibility(bHasSelection ? EWidgetVisibility::Visible
+                                                               : EWidgetVisibility::Collapsed);
+    }
+}
+
+void EditorSurface::selectProjectBrowserRow(const std::string& rowId)
+{
+    if (!_layer || !_projectBrowser) {
+        return;
+    }
+    int row = -1;
+    if (auto [ptr, ec] = std::from_chars(rowId.data(), rowId.data() + rowId.size(), row);
+        ec != std::errc{} || ptr != rowId.data() + rowId.size() || row < 0 ||
+        row >= static_cast<int>(_projectBrowser->rowToProject.size())) {
+        return;
+    }
+    const auto& discovered = _layer->getDiscoveredProjects();
+    const int   index      = _projectBrowser->rowToProject[static_cast<size_t>(row)];
+    _layer->setProjectBrowserSelection(index);
+    if (_projectBrowser->pathText && index >= 0 && index < static_cast<int>(discovered.size())) {
+        _projectBrowser->pathText->setText(discovered[static_cast<size_t>(index)]);
+        _projectBrowser->pathText->setVisibility(EWidgetVisibility::Visible);
     }
 }
 
