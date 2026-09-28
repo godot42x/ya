@@ -60,7 +60,7 @@
 | `editor-ui-grouping/` | GameEditor/UI 关切分组（G1 已落地） |
 | `display-compose-encoding/` | display compose 只搬运不改色，且 surface 层不再持管线（F1–F3 已落地；仅剩 gamma 开关语义待定） |
 | `game-ui-script-framework/` | 界面自带脚本（与宿主无关的 Lua 运行时 + GUI 不透明行为描述）、帧顺序/暂停/结构变更时机成为契约、条目模态与取消路由；验收用例 GreedSnake（F0–S3 与性能检查点已落地；下一步 S4） |
-| `ui-behavior-capabilities/` | `UIBehavior` 按能力登记（含同类唯一）、树 tick 注册表、Lua `call()` 热路径（C1 完成，下一步 C2；排在 game-ui S4 之前） |
+| `ui-behavior-capabilities/` | `UIBehavior` 按能力登记（含同类唯一、拖放为行为种类）、树 tick 注册表、Lua `call()` 热路径（C1/C1b 完成，下一步 C2；排在 game-ui S4 之前） |
 | `scene-2d-world-and-game-ui/` | 现有 Scene/Transform/Camera 上补 authored sprite，并与 UI Compose 分层形成 2D 游戏闭环（Render2DList 值化、screen/world draw contract、Render3D→GUI 解耦已落地；D1–D3 按坐标系拆 draw list / 删全局 Render2D / View overlay 归编辑器待做；P0 混合语义和 Scene graph integration 未完成） |
 
 ## 归档判据

@@ -151,18 +151,20 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   drag&drop 的 source-local 状态（`beginDrag/updateDrag/endDrag/cancelDrag`、payload、ghost、observer）由树管理，唯一入口是
   `beginDrag(source, UIDragDropOperationRef)`。跨窗的 source/hover window 身份由 host `GUIDragRouter` 唯一持有。基类带通用 `payload` slot；领域拖拽
   继承加字段（`FDockPanelDragDropOp` / `FTreeReorderDragDropOp`）。目标用
-  `as<T>()` / `isType()`。拖放源/目标是行为（`IUIDragSource` / `IUIDropTarget`，常用
-  `UIDragSourceBehavior` / `UIDropTargetBehavior`）；树只调自由函数
-  `detectDrag/acceptsDrop/previewsDrop/dropOnto/highlightDrop/hoverDrop`，`UIElement` 没有拖放虚函数。
+  `as<T>()` / `isType()`。拖放源/目标是两个 final 行为种类 `UIDragSourceBehavior` /
+  `UIDropTargetBehavior`（回调配置 + `onOwnerDetached`），控件在 install 函数里配置后 `addBehavior`，
+  不派生它们；树只调自由函数 `detectDrag/acceptsDrop/previewsDrop/dropOnto/highlightDrop/hoverDrop`
+  （内部 `findBehavior`），`UIElement` 没有拖放虚函数。
 - 行为模型（`UIBehavior.h`）：**能力封闭、种类开放**。能力 = GUI 的派发点（`EUIBehaviorCapability`：
-  Tick / Input / Action / DragSource / DropTarget），每个一个接口；行为用
-  `UIBehaviorWith<IUITickable, ...>` 在编译期声明能力，`addBehavior` 时进入 `UIElement` 的按能力索引，
+  Tick / Input / Action），每个一个接口；拖、放、tween 是种类不是能力。行为用
+  `UIBehaviorWith<Self, IUITickable, ...>`（`Self` final）在编译期声明能力与种类键 `type_index_v<Self>`，
+  `addBehavior` 时进入 `UIElement` 的按能力索引，
   派发只读 `behaviorsOf<I>()`（同能力按挂上顺序），无 `dynamic_cast`。接口构造私有，不经
   `UIBehaviorWith` 声明就继承接口是编译错误。新行为种类（GameRuntime 的 Lua 脚本、编辑器行为）不改
-  GUI 源码；新增**能力**才改 GUI。`UIBehavior` 基类只有 owner + `onAttached/onDetached`，
+  GUI 源码；新增**能力**才改 GUI。`UIBehavior` 基类只有 owner + 种类键 + `onAttached/onDetached`，
   禁止再往基类加能力虚函数。
-  **一个控件每种具体类型的行为至多一个**：`addBehavior` 拒绝同类第二个（返回 false + ERROR），
-  所以 `findBehavior<T>()`（精确类型）结果唯一。需要多份工作的行为自己在内部持有多份
+  **一个控件每种行为至多一个**：`addBehavior` 按种类键拒绝同类第二个（返回 false + ERROR），
+  所以 `findBehavior<T>()`（扫连续种类键，返回 `T*`，无 RTTI）结果唯一。需要多份工作的行为自己在内部持有多份
   （`UIAnimatorBehavior` 持有多个 `UITween`；一个控件至多一个 `script.lua`）。
   文本焦点：`UITextField` 消费 `KeyTyped`（IME 提交）、按码点 Backspace/Delete，选区
   （anchor/caret、Shift+方向、拖选、primary+A），以及

@@ -74,7 +74,7 @@ struct YA_GUI_API UIDockFloatingWindow : public UIElement, public UIStyledWidget
     void applyAssignedLayout(const Rect2D& rect) override;
 
   private:
-    friend struct FDockFloatingWindowDropTargetBehavior;
+    friend struct FDockFloatingWindowDrop;
     friend struct FDockFloatingWindowPanelDrag;
 
     void beginWindowMove();

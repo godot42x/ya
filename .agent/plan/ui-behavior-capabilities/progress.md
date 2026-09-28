@@ -26,3 +26,19 @@
 偏离：§2 原写「不提供通用按类型查找」，因 B4 保证唯一而改为提供 `findBehavior<T>()`。
 
 下一步：C2 树 tick 登记表。
+
+## 2026-09-28 — C1b 拖放是行为种类；编译期种类键（B5）
+
+完成：
+- 删除 `IUIDragSource` / `IUIDropTarget`，能力只剩 Tick / Input / Action；`UIDragSourceBehavior` /
+  `UIDropTargetBehavior` final + `onOwnerDetached`，GUI 内派生行为改为 installer 配置。
+- `UIBehaviorWith<Self, Caps...>` 记录 `type_index_v<Self>`；`FUIBehaviorIndex.kinds` 连续键，
+  `findBehavior<T>()` 返回 `T*`、判重按键，删 `typeid`；`UITween` 回指 animator 为裸指针。
+- 验证：`ya-testing` 1389 全绿；`ya-gui-closure-test` 613 全绿；GUIWorkbench `--smoke-actions` PASS；
+  GreedSnake runtime / editor、HelloMaterial `--exit-after-frame=60` 无 Error。
+
+保留：tick 仍全树遍历（C2）。
+
+偏离：无。
+
+下一步：C2 树 tick 登记表。

@@ -215,18 +215,17 @@ struct OperationDropTarget final : public UIElement
 
 struct DragDetectWidget final : public UIElement
 {
-    struct Source final : UIBehaviorWith<IUIDragSource>
-    {
-        UIDragDropOperationRef onDragDetected(UIElement& owner, const FDragDetectedEvent& event) override
-        {
-            static_cast<DragDetectWidget&>(owner).detected = event.currentPoint.x > event.startPoint.x;
-            return UIDragDropOperation::make("detected", "Detected", "test.detected");
-        }
-    };
-
     bool detected = false;
 
-    explicit DragDetectWidget(std::string name) : UIElement(std::move(name)) { addBehavior(std::make_shared<Source>()); }
+    explicit DragDetectWidget(std::string name) : UIElement(std::move(name))
+    {
+        auto drag              = std::make_shared<UIDragSourceBehavior>();
+        drag->operationFactory = [this](UIElement&) {
+            detected = true;
+            return UIDragDropOperation::make("detected", "Detected", "test.detected");
+        };
+        addBehavior(drag);
+    }
 };
 
 struct TickCounterWidget final : public UIElement
@@ -272,7 +271,7 @@ struct TickEnabledBorder final : public UIBorder
     void tick(float) override { ++ticks; }
 };
 
-struct TestBehavior final : public UIBehaviorWith<IUITickable, IUIInputHandler>
+struct TestBehavior final : public UIBehaviorWith<TestBehavior, IUITickable, IUIInputHandler>
 {
     int attached = 0;
     int detached = 0;
@@ -336,43 +335,43 @@ struct TestBehavior final : public UIBehaviorWith<IUITickable, IUIInputHandler>
     void requestPaint() { invalidateOwnerPaint(); }
 };
 
-struct TestDragBehavior final : public UIBehaviorWith<IUIDragSource, IUIDropTarget>
+/// Drag source + drop target configured on one widget, recording what the
+/// session asked.
+struct TestDragProbe
 {
-    bool bSource = false;
-    bool bAccept = false;
-    bool detected = false;
-    bool dropped = false;
-    int highlightChanges = 0;
+    bool        bSource          = false;
+    bool        bAccept          = false;
+    bool        detected         = false;
+    bool        dropped          = false;
+    int         highlightChanges = 0;
     std::string payload;
 
-    UIDragDropOperationRef onDragDetected(UIElement& owner, const FDragDetectedEvent& event) override
-    {
-        (void)owner;
-        detected = event.currentPoint.x >= event.startPoint.x;
-        if (!bSource) {
-            return nullptr;
-        }
-        auto op = UIDragDropOperation::make(
-            payload.empty() ? "behavior.payload.1" : payload, "Behavior", "behavior.payload");
-        return op;
-    }
+    [[nodiscard]] std::string expectedPayload() const { return payload.empty() ? "behavior.payload.1" : payload; }
 
-    bool canAcceptDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint) override
+    static std::shared_ptr<TestDragProbe> install(UIElement& widget)
     {
-        (void)owner; (void)logicalPoint;
-        return bAccept && operation.typeId == "behavior.payload";
-    }
+        auto probe = std::make_shared<TestDragProbe>();
 
-    void onDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint) override
-    {
-        (void)owner; (void)logicalPoint;
-        dropped = operation.payload == (payload.empty() ? "behavior.payload.1" : payload);
-    }
+        auto drag              = std::make_shared<UIDragSourceBehavior>();
+        drag->operationFactory = [probe](UIElement&) -> UIDragDropOperationRef {
+            probe->detected = true;
+            if (!probe->bSource) {
+                return nullptr;
+            }
+            return UIDragDropOperation::make(probe->expectedPayload(), "Behavior", "behavior.payload");
+        };
+        widget.addBehavior(drag);
 
-    void setDropHighlight(UIElement& owner, bool bHighlight) override
-    {
-        (void)owner; (void)bHighlight;
-        ++highlightChanges;
+        auto drop       = std::make_shared<UIDropTargetBehavior>();
+        drop->canAccept = [probe](UIElement&, const UIDragDropOperation& operation, const glm::vec2&) {
+            return probe->bAccept && operation.typeId == "behavior.payload";
+        };
+        drop->handleDrop = [probe](UIElement&, const UIDragDropOperation& operation, const glm::vec2&) {
+            probe->dropped = operation.payload == probe->expectedPayload();
+        };
+        drop->setHighlightState = [probe](UIElement&, bool) { ++probe->highlightChanges; };
+        widget.addBehavior(drop);
+        return probe;
     }
 };
 
@@ -705,13 +704,11 @@ TEST(WidgetTreeTest, BehaviorCanActAsDragSourceAndDropTargetWithoutDedicatedWidg
     FCanvasSlotArgs targetSlot; targetSlot.offset = {220.0f, 20.0f}; targetSlot.fixedSize = {120.0f, 60.0f};
     target->_hitFilter = EWidgetHitFilter::Stop;
 
-    auto sourceBehavior = std::make_shared<TestDragBehavior>();
+    auto sourceBehavior = TestDragProbe::install(*source);
     sourceBehavior->bSource = true;
-    auto targetBehavior = std::make_shared<TestDragBehavior>();
+    auto targetBehavior = TestDragProbe::install(*target);
     targetBehavior->bAccept = true;
     targetBehavior->payload = "behavior.payload.1";
-    source->addBehavior(sourceBehavior);
-    target->addBehavior(targetBehavior);
 
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot).valid());
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot).valid());
@@ -2208,7 +2205,7 @@ TEST(WidgetTreeTest, FocusedButtonActivatesOnEnterAndSpace)
 
 TEST(WidgetTreeTest, ButtonActionBubblesThroughBehavioursToTheSink)
 {
-    struct Recorder final : UIBehaviorWith<IUIActionHandler>
+    struct Recorder final : UIBehaviorWith<Recorder, IUIActionHandler>
     {
         std::vector<std::string>* log = nullptr;
         std::string               tag;

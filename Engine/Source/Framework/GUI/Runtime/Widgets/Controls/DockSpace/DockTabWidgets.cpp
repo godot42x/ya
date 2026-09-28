@@ -25,62 +25,48 @@ UIDockSpace* dockAreaOf(UIElement& owner)
 
 } // namespace
 
-struct FDockAreaDropTargetBehavior final : public UIDropTargetBehavior
+void installDockDropTarget(UIElement& widget)
 {
-    FDockAreaDropTargetBehavior()
+    auto drop = std::make_shared<UIDropTargetBehavior>();
+    drop->canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
     {
-        canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
-        {
-            UIDockSpace* area = dockAreaOf(owner);
-            if (!area) {
-                return false;
-            }
-            auto preview = area->dropPreviewFor(operation, logicalPoint);
-            return preview.has_value() && !preview->bDisabled && preview->target.commitsDrop();
-        };
-        canPreview = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
-        {
-            UIDockSpace* area = dockAreaOf(owner);
-            if (!area) {
-                return false;
-            }
-            auto preview = area->dropPreviewFor(operation, logicalPoint);
-            return preview.has_value() && !preview->bDisabled;
-        };
-        handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
-        {
-            if (UIDockSpace* area = dockAreaOf(owner)) {
-                area->applyDrop(operation, logicalPoint);
-            }
-        };
-        setHighlightState = [](UIElement& owner, bool bHighlight)
-        {
-            if (!bHighlight) {
-                if (UIDockSpace* area = dockAreaOf(owner)) {
-                    area->clearDropPreview();
-                }
-            }
-        };
-        updateHover = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
-        {
-            if (UIDockSpace* area = dockAreaOf(owner)) {
-                area->hoverDrop(operation, logicalPoint);
-            }
-        };
-    }
-
-    void onDetached(UIElement& owner) override
+        UIDockSpace* area = dockAreaOf(owner);
+        if (!area) {
+            return false;
+        }
+        auto preview = area->dropPreviewFor(operation, logicalPoint);
+        return preview.has_value() && !preview->bDisabled && preview->target.commitsDrop();
+    };
+    drop->canPreview = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+    {
+        UIDockSpace* area = dockAreaOf(owner);
+        if (!area) {
+            return false;
+        }
+        auto preview = area->dropPreviewFor(operation, logicalPoint);
+        return preview.has_value() && !preview->bDisabled;
+    };
+    drop->handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
     {
         if (UIDockSpace* area = dockAreaOf(owner)) {
-            area->clearDropPreview();
+            area->applyDrop(operation, logicalPoint);
         }
-        UIDropTargetBehavior::onDetached(owner);
-    }
-};
-
-void installDockDropTarget(UIElement& owner)
-{
-    owner.addBehavior(std::make_shared<FDockAreaDropTargetBehavior>());
+    };
+    drop->setHighlightState = [](UIElement& owner, bool bHighlight)
+    {
+        if (!bHighlight) {
+            if (UIDockSpace* area = dockAreaOf(owner)) {
+                area->clearDropPreview();
+            }
+        }
+    };
+    drop->updateHover = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+    {
+        if (UIDockSpace* area = dockAreaOf(owner)) {
+            area->hoverDrop(operation, logicalPoint);
+        }
+    };
+    widget.addBehavior(drop);
 }
 
 UIDockTabStack::UIDockTabStack(std::string name, UIDockSpace* area, DockNodeId stackId)

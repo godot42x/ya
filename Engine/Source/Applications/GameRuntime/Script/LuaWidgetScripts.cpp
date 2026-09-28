@@ -308,7 +308,7 @@ void LuaWidgetScripts::bindSelf(const std::shared_ptr<LuaWidgetScriptBehavior>& 
 
 sol::object LuaWidgetScripts::scriptSelfOf(const UIElement& widget)
 {
-    const std::shared_ptr<LuaWidgetScriptBehavior> script = widget.findBehavior<LuaWidgetScriptBehavior>();
+    const LuaWidgetScriptBehavior* script = widget.findBehavior<LuaWidgetScriptBehavior>();
     if (script && script->runtime && script->instance.bLoaded) {
         return script->instance.self;
     }

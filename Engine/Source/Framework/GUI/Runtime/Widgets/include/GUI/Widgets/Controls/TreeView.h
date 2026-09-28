@@ -207,8 +207,7 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     void clearTransientInputState() override;
 
   private:
-    friend struct FTreeViewReorderDragBehavior;
-    friend struct FTreeViewReorderDropBehavior;
+    friend struct FTreeViewReorderDragDrop;
     struct VisibleRow
     {
         const FNode* node  = nullptr;

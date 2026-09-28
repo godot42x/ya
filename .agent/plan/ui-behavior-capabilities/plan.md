@@ -1,6 +1,6 @@
 # UIBehavior 能力化与热路径
 
-状态：决策门已确认（2026-09-28），排在 `game-ui-script-framework` S4 之前；C1 完成，下一步 C2。
+状态：决策门已确认（2026-09-28），排在 `game-ui-script-framework` S4 之前；C1、C1b 完成，下一步 C2。
 来源：`game-ui-script-framework` 性能检查点时用户指出 `UIBehavior` 权责不分、实现性能低。
 
 ## 1. 现状（2026-09-28 核对）
@@ -27,19 +27,24 @@
 GameEditor，新增行为不改引擎 GUI 源码，GUI 也不认识它们。
 
 - 能力接口（`GUI/Widgets/UIBehavior.h`）：`IUITickable`、`IUIInputHandler`、
-  `IUIActionHandler`、`IUIDragSource`、`IUIDropTarget`，各带 `kCapability`
-  （`EUIBehaviorCapability`）。接口构造函数私有、只对 `UIBehaviorWith` 开放：
+  `IUIActionHandler`，各带 `kCapability`（`EUIBehaviorCapability`）。能力只能是通用派发点
+  （帧 / 输入路由 / 动作冒泡）；拖、放、tween 是行为种类，不是能力（B5）。接口构造函数私有、只对 `UIBehaviorWith` 开放：
   绕过声明直接继承接口是编译错误，不会出现「实现了接口却没登记」的静默失效。
-- `UIBehavior` 只剩所有权与生命周期（`getOwner` / `onAttached` / `onDetached`）。
-- `UIBehaviorWith<Caps...>`：编译期得到能力掩码；`capabilityInterface(c)` 用 `static_cast`
-  给出接口子对象，只在 `addBehavior` / `removeBehavior` 时调用。派发无 RTTI。
-- `UIElement`：`_behaviors`（所有权与顺序）+ 按能力的类型化索引（无行为的控件只有一个空
-  指针）。`behaviorsOf<I>()` 是派发入口；同一能力内按挂上顺序。
-- 拖放查询是基于索引的自由函数（`acceptsDrop` / `previewsDrop` / `dropOnto` /
-  `highlightDrop` / `hoverDrop` / `detectDrag`），`UIElement` 不再有拖放虚函数。
-- **同类行为唯一**（B4）：一个控件每种具体类型的行为至多一个，`addBehavior` 拒绝第二个
-  （返回 false + ERROR）。因此 `findBehavior<T>()`（精确类型，`typeid`，非热路径）结果唯一；
-  GameRuntime 的 `scriptSelfOf` 与 `animate()` 用它，取代手写 `dynamic_cast` 遍历。
+- `UIBehavior` 只剩所有权、生命周期与种类键（`getOwner` / `onAttached` / `onDetached` / `getKind`）。
+- `UIBehaviorWith<Self, Caps...>`（CRTP，`Self` 必须 final）：编译期得到能力掩码与种类键
+  `type_index_v<Self>`（类型名 FNV 哈希，跨模块稳定、无 RTTI）；`capabilityInterface(c)` 用
+  `static_cast` 给出接口子对象，只在 `addBehavior` / `removeBehavior` 时调用。
+- `UIElement`：`_behaviors`（所有权与顺序）+ `FUIBehaviorIndex`（无行为的控件只有一个空指针）：
+  `kinds`（与 `_behaviors` 平行的连续种类键）与按能力的类型化列表。`behaviorsOf<I>()` 是派发入口，
+  同一能力内按挂上顺序；`findBehavior<T>()` 扫连续整数键，返回 `T*`。
+- 拖放是两个 final 行为种类 `UIDragSourceBehavior`（声明 `IUIInputHandler`）/
+  `UIDropTargetBehavior`（无能力），回调配置 + `onOwnerDetached`；控件不再派生它们，而是在
+  install 函数里配置后 `addBehavior`。树通过自由函数（`acceptsDrop` / `previewsDrop` /
+  `dropOnto` / `highlightDrop` / `hoverDrop` / `detectDrag`）以 `findBehavior` 取到唯一实例，
+  `UIElement` 没有拖放虚函数。
+- **同类行为唯一**（B4）：一个控件每种行为至多一个，`addBehavior` 按种类键拒绝第二个
+  （返回 false + ERROR）。因此 `findBehavior<T>()` 结果唯一；GameRuntime 的 `scriptSelfOf`、
+  `animate()` 与拖放自由函数用它。
 - 需要多份工作的行为在内部持有多份：tween 拆成 `UITween`（一个时钟 N 条轨道，不是行为）与
   `UIAnimatorBehavior`（每控件一个，按创建顺序 tick 其 tween，丢弃播完且无外部句柄的 tween）；
   `animate(widget, d)` 找到或创建 animator 再加一个 tween。一个控件至多一个 `script.lua`，
@@ -55,6 +60,7 @@ GameEditor，新增行为不改引擎 GUI 源码，GUI 也不认识它们。
 | B2 | tick 登记粒度 | 行为级（控件自身 tick 另算一个登记项） |
 | B3 | 排期 | `game-ui-script-framework` S4 之前 |
 | B4 | 同类行为是否可多个（2026-09-28 用户追加） | 不可；tween 改为 animator + 多 tween，规则对所有类型一律生效，并入 C1 |
+| B5 | 拖 / 放是否为能力（2026-09-28 用户追加） | 否：删除 `IUIDragSource` / `IUIDropTarget`，拖放是具体行为种类；按类型查找用 CRTP 编译期种类键 `type_index_v<Self>`，不用 `typeid`（C1b） |
 
 ## 4. Checkpoints
 
@@ -74,6 +80,17 @@ GameEditor，新增行为不改引擎 GUI 源码，GUI 也不认识它们。
   新增 `UIBehaviorCapabilityTest`：能力按声明进入索引、移除后退出、同能力按挂上顺序派发、
   派发中被移除的动作处理者不再被调用、同类第二个被拒；
   `GuiAnimationTest.TweensOnOneWidgetShareItsSingleAnimator`。
+
+### C1b — 拖放是行为种类；编译期种类键（B5）
+
+- 删除 `IUIDragSource` / `IUIDropTarget` 与对应能力值；`UIDragSourceBehavior` / `UIDropTargetBehavior`
+  改 final，方法非虚，加 `onOwnerDetached`。
+- TreeView / SelectableRow / DockArea / DockFloatingWindow 的派生行为改为 friend installer 配置 stock 行为。
+- `UIBehaviorWith<Self, Caps...>` 写入 `type_index_v<Self>`；`FUIBehaviorIndex.kinds` 连续键；
+  `findBehavior<T>()` / 判重按键比较，删 `typeid`；`findBehavior` 返回 `T*`（`UITween` 回指 animator
+  改裸指针，animator 析构时清空）。
+- 验收：同 C1；`UIBehaviorCapabilityTest.DragAndDropAreKindsNotCapabilities`、
+  `KindLookupStaysAlignedAfterRemoval`；`GuiAnimationTest.HeldTweenOutlivesItsWidget`。
 
 ### C2 — 树 tick 登记表
 

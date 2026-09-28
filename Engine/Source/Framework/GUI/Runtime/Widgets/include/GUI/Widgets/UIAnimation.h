@@ -470,18 +470,21 @@ class YA_GUI_API UITween
     std::function<void()>      _onFinished;
     /// Ids already warned about in this tween run (cleared on play*()).
     std::vector<std::string>   _warnedIds;
-    std::weak_ptr<UIAnimatorBehavior> _animator;
+    /// Cleared by the animator when it is destroyed.
+    UIAnimatorBehavior*        _animator = nullptr;
     bool                       _bFinishedFired = false;
 };
 
 /// The widget's single tween driver (one per widget, like every behaviour
 /// type). It ticks its tweens in creation order, wants a frame while any of
 /// them plays, and drops a finished tween nobody else holds.
-class YA_GUI_API UIAnimatorBehavior final : public UIBehaviorWith<IUITickable>
+class YA_GUI_API UIAnimatorBehavior final : public UIBehaviorWith<UIAnimatorBehavior, IUITickable>
 {
     std::vector<std::shared_ptr<UITween>> _tweens;
 
   public:
+    ~UIAnimatorBehavior() override;
+
     [[nodiscard]] size_t getTweenCount() const { return _tweens.size(); }
 
     [[nodiscard]] bool wantsTick() const override;

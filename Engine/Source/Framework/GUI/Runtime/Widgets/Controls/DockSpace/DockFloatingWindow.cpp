@@ -33,11 +33,14 @@ constexpr float kCornerGripSize  = 14.0f;
 
 } // namespace
 
-struct FDockFloatingWindowDropTargetBehavior final : public UIDropTargetBehavior
+/// Floating tab well as a drop target; a friend so it can read the owner's
+/// dock context.
+struct FDockFloatingWindowDrop
 {
-    FDockFloatingWindowDropTargetBehavior()
+    static void install(UIDockFloatingWindow& floating)
     {
-        canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+        auto drop = std::make_shared<UIDropTargetBehavior>();
+        drop->canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* window = dynamic_cast<UIDockFloatingWindow*>(&owner);
             if (!window || !window->_context) {
@@ -50,7 +53,7 @@ struct FDockFloatingWindowDropTargetBehavior final : public UIDropTargetBehavior
             const std::optional<FDockDropTarget> target = window->dropTargetAt(logicalPoint, dockOp->panelId);
             return target.has_value() && target->kind == EDockDropTargetKind::FloatingTabWell;
         };
-        handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+        drop->handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* window = dynamic_cast<UIDockFloatingWindow*>(&owner);
             if (!window || !window->_context) {
@@ -95,6 +98,7 @@ struct FDockFloatingWindowDropTargetBehavior final : public UIDropTargetBehavior
                 }
             }
         };
+        floating.addBehavior(drop);
     }
 };
 
@@ -295,7 +299,7 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
 {
     installLayout(std::make_unique<UIOverlayLayout>());
     _hitFilter = EWidgetHitFilter::Stop;
-    addBehavior(std::make_shared<FDockFloatingWindowDropTargetBehavior>());
+    FDockFloatingWindowDrop::install(*this);
 
     auto chrome = std::make_shared<UIContainer>(std::format("{}_Chrome", _name));
     chrome->setDirection(EWidgetBoxLayout::Vertical);

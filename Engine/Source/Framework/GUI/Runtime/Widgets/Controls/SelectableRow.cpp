@@ -9,19 +9,20 @@
 namespace ya
 {
 
-struct FSelectableRowDragDropBehavior final : public UIDragSourceBehavior
+struct FSelectableRowDragDrop
 {
-    FSelectableRowDragDropBehavior()
+    static void install(UISelectableRow& widget)
     {
-        bCapturePointerOnPress = true;
-        bBeginDragFromCapturedMove = true;
-        setPressedState = [](UIElement& owner, bool bPressed)
+        auto drag = std::make_shared<UIDragSourceBehavior>();
+        drag->bCapturePointerOnPress = true;
+        drag->bBeginDragFromCapturedMove = true;
+        drag->setPressedState = [](UIElement& owner, bool bPressed)
         {
             if (auto* row = dynamic_cast<UISelectableRow*>(&owner)) {
                 row->_bPressed = bPressed;
             }
         };
-        operationFactory = [](UIElement& owner) -> UIDragDropOperationRef
+        drag->operationFactory = [](UIElement& owner) -> UIDragDropOperationRef
         {
             auto* row = dynamic_cast<UISelectableRow*>(&owner);
             if (!row || !row->_bDraggable) {
@@ -32,21 +33,17 @@ struct FSelectableRowDragDropBehavior final : public UIDragSourceBehavior
                 row->_dragGhostLabel.empty() ? row->_itemId : row->_dragGhostLabel,
                 "ya.selectable.row");
         };
-    }
-};
+        widget.addBehavior(drag);
 
-struct FSelectableRowDropTargetBehavior final : public UIDropTargetBehavior
-{
-    FSelectableRowDropTargetBehavior()
-    {
-        canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+        auto drop = std::make_shared<UIDropTargetBehavior>();
+        drop->canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* row = dynamic_cast<UISelectableRow*>(&owner);
             return row && row->_bDraggable && owner.hitTestLayoutRect(logicalPoint) &&
                    operation.isType("ya.selectable.row") && !operation.payload.empty() &&
                    operation.payload != row->_itemId;
         };
-        handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2&)
+        drop->handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2&)
         {
             if (auto* row = dynamic_cast<UISelectableRow*>(&owner)) {
                 if (row->_onDropped && operation.isType("ya.selectable.row")) {
@@ -54,12 +51,13 @@ struct FSelectableRowDropTargetBehavior final : public UIDropTargetBehavior
                 }
             }
         };
-        setHighlightState = [](UIElement& owner, bool bHighlight)
+        drop->setHighlightState = [](UIElement& owner, bool bHighlight)
         {
             if (auto* row = dynamic_cast<UISelectableRow*>(&owner)) {
                 row->_bDropHighlighted = bHighlight;
             }
         };
+        widget.addBehavior(drop);
     }
 };
 
@@ -68,8 +66,7 @@ UISelectableRow::UISelectableRow(std::string name) : UIElement(std::move(name), 
     _hitFilter  = EWidgetHitFilter::Stop;
     _focusPolicy = EWidgetFocusPolicy::Focusable;
     bindHostLayout(_contentLayout);
-    addBehavior(std::make_shared<FSelectableRowDragDropBehavior>());
-    addBehavior(std::make_shared<FSelectableRowDropTargetBehavior>());
+    FSelectableRowDragDrop::install(*this);
 }
 
 void UISelectableRow::paintSelf(UIFrameBuilder& builder)

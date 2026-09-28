@@ -84,15 +84,7 @@ bool UIDragSourceBehavior::handleInputEvent(UIElement& owner, const Event& event
         }
         return false;
     case EEvent::MouseButtonReleased:
-        _bPressed = false;
-        if (setPressedState) {
-            setPressedState(owner, false);
-        }
-        if (bCapturePointerOnPress) {
-            if (WidgetTree* tree = owner.getTree()) {
-                tree->releasePointerCapture(&owner);
-            }
-        }
+        releasePress(owner);
         return true;
     default:
         return false;
@@ -102,20 +94,21 @@ bool UIDragSourceBehavior::handleInputEvent(UIElement& owner, const Event& event
 UIDragDropOperationRef UIDragSourceBehavior::onDragDetected(UIElement& owner, const FDragDetectedEvent& event)
 {
     (void)event;
-    _bPressed = false;
-    if (setPressedState) {
-        setPressedState(owner, false);
-    }
-    if (bCapturePointerOnPress) {
-        if (WidgetTree* tree = owner.getTree()) {
-            tree->releasePointerCapture(&owner);
-        }
-    }
+    releasePress(owner);
     return operationFactory ? operationFactory(owner) : nullptr;
 }
 
 void UIDragSourceBehavior::onDetached(UIElement& owner)
 {
+    releasePress(owner);
+    if (onOwnerDetached) {
+        onOwnerDetached(owner);
+    }
+    UIBehavior::onDetached(owner);
+}
+
+void UIDragSourceBehavior::releasePress(UIElement& owner)
+{
     _bPressed = false;
     if (setPressedState) {
         setPressedState(owner, false);
@@ -125,15 +118,14 @@ void UIDragSourceBehavior::onDetached(UIElement& owner)
             tree->releasePointerCapture(&owner);
         }
     }
-    UIBehavior::onDetached(owner);
 }
 
-bool UIDropTargetBehavior::canAcceptDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+bool UIDropTargetBehavior::canAcceptDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint) const
 {
-    return canAccept ? canAccept(owner, operation, logicalPoint) : false;
+    return canAccept && canAccept(owner, operation, logicalPoint);
 }
 
-bool UIDropTargetBehavior::canPreviewDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+bool UIDropTargetBehavior::canPreviewDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint) const
 {
     if (canPreview) {
         return canPreview(owner, operation, logicalPoint);
@@ -141,89 +133,62 @@ bool UIDropTargetBehavior::canPreviewDrop(UIElement& owner, const UIDragDropOper
     return canAcceptDrop(owner, operation, logicalPoint);
 }
 
-void UIDropTargetBehavior::onDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
-{
-    setDropHighlight(owner, false);
-    if (handleDrop) {
-        handleDrop(owner, operation, logicalPoint);
-    }
-}
-
-void UIDropTargetBehavior::setDropHighlight(UIElement& owner, bool bHighlight)
-{
-    if (setHighlightState) {
-        setHighlightState(owner, bHighlight);
-    }
-}
-
-void UIDropTargetBehavior::updateDropHover(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
-{
-    if (updateHover) {
-        updateHover(owner, operation, logicalPoint);
-    }
-}
-
 void UIDropTargetBehavior::onDetached(UIElement& owner)
 {
-    setDropHighlight(owner, false);
+    if (setHighlightState) {
+        setHighlightState(owner, false);
+    }
+    if (onOwnerDetached) {
+        onOwnerDetached(owner);
+    }
     UIBehavior::onDetached(owner);
 }
 
 bool acceptsDrop(UIElement& target, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
-    for (IUIDropTarget* drop : target.behaviorsOf<IUIDropTarget>()) {
-        if (drop->canAcceptDrop(target, operation, logicalPoint)) {
-            return true;
-        }
-    }
-    return false;
+    const UIDropTargetBehavior* drop = target.findBehavior<UIDropTargetBehavior>();
+    return drop && drop->canAcceptDrop(target, operation, logicalPoint);
 }
 
 bool previewsDrop(UIElement& target, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
-    for (IUIDropTarget* drop : target.behaviorsOf<IUIDropTarget>()) {
-        if (drop->canPreviewDrop(target, operation, logicalPoint)) {
-            return true;
-        }
-    }
-    return false;
+    const UIDropTargetBehavior* drop = target.findBehavior<UIDropTargetBehavior>();
+    return drop && drop->canPreviewDrop(target, operation, logicalPoint);
 }
 
 void dropOnto(UIElement& target, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
-    for (IUIDropTarget* drop : target.behaviorsOf<IUIDropTarget>()) {
-        if (drop->canAcceptDrop(target, operation, logicalPoint)) {
-            drop->onDrop(target, operation, logicalPoint);
-            return;
-        }
+    const UIDropTargetBehavior* drop = target.findBehavior<UIDropTargetBehavior>();
+    if (!drop || !drop->canAcceptDrop(target, operation, logicalPoint)) {
+        return;
+    }
+    if (drop->setHighlightState) {
+        drop->setHighlightState(target, false);
+    }
+    if (drop->handleDrop) {
+        drop->handleDrop(target, operation, logicalPoint);
     }
 }
 
 void highlightDrop(UIElement& target, bool bHighlight)
 {
-    for (IUIDropTarget* drop : target.behaviorsOf<IUIDropTarget>()) {
-        drop->setDropHighlight(target, bHighlight);
+    if (const UIDropTargetBehavior* drop = target.findBehavior<UIDropTargetBehavior>(); drop && drop->setHighlightState) {
+        drop->setHighlightState(target, bHighlight);
     }
 }
 
 void hoverDrop(UIElement& target, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
-    for (IUIDropTarget* drop : target.behaviorsOf<IUIDropTarget>()) {
-        if (drop->canPreviewDrop(target, operation, logicalPoint)) {
-            drop->updateDropHover(target, operation, logicalPoint);
-            return;
-        }
+    const UIDropTargetBehavior* drop = target.findBehavior<UIDropTargetBehavior>();
+    if (drop && drop->updateHover && drop->canPreviewDrop(target, operation, logicalPoint)) {
+        drop->updateHover(target, operation, logicalPoint);
     }
 }
 
 UIDragDropOperationRef detectDrag(UIElement& source, const FDragDetectedEvent& event)
 {
-    for (IUIDragSource* drag : source.behaviorsOf<IUIDragSource>()) {
-        if (UIDragDropOperationRef operation = drag->onDragDetected(source, event)) {
-            return operation;
-        }
-    }
-    return nullptr;
+    UIDragSourceBehavior* drag = source.findBehavior<UIDragSourceBehavior>();
+    return drag ? drag->onDragDetected(source, event) : nullptr;
 }
 
 } // namespace ya

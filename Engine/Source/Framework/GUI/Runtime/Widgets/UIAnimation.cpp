@@ -551,8 +551,7 @@ void UITween::clearTracks()
 
 UIElement* UITween::getOwner() const
 {
-    const std::shared_ptr<UIAnimatorBehavior> animator = _animator.lock();
-    return animator ? animator->getOwner() : nullptr;
+    return _animator ? _animator->getOwner() : nullptr;
 }
 
 UITween& UITween::play()
@@ -698,6 +697,13 @@ void UITween::applyTracks(UIElement& owner, float lerp)
 
 // === Animator ===============================================================
 
+UIAnimatorBehavior::~UIAnimatorBehavior()
+{
+    for (const std::shared_ptr<UITween>& tween : _tweens) {
+        tween->_animator = nullptr;
+    }
+}
+
 bool UIAnimatorBehavior::wantsTick() const
 {
     return std::ranges::any_of(_tweens, [](const std::shared_ptr<UITween>& tween) { return tween->isPlaying(); });
@@ -731,10 +737,11 @@ void UIAnimatorBehavior::onDetached(UIElement& owner)
 
 std::shared_ptr<UITween> animate(UIElement& widget, float duration)
 {
-    std::shared_ptr<UIAnimatorBehavior> animator = widget.findBehavior<UIAnimatorBehavior>();
+    UIAnimatorBehavior* animator = widget.findBehavior<UIAnimatorBehavior>();
     if (!animator) {
-        animator = std::make_shared<UIAnimatorBehavior>();
-        widget.addBehavior(animator);
+        auto created = std::make_shared<UIAnimatorBehavior>();
+        widget.addBehavior(created);
+        animator = created.get();
     }
     auto tween       = std::make_shared<UITween>();
     tween->_animator = animator;

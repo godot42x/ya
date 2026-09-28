@@ -109,7 +109,7 @@ struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISe
     [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 
   private:
-    friend struct FSelectableRowDragDropBehavior;
+    friend struct FSelectableRowDragDrop;
     UISingleChildLayout _contentLayout;
     VisualFlag _bPressed{*this};
     VisualFlag _bHovered{*this};

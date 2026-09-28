@@ -11,7 +11,7 @@ struct UIDockSpace;
 
 /// Shared drop target for DockArea, TabStack, and TabWell. Area owns overlay
 /// and commit; leaf widgets are the hit targets.
-void installDockDropTarget(UIElement& owner);
+void installDockDropTarget(UIElement& widget);
 
 /// DockArea leaf projection: tab well + active content, stacked in one rect.
 /// TabStack drop target (center merge / cardinal split / chooser).

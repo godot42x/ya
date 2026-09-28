@@ -10,7 +10,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <typeinfo>
 
 namespace ya
 {
@@ -79,18 +78,15 @@ bool UIElement::addBehavior(const UIBehaviorRef& behavior)
         YA_CORE_ERROR("UIElement::addBehavior: behavior already attached to another widget");
         return false;
     }
-    const UIBehavior& added = *behavior;
-    if (std::ranges::any_of(_behaviors, [&added](const UIBehaviorRef& existing) {
-            const UIBehavior& candidate = *existing;
-            return typeid(candidate) == typeid(added);
-        })) {
-        YA_CORE_ERROR("UIElement::addBehavior: '{}' already has a behavior of type '{}'", _name, typeid(added).name());
-        return false;
-    }
-    _behaviors.push_back(behavior);
     if (!_behaviorIndex) {
         _behaviorIndex = std::make_unique<FUIBehaviorIndex>();
     }
+    if (std::ranges::find(_behaviorIndex->kinds, behavior->getKind()) != _behaviorIndex->kinds.end()) {
+        YA_CORE_ERROR("UIElement::addBehavior: '{}' already has a behavior of kind {:#x}", _name, behavior->getKind());
+        return false;
+    }
+    _behaviors.push_back(behavior);
+    _behaviorIndex->kinds.push_back(behavior->getKind());
     std::apply(
         [&behavior](auto&... lists) {
             auto join = [&behavior]<typename I>(std::vector<I*>& list) {
@@ -100,7 +96,7 @@ bool UIElement::addBehavior(const UIBehaviorRef& behavior)
             };
             (join(lists), ...);
         },
-        *_behaviorIndex);
+        _behaviorIndex->byCapability);
     if (isAttached()) {
         behavior->onAttached(*this);
     }
@@ -118,7 +114,9 @@ void UIElement::removeBehavior(const UIBehavior& behavior)
     if (isAttached()) {
         removed->onDetached(*this);
     }
-    _behaviors.erase(std::find(_behaviors.begin(), _behaviors.end(), removed));
+    const auto slot = std::find(_behaviors.begin(), _behaviors.end(), removed);
+    _behaviorIndex->kinds.erase(_behaviorIndex->kinds.begin() + (slot - _behaviors.begin()));
+    _behaviors.erase(slot);
     std::apply(
         [&removed](auto&... lists) {
             auto leave = [&removed]<typename I>(std::vector<I*>& list) {
@@ -128,7 +126,7 @@ void UIElement::removeBehavior(const UIBehavior& behavior)
             };
             (leave(lists), ...);
         },
-        *_behaviorIndex);
+        _behaviorIndex->byCapability);
 }
 
 bool UIElement::hasBehavior(const UIBehavior& behavior) const

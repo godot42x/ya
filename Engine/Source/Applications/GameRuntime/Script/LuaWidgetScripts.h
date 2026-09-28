@@ -31,7 +31,7 @@ namespace ya
 struct GameUIHost;
 struct LuaWidgetScripts;
 
-struct LuaWidgetScriptBehavior final : UIBehaviorWith<IUITickable, IUIActionHandler>
+struct LuaWidgetScriptBehavior final : UIBehaviorWith<LuaWidgetScriptBehavior, IUITickable, IUIActionHandler>
 {
     LuaScriptInstance        instance;
     /// Null once the runtime is gone; the behaviour is inert from then on.

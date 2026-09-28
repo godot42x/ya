@@ -17,19 +17,20 @@ namespace ya
 
 FTreeReorderDragDropOp::~FTreeReorderDragDropOp() = default;
 
-struct FTreeViewReorderDragBehavior final : public UIDragSourceBehavior
+struct FTreeViewReorderDragDrop
 {
-    FTreeViewReorderDragBehavior()
+    static void install(UITreeView& view)
     {
-        bCapturePointerOnPress = true;
-        bBeginDragFromCapturedMove = true;
-        setPressedState = [](UIElement& owner, bool bPressed)
+        auto drag = std::make_shared<UIDragSourceBehavior>();
+        drag->bCapturePointerOnPress = true;
+        drag->bBeginDragFromCapturedMove = true;
+        drag->setPressedState = [](UIElement& owner, bool bPressed)
         {
             if (auto* tree = dynamic_cast<UITreeView*>(&owner)) {
                 tree->_bPressArmed = bPressed;
             }
         };
-        operationFactory = [](UIElement& owner) -> UIDragDropOperationRef
+        drag->operationFactory = [](UIElement& owner) -> UIDragDropOperationRef
         {
             auto* tree = dynamic_cast<UITreeView*>(&owner);
             if (!tree || !tree->_bReorderable || tree->_pressRowId.empty()) {
@@ -39,23 +40,17 @@ struct FTreeViewReorderDragBehavior final : public UIDragSourceBehavior
             tree->_pressRowId.clear();
             return operation;
         };
-    }
+        drag->onOwnerDetached = [](UIElement& owner)
+        {
+            if (auto* tree = dynamic_cast<UITreeView*>(&owner)) {
+                tree->_bPressArmed = false;
+                tree->_pressRowId.clear();
+            }
+        };
+        view.addBehavior(drag);
 
-    void onDetached(UIElement& owner) override
-    {
-        if (auto* tree = dynamic_cast<UITreeView*>(&owner)) {
-            tree->_bPressArmed = false;
-            tree->_pressRowId.clear();
-        }
-        UIDragSourceBehavior::onDetached(owner);
-    }
-};
-
-struct FTreeViewReorderDropBehavior final : public UIDropTargetBehavior
-{
-    FTreeViewReorderDropBehavior()
-    {
-        canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+        auto drop = std::make_shared<UIDropTargetBehavior>();
+        drop->canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* tree = dynamic_cast<UITreeView*>(&owner);
             if (!tree || !tree->_bReorderable || !operation.as<FTreeReorderDragDropOp>()) {
@@ -65,7 +60,7 @@ struct FTreeViewReorderDropBehavior final : public UIDropTargetBehavior
             int mode     = 0;
             return tree->dropPosition(logicalPoint, rowIndex, mode);
         };
-        handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+        drop->handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* tree = dynamic_cast<UITreeView*>(&owner);
             if (!tree) {
@@ -91,7 +86,7 @@ struct FTreeViewReorderDropBehavior final : public UIDropTargetBehavior
                 tree->_onReorder(fromId, rows[static_cast<size_t>(rowIndex)].node->id, mode);
             }
         };
-        setHighlightState = [](UIElement& owner, bool bHighlight)
+        drop->setHighlightState = [](UIElement& owner, bool bHighlight)
         {
             if (auto* tree = dynamic_cast<UITreeView*>(&owner)) {
                 if (bHighlight) {
@@ -103,7 +98,7 @@ struct FTreeViewReorderDropBehavior final : public UIDropTargetBehavior
                 }
             }
         };
-        updateHover = [](UIElement& owner, const UIDragDropOperation&, const glm::vec2& logicalPoint)
+        drop->updateHover = [](UIElement& owner, const UIDragDropOperation&, const glm::vec2& logicalPoint)
         {
             auto* tree = dynamic_cast<UITreeView*>(&owner);
             if (!tree) {
@@ -118,14 +113,13 @@ struct FTreeViewReorderDropBehavior final : public UIDropTargetBehavior
                 tree->markPaintDirty();
             }
         };
-    }
-
-    void onDetached(UIElement& owner) override
-    {
-        if (auto* tree = dynamic_cast<UITreeView*>(&owner)) {
-            tree->_dropRowIndex = -1;
-        }
-        UIDropTargetBehavior::onDetached(owner);
+        drop->onOwnerDetached = [](UIElement& owner)
+        {
+            if (auto* tree = dynamic_cast<UITreeView*>(&owner)) {
+                tree->_dropRowIndex = -1;
+            }
+        };
+        view.addBehavior(drop);
     }
 };
 
@@ -133,8 +127,7 @@ UITreeView::UITreeView(std::string name) : UIElement(std::move(name), "tree")
 {
     _hitFilter  = EWidgetHitFilter::Stop;
     _selectedId = std::make_shared<Reactive<std::string>>();
-    addBehavior(std::make_shared<FTreeViewReorderDragBehavior>());
-    addBehavior(std::make_shared<FTreeViewReorderDropBehavior>());
+    FTreeViewReorderDragDrop::install(*this);
 }
 
 void UITreeView::bindData(std::shared_ptr<ReactiveList<FNode>> roots)

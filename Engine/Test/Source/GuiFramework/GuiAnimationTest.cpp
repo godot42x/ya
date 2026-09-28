@@ -511,6 +511,18 @@ TEST(GuiAnimationTest, TweensOnOneWidgetShareItsSingleAnimator)
     EXPECT_EQ(animator->getTweenCount(), 2u);
 }
 
+TEST(GuiAnimationTest, HeldTweenOutlivesItsWidget)
+{
+    std::shared_ptr<UITween> tween;
+    {
+        auto card = std::make_shared<UIBorder>("Card");
+        tween     = animate(*card, 0.25f);
+        tween->fade(0.0f, 1.0f, EUIAnimEase::Linear);
+    }
+    tween->play();
+    EXPECT_TRUE(tween->isPlaying());
+}
+
 // === Default-animated control: UISwitch =====================================
 
 TEST(GuiAnimationTest, SwitchIsIdleUntilToggledThenAnimatesItsStateChange)

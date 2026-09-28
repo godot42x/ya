@@ -30,7 +30,7 @@ namespace
 /// Counts frames the host tree actually ticked. A behaviour is the framework's
 /// own second door into the frame lifecycle, so this asserts the host drives
 /// `WidgetTree::tick` rather than only laying the tree out for a snapshot.
-struct TickCountingBehavior final : public UIBehaviorWith<IUITickable>
+struct TickCountingBehavior final : public UIBehaviorWith<TickCountingBehavior, IUITickable>
 {
     int ticks = 0;
 
@@ -47,7 +47,7 @@ struct TickCountingBehavior final : public UIBehaviorWith<IUITickable>
 /// a VALUE (how much time passed), not whether the tree is visited at all: a
 /// paused gameplay frame still walks the tree, it just hands it zero seconds.
 /// Counting calls would measure the wrong thing.
-struct AdvancingBehavior final : public UIBehaviorWith<IUITickable>
+struct AdvancingBehavior final : public UIBehaviorWith<AdvancingBehavior, IUITickable>
 {
     float seconds = 0.0f;
 
