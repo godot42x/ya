@@ -3,7 +3,6 @@
 #include "Core/Common/Types.h"
 #include "Core/Event.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
-#include "GUI/Binding/SelectionModel.h"
 #include "GameEditor/UI/Dialogs/EditorAssetPicker.h"
 #include "GameEditor/UI/Dock/EditorDockWorkspace.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
@@ -12,10 +11,8 @@
 #include "GameEditor/UI/Shell/EditorSurfaceContext.h"
 #include "GameEditor/UI/Viewport/EditorViewportHost.h"
 
-#include <chrono>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <string>
 #include <string_view>
 
@@ -38,12 +35,10 @@ struct UIMenu;
 struct UIMenuBar;
 struct UITabBar;
 struct UICanvasPanel;
-class UICanvasSlot;
 struct UITheme;
 struct WidgetTree;
 struct IImage;
 struct IImageView;
-struct FEditorProjectBrowser;
 struct UIDragDropOperation;
 enum class EWidgetRouteResult : uint8_t;
 
@@ -66,7 +61,7 @@ struct EditorSurface : IEditorViewportHostSink
     App* _app = nullptr;
     std::shared_ptr<UITheme>    _theme;
     UIFrameSnapshot             _snapshot;
-    bool                        _bBuiltAsProjectBrowser = false;
+    bool                        _bBuiltChrome = false;
 
     std::shared_ptr<UICanvasPanel>         _root;
     std::shared_ptr<UICanvasPanel>         _titleBar;
@@ -78,8 +73,6 @@ struct EditorSurface : IEditorViewportHostSink
     std::shared_ptr<UIDockSpace>     _dockSpace;
     std::shared_ptr<UIDockFloatingHost> _dockFloatingHost;
     std::shared_ptr<UIDockFloatingHost> _ownedDockFloatingHost;
-    std::unique_ptr<FEditorProjectBrowser> _projectBrowser;
-    std::shared_ptr<SelectionModel>  _projectSelection;
     EditorRootSession*               _rootSession = nullptr;
     FEditorRootSessions              _roots;
     EditorWindowId                   _windowId    = kDefaultEditorWindowId;
@@ -165,28 +158,8 @@ struct EditorSurface : IEditorViewportHostSink
 
   private:
     void rebuild(const FEditorSurfaceContext& context);
-    void buildProjectBrowser(App& app);
     void buildEditorChrome(const FEditorSurfaceContext& context);
     void pushViewportDisplay();
-    void refreshProjectBrowserRows();
-    /// A tree row id is an index into the filtered browser rows; map it back to
-    /// the discovered-projects index and mirror the path into the footer.
-    void selectProjectBrowserRow(const std::string& rowId);
-    /// UE-style open splash: raise the banner now, defer the (blocking) load
-    /// past the next present so the banner is actually on screen while the
-    /// project loads.
-    void showProjectOpenSplash(const std::string& projectPath);
-    void consumePendingProjectOpen();
-
-    /// Raised with the banner; consumed (load runs) once the splash has been
-    /// on screen for a legible minimum.
-    std::optional<std::string>                    _pendingProjectOpen;
-    std::chrono::steady_clock::time_point         _pendingProjectOpenSince{};
-    /// Canvas slots of the selector card and the open splash; applyWindowMetrics
-    /// clamps their max size to the live window extent so the fixed preferred
-    /// sizes never overflow a smaller window. Rebuilt with the browser page.
-    UICanvasSlot*                                 _projectCardSlot   = nullptr;
-    UICanvasSlot*                                 _projectSplashSlot = nullptr;
     void publishViewportRect();
     /// The camera preview panel's rect in viewport-local logical pixels. Empty
     /// when no preview is shown.

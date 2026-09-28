@@ -30,6 +30,7 @@
 #include "GameEditor/UI/Dock/EditorWindowLayout.h"
 #include "GameEditor/UI/Dock/EditorLayoutLibrary.h"
 #include "GameEditor/UI/Shell/EditorWindowRegistry.h"
+#include "GameEditor/UI/Shell/EditorLaunchFlow.h"
 #include "GameRuntime/App.h"
 #include "GameRuntime/Automation/EditorAutomationControl.h"
 #include "GameRuntime/IRuntimeModule.h"
@@ -145,6 +146,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     EditorTabSpawnerRegistry       _tabSpawners;
     GUIWindowManager               _guiWindows;
     GUIDragRouter                  _dragRouter;
+    EditorLaunchFlow               _launchFlow;
     struct FExtraGuiDelegate final : IGUIAppDelegate
     {
         void buildUI(WidgetTree&) override {}
@@ -365,6 +367,22 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     {
         using Json = ScriptApiRegistry::Json;
         auto& api  = ScriptApiRegistry::get();
+
+        api.registerFunction(
+            "project.open",
+            "Opens a project through the launch flow (browser window must be up). "
+            "Args: {path}.",
+            Json{{"path", {{"type", "string"}}}},
+            [this](const Json& args) -> Json {
+                const std::string path = args.value("path", "");
+                if (path.empty()) {
+                    throw ScriptApiRegistry::Error("project.open: path is required");
+                }
+                if (!_launchFlow.requestOpenProject(path)) {
+                    throw ScriptApiRegistry::Error("project.open: no project browser session to open from");
+                }
+                return Json{{"requested", true}};
+            });
 
         api.registerFunction(
             "viewport.set_mode",
@@ -624,6 +642,10 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
 
     void presentDefaultChrome(App& app, ICommandBuffer& commandBuffer, float dt)
     {
+        // Launch phases first: the pending open may block here while the
+        // splash overlay's last presented frame is on screen, and the editor
+        // window shows only after the chrome below has been built.
+        _launchFlow.tick();
         auto* render = app.getRenderServices().getRender();
         if (!render) {
             return;
@@ -698,6 +720,9 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         std::vector<GUIWindowId> orphans;
         _guiWindows.forEachWindow([&](GUIWindowId id, WidgetTree*, INativeWindow*) {
             if (_guiWindows.isHostOverlay(id)) {
+                return;
+            }
+            if (_launchFlow.hostsSession(id)) {
                 return;
             }
             if (std::find(hosted.begin(), hosted.end(), id) == hosted.end()) {
@@ -822,6 +847,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _dragRouter.bindExtras(&_guiWindows);
         _dragRouter.bindRender(app.getRenderServices().getRender());
         INativeWindow* mainNative = mainNativeWindow();
+        _launchFlow.begin(_guiWindows, app.getRenderServices().getRender(), *_layer, mainNative);
         window->surface().setPersistLayout([this]() { persistLayout(); });
         hookNativeTearOff(*window);
         // The arrangement is a document of its own under the layout overrides
@@ -951,6 +977,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
 
     void onDetach(App& app) override
     {
+        _launchFlow.shutdown();
         app.getInputRouter().cancelInput(EInputCancelReason::ModuleDetached);
         _inputNodeRegistration.reset();
         _inputNode.unbind();

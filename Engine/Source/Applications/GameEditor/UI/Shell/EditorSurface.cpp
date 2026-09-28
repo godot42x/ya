@@ -27,7 +27,6 @@
 #include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Host/OsClipboard.h"
 #include "GUI/Layout/UILayout.h"
-#include "GUI/Layout/UICanvasLayout.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
@@ -71,55 +70,10 @@
 namespace ya
 {
 
-struct FEditorProjectBrowser
-{
-    std::shared_ptr<UITreeView> list;
-    std::shared_ptr<ReactiveList<UITreeView::FNode>> roots;
-    std::shared_ptr<UIText> errorText;
-    std::shared_ptr<UIText> pathText;
-    /// Open splash (UE-style, borderless widget centered over the page).
-    std::shared_ptr<UIElement> banner;
-    std::shared_ptr<UIText>    bannerProject;
-    /// Case-insensitive substring filter on the project file name and path.
-    std::string      filter;
-    /// Filtered row -> index into EditorLayer::getDiscoveredProjects().
-    std::vector<int> rowToProject;
-};
-
 namespace
 {
 
 constexpr float kMenuHeight = editor_density::kMenuHeight;
-
-/// The launcher card (UE/Godot-style compact chooser) centered in the window;
-/// the selector is a dialog-scale surface, not a fullscreen page.
-constexpr glm::vec2 kProjectBrowserCardSize{880.0f, 560.0f};
-
-/// The open splash: a small borderless card centered over the page.
-constexpr glm::vec2 kProjectBannerSize{420.0f, 190.0f};
-
-/// Breathing room kept around the card / banner; a window smaller than that
-/// clamps them to these floors instead of letting them overflow.
-constexpr glm::vec2 kProjectBrowserMinCardSize{320.0f, 240.0f};
-constexpr glm::vec2 kProjectBrowserMinBannerSize{280.0f, 120.0f};
-constexpr glm::vec2 kProjectBrowserWindowMargin{48.0f, 48.0f};
-
-/// The open splash stays up at least this long so a fast open still reads as
-/// "the editor is opening <project>" instead of a one-frame flash.
-constexpr int kProjectBannerMinDisplayMs = 400;
-
-/// YA branding mark shown on the open splash.
-constexpr const char* kProjectBannerMark = "Engine/Content/Branding/ya-icon.png";
-
-/// The canvas slot hosting `widget`, if the layer gave it one — the browser
-/// keeps the card / splash slots to clamp them against the live window extent.
-UICanvasSlot* projectCanvasSlot(UIElement& parent, UIElement& widget)
-{
-    if (UISlot* slot = parent.getSlotForChild(widget)) {
-        return dynamic_cast<UICanvasSlot*>(slot);
-    }
-    return nullptr;
-}
 
 } // namespace
 
@@ -183,8 +137,6 @@ void EditorSurface::shutdown()
     setViewportHost(nullptr);
     _viewportGizmoOverlay.reset();
     _viewOverlayHost.clearOverlay();
-    _projectBrowser.reset();
-    _projectSelection.reset();
     _viewportTexture.reset();
     _viewportImageResource.reset();
     _viewportImageView.reset();
@@ -203,14 +155,9 @@ void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
         return;
     }
 
-    // Consumed at tick start: the banner frame has already been presented by
-    // the previous tick, so the blocking load below keeps it on screen.
-    consumePendingProjectOpen();
-
-    const bool bProjectBrowser = !_layer->isProjectLoaded();
     _presentSurface = context.presentSurface;
     _app            = context.app;
-    if (!_tree || _bBuiltAsProjectBrowser != bProjectBrowser) {
+    if (!_tree || (!_bBuiltChrome && _layer->isProjectLoaded())) {
         rebuild(context);
     }
     if (!_tree) {
@@ -249,10 +196,6 @@ void EditorSurface::rebuild(const FEditorSurfaceContext& context)
     setViewportHost(nullptr);
     _viewportGizmoOverlay.reset();
     _viewOverlayHost.clearOverlay();
-    _projectBrowser.reset();
-    _projectSelection.reset();
-    _projectCardSlot   = nullptr;
-    _projectSplashSlot = nullptr;
     if (_filePicker) {
         _filePicker->reset();
     }
@@ -276,158 +219,12 @@ void EditorSurface::rebuild(const FEditorSurfaceContext& context)
     _theme = buildEditorTheme(true);
     _tree->setTheme(_theme.get());
 
-    if (_layer->isProjectLoaded()) {
-        _bBuiltAsProjectBrowser = false;
+    _bBuiltChrome = _layer->isProjectLoaded();
+    if (_bBuiltChrome) {
         buildEditorChrome(context);
     }
-    else {
-        _bBuiltAsProjectBrowser = true;
-        buildProjectBrowser(*context.app);
-    }
-}
-
-void EditorSurface::buildProjectBrowser(App& app)
-{
-    (void)app;
-    _layer->requestRefreshProjectBrowser();
-
-    _projectBrowser       = std::make_unique<FEditorProjectBrowser>();
-    _projectSelection     = std::make_shared<SelectionModel>();
-    _projectBrowser->roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
-
-    auto exitBtn = labeledButton("ExitEditor", "Exit")
-                       .setOnClick([this]() {
-                           if (_layer) {
-                               _layer->cmdRequestQuit();
-                           }
-                       });
-
-    auto searchField = ui::textField("ProjectSearch")
-                           .setStyleKey(editorStyle(StyleKey::TextField))
-                           .setOnTextChanged([this](const std::string& text) {
-                               if (_projectBrowser) {
-                                   _projectBrowser->filter = text;
-                                   refreshProjectBrowserRows();
-                               }
-                           });
-
-    auto list = ui::treeView("ProjectList")
-                    .bindData(_projectBrowser->roots)
-                    .bindSelection(_projectSelection->primaryRef())
-                    .setOnSelectionChanged([this](const std::string& id) {
-                        _projectSelection->select(id);
-                        selectProjectBrowserRow(id);
-                    });
-    _projectBrowser->list = list.share();
-
-    auto refreshBtn = labeledButton("RefreshProjects", "Refresh")
-                          .setOnClick([this]() {
-                              _layer->requestRefreshProjectBrowser();
-                              refreshProjectBrowserRows();
-                          });
-    auto openBtn = labeledButton("OpenProject", "Open Project")
-                       .setOnClick([this]() {
-                           const auto& projects = _layer->getDiscoveredProjects();
-                           const int   index    = _layer->getProjectBrowserSelection();
-                           if (index >= 0 && index < static_cast<int>(projects.size())) {
-                               showProjectOpenSplash(projects[static_cast<size_t>(index)]);
-                           }
-                       });
-
-    auto errorText = ui::text("ProjectError").setStyleKey("text.error");
-    _projectBrowser->errorText = errorText.share();
-    auto pathText = ui::text("SelectedProjectPath").setStyleKey("text.muted");
-    _projectBrowser->pathText = pathText.share();
-
-    auto headerTitle = ui::column("ProjectBrowserTitle")
-                           .setSpacing(2.0f)
-                           .child(ui::text("ProjectTitle").setText("YA Editor").setStyleKey("text.header"))
-                           .child(ui::text("ProjectSubtitle")
-                                      .setText("Select a project to open")
-                                      .setStyleKey("text.muted"));
-    auto headerRow = ui::row("ProjectBrowserHeader")
-                         .setSpacing(8.0f)
-                         .child(std::move(headerTitle), ui::boxSlot().fillWidth())
-                         .child(std::move(exitBtn), ui::boxSlot().preferredSize({96.0f, 26.0f}));
-
-    auto statusColumn = ui::column("ProjectBrowserStatus")
-                            .setSpacing(2.0f)
-                            .child(std::move(errorText))
-                            .child(std::move(pathText));
-    auto footerRow = ui::row("ProjectBrowserFooter")
-                         .setSpacing(8.0f)
-                         .child(std::move(statusColumn), ui::boxSlot().fillWidth())
-                         .child(std::move(refreshBtn), ui::boxSlot().preferredSize({110.0f, 26.0f}))
-                         .child(std::move(openBtn), ui::boxSlot().preferredSize({150.0f, 26.0f}));
-
-    auto card = ui::column("ProjectBrowserCard")
-                    .setPadding({20.0f, 20.0f})
-                    .setSpacing(10.0f)
-                    .child(std::move(headerRow))
-                    .child(std::move(searchField), ui::boxSlot().preferredSize({0.0f, 26.0f}))
-                    .child(std::move(list), ui::boxSlot().fill())
-                    .child(std::move(footerRow), ui::boxSlot().preferredSize({0.0f, 40.0f}));
-
-    auto* contentLayer = _tree->getLayer(WidgetTree::ELayer::Content);
-    const auto cardSlot = ui::canvasSlot()
-                              .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
-                              .pivot({0.5f, 0.5f})
-                              .size(kProjectBrowserCardSize);
-    (void)ui::attach(*_tree,
-                     *contentLayer,
-                     ui::border("ProjectBrowserBackdrop")
-                         .setStyleKey("panel.canvas")
-                         .setVisibility(EWidgetVisibility::HitTestInvisible)
-                         .release(),
-                     ui::canvasSlot().fill());
-    (void)ui::attach(*_tree,
-                     *contentLayer,
-                     ui::border("ProjectBrowserCardFill")
-                         .setStyleKey("panel.surface")
-                         .release(),
-                     cardSlot);
-    auto cardWidget = std::shared_ptr<UIElement>(std::move(card).release());
-    (void)ui::attach(*_tree, *contentLayer, cardWidget, cardSlot);
-    _projectCardSlot = projectCanvasSlot(*contentLayer, *cardWidget);
-
-    // The open splash: a small borderless card centered over the page, above
-    // the selector. Raised by Open Project, dismissed by the chrome rebuild
-    // once the load completes (or explicitly when the open fails).
-    auto bannerProject = ui::text("ProjectOpenBannerName")
-                             .setText("")
-                             .setStyleKey("text.header")
-                             .setHAlign(EWidgetAlignH::Center);
-    _projectBrowser->bannerProject = bannerProject.share();
-    auto bannerRoot = ui::border("ProjectOpenBanner")
-                          .setStyleKey("panel.surface")
-                          .setPadding(FMargin::all(20.0f))
-                          .setVisibility(EWidgetVisibility::Collapsed)
-                          .child(ui::column("ProjectOpenBannerContent")
-                                     .setSpacing(6.0f)
-                                     .child(ui::image("ProjectOpenBannerMark")
-                                                .setAssetPath(kProjectBannerMark)
-                                                .setScaleMode(EImageScaleMode::Contain),
-                                            ui::boxSlot().preferredSize({0.0f, 56.0f}))
-                                     .child(ui::text("ProjectOpenBannerEyebrow")
-                                                .setText("OPENING PROJECT")
-                                                .setStyleKey("text.eyebrow")
-                                                .setHAlign(EWidgetAlignH::Center))
-                                     .child(std::move(bannerProject))
-                                     .child(ui::text("ProjectOpenBannerStatus")
-                                                .setText("Loading scene, modules and content…")
-                                                .setStyleKey("text.muted")
-                                                .setHAlign(EWidgetAlignH::Center)));
-    _projectBrowser->banner = bannerRoot.share();
-    auto splashWidget = std::shared_ptr<UIElement>(std::move(bannerRoot).release());
-    (void)ui::attach(*_tree,
-                     *contentLayer,
-                     splashWidget,
-                     ui::canvasSlot()
-                         .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
-                         .pivot({0.5f, 0.5f})
-                         .size(kProjectBannerSize));
-    _projectSplashSlot = projectCanvasSlot(*contentLayer, *splashWidget);
-    refreshProjectBrowserRows();
+    // Without a project the launch flow leads with its own windows; this
+    // shell window stays hidden and empty until a project opens.
 }
 
 void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
@@ -744,18 +541,6 @@ void EditorSurface::applyWindowMetrics(const EditorWindowMetrics& metrics)
     if (auto* fonts = FontManager::get()) {
         fonts->setActiveDpiScale(_tree->getDpiScale());
     }
-    // The selector card and the open splash keep their preferred sizes while
-    // the window is large enough, and shrink (staying centered by their pivot)
-    // once it is not — the selector adapts to the window, never overflows it.
-    const glm::vec2 extent{static_cast<float>(metrics.logicalExtent.width),
-                           static_cast<float>(metrics.logicalExtent.height)};
-    const glm::vec2 usable = glm::max(extent - kProjectBrowserWindowMargin, glm::vec2{0.0f});
-    if (_projectCardSlot) {
-        _projectCardSlot->setMaxSize(glm::clamp(usable, kProjectBrowserMinCardSize, kProjectBrowserCardSize));
-    }
-    if (_projectSplashSlot) {
-        _projectSplashSlot->setMaxSize(glm::clamp(usable, kProjectBrowserMinBannerSize, kProjectBannerSize));
-    }
 }
 
 void EditorSurface::persistDockLayouts()
@@ -879,150 +664,6 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
     _viewportContextMenu = menu;
     menu->_onDismiss = [this]() { _viewportContextMenu.reset(); };
     menu->openAt(*_tree, windowPoint);
-}
-
-void EditorSurface::refreshProjectBrowserRows()
-{
-    if (!_layer || !_projectBrowser) {
-        return;
-    }
-
-    const auto matchesFilter = [](const std::string& projectPath, const std::string& filter) {
-        if (filter.empty()) {
-            return true;
-        }
-        const auto containsFolded = [&filter](const std::string& haystack) {
-            const auto folded = [](const std::string& text) {
-                std::string lower;
-                lower.reserve(text.size());
-                for (char c : text) {
-                    lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
-                }
-                return lower;
-            };
-            return folded(haystack).find(folded(filter)) != std::string::npos;
-        };
-        return containsFolded(std::filesystem::path(projectPath).filename().string()) ||
-               containsFolded(projectPath);
-    };
-
-    const auto& discovered = _layer->getDiscoveredProjects();
-    std::vector<UITreeView::FNode> rows;
-    rows.reserve(discovered.size());
-    _projectBrowser->rowToProject.clear();
-    for (int i = 0; i < static_cast<int>(discovered.size()); ++i) {
-        const std::string& projectPath = discovered[static_cast<size_t>(i)];
-        if (!matchesFilter(projectPath, _projectBrowser->filter)) {
-            continue;
-        }
-        rows.push_back(UITreeView::FNode{
-            .id    = std::to_string(rows.size()),
-            .label = std::filesystem::path(projectPath).stem().string(),
-            .icon  = {.resource = editor_icons::kFolder},
-        });
-        _projectBrowser->rowToProject.push_back(i);
-    }
-    if (_projectBrowser->roots) {
-        _projectBrowser->roots->replace(std::move(rows));
-    }
-
-    // Keep the selection pointing at the same project across filter changes;
-    // when it left the filtered view (or is unset), take the first row.
-    const auto& mapping   = _projectBrowser->rowToProject;
-    const int   current   = _layer->getProjectBrowserSelection();
-    const auto  rowOfCurrent = std::find(mapping.begin(), mapping.end(), current);
-    if (!mapping.empty()) {
-        const int row = rowOfCurrent != mapping.end()
-                            ? static_cast<int>(rowOfCurrent - mapping.begin())
-                            : 0;
-        if (rowOfCurrent == mapping.end()) {
-            _layer->setProjectBrowserSelection(mapping.front());
-        }
-        if (_projectSelection) {
-            _projectSelection->select(std::to_string(row));
-        }
-    }
-    else {
-        _layer->setProjectBrowserSelection(-1);
-        if (_projectSelection) {
-            _projectSelection->select("");
-        }
-    }
-
-    if (_projectBrowser->errorText) {
-        const std::string& error = _layer->getProjectBrowserError();
-        _projectBrowser->errorText->setText(error);
-        _projectBrowser->errorText->setVisibility(error.empty() ? EWidgetVisibility::Collapsed
-                                                                : EWidgetVisibility::Visible);
-    }
-    if (_projectBrowser->pathText) {
-        const int   selected     = _layer->getProjectBrowserSelection();
-        const bool  bHasSelection = selected >= 0 && selected < static_cast<int>(discovered.size());
-        _projectBrowser->pathText->setText(bHasSelection ? discovered[static_cast<size_t>(selected)] : std::string{});
-        _projectBrowser->pathText->setVisibility(bHasSelection ? EWidgetVisibility::Visible
-                                                               : EWidgetVisibility::Collapsed);
-    }
-}
-
-void EditorSurface::selectProjectBrowserRow(const std::string& rowId)
-{
-    if (!_layer || !_projectBrowser) {
-        return;
-    }
-    int row = -1;
-    if (auto [ptr, ec] = std::from_chars(rowId.data(), rowId.data() + rowId.size(), row);
-        ec != std::errc{} || ptr != rowId.data() + rowId.size() || row < 0 ||
-        row >= static_cast<int>(_projectBrowser->rowToProject.size())) {
-        return;
-    }
-    const auto& discovered = _layer->getDiscoveredProjects();
-    const int   index      = _projectBrowser->rowToProject[static_cast<size_t>(row)];
-    _layer->setProjectBrowserSelection(index);
-    if (_projectBrowser->pathText && index >= 0 && index < static_cast<int>(discovered.size())) {
-        _projectBrowser->pathText->setText(discovered[static_cast<size_t>(index)]);
-        _projectBrowser->pathText->setVisibility(EWidgetVisibility::Visible);
-    }
-}
-
-void EditorSurface::showProjectOpenSplash(const std::string& projectPath)
-{
-    if (!_projectBrowser) {
-        return;
-    }
-    if (_projectBrowser->bannerProject) {
-        _projectBrowser->bannerProject->setText(std::filesystem::path(projectPath).stem().string());
-    }
-    if (_projectBrowser->banner) {
-        // Renders over the selector but never intercepts its clicks.
-        _projectBrowser->banner->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
-    }
-    _pendingProjectOpen      = projectPath;
-    _pendingProjectOpenSince = std::chrono::steady_clock::now();
-}
-
-void EditorSurface::consumePendingProjectOpen()
-{
-    if (!_pendingProjectOpen || !_layer) {
-        return;
-    }
-    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - _pendingProjectOpenSince).count();
-    if (elapsedMs < kProjectBannerMinDisplayMs) {
-        return;
-    }
-
-    const std::string path = *_pendingProjectOpen;
-    _pendingProjectOpen.reset();
-    if (_layer->requestOpenProject(path)) {
-        // Loaded: the browser->chrome rebuild below replaces the tree, banner
-        // included. While the load blocked, the last presented frame (the
-        // banner) stayed on screen.
-        return;
-    }
-    if (_projectBrowser && _projectBrowser->banner) {
-        _projectBrowser->banner->setVisibility(EWidgetVisibility::Collapsed);
-    }
-    refreshProjectBrowserRows();
 }
 
 void EditorSurface::setViewportHost(IEditorViewportHost* host)
