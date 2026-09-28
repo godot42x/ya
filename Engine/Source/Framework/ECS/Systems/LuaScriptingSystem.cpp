@@ -62,6 +62,42 @@ struct LuaLogApi
     void debug(const std::string& message) const { YA_DEBUG("{}", message); }
 };
 
+// table["name"] goes through sol's proxy assignment, which does not keep the
+// instance function (the call returns without entering it). Read the field
+// off the stack and store that reference.
+sol::function functionField(sol::state_view lua, const sol::table& table, const char* key)
+{
+    lua_State* L = lua.lua_state();
+    table.push(L);
+    lua_getfield(L, -1, key);
+    sol::function function;
+    if (lua_isfunction(L, -1)) {
+        function = sol::function(L, -1);
+    }
+    lua_pop(L, 2);
+    return function;
+}
+
+template <typename... Args>
+void invokeLuaCallback(const sol::function& callback,
+                       std::string_view     what,
+                       std::string_view     scriptPath,
+                       Args&&... args)
+{
+    if (!callback.valid()) {
+        return;
+    }
+    lua_State* L = callback.lua_state();
+    callback.push(L);
+    sol::protected_function protectedCallback(L, -1);
+    lua_pop(L, 1);
+    const sol::protected_function_result result = protectedCallback(std::forward<Args>(args)...);
+    if (!result.valid()) {
+        const sol::error error = result;
+        YA_CORE_ERROR("Lua {} error ({}): {}", what, scriptPath, error.what());
+    }
+}
+
 } // namespace
 
 
@@ -401,11 +437,11 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
                         sol::table scriptTable = _lua.script(scriptContent);
 
                         script.self      = scriptTable;
-                        script.onInit    = scriptTable["onInit"];
-                        script.onUpdate  = scriptTable["onUpdate"];
-                        script.onDestroy = scriptTable["onDestroy"];
-                        script.onEnable  = scriptTable["onEnable"];
-                        script.onDisable = scriptTable["onDisable"];
+                        script.onInit    = functionField(_lua, scriptTable, "onInit");
+                        script.onUpdate  = functionField(_lua, scriptTable, "onUpdate");
+                        script.onDestroy = functionField(_lua, scriptTable, "onDestroy");
+                        script.onEnable  = functionField(_lua, scriptTable, "onEnable");
+                        script.onDisable = functionField(_lua, scriptTable, "onDisable");
 
                         // 设置 entity 引用
                         script.self["entity"] = entity;
@@ -414,10 +450,7 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
                         script.refreshProperties();
                         script.applyPropertyOverrides(_lua);
 
-                        // 调用 onInit
-                        if (script.onInit.valid()) {
-                            script.onInit(script.self);
-                        }
+                        invokeLuaCallback(script.onInit, "onInit", script.scriptPath, script.self);
 
                         script.bLoaded = true;
                         YA_CORE_INFO("Loaded Lua script: {}", script.scriptPath);
@@ -441,7 +474,7 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
                     // 更新 entity 引用（防止 entity 被移动）
                     script.self["entity"] = entity;
 
-                    script.onUpdate(script.self, deltaTime);
+                    invokeLuaCallback(script.onUpdate, "onUpdate", script.scriptPath, script.self, deltaTime);
                 }
                 catch (const sol::error &e) {
                     YA_CORE_ERROR("Lua onUpdate error ({}): {}", script.scriptPath, e.what());
@@ -467,7 +500,7 @@ void LuaScriptingSystem::onStop()
         for (auto &script : luaComp.scripts) {
             if (script.bLoaded && script.onDestroy.valid()) {
                 try {
-                    script.onDestroy(script.self);
+                    invokeLuaCallback(script.onDestroy, "onDestroy", script.scriptPath, script.self);
                 }
                 catch (const sol::error &e) {
                     YA_CORE_ERROR("Lua onDestroy error ({}): {}", script.scriptPath, e.what());
@@ -563,7 +596,7 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
             // 调用 onDestroy（如果存在）
             if (script.onDestroy.valid()) {
                 try {
-                    script.onDestroy(script.self);
+                    invokeLuaCallback(script.onDestroy, "onDestroy", script.scriptPath, script.self);
                 }
                 catch (const sol::error &e) {
                     YA_CORE_ERROR("[Hot Reload] onDestroy error: {}", e.what());
@@ -577,11 +610,11 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
                     sol::table scriptTable = _lua.script(scriptContent);
 
                     script.self      = scriptTable;
-                    script.onInit    = scriptTable["onInit"];
-                    script.onUpdate  = scriptTable["onUpdate"];
-                    script.onDestroy = scriptTable["onDestroy"];
-                    script.onEnable  = scriptTable["onEnable"];
-                    script.onDisable = scriptTable["onDisable"];
+                    script.onInit    = functionField(_lua, scriptTable, "onInit");
+                    script.onUpdate  = functionField(_lua, scriptTable, "onUpdate");
+                    script.onDestroy = functionField(_lua, scriptTable, "onDestroy");
+                    script.onEnable  = functionField(_lua, scriptTable, "onEnable");
+                    script.onDisable = functionField(_lua, scriptTable, "onDisable");
 
                     // 设置 entity 引用
                     script.self["entity"] = entity;
@@ -598,9 +631,7 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
                     script.applyPropertyOverrides(_lua);
 
                     // 调用 onInit
-                    if (script.onInit.valid()) {
-                        script.onInit(script.self);
-                    }
+                    invokeLuaCallback(script.onInit, "onInit", script.scriptPath, script.self);
 
                     YA_CORE_INFO("[Hot Reload] Successfully reloaded: {}", normalizedScriptPath);
                 }
