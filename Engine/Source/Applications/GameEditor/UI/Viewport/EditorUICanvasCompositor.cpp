@@ -63,7 +63,9 @@ void EditorUICanvasCompositor::compose(IRender& render, ICommandBuffer& commandB
     UIFrameSnapshot        previewSnapshot;
     const UIFrameSnapshot* pPreviewSnapshot = nullptr;
     const Rect2D*          pSelectionRect   = nullptr;
-    if (designer.hasDocument()) {
+    const glm::vec2        designSize       = glm::vec2(designer.designResolution());
+    const bool             bHasDocument     = designer.hasDocument();
+    if (bHasDocument) {
         previewSnapshot  = designer.buildPreviewSnapshot(uiScale, offset);
         pPreviewSnapshot = &previewSnapshot;
         pSelectionRect   = designer.getSelectedLayoutRect();
@@ -79,7 +81,10 @@ void EditorUICanvasCompositor::compose(IRender& render, ICommandBuffer& commandB
                                   .canvasZoom    = view.zoom,
                               },
                               _screen,
-                              [&pSelectionRect, &uiScale, &offset](ScreenDrawList& composeList) {
+                              [&](ScreenDrawList& composeList) {
+                                  if (bHasDocument) {
+                                      recordEditorCanvasDesignFrame(composeList, designSize, uiScale, offset);
+                                  }
                                   if (pSelectionRect) {
                                       recordEditorCanvasSelectionOverlay(composeList, *pSelectionRect, uiScale, offset);
                                   }

@@ -169,6 +169,21 @@ void recordEditorViewportWorldOverlays(WorldDrawList& list, EditorLayer& layer, 
     recordSelectedEntityBounds(list, layer);
 }
 
+void recordEditorCanvasDesignFrame(ScreenDrawList& list, const glm::vec2& designSize, const glm::vec2& uiScale, const glm::vec2& offset)
+{
+    auto* white = TextureLibrary::get().getWhiteTexture().get();
+    const glm::vec2 size = designSize * uiScale;
+    if (!white || size.x <= 0.0f || size.y <= 0.0f) {
+        return;
+    }
+    const glm::vec4 color(0.62f, 0.62f, 0.66f, 0.9f);
+    const float     thickness = 1.0f;
+    list.makeSprite(glm::vec3(offset.x, offset.y, 0.0f), glm::vec2(size.x, thickness), white, color);
+    list.makeSprite(glm::vec3(offset.x, offset.y + size.y - thickness, 0.0f), glm::vec2(size.x, thickness), white, color);
+    list.makeSprite(glm::vec3(offset.x, offset.y, 0.0f), glm::vec2(thickness, size.y), white, color);
+    list.makeSprite(glm::vec3(offset.x + size.x - thickness, offset.y, 0.0f), glm::vec2(thickness, size.y), white, color);
+}
+
 void recordEditorCanvasSelectionOverlay(ScreenDrawList& list, const Rect2D& rect, const glm::vec2& uiScale, const glm::vec2& offset)
 {
     // Outline + resize handles in target pixels. The widget rect uses the

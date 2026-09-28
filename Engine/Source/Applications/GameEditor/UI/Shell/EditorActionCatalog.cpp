@@ -188,6 +188,16 @@ void registerUIDesignerActions(ActionMap& actions, EditorUIDesignerSession& desi
         .canExecute = [&designer]() { return designer.undoStack().canRedo(); },
     });
     define({
+        .id         = "selection.duplicate",
+        .label      = "Duplicate Widget",
+        .chord      = FActionChord::primary(EKey::K_D),
+        .execute    = [&designer]() { (void)designer.duplicateWidget(designer.getSelectedWidget()); },
+        .canExecute = [&designer]() {
+            UIElement* selected = designer.getSelectedWidget();
+            return selected && selected != designer.getPreviewRoot();
+        },
+    });
+    define({
         .id         = "selection.delete",
         .label      = "Delete Widget",
         .chord      = {.key = EKey::Delete},

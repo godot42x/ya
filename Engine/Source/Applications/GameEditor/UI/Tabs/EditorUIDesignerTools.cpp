@@ -6,8 +6,11 @@
 #include "GUI/Layout/UILayout.h"
 #include "Core/Event.h"
 #include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/ComboBox.h"
+#include "GUI/Widgets/Controls/SpinBox.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Image.h"
+#include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -113,6 +116,31 @@ constexpr FAnchorPresetButton kAnchorPresetRows[4][3] = {
      {"Fill", ECanvasAnchorPreset::Fill}},
 };
 
+struct FResolutionPreset
+{
+    const char* label;
+    glm::uvec2  size;
+};
+
+constexpr FResolutionPreset kResolutionPresets[] = {
+    {"1280 x 720", {1280, 720}},
+    {"1920 x 1080", {1920, 1080}},
+    {"2560 x 1440", {2560, 1440}},
+    {"1080 x 1920 (portrait)", {1080, 1920}},
+    {"800 x 600", {800, 600}},
+};
+constexpr int kCustomResolutionIndex = static_cast<int>(std::size(kResolutionPresets));
+
+std::shared_ptr<UISpinBox> makeResolutionSpin(std::string name, std::function<void(float)> onChanged)
+{
+    auto spin             = std::make_shared<UISpinBox>(std::move(name));
+    spin->_min            = 16.0f;
+    spin->_max            = 8192.0f;
+    spin->_step           = 1.0f;
+    spin->_onValueChanged = std::move(onChanged);
+    return spin;
+}
+
 /// Anchor presets for the selected canvas child. The click reads the selection
 /// then, so a stale grid cannot re-anchor a widget it was not built for.
 UIElementRef makeAnchorPresetGrid(EditorUIDesignerSession& designer)
@@ -136,9 +164,10 @@ UIElementRef makeAnchorPresetGrid(EditorUIDesignerSession& designer)
 
 } // namespace
 
-EditorUIHierarchyTab::EditorUIHierarchyTab(EditorLayer& layer)
+EditorUIHierarchyTab::EditorUIHierarchyTab(EditorLayer& layer, ActionMap* actions)
     : UICompoundWidget("UIDesignerHierarchyBody", "panel.canvas")
     , _layer(&layer)
+    , _actions(actions)
 {
     enableTick();
 }
@@ -186,6 +215,9 @@ void EditorUIHierarchyTab::construct()
                                    position = EditorUIDesignerSession::EDropPos::After;
                                }
                                panel.applyWidgetDrop(dragged, *target, position);
+                           })
+                           .setOnContextMenu([this](const std::string& nodeId, const glm::vec2& logicalPoint) {
+                               openContextMenu(nodeId, logicalPoint);
                            });
     _treeView = treeBuilder.share();
     addDetachedChild(ui::border("UIDesignerHierarchyInner")
@@ -193,6 +225,22 @@ void EditorUIHierarchyTab::construct()
                          .setPadding(FMargin::all(8.0f))
                          .child(_treeView, ui::contentSlot().fill())
                          .release());
+}
+
+void EditorUIHierarchyTab::openContextMenu(const std::string& nodeId, const glm::vec2& logicalPoint)
+{
+    WidgetTree*                              tree = getTree();
+    const std::optional<std::vector<size_t>> path = parseDesignerChildPath(nodeId);
+    if (!tree || !_layer || !_actions || !path) {
+        return;
+    }
+    // The menu acts on the selection, so a right-click selects first.
+    _layer->getEditorUIDesignerSession().selectByChildPath(*path);
+    auto menu = UIMenu::create({
+        UIMenu::FItem::fromAction(*_actions, "selection.duplicate"),
+        UIMenu::FItem::fromAction(*_actions, "selection.delete"),
+    });
+    menu->openAt(*tree, logicalPoint);
 }
 
 void EditorUIHierarchyTab::onAttached()
@@ -436,6 +484,35 @@ EditorUICanvasTab::EditorUICanvasTab(EditorLayer& layer)
 
 void EditorUICanvasTab::construct()
 {
+    std::vector<std::string> presetLabels;
+    for (const FResolutionPreset& preset : kResolutionPresets) {
+        presetLabels.emplace_back(preset.label);
+    }
+    presetLabels.emplace_back("Custom");
+    _resolutionPresets = ui::comboBox("UIDesignerResolutionPresets")
+                             .setItems(std::move(presetLabels))
+                             .setOnSelectionChanged([this](int index) {
+                                 if (index >= 0 && index < kCustomResolutionIndex) {
+                                     _designer->setDesignResolution(kResolutionPresets[index].size);
+                                 }
+                             })
+                             .share();
+    _resolutionWidth = makeResolutionSpin("UIDesignerResolutionWidth", [this](float value) {
+        _designer->setDesignResolution({static_cast<uint32_t>(value), _designer->designResolution().y});
+    });
+    _resolutionHeight = makeResolutionSpin("UIDesignerResolutionHeight", [this](float value) {
+        _designer->setDesignResolution({_designer->designResolution().x, static_cast<uint32_t>(value)});
+    });
+    auto toolbar = ui::row("UIDesignerCanvasToolbar")
+                       .setSpacing(4.0f)
+                       .child(_resolutionPresets, ui::boxSlot().preferredSize({170.0f, 0.0f}))
+                       .child(_resolutionWidth, ui::boxSlot().preferredSize({72.0f, 0.0f}))
+                       .child(_resolutionHeight, ui::boxSlot().preferredSize({72.0f, 0.0f}))
+                       .child(labeledButton("UIDesignerCanvasFit", "Fit").setOnClick([this]() {
+                                  _designer->canvas().bFitPending = true;
+                              }),
+                              ui::boxSlot().preferredSize({48.0f, 0.0f}));
+
     auto image = ui::image("UIDesignerCanvasImage");
     _image     = image.share();
     // The picture is the input surface: presses stop here and bubble to this
@@ -444,7 +521,30 @@ void EditorUICanvasTab::construct()
     _image->_hitFilter   = EWidgetHitFilter::Stop;
     _image->_focusPolicy = EWidgetFocusPolicy::Focusable;
     _image->setOpaqueSample(true);
-    addDetachedChild(image.release());
+    addDetachedChild(ui::column("UIDesignerCanvasColumn")
+                         .setSpacing(4.0f)
+                         .child(std::move(toolbar), ui::boxSlot().preferredSize({0.0f, 24.0f}))
+                         .child(image.release(), ui::boxSlot().fill())
+                         .release());
+    syncResolution();
+}
+
+void EditorUICanvasTab::syncResolution()
+{
+    const glm::uvec2 resolution = _designer->designResolution();
+    if (resolution == _shownResolution) {
+        return;
+    }
+    _shownResolution = resolution;
+    int index        = kCustomResolutionIndex;
+    for (int i = 0; i < kCustomResolutionIndex; ++i) {
+        if (kResolutionPresets[i].size == resolution) {
+            index = i;
+        }
+    }
+    _resolutionPresets->setSelectedIndex(index, false);
+    _resolutionWidth->setValue(static_cast<float>(resolution.x));
+    _resolutionHeight->setValue(static_cast<float>(resolution.y));
 }
 
 void EditorUICanvasTab::onAttached()
@@ -465,7 +565,12 @@ void EditorUICanvasTab::tick(float deltaSeconds)
 {
     UICompoundWidget::tick(deltaSeconds);
     // Next frame's canvas is sized from where this tab is laid out now.
-    _designer->canvas().extent = _image->_layoutRect.extent;
+    EditorUICanvasView& view = _designer->canvas();
+    view.extent              = _image->_layoutRect.extent;
+    if (view.bFitPending && view.fitTo(glm::vec2(_designer->designResolution()))) {
+        view.bFitPending = false;
+    }
+    syncResolution();
     pushPicture();
 }
 

@@ -112,6 +112,11 @@ struct EditorUIDesignerSession
     // === Canvas view (the Canvas tab's navigation and picture) ===
     [[nodiscard]] EditorUICanvasView&       canvas() { return _canvas; }
     [[nodiscard]] const EditorUICanvasView& canvas() const { return _canvas; }
+    /// Preview tree size: the resolution the game lays this UI out at. A
+    /// designer setting, not document data -- the same document runs at any
+    /// window size. Changing it re-lays the preview and refits the canvas.
+    void setDesignResolution(glm::uvec2 size);
+    [[nodiscard]] glm::uvec2 designResolution() const { return _designResolution; }
 
     // === Preview (independent WidgetTree, never shared with the runtime) ===
     /// Build the immutable preview frame. `uiScale`/`offset` map tree-local
@@ -189,8 +194,13 @@ struct EditorUIDesignerSession
     static EDropPos computeDropPos(float itemMinY, float itemMaxY, float mouseY);
     /// Apply a designer-tree drag-drop (reparent/reorder in the preview).
     void applyWidgetDrop(UIElement* dragged, UIElement& target, EDropPos position);
-    /// Add a widget from the palette under the current selection (or document root).
+    /// Add a widget from the palette into the selected host (or the document
+    /// root). A selected leaf (no layout) cannot host children, so the new
+    /// widget goes right after it instead.
     [[nodiscard]] bool addPaletteWidget(const std::string& typeId);
+    /// Copy `widget`'s subtree and parent slot in right after it and select the
+    /// copy; one edit. The document root cannot be duplicated.
+    UIElement* duplicateWidget(UIElement* widget);
     /// Display name for palette entries (`engine.button` → `button`).
     [[nodiscard]] static std::string paletteDisplayName(const std::string& typeId);
 
@@ -222,6 +232,7 @@ struct EditorUIDesignerSession
     std::string _documentPath;
 
     EditorUICanvasView _canvas;
+    glm::uvec2         _designResolution = {1280, 720};
 
     // === Edit transaction state ===
     /// The preview as of the last commit: the "before" of the next edit.

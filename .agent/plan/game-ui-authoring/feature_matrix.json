@@ -197,9 +197,13 @@
     {
       "id": "designer_canvas_baseline",
       "phase": "P6/U4",
-      "status": "planned",
+      "status": "done",
       "evidence": [
-        "preview extent = design resolution; design frame drawn; zoom-to-fit on open; tree context menu Delete/Duplicate; palette never nests under leaf widgets"
+        "preview extent = design resolution; design frame drawn; zoom-to-fit on open; tree context menu Delete/Duplicate; palette never nests under leaf widgets",
+        "EditorUIDesignerSessionTest.APaletteWidgetGoesAfterASelectedLeafNotIntoIt",
+        "EditorUIDesignerSessionTest.DuplicateCopiesTheSubtreeAndSlotRightAfterTheOriginal",
+        "EditorUIDesignerSessionTest.TheDesignResolutionSizesThePreviewWithoutEditingTheDocument",
+        "EditorUIDesignerSessionTest.FitCentresTheDesignFrameInsideTheMargin"
       ]
     }
   ],

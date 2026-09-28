@@ -600,4 +600,94 @@ TEST(EditorUIDesignerSessionTest, AnAnchorPresetIsOneUndoableEdit)
     EXPECT_EQ(previewJson(designer), original);
 }
 
+TEST(EditorUIDesignerSessionTest, APaletteWidgetGoesAfterASelectedLeafNotIntoIt)
+{
+    auto& registry = UITypeRegistry::instance();
+    auto  root     = registry.createInstance(kTypeIdCanvasPanel);
+    auto  label    = registry.createInstance(kTypeIdText);
+    label->_name   = "Label";
+    root->addDetachedChild(label);
+
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+
+    designer.selectByChildPath({0});
+    ASSERT_TRUE(designer.addPaletteWidget(kTypeIdButton));
+    UIElement* previewRoot = designer.getPreviewRoot();
+    ASSERT_EQ(previewRoot->getChildren().size(), 2u);
+    EXPECT_EQ(previewRoot->getChildren()[0]->_name, "Label");
+    EXPECT_TRUE(previewRoot->getChildren()[0]->getChildren().empty()) << "a text cannot host children";
+    EXPECT_EQ(designer.getSelectedWidget(), previewRoot->getChildren()[1].get());
+
+    // A host still takes the new widget inside.
+    designer.selectByChildPath({1});
+    ASSERT_TRUE(designer.addPaletteWidget(kTypeIdText));
+    EXPECT_EQ(designer.findByChildPath({1})->getChildren().size(), 1u) << "a button hosts its content";
+}
+
+TEST(EditorUIDesignerSessionTest, DuplicateCopiesTheSubtreeAndSlotRightAfterTheOriginal)
+{
+    auto root = makeTwoChildCanvas();
+    root->getChildren()[0]->addDetachedChild(UITypeRegistry::instance().createInstance(kTypeIdText));
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    const nlohmann::json original = previewJson(designer);
+
+    EXPECT_EQ(designer.duplicateWidget(designer.getPreviewRoot()), nullptr);
+    UIElement* copy = designer.duplicateWidget(designer.findByChildPath({0}));
+    ASSERT_NE(copy, nullptr);
+    EXPECT_EQ(designer.getSelectedWidget(), copy);
+    EXPECT_EQ(designer.findByChildPath({1}), copy);
+    EXPECT_EQ(designer.findByChildPath({2})->_name, "Second");
+    EXPECT_EQ(copy->getChildren().size(), 1u);
+
+    const nlohmann::json edited = previewJson(designer);
+    EXPECT_EQ(edited["childSlots"][1], edited["childSlots"][0]) << "the copy keeps the original's placement";
+    EXPECT_EQ(edited["children"][1]["children"], edited["children"][0]["children"]);
+    EXPECT_EQ(designer.undoStack().undoCount(), 1u);
+    ASSERT_TRUE(designer.undoStack().undo());
+    EXPECT_EQ(previewJson(designer), original);
+}
+
+TEST(EditorUIDesignerSessionTest, TheDesignResolutionSizesThePreviewWithoutEditingTheDocument)
+{
+    auto             root = makeTwoChildCanvas();
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    EXPECT_TRUE(designer.canvas().bFitPending) << "opening a document asks the canvas to fit it";
+    designer.canvas().bFitPending = false;
+
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+    EXPECT_EQ(designer.getPreviewRoot()->_layoutRect.extent, glm::vec2(designer.designResolution()));
+    const nlohmann::json original = previewJson(designer);
+
+    designer.setDesignResolution({1920, 1080});
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+    EXPECT_EQ(designer.getPreviewRoot()->_layoutRect.extent, glm::vec2(1920.0f, 1080.0f));
+    EXPECT_TRUE(designer.canvas().bFitPending);
+    EXPECT_EQ(previewJson(designer), original);
+    EXPECT_EQ(designer.undoStack().undoCount(), 0u);
+    EXPECT_FALSE(designer.isDocumentDirty());
+}
+
+TEST(EditorUIDesignerSessionTest, FitCentresTheDesignFrameInsideTheMargin)
+{
+    EditorUICanvasView view;
+    EXPECT_FALSE(view.fitTo({1920.0f, 1080.0f})) << "no extent yet";
+    view.extent = {1000.0f, 600.0f};
+    ASSERT_TRUE(view.fitTo({1920.0f, 1080.0f}, 24.0f));
+    EXPECT_FLOAT_EQ(view.zoom, 952.0f / 1920.0f);
+    const glm::vec2 lo = view.canvasToView({0.0f, 0.0f});
+    const glm::vec2 hi = view.canvasToView({1920.0f, 1080.0f});
+    EXPECT_FLOAT_EQ(lo.x, 24.0f);
+    EXPECT_FLOAT_EQ(hi.x, 976.0f);
+    EXPECT_FLOAT_EQ(lo.y + hi.y, 600.0f) << "centred vertically";
+}
+
 } // namespace ya

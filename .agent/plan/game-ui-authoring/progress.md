@@ -181,3 +181,20 @@ plan.md Phase 6 基线表：新建硬编码 `"panel"` 必失败、无 Open / Sav
 - 手测（待用户）：选中画布子控件看到「Canvas Slot」分组与锚点按钮；点 BR 贴右下、Fill 铺满，
   Ctrl+Z 一步回退；拖 offset 数值一次松手一步撤销；选 column 里的子控件看到「Box Slot」，
   Size Rule 是下拉框；画布拖动控件时 Slot 分组的 offset 跟着变。
+
+### U4 画布与层级补齐基线（落地）
+
+- 设计分辨率：`EditorUIDesignerSession::setDesignResolution` 设预览树 logical extent（默认 1280×720），
+  是设计器设置，不进文档、不产生撤销步。画布 tab 顶部工具条：预设下拉（含 Custom）+ 宽 / 高数值框 +
+  Fit；会话在别处改了分辨率时工具条跟随。画布上画设计框（1px 灰边）。
+- 适配：打开 / 新建文档与改分辨率时置 `EditorUICanvasView::bFitPending`，画布 tab 在拿到自身尺寸
+  后 `fitTo`（打开时 tab 可能还没布局）；Fit 按钮手动触发。
+- 层级右键：先选中该节点，菜单项取 UI root 的 `selection.duplicate` / `selection.delete`（与
+  Ctrl+D / Delete 同一 action；UI 页 Edit 菜单的 Duplicate 也因此可用）。`duplicateWidget` 复制子树与
+  父 slot 状态，插在原控件之后并选中副本，名字加 `_copy`。
+- Palette：选中控件没有 layout（叶子）时插到它之后；文档根没有 layout 时拒绝并告警。
+- 验证：`ya-testing` 1407 通过 / 1 跳过；`ya-gui-closure-test` 614 通过；HelloMaterial、GreedySnake
+  编辑器 120 帧 exit 0（smoke 不进 UI 页，工具条 / 右键菜单 / 设计框需手测）。
+- 手测（待用户）：打开 `.yaui` 后画布自动缩放到设计框居中；切 1920×1080 / 竖屏后锚点布局按新尺寸
+  重排并重新适配；改宽高数值框下拉变 Custom；层级右键 Duplicate / Delete 各一步撤销；选中 Text
+  点 Palette 的 Button，Button 出现在 Text 之后而不是里面。

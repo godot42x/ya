@@ -10,20 +10,25 @@
 namespace ya
 {
 
+class ActionMap;
 struct EditorLayer;
 struct EditorUIDesignerSession;
 class EditorUISlotEdit;
 struct IImage;
 struct IImageView;
 struct Texture;
+struct UIComboBox;
 struct UIElement;
 struct UIImage;
+struct UISpinBox;
 struct WidgetTree;
 
 class EditorUIHierarchyTab : public UICompoundWidget
 {
   public:
-    explicit EditorUIHierarchyTab(EditorLayer& layer);
+    /// `actions` is the UI page root's map: the context menu runs the same
+    /// Duplicate / Delete the shortcuts do.
+    EditorUIHierarchyTab(EditorLayer& layer, ActionMap* actions);
     void onAttached() override;
     void tick(float deltaSeconds) override;
 
@@ -31,7 +36,8 @@ class EditorUIHierarchyTab : public UICompoundWidget
     void construct() override;
 
   private:
-    EditorLayer* _layer = nullptr;
+    EditorLayer* _layer   = nullptr;
+    ActionMap*   _actions = nullptr;
     std::shared_ptr<ReactiveList<UITreeView::FNode>> _roots;
     std::shared_ptr<Reactive<std::string>> _selection;
     std::shared_ptr<UITreeView> _treeView;
@@ -39,6 +45,7 @@ class EditorUIHierarchyTab : public UICompoundWidget
     std::string _selectionFingerprint;
 
     void refresh();
+    void openContextMenu(const std::string& nodeId, const glm::vec2& logicalPoint);
 };
 
 class EditorUIInspectorTab : public UICompoundWidget
@@ -88,6 +95,11 @@ class EditorUICanvasTab : public UICompoundWidget
 {
     EditorUIDesignerSession*    _designer = nullptr;
     std::shared_ptr<UIImage>    _image;
+    /// Design resolution toolbar; follows the session when it changes elsewhere.
+    std::shared_ptr<UIComboBox> _resolutionPresets;
+    std::shared_ptr<UISpinBox>  _resolutionWidth;
+    std::shared_ptr<UISpinBox>  _resolutionHeight;
+    glm::uvec2                  _shownResolution = {0, 0};
     /// Chrome wrap of the canvas picture, rebuilt only when the picture's
     /// image or view changes (a resize), not every frame.
     std::shared_ptr<Texture>    _texture;
@@ -119,6 +131,7 @@ class EditorUICanvasTab : public UICompoundWidget
     void beginPress(const glm::vec2& viewPoint);
     void endGesture();
     void pushPicture();
+    void syncResolution();
 };
 
 } // namespace ya

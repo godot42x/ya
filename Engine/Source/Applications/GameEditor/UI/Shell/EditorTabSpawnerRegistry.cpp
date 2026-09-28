@@ -198,7 +198,7 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
             if (!ctx.layer) {
                 return nullptr;
             }
-            return std::make_shared<EditorUIHierarchyTab>(*ctx.layer);
+            return std::make_shared<EditorUIHierarchyTab>(*ctx.layer, ctx.actions);
         },
     });
     registry.add({

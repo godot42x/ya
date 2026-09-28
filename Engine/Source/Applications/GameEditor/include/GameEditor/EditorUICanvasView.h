@@ -34,10 +34,26 @@ struct EditorUICanvasView
     /// How many canvas tabs are on screen. The compositor records only while
     /// this is nonzero; a count because each editor window may host one.
     uint32_t                       shownCount = 0;
+    /// Set when a document opens or the design size changes. The canvas tab
+    /// fits once it knows its on-screen extent (it may not be laid out yet).
+    bool                           bFitPending = false;
 
     [[nodiscard]] bool isShown() const { return shownCount > 0; }
 
     void setZoom(float value) { zoom = std::clamp(value, kMinZoom, kMaxZoom); }
+
+    /// Zoom so `content` (canvas px) fits the view with `margin` view px
+    /// around it, centred. False while the view has no extent.
+    bool fitTo(const glm::vec2& content, float margin = 24.0f)
+    {
+        const glm::vec2 room = extent - glm::vec2(2.0f * margin);
+        if (room.x <= 0.0f || room.y <= 0.0f || content.x <= 0.0f || content.y <= 0.0f) {
+            return false;
+        }
+        setZoom(std::min(room.x / content.x, room.y / content.y));
+        pan = (extent - content * zoom) * 0.5f;
+        return true;
+    }
 
     /// Zoom by `factor` keeping the canvas point under `viewPoint` in place.
     void zoomAt(const glm::vec2& viewPoint, float factor)

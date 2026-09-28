@@ -283,6 +283,7 @@ void EditorUIDesignerSession::openDocument(std::string_view path)
         (void)closeSession(EEditorDocumentCloseMode::Force);
         return;
     }
+    _canvas.bFitPending = true;
     _documentPath = std::string(path);
     if (_owner) {
         _owner->showUIDesignerCanvas();
@@ -301,6 +302,7 @@ void EditorUIDesignerSession::openUntitled(const std::shared_ptr<UIDocument>& do
         (void)closeSession(EEditorDocumentCloseMode::Force);
         return;
     }
+    _canvas.bFitPending = true;
     _documentPath.clear();
     if (_owner) {
         _owner->showUIDesignerCanvas();
@@ -310,7 +312,7 @@ void EditorUIDesignerSession::openUntitled(const std::shared_ptr<UIDocument>& do
 bool EditorUIDesignerSession::installPreview(const std::shared_ptr<UIDocument>& document)
 {
     _document     = document;
-    _previewTree  = std::make_unique<WidgetTree>(Extent2D{800, 600});
+    _previewTree  = std::make_unique<WidgetTree>(Extent2D{_designResolution.x, _designResolution.y});
     _previewTree->setTextureSource(&gameUITextureSource());
     _previewRoot  = document->instantiate();
     _selected     = nullptr;
@@ -336,6 +338,19 @@ bool EditorUIDesignerSession::installPreview(const std::shared_ptr<UIDocument>& 
     _committedJson      = baseline ? baseline->toJson() : nlohmann::json();
     _committedSelection = childPathOf(_selected);
     return true;
+}
+
+void EditorUIDesignerSession::setDesignResolution(glm::uvec2 size)
+{
+    size = glm::max(size, glm::uvec2(16));
+    if (size == _designResolution) {
+        return;
+    }
+    _designResolution = size;
+    if (_previewTree) {
+        _previewTree->setLogicalExtent(Extent2D{size.x, size.y});
+    }
+    _canvas.bFitPending = true;
 }
 
 void EditorUIDesignerSession::newDocument(const std::string& typeId)
@@ -521,14 +536,51 @@ bool EditorUIDesignerSession::addPaletteWidget(const std::string& typeId)
     }
     widget->_name = shortTypeName(typeId);
 
-    UIElement* parent = (_selected && _selected->isAttached()) ? _selected : _previewRoot.get();
-    if (!parent) {
+    UIElement* target = (_selected && _selected->isAttached()) ? _selected : _previewRoot.get();
+    if (!target) {
         return false;
     }
-    _previewTree->attach(*parent, widget);
+    if (target->getLayout()) {
+        _previewTree->attach(*target, widget);
+    }
+    else if (target != _previewRoot.get() && target->getParent()) {
+        _previewTree->attach(*target->getParent(), widget);
+        _previewTree->reparentAfter(*target, widget);
+    }
+    else {
+        YA_CORE_WARN("EditorUIDesignerSession: document root '{}' has no layout and cannot hold '{}'",
+                     target->_name,
+                     typeId);
+        return false;
+    }
     _selected = widget.get();
     commitEdit("Add " + widget->_name);
     return true;
+}
+
+UIElement* EditorUIDesignerSession::duplicateWidget(UIElement* widget)
+{
+    if (!widget || widget == _previewRoot.get() || !childPathOf(widget) || !_previewTree) {
+        return nullptr;
+    }
+    UIElement*                        parent   = widget->getParent();
+    const UISlot*                     slot     = parent->getSlotForChild(*widget);
+    const std::shared_ptr<UIDocument> document = UIDocument::fromWidget(*widget);
+    UIElementRef                      copy     = document ? document->instantiate() : nullptr;
+    if (!copy || !slot) {
+        YA_CORE_ERROR("EditorUIDesignerSession: failed to duplicate '{}'", widget->_name);
+        return nullptr;
+    }
+    nlohmann::json slotState;
+    slot->serialize(slotState);
+    copy->_name = widget->_name + "_copy";
+    _previewTree->attach(*parent, copy);
+    // Same parent, so the reorder keeps the copied slot.
+    parent->getSlotForChild(*copy)->deserialize(slotState);
+    _previewTree->reparentAfter(*widget, copy);
+    _selected = copy.get();
+    commitEdit("Duplicate " + widget->_name);
+    return copy.get();
 }
 
 void EditorUIDesignerSession::invalidatePreview()
