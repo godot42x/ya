@@ -554,13 +554,19 @@ void App::notifyModulesSceneDestroyed(Scene* scene)
 }
 
 
-INativeWindow* App::getOrCreateMainNativeWindow(const WindowCreateInfo& ci)
+INativeWindow* App::getOrCreateMainNativeWindow(WindowCreateInfo ci)
 {
     if (!_nativeWindowManager) {
         return nullptr;
     }
     if (auto* window = _nativeWindowManager->getMainWindow()) {
         return window;
+    }
+    // Editor launched without a project leads with the launch flow's windows;
+    // the shell window is created hidden and shown once chrome exists. The
+    // policy lives here so every creation site (device init included) agrees.
+    if (_ci.bEditor && !_ci.projectPath.has_value()) {
+        ci.bHidden = true;
     }
     INativeWindow* window = _nativeWindowManager->createMainWindow(ci);
     if (window) {

@@ -25,7 +25,9 @@ struct IRenderRuntimeHostServices
 
     // Ensure a main window exists (creates one with the given info when the
     // host has none yet, e.g. headless test bootstrap) and return it.
-    virtual INativeWindow* getOrCreateMainNativeWindow(const WindowCreateInfo& ci) = 0;
+    /// Takes the info by value: the host may apply its own launch-visibility
+    /// policy (editor without a project creates the shell window hidden).
+    virtual INativeWindow* getOrCreateMainNativeWindow(WindowCreateInfo ci) = 0;
 
     // Authoritative shadow configuration + automation overrides.
     virtual ShadowSettings*                      getShadowSettings() = 0;

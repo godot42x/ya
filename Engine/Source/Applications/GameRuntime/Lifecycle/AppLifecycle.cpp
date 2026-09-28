@@ -222,6 +222,9 @@ void App::init(AppDesc ci)
     if (auto* render = app.getRenderServices().getRender()) {
         // The window exists already (the device was created for it), so this is
         // the app naming its own window -- not a renderer default.
+        // The editor's launch flow owns window phases: without a project the
+        // editor shell stays hidden while a dedicated browser / splash window
+        // leads, and shows this window once a project is open.
         INativeWindow* mainWindow = app.getOrCreateMainNativeWindow(WindowCreateInfo{
             .index      = 0,
             .renderAPI  = render->getAPI(),
@@ -230,6 +233,7 @@ void App::init(AppDesc ci)
             .height     = static_cast<uint32_t>(app._ci.height),
             .scale      = 1.0f,
             .bResizable = true,
+            .bHidden    = app._ci.bEditor && !app._ci.projectPath.has_value(),
         });
         app._renderState->hostSurfaceId = mainWindow ? render->findSurfaceId(*mainWindow) : SurfaceId{};
 

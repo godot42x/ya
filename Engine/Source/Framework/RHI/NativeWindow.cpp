@@ -140,6 +140,9 @@ bool SDLNativeWindow::recreate(const WindowCreateInfo &ci)
     if (ci.bUtility) {
         flags |= SDL_WINDOW_UTILITY;
     }
+    if (ci.bHidden) {
+        flags |= SDL_WINDOW_HIDDEN;
+    }
 
     SDL_Window *window = SDL_CreateWindow(ci.title.c_str(), static_cast<int>(ci.width), static_cast<int>(ci.height), flags);
     if (!window) {

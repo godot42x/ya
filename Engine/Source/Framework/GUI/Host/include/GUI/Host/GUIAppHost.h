@@ -142,6 +142,15 @@ struct FGUIWindowHostConfig
     std::optional<EWindowChromeMode> chromeMode;
     /// Host-owned drag-ghost overlay: click-through, no taskbar, not an editor session.
     bool bDragOverlay = false;
+    /// Window-appearance flags for non-overlay sessions (launch splash etc.).
+    /// `bDragOverlay` implies all of them plus click-through; these are opt-in
+    /// per flag and compose with the resolved chrome mode.
+    bool bBorderless   = false;
+    bool bAlwaysOnTop  = false;
+    bool bTransparent  = false;
+    bool bNotFocusable = false;
+    bool bUtility      = false;
+    bool bMousePassthrough = false;
     /// Shared automation run policy. Zero means "run until closed".
     AppAutomationRunOptions automation;
 };

@@ -41,6 +41,9 @@ struct WindowCreateInfo
     bool          bNotFocusable = false;
     bool          bUtility = false;
     bool          bMousePassthrough = false;
+    /// Created without mapping (SDL_WINDOW_HIDDEN); the owner shows it when
+    /// its content is ready — a launch phase must not flash an empty window.
+    bool          bHidden = false;
     /// Empty = `processWindowIconPath()` (YA branding, or the packed game icon).
     std::string   iconPath;
 };

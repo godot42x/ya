@@ -85,6 +85,7 @@ GUIWindowId GUIWindowManager::createSession(const FGUIWindowHostConfig& config,
                                             ? EWindowChromeMode::ClientDrawn
                                             : config.chromeMode.value_or(defaultWindowChromeMode());
     const EWindowChromeMode resolved  = resolveWindowChromeMode(requested);
+    const bool bOverlay = config.bDragOverlay;
 
     INativeWindow* native = _nativeWindows.createWindow(WindowCreateInfo{
         .renderAPI          = render ? render->getAPI() : config.renderAPI,
@@ -92,13 +93,13 @@ GUIWindowId GUIWindowManager::createSession(const FGUIWindowHostConfig& config,
         .width              = config.width,
         .height             = config.height,
         .scale              = config.scale,
-        .bResizable         = config.bDragOverlay ? false : config.bResizable,
-        .bBorderless        = config.bDragOverlay || resolved == EWindowChromeMode::ClientDrawn,
-        .bAlwaysOnTop       = config.bDragOverlay,
-        .bTransparent       = config.bDragOverlay,
-        .bNotFocusable      = config.bDragOverlay,
-        .bUtility           = config.bDragOverlay,
-        .bMousePassthrough  = config.bDragOverlay,
+        .bResizable         = bOverlay ? false : config.bResizable,
+        .bBorderless        = bOverlay || config.bBorderless || resolved == EWindowChromeMode::ClientDrawn,
+        .bAlwaysOnTop       = bOverlay || config.bAlwaysOnTop,
+        .bTransparent       = bOverlay || config.bTransparent,
+        .bNotFocusable      = bOverlay || config.bNotFocusable,
+        .bUtility           = bOverlay || config.bUtility,
+        .bMousePassthrough  = bOverlay || config.bMousePassthrough,
     });
     if (!native) {
         return 0;
