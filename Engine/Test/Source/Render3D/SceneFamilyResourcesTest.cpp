@@ -1,7 +1,6 @@
 #include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/SceneFamilyResources.h"
-#include "Render3D/RenderFrameData.h"
 #include "RHI/Core/Buffer.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderResourceFactory.h"
@@ -73,13 +72,6 @@ ICommandBuffer* dummyCmdBuf(uintptr_t token)
     return reinterpret_cast<ICommandBuffer*>(token);
 }
 
-SceneSnapshot makeSnapshotWithPalettes(uint32_t count)
-{
-    SceneSnapshot snapshot;
-    snapshot.skinningPalettes.resize(count);
-    return snapshot;
-}
-
 } // namespace
 
 TEST(SceneFamilyResourcesTest, SameSceneViewsShareFamilyOwner)
@@ -145,31 +137,31 @@ TEST(SceneFamilyResourcesTest, DualSceneSkinningBuffersStayIndependent)
     RenderSubmission* live = pool.acquire(0, 1u, dummyCmdBuf(1));
     ASSERT_NE(live, nullptr);
 
-    SceneSnapshot snapA = makeSnapshotWithPalettes(1);
-    SceneSnapshot snapB = makeSnapshotWithPalettes(2);
     Scene                 sceneA("FamilyKeyA");
     Scene                 sceneB("FamilyKeyB");
-    SceneFamilyResources* familyA =
-        live->allocateSceneFamily(SceneViewFamilyKey{.scene = &sceneA}, &snapA);
-    SceneFamilyResources* familyB =
-        live->allocateSceneFamily(SceneViewFamilyKey{.scene = &sceneB}, &snapB);
+    SceneFamilyResources* familyA = live->allocateSceneFamily(SceneViewFamilyKey{.scene = &sceneA});
+    SceneFamilyResources* familyB = live->allocateSceneFamily(SceneViewFamilyKey{.scene = &sceneB});
     ASSERT_NE(familyA, nullptr);
     ASSERT_NE(familyB, nullptr);
 
-    ASSERT_TRUE(prepareSceneFamilySkinning(*live, *familyA, factory, nullptr, {}, "SceneA"));
-    ASSERT_TRUE(prepareSceneFamilySkinning(*live, *familyB, factory, nullptr, {}, "SceneB"));
-
-    ASSERT_NE(familyA->gpu().skinningBuffer, nullptr);
-    ASSERT_NE(familyB->gpu().skinningBuffer, nullptr);
-    EXPECT_NE(familyA->gpu().skinningBuffer.get(), familyB->gpu().skinningBuffer.get());
-    EXPECT_EQ(familyA->gpu().skinningPaletteCount, 1u);
-    EXPECT_EQ(familyB->gpu().skinningPaletteCount, 2u);
-
-    const IBuffer* bufferA = familyA->gpu().skinningBuffer.get();
-    const uint32_t countA  = familyA->gpu().skinningPaletteCount;
-    ASSERT_TRUE(prepareSceneFamilySkinning(*live, *familyB, factory, nullptr, {}, "SceneB"));
-    EXPECT_EQ(familyA->gpu().skinningBuffer.get(), bufferA);
-    EXPECT_EQ(familyA->gpu().skinningPaletteCount, countA);
+    // Buffers are scene-owned (SceneSkinningCache) and only bound here: with
+    // no render/layout the bind is a no-op success, and a missing buffer is
+    // rejected so beginView fails closed instead of importing null.
+    auto bufferA = std::make_shared<TestBuffer>(BufferCreateInfo{
+        .label = "SceneA",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 64,
+        .memoryUsage = EMemoryUsage::CpuToGpu,
+    });
+    auto bufferB = std::make_shared<TestBuffer>(BufferCreateInfo{
+        .label = "SceneB",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 64,
+        .memoryUsage = EMemoryUsage::CpuToGpu,
+    });
+    ASSERT_TRUE(prepareSceneFamilySkinning(*live, *familyA, bufferA, nullptr, {}));
+    ASSERT_TRUE(prepareSceneFamilySkinning(*live, *familyB, bufferB, nullptr, {}));
+    EXPECT_FALSE(prepareSceneFamilySkinning(*live, *familyA, nullptr, nullptr, {}));
 }
 
 TEST(SceneFamilyResourcesTest, FinishRejectsLaterFamilyAllocation)

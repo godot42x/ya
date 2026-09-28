@@ -26,6 +26,9 @@ void RenderDeviceState::prepareDerivedState(std::span<Scene* const> scenes, floa
 {
     // Each processor resolves work per Scene, so the second Scene of the tick
     // cannot drop or overwrite the first one's.
+    // Skinning buffers are scene-keyed the same way: a Scene this tick no
+    // longer renders has its flight buffers retired here.
+    _skinningCache.dropScenesAbsentFrom(scenes);
     if (_environmentLightingProcessor) {
         _environmentLightingProcessor->prepareScenes(scenes, dt);
     }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Common/Types.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "Render3D/Common/EnvironmentLightingSceneResources.h"
 
@@ -7,6 +8,7 @@ namespace ya
 {
 
 struct EnvironmentLightingProcessor;
+struct IBuffer;
 
 /// The Scene-keyed GPU bindings one View's passes bind while recording.
 ///
@@ -25,6 +27,11 @@ struct RenderViewSceneResources
     DescriptorSetHandle               skyboxDescriptorSet{};
     DescriptorSetHandle               environmentLightingDescriptorSet{};
 
+    /// Scene skinning palette buffer, resolved before the graph is built and
+    /// shared by every pass of the View. Stable across frames while the Scene
+    /// content is unchanged, so graph imports of it never churn.
+    stdptr<IBuffer>                   skinningBuffer;
+
     [[nodiscard]] bool hasEnvironmentLighting() const { return environmentLighting != nullptr; }
     [[nodiscard]] bool hasSkybox() const { return static_cast<bool>(skyboxDescriptorSet); }
 
@@ -34,6 +41,7 @@ struct RenderViewSceneResources
         environmentLightingResources = {};
         skyboxDescriptorSet = {};
         environmentLightingDescriptorSet = {};
+        skinningBuffer.reset();
     }
 };
 

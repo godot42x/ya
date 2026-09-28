@@ -29,6 +29,7 @@
 #include "Render3D/Services/GameplayResourceBinding.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Terrain/TerrainProcessor.h"
+#include "Render3D/Common/SceneSkinningCache.h"
 
 #include <functional>
 #include <glm/glm.hpp>
@@ -55,6 +56,8 @@ struct RenderFrameData;
 struct RenderViewSceneResources;
 struct DebugRenderSystem;
 struct Node;
+struct SceneSnapshot;
+struct SceneViewTask;
 
 /// Device-lifetime backend, persistent renderer services, fence-safe mutations,
 /// and the steps one frame's recording is made of. It owns the machinery, not
@@ -112,6 +115,10 @@ struct YA_RENDER_3D_API RenderDeviceState
     ERenderAPI::T  currentRenderAPI      = ERenderAPI::None;
 
     RenderSharedResourceProvider  _sharedResourceProvider{};
+    /// Scene skinning palette buffers, one flight ring per Scene. Resolved per
+    /// View before recording (see resolveViewSceneResources) so graph imports
+    /// stay pointer-stable while the Scene content is unchanged.
+    SceneSkinningCache            _skinningCache{};
     RenderDiagnosticsService     _diagnostics{};
     PipelineCoordinator          _pipelineCoordinator{};
     ScreenDrawPipelines          _screenDrawPipelines{};
@@ -138,11 +145,16 @@ struct YA_RENDER_3D_API RenderDeviceState
     void shutdown(bool bRenderAlreadyIdle = false);
 
     /// Resolve the Scene-keyed GPU bindings one View's passes bind (skybox /
-    /// IBL descriptor sets and derived resources). Called per View before
-    /// recording starts, so a pass reads its own View's scene resources instead
-    /// of asking this owner which Scene is current. Not const: binding a Scene's
-    /// skybox/IBL descriptor set updates the cached binding for that set.
-    void resolveViewSceneResources(Scene* scene, RenderViewSceneResources& out);
+    /// IBL descriptor sets, derived resources and the skinning buffer). Called
+    /// per View before recording starts, so a pass reads its own View's scene
+    /// resources instead of asking this owner which Scene is current. Not
+    /// const: binding a Scene's skybox/IBL descriptor set updates the cached
+    /// binding for that set, and resolving the skinning buffer uploads this
+    /// flight's palette bytes on content change.
+    void resolveViewSceneResources(const SceneViewTask*                          task,
+                                   const std::shared_ptr<const SceneSnapshot>&   snapshot,
+                                   RenderViewSceneResources&                     out,
+                                   uint32_t                                      flightIndex);
     /// Prepare the derived processors for exactly this frame's Scenes, then
     /// rewrite the IBL sets those Scenes asked for. The Scene set is the
     /// tick's declaration: a Scene it does not name has its derived state

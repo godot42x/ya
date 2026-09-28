@@ -9,7 +9,6 @@
 #include "Render3D/RenderFrameData.h"
 
 #include <algorithm>
-#include <format>
 
 namespace ya
 {
@@ -43,76 +42,22 @@ SceneFamilyResources* allocateSceneFamilyForView(
     RenderSubmission&                 submission,
     const RenderViewRecordingContext& view)
 {
-    const SceneSnapshot* snapshot = nullptr;
-    if (view.frameData) {
-        snapshot = view.frameData->sceneSnapshot.get();
-    }
     if (view.task) {
-        return submission.allocateSceneFamily(makeSceneViewFamilyKey(*view.task), snapshot);
+        return submission.allocateSceneFamily(makeSceneViewFamilyKey(*view.task));
     }
-    return submission.allocateSceneFamily(SceneViewFamilyKey{}, snapshot);
+    return submission.allocateSceneFamily(SceneViewFamilyKey{});
 }
 
 bool prepareSceneFamilySkinning(
     RenderSubmission&                   submission,
     SceneFamilyResources&               family,
-    IRenderResourceFactory&             factory,
+    const stdptr<IBuffer>&              skinningBuffer,
     IRender*                            render,
-    const stdptr<IDescriptorSetLayout>& layout,
-    std::string_view                    label)
+    const stdptr<IDescriptorSetLayout>& layout)
 {
-    if (!submission.isRecording()) {
+    if (!submission.isRecording() || !skinningBuffer) {
         return false;
     }
-
-    const std::vector<RenderSkinningPalette>* palettes = nullptr;
-    if (family.snapshot()) {
-        palettes = &family.snapshot()->skinningPalettes;
-        if (palettes->size() > std::numeric_limits<uint32_t>::max()) {
-            YA_CORE_ERROR("{} skinning palette count exceeds uint32 range", label);
-            return false;
-        }
-    }
-    const uint32_t paletteCount = palettes ? static_cast<uint32_t>(palettes->size()) : 0u;
-
-    SceneFamilyGpuPacket& gpu = family.gpu();
-    if (!gpu.skinningBuffer || gpu.skinningCapacity < std::max(1u, paletteCount)) {
-        const auto nextCapacity = calculateSceneFamilySkinningCapacity(gpu.skinningCapacity, paletteCount);
-        if (!nextCapacity.has_value()) {
-            YA_CORE_ERROR("{} skinning palette count {} exceeds buffer size limit", label, paletteCount);
-            return false;
-        }
-
-        auto nextBuffer = factory.createBuffer(BufferCreateInfo{
-            .label       = std::format("{}_Skinning_SSBO_family", label),
-            .usage       = EBufferUsage::StorageBuffer,
-            .size        = static_cast<uint32_t>(*nextCapacity * sizeof(RenderSkinningPalette)),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-        if (!nextBuffer) {
-            YA_CORE_ERROR("{} failed to create scene-family skinning buffer", label);
-            return false;
-        }
-
-        if (gpu.skinningBuffer) {
-            submission.retain(gpu.skinningBuffer);
-        }
-        gpu.skinningBuffer     = std::move(nextBuffer);
-        gpu.skinningCapacity   = *nextCapacity;
-        gpu.skinningUploaded   = false;
-        submission.retain(gpu.skinningBuffer);
-    }
-
-    gpu.skinningPaletteCount = paletteCount;
-    if (!gpu.skinningUploaded && palettes && !palettes->empty()) {
-        const uint32_t byteCount = paletteCount * sizeof(RenderSkinningPalette);
-        if (!gpu.skinningBuffer->writeData(palettes->data(), byteCount, 0) ||
-            !gpu.skinningBuffer->flush(byteCount, 0)) {
-            YA_CORE_ERROR("{} failed to upload scene-family skinning palettes", label);
-            return false;
-        }
-    }
-    gpu.skinningUploaded = true;
 
     if (!render || !layout) {
         return true;
@@ -122,7 +67,7 @@ bool prepareSceneFamilySkinning(
     if (!set) {
         set = submission.allocateDescriptorSet(layout, 1, EPipelineDescriptorType::StorageBuffer);
         if (!set) {
-            YA_CORE_ERROR("{} failed to allocate scene-family skinning descriptor set", label);
+            YA_CORE_ERROR("Failed to allocate scene-family skinning descriptor set");
             return false;
         }
         family.storeSkinningDescriptorSet(layout.get(), set);
@@ -133,7 +78,7 @@ bool prepareSceneFamilySkinning(
             set,
             0,
             EPipelineDescriptorType::StorageBuffer,
-            gpu.skinningBuffer.get())},
+            skinningBuffer.get())},
         {});
     return true;
 }

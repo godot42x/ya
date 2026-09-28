@@ -387,6 +387,7 @@ void RenderDeviceState::destroyRenderBackend()
         return;
     }
 
+    _skinningCache.clear();
     DeferredDeletionQueue::get().flushAll();
 
     _render->destroy();

@@ -54,19 +54,17 @@ bool RenderSubmission::finish()
 }
 
 SceneFamilyResources* RenderSubmission::allocateSceneFamily(
-    const SceneViewFamilyKey& key,
-    const SceneSnapshot* snapshot)
+    const SceneViewFamilyKey& key)
 {
     if (!isRecording()) {
         return nullptr;
     }
     for (auto& family : _families) {
         if (family && family->key() == key) {
-            family->bindSnapshot(snapshot);
             return family.get();
         }
     }
-    _families.push_back(std::make_unique<SceneFamilyResources>(key, snapshot));
+    _families.push_back(std::make_unique<SceneFamilyResources>(key));
     return _families.back().get();
 }
 

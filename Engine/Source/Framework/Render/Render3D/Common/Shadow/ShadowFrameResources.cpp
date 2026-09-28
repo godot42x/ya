@@ -43,12 +43,11 @@ bool ShadowFrameResources::prepareSkinning(
     const RenderViewRecordingContext& view)
 {
     SceneFamilyResources* family = allocateSceneFamilyForView(submission, view);
-    IRenderResourceFactory* factory = submission.resourceFactory();
-    if (!family || !factory) {
+    if (!family || !view.frameData) {
         return false;
     }
     return prepareSceneFamilySkinning(
-        submission, *family, *factory, _render, _skinningDSL, _resourceTag);
+        submission, *family, view.frameData->sceneResources.skinningBuffer, _render, _skinningDSL);
 }
 
 bool ShadowFrameResources::ensureViewDescriptors(
@@ -245,7 +244,7 @@ const ShadowFrameResources::Binding* ShadowFrameResources::beginView(
         return nullptr;
     }
     slot->skinningDS     = family->skinningDescriptorSet(_skinningDSL.get());
-    slot->skinningBuffer = family->gpu().skinningBuffer;
+    slot->skinningBuffer = view.frameData->sceneResources.skinningBuffer;
 
     const ViewPayloads payloads = buildViewPayloads(payload);
     if (!ensureViewDescriptors(submission, *slot, payloads.directionalCount, payloads.pointFaceCount)) {

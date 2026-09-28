@@ -5,6 +5,9 @@
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
 #include "RHI/Core/CommandBuffer.h"
+#include "Render3D/RenderFrameData.h"
+
+#include <limits>
 #include <vector>
 
 namespace ya
@@ -115,23 +118,56 @@ void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan)
     // with empty IBL/skybox bindings rather than an obviously wrong one.
     for (const SceneViewRecording& recording : plan.sceneRender.views()) {
         if (recording.frameData) {
-            resolveViewSceneResources(recording.task ? recording.task->desc.scene : nullptr,
-                                      recording.frameData->sceneResources);
+            resolveViewSceneResources(recording.task,
+                                      recording.frameData->sceneSnapshot,
+                                      recording.frameData->sceneResources,
+                                      plan.frame.flightIndex);
         }
     }
 }
 
-void RenderDeviceState::resolveViewSceneResources(Scene* scene, RenderViewSceneResources& out)
+void RenderDeviceState::resolveViewSceneResources(const SceneViewTask*                        task,
+                                                  const std::shared_ptr<const SceneSnapshot>& snapshot,
+                                                  RenderViewSceneResources&                   out,
+                                                  uint32_t                                    flightIndex)
 {
     // Same calls the passes used to make through the services interface, moved
     // to the point where the View's Scene is known and recording has not begun.
     // Nothing here reads "the current Scene": the caller names the Scene.
     out.clear();
+    Scene* scene = task ? task->desc.scene : nullptr;
     out.environmentLighting            = _environmentLightingProcessor.get();
     out.environmentLightingResources   = _sharedResourceProvider.resolveSceneEnvironmentLightingResources(scene);
     out.skyboxDescriptorSet            = _sharedResourceProvider.getSceneSkyboxDescriptorSet(scene);
     out.environmentLightingDescriptorSet =
         _sharedResourceProvider.getSceneEnvironmentLightingDescriptorSet(scene);
+
+    // Scene skinning palettes, shared by every pass of the View. Resolved here
+    // (after the flight fence wait, before any command is recorded) so the
+    // buffer pointer stays stable while the content is unchanged -- graph
+    // imports of it then never churn through the DeferredDeletionQueue.
+    IRenderResourceFactory* factory = _render ? _render->getResourceFactory() : nullptr;
+    if (!factory) {
+        YA_CORE_ERROR("RenderDeviceState cannot resolve the skinning buffer without a resource factory");
+        return;
+    }
+    const RenderSkinningPalette* palettes     = nullptr;
+    uint32_t                     paletteCount = 0;
+    if (snapshot && !snapshot->skinningPalettes.empty()) {
+        if (snapshot->skinningPalettes.size() > std::numeric_limits<uint32_t>::max()) {
+            YA_CORE_ERROR("RenderDeviceState skinning palette count exceeds uint32 range");
+            return;
+        }
+        palettes     = snapshot->skinningPalettes.data();
+        paletteCount = static_cast<uint32_t>(snapshot->skinningPalettes.size());
+    }
+    out.skinningBuffer = _skinningCache.resolve(scene,
+                                                task ? task->desc.sceneRevision : 0,
+                                                palettes,
+                                                paletteCount,
+                                                flightIndex,
+                                                *factory,
+                                                "SceneSkinning");
 }
 
 FSurfaceImage RenderDeviceState::surfaceImageFor(const RenderViewOutput* output) const

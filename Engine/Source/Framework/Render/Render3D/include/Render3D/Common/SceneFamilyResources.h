@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
-#include <string_view>
 #include <vector>
 
 namespace ya
@@ -16,25 +15,13 @@ namespace ya
 
 struct IDescriptorSetLayout;
 struct IRender;
-struct IRenderResourceFactory;
 class RenderSubmission;
 struct RenderViewRecordingContext;
-struct SceneSnapshot;
 
-/// GPU packet shared by every View in one Scene family.
-/// Skinning SSBO is family-owned; descriptor sets are per pipeline layout
-/// wrapping that same buffer.
-struct SceneFamilyGpuPacket
-{
-    stdptr<IBuffer> skinningBuffer;
-    uint32_t        skinningPaletteCount = 0;
-    uint32_t        skinningCapacity     = 0;
-    bool            skinningUploaded     = false;
-};
-
-/// Submission-owned Scene family. Views store a pointer; they do not own
-/// skinning or the scene GPU packet. Different keys yield different instances
-/// even inside the same command buffer.
+/// Submission-owned Scene family. Views store a pointer; skinning buffers are
+/// scene-owned (see SceneSkinningCache) and only referenced from here through
+/// the View's prepared data. Different keys yield different instances even
+/// inside the same command buffer.
 class SceneFamilyResources
 {
     struct SkinningSet
@@ -43,27 +30,15 @@ class SceneFamilyResources
         DescriptorSetHandle         set{};
     };
 
-    SceneViewFamilyKey          _key;
-    const SceneSnapshot*        _snapshot = nullptr;
-    SceneFamilyGpuPacket        _gpu;
-    std::vector<SkinningSet>    _skinningSets;
+    SceneViewFamilyKey       _key;
+    std::vector<SkinningSet> _skinningSets;
 
   public:
-    explicit SceneFamilyResources(SceneViewFamilyKey key, const SceneSnapshot* snapshot = nullptr)
-        : _key(key), _snapshot(snapshot)
+    explicit SceneFamilyResources(SceneViewFamilyKey key)
+        : _key(key)
     {}
 
     [[nodiscard]] const SceneViewFamilyKey& key() const { return _key; }
-    [[nodiscard]] const SceneSnapshot* snapshot() const { return _snapshot; }
-    void bindSnapshot(const SceneSnapshot* snapshot)
-    {
-        if (!_snapshot) {
-            _snapshot = snapshot;
-        }
-    }
-
-    [[nodiscard]] SceneFamilyGpuPacket&       gpu() { return _gpu; }
-    [[nodiscard]] const SceneFamilyGpuPacket& gpu() const { return _gpu; }
 
     [[nodiscard]] DescriptorSetHandle skinningDescriptorSet(const IDescriptorSetLayout* layout) const
     {
@@ -101,12 +76,18 @@ class SceneFamilyResources
     RenderSubmission&                 submission,
     const RenderViewRecordingContext& view);
 
+/**
+ * @brief Bind the scene-wide skinning buffer into this family's descriptor set.
+ *
+ * The buffer itself is owned by the SceneSkinningCache and resolved before the
+ * graph is built; the family only owns the per-layout descriptor set wrapping
+ * it (allocated from the recording submission, like all submission-owned sets).
+ */
 bool prepareSceneFamilySkinning(
     RenderSubmission&                   submission,
     SceneFamilyResources&               family,
-    IRenderResourceFactory&             factory,
+    const stdptr<IBuffer>&              skinningBuffer,
     IRender*                            render,
-    const stdptr<IDescriptorSetLayout>& layout,
-    std::string_view                    label);
+    const stdptr<IDescriptorSetLayout>& layout);
 
 } // namespace ya

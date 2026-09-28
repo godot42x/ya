@@ -104,12 +104,11 @@ bool DeferredFrameResourceSet::prepareSkinning(
     const RenderViewRecordingContext& view)
 {
     SceneFamilyResources* family = allocateSceneFamilyForView(submission, view);
-    IRenderResourceFactory* factory = submission.resourceFactory();
-    if (!family || !factory) {
+    if (!family || !view.frameData) {
         return false;
     }
     return prepareSceneFamilySkinning(
-        submission, *family, *factory, _render, _skinningDSL, _resourceTag);
+        submission, *family, view.frameData->sceneResources.skinningBuffer, _render, _skinningDSL);
 }
 
 bool DeferredFrameResourceSet::ensureViewDescriptors(RenderSubmission& submission, Binding& binding)
@@ -283,7 +282,7 @@ const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
         return nullptr;
     }
     slot->frame.skinningDescriptorSet = family->skinningDescriptorSet(_skinningDSL.get());
-    slot->frame.skinningBuffer        = family->gpu().skinningBuffer;
+    slot->frame.skinningBuffer        = view.frameData->sceneResources.skinningBuffer;
 
     if (!ensureViewDescriptors(submission, slot->frame)) {
         YA_CORE_ERROR("Deferred beginView failed to allocate view descriptor sets");
