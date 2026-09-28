@@ -619,3 +619,9 @@ Phase 5 的 runtime 验收：“orthographic game scene renders authored sprites
 
 - 画布目标按逻辑像素建（与旧 Level 2D 路径一致），HiDPI 下偏糊；预览树仍固定 800×600。
 - V3（Ortho 移出 Play 工具栏）单独提交。
+
+## 2026-09-28 — Ortho 移出 Play 工具栏（V3）
+
+- Play 工具栏只剩 Play / Simulate / Stop 与状态文字。
+- `viewport.ortho` 在 View 菜单里是可勾选项，勾选态读 `EditorLayer::isEditorOrthoXY()`；action 与快捷键不变。
+- 验证：`xmake b ya-game-editor` 通过；GreedySnake 编辑器 120 帧 exit=0。

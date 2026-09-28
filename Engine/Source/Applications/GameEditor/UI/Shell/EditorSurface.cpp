@@ -396,8 +396,12 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
         });
     });
     _menuBar->addItem("View", [this]() {
+        // Ortho XY is a camera option of the Level viewport (world 2D authoring).
+        UIMenu::FItem orthoItem = UIMenu::FItem::fromAction(_rootSession->actions(), "viewport.ortho");
+        orthoItem.bCheckable    = true;
+        orthoItem.bChecked      = _layer && _layer->isEditorOrthoXY();
         std::vector<UIMenu::FItem> items = {
-            UIMenu::FItem::fromAction(_rootSession->actions(), "viewport.ortho"),
+            std::move(orthoItem),
             UIMenu::FItem::separator(),
             UIMenu::FItem::fromAction(_rootSession->actions(), "editor.settings"),
         };
