@@ -132,8 +132,8 @@ void EditorHierarchyTab::construct()
                             _layer->setSelectedEntity(moved);
                         }
                     })
-                    .setOnContextMenu([this](const std::string&, const glm::vec2& logicalPoint) {
-                        openContextMenu(logicalPoint);
+                    .setOnContextMenu([this](const std::string& targetId, const glm::vec2& logicalPoint) {
+                        openContextMenu(targetId, logicalPoint);
                     })
                     .share();
 
@@ -249,16 +249,65 @@ void EditorHierarchyTab::pullSelectionFromLayer()
     _selection->replace(std::move(ids), std::move(primary));
 }
 
-void EditorHierarchyTab::openContextMenu(const glm::vec2& logicalPoint)
+void EditorHierarchyTab::openContextMenu(const std::string& targetId, const glm::vec2& logicalPoint)
 {
     WidgetTree* tree = getTree();
     if (!tree || !_actions || !_layer) {
         return;
     }
-    std::vector<UIMenu::FItem> items = makeEditorCreateMenuItems(*_layer, *_actions);
-    items.push_back(UIMenu::FItem::separator());
-    items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.duplicate"));
-    items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.delete"));
+    EditorLayer& layer = *_layer;
+
+    auto gameUIItems = [&layer]() {
+        std::vector<UIMenu::FItem> items;
+        items.push_back({
+            .label  = "New Game UI",
+            .action = [&layer]() { layer.createAndMountGameUI(); },
+        });
+        items.push_back({
+            .label    = "Mount Open Game UI",
+            .action   = [&layer]() { layer.mountOpenGameUI(); },
+            .bEnabled = layer.canMountOpenGameUI(),
+        });
+        return items;
+    };
+
+    std::vector<UIMenu::FItem> items;
+    std::string                entryId;
+    uint64_t                   uuid = 0;
+    if (parseWidgetEntryKey(targetId, entryId)) {
+        items.push_back({
+            .label  = "Open in UI Designer",
+            .action = [&layer, entryId]() { layer.openGameUIEntry(entryId); },
+        });
+        items.push_back(UIMenu::FItem::separator());
+        items.push_back({
+            .label  = "Unmount from Scene",
+            .action = [&layer, entryId]() { layer.unmountGameUIEntry(entryId); },
+        });
+    }
+    else if (targetId == "ui-root") {
+        items = gameUIItems();
+    }
+    else if (parseEditorHierarchyEntityIdKey(targetId, uuid)) {
+        Node* parent = nullptr;
+        if (Scene* scene = layer.getHierarchyScene()) {
+            if (Entity* entity = scene->getEntityByUUID(uuid)) {
+                parent = scene->getNodeByEntity(entity);
+            }
+        }
+        items = makeEditorCreateMenuItems(layer, parent);
+        items.push_back(UIMenu::FItem::separator());
+        items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.duplicate"));
+        items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.delete"));
+    }
+    else {
+        items = makeEditorCreateMenuItems(layer);
+        items.push_back(UIMenu::FItem::separator());
+        for (UIMenu::FItem& item : gameUIItems()) {
+            items.push_back(std::move(item));
+        }
+    }
+
     auto menu = UIMenu::create(std::move(items));
     menu->openAt(*tree, logicalPoint);
 }

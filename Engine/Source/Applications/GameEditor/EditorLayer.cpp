@@ -1,5 +1,7 @@
 #include "GameEditor/EditorLayerInternal.h"
 #include "GameEditor/EditorUIDesignerSession.h"
+#include "GUI/Widgets/UIDocument.h"
+#include "GUI/Widgets/UIDocumentStore.h"
 #include "ECS/Component.h"
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "Core/Log.h"
@@ -167,6 +169,139 @@ void EditorLayer::setEditorOrthoXY(bool enabled)
         position.z = 20.0f;
     }
     camera.setPositionAndRotation(position, {0.0f, 0.0f, 0.0f});
+}
+
+void EditorLayer::createAndMountGameUI()
+{
+    Scene*           scene = getEditableScene();
+    UIDocumentStore* store = uiDocumentStore();
+    if (!scene || !store) {
+        return;
+    }
+
+    VirtualFileSystem* vfs = VirtualFileSystem::get();
+    std::string        path;
+    int                index = 1;
+    for (; index < 1000; ++index) {
+        path              = std::format("Content:UI/Panel{}.yaui.json", index);
+        const bool onDisk = vfs && vfs->isFileExists(path);
+        bool       mounted = false;
+        for (const SceneWidgetEntry& entry : scene->getWidgetEntries()) {
+            if (entry.documentPath == path) {
+                mounted = true;
+                break;
+            }
+        }
+        if (!onDisk && !mounted) {
+            break;
+        }
+    }
+
+    auto document     = std::make_shared<UIDocument>();
+    document->typeId  = "engine.panel";
+    document->fields  = nlohmann::json{
+        {"__base__", {{"UIElement", {{"_name", std::format("Panel{}", index)}}}}},
+    };
+    store->put(path, document);
+    store->save(path);
+
+    const std::string entryId = std::format("Panel{}", index);
+    SceneWidgetEntry  entry;
+    entry.entryId      = entryId;
+    entry.documentPath = path;
+    entry.zOrder       = static_cast<int32_t>(scene->getWidgetEntries().size());
+    entry.autoMount    = true;
+    scene->addWidgetEntry(std::move(entry));
+    markSceneDirty();
+    notifyHierarchyChanged();
+    setSelectedWidgetEntryId(entryId);
+    _uiDesignerSession.openDocument(path);
+}
+
+void EditorLayer::mountOpenGameUI()
+{
+    const std::string path = _uiDesignerSession.getDocumentPath();
+    Scene*            scene = getEditableScene();
+    if (path.empty() || !scene) {
+        return;
+    }
+    for (const SceneWidgetEntry& existing : scene->getWidgetEntries()) {
+        if (existing.documentPath == path) {
+            setSelectedWidgetEntryId(existing.entryId);
+            return;
+        }
+    }
+
+    std::string entryId = std::filesystem::path(path).stem().stem().string();
+    if (entryId.empty()) {
+        entryId = "GameUI";
+    }
+    const std::string baseId = entryId;
+    for (int suffix = 2; suffix < 1000; ++suffix) {
+        bool taken = false;
+        for (const SceneWidgetEntry& existing : scene->getWidgetEntries()) {
+            if (existing.entryId == entryId) {
+                taken = true;
+                break;
+            }
+        }
+        if (!taken) {
+            break;
+        }
+        entryId = std::format("{}{}", baseId, suffix);
+    }
+
+    SceneWidgetEntry entry;
+    entry.entryId      = entryId;
+    entry.documentPath = path;
+    entry.zOrder       = static_cast<int32_t>(scene->getWidgetEntries().size());
+    entry.autoMount    = true;
+    scene->addWidgetEntry(std::move(entry));
+    markSceneDirty();
+    notifyHierarchyChanged();
+    setSelectedWidgetEntryId(entryId);
+}
+
+bool EditorLayer::canMountOpenGameUI() const
+{
+    const std::string& path  = _uiDesignerSession.getDocumentPath();
+    Scene*             scene = getEditableScene();
+    if (path.empty() || !scene) {
+        return false;
+    }
+    for (const SceneWidgetEntry& entry : scene->getWidgetEntries()) {
+        if (entry.documentPath == path) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void EditorLayer::openGameUIEntry(const std::string& entryId)
+{
+    Scene* scene = getEditableScene();
+    if (!scene || entryId.empty()) {
+        return;
+    }
+    for (const SceneWidgetEntry& entry : scene->getWidgetEntries()) {
+        if (entry.entryId == entryId) {
+            _uiDesignerSession.openSceneEntry(entry);
+            return;
+        }
+    }
+}
+
+void EditorLayer::unmountGameUIEntry(const std::string& entryId)
+{
+    Scene* scene = getEditableScene();
+    if (!scene || !scene->removeWidgetEntry(entryId)) {
+        return;
+    }
+    if (_selectedWidgetEntryId == entryId) {
+        setSelectedWidgetEntryId({});
+    }
+    markSceneDirty();
+    notifyHierarchyChanged();
 }
 
 bool EditorLayer::viewportToCanvas(const glm::vec2& viewportLocal, glm::vec2& outCanvas) const

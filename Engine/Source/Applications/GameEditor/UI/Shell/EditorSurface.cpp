@@ -735,7 +735,7 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
 
     closeViewportContextMenu();
 
-    std::vector<UIMenu::FItem> items = makeEditorCreateMenuItems(*_layer, _rootSession->actions());
+    std::vector<UIMenu::FItem> items = makeEditorCreateMenuItems(*_layer);
     items.push_back(UIMenu::FItem::separator());
     items.push_back(UIMenu::FItem::fromAction(_rootSession->actions(), "selection.duplicate"));
     items.push_back(UIMenu::FItem::fromAction(_rootSession->actions(), "selection.delete"));

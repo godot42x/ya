@@ -33,6 +33,7 @@ namespace ya
 {
 
 struct App;
+struct Node;
 struct EditorDocumentRegistry;
 struct UIDocumentStore;
 struct IImageView;
@@ -346,6 +347,17 @@ struct EditorLayer
     /// Snap the editor camera onto the XY plane when enabling. Sprites face
     /// local +Z, so this is the view that shows them.
     void                           setEditorOrthoXY(bool enabled);
+    /// Write a new canvas document under Content:UI and mount it on the
+    /// editable scene, then open it in the designer.
+    void                           createAndMountGameUI();
+    /// Mount the document currently open in the designer, if it is not already.
+    void                           mountOpenGameUI();
+    /// A designer document is open and the editable scene does not mount it yet.
+    [[nodiscard]] bool             canMountOpenGameUI() const;
+    /// Open this scene UI entry in the designer.
+    void                           openGameUIEntry(const std::string& entryId);
+    /// Remove the entry from the editable scene. The document stays on disk.
+    void                           unmountGameUIEntry(const std::string& entryId);
     [[nodiscard]] const glm::vec2& getCanvasPan() const { return _canvasPan; }
     [[nodiscard]] float            getCanvasZoom() const { return _canvasZoom; }
     void                           setCanvasPan(const glm::vec2& pan) { _canvasPan = pan; }
@@ -485,8 +497,9 @@ struct EditorLayer
     void cmdOpenScene();
     void cmdRequestQuit();
     [[nodiscard]] bool canViewportAuthor() const;
-    void cmdCreateEmptyNode();
-    void cmdCreateNodePreset(const std::string& presetDisplayName);
+    /// `parent` nullptr = scene root.
+    void cmdCreateEmptyNode(Node* parent = nullptr);
+    void cmdCreateNodePreset(const std::string& presetDisplayName, Node* parent = nullptr);
     void cmdDuplicateSelection();
     void cmdDeleteSelection();
     void setSaveSceneAsHandler(std::function<void()> handler) { _saveSceneAsHandler = std::move(handler); }

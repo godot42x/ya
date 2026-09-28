@@ -65,6 +65,8 @@ struct EditorUIDesignerSession
     /// The currently open document. For an asset it is the store's instance,
     /// so the inspector and the mounted tree read the same edits.
     [[nodiscard]] const std::shared_ptr<UIDocument>& getOpenDocument() const { return _document; }
+    /// Empty when the open document is untitled.
+    [[nodiscard]] const std::string& getDocumentPath() const { return _documentPath; }
     [[nodiscard]] UIElement* getPreviewRoot() const { return _previewRoot.get(); }
     [[nodiscard]] EditorDocumentSession* documentSession() { return _session; }
     [[nodiscard]] const EditorDocumentSession* documentSession() const { return _session; }

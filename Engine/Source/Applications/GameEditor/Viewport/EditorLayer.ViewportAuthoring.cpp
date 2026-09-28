@@ -13,7 +13,7 @@ bool EditorLayer::canViewportAuthor() const
     return _app && _app->isStopped() && hasProjectLoaded() && !isViewportMode2D();
 }
 
-void EditorLayer::cmdCreateEmptyNode()
+void EditorLayer::cmdCreateEmptyNode(Node* parent)
 {
     if (!canViewportAuthor()) {
         return;
@@ -22,7 +22,7 @@ void EditorLayer::cmdCreateEmptyNode()
     if (!scene) {
         return;
     }
-    Node* newNode = scene->createNode3D("New Node");
+    Node* newNode = scene->createNode3D("New Node", parent);
     notifyHierarchyChanged();
     markSceneDirty();
     if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
@@ -30,7 +30,7 @@ void EditorLayer::cmdCreateEmptyNode()
     }
 }
 
-void EditorLayer::cmdCreateNodePreset(const std::string& presetDisplayName)
+void EditorLayer::cmdCreateNodePreset(const std::string& presetDisplayName, Node* parent)
 {
     if (!canViewportAuthor()) {
         return;
@@ -39,7 +39,7 @@ void EditorLayer::cmdCreateNodePreset(const std::string& presetDisplayName)
     if (!scene) {
         return;
     }
-    Node* node = editor::NodeCreateRegistry::get().createPreset(presetDisplayName, *scene, presetDisplayName, nullptr);
+    Node* node = editor::NodeCreateRegistry::get().createPreset(presetDisplayName, *scene, presetDisplayName, parent);
     notifyHierarchyChanged();
     markSceneDirty();
     if (auto* node3D = dynamic_cast<Node3D*>(node)) {

@@ -18,7 +18,8 @@ namespace editor
 /// hierarchy panel. Game UI authoring uses the registry-driven UI Designer.
 struct NodeCreateEntry
 {
-    std::string category; // "3D Object" / "Light" / "2D"
+    /// Create-menu submenu label. Any string; the menu groups by it.
+    std::string category;
     std::string displayName;
     std::string doc;
     /// Creates the node (and any entity/components) under `parent`. Returns

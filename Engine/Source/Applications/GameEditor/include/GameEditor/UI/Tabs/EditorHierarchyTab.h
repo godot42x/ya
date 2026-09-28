@@ -46,7 +46,10 @@ class EditorHierarchyTab : public UICompoundWidget
     void unbindLayerDelegates();
     void rebuildTree();
     void pullSelectionFromLayer();
-    void openContextMenu(const glm::vec2& logicalPoint);
+    /// `targetId` is the right-clicked row (entity key, `ui:<entry>`,
+    /// `ui-root`) or empty for blank space. The menu lists what that target
+    /// supports.
+    void openContextMenu(const std::string& targetId, const glm::vec2& logicalPoint);
 };
 
 } // namespace ya
