@@ -1,0 +1,13 @@
+{
+  "childSlots": [],
+  "children": [],
+  "fields": {
+    "__base__": {
+      "UIElement": {
+        "_name": "Panel2"
+      }
+    }
+  },
+  "typeId": "engine.panel",
+  "version": 2
+}
