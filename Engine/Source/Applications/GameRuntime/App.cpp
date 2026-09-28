@@ -276,9 +276,10 @@ void App::applyProjectDescriptor(const FProjectDescriptor& descriptor)
     }
 
     // Packed games own the Dock / taskbar icon. Editor keeps YA branding.
+    // The icon path arrives resolved (absolute) from the descriptor.
     if (!_ci.bEditor) {
         if (descriptor.icon) {
-            setProcessWindowIconPath(descriptor.resolvePath(*descriptor.icon).string());
+            setProcessWindowIconPath(*descriptor.icon);
         }
         else {
             setProcessWindowIconPath({});

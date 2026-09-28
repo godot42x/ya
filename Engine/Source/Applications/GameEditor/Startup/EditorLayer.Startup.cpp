@@ -71,7 +71,16 @@ void EditorLayer::refreshProjectBrowser()
     _projectBrowserError.clear();
 
     namespace fs = std::filesystem;
-    const fs::path exampleRoot = fs::current_path() / "Example";
+    // The browser lists the workspace's projects; anchor it at the VFS working
+    // root (the engine's own tree) rather than wherever the process was booted.
+    const fs::path workspaceRoot = [&] {
+        if (const auto* vfs = VirtualFileSystem::get()) {
+            return vfs->getWorkingRoot();
+        }
+        std::error_code error;
+        return std::filesystem::current_path(error);
+    }();
+    const fs::path exampleRoot = workspaceRoot / "Example";
     if (!fs::exists(exampleRoot) || !fs::is_directory(exampleRoot)) {
         _projectBrowserError = std::format("Project root not found: {}", exampleRoot.string());
         return;

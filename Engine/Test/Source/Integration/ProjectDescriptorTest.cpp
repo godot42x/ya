@@ -1,5 +1,7 @@
 #include "App/Module/ProjectDescriptor.h"
 
+#include "Core/System/VirtualFileSystem.h"
+
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -14,9 +16,11 @@ class ProjectDescriptorTest : public ::testing::Test
 {
   protected:
     std::filesystem::path _root;
+    std::filesystem::path _originalCwd;
 
     void SetUp() override
     {
+        _originalCwd = std::filesystem::current_path();
         _root = std::filesystem::temp_directory_path() /
                 ("ya-project-descriptor-test-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) + "-" +
                  std::to_string(::testing::UnitTest::GetInstance()->current_test_info()->line()));
@@ -27,6 +31,7 @@ class ProjectDescriptorTest : public ::testing::Test
     void TearDown() override
     {
         std::error_code error;
+        std::filesystem::current_path(_originalCwd, error);
         std::filesystem::remove_all(_root, error);
     }
 
@@ -37,6 +42,28 @@ class ProjectDescriptorTest : public ::testing::Test
         EXPECT_TRUE(stream.is_open());
         stream << content;
         return path;
+    }
+
+    std::filesystem::path writeModuleManifest() const
+    {
+        return writeText(_root / "Game.yamodule",
+                         R"({
+  "schemaVersion": 1,
+  "name": "Game",
+  "kind": "project",
+  "binary": "Game",
+  "dependencies": []
+})");
+    }
+
+    /// A standalone VFS whose "Engine" mount roots a private workspace: the
+    /// bootstrap's mount contract without the process-wide engine tree.
+    void initWorkspaceVfs(const std::filesystem::path& workspaceRoot) const
+    {
+        VirtualFileSystem::init();
+        auto* vfs = VirtualFileSystem::get();
+        ASSERT_NE(vfs, nullptr);
+        vfs->mount("Engine", workspaceRoot / "Engine");
     }
 };
 
@@ -103,8 +130,11 @@ TEST_F(ProjectDescriptorTest, LoadsOptionalIcon)
 
     const auto descriptor = FProjectDescriptor::load(descriptorPath);
     ASSERT_TRUE(descriptor.icon.has_value());
-    EXPECT_EQ(*descriptor.icon, "Content/AppIcon.png");
-    EXPECT_TRUE(std::filesystem::is_regular_file(descriptor.resolvePath(*descriptor.icon)));
+    // The icon is stored resolved (absolute): consumers never re-resolve it.
+    EXPECT_TRUE(std::filesystem::path(*descriptor.icon).is_absolute());
+    EXPECT_TRUE(std::filesystem::is_regular_file(*descriptor.icon));
+    EXPECT_EQ(*descriptor.icon,
+              (std::filesystem::weakly_canonical(_root) / "Content" / "AppIcon.png").lexically_normal().string());
 }
 
 TEST_F(ProjectDescriptorTest, RejectsMissingIcon)
@@ -145,14 +175,7 @@ TEST_F(ProjectDescriptorTest, RejectsMissingIcon)
 TEST_F(ProjectDescriptorTest, RejectsMissingDefaultScene)
 {
     writeText(_root / "Content" / ".keep", "");
-    writeText(_root / "Game.yamodule",
-              R"({
-  "schemaVersion": 1,
-  "name": "Game",
-  "kind": "project",
-  "binary": "Game",
-  "dependencies": []
-})");
+    writeModuleManifest();
     const auto descriptorPath = writeText(_root / "Game.yaproject",
                                           R"({
   "schemaVersion": 1,
@@ -175,6 +198,68 @@ TEST_F(ProjectDescriptorTest, RejectsMissingDefaultScene)
             }
         },
         std::runtime_error);
+}
+
+TEST_F(ProjectDescriptorTest, PrefersProjectRelativeOverWorkspaceRelative)
+{
+    writeModuleManifest();
+    writeText(_root / "Content" / ".keep", "");
+    // The same relative file lives in the project root and at the workspace
+    // root (mounted here as a private VFS "Engine"): the project one wins.
+    const auto workspaceRoot = std::filesystem::weakly_canonical(_root) / "workspace";
+    writeText(workspaceRoot / "Content" / "Shared.txt", "workspace");
+    writeText(_root / "Content" / "Shared.txt", "project");
+    const auto descriptorPath = writeText(_root / "Game.yaproject",
+                                          R"({
+  "schemaVersion": 1,
+  "name": "Game",
+  "mainModule": "Game",
+  "modules": ["Game.yamodule"],
+  "plugins": [],
+  "contentDir": "Content",
+  "icon": "Content/Shared.txt"
+})");
+
+    initWorkspaceVfs(workspaceRoot);
+    const auto descriptor = FProjectDescriptor::load(descriptorPath);
+    ASSERT_TRUE(descriptor.icon.has_value());
+    const auto resolved = descriptor.resolvePath(*descriptor.icon);
+    EXPECT_EQ(resolved, (std::filesystem::weakly_canonical(_root) / "Content" / "Shared.txt").lexically_normal());
+}
+
+TEST_F(ProjectDescriptorTest, ResolvesWorkspaceRelativePathsFromForeignCwd)
+{
+    writeModuleManifest();
+    writeText(_root / "Content" / ".keep", "");
+    // A workspace holding the engine tree (HelloMaterial.yaproject's
+    // "Example/..." and "Engine/..." forms) and a project descriptor that
+    // references it workspace-relatively. The process boots from a third
+    // directory; the browser must still open the project.
+    const auto workspaceRoot = std::filesystem::weakly_canonical(_root) / "workspace";
+    writeText(workspaceRoot / "Engine" / "Content" / "Scenes" / "Ws.scene.json",
+              R"({"version":"1.0","name":"Ws","entities":[]})");
+    initWorkspaceVfs(workspaceRoot);
+
+    const auto bootCwd = _root / "booted-elsewhere";
+    std::filesystem::create_directories(bootCwd);
+    std::filesystem::current_path(bootCwd);
+
+    const auto descriptorPath = writeText(_root / "Game.yaproject",
+                                          R"({
+  "schemaVersion": 1,
+  "name": "Game",
+  "mainModule": "Game",
+  "modules": ["Game.yamodule"],
+  "plugins": [],
+  "contentDir": "Content",
+  "defaultScene": "Engine/Content/Scenes/Ws.scene.json"
+})");
+
+    const auto descriptor = FProjectDescriptor::load(descriptorPath);
+    ASSERT_TRUE(descriptor.defaultScene.has_value());
+    const auto resolved = std::filesystem::path(*descriptor.defaultScene);
+    EXPECT_TRUE(resolved.is_absolute());
+    EXPECT_EQ(resolved, (workspaceRoot / "Engine" / "Content" / "Scenes" / "Ws.scene.json").lexically_normal());
 }
 
 } // namespace
