@@ -1,6 +1,7 @@
 #include "GameEditor/UI/Viewport/EditorViewportCompositor.h"
 
 #include "GameEditor/EditorLayer.h"
+#include "GameRuntime/App.h"
 #include "GameEditor/UI/Viewport/EditorViewportOverlayRecord.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "GUI/Compose/Render2DComposePass.h"
@@ -50,6 +51,7 @@ void EditorViewportCompositor::bindDraw(ScreenDrawPipelines& screen, WorldDrawPi
     _screenPipelines = &screen;
     _worldPipelines  = &world;
     _viewportScreen.init(screen);
+    _gameUiScreen.init(screen);
     _canvasScreen.init(screen);
     _world.init(world);
     _bRecordersBound = true;
@@ -67,12 +69,14 @@ void EditorViewportCompositor::prepare(EFormat::T colorFormat, EFormat::T depthF
     _overlayColorFormat = colorFormat;
     _worldDepthFormat   = depthFormat;
     _viewportScreen.prepare(colorFormat, depthFormat);
+    _gameUiScreen.prepare(colorFormat, EFormat::Undefined);
     _world.prepare(colorFormat, depthFormat);
 }
 
 void EditorViewportCompositor::shutdown()
 {
     _viewportScreen.destroy();
+    _gameUiScreen.destroy();
     _canvasScreen.destroy();
     _world.destroy();
     _bRecordersBound = false;
@@ -176,6 +180,8 @@ void EditorViewportCompositor::composeAuthoringView(ICommandBuffer&             
         return;
     }
 
+    composeMountedGameUI(commandBuffer, *color, layer);
+
     auto depth = snapshot.viewDepthOwner;
     const bool bCanOverlay = depth && depth->isValid() && depth->getImageView() &&
                              depth->getExtent() == color->getExtent() &&
@@ -185,6 +191,48 @@ void EditorViewportCompositor::composeAuthoringView(ICommandBuffer&             
         recordViewOverlay(commandBuffer, *color, *depth, layer, worldCamera);
     }
     _publishedOutput = std::move(color);
+}
+
+void EditorViewportCompositor::composeMountedGameUI(ICommandBuffer& commandBuffer,
+                                                     RenderTexture&  color,
+                                                     EditorLayer&    layer)
+{
+    App* app = App::get();
+    if (app && (app->isRuntimeMode() || app->isSimulationMode())) {
+        return;
+    }
+    Scene* scene = layer.getViewportInteractionScene();
+    if (!scene || scene->getWidgetEntries().empty() || !color.isValid()) {
+        return;
+    }
+
+    const glm::vec2 logicalViewport = layer.getViewportSize();
+    const Extent2D  logicalExtent{
+        .width  = static_cast<uint32_t>(std::max(logicalViewport.x, 0.0f)),
+        .height = static_cast<uint32_t>(std::max(logicalViewport.y, 0.0f)),
+    };
+    if (logicalExtent.width == 0 || logicalExtent.height == 0) {
+        return;
+    }
+
+    const glm::vec2 uiScale{
+        static_cast<float>(color.getExtent().width) / static_cast<float>(logicalExtent.width),
+        static_cast<float>(color.getExtent().height) / static_cast<float>(logicalExtent.height),
+    };
+    const UIFrameSnapshot snapshot = _scenePreview.buildSnapshot(*scene,
+                                                                 layer.uiDocumentStore(),
+                                                                 logicalExtent,
+                                                                 uiScale,
+                                                                 {0.0f, 0.0f});
+    recordRender2DComposePass(&commandBuffer,
+                              color,
+                              &snapshot,
+                              FRender2DComposePassDesc{
+                                  .kind          = ERender2DComposePassKind::RuntimeUIComposite,
+                                  .logicalExtent = logicalExtent,
+                              },
+                              _gameUiScreen,
+                              {});
 }
 
 void EditorViewportCompositor::recordViewOverlay(ICommandBuffer&            commandBuffer,

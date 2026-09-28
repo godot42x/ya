@@ -124,6 +124,11 @@ void registerEditorActions(ActionMap& actions,
         .execute = [&layer]() { layer.setViewportMode(EViewportMode::Mode2D); },
     });
     define({
+        .id      = "viewport.ortho",
+        .label   = "Viewport Ortho XY",
+        .execute = [&layer]() { layer.setEditorOrthoXY(!layer.isEditorOrthoXY()); },
+    });
+    define({
         .id      = "runtime.play",
         .label   = "Play",
         .execute = []() {

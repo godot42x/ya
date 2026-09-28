@@ -168,6 +168,9 @@ void EditorUIDesignerSession::openDocument(std::string_view path)
         return;
     }
     _documentPath = std::string(path);
+    if (_owner) {
+        _owner->setViewportMode(EViewportMode::Mode2D);
+    }
 }
 
 void EditorUIDesignerSession::openUntitled(const std::shared_ptr<UIDocument>& document)
@@ -183,6 +186,9 @@ void EditorUIDesignerSession::openUntitled(const std::shared_ptr<UIDocument>& do
         return;
     }
     _documentPath.clear();
+    if (_owner) {
+        _owner->setViewportMode(EViewportMode::Mode2D);
+    }
 }
 
 bool EditorUIDesignerSession::installPreview(const std::shared_ptr<UIDocument>& document)

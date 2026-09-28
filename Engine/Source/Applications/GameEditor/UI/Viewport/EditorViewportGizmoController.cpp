@@ -659,8 +659,11 @@ void EditorViewportGizmoController::updateDrag(const glm::vec2& localPoint)
             if (isViewportGizmoSnapEnabled(*_app)) {
                 delta = snapScalar(delta, kViewportGizmoTranslateSnap);
             }
-            newPrimaryWorld =
-                composeTrs(startPosition + _dragAxisWorld * delta, startRotation, startScale);
+            glm::vec3 position = startPosition + _dragAxisWorld * delta;
+            if (_sources.isEditorOrthoXY && _sources.isEditorOrthoXY()) {
+                position.z = startPosition.z;
+            }
+            newPrimaryWorld = composeTrs(position, startRotation, startScale);
         }
         else {
             const float axisLengthWorld =

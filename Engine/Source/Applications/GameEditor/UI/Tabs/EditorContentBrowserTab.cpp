@@ -399,6 +399,16 @@ void EditorContentBrowserTab::activateItem(const std::filesystem::path& path, bo
     else if (utf8Path.ends_with(".lua")) {
         _layer->openDocumentEditor(EEditorDocumentKind::Script, std::move(utf8Path));
     }
+    else if (utf8Path.ends_with(".yaui.json")) {
+        std::string assetPath = utf8Path;
+        if (VirtualFileSystem* vfs = VirtualFileSystem::get()) {
+            const std::string vfsPath = vfs->toVfsPath(assetPath);
+            if (!vfsPath.empty()) {
+                assetPath = vfsPath;
+            }
+        }
+        _layer->getEditorUIDesignerSession().openDocument(assetPath);
+    }
     else if (utf8Path.ends_with(".mat") || utf8Path.ends_with(".material")) {
         _layer->openDocumentEditor(EEditorDocumentKind::Material, std::move(utf8Path));
     }

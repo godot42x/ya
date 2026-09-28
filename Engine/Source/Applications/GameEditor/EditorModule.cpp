@@ -486,10 +486,23 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             _cameraController.update(editorCamera, app.getInputManager(), dt);
         }
         if (viewExtent.height > 0) {
-            editorCamera.setPerspective(editorCamera._fov,
-                                        static_cast<float>(viewExtent.width) / static_cast<float>(viewExtent.height),
-                                        editorCamera._nearClip,
-                                        editorCamera._farClip);
+            const float aspect = static_cast<float>(viewExtent.width) / static_cast<float>(viewExtent.height);
+            if (_layer->isEditorOrthoXY() && !_layer->isViewportMode2D()) {
+                editorCamera.setRotation({0.0f, 0.0f, 0.0f});
+                constexpr float kHalfHeight = 12.0f;
+                editorCamera.setOrthographic(-kHalfHeight * aspect,
+                                             kHalfHeight * aspect,
+                                             -kHalfHeight,
+                                             kHalfHeight,
+                                             editorCamera._nearClip,
+                                             editorCamera._farClip);
+            }
+            else if (!_layer->isEditorOrthoXY()) {
+                editorCamera.setPerspective(editorCamera._fov,
+                                            aspect,
+                                            editorCamera._nearClip,
+                                            editorCamera._farClip);
+            }
         }
         // Prepare before command recording. Recreating a pipeline while a
         // command buffer is recording invalidates that command buffer.

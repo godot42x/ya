@@ -50,6 +50,11 @@ void EditorPlayToolbarTab::construct()
             (void)_actions->execute("viewport.mode2d");
         }
     });
+    auto ortho = labeledButton("PlayToolbarOrtho", "Ortho").setOnClick([this]() {
+        if (_actions) {
+            (void)_actions->execute("viewport.ortho");
+        }
+    });
     auto modeText = ui::text("PlayToolbarMode").setStyleKey(editorStyle(StyleKey::Text)).setText("EDIT");
 
     _playButton     = play.share();
@@ -66,6 +71,7 @@ void EditorPlayToolbarTab::construct()
                                     .child(_stopButton, ui::boxSlot().preferredSize({76.0f, 26.0f}))
                                     .child(std::move(mode3d), ui::boxSlot().preferredSize({44.0f, 26.0f}))
                                     .child(std::move(mode2d), ui::boxSlot().preferredSize({44.0f, 26.0f}))
+                                    .child(std::move(ortho), ui::boxSlot().preferredSize({64.0f, 26.0f}))
                                     .child(_modeText, ui::boxSlot().preferredSize({88.0f, 26.0f}))
                                     .release(),
                                 ui::canvasSlot()

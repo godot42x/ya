@@ -4,6 +4,8 @@
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "Core/Log.h"
 
+#include <cmath>
+
 namespace ya
 {
 EditorLayer::EditorLayer(App* app)
@@ -16,6 +18,7 @@ EditorLayer::EditorLayer(App* app)
         .getSelections = [this]() -> const std::vector<Entity*>& { return getSelections(); },
         .getViewportInteractionScene = [this]() { return getViewportInteractionScene(); },
         .isViewportMode2D = [this]() { return isViewportMode2D(); },
+        .isEditorOrthoXY = [this]() { return isEditorOrthoXY(); },
         .onTransformCommitted = [this]() { markSceneDirty(); },
     });
 }
@@ -147,6 +150,23 @@ void EditorLayer::setViewportMode(EViewportMode mode, bool bPersist)
             .set("viewport.mode", mode == EViewportMode::Mode2D ? "2d" : "3d")
             .flush();
     }
+}
+
+void EditorLayer::setEditorOrthoXY(bool enabled)
+{
+    if (_bEditorOrthoXY == enabled) {
+        return;
+    }
+    _bEditorOrthoXY = enabled;
+    if (!enabled) {
+        return;
+    }
+    FreeCamera& camera   = getCamera();
+    glm::vec3   position = camera.getPosition();
+    if (std::abs(position.z) < 1.0f) {
+        position.z = 20.0f;
+    }
+    camera.setPositionAndRotation(position, {0.0f, 0.0f, 0.0f});
 }
 
 bool EditorLayer::viewportToCanvas(const glm::vec2& viewportLocal, glm::vec2& outCanvas) const

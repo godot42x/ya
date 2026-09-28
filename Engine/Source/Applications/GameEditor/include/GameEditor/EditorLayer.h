@@ -106,6 +106,9 @@ struct EditorLayer
     // around the viewport center. Lightweight navigation state - no camera
     // entity (Unity Scene-view 2D mode semantics).
     EViewportMode _viewportMode       = EViewportMode::Mode3D;
+    /// World-2D authoring stays in this viewport: an orthographic camera
+    /// looking down local +Z onto the XY plane. Mode2D remains the UI canvas.
+    bool          _bEditorOrthoXY     = false;
     glm::vec2     _canvasPan          = {0.0f, 0.0f};
     float         _canvasZoom         = 1.0f;
     bool          _bCanvasPanning     = false;
@@ -339,6 +342,10 @@ struct EditorLayer
     [[nodiscard]] EViewportMode    getViewportMode() const { return _viewportMode; }
     void                           setViewportMode(EViewportMode mode, bool bPersist = true);
     [[nodiscard]] bool             isViewportMode2D() const { return _viewportMode == EViewportMode::Mode2D; }
+    [[nodiscard]] bool             isEditorOrthoXY() const { return _bEditorOrthoXY; }
+    /// Snap the editor camera onto the XY plane when enabling. Sprites face
+    /// local +Z, so this is the view that shows them.
+    void                           setEditorOrthoXY(bool enabled);
     [[nodiscard]] const glm::vec2& getCanvasPan() const { return _canvasPan; }
     [[nodiscard]] float            getCanvasZoom() const { return _canvasZoom; }
     void                           setCanvasPan(const glm::vec2& pan) { _canvasPan = pan; }

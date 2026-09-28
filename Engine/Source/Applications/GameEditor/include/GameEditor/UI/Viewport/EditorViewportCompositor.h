@@ -41,6 +41,9 @@ class EditorViewportCompositor
     ScreenDrawPipelines*           _screenPipelines = nullptr;
     WorldDrawPipelines*            _worldPipelines  = nullptr;
     ScreenDrawRecorder             _viewportScreen;
+    /// Game UI overlay on the 3D display image. Separate from `_viewportScreen`
+    /// because one recorder resets its flight buffer at the start of a record.
+    ScreenDrawRecorder             _gameUiScreen;
     ScreenDrawRecorder             _canvasScreen;
     WorldDrawRecorder              _world;
     bool                           _bRecordersBound    = false;
@@ -75,6 +78,9 @@ class EditorViewportCompositor
                               const RenderViewportSnapshot& snapshot,
                               EditorLayer&               layer,
                               const EditorComposeCamera& worldCamera);
+    void composeMountedGameUI(ICommandBuffer& commandBuffer,
+                              RenderTexture&  color,
+                              EditorLayer&    layer);
     void recordViewOverlay(ICommandBuffer&            commandBuffer,
                            RenderTexture&             color,
                            RenderTexture&             depth,
