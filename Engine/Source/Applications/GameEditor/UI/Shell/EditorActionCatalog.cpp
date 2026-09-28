@@ -170,6 +170,13 @@ void registerUIDesignerActions(ActionMap& actions, EditorUIDesignerSession& desi
         .canExecute = [&designer]() { return designer.hasDocument(); },
     });
     define({
+        .id         = "ui.toggleSnap",
+        .label      = "Toggle Grid Snapping",
+        .chord      = FActionChord::primary(EKey::K_G),
+        .execute    = [&designer]() { designer.setSnapToGrid(!designer.isSnapToGrid()); },
+        .canExecute = [&designer]() { return designer.hasDocument(); },
+    });
+    define({
         .id         = "edit.undo",
         .label      = "Undo",
         .chord      = FActionChord::primary(EKey::K_Z),

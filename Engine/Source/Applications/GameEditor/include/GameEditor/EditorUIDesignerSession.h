@@ -37,6 +37,7 @@
 #include "GameEditor/EditorUICanvasView.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
+#include <cmath>
 #include <memory>
 #include <optional>
 #include <string>
@@ -158,6 +159,17 @@ struct EditorUIDesignerSession
     /// Re-anchor a canvas child to a preset, keeping its current size; one
     /// edit. False when the widget is not a canvas child.
     bool applyCanvasAnchorPreset(UIElement* widget, ECanvasAnchorPreset preset);
+    // === Snapping (designer preference, not document data) ===
+    /// Move/resize snap to the design-pixel grid while enabled; nudge always
+    /// moves in exact pixels (fine adjustment never quantizes).
+    [[nodiscard]] bool  isSnapToGrid() const { return _bSnapToGrid; }
+    void                setSnapToGrid(bool enabled);
+    [[nodiscard]] float snapGridSize() const { return kSnapGridSize; }
+    /// Arrow-key nudge: move the selection's canvas slot offset by `delta`
+    /// design px and commit one "Nudge" edit under merge key "nudge" — the
+    /// caller opens/closes the undo merge session around a held-arrow burst.
+    /// False when the selection is not a canvas child.
+    bool nudgeSelection(const glm::vec2& canvasDelta);
 
     // === Canvas direct manipulation (the Canvas tab drives the pointer, this
     // session owns the edited widget and the drag session) ===
@@ -251,6 +263,19 @@ struct EditorUIDesignerSession
         Move,
         Resize,
     };
+
+    static constexpr float kSnapGridSize = 8.0f;
+    /// Round an offset axis onto the grid (whole multiples), when enabled.
+    [[nodiscard]] float snapAxis(float value) const
+    {
+        return _bSnapToGrid ? std::round(value / kSnapGridSize) * kSnapGridSize : value;
+    }
+    [[nodiscard]] glm::vec2 snapOffset(glm::vec2 offset) const
+    {
+        return {snapAxis(offset.x), snapAxis(offset.y)};
+    }
+
+    bool _bSnapToGrid = true;
 
     EDragMode _dragMode        = EDragMode::None;
     UIElement* _dragWidget     = nullptr;

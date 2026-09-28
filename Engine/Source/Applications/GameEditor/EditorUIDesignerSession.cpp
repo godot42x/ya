@@ -708,7 +708,7 @@ bool EditorUIDesignerSession::applyDragDelta(const glm::vec2& canvasDelta)
         // the parent rect does not move, so a canvas delta maps 1:1.
         if (UIElement* parent = _dragWidget->getParent()) {
             if (auto* slot = dynamic_cast<UICanvasSlot*>(parent->getSlotForChild(*_dragWidget))) {
-                slot->setOffset(_dragStartPos + canvasDelta);
+                slot->setOffset(snapOffset(_dragStartPos + canvasDelta));
                 invalidatePreview();
                 return true;
             }
@@ -728,9 +728,11 @@ bool EditorUIDesignerSession::applyDragDelta(const glm::vec2& canvasDelta)
         glm::vec2 anchorMin = _dragStartAnchorMin;
         glm::vec2 anchorMax = _dragStartAnchorMax;
 
+        // Point-anchor resize snaps the moving edges to the grid; anchored
+        // (stretch) edges are fractional by definition and never snap.
         const auto resizeMinEdge = [&](float& edgePos, float& edgeSize, float startPos, float startSize, float delta) {
-            edgePos  = startPos + delta;
-            edgeSize = startSize - delta;
+            edgePos  = snapAxis(startPos + delta);
+            edgeSize = startSize - (edgePos - startPos);
             if (edgeSize < 1.0f) {
                 // Never let the min edge cross the max edge: clamp size to the
                 // minimum and pin the min edge so the max edge stays fixed.
@@ -739,7 +741,7 @@ bool EditorUIDesignerSession::applyDragDelta(const glm::vec2& canvasDelta)
             }
         };
         const auto resizeMaxEdge = [&](float& edgeSize, float startSize, float delta) {
-            edgeSize = std::max(startSize + delta, 1.0f);
+            edgeSize = std::max(snapAxis(startSize + delta), 1.0f);
         };
 
         if (_resizeMask & kResizeHandleLeft) {
@@ -811,6 +813,29 @@ std::unique_ptr<EditorUISlotEdit> EditorUIDesignerSession::editSlot(UIElement* w
         return nullptr;
     }
     return EditorUISlotEdit::forChild(*widget);
+}
+
+void EditorUIDesignerSession::setSnapToGrid(const bool enabled)
+{
+    _bSnapToGrid = enabled;
+}
+
+bool EditorUIDesignerSession::nudgeSelection(const glm::vec2& canvasDelta)
+{
+    UIElement* selected = getSelectedWidget();
+    if (!selected || selected == _previewRoot.get() || !childPathOf(selected)) {
+        return false;
+    }
+    UIElement* parent = selected->getParent();
+    auto*      slot   = parent ? dynamic_cast<UICanvasSlot*>(parent->getSlotForChild(*selected)) : nullptr;
+    if (!slot) {
+        return false;
+    }
+    // Nudging is fine adjustment: exact pixels, never quantized to the grid.
+    slot->setOffset(slot->toArgs().offset + canvasDelta);
+    invalidatePreview();
+    commitEdit("Nudge " + selected->_name, "nudge");
+    return true;
 }
 
 bool EditorUIDesignerSession::applyCanvasAnchorPreset(UIElement* widget, ECanvasAnchorPreset preset)

@@ -503,11 +503,17 @@ void EditorUICanvasTab::construct()
     _resolutionHeight = makeResolutionSpin("UIDesignerResolutionHeight", [this](float value) {
         _designer->setDesignResolution({_designer->designResolution().x, static_cast<uint32_t>(value)});
     });
+    _snapToGrid = ui::checkBox("UIDesignerCanvasSnap")
+                      .setText("Snap")
+                      .setChecked(_designer->isSnapToGrid())
+                      .setOnChanged([this](bool value) { _designer->setSnapToGrid(value); })
+                      .share();
     auto toolbar = ui::row("UIDesignerCanvasToolbar")
                        .setSpacing(4.0f)
                        .child(_resolutionPresets, ui::boxSlot().preferredSize({170.0f, 0.0f}))
                        .child(_resolutionWidth, ui::boxSlot().preferredSize({72.0f, 0.0f}))
                        .child(_resolutionHeight, ui::boxSlot().preferredSize({72.0f, 0.0f}))
+                       .child(_snapToGrid, ui::boxSlot().preferredSize({96.0f, 0.0f}))
                        .child(labeledButton("UIDesignerCanvasFit", "Fit").setOnClick([this]() {
                                   _designer->canvas().bFitPending = true;
                               }),
@@ -568,6 +574,9 @@ void EditorUICanvasTab::tick(float deltaSeconds)
     EditorUICanvasView& view = _designer->canvas();
     view.extent              = _image->_layoutRect.extent;
     if (view.bFitPending && view.fitTo(glm::vec2(_designer->designResolution()))) {
+    if (_snapToGrid && _snapToGrid->isChecked() != _designer->isSnapToGrid()) {
+        _snapToGrid->setChecked(_designer->isSnapToGrid());
+    }
         view.bFitPending = false;
     }
     syncResolution();
@@ -641,6 +650,27 @@ void EditorUICanvasTab::clearTransientInputState()
     UICompoundWidget::clearTransientInputState();
 }
 
+void EditorUICanvasTab::frameSelection()
+{
+    if (!_designer) {
+        return;
+    }
+    // Frame the selection; with nothing selected, frame the whole design.
+    if (const Rect2D* rect = _designer->getSelectedLayoutRect()) {
+        (void)_designer->canvas().frameRect(*rect);
+        return;
+    }
+    (void)_designer->canvas().fitTo(glm::vec2(_designer->designResolution()));
+}
+
+void EditorUICanvasTab::endNudgeMerge()
+{
+    if (_bNudgeMergeOpen) {
+        _designer->undoStack().endMerge();
+        _bNudgeMergeOpen = false;
+    }
+}
+
 bool EditorUICanvasTab::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
     WidgetTree* tree = getTree();
@@ -695,6 +725,58 @@ bool EditorUICanvasTab::handleInputEvent(const Event& event, const WidgetEventCo
         endGesture();
         tree->releasePointerCapture(this);
         return true;
+    }
+    case EEvent::KeyPressed: {
+        // Keyboard editing lives on the canvas: the image takes focus on press,
+        // so arrows/Escape/F never leak into other tabs' widgets.
+        const auto& press = static_cast<const KeyPressedEvent&>(event);
+        switch (press.getKeyCode()) {
+        case EKey::Left:
+        case EKey::Right:
+        case EKey::Up:
+        case EKey::Down: {
+            const float step    = press.isShiftPressed() ? 10.0f : 1.0f;
+            glm::vec2   delta{};
+            switch (press.getKeyCode()) {
+            case EKey::Left:  delta.x = -step; break;
+            case EKey::Right: delta.x = step; break;
+            case EKey::Up:    delta.y = -step; break;
+            default:          delta.y = step; break;
+            }
+            if (!press.bRepeat && !_bNudgeMergeOpen) {
+                _designer->undoStack().beginMerge();
+                _bNudgeMergeOpen = true;
+            }
+            if (!_designer->nudgeSelection(delta)) {
+                endNudgeMerge();
+            }
+            return true;
+        }
+        case EKey::Escape:
+            endNudgeMerge();
+            _designer->clearSelection();
+            return true;
+        case EKey::K_F:
+            endNudgeMerge();
+            frameSelection();
+            return true;
+        default:
+            endNudgeMerge();
+            return false;
+        }
+    }
+    case EEvent::KeyReleased: {
+        const auto& release = static_cast<const KeyReleasedEvent&>(event);
+        switch (release.getKeyCode()) {
+        case EKey::Left:
+        case EKey::Right:
+        case EKey::Up:
+        case EKey::Down:
+            endNudgeMerge();
+            return true;
+        default:
+            return false;
+        }
     }
     case EEvent::MouseScrolled: {
         if (!bOnImage) {

@@ -169,7 +169,7 @@ void recordEditorViewportWorldOverlays(WorldDrawList& list, EditorLayer& layer, 
     recordSelectedEntityBounds(list, layer);
 }
 
-void recordEditorCanvasDesignFrame(ScreenDrawList& list, const glm::vec2& designSize, const glm::vec2& uiScale, const glm::vec2& offset)
+void recordEditorCanvasDesignFrame(ScreenDrawList& list, const glm::vec2& designSize, const glm::vec2& uiScale, const glm::vec2& offset, float gridStep)
 {
     auto* white = TextureLibrary::get().getWhiteTexture().get();
     const glm::vec2 size = designSize * uiScale;
@@ -182,6 +182,21 @@ void recordEditorCanvasDesignFrame(ScreenDrawList& list, const glm::vec2& design
     list.makeSprite(glm::vec3(offset.x, offset.y + size.y - thickness, 0.0f), glm::vec2(size.x, thickness), white, color);
     list.makeSprite(glm::vec3(offset.x, offset.y, 0.0f), glm::vec2(thickness, size.y), white, color);
     list.makeSprite(glm::vec3(offset.x + size.x - thickness, offset.y, 0.0f), glm::vec2(thickness, size.y), white, color);
+
+    if (gridStep > 0.0f) {
+        const glm::vec2 cell = gridStep * uiScale;
+        if (cell.x >= 6.0f && cell.y >= 6.0f) {
+            const glm::vec4 grid(0.5f, 0.5f, 0.55f, 0.22f);
+            for (float x = gridStep; x < designSize.x - 0.5f; x += gridStep) {
+                list.makeSprite(glm::vec3(offset.x + x * uiScale.x, offset.y, 0.0f),
+                                glm::vec2(thickness, size.y), white, grid);
+            }
+            for (float y = gridStep; y < designSize.y - 0.5f; y += gridStep) {
+                list.makeSprite(glm::vec3(offset.x, offset.y + y * uiScale.y, 0.0f),
+                                glm::vec2(size.x, thickness), white, grid);
+            }
+        }
+    }
 }
 
 void recordEditorCanvasSelectionOverlay(ScreenDrawList& list, const Rect2D& rect, const glm::vec2& uiScale, const glm::vec2& offset)

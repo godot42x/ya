@@ -55,6 +55,20 @@ struct EditorUICanvasView
         return true;
     }
 
+    /// Frame `content` (a canvas-px rect): zoom so it fits with `margin`
+    /// view px around it and centre the view on the rect's centre. False
+    /// while the view has no extent.
+    bool frameRect(const Rect2D& content, float margin = 96.0f)
+    {
+        const glm::vec2 room = extent - glm::vec2(2.0f * margin);
+        if (room.x <= 0.0f || room.y <= 0.0f || content.extent.x <= 0.0f || content.extent.y <= 0.0f) {
+            return false;
+        }
+        setZoom(std::min(room.x / content.extent.x, room.y / content.extent.y));
+        pan = extent * 0.5f - (content.pos + content.extent * 0.5f) * zoom;
+        return true;
+    }
+
     /// Zoom by `factor` keeping the canvas point under `viewPoint` in place.
     void zoomAt(const glm::vec2& viewPoint, float factor)
     {

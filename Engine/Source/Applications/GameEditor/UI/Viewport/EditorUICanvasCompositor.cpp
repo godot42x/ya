@@ -83,7 +83,8 @@ void EditorUICanvasCompositor::compose(IRender& render, ICommandBuffer& commandB
                               _screen,
                               [&](ScreenDrawList& composeList) {
                                   if (bHasDocument) {
-                                      recordEditorCanvasDesignFrame(composeList, designSize, uiScale, offset);
+                                      recordEditorCanvasDesignFrame(composeList, designSize, uiScale, offset,
+                                            designer.isSnapToGrid() ? designer.snapGridSize() : 0.0f);
                                   }
                                   if (pSelectionRect) {
                                       recordEditorCanvasSelectionOverlay(composeList, *pSelectionRect, uiScale, offset);

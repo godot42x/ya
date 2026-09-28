@@ -125,6 +125,9 @@ TEST(EditorUIDesignerSessionTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceO
     EditorUIDesignerSession designer(&fixture.layer);
     fixture.publish(*root);
     designer.openDocument(FDesignerFixture::kDocumentPath);
+    // This test pins exact slot values across consecutive resizes; snapping
+    // quantizes them, so it opts out (snap has its own test below).
+    designer.setSnapToGrid(false);
     const UIFrameSnapshot initial = designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
     (void)initial;
     designer.selectByChildPath({0});
@@ -513,6 +516,98 @@ TEST(EditorUIDesignerSessionTest, AnUndoStepIsInertOnceItsDesignerIsGoneOrOnAnot
     const nlohmann::json other = previewJson(mover);
     ASSERT_TRUE(keeper.undoStack().undo());
     EXPECT_EQ(previewJson(mover), other);
+}
+
+TEST(EditorUIDesignerSessionTest, MoveSnapsToTheGridAndNudgeDoesNot)
+{
+    auto& registry = UITypeRegistry::instance();
+    auto root = registry.createInstance(kTypeIdCanvasPanel);
+    auto child = registry.createInstance(kTypeIdCanvasPanel);
+    ASSERT_NE(root, nullptr);
+    ASSERT_NE(child, nullptr);
+    root->_name  = "Root";
+    child->_name = "Child";
+    // Off-grid start: dragging snaps the result onto the grid...
+    root->addDetachedChild(child, [](UIElement&, UISlot& edge) {
+        auto* slot = edge.as<UICanvasSlot>();
+        ASSERT_NE(slot, nullptr);
+        FCanvasSlotArgs args;
+        args.offset    = {3.0f, 30.0f};
+        args.fixedSize = {80.0f, 40.0f};
+        slot->apply(args);
+    });
+
+    FDesignerFixture       fixture;
+    EditorUIDesignerSession designer(&fixture.layer);
+    fixture.publish(*root);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+    designer.selectByChildPath({0});
+    ASSERT_TRUE(designer.isSnapToGrid());
+
+    UIElement* previewChild = designer.getSelectedWidget();
+    ASSERT_NE(previewChild, nullptr);
+    designer.beginMove(previewChild, {0.0f, 0.0f});
+    ASSERT_TRUE(designer.applyDragDelta({10.0f, 0.0f}));
+    designer.endDrag();
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f}); // relayout
+    const Rect2D* snapped = designer.getSelectedLayoutRect();
+    ASSERT_NE(snapped, nullptr);
+    EXPECT_FLOAT_EQ(snapped->pos.x, 16.0f); // round(13 / 8) = 2 cells
+    EXPECT_FLOAT_EQ(snapped->pos.y, 32.0f); // round(30 / 8) = 4 cells
+
+    // ...while nudging moves in exact pixels from wherever it is.
+    ASSERT_TRUE(designer.nudgeSelection({1.0f, 0.0f}));
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f}); // relayout
+    const Rect2D* nudged = designer.getSelectedLayoutRect();
+    ASSERT_NE(nudged, nullptr);
+    EXPECT_FLOAT_EQ(nudged->pos.x, 17.0f);
+    EXPECT_FLOAT_EQ(nudged->pos.y, 32.0f);
+}
+
+TEST(EditorUIDesignerSessionTest, ANudgeBurstInsideOneMergeGestureIsOneUndoStep)
+{
+    auto             root = makeTwoChildCanvas();
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+    designer.selectByChildPath({0});
+
+    // The canvas tab opens the merge on the first press and closes it on key
+    // release; repeats and further presses inside the burst collapse.
+    designer.undoStack().beginMerge();
+    for (int i = 0; i < 5; ++i) {
+        ASSERT_TRUE(designer.nudgeSelection({1.0f, 0.0f}));
+    }
+    designer.undoStack().endMerge();
+    EXPECT_EQ(designer.undoStack().undoCount(), 1u);
+
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f}); // relayout
+    const Rect2D* rect = designer.getSelectedLayoutRect();
+    ASSERT_NE(rect, nullptr);
+    EXPECT_FLOAT_EQ(rect->pos.x, 25.0f); // 20 + 5 x 1px
+
+    ASSERT_TRUE(designer.undoStack().undo());
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f}); // relayout
+    EXPECT_FLOAT_EQ(designer.getSelectedLayoutRect()->pos.x, 20.0f);
+}
+
+TEST(EditorUIDesignerSessionTest, NudgeAndSnapTargetCanvasChildrenOnly)
+{
+    auto             root = makeTwoChildCanvas();
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+
+    // The document root has no parent-owned canvas slot: nudging it is a no-op.
+    designer.selectByChildPath({});
+    EXPECT_EQ(designer.getSelectedWidget(), designer.getPreviewRoot());
+    EXPECT_FALSE(designer.nudgeSelection({1.0f, 0.0f}));
+    EXPECT_FALSE(designer.isDocumentDirty());
 }
 
 TEST(EditorUIDesignerSessionTest, ASlotEditWritesThroughTheSlotAndIsOneUndoStep)

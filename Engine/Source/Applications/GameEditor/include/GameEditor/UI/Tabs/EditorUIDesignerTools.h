@@ -17,6 +17,7 @@ class EditorUISlotEdit;
 struct IImage;
 struct IImageView;
 struct Texture;
+struct UICheckBox;
 struct UIComboBox;
 struct UIElement;
 struct UIImage;
@@ -113,6 +114,14 @@ class EditorUICanvasTab : public UICompoundWidget
     bool       _bPressing  = false;
     bool       _bPanning   = false;
     glm::vec2  _panLast    = {0.0f, 0.0f}; // view px of the last pan step
+
+    // Grid snapping toggle (mirrors the designer session's flag).
+    std::shared_ptr<UICheckBox> _snapToGrid;
+
+    // Keyboard editing: arrow nudges merge into one undo step per held burst.
+    bool _bNudgeMergeOpen = false;
+    void frameSelection();
+    void endNudgeMerge();
 
   public:
     explicit EditorUICanvasTab(EditorLayer& layer);
