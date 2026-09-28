@@ -165,28 +165,23 @@ struct TestRouteWidget final : public UIElement
 
 struct TestDropTarget final : public UIElement
 {
-    explicit TestDropTarget(std::string name) : UIElement(std::move(name)) {}
-
     bool bAccept = true;
     int highlightChanges = 0;
     int drops = 0;
     std::string lastPayload;
 
-    bool canAcceptDrop(const UIDragDropOperation&, const glm::vec2& point) override
+    explicit TestDropTarget(std::string name) : UIElement(std::move(name))
     {
-        return bAccept && hitTestLayoutRect(point);
-    }
-
-    void onDrop(const UIDragDropOperation& operation, const glm::vec2&) override
-    {
-        ++drops;
-        lastPayload = operation.payload;
-    }
-
-    void setDropHighlight(bool bHighlight) override
-    {
-        (void)bHighlight;
-        ++highlightChanges;
+        auto drop       = std::make_shared<UIDropTargetBehavior>();
+        drop->canAccept = [this](UIElement&, const UIDragDropOperation&, const glm::vec2& point) {
+            return bAccept && hitTestLayoutRect(point);
+        };
+        drop->handleDrop = [this](UIElement&, const UIDragDropOperation& operation, const glm::vec2&) {
+            ++drops;
+            lastPayload = operation.payload;
+        };
+        drop->setHighlightState = [this](UIElement&, bool) { ++highlightChanges; };
+        addBehavior(drop);
     }
 };
 
@@ -199,31 +194,39 @@ struct FAssetTestDragDropOp : public UIDragDropOperation
 
 struct OperationDropTarget final : public UIElement
 {
-    explicit OperationDropTarget(std::string name) : UIElement(std::move(name)) {}
     bool accepted = false;
     std::string receivedType;
-    bool canAcceptDrop(const UIDragDropOperation& operation, const glm::vec2&) override
+
+    explicit OperationDropTarget(std::string name) : UIElement(std::move(name))
     {
-        receivedType = operation.typeId;
-        return operation.as<FAssetTestDragDropOp>() != nullptr;
-    }
-    void onDrop(const UIDragDropOperation& operation, const glm::vec2&) override
-    {
-        if (const auto* asset = operation.as<FAssetTestDragDropOp>()) {
-            accepted = asset->assetId == 42;
-        }
+        auto drop       = std::make_shared<UIDropTargetBehavior>();
+        drop->canAccept = [this](UIElement&, const UIDragDropOperation& operation, const glm::vec2&) {
+            receivedType = operation.typeId;
+            return operation.as<FAssetTestDragDropOp>() != nullptr;
+        };
+        drop->handleDrop = [this](UIElement&, const UIDragDropOperation& operation, const glm::vec2&) {
+            if (const auto* asset = operation.as<FAssetTestDragDropOp>()) {
+                accepted = asset->assetId == 42;
+            }
+        };
+        addBehavior(drop);
     }
 };
 
 struct DragDetectWidget final : public UIElement
 {
-    explicit DragDetectWidget(std::string name) : UIElement(std::move(name)) {}
-    UIDragDropOperationRef onDragDetected(const FDragDetectedEvent& event) override
+    struct Source final : UIBehaviorWith<IUIDragSource>
     {
-        detected = event.currentPoint.x > event.startPoint.x;
-        return UIDragDropOperation::make("detected", "Detected", "test.detected");
-    }
+        UIDragDropOperationRef onDragDetected(UIElement& owner, const FDragDetectedEvent& event) override
+        {
+            static_cast<DragDetectWidget&>(owner).detected = event.currentPoint.x > event.startPoint.x;
+            return UIDragDropOperation::make("detected", "Detected", "test.detected");
+        }
+    };
+
     bool detected = false;
+
+    explicit DragDetectWidget(std::string name) : UIElement(std::move(name)) { addBehavior(std::make_shared<Source>()); }
 };
 
 struct TickCounterWidget final : public UIElement
@@ -269,7 +272,7 @@ struct TickEnabledBorder final : public UIBorder
     void tick(float) override { ++ticks; }
 };
 
-struct TestBehavior final : public UIBehavior
+struct TestBehavior final : public UIBehaviorWith<IUITickable, IUIInputHandler>
 {
     int attached = 0;
     int detached = 0;
@@ -333,7 +336,7 @@ struct TestBehavior final : public UIBehavior
     void requestPaint() { invalidateOwnerPaint(); }
 };
 
-struct TestDragBehavior final : public UIBehavior
+struct TestDragBehavior final : public UIBehaviorWith<IUIDragSource, IUIDropTarget>
 {
     bool bSource = false;
     bool bAccept = false;
@@ -2205,7 +2208,7 @@ TEST(WidgetTreeTest, FocusedButtonActivatesOnEnterAndSpace)
 
 TEST(WidgetTreeTest, ButtonActionBubblesThroughBehavioursToTheSink)
 {
-    struct Recorder final : UIBehavior
+    struct Recorder final : UIBehaviorWith<IUIActionHandler>
     {
         std::vector<std::string>* log = nullptr;
         std::string               tag;
@@ -2616,7 +2619,7 @@ TEST(WidgetTreeTest, LockedTabPressDoesNotArmGhost)
     EXPECT_FALSE(tree.isDragging());
     EXPECT_FALSE(bBegan);
     EXPECT_EQ(tree.getDragOperation(), nullptr);
-    EXPECT_EQ(locked->onDragDetected({press, moved}), nullptr);
+    EXPECT_EQ(detectDrag(*locked, {press, moved}), nullptr);
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(moved.x, moved.y)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
@@ -2701,7 +2704,7 @@ TEST(WidgetTreeTest, DockSpaceSameLeafContentDropWithoutChooserFloats)
         }
     }
     ASSERT_TRUE(bFoundChooserGap);
-    EXPECT_FALSE(stackRoot->canAcceptDrop(*op, drop));
+    EXPECT_FALSE(acceptsDrop(*stackRoot, *op, drop));
     tree.updateDrag(drop);
     tree.endDrag(drop);
     EXPECT_FALSE(tree.isDragging());
@@ -2750,7 +2753,7 @@ TEST(WidgetTreeTest, DockSpaceSameLeafChooserSplitApplies)
         }
     }
     ASSERT_TRUE(bFoundSplit);
-    EXPECT_TRUE(stackRoot->canAcceptDrop(*op, splitPoint));
+    EXPECT_TRUE(acceptsDrop(*stackRoot, *op, splitPoint));
     tree.updateDrag(splitPoint);
     tree.endDrag(splitPoint);
     EXPECT_FALSE(tree.isDragging());

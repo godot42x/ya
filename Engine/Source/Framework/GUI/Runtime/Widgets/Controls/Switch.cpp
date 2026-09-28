@@ -55,8 +55,7 @@ UISwitch::UISwitch(std::string name) : UIElement(std::move(name), "switch")
     bindHostLayout(_contentLayout);
     syncContentPadding();
 
-    // animate() addBehavior's a UITweenBehavior onto this widget. The returned
-    // handle is that same instance; idle (wantsTick() == false) until toggle.
+    // Idle (wantsTick() == false) until the first toggle.
     _transition = animate(*this, kDefaultTransitionSeconds);
     _transition->track(kAnimSwitchProgress, 0.0f, 1.0f, EUIAnimEase::OutQuad);
 }

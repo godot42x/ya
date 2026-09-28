@@ -486,9 +486,9 @@ bool UIAnimClock::tick(float deltaSeconds)
     return true;
 }
 
-// === Tween behaviour ========================================================
+// === Tween ================================================================
 
-UITweenBehavior& UITweenBehavior::addFloatTrack(std::string id, float from, float to, EUIAnimEase ease)
+UITween& UITween::addFloatTrack(std::string id, float from, float to, EUIAnimEase ease)
 {
     FUIAnimTrack track;
     track.id   = std::move(id);
@@ -500,7 +500,7 @@ UITweenBehavior& UITweenBehavior::addFloatTrack(std::string id, float from, floa
     return *this;
 }
 
-UITweenBehavior& UITweenBehavior::addVec2Track(std::string id, glm::vec2 from, glm::vec2 to, EUIAnimEase ease)
+UITween& UITween::addVec2Track(std::string id, glm::vec2 from, glm::vec2 to, EUIAnimEase ease)
 {
     FUIAnimTrack track;
     track.id   = std::move(id);
@@ -512,7 +512,7 @@ UITweenBehavior& UITweenBehavior::addVec2Track(std::string id, glm::vec2 from, g
     return *this;
 }
 
-UITweenBehavior& UITweenBehavior::addVec4Track(std::string id, glm::vec4 from, glm::vec4 to, EUIAnimEase ease)
+UITween& UITween::addVec4Track(std::string id, glm::vec4 from, glm::vec4 to, EUIAnimEase ease)
 {
     FUIAnimTrack track;
     track.id   = std::move(id);
@@ -524,7 +524,7 @@ UITweenBehavior& UITweenBehavior::addVec4Track(std::string id, glm::vec4 from, g
     return *this;
 }
 
-UITweenBehavior& UITweenBehavior::addCurveTrack(std::string id, EUIAnimValueType type, std::vector<FUIAnimKey> keys)
+UITween& UITween::addCurveTrack(std::string id, EUIAnimValueType type, std::vector<FUIAnimKey> keys)
 {
     FUIAnimTrack track;
     track.id = std::move(id);
@@ -540,7 +540,7 @@ UITweenBehavior& UITweenBehavior::addCurveTrack(std::string id, EUIAnimValueType
     return *this;
 }
 
-void UITweenBehavior::clearTracks()
+void UITween::clearTracks()
 {
     _tracks.clear();
     _resolved.clear();
@@ -549,12 +549,13 @@ void UITweenBehavior::clearTracks()
     _bFinishedFired = false;
 }
 
-bool UITweenBehavior::wantsTick() const
+UIElement* UITween::getOwner() const
 {
-    return _clock.isPlaying();
+    const std::shared_ptr<UIAnimatorBehavior> animator = _animator.lock();
+    return animator ? animator->getOwner() : nullptr;
 }
 
-UITweenBehavior& UITweenBehavior::play()
+UITween& UITween::play()
 {
     _warnedIds.clear();
     _bFinishedFired = false;
@@ -571,7 +572,7 @@ UITweenBehavior& UITweenBehavior::play()
     return *this;
 }
 
-UITweenBehavior& UITweenBehavior::playReverse()
+UITween& UITween::playReverse()
 {
     _warnedIds.clear();
     _bFinishedFired = false;
@@ -588,7 +589,7 @@ UITweenBehavior& UITweenBehavior::playReverse()
     return *this;
 }
 
-UITweenBehavior& UITweenBehavior::playToward(EUIAnimDirection direction)
+UITween& UITween::playToward(EUIAnimDirection direction)
 {
     _warnedIds.clear();
     _bFinishedFired = false;
@@ -602,7 +603,7 @@ UITweenBehavior& UITweenBehavior::playToward(EUIAnimDirection direction)
     return *this;
 }
 
-UITweenBehavior& UITweenBehavior::setLerpNow(float lerp)
+UITween& UITween::setLerpNow(float lerp)
 {
     _warnedIds.clear();
     _clock.setLerp(lerp);
@@ -613,20 +614,20 @@ UITweenBehavior& UITweenBehavior::setLerpNow(float lerp)
     return *this;
 }
 
-UITweenBehavior& UITweenBehavior::stop()
+UITween& UITween::stop()
 {
     _clock.stop();
     return *this;
 }
 
-void UITweenBehavior::tick(UIElement& owner, float deltaSeconds)
+void UITween::tick(UIElement& owner, float deltaSeconds)
 {
     _clock.tick(deltaSeconds);
     applyTracks(owner, _clock.getLerp());
     settleFinishedCallback();
 }
 
-void UITweenBehavior::settleFinishedCallback()
+void UITween::settleFinishedCallback()
 {
     if (_clock.hasFinished() && !_bFinishedFired) {
         _bFinishedFired = true;
@@ -636,15 +637,14 @@ void UITweenBehavior::settleFinishedCallback()
     }
 }
 
-void UITweenBehavior::onDetached(UIElement& owner)
+void UITween::release()
 {
     _clock.stop();
     // The next owner may expose a different property table.
     _resolved.clear();
-    UIBehavior::onDetached(owner);
 }
 
-void UITweenBehavior::resolveTrackDescriptors(UIElement& owner)
+void UITween::resolveTrackDescriptors(UIElement& owner)
 {
     // Runs once per track set / owner change. Descriptors come from static
     // per-widget-type tables, so the pointers stay valid while the owner (and
@@ -666,16 +666,16 @@ void UITweenBehavior::resolveTrackDescriptors(UIElement& owner)
     }
 }
 
-void UITweenBehavior::warnTrackSkipped(UIElement& owner, const FUIAnimTrack& track, const char* reason)
+void UITween::warnTrackSkipped(UIElement& owner, const FUIAnimTrack& track, const char* reason)
 {
     if (std::ranges::find(_warnedIds, track.id) != _warnedIds.end()) {
         return;
     }
     _warnedIds.push_back(track.id);
-    YA_CORE_WARN("UITweenBehavior: owner '{}' {} for track '{}'; track skipped", owner._name, reason, track.id);
+    YA_CORE_WARN("UITween: owner '{}' {} for track '{}'; track skipped", owner._name, reason, track.id);
 }
 
-void UITweenBehavior::applyTracks(UIElement& owner, float lerp)
+void UITween::applyTracks(UIElement& owner, float lerp)
 {
     if (_resolved.size() != _tracks.size()) {
         resolveTrackDescriptors(owner);
@@ -696,14 +696,51 @@ void UITweenBehavior::applyTracks(UIElement& owner, float lerp)
     }
 }
 
+// === Animator ===============================================================
+
+bool UIAnimatorBehavior::wantsTick() const
+{
+    return std::ranges::any_of(_tweens, [](const std::shared_ptr<UITween>& tween) { return tween->isPlaying(); });
+}
+
+void UIAnimatorBehavior::tick(UIElement& owner, float deltaSeconds)
+{
+    // An end callback may start another tween on this widget; it joins
+    // _tweens and runs from the next frame.
+    const size_t count = _tweens.size();
+    for (size_t i = 0; i < count; ++i) {
+        const std::shared_ptr<UITween> tween = _tweens[i];
+        if (tween->isPlaying()) {
+            tween->tick(owner, deltaSeconds);
+        }
+    }
+    std::erase_if(_tweens, [](const std::shared_ptr<UITween>& tween) {
+        return !tween->isPlaying() && tween.use_count() == 1;
+    });
+}
+
+void UIAnimatorBehavior::onDetached(UIElement& owner)
+{
+    for (const std::shared_ptr<UITween>& tween : _tweens) {
+        tween->release();
+    }
+    UIBehavior::onDetached(owner);
+}
+
 // === Authoring entry points =================================================
 
-std::shared_ptr<UITweenBehavior> animate(UIElement& widget, float duration)
+std::shared_ptr<UITween> animate(UIElement& widget, float duration)
 {
-    auto behavior = std::make_shared<UITweenBehavior>();
-    behavior->setDuration(duration);
-    widget.addBehavior(behavior); // join the widget's UIBehavior list (tick / wantsTick)
-    return behavior;
+    std::shared_ptr<UIAnimatorBehavior> animator = widget.findBehavior<UIAnimatorBehavior>();
+    if (!animator) {
+        animator = std::make_shared<UIAnimatorBehavior>();
+        widget.addBehavior(animator);
+    }
+    auto tween       = std::make_shared<UITween>();
+    tween->_animator = animator;
+    tween->setDuration(duration);
+    animator->_tweens.push_back(tween);
+    return tween;
 }
 
 } // namespace ya

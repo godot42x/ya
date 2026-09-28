@@ -191,24 +191,15 @@ struct FDropChooserOverlay final : UIElement
     UIDockSpace* _owner = nullptr;
 };
 
-template <typename TBehavior>
-TBehavior* findBehavior(UIElement& owner)
-{
-    for (const UIBehaviorRef& behavior : owner.getBehaviors()) {
-        if (auto* typed = dynamic_cast<TBehavior*>(behavior.get())) {
-            return typed;
-        }
-    }
-    return nullptr;
-}
-
 } // namespace
 
 FDockPanelDragDropOp::~FDockPanelDragDropOp() = default;
 
-struct FDockSpacePanelDragBehavior final : public UIBehavior
+/// Panel drag session for UIDockSpace; a friend so it can drive the owner's
+/// drag state.
+struct FDockSpacePanelDrag
 {
-    void beginPanelDrag(UIDockSpace& owner, DockPanelId panelId, std::string label)
+    static void beginPanelDrag(UIDockSpace& owner, DockPanelId panelId, std::string label)
     {
         WidgetTree* tree = owner.getTree();
         if (!tree) {
@@ -258,7 +249,6 @@ UIDockSpace::UIDockSpace(std::string name)
 {
     installLayout(std::make_unique<UISingleChildLayout>());
     _hitFilter = EWidgetHitFilter::Stop;
-    addBehavior(std::make_shared<FDockSpacePanelDragBehavior>());
     installDockDropTarget(*this);
 }
 
@@ -646,9 +636,7 @@ void UIDockSpace::bindStackHandlers(FDockStackView& view, DockNodeId stackId)
             return;
         }
         const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
-        if (auto* behavior = findBehavior<FDockSpacePanelDragBehavior>(*this)) {
-            behavior->beginPanelDrag(*this, panelId, label);
-        }
+        FDockSpacePanelDrag::beginPanelDrag(*this, panelId, label);
     };
     view.well->_onTabReordered = [this, stackId](int from, int to)
     {

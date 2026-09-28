@@ -2389,7 +2389,7 @@ TEST(UIFrameSnapshotTest, SelectableRowDropTargetWinsOverSelection)
     rowSlot.fixedSize = {240.0f, 22.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
 
-    row->setDropHighlight(true);
+    highlightDrop(*row, true);
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_EQ(snap.items.size(), 1u);
     EXPECT_EQ(snap.items[0].color, FSelectableRowStyle{}.dropTargetFill.tintColor);

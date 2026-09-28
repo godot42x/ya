@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <typeinfo>
 
 namespace ya
 {
@@ -29,8 +30,8 @@ bool UIElement::wantsTick() const
     if (_bTickEnabled) {
         return true;
     }
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->wantsTick()) {
+    for (const IUITickable* tickable : behaviorsOf<IUITickable>()) {
+        if (tickable->wantsTick()) {
             return true;
         }
     }
@@ -65,23 +66,45 @@ UIElement::~UIElement()
     clearPersistentDependencies();
 }
 
-void UIElement::addBehavior(const UIBehaviorRef& behavior)
+bool UIElement::addBehavior(const UIBehaviorRef& behavior)
 {
     if (!behavior) {
         YA_CORE_ERROR("UIElement::addBehavior: null behavior on '{}'", _name);
-        return;
+        return false;
     }
     if (std::find(_behaviors.begin(), _behaviors.end(), behavior) != _behaviors.end()) {
-        return;
+        return true;
     }
     if (behavior->_owner && behavior->_owner != this) {
         YA_CORE_ERROR("UIElement::addBehavior: behavior already attached to another widget");
-        return;
+        return false;
+    }
+    const UIBehavior& added = *behavior;
+    if (std::ranges::any_of(_behaviors, [&added](const UIBehaviorRef& existing) {
+            const UIBehavior& candidate = *existing;
+            return typeid(candidate) == typeid(added);
+        })) {
+        YA_CORE_ERROR("UIElement::addBehavior: '{}' already has a behavior of type '{}'", _name, typeid(added).name());
+        return false;
     }
     _behaviors.push_back(behavior);
+    if (!_behaviorIndex) {
+        _behaviorIndex = std::make_unique<FUIBehaviorIndex>();
+    }
+    std::apply(
+        [&behavior](auto&... lists) {
+            auto join = [&behavior]<typename I>(std::vector<I*>& list) {
+                if (behavior->hasCapability(I::kCapability)) {
+                    list.push_back(static_cast<I*>(behavior->capabilityInterface(I::kCapability)));
+                }
+            };
+            (join(lists), ...);
+        },
+        *_behaviorIndex);
     if (isAttached()) {
         behavior->onAttached(*this);
     }
+    return true;
 }
 
 void UIElement::removeBehavior(const UIBehavior& behavior)
@@ -91,10 +114,21 @@ void UIElement::removeBehavior(const UIBehavior& behavior)
     if (it == _behaviors.end()) {
         return;
     }
+    const UIBehaviorRef removed = *it;
     if (isAttached()) {
-        (*it)->onDetached(*this);
+        removed->onDetached(*this);
     }
-    _behaviors.erase(it);
+    _behaviors.erase(std::find(_behaviors.begin(), _behaviors.end(), removed));
+    std::apply(
+        [&removed](auto&... lists) {
+            auto leave = [&removed]<typename I>(std::vector<I*>& list) {
+                if (removed->hasCapability(I::kCapability)) {
+                    std::erase(list, static_cast<I*>(removed->capabilityInterface(I::kCapability)));
+                }
+            };
+            (leave(lists), ...);
+        },
+        *_behaviorIndex);
 }
 
 bool UIElement::hasBehavior(const UIBehavior& behavior) const
@@ -499,8 +533,8 @@ void UIElement::paintChildren(UIFrameBuilder& builder)
 
 bool UIElement::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->handleInputEvent(*this, event, ctx)) {
+    for (IUIInputHandler* input : behaviorsOf<IUIInputHandler>()) {
+        if (input->handleInputEvent(*this, event, ctx)) {
             return true;
         }
     }
@@ -511,8 +545,8 @@ bool UIElement::handleInputEvent(const Event& event, const WidgetEventContext& c
 
 bool UIElement::previewInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->previewInputEvent(*this, event, ctx)) {
+    for (IUIInputHandler* input : behaviorsOf<IUIInputHandler>()) {
+        if (input->previewInputEvent(*this, event, ctx)) {
             return true;
         }
     }
@@ -523,8 +557,8 @@ bool UIElement::previewInputEvent(const Event& event, const WidgetEventContext& 
 
 bool UIElement::bubbleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->bubbleInputEvent(*this, event, ctx)) {
+    for (IUIInputHandler* input : behaviorsOf<IUIInputHandler>()) {
+        if (input->bubbleInputEvent(*this, event, ctx)) {
             return true;
         }
     }
@@ -533,9 +567,9 @@ bool UIElement::bubbleInputEvent(const Event& event, const WidgetEventContext& c
 
 void UIElement::tick(float deltaSeconds)
 {
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->wantsTick()) {
-            behavior->tick(*this, deltaSeconds);
+    for (IUITickable* tickable : behaviorsOf<IUITickable>()) {
+        if (tickable->wantsTick()) {
+            tickable->tick(*this, deltaSeconds);
         }
     }
 }
@@ -733,55 +767,6 @@ void UIElement::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&
     (void)tree;
 }
 
-bool UIElement::canAcceptDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
-{
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->canAcceptDrop(*this, operation, logicalPoint)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool UIElement::canPreviewDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
-{
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->canPreviewDrop(*this, operation, logicalPoint)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void UIElement::onDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
-{
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->canAcceptDrop(*this, operation, logicalPoint)) {
-            behavior->onDrop(*this, operation, logicalPoint);
-            return;
-        }
-    }
-}
-
-void UIElement::setDropHighlight(bool bHighlight)
-{
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior) {
-            behavior->setDropHighlight(*this, bHighlight);
-        }
-    }
-}
-
-void UIElement::updateDropHover(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
-{
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->canPreviewDrop(*this, operation, logicalPoint)) {
-            behavior->updateDropHover(*this, operation, logicalPoint);
-            return;
-        }
-    }
-}
-
 bool UIElement::beginDragOperation(UIDragDropOperationRef operation,
                                    bool bShowGhost,
                                    bool bSkipSourceInHitTest)
@@ -791,18 +776,6 @@ bool UIElement::beginDragOperation(UIDragDropOperationRef operation,
     }
     _tree->beginDrag(this, std::move(operation), {}, bShowGhost, bSkipSourceInHitTest);
     return true;
-}
-
-UIDragDropOperationRef UIElement::onDragDetected(const FDragDetectedEvent& event)
-{
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior) {
-            if (UIDragDropOperationRef operation = behavior->onDragDetected(*this, event)) {
-                return operation;
-            }
-        }
-    }
-    return nullptr;
 }
 
 void UIElement::appendRuntimeLayoutDiagnostics(nlohmann::json& node) const

@@ -22,17 +22,6 @@ namespace ya
 
 namespace
 {
-template <typename TBehavior>
-TBehavior* findBehavior(UIElement& owner)
-{
-    for (const UIBehaviorRef& behavior : owner.getBehaviors()) {
-        if (auto* typed = dynamic_cast<TBehavior*>(behavior.get())) {
-            return typed;
-        }
-    }
-    return nullptr;
-}
-
 bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 {
     return point.x >= rect.pos.x && point.x <= rect.pos.x + rect.extent.x &&
@@ -109,9 +98,11 @@ struct FDockFloatingWindowDropTargetBehavior final : public UIDropTargetBehavior
     }
 };
 
-struct FDockFloatingWindowPanelDragBehavior final : public UIBehavior
+/// Panel drag session for UIDockFloatingWindow; a friend so it can drive the owner's
+/// drag state.
+struct FDockFloatingWindowPanelDrag
 {
-    void beginPanelDrag(UIDockFloatingWindow& owner, DockPanelId panelId, std::string label)
+    static void beginPanelDrag(UIDockFloatingWindow& owner, DockPanelId panelId, std::string label)
     {
         WidgetTree* tree = owner.getTree();
         if (!tree) {
@@ -141,7 +132,7 @@ struct FDockFloatingWindowPanelDragBehavior final : public UIBehavior
             if (!space) {
                 return;
             }
-            space->updateDropHover(operation, logicalPoint);
+            hoverDrop(*space, operation, logicalPoint);
             if (space->hasDropPreview()) {
                 *lastPreview = space->dropPreview();
             }
@@ -304,7 +295,6 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
 {
     installLayout(std::make_unique<UIOverlayLayout>());
     _hitFilter = EWidgetHitFilter::Stop;
-    addBehavior(std::make_shared<FDockFloatingWindowPanelDragBehavior>());
     addBehavior(std::make_shared<FDockFloatingWindowDropTargetBehavior>());
 
     auto chrome = std::make_shared<UIContainer>(std::format("{}_Chrome", _name));
@@ -334,9 +324,7 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
                 _title = _context->findPanel(_panelId) ? _context->findPanel(_panelId)->name : std::string{};
             }
         }
-        if (auto* behavior = findBehavior<FDockFloatingWindowPanelDragBehavior>(*this)) {
-            behavior->beginPanelDrag(*this, _panelId, _title);
-        }
+        FDockFloatingWindowPanelDrag::beginPanelDrag(*this, _panelId, _title);
     };
     _tabBar->_onTabContextMenu = [this](int, const glm::vec2& logicalPoint)
     {

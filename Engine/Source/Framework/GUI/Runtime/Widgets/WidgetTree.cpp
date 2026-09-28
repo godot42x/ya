@@ -811,9 +811,18 @@ bool WidgetTree::emitAction(UIElement& source, std::string_view action)
         route.push_back(node->shared_from_this());
     }
     for (const UIElementRef& node : route) {
-        const std::vector<UIBehaviorRef> behaviors = node->getBehaviors();
-        for (const UIBehaviorRef& behavior : behaviors) {
-            if (behavior && behavior->getOwner() == node.get() && behavior->onAction(*node, source, action)) {
+        const std::span<IUIActionHandler* const> live = node->behaviorsOf<IUIActionHandler>();
+        if (live.empty()) {
+            continue;
+        }
+        const std::vector<UIBehaviorRef>     keepAlive = node->getBehaviors();
+        const std::vector<IUIActionHandler*> handlers(live.begin(), live.end());
+        for (IUIActionHandler* handler : handlers) {
+            if (!node->isAttached() || std::ranges::find(node->behaviorsOf<IUIActionHandler>(), handler) ==
+                                           node->behaviorsOf<IUIActionHandler>().end()) {
+                continue;
+            }
+            if (handler->onAction(*node, source, action)) {
                 return true;
             }
         }
@@ -1159,7 +1168,7 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
     if (eventType == EEvent::MouseMoved && _dragCandidate && !isDragging()) {
         if (glm::length(ctx.logicalPoint - _dragCandidateStart) > 6.0f) {
             UIElementRef candidate = _dragCandidate->shared_from_this();
-            auto operation = candidate->onDragDetected({_dragCandidateStart, ctx.logicalPoint});
+            auto operation = detectDrag(*candidate, {_dragCandidateStart, ctx.logicalPoint});
             _dragCandidate = nullptr;
             if (operation) {
                 beginDrag(candidate.get(), std::move(operation));
@@ -1719,7 +1728,7 @@ UIElement* WidgetTree::findDropTarget(const glm::vec2& logicalPoint,
         return nullptr;
     }
     for (UIElement* node = topmostHit(logicalPoint); node != nullptr; node = node->getParent()) {
-        if (node->canAcceptDrop(*operation, logicalPoint)) {
+        if (acceptsDrop(*node, *operation, logicalPoint)) {
             return node;
         }
     }
@@ -1736,7 +1745,7 @@ UIElement* WidgetTree::findDropHoverTarget(const glm::vec2& logicalPoint,
         return accept;
     }
     for (UIElement* node = topmostHit(logicalPoint); node != nullptr; node = node->getParent()) {
-        if (node->canPreviewDrop(*operation, logicalPoint)) {
+        if (previewsDrop(*node, *operation, logicalPoint)) {
             return node;
         }
     }
@@ -1787,16 +1796,16 @@ void WidgetTree::applyDropTarget(UIElement* target,
 {
     if (target != _dragDropTarget) {
         if (_dragDropTarget) {
-            _dragDropTarget->setDropHighlight(false);
+            highlightDrop(*_dragDropTarget, false);
         }
         _dragDropTarget = target;
         if (_dragDropTarget) {
-            _dragDropTarget->setDropHighlight(true);
-            _dragDropTarget->updateDropHover(operation, logicalPoint);
+            highlightDrop(*_dragDropTarget, true);
+            hoverDrop(*_dragDropTarget, operation, logicalPoint);
         }
     }
     else if (_dragDropTarget) {
-        _dragDropTarget->updateDropHover(operation, logicalPoint);
+        hoverDrop(*_dragDropTarget, operation, logicalPoint);
     }
 }
 
@@ -1829,7 +1838,7 @@ void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
 void WidgetTree::clearDragSession()
 {
     if (_dragDropTarget) {
-        _dragDropTarget->setDropHighlight(false);
+        highlightDrop(*_dragDropTarget, false);
         _dragDropTarget = nullptr;
     }
     _externalDropOp = nullptr;
@@ -1861,7 +1870,7 @@ void WidgetTree::endDrag(const glm::vec2& logicalPoint)
     clearDragSession();
     if (target) {
         if (operation) {
-            targetKeepAlive->onDrop(*operation, logicalPoint);
+            dropOnto(*targetKeepAlive, *operation, logicalPoint);
         }
     }
     if (observer.onFinished) {
@@ -1918,7 +1927,7 @@ void WidgetTree::setExternalDropHover(const UIDragDropOperation& operation,
 void WidgetTree::clearExternalDropHover()
 {
     if (_dragDropTarget) {
-        _dragDropTarget->setDropHighlight(false);
+        highlightDrop(*_dragDropTarget, false);
         _dragDropTarget = nullptr;
     }
     _externalDropOp = nullptr;
@@ -1932,7 +1941,7 @@ void WidgetTree::setSourceDragChromeVisible(bool visible)
                                           : EWidgetVisibility::Hidden);
     }
     if (!visible && _dragDropTarget) {
-        _dragDropTarget->setDropHighlight(false);
+        highlightDrop(*_dragDropTarget, false);
         _dragDropTarget = nullptr;
     }
 }
@@ -1948,7 +1957,7 @@ bool WidgetTree::dropExternal(const UIDragDropOperation& operation, const glm::v
     if (!target) {
         return false;
     }
-    keep->onDrop(operation, logicalPoint);
+    dropOnto(*keep, operation, logicalPoint);
     return true;
 }
 

@@ -134,15 +134,13 @@ TEST(GuiAnimationTest, TweenAdvancesThenStopsDirtying)
     WidgetTree tree({.width = 400, .height = 200});
     auto       card  = std::make_shared<UIBorder>("Card");
     card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
-    auto       tween = std::make_shared<UITweenBehavior>();
+    auto       tween = animate(*card, 1.0f);
     tween->addFloatTrack("opacity", 0.0f, 1.0f, EUIAnimEase::Linear);
-    tween->setDuration(1.0f);
 
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
-    card->addBehavior(tween);
 
     EXPECT_FALSE(card->wantsTick());
     tween->play();
@@ -183,22 +181,20 @@ TEST(GuiAnimationTest, TweenDrivesDownstreamPropertyWithoutFrameworkChange)
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 40.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe, slot);
-    auto tween  = std::make_shared<UITweenBehavior>();
+    auto tween  = animate(*probe, 1.0f);
     // from != the property default, so "play applies t=0 immediately" is
     // actually observable instead of coinciding with the initial value.
     tween->addFloatTrack("gauge", 0.2f, 1.0f, EUIAnimEase::Linear);
-    tween->setDuration(1.0f);
-    probe->addBehavior(tween);
 
     tween->play();
     EXPECT_FLOAT_EQ(probe->getGauge(), 0.2f);
     EXPECT_TRUE(probe->wantsTick());
 
-    tween->tick(*probe, 0.5f);
+    tree.tick(0.5f);
     EXPECT_FLOAT_EQ(probe->getGauge(), 0.6f);
     EXPECT_TRUE(probe->isPaintDirty());
 
-    tween->tick(*probe, 0.5f);
+    tree.tick(0.5f);
     EXPECT_FLOAT_EQ(probe->getGauge(), 1.0f); // end of the track
     EXPECT_FALSE(probe->wantsTick());
 
@@ -364,15 +360,13 @@ TEST(GuiAnimationTest, UnknownTrackIsSkippedWithoutBreakingResolvedTracks)
     slot.fixedSize = {80.0f, 40.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
 
-    auto tween = std::make_shared<UITweenBehavior>();
+    auto tween = animate(*card, 1.0f);
     tween->addFloatTrack("notAnimatable", 0.0f, 1.0f, EUIAnimEase::Linear);
     tween->addFloatTrack("opacity", 0.0f, 1.0f, EUIAnimEase::Linear);
-    tween->setDuration(1.0f);
-    card->addBehavior(tween);
 
     tween->play();
     EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.0f);
-    tween->tick(*card, 0.5f);
+    tree.tick(0.5f);
     EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.5f);
 }
 
@@ -389,23 +383,23 @@ TEST(GuiAnimationTest, PlayTowardRetargetsWithoutSnapping)
 
     auto tween = animate(*card, 1.0f);
     tween->fade(0.0f, 1.0f, EUIAnimEase::Linear).play();
-    tween->tick(*card, 0.5f);
+    tree.tick(0.5f);
     EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.5f);
 
     // Reverse from the current position: the value keeps falling from 0.5.
     tween->playToward(EUIAnimDirection::Backward);
     EXPECT_TRUE(card->wantsTick());
-    tween->tick(*card, 0.2f);
+    tree.tick(0.2f);
     EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.3f);
 
     // Forward again from 0.3 (no jump to 0).
     tween->playToward(EUIAnimDirection::Forward);
-    tween->tick(*card, 0.2f);
+    tree.tick(0.2f);
     EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.5f);
 
     // Reaching the endpoint settles instead of spinning.
     tween->playToward(EUIAnimDirection::Forward);
-    tween->tick(*card, 5.0f);
+    tree.tick(5.0f);
     EXPECT_FLOAT_EQ(card->getRenderOpacity(), 1.0f);
     EXPECT_FALSE(card->wantsTick());
 
@@ -480,6 +474,43 @@ TEST(GuiAnimationTest, AnimateHelperAttachesTheBehaviour)
     EXPECT_FALSE(card->wantsTick());
 }
 
+// One behaviour per type: every tween on a widget runs on its single animator,
+// each on its own clock.
+TEST(GuiAnimationTest, TweensOnOneWidgetShareItsSingleAnimator)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    auto       card = std::make_shared<UIBorder>("Card");
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {80.0f, 40.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+
+    auto fade = animate(*card, 1.0f);
+    fade->fade(0.0f, 1.0f, EUIAnimEase::Linear);
+    auto slide = animate(*card, 0.5f);
+    slide->slide({0.0f, 0.0f}, {10.0f, 0.0f}, EUIAnimEase::Linear);
+    animate(*card, 0.25f)->scale({1.0f, 1.0f}, {2.0f, 2.0f}, EUIAnimEase::Linear).play();
+
+    EXPECT_EQ(card->getBehaviors().size(), 1u);
+    const auto animator = card->findBehavior<UIAnimatorBehavior>();
+    ASSERT_NE(animator, nullptr);
+    EXPECT_EQ(animator->getTweenCount(), 3u);
+
+    fade->play();
+    slide->play();
+    tree.tick(0.25f);
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.25f);
+    EXPECT_EQ(card->getRenderTranslation(), glm::vec2(5.0f, 0.0f));
+    EXPECT_EQ(card->getRenderScale(), glm::vec2(2.0f, 2.0f));
+    // The finished fire-and-forget tween has no other holder: dropped.
+    EXPECT_EQ(animator->getTweenCount(), 2u);
+
+    tree.tick(0.25f);
+    EXPECT_FALSE(slide->isPlaying());
+    EXPECT_TRUE(fade->isPlaying());
+    // A held tween stays replayable after it finishes.
+    EXPECT_EQ(animator->getTweenCount(), 2u);
+}
+
 // === Default-animated control: UISwitch =====================================
 
 TEST(GuiAnimationTest, SwitchIsIdleUntilToggledThenAnimatesItsStateChange)
@@ -490,17 +521,10 @@ TEST(GuiAnimationTest, SwitchIsIdleUntilToggledThenAnimatesItsStateChange)
     auto widget = attachSwitch(tree, slot);
 
     // An untouched switch costs nothing per frame (the transition is asleep).
-    // The lifetime tween is on the widget's behavior list, not a private clock.
+    // The lifetime tween is on the widget's animator, not a private clock.
     EXPECT_FALSE(widget->wantsTick());
     EXPECT_FLOAT_EQ(widget->getProgress(), 0.0f);
-    bool bTweenOnBehaviorList = false;
-    for (const UIBehaviorRef& behavior : widget->getBehaviors()) {
-        if (dynamic_cast<const UITweenBehavior*>(behavior.get()) != nullptr) {
-            bTweenOnBehaviorList = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(bTweenOnBehaviorList);
+    EXPECT_NE(widget->findBehavior<UIAnimatorBehavior>(), nullptr);
 
     widget->setChecked(true);
     EXPECT_TRUE(widget->isChecked());

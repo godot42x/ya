@@ -27,10 +27,13 @@
 
 #include <glm/glm.hpp>
 
+#include <concepts>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
+#include <typeinfo>
 #include <unordered_set>
 #include <vector>
 
@@ -194,20 +197,44 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// same protocol and they cover different things:
     ///   - this one, called from the widget's OWN class, which overrides
     ///     tick() because the per-frame state lives in that type;
-    ///   - addBehavior(UIBehavior) for per-frame work that is not the widget's
-    ///     type (tween, drag, a dialog refreshing itself) - the behaviour
-    ///     reports wantsTick() on its own.
+    ///   - addBehavior(an IUITickable behaviour) for per-frame work that is not
+    ///     the widget's type (tween, a dialog refreshing itself) - the
+    ///     behaviour reports wantsTick() on its own.
     /// A subclass that overrides wantsTick() MUST chain to
     /// UIElement::wantsTick(), or every behaviour attached to that type is
     /// silently never ticked.
     void enableTick(bool enabled = true) { _bTickEnabled = enabled; }
 
-    /// Cross-cutting capabilities (tween, drag, drop). WidgetTree ticks a
-    /// widget that wantsTick(); UIElement::wantsTick/tick forward to this list.
-    /// A lifetime tween belongs here (addBehavior), not on a parallel clock.
-    void addBehavior(const UIBehaviorRef& behavior);
+    /// Parts that are not this widget's own type (tween, drag, drop, script).
+    /// Each joins the per-capability lists it declared (UIBehaviorWith<...>);
+    /// dispatch reads those lists through behaviorsOf<I>(). A lifetime tween
+    /// belongs here (animate() -> UIAnimatorBehavior), not on a parallel clock.
+    /// At most one behaviour per concrete type: a second one is rejected
+    /// (returns false), so findBehavior<T>() always names a single instance.
+    bool addBehavior(const UIBehaviorRef& behavior);
     void removeBehavior(const UIBehavior& behavior);
     [[nodiscard]] bool hasBehavior(const UIBehavior& behavior) const;
+    /// The behaviour whose concrete type is exactly `T`, or null.
+    template <std::derived_from<UIBehavior> T>
+    [[nodiscard]] std::shared_ptr<T> findBehavior() const
+    {
+        for (const UIBehaviorRef& behavior : _behaviors) {
+            const UIBehavior& candidate = *behavior;
+            if (typeid(candidate) == typeid(T)) {
+                return std::static_pointer_cast<T>(behavior);
+            }
+        }
+        return nullptr;
+    }
+    /// Behaviours implementing capability interface `I`, in attach order.
+    template <typename I>
+    [[nodiscard]] std::span<I* const> behaviorsOf() const
+    {
+        if (!_behaviorIndex) {
+            return {};
+        }
+        return std::get<std::vector<I*>>(*_behaviorIndex);
+    }
 
     // === Identity ===
     std::string _name;
@@ -470,33 +497,15 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// outside the parent rect.
     [[nodiscard]] virtual bool cullsChildHits(const glm::vec2& /*logicalPoint*/) const { return false; }
 
-    // === Drag & drop target hooks ===
-    /// Whether this widget accepts the in-flight operation at `logicalPoint`
-    /// (the tree highlights it as a valid drop target during a drag session).
-    [[nodiscard]] virtual bool canAcceptDrop(const UIDragDropOperation& operation,
-                                             const glm::vec2& logicalPoint);
-    [[nodiscard]] virtual bool canPreviewDrop(const UIDragDropOperation& operation,
-                                              const glm::vec2& logicalPoint);
-    /// Called when a drag session is released over this target (only after
-    /// canAcceptDrop returned true for that point).
-    virtual void onDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
-    /// Visual feedback while the drag hovers this target (cleared on leave /
-    /// drop / cancel). Targets with a point-SENSITIVE preview (e.g. a dock
-    /// space whose highlight follows the pointer) override updateDropHover
-    /// instead.
-    virtual void setDropHighlight(bool bHighlight);
-    /// Point-sensitive hover feedback: called with the CURRENT drag point on
-    /// every pointer move while this widget is the active drop target (the
-    /// tree calls it after setDropHighlight(true) and on each move). Default:
-    /// no-op — targets without a moving preview keep using setDropHighlight.
-    virtual void updateDropHover(const UIDragDropOperation& operation,
-                                 const glm::vec2& logicalPoint);
+    // === Drag & drop ===
+    // Drag sources and drop targets are IUIDragSource / IUIDropTarget
+    // behaviours; the tree asks them through acceptsDrop / dropOnto / ...
+    // (UIBehavior.h).
     /// Start an operation owned by the widget tree. Any UIElement may invoke
     /// this; drag-source widget subclasses are not required.
     bool beginDragOperation(UIDragDropOperationRef operation,
                             bool bShowGhost = true,
                             bool bSkipSourceInHitTest = false);
-    virtual UIDragDropOperationRef onDragDetected(const FDragDetectedEvent& event);
 
     // === Reactive dependency tracking ===
     /// Mark this widget paint-dirty (called by ReactiveBase::notifyDependents).
@@ -736,6 +745,8 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// points back with a raw (non-owning) pointer.
     std::vector<UIElementRef> _children;
     std::vector<UIBehaviorRef> _behaviors;
+    /// `_behaviors` by capability; null until the first behaviour.
+    std::unique_ptr<FUIBehaviorIndex> _behaviorIndex;
     std::vector<std::unique_ptr<UISlot>> _childSlots;
     UIElement*                _parent = nullptr;
     UISlot*                   _slot   = nullptr;

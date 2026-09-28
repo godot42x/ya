@@ -1260,7 +1260,7 @@ TEST(DockNodeTest, DropTargetKindDistinguishesWellStackSplitAndNoTarget)
     EXPECT_EQ(well->target.stackId, inspectorLeaf->id);
     EXPECT_TRUE(well->target.commitsDrop());
     EXPECT_TRUE(well->target.isMerge());
-    EXPECT_TRUE(inspectorBar->canAcceptDrop(*operation, wellPoint));
+    EXPECT_TRUE(acceptsDrop(*inspectorBar, *operation, wellPoint));
 
     const glm::vec2 sameLeafPoint = sceneBar->_layoutRect.pos + glm::vec2{8.0f, sceneBar->_layoutRect.extent.y + 40.0f};
     const auto sameLeaf = dock->dropPreviewFor(*operation, sameLeafPoint);
@@ -1272,11 +1272,11 @@ TEST(DockNodeTest, DropTargetKindDistinguishesWellStackSplitAndNoTarget)
         findNamedDescendant(*dock, std::format("DockStack{}", sceneLeaf->id)));
     ASSERT_NE(sceneStack, nullptr);
     if (sameLeaf->target.commitsDrop()) {
-        EXPECT_TRUE(sceneStack->canAcceptDrop(*operation, sameLeafPoint));
+        EXPECT_TRUE(acceptsDrop(*sceneStack, *operation, sameLeafPoint));
     }
     else {
-        EXPECT_FALSE(sceneStack->canAcceptDrop(*operation, sameLeafPoint));
-        EXPECT_TRUE(sceneStack->canPreviewDrop(*operation, sameLeafPoint));
+        EXPECT_FALSE(acceptsDrop(*sceneStack, *operation, sameLeafPoint));
+        EXPECT_TRUE(previewsDrop(*sceneStack, *operation, sameLeafPoint));
     }
 
     glm::vec2 chooserPoint = inspectorLeafRoot->_layoutRect.pos + glm::vec2{24.0f, 80.0f};
@@ -1316,9 +1316,9 @@ TEST(DockNodeTest, DropTargetKindDistinguishesWellStackSplitAndNoTarget)
     EXPECT_EQ(chooser->target.kind, EDockDropTargetKind::TabStackChooser);
     EXPECT_FALSE(chooser->target.commitsDrop());
     EXPECT_TRUE(chooser->target.isPreviewOnly());
-    EXPECT_FALSE(inspectorLeafRoot->canAcceptDrop(*operation, chooserPoint));
-    EXPECT_TRUE(inspectorLeafRoot->canPreviewDrop(*operation, chooserPoint));
-    EXPECT_TRUE(inspectorLeafRoot->canAcceptDrop(*operation, splitPoint));
+    EXPECT_FALSE(acceptsDrop(*inspectorLeafRoot, *operation, chooserPoint));
+    EXPECT_TRUE(previewsDrop(*inspectorLeafRoot, *operation, chooserPoint));
+    EXPECT_TRUE(acceptsDrop(*inspectorLeafRoot, *operation, splitPoint));
 
     const auto split = dock->dropPreviewFor(*operation, splitPoint);
     ASSERT_TRUE(split.has_value());
@@ -1600,12 +1600,12 @@ TEST(DockNodeTest, NestedDockChooserWinsOverHostPageLeaf)
     ASSERT_TRUE(bFoundSplit);
 
     EXPECT_FALSE(outerDock->dropPreviewFor(*operation, chooserPoint).has_value());
-    EXPECT_FALSE(pageStack->canAcceptDrop(*operation, chooserPoint));
-    EXPECT_FALSE(pageStack->canPreviewDrop(*operation, chooserPoint));
-    EXPECT_TRUE(nestedStack->canPreviewDrop(*operation, chooserPoint));
-    EXPECT_FALSE(nestedStack->canAcceptDrop(*operation, chooserPoint));
-    EXPECT_TRUE(nestedStack->canAcceptDrop(*operation, splitPoint));
-    EXPECT_FALSE(pageStack->canAcceptDrop(*operation, splitPoint));
+    EXPECT_FALSE(acceptsDrop(*pageStack, *operation, chooserPoint));
+    EXPECT_FALSE(previewsDrop(*pageStack, *operation, chooserPoint));
+    EXPECT_TRUE(previewsDrop(*nestedStack, *operation, chooserPoint));
+    EXPECT_FALSE(acceptsDrop(*nestedStack, *operation, chooserPoint));
+    EXPECT_TRUE(acceptsDrop(*nestedStack, *operation, splitPoint));
+    EXPECT_FALSE(acceptsDrop(*pageStack, *operation, splitPoint));
 
     tree.beginDrag(outerDock.get(), operation);
     tree.updateDrag(chooserPoint);

@@ -172,7 +172,7 @@ struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSp
     [[nodiscard]] bool assignedLayoutInputsUnchanged() const override;
 
 private:
-    friend struct FDockSpacePanelDragBehavior;
+    friend struct FDockSpacePanelDrag;
     /// Visual projection of one StackNode: tab well + active content.
     struct FDockStackView
     {

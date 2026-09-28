@@ -75,7 +75,7 @@ struct YA_GUI_API UIDockFloatingWindow : public UIElement, public UIStyledWidget
 
   private:
     friend struct FDockFloatingWindowDropTargetBehavior;
-    friend struct FDockFloatingWindowPanelDragBehavior;
+    friend struct FDockFloatingWindowPanelDrag;
 
     void beginWindowMove();
     void updateWindowMove(const glm::vec2& logicalPoint);

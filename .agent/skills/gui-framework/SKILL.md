@@ -151,8 +151,19 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   drag&drop 的 source-local 状态（`beginDrag/updateDrag/endDrag/cancelDrag`、payload、ghost、observer）由树管理，唯一入口是
   `beginDrag(source, UIDragDropOperationRef)`。跨窗的 source/hover window 身份由 host `GUIDragRouter` 唯一持有。基类带通用 `payload` slot；领域拖拽
   继承加字段（`FDockPanelDragDropOp` / `FTreeReorderDragDropOp`）。目标用
-  `as<T>()` / `isType()`。目标控件实现
-  `canAcceptDrop/onDrop/setDropHighlight`。
+  `as<T>()` / `isType()`。拖放源/目标是行为（`IUIDragSource` / `IUIDropTarget`，常用
+  `UIDragSourceBehavior` / `UIDropTargetBehavior`）；树只调自由函数
+  `detectDrag/acceptsDrop/previewsDrop/dropOnto/highlightDrop/hoverDrop`，`UIElement` 没有拖放虚函数。
+- 行为模型（`UIBehavior.h`）：**能力封闭、种类开放**。能力 = GUI 的派发点（`EUIBehaviorCapability`：
+  Tick / Input / Action / DragSource / DropTarget），每个一个接口；行为用
+  `UIBehaviorWith<IUITickable, ...>` 在编译期声明能力，`addBehavior` 时进入 `UIElement` 的按能力索引，
+  派发只读 `behaviorsOf<I>()`（同能力按挂上顺序），无 `dynamic_cast`。接口构造私有，不经
+  `UIBehaviorWith` 声明就继承接口是编译错误。新行为种类（GameRuntime 的 Lua 脚本、编辑器行为）不改
+  GUI 源码；新增**能力**才改 GUI。`UIBehavior` 基类只有 owner + `onAttached/onDetached`，
+  禁止再往基类加能力虚函数。
+  **一个控件每种具体类型的行为至多一个**：`addBehavior` 拒绝同类第二个（返回 false + ERROR），
+  所以 `findBehavior<T>()`（精确类型）结果唯一。需要多份工作的行为自己在内部持有多份
+  （`UIAnimatorBehavior` 持有多个 `UITween`；一个控件至多一个 `script.lua`）。
   文本焦点：`UITextField` 消费 `KeyTyped`（IME 提交）、按码点 Backspace/Delete，选区
   （anchor/caret、Shift+方向、拖选、primary+A），以及
   primary+C/X/V（Cmd macOS / Ctrl 别处）经 `WidgetTree` clipboard（作用在选区上；
@@ -176,10 +187,10 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   deferred texture generation。GPU/offscreen 像素门禁：`Script/automation/gui/run_workbench_gpu_parity.py`
   （headless lastRoute + snapshot digest + windowed `--gpu-shot`/`--offscreen-diff` 零容差）。
 - 帧生命周期（**两扇门，一条协议，门归框架**）：`WidgetTree::tickSubtree` 只拜访可见子树
-  （折叠/隐藏即停），门是 `UIElement::wantsTick()` = `_bTickEnabled || 任一 behavior 想跑`。
+  （折叠/隐藏即停），门是 `UIElement::wantsTick()` = `_bTickEnabled || 任一 IUITickable 行为想跑`。
   两扇门覆盖不同的事：控件**自己的类**用 `enableTick()` + override `tick()`（每帧状态在自己类型里，
-  editor tab / section 是这一类）；**别人的部件**用 `addBehavior(UIBehavior)`（tween、对话框自刷新、
-  drag；behavior 自己回答 `wantsTick()`）。门是**整个 widget 一扇**而不是每扇门一扇：behavior 想要帧，
+  editor tab / section 是这一类）；**别人的部件**用 `addBehavior(IUITickable 行为)`（tween、对话框自刷新；
+  behavior 自己回答 `wantsTick()`）。门是**整个 widget 一扇**而不是每扇门一扇：behavior 想要帧，
   这个 widget 的 `tick()` 就会跑；因此谁 override `tick()`，谁就必须转发 `UIElement::tick(dt)`，
   否则挂在这个类型上的 behavior 静默不跑、也不报错。
   `wantsTick()` **故意非虚**：让它由子类回答，就等于允许子类藏掉 behavior 那半扇门
@@ -208,12 +219,13 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
 - 写路径唯一真源是 changed-only setter（`setRenderOpacity` 等，失效走
   `EUIPropertyImpact::SubtreePaintContext`，因为子树继承 render transform）。禁止动画
   field poke、禁止把 `_bVolatile` 当动画、禁止在 paint/layout 回调里 spawn 动画。
-- 时钟/tween：`UIAnimClock` 是 `UITweenBehavior` 的内部时钟（对标 FCurveSequence），
-  **不是** WidgetTree 上的第二套 tick。驱动者是 `UITweenBehavior`（`UIBehavior`）：
-  `WidgetTree::tick` → `UIElement::tick` → 行为列表。`wantsTick()` 只在播放中为真，
-  结束自动回到干净、树不再拜访。挂上 tween 的**唯一接口**是 `ya::ui::animate(widget, dt)`
-  （内部 `addBehavior`）；返回的 shared_ptr 只是同一实例的句柄。onFinished 可做
-  ping-pong（playReverse）。
+- 时钟/tween：`UIAnimClock` 是 `UITween` 的内部时钟（对标 FCurveSequence），
+  **不是** WidgetTree 上的第二套 tick。`UITween` 不是行为；驱动者是控件唯一的
+  `UIAnimatorBehavior`（`IUITickable`）：`WidgetTree::tick` → `UIElement::tick` → animator →
+  按创建顺序 tick 各 tween。`wantsTick()` 只在有 tween 播放时为真，结束自动回到干净、树不再拜访；
+  播完且无外部句柄的 tween 由 animator 丢弃。挂上 tween 的**唯一接口**是
+  `ya::ui::animate(widget, dt)`（找到或创建 animator，再加一个 tween）；同一控件可多次调用得到
+  多个独立 tween（各自时钟）。onFinished 可做 ping-pong（playReverse）。
   写回 widget 一律走可动画属性接缝（`applyAnimatableProperty` / setter）；将来的
   Game UI clip player 也写同一条缝，仍然不是平行 dirty 通道。
 - render transform 解析：`UIFrameBuilder::pushRenderTransform`，emit 时映射 rect/color/clip
@@ -224,7 +236,7 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
   `.track(handle, from, to, ease)` / `.setDuration()` / `.setLoop()` /
   `.setOnFinished()` / `.play()`。typed 句柄 `ya::ui::anim::opacity|scale|translation|tint`
   把值域编进类型；自定义属性用 `ya::TUIAnimProperty<float>{"gauge"}` 声明，写错值类型
-  是编译错误而不是运行时拒绝。behavior 由 widget 持有，所以句柄可丢弃
+  是编译错误而不是运行时拒绝。tween 由 widget 的 animator 持有，所以句柄可丢弃
   （`ya::ui::animate(card, 0.2f)->fade(0.0f, 1.0f).play();` 就是完整动画）。
 - 两态/重定位：`playToward(Forward|Backward)` 从当前位置继续，`setLerpNow(v)` 直接落位
   并停表。「目标态变了就朝它走」的控件（开关、hover 反馈）用这两个，不要用
@@ -235,8 +247,8 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
   同一时刻的后键胜出（离散跳变）；首键之前与末键之后保持该键的值（不外推）；时刻必须非递减、
   值域必须与属性声明一致，否则该 track 在 resolve 时被拒并只警告一次。
   多对象 / 事件轨 / blend 仍属 Game UI clip player，不要塞进框架。
-- 默认带动画的控件：`UISwitch`（DSL `ya::ui::toggle(...)`）。它用 `animate()` 挂上
-  一个 `UITweenBehavior` 驱动自己声明的 `progress` 通道（`kAnimSwitchProgress`）：值立即
+- 默认带动画的控件：`UISwitch`（DSL `ya::ui::toggle(...)`）。它用 `animate()` 取得
+  一个 `UITween` 驱动自己声明的 `progress` 通道（`kAnimSwitchProgress`）：值立即
   翻转，knob 位移 + track 配色插值；静止时 `wantsTick()==false`，
   `setTransitionSeconds(0)` 可整体关掉动画。
   哪些控件该默认携带动画、哪些应 opt-in，见 `.agent/plan/archive/gui-animation/plan.md` §8。
@@ -275,7 +287,7 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
 `UIDockTabWell` / `UIDockTabStack` 是 leaf drop target。GameEditor policy 仍用 `canAdoptOntoLeaf` 签名。`UIDockSpace` 保留作 Area 投影名。
 
 - `FDockContext` 是共享会话，不是 widget，也不是 OS window。NativeWindow placement 只是 coordinator 记录（MW-702/703），本对象不创建 native window。Overlay 的 `targetWindowId` 是 host window；`bindFloatingTargetWindow` 拒绝 overlay。跨树迁移走 `extractPanel` / `adoptPanel` / `transferPanelTo`（禁止 live widget 双挂载）。Policy 只吃 opaque `stableKey` / `ownerEditorId` / `documentKey`。`FDockPanelDragDropOp` 携带 `sourceContext`。Drop 命中由 Well/Stack 产生 `FDockDropTarget`。
-- 指针拖拽 session 在进程里对每个 input universe（`GUIApp` 或 GameEditor 的 `AppKernel`）是唯一的：`GUIDragRouter` 记录 source/hover window，以及 pointer capture 所属窗、key-focus IME 窗、树内 modal 的 app-modal 范围。`WidgetTree` 只持有 source-local 的 payload、ghost、observer、capture widget、hover/tooltip。通用 D&D（TreeView / Designer / Asset / Dock）都从 topmost `canAcceptDrop()` 发现可提交目标；同树 hover 与跨窗一样走 `canPreviewDrop()` / `findDropHoverTarget`（dock chooser）。OS cursor 问 router（capture 窗或当前指针窗的 hovered）。GameEditor 不得再自己听 SDL 做跨窗拖拽；`EditorInputNode` / `EditorModule::onEvent` 共用同一 router。同一窗与跨窗 dock tab 拖拽共用一条路径：source 窗保留自己的 tree，ghost 是 DragIme 上的小 tile，目标树走 `setExternalDropHover`。禁止把 extra tree 偷到全屏/等大 pickup overlay（macOS Vulkan swapchain 往往不透明，全屏 overlay 会挡住 drop 目标）。指针不在任何可见窗内时才用 ~168×32 的 click-through desktop overlay 画 tab ghost。标题 TabBar 整条 rect 必须注册为 Client；只有 trailing gutter 是 Drag。从顶部 tabwell 拖出 tab 是 tab 手势，不是 OS 拖窗。最后一个可关闭 extra 页签一旦离开源窗，`bHideSourceWindowOnLeave` 立刻 `INativeWindow::hide()`，源窗不得跟着指针走；drop 到 dock 后 reclaim，NoTarget 再 show/挪到落点或开新窗。不要用 `SDL_HITTEST_DRAGGABLE` / `performWindowDragWithEvent` 去“拖 tab”。drag 期间 `SDL_CaptureMouse`；source-tagged 的 move/release 用 `OsEventPump::queryGlobalMouse` 做窗口 hit-test（capture 会把事件钉在源窗并可能钳制局部坐标），显式 foreign window id 仍信任事件坐标；hit-test 跳过 hidden/minimized。`WindowFocusLost` 必须清掉该树的 hover / tooltip / 普通 pointer-over；正在 capture/drag 的树仍不得注入远指针（capture 与 drag session 可以跨窗保留）。
+- 指针拖拽 session 在进程里对每个 input universe（`GUIApp` 或 GameEditor 的 `AppKernel`）是唯一的：`GUIDragRouter` 记录 source/hover window，以及 pointer capture 所属窗、key-focus IME 窗、树内 modal 的 app-modal 范围。`WidgetTree` 只持有 source-local 的 payload、ghost、observer、capture widget、hover/tooltip。通用 D&D（TreeView / Designer / Asset / Dock）都从 topmost `acceptsDrop()` 发现可提交目标；同树 hover 与跨窗一样走 `previewsDrop()` / `findDropHoverTarget`（dock chooser）。OS cursor 问 router（capture 窗或当前指针窗的 hovered）。GameEditor 不得再自己听 SDL 做跨窗拖拽；`EditorInputNode` / `EditorModule::onEvent` 共用同一 router。同一窗与跨窗 dock tab 拖拽共用一条路径：source 窗保留自己的 tree，ghost 是 DragIme 上的小 tile，目标树走 `setExternalDropHover`。禁止把 extra tree 偷到全屏/等大 pickup overlay（macOS Vulkan swapchain 往往不透明，全屏 overlay 会挡住 drop 目标）。指针不在任何可见窗内时才用 ~168×32 的 click-through desktop overlay 画 tab ghost。标题 TabBar 整条 rect 必须注册为 Client；只有 trailing gutter 是 Drag。从顶部 tabwell 拖出 tab 是 tab 手势，不是 OS 拖窗。最后一个可关闭 extra 页签一旦离开源窗，`bHideSourceWindowOnLeave` 立刻 `INativeWindow::hide()`，源窗不得跟着指针走；drop 到 dock 后 reclaim，NoTarget 再 show/挪到落点或开新窗。不要用 `SDL_HITTEST_DRAGGABLE` / `performWindowDragWithEvent` 去“拖 tab”。drag 期间 `SDL_CaptureMouse`；source-tagged 的 move/release 用 `OsEventPump::queryGlobalMouse` 做窗口 hit-test（capture 会把事件钉在源窗并可能钳制局部坐标），显式 foreign window id 仍信任事件坐标；hit-test 跳过 hidden/minimized。`WindowFocusLost` 必须清掉该树的 hover / tooltip / 普通 pointer-over；正在 capture/drag 的树仍不得注入远指针（capture 与 drag session 可以跨窗保留）。
 - GameEditor 经 `FEditorTabDragPayload` / `canTearOffEditorTab` / `canAcceptEditorDrop` / `canRedockEditorTab` 做 placement policy。`tearOffEditorPanelToNativeWindow` / `handleDockNoTargetTearOff` / `redockEditorPanelToOwner` / `closeEditorWindow` 只调用 coordinator + `transferPanelTo`；空 extra 窗 `reclaimEditorWindowIfEmpty`。Locked / Level / 默认窗不能关或迁走。`EditorDockWorkspace` 不创建 native window、不 include `IGUIWindowCoordinator`。`EditorSurface` 只挂 generic `realizeNoTargetTearOff` 回调，不 include coordinator。
 - DockSpace NoTarget：若 `FDockContext::realizeNoTargetTearOff` 返回 true，不创建 overlay；未接线或返回 false 时仍 `InProcessOverlay`。GameEditor 产品路径走 native OS window。`UIDockFloatingHost` 仍只投影 overlay。Host 适配器 `realizeNativeDockPlacement` 只把 `geometrySpace == Screen` 的 pos 写成 host origin；`createSession` 在 `monitorIndex < 0` 时保留窗口已查询的 monitor，避免 recover 丢掉 origin。TreeLocal 不得升格为 OS origin。
 - `UIDockSpace` 是 DockArea 投影：把 context 的 docked tree 物化成 nested split + `UIDockTabStack` / `UIDockTabWell`。不拥有 model。内部投影是 `FDockStackView`。**唯一入口**是 `syncProjection(EDockProjectionSync)`：`Structure` 重建拓扑（drop / tear-off / `fireDockUpdated` / 空 Area 的首次 layout）；`Stack` 只灌一个 stack 的 tab+graft（`addPanel` / `activatePanel`）；`Chrome` 只改 well 可见性。禁止在 Area 外直接调 `rebuildProjection` / `rebuildStack`。drop 语义收口为 `FDockDropTarget`；布局变更走 `FDockContext::commitDrop`。Well/Stack 的 `canAcceptDrop` 命中 leaf；Area 处理 split gutter 回退，并拥有 chooser overlay / `applyDrop`。overlay floating 自己产生 `FloatingTabWell`。模型节点是 `EDockNodeKind::Split` / `Stack`（JSON `"leaf"` 仍可读）。同一树里 nested `UIDockSpace`（Level Viewport）盖住 window-root page leaf：同树 hover 走 `findDropHoverTarget`（chooser 是 preview-only）；外层 `resolveDropPreview` 在 innermost dock 不是自己时返回空，禁止把整块上半窗画成 page chooser。
@@ -283,7 +295,7 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
 - `UIDockFloatingHost` 只投影 `InProcessOverlay` placement（同一 native window / 同一 WidgetTree 的 Popup 层）。它不是 OS window；`NativeWindow` placement 必须跳过。浮窗 merge 走 `FloatingTabWell`，不要再加一套 `targetFloatingId` bool。
 - 绑定 API：`UIDockSpace::setContext` / `UIDockFloatingHost::bindContext`。不要再引入 `UIDockWorkspace` 这种与 Space 近义、还带 `UI` 前缀的会话类型。
 - 源码与公开头收在 `Runtime/Widgets/Controls/DockSpace/`；include 为 `GUI/Widgets/Controls/DockSpace/...`。TabBar 仍是通用控件，不进这个目录。
-- 停靠 tab 拖动（`FDockSpacePanelDragBehavior`：ghost + 无目标时 tear-off）和浮窗标题拖动（`FDockFloatingWindowPanelDragBehavior`：窗体跟随指针、skip-source hit-test、sticky preview）不是同一套手势。不要抽共享 helper。
+- 停靠 tab 拖动（`FDockSpacePanelDrag`：ghost + 无目标时 tear-off）和浮窗标题拖动（`FDockFloatingWindowPanelDrag`：窗体跟随指针、skip-source hit-test、sticky preview）不是同一套手势。不要抽共享 helper。
 
 ## 布局契约（SizeToContent）
 

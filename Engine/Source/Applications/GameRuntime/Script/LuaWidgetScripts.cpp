@@ -218,7 +218,11 @@ void LuaWidgetScripts::activate(UIElement& widget, const FUIBehaviorSpec& spec, 
     behavior->entryRoot           = context.entryRoot.weak_from_this();
     behavior->entryZOrder         = context.entryRoot._zOrder;
     behavior->activationIndex     = _nextActivation++;
-    widget.addBehavior(behavior);
+    if (!widget.addBehavior(behavior)) {
+        YA_CORE_WARN("Game UI: '{}' in entry '{}' already has a script.lua; '{}' ignored",
+                     widget._name, context.entryId, behavior->instance.scriptPath);
+        return;
+    }
     _fresh.push_back(behavior);
 }
 
@@ -304,11 +308,9 @@ void LuaWidgetScripts::bindSelf(const std::shared_ptr<LuaWidgetScriptBehavior>& 
 
 sol::object LuaWidgetScripts::scriptSelfOf(const UIElement& widget)
 {
-    for (const UIBehaviorRef& behavior : widget.getBehaviors()) {
-        if (const auto* script = dynamic_cast<const LuaWidgetScriptBehavior*>(behavior.get());
-            script && script->runtime && script->instance.bLoaded) {
-            return script->instance.self;
-        }
+    const std::shared_ptr<LuaWidgetScriptBehavior> script = widget.findBehavior<LuaWidgetScriptBehavior>();
+    if (script && script->runtime && script->instance.bLoaded) {
+        return script->instance.self;
     }
     return {};
 }

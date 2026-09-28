@@ -134,8 +134,7 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
             });
 
     // === Case 2: subtree transition (one overlay animates a whole group) ===
-    auto groupTween = std::make_shared<ya::UITweenBehavior>();
-    auto group      = ya::ui::row("AnimationGroup").setSpacing(8.0f);
+    auto group = ya::ui::row("AnimationGroup").setSpacing(8.0f);
     for (int i = 0; i < 3; ++i)
     {
         group.child(ya::ui::border(std::format("AnimationGroupCard{}", i))
@@ -143,14 +142,14 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
                         .setCornerRadius(6.0f),
                     ya::ui::boxSlot().preferredSize({90.0f, 40.0f}));
     }
-    auto groupRef = group.share();
-    groupTween->addFloatTrack("opacity", 1.0f, 0.15f, ya::EUIAnimEase::InOutQuad).setDuration(0.25f);
-    groupRef->addBehavior(groupTween);
+    auto groupRef   = group.share();
+    auto groupTween = ya::ui::animate(*groupRef, 0.25f);
+    groupTween->addFloatTrack("opacity", 1.0f, 0.15f, ya::EUIAnimEase::InOutQuad);
 
     // === Case 3: a sequence (stagger) composed in the app layer ===
     auto staggerRow = ya::ui::row("AnimationStagger").setSpacing(6.0f);
     std::vector<std::shared_ptr<ya::UIBorder>> staggerCards;
-    std::vector<std::shared_ptr<ya::UITweenBehavior>> staggerTweens;
+    std::vector<std::shared_ptr<ya::UITween>> staggerTweens;
     for (int i = 0; i < 5; ++i)
     {
         auto staggerCard = std::make_shared<ya::UIBorder>(std::format("AnimationStaggerCard{}", i));

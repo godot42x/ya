@@ -196,7 +196,7 @@ void publishTornTitleClientHits(FEditorTornChromeState& state)
     updateWindowChromeTitleClientHits(*state.native, hits);
 }
 
-struct FEditorTornTitleHitsBehavior final : UIBehavior
+struct FEditorTornTitleHitsBehavior final : UIBehaviorWith<IUITickable>
 {
     std::shared_ptr<FEditorTornChromeState> state;
 

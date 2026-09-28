@@ -139,7 +139,7 @@ struct CountingSystem final : ISystem
     void onUpdate(float) override { ++updates; }
 };
 
-struct TickCountingBehavior final : UIBehavior
+struct TickCountingBehavior final : UIBehaviorWith<IUITickable>
 {
     int ticks = 0;
     [[nodiscard]] bool wantsTick() const override { return true; }

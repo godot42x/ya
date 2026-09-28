@@ -397,20 +397,20 @@ TEST(GUIAppExtraWindowTest, ExtraCloseDoesNotQuitPrimary)
 
 struct CrossWindowDropTarget final : public UIElement
 {
-    explicit CrossWindowDropTarget(std::string name) : UIElement(std::move(name)) {}
-
     int         drops = 0;
     std::string lastPayload;
 
-    bool canAcceptDrop(const UIDragDropOperation&, const glm::vec2& point) override
+    explicit CrossWindowDropTarget(std::string name) : UIElement(std::move(name))
     {
-        return hitTestLayoutRect(point);
-    }
-
-    void onDrop(const UIDragDropOperation& operation, const glm::vec2&) override
-    {
-        ++drops;
-        lastPayload = operation.payload;
+        auto drop       = std::make_shared<UIDropTargetBehavior>();
+        drop->canAccept = [this](UIElement&, const UIDragDropOperation&, const glm::vec2& point) {
+            return hitTestLayoutRect(point);
+        };
+        drop->handleDrop = [this](UIElement&, const UIDragDropOperation& operation, const glm::vec2&) {
+            ++drops;
+            lastPayload = operation.payload;
+        };
+        addBehavior(drop);
     }
 };
 

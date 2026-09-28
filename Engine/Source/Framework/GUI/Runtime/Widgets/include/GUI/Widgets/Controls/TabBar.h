@@ -64,9 +64,6 @@ struct YA_GUI_API UITabButton : public UIElement, public UIStyledWidget<UITabBut
                            {"closable", _bClosable}};
     }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
-    /// WidgetTree auto-detect must not spawn a ghost. Tab drag starts only
-    /// through `_onDragArmed` after the pointer leaves the well.
-    UIDragDropOperationRef onDragDetected(const FDragDetectedEvent&) override { return nullptr; }
     bool isHoverable() const override { return true; }
     void onPointerEnter() override { _bHovered = true; }
     void onPointerLeave() override { _bHovered = false; }

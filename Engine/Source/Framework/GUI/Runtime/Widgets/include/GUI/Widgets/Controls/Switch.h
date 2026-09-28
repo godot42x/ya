@@ -24,7 +24,7 @@ inline constexpr TUIAnimProperty<float> kAnimSwitchProgress{"progress"};
 /// This is the framework's first default-animated control, and it is built on
 /// the same primitives every other control would use - it declares its own
 /// animatable property (`progress`) and drives it with `animate()`, which
-/// addBehavior's a `UITweenBehavior`. A single clock owns the transition;
+/// adds a `UITween` to the widget's animator. A single clock owns the transition;
 /// a mid-flight flip reverses instead of snapping.
 ///
 /// The visual state is paint-only: layout, hit testing and the value are
@@ -116,9 +116,9 @@ struct YA_GUI_API UISwitch : public UIElement, public UIStyledWidget<UISwitch, F
     [[nodiscard]] Rect2D knobRect() const;
 
     UISingleChildLayout              _contentLayout;
-    /// Typed handle to the UITweenBehavior that `animate()` already registered
-    /// via addBehavior. Same instance as in `_behaviors`; not a parallel driver.
-    std::shared_ptr<UITweenBehavior> _transition;
+    /// Handle to the tween `animate()` put on this widget's animator; the
+    /// animator drives it, this is not a parallel driver.
+    std::shared_ptr<UITween>         _transition;
     float                            _progress = 0.0f;
     VisualFlag                       _bHovered{*this};
     VisualFlag                       _bPressed{*this};
