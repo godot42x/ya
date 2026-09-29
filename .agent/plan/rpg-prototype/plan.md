@@ -215,12 +215,20 @@ R1b / R1c 改的正是 R1a 引入的文件，所以按一个可验收目标一�
 - 测试：`SceneTransferTest.SpawnPointPlacesPlayer`、`PersistentStateSurvivesTransfer`、
   `PlayStopClearsPersistentState`。
 
-### R4 — 规模与定案
+### R4 — 规模与定案（2026-09-30 完成，数据与决策见 `r4-measurements.md`）
 
-- 游戏验收：64×64、3 层地图 + 20 个 NPC，量 profile 构建下的帧时间与 draw 数。
-- 用数据决定，交给 `scene-2d-world-and-game-ui`：精灵合批 / 实例化、16 张纹理表上限、纯 2D View
-  是否绕开 Deferred、tile 候选按区块缓存。
+- 游戏验收：64×64、3 层地图 + 20 个 NPC（`Content/Scenes/TownLarge.scene.json`，由
+  `Tools/make_scale_scene.py` 确定性生成），量 profile 构建下的帧时间与 draw 数。
+- 结论（一句话版；依据与复现命令在 `r4-measurements.md`）：
+  - 逐候选约 **1.2µs** CPU 录制，5134 候选取 ~6.3ms，占 10.6ms 帧的 60%，且随候选数线性增长
+    → **精灵合批 / 实例化是当前最高价值的渲染改动**（纹理只有 2 张，形态高度重复）。
+  - 窗口缩到 1/4 像素只省 0.8ms → **填充/全屏 Deferred 链不是瓶颈**；「纯 2D View 绕开
+    Deferred」按正确性与图层面清晰度推进，不要拿性能当理由（图层面仍值得拆）。
+  - 纹理表 2/16 → 上限当前不是约束；但每帧重建 + 逐候选线性查找要随合批一起改成直接映射。
+  - 整帧提取只要 0.10-0.15ms → **tile 候选区块缓存现在不需要**（4× 面积时再评估）。
 - 本 checkpoint 只产出数据与决策记录，不改渲染。
+- 未决：`Render/Frame` 的 self 时间（4.3/5.0/2.9ms，疑似帧栅栏等待）在 CPU trace 里无法归因，
+  需要 pass 级 scope 或 GPU timing（本机无 RenderDoc）——已列进交接项。
 
 ### B2 — Lua 插件化与旧绑定收口（排在 game-ui S7 之后）
 

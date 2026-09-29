@@ -100,10 +100,19 @@
     {
       "id": "scale_decision",
       "phase": "R4",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: 64x64x3 map with 20 NPCs",
       "evidence": [
-        "frame time and draw count recorded; batching / texture table / pure-2D graph decisions handed to scene-2d-world-and-game-ui"
+        "fixture: Content/Scenes/TownLarge.scene.json (64x64, Ground 4096 / Decor 776 / Overlay 241 cells, 20 NPCs + player = 5120 tile candidates + 21 sprite candidates), generated deterministically by Tools/make_scale_scene.py (--size/--npcs/--out for other sizes)",
+        "method: profile build + runtime CPU trace via --cpu-profile; frame root 'iterate' (600 frames, skip 60); analyzer .agent/plan/rpg-prototype/measure_trace.py; full record in r4-measurements.md",
+        "measured: recordFamily (the sprite-pass submission lives here) fits 1.14ms + 1.23us/candidate (700->1.77, 1329->3.05, 5134->7.41); TownLarge frame 10.56ms (95fps), so ~6.3ms of it is per-candidate CPU recording",
+        "measured: window 1024x768 -> 512x384 cuts the frame 7% with recordFamily unchanged and Render/Frame self -0.84ms -> the bottleneck is per-candidate CPU, not fill",
+        "measured: whole-map extraction 0.10-0.15ms at 5134 candidates (~1/50 of the submission cost); Lua 0.015-0.04ms",
+        "decision 1: batching / instancing is needed and is the highest-value render change (the one cost that grows linearly with content; only 2 distinct textures here)",
+        "decision 2: the 16-entry texture table is not the binding constraint (2 used), but its per-frame rebuild + per-candidate linear scan should become a direct mapping with batching",
+        "decision 3: bypassing Deferred for a pure-2D view is worth ~1ms at this scale - do it for correctness/layering, not for performance",
+        "decision 4: chunk caching of tile candidates is not needed yet (extraction is 1/50 of submission); revisit at 4x area",
+        "open (handed over): Render/Frame self time (4.3/5.0/2.9ms, not monotone in candidates, likely the frame-fence wait) is unattributed by the CPU trace; draw counts are derived from the implementation rule + scene data (no RenderDoc on this machine)"
       ]
     },
     {

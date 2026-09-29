@@ -303,3 +303,29 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   注意：control 实例有约 220s 的寿命上限（防遗忘自杀），长验证中途会被掐，需要续命就重启。
 - 未完成：按键注入自动化（等 S7）；`world.loadScene` 的 spawn 只放 Player 一名实体。
   下一步 R4（规模与定案）。
+
+## 2026-09-30 — R4：规模与定案
+
+- 目标与边界：64×64、3 层地图 + 20 NPC，量 profile 构建下的帧时间与 draw 数；
+  **只产出数据与决策记录，不改渲染**。完整数据、方法与复现命令见 `r4-measurements.md`。
+- 夹具：`Content/Scenes/TownLarge.scene.json`（64×64；Ground 4096 / Decor 776 / Overlay 241 格，
+  20 NPC + 玩家；5120 个 tile 候选 + 21 精灵候选），由 `Tools/make_scale_scene.py` 确定性生成
+  （`--size/--npcs/--out` 可造其它尺寸，用于斜率与对照）。
+- 测量手段：profile 构建 + runtime CPU trace（speedscope），帧根取 `iterate`（600 帧，跳前 60）；
+  分析脚本 `.agent/plan/rpg-prototype/measure_trace.py`（flat self 表 + inclusive 表 + 最热帧树）。
+  读数前提写进了记录：默认帧限速（120fps）会把小场景的绝对帧时间夹住，只有超出预算的场景
+  （TownLarge 10.56ms）帧时间可用；`Tick/FpsControl` 的 self 就是限速 sleep。
+- 数据（profile，ms/帧）：三点拟合 `recordFamily ≈ 1.14ms + 1.23µs × 候选数`
+  （700→1.77 / 1329→3.05 / 5134→7.41，残差 ±3%，点对点边际 1.15~2.04µs）；
+  窗口 1024×768→512×384（像素 1/4）帧只降 7%，`recordFamily` 不变、`Render/Frame` self 降 0.84ms
+  → 瓶颈是逐候选 CPU 录制而非填充；提取（5134 候选）0.10-0.15ms；Lua 0.015-0.04ms。
+- 决策（交 `scene-2d-world-and-game-ui`）：①合批/实例化**需要**且优先级最高（唯一随内容
+  线性增长的成本项，纹理高度集中）；②16 张纹理表当前不是约束，但每帧重建 + 逐候选线性查找
+  要随合批改成直接映射；③纯 2D View 绕开 Deferred 按正确性推进、不以性能为由（收益 ~1ms 级）；
+  ④tile 区块缓存现在不需要（提取是提交的 1/50，4× 面积再评估）。
+- 未决（已列交接）：`Render/Frame` 的 self 时间（4.3/5.0/2.9ms，与候选数不单调，疑似
+  `beginRecordedFrame` 的帧栅栏等待或 offscreen pump）在 CPU trace 里无法归因；draw 数是
+  按实现规则 + 场景数据推导（环境无 RenderDoc），长期量化建议加只读诊断计数走 automation。
+- 验证：`TownLarge` 在 profile 下跑通 600 帧 exit 0；测量脚本对三个夹具 + 尺寸对照共 4 条
+  trace 均可复现；测完已恢复原构建模式（debug）。
+- 未完成：B2（Lua 插件化与旧绑定收口，排在 game-ui S7 之后）。R0–R4 全部落地。

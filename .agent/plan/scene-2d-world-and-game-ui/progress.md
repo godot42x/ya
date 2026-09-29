@@ -625,3 +625,24 @@ Phase 5 的 runtime 验收：“orthographic game scene renders authored sprites
 - Play 工具栏只剩 Play / Simulate / Stop 与状态文字。
 - `viewport.ortho` 在 View 菜单里是可勾选项，勾选态读 `EditorLayer::isEditorOrthoXY()`；action 与快捷键不变。
 - 验证：`xmake b ya-game-editor` 通过；GreedySnake 编辑器 120 帧 exit=0。
+
+## 2026-09-30 — 接手 `rpg-prototype` R4 的 2D 规模数据
+
+来源：`.agent/plan/rpg-prototype/r4-measurements.md`（profile 构建 + CPU trace，
+夹具 `Example/2DRpgPrototype/Content/Scenes/TownLarge.scene.json`：64×64 × 3 层 + 20 NPC，
+5134 个 sprite 候选）。结论只针对**当前实现**（逐候选一次 draw、全量展开、每帧重建纹理表）：
+
+1. **逐候选 ~1.2µs CPU 录制**（三点拟合 `recordFamily ≈ 1.14ms + 1.23µs × 候选`），
+   5134 候选 → ~6.3ms，占 10.56ms 帧的 60%，是唯一随内容量线性增长的成本项。
+2. 窗口缩到 1/4 像素帧只降 7%（`recordFamily` 不变）→ **填充/全屏 Deferred 链不是瓶颈**；
+   「纯 2D View 绕开 3D attachments」请按正确性与图层面清晰度推进，性能不是理由。
+3. 纹理只用了 2 张（16 上限），但 `buildTextureTable` 每帧重建且 `slotFor` 对每个候选线性
+   扫描（16 × 5134 ≈ 8.2 万次/帧），合批时应换成「纹理句柄 → 槽位」直接映射，并让超限
+   变成可见诊断而非静默 skip。
+4. 整帧提取（5134 候选的展开）只要 0.10-0.15ms → 区块缓存现在不需要，4× 面积再评估。
+
+未决交接：`Render/Frame` 的 self 时间（4.3/5.0/2.9ms，与候选数不单调，疑似
+`beginRecordedFrame` 的帧栅栏等待或 offscreen pump）在 CPU trace 里无法归因，且可能比
+逐候选成本更大——本机无 RenderDoc，需要 pass 级 scope 或 GPU timing 才能定论；
+**建议先补这个归因，再定合批的收益上限**。draw 数在记录中是按实现规则 + 场景数据推导
+（环境无 RenderDoc），若要长期量化，建议加只读诊断计数（候选数 / 纹理表命中率）走 automation。

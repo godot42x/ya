@@ -1,0 +1,1896 @@
+{
+  "name": "TownLarge",
+  "entities": [
+    {
+      "id": 1001,
+      "name": "Camera",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            32.5,
+            32.5,
+            24.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "CameraComponent": {
+          "bPrimary": true,
+          "_projection": "Orthographic",
+          "_orthoHalfHeight": 8.0,
+          "_fov": 45.0,
+          "_aspectRatio": 1.7777778,
+          "_nearClip": 0.1,
+          "_farClip": 100.0,
+          "_fixedAspectRatio": false,
+          "_distance": 24.0,
+          "_focusPoint": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/FollowCamera.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1021,
+      "name": "Player",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            32.5,
+            32.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Player.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1100,
+      "name": "Npc1",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            6.5,
+            7.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.55,
+            0.7,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1101,
+      "name": "Npc2",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            9.5,
+            11.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.675,
+            0.8999999999999999,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1102,
+      "name": "Npc3",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            12.5,
+            17.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.8,
+            0.7,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1103,
+      "name": "Npc4",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            15.5,
+            23.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.55,
+            0.8999999999999999,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1104,
+      "name": "Npc5",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            18.5,
+            26.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.675,
+            0.7,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1105,
+      "name": "Npc6",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            21.5,
+            31.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.8,
+            0.8999999999999999,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1106,
+      "name": "Npc7",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            24.5,
+            38.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.55,
+            0.7,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1107,
+      "name": "Npc8",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            27.5,
+            41.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.675,
+            0.8999999999999999,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1108,
+      "name": "Npc9",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            30.5,
+            47.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.8,
+            0.7,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1109,
+      "name": "Npc10",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            33.5,
+            53.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.55,
+            0.8999999999999999,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1110,
+      "name": "Npc11",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            36.5,
+            56.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.675,
+            0.7,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1111,
+      "name": "Npc12",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            39.5,
+            11.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.8,
+            0.8999999999999999,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1112,
+      "name": "Npc13",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            42.5,
+            14.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.55,
+            0.7,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1113,
+      "name": "Npc14",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            45.5,
+            19.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.675,
+            0.8999999999999999,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1114,
+      "name": "Npc15",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            48.5,
+            24.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.8,
+            0.7,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1115,
+      "name": "Npc16",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            51.5,
+            30.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.55,
+            0.8999999999999999,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1116,
+      "name": "Npc17",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            54.5,
+            35.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.675,
+            0.7,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1117,
+      "name": "Npc18",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            57.5,
+            39.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.8,
+            0.8999999999999999,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1118,
+      "name": "Npc19",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            8.5,
+            44.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.55,
+            0.7,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1119,
+      "name": "Npc20",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            11.5,
+            49.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/hero_walk.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.5
+          ],
+          "uvRect": [
+            0.3333333333333333,
+            0.0,
+            0.6666666666666666,
+            0.25
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.675,
+            0.8999999999999999,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Npc.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 2000,
+      "name": "TilemapGround",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            -32.0,
+            -32.0,
+            0.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "TilemapComponent": {
+          "tileset": {
+            "__base__": {
+              "AssetRefBase": {
+                "_path": "Content:Tilesets/town.yatileset.json"
+              }
+            }
+          },
+          "cellSize": [
+            1.0,
+            1.0
+          ],
+          "width": 64,
+          "height": 64,
+          "layers": [
+            {
+              "name": "Ground",
+              "zOffset": 0.0,
+              "cells": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            },
+            {
+              "name": "Decor",
+              "zOffset": 0.03,
+              "cells": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 17, 0, 0, 0, 2, 0, 17, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 17, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 2, 0, 0, 0, 0, 2, 17, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 17, 2, 0, 0, 0, 0, 2, 0, 17, 0, 0, 0, 0, 17, 0, 82, 0, 0, 82, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 17, 0, 2, 0, 2, 0, 0, 0, 0, 0, 3, 2, 0, 2, 2, 0, 0, 0, 17, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 3, 0, 0, 2, 17, 0, 0, 0, 17, 0, 0, 2, 0, 17, 0, 0, 0, 0, 0, 17, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 3, 0, 17, 2, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 17, 17, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 17, 2, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 17, 2, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 2, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 17, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 17, 0, 0, 3, 0, 0, 0, 0, 17, 17, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 6, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 3, 0, 0, 3, 0, 0, 0, 3, 0, 82, 0, 0, 82, 0, 2, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 17, 3, 17, 0, 0, 0, 0, 0, 17, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 2, 0, 0, 0, 0, 0, 0, 17, 0, 0, 2, 0, 0, 0, 17, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 2, 0, 0, 2, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 17, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 17, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 17, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 17, 0, 0, 17, 0, 3, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 2, 0, 0, 3, 17, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 3, 17, 0, 0, 0, 3, 0, 0, 82, 0, 0, 82, 0, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 17, 2, 0, 17, 17, 0, 0, 0, 0, 17, 0, 82, 0, 0, 82, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 3, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 17, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 17, 0, 0, 3, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 17, 17, 17, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 2, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 17, 0, 0, 17, 17, 0, 0, 0, 2, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 17, 0, 17, 0, 0, 0, 0, 0, 0, 0, 17, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 2, 0, 17, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 0, 17, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 3, 17, 3, 0, 0, 17, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 17, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 17, 17, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 17, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 17, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 2, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 17, 0, 0, 2, 17, 0, 82, 0, 0, 82, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 2, 2, 0, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 17, 0, 0, 17, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 2, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 82, 0, 0, 82, 0, 17, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 2, 0, 0, 2, 3, 0, 0, 0, 0, 0, 17, 17, 0, 0, 0, 0, 0, 17, 0, 0, 0, 82, 0, 0, 82, 0, 17, 0, 17, 0, 0, 0, 0, 0, 2, 0, 0, 2, 17, 0, 0, 3, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 3, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 2, 0, 2, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 2, 0, 0, 2, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 17, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 17, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 17, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 17, 0, 0, 0, 0, 3, 0, 0, 0, 0, 2, 0, 17, 0, 0, 17, 17, 17, 0, 0, 0, 17, 0, 82, 0, 0, 82, 0, 17, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 3, 0, 17, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 2, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 17, 0, 17, 0, 3, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 17, 2, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 2, 3, 17, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 17, 0, 17, 17, 0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 2, 17, 0, 0, 0, 0, 0, 2, 0, 0, 17, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 2, 0, 17, 0, 0, 0, 0, 0, 3, 3, 0, 0, 17, 0, 0, 3, 0, 17, 3, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 2, 17, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 3, 0, 3, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 0, 17, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 17, 6, 0, 0, 0, 0, 0, 0, 0, 2, 2, 17, 0, 0, 2, 0, 17, 0, 0, 3, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 17, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 0, 0, 17, 0, 0, 0, 2, 17, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 17, 17, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 17, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 17, 2, 0, 0, 2, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 17, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 17, 2, 2, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 0, 17, 0, 0, 0, 3, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 3, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 3, 0, 17, 2, 2, 0, 2, 0, 2, 0, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 3, 0, 0, 0, 2, 0, 3, 0, 17, 0, 0, 3, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 82, 0, 0, 82, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 17, 0, 0, 0, 0, 0, 17, 0, 17, 3, 0, 3, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 82, 0, 0, 82, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 17, 0, 17, 17, 17, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 17, 17, 2, 0, 0, 82, 0, 0, 82, 0, 0, 3, 0, 0, 0, 3, 17, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 17, 0, 17, 2, 17, 0, 0, 0, 0, 0, 0, 2, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 82, 0, 0, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 82, 0, 0, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            },
+            {
+              "name": "Overlay",
+              "zOffset": 0.2,
+              "cells": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 5, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 5, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 5, 5, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 5, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            }
+          ],
+          "layer": 0
+        }
+      }
+    }
+  ],
+  "nodeTree": {
+    "name": "scene_root",
+    "children": [
+      {
+        "name": "Camera",
+        "entityRef": 1001
+      },
+      {
+        "name": "Player",
+        "entityRef": 1021
+      },
+      {
+        "name": "Npc1",
+        "entityRef": 1100
+      },
+      {
+        "name": "Npc2",
+        "entityRef": 1101
+      },
+      {
+        "name": "Npc3",
+        "entityRef": 1102
+      },
+      {
+        "name": "Npc4",
+        "entityRef": 1103
+      },
+      {
+        "name": "Npc5",
+        "entityRef": 1104
+      },
+      {
+        "name": "Npc6",
+        "entityRef": 1105
+      },
+      {
+        "name": "Npc7",
+        "entityRef": 1106
+      },
+      {
+        "name": "Npc8",
+        "entityRef": 1107
+      },
+      {
+        "name": "Npc9",
+        "entityRef": 1108
+      },
+      {
+        "name": "Npc10",
+        "entityRef": 1109
+      },
+      {
+        "name": "Npc11",
+        "entityRef": 1110
+      },
+      {
+        "name": "Npc12",
+        "entityRef": 1111
+      },
+      {
+        "name": "Npc13",
+        "entityRef": 1112
+      },
+      {
+        "name": "Npc14",
+        "entityRef": 1113
+      },
+      {
+        "name": "Npc15",
+        "entityRef": 1114
+      },
+      {
+        "name": "Npc16",
+        "entityRef": 1115
+      },
+      {
+        "name": "Npc17",
+        "entityRef": 1116
+      },
+      {
+        "name": "Npc18",
+        "entityRef": 1117
+      },
+      {
+        "name": "Npc19",
+        "entityRef": 1118
+      },
+      {
+        "name": "Npc20",
+        "entityRef": 1119
+      },
+      {
+        "name": "TilemapGround",
+        "entityRef": 2000
+      }
+    ]
+  },
+  "widgetEntries": [
+    {
+      "entryId": "Dialogue",
+      "zOrder": 10,
+      "autoMount": true,
+      "document": "Content:UI/Dialogue.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [
+          0.0,
+          0.0
+        ],
+        "anchorMax": [
+          1.0,
+          1.0
+        ],
+        "offset": [
+          0.0,
+          0.0
+        ],
+        "minSize": [
+          0.0,
+          0.0
+        ],
+        "maxSize": [
+          1000000.0,
+          1000000.0
+        ],
+        "offsets": {
+          "left": 0.0,
+          "top": 0.0,
+          "right": 0.0,
+          "bottom": 0.0
+        },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [
+          0.0,
+          0.0
+        ],
+        "preferredSize": [
+          0.0,
+          0.0
+        ],
+        "fixedSize": [
+          0.0,
+          0.0
+        ]
+      }
+    }
+  ]
+}
