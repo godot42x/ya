@@ -1,3 +1,26 @@
+// Engine objects in Lua. The whole mechanism, one screen:
+//
+// C++ -> Lua: anything that moves a LuaScriptObject through sol ends up in
+// sol_lua_push -> pushObject: one full userdata holding a ScriptRef, tagged
+// with the metatable of ref.type (registry[&kMetatablesKey][type], built on
+// first push, see pushObjectMetatable).
+//
+// Lua -> C++: Lua calls the closures the metatable carries:
+//   obj.x        -> __index    = objectIndex
+//   obj.x = v    -> __newindex = objectNewIndex
+//   obj:foo(...) -> the method closure objectIndex cached under "foo"
+//                   (= methodCall)
+// Both metamethods share the type's member cache (their upvalue): on the
+// first access of a name they ask the neutral layer (script::findField /
+// findMethod) and rawset the answer into the cache — fields as lightuserdata
+// handles, methods as closures whose upvalues are the handle, the name and
+// the owning type. Later accesses are one table lookup. Field values still
+// resolve per access, so an object that is gone raises instead of dangling.
+//
+// sol remains in exactly two places: the bridge functions below (other
+// modules move engine objects through sol) and the Vec2/3/4 value types,
+// which stay sol usertypes end to end (registration, conversion, checks).
+
 #include "ECS/Systems/LuaScriptBinding.h"
 
 #include "Core/Scripting/ScriptBindings.h"
@@ -29,7 +52,7 @@ static_assert(std::is_trivially_copyable_v<ScriptRef> && std::is_trivially_destr
 
 /// Registry key of the table type index -> metatable, one per Lua state.
 char kMetatablesKey = 0;
-/// Metatable key that tells script objects from other userdata.
+/// Metatable key that tells script object userdata from other userdata.
 char kObjectMarker = 0;
 
 std::string typeNameOf(type_index_t type)
@@ -54,8 +77,7 @@ int guarded(lua_State* L)
 }
 
 // ============================================================================
-// The only code in this file that addresses the Lua stack by index. The
-// metamethods below read their call through ObjectCall / MethodCall.
+// Stack primitives: userdata access, registry tables, object construction.
 // ============================================================================
 
 const ScriptRef& refAt(lua_State* L, int index)
@@ -63,21 +85,29 @@ const ScriptRef& refAt(lua_State* L, int index)
     return *static_cast<const ScriptRef*>(lua_touserdata(L, index));
 }
 
-/// Pushes the metatable registered for `type`; pushes nothing when there is none.
-bool pushRegisteredMetatable(lua_State* L, type_index_t type)
+/// True when the userdata's metatable carries `marker`.
+bool metatableHasMarker(lua_State* L, int index, const void* marker)
+{
+    if (lua_type(L, index) != LUA_TUSERDATA || !lua_getmetatable(L, index)) {
+        return false;
+    }
+    const bool bHas = lua_rawgetp(L, -1, marker) != LUA_TNIL;
+    lua_pop(L, 2);
+    return bHas;
+}
+
+/// Pushes the per-state table type index -> metatable, creating it on first use.
+void pushMetatableTable(lua_State* L)
 {
     if (lua_rawgetp(L, LUA_REGISTRYINDEX, &kMetatablesKey) != LUA_TTABLE) {
         lua_pop(L, 1);
-        return false;
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_rawsetp(L, LUA_REGISTRYINDEX, &kMetatablesKey);
     }
-    const bool bFound = lua_rawgeti(L, -1, static_cast<lua_Integer>(type)) == LUA_TTABLE;
-    lua_remove(L, -2);
-    if (!bFound) {
-        lua_pop(L, 1);
-    }
-    return bFound;
 }
 
+/// Pushes the metatable registered for `type`, creating it on first use.
 void pushObjectMetatable(lua_State* L, type_index_t type);
 
 void pushObject(lua_State* L, const ScriptRef& ref)
@@ -87,15 +117,50 @@ void pushObject(lua_State* L, const ScriptRef& ref)
     lua_setmetatable(L, -2);
 }
 
-bool hasObjectMarker(lua_State* L, int index)
+/// The file's field-setting vocabulary. Every helper resolves `table` to an
+/// absolute index first, so the pushes inside never shift the target.
+void setFieldFunction(lua_State* L, int table, const char* name, lua_CFunction fn)
 {
-    if (lua_type(L, index) != LUA_TUSERDATA || !lua_getmetatable(L, index)) {
-        return false;
-    }
-    const bool bObject = lua_rawgetp(L, -1, &kObjectMarker) == LUA_TBOOLEAN;
-    lua_pop(L, 2);
-    return bObject;
+    const int target = lua_absindex(L, table);
+    lua_pushcfunction(L, fn);
+    lua_setfield(L, target, name);
 }
+
+/// table[name] = closure(impl) whose single upvalue is a copy of `upvalue`.
+void setFieldClosure(lua_State* L, int table, const char* name, int (*impl)(lua_State*), int upvalue)
+{
+    const int target = lua_absindex(L, table);
+    const int source = lua_absindex(L, upvalue);
+    lua_pushvalue(L, source);
+    lua_pushcclosure(L, impl, 1);
+    lua_setfield(L, target, name);
+}
+
+void setFieldString(lua_State* L, int table, const char* name, std::string_view text)
+{
+    const int target = lua_absindex(L, table);
+    lua_pushlstring(L, text.data(), text.size());
+    lua_setfield(L, target, name);
+}
+
+void setFieldBoolean(lua_State* L, int table, const char* name, bool value)
+{
+    const int target = lua_absindex(L, table);
+    lua_pushboolean(L, value ? 1 : 0);
+    lua_setfield(L, target, name);
+}
+
+/// table[lightuserdata marker] = true, findable only by pointer.
+void setMarker(lua_State* L, int table, const void* marker)
+{
+    const int target = lua_absindex(L, table);
+    lua_pushboolean(L, 1);
+    lua_rawsetp(L, target, marker);
+}
+
+// ============================================================================
+// The two calls a script can make on an engine object, read from the stack.
+// ============================================================================
 
 /// What a method closure sees: the object and the script's arguments, plus
 /// the method handle, its name and the type it belongs to as upvalues.
@@ -120,7 +185,7 @@ class MethodCall
     [[nodiscard]] type_index_t ownerType() const { return static_cast<type_index_t>(lua_tointeger(_L, lua_upvalueindex(3))); }
 
     /// False for `obj.method()` and for a self of another type.
-    [[nodiscard]] bool             calledOnOwner() const { return hasObjectMarker(_L, kSelf) && self().type == ownerType(); }
+    [[nodiscard]] bool             calledOnOwner() const { return metatableHasMarker(_L, kSelf, &kObjectMarker) && self().type == ownerType(); }
     [[nodiscard]] const ScriptRef& self() const { return refAt(_L, kSelf); }
 
     [[nodiscard]] std::vector<ScriptValue> arguments() const
@@ -233,11 +298,10 @@ int methodCall(lua_State* L)
 
 void MethodCall::push(lua_State* L, const ScriptMethod& method, int nameIndex, type_index_t type)
 {
-    sol::stack::push(L,
-                     sol::make_closure(&guarded<&methodCall>,
-                                       sol::lightuserdata_value(const_cast<ScriptMethod*>(&method)),
-                                       sol::stack_object(L, nameIndex),
-                                       static_cast<lua_Integer>(type)));
+    lua_pushlightuserdata(L, const_cast<ScriptMethod*>(&method)); // upvalue 1: the handle
+    lua_pushvalue(L, nameIndex);                                  // upvalue 2: the name
+    lua_pushinteger(L, static_cast<lua_Integer>(type));           // upvalue 3: the owning type
+    lua_pushcclosure(L, &guarded<&methodCall>, 3);
 }
 
 int objectIndex(lua_State* L)
@@ -284,59 +348,71 @@ int objectNewIndex(lua_State* L)
     return 0;
 }
 
-sol::table registeredMetatables(sol::state_view lua)
+int objectEq(lua_State* L)
 {
-    sol::table                 registry = lua.registry();
-    const auto                 key      = sol::lightuserdata_value(&kMetatablesKey);
-    sol::optional<sol::table> types    = registry.raw_get<sol::optional<sol::table>>(key);
-    if (types) {
-        return *types;
-    }
-    sol::table created = lua.create_table();
-    registry.raw_set(key, created);
-    return created;
+    lua_pushboolean(L, metatableHasMarker(L, 1, &kObjectMarker) && metatableHasMarker(L, 2, &kObjectMarker) && refAt(L, 1) == refAt(L, 2));
+    return 1;
 }
 
+int objectToString(lua_State* L)
+{
+    const std::string name = typeNameOf(refAt(L, 1).type);
+    lua_pushlstring(L, name.data(), name.size());
+    return 1;
+}
+
+/// The metatable every script object of `type` carries: the two member
+/// closures sharing the type's member cache, identity/string comparison, all
+/// hidden from scripts and marked as ours. Leaves the metatable pushed.
 void pushObjectMetatable(lua_State* L, type_index_t type)
 {
-    if (pushRegisteredMetatable(L, type)) {
+    pushMetatableTable(L);
+    const int typesTable = lua_absindex(L, -1);
+    if (lua_rawgeti(L, typesTable, static_cast<lua_Integer>(type)) == LUA_TTABLE) {
+        lua_remove(L, typesTable);
         return;
     }
+    lua_pop(L, 1);
 
-    sol::state_view lua(L);
-    sol::table      memberCache = lua.create_table();
-    sol::table      metatable   = lua.create_table_with(
-        sol::meta_function::index,
-        sol::make_closure(&guarded<&objectIndex>, memberCache),
-        sol::meta_function::new_index,
-        sol::make_closure(&guarded<&objectNewIndex>, memberCache),
-        sol::meta_function::equal_to,
-        [](const sol::stack_object& a, const sol::stack_object& b) {
-            return a.is<LuaScriptObject>() && b.is<LuaScriptObject>() && a.as<LuaScriptObject>().ref == b.as<LuaScriptObject>().ref;
-        },
-        sol::meta_function::to_string,
-        [](LuaScriptObject self) { return typeNameOf(self.ref.type); },
-        // Hides the metamethods from scripts: they trust argument 1 to be ours.
-        sol::meta_function::metatable,
-        false,
-        "__name",
-        typeNameOf(type));
-    metatable.raw_set(sol::lightuserdata_value(&kObjectMarker), true);
-    registeredMetatables(lua).raw_set(static_cast<lua_Integer>(type), metatable);
-    sol::stack::push(L, metatable);
+    lua_newtable(L); // the metatable
+    const int metatable = lua_absindex(L, -1);
+
+    lua_createtable(L, 0, 0); // the member cache the two closures share
+    const int memberCache = lua_absindex(L, -1);
+    setFieldClosure(L, metatable, "__index", &guarded<&objectIndex>, memberCache);
+    setFieldClosure(L, metatable, "__newindex", &guarded<&objectNewIndex>, memberCache);
+    lua_pop(L, 1); // the cache lives on only inside the closures
+
+    setFieldFunction(L, metatable, "__eq", &objectEq);
+    setFieldFunction(L, metatable, "__tostring", &guarded<&objectToString>);
+    setFieldString(L, metatable, "__name", typeNameOf(type));
+    // Hides the metamethods from scripts: they trust argument 1 to be ours.
+    setFieldBoolean(L, metatable, "__metatable", false);
+    setMarker(L, metatable, &kObjectMarker);
+
+    lua_pushvalue(L, metatable);
+    lua_rawseti(L, typesTable, static_cast<lua_Integer>(type)); // types[type] = metatable
+    lua_remove(L, typesTable);                                  // leave only the metatable pushed
 }
 
 } // namespace
 
+// ============================================================================
+// sol2 bridge: the only place sol meets engine objects. Every module that
+// moves a LuaScriptObject through sol (bindSelf, world.* functions, tests)
+// funnels through these three.
+// ============================================================================
+
 bool isLuaScriptObject(lua_State* L, int index)
 {
-    return hasObjectMarker(L, index);
+    return metatableHasMarker(L, index, &kObjectMarker);
 }
 
 int sol_lua_push(lua_State* L, const LuaScriptObject& object)
 {
     if (!object.ref) {
-        return sol::stack::push(L, sol::lua_nil);
+        lua_pushnil(L);
+        return 1;
     }
     pushObject(L, object.ref);
     return 1;
@@ -348,67 +424,75 @@ LuaScriptObject sol_lua_get(sol::types<LuaScriptObject>, lua_State* L, int index
     return LuaScriptObject{refAt(L, index)};
 }
 
+// ============================================================================
+// Vec value types stay sol usertypes end to end (registration and conversion).
+// ============================================================================
+
 void registerLuaScriptBindings(sol::state_view lua)
 {
     script::ensureSceneScriptBindings();
 
     lua.new_usertype<glm::vec2>("Vec2",
-                                sol::constructors<glm::vec2(), glm::vec2(float), glm::vec2(float, float)>(),
-                                "x",
-                                &glm::vec2::x,
-                                "y",
-                                &glm::vec2::y,
-                                "__add",
-                                [](const glm::vec2& a, const glm::vec2& b) { return a + b; },
-                                "__sub",
-                                [](const glm::vec2& a, const glm::vec2& b) { return a - b; },
-                                "__mul",
-                                sol::overload([](const glm::vec2& v, float s) { return v * s; },
-                                              [](float s, const glm::vec2& v) { return s * v; }),
-                                "__div",
-                                [](const glm::vec2& v, float s) { return v / s; },
-                                "length",
-                                [](const glm::vec2& v) { return glm::length(v); },
-                                "normalize",
-                                [](const glm::vec2& v) { return glm::normalize(v); });
+                                                  sol::constructors<glm::vec2(), glm::vec2(float), glm::vec2(float, float)>(),
+                                                  "x",
+                                                  &glm::vec2::x,
+                                                  "y",
+                                                  &glm::vec2::y,
+                                                  "__add",
+                                                  [](const glm::vec2& a, const glm::vec2& b) { return a + b; },
+                                                  "__sub",
+                                                  [](const glm::vec2& a, const glm::vec2& b) { return a - b; },
+                                                  "__mul",
+                                                  sol::overload([](const glm::vec2& v, float s) { return v * s; },
+                                                                [](float s, const glm::vec2& v) { return s * v; }),
+                                                  "__div",
+                                                  [](const glm::vec2& v, float s) { return v / s; },
+                                                  "length",
+                                                  [](const glm::vec2& v) { return glm::length(v); },
+                                                  "normalize",
+                                                  [](const glm::vec2& v) { return glm::normalize(v); });
 
     lua.new_usertype<glm::vec3>("Vec3",
-                                sol::constructors<glm::vec3(), glm::vec3(float), glm::vec3(float, float, float)>(),
-                                "x",
-                                &glm::vec3::x,
-                                "y",
-                                &glm::vec3::y,
-                                "z",
-                                &glm::vec3::z,
-                                "__add",
-                                [](const glm::vec3& a, const glm::vec3& b) { return a + b; },
-                                "__sub",
-                                [](const glm::vec3& a, const glm::vec3& b) { return a - b; },
-                                "__mul",
-                                sol::overload([](const glm::vec3& v, float s) { return v * s; },
-                                              [](float s, const glm::vec3& v) { return s * v; }),
-                                "__div",
-                                [](const glm::vec3& v, float s) { return v / s; },
-                                "length",
-                                [](const glm::vec3& v) { return glm::length(v); },
-                                "normalize",
-                                [](const glm::vec3& v) { return glm::normalize(v); },
-                                "dot",
-                                [](const glm::vec3& a, const glm::vec3& b) { return glm::dot(a, b); },
-                                "cross",
-                                [](const glm::vec3& a, const glm::vec3& b) { return glm::cross(a, b); });
+                                                  sol::constructors<glm::vec3(), glm::vec3(float), glm::vec3(float, float, float)>(),
+                                                  "x",
+                                                  &glm::vec3::x,
+                                                  "y",
+                                                  &glm::vec3::y,
+                                                  "z",
+                                                  &glm::vec3::z,
+                                                  "__add",
+                                                  [](const glm::vec3& a, const glm::vec3& b) { return a + b; },
+                                                  "__sub",
+                                                  [](const glm::vec3& a, const glm::vec3& b) { return a - b; },
+                                                  "__mul",
+                                                  sol::overload([](const glm::vec3& v, float s) { return v * s; },
+                                                                [](float s, const glm::vec3& v) { return s * v; }),
+                                                  "__div",
+                                                  [](const glm::vec3& v, float s) { return v / s; },
+                                                  "length",
+                                                  [](const glm::vec3& v) { return glm::length(v); },
+                                                  "normalize",
+                                                  [](const glm::vec3& v) { return glm::normalize(v); },
+                                                  "dot",
+                                                  [](const glm::vec3& a, const glm::vec3& b) { return glm::dot(a, b); },
+                                                  "cross",
+                                                  [](const glm::vec3& a, const glm::vec3& b) { return glm::cross(a, b); });
 
     lua.new_usertype<glm::vec4>("Vec4",
-                                sol::constructors<glm::vec4(), glm::vec4(float), glm::vec4(float, float, float, float)>(),
-                                "x",
-                                &glm::vec4::x,
-                                "y",
-                                &glm::vec4::y,
-                                "z",
-                                &glm::vec4::z,
-                                "w",
-                                &glm::vec4::w);
+                                                  sol::constructors<glm::vec4(), glm::vec4(float), glm::vec4(float, float, float, float)>(),
+                                                  "x",
+                                                  &glm::vec4::x,
+                                                  "y",
+                                                  &glm::vec4::y,
+                                                  "z",
+                                                  &glm::vec4::z,
+                                                  "w",
+                                                  &glm::vec4::w);
 }
+
+// ============================================================================
+// ScriptValue <-> the Lua stack
+// ============================================================================
 
 int pushLuaValue(lua_State* L, const ScriptValue& value)
 {
@@ -416,52 +500,68 @@ int pushLuaValue(lua_State* L, const ScriptValue& value)
         [L](const auto& v) -> int {
             using T = std::decay_t<decltype(v)>;
             if constexpr (std::is_same_v<T, std::monostate>) {
-                return sol::stack::push(L, sol::lua_nil);
+                lua_pushnil(L);
+            }
+            else if constexpr (std::is_same_v<T, bool>) {
+                lua_pushboolean(L, v ? 1 : 0);
+            }
+            else if constexpr (std::is_same_v<T, int64_t>) {
+                lua_pushinteger(L, static_cast<lua_Integer>(v));
+            }
+            else if constexpr (std::is_same_v<T, double>) {
+                lua_pushnumber(L, static_cast<lua_Number>(v));
+            }
+            else if constexpr (std::is_same_v<T, std::string>) {
+                lua_pushlstring(L, v.data(), v.size());
             }
             else if constexpr (std::is_same_v<T, ScriptRef>) {
-                return sol::stack::push(L, LuaScriptObject{v});
+                pushObject(L, v);
             }
             else {
-                return sol::stack::push(L, v);
+                return sol::stack::push(L, v); // Vec value types are sol usertypes
             }
+            return 1;
         },
         value);
 }
 
 ScriptValue toScriptValue(lua_State* L, int index)
 {
-    const sol::stack_object value(L, index);
-    switch (value.get_type()) {
-    case sol::type::lua_nil:
-    case sol::type::none:
+    switch (lua_type(L, index)) {
+    case LUA_TNIL:
+    case LUA_TNONE:
         return {};
-    case sol::type::boolean:
-        return value.as<bool>();
-    case sol::type::number:
+    case LUA_TBOOLEAN:
+        return lua_toboolean(L, index) != 0;
+    case LUA_TNUMBER:
         if (lua_isinteger(L, index)) {
-            return value.as<int64_t>();
+            return static_cast<int64_t>(lua_tointeger(L, index));
         }
-        return value.as<double>();
-    case sol::type::string:
-        return value.as<std::string>();
-    case sol::type::userdata:
-        if (value.is<LuaScriptObject>()) {
-            return value.as<LuaScriptObject>().ref;
+        return static_cast<double>(lua_tonumber(L, index));
+    case LUA_TSTRING: {
+        size_t      length = 0;
+        const char* text   = lua_tolstring(L, index, &length);
+        return std::string(text, length);
+    }
+    case LUA_TUSERDATA:
+        if (metatableHasMarker(L, index, &kObjectMarker)) {
+            return refAt(L, index);
         }
-        if (value.is<glm::vec3>()) {
-            return value.as<glm::vec3>();
+        // Vec value types are sol usertypes; sol recognizes its own instances.
+        if (sol::stack::check<glm::vec3>(L, index, &sol::no_panic)) {
+            return sol::stack::get<glm::vec3>(L, index);
         }
-        if (value.is<glm::vec2>()) {
-            return value.as<glm::vec2>();
+        if (sol::stack::check<glm::vec2>(L, index, &sol::no_panic)) {
+            return sol::stack::get<glm::vec2>(L, index);
         }
-        if (value.is<glm::vec4>()) {
-            return value.as<glm::vec4>();
+        if (sol::stack::check<glm::vec4>(L, index, &sol::no_panic)) {
+            return sol::stack::get<glm::vec4>(L, index);
         }
         break;
     default:
         break;
     }
-    throw ScriptError(std::format("a Lua {} cannot be passed to the engine", sol::type_name(L, value.get_type())));
+    throw ScriptError(std::format("a Lua {} cannot be passed to the engine", luaL_typename(L, index)));
 }
 
 } // namespace ya

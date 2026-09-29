@@ -66,6 +66,19 @@ std::any solToAny(const sol::object& value, std::string_view typeHint)
     }
 }
 
+/// A Lua value carrying `value`'s type, or an invalid object when the type
+/// cannot cross (the caller reports it). The type list is the whole dispatch.
+template <typename... TTypes>
+sol::object makeLuaObject(sol::state& lua, const std::any& value)
+{
+    sol::object made;
+    const bool  bKnown = ((value.type() == typeid(TTypes)
+                               ? (made = sol::make_object(lua, std::any_cast<TTypes>(value)), true)
+                               : false)
+                              || ...);
+    return bKnown ? made : sol::object{};
+}
+
 } // namespace
 
 std::string LuaScriptInstance::normalizeScriptPath(std::string_view path)
@@ -184,32 +197,9 @@ void LuaScriptInstance::applyPropertyOverridesTo(sol::table table, sol::state& l
         }
 
         try {
-            sol::object luaValue = sol::lua_nil;
-            if (anyValue.type() == typeid(int)) {
-                luaValue = sol::make_object(lua, std::any_cast<int>(anyValue));
-            }
-            else if (anyValue.type() == typeid(float)) {
-                luaValue = sol::make_object(lua, std::any_cast<float>(anyValue));
-            }
-            else if (anyValue.type() == typeid(double)) {
-                luaValue = sol::make_object(lua, std::any_cast<double>(anyValue));
-            }
-            else if (anyValue.type() == typeid(bool)) {
-                luaValue = sol::make_object(lua, std::any_cast<bool>(anyValue));
-            }
-            else if (anyValue.type() == typeid(std::string)) {
-                luaValue = sol::make_object(lua, std::any_cast<std::string>(anyValue));
-            }
-            else if (anyValue.type() == typeid(glm::vec2)) {
-                luaValue = sol::make_object(lua, std::any_cast<glm::vec2>(anyValue));
-            }
-            else if (anyValue.type() == typeid(glm::vec3)) {
-                luaValue = sol::make_object(lua, std::any_cast<glm::vec3>(anyValue));
-            }
-            else if (anyValue.type() == typeid(glm::vec4)) {
-                luaValue = sol::make_object(lua, std::any_cast<glm::vec4>(anyValue));
-            }
-            else {
+            const sol::object luaValue =
+                makeLuaObject<int, float, double, bool, std::string, glm::vec2, glm::vec3, glm::vec4>(lua, anyValue);
+            if (!luaValue.valid()) {
                 YA_CORE_WARN("[LuaScript] Unsupported type for property '{}': {}",
                              propName,
                              anyValue.type().name());

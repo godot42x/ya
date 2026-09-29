@@ -84,20 +84,27 @@ sol::function functionField(sol::state_view lua, const sol::table& table, const 
     return function;
 }
 
+/// Calls a Lua function behind sol::protected_function: a script error comes
+/// back as a failed result instead of unwinding through sol's call frames.
 template <typename... Args>
-void invokeLuaCallback(const sol::function& callback,
-                       std::string_view     what,
-                       std::string_view     scriptPath,
-                       Args&&... args)
+sol::protected_function_result protectedCall(const sol::function& callback, Args&&... args)
 {
-    if (!callback.valid()) {
-        return;
-    }
     lua_State* L = callback.lua_state();
     callback.push(L);
     sol::protected_function protectedCallback(L, -1);
     lua_pop(L, 1);
-    const sol::protected_function_result result = protectedCallback(std::forward<Args>(args)...);
+    return protectedCallback(std::forward<Args>(args)...);
+}
+
+/// Runs `callback` if the script defines it; a failed call is logged with
+/// `what` / `scriptPath` and contained to this instance.
+template <typename... Args>
+void invokeLuaCallback(const sol::function& callback, std::string_view what, std::string_view scriptPath, Args&&... args)
+{
+    if (!callback.valid()) {
+        return;
+    }
+    const sol::protected_function_result result = protectedCall(callback, std::forward<Args>(args)...);
     if (!result.valid()) {
         const sol::error error = result;
         YA_CORE_ERROR("Lua {} error ({}): {}", what, scriptPath, error.what());
@@ -654,13 +661,11 @@ bool LuaScriptingSystem::invoke(LuaScriptInstance& instance, const char* callbac
     if (!function.valid()) {
         return false;
     }
-    const std::string       path = instance.scriptPath;
-    const sol::table        self = instance.self;
-    lua_State*              L    = function.lua_state();
-    function.push(L);
-    sol::protected_function protectedCallback(L, -1);
-    lua_pop(L, 1);
-    const sol::protected_function_result result = protectedCallback(self, sol::as_args(args));
+    const std::string path = instance.scriptPath;
+    const sol::table  self = instance.self;
+    // The callback may move the instance's storage, so nothing below reads
+    // `instance` after the call.
+    const sol::protected_function_result result = protectedCall(function, self, sol::as_args(args));
     if (!result.valid()) {
         const sol::error error = result;
         YA_CORE_ERROR("Lua {} error ({}): {}", callback, path, error.what());
@@ -713,6 +718,41 @@ void LuaScriptingSystem::destroyAll()
     }
 }
 
+bool LuaScriptingSystem::reloadInstance(ILuaScriptHost* host, uint64_t id, const std::string& source)
+{
+    LuaScriptInstance* instance = host->resolve(id);
+    if (!instance) {
+        return false;
+    }
+
+    std::unordered_map<std::string, sol::object> savedProperties;
+    for (const auto& prop : instance->properties) {
+        savedProperties[prop.name] = instance->self[prop.name];
+    }
+    call(*instance, ELuaScriptCallback::Destroy);
+
+    // Callbacks may have destroyed the instance or moved its storage.
+    instance = host->resolve(id);
+    if (!instance || !bindChunk(*instance, source)) {
+        return false;
+    }
+    host->bindSelf(instance->self);
+    instance->refreshProperties();
+    for (const auto& [name, value] : savedProperties) {
+        if (value.valid()) {
+            instance->self[name] = value;
+        }
+    }
+    instance->applyPropertyOverrides(_lua);
+
+    // A reloaded instance is a batch of one: onInit, then onStart.
+    call(*instance, ELuaScriptCallback::Init);
+    if (LuaScriptInstance* started = host->resolve(id)) {
+        call(*started, ELuaScriptCallback::Start);
+    }
+    return true;
+}
+
 void LuaScriptingSystem::reloadScript(const std::string& scriptPath)
 {
     const std::string path = LuaScriptInstance::normalizeScriptPath(scriptPath);
@@ -741,36 +781,9 @@ void LuaScriptingSystem::reloadScript(const std::string& scriptPath)
             }
             bSourceRead = true;
         }
-
-        std::unordered_map<std::string, sol::object> savedProperties;
-        for (const auto& prop : instance->properties) {
-            savedProperties[prop.name] = instance->self[prop.name];
+        if (reloadInstance(host, id, source)) {
+            YA_CORE_INFO("[Hot Reload] Successfully reloaded: {}", path);
         }
-        call(*instance, ELuaScriptCallback::Destroy);
-
-        // Callbacks may have destroyed the instance or moved its storage.
-        instance = _live.contains(id) ? host->resolve(id) : nullptr;
-        if (!instance) {
-            continue;
-        }
-        if (!bindChunk(*instance, source)) {
-            continue;
-        }
-        host->bindSelf(instance->self);
-        instance->refreshProperties();
-        for (const auto& [name, value] : savedProperties) {
-            if (value.valid()) {
-                instance->self[name] = value;
-            }
-        }
-        instance->applyPropertyOverrides(_lua);
-
-        // A reloaded instance is a batch of one: onInit, then onStart.
-        call(*instance, ELuaScriptCallback::Init);
-        if (LuaScriptInstance* started = _live.contains(id) ? host->resolve(id) : nullptr) {
-            call(*started, ELuaScriptCallback::Start);
-        }
-        YA_CORE_INFO("[Hot Reload] Successfully reloaded: {}", path);
     }
 }
 

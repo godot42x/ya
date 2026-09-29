@@ -135,6 +135,10 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     [[nodiscard]] bool readSource(const std::string& path, std::string& out) const;
     /// Run `source` and bind the returned table onto `instance` (self and callbacks).
     bool bindChunk(LuaScriptInstance& instance, const std::string& source);
+    /// Hot-reload one live instance from `source`: onDestroy, rebind, restore
+    /// the saved property values, onInit, onStart. False when it did not
+    /// survive its own onDestroy or the chunk failed to load.
+    bool reloadInstance(ILuaScriptHost* host, uint64_t id, const std::string& source);
     [[nodiscard]] ILuaScriptHost* hostOf(const LuaScriptInstance& instance) const;
     [[nodiscard]] std::vector<uint64_t> liveIds() const;
     [[nodiscard]] const std::vector<uint32_t>& treeRanks(Scene& scene);

@@ -20,7 +20,8 @@ struct LuaScriptObject
 };
 
 /// `Vec2` / `Vec3` / `Vec4`. Called once per state; script objects need no
-/// registration.
+/// registration. The full mechanism of script objects in Lua is documented
+/// at the top of LuaScriptBinding.cpp.
 YA_ECS_SYSTEMS_API void registerLuaScriptBindings(sol::state_view lua);
 
 YA_ECS_SYSTEMS_API int                 pushLuaValue(lua_State* L, const script::ScriptValue& value);
