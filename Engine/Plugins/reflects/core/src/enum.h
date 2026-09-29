@@ -24,6 +24,7 @@ struct Enum
     std::unordered_map<std::string, int64_t> nameToValue;
     std::unordered_map<int64_t, std::string> valueToName;
     size_t                                   underlyingSize = sizeof(int); // Size of underlying type in bytes
+    bool                                     bUnderlyingSigned = true;    // Sign of the underlying type
 
     Enum() = default;
     explicit Enum(const std::string &inName) : name(inName) {}
@@ -74,12 +75,43 @@ struct Enum
         return values;
     }
 
+    // Read/write honour the declared underlying size/sign: most reflected
+    // enums are 1- or 2-byte scoped enums, and the historical 8-byte access
+    // picked up neighbouring members' bytes as value noise.
     int64_t getValue(void *ptr) const
     {
-        return *reinterpret_cast<int64_t *>(ptr);
+        switch (underlyingSize) {
+        case 1:
+            return bUnderlyingSigned ? static_cast<int64_t>(*static_cast<const int8_t *>(ptr))
+                                     : static_cast<int64_t>(*static_cast<const uint8_t *>(ptr));
+        case 2:
+            return bUnderlyingSigned ? static_cast<int64_t>(*static_cast<const int16_t *>(ptr))
+                                     : static_cast<int64_t>(*static_cast<const uint16_t *>(ptr));
+        case 4:
+            return bUnderlyingSigned ? static_cast<int64_t>(*static_cast<const int32_t *>(ptr))
+                                     : static_cast<int64_t>(*static_cast<const uint32_t *>(ptr));
+        default:
+            return *reinterpret_cast<const int64_t *>(ptr);
+        }
     }
     void setValue(void *ptr, int64_t val) const
     {
-        *reinterpret_cast<int64_t *>(ptr) = val;
+        switch (underlyingSize) {
+        case 1:
+            if (bUnderlyingSigned) { *static_cast<int8_t *>(ptr) = static_cast<int8_t>(val); }
+            else { *static_cast<uint8_t *>(ptr) = static_cast<uint8_t>(val); }
+            break;
+        case 2:
+            if (bUnderlyingSigned) { *static_cast<int16_t *>(ptr) = static_cast<int16_t>(val); }
+            else { *static_cast<uint16_t *>(ptr) = static_cast<uint16_t>(val); }
+            break;
+        case 4:
+            if (bUnderlyingSigned) { *static_cast<int32_t *>(ptr) = static_cast<int32_t>(val); }
+            else { *static_cast<uint32_t *>(ptr) = static_cast<uint32_t>(val); }
+            break;
+        default:
+            *reinterpret_cast<int64_t *>(ptr) = val;
+            break;
+        }
     }
 };

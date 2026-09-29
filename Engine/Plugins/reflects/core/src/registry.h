@@ -278,9 +278,10 @@ struct RegisterEnum
     RegisterEnum(const std::string &enumName, refl::type_index_t inTypeIndex = 0)
     {
         static_assert(std::is_enum_v<EnumType>, "T must be an enum type");
-        enumInfo.name           = enumName;
-        enumInfo.underlyingSize = sizeof(std::underlying_type_t<EnumType>);
-        typeIndex               = inTypeIndex;
+        enumInfo.name              = enumName;
+        enumInfo.underlyingSize    = sizeof(std::underlying_type_t<EnumType>);
+        enumInfo.bUnderlyingSigned = std::is_signed_v<std::underlying_type_t<EnumType>>;
+        typeIndex                  = inTypeIndex;
     }
 
     RegisterEnum &value(const std::string &valueName, EnumType val)
