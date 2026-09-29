@@ -1,8 +1,11 @@
 #include "Graph/RenderGraphResourceRegistry.h"
 
 #include "Core/Common/DeferredDeletionQueue.h"
+#include "Core/Log.h"
 
+#include <atomic>
 #include <unordered_set>
+#include <utility>
 
 namespace ya
 {
@@ -33,7 +36,12 @@ bool isSameSubresourceRange(const ImageSubresourceRange& lhs, const ImageSubreso
            lhs.layerCount == rhs.layerCount;
 }
 
-bool isSameImportedTextureDesc(const RGImportedTextureDesc& lhs, const RGImportedTextureDesc& rhs)
+bool isSameRetainedResources(const std::vector<RetainedResource>& lhs,
+                             const std::vector<RetainedResource>& rhs);
+
+/// Import replacement is decided by the stable pieces only; Wrapper and Retained
+/// bits are reported for diagnostics and never force a replacement.
+uint32_t diffImportedTextureDesc(const RGImportedTextureDesc& lhs, const RGImportedTextureDesc& rhs, bool& outReplace)
 {
     const bool bSameSubresourceRange =
         lhs.subresourceRange.has_value() == rhs.subresourceRange.has_value() &&
@@ -75,14 +83,27 @@ bool isSameImportedTextureDesc(const RGImportedTextureDesc& lhs, const RGImporte
     const bool bSameUnderlyingImage = lhsImage == rhsImage;
     const bool bSameUnderlyingView  = lhsView == rhsView;
     const bool bSameSharedImageBackedImport = bSameUnderlyingImage && lhsImage != nullptr;
+    const bool bSameDesc = isSameTextureDesc(lhs.desc, rhs.desc);
 
-    return isSameTextureDesc(lhs.desc, rhs.desc) &&
-           bSameImportedImageIdentitySansLayout &&
-           bSameUnderlyingImage &&
-           bSameUnderlyingView &&
-           bSameSubresourceRange &&
-           bSameViewDesc &&
-           (bSameSharedImageBackedImport || bSameLayoutContract);
+    outReplace = !(bSameDesc &&
+                   bSameImportedImageIdentitySansLayout &&
+                   bSameUnderlyingImage &&
+                   bSameUnderlyingView &&
+                   bSameSubresourceRange &&
+                   bSameViewDesc &&
+                   (bSameSharedImageBackedImport || bSameLayoutContract));
+
+    uint32_t changes = ERGImportChange::None;
+    changes |= bSameDesc ? 0u : ERGImportChange::Desc;
+    changes |= bSameImportedImageIdentitySansLayout ? 0u : ERGImportChange::ImportIdentity;
+    changes |= bSameUnderlyingImage ? 0u : ERGImportChange::Image;
+    changes |= bSameUnderlyingView ? 0u : ERGImportChange::View;
+    changes |= bSameSubresourceRange ? 0u : ERGImportChange::Subresource;
+    changes |= bSameViewDesc ? 0u : ERGImportChange::ViewDesc;
+    changes |= bSameLayoutContract ? 0u : ERGImportChange::LayoutContract;
+    changes |= lhs.resource == rhs.resource ? 0u : ERGImportChange::Wrapper;
+    changes |= isSameRetainedResources(lhs.retainedResources, rhs.retainedResources) ? 0u : ERGImportChange::Retained;
+    return changes;
 }
 
 bool isSameBufferDesc(const RGBufferDesc& lhs, const RGBufferDesc& rhs)
@@ -99,10 +120,17 @@ bool hasRequestedBufferUsage(EBufferUsage value, EBufferUsage required)
     return (value & required) == required;
 }
 
-bool isSameImportedBufferDesc(const RGImportedBufferDesc& lhs, const RGImportedBufferDesc& rhs)
+uint32_t diffImportedBufferDesc(const RGImportedBufferDesc& lhs, const RGImportedBufferDesc& rhs, bool& outReplace)
 {
-    return isSameBufferDesc(lhs.desc, rhs.desc) &&
-           lhs.buffer == rhs.buffer;
+    const bool bSameDesc   = isSameBufferDesc(lhs.desc, rhs.desc);
+    const bool bSameBuffer = lhs.buffer == rhs.buffer;
+    outReplace             = !(bSameDesc && bSameBuffer);
+
+    uint32_t changes = ERGImportChange::None;
+    changes |= bSameDesc ? 0u : ERGImportChange::Desc;
+    changes |= bSameBuffer ? 0u : ERGImportChange::Buffer;
+    changes |= isSameRetainedResources(lhs.retainedResources, rhs.retainedResources) ? 0u : ERGImportChange::Retained;
+    return changes;
 }
 
 template <typename T>
@@ -134,19 +162,175 @@ bool isSameRetainedResources(const std::vector<RetainedResource>& lhs,
                       });
 }
 
-void refreshRetainedResources(std::vector<RetainedResource>& currentRetainedResources,
+/// Returns true when the old keep-alive list was retired.
+bool refreshRetainedResources(std::vector<RetainedResource>& currentRetainedResources,
                               const std::vector<RetainedResource>& nextRetainedResources)
 {
     if (isSameRetainedResources(currentRetainedResources, nextRetainedResources)) {
-        return;
+        return false;
     }
 
     auto retiredResources = std::move(currentRetainedResources);
     currentRetainedResources = nextRetainedResources;
     retireRetainedResources(retiredResources);
+    return true;
 }
 
+std::atomic<bool> gRenderGraphTraceEnabled{false};
+
 } // namespace
+
+namespace render_graph_trace
+{
+
+void setEnabled(bool bEnabled)
+{
+    gRenderGraphTraceEnabled.store(bEnabled, std::memory_order_relaxed);
+}
+
+bool isEnabled()
+{
+    return gRenderGraphTraceEnabled.load(std::memory_order_relaxed);
+}
+
+std::string_view toString(ERGRegistryEvent kind)
+{
+    switch (kind) {
+    case ERGRegistryEvent::ImportBound:
+        return "ImportBound";
+    case ERGRegistryEvent::ImportReplaced:
+        return "ImportReplaced";
+    case ERGRegistryEvent::RetainedRefreshed:
+        return "RetainedRefreshed";
+    case ERGRegistryEvent::ImportPruned:
+        return "ImportPruned";
+    case ERGRegistryEvent::OwnedBufferCreated:
+        return "OwnedBufferCreated";
+    case ERGRegistryEvent::OwnedBufferReplaced:
+        return "OwnedBufferReplaced";
+    case ERGRegistryEvent::OwnedBufferPruned:
+        return "OwnedBufferPruned";
+    case ERGRegistryEvent::TransientTextureAllocated:
+        return "TransientTextureAllocated";
+    case ERGRegistryEvent::TransientBufferSlotAllocated:
+        return "TransientBufferSlotAllocated";
+    }
+    return "Unknown";
+}
+
+std::string describeChanges(uint32_t changes)
+{
+    if (changes == ERGImportChange::None) {
+        return "none";
+    }
+
+    constexpr std::pair<uint32_t, std::string_view> names[] = {
+        {ERGImportChange::Desc, "desc"},
+        {ERGImportChange::ImportIdentity, "import-identity"},
+        {ERGImportChange::Image, "image"},
+        {ERGImportChange::View, "view"},
+        {ERGImportChange::Subresource, "subresource"},
+        {ERGImportChange::ViewDesc, "view-desc"},
+        {ERGImportChange::LayoutContract, "layout"},
+        {ERGImportChange::Buffer, "buffer"},
+        {ERGImportChange::Wrapper, "wrapper"},
+        {ERGImportChange::Retained, "retained"},
+        {ERGImportChange::Lifetime, "lifetime"},
+    };
+
+    std::string text;
+    for (const auto& [bit, name] : names) {
+        if ((changes & bit) == 0) {
+            continue;
+        }
+        if (!text.empty()) {
+            text += '|';
+        }
+        text += name;
+    }
+    return text;
+}
+
+} // namespace render_graph_trace
+
+void RenderGraphResourceRegistry::recordEvent(ERGRegistryEvent kind,
+                                              bool             bTexture,
+                                              uint32_t         handleIndex,
+                                              uint32_t         changes,
+                                              bool             bRegistryOwnsGpuObject,
+                                              std::string_view label)
+{
+    switch (kind) {
+    case ERGRegistryEvent::ImportBound:
+        ++_lastSyncStats.importBound;
+        _lastSyncStats.registryObjectsCreated += bRegistryOwnsGpuObject ? 1u : 0u;
+        break;
+    case ERGRegistryEvent::ImportReplaced:
+        ++_lastSyncStats.importReplaced;
+        _lastSyncStats.registryObjectsRetired += bRegistryOwnsGpuObject ? 1u : 0u;
+        break;
+    case ERGRegistryEvent::RetainedRefreshed:
+        ++_lastSyncStats.retainedRefreshed;
+        break;
+    case ERGRegistryEvent::ImportPruned:
+        ++_lastSyncStats.importPruned;
+        _lastSyncStats.registryObjectsRetired += bRegistryOwnsGpuObject ? 1u : 0u;
+        break;
+    case ERGRegistryEvent::OwnedBufferCreated:
+    case ERGRegistryEvent::TransientTextureAllocated:
+    case ERGRegistryEvent::TransientBufferSlotAllocated:
+        ++_lastSyncStats.registryObjectsCreated;
+        break;
+    case ERGRegistryEvent::OwnedBufferReplaced:
+        ++_lastSyncStats.registryObjectsCreated;
+        ++_lastSyncStats.registryObjectsRetired;
+        break;
+    case ERGRegistryEvent::OwnedBufferPruned:
+        ++_lastSyncStats.registryObjectsRetired;
+        break;
+    }
+
+    if (!render_graph_trace::isEnabled()) {
+        return;
+    }
+    _lastSyncEvents.push_back(RGRegistryEventRecord{
+        .kind                   = kind,
+        .bTexture               = bTexture,
+        .handleIndex            = handleIndex,
+        .changes                = changes,
+        .bRegistryOwnsGpuObject = bRegistryOwnsGpuObject,
+        .label                  = std::string(label),
+    });
+}
+
+void RenderGraphResourceRegistry::logSyncEvents() const
+{
+    if (_lastSyncEvents.empty()) {
+        return;
+    }
+
+    const auto& stats = _lastSyncStats;
+    YA_CORE_INFO("[RGTrace] registry '{}' sync#{}: bound={} replaced={} retained={} pruned={} rebound={} "
+                 "registryCreated={} registryRetired={}",
+                 _debugName,
+                 stats.syncSerial,
+                 stats.importBound,
+                 stats.importReplaced,
+                 stats.retainedRefreshed,
+                 stats.importPruned,
+                 stats.importRebound,
+                 stats.registryObjectsCreated,
+                 stats.registryObjectsRetired);
+    for (const auto& event : _lastSyncEvents) {
+        YA_CORE_INFO("[RGTrace]   {} {} '{}' handle={} changes={} registryOwned={}",
+                     render_graph_trace::toString(event.kind),
+                     event.bTexture ? "texture" : "buffer",
+                     event.label,
+                     event.handleIndex,
+                     render_graph_trace::describeChanges(event.changes),
+                     event.bRegistryOwnsGpuObject ? "yes" : "no");
+    }
+}
 
 void RenderGraphResourceRegistry::releaseTextureBinding(std::shared_ptr<TextureEntry>& entry)
 {
@@ -223,6 +407,7 @@ std::shared_ptr<RenderGraphResourceRegistry::TextureEntry> RenderGraphResourceRe
                    desc.label);
     _transientTexturePool.push_back(entry);
     usedPoolEntries.insert(entry.get());
+    recordEvent(ERGRegistryEvent::TransientTextureAllocated, true, 0, ERGImportChange::None, true, desc.label);
     return entry;
 }
 
@@ -257,6 +442,7 @@ std::shared_ptr<RenderGraphResourceRegistry::OwnedBufferEntry> RenderGraphResour
     usedPoolEntries.insert(entry.get());
     ++_transientPoolDiagnostics.lastMissCount;
     ++_transientPoolDiagnostics.totalMissCount;
+    recordEvent(ERGRegistryEvent::TransientBufferSlotAllocated, false, slot.slotIndex, ERGImportChange::None, true, slot.desc.label);
     return entry;
 }
 
@@ -322,11 +508,14 @@ ImageViewCreateInfo RenderGraphResourceRegistry::makeDefaultViewDesc(const RGTex
     };
 }
 
-std::shared_ptr<RenderTexture> RenderGraphResourceRegistry::createImportedTexture(const RGImportedTextureDesc& desc)
+std::shared_ptr<RenderTexture> RenderGraphResourceRegistry::createImportedTexture(const RGImportedTextureDesc& desc,
+                                                                                  bool& outRegistryCreatedObject)
 {
+    outRegistryCreatedObject = false;
     auto image = desc.resource ? desc.resource->getImageShared() : nullptr;
     if (!image) {
         image = _factory.importImage(desc.importDesc);
+        outRegistryCreatedObject = image != nullptr;
     }
     if (!image) {
         YA_CORE_ERROR("Failed to import render graph texture '{}'", desc.importDesc.label);
@@ -341,6 +530,7 @@ std::shared_ptr<RenderTexture> RenderGraphResourceRegistry::createImportedTextur
     }
     else {
         view = _factory.createImageView(image, desc.viewDesc.value_or(makeDefaultViewDesc(desc.desc)));
+        outRegistryCreatedObject = outRegistryCreatedObject || view != nullptr;
     }
     if (!view) {
         YA_CORE_ERROR("Failed to create imported render graph texture view '{}'", desc.importDesc.label);
@@ -384,6 +574,14 @@ void RenderGraphResourceRegistry::pruneUnusedResources(const RenderGraph& graph)
                           it->second->desc.label,
                           it->first.index,
                           it->first.generation);
+            if (it->second && it->second->imported.has_value()) {
+                recordEvent(ERGRegistryEvent::ImportPruned,
+                            true,
+                            it->first.index,
+                            ERGImportChange::None,
+                            it->second->bRegistryCreatedImportObject,
+                            it->second->desc.label);
+            }
             releaseTextureBinding(it->second);
             it = _textures.erase(it);
         }
@@ -400,6 +598,9 @@ void RenderGraphResourceRegistry::pruneUnusedResources(const RenderGraph& graph)
 
     for (auto it = _ownedBuffers.begin(); it != _ownedBuffers.end();) {
         if (!liveBuffers.contains(it->first)) {
+            if (it->second && !it->second->pooledTransient) {
+                recordEvent(ERGRegistryEvent::OwnedBufferPruned, false, it->first.index, ERGImportChange::None, true, it->second->desc.label);
+            }
             releaseOwnedBufferBinding(it->second);
             it = _ownedBuffers.erase(it);
         }
@@ -411,6 +612,7 @@ void RenderGraphResourceRegistry::pruneUnusedResources(const RenderGraph& graph)
     for (auto it = _importedBuffers.begin(); it != _importedBuffers.end();) {
         if (!liveBuffers.contains(it->first)) {
             if (it->second.imported.has_value()) {
+                recordEvent(ERGRegistryEvent::ImportPruned, false, it->first.index, ERGImportChange::None, false, it->second.imported->desc.label);
                 retireRetainedResources(it->second.imported->retainedResources);
             }
             it = _importedBuffers.erase(it);
@@ -421,20 +623,24 @@ void RenderGraphResourceRegistry::pruneUnusedResources(const RenderGraph& graph)
     }
 }
 
-bool RenderGraphResourceRegistry::needsTextureReplacement(const TextureEntry& entry, const RGTextureResource& resource)
+uint32_t RenderGraphResourceRegistry::diffTexture(const TextureEntry& entry, const RGTextureResource& resource, bool& outReplace)
 {
-    if (!isSameTextureDesc(entry.desc, resource.desc)) {
-        return true;
-    }
+    const bool     bSameDesc   = isSameTextureDesc(entry.desc, resource.desc);
+    const uint32_t descChange  = bSameDesc ? ERGImportChange::None : ERGImportChange::Desc;
 
     if (resource.lifetime == ERGResourceLifetime::Imported) {
         if (!resource.imported.has_value() || !entry.imported.has_value()) {
-            return true;
+            outReplace = true;
+            return descChange | ERGImportChange::Lifetime;
         }
-        return !isSameImportedTextureDesc(*entry.imported, *resource.imported);
+        bool           bImportReplace = false;
+        const uint32_t changes        = diffImportedTextureDesc(*entry.imported, *resource.imported, bImportReplace);
+        outReplace                    = !bSameDesc || bImportReplace;
+        return changes | descChange;
     }
 
-    return entry.imported.has_value();
+    outReplace = !bSameDesc || entry.imported.has_value();
+    return descChange | (entry.imported.has_value() ? ERGImportChange::Lifetime : ERGImportChange::None);
 }
 
 bool RenderGraphResourceRegistry::needsOwnedBufferReplacement(const OwnedBufferEntry& entry, const RGBufferResource& resource)
@@ -442,18 +648,21 @@ bool RenderGraphResourceRegistry::needsOwnedBufferReplacement(const OwnedBufferE
     return !isSameBufferDesc(entry.desc, resource.desc);
 }
 
-bool RenderGraphResourceRegistry::needsImportedBufferReplacement(const ImportedBufferEntry& entry, const RGBufferResource& resource)
+uint32_t RenderGraphResourceRegistry::diffImportedBuffer(const ImportedBufferEntry& entry, const RGBufferResource& resource, bool& outReplace)
 {
     if (resource.lifetime != ERGResourceLifetime::Imported || !resource.imported.has_value() || !entry.imported.has_value()) {
-        return true;
+        outReplace = true;
+        return ERGImportChange::Lifetime;
     }
-    return !isSameImportedBufferDesc(*entry.imported, *resource.imported);
+    return diffImportedBufferDesc(*entry.imported, *resource.imported, outReplace);
 }
 
 void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompiledGraph* compiled)
 {
     _transientPoolDiagnostics.lastHitCount = 0;
     _transientPoolDiagnostics.lastMissCount = 0;
+    _lastSyncStats = RGRegistrySyncStats{.syncSerial = _lastSyncStats.syncSerial + 1};
+    _lastSyncEvents.clear();
     pruneUnusedResources(graph);
 
     std::unordered_set<TextureEntry*> usedTransientTextureEntries;
@@ -461,41 +670,73 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
 
     for (const auto& texture : graph.getTextures()) {
         const auto existing = _textures.find(texture.handle);
-        if (existing != _textures.end() && !needsTextureReplacement(*existing->second, texture)) {
+        bool       bReplace = true;
+        uint32_t   changes  = ERGImportChange::None;
+        if (existing != _textures.end()) {
+            changes = diffTexture(*existing->second, texture, bReplace);
+        }
+        if (existing != _textures.end() && !bReplace) {
             if (texture.lifetime == ERGResourceLifetime::Transient && existing->second->pooledTransient) {
                 usedTransientTextureEntries.insert(existing->second.get());
             }
             if (texture.lifetime == ERGResourceLifetime::Imported) {
+                bool bRetiredKeepAlive = false;
                 if (existing->second->imported.has_value()) {
-                    refreshRetainedResources(existing->second->imported->retainedResources,
-                                             texture.imported ? texture.imported->retainedResources : std::vector<RetainedResource>{});
+                    bRetiredKeepAlive |= refreshRetainedResources(
+                        existing->second->imported->retainedResources,
+                        texture.imported ? texture.imported->retainedResources : std::vector<RetainedResource>{});
                 }
                 existing->second->imported = texture.imported;
                 if (existing->second->resource && existing->second->resource->resource) {
-                    refreshRetainedResources(existing->second->resource->resource->retainedResources,
-                                             texture.imported ? texture.imported->retainedResources : std::vector<RetainedResource>{});
+                    bRetiredKeepAlive |= refreshRetainedResources(
+                        existing->second->resource->resource->retainedResources,
+                        texture.imported ? texture.imported->retainedResources : std::vector<RetainedResource>{});
+                }
+                if (bRetiredKeepAlive) {
+                    recordEvent(ERGRegistryEvent::RetainedRefreshed, true, texture.handle.index, changes, false, texture.desc.label);
+                }
+                else {
+                    ++_lastSyncStats.importRebound;
                 }
             }
             continue;
         }
+
+        bool bReplacedImport         = false;
+        bool bRetiredRegistryObject  = false;
         if (existing != _textures.end()) {
             YA_CORE_TRACE("RenderGraph registry replacing texture '{}' (handle={}:{})",
                           texture.desc.label,
                           texture.handle.index,
                           texture.handle.generation);
+            bReplacedImport        = existing->second && existing->second->imported.has_value();
+            bRetiredRegistryObject = existing->second && existing->second->bRegistryCreatedImportObject;
             releaseTextureBinding(existing->second);
         }
 
         if (texture.lifetime == ERGResourceLifetime::Imported) {
             YA_CORE_ASSERT(texture.imported.has_value(), "Imported render graph texture '{}' is missing import desc", texture.desc.label);
+            bool bCreatedRegistryObject = false;
+            auto resource               = createImportedTexture(*texture.imported, bCreatedRegistryObject);
             _textures[texture.handle] = std::make_shared<TextureEntry>(TextureEntry{
-                .resource        = createImportedTexture(*texture.imported),
-                .desc            = texture.desc,
-                .allocationDesc  = texture.desc,
-                .imported        = texture.imported,
-                .pooledTransient = false,
+                .resource                     = std::move(resource),
+                .desc                         = texture.desc,
+                .allocationDesc               = texture.desc,
+                .imported                     = texture.imported,
+                .pooledTransient              = false,
+                .bRegistryCreatedImportObject = bCreatedRegistryObject,
             });
+            if (bReplacedImport) {
+                recordEvent(ERGRegistryEvent::ImportReplaced, true, texture.handle.index, changes, bRetiredRegistryObject, texture.desc.label);
+                _lastSyncStats.registryObjectsCreated += bCreatedRegistryObject ? 1u : 0u;
+            }
+            else {
+                recordEvent(ERGRegistryEvent::ImportBound, true, texture.handle.index, changes, bCreatedRegistryObject, texture.desc.label);
+            }
             continue;
+        }
+        if (bReplacedImport) {
+            recordEvent(ERGRegistryEvent::ImportPruned, true, texture.handle.index, changes, bRetiredRegistryObject, texture.desc.label);
         }
 
         auto transientEntry = acquireTransientTexture(texture.desc, usedTransientTextureEntries);
@@ -516,20 +757,37 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
         if (buffer.lifetime == ERGResourceLifetime::Imported) {
             YA_CORE_ASSERT(buffer.imported.has_value(), "Imported render graph buffer '{}' is missing import desc", buffer.desc.label);
             if (const auto owned = _ownedBuffers.find(buffer.handle); owned != _ownedBuffers.end()) {
+                if (owned->second && !owned->second->pooledTransient) {
+                    recordEvent(ERGRegistryEvent::OwnedBufferPruned, false, buffer.handle.index, ERGImportChange::Lifetime, true, buffer.desc.label);
+                }
                 releaseOwnedBufferBinding(owned->second);
             }
             _ownedBuffers.erase(buffer.handle);
 
             const auto existing = _importedBuffers.find(buffer.handle);
-            if (existing != _importedBuffers.end() && !needsImportedBufferReplacement(existing->second, buffer)) {
+            bool       bReplace = true;
+            uint32_t   changes  = ERGImportChange::None;
+            if (existing != _importedBuffers.end()) {
+                changes = diffImportedBuffer(existing->second, buffer, bReplace);
+            }
+            if (existing != _importedBuffers.end() && !bReplace) {
+                bool bRetiredKeepAlive = false;
                 if (existing->second.imported.has_value()) {
-                    refreshRetainedResources(existing->second.imported->retainedResources,
-                                             buffer.imported ? buffer.imported->retainedResources : std::vector<RetainedResource>{});
+                    bRetiredKeepAlive = refreshRetainedResources(
+                        existing->second.imported->retainedResources,
+                        buffer.imported ? buffer.imported->retainedResources : std::vector<RetainedResource>{});
                 }
                 existing->second.imported = buffer.imported;
+                if (bRetiredKeepAlive) {
+                    recordEvent(ERGRegistryEvent::RetainedRefreshed, false, buffer.handle.index, changes, false, buffer.desc.label);
+                }
+                else {
+                    ++_lastSyncStats.importRebound;
+                }
                 continue;
             }
-            if (existing != _importedBuffers.end() && existing->second.imported.has_value()) {
+            const bool bReplacedImport = existing != _importedBuffers.end() && existing->second.imported.has_value();
+            if (bReplacedImport) {
                 retireRetainedResources(existing->second.imported->retainedResources);
             }
 
@@ -537,11 +795,18 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
                 .resource = buffer.imported->buffer,
                 .imported = buffer.imported,
             };
+            recordEvent(bReplacedImport ? ERGRegistryEvent::ImportReplaced : ERGRegistryEvent::ImportBound,
+                        false,
+                        buffer.handle.index,
+                        changes,
+                        false,
+                        buffer.desc.label);
             continue;
         }
 
         if (const auto imported = _importedBuffers.find(buffer.handle);
             imported != _importedBuffers.end() && imported->second.imported.has_value()) {
+            recordEvent(ERGRegistryEvent::ImportPruned, false, buffer.handle.index, ERGImportChange::Lifetime, false, buffer.desc.label);
             retireRetainedResources(imported->second.imported->retainedResources);
         }
         _importedBuffers.erase(buffer.handle);
@@ -550,6 +815,7 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
         if (existing != _ownedBuffers.end() && !needsOwnedBufferReplacement(*existing->second, buffer)) {
             continue;
         }
+        const bool bReplacedOwned = existing != _ownedBuffers.end() && existing->second && !existing->second->pooledTransient;
         if (existing != _ownedBuffers.end()) {
             releaseOwnedBufferBinding(existing->second);
         }
@@ -563,6 +829,16 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
             }),
             .desc = buffer.desc,
         });
+        recordEvent(bReplacedOwned ? ERGRegistryEvent::OwnedBufferReplaced : ERGRegistryEvent::OwnedBufferCreated,
+                    false,
+                    buffer.handle.index,
+                    bReplacedOwned ? ERGImportChange::Desc : ERGImportChange::None,
+                    true,
+                    buffer.desc.label);
+    }
+
+    if (render_graph_trace::isEnabled()) {
+        logSyncEvents();
     }
 }
 

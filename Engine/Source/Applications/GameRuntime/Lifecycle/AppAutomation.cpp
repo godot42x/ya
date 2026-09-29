@@ -12,6 +12,7 @@
 #include "GameRuntime/Automation/AppScreenshotCapture.h"
 
 #include "Core/Config/ConfigManager.h"
+#include "Graph/RenderGraphResourceRegistry.h"
 #include "Render3D/Common/ShadowSettings.h"
 
 #include "Core/Log.h"
@@ -724,6 +725,11 @@ void AppAutomation::applyLogOverrides(const AppDesc& appDesc)
         YA_CORE_INFO("Automation log overrides applied: level={}, detailLevel={}",
                      logcc::LogLevel::toString(effectiveLogLevel),
                      logcc::LogLevel::toString(effectiveLogDetailLevel));
+    }
+
+    render_graph_trace::setEnabled(automation.bRenderGraphTrace);
+    if (automation.bRenderGraphTrace) {
+        YA_CORE_INFO("Render graph trace enabled: registry sync events and graph dumps are logged with [RGTrace]");
     }
 }
 

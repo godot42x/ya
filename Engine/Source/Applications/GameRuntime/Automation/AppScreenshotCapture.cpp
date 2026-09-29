@@ -377,7 +377,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
 
     state.outputPath                   = outputPath;
     state.readbackBuffer               = std::move(readbackBuffer);
-    state.copyExecutor                 = std::make_shared<RenderGraphExecutor>(*render->getResourceFactory());
+    state.copyExecutor                 = std::make_shared<RenderGraphExecutor>(*render->getResourceFactory(), "ScreenshotCopy");
     state.presentationSourceImage       = nullptr;
     state.width                        = extent.width;
     state.height                       = extent.height;

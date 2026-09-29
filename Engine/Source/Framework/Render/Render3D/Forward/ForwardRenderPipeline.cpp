@@ -247,7 +247,7 @@ void ForwardRenderPipeline::rebuildShadowViews()
 void ForwardRenderPipeline::init(const InitDesc& desc)
 {
     _render                 = desc.render;
-    _graphExecutor          = _render ? std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()) : nullptr;
+    _graphExecutor          = _render ? std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory(), "Forward") : nullptr;
     _shadowSettings         = desc.shadowSettings;
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;

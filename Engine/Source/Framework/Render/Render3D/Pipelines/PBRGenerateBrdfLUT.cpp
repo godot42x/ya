@@ -30,7 +30,7 @@ void PBRGenerateBrdfLUT::init(IRender* render)
         return;
     }
 
-    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
+    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory(), "BrdfLUT");
     _pipelineLayout = IPipelineLayout::create(_render,
                                               _pipelineLayoutDesc.label,
                                               _pipelineLayoutDesc.pushConstants,

@@ -2,6 +2,20 @@
 
 这里存放阶段性计划、进度、基线和评估工件。默认不要把 `plan/` 当成当前主规范入口。
 
+
+## 门禁
+在完成计划文件编写及执行之前:
+除非你有 95% 以上的信心和把握已经理解了目标，就应该向用户询问方案偏差与改动方向，以问题的形式, 不断迭代出最终的计划.
+
+```cpp
+float confidence = ratio_that_you_sure_understand_and_could_finish_the_target(this_plan);
+while(confidence < 0.95){
+    ask_user_some_questions_about_target_and_update(this_plan);
+    confidence = ratio_that_you_sure_understand_and_could_finish_the_target(this_plan);
+}
+completion_and_make_the_final_plan(this_plan);
+```
+
 ## 边界
 
 - `plan/` 记录的是某条重构线或阶段任务在当时的目标、决策、验证命令和进度。
@@ -61,6 +75,7 @@
 | `display-compose-encoding/` | display compose 只搬运不改色，且 surface 层不再持管线（F1–F3 已落地；仅剩 gamma 开关语义待定） |
 | `game-ui-script-framework/` | 界面自带脚本（与宿主无关的 Lua 运行时 + GUI 不透明行为描述）、帧顺序/暂停/结构变更时机成为契约、条目模态与取消路由；验收用例 GreedSnake（F0–S3 与性能检查点已落地；下一步 S4） |
 | `ui-behavior-capabilities/` | `UIBehavior` 按能力登记（含同类唯一、拖放为行为种类、控件委托取代动作字符串、Lua 监听归属脚本实例）、树 tick 注册表、Lua `call()` 热路径（C1/C1b/C1c/C1d 完成，下一步 C2；排在 game-ui S4 之前） |
+| `rdg-cache-dx/` | RenderGraph import 替换决策诊断与 owner 身份收敛、Bloom 切片、Forward/Deferred/Shadow 资源容器按生命周期拆分（接手自 render-view-family）、Slang 生成 descriptor layout（P0 skinning、P1 registry 诊断已落地；下一步 P2 按 owner key 匹配 import） |
 | `scene-2d-world-and-game-ui/` | 现有 Scene/Transform/Camera 上补 authored sprite，并与 UI Compose 分层形成 2D 游戏闭环（Render2DList 值化、screen/world draw contract、Render3D→GUI 解耦已落地；D1–D3 按坐标系拆 draw list / 删全局 Render2D / View overlay 归编辑器待做；P0 混合语义和 Scene graph integration 未完成） |
 
 ## 归档判据

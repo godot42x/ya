@@ -81,7 +81,7 @@ void BloomPostprocessing::init(const InitDesc& initDesc)
 {
     _render   = initDesc.render;
     _initDesc = initDesc;
-    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
+    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory(), "Bloom");
     initExtractPipeline();
     initBlurPipeline();
     initCompositePipeline();

@@ -79,6 +79,7 @@ xmake project -k compile_commands
     公开路径就是相对 include 根的路径；模块根不再保留同名副本，`include/` 下不得出现
     转发 stub，一个物理头只能有一个公开路径。include 字符串一律写公开路径。
     细则见 `./.agent/skills/code-reorganize/SKILL.md`。
+16. plan files 相关先读 `./.agent/plan/AGENTS.md`
 
 ## Repo Facts
 

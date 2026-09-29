@@ -87,6 +87,7 @@ struct AppAutomationOptions : AppAutomationRunOptions
     std::optional<AppAutomationPipelineSwitch> pipelineSwitch;
     std::optional<logcc::LogLevel::T> logLevel;
     std::optional<logcc::LogLevel::T> logDetailLevel;
+    bool                         bRenderGraphTrace = false;
     AppAutomationShadowOverrides shadow;
     AppAutomationDeferredOverrides deferred;
     AppAutomationPostProcessOverrides postprocess;

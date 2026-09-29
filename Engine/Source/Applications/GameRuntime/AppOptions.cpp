@@ -155,6 +155,7 @@ void AppDesc::init(int argc, char** argv)
         .opt<std::string>("", {"editor-camera-rot"}, "Editor camera rotation override as pitch,yaw,roll")
         .opt<std::string>("", {"log-level"}, "Runtime log level: debug/trace/info/warn/error/fatal")
         .opt<std::string>("", {"log-detail-level"}, "Runtime source-detail log level: debug/trace/info/warn/error/fatal")
+        .opt<bool>("", {"render-graph-trace"}, "Log render graph registry sync events and per-executor graph dumps", "false")
         .opt<std::string>("", {"renderdoc-dll"}, "RenderDoc dll path", renderDocDllPath)
         .opt<std::string>("", {"renderdoc-output"}, "RenderDoc capture output directory", renderDocCaptureOutputDir)
         .opt<uint16_t>("", {"automation-control-port"}, "Automation control TCP port; 0 disables the server", "0")
@@ -253,6 +254,7 @@ void AppDesc::init(int argc, char** argv)
             automation.logLevel = parsedLogLevel;
         }
     }
+    params.tryGet<bool>("render-graph-trace", automation.bRenderGraphTrace);
     if (std::string logDetailLevelText; params.tryGet<std::string>("log-detail-level", logDetailLevelText)) {
         logcc::LogLevel::T parsedLogDetailLevel = logcc::LogLevel::Warn;
         if (tryParseLogLevel(logDetailLevelText, parsedLogDetailLevel)) {

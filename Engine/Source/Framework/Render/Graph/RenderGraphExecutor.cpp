@@ -84,6 +84,18 @@ bool RenderGraphExecutor::prepare(
     }
 
     _registry.sync(graph, &outCompiled);
+    if (render_graph_trace::isEnabled() && _traceDumpCount < kMaxTraceDumps) {
+        const auto& stats = _registry.getLastSyncStats();
+        if (_traceDumpCount == 0 || stats.importReplaced > 0 || stats.importPruned > 0) {
+            ++_traceDumpCount;
+            YA_CORE_INFO("[RGTrace] executor '{}' sync#{} graph dump ({}/{}):\n{}",
+                         _registry.getDebugName(),
+                         stats.syncSerial,
+                         _traceDumpCount,
+                         kMaxTraceDumps,
+                         graph.debugDump(outCompiled));
+        }
+    }
     if (outResult) {
         captureExecutionResult(outCompiled, *outResult);
     }

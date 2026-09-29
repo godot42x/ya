@@ -1778,6 +1778,50 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
         }
     }
 
+    const auto importedTextureCount = std::count_if(_textures.begin(), _textures.end(), [](const RGTextureResource& texture) {
+        return texture.lifetime == ERGResourceLifetime::Imported;
+    });
+    const auto importedBufferCount = std::count_if(_buffers.begin(), _buffers.end(), [](const RGBufferResource& buffer) {
+        return buffer.lifetime == ERGResourceLifetime::Imported;
+    });
+    oss << "imports(" << importedTextureCount + importedBufferCount << ")\n";
+    for (const auto& texture : _textures) {
+        if (texture.lifetime != ERGResourceLifetime::Imported || !texture.imported.has_value()) {
+            continue;
+        }
+        const auto& imported = *texture.imported;
+        const auto* wrapper  = imported.resource.get();
+        const auto  image    = wrapper ? wrapper->getImageShared() : nullptr;
+        const auto  view     = wrapper ? wrapper->getImageViewShared() : nullptr;
+        oss << "  texture[" << texture.handle.index << "] " << texture.desc.label
+            << " wrapper=" << static_cast<const void*>(wrapper)
+            << " image=";
+        if (image) {
+            oss << static_cast<const void*>(image.get());
+        }
+        else {
+            oss << "registry-imports(native=" << imported.importDesc.nativeHandle << ")";
+        }
+        oss << " view=";
+        if (view) {
+            oss << static_cast<const void*>(view.get());
+        }
+        else {
+            oss << "registry-creates";
+        }
+        oss << " retained=" << imported.retainedResources.size() << "\n";
+    }
+    for (const auto& buffer : _buffers) {
+        if (buffer.lifetime != ERGResourceLifetime::Imported || !buffer.imported.has_value()) {
+            continue;
+        }
+        const auto& imported = *buffer.imported;
+        oss << "  buffer[" << buffer.handle.index << "] " << buffer.desc.label
+            << " buffer=" << static_cast<const void*>(imported.buffer)
+            << " range=" << imported.initialState.offset << "+" << imported.initialState.size
+            << " retained=" << imported.retainedResources.size() << "\n";
+    }
+
     oss << "importedTextureFinalizes(" << compiled.importedTextureFinalizes.size() << ")\n";
     for (const auto& finalize : compiled.importedTextureFinalizes) {
         const auto* texture = getTexture(finalize.texture);

@@ -777,7 +777,7 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
 void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
 {
     _render                       = desc.render;
-    _graphExecutor                = _render ? std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()) : nullptr;
+    _graphExecutor                = _render ? std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory(), "Deferred") : nullptr;
     _shadowSettings               = desc.shadowSettings;
     _automationShadowOverrides    = desc.automationShadowOverrides;
     _environmentLightingDSL       = desc.environmentLightingDSL;

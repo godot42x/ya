@@ -103,7 +103,8 @@ void PresentationGraphService::rebuildImages()
     }
     _presentationGraphExecutors.reserve(_presentationImages.size());
     for (size_t i = 0; i < _presentationImages.size(); ++i) {
-        _presentationGraphExecutors.push_back(std::make_unique<RenderGraphExecutor>(*factory));
+        _presentationGraphExecutors.push_back(
+            std::make_unique<RenderGraphExecutor>(*factory, std::format("Presentation[{}]", i)));
     }
 }
 

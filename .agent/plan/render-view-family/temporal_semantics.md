@@ -137,7 +137,7 @@ hostTick = 1200
 | `GameRuntimeFrameOrchestrator::resolveFlightIndex(app)` | 由 `FrameFlightResources` 提供 | `GameRuntimeFrameOrchestrator.cpp:426` | 当前从 primary surface present 计数推导；多 Surface 下 owner 错误 |
 | `FrameUploadArena` | `UploadArena` | `RHI/Core/FrameUploadArena.{h,cpp}` + `include/` 转发 | |
 | `FrameResourceSubmission.h`（`beginViewBindingTable` / `writeUploadSlice`） | `ViewRecordingSupport.h` | `Render3D/Common/FrameResourceSubmission.h` | |
-| `PerFlightFrameResourceSetBase` | `SkinningLayoutProvider` | `Render3D/Common/PerFlightFrameResourceSetBase.h` | 现在只持 skinning DSL 布局，已无 per-flight 资源 |
+| `PerFlightFrameResourceSetBase` | `SkinningLayoutProvider` | `Render3D/Common/PerFlightFrameResourceSetBase.h` | 现在只持 skinning DSL 布局，已无 per-flight 资源；转交 `rdg-cache-dx` P4 |
 | `RenderSurfaceContext::getCurrentFrameIndex()` | `getPresentCycleIndex()` | `RHI/Core/RenderSurfaceContext.h:69`、`RHI/Backend/Vulkan/VulkanRenderSurfaceContext.h:77`、`RHI/Render.h:109`、`VulkanRender.cpp:1197,1270,1291` | 它同时被 GPU timing query ring 当作槽位使用，改名需一并核对 |
 | `MAX_FLIGHTS_IN_FLIGHT` | 保持 | | flight 轴语义正确 |
 
@@ -188,9 +188,9 @@ overlap，需要同时 (a) 提高 `flightFrameSize`、(b) 把 `waitAllGraphicsFe
 | `ForwardFrameGraphPasses.{h,cpp}` | `ForwardViewFamilyGraphPasses.*` |
 | `DeferredFrameGraphResources.h` | `DeferredViewGraphResources.h` |
 | `ForwardFrameGraphResources.h` | `ForwardViewGraphResources.h` |
-| `DeferredFrameResourceSet` | `DeferredGpuResourceLibrary` |
-| `ForwardFrameResourceSet` | `ForwardGpuResourceLibrary` |
-| `ShadowFrameResources` | `ShadowViewResources` |
+| `DeferredFrameResourceSet` | `DeferredGpuResourceLibrary`（转交 `rdg-cache-dx` P4） |
+| `ForwardFrameResourceSet` | `ForwardGpuResourceLibrary`（转交 `rdg-cache-dx` P4） |
+| `ShadowFrameResources` | `ShadowViewResources`（转交 `rdg-cache-dx` P4） |
 | 测试名 `DeferredFrameResourceSetTest`、`DeferredFrameGraphResourcesTest`、`ForwardFrameGraphOrchestratorTest`、`RenderGraphCoreTest.FrameUploadArena*` | 跟随新名 |
 
 ### M7 — GUI framework 命名

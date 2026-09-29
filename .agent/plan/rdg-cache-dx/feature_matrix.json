@@ -1,13 +1,59 @@
 {
   "plan": "rdg-cache-dx",
   "updated": "2026-09-29",
+  "intent": {
+    "primary": "降低 pipeline feature 扩展的跨文件心智负担，并让 GPU allocation 生命周期具有可追踪的唯一 owner",
+    "contract_view": "shader 侧接口以 Slang 生成物为唯一事实源（含 descriptor layout）；不引入平行手写 schema 或外部 DSL"
+  },
   "rows": [
-    {"area": "skinning SSBO", "owner": "SceneSkinningCache (device)", "phase": "P0", "status": "done", "proof": "commit 533003be, 200 帧零 flush"},
-    {"area": "graph dump + 悬空依赖 warning", "owner": "RenderGraphExecutor", "phase": "P1", "status": "todo", "proof": ""},
-    {"area": "import 条目瘦身 (borrow+保活)", "owner": "RenderGraphResourceRegistry", "phase": "P2", "status": "todo", "proof": ""},
-    {"area": "view 附件双份 (ViewTargetStore/import)", "owner": "待定", "phase": "P2", "status": "todo", "proof": ""},
-    {"area": "arena 切片双份 (arena/imported buffer)", "owner": "待定", "phase": "P2", "status": "todo", "proof": ""},
-    {"area": "统一失效语言", "owner": "各缓存", "phase": "P3", "status": "todo", "proof": ""},
-    {"area": "pass 登记入口收敛", "owner": "RenderGraphImportUtils", "phase": "P4", "status": "todo", "proof": ""}
+    {
+      "area": "Scene skinning SSBO reuse",
+      "owner": "SceneSkinningCache (device)",
+      "phase": "P0",
+      "status": "done",
+      "proof": "历史记录：commit 533003be；ya-render-3d-test 182 passed；HelloMaterial 200 frames warmup 后零 flush；本轮未重跑"
+    },
+    {
+      "area": "registry sync 替换/退役事件诊断 + 运行时开关 + debugDump imported 段",
+      "owner": "RenderGraphResourceRegistry（输出决策）+ 外部 owner（提供身份）",
+      "phase": "P1",
+      "status": "done",
+      "proof": "ya-render-3d-test 187 passed（新增 5 个 trace/dump 测试）；--render-graph-trace=true 下 HelloMaterial warmup churn 逐条指到 label/handle/原因；替换谓词未改，200 帧 warmup 后零 flush"
+    },
+    {
+      "area": "import owner 表与 P2 决策",
+      "owner": "P1 产出，记录在 progress.md",
+      "phase": "P1",
+      "status": "done",
+      "proof": "progress.md owner 表（HelloMaterial Deferred/Forward + resize + pipeline 切换）；P2 决策=部分执行（用户确认）。多 View 运行时未验证：无编辑器选择 automation，结论基于代码"
+    },
+    {
+      "area": "import 条目按 owner key 匹配 + 删 registry 自建 import view + import 入口收敛 + transient 纹理池淘汰",
+      "owner": "外部 owner 在 RGImported*Desc 提供稳定 key；registry 按 key 匹配、按 backing 判替换；RenderGraphImportUtils 为唯一构造入口",
+      "phase": "P2",
+      "status": "todo",
+      "proof": "拓扑变化（首现 pass / View 增减）不产生误替换（P1 trace 计数）；稳态替换 0；resize 只触发 owner 单次替换且旧尺寸 transient 条目被淘汰；import 必须带 view；5 个转发包装与 3 个 host-written lambda 删除；ya-render-3d-test 全过；flush 基线不回退"
+    },
+    {
+      "area": "Bloom 垂直切片（Forward + Deferred 共用）",
+      "owner": "BloomPostprocessing / PostProcessingStage + pipeline composition entry",
+      "phase": "P3",
+      "status": "todo",
+      "proof": "变更清单；从 Bloom 入口可追全输入；Forward/Deferred 渲染结果不变"
+    },
+    {
+      "area": "Forward/Deferred/Shadow 资源容器按生命周期拆分（接手自 render-view-family）",
+      "owner": "*GpuResourceLibrary（device）+ submission 侧 ViewResources 持有者 + shadow strategy",
+      "phase": "P4",
+      "status": "todo",
+      "proof": "先 Deferred 一条链；View/Scene/flight 身份不靠散落字段推断；测试与 allocation/flush 基线通过；render-view-family 对应条目标注已转交"
+    },
+    {
+      "area": "Slang 生成 descriptor layout 并替换手写（Bloom + 一条完整管线）",
+      "owner": "slang_gen_header.py 生成物",
+      "phase": "P5",
+      "status": "todo",
+      "proof": "所选路径无手写 DescriptorSetLayout；binding 不一致在编译/测试暴露；xmake ya-shader 与测试通过；渲染结果不变"
+    }
   ]
 }

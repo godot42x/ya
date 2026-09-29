@@ -2415,6 +2415,236 @@ TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenViewIdentityChange
     EXPECT_EQ(factory.createdViews, 2u);
 }
 
+TEST(RenderGraphCoreTest, ResourceRegistryTraceSeparatesKeepAliveRefreshFromBufferReplacement)
+{
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+    deletionQueue.init(/*framesInFlight=*/1);
+    render_graph_trace::setEnabled(true);
+
+    TestResourceFactory         factory;
+    RenderGraphResourceRegistry registry(factory, "trace.buffers");
+    const BufferCreateInfo      bufferInfo{.label = "trace.ssbo", .usage = EBufferUsage::StorageBuffer, .size = 256};
+    auto                        bufferA = std::make_shared<TestBuffer>(bufferInfo);
+    auto                        bufferB = std::make_shared<TestBuffer>(bufferInfo);
+
+    const auto syncFrame = [&](const std::shared_ptr<TestBuffer>& buffer, const std::shared_ptr<int>& owner) {
+        RenderGraph graph;
+        (void)graph.importBuffer(RGImportedBufferDesc{
+            .desc              = RGBufferDesc{.label = "trace.ssbo", .usage = EBufferUsage::StorageBuffer, .size = 256},
+            .buffer            = buffer.get(),
+            .retainedResources = {RetainedResource{owner}},
+        });
+        registry.sync(graph);
+    };
+
+    auto ownerA = std::make_shared<int>(1);
+    syncFrame(bufferA, ownerA);
+    EXPECT_EQ(registry.getLastSyncStats().importBound, 1u);
+
+    syncFrame(bufferA, ownerA);
+    EXPECT_FALSE(registry.getLastSyncStats().hasChurn());
+    EXPECT_EQ(registry.getLastSyncStats().importRebound, 1u);
+    EXPECT_TRUE(registry.getLastSyncEvents().empty());
+
+    syncFrame(bufferA, std::make_shared<int>(2));
+    EXPECT_EQ(registry.getLastSyncStats().retainedRefreshed, 1u);
+    EXPECT_EQ(registry.getLastSyncStats().importReplaced, 0u);
+    ASSERT_EQ(registry.getLastSyncEvents().size(), 1u);
+    EXPECT_EQ(registry.getLastSyncEvents()[0].kind, ERGRegistryEvent::RetainedRefreshed);
+    EXPECT_EQ(registry.getLastSyncEvents()[0].changes, static_cast<uint32_t>(ERGImportChange::Retained));
+
+    syncFrame(bufferB, ownerA);
+    EXPECT_EQ(registry.getLastSyncStats().importReplaced, 1u);
+    ASSERT_EQ(registry.getLastSyncEvents().size(), 1u);
+    const auto& replaced = registry.getLastSyncEvents()[0];
+    EXPECT_EQ(replaced.kind, ERGRegistryEvent::ImportReplaced);
+    EXPECT_NE(replaced.changes & ERGImportChange::Buffer, 0u);
+    EXPECT_EQ(replaced.changes & ERGImportChange::Desc, 0u);
+    EXPECT_FALSE(replaced.bRegistryOwnsGpuObject);
+    EXPECT_EQ(replaced.label, "trace.ssbo");
+
+    render_graph_trace::setEnabled(false);
+    registry.clear();
+    deletionQueue.flushAll();
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryTraceReportsWrapperCloneAsReboundNotReplacement)
+{
+    render_graph_trace::setEnabled(true);
+
+    TestResourceFactory         factory;
+    RenderGraphResourceRegistry registry(factory, "trace.wrapper");
+    auto image = std::make_shared<TestImage>(ImageCreateInfo{
+        .label       = "trace.target",
+        .format      = EFormat::R16G16B16A16_SFLOAT,
+        .extent      = {.width = 64, .height = 64, .depth = 1},
+        .mipLevels   = 1,
+        .arrayLayers = 1,
+        .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+    auto view = factory.createImageView(image, ImageViewCreateInfo{
+        .label       = "trace.target.view",
+        .viewType    = EImageViewType::View2D,
+        .aspectFlags = EImageAspect::Color,
+    });
+
+    const auto syncFrame = [&] {
+        RenderGraph graph;
+        (void)graph.importTexture(RGImportedTextureDesc{
+            .desc = RGTextureDesc{
+                .label  = "trace.target",
+                .format = EFormat::R16G16B16A16_SFLOAT,
+                .extent = Extent3D{64, 64, 1},
+                .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            },
+            .importDesc = ImportedImageDesc{
+                .label        = "trace.target",
+                .nativeHandle = static_cast<void*>(image->getHandle()),
+                .format       = EFormat::R16G16B16A16_SFLOAT,
+                .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .extent       = Extent3D{64, 64, 1},
+            },
+            .resource = makeTestImageResource(image, view),
+        });
+        registry.sync(graph);
+    };
+
+    syncFrame();
+    ASSERT_EQ(registry.getLastSyncEvents().size(), 1u);
+    EXPECT_EQ(registry.getLastSyncEvents()[0].kind, ERGRegistryEvent::ImportBound);
+    EXPECT_FALSE(registry.getLastSyncEvents()[0].bRegistryOwnsGpuObject);
+
+    syncFrame();
+    EXPECT_FALSE(registry.getLastSyncStats().hasChurn());
+    EXPECT_EQ(registry.getLastSyncStats().importRebound, 1u);
+
+    render_graph_trace::setEnabled(false);
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryTraceMarksRegistryCreatedImportViewOnReplaceAndPrune)
+{
+    render_graph_trace::setEnabled(true);
+
+    TestResourceFactory         factory;
+    RenderGraphResourceRegistry registry(factory, "trace.registry-view");
+
+    const auto syncFrame = [&](uint32_t baseMipLevel) {
+        RenderGraph           graph;
+        RGImportedTextureDesc importedDesc{};
+        importedDesc.desc = RGTextureDesc{
+            .label  = "trace.native",
+            .format = EFormat::R16G16B16A16_SFLOAT,
+            .extent = Extent3D{128, 128, 1},
+            .usage  = EImageUsage::Sampled,
+        };
+        importedDesc.importDesc = ImportedImageDesc{
+            .label        = "trace.native",
+            .nativeHandle = reinterpret_cast<void*>(0x505),
+            .format       = EFormat::R16G16B16A16_SFLOAT,
+            .usage        = EImageUsage::Sampled,
+            .extent       = Extent3D{128, 128, 1},
+            .mipLevels    = 4,
+        };
+        importedDesc.viewDesc = ImageViewCreateInfo{
+            .label        = "trace.native.view",
+            .viewType     = EImageViewType::View2D,
+            .aspectFlags  = EImageAspect::Color,
+            .baseMipLevel = baseMipLevel,
+            .levelCount   = 1,
+            .layerCount   = 1,
+        };
+        (void)graph.importTexture(importedDesc);
+        registry.sync(graph);
+    };
+
+    syncFrame(0);
+    EXPECT_EQ(registry.getLastSyncStats().registryObjectsCreated, 1u);
+    ASSERT_EQ(registry.getLastSyncEvents().size(), 1u);
+    EXPECT_TRUE(registry.getLastSyncEvents()[0].bRegistryOwnsGpuObject);
+
+    syncFrame(1);
+    ASSERT_EQ(registry.getLastSyncEvents().size(), 1u);
+    const auto& replaced = registry.getLastSyncEvents()[0];
+    EXPECT_EQ(replaced.kind, ERGRegistryEvent::ImportReplaced);
+    EXPECT_NE(replaced.changes & ERGImportChange::ViewDesc, 0u);
+    EXPECT_TRUE(replaced.bRegistryOwnsGpuObject);
+    EXPECT_EQ(registry.getLastSyncStats().registryObjectsRetired, 1u);
+    EXPECT_EQ(registry.getLastSyncStats().registryObjectsCreated, 1u);
+
+    RenderGraph emptyGraph;
+    registry.sync(emptyGraph);
+    ASSERT_EQ(registry.getLastSyncEvents().size(), 1u);
+    EXPECT_EQ(registry.getLastSyncEvents()[0].kind, ERGRegistryEvent::ImportPruned);
+    EXPECT_EQ(registry.getLastSyncStats().registryObjectsRetired, 1u);
+
+    render_graph_trace::setEnabled(false);
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryRecordsEventsOnlyWhileTraceEnabled)
+{
+    render_graph_trace::setEnabled(false);
+
+    TestResourceFactory         factory;
+    RenderGraphResourceRegistry registry(factory);
+    auto buffer = std::make_shared<TestBuffer>(BufferCreateInfo{.label = "quiet", .usage = EBufferUsage::StorageBuffer, .size = 64});
+
+    RenderGraph graph;
+    (void)graph.importBuffer(RGImportedBufferDesc{
+        .desc   = RGBufferDesc{.label = "quiet", .usage = EBufferUsage::StorageBuffer, .size = 64},
+        .buffer = buffer.get(),
+    });
+    registry.sync(graph);
+
+    EXPECT_EQ(registry.getLastSyncStats().importBound, 1u);
+    EXPECT_TRUE(registry.getLastSyncEvents().empty());
+}
+
+TEST(RenderGraphCoreTest, DebugDumpListsImportedResourcesWithBackingIdentity)
+{
+    auto image = std::make_shared<TestImage>(ImageCreateInfo{
+        .label       = "dump.target",
+        .format      = EFormat::R16G16B16A16_SFLOAT,
+        .extent      = {.width = 32, .height = 32, .depth = 1},
+        .mipLevels   = 1,
+        .arrayLayers = 1,
+        .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+    auto buffer = std::make_shared<TestBuffer>(BufferCreateInfo{.label = "dump.ssbo", .usage = EBufferUsage::StorageBuffer, .size = 128});
+
+    RenderGraph graph;
+    const auto  texture = graph.importTexture(RGImportedTextureDesc{
+         .desc = RGTextureDesc{
+             .label  = "dump.target",
+             .format = EFormat::R16G16B16A16_SFLOAT,
+             .extent = Extent3D{32, 32, 1},
+             .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        },
+         .importDesc = ImportedImageDesc{
+             .label        = "dump.target",
+             .nativeHandle = static_cast<void*>(image->getHandle()),
+             .format       = EFormat::R16G16B16A16_SFLOAT,
+             .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+             .extent       = Extent3D{32, 32, 1},
+        },
+         .resource = makeTestImageResource(image),
+    });
+    const auto  ssbo = graph.importBuffer(RGImportedBufferDesc{
+         .desc   = RGBufferDesc{.label = "dump.ssbo", .usage = EBufferUsage::StorageBuffer, .size = 128},
+         .buffer = buffer.get(),
+    });
+    (void)graph.addPass("dump.pass", [texture, ssbo](RGPassBuilder& pass) {
+        pass.read(texture);
+        pass.storageRead(ssbo);
+    });
+
+    const auto dump = graph.debugDump(graph.compile());
+    EXPECT_NE(dump.find("imports(2)"), std::string::npos);
+    EXPECT_NE(dump.find("texture[0] dump.target"), std::string::npos);
+    EXPECT_NE(dump.find("view=registry-creates"), std::string::npos);
+    EXPECT_NE(dump.find("buffer[0] dump.ssbo"), std::string::npos);
+}
+
 TEST(RenderGraphCoreTest, ResourceRegistryKeepsSharedImportedTextureWhenOnlyLayoutContractChanges)
 {
     TestResourceFactory factory;

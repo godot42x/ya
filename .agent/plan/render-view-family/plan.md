@@ -273,8 +273,8 @@ PreparedView 直接包含 View task、prepared frame data 和 derived Scene，�
 | `ForwardRenderPipeline` | `ForwardViewFamilyRenderer` | 同上，策略独立 |
 | `DeferredFrameGraphOrchestrator` | `DeferredViewFamilyGraphBuilder` | 只 build graph，不发布 current 输出 |
 | `ForwardFrameGraphOrchestrator` | `ForwardViewFamilyGraphBuilder` | 同上 |
-| `DeferredFrameResourceSet` | `DeferredGpuResourceLibrary` | device-level layout/pool/static resources |
-| `ForwardFrameResourceSet` | `ForwardGpuResourceLibrary` | 同上 |
+| `DeferredFrameResourceSet` | `DeferredGpuResourceLibrary` | device-level layout/pool/static resources（2026-09-29 转交 `rdg-cache-dx` P4） |
+| `ForwardFrameResourceSet` | `ForwardGpuResourceLibrary` | 同上（转交 `rdg-cache-dx` P4） |
 | `GBufferStage` / `SSAOStage` / `LightStage` | `GBufferPass` / `SSAOPass` / `DeferredLightingPass` | pass recipe + typed inputs/outputs |
 | `ViewportOverlayStage` | `ViewportOverlayPass` | 不保存 current frame inputs |
 
