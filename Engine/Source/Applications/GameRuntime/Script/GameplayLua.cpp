@@ -123,7 +123,7 @@ void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui)
         Entity* entity = spawnSprite(name);
         return entity ? sol::optional<LuaScriptObject>(LuaScriptObject{script::entityRef(entity)}) : sol::nullopt;
     });
-    world.set_function("destroyEntity", [](const LuaScriptObject& entity) { destroySpriteEntity(script::entityOf(entity.ref)); });
+    world.set_function("destroyEntity", [](LuaScriptObject entity) { destroySpriteEntity(script::entityOf(entity.ref)); });
     world.set_function("viewAspect", []() { return viewAspect(); });
 
     ui.setBehaviorRuntime(std::make_unique<LuaWidgetScripts>(scripting, ui));

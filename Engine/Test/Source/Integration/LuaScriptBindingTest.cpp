@@ -1,4 +1,4 @@
-// Lua view of the shared script export (rpg-prototype B1).
+// Lua view of the shared script export (rpg-prototype B1, D12).
 
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/CameraComponent.h"
@@ -32,7 +32,7 @@ class LuaScriptBindingTest : public ::testing::Test
     sol::protected_function_result run(const std::string& source) { return _lua.safe_script(source, sol::script_pass_on_error); }
 };
 
-TEST_F(LuaScriptBindingTest, MarkedMembersReachTheComponents)
+TEST_F(LuaScriptBindingTest, ReflectedMembersReachTheComponents)
 {
     const auto result = run(R"(
         local t = entity:getTransform()
@@ -40,7 +40,7 @@ TEST_F(LuaScriptBindingTest, MarkedMembersReachTheComponents)
         t:setRotation(Vec3.new(0, 90, 0))
         local camera = entity:add("CameraComponent")
         camera.projection = 1
-        camera.primary = true
+        camera.bPrimary = true
         return entity:getName(), t.position.y, entity:hasCamera(), camera.projection
     )");
     ASSERT_TRUE(result.valid()) << sol::error(result).what();
@@ -70,6 +70,25 @@ TEST_F(LuaScriptBindingTest, MissingComponentIsNilAndRefsCompareByIdentity)
     EXPECT_TRUE(result.get<bool>(2));
 }
 
+TEST_F(LuaScriptBindingTest, MembersAreCachedPerType)
+{
+    _lua["other"] = LuaScriptObject{script::entityRef(_scene.createNode3D("Other")->getEntity())};
+    const auto result = run(R"(
+        local getName = entity.getName
+        local a, b = entity:getTransform(), other:getTransform()
+        local _ = a.position
+        return rawequal(getName, entity.getName), rawequal(getName, other.getName), getName(other),
+               rawequal(a.getPosition, b.getPosition), b.position.x, getmetatable(entity)
+    )");
+    ASSERT_TRUE(result.valid()) << sol::error(result).what();
+    EXPECT_TRUE(result.get<bool>(0));
+    EXPECT_TRUE(result.get<bool>(1));
+    EXPECT_EQ(result.get<std::string>(2), "Other");
+    EXPECT_TRUE(result.get<bool>(3));
+    EXPECT_DOUBLE_EQ(result.get<double>(4), 0.0);
+    EXPECT_FALSE(result.get<bool>(5));
+}
+
 TEST_F(LuaScriptBindingTest, MistakesRaiseLuaErrors)
 {
     for (const char* source : {
@@ -77,6 +96,8 @@ TEST_F(LuaScriptBindingTest, MistakesRaiseLuaErrors)
              "entity:getTransform().localDirty = true",
              "entity:getTransform().position = 'up'",
              "return entity.getName()",
+             "return entity.getName(entity:getTransform())",
+             "entity.getName = 1",
              "return entity:get('NoSuchComponent')",
          }) {
         const auto result = run(source);
@@ -86,7 +107,7 @@ TEST_F(LuaScriptBindingTest, MistakesRaiseLuaErrors)
 
 TEST_F(LuaScriptBindingTest, DestroyedEntityRaisesInsteadOfDangling)
 {
-    ASSERT_TRUE(run("transform = entity:getTransform()").valid());
+    ASSERT_TRUE(run("transform = entity:getTransform(); local _ = transform.position, entity:getName()").valid());
     _scene.destroyEntity(_entity);
 
     const auto name = run("return entity:getName()");

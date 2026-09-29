@@ -89,9 +89,9 @@ struct YA_ECS_CORE_API Entity
     [[nodiscard]] bool removeComponentByName(const std::string& typeName);
 
     YA_REFLECT_BEGIN(Entity)
-    YA_REFLECT_METHOD(getId, .script().tooltip("Entity id in its scene"))
-    YA_REFLECT_METHOD(getName, .script().tooltip("Entity display name"))
-    YA_REFLECT_METHOD(setName, .script().tooltip("Rename the entity"))
+    YA_REFLECT_METHOD(getId, .tooltip("Entity id in its scene"))
+    YA_REFLECT_METHOD(getName, .tooltip("Entity display name"))
+    YA_REFLECT_METHOD(setName, .tooltip("Rename the entity"))
     YA_REFLECT_END()
 
     /// True when the handle is valid in its owning scene/registry. The scene

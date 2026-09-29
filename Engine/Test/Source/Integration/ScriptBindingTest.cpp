@@ -25,7 +25,7 @@ enum class EProbeMood : uint8_t
 struct FProbeBase
 {
     YA_REFLECT_BEGIN(FProbeBase)
-    YA_REFLECT_FIELD(baseValue, .script())
+    YA_REFLECT_FIELD(baseValue)
     YA_REFLECT_END()
 
     int baseValue = 1;
@@ -34,27 +34,27 @@ struct FProbeBase
 struct FProbe : FProbeBase
 {
     YA_REFLECT_BEGIN(FProbe, FProbeBase)
-    YA_REFLECT_FIELD(_speed, .script())
-    YA_REFLECT_FIELD(_label, .scriptReadOnly())
-    YA_REFLECT_FIELD(bFlag, .script("flag"))
-    YA_REFLECT_FIELD(hidden)
-    YA_REFLECT_FIELD(_mood, .script())
-    YA_REFLECT_METHOD(scaled, .script())
-    YA_REFLECT_METHOD(setMood, .script())
-    YA_REFLECT_METHOD(getLabel, .script())
-    YA_REFLECT_METHOD(secret)
+    YA_REFLECT_FIELD(_speed)
+    YA_REFLECT_FIELD(_label)
+    YA_REFLECT_FIELD(bFlag)
+    YA_REFLECT_FIELD(_mood)
+    YA_REFLECT_FIELD(_matrix)
+    YA_REFLECT_METHOD(scaled)
+    YA_REFLECT_METHOD(setMood)
+    YA_REFLECT_METHOD(getLabel)
+    YA_REFLECT_METHOD(getMatrix)
     YA_REFLECT_END()
 
-    float       _speed = 2.0f;
-    std::string _label = "probe";
-    bool        bFlag  = false;
-    int         hidden = 7;
-    EProbeMood  _mood  = EProbeMood::Calm;
+    float             _speed  = 2.0f;
+    const std::string _label  = "probe";
+    bool              bFlag   = false;
+    EProbeMood        _mood   = EProbeMood::Calm;
+    glm::mat4         _matrix = glm::mat4(1.0f);
 
     [[nodiscard]] float              scaled(float factor) const { return _speed * factor; }
     void                             setMood(EProbeMood mood) { _mood = mood; }
     [[nodiscard]] const std::string& getLabel() const { return _label; }
-    [[nodiscard]] int                secret() const { return 42; }
+    [[nodiscard]] const glm::mat4&   getMatrix() const { return _matrix; }
 };
 
 } // namespace ya::script_binding_test
@@ -69,7 +69,6 @@ namespace ya::script_binding_test
 namespace
 {
 
-using script::EScriptMember;
 using script::ScriptError;
 using script::ScriptRef;
 using script::ScriptValue;
@@ -102,7 +101,8 @@ struct FProbeWorld
 
     ScriptRef add(uint64_t id)
     {
-        probes[id] = FProbe{};
+        probes.erase(id);
+        probes.try_emplace(id);
         return ScriptRef{.type = type_index_v<FProbe>, .kind = kind(), .a = id};
     }
 };
@@ -117,19 +117,22 @@ class ScriptBindingTest : public ::testing::Test
     }
 };
 
-TEST_F(ScriptBindingTest, OnlyMarkedMembersAreVisible)
+TEST_F(ScriptBindingTest, ReflectedMembersThatCrossAreVisible)
 {
     const type_index_t type = type_index_v<FProbe>;
-    EXPECT_EQ(script::findMember(type, "speed"), EScriptMember::Field);
-    EXPECT_EQ(script::findMember(type, "label"), EScriptMember::Field);
-    EXPECT_EQ(script::findMember(type, "flag"), EScriptMember::Field);
-    EXPECT_EQ(script::findMember(type, "baseValue"), EScriptMember::Field);
-    EXPECT_EQ(script::findMember(type, "scaled"), EScriptMember::Method);
+    EXPECT_NE(script::findField(type, "speed"), nullptr);
+    EXPECT_NE(script::findField(type, "label"), nullptr);
+    EXPECT_NE(script::findField(type, "bFlag"), nullptr);
+    EXPECT_NE(script::findField(type, "baseValue"), nullptr);
+    EXPECT_NE(script::findMethod(type, "scaled"), nullptr);
+    EXPECT_NE(script::findMethod(type, "getLabel"), nullptr);
 
-    EXPECT_EQ(script::findMember(type, "hidden"), EScriptMember::None);
-    EXPECT_EQ(script::findMember(type, "secret"), EScriptMember::None);
-    EXPECT_EQ(script::findMember(type, "_speed"), EScriptMember::None);
-    EXPECT_EQ(script::findMember(type, "bFlag"), EScriptMember::None);
+    EXPECT_EQ(script::findField(type, "_speed"), nullptr);
+    EXPECT_EQ(script::findField(type, "matrix"), nullptr);
+    EXPECT_EQ(script::findMethod(type, "getMatrix"), nullptr);
+    EXPECT_EQ(script::findMethod(type, "speed"), nullptr);
+
+    EXPECT_EQ(script::findField(type, "speed"), script::findField(type, "speed"));
 }
 
 TEST_F(ScriptBindingTest, FieldsReadAndWriteThroughReflection)
@@ -142,7 +145,7 @@ TEST_F(ScriptBindingTest, FieldsReadAndWriteThroughReflection)
     EXPECT_EQ(script::readField(ref, "baseValue"), ScriptValue{int64_t{1}});
 
     script::writeField(ref, "speed", int64_t{3});
-    script::writeField(ref, "flag", true);
+    script::writeField(ref, "bFlag", true);
     script::writeField(ref, "baseValue", int64_t{9});
     EXPECT_FLOAT_EQ(probe._speed, 3.0f);
     EXPECT_TRUE(probe.bFlag);
@@ -151,7 +154,7 @@ TEST_F(ScriptBindingTest, FieldsReadAndWriteThroughReflection)
 
     EXPECT_THROW(script::writeField(ref, "label", std::string("x")), ScriptError);
     EXPECT_THROW(script::writeField(ref, "speed", std::string("fast")), ScriptError);
-    EXPECT_THROW(script::writeField(ref, "hidden", int64_t{1}), ScriptError);
+    EXPECT_THROW(script::writeField(ref, "matrix", int64_t{1}), ScriptError);
     EXPECT_FLOAT_EQ(probe._speed, 3.0f);
     EXPECT_EQ(FProbeWorld::get().writes, 3);
 }
@@ -185,7 +188,7 @@ TEST_F(ScriptBindingTest, MethodsCallThePluginInvoker)
     EXPECT_EQ(probe._mood, EProbeMood::Angry);
 
     EXPECT_THROW(script::callMethod(ref, "scaled", {}), ScriptError);
-    EXPECT_THROW(script::callMethod(ref, "secret", {}), ScriptError);
+    EXPECT_THROW(script::callMethod(ref, "getMatrix", {}), ScriptError);
 }
 
 TEST_F(ScriptBindingTest, GoneObjectsRaiseInsteadOfDangling)
@@ -221,12 +224,12 @@ TEST_F(ScriptBindingTest, EntityRefsReachComponentsAndGoStale)
     const ScriptValue cameraName[] = {ScriptValue{std::string("CameraComponent")}};
     const ScriptValue camera       = script::callMethod(ref, "add", cameraName);
     ASSERT_TRUE(std::holds_alternative<ScriptRef>(camera));
-    script::writeField(std::get<ScriptRef>(camera), "primary", true);
+    script::writeField(std::get<ScriptRef>(camera), "bPrimary", true);
     EXPECT_TRUE(entity->getComponent<CameraComponent>()->bPrimary);
     EXPECT_EQ(script::callMethod(ref, "remove", cameraName), ScriptValue{true});
     EXPECT_EQ(script::tryResolve(std::get<ScriptRef>(camera)), nullptr);
 
-    EXPECT_EQ(script::findMember(ref.type, "getNoSuchThing"), EScriptMember::None);
+    EXPECT_EQ(script::findMethod(ref.type, "getNoSuchThing"), nullptr);
     const ScriptValue unknown[] = {ScriptValue{std::string("NoSuchComponent")}};
     EXPECT_THROW(script::callMethod(ref, "get", unknown), ScriptError);
 

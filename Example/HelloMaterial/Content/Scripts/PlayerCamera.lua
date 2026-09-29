@@ -27,7 +27,7 @@ function Script:onInit()
 
     local camera = self.entity and self.entity:getCamera()
     if camera then
-        camera.primary = true
+        camera.bPrimary = true
         camera.fixedAspectRatio = false
         camera.fov = 45.0
         camera.nearClip = 0.1

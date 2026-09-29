@@ -204,9 +204,9 @@ struct YA_SCENE_CORE_API Scene
 
     // === Script-facing reflected API ===
     YA_REFLECT_BEGIN(Scene)
-    YA_REFLECT_METHOD(getName, .script().tooltip("Scene display name"))
-    YA_REFLECT_METHOD(setName, .script().tooltip("Rename the scene"))
-    YA_REFLECT_METHOD(entityCount, .script().tooltip("Number of entities in the scene"))
+    YA_REFLECT_METHOD(getName, .tooltip("Scene display name"))
+    YA_REFLECT_METHOD(setName, .tooltip("Rename the scene"))
+    YA_REFLECT_METHOD(entityCount, .tooltip("Number of entities in the scene"))
     YA_REFLECT_END()
 
   private:

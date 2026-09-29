@@ -30,15 +30,15 @@ namespace ya
 struct TransformComponent : public IComponent
 {
     YA_REFLECT_BEGIN(TransformComponent)
-    YA_REFLECT_FIELD(_position, .script())
-    YA_REFLECT_FIELD(_rotation, .script())
-    YA_REFLECT_FIELD(_scale, .script())
-    YA_REFLECT_METHOD(setPosition, .script().tooltip("Set local position"))
-    YA_REFLECT_METHOD(getPosition, .script().tooltip("Get local position"))
-    YA_REFLECT_METHOD(setRotation, .script().tooltip("Set local rotation (euler degrees)"))
-    YA_REFLECT_METHOD(getRotation, .script().tooltip("Get local rotation (euler degrees)"))
-    YA_REFLECT_METHOD(setScale, .script().tooltip("Set local scale"))
-    YA_REFLECT_METHOD(getScale, .script().tooltip("Get local scale"))
+    YA_REFLECT_FIELD(_position)
+    YA_REFLECT_FIELD(_rotation)
+    YA_REFLECT_FIELD(_scale)
+    YA_REFLECT_METHOD(setPosition, .tooltip("Set local position"))
+    YA_REFLECT_METHOD(getPosition, .tooltip("Get local position"))
+    YA_REFLECT_METHOD(setRotation, .tooltip("Set local rotation (euler degrees)"))
+    YA_REFLECT_METHOD(getRotation, .tooltip("Get local rotation (euler degrees)"))
+    YA_REFLECT_METHOD(setScale, .tooltip("Set local scale"))
+    YA_REFLECT_METHOD(getScale, .tooltip("Get local scale"))
     YA_REFLECT_END()
 
     // === USER DATA (modifiable) ===

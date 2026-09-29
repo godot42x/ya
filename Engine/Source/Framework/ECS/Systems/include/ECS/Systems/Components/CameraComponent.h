@@ -22,17 +22,17 @@ enum class ECameraProjection : uint8_t
 struct YA_ECS_SYSTEMS_API CameraComponent : public IComponent
 {
     YA_REFLECT_BEGIN(CameraComponent)
-    YA_REFLECT_FIELD(bPrimary, .script("primary"))
-    YA_REFLECT_FIELD(_fixedAspectRatio, .script())
-    YA_REFLECT_FIELD(_projection, .script())
-    YA_REFLECT_FIELD(_fov, .script())
-    YA_REFLECT_FIELD(_orthoHalfHeight, .script())
-    YA_REFLECT_FIELD(_aspectRatio, .script())
-    YA_REFLECT_FIELD(_nearClip, .script())
-    YA_REFLECT_FIELD(_farClip, .script())
-    YA_REFLECT_FIELD(_distance, .script())
-    YA_REFLECT_FIELD(_focusPoint, .script())
-    YA_REFLECT_METHOD(setAspectRatio, .script())
+    YA_REFLECT_FIELD(bPrimary)
+    YA_REFLECT_FIELD(_fixedAspectRatio)
+    YA_REFLECT_FIELD(_projection)
+    YA_REFLECT_FIELD(_fov)
+    YA_REFLECT_FIELD(_orthoHalfHeight)
+    YA_REFLECT_FIELD(_aspectRatio)
+    YA_REFLECT_FIELD(_nearClip)
+    YA_REFLECT_FIELD(_farClip)
+    YA_REFLECT_FIELD(_distance)
+    YA_REFLECT_FIELD(_focusPoint)
+    YA_REFLECT_METHOD(setAspectRatio)
     YA_REFLECT_END()
 
     bool               bPrimary          = false; // Default camera for WorldView[0]; not "the only viewport"

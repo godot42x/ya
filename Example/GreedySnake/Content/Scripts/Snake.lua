@@ -224,7 +224,7 @@ function Script:onInit()
     camera = self.entity and self.entity:getCamera()
     if camera then
         camera.projection = CameraProjection.Orthographic
-        camera.primary = true
+        camera.bPrimary = true
         frameCamera()
     end
     local transform = self.entity and self.entity:getTransform()

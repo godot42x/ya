@@ -20,7 +20,7 @@
    帧动画。
 3. **两处架构债由本计划负责**：
    - 玩法脚本 API 全靠手写绑定（`LuaScriptingSystem::bindReflectedComponents` 是空 TODO，
-     `Sprite2DComponent` 在 Lua 只有 `bVisible/size/tint`）。改为反射标记驱动、与脚本语言无关的
+     `Sprite2DComponent` 在 Lua 只有 `bVisible/size/tint`）。改为反射驱动、与脚本语言无关的
      绑定层（§4 B1/B2）。
    - 纯 2D 画面走完整 Deferred 管线、每个精灵一个 draw call。只在 R4 用数据决定，渲染改动交回
      `scene-2d-world-and-game-ui`。
@@ -62,16 +62,17 @@
 | # | 问题 | 结论 |
 | --- | --- | --- |
 | D1 | 移动 / 碰撞模型 | 两种都可。先做 tile 通行表查询（按格移动足够）；查询面抽成小接口，以后接 AABB、Box2D 或 Jolt 只换实现，玩法脚本不变 |
-| D2 | 脚本绑定 | UE 式：反射里标记了的字段 / 方法自动注册到脚本。绑定描述与脚本语言无关；Lua 以后可以是插件，换 QuickJS 不应大改 |
+| D2 | 脚本绑定 | 反射了的字段 / 方法自动注册到脚本（可见性见 D12）。绑定描述与脚本语言无关；Lua 以后可以是插件，换 QuickJS 不应大改 |
 | D3 | 地图数据位置 | 场景即地图：tile 图层内联在 `TilemapComponent`；tileset 是独立资产 |
 | D4 | 计划位置 | 新开本目录；`scene-2d-world-and-game-ui` 只记渲染侧 |
 | D5 | 与活跃线的顺序 | 与 `game-ui-script-framework`（S4–S7）、`ui-behavior-capabilities`（C2/C3）交替推进，按 checkpoint 排；冲突规则见 §5 |
 | D6 | 绑定层范围 | 分两步：B1 中立层 + Lua 后端投影（组件字段 / 方法 + 模块函数），新代码只依赖中立层；B2 把 Lua 拆成独立 target、迁移控件句柄与 `world.*` / `ui.*` 手写函数 |
 | D7 | 素材 | 地图用仓库里的 Tiny Town；角色行走图先试 grok-4.7 生图，不合格再找 CC0 角色素材。素材随许可说明入 `Example/RpgPrototype/Content` |
 | D8 | 现有 QuickJS 反射导出（`JSScriptingSystem`，供 `eval_js` / MCP） | B1 起 JS 与 Lua 共用同一个中立导出层，不留第二个反射→脚本导出器 |
-| D9 | 可见性 | 一律只看标记了的字段 / 方法，自动化脚本也一样；自动化要改任意字段走 `component.get/set` 注册命令 |
+| D9 | 可见性 | ~~一律只看标记了的字段 / 方法~~，由 D12 取代 |
 | D10 | 中立层的值传递 | 类型化的值，不走 JSON；JS 迁移后 JSON 方法调用器（`MethodJsonInvokers`）删除 |
 | D11 | 反射方法怎么被脚本调用 | 走插件自己的 `Function::invoker`，不另建每方法调用器：插件 `Function` 补记参数 / 返回的 `type_index`，`Enum` 能把值装成自身类型的 `std::any`；中立层只有一张按 `type_index` 的值编解码表，字段读写、参数、返回值共用 |
+| D12 | 脚本可见性与查找开销（B1 后修订） | 没有「脚本不可访问」的需求，不设门禁：反射了的非静态成员只要类型能过边界就导出，const / 无可写访问器的字段只读；`.script()`、`Meta::ScriptName`、插件 `FieldFlags::Blueprint*` 删除。中立层按名字查一次得到常驻句柄（`findField / findMethod`）；Lua 每个类型一张元表，名字首次命中后把方法闭包 / 字段句柄 `rawset` 进该类型的缓存，之后同类型任何对象都是一次表查找。JS 暂不缓存 |
 
 ## 4. Checkpoints
 
@@ -82,45 +83,47 @@
 逼出来的需求：R0 行走动画要写 `uvRect`、R1c 要调 tilemap 查询方法、R2 要按名字找实体；每个都手写
 一遍绑定，就是 G6 的放大器。开工时发现 `JSScriptingSystem` 已经把全部反射按 JSON 导给 `eval_js`（D8–D10）。
 
-- **标记**：`MetaBuilder::script(name = "")` / `scriptReadOnly(name = "")`，落到 reflects 已有的
-  `BlueprintReadWrite` / `BlueprintReadOnly` / `BlueprintCallable` 标志；方法的元数据经
-  `Register::function(name, fn, meta)` 交给插件（与 `property` 同式）。脚本名默认是反射名
-  去掉前导 `_`（`_fov` → `fov`），传名字时覆盖（`bPrimary` → `primary`）。没有标记的脚本看不到。
+- **可见性（D12）**：反射了的非静态、非指针成员，类型能过边界就导出，不需要标记；过不了的静默不导出。
+  脚本名是反射名去掉前导 `_`（`_fov` → `fov`，`bPrimary` 不变）。方法的元数据经
+  `Register::function(name, fn, meta)` 交给插件（与 `property` 同式）。
 - **中立层**放 `Core/Scripting/`（`ya-foundation-core`，与 `ScriptApiRegistry` 同处，只依赖反射），不新建 target：
   - 值：nil / bool / 整数 / 浮点 / 字符串 / vec2-4 / 对象引用；枚举按整数传，写入也接受枚举名。
   - 对象引用 = (类型, 引用种类, 两个 64 位载荷)，每次访问经种类的解析函数找回对象，不持有指针；
     找不回来时报脚本错误。
   - 方法（D11）：参数按 `Function::argTypeIndices` 装箱成 `std::any`，调插件 `Function::invoker`，返回值按
-    `returnTypeIndex` 拆箱；JSON 调用器扩展表与 `InstanceRef` 删除。签名里有不支持的类型时绑定期告警、不导出。
-  - 每类型的导出（标记了的 `Property*` / `Function*` + 继承路径）只在 `.cpp` 内缓存，公开面是按名字的
-    `findMember / readField / writeField / callMethod`。
+    `returnTypeIndex` 拆箱；JSON 调用器扩展表与 `InstanceRef` 删除。签名里有不支持的类型时不导出。
+  - 每类型的导出（`Property*` / `Function*` + 继承路径，原生与解析器答出的方法同表）在 `.cpp` 内首次使用时建，
+    只增不删；公开面是常驻句柄 `findField / findMethod` 加句柄版 `readField / writeField / callMethod`，
+    按名字的版本只是「查 + 用」。
   - 类型原生方法：不来自反射、由提供方登记在某类型上（实体的组件存取）。
   - 组件字段写入后调用 `onPostSerialize`（与原 JS 路径一致；Transform 借此置脏）。
 - **引用种类**由 `ya-scene-core` 提供：场景（`Scene::_instanceId`）、实体（场景 id + 带版本的 entt 句柄）、
   组件（实体 + 类型）。`Scene` 维护 instanceId → 活场景的查找表（不依赖 lifecycle host，测试里也成立）。
-- **实体脚本面**（两种语言相同）：`getId / getName / setName`（反射标记）；原生 `get / has / add / remove(类型名)`；
+- **实体脚本面**（两种语言相同）：`getId / getName / setName`（反射方法）；原生 `get / has / add / remove(类型名)`；
   每个组件类型的 `get<短名>() / has<短名>()`，短名 = 类名去掉 `Component`（`getTransform`、`getCamera`、
   `getSprite2D`）。`Entity::componentByName` 等只为 JS 存在的反射方法与 `components()` 删除；C++ 调用方
   用到的 `addComponentByName / removeComponentByName` 保留为普通方法。
-- **Lua 后端**（仍在 `ya-ecs-systems`）：一个承载引用的 userdata，`__index / __newindex / __eq` 按类型绑定分派；
+- **Lua 后端**（仍在 `ya-ecs-systems`）：承载引用的 full userdata，元表按类型懒建（D12），`__index / __newindex`
+  先查该类型的缓存表，未命中才进中立层并回填；方法闭包带类型 upvalue，拿别的类型当 self 报错；元表对脚本隐藏；
+  sol 经 `sol_lua_push/get/check` 定制点认它，不再是 usertype；
   `self.entity`、`world.spawnSprite` 返回实体引用。删除 Transform / Camera / Sprite / Entity 的手写 usertype 与
   GameplayLua 里的 `hasSprite / getSprite`；Vec4 值类型随 Vec2 / Vec3 归到 Lua 后端。
 - **JS 后端**：字段 / 方法导出改走中立层，值直接在中立值与 JS 值之间转换（向量仍是数组）；
   `ya.entity.create/get/list`、`ya.scene.active` 返回中立引用。
-- **标记范围**：Transform（位置 / 旋转 / 缩放字段与 get/set 方法）、Camera（原 Lua 暴露的字段）、
-  Sprite2D（`bVisible/size/uvRect/bFlipU/bFlipV/tint/layer/sortOrder`）、Entity、Scene 的现有反射方法。
+- **新增反射**：Transform 的 get/set 方法、`CameraComponent::setAspectRatio`、Entity / Scene 的名字与计数方法。
 - **不在 B1**：`world.*` / `ui.*` 既有函数与控件句柄（§5）；模块函数登记推迟到第一个使用者 R0；
   脚本函数句柄推迟到 B2（B1 没有使用者）；反射枚举的通用导出（`CameraProjection` 表仍手写）。
   Transform 手写的 `getForward/getRight/getUp` 没有脚本在用，删除不补。
-- 测试：`ScriptBindingTest.OnlyMarkedMembersAreVisible`、`FieldsReadAndWriteThroughReflection`、
+- 测试：`ScriptBindingTest.ReflectedMembersThatCrossAreVisible`、`FieldsReadAndWriteThroughReflection`、
   `EnumsTravelAsIntegersAndAcceptNames`、`MethodsCallThePluginInvoker`、`GoneObjectsRaiseInsteadOfDangling`、
   `EntityRefsReachComponentsAndGoStale`、`SceneRefsDieWithTheirScene`；
-  `LuaScriptBindingTest.MarkedMembersReachTheComponents`、`MissingComponentIsNilAndRefsCompareByIdentity`、
-  `MistakesRaiseLuaErrors`、`DestroyedEntityRaisesInsteadOfDangling`；
+  `LuaScriptBindingTest.ReflectedMembersReachTheComponents`、`MembersAreCachedPerType`、
+  `MissingComponentIsNilAndRefsCompareByIdentity`、`MistakesRaiseLuaErrors`、`DestroyedEntityRaisesInsteadOfDangling`；
   既有 `ScriptApiTest` / `ScriptApiLibraryTest` / `AppAutomationControlJsTest` 按新名字改写后全绿。
-- 验收：HelloMaterial、TestPointLight 脚本不改；GreedySnake 只把 `getSprite` 机械改为 `getSprite2D`；
-  运行冒烟与 `ya-testing` 全绿；`rg -n "new_usertype<(TransformComponent|CameraComponent|Sprite2DComponent|Entity)>" Engine/Source`
-  与 `rg -n "MethodJsonInvokers|findJsonInvoker|InstanceRef|ScriptInvoker" Engine Script` 无结果。
+- 验收：GreedySnake 只把 `getSprite` 机械改为 `getSprite2D`，GreedySnake / HelloMaterial 的 `camera.primary`
+  改为 `camera.bPrimary`（D12 无改名）；运行冒烟与 `ya-testing` 全绿；
+  `rg -n "new_usertype<(TransformComponent|CameraComponent|Sprite2DComponent|Entity|LuaScriptObject)>" Engine/Source`
+  与 `rg -n "MethodJsonInvokers|findJsonInvoker|InstanceRef|ScriptInvoker|Blueprint(ReadOnly|ReadWrite|Callable|Pure)|ScriptName|findMember" Engine Script` 无结果。
 
 ### R0 — 示例壳 + 走动 + 相机跟随
 
@@ -166,7 +169,7 @@
 ### R1c — 通行查询 + 被墙挡住 + 相机限界
 
 - 游戏验收：编辑器画墙 → Play 被挡住；相机停在地图边界内。
-- `TilemapComponent` 标记可调用方法：`worldToCell`、`cellToWorld`、`isSolid(x, y)`、`bounds()`。
+- `TilemapComponent` 反射可调用方法：`worldToCell`、`cellToWorld`、`isSolid(x, y)`、`bounds()`。
 - 查询面按 D1 抽成小接口（先只有 tile 实现），玩家与以后的 NPC 共用；AABB 查询等自由移动需求出现再加。
 - 测试：`TilemapQueryTest.SolidTileBlocks`、`OutOfBoundsIsSolid`。
 

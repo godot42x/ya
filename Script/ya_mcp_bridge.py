@@ -79,9 +79,10 @@ def _command_tools(host: str, port: int) -> tuple[list[dict], dict[str, str]]:
         "description": "Evaluates a JavaScript snippet inside the engine's embedded quickjs runtime "
                        "and returns the last expression's value as JSON. "
                        "Use ya.entity/ya.scene/ya.<library> objects to manipulate the engine. "
-                       "Engine objects expose only script-marked fields and methods; an entity also has "
+                       "Engine objects expose their reflected fields (leading '_' dropped) and methods "
+                       "whose types are bool/number/string/vec2-4/enum/engine object; an entity also has "
                        "get/has/add/remove(typeName) and getTransform()-style accessors. "
-                       "Read or write any other component field with ya.component.get/set.",
+                       "Read or write other component fields with ya.component.get/set.",
         "inputSchema": {
             "type": "object",
             "properties": {"source": {"type": "string"}},

@@ -198,17 +198,14 @@ JSValue objectGetProperty(JSContext* ctx, JSValueConst object, JSAtom atom, JSVa
     if (self && !isSymbol(ctx, atom)) {
         const std::string name = atomName(ctx, atom);
         try {
-            switch (script::findMember(self->type, name)) {
-            case script::EScriptMember::Field:
-                return toJs(ctx, script::readField(*self, name));
-            case script::EScriptMember::Method: {
+            if (const script::ScriptField* field = script::findField(self->type, name)) {
+                return toJs(ctx, script::readField(*self, *field));
+            }
+            if (script::findMethod(self->type, name)) {
                 JSValue nameValue = JS_NewStringLen(ctx, name.data(), name.size());
                 JSValue function  = JS_NewCFunctionData(ctx, &methodCall, 0, 0, 1, &nameValue);
                 JS_FreeValue(ctx, nameValue);
                 return function;
-            }
-            case script::EScriptMember::None:
-                break;
             }
         }
         catch (const std::exception& e) {

@@ -1,8 +1,5 @@
 #include "Core/Scripting/ScriptBindings.h"
 
-#include "Core/Log.h"
-#include "Core/Reflection/MetadataSupport.h"
-
 #include <reflects-core/lib.h>
 
 #include <any>
@@ -169,9 +166,33 @@ ScriptValue unboxValue(type_index_t type, const std::any& boxed)
     return enumFor(type)->unboxValue(boxed);
 }
 
+} // namespace
+
 // ============================================================================
-// Per-type export, built from reflection marks on first use.
+// Per-type export, built from reflection on first use.
 // ============================================================================
+
+struct ScriptField
+{
+    std::string               name;
+    const Property*           property = nullptr;
+    /// Reflected classes between the exported type and the declaring class
+    /// (empty when the type declares the field itself).
+    std::vector<type_index_t> ownerPath;
+    bool                      bReadOnly = false;
+};
+
+/// Either a reflected method (`function` set) or a native one.
+struct ScriptMethod
+{
+    std::string               name;
+    const Function*           function = nullptr;
+    std::vector<type_index_t> ownerPath;
+    ScriptNativeFn            native;
+};
+
+namespace
+{
 
 struct StringHash
 {
@@ -182,29 +203,20 @@ struct StringHash
 template <typename T>
 using NameMap = std::unordered_map<std::string, T, StringHash, std::equal_to<>>;
 
-/// A marked plugin member plus the reflected classes between the exported
-/// type and the member's owner (empty when the type declares it itself).
-template <typename TMember>
-struct Marked
-{
-    const TMember*            member = nullptr;
-    std::vector<type_index_t> ownerPath;
-};
-
+/// Node-based maps that only ever grow: handles into them never move.
 struct TypeExport
 {
-    bool                     bBuilt = false;
-    std::string              name;
-    NameMap<Marked<Property>> fields;
-    NameMap<Marked<Function>> methods;
-    NameMap<ScriptNativeFn>   natives;
-    ScriptMethodResolver      resolver;
-    NameMap<ScriptNativeFn>   resolved;
+    bool                  bBuilt = false;
+    std::string           name;
+    NameMap<ScriptField>  fields;
+    /// Reflected, native and resolver-answered methods alike.
+    NameMap<ScriptMethod> methods;
+    ScriptMethodResolver  resolver;
 };
 
 struct State
 {
-    std::vector<ScriptRefKind>                 kinds;
+    std::vector<ScriptRefKind>                   kinds;
     std::unordered_map<type_index_t, TypeExport> types;
 };
 
@@ -214,13 +226,10 @@ State& state()
     return instance;
 }
 
-std::string scriptNameOf(const Field& member)
+std::string scriptNameOf(const std::string& reflectedName)
 {
-    if (member.metadata.hasMeta(reflection::Meta::ScriptName)) {
-        return member.metadata.get<std::string>(reflection::Meta::ScriptName);
-    }
-    const size_t first = member.name.find_first_not_of('_');
-    return first == std::string::npos ? member.name : member.name.substr(first);
+    const size_t first = reflectedName.find_first_not_of('_');
+    return first == std::string::npos ? reflectedName : reflectedName.substr(first);
 }
 
 bool signatureCrosses(const Function& function)
@@ -236,42 +245,38 @@ bool signatureCrosses(const Function& function)
     return true;
 }
 
-void collectMarked(const Class& cls, const std::vector<type_index_t>& path, TypeExport& out)
+/// Members declared further down the hierarchy win over inherited ones of the
+/// same script name.
+void collectMembers(const Class& cls, const std::vector<type_index_t>& path, TypeExport& out)
 {
     for (const type_index_t parent : cls.parents) {
         if (const Class* parentClass = ClassRegistry::instance().getClass(parent)) {
             std::vector<type_index_t> parentPath = path;
             parentPath.push_back(parent);
-            collectMarked(*parentClass, parentPath, out);
+            collectMembers(*parentClass, parentPath, out);
         }
     }
 
     for (const auto& [propertyName, property] : cls.properties) {
-        const bool bMarked = property.metadata.hasFlag(FieldFlags::BlueprintReadWrite) ||
-                             property.metadata.hasFlag(FieldFlags::BlueprintReadOnly);
-        if (!bMarked) {
-            continue;
-        }
         if (property.bStatic || property.bPointer || !crossesToScripts(property.typeIndex)) {
-            YA_CORE_WARN("[Script] {}.{} is marked for scripts but its type cannot cross to scripts; skipped",
-                         cls.name,
-                         propertyName);
             continue;
         }
-        out.fields.insert_or_assign(scriptNameOf(property), Marked<Property>{&property, path});
+        std::string name = scriptNameOf(propertyName);
+        out.fields.insert_or_assign(name,
+                                    ScriptField{
+                                        .name      = name,
+                                        .property  = &property,
+                                        .ownerPath = path,
+                                        .bReadOnly = property.bConst || !property.addressGetterMutable,
+                                    });
     }
 
     for (const auto& [functionName, function] : cls.functions) {
-        if (!function.metadata.hasFlag(FieldFlags::BlueprintCallable)) {
-            continue;
-        }
         if (!signatureCrosses(function)) {
-            YA_CORE_WARN("[Script] {}::{} is marked for scripts but its signature cannot cross to scripts; skipped",
-                         cls.name,
-                         functionName);
             continue;
         }
-        out.methods.insert_or_assign(scriptNameOf(function), Marked<Function>{&function, path});
+        std::string name = scriptNameOf(functionName);
+        out.methods.insert_or_assign(name, ScriptMethod{.name = name, .function = &function, .ownerPath = path});
     }
 }
 
@@ -282,35 +287,10 @@ TypeExport& exportOf(type_index_t type)
         entry.bBuilt = true;
         if (const Class* cls = ClassRegistry::instance().getClass(type)) {
             entry.name = cls->name;
-            collectMarked(*cls, {}, entry);
+            collectMembers(*cls, {}, entry);
         }
     }
     return entry;
-}
-
-template <typename T>
-const T* findIn(const NameMap<T>& map, std::string_view name)
-{
-    const auto it = map.find(name);
-    return it != map.end() ? &it->second : nullptr;
-}
-
-const ScriptNativeFn* findNative(TypeExport& entry, std::string_view name)
-{
-    if (const ScriptNativeFn* native = findIn(entry.natives, name)) {
-        return native;
-    }
-    if (const ScriptNativeFn* resolved = findIn(entry.resolved, name)) {
-        return resolved;
-    }
-    if (!entry.resolver) {
-        return nullptr;
-    }
-    std::optional<ScriptNativeFn> fn = entry.resolver(name);
-    if (!fn) {
-        return nullptr;
-    }
-    return &entry.resolved.insert_or_assign(std::string(name), std::move(*fn)).first->second;
 }
 
 void* toOwner(void* object, type_index_t type, const std::vector<type_index_t>& ownerPath)
@@ -338,15 +318,6 @@ std::string displayName(type_index_t type)
     return name.empty() ? std::string("object") : name;
 }
 
-const Marked<Property>& fieldOf(type_index_t type, std::string_view field)
-{
-    const Marked<Property>* marked = findIn(exportOf(type).fields, field);
-    if (!marked) {
-        throw ScriptError(std::format("{} has no field '{}'", displayName(type), field));
-    }
-    return *marked;
-}
-
 } // namespace
 
 uint32_t registerRefKind(ScriptRefKind kind)
@@ -358,14 +329,20 @@ uint32_t registerRefKind(ScriptRefKind kind)
 
 void addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn)
 {
-    state().types[type].natives.insert_or_assign(std::move(name), std::move(fn));
+    TypeExport&  entry  = state().types[type];
+    ScriptMethod method = {.name = name, .native = std::move(fn)};
+    if (entry.bBuilt) {
+        entry.methods.try_emplace(std::move(name), std::move(method));
+    }
+    else {
+        // exportOf() lets reflected methods overwrite it later.
+        entry.methods.insert_or_assign(std::move(name), std::move(method));
+    }
 }
 
 void setMethodResolver(type_index_t type, ScriptMethodResolver resolver)
 {
-    TypeExport& entry = state().types[type];
-    entry.resolver    = std::move(resolver);
-    entry.resolved.clear();
+    state().types[type].resolver = std::move(resolver);
 }
 
 std::string scriptTypeName(type_index_t type)
@@ -373,16 +350,28 @@ std::string scriptTypeName(type_index_t type)
     return exportOf(type).name;
 }
 
-EScriptMember findMember(type_index_t type, std::string_view name)
+const ScriptField* findField(type_index_t type, std::string_view name)
+{
+    const TypeExport& entry = exportOf(type);
+    const auto        it    = entry.fields.find(name);
+    return it != entry.fields.end() ? &it->second : nullptr;
+}
+
+const ScriptMethod* findMethod(type_index_t type, std::string_view name)
 {
     TypeExport& entry = exportOf(type);
-    if (findIn(entry.fields, name)) {
-        return EScriptMember::Field;
+    if (const auto it = entry.methods.find(name); it != entry.methods.end()) {
+        return &it->second;
     }
-    if (findIn(entry.methods, name) || findNative(entry, name)) {
-        return EScriptMember::Method;
+    if (!entry.resolver) {
+        return nullptr;
     }
-    return EScriptMember::None;
+    std::optional<ScriptNativeFn> fn = entry.resolver(name);
+    if (!fn) {
+        return nullptr;
+    }
+    std::string key(name);
+    return &entry.methods.try_emplace(key, ScriptMethod{.name = key, .native = std::move(*fn)}).first->second;
 }
 
 void* tryResolve(const ScriptRef& ref)
@@ -400,46 +389,65 @@ void* resolve(const ScriptRef& ref)
     throw ScriptError(std::format("the {} this script refers to no longer exists", kind ? kind->name : "object"));
 }
 
-ScriptValue readField(const ScriptRef& ref, std::string_view field)
+ScriptValue readField(const ScriptRef& ref, const ScriptField& field)
 {
-    const Marked<Property>& marked = fieldOf(ref.type, field);
-    const Property&         prop   = *marked.member;
-    return loadValue(prop.typeIndex, prop.addressGetter(toOwner(resolve(ref), ref.type, marked.ownerPath)));
+    const Property& prop = *field.property;
+    return loadValue(prop.typeIndex, prop.addressGetter(toOwner(resolve(ref), ref.type, field.ownerPath)));
 }
 
-void writeField(const ScriptRef& ref, std::string_view field, const ScriptValue& value)
+void writeField(const ScriptRef& ref, const ScriptField& field, const ScriptValue& value)
 {
-    const Marked<Property>& marked = fieldOf(ref.type, field);
-    const Property&         prop   = *marked.member;
-    if (prop.metadata.hasFlag(FieldFlags::BlueprintReadOnly) || prop.bConst || !prop.addressGetterMutable) {
-        throw ScriptError(std::format("field '{}' is read-only", field));
+    if (field.bReadOnly) {
+        throw ScriptError(std::format("field '{}' is read-only", field.name));
     }
-    void* object = resolve(ref);
-    storeValue(prop.typeIndex, prop.addressGetterMutable(toOwner(object, ref.type, marked.ownerPath)), value);
+    const Property& prop   = *field.property;
+    void*           object = resolve(ref);
+    storeValue(prop.typeIndex, prop.addressGetterMutable(toOwner(object, ref.type, field.ownerPath)), value);
     if (const auto& afterWrite = kindOf(ref)->afterWrite) {
         afterWrite(ref, object);
     }
 }
 
+ScriptValue callMethod(const ScriptRef& ref, const ScriptMethod& method, ScriptArgs args)
+{
+    if (!method.function) {
+        return method.native(resolve(ref), ref, args);
+    }
+    const Function& function = *method.function;
+    if (args.size() != function.argTypeIndices.size()) {
+        throw ScriptError(std::format("{}() expects {} argument(s), got {}", method.name, function.argTypeIndices.size(), args.size()));
+    }
+    ArgumentList boxed;
+    boxed.args.reserve(args.size());
+    for (size_t index = 0; index < args.size(); ++index) {
+        boxed.args.push_back(boxValue(function.argTypeIndices[index], args[index]));
+    }
+    void*          self   = toOwner(resolve(ref), ref.type, method.ownerPath);
+    const std::any result = function.invoker(self, boxed);
+    return function.returnTypeIndex != 0 ? unboxValue(function.returnTypeIndex, result) : ScriptValue{};
+}
+
+ScriptValue readField(const ScriptRef& ref, std::string_view field)
+{
+    if (const ScriptField* found = findField(ref.type, field)) {
+        return readField(ref, *found);
+    }
+    throw ScriptError(std::format("{} has no field '{}'", displayName(ref.type), field));
+}
+
+void writeField(const ScriptRef& ref, std::string_view field, const ScriptValue& value)
+{
+    if (const ScriptField* found = findField(ref.type, field)) {
+        writeField(ref, *found, value);
+        return;
+    }
+    throw ScriptError(std::format("{} has no field '{}'", displayName(ref.type), field));
+}
+
 ScriptValue callMethod(const ScriptRef& ref, std::string_view method, ScriptArgs args)
 {
-    TypeExport& entry = exportOf(ref.type);
-    if (const Marked<Function>* marked = findIn(entry.methods, method)) {
-        const Function& function = *marked->member;
-        if (args.size() != function.argTypeIndices.size()) {
-            throw ScriptError(std::format("{}() expects {} argument(s), got {}", method, function.argTypeIndices.size(), args.size()));
-        }
-        ArgumentList boxed;
-        boxed.args.reserve(args.size());
-        for (size_t index = 0; index < args.size(); ++index) {
-            boxed.args.push_back(boxValue(function.argTypeIndices[index], args[index]));
-        }
-        void*          self   = toOwner(resolve(ref), ref.type, marked->ownerPath);
-        const std::any result = function.invoker(self, boxed);
-        return function.returnTypeIndex != 0 ? unboxValue(function.returnTypeIndex, result) : ScriptValue{};
-    }
-    if (const ScriptNativeFn* native = findNative(entry, method)) {
-        return (*native)(resolve(ref), ref, args);
+    if (const ScriptMethod* found = findMethod(ref.type, method)) {
+        return callMethod(ref, *found, args);
     }
     throw ScriptError(std::format("{} has no method '{}'", displayName(ref.type), method));
 }

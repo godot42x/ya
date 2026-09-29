@@ -76,11 +76,7 @@ enum class FieldFlags : uint32_t
     Transient          = 1 << 3, // Temporary variable (not saved)
     Category           = 1 << 4, // Category
     Replicated         = 1 << 5, // Network replication
-    BlueprintReadOnly  = 1 << 6,
-    BlueprintReadWrite = 1 << 7,
     // Function-specific flags
-    BlueprintCallable = 1 << 8,  // Can be called from Blueprint
-    BlueprintPure     = 1 << 9,  // Pure function (no side effects)
     Exec              = 1 << 10, // Execution function
     Wrapper           = 1 << 11, // Wrapper type(like struct A{B value}; plain display inner type B)
     InstanceEditable  = 1 << 12, // Game UI: overridable per SceneWidgetEntry instance
