@@ -1,6 +1,7 @@
 #include "Core/Reflection/PropertyAccessor.h"
 
 #include "Core/Common/AssetRef.h"
+#include "Core/Common/Tileset.h"
 #include "Core/Reflection/PropertyExtensions.h"
 #include "reflects-core/lib.h"
 
@@ -700,6 +701,9 @@ bool PropertyAccessor::hasAssetResolveError(const FPropertySlot& slot, const voi
     }
     if (type == refl::type_index_v<MeshRef>) {
         return static_cast<const MeshRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
+    }
+    if (type == refl::type_index_v<TilesetRef>) {
+        return static_cast<const TilesetRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
     }
     return false;
 }

@@ -17,6 +17,9 @@ void EditorViewportGizmoOverlay::syncHost(const FEditorViewportHostState& host)
     if (_controller) {
         _controller->syncHost(host);
     }
+    if (_brush) {
+        _brush->syncHost(host);
+    }
 }
 
 EWidgetRouteResult EditorViewportGizmoOverlay::dispatchEvent(const Event& event,
@@ -32,6 +35,13 @@ EWidgetRouteResult EditorViewportGizmoOverlay::dispatchEvent(const Event& event,
     switch (event.getEventType()) {
     case EEvent::MouseMoved:
         _controller->setPointer(localPoint, bInside);
+        if (_brush) {
+            _brush->setHover(localPoint);
+            if (_brush->isStroking()) {
+                _brush->updateStroke(localPoint);
+                return EWidgetRouteResult::HandledExclusive;
+            }
+        }
         if (wantsPointerCapture()) {
             return EWidgetRouteResult::HandledExclusive;
         }
@@ -39,18 +49,28 @@ EWidgetRouteResult EditorViewportGizmoOverlay::dispatchEvent(const Event& event,
     case EEvent::MouseButtonPressed: {
         const auto& press = static_cast<const MouseButtonPressedEvent&>(event);
         _controller->setPointer(localPoint, bInside);
-        if (press.GetMouseButton() == EMouse::Left && bInside &&
-            _controller->beginDrag(localPoint)) {
-            return EWidgetRouteResult::HandledExclusive;
+        if (press.GetMouseButton() == EMouse::Left && bInside) {
+            if (_brush && _brush->isEngaged() && _brush->beginStroke(localPoint)) {
+                return EWidgetRouteResult::HandledExclusive;
+            }
+            if (_controller->beginDrag(localPoint)) {
+                return EWidgetRouteResult::HandledExclusive;
+            }
         }
         break;
     }
     case EEvent::MouseButtonReleased: {
         const auto& release = static_cast<const MouseButtonReleasedEvent&>(event);
         _controller->setPointer(localPoint, bInside);
-        if (release.GetMouseButton() == EMouse::Left && _controller->isDragging()) {
-            _controller->endDrag();
-            return EWidgetRouteResult::HandledExclusive;
+        if (release.GetMouseButton() == EMouse::Left) {
+            if (_brush && _brush->isStroking()) {
+                _brush->endStroke();
+                return EWidgetRouteResult::HandledExclusive;
+            }
+            if (_controller->isDragging()) {
+                _controller->endDrag();
+                return EWidgetRouteResult::HandledExclusive;
+            }
         }
         break;
     }
@@ -89,12 +109,14 @@ EWidgetRouteResult EditorViewportGizmoOverlay::dispatchEvent(const Event& event,
 
 bool EditorViewportGizmoOverlay::wantsPointerCapture() const
 {
-    return _controller && _controller->isDragging();
+    return (_controller && _controller->isDragging()) || (_brush && _brush->isStroking());
 }
 
 bool EditorViewportGizmoOverlay::isActive() const
 {
-    return _controller && _controller->isActive();
+    // A tile stroke counts as active too: the editor must keep camera
+    // navigation off the mouse for as long as the brush owns the pointer.
+    return (_controller && _controller->isActive()) || (_brush && _brush->isStroking());
 }
 
 } // namespace ya

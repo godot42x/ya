@@ -13,6 +13,7 @@ class TerrainProcessor;
 struct RenderRuntime;
 struct SkeletonAnimatorComponent;
 struct Sprite2DComponent;
+struct TilemapComponent;
 
 struct RenderFrameExtractor
 {
@@ -67,6 +68,7 @@ struct RenderFrameExtractor
     static void extractCamera(const ViewPrepareInput& input, RenderFrameData& out);
     static void extractSceneLights(entt::registry& reg, SceneSnapshot& out);
     static void extractSprites(Scene* scene, entt::registry& reg, SceneSnapshot& out);
+    static void extractTilemaps(Scene* scene, entt::registry& reg, SceneSnapshot& out);
     static void prepareViewLights(const ViewPrepareInput& input, RenderFrameData& out);
     static int32_t registerSkinningPalette(DrawItemExtractionContext& ctx, entt::entity entity, Mesh* mesh);
     static void extractDrawItems(DrawItemExtractionContext& ctx);

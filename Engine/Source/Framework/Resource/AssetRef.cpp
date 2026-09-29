@@ -1,4 +1,5 @@
 #include "Core/Common/AssetRef.h"
+#include "Core/Common/Tileset.h"
 #include "Resource/AssetManager.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "Core/Log.h"
@@ -29,7 +30,8 @@ struct EngineAssetRefResolver final : IAssetRefResolver
     {
         return typeIndex == ya::type_index_v<TextureRef> ||
                typeIndex == ya::type_index_v<ModelRef> ||
-               typeIndex == ya::type_index_v<MeshRef>;
+               typeIndex == ya::type_index_v<MeshRef> ||
+               typeIndex == ya::type_index_v<TilesetRef>;
     }
 
     void resolveAssetRef(type_index_t typeIndex, void* assetRefPtr) const override
@@ -42,6 +44,11 @@ struct EngineAssetRefResolver final : IAssetRefResolver
         }
         else if (typeIndex == ya::type_index_v<MeshRef>) {
             resolveMesh(*static_cast<MeshRef*>(assetRefPtr));
+        }
+        else if (typeIndex == ya::type_index_v<TilesetRef>) {
+            // Tileset documents load synchronously through the ref itself,
+            // like a texture resolve that already finished.
+            (void)static_cast<TilesetRef*>(assetRefPtr)->resolve();
         }
         else {
             YA_CORE_WARN("EngineAssetRefResolver: Unknown asset ref type index: {}", typeIndex);

@@ -1,0 +1,37 @@
+{
+  "atlas": {
+    "textureRef": {
+      "__base__": {
+        "AssetRefBase": {
+          "_path": "Content:Textures/tiny_town.png"
+        }
+      }
+    },
+    "bEnable": true,
+    "uvScale": [
+      1.0,
+      1.0
+    ],
+    "uvOffset": [
+      0.0,
+      0.0
+    ],
+    "uvRotation": 0.0,
+    "samplerConfig": {
+      "filterMode": "Nearest",
+      "addressMode": "ClampToEdge"
+    }
+  },
+  "tileWidth": 16,
+  "tileHeight": 16,
+  "margin": 0,
+  "spacing": 0,
+  "columns": 12,
+  "solid": [
+    4,
+    16,
+    80,
+    81,
+    82
+  ]
+}

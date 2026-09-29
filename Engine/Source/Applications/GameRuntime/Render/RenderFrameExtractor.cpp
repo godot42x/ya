@@ -10,6 +10,7 @@
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/2D/Sprite2DComponent.h"
+#include "ECS/Component/2D/TilemapComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -146,6 +147,7 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
     auto& registry = input.scene->getRegistry();
     extractSceneLights(registry, outSnapshot);
     extractSprites(input.scene, registry, outSnapshot);
+    extractTilemaps(input.scene, registry, outSnapshot);
     auto drawCtx = DrawItemExtractionContext{
         .registry         = &registry,
         .sceneSnapshot    = &outSnapshot,
@@ -204,6 +206,43 @@ void RenderFrameExtractor::extractSprites(Scene* scene, entt::registry& reg, Sce
             buildSpriteCandidate(transform.getTransform(), sprite, static_cast<uint32_t>(entity));
         tagCompanionFeatures(scene, reg, entity, candidate.features, candidate.hostEntityId);
         out.worldSprites.push_back(std::move(candidate));
+    }
+}
+
+void RenderFrameExtractor::extractTilemaps(Scene* scene, entt::registry& reg, SceneSnapshot& out)
+{
+    for (const auto& [entity, tilemap, transform] : reg.view<TilemapComponent, TransformComponent>().each()) {
+        // Same "no substitute image" rule as sprites: an unloadable tileset
+        // or a still-loading atlas yields no candidates, never placeholders.
+        if (!tilemap.isValid() || !tilemap.tileset.isLoaded()) {
+            continue;
+        }
+        const Tileset* tileset = tilemap.tileset.get();
+        if (!tileset || !tileset->atlas.isReady()) {
+            continue;
+        }
+        const Texture* atlasTexture = tileset->atlas.textureRef.get();
+        if (!atlasTexture || atlasTexture->getWidth() == 0 || atlasTexture->getHeight() == 0) {
+            continue;
+        }
+
+        TransformSystem::computeWorldMatrix(&transform);
+        const TextureBinding binding = slotToTextureBinding(tileset->atlas);
+        const size_t first = out.worldSprites.size();
+        appendTilemapCandidates(TilemapExtractionInput{
+            .map           = &tilemap,
+            .tileset       = tileset,
+            .world         = transform.getTransform(),
+            .entityId      = static_cast<uint32_t>(entity),
+            .atlas         = &binding,
+            .textureWidth  = atlasTexture->getWidth(),
+            .textureHeight = atlasTexture->getHeight(),
+        },
+                                out.worldSprites);
+        for (size_t index = first; index < out.worldSprites.size(); ++index) {
+            tagCompanionFeatures(scene, reg, entity, out.worldSprites[index].features,
+                                 out.worldSprites[index].hostEntityId);
+        }
     }
 }
 

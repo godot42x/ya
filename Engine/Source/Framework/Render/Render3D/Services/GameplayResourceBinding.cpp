@@ -2,6 +2,7 @@
 
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/2D/Sprite2DComponent.h"
+#include "ECS/Component/2D/TilemapComponent.h"
 #include "ECS/Systems/Components/UIComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
@@ -61,6 +62,10 @@ void GameplayResourceBinding::prepareScenes(std::span<Scene* const> scenes, floa
         {
             YA_PROFILE_SCOPE("ResourceResolve/Sprites");
             resolvePendingSprites(*scene);
+        }
+        {
+            YA_PROFILE_SCOPE("ResourceResolve/Tilemaps");
+            resolvePendingTilemaps(*scene);
         }
     }
 }
@@ -322,7 +327,26 @@ void GameplayResourceBinding::resolvePendingSprites(Scene& scene)
     }
 }
 
+void GameplayResourceBinding::resolvePendingTilemaps(Scene& scene)
+{
+    auto& registry = scene.getRegistry();
 
+    for (const auto& [entity, comp] : registry.view<TilemapComponent>().each()) {
+        (void)entity;
+        if (!comp.tileset.hasPath()) {
+            continue;
+        }
+        // The tileset document itself loads synchronously; its atlas image
+        // resolves on the texture path like every other sprite texture.
+        if (comp.tileset.resolve() != EAssetResolveResult::Ready) {
+            continue;
+        }
+        Tileset* tileset = comp.tileset.get();
+        if (tileset && tileset->atlas.needsResolve()) {
+            (void)tileset->atlas.resolve();
+        }
+    }
+}
 
 void GameplayResourceBinding::shutdown()
 {

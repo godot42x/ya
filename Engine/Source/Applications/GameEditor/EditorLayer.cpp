@@ -22,6 +22,12 @@ EditorLayer::EditorLayer(App* app)
         .isEditorOrthoXY = [this]() { return isEditorOrthoXY(); },
         .onTransformCommitted = [this]() { markSceneDirty(); },
     });
+    _tileBrush.bind(FTileBrushSources{
+        .getSelectedEntity = [this]() { return getSelectedEntity(); },
+        .getViewportInteractionScene = [this]() { return getViewportInteractionScene(); },
+        .isEditorOrthoXY = [this]() { return isEditorOrthoXY(); },
+        .onTilesCommitted = [this]() { markSceneDirty(); },
+    });
 }
 
 bool EditorLayer::shouldCaptureInput() const

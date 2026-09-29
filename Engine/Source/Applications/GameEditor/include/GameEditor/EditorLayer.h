@@ -12,6 +12,7 @@
 #include "GameEditor/UI/Dialogs/EditorAssetPicker.h"
 #include "GameEditor/UI/Dialogs/EditorFilePicker.h"
 #include "GameEditor/UI/Viewport/EditorViewportGizmoController.h"
+#include "GameEditor/UI/Viewport/EditorTileBrushController.h"
 #include "GameEditor/EditorSelection.h"
 #include "GameEditor/EditorUIDesignerSession.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
@@ -113,6 +114,7 @@ struct EditorLayer
     bool      _bShowEditorGizmos           = false;
 
     EditorViewportGizmoController _gizmo;
+    EditorTileBrushController   _tileBrush;
 
     enum
     {
@@ -421,6 +423,8 @@ struct EditorLayer
     const Rect2D&                    getViewportMouseRect() const { return _viewportMouseRect; }
     const glm::vec2&                 getViewportMouseCenter() const { return _viewportMouseCenter; }
     [[nodiscard]] EditorViewportGizmoController&       gizmo() { return _gizmo; }
+    [[nodiscard]] EditorTileBrushController&         tileBrush() { return _tileBrush; }
+    [[nodiscard]] const EditorTileBrushController& tileBrush() const { return _tileBrush; }
     [[nodiscard]] const EditorViewportGizmoController& gizmo() const { return _gizmo; }
     bool                             isRightMouseDragging() const { return _bRightMouseDragging; }
     const std::vector<Entity*>&      getSelections() const { return _selections; }

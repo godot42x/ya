@@ -167,6 +167,9 @@ void recordEditorViewportWorldOverlays(WorldDrawList& list, EditorLayer& layer, 
     }
     recordPhysicsCollision(list, layer);
     recordSelectedEntityBounds(list, layer);
+    if (layer.tileBrush().isStroking() || layer.tileBrush().isEngaged()) {
+        layer.tileBrush().recordWorldOverlay(list);
+    }
 }
 
 void recordEditorCanvasDesignFrame(ScreenDrawList& list, const glm::vec2& designSize, const glm::vec2& uiScale, const glm::vec2& offset, float gridStep)

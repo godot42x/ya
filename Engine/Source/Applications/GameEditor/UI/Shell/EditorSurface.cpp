@@ -534,8 +534,10 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
     }
 
     _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(_layer->gizmo());
+    _viewportGizmoOverlay->setBrush(&_layer->tileBrush());
     _viewOverlayHost.setOverlay(_viewportGizmoOverlay);
     _layer->gizmo().setUndoStack(&_rootSession->undo());
+    _layer->tileBrush().setUndoStack(&_rootSession->undo());
 }
 
 void EditorSurface::applyWindowMetrics(const EditorWindowMetrics& metrics)

@@ -1,6 +1,7 @@
 {
     "cSpell.words": [
         "AABB",
+        "absindex",
         "animatable",
         "Assimp",
         "batchcmds",
@@ -71,8 +72,10 @@
         "PRIMITIVETYPE",
         "projectdir",
         "Pushable",
+        "pushcclosure",
         "Qiao",
         "RALT",
+        "rawgeti",
         "rawseti",
         "rdoc",
         "Renderable",

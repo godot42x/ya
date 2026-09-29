@@ -144,6 +144,12 @@ using EditorFilePickerCallback = std::function<void(FEditorFilePickerRequest req
         request.extensions = {".obj", ".fbx", ".gltf", ".glb", ".dae"};
         break;
     }
+    case EEditorAssetPickerKind::Tileset: {
+        request.title = "Select Tileset";
+        request.configScope = "assetPickerDialog.tileset";
+        request.extensions = {".yatileset.json"};
+        break;
+    }
     }
     request.currentPath = std::move(currentPath);
     request.onPicked = std::move(onPicked);

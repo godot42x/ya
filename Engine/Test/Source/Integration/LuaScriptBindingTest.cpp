@@ -1,6 +1,7 @@
 // Lua view of the shared script export (rpg-prototype B1, D12).
 
 #include "Core/Scripting/ScriptBindings.h"
+#include "ECS/Component/2D/TilemapComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/LuaScriptBinding.h"
@@ -142,6 +143,38 @@ TEST_F(LuaScriptBindingTest, DestroyedEntityRaisesInsteadOfDangling)
     ASSERT_FALSE(name.valid());
     EXPECT_NE(std::string(sol::error(name).what()).find("no longer exists"), std::string::npos);
     EXPECT_FALSE(run("return transform.position").valid());
+}
+
+// TilemapComponent's movement query face (isSolid / worldToCell / cellToWorld
+// / bounds) reaches scripts through reflection like any other method, so a
+// gameplay script asks the map directly (rpg-prototype R1c).
+TEST_F(LuaScriptBindingTest, TilemapQueryFaceReachesLua)
+{
+    auto* map = _entity->addComponent<TilemapComponent>();
+    ASSERT_NE(map, nullptr);
+    map->width      = 3;
+    map->height     = 3;
+    map->cellSize   = glm::vec2(1.0f, 1.0f);
+    map->_editWidth = 3;
+    map->_editHeight = 3;
+    map->layers.push_back(TilemapLayer{.name = "Ground", .cells = std::vector<int32_t>(9, 1)});
+    ASSERT_TRUE(map->setCell(2, 1, 0, 5)); // tile 4
+    auto tileset         = std::make_shared<Tileset>();
+    tileset->solidTiles  = {4};
+    map->tileset._cached = tileset;
+    map->tileset._resolveState = EAssetResolveState::Ready;
+
+    const auto result = run(R"(
+        local map = entity:getTilemap()
+        local cell = map:worldToCell(Vec2.new(2.5, 1.5))
+        return cell.x, cell.y, map:isSolid(2, 1), map:isSolid(0, 0), map:isSolid(-1, 0)
+    )");
+    ASSERT_TRUE(result.valid()) << sol::error(result).what();
+    EXPECT_FLOAT_EQ(result.get<double>(0), 2.0);
+    EXPECT_FLOAT_EQ(result.get<double>(1), 1.0);
+    EXPECT_TRUE(result.get<bool>(2));
+    EXPECT_FALSE(result.get<bool>(3));
+    EXPECT_TRUE(result.get<bool>(4));
 }
 
 } // namespace

@@ -1,6 +1,7 @@
 #include "GameEditor/Inspector/PropertyCapabilityRegistry.h"
 
 #include "Core/Common/AssetRef.h"
+#include "Core/Common/Tileset.h"
 #include "reflects-core/lib.h"
 
 #include <mutex>
@@ -33,6 +34,7 @@ void registerBuiltinPropertyCapabilities()
         registry.registerAssetRef(refl::type_index_v<TextureRef>, EEditorAssetPickerKind::Texture);
         registry.registerAssetRef(refl::type_index_v<ModelRef>, EEditorAssetPickerKind::Model);
         registry.registerAssetRef(refl::type_index_v<MeshRef>, EEditorAssetPickerKind::Mesh);
+        registry.registerAssetRef(refl::type_index_v<TilesetRef>, EEditorAssetPickerKind::Tileset);
     });
 }
 

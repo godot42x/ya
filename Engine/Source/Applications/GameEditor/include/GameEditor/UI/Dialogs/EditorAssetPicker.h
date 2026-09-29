@@ -12,6 +12,7 @@ enum class EEditorAssetPickerKind : uint8_t
     Texture = 0,
     Model,
     Mesh,
+    Tileset,
 };
 
 /// Host callback for retained asset-reference rows. Widgettree chrome wires this

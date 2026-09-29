@@ -12,6 +12,7 @@
 #include "GameEditor/UI/Tabs/EditorRuntimeToolsTab.h"
 #include "GameEditor/UI/Tabs/EditorRenderSettingsTab.h"
 #include "GameEditor/UI/Tabs/EditorStatsTab.h"
+#include "GameEditor/UI/Tabs/EditorTilePaletteTab.h"
 #include "GameEditor/UI/Shell/EditorTheme.h"
 #include "GameEditor/UI/Tabs/EditorUIDesignerTab.h"
 #include "GameEditor/UI/Tabs/EditorUIDesignerTools.h"
@@ -316,6 +317,21 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
                 return nullptr;
             }
             return std::make_shared<EditorDebugImagesTab>(*ctx.layer);
+        },
+    });
+    registry.add({
+        .tabId = "tile-palette",
+        .title = "Tiles",
+        .toolsMenuLabel = "Tile Palette",
+        .scope = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId = kLevelEditorRootId,
+        .placement = EEditorTabPlacement::EditorOwnedNested,
+        .detachPolicy = EEditorTabDetachPolicy::TearOffKeepOwner,
+        .spawn = [](FEditorTabSpawnContext& ctx) -> std::shared_ptr<UIElement> {
+            if (!ctx.layer) {
+                return nullptr;
+            }
+            return std::make_shared<EditorTilePaletteTab>(*ctx.layer);
         },
     });
     registry.add({

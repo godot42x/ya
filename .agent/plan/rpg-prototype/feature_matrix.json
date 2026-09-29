@@ -6,7 +6,7 @@
       "id": "script_neutral_binding",
       "phase": "B1",
       "status": "done",
-      "driven_by": "R0 uvRect animation, R1c tilemap query methods, R2a world.find",
+      "driven_by": "R0 uvRect animation, R1 tilemap query methods, R2a world.find",
       "evidence": [
         "D12: every reflected member whose type crosses is visible, no marks; FieldFlags::Blueprint* and Meta::ScriptName deleted",
         "Lua caches method closures / field handles per type metatable after the first lookup (LuaScriptBindingTest.MembersAreCachedPerType)",
@@ -29,34 +29,28 @@
       ]
     },
     {
-      "id": "tilemap_runtime",
-      "phase": "R1a",
-      "status": "planned",
-      "driven_by": "game: map is scene data with ground/decoration/overlay layers",
+      "id": "tilemap",
+      "phase": "R1",
+      "status": "done",
+      "driven_by": "game: the map is scene data the editor paints; painted walls block the player and the camera clamps to bounds",
       "evidence": [
-        "Tileset asset with per-tile solid",
-        "TilemapComponent inline layers round-trip",
-        "visible non-empty cells become WorldSpriteCandidate; no new render pass"
-      ]
-    },
-    {
-      "id": "tilemap_brush",
-      "phase": "R1b",
-      "status": "planned",
-      "driven_by": "game: author paints walls/paths in the editor and they persist",
-      "evidence": [
-        "Tile Palette tab + paint/erase/rect/eyedropper in ortho XY",
-        "one stroke = one step on the level root UndoStack"
-      ]
-    },
-    {
-      "id": "tile_passability",
-      "phase": "R1c",
-      "status": "planned",
-      "driven_by": "game: painted wall blocks the player; camera clamps to map bounds",
-      "evidence": [
-        "worldToCell/cellToWorld/isSolid/bounds callable from script",
-        "query behind a small interface so AABB/Box2D/Jolt can replace it"
+        "Tileset asset (.yatileset.json): atlas TextureSlot + tile geometry + sparse solid list; TilesetRef mirrors TextureRef (path serialized, parsed copy cached)",
+        "TilemapComponent beside Sprite2DComponent: tileset/cellSize/width/height/layers/layer; cells row-major from bottom-left, 0 = empty else tile + 1",
+        "visible non-empty cells become WorldSpriteCandidate via appendTilemapCandidates (pure, range-narrowable); snapshot extracts all, view/chunk culling deferred to R4",
+        "no new render pass: candidates reuse Sprite2DStage; packed-atlas UVs inset by half a texel",
+        "Town.scene.json carries a 3-layer TilemapGround (ground/decor/overlay); player z=0.1 stands between decor 0.04 and overlay 0.21",
+        "tests: TilemapComponentTest.RoundTripsLayers, TilemapExtractionTest x2, TilemapSceneTest x2 (hand-written scene + tileset file)",
+        "Tile Palette tab (tool row / layer combo / atlas grid) registered as tile-palette; UITileAtlasGrid takes a single tile or drags a stamp box",
+        "EditorTileBrushController paints/erases/rect-fills/eyedrops over the selected TilemapComponent in ortho XY; grid and hover/rect outline go through the editor world overlay list, no new pass",
+        "one stroke = one step on the level root UndoStack; the step stores whole-layer before/after cells (TilemapEditUndoTest.StrokeIsOneUndoStep)",
+        "resize/setCell/fillRect edit component data only; onEdit replays the old row width from transient _editWidth/_editHeight, so Inspector 6->10 keeps the 6 left columns (TilemapEditTest.ResizeKeepsExistingCells / InspectorWidthEditKeepsCells / RectFillWritesOnlyTheActiveLayer)",
+        "Tileset moved to Core/Common/Tileset.h and TilesetRef joined the asset-ref list, so the Inspector tileset row edits as an asset (TilemapInspectorTest.GraphExposesEditableMapFields)",
+        "TilemapComponent exposes worldToCell / cellToWorld / isSolid / bounds through reflection, so the player and any later NPC share one face (LuaScriptBindingTest.TilemapQueryFaceReachesLua)",
+        "isSolid blocks on any layer's tileset-solid tile and treats off-map as solid, so the map edge stops the player like a wall (TilemapQueryTest.SolidTileBlocks / OutOfBoundsIsSolid)",
+        "worldToCell / cellToWorld / bounds fold in the owner's world matrix via getOwner() + TransformSystem; an ownerless map falls back to identity (TilemapQueryTest.WorldToCellUsesTheOwnerTransform / OwnerlessMapUsesIdentityTransform)",
+        "Player.lua has no grid of its own anymore: its cell is the map's cell, placed by cellToWorld and gated by isSolid, so editor-painted walls block without a script change",
+        "FollowCamera.lua clamps the framed rect with bounds(), centring an axis the map cannot fill, and follows without clamping when the map is absent",
+        "the map is now 32x20 at (-16,-10) with the scene's trees/bushes/sign/fence folded into its layers (scene: 21 entities -> 3); tileset solid list gained the fence 80-82"
       ]
     },
     {

@@ -136,6 +136,9 @@ EditorAssetPickerCallback makeAssetPicker(EditorLayer* layer)
         case EEditorAssetPickerKind::Mesh:
             layer->_filePicker.openModelPicker(currentPath, std::move(onPicked));
             break;
+        case EEditorAssetPickerKind::Tileset:
+            layer->_filePicker.openTilesetPicker(currentPath, std::move(onPicked));
+            break;
         }
     };
 }

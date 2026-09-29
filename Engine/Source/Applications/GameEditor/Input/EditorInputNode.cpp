@@ -62,6 +62,18 @@ FEditorInputSnapshot buildSnapshot(App& app, EditorLayer& layer, EditorWindowSes
     return snapshot;
 }
 
+bool isEscapeKey(const FInputEvent& event)
+{
+    switch (event.getEventType()) {
+    case EEvent::KeyPressed:
+        return static_cast<const KeyPressedEvent&>(event).getKeyCode() == EKey::Escape;
+    case EEvent::KeyReleased:
+        return static_cast<const KeyReleasedEvent&>(event).getKeyCode() == EKey::Escape;
+    default:
+        return false;
+    }
+}
+
 FInputReply routeCommandInput(FInputRouteContext& context, const FInputEvent& event)
 {
     if (event.getEventType() != EEvent::KeyReleased) {
@@ -69,11 +81,6 @@ FInputReply routeCommandInput(FInputRouteContext& context, const FInputEvent& ev
     }
 
     const auto& keyEvent = static_cast<const KeyReleasedEvent&>(event);
-    if (keyEvent.getKeyCode() == EKey::Escape) {
-        context.app.requestQuit();
-        return FInputReply{.handled = true};
-    }
-
     if (keyEvent.getKeyCode() != EKey::K_GRAVE || !context.router.isMouseCaptured()) {
         return {};
     }
@@ -147,6 +154,7 @@ FInputReply routeViewportToolInput(
 FInputReply routeGameplayViewportInput(
     App& app,
     EditorLayer& layer,
+    FInputRouteContext& context,
     const FEditorInputSnapshot& snapshot,
     const FInputEvent& event)
 {
@@ -176,10 +184,26 @@ FInputReply routeGameplayViewportInput(
 
     if (snapshot.keyboardEvent && snapshot.viewportFocused && !snapshot.textInput) {
         app.getInputManager().processEvent(event);
-        return FInputReply{.handled = true};
+        // The same game key step as a standalone run; an Escape the game
+        // leaves goes on to the editor's Escape policy.
+        const bool bConsumed = context.router.dispatchGameKey(event);
+        return FInputReply{.handled = bConsumed || !isEscapeKey(event)};
     }
 
     return {};
+}
+
+/// Escape nothing before took: stops Play / Simulate. The editor never quits
+/// on Escape, so it must not reach the standalone fallback (App quits there).
+FInputReply routeEscapeInput(App& app, EditorWindowSession* session, const FInputEvent& event)
+{
+    if (!isEscapeKey(event)) {
+        return {};
+    }
+    if (event.getEventType() == EEvent::KeyReleased && session && (app.isRuntimeMode() || app.isSimulationMode())) {
+        (void)session->activeRoot().actions().execute("runtime.stop");
+    }
+    return FInputReply{.handled = true};
 }
 
 FInputReply routeGameUIInput(App& app, EditorLayer& layer, const FInputEvent& event)
@@ -358,7 +382,12 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
         return reply;
     }
 
-    reply = routeGameplayViewportInput(*_app, *_layer, snapshot, event);
+    reply = routeGameplayViewportInput(*_app, *_layer, context, snapshot, event);
+    if (shouldStopRouting(reply)) {
+        return reply;
+    }
+
+    reply = routeEscapeInput(*_app, session(), event);
     if (shouldStopRouting(reply)) {
         return reply;
     }

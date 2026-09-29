@@ -96,6 +96,11 @@ struct FilePicker
     void openModelPicker(const std::string &currentPath, Callback onConfirm);
 
     /**
+     * @brief 打开图块集选择器
+     */
+    void openTilesetPicker(const std::string &currentPath, Callback onConfirm);
+
+    /**
      * @brief 打开目录选择器
      */
     void openDirectoryPicker(const std::string &currentPath,

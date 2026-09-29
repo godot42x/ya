@@ -72,6 +72,7 @@ struct YA_RENDER_3D_API GameplayResourceBinding : public ISystem
     void resolvePendingUI(Scene& scene);
     void resolvePendingBillboards(Scene& scene);
     void resolvePendingSprites(Scene& scene);
+    void resolvePendingTilemaps(Scene& scene);
 
     std::function<uint64_t()>                   _getHostTick;
     std::unordered_map<const Scene*, SceneWork> _sceneWork;

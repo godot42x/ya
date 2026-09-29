@@ -74,4 +74,105 @@
 - 验证：`ya-testing` 1442 全过（新增 `ModuleFunctionsReplaceInPlaceOnReRegistration`、
   `ModuleFunctionsBecomeGlobalTables`、`ModuleFunctionsExportUnderYa`）；2DRpgPrototype 运行 / 编辑器、GreedySnake、
   HelloMaterial 冒烟退出码 0，截图确认最近邻与朝向。
-- 未完成：按键注入自动化（等 S7 `input.inject_key`）。下一步 R1a。
+- 未完成：按键注入自动化（等 S7 `input.inject_key`）。下一步 R1。
+
+## 2026-09-29 — R1：Tilemap（数据 + 渲染 + 编辑笔刷 + 通行查询）
+
+R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档，R1b / R1c 改的正是 R1a
+引入的文件，所以落在一个提交里；下面按三段记录。
+
+### R1a：Tileset 资产 + TilemapComponent + 渲染
+
+- 目标与边界：手写一份带 tilemap 的场景，Play 看到地面 / 装饰 / 遮挡三层，玩家在地面与遮挡层之间；
+  不新增 pass（复用 Sprite2DStage），不做查询 API（R1c）、不做笔刷（R1b）、不加脚本函数。
+- 数据：Tileset（atlas TextureSlot + tile 几何 + 稀疏 solid 表）存 .yatileset.json，TilesetRef
+  照 TextureRef 的样子只序列化 path、缓存解析结果，同步加载（小 authoring JSON，同 .yaui 待遇）；
+  TilemapComponent 与 Sprite2DComponent 同模块：tileset / cellSize / width / height /
+  layers（name/zOffset/cells，左下起按行，0 = 空否则 tile+1）/ layer。
+- 渲染：纯函数 appendTilemapCandidates 把范围内非空格展开成 WorldSpriteCandidate（entityId 取
+  tilemap 实体，layer 取组件 layer，sortOrder 取层号）；extractor 在 snapshot 里全量展开（与精灵
+  一致，View 裁剪留给 R4 定），无内边距图集 uv 半像素内缩；resolve 走 GameplayResourceBinding
+ （tileset 文档同步 + atlas 贴图异步），未就绪产出零候选（无占位图规则与精灵一致）。
+- 内容：Content/Tilesets/town.yatileset.json（tiny_town 图集，Nearest + ClampToEdge，solid 记树冠 4
+  与树干 16）；Town.scene.json 加 1022 号 TilemapGround（6x5，origin (-5,-2,0.01)，overlay 层
+  z=0.21，玩家 0.1 在 decor 0.04 与 overlay 之间；玩家出生格 (5,2) 是草地）。
+- 保留 / 偏离：snapshot 层不做 View 可见裁剪（与精灵一致；纯函数留了 cell range 参数给 R4 的
+  frustum / chunk 缓存）；Tileset 文件热重载不在 R1a（改文件需重载场景，笔刷改的是组件数据即时生效）。
+- 途中发现（引擎既有行为，非本计划改动）：反序列化 TextureRef 会立即触发贴图加载，需要 App 上下文
+  （VFS + AssetManager）；测试里只能验到 TilemapComponent 子对象与 tileset 文件结构，整场景加载由冒烟覆盖。
+- 验证：新增 5 测试全绿（TilemapComponentTest.RoundTripsLayers、TilemapExtractionTest x2、
+  TilemapSceneTest x2）；ya-render-3d-test 191 全过（基线 188+3）；
+  ya-testing 1381 通过，23 失败全是 AppAutomationControl 系 TCP 回环被本机沙盒拒绝（环境性，
+  与 tilemap 无关）；运行 / 编辑器冒烟因沙盒无显示器无法执行（SDL 起不来），改用文件级验证代替。
+- 未完成：冒烟待有显示器环境补跑。
+
+### R1b：编辑器 Tile 笔刷
+
+- 目标与边界：选中 tilemap 后在正交 XY 视口里画 / 擦 / 矩形填充 / 吸管，一笔一个撤销步，保存重开仍在；
+  Inspector 可改宽高 / 每格尺寸 / tileset 且改宽高保留已有格子。不做通行查询（R1c）、不加脚本函数、
+  不新增 pass。
+- 引擎侧 cell 编辑（`TilemapComponent`）：`resize` / `setCell` / `fillRect` 只改组件数据；`onEdit()` 用
+  `_editWidth/_editHeight` 这份 transient 旧尺寸做按行重排，所以 Inspector 把宽 6 改成 10 时左边 6 列原样保留，
+  不是按线性前缀硬搬；`onPostSerialize()` 同景；图层 cell 数与 width*height 不符时提取照样跳过该层。
+- 撤销：`EditorTilemapUndo`（`FTileLayerSnapshot` + `pushTileLayerUndo`）推的是关卡根会话的同一个 `UndoStack`
+  （与 `EditorTransformUndo`、Inspector 属性编辑同栈），一笔按下到松开存整层前 / 后 cell；前后相同不记步。
+- 笔刷：`EditorTileBrushController` 管 Move/Paint/Erase/RectFill/Eyedropper、矩形图章、相邻格间 Bresenham 连线、
+  press 时抓一次 `_strokeBefore`；`screenToCell` 走 view×projection 反投影再乘 tilemap 世界逆矩阵；
+  网格线与悬停 / 矩形框走编辑器 overlay 的世界绘制列表（`recordWorldOverlay`），不加新 pass。
+- 接线：`EditorSurface` 把 `EditorViewportGizmoOverlay` 的 brush 指向 `EditorLayer::tileBrush()` 并挂同一 UndoStack；
+  `EditorViewportGizmoOverlay::dispatchEvent` 在 brush 处于「已上膛 + 正交 XY + 选中 tilemap」时优先于 gizmo 接管左键，
+  `wantsPointerCapture()` 把进行中的笔画算进去，`isActive()` 也一并算上，笔画期间编辑器不会把鼠标当相机导航。
+- Tile Palette tab：`EditorTilePaletteTab`（工具行 / 图层下拉 / 图集网格）+ 内嵌 `UITileAtlasGrid`（点选或框选图章，
+  拖拽期间自己 setPointerCapture）；注册进 `EditorTabSpawnerRegistry`（tabId `tile-palette`，归关卡编辑器根会话）。
+- 顺带：`Tileset` 从 Render3D 下沉到 Core（`Core/Common/Tileset.h`），`TilesetRef` 接进 asset-ref 名单
+  （`isAssetRefType` / `resolveAssetRef` / `hasAssetResolveError` / `registerAssetRef` / picker 各分支 + `openTilesetPicker`），
+  Inspector 的 tileset 行因此是资产行而非纯文本行。
+- 偏差：plan 写「图集网格」为 tile 单选 / 框选，实现一致；未做笔画中右键取消的 UI 入口（`cancelStroke()` 已具备，
+  等有明确按键约定再接）。
+- 途中修复（本轮新引入，非既有 bug）：`EntityIdPass.h` 用了 `DrawCandidateView` 却只做前置声明、没包含定义它的
+  `RenderFrameData.h`；新增 `TilemapComponent.cpp` 改变 unity 分组后暴露，补上 include 即解。
+- 验证：`ya-testing` 1386 通过 / 23 失败（22 个 `AppAutomationControl*` 走 TCP 回环被沙盒拒绝、
+  1 个 `GUIWindowManagerTest.DragOverlaySessionIsExemptFromFocusAndInput` 需显示器，均环境性）；
+  Tilemap 相关 10 项全过（`TilemapEditTest` x3、`TilemapComponentTest`、`TilemapExtractionTest` x2、
+  `TilemapSceneTest` x2、`TilemapEditUndoTest`、`TilemapInspectorTest`）；`ya-render-3d` 与 `ya-game-editor` 编译通过。
+- 未完成：编辑器冒烟（需显示器，沙盒内 SDL 起不来）。
+
+### R1c：通行查询 + 被墙挡住 + 相机限界
+
+- 目标与边界：玩家被地图挡住、方向键在地图边界停下；相机跟随但画面不越出地图。
+  不加碰撞体 / 物理、不新增 pass、不加脚本专用的平行接口。
+- 查询面（D1）：`TilemapComponent` 四个反射方法 `worldToCell` / `cellToWorld` / `isSolid` / `bounds`，
+  四个都能过脚本边界，所以玩家与以后的 NPC 走同一条路，没有第二套绑定。
+  - `isSolid(x, y)`：任一图层该格是 tileset 的 solid tile 即阻挡；**出界也算阻挡**，地图边缘因此
+    像墙一样挡住玩家，不用在脚本里再写一遍范围判断。
+  - `worldToCell` / `cellToWorld` / `bounds` 都带 owner 的 Transform（组件经 `getOwner()` 取，
+    `TransformSystem::computeWorldMatrix` 递归算父级）；没有 owner 时退化为 identity，纯数据测试
+    与提取路径不必造 Scene。
+  - 「小接口」（D1 原话）在这里读作「窄的能力面」：四个名字够用，且实现只有 tile 一种。
+    真正的「谁是场景的碰撞权威」这件事没有抽象——现在只有一个地图、一个调用方，抽象是投机；
+    R2a 的 NPC 或 R3 的换图成为第二个调用方时再决定接口形态（见「未完成」）。
+- 玩家（Player.lua）：不再自带一套整数格。它的 cell 直接是 TilemapGround 的 cell，
+  位置由 `cellToWorld` 给出，通行由 `isSolid` 判定——**地图是碰撞权威**，编辑器画的墙不用改脚本就生效。
+  这次重写顺带修掉了 R0 遗留的隐式约定：旧版玩家格与地图格差半格，靠 `+5 / +2` 这类魔法偏移才对齐，
+  现在两边用同一个格定义。
+- 相机（FollowCamera.lua）：按 `bounds()` 把取景矩形夹在地图内；地图某轴比视野还窄时该轴取中，
+  否则 clamp 会和跟随互相拉扯、在边缘抖动。取景仍吸附到整屏幕像素。地图缺失时只跟随、不夹取，
+  R3 换图不会先崩在限界上。
+- 内容重建：地图从 6x5 扩到 32x20（origin 由 (-5,-2) 改为 (-16,-10)），理由——原地图比可视范围还小，
+  「相机停在地图边界内」这条验收根本演示不出来。按 D3「场景即地图」把原先散落的精灵收进地图：
+  草地精灵（`Ground`）、树冠 / 树干（5 棵树的 Top/Trunk 共 10 个精灵）、灌木 / 蘑菇 / 告示牌、
+  4 段栅栏共 13 个实体合并成 Ground / Decor / Overlay 三层，场景实体从 21 降到 3（Camera / Player /
+  TilemapGround）。tileset 的 `solid` 表补上栅栏 80–82（原本只有树冠 4 与树干 16），
+  所以「栅栏挡住玩家」也是地图数据而不是脚本判断。玩家出生格改为地图中心格 (16,10)，
+  与 footLift 对齐，首帧不动。
+- 偏差：计划说查询面「抽成小接口」，实现为组件上的窄能力面而不是 C++ 抽象基类，理由如上；
+  如果要在 Box2D/Jolt 之间切换，那时需要的是「碰撞权威的发现」（谁回答查询）而不是这四个数学方法，
+  一并留到第二个调用方出现时决定。
+- 验证：`ya-testing` 1391 通过 / 23 失败（22 个 `AppAutomationControl*` 需 TCP 回环、
+  1 个 `GUIWindowManagerTest` 需显示器，均环境性）；新增 `TilemapQueryTest` x4
+  （`SolidTileBlocks` / `OutOfBoundsIsSolid` / `WorldToCellUsesTheOwnerTransform` /
+  `OwnerlessMapUsesIdentityTransform`）与 `LuaScriptBindingTest.TilemapQueryFaceReachesLua`
+  （反射签名确实能过脚本边界）；`TilemapSceneTest` 断言随新内容更新；两个 Lua 脚本用 lua 5.4
+  `loadfile` 语法检查通过；`ya-game-runtime` / `2DRpgPrototype` / `ya-game-editor` / `ya-testing` 编译通过。
+- 未完成：编辑器冒烟（沙盒无显示器，SDL 起不来）；相机限界与「画墙→被挡住」只有手测路径，
+  没有自动化（等 S7 的 `input.inject_key`）；「谁是碰撞权威」的发现留到 R2a/R3。下一步 R2a。

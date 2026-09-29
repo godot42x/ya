@@ -80,7 +80,7 @@
 
 ### B1 — 脚本中立绑定层 + Lua / JS 投影
 
-逼出来的需求：R0 行走动画要写 `uvRect`、R1c 要调 tilemap 查询方法、R2 要按名字找实体；每个都手写
+逼出来的需求：R0 行走动画要写 `uvRect`、R1 要调 tilemap 查询方法、R2 要按名字找实体；每个都手写
 一遍绑定，就是 G6 的放大器。开工时发现 `JSScriptingSystem` 已经把全部反射按 JSON 导给 `eval_js`（D8–D10）。
 
 - **可见性（D12）**：反射了的非静态、非指针成员，类型能过边界就导出，不需要标记；过不了的静默不导出。
@@ -146,7 +146,12 @@
 - 验收：`python3 Script/ya.py run --project Example/2DRpgPrototype/2DRpgPrototype.yaproject -- --exit-after-frame=120`
   exit 0；行走 / 跟随手测（自动注入按键等 S7 的 `input.inject_key` 落地后补自动化）。
 
-### R1a — Tileset 资产 + TilemapComponent + 渲染
+### R1 — Tilemap（数据 + 渲染 + 编辑笔刷 + 通行查询）
+
+一个 checkpoint 一个提交：R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档，
+R1b / R1c 改的正是 R1a 引入的文件，所以按一个可验收目标一次落地。
+
+#### R1a — Tileset 资产 + TilemapComponent + 渲染
 
 - 游戏验收：手写一份带 tilemap 的场景 JSON，Play 看到三层地图（地面 / 装饰 / 遮挡），玩家在地面与
   遮挡层之间。
@@ -159,7 +164,7 @@
 - 测试：`TilemapComponentTest.RoundTripsLayers`、`TilemapExtractionTest.OnlyVisibleCellsBecomeCandidates`、
   `TilemapExtractionTest.EmptyCellsAreSkipped`。
 
-### R1b — 编辑器 Tile 笔刷
+#### R1b — 编辑器 Tile 笔刷
 
 - 游戏验收：编辑器里选中 tilemap，在正交 XY 视口画一面墙、擦掉一块草、矩形填充一片路，保存重开仍在；
   每一笔可以撤销。
@@ -169,10 +174,10 @@
 - 一笔（按下到松开）= 一个撤销步，推到关卡根会话的 `UndoStack`（与 `EditorTransformUndo`、Inspector
   属性编辑同一个栈），撤销记录存图层前后内容，不另造撤销栈。
 - Inspector：宽高、每格尺寸、tileset 可编辑；改宽高保留已有格子。
-- 测试：`TilemapEditTest.StrokeIsOneUndoStep`、`RectFillWritesOnlyTheActiveLayer`、
-  `ResizeKeepsExistingCells`；编辑器冒烟 exit 0。
+- 测试：`TilemapEditUndoTest.StrokeIsOneUndoStep`、`TilemapEditTest.RectFillWritesOnlyTheActiveLayer`、
+  `TilemapEditTest.ResizeKeepsExistingCells`；编辑器冒烟 exit 0。
 
-### R1c — 通行查询 + 被墙挡住 + 相机限界
+#### R1c — 通行查询 + 被墙挡住 + 相机限界
 
 - 游戏验收：编辑器画墙 → Play 被挡住；相机停在地图边界内。
 - `TilemapComponent` 反射可调用方法：`worldToCell`、`cellToWorld`、`isSolid(x, y)`、`bounds()`。
@@ -232,12 +237,10 @@
 - `ui-behavior-capabilities`：C3（Lua `call()` 热路径）与 R2a 的具名互调都在 `LuaScriptingSystem::call`；
   先落地的一方定接口，后到的一方复用，不并存两套调用路径。
 - `scene-2d-world-and-game-ui`：只接 R4 的渲染决策；本计划不写渲染 pass。
-- 关卡撤销：R1b 复用关卡根会话的 `UndoStack`（`EditorTransformUndo` 同款），不另造撤销栈。
+- 关卡撤销：R1 复用关卡根会话的 `UndoStack`（`EditorTransformUndo` 同款），不另造撤销栈。
 
 ```text
-B1 ──► R0 ──► R1a ──► R1b
-               │        │
-               └──► R1c ◄┘ ──► R2a ──► R2b ──► R3 ──► R4
+B1 ──► R0 ──► R1 ──► R2a ──► R2b ──► R3 ──► R4
 game-ui S7 ──► B2
 ```
 
@@ -263,5 +266,5 @@ game-ui S7 ──► B2
 - 绑定层与 game-ui S5/S7 同时改脚本面 → §5 冲突规则；B1 对 `GameplayLua.cpp` 只改实体的传递方式（返回 / 接收实体引用）与删除 `hasSprite/getSprite`，不动函数语义。
 - `eval_js` 可见面收窄（D9）→ 自动化 agent 改用 `component.get/set`；MCP 桥说明同步。
 - 生成的角色图像素网格不齐、调色板与 Tiny Town 不搭 → D7 回退到 CC0 素材，R0 验收看像素对齐。
-- 逐格一个候选、逐候选一次 draw，在大地图上可能吃紧 → R1a 先做可见范围裁剪，R4 定合批。
+- 逐格一个候选、逐候选一次 draw，在大地图上可能吃紧 → R1 先做可见范围裁剪，R4 定合批。
 - tile 编辑触发候选重建的频率 → 候选每帧从组件提取，编辑只改组件数据，不碰 GPU 资源。

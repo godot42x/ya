@@ -5,6 +5,7 @@
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Pipeline.h"
 #include "Render3D/Common/ViewPassResources.h"
+#include "Render3D/RenderFrameData.h"
 #include "EntityId.slang.h"
 
 #include <glm/glm.hpp>
