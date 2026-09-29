@@ -8,7 +8,7 @@
 
 性能 / 正确性
 - [x] 双面 quad：精灵 / 延迟光照全屏 pass / billboard 都 `cullMode None` 画两遍 → 改剔除背面（见 progress 2026-09-30）
-- [ ] `Render/Frame` self 2.9–5ms 补 pass 级计时归因
+- [x] `Render/Frame` self 2.9–5ms 归因：主体是帧栅栏等待（`kFramesInFlight = 1`，CPU/GPU 串行，归 render-view-family M4），见 `r4-measurements.md` §7
 - [ ] 精灵实例化（逐候选 ~1.2µs、四次命令调用）
 - [ ] 纹理表每帧重建 + `slotFor` 线性查找 → 直接映射
 - [ ] tilemap 每图层 / 区块静态实例缓冲，只在编辑时重建

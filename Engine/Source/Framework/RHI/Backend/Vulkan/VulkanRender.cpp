@@ -1329,12 +1329,14 @@ void VulkanRender::beginRecordedFrame()
     // with no presentable window (or no work at all) still retires it.
     const uint32_t slot = static_cast<uint32_t>(_frameIndex % kFramesInFlight);
     if (slot < _frameFences.size() && _frameFences[slot] != VK_NULL_HANDLE) {
+        YA_PROFILE_SCOPE("VulkanRender::waitFrameFence");
         VK_CALL(vkWaitForFences(m_LogicalDevice, 1, &_frameFences[slot], VK_TRUE, UINT64_MAX));
     }
     // Re-armed by this frame's first submission. A frame that submits nothing
     // leaves the fence signaled for the next frame that uses the slot.
     _bFrameFenceArmed = false;
 
+    YA_PROFILE_SCOPE("DeferredDeletionQueue::flush");
     DeferredDeletionQueue::get().flush(_frameIndex);
 }
 

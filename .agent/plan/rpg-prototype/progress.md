@@ -343,3 +343,17 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   2DRpgPrototype 前后截图仅物体轮廓差异（两次运行跟随相机约 1px 偏移，场景精灵均为 alpha 裁剪不透明）；
   2DRpgPrototype 编辑器、GreedySnake 冒烟 exit 0。
 - 保留：GPU 侧收益未量化（环境无 GPU 计时）；半透明精灵的颜色修正没有现成场景可截图对照。
+
+## 2026-09-30 — `Render/Frame` 归因
+
+- 给 `RuntimeRenderContext::tick` 里没有 scope 的步骤补了 `YA_PROFILE_SCOPE`，
+  并在 `VulkanRender::beginRecordedFrame` 内拆出 `waitFrameFence` / `DeferredDeletionQueue::flush`；
+  在 `prepareDerivedState` 和 Terrain / GameplayBinding 两个处理器外包了 scope（资源计划 H1 的基线要用）。
+  误名 scope `RenderFrameExtractor::sceneSnapshot`（实际包的是 `prepareViews`）改名为 `Render/PrepareViews`，
+  真正的快照抽取加上 `Render/ExtractScenes`。
+- 结果（`r4-measurements.md` §7）：`Render/Frame` self 从 2.9–5ms 降到 0.006ms；TownLarge 上的主体是
+  `waitFrameFence` 2.18ms（CPU/GPU 串行，归 M4），`SubmitPresent` 0.52ms；资源准备 0.011ms/帧。
+- 验证：profile 构建 TownLarge / Town 600 帧 exit 0；已切回 debug；ya-testing 1469 全过；
+  HelloMaterial 运行时 / 编辑器、2DRpgPrototype 冒烟 exit 0。
+- 保留：MoltenVK 下 `tickGpuMs` 恒 0，GPU 时间只能由栅栏等待反推；`FPSControl` 与配置
+  `fpsLimit: 60` 对不上的现象未查。

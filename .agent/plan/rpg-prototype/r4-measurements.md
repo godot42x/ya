@@ -141,13 +141,39 @@ python3 Script/ya.py run --project Example/2DRpgPrototype/2DRpgPrototype.yaproje
 
 ## 6. 未决与交接（给 `scene-2d-world-and-game-ui`）
 
-1. **`Render/Frame` 的 self 时间没有归因**（4.3 / 5.0 / 2.9ms，与候选数不单调，
-   疑似帧栅栏等待 `beginRecordedFrame` 或 offscreen pump）。它可能比 D-R4-1 更大，
-   但本次工具（CPU trace）看不到；需要 pass 级 scope 或 GPU timing（本机无 RenderDoc）。
-   **建议接收方先补这个归因**，再决定合批的收益上限。
+1. ~~`Render/Frame` 的 self 时间没有归因~~ → **已归因（2026-09-30，见 §7）**：主体是
+   `VulkanRender::waitFrameFence`（CPU 等上一帧 GPU，`kFramesInFlight = 1`），不比 D-R4-1 大。
 2. 本次 draw 数是**按实现规则推导 + 场景数据计数**（逐候选一次 draw、全量展开），
    不是运行时计数器 —— 环境里没有 RenderDoc（`Script/renderdoc/rdc_pass_summary.py`
    需要 `renderdoccmd`）。若要长期量化，建议加一个只读诊断计数（候选数/纹理表命中率）
    走 automation，而不是每次靠推导。
 3. D-R4-1 的目标形态（instanced quad / indirect + 纹理索引）由接收方定；
    本计划只提供「成本随候选数线性增长、纹理高度集中」这两条依据。
+
+## 7. `Render/Frame` 归因（2026-09-30 补测）
+
+`RuntimeRenderContext::tick` 里原来没有 scope 的步骤都补了 `YA_PROFILE_SCOPE`（`Render/DeclareViews`、
+`Render/ExtractScenes`、`Render/BuildGameFrame`、`Render/BeginRecordedFrame`、`Render/AcquirePresent`、
+`Render/ExtraSurfaces`、`Render/SubmitPresent`），`VulkanRender::beginRecordedFrame` 内拆出
+`VulkanRender::waitFrameFence` 与 `DeferredDeletionQueue::flush`。补测命令同 §2（profile，600 帧跳 60），
+构建已含双面 quad 修复（精灵 / 光照全屏 pass / billboard 只光栅化一次）。
+
+| 夹具 | iterate 均值 | `recordFamily` self | `waitFrameFence` | `SubmitPresent` self | `Render/Frame` self |
+| --- | --- | --- | --- | --- | --- |
+| Town | 5.900 | 1.920 | 0.524 | 0.645 | 0.006 |
+| TownLarge | 10.513 | 7.359 | 2.184 | 0.521 | 0.006 |
+
+- `Render/Frame` self 降到 0.006ms，原来的 2.9–5ms 已全部落到具名步骤。
+- 主体是 **帧栅栏等待**：`kFramesInFlight = 1`，CPU 录下一帧前要等上一帧 GPU 做完，GPU 时间串进 CPU 帧。
+  本机 MoltenVK 拿不到 GPU 时间戳（`tickGpuMs` 恒 0），只能由等待反推：TownLarge 的 GPU 帧约
+  `waitFrameFence + SubmitPresent ≈ 2.7ms`。调高 `kFramesInFlight` 是 CPU/GPU 重叠决策，
+  归 `render-view-family/temporal_semantics.md` M4（所有 per-frame 环一起轮转验证），这里不动。
+- 限速口径与 §2 的注意不一致：`Engine/Saved/Config/Editor.json` 配的是 `fpsLimit: 60`，而 Town 帧均值
+  5.9ms、`Tick/FpsControl` self 2.5ms。`FPSControl` 的实际行为未查；各 scope 的读数不受影响，
+  但小夹具的绝对帧时间仍不要拿来比较。
+- **更正 §3.1 的"extract 场景快照"一列**：R4 用的 scope `RenderFrameExtractor::sceneSnapshot`
+  实际包的是逐 View 的 `prepareViews`（已改名 `Render/PrepareViews`，TownLarge 0.141ms）；
+  真正的 ECS 快照抽取 `Render/ExtractScenes` 原来没有 scope，TownLarge 0.051ms。
+- 资源准备（`RenderDeviceState::prepareDerivedState`，含三个处理器）TownLarge 0.011ms/帧：
+  这个场景带资源的实体很少，轮询的 CPU 成本可以忽略。
+- 结论：D-R4-1（逐候选提交 7.4ms）仍是最大项，优先级不变；第二项是 CPU/GPU 串行（约 2.2ms），归 M4。

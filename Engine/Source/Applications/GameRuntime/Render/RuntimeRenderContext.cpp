@@ -226,12 +226,14 @@ void RuntimeRenderContext::tick(App& app, float dt)
     // exactly the frame where nothing else would retire the resources this
     // tick drops.
     if (render) {
+        YA_PROFILE_SCOPE("Render/BeginRecordedFrame");
         render->beginRecordedFrame();
     }
 
     bool bAcquireAttempted = false;
     {
         YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());
+        YA_PROFILE_SCOPE("Render/AcquirePresent");
         bAcquireAttempted = acquirePresentFrame(presentFrame);
     }
     // Host policy, not a renderer rule: when this window shows nothing (no
@@ -256,9 +258,13 @@ void RuntimeRenderContext::tick(App& app, float dt)
 
     // Extra windows acquire and record here, before the one submit, so their
     // sync pairs join the host's instead of starting a later submission.
-    app.recordModuleExtraSurfaces(dt, submission);
+    {
+        YA_PROFILE_SCOPE("Render/ExtraSurfaces");
+        app.recordModuleExtraSurfaces(dt, submission);
+    }
     if (render) {
         YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
+        YA_PROFILE_SCOPE("Render/SubmitPresent");
         (void)submission.submitAndPresent(*render);
     }
 }
@@ -315,6 +321,7 @@ uint32_t RuntimeRenderContext::resolveFlightIndex(App& app) const
 
 void RuntimeRenderContext::declareViews(App& app, float dt, SceneRenderScheduler& scheduler)
 {
+    YA_PROFILE_SCOPE("Render/DeclareViews");
     const HostRenderSettings& hostSettings = app._renderState->hostSettings;
 
     // Declare this tick's views. Every owner declares its own (the game
@@ -349,6 +356,7 @@ void RuntimeRenderContext::declareViews(App& app, float dt, SceneRenderScheduler
 
 ExtractedSceneRender RuntimeRenderContext::extractScenes(App& app, SceneRenderScheduler& scheduler)
 {
+    YA_PROFILE_SCOPE("Render/ExtractScenes");
     // Extraction is its own step: seal() only grouped the declarations, so
     // Scene/ECS content is read here and nowhere earlier.
     ExtractedSceneRender sceneRender =
@@ -370,7 +378,7 @@ void RuntimeRenderContext::prepareViews(App& app, ExtractedSceneRender& sceneRen
     }
 
     YA_PERF_SCOPE(perf::sample::renderExtract(), perf::metric::cpuTimeMs(), perf::domain::render());
-    YA_PROFILE_SCOPE("RenderFrameExtractor::sceneSnapshot");
+    YA_PROFILE_SCOPE("Render/PrepareViews");
     for (const SceneViewRecording& recording : sceneRender.views()) {
         const SceneViewTask& task      = *recording.task;
         const SceneViewDesc&     desc      = task.desc;
@@ -397,6 +405,7 @@ RuntimeRenderContext::TickFrame RuntimeRenderContext::buildGameRenderFrame(
     uint32_t                    flightIndex,
     const ExtractedSceneRender& sceneRender)
 {
+    YA_PROFILE_SCOPE("Render/BuildGameFrame");
     const HostRenderSettings& hostSettings = app._renderState->hostSettings;
 
     TickFrame tickFrame;

@@ -28,14 +28,17 @@ void RenderDeviceState::prepareDerivedState(std::span<Scene* const> scenes, floa
     // cannot drop or overwrite the first one's.
     // Skinning buffers are scene-keyed the same way: a Scene this tick no
     // longer renders has its flight buffers retired here.
+    YA_PROFILE_SCOPE("RenderDeviceState::prepareDerivedState");
     _skinningCache.dropScenesAbsentFrom(scenes);
     if (_environmentLightingProcessor) {
         _environmentLightingProcessor->prepareScenes(scenes, dt);
     }
     if (_terrainProcessor) {
+        YA_PROFILE_SCOPE("ResourceResolve/Terrain");
         _terrainProcessor->prepareScenes(scenes, dt);
     }
     if (_gameplayResourceBinding) {
+        YA_PROFILE_SCOPE("ResourceResolve/GameplayBinding");
         _gameplayResourceBinding->prepareScenes(scenes, dt);
     }
     for (Scene* scene : scenes) {
