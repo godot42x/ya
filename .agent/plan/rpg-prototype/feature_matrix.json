@@ -85,11 +85,16 @@
     {
       "id": "scene_transfer",
       "phase": "R3",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: door to another map, spawn point, chest state persists",
       "evidence": [
-        "gameplay world.loadScene(path, spawnName) at the structural-change point",
-        "explicit persistent script state cleared on Play stop"
+        "world.loadScene(path, spawnName) registered through the neutral layer; it only queues (last request wins) - AppSceneServices.runPendingSceneTransfer executes at the frame-end structural flush, never inline (a switch stops every script)",
+        "the transfer keeps the play session: app state, UI host and the Persist table are untouched; it is waitIdle -> onStop (old scene) -> SceneManager::loadScene -> placePlayerAtSpawn, NOT stopRuntime (which would end play in the editor and wipe Persist)",
+        "Persist = LuaScriptingSystem::persistentState(), bound as the global at state build; only stopRuntime/stopSimulation swap in a fresh table (play-session exit), so chest flags survive transfers and never leak across plays",
+        "placePlayerAtSpawn: the scene's \"Player\" entity lands on the named root-level spawn marker (x/y only, actor keeps its z); missing marker or player logs and leaves the scene as authored",
+        "walkable-event protocol: Player.lua blocks on isSolid OR (occupant whose call(\"blocksEntry\") ~= false) - doors answer false, chests/NPC default solid; stepping onto a cell pokes entityAt(x, y, self.entity) with onPlayerEnter",
+        "content: House.scene.json (10x7 stone-floor interior, walls solid via tile 99 in the tileset), Door.lua with per-door property overrides, Chest.lua (closed pot 107 / open golden 94), Town gains DoorToHouse + SpawnFromHouse",
+        "verified end to end through the automation control port: door -> House rendered with the player on the spawn, chest opened, round trip back to Town and again to House - the chest is still the golden pot; SceneTransferTest x4 green; ya-testing 1425; smokes exit 0"
       ]
     },
     {

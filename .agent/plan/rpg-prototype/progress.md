@@ -261,3 +261,45 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   末页再按 → 关闭、恢复移动。对话期间方向键应无效。
 - 未完成：翻页/关闭的按键自动化（等 S7 `input.inject_key`）；移动锁迁 S4 modal。
   下一步 R3（切换地图与跨场景状态）。
+
+## 2026-09-30 — R3：切换地图与跨场景状态
+
+- 目标与边界：走进门切到 House 场景站上出生点、出来回到门口、宝箱状态跨场景保留。
+  不合并自动化 `scene.load` 与玩法 `world.loadScene` 两套 API（共用 SceneManager::loadScene
+  底层）；不做实例索引优化。冲突检查同前两条线未动本处。
+- 引擎改动（对应游戏需求）：
+  - `world.loadScene(path, spawnName)`（GameplayScriptFunctions 注册）← 门脚本要换图。
+    只排队（`AppSceneServices::requestSceneTransfer`，同帧后者覆盖），**在帧尾结构变更阶段执行**
+    （orchestrator `flushStructuralChanges` 末尾）：一次转移会停掉全部脚本，绝不能在脚本
+    运行中内联发生。执行 = waitIdle → 旧场景 onStop → SceneManager::loadScene → 出生点
+    放置；**保持 play 会话**（app 状态、UI host、常驻表都不动——走 stopRuntime 会让编辑器
+    误以为退出 play，也会把常驻表一起清掉）。
+  - 显式常驻表 `Persist`（LuaScriptingSystem::persistentState/resetPersistentState）←
+    宝箱状态要跨图保留但不跨局泄漏。init 时绑定全局；**只有 stopRuntime/stopSimulation
+    （退出 play）换新表**，转移路径不碰它。普通 Lua 表，脚本可存任意值。
+  - `placePlayerAtSpawn(scene, spawnName)`（自由函数）← 出生点放置。约定：玩法主角实体
+    名为 "Player"，出生标记是场景根上的 Node3D，只取其 x/y（z 归角色自己）。
+- 内容：`Door.lua`（propertyOverrides 授权目标场景与出生点，Inspector 可改）+ `Chest.lua`
+  （Persist.opened[实体名] 记开态，关=107 号罐/开=94 号金罐换图）+ `House.scene.json`
+  （10×7 室内：石板地 108、墙 99 入 solid、门、箱、SpawnFromTown、玩家、相机、Dialogue 条目）
+  + Town 加 DoorToHouse 与 SpawnFromHouse + `Player.lua`（tryStep 先问
+  `occupant:call("blocksEntry") ~= false` 才阻挡——门可穿行、罐子阻挡、无作答=阻挡；
+  到达新格 `pokeArrival` 触发 `onPlayerEnter`，查询用 `entityAt(x, y, self.entity)` 排除自己）。
+- 途中发现（内容侧三连坑，全部真实踩到）：
+  - **cell 值 = tile 序号 + 1**：手写 House 时把裸 tile 序号填进 cells，整个地图错位一格
+    （isSolid 探测的"异常"其实是它，不是 tileset 解析问题）。
+  - **TilesetRef 的 JSON 形状**是 `{"__base__": {"AssetRefBase": {"_path": ...}}}`，
+    不是 TextureSlot 那套 bEnable/samplerConfig（写错时 ReflectionSerializer 静默丢弃，
+    只有 Warn）。
+  - **每个场景的行走地图实体必须叫 `TilemapGround`**（Player.lua 按名字找地图）——写进
+    skill 约定；违反时 onInit 报错、字段全空、onUpdate 每帧刷错。
+- 验证（自动化控制口端到端）：`eval_js`（`ya.entity.list()` 按名过滤，`ya.entity.get`
+  按句柄不按名）触发门 → 截图确认 House 渲染完整、玩家站在出生点 → 开箱（金罐 + 对话）→
+  回 Town → 再进 House → **金罐仍是打开的**。往返切换共 3 次全成功。另：SceneTransferTest
+  四项全绿（SpawnPointPlacesPlayer / PersistentStateSurvivesTransfer /
+  TransferWithoutSpawnKeepsAuthoredPositions / PlayStopClearsPersistentState，App 用
+  AppModuleTestAccess 无头组装 + 临时目录场景文件走真 loadScene）；`ya-testing` 1425 通过
+  （唯一失败仍是显示器红灯）；2DRpgPrototype / GreedySnake 冒烟 exit 0；脚本 luajit 语法通过。
+  注意：control 实例有约 220s 的寿命上限（防遗忘自杀），长验证中途会被掐，需要续命就重启。
+- 未完成：按键注入自动化（等 S7）；`world.loadScene` 的 spawn 只放 Player 一名实体。
+  下一步 R4（规模与定案）。

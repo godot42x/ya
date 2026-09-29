@@ -2,6 +2,7 @@
 #include "GameRuntime/Script/GameplayLua.h"
 #include "GameRuntime/Script/GameplayScriptFunctions.h"
 #include "GameRuntime/AppRenderState.h"
+#include "GameRuntime/AppSceneServices.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/Lifecycle/FPSCtrl.h"
@@ -66,33 +67,6 @@
 
 namespace ya
 {
-
-namespace
-{
-std::string resolveProjectScenePath(const App& app, const std::string& requestedPath)
-{
-    if (requestedPath.empty()) {
-        return {};
-    }
-
-    const std::filesystem::path inputPath(requestedPath);
-    if (inputPath.is_absolute() && std::filesystem::is_regular_file(inputPath)) {
-        return inputPath.lexically_normal().string();
-    }
-    if (std::filesystem::is_regular_file(inputPath)) {
-        return inputPath.lexically_normal().string();
-    }
-
-    if (app.getDesc().projectRoot) {
-        const auto rootedPath = std::filesystem::path(*app.getDesc().projectRoot) / inputPath;
-        if (std::filesystem::is_regular_file(rootedPath)) {
-            return rootedPath.lexically_normal().string();
-        }
-    }
-
-    return requestedPath;
-}
-} // namespace
 
 std::string App::resolveStartupScenePath(const AppDesc& appDesc)
 {
@@ -735,6 +709,9 @@ void App::stopRuntime()
     }
     if (app._luaScriptingSystem) {
         app._luaScriptingSystem->onStop();
+        // A play-session exit is the one thing that wipes `Persist`; scene
+        // transfers keep it (rpg R3).
+        app._luaScriptingSystem->resetPersistentState();
     }
     if (!app.notifyModulesBeforeAppStateChange(AppState::Stopped)) {
         YA_CORE_WARN("Runtime stop was rejected by an app module");
@@ -766,6 +743,8 @@ void App::stopSimulation()
     }
     if (app._luaScriptingSystem) {
         app._luaScriptingSystem->onStop();
+        // Same contract as stopRuntime: leaving play wipes `Persist` (rpg R3).
+        app._luaScriptingSystem->resetPersistentState();
     }
     if (!app.notifyModulesBeforeAppStateChange(AppState::Stopped)) {
         YA_CORE_WARN("Simulation stop was rejected by an app module");

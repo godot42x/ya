@@ -213,6 +213,68 @@
           ]
         }
       }
+    },
+    {
+      "id": 1024,
+      "name": "DoorToHouse",
+      "components": {
+        "TransformComponent": {
+          "_position": [4.5, 2.5, 0.012],
+          "_rotation": [0.0, 0.0, 0.0],
+          "_scale": [1.0, 1.0, 1.0]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/tiny_town.png"
+                }
+              }
+            },
+            "uvOffset": [0.0, 0.0],
+            "uvRotation": 0.0,
+            "uvScale": [1.0, 1.0]
+          },
+          "size": [1.0, 1.0],
+          "uvRect": [0.16666666666666666, 0.5454545454545454, 0.25, 0.6363636363636364],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [1.0, 1.0, 1.0, 1.0],
+          "layer": 0,
+          "sortOrder": 0,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Door.lua",
+              "propertyOverrides": {
+                "targetScene": "Content/Scenes/House.scene.json",
+                "spawnName": "SpawnFromTown"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1025,
+      "name": "SpawnFromHouse",
+      "components": {
+        "TransformComponent": {
+          "_position": [5.5, 2.5, 0.0],
+          "_rotation": [0.0, 0.0, 0.0],
+          "_scale": [1.0, 1.0, 1.0]
+        }
+      }
     }
   ],
   "nodeTree": {
@@ -237,6 +299,14 @@
       {
         "name": "Npc",
         "entityRef": 1023
+      },
+      {
+        "name": "DoorToHouse",
+        "entityRef": 1024
+      },
+      {
+        "name": "SpawnFromHouse",
+        "entityRef": 1025
       }
     ]
   }

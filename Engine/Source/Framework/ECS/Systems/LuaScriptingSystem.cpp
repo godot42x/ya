@@ -493,6 +493,10 @@ void LuaScriptingSystem::init()
     lua["time"]  = LuaTimeApi{.elapsedSeconds = _services.elapsedSeconds, .frameIndex = _services.frameIndex};
     lua["log"]   = LuaLogApi{};
 
+    // The `Persist` global exists from state build, so scripts can read it
+    // before their first write (rpg R3).
+    persistentState();
+
     // 启用脚本热重载
     enableHotReload();
 }
@@ -609,6 +613,21 @@ void LuaScriptingSystem::onStop()
             script.releaseLuaHandles();
         }
     }
+}
+
+sol::table LuaScriptingSystem::persistentState()
+{
+    if (!_persistent.valid()) {
+        _persistent = _lua.create_table();
+        _lua["Persist"] = _persistent;
+    }
+    return _persistent;
+}
+
+void LuaScriptingSystem::resetPersistentState()
+{
+    _persistent = _lua.create_table();
+    _lua["Persist"] = _persistent;
 }
 
 LuaScriptingSystem::~LuaScriptingSystem()

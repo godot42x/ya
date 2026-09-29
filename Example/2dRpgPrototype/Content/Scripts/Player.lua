@@ -93,14 +93,28 @@ function Script:tryStep(carry)
     local nextX = self.cell.x + direction.dx
     local nextY = self.cell.y + direction.dy
     -- The map is the collision authority: a solid tile (painted wall, tree
-    -- canopy), a cell off the map, or another actor's cell (NPC, sign) is
-    -- never entered. Turning toward a blocker still counts as facing it.
-    if self.map:isSolid(nextX, nextY) or self.map:entityAt(nextX, nextY) then
+    -- canopy) or a cell off the map is never entered. An actor's cell blocks
+    -- too -- unless its script answers blocksEntry() == false (doors are
+    -- walked through); a missing answer means solid.
+    if self.map:isSolid(nextX, nextY) then
+        return false
+    end
+    local occupant = self.map:entityAt(nextX, nextY)
+    if occupant ~= nil and occupant:call("blocksEntry") ~= false then
         return false
     end
     self.to = { x = nextX, y = nextY }
     self.progress = carry
     return true
+end
+
+-- Stepping onto an event's cell pokes it (doors switch maps this way). The
+-- player itself is excluded from the query, so the event behind it is seen.
+function Script:pokeArrival()
+    local occupant = self.map:entityAt(self.cell.x, self.cell.y, self.entity)
+    if occupant then
+        occupant:call("onPlayerEnter")
+    end
 end
 
 -- The actor in the cell we face gets its onInteract; a quiet cell does
@@ -169,6 +183,8 @@ function Script:onUpdate(dt)
     if self.progress >= 1 then
         self.cell = self.to
         self.to = nil
+        -- Poke the cell we just walked onto before possibly walking on.
+        self:pokeArrival()
         -- Keep walking without a stop frame while a direction stays held.
         self:tryStep(self.progress - 1)
     end

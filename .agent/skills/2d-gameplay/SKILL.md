@@ -23,12 +23,27 @@
 ## 地图即碰撞权威
 
 - 通行、格子的定义全部问 tilemap 组件，不问物理：`worldToCell` / `cellToWorld` /
-  `isSolid` / `bounds`（反射方法），加 `entityAt(x, y)`（原生方法，GameRuntime 注册）。
+  `isSolid` / `bounds`（反射方法），加 `entityAt(x, y[, except])`（原生方法，GameRuntime
+  注册）。**每个场景的行走地图实体都叫 `TilemapGround`**——Player.lua 按这个名字找地图。
 - `isSolid` 出界算阻挡；`entityAt` 返回「格子里第一个 actor」——actor = 同时有
   Sprite2DComponent 与 LuaScriptComponent 的实体。相机、纯变换实体永远不算。
-- 玩法脚本（Player.lua）组合两者判进格：`isSolid(...) or entityAt(...) ~= nil`。
-  引擎不在 isSolid 里掺实体感知——tilemap 组件看不见场景，查询的注册点在
-  GameRuntime `GameplayScriptFunctions.cpp`（能同时看到 Scene 与组件）。
+- 玩法脚本（Player.lua）组合三者判进格：`isSolid(...)`，以及
+  `occupant:call("blocksEntry") ~= false`（门作答 false 可穿行；无作答 = 阻挡）。
+  走上新格时用 `entityAt(x, y, self.entity)` 排除自己再触发其 `onPlayerEnter`（门、
+  陷阱都是这个入口）。引擎不在 isSolid 里掺实体感知——tilemap 组件看不见场景，查询的
+  注册点在 GameRuntime `GameplayScriptFunctions.cpp`（能同时看到 Scene 与组件）。
+- 手写场景注意：**cell 值 = tile 序号 + 1**（0 = 空）；TilesetRef 的 JSON 形状是
+  `{"__base__": {"AssetRefBase": {"_path": ...}}}`，不是 TextureSlot 那套字段。
+
+## 场景转移（R3 约定）
+
+- 换图只有一条玩法路：`world.loadScene(path, spawnName)`。它只排队，在**帧尾结构变更
+  阶段**执行（转移会停掉全部脚本，不能内联）；转移保持 play 会话——app 状态、UI host、
+  `Persist` 常驻表都不动。
+- 跨场景状态只进 `Persist` 全局表（按实体名等做键）；退出 play（stopRuntime /
+  stopSimulation）换新表，转移不碰它。不要依赖「全局变量碰巧没被清」。
+- 出生点：场景根上一个命名 Node3D；引擎把名为 `Player` 的实体放到标记的 x/y 上，
+  z 归角色自己。场景之间主角不搬家，每张图自带 Player 实体。
 
 ## 脚本互调
 

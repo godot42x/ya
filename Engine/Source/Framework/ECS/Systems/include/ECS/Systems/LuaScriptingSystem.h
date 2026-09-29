@@ -73,6 +73,9 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     /// rebuilt only when the active scene tree's revision moves.
     std::vector<uint32_t> _treeRanks;
     uint64_t              _rankedTreeRevision = 0;
+    /// The `Persist` global's table; created on first use, replaced on a play
+    /// session exit. A plain table so scripts store any Lua value.
+    sol::table _persistent;
 
   public:
     LuaScriptingSystem() = default;
@@ -96,6 +99,13 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     /// Play stopped: onDestroy every live instance, whatever hosts it, and
     /// reset the active scene's script rows for the next play.
     void onStop();
+    /// The gameplay persistent table, bound as the `Persist` global (rpg R3):
+    /// chest flags and the like. Scene transfers never touch it; a play
+    /// session exit calls resetPersistentState for a fresh one.
+    [[nodiscard]] sol::table persistentState();
+    /// Swap in a fresh `Persist` table. The old table object stays alive as
+    /// long as scripts hold it, but the global reads the new empty one.
+    void resetPersistentState();
     /// `entity` is about to be destroyed: onDestroy its loaded scripts and
     /// drop their Lua handles.
     void onEntityDestroying(Entity& entity);

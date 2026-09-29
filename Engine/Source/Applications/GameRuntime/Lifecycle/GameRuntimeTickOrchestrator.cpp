@@ -255,15 +255,18 @@ void GameRuntimeTickOrchestrator::flushStructuralChanges(App& app)
         gameUIHost->flushStructuralChanges();
     }
     Scene* scene = app.getSceneServices().getActiveScene();
-    if (!scene) {
-        return;
+    if (scene) {
+        LuaScriptingSystem* lua = app._luaScriptingSystem;
+        scene->flushQueuedDestroys([lua](Entity& entity) {
+            if (lua) {
+                lua->onEntityDestroying(entity);
+            }
+        });
     }
-    LuaScriptingSystem* lua = app._luaScriptingSystem;
-    scene->flushQueuedDestroys([lua](Entity& entity) {
-        if (lua) {
-            lua->onEntityDestroying(entity);
-        }
-    });
+    // Last: a queued `world.loadScene` (rpg R3) stops every script, so it
+    // waits for this point — no script, module or UI callback runs after it
+    // in the frame, and the next frame's Lua update loads the new scene.
+    app.getSceneServices().runPendingSceneTransfer();
 }
 
 void GameRuntimeTickOrchestrator::prepareHostViewState(App& app, float dt)
