@@ -176,3 +176,51 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   `loadfile` 语法检查通过；`ya-game-runtime` / `2DRpgPrototype` / `ya-game-editor` / `ya-testing` 编译通过。
 - 未完成：编辑器冒烟（沙盒无显示器，SDL 起不来）；相机限界与「画墙→被挡住」只有手测路径，
   没有自动化（等 S7 的 `input.inject_key`）；「谁是碰撞权威」的发现留到 R2a/R3。下一步 R2a。
+
+## 2026-09-30 — R2a：事件实体与交互
+
+- 目标与边界：编辑器摆 NPC 与告示牌（精灵 + 各自脚本），玩家面朝按确认键 → 其 `onInteract`
+  被调用；NPC 占住的格子走不进去。不碰 `world.spawnSprite` / `ui.*`（game-ui 线所有）、
+  不新增渲染 pass、不造事件总线；对话框归 R2b。冲突检查：`ui-behavior-capabilities` 到 C1d
+  （C2/C3 未动工，R2a 先定具名调用接口，C3 复用）；`game-ui-script-framework` 停在 S3b。
+- 逼出来的引擎改动（对应游戏需求）：
+  - `entity:call(name, ...)` ← 玩家要调目标脚本函数。`LuaScriptingSystem::callNamed`
+    （实例面：host bindSelf 后 `self:<name>(args...)`，带返回值）+ `callEntityScript`
+    （实体面：走查 `LuaScriptComponent::scripts`，第一个定义该名字的已加载脚本作答，
+    `rebindEntitySelf` 复用 FEntityScriptHost 的 self.entity 绑定）。init() 以无捕获
+    原生方法挂在 Entity 类型上——Lua / JS 共用，且重复 init（测试）不会重绑悬垂系统。
+    语义：未定义返回 nil；目标脚本出错抛 ScriptError 到调用方（错误不能伪装成安静 nil）。
+  - `map:entityAt(x, y)` ← 玩家要找面前格子里的 actor、进门格前查占位。原生方法注册在
+    `GameplayScriptFunctions.cpp`（GameRuntime 才同时看得见 Scene 与组件）：返回格子里
+    第一个「有 Sprite2D 又有 LuaScript」的实体，逐候选问地图自己的 `worldToCell`，
+    相机 / 纯变换实体永不作答；线性遍历（D-T4），量大再加索引。tilemap 组件保持在
+    Render3D 看不见场景，注册点不放那里。
+  - 「角色 z = 图层基准 − y × ε」← 玩家与 NPC 同层时按屏幕上下正确遮挡（G2 不透明深度）。
+    收进示例 `Content/Scripts/Actor.lua`（`Actor.zFor` + hero 图帧算式），三个脚本共用；
+    约定与「地图即碰撞权威」「entity:call 互调」写进新 skill `.agent/skills/2d-gameplay/`。
+- 内容：`Actor.lua`（新）、`Player.lua`（tryStep 加 `isSolid(...) or entityAt(...)`；
+  确认键 Space/Enter/E 边沿（`input:isKeyPressed`）触发 `target:call("onInteract")`；
+  z 改按 Actor.zFor 随 y 重算）、`Npc.lua`（新，onInteract 转身朝玩家 + print）、
+  `Sign.lua`（新，onInteract 变暖色 + print，替 R2b 的文字占位）；`Town.scene.json`
+  加 Sign（1022，tiny_town tile 5 改成精灵放回 (13,5) 格，Decor 层该格清零）与
+  Npc（1023，hero 图调蓝放在 (14,9) 格）。
+- 保留 / 偏离：
+  - 「扩展 S1 的 call」落地为并行的 callNamed（invoke 的 bool 过滤语义与其三个调用方原样保留）；
+    C3（Lua call 热路径）落地时复用同一入口。
+  - entityAt 的 actor 判定（精灵+脚本）是引擎面约定的最小实现；将来「隐形触发区」需求
+    出现时再放宽，届时一并评估 D-T4 的索引。
+  - 计划写「两个以上脚本重复这段时下沉成组件字段」：z 约定现在是 Player/Npc/Sign 三处
+    require 同一个 Actor.lua（游戏内容内复用），尚未到引擎组件；组件字段属于 authored
+    sprite 能力（scene-2d 线），出现第四处重复再评估。
+- 验证：新增 8 测试全绿——`LuaScriptHostTest.NamedCallReturnsValue` /
+  `NamedCallOnMissingFunctionIsNil` / `NamedCallPropagatesTargetErrors`、
+  `LuaEntityScriptCallTest` x3（第一个定义者作答、参数/nil、目标错误在调用方可见）、
+  `TilemapEntityQueryTest` x2（actor 命中、非 actor 静默）；脚本 / tilemap 相关 90 项全绿；
+  `ya-testing` 1421 通过，唯一失败仍是既有红灯
+  `GUIWindowManagerTest.DragOverlaySessionIsExemptFromFocusAndInput`；
+  2DRpgPrototype 运行 / 编辑器与 GreedySnake 冒烟（--exit-after-frame=120）exit 0、
+  无脚本错误；全部脚本 luajit loadfile 语法检查通过。
+- 手测步骤（验证「面朝 + 确认」）：Play 后走到告示牌（(13,5) 格）或 NPC（(14,9) 格）旁，
+  面朝它按 Space/Enter/E：NPC 转身朝玩家并在控制台打印欢迎；告示牌变暖色并打印；
+  走进 NPC 所在格被挡住；站在 NPC 上方时 NPC 遮住玩家、下方时玩家遮住 NPC。
+- 未完成：按键注入自动化（等 S7）；R2b 对话框。下一步 R2b。

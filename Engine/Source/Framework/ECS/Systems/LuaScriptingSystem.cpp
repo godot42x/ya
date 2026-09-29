@@ -3,6 +3,7 @@
 #include "ECS/Systems/LuaScriptBinding.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
+#include "Core/Scripting/ScriptBindings.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Scene/Core/GameMounts.h"
 #include "Core/System/FileWatcher.h"
@@ -14,6 +15,7 @@
 #include <glm/glm.hpp>
 
 #include <algorithm>
+#include <format>
 #include <functional>
 #include <iterator>
 #include <optional>
@@ -96,6 +98,49 @@ sol::protected_function_result protectedCall(const sol::function& callback, Args
     return protectedCallback(std::forward<Args>(args)...);
 }
 
+/// The self binding an entity host applies before every callback. Entity-to-
+/// entity calls reach the instance through its component, not its host, and
+/// reapply the same line (callEntityScript below).
+void rebindEntitySelf(sol::table& self, const ya::Entity* entity)
+{
+    if (entity) {
+        self["entity"] = ya::LuaScriptObject{ya::script::entityRef(entity)};
+    }
+    else {
+        self["entity"] = sol::lua_nil;
+    }
+}
+
+/// `self:<name>(args...)` on a loaded instance whose function the caller has
+/// already found. Args cross as script values; the first return value comes
+/// back as one. A failing target raises, so a script-to-script call surfaces
+/// the target's mistake at the caller instead of disguising it as a nil.
+ya::ScriptValue callDefinedFunction(ya::LuaScriptInstance& script, const std::string& name, ya::script::ScriptArgs args)
+{
+    lua_State* L = script.self.lua_state();
+    const sol::function function = functionField(sol::state_view(L), script.self, name.c_str());
+    std::vector<sol::object> arguments;
+    arguments.reserve(args.size());
+    for (const ya::ScriptValue& value : args) {
+        ya::pushLuaValue(L, value);
+        arguments.emplace_back(L, -1);
+        lua_pop(L, 1);
+    }
+    const std::string path = script.scriptPath;
+    const sol::table  self = script.self;
+    // The call may move the instance's storage, so nothing below reads
+    // `script` again.
+    const sol::protected_function_result result = protectedCall(function, self, sol::as_args(arguments));
+    if (!result.valid()) {
+        const sol::error error = result;
+        throw ya::script::ScriptError(std::format("call '{}' ({}): {}", name, path, error.what()));
+    }
+    if (result.return_count() == 0) {
+        return {};
+    }
+    return ya::toScriptValue(L, result.stack_index());
+}
+
 /// Runs `callback` if the script defines it; a failed call is logged with
 /// `what` / `scriptPath` and contained to this instance.
 template <typename... Args>
@@ -168,12 +213,7 @@ struct FEntityScriptHost final : ya::ILuaScriptHost
     {
         ya::Scene*        current = scene();
         const ya::Entity* entity  = current ? current->getEntityByEnttID(handle) : nullptr;
-        if (entity) {
-            self["entity"] = ya::LuaScriptObject{ya::script::entityRef(entity)};
-        }
-        else {
-            self["entity"] = sol::lua_nil;
-        }
+        rebindEntitySelf(self, entity);
     }
 };
 
@@ -261,6 +301,27 @@ std::vector<FScriptSlot> collectWorldSlots(ya::Scene&                           
 namespace ya
 {
 
+script::ScriptValue callEntityScript(Entity& entity, const std::string& name, script::ScriptArgs args)
+{
+    auto* component =
+        entity.hasComponent<LuaScriptComponent>() ? entity.getComponent<LuaScriptComponent>() : nullptr;
+    if (!component) {
+        return {};
+    }
+    for (LuaScriptInstance& script : component->scripts) {
+        if (!script.bLoaded || !script.self.valid()) {
+            continue;
+        }
+        lua_State* L = script.self.lua_state();
+        if (!functionField(sol::state_view(L), script.self, name.c_str()).valid()) {
+            continue;
+        }
+        rebindEntitySelf(script.self, &entity);
+        return callDefinedFunction(script, name, args);
+    }
+    return {};
+}
+
 void LuaScriptingSystem::setRuntimeServices(LuaRuntimeServices services)
 {
     _services = std::move(services);
@@ -317,6 +378,19 @@ void LuaScriptingSystem::init()
     )");
 
     registerLuaScriptBindings(lua);
+
+    // Script-to-script interaction (rpg-prototype R2a): `entity:call(name, ...)`
+    // on the shared export. The first registration wins for the process and the
+    // body captures nothing, so a second init (tests) never rebinds a dangling
+    // system.
+    script::addNativeMethod(type_index_v<Entity>, "call",
+                            [](void* self, const script::ScriptRef&, script::ScriptArgs args) -> ScriptValue {
+                                if (args.empty()) {
+                                    throw script::ScriptError("call: expects the function name as its first argument");
+                                }
+                                const std::string name = script::scriptToString(args[0]);
+                                return callEntityScript(*static_cast<Entity*>(self), name, args.subspan(1));
+                            });
 
     lua.new_usertype<LuaInputApi>(
         "Input",
@@ -676,6 +750,20 @@ bool LuaScriptingSystem::invoke(LuaScriptInstance& instance, const char* callbac
     }
     const sol::object value = result.get<sol::object>();
     return value.is<bool>() && value.as<bool>();
+}
+
+script::ScriptValue LuaScriptingSystem::callNamed(LuaScriptInstance& instance, const std::string& name,
+                                                  script::ScriptArgs args)
+{
+    ILuaScriptHost* host = hostOf(instance);
+    if (!host || !instance.bLoaded) {
+        return {};
+    }
+    host->bindSelf(instance.self);
+    if (!functionField(_lua, instance.self, name.c_str()).valid()) {
+        return {};
+    }
+    return callDefinedFunction(instance, name, args);
 }
 
 void LuaScriptingSystem::destroy(LuaScriptInstance& instance)

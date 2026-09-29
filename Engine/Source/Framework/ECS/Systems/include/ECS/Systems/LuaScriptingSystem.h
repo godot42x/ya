@@ -2,6 +2,7 @@
 #include "ECS/Systems/ScriptingSystem.h"
 #include "ECS/Systems/LuaScriptInstance.h"
 #include "Core/Input/InputManager.h"
+#include "Core/Scripting/ScriptValue.h"
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -111,6 +112,13 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     /// class chain). True only when the callback returned `true`; a missing
     /// callback, an error or any other result is false. Errors stay contained.
     bool invoke(LuaScriptInstance& instance, const char* callback, const std::vector<sol::object>& args = {});
+    /// Named call for script-to-script interaction (rpg-prototype R2a):
+    /// `self:<name>(args...)` with the host's self binding refreshed first.
+    /// Returns the first return value; nil when the script does not define
+    /// `name` or the instance is not live. A failing target raises ScriptError,
+    /// so the mistake surfaces at the caller instead of vanishing as a nil.
+    [[nodiscard]] script::ScriptValue callNamed(LuaScriptInstance& instance, const std::string& name,
+                                                script::ScriptArgs args);
     /// onDestroy, drop Lua handles and unregister. No-op if not live.
     void destroy(LuaScriptInstance& instance);
     /// destroy() every live instance, in load order.
@@ -143,6 +151,13 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     [[nodiscard]] std::vector<uint64_t> liveIds() const;
     [[nodiscard]] const std::vector<uint32_t>& treeRanks(Scene& scene);
 };
+
+/// The entity face of callNamed, exported to scripts as `entity:call(name, ...)`
+/// (rpg-prototype R2a). The first loaded script on `entity` that defines `name`
+/// answers, with `self.entity` rebound first — what its host's bindSelf does.
+/// Nil when no script defines the name; a failing target raises ScriptError.
+[[nodiscard]] YA_ECS_SYSTEMS_API script::ScriptValue callEntityScript(Entity& entity, const std::string& name,
+                                                                      script::ScriptArgs args);
 
 
 

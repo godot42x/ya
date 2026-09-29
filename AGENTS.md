@@ -52,6 +52,7 @@ xmake project -k compile_commands
 - 资源加载、resolve、dirty queue、environment lighting：`./.agent/skills/resource-system/SKILL.md`
 - ECS -> material -> render consumer：`./.agent/skills/material-flow/SKILL.md`
 - 生成物边界（gizmo / 图标 / 子 mesh、派生视觉的序列化与可编辑规则、视图 feature 位）：`./.agent/skills/scene-object-boundary/SKILL.md`
+- 2D 玩法（角色遮挡 z 约定、tilemap 通行 / entityAt、脚本互调）：`./.agent/skills/2d-gameplay/SKILL.md`
 - RenderRuntime、后端边界、shader 生成链：`./.agent/skills/render-arch/SKILL.md`
 - C++ 风格、所有权、类布局：`./.agent/skills/cpp-style/SKILL.md`
 - 文件拆分、目录重组：`./.agent/skills/code-reorganize/SKILL.md`

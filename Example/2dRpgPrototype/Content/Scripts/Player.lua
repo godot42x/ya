@@ -2,10 +2,12 @@
 -- three-frame walk cycle from Textures/hero_walk.png (16x24 frames).
 --
 -- The player keeps no grid of its own: its cell is a cell of the
--- TilemapComponent named below, so "where is this tile" (cellToWorld) and
--- "may I enter it" (isSolid) are the map's answers. Painting a wall in the
--- editor therefore blocks the player without touching this script.
+-- TilemapComponent named below, so "where is this tile" (cellToWorld), "may I
+-- enter it" (isSolid) and "who stands there" (entityAt) are the map's
+-- answers. Painting a wall in the editor, or placing an NPC, blocks the
+-- player without touching this script.
 local ScriptBase = require("ScriptBase")
+local Actor = require("Actor")
 local Script = ScriptBase:new()
 
 local STEP_SECONDS = 0.2
@@ -13,9 +15,7 @@ local FRAME_SECONDS = 0.12
 local TEXELS_PER_UNIT = 16
 local MAP_NAME = "TilemapGround"
 
--- hero_walk.png: 3 columns (left foot, stand, right foot) x 4 rows.
-local SHEET_COLUMNS = 3
-local SHEET_ROWS = 4
+-- Walk columns of hero_walk.png: 0 left foot, 1 stand, 2 right foot.
 local STAND_COLUMN = 1
 local WALK_COLUMNS = { 0, 1, 2, 1 }
 
@@ -26,6 +26,9 @@ local DIRECTIONS = {
     { keys = { EKey.Left, EKey.K_A }, dx = -1, dy = 0, row = 1 },
     { keys = { EKey.Right, EKey.K_D }, dx = 1, dy = 0, row = 2 },
 }
+
+-- Facing something and tapping one of these triggers its onInteract.
+local CONFIRM_KEYS = { EKey.Space, EKey.Enter, EKey.K_E }
 
 local function heldDirection()
     for _, direction in ipairs(DIRECTIONS) do
@@ -43,15 +46,24 @@ local function snap(value)
     return math.floor(value * TEXELS_PER_UNIT + 0.5) / TEXELS_PER_UNIT
 end
 
+local function confirmPressed()
+    for _, key in ipairs(CONFIRM_KEYS) do
+        -- isKeyPressed is the down edge (isKeyDown is the held state).
+        if input:isKeyPressed(key) then
+            return true
+        end
+    end
+    return false
+end
+
 function Script:showFrame(column)
-    local u0 = column / SHEET_COLUMNS
-    local v0 = self.facing.row / SHEET_ROWS
-    self.sprite.uvRect = Vec4.new(u0, v0, u0 + 1 / SHEET_COLUMNS, v0 + 1 / SHEET_ROWS)
+    self.sprite.uvRect = Actor.heroFrame(column, self.facing.row)
 end
 
 -- Put the sprite on its current cell, or between the two cells of a step in
--- progress. The map says where a cell centre is, so a non-unit cell size and a
--- moved tilemap need nothing here.
+-- progress. The map says where a cell centre is, so a non-unit cell size and
+-- a moved tilemap need nothing here. The feet carry the depth: lower on
+-- screen draws in front of the actors behind (Actor.zFor).
 function Script:applyPosition()
     local from = self.map:cellToWorld(self.cell.x, self.cell.y)
     local x, y = from.x, from.y
@@ -60,7 +72,7 @@ function Script:applyPosition()
         x = from.x + (target.x - from.x) * self.progress
         y = from.y + (target.y - from.y) * self.progress
     end
-    self.transform:setPosition(Vec3.new(snap(x), snap(y + self.footLift), self.z))
+    self.transform:setPosition(Vec3.new(snap(x), snap(y + self.footLift), Actor.zFor(y)))
 end
 
 function Script:tryStep(carry)
@@ -72,14 +84,23 @@ function Script:tryStep(carry)
     local nextX = self.cell.x + direction.dx
     local nextY = self.cell.y + direction.dy
     -- The map is the collision authority: a solid tile (painted wall, tree
-    -- canopy) or a cell off the map is never entered. Turning toward the wall
-    -- still counts as facing it.
-    if self.map:isSolid(nextX, nextY) then
+    -- canopy), a cell off the map, or another actor's cell (NPC, sign) is
+    -- never entered. Turning toward a blocker still counts as facing it.
+    if self.map:isSolid(nextX, nextY) or self.map:entityAt(nextX, nextY) then
         return false
     end
     self.to = { x = nextX, y = nextY }
     self.progress = carry
     return true
+end
+
+-- The actor in the cell we face gets its onInteract; a quiet cell does
+-- nothing. The NPC answers by turning toward us, the sign by "being read".
+function Script:interact()
+    local target = self.map:entityAt(self.cell.x + self.facing.dx, self.cell.y + self.facing.dy)
+    if target then
+        target:call("onInteract")
+    end
 end
 
 function Script:onInit()
@@ -89,7 +110,6 @@ function Script:onInit()
     -- it so the feet stand on the tile's bottom edge.
     self.footLift = (self.sprite.size.y - 1) / 2
     local position = self.transform:getPosition()
-    self.z = position.z
     self.map = world.find(MAP_NAME):getTilemap()
     -- Start on whichever cell the authored position lands on.
     local cell = self.map:worldToCell(Vec2.new(position.x, position.y))
@@ -108,6 +128,9 @@ function Script:onUpdate(dt)
         self.walkTime = 0
         self:showFrame(STAND_COLUMN)
         self:applyPosition()
+        if confirmPressed() then
+            self:interact()
+        end
         return
     end
 
@@ -126,4 +149,3 @@ function Script:onUpdate(dt)
 end
 
 return Script
-

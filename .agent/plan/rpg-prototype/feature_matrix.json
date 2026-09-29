@@ -56,12 +56,16 @@
     {
       "id": "interaction",
       "phase": "R2a",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: face an NPC or sign and press confirm",
       "evidence": [
-        "entity lookup by cell",
-        "entity:call(name, ...) with return value, extending the S1 call path",
-        "z = layer base - y * epsilon ordering convention"
+        "entity:call(name, ...) = LuaScriptingSystem::callNamed (instance face, host self binding refreshed) + callEntityScript (entity face: first loaded script defining the name answers); nil when no script defines it, ScriptError when the target fails, so a bug is not disguised as a quiet nil",
+        "registered as a capture-free Entity native method in LuaScriptingSystem::init, so Lua and JS share it and re-init (tests) never rebinds a dangling system; FEntityScriptHost::bindSelf and callEntityScript share rebindEntitySelf",
+        "map:entityAt(x, y) = TilemapComponent native method registered by registerGameplayScriptFunctions: first entity with sprite+script whose world position lands on the cell (asks the map's own worldToCell); camera / bare transforms never answer; linear walk until a real map needs an index (D-T4)",
+        "actor conventions in Example/2DRpgPrototype/Content/Scripts/Actor.lua: z = Z_BASE - y * Z_PER_Y (opaque sprite depth, G2), shared hero-sheet frame math; Player/Npc/Sign require it",
+        "Player.lua blocks on isSolid OR entityAt, and on confirm (Space/Enter/E down edge) calls entity:call(\"onInteract\") on the faced cell; Npc turns toward the player, Sign tints while read (print stands in for R2b text)",
+        "Town.scene.json: Sign (1022, tiny_town tile 5 as a sprite at cell (13,5), tile removed from Decor) and Npc (1023, tinted hero frame at cell (14,9)) join the tree",
+        "tests: LuaScriptHostTest.NamedCallReturnsValue / NamedCallOnMissingFunctionIsNil / NamedCallPropagatesTargetErrors, LuaEntityScriptCallTest x3 (first defining script, args+missing=nil, target error raises at caller), TilemapEntityQueryTest x2 (actor found, non-actors silent)"
       ]
     },
     {
