@@ -329,3 +329,17 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 验证：`TownLarge` 在 profile 下跑通 600 帧 exit 0；测量脚本对三个夹具 + 尺寸对照共 4 条
   trace 均可复现；测完已恢复原构建模式（debug）。
 - 未完成：B2（Lua 插件化与旧绑定收口，排在 game-ui S7 之后）。R0–R4 全部落地。
+
+## 2026-09-30 — 评审与双面 quad 修复
+
+- 评审（R0–R4 六个问题）写进 `review-2026-09-30.md`，未排期待办列在 `todo.md`；资源层每帧 resolve
+  另立计划 `../resource-handle-events/`。
+- 修复：共享 `EPrimitiveGeometry::Quad` 带正反两套绕序（`createFullscreenQuad` 12 个索引，背面给编辑器
+  放置的 Quad 网格用）。三个使用方设 `cullMode None`，每个像素画两遍：`Sprite2DStage`（半透明精灵
+  混合两次）、`LightStage`（延迟光照全屏 pass 片元开销翻倍，画面不变）、`ViewOverlayStage` billboard
+  （编辑器图标混合两次）。三处都改为剔除背面：从任意方向看恰有一套绕序朝前，仍双面可见、只画一次，
+  与视口 Y 翻转无关。几何不动。
+- 验证：ya-testing 1469 全过；HelloMaterial 前后截图逐像素一致（光照 pass 不混合，符合预期）；
+  2DRpgPrototype 前后截图仅物体轮廓差异（两次运行跟随相机约 1px 偏移，场景精灵均为 alpha 裁剪不透明）；
+  2DRpgPrototype 编辑器、GreedySnake 冒烟 exit 0。
+- 保留：GPU 侧收益未量化（环境无 GPU 计时）；半透明精灵的颜色修正没有现成场景可截图对照。

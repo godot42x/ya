@@ -93,9 +93,10 @@ GraphicsPipelineCreateInfo Sprite2DStage::makePipelineCreateInfo(bool bTransluce
         },
         .dynamicFeatures    = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor},
         .primitiveType      = EPrimitiveType::TriangleList,
-        // The shared quad carries both windings, so a sprite is visible from
-        // either side; nothing else in the pass culls by orientation.
-        .rasterizationState = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::None, .frontFace = EFrontFaceType::CounterClockWise},
+        // The shared quad carries both windings. Culling back faces keeps the
+        // sprite visible from either side while rasterizing it once; without
+        // culling both windings draw and translucent sprites blend twice.
+        .rasterizationState = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::Back, .frontFace = EFrontFaceType::CounterClockWise},
         .depthStencilState  = {
             .bDepthTestEnable  = true,
             .bDepthWriteEnable = !bTranslucent,

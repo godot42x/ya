@@ -176,7 +176,9 @@ void LightStage::init(IRender* render)
         },
         .dynamicFeatures    = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor},
         .primitiveType      = EPrimitiveType::TriangleList,
-        .rasterizationState = {.cullMode = ECullMode::None, .frontFace = EFrontFaceType::CounterClockWise},
+        // The shared quad carries both windings; culling one keeps the lighting
+        // pass at one fragment per pixel.
+        .rasterizationState = {.cullMode = ECullMode::Back, .frontFace = EFrontFaceType::CounterClockWise},
         .depthStencilState  = {.bDepthTestEnable = false, .bDepthWriteEnable = false},
         .colorBlendState    = {.attachments = {ColorBlendAttachmentState{
                                    .index          = 0,

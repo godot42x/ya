@@ -220,7 +220,8 @@ void ViewOverlayStage::initBillboards()
         },
         .dynamicFeatures    = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor},
         .primitiveType      = EPrimitiveType::TriangleList,
-        .rasterizationState = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::None, .frontFace = EFrontFaceType::CounterClockWise},
+        // The shared quad carries both windings; culling one blends each billboard once.
+        .rasterizationState = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::Back, .frontFace = EFrontFaceType::CounterClockWise},
         .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = false, .depthCompareOp = ECompareOp::LessOrEqual},
         .colorBlendState    = {.attachments = {{
             .index               = 0,
