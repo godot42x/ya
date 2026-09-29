@@ -22,8 +22,6 @@ namespace ya
 
 namespace reflection::detail
 {
-struct JsonMethodInvoker;
-
 template <typename T>
 struct is_optional : std::false_type
 {};
@@ -39,10 +37,6 @@ inline constexpr bool is_optional_v = is_optional<std::remove_cvref_t<T>>::value
 
 struct YA_CORE_API ReflectionSerializer
 {
-    // MethodReflection bridges reflected member functions to JSON and needs
-    // the generic type <-> JSON conversion primitives.
-    friend struct ::ya::reflection::detail::JsonMethodInvoker;
-
     struct CustomTypeHook
     {
         std::function<nlohmann::json(const void*)>        serialize;

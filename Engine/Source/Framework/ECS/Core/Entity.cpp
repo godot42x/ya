@@ -54,40 +54,28 @@ Entity::operator bool() const
     return _registry->valid(_entityHandle);
 }
 
-bool Entity::hasComponentByName(const std::string& typeName) const
+namespace
 {
-    if (_registry == nullptr) {
-        return false;
-    }
-    return ECSRegistry::get().hasComponent(FName(typeName), *_registry, _entityHandle);
-}
-
-InstanceRef Entity::componentByName(const std::string& typeName)
+type_index_t componentTypeOf(const std::string& typeName)
 {
-    if (_registry == nullptr) {
-        return {};
-    }
-    auto&      ecs       = ECSRegistry::get();
-    const auto typeIndex = ecs.getTypeIndex(FName(typeName));
+    const auto typeIndex = ECSRegistry::get().getTypeIndex(FName(typeName));
     if (!typeIndex) {
         throw std::runtime_error("unknown component type: " + typeName);
     }
-    return InstanceRef{*typeIndex, ecs.getComponent(*typeIndex, *_registry, _entityHandle)};
+    return *typeIndex;
 }
+} // namespace
 
-InstanceRef Entity::addComponentByName(const std::string& typeName)
+void* Entity::addComponentByName(const std::string& typeName)
 {
+    const type_index_t typeIndex = componentTypeOf(typeName);
     if (_registry == nullptr) {
-        return {};
+        return nullptr;
     }
-    auto&      ecs       = ECSRegistry::get();
-    const auto typeIndex = ecs.getTypeIndex(FName(typeName));
-    if (!typeIndex) {
-        throw std::runtime_error("unknown component type: " + typeName);
-    }
-    void* ptr = ecs.getComponent(*typeIndex, *_registry, _entityHandle);
+    auto& ecs = ECSRegistry::get();
+    void* ptr = ecs.getComponent(typeIndex, *_registry, _entityHandle);
     if (ptr == nullptr) {
-        ptr = ecs.addComponent(*typeIndex, *_registry, _entityHandle, this);
+        ptr = ecs.addComponent(typeIndex, *_registry, _entityHandle, this);
     }
     else if (auto* component = static_cast<IComponent*>(ptr)) {
         // "Get or create this component on this entity" answers for this entity
@@ -95,31 +83,13 @@ InstanceRef Entity::addComponentByName(const std::string& typeName)
         // still ends up knowing its owner.
         component->setOwner(this);
     }
-    return InstanceRef{*typeIndex, ptr};
+    return ptr;
 }
 
 bool Entity::removeComponentByName(const std::string& typeName)
 {
-    if (_registry == nullptr) {
-        return false;
-    }
-    return ECSRegistry::get().removeComponent(FName(typeName), *_registry, _entityHandle);
-}
-
-nlohmann::json Entity::components() const
-{
-    nlohmann::json out = nlohmann::json::object();
-    if (_registry == nullptr) {
-        return out;
-    }
-
-    auto& ecs = ECSRegistry::get();
-    for (const auto& [fname, typeIndex] : ecs.getTypeIndexCache()) {
-        if (void* ptr = ecs.getComponent(typeIndex, *_registry, _entityHandle); ptr != nullptr) {
-            out[fname.toString()] = serializeInstanceRef({typeIndex, ptr});
-        }
-    }
-    return out;
+    const type_index_t typeIndex = componentTypeOf(typeName);
+    return _registry != nullptr && ECSRegistry::get().removeComponent(typeIndex, *_registry, _entityHandle);
 }
 
 } // namespace ya

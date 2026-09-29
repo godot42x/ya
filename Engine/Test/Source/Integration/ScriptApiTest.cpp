@@ -126,9 +126,9 @@ TEST_F(ScriptApiFixture, JsClassBindingCreatesAndMutatesEntity)
 
     const auto result = system.evalJS(R"(
         const e = ya.entity.create("Box");
-        const t = e.addComponentByName("TransformComponent");
+        const t = e.add("TransformComponent");
         t.setPosition([1, 2, 3]);
-        t._rotation = [0, 90, 0];
+        t.rotation = [0, 90, 0];
         t.getPosition()
     )");
     ASSERT_TRUE(result.ok) << result.error;
@@ -157,10 +157,10 @@ TEST_F(ScriptApiFixture, JsFieldWriteThroughSecondReference)
 
     const auto result = system.evalJS(R"(
         const e = ya.entity.create("Box");
-        const t = e.addComponentByName("TransformComponent");
-        t._position = [4, 5, 6];
-        const c = e.componentByName("TransformComponent");
-        c._position
+        const t = e.add("TransformComponent");
+        t.position = [4, 5, 6];
+        const c = e.get("TransformComponent");
+        c.position
     )");
     ASSERT_TRUE(result.ok) << result.error;
     EXPECT_EQ(result.value, Json::array({4.0, 5.0, 6.0}));
@@ -173,7 +173,7 @@ TEST_F(ScriptApiFixture, JsEntitySurface)
 
     const auto result = system.evalJS(R"(
         const e = ya.entity.create("Box");
-        const c = e.components().TransformComponent;
+        const c = e.getTransform();
         c.setPosition([7, 8, 9]);
         [e.getId(), e.getName(), c !== undefined, c.getPosition(), ya.scene.active().entityCount()]
     )");
@@ -193,11 +193,11 @@ TEST_F(ScriptApiFixture, JsReflectedEntityComponentOps)
 
     const auto result = system.evalJS(R"(
         const e = ya.entity.create("Ops");
-        const before = e.hasComponentByName("TransformComponent");
-        const added = e.addComponentByName("TransformComponent") !== undefined;
-        const still = e.hasComponentByName("TransformComponent");
-        const removed = e.removeComponentByName("TransformComponent");
-        const after = e.hasComponentByName("TransformComponent");
+        const before = e.has("TransformComponent");
+        const added = e.add("TransformComponent") !== undefined;
+        const still = e.has("TransformComponent");
+        const removed = e.remove("TransformComponent");
+        const after = e.has("TransformComponent");
         [before, added, still, removed, after]
     )");
     ASSERT_TRUE(result.ok) << result.error;
@@ -223,7 +223,7 @@ TEST_F(ScriptApiFixture, JsReflectedEntityUnknownTypeErrors)
 
     const auto result = system.evalJS(R"(
         const e = ya.entity.create("Box");
-        e.addComponentByName("NoSuchComponent")
+        e.add("NoSuchComponent")
     )");
     EXPECT_FALSE(result.ok);
     EXPECT_NE(result.error.find("unknown component type"), std::string::npos);

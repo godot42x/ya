@@ -141,7 +141,7 @@ TEST(SceneNodeLifecycleTest, CreatingAComponentOnAnEntityAssignsThatEntityAsItsO
     ASSERT_NE(entity->addComponent<CameraComponent>(), nullptr);
     EXPECT_EQ(entity->getComponent<CameraComponent>()->getOwner(), entity);
 
-    auto* mesh = static_cast<StaticMeshComponent*>(entity->addComponentByName("StaticMeshComponent").instance);
+    auto* mesh = static_cast<StaticMeshComponent*>(entity->addComponentByName("StaticMeshComponent"));
     ASSERT_NE(mesh, nullptr);
     EXPECT_EQ(mesh->getOwner(), entity);
 
@@ -151,7 +151,7 @@ TEST(SceneNodeLifecycleTest, CreatingAComponentOnAnEntityAssignsThatEntityAsItsO
 
     // "Get or create" answers for this entity even when the component was
     // already there.
-    EXPECT_EQ(entity->addComponentByName("StaticMeshComponent").instance, mesh);
+    EXPECT_EQ(entity->addComponentByName("StaticMeshComponent"), mesh);
     EXPECT_EQ(mesh->getOwner(), entity);
 }
 

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <any>
+#include <cstdint>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -25,6 +28,9 @@ struct Enum
     std::unordered_map<int64_t, std::string> valueToName;
     size_t                                   underlyingSize = sizeof(int); // Size of underlying type in bytes
     bool                                     bUnderlyingSigned = true;    // Sign of the underlying type
+    // A value as a std::any of the enum's own type, for Function invokers.
+    std::function<std::any(int64_t)>         boxValue;
+    std::function<int64_t(const std::any &)> unboxValue;
 
     Enum() = default;
     explicit Enum(const std::string &inName) : name(inName) {}

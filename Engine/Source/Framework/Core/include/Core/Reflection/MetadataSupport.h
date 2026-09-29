@@ -31,6 +31,7 @@ struct Meta
     static inline const FName DisplayName  = "display_name";
     static inline const FName EditableIf   = "editable_if";
     static inline const FName DisabledHint = "disabled_hint";
+    static inline const FName ScriptName   = "script_name";
 
     using EditablePredicate = std::function<bool(const void*)>;
 
@@ -134,6 +135,29 @@ struct MetaBuilder
     MetaBuilder& wrapper()
     {
         addFlag(FieldFlags::EditReadOnly);
+        return *this;
+    }
+
+    /// Visible to scripts (gameplay and automation alike): a field becomes
+    /// read-write, a method callable. Unmarked members are invisible to every
+    /// script language. `name` overrides the script name, which otherwise is
+    /// the reflected name without its leading underscores.
+    MetaBuilder& script(const std::string& name = {})
+    {
+        addFlag(std::is_void_v<T> ? FieldFlags::BlueprintCallable : FieldFlags::BlueprintReadWrite);
+        if (!name.empty()) {
+            meta.set(Meta::ScriptName, name);
+        }
+        return *this;
+    }
+
+    MetaBuilder& scriptReadOnly(const std::string& name = {})
+        requires(!std::is_void_v<T>)
+    {
+        addFlag(FieldFlags::BlueprintReadOnly);
+        if (!name.empty()) {
+            meta.set(Meta::ScriptName, name);
+        }
         return *this;
     }
 

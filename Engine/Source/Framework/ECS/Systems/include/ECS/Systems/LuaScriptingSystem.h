@@ -138,13 +138,6 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     [[nodiscard]] ILuaScriptHost* hostOf(const LuaScriptInstance& instance) const;
     [[nodiscard]] std::vector<uint64_t> liveIds() const;
     [[nodiscard]] const std::vector<uint32_t>& treeRanks(Scene& scene);
-
-    // 自动绑定所有已注册的反射组件到Lua
-    void bindReflectedComponents();
-
-    // 通用组件绑定模板（利用反射自动绑定）
-    // template <typename ComponentType>
-    // void bindComponentAuto(const std::string &className);
 };
 
 

@@ -158,17 +158,17 @@ struct Register
     // virtual ~Register() {}
 
     template <typename FuncType>
-    Register &function(const std::string &name, FuncType func)
+    Register &function(const std::string &name, FuncType func, Metadata meta = {})
     {
-        classInfo->function(name, func);
+        classInfo->function(name, func).metadata = std::move(meta);
         return *this;
     }
 
     // 注册静态函数
     template <typename Ret, typename... Args>
-    Register &staticFunction(const std::string &name, Ret (*func)(Args...))
+    Register &staticFunction(const std::string &name, Ret (*func)(Args...), Metadata meta = {})
     {
-        classInfo->staticFunction(name, func);
+        classInfo->staticFunction(name, func).metadata = std::move(meta);
         return *this;
     }
 
@@ -281,6 +281,8 @@ struct RegisterEnum
         enumInfo.name              = enumName;
         enumInfo.underlyingSize    = sizeof(std::underlying_type_t<EnumType>);
         enumInfo.bUnderlyingSigned = std::is_signed_v<std::underlying_type_t<EnumType>>;
+        enumInfo.boxValue          = [](int64_t val) { return std::any(static_cast<EnumType>(val)); };
+        enumInfo.unboxValue        = [](const std::any &boxed) { return static_cast<int64_t>(std::any_cast<EnumType>(boxed)); };
         typeIndex                  = inTypeIndex;
     }
 

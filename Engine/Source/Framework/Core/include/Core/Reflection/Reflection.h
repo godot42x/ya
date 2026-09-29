@@ -8,7 +8,6 @@
 
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Core/Reflection/MetadataSupport.h"
-#include "Core/Reflection/MethodReflection.h"
 
 #include "Core/Macro/VariadicMacros.h"
 #include "Core/Reflection/PropertyExtensions.h"
@@ -196,14 +195,7 @@ struct Visitor<void>
             visit_static_fields([&reg](const char* name, auto member, auto meta) {                                                               \
                 using MemberType = std::decay_t<decltype(member)>;                                                                                \
                 if constexpr (std::is_member_function_pointer_v<MemberType>) {                                                                    \
-                    /* Reflected member function -> plugin Function with a JSON                                                                   \
-                       call path for scripts (see MethodReflection.h). */                                                                         \
-                    reg->function(name, member);                                                                                                  \
-                    if (auto* cls = ClassRegistry::instance().getClass(ya::type_index_v<class_t>)) {                                              \
-                        if (auto it = cls->functions.find(name); it != cls->functions.end()) {                                                    \
-                            ::ya::reflection::detail::registerReflectedMethod<class_t>(it->second, member, meta);                                 \
-                        }                                                                                                                         \
-                    }                                                                                                                             \
+                    reg->function(name, member, meta);                                                                                            \
                 }                                                                                                                                 \
                 else {                                                                                                                            \
                     reg->property(name, member, meta);                                                                                            \

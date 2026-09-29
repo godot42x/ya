@@ -19,6 +19,12 @@ namespace
 ISceneLifecycleHost* g_sceneLifecycleHost = nullptr;
 std::atomic<uint64_t> g_nextSceneInstanceId{1};
 
+std::unordered_map<uint64_t, Scene*>& liveScenes()
+{
+    static std::unordered_map<uint64_t, Scene*> scenes;
+    return scenes;
+}
+
 /// Collect every entity in `node`'s subtree in pre-order (a node always
 /// precedes its own descendants). Callers that destroy the results must walk
 /// the list backwards so children are gone before their parents.
@@ -49,10 +55,17 @@ ISceneLifecycleHost* Scene::getLifecycleHost()
     return g_sceneLifecycleHost;
 }
 
+Scene* Scene::findByInstanceId(uint64_t instanceId)
+{
+    const auto it = liveScenes().find(instanceId);
+    return it != liveScenes().end() ? it->second : nullptr;
+}
+
 Scene::Scene(const std::string &name)
     : _name(name)
     , _instanceId(g_nextSceneInstanceId.fetch_add(1, std::memory_order_relaxed))
 {
+    liveScenes()[_instanceId] = this;
     if (auto *lifecycleHost = getLifecycleHost()) {
         lifecycleHost->registerScenePointer(this);
     }
@@ -61,6 +74,7 @@ Scene::Scene(const std::string &name)
 Scene::~Scene()
 {
     // _magic = 0xDEADBEEF; // Mark as destroyed
+    liveScenes().erase(_instanceId);
 
     if (auto *lifecycleHost = getLifecycleHost()) {
         lifecycleHost->unregisterScenePointer(this);

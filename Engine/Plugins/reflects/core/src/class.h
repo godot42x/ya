@@ -397,6 +397,8 @@ struct Class : public Field
         f.argCount       = sizeof...(Args);
         f.returnTypeName = detail::getTypeName<Ret>();
         (f.argTypeNames.push_back(detail::getTypeName<Args>()), ...);
+        f.returnTypeIndex = detail::valueTypeIndex<Ret>();
+        f.argTypeIndices  = {detail::valueTypeIndex<Args>()...};
 
         f.invoker = [func](void *obj, const ArgumentList &args) -> std::any {
             ClassType *self = static_cast<ClassType *>(obj);
@@ -419,6 +421,8 @@ struct Class : public Field
         f.argCount       = sizeof...(Args);
         f.returnTypeName = detail::getTypeName<Ret>();
         (f.argTypeNames.push_back(detail::getTypeName<Args>()), ...);
+        f.returnTypeIndex = detail::valueTypeIndex<Ret>();
+        f.argTypeIndices  = {detail::valueTypeIndex<Args>()...};
 
         f.invoker = [func](void *obj, const ArgumentList &args) -> std::any {
             const ClassType *self = static_cast<const ClassType *>(obj);
@@ -441,6 +445,8 @@ struct Class : public Field
         f.argCount       = sizeof...(Args);
         f.returnTypeName = detail::getTypeName<Ret>();
         (f.argTypeNames.push_back(detail::getTypeName<Args>()), ...);
+        f.returnTypeIndex = detail::valueTypeIndex<Ret>();
+        f.argTypeIndices  = {detail::valueTypeIndex<Args>()...};
 
         f.invoker = [func](void * /*obj*/, const ArgumentList &args) -> std::any {
             return detail::staticFunctionWrapper(func, args);

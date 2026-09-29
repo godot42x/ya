@@ -1,19 +1,17 @@
 #include "ECS/Systems/LuaScriptingSystem.h"
 #include "ECS/Systems/LuaEvent.h"
+#include "ECS/Systems/LuaScriptBinding.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
-#include "Core/Reflection/MetadataSupport.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Scene/Core/GameMounts.h"
 #include "Core/System/FileWatcher.h"
 #include "Scene/Core/Scene.h"
+#include "Scene/Core/SceneScriptBindings.h"
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
-#include "ECS/Systems/Components/PointLightComponent.h"
-#include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
 #include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
 #include <functional>
@@ -161,8 +159,14 @@ struct FEntityScriptHost final : ya::ILuaScriptHost
 
     void bindSelf(sol::table& self) override
     {
-        ya::Scene* current = scene();
-        self["entity"]     = current ? current->getEntityByEnttID(handle) : nullptr;
+        ya::Scene*        current = scene();
+        const ya::Entity* entity  = current ? current->getEntityByEnttID(handle) : nullptr;
+        if (entity) {
+            self["entity"] = ya::LuaScriptObject{ya::script::entityRef(entity)};
+        }
+        else {
+            self["entity"] = sol::lua_nil;
+        }
     }
 };
 
@@ -305,52 +309,7 @@ void LuaScriptingSystem::init()
         print(package.path)
     )");
 
-    // 暴露 glm::vec3 类型
-    lua.new_usertype<glm::vec3>("Vec3",
-                                 sol::constructors<glm::vec3(), glm::vec3(float), glm::vec3(float, float, float)>(),
-                                 "x",
-                                 &glm::vec3::x,
-                                 "y",
-                                 &glm::vec3::y,
-                                 "z",
-                                 &glm::vec3::z,
-                                 "__add",
-                                 [](const glm::vec3 &a, const glm::vec3 &b) { return a + b; },
-                                 "__sub",
-                                 [](const glm::vec3 &a, const glm::vec3 &b) { return a - b; },
-                                 "__mul",
-                                 sol::overload([](const glm::vec3 &v, float s) { return v * s; },
-                                               [](float s, const glm::vec3 &v) { return s * v; }),
-                                 "__div",
-                                 [](const glm::vec3 &v, float s) { return v / s; },
-                                 "length",
-                                 [](const glm::vec3 &v) { return glm::length(v); },
-                                 "normalize",
-                                 [](const glm::vec3 &v) { return glm::normalize(v); },
-                                 "dot",
-                                 [](const glm::vec3 &a, const glm::vec3 &b) { return glm::dot(a, b); },
-                                 "cross",
-                                 [](const glm::vec3 &a, const glm::vec3 &b) { return glm::cross(a, b); });
-
-    lua.new_usertype<glm::vec2>("Vec2",
-                                 sol::constructors<glm::vec2(), glm::vec2(float), glm::vec2(float, float)>(),
-                                 "x",
-                                 &glm::vec2::x,
-                                 "y",
-                                 &glm::vec2::y,
-                                 "__add",
-                                 [](const glm::vec2 &a, const glm::vec2 &b) { return a + b; },
-                                 "__sub",
-                                 [](const glm::vec2 &a, const glm::vec2 &b) { return a - b; },
-                                 "__mul",
-                                 sol::overload([](const glm::vec2 &v, float s) { return v * s; },
-                                               [](float s, const glm::vec2 &v) { return s * v; }),
-                                 "__div",
-                                 [](const glm::vec2 &v, float s) { return v / s; },
-                                 "length",
-                                 [](const glm::vec2 &v) { return glm::length(v); },
-                                 "normalize",
-                                 [](const glm::vec2 &v) { return glm::normalize(v); });
+    registerLuaScriptBindings(lua);
 
     lua.new_usertype<LuaInputApi>(
         "Input",
@@ -443,105 +402,15 @@ void LuaScriptingSystem::init()
         "debug",
         &LuaLogApi::debug);
 
-    // ========================================================================
-    // 高性能组件：手动绑定（避免反射开销）
-    // ========================================================================
-
-    // TransformComponent - 热点组件，使用原生绑定
-    lua.new_usertype<TransformComponent>("TransformComponent",
-                                          sol::no_constructor,
-                                          // 直接成员访问（零开销）
-                                          "position",
-                                          &TransformComponent::_position,
-                                          "rotation",
-                                          &TransformComponent::_rotation,
-                                          "scale",
-                                          &TransformComponent::_scale,
-                                          // 方法绑定
-                                          "getPosition",
-                                          &TransformComponent::getPosition,
-                                          "setPosition",
-                                          &TransformComponent::setPosition,
-                                          "getRotation",
-                                          &TransformComponent::getRotation,
-                                          "setRotation",
-                                          &TransformComponent::setRotation,
-                                          "getScale",
-                                          &TransformComponent::getScale,
-                                          "setScale",
-                                          &TransformComponent::setScale,
-                                          // Direction vectors (computed from rotation euler angles)
-                                          "getForward",
-                                          [](TransformComponent& t) -> glm::vec3 {
-                                              glm::quat q = glm::quat(glm::radians(t._rotation));
-                                              return q * glm::vec3(0.0f, 0.0f, -1.0f); // WorldForward
-                                          },
-                                          "getRight",
-                                          [](TransformComponent& t) -> glm::vec3 {
-                                              glm::quat q = glm::quat(glm::radians(t._rotation));
-                                              return q * glm::vec3(1.0f, 0.0f, 0.0f); // WorldRight
-                                          },
-                                          "getUp",
-                                          [](TransformComponent& t) -> glm::vec3 {
-                                              glm::quat q = glm::quat(glm::radians(t._rotation));
-                                              return q * glm::vec3(0.0f, 1.0f, 0.0f); // WorldUp
-                                          });
-
     lua.new_enum("CameraProjection",
                   "Perspective",
                   ECameraProjection::Perspective,
                   "Orthographic",
                   ECameraProjection::Orthographic);
 
-    lua.new_usertype<CameraComponent>("CameraComponent",
-                                       sol::no_constructor,
-                                       "primary",
-                                       &CameraComponent::bPrimary,
-                                       "fixedAspectRatio",
-                                       &CameraComponent::_fixedAspectRatio,
-                                       "projection",
-                                       &CameraComponent::_projection,
-                                       "fov",
-                                       &CameraComponent::_fov,
-                                       "orthoHalfHeight",
-                                       &CameraComponent::_orthoHalfHeight,
-                                       "aspectRatio",
-                                       &CameraComponent::_aspectRatio,
-                                       "nearClip",
-                                       &CameraComponent::_nearClip,
-                                       "farClip",
-                                       &CameraComponent::_farClip,
-                                       "distance",
-                                       &CameraComponent::_distance,
-                                       "focusPoint",
-                                       &CameraComponent::_focusPoint,
-                                       "setAspectRatio",
-                                       &CameraComponent::setAspectRatio);
-
-    // 暴露 Entity (通用接口)
-    lua.new_usertype<Entity>(
-        "Entity",
-        "hasTransform",
-        [](Entity &e) { return e.hasComponent<TransformComponent>(); },
-        "getTransform",
-        [](Entity &e) -> TransformComponent * {
-            return e.hasComponent<TransformComponent>() ? e.getComponent<TransformComponent>() : nullptr;
-        },
-        "hasCamera",
-        [](Entity &e) { return e.hasComponent<CameraComponent>(); },
-        "getCamera",
-        [](Entity &e) -> CameraComponent * {
-            return e.hasComponent<CameraComponent>() ? e.getComponent<CameraComponent>() : nullptr;
-        });
-
     lua["input"] = LuaInputApi{.input = _services.input, .isMouseCapturedFn = _services.isMouseCaptured};
     lua["time"]  = LuaTimeApi{.elapsedSeconds = _services.elapsedSeconds, .frameIndex = _services.frameIndex};
     lua["log"]   = LuaLogApi{};
-
-    // ========================================================================
-    // 自动绑定所有反射组件（跳过已手动绑定的）
-    // ========================================================================
-    bindReflectedComponents();
 
     // 启用脚本热重载
     enableHotReload();
@@ -659,54 +528,6 @@ void LuaScriptingSystem::onStop()
             script.releaseLuaHandles();
         }
     }
-}
-
-// ============================================================================
-// 通用组件绑定 - 利用反射 visitor 自动绑定所有属性
-// ============================================================================
-
-// template <typename ComponentType>
-// void LuaScriptingSystem::bindComponentAuto(const std::string &className)
-// {
-//     using namespace ya::reflection;
-// TODO: unimplemented
-// How to get static type so that can transfer property value between sol::object and std::any?
-
-// // 验证组件是否已注册反射（通过尝试获取属性列表）
-// auto *cls = ClassRegistry::instance().getClass(className);
-// if (!cls || cls->properties.empty()) {
-//     YA_CORE_WARN("No reflection properties found for: {}", className);
-//     return;
-// }
-
-// _lua.new_usertype<ComponentType>(
-//     className,
-//     sol::no_constructor,
-//     // 反射属性绑定
-//     "__index",
-//     [cls](ComponentType &self, const std::string &key) -> sol::object {
-//         auto *prop = cls->getProperty(key);
-//         }
-//     },
-//     "__newindex",
-//     [cls](ComponentType &self, const std::string &key, sol::object value) {
-//         auto *prop = cls->getProperty(key);
-//         if (prop) {
-//             reflection::setPropertyValueFromSolObject(self, *prop, value);
-//         }
-//     });
-
-//     YA_CORE_TRACE("  Auto-bound component: {}", className);
-// }
-
-void LuaScriptingSystem::bindReflectedComponents()
-{
-    YA_CORE_INFO("Auto-binding reflected components to Lua...");
-
-    // bindComponentAuto<PointLightComponent>("PointLightComponent");
-    // bindComponentAuto<CameraComponent>("CameraComponent");
-    // TODO: 实现  UFUNCTION
-    // bindComponentAuto<TransformComponent>("TransformComponent");
 }
 
 LuaScriptingSystem::~LuaScriptingSystem()

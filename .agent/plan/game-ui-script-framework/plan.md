@@ -462,11 +462,11 @@ S6 依赖 S2/S3/S4 的数据形态，可与 S7 并行
 - 命名输入动作系统（InputMap）；本计划只内置「取消」。
 - 文档内的 Reactive 数据绑定（ViewModel 写法）；等 S3 句柄稳定后另起。
 - 世界空间 UI、UI 动画轨道（clip player）。
-- 场景可编辑性：墙、相机取景作为场景数据 / 组件（固定场地取景相机模式）另起计划；
-  本计划不改 `Snake.lua` 里的取景与墙生成。
+- 场景可编辑性：墙、相机取景作为场景数据 / 组件（固定场地取景相机模式）由 `rpg-prototype`
+  接手（Tilemap / 相机跟随）；本计划不改 `Snake.lua` 里的取景与墙生成。
 - 预制体实例化（D6）。
 - `GameUIHost` 拆分（`game-ui-authoring` P2 `scene_ui_composition_split`）。
-- 反射自动绑定 Lua。
+- 反射自动绑定 Lua：由 `rpg-prototype` B1/B2 接手（脚本中立绑定层）。
 
 ## 8. 风险
 

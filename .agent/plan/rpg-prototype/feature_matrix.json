@@ -1,0 +1,110 @@
+{
+  "plan": "rpg-prototype",
+  "status": "in_progress",
+  "features": [
+    {
+      "id": "script_neutral_binding",
+      "phase": "B1",
+      "status": "done",
+      "driven_by": "R0 uvRect animation, R1c tilemap query methods, R2a world.find",
+      "evidence": [
+        "MetaBuilder .script()/.scriptReadOnly() on Transform, Camera, Sprite2D, Entity, Scene",
+        "reflected methods invoked through plugin Function::invoker via argTypeIndices/returnTypeIndex; MethodReflection JSON invokers and InstanceRef deleted",
+        "scene/entity/component refs resolve per access; destroyed entity or scene is a script error (ScriptBindingTest, LuaScriptBindingTest)",
+        "Lua and JS both dispatch through Core/Scripting/ScriptBindings; hand-written Transform/Camera/Sprite/Entity usertypes deleted",
+        "GreedySnake only getSprite -> getSprite2D; HelloMaterial and TestPointLight scripts unchanged; runtime + editor smoke exit 0"
+      ]
+    },
+    {
+      "id": "walk_and_follow",
+      "phase": "R0",
+      "status": "planned",
+      "driven_by": "game: editor-placed player walks on a grid with 4-direction animation; camera follows",
+      "evidence": [
+        "world.find / world.viewSize registered through the neutral layer",
+        "Nearest filtering honored by the sprite pass for pixel art",
+        "RpgPrototype 120-frame runtime smoke exit 0"
+      ]
+    },
+    {
+      "id": "tilemap_runtime",
+      "phase": "R1a",
+      "status": "planned",
+      "driven_by": "game: map is scene data with ground/decoration/overlay layers",
+      "evidence": [
+        "Tileset asset with per-tile solid",
+        "TilemapComponent inline layers round-trip",
+        "visible non-empty cells become WorldSpriteCandidate; no new render pass"
+      ]
+    },
+    {
+      "id": "tilemap_brush",
+      "phase": "R1b",
+      "status": "planned",
+      "driven_by": "game: author paints walls/paths in the editor and they persist",
+      "evidence": [
+        "Tile Palette tab + paint/erase/rect/eyedropper in ortho XY",
+        "one stroke = one step on the level root UndoStack"
+      ]
+    },
+    {
+      "id": "tile_passability",
+      "phase": "R1c",
+      "status": "planned",
+      "driven_by": "game: painted wall blocks the player; camera clamps to map bounds",
+      "evidence": [
+        "worldToCell/cellToWorld/isSolid/bounds callable from script",
+        "query behind a small interface so AABB/Box2D/Jolt can replace it"
+      ]
+    },
+    {
+      "id": "interaction",
+      "phase": "R2a",
+      "status": "planned",
+      "driven_by": "game: face an NPC or sign and press confirm",
+      "evidence": [
+        "entity lookup by cell",
+        "entity:call(name, ...) with return value, extending the S1 call path",
+        "z = layer base - y * epsilon ordering convention"
+      ]
+    },
+    {
+      "id": "dialogue",
+      "phase": "R2b",
+      "status": "planned",
+      "driven_by": "game: typewriter dialogue blocks movement",
+      "evidence": [
+        "Dialogue.yaui + widget script; gameplay calls ui.get(\"Dialogue\"):say(...)"
+      ]
+    },
+    {
+      "id": "scene_transfer",
+      "phase": "R3",
+      "status": "planned",
+      "driven_by": "game: door to another map, spawn point, chest state persists",
+      "evidence": [
+        "gameplay world.loadScene(path, spawnName) at the structural-change point",
+        "explicit persistent script state cleared on Play stop"
+      ]
+    },
+    {
+      "id": "scale_decision",
+      "phase": "R4",
+      "status": "planned",
+      "driven_by": "game: 64x64x3 map with 20 NPCs",
+      "evidence": [
+        "frame time and draw count recorded; batching / texture table / pure-2D graph decisions handed to scene-2d-world-and-game-ui"
+      ]
+    },
+    {
+      "id": "lua_plugin",
+      "phase": "B2",
+      "status": "planned",
+      "driven_by": "D2: Lua becomes a plugin, QuickJS swappable",
+      "evidence": [
+        "after game-ui-script-framework S7",
+        "sol2 only inside the Lua backend target"
+      ]
+    }
+  ]
+}

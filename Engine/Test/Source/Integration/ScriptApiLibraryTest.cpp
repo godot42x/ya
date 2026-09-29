@@ -216,7 +216,7 @@ TEST_F(ScriptApiLibraryFixture, ModuleFunctionsTakePrecedenceOverRegistry)
 {
     const auto result = _system.evalJS(R"(
         const e = ya.entity.create("Precedence");
-        [typeof e.getId, typeof e.addComponentByName, e.components().TransformComponent !== undefined]
+        [typeof e.getId, typeof e.add, e.getTransform() !== null]
     )");
     ASSERT_TRUE(result.ok) << result.error;
     EXPECT_EQ(result.value, Json::array({"function", "function", true}));

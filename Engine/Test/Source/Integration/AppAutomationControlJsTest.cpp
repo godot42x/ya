@@ -402,9 +402,9 @@ TEST_F(AppAutomationControlJsTest, EvalJsCreatesAndMutatesEntityEndToEnd)
                                 {{"source",
                                   R"(
                                     const e = ya.entity.create("RpcBox");
-                                    const t = e.addComponentByName("TransformComponent");
+                                    const t = e.add("TransformComponent");
                                     t.setPosition([3, 4, 5]);
-                                    t._rotation = [0, 90, 0];
+                                    t.rotation = [0, 90, 0];
                                     e.getId()
                                   )"}}}});
     ASSERT_TRUE(response["ok"].get<bool>()) << response.dump();
@@ -432,7 +432,7 @@ TEST_F(AppAutomationControlJsTest, EvalJsHandleCompositionWorksThroughRpc)
                                 {{"source",
                                   R"(
                                     const e = ya.entity.create("Composed");
-                                    const c = e.components().TransformComponent;
+                                    const c = e.getTransform();
                                     c.setPosition([7, 8, 9]);
                                     [e.getName(), c.getPosition()]
                                   )"}}}});

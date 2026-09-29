@@ -11,8 +11,10 @@
 
 #include "ECS/Component/2D/Sprite2DComponent.h"
 #include "ECS/Entity.h"
+#include "ECS/Systems/LuaScriptBinding.h"
 #include "ECS/Systems/LuaScriptingSystem.h"
 #include "Scene/Core/Scene.h"
+#include "Scene/Core/SceneScriptBindings.h"
 #include "Scene3D/Node3D.h"
 
 namespace ya
@@ -77,26 +79,6 @@ void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui)
 {
     sol::state& lua = scripting.lua();
 
-    lua.new_usertype<glm::vec4>("Vec4",
-                                sol::constructors<glm::vec4(), glm::vec4(float), glm::vec4(float, float, float, float)>(),
-                                "x",
-                                &glm::vec4::x,
-                                "y",
-                                &glm::vec4::y,
-                                "z",
-                                &glm::vec4::z,
-                                "w",
-                                &glm::vec4::w);
-
-    lua.new_usertype<Sprite2DComponent>("Sprite2DComponent",
-                                        sol::no_constructor,
-                                        "bVisible",
-                                        &Sprite2DComponent::bVisible,
-                                        "size",
-                                        &Sprite2DComponent::size,
-                                        "tint",
-                                        &Sprite2DComponent::tint);
-
     sol::table inputType = lua["Input"];
     inputType.set_function("setKeyHandler", [](sol::object /*self*/, sol::object handler) {
         App* app = App::get();
@@ -136,15 +118,12 @@ void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui)
         });
     });
 
-    sol::table entityType = lua["Entity"];
-    entityType.set_function("hasSprite", [](Entity& entity) { return entity.hasComponent<Sprite2DComponent>(); });
-    entityType.set_function("getSprite", [](Entity& entity) -> Sprite2DComponent* {
-        return entity.hasComponent<Sprite2DComponent>() ? entity.getComponent<Sprite2DComponent>() : nullptr;
-    });
-
     sol::table world = lua.create_named_table("world");
-    world.set_function("spawnSprite", [](const std::string& name) -> Entity* { return spawnSprite(name); });
-    world.set_function("destroyEntity", [](Entity* entity) { destroySpriteEntity(entity); });
+    world.set_function("spawnSprite", [](const std::string& name) -> sol::optional<LuaScriptObject> {
+        Entity* entity = spawnSprite(name);
+        return entity ? sol::optional<LuaScriptObject>(LuaScriptObject{script::entityRef(entity)}) : sol::nullopt;
+    });
+    world.set_function("destroyEntity", [](const LuaScriptObject& entity) { destroySpriteEntity(script::entityOf(entity.ref)); });
     world.set_function("viewAspect", []() { return viewAspect(); });
 
     ui.setBehaviorRuntime(std::make_unique<LuaWidgetScripts>(scripting, ui));

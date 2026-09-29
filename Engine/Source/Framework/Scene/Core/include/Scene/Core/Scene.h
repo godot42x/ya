@@ -61,13 +61,15 @@ struct YA_SCENE_CORE_API Scene
     ~Scene();
 
 
-    // Delete copy constructor and assignment operator
+    // Entities and the instance table hold this scene's address.
     Scene(const Scene&)            = delete;
     Scene& operator=(const Scene&) = delete;
+    Scene(Scene&&)                 = delete;
+    Scene& operator=(Scene&&)      = delete;
 
-    // Add move constructor and assignment operator
-    Scene(Scene&&)            = default;
-    Scene& operator=(Scene&&) = default;
+    /// The live scene with this instance id, or null once it is destroyed.
+    /// Instance ids are never reused, so a stale id stays stale.
+    static Scene* findByInstanceId(uint64_t instanceId);
 
     // === Public Node API (Application Layer) ===
     Node*   createNode(const std::string& name = "Entity", Node* parent = nullptr, Entity* entity = nullptr);
@@ -202,9 +204,9 @@ struct YA_SCENE_CORE_API Scene
 
     // === Script-facing reflected API ===
     YA_REFLECT_BEGIN(Scene)
-    YA_REFLECT_METHOD(getName, .tooltip("Scene display name"))
-    YA_REFLECT_METHOD(setName, .tooltip("Rename the scene"))
-    YA_REFLECT_METHOD(entityCount, .tooltip("Number of entities in the scene"))
+    YA_REFLECT_METHOD(getName, .script().tooltip("Scene display name"))
+    YA_REFLECT_METHOD(setName, .script().tooltip("Rename the scene"))
+    YA_REFLECT_METHOD(entityCount, .script().tooltip("Number of entities in the scene"))
     YA_REFLECT_END()
 
   private:

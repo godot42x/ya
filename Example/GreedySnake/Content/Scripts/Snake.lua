@@ -28,7 +28,7 @@ local function place(entity, x, y)
 end
 
 local function paint(entity, r, g, b)
-    local sprite = entity:getSprite()
+    local sprite = entity:getSprite2D()
     if not sprite then
         return
     end
@@ -125,7 +125,7 @@ local function spawnBorder()
             if transform then
                 transform:setPosition(Vec3.new(bar[2], bar[3], 0))
             end
-            local sprite = entity:getSprite()
+            local sprite = entity:getSprite2D()
             if sprite then
                 sprite.bVisible = true
                 sprite.size = Vec2.new(bar[4], bar[5])

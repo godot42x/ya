@@ -25,15 +25,15 @@ namespace ya
 struct YA_RENDER_3D_API Sprite2DComponent : public IComponent
 {
     YA_REFLECT_BEGIN(Sprite2DComponent, IComponent)
-    YA_REFLECT_FIELD(bVisible)
+    YA_REFLECT_FIELD(bVisible, .script())
     YA_REFLECT_FIELD(image)
-    YA_REFLECT_FIELD(size)
-    YA_REFLECT_FIELD(uvRect)
-    YA_REFLECT_FIELD(bFlipU)
-    YA_REFLECT_FIELD(bFlipV)
-    YA_REFLECT_FIELD(tint, .color())
-    YA_REFLECT_FIELD(layer)
-    YA_REFLECT_FIELD(sortOrder)
+    YA_REFLECT_FIELD(size, .script())
+    YA_REFLECT_FIELD(uvRect, .script())
+    YA_REFLECT_FIELD(bFlipU, .script())
+    YA_REFLECT_FIELD(bFlipV, .script())
+    YA_REFLECT_FIELD(tint, .color().script())
+    YA_REFLECT_FIELD(layer, .script())
+    YA_REFLECT_FIELD(sortOrder, .script())
     YA_REFLECT_FIELD(pickId)
     YA_REFLECT_END()
 

@@ -40,6 +40,10 @@ struct Function : public Field
     size_t                   argCount = 0;
     std::vector<std::string> argTypeNames;
     std::string              returnTypeName;
+    // Decayed argument / return types; the invoker expects each argument as
+    // a std::any holding exactly that type. 0 marks a void return.
+    std::vector<refl::type_index_t> argTypeIndices;
+    refl::type_index_t              returnTypeIndex = 0;
 
     // 是否是静态函数
     bool isStatic() const
@@ -63,6 +67,17 @@ template <typename T>
 std::string getTypeName()
 {
     return typeid(T).name();
+}
+
+template <typename T>
+constexpr refl::type_index_t valueTypeIndex()
+{
+    if constexpr (std::is_void_v<T>) {
+        return 0;
+    }
+    else {
+        return refl::type_index_v<std::decay_t<T>>;
+    }
 }
 
 // 普通成员函数包装器
