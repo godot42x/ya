@@ -40,6 +40,20 @@
   （实体面，`ECS/Systems/LuaScriptingSystem.cpp`），以无捕获原生方法挂在
   Entity 类型上，Lua / JS 共用。
 
+## 对话框（Game UI 条目）
+
+- 对话框是一个 autoMount 的 Game UI 条目（`widgetEntries`），根 panel 挂
+  `script.lua` behavior 并常驻 Hidden；脚本提供 `say(lines, onDone)` 与 `busy()`。
+- 玩法侧（NPC / 玩家脚本）经 `ui.get("Dialogue"):say(...)` 说话；**移动锁由玩法
+  状态控制**——玩家脚本每帧轮询 `dialogue:busy()`，game-ui S4 的 modal 条目落地后
+  才迁移。`ui.get` 在条目脚本加载完成前的头几帧回落成控件句柄，轮询侧必须
+  容错（`dialogue.busy ~= nil` 再调用）。
+- 一次按键只做一件事：对话框忽略「开框那一帧」的确认键（`time:getFrameIndex()`），
+  玩家侧触发交互后要求确认键完全松开才再武装（re-arm），否则同一次按键会同时
+  推进对话又再次触发交互。
+- Lua 全局是小写 `time`（`LuaTimeApi` 实例）与 `input` / `log`；大写 `Time` 是
+  usertype 表，不能在其上调方法。
+
 ## 边界
 
 - 不引入 `Node2D` / `Transform2D` / `Camera2D`；2D 对象 = `Node3D` +

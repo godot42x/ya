@@ -71,10 +71,15 @@
     {
       "id": "dialogue",
       "phase": "R2b",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: typewriter dialogue blocks movement",
       "evidence": [
-        "Dialogue.yaui + widget script; gameplay calls ui.get(\"Dialogue\"):say(...)"
+        "Content/UI/Dialogue.yaui.json: hidden root panel carries the script.lua behavior; Box/Body/Hint flat under the root with canvas slots (a canvas-format slot on a border child asserts in UIContentSlot::deserialize — engine robustness debt, left to the gui line)",
+        "Content/UI/Dialogue.lua: say(lines, onDone) / busy() / per-character reveal via self:every with an explicit timer cancel; confirm reveals the page, then advances, then closes; the opening frame (time:getFrameIndex()) ignores confirm so the starting press never skips page one",
+        "Town.scene.json widgetEntries mounts the Dialogue entry (autoMount, full-screen canvas rootSlot)",
+        "Npc/Sign keep their reactions and speak through ui.get(\"Dialogue\"):say(LINES); Player holds movement+interact while dialogue:busy(), with a confirm re-arm guard (press must fully release before the next interaction) so one press never re-triggers",
+        "verified through the automation control port: eval_js (entity list filtered by name; note ya.entity.get takes a handle, a string coerces to 0) triggers onInteract and capture_screenshot shows the bottom-centre box mid-typewriter with the key hint; say-on-busy replaces pages",
+        "runtime/editor + GreedySnake smoke exit 0; ya-testing 1421 passed (display red light unchanged)"
       ]
     },
     {

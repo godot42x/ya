@@ -1,13 +1,18 @@
 -- A villager: stands on its cell and answers onInteract by turning toward
--- the player. Its cell blocks the player through map:entityAt, so it reads
--- as a body on the map without any collision code here. Real dialog waits
--- for the dialogue box (R2b).
+-- the player and talking through the Dialogue entry. Its cell blocks the
+-- player through map:entityAt, so it reads as a body on the map without any
+-- collision code here.
 local ScriptBase = require("ScriptBase")
 local Actor = require("Actor")
 local Script = ScriptBase:new()
 
 -- hero_walk rows: 0 down, 1 left, 2 right, 3 up.
 local ROWS = { down = 0, left = 1, right = 2, up = 3 }
+
+local LINES = {
+    "Welcome to Tiny Town!",
+    "Mind the fences -- the map keeps the roads, not me.",
+}
 
 function Script:showFrame(row)
     self.sprite.uvRect = Actor.heroFrame(1, row)
@@ -38,7 +43,12 @@ function Script:onInteract()
         end
         self:showFrame(row)
     end
-    print("[Npc] Welcome to Tiny Town! The sign by the road knows more.")
+    local dialogue = ui.get("Dialogue")
+    if dialogue then
+        dialogue:say(LINES)
+    else
+        log:warn("Npc: no Dialogue entry mounted")
+    end
 end
 
 return Script

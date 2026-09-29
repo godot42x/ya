@@ -56,6 +56,15 @@ local function confirmPressed()
     return false
 end
 
+local function confirmHeld()
+    for _, key in ipairs(CONFIRM_KEYS) do
+        if input:isKeyDown(key) then
+            return true
+        end
+    end
+    return false
+end
+
 function Script:showFrame(column)
     self.sprite.uvRect = Actor.heroFrame(column, self.facing.row)
 end
@@ -118,17 +127,39 @@ function Script:onInit()
     self.facing = DIRECTIONS[2]
     self.progress = 0
     self.walkTime = 0
+    self.talking = false
+    self.bConfirmArmed = true
     self:showFrame(STAND_COLUMN)
     self:applyPosition()
 end
 
 function Script:onUpdate(dt)
+    -- A dialogue owns the player while it is up (this hold moves to a
+    -- game-ui S4 modal entry once that lands). One press must never trigger
+    -- twice: the confirm key has to be released again before interacting.
+    -- ui.get falls back to the root widget handle for the first frames of a
+    -- scene, until the entry's script has loaded; only the script has :busy().
+    local dialogue = ui.get("Dialogue")
+    self.talking = dialogue ~= nil and dialogue.busy ~= nil and dialogue:busy()
+    if not confirmHeld() then
+        self.bConfirmArmed = true
+    end
+
+    if self.talking then
+        self.progress = 0
+        self.walkTime = 0
+        self:showFrame(STAND_COLUMN)
+        self:applyPosition()
+        return
+    end
+
     if not self.to and not self:tryStep(0) then
         self.progress = 0
         self.walkTime = 0
         self:showFrame(STAND_COLUMN)
         self:applyPosition()
-        if confirmPressed() then
+        if self.bConfirmArmed and confirmPressed() then
+            self.bConfirmArmed = false
             self:interact()
         end
         return

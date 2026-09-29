@@ -224,3 +224,40 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   面朝它按 Space/Enter/E：NPC 转身朝玩家并在控制台打印欢迎；告示牌变暖色并打印；
   走进 NPC 所在格被挡住；站在 NPC 上方时 NPC 遮住玩家、下方时玩家遮住 NPC。
 - 未完成：按键注入自动化（等 S7）；R2b 对话框。下一步 R2b。
+
+## 2026-09-30 — R2b：对话框
+
+- 目标与边界：交互弹出对话框、逐字显示、确认键翻页/关闭、对话期间玩家不能移动。
+  S4 未落地 → 移动锁由玩法状态控制（S4 落地后迁移 modal）；不改 `ui.*` / `world.*`
+  语义（game-ui 线所有）；无引擎代码改动，全部落在示例内容。
+- 内容（`Example/2DRpgPrototype/Content/`）：
+  - `UI/Dialogue.yaui.json`：根 panel（Hidden）挂 `script.lua` behavior，Box/Body/Hint
+    三个子控件全部平铺在根下用 canvas 槽（底部居中 880×160 卡片 + 内嵌正文 + 右下键位提示）。
+  - `UI/Dialogue.lua`：`say(lines, onDone)` / `busy()` / 逐字（`self:every` 0.02s 一字，
+    `revealTimer:cancel()` 收尾）/ 确认键三段（补完本页 → 翻页 → 关闭）；开框帧
+    （`time:getFrameIndex()`）屏蔽确认键，起始那次按键不会跳过第一页。
+  - `Town.scene.json`：`widgetEntries` 加 Dialogue 条目（autoMount，rootSlot 抄 GreedySnake
+    全屏 canvas）。
+  - `Npc.lua` / `Sign.lua`：onInteract 保留各自的转身/变色反应，改为经
+    `ui.get("Dialogue"):say(LINES)` 说话。
+  - `Player.lua`：每帧 `dialogue:busy()` 决定 `talking`，说话时锁移动与交互；确认键
+    「再武装」——按下触发后必须完全松开才允许下一次，同一次按键不会同时推进对话又再次触发。
+- 途中发现（引擎既有，非本计划改动）：
+  - **yaui 槽格式必须匹配父控件**：给 `engine.border` 的子控件写 canvas 槽会在
+    `UIContentSlot::deserialize` 断言崩进程（`UILayout.cpp` 的 content/overlay 槽反序列化
+    用无守卫的 `node["padding"]`）。格式不匹配应是可读的错误，不是 assert——健壮性债，
+    留给 gui 线；本次内容改为平铺根 panel（canvas 槽，GameOver 已验证的形状）。
+  - **JS `ya.entity.get(id)` 按句柄不按名字**：字符串被 `JS_ToUint32` 归 0，拿到的是
+    第一个实体（Camera）。自动化里用 `ya.entity.list()` 按名字过滤再调用。
+  - **Lua 全局是小写 `time`**（`LuaTimeApi` 实例），大写 `Time` 是 usertype 表，
+    在其上调方法报 "received nil for self"。
+- 验证（自动化控制口真实验证）：`ya.py control start --game` 起实例，`eval_js` 按
+  `ya.entity.list()` 过滤出 Npc/Sign 调 `call("onInteract")`，`capture_screenshot`
+  （presentation 目标）截图确认——对话框底部居中弹出、逐字显示进行中、右下键位提示、
+  NPC 转身朝玩家；对已打开的框再次 `say` 正确替换页。翻页/关闭需要确认键，留手测。
+  另：2DRpgPrototype 运行/编辑器与 GreedySnake 冒烟（--exit-after-frame=120）exit 0
+  无错误；`ya-testing` 1421 通过（唯一失败仍是既有显示器红灯）；脚本 luajit 语法检查通过。
+- 手测步骤：面朝 NPC/告示牌按 Space → 弹框逐字；再按一次 → 本页立即补完；再按 → 翻页；
+  末页再按 → 关闭、恢复移动。对话期间方向键应无效。
+- 未完成：翻页/关闭的按键自动化（等 S7 `input.inject_key`）；移动锁迁 S4 modal。
+  下一步 R3（切换地图与跨场景状态）。

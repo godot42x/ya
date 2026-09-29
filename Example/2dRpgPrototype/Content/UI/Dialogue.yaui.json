@@ -1,0 +1,119 @@
+{
+  "version": 2,
+  "typeId": "engine.panel",
+  "fields": {
+    "__base__": {
+      "UIElement": {
+        "_name": "Dialogue",
+        "_visibility": "Hidden"
+      }
+    }
+  },
+  "behaviors": [
+    {
+      "type": "script.lua",
+      "data": {
+        "script": "Content/UI/Dialogue.lua"
+      }
+    }
+  ],
+  "children": [
+    {
+      "version": 2,
+      "typeId": "engine.border",
+      "fields": {
+        "_color": [0.07, 0.08, 0.1, 0.9],
+        "_cornerRadius": 8.0,
+        "__base__": {
+          "UIElement": {
+            "_name": "Box"
+          }
+        }
+      },
+      "children": [],
+      "childSlots": []
+    },
+    {
+      "version": 2,
+      "typeId": "engine.text",
+      "fields": {
+        "_text": "",
+        "_fontSize": 20,
+        "_color": [1.0, 1.0, 1.0, 1.0],
+        "__base__": {
+          "UIElement": {
+            "_name": "Body"
+          }
+        }
+      },
+      "children": [],
+      "childSlots": []
+    },
+    {
+      "version": 2,
+      "typeId": "engine.text",
+      "fields": {
+        "_text": "Space / Enter / E",
+        "_fontSize": 13,
+        "_color": [0.68, 0.7, 0.76, 0.9],
+        "__base__": {
+          "UIElement": {
+            "_name": "Hint"
+          }
+        }
+      },
+      "children": [],
+      "childSlots": []
+    }
+  ],
+  "childSlots": [
+    {
+      "type": "canvas",
+      "anchorMin": [0.5, 1.0],
+      "anchorMax": [0.5, 1.0],
+      "offset": [0.0, -48.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 0,
+      "alignmentV": 0,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.5, 1.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [880.0, 160.0]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [0.5, 1.0],
+      "anchorMax": [0.5, 1.0],
+      "offset": [0.0, -182.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 0,
+      "alignmentV": 0,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.5, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [820.0, 110.0]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [0.5, 1.0],
+      "anchorMax": [0.5, 1.0],
+      "offset": [420.0, -84.0],
+      "minSize": [0.0, 0.0],
+      "maxSize": [1000000.0, 1000000.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 0,
+      "alignmentV": 0,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [1.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [200.0, 22.0]
+    }
+  ]
+}

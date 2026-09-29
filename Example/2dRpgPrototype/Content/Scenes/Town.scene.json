@@ -240,4 +240,58 @@
       }
     ]
   }
+,
+  "widgetEntries": [
+{
+    "entryId": "Dialogue",
+    "zOrder": 10,
+    "autoMount": true,
+    "document": "Content:UI/Dialogue.yaui.json",
+    "rootSlot": {
+      "type": "canvas",
+      "anchorMin": [
+        0.0,
+        0.0
+      ],
+      "anchorMax": [
+        1.0,
+        1.0
+      ],
+      "offset": [
+        0.0,
+        0.0
+      ],
+      "minSize": [
+        0.0,
+        0.0
+      ],
+      "maxSize": [
+        1000000.0,
+        1000000.0
+      ],
+      "offsets": {
+        "left": 0.0,
+        "top": 0.0,
+        "right": 0.0,
+        "bottom": 0.0
+      },
+      "alignmentH": 0,
+      "alignmentV": 0,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [
+        0.0,
+        0.0
+      ],
+      "preferredSize": [
+        0.0,
+        0.0
+      ],
+      "fixedSize": [
+        0.0,
+        0.0
+      ]
+    }
+  }
+  ]
 }
