@@ -18,6 +18,11 @@ struct YA_GUI_API UISizeBox : public UIElement
     using SlotArgs = FContentSlotArgs;
 
     YA_REFLECT_BEGIN(UISizeBox, UIElement)
+        YA_REFLECT_FIELD(_contentLayout, .instanceEditable())
+        YA_REFLECT_FIELD(_widthOverride, .instanceEditable())
+        YA_REFLECT_FIELD(_heightOverride, .instanceEditable())
+        YA_REFLECT_FIELD(_minSize, .instanceEditable())
+        YA_REFLECT_FIELD(_maxSize, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UISizeBox(std::string name = "SizeBox");

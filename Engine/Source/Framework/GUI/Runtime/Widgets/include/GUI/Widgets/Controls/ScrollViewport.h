@@ -28,6 +28,8 @@ struct YA_GUI_API UIScrollViewport : public UIElement, public UIStyledWidget<UIS
     using SlotArgs = FContentSlotArgs;
 
     YA_REFLECT_BEGIN(UIScrollViewport, UIElement)
+        YA_REFLECT_FIELD(_scrollLayout, .instanceEditable())
+        YA_REFLECT_FIELD(_bShowScrollbar, .instanceEditable())
     YA_REFLECT_END()
 
     YA_GUI_AUTHORED_STYLE_IO(FScrollBarStyle)

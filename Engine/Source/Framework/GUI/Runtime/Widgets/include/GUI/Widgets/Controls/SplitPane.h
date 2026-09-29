@@ -31,6 +31,7 @@ struct YA_GUI_API UISplitPane : public UIElement, public UIStyledWidget<UISplitP
     using SlotArgs = FContentSlotArgs;
 
     YA_REFLECT_BEGIN(UISplitPane, UIElement)
+        YA_REFLECT_FIELD(_splitLayout, .instanceEditable())
     YA_REFLECT_END()
 
     YA_GUI_AUTHORED_STYLE_IO(FSplitPaneStyle)

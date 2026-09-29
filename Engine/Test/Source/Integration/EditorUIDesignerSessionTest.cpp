@@ -13,6 +13,8 @@
 #include "GUI/Widgets/UITypeIds.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "Core/Reflection/DeferredInitializer.h"
+#include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Layout/UILayout.h"
 #include "Scene/Core/SceneWidgetEntry.h"
@@ -516,6 +518,82 @@ TEST(EditorUIDesignerSessionTest, AnUndoStepIsInertOnceItsDesignerIsGoneOrOnAnot
     const nlohmann::json other = previewJson(mover);
     ASSERT_TRUE(keeper.undoStack().undo());
     EXPECT_EQ(previewJson(mover), other);
+}
+
+TEST(EditorUIDesignerSessionTest, ContainerBoxLayoutIsReflectedAndRoundTripsTheDocument)
+{
+    auto& registry = UITypeRegistry::instance();
+    auto root = registry.createInstance(kTypeIdCanvasPanel);
+    auto container = registry.createInstance(kTypeIdContainer);
+    ASSERT_NE(root, nullptr);
+    ASSERT_NE(container, nullptr);
+    root->_name     = "Root";
+    container->_name = "Panel";
+    auto* containerWidget = static_cast<UIContainer*>(container.get());
+    ASSERT_NE(containerWidget, nullptr);
+    containerWidget->setSpacing(12.0f);
+    containerWidget->setPadding(glm::vec2{4.0f, 6.0f});
+    root->addDetachedChild(container, [](UIElement&, UISlot& edge) {
+        auto* slot = edge.as<UICanvasSlot>();
+        ASSERT_NE(slot, nullptr);
+        FCanvasSlotArgs args;
+        args.fixedSize = {200.0f, 100.0f};
+        slot->apply(args);
+    });
+
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+    EditorUIDesignerSession designer(&fixture.layer);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    ASSERT_TRUE(designer.hasDocument());
+
+    // The document stores the layout-owned state under the composite member,
+    // on the CHILD document (the container is the root's child).
+    ASSERT_FALSE(designer.getOpenDocument()->children.empty());
+    const nlohmann::json& fields = designer.getOpenDocument()->children.front()->fields;
+    ASSERT_TRUE(fields.contains("_boxLayout"));
+    EXPECT_FLOAT_EQ(fields["_boxLayout"]["_spacing"].get<float>(), 12.0f);
+    EXPECT_EQ(fields["_boxLayout"]["_padding"].get<std::vector<float>>().size(), 2u);
+
+    // A round trip through the document restores the layout state.
+    const auto restored = UIDocument::fromJson(designer.getOpenDocument()->toJson());
+    ASSERT_NE(restored, nullptr);
+    UIElementRef widget = restored->instantiate();
+    ASSERT_NE(widget, nullptr);
+    ASSERT_FALSE(widget->getChildren().empty());
+    const auto* box = dynamic_cast<const UIContainer*>(widget->getChildren().front().get());
+    ASSERT_NE(box, nullptr);
+    EXPECT_FLOAT_EQ(box->getBoxLayout().getSpacing(), 12.0f);
+    EXPECT_FLOAT_EQ(box->getBoxLayout().getPadding().y, 6.0f);
+}
+
+TEST(EditorUIDesignerSessionTest, InspectorGraphWritesReachTheLayoutComposite)
+{
+    auto& registry = UITypeRegistry::instance();
+    auto container = registry.createInstance(kTypeIdContainer);
+    ASSERT_NE(container, nullptr);
+    container->_name = "Panel";
+    auto* containerWidget = static_cast<UIContainer*>(container.get());
+    ASSERT_NE(containerWidget, nullptr);
+
+    // The designer inspector projects the selected widget; the layout
+    // composite must appear as editable leaves and write through to the
+    // layout-owned state.
+    // Enum/class registrations are deferred static init; the app runs them at
+    // process bootstrap, a headless test does it here.
+    reflection::DeferredInitializerQueue::instance().executeAll();
+    PropertyGraph graph = PropertyGraph::project(container->getTypeIndex(), {container.get()});
+    const PropertyNode* spacing = graph.find("_boxLayout._spacing");
+    ASSERT_NE(spacing, nullptr);
+    EXPECT_TRUE(spacing->bEditable);
+    ASSERT_TRUE(spacing->binding.set(20.0f));
+    EXPECT_FLOAT_EQ(containerWidget->getBoxLayout().getSpacing(), 20.0f);
+
+    const PropertyNode* direction = graph.find("_boxLayout._direction");
+    ASSERT_NE(direction, nullptr);
+    int enumIndex = -1;
+    EXPECT_TRUE(direction->binding.tryGetEnumIndex(enumIndex));
+    EXPECT_GE(enumIndex, 0);
 }
 
 TEST(EditorUIDesignerSessionTest, MoveSnapsToTheGridAndNudgeDoesNot)

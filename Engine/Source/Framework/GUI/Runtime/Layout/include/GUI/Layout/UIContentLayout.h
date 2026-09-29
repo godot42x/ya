@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/Reflection/Reflection.h"
 #include "GUI/Layout/UILayoutBase.h"
 #include "GUI/Layout/UILayoutTypes.h"
 
@@ -24,6 +25,10 @@ public:
     [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
     void onArrange(UIElement& parent, const Rect2D& rect) const override;
+
+    YA_REFLECT_BEGIN(UISingleChildLayout)
+        YA_REFLECT_FIELD(_padding, .instanceEditable())
+    YA_REFLECT_END()
 
 private:
     FMargin _padding{};

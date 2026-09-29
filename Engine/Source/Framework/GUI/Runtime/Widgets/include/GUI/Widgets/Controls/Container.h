@@ -14,6 +14,9 @@ struct YA_GUI_API UIContainer : public UIElement
     using SlotArgs = FBoxSlotArgs;
 
     YA_REFLECT_BEGIN(UIContainer, UIElement)
+        // Box configuration stays layout-owned; the reflected composite gives
+        // the inspector and UIDocument access without duplicating the state.
+        YA_REFLECT_FIELD(_boxLayout, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIContainer(std::string name = "Container", std::string styleKey = {});

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/Reflection/Reflection.h"
 #include "GUI/Layout/UILayoutBase.h"
 #include "GUI/Layout/UILayoutTypes.h"
 
@@ -131,6 +132,18 @@ public:
     [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
     void onArrange(UIElement& parent, const Rect2D& rect) const override;
+
+    // Container configuration is reflected (designer inspector + UIDocument)
+    // while staying layout-owned: writes go through the raw member and the
+    // editing contexts aggregate layout invalidation themselves.
+    YA_REFLECT_BEGIN(UIBoxLayout)
+        YA_REFLECT_FIELD(_direction, .instanceEditable())
+        YA_REFLECT_FIELD(_spacing, .instanceEditable())
+        YA_REFLECT_FIELD(_padding, .instanceEditable())
+        YA_REFLECT_FIELD(_mainAxisAlignment, .instanceEditable())
+        YA_REFLECT_FIELD(_bClipChildren, .instanceEditable())
+        YA_REFLECT_FIELD(_bStretchLastChild, .instanceEditable())
+    YA_REFLECT_END()
 
 private:
     EWidgetBoxLayout         _direction         = EWidgetBoxLayout::Horizontal;

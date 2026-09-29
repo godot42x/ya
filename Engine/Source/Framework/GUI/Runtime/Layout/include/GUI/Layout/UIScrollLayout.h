@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/Reflection/Reflection.h"
 #include "GUI/Layout/UILayoutBase.h"
 
 #include <glm/glm.hpp>
@@ -44,9 +45,14 @@ public:
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
     void onArrange(UIElement& parent, const Rect2D& rect) const override;
 
+    YA_REFLECT_BEGIN(UIScrollLayout)
+        YA_REFLECT_FIELD(_axis, .instanceEditable())
+        YA_REFLECT_FIELD(_scrollStep, .instanceEditable())
+    YA_REFLECT_END()
+
 private:
     EScrollAxis   _axis = EScrollAxis::Vertical;
-    mutable float _scrollOffset = 0.0f;
+    mutable float _scrollOffset = 0.0f; // runtime state, not authored
     float         _scrollStep = 40.0f;
     mutable float _maxScrollOffset = 0.0f;
 };

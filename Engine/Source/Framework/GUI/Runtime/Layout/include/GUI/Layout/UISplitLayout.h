@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/Reflection/Reflection.h"
 #include "Core/Common/Types.h"
 #include "GUI/Layout/UILayoutBase.h"
 
@@ -54,13 +55,23 @@ private:
     [[nodiscard]] float axisExtent(const Rect2D& rect) const;
     [[nodiscard]] float axisPosition(const glm::vec2& point) const;
 
+    YA_REFLECT_BEGIN(UISplitLayout)
+        YA_REFLECT_FIELD(_orientation, .instanceEditable())
+        YA_REFLECT_FIELD(_splitRatio, .instanceEditable())
+        YA_REFLECT_FIELD(_minFirstExtent, .instanceEditable())
+        YA_REFLECT_FIELD(_minSecondExtent, .instanceEditable())
+        YA_REFLECT_FIELD(_dividerThickness, .instanceEditable())
+        YA_REFLECT_FIELD(_padding, .instanceEditable())
+    YA_REFLECT_END()
+
+private:
     ESplitOrientation _orientation = ESplitOrientation::Vertical;
     mutable float      _splitRatio = 0.5f;
     float              _minFirstExtent = 00.0f;
     float              _minSecondExtent = 00.0f;
     float              _dividerThickness = 4.0f;
     glm::vec2          _padding = {0.0f, 0.0f};
-    mutable Rect2D     _contentRect{};
+    mutable Rect2D     _contentRect{}; // runtime cache, not authored
 };
 
 } // namespace ya

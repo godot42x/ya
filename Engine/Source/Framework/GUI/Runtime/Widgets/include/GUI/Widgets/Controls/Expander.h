@@ -31,6 +31,12 @@ struct YA_GUI_API UIExpander : public UIElement, public UIStyledWidget<UIExpande
     using SlotArgs = FBoxSlotArgs;
 
     YA_REFLECT_BEGIN(UIExpander, UIElement)
+        YA_REFLECT_FIELD(_title, .instanceEditable())
+        YA_REFLECT_FIELD(_headerHeight, .instanceEditable())
+        // Private composite/state below are reachable: the reflect visitor is
+        // instantiated inside the class scope.
+        YA_REFLECT_FIELD(_bodyLayout, .instanceEditable())
+        YA_REFLECT_FIELD(_bExpanded, .instanceEditable())
     YA_REFLECT_END()
 
     YA_GUI_AUTHORED_STYLE_IO(FExpanderStyle)
