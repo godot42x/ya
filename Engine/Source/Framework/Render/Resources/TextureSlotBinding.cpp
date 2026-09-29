@@ -21,10 +21,7 @@ ya::Ptr<Texture> resolveSlotTexture(const TextureSlot& slot)
 
 ya::Ptr<Sampler> resolveSlotSampler(const TextureSlot& slot)
 {
-    (void)slot;
-    // TODO: When custom sampler creation is implemented, check slot.samplerConfig here.
-    // For now, always return default sampler (backward compatible).
-    return TextureLibrary::get().getDefaultSampler();
+    return TextureLibrary::get().getSampler(slot.samplerConfig.filterMode, slot.samplerConfig.addressMode);
 }
 
 TextureBinding slotToTextureBinding(const TextureSlot& slot)

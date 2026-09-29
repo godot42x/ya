@@ -1,5 +1,6 @@
 #include "Core/Scripting/ScriptApiAsset.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
+#include "Core/Scripting/ScriptBindings.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
@@ -96,6 +97,27 @@ TEST_F(ScriptApiLibraryFixture, RegistryCommandsExportAsLibraryNamespaces)
                                          "function",
                                          "function",
                                          "function"}));
+}
+
+TEST_F(ScriptApiLibraryFixture, ModuleFunctionsExportUnderYa)
+{
+    script::registerModuleFunction("probeJs", "sum", [](script::ScriptArgs args) -> script::ScriptValue {
+        return script::scriptToNumber(args[0]) + script::scriptToNumber(args[1]);
+    });
+    script::registerModuleFunction("probeJs", "fail", [](script::ScriptArgs) -> script::ScriptValue {
+        throw script::ScriptError("boom");
+    });
+    JSScriptingSystem system;
+    system.init();
+
+    const auto result = system.evalJS(R"(
+        let message = "";
+        try { ya.probeJs.fail(); } catch (e) { message = String(e); }
+        [ya.probeJs.sum(2, 3), message]
+    )");
+    system.shutdown();
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_EQ(result.value, Json::array({5, "probeJs.fail: boom"}));
 }
 
 TEST_F(ScriptApiLibraryFixture, NoArgCommandReturnsRegistryResult)

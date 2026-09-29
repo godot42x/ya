@@ -1,5 +1,6 @@
 #include "GameRuntime/App.h"
 #include "GameRuntime/Script/GameplayLua.h"
+#include "GameRuntime/Script/GameplayScriptFunctions.h"
 #include "GameRuntime/AppRenderState.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
@@ -360,6 +361,9 @@ void App::init(AppDesc ci)
                 std::format("automation control port {} is already in use", controlPort));
         }
     }
+
+    // Before any script state is built: backends project module functions then.
+    registerGameplayScriptFunctions();
 
     app._luaScriptingSystem = new LuaScriptingSystem();
     app._luaScriptingSystem->setRuntimeServices({

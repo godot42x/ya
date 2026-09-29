@@ -5,6 +5,7 @@
 #include "RHI/Core/BuiltinTextureSource.h"
 #include "RHI/Core/Sampler.h"
 #include "RHI/Core/Texture.h"
+#include <array>
 #include <memory>
 
 
@@ -94,6 +95,13 @@ class YA_RHI_BACKEND_API TextureLibrary : public IResourceCache, public IBuiltin
      */
     ya::Ptr<Sampler> getClampNearestSampler();
 
+    /**
+     * @brief The sampler a texture slot's SamplerConfig asks for. Linear ones
+     * filter anisotropically. Cubic filters need a device extension the engine
+     * does not enable; they sample linearly.
+     */
+    ya::Ptr<Sampler> getSampler(EFilter::T filter, ESamplerAddressMode::T addressMode);
+
   public:
     TextureLibrary()  = default;
     ~TextureLibrary() = default;
@@ -117,6 +125,8 @@ class YA_RHI_BACKEND_API TextureLibrary : public IResourceCache, public IBuiltin
     std::shared_ptr<Sampler> _clampLinearSampler;
     std::shared_ptr<Sampler> _nearestSampler;
     std::shared_ptr<Sampler> _clampNearestSampler;
+    /// [nearest, linear][address mode]; _linearSampler is the linear/repeat entry.
+    std::array<std::array<std::shared_ptr<Sampler>, 4>, 2> _slotSamplers;
 
     bool _initialized = false;
 };

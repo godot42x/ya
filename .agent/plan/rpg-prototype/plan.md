@@ -9,7 +9,7 @@
 - 相机跟随玩家，停在地图边界内。
 - 走进门切换到另一张地图，跨地图的游戏状态保留。
 
-示例放在 `Example/RpgPrototype`。
+示例放在 `Example/2DRpgPrototype`。
 
 核心结论（2026-09-29 讨论，用户确认）：
 
@@ -43,7 +43,7 @@
 | G9 | 碰撞 / 触发 | Jolt 3D，只有 box/sphere，无 trigger、无 Lua 回调 | `Physics/PhysicsSystem.cpp`，`PhysicsBodyComponent.h` |
 | G10 | 切场景 | 只有自动化 JSON 接口 `loadScene`，玩法 Lua 调不到 | `GameRuntime/ScriptApiCore.cpp` |
 | G11 | 编辑器 2D | View 菜单正交 XY、平移 gizmo 锁 Z、吸附 0.5；无网格显示、无笔刷 | `EditorLayer::setEditorOrthoXY`，`EditorViewportGizmoController.cpp` |
-| G12 | 像素风采样 | `TextureSlot.samplerConfig.filterMode` 可选 Nearest；精灵 pass 是否按它取 sampler 待 R0 核实 | `Core/Common/TextureSlot.h` |
+| G12 | 像素风采样 | R0 核实时 `resolveSlotSampler` 无视 `samplerConfig`、一律线性；已修：`TextureLibrary` 预建（Nearest / Linear）×4 寻址的 sampler 表，按槽位取（Cubic 退回线性） | `Core/Common/TextureSlot.h`，`TextureSlotBinding.cpp`，`TextureLibrary::getSampler` |
 | G13 | 素材 | Kenney Tiny Town（CC0）`Engine/Content/TestTextures/tiny_town/tilemap_packed.png`：192×176，16px，12×11 格，地面/树/房屋/栅栏/告示牌；**无角色行走图** | — |
 
 ## 2. 边界（不可越过）
@@ -67,7 +67,7 @@
 | D4 | 计划位置 | 新开本目录；`scene-2d-world-and-game-ui` 只记渲染侧 |
 | D5 | 与活跃线的顺序 | 与 `game-ui-script-framework`（S4–S7）、`ui-behavior-capabilities`（C2/C3）交替推进，按 checkpoint 排；冲突规则见 §5 |
 | D6 | 绑定层范围 | 分两步：B1 中立层 + Lua 后端投影（组件字段 / 方法 + 模块函数），新代码只依赖中立层；B2 把 Lua 拆成独立 target、迁移控件句柄与 `world.*` / `ui.*` 手写函数 |
-| D7 | 素材 | 地图用仓库里的 Tiny Town；角色行走图先试 grok-4.7 生图，不合格再找 CC0 角色素材。素材随许可说明入 `Example/RpgPrototype/Content` |
+| D7 | 素材 | 地图用仓库里的 Tiny Town；角色行走图先试 grok-4.7 生图，不合格再找 CC0 角色素材。素材随许可说明入 `Example/2DRpgPrototype/Content` |
 | D8 | 现有 QuickJS 反射导出（`JSScriptingSystem`，供 `eval_js` / MCP） | B1 起 JS 与 Lua 共用同一个中立导出层，不留第二个反射→脚本导出器 |
 | D9 | 可见性 | ~~一律只看标记了的字段 / 方法~~，由 D12 取代 |
 | D10 | 中立层的值传递 | 类型化的值，不走 JSON；JS 迁移后 JSON 方法调用器（`MethodJsonInvokers`）删除 |
@@ -129,7 +129,7 @@
 
 - 游戏验收：编辑器里摆一个玩家精灵、在 Inspector 选贴图；Play 后方向键按格走动（格间补间），
   四方向朝向 + 行走帧动画；相机平滑跟随。
-- 内容：`Example/RpgPrototype`（照 GreedySnake 的 yaproject / xmake / module 结构）、
+- 内容：`Example/2DRpgPrototype`（照 GreedySnake 的 yaproject / xmake / module 结构）、
   `Content/Scenes/Town.scene.json`、`Content/Scripts/Player.lua`、`Content/Scripts/FollowCamera.lua`；
   Tiny Town 图集与角色行走图（D7）入 `Content/Textures/`，附许可说明。
 - 逼出来的引擎改动：
@@ -137,7 +137,13 @@
   - `world.viewSize()` 返回像素尺寸：像素对齐取景 `orthoHalfHeight = 视口高 / (2 × 每单位像素 × 缩放)`。
   - 核实 G12：像素图选 Nearest 后精灵 pass 确实用最近邻；不是则修到 sampler 走 `TextureSlot`。
 - 输入用现有 `input:isKeyDown` 轮询，不依赖 S5 的 `onKey`。
-- 验收：`python3 Script/ya.py run --project Example/RpgPrototype/RpgPrototype.yaproject -- --exit-after-frame=120`
+- 模块函数（落地）：中立层 `registerModuleFunction(module, name, fn)`，类型化值进出；后端建状态时投影
+  （Lua 全局表 `world.*`、JS `ya.world.*`），所以登记在 Lua / JS init 之前（`registerGameplayScriptFunctions`）。
+  与 `ScriptApiRegistry` 分工：后者是编辑 / 自动化的 JSON 命令表（`component.get`、`scene.save`），
+  玩法每帧对活对象的调用走中立层；JS 上同名时类型化函数优先。
+- 途中发现：精灵 pass 把图像顶行画在四边形底边（共享 quad 是 GL 约定 `texCoord.y` 朝 +Y，`uvRect` 是
+  图像空间）。在 `Sprite2DWorld.slang` 里翻转 quad 的 v，quad 网格不动（光照全屏 / billboard / Quad 预设共用）。
+- 验收：`python3 Script/ya.py run --project Example/2DRpgPrototype/2DRpgPrototype.yaproject -- --exit-after-frame=120`
   exit 0；行走 / 跟随手测（自动注入按键等 S7 的 `input.inject_key` 落地后补自动化）。
 
 ### R1a — Tileset 资产 + TilemapComponent + 渲染
@@ -216,7 +222,7 @@
 - Lua 后端从 `ya-ecs-systems` 拆成独立 target；引擎、GameRuntime 只依赖中立层。
 - `world.*` / `ui.*` 手写函数、控件句柄（`LuaWidgetHandle` / `LuaWidgetScripts`）迁到中立层登记。
 - 验收：`rg -n "sol/|sol::" Engine/Source --glob '!**/Script/Lua/**'` 只剩 Lua 后端；
-  GreedySnake、RpgPrototype 冒烟与脚本测试全绿。
+  GreedySnake、2DRpgPrototype 冒烟与脚本测试全绿。
 
 ## 5. 与活跃线的关系与冲突规则
 

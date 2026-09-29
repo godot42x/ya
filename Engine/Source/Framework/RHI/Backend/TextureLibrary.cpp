@@ -45,6 +45,10 @@ void TextureLibrary::clearCache()
     _linearSampler.reset();
     _clampLinearSampler.reset();
     _nearestSampler.reset();
+    _clampNearestSampler.reset();
+    for (auto& byAddress : _slotSamplers) {
+        byAddress.fill(nullptr);
+    }
 
     _initialized = false;
     YA_CORE_INFO("TextureLibrary cleared");
@@ -58,20 +62,29 @@ void TextureLibrary::shutdown()
 void TextureLibrary::createSamplers(IRender* render)
 {
     auto* resourceFactory = render->getResourceFactory();
-    _linearSampler = resourceFactory->createSampler(
-        SamplerDesc{
-            .label         = "linear",
-            .minFilter     = EFilter::Linear,
-            .magFilter     = EFilter::Linear,
-            .mipmapMode    = ESamplerMipmapMode::Linear,
-            .addressModeU  = ESamplerAddressMode::Repeat,
-            .addressModeV  = ESamplerAddressMode::Repeat,
-            .addressModeW  = ESamplerAddressMode::Repeat,
-            .mipLodBias    = 0.0f,
-            .anisotropyEnable = true,
-            .maxAnisotropy = 8.0f,
-            .maxLod        = 1000.0f,
-        });
+
+    constexpr const char* kAddressNames[] = {"repeat", "mirrored_repeat", "clamp", "clamp_border"};
+    for (const EFilter::T filter : {EFilter::Nearest, EFilter::Linear}) {
+        const bool bLinear = filter == EFilter::Linear;
+        for (int address = 0; address < 4; ++address) {
+            const auto mode                = static_cast<ESamplerAddressMode::T>(address);
+            _slotSamplers[filter][address] = resourceFactory->createSampler(
+                SamplerDesc{
+                    .label            = std::string(bLinear ? "slot_linear_" : "slot_nearest_") + kAddressNames[address],
+                    .minFilter        = filter,
+                    .magFilter        = filter,
+                    .mipmapMode       = bLinear ? ESamplerMipmapMode::Linear : ESamplerMipmapMode::Nearest,
+                    .addressModeU     = mode,
+                    .addressModeV     = mode,
+                    .addressModeW     = mode,
+                    .mipLodBias       = 0.0f,
+                    .anisotropyEnable = bLinear,
+                    .maxAnisotropy    = bLinear ? 8.0f : 1.0f,
+                    .maxLod           = 1000.0f,
+                });
+        }
+    }
+    _linearSampler = _slotSamplers[EFilter::Linear][ESamplerAddressMode::Repeat];
 
     _clampLinearSampler = resourceFactory->createSampler(
         SamplerDesc{
@@ -207,6 +220,14 @@ ya::Ptr<Sampler> TextureLibrary::getClampNearestSampler()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
     return ya::Ptr<Sampler>(_clampNearestSampler);
+}
+
+ya::Ptr<Sampler> TextureLibrary::getSampler(EFilter::T filter, ESamplerAddressMode::T addressMode)
+{
+    YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
+    const size_t filterIndex  = filter == EFilter::Nearest ? EFilter::Nearest : EFilter::Linear;
+    const size_t addressIndex = static_cast<size_t>(addressMode) < 4 ? static_cast<size_t>(addressMode) : ESamplerAddressMode::Repeat;
+    return ya::Ptr<Sampler>(_slotSamplers[filterIndex][addressIndex]);
 }
 
 } // namespace ya

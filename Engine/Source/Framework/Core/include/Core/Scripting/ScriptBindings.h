@@ -15,9 +15,14 @@
 /// read-only. Members are found through the reflection plugin's own
 /// Class / Property / Function and methods run through `Function::invoker`.
 /// This layer adds only what the plugin has no notion of: script values,
-/// references that survive their object, and native methods a module supplies
-/// for things that are not reflected members. How a value or an object looks
-/// in Lua or JS is the backend's business.
+/// references that survive their object, native methods a module supplies
+/// for things that are not reflected members, and module functions that
+/// belong to no object (`world.find`). How a value or an object looks in Lua
+/// or JS is the backend's business.
+///
+/// Gameplay scripts call through this layer every frame with live objects.
+/// Authoring and automation commands with structured JSON arguments and
+/// results (`component.get`, `scene.save`...) live in ScriptApiRegistry.
 namespace ya::script
 {
 
@@ -39,6 +44,16 @@ struct ScriptRefKind
     std::function<void(const ScriptRef&, void*)> afterWrite;
 };
 
+/// A function a module offers scripts as `<module>.<name>(...)`.
+using ScriptFunction = std::function<ScriptValue(ScriptArgs args)>;
+
+struct ScriptModuleFunction
+{
+    std::string    module;
+    std::string    name;
+    ScriptFunction fn;
+};
+
 /// A member found by name once. Handles stay valid for the whole process, so
 /// backends may cache them per type; a method a resolver answered keeps its
 /// first answer.
@@ -50,6 +65,13 @@ YA_CORE_API uint32_t registerRefKind(ScriptRefKind kind);
 /// A reflected method of the same name wins over a native one.
 YA_CORE_API void     addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn);
 YA_CORE_API void     setMethodResolver(type_index_t type, ScriptMethodResolver resolver);
+
+/// Backends project module functions when they build a script state, so a
+/// module registers before the states it serves are created. Registering
+/// the same module and name again replaces the function.
+YA_CORE_API void registerModuleFunction(std::string module, std::string name, ScriptFunction fn);
+/// In registration order. Entries never move, so backends may keep pointers.
+YA_CORE_API void forEachModuleFunction(const std::function<void(const ScriptModuleFunction&)>& visit);
 
 /// The reflected class name, or empty for a type without one.
 [[nodiscard]] YA_CORE_API std::string         scriptTypeName(type_index_t type);

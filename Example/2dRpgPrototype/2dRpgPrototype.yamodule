@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "2DRpgPrototype",
+  "kind": "project",
+  "binary": "2DRpgPrototype",
+  "dependencies": []
+}

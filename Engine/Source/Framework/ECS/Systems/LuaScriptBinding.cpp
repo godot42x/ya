@@ -17,6 +17,10 @@
 // the owning type. Later accesses are one table lookup. Field values still
 // resolve per access, so an object that is gone raises instead of dangling.
 //
+// Module functions (script::registerModuleFunction) become globals
+// `<module>.<name>` when the state is built: closures over the registered
+// entry (moduleFunctionCall).
+//
 // sol remains in exactly two places: the bridge functions below (other
 // modules move engine objects through sol) and the Vec2/3/4 value types,
 // which stay sol usertypes end to end (registration, conversion, checks).
@@ -202,6 +206,36 @@ class MethodCall
     int returnValue(const ScriptValue& value) const { return pushLuaValue(_L, value); }
 };
 
+/// What a module function closure (`world.find`) sees: the script's
+/// arguments, plus the registered function as upvalue.
+class ModuleFunctionCall
+{
+    static constexpr int kFirstArgument = 1;
+
+    lua_State* _L;
+
+  public:
+    explicit ModuleFunctionCall(lua_State* L) : _L(L) {}
+
+    [[nodiscard]] const script::ScriptModuleFunction& function() const
+    {
+        return *static_cast<const script::ScriptModuleFunction*>(lua_touserdata(_L, lua_upvalueindex(1)));
+    }
+
+    [[nodiscard]] std::vector<ScriptValue> arguments() const
+    {
+        std::vector<ScriptValue> args;
+        const int                last = lua_gettop(_L);
+        args.reserve(last >= kFirstArgument ? last - kFirstArgument + 1 : 0);
+        for (int index = kFirstArgument; index <= last; ++index) {
+            args.push_back(toScriptValue(_L, index));
+        }
+        return args;
+    }
+
+    int returnValue(const ScriptValue& value) const { return pushLuaValue(_L, value); }
+};
+
 /// A hit in a type's member cache.
 struct CachedMember
 {
@@ -348,6 +382,41 @@ int objectNewIndex(lua_State* L)
     return 0;
 }
 
+int moduleFunctionCall(lua_State* L)
+{
+    const ModuleFunctionCall            call(L);
+    const script::ScriptModuleFunction& function = call.function();
+    try {
+        return call.returnValue(function.fn(call.arguments()));
+    }
+    catch (const std::exception& e) {
+        throw ScriptError(std::format("{}.{}: {}", function.module, function.name, e.what()));
+    }
+}
+
+/// Global table `name`, created on first use. Leaves it pushed.
+void pushGlobalTable(lua_State* L, const std::string& name)
+{
+    if (lua_getglobal(L, name.c_str()) == LUA_TTABLE) {
+        return;
+    }
+    lua_pop(L, 1);
+    lua_newtable(L);
+    lua_pushvalue(L, -1);
+    lua_setglobal(L, name.c_str());
+}
+
+/// `<module>.<name>` = a closure over the registered function.
+void setModuleFunction(lua_State* L, const script::ScriptModuleFunction& function)
+{
+    pushGlobalTable(L, function.module);
+    const int moduleTable = lua_absindex(L, -1);
+    lua_pushlightuserdata(L, const_cast<script::ScriptModuleFunction*>(&function));
+    lua_pushcclosure(L, &guarded<&moduleFunctionCall>, 1);
+    lua_setfield(L, moduleTable, function.name.c_str());
+    lua_pop(L, 1); // the module table
+}
+
 int objectEq(lua_State* L)
 {
     lua_pushboolean(L, metatableHasMarker(L, 1, &kObjectMarker) && metatableHasMarker(L, 2, &kObjectMarker) && refAt(L, 1) == refAt(L, 2));
@@ -488,6 +557,10 @@ void registerLuaScriptBindings(sol::state_view lua)
                                                   &glm::vec4::z,
                                                   "w",
                                                   &glm::vec4::w);
+
+    script::forEachModuleFunction([L = lua.lua_state()](const script::ScriptModuleFunction& function) {
+        setModuleFunction(L, function);
+    });
 }
 
 // ============================================================================

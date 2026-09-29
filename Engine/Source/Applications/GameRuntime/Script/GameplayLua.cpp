@@ -118,7 +118,8 @@ void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui)
         });
     });
 
-    sol::table world = lua.create_named_table("world");
+    // Module functions registered through the script export already live here.
+    sol::table world = lua["world"].get_or_create<sol::table>();
     world.set_function("spawnSprite", [](const std::string& name) -> sol::optional<LuaScriptObject> {
         Entity* entity = spawnSprite(name);
         return entity ? sol::optional<LuaScriptObject>(LuaScriptObject{script::entityRef(entity)}) : sol::nullopt;

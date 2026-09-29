@@ -15,12 +15,15 @@ namespace ya
 struct Scene;
 
 /**
- * @brief ScriptApiRegistry - the single engine capability registry.
+ * @brief ScriptApiRegistry - the authoring / automation command registry.
  *
- * Every engine operation exposed to scripts / agents is a named callable with
- * a JSON argument contract and a doc string. JS bindings, the automation RPC
- * (`invoke` / `list_commands`) and the agent-facing schema all consume this
- * one registry, so a new capability is registered once and appears everywhere.
+ * Every authoring operation exposed to agents and editor tooling is a named
+ * callable with a JSON argument contract and a doc string. JS bindings, the
+ * automation RPC (`invoke` / `list_commands`) and the agent-facing schema all
+ * consume this one registry, so a command is registered once and appears
+ * everywhere. Gameplay calls on live objects (entity references, vectors,
+ * every frame) are not commands: they go through the typed script export in
+ * `Core/Scripting/ScriptBindings.h`.
  *
  * Component / entity access is intentionally NOT hardcoded here: the core
  * registrations in ScriptApiCore.cpp build on the existing ECSRegistry

@@ -69,6 +69,7 @@ namespace ya::script_binding_test
 namespace
 {
 
+using script::ScriptArgs;
 using script::ScriptError;
 using script::ScriptRef;
 using script::ScriptValue;
@@ -116,6 +117,29 @@ class ScriptBindingTest : public ::testing::Test
         FProbeWorld::get().writes = 0;
     }
 };
+
+TEST_F(ScriptBindingTest, ModuleFunctionsReplaceInPlaceOnReRegistration)
+{
+    script::registerModuleFunction("probeModule", "answer", [](ScriptArgs) -> ScriptValue { return int64_t{1}; });
+    const script::ScriptModuleFunction* first = nullptr;
+    script::forEachModuleFunction([&](const script::ScriptModuleFunction& function) {
+        if (function.module == "probeModule") {
+            first = &function;
+        }
+    });
+    ASSERT_NE(first, nullptr);
+
+    script::registerModuleFunction("probeModule", "answer", [](ScriptArgs) -> ScriptValue { return int64_t{2}; });
+    int entries = 0;
+    script::forEachModuleFunction([&](const script::ScriptModuleFunction& function) {
+        if (function.module == "probeModule") {
+            ++entries;
+            EXPECT_EQ(&function, first);
+        }
+    });
+    EXPECT_EQ(entries, 1);
+    EXPECT_EQ(std::get<int64_t>(first->fn({})), 2);
+}
 
 TEST_F(ScriptBindingTest, ReflectedMembersThatCrossAreVisible)
 {

@@ -19,12 +19,13 @@
     {
       "id": "walk_and_follow",
       "phase": "R0",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: editor-placed player walks on a grid with 4-direction animation; camera follows",
       "evidence": [
-        "world.find / world.viewSize registered through the neutral layer",
-        "Nearest filtering honored by the sprite pass for pixel art",
-        "RpgPrototype 120-frame runtime smoke exit 0"
+        "world.find / world.viewSize registered through the neutral layer (registerModuleFunction), projected to Lua world.* and JS ya.world.* (LuaScriptBindingTest.ModuleFunctionsBecomeGlobalTables, ScriptApiLibraryFixture.ModuleFunctionsExportUnderYa)",
+        "Nearest filtering honored by the sprite pass: resolveSlotSampler reads TextureSlot.samplerConfig",
+        "sprite pass shows the image's top rows at the quad's top edge",
+        "2DRpgPrototype 120-frame runtime and editor smoke exit 0; user review: walk sheet 16x24, example named 2DRpgPrototype"
       ]
     },
     {

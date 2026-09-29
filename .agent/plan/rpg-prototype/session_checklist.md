@@ -11,12 +11,12 @@
 
 ## 收尾
 
-1. xmake b ya-game-runtime ya-game-editor ya-testing RpgPrototype（R0 之前没有 RpgPrototype 目标就跳过）
+1. xmake b ya-game-runtime ya-game-editor ya-testing 2DRpgPrototype（R0 之前没有 2DRpgPrototype 目标就跳过）
 2. xmake r ya-testing；脚本与 tilemap 相关用例全绿，总数与上一轮对比。
 3. 冒烟：
    python3 Script/ya.py run --project Example/GreedySnake/GreedySnake.yaproject -- --exit-after-frame=120 --log-level=warn
-   python3 Script/ya.py run --project Example/RpgPrototype/RpgPrototype.yaproject -- --exit-after-frame=120 --log-level=warn
-   python3 Script/ya.py run-editor --project Example/RpgPrototype/RpgPrototype.yaproject -- --exit-after-frame=120 --log-level=warn
+   python3 Script/ya.py run --project Example/2DRpgPrototype/2DRpgPrototype.yaproject -- --exit-after-frame=120 --log-level=warn
+   python3 Script/ya.py run-editor --project Example/2DRpgPrototype/2DRpgPrototype.yaproject -- --exit-after-frame=120 --log-level=warn
 4. 核对边界：没有新增 `Node2D` / `Transform2D` / `Camera2D`；新脚本函数没有直接写 sol2（B1 起）；
    没有新增渲染 pass。
 5. 更新 progress.md（完成 / 验证 / 保留与未完成 / 手测步骤）与 feature_matrix.json，和代码同一提交。

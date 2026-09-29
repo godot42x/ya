@@ -398,6 +398,45 @@ JSValue libraryFunctionClosure(JSContext* ctx,
     return jsonToJs(ctx, result);
 }
 
+JSValue moduleFunctionClosure(JSContext* ctx, JSValueConst /*this_val*/, int argc, JSValueConst* argv, int /*magic*/, void* opaque)
+{
+    const auto& function = *static_cast<const script::ScriptModuleFunction*>(opaque);
+    try {
+        std::vector<ScriptValue> args;
+        args.reserve(static_cast<size_t>(argc));
+        for (int i = 0; i < argc; ++i) {
+            args.push_back(fromJs(ctx, argv[i]));
+        }
+        return toJs(ctx, function.fn(args));
+    }
+    catch (const std::exception& e) {
+        return throwError(ctx, std::format("{}.{}: {}", function.module, function.name, e.what()));
+    }
+}
+
+/// Creates `ya.<module>.<fn>` for every module function of the script export.
+/// Runs before the command libraries, which skip names already present.
+void buildModuleFunctionObjects(JSContext* ctx, JSValue yaGlobal)
+{
+    script::forEachModuleFunction([ctx, yaGlobal](const script::ScriptModuleFunction& function) {
+        JSValue module = JS_GetPropertyStr(ctx, yaGlobal, function.module.c_str());
+        if (!JS_IsObject(module)) {
+            JS_FreeValue(ctx, module);
+            module = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, yaGlobal, function.module.c_str(), JS_DupValue(ctx, module));
+        }
+        JSValue fn = JS_NewCClosure(ctx,
+                                    moduleFunctionClosure,
+                                    function.name.c_str(),
+                                    [](void*) {},
+                                    0,
+                                    0,
+                                    const_cast<script::ScriptModuleFunction*>(&function));
+        JS_SetPropertyStr(ctx, module, function.name.c_str(), fn);
+        JS_FreeValue(ctx, module);
+    });
+}
+
 /// Creates `ya.<namespace>.<fn>` objects for every registered command.
 void buildRegistryLibraryObjects(JSContext* ctx, JSValue yaGlobal)
 {
@@ -513,7 +552,9 @@ void JSScriptingSystem::init()
     JS_SetPropertyStr(_impl->context, entityModule, "list", JS_NewCFunction(_impl->context, entityListFunction, "list", 0));
     JS_SetPropertyStr(_impl->context, yaGlobal, "entity", entityModule);
 
-    // Function libraries: every registered command becomes ya.<ns>.<fn>.
+    // Typed module functions become ya.<module>.<fn>; then every registered
+    // command becomes ya.<ns>.<fn> unless that name is taken.
+    buildModuleFunctionObjects(_impl->context, yaGlobal);
     buildRegistryLibraryObjects(_impl->context, yaGlobal);
 
     JS_SetPropertyStr(_impl->context, yaGlobal, "__commands", jsonToJs(_impl->context, ScriptApiRegistry::get().buildCommandList()));

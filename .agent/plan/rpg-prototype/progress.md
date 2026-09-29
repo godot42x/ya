@@ -52,3 +52,26 @@
   （`makeLuaObject<T...>`）。`solToAny` 保持 if-chain——每类一行、本身就是表的直写形式，包一层反而变长。
 - 用户同时确认不动 `init()`（A 项不做）。
 - 验证：`ya-testing` 1395 通过（唯一失败仍是既有红灯）；GreedySnake / HelloMaterial 冒烟退出码 0。
+
+## 2026-09-29 — R0：示例壳 + 按格走动 + 相机跟随
+
+- 目标与边界：`Example/2DRpgPrototype` 跑起来，方向键 / WASD 按格走、四方向 + 三帧行走、相机平滑跟随且像素对齐；
+  新脚本函数只经中立层，不新增 pass，不动 `world.spawnSprite` / `ui.*` 语义。
+- 中立层模块函数：`registerModuleFunction / forEachModuleFunction`（同名覆盖、条目不搬家），Lua 投影成全局表闭包、
+  JS 投影成 `ya.<module>.<fn>`；`ScriptApiRegistry` 头注释收窄为编辑 / 自动化 JSON 命令表。
+  GameRuntime `registerGameplayScriptFunctions` 登记 `world.find(name)`、`world.viewSize()`，在 Lua / JS init 前；
+  `GameplayLua` 的 `world` 表改为取或建，保住投影进来的函数。
+- G12 修复：`TextureLibrary` 预建（Nearest / Linear）×4 寻址 sampler，`resolveSlotSampler` 按 `samplerConfig` 取。
+- 途中发现并修复：精灵图像上下颠倒（共享 quad 的 `texCoord.y` 朝 +Y，`uvRect` 是图像空间）；只改 `Sprite2DWorld.slang`。
+- 素材：生图后 `Tools/quantize_walk_sheet.py` 量化——生图不在整齐网格上，按连通区域找 12 个人物，
+  原图先压 12 色调色板再逐块多数表决，脚底对齐格子底行；右向行 = 左向行镜像（生图的右向第 3 帧朝反了）。
+  用户在 16×16 / 16×24 预览中选 16×24：精灵 1×1.5 单位，`Player.lua` 按 `sprite.size.y` 抬高半个超出量让脚踩格底。
+  示例名按用户要求为 `2DRpgPrototype`（C++ 模块结构体仍叫 `RpgPrototypeModule`，标识符不能以数字开头）。
+  Tiny Town 图集与草地 tile 拷入 `Content/Textures/`，`LICENSE.md` 记来源。
+- 场景：`Town.scene.json` 草地一张大精灵（Repeat + Nearest 平铺），树 / 灌木 / 告示牌 / 栅栏为 atlas `uvRect` 精灵，
+  玩家 z=0.1 在景物 0.05 之上。`FollowCamera.lua` 取最大整数缩放使纵向至少 12 格，`orthoHalfHeight = 视口高 / (2×16×缩放)`，
+  相机位置吸附到屏幕像素；`Player.lua` 位置吸附到 texel。
+- 验证：`ya-testing` 1442 全过（新增 `ModuleFunctionsReplaceInPlaceOnReRegistration`、
+  `ModuleFunctionsBecomeGlobalTables`、`ModuleFunctionsExportUnderYa`）；2DRpgPrototype 运行 / 编辑器、GreedySnake、
+  HelloMaterial 冒烟退出码 0，截图确认最近邻与朝向。
+- 未完成：按键注入自动化（等 S7 `input.inject_key`）。下一步 R1a。

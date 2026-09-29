@@ -2,7 +2,9 @@
 
 #include <reflects-core/lib.h>
 
+#include <algorithm>
 #include <any>
+#include <deque>
 #include <format>
 #include <type_traits>
 #include <unordered_map>
@@ -218,6 +220,7 @@ struct State
 {
     std::vector<ScriptRefKind>                   kinds;
     std::unordered_map<type_index_t, TypeExport> types;
+    std::deque<ScriptModuleFunction>             moduleFunctions;
 };
 
 State& state()
@@ -325,6 +328,26 @@ uint32_t registerRefKind(ScriptRefKind kind)
     auto& kinds = state().kinds;
     kinds.push_back(std::move(kind));
     return static_cast<uint32_t>(kinds.size());
+}
+
+void registerModuleFunction(std::string module, std::string name, ScriptFunction fn)
+{
+    auto&      functions = state().moduleFunctions;
+    const auto existing  = std::ranges::find_if(functions, [&](const ScriptModuleFunction& entry) {
+        return entry.module == module && entry.name == name;
+    });
+    if (existing != functions.end()) {
+        existing->fn = std::move(fn);
+        return;
+    }
+    functions.push_back(ScriptModuleFunction{.module = std::move(module), .name = std::move(name), .fn = std::move(fn)});
+}
+
+void forEachModuleFunction(const std::function<void(const ScriptModuleFunction&)>& visit)
+{
+    for (const ScriptModuleFunction& entry : state().moduleFunctions) {
+        visit(entry);
+    }
 }
 
 void addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn)

@@ -70,7 +70,10 @@ SpriteVertexOutput vertWorldMain(SpriteVertexInput input)
 
     SpriteVertexOutput output;
     output.sv_position  = mul(uFrame.viewProj, float4(worldPos, 1.0));
-    output.texCoord     = lerp(pc.uvRect.xy, pc.uvRect.zw, input.texCoord);
+    // uvRect is in image space (v0 = the image's top rows), while the shared
+    // quad's texCoord.y grows toward +Y. The quad's top edge shows v0.
+    float2 quadUv       = float2(input.texCoord.x, 1.0 - input.texCoord.y);
+    output.texCoord     = lerp(pc.uvRect.xy, pc.uvRect.zw, quadUv);
     output.tint         = pc.tint;
     output.textureIndex = pc.textureIndex;
     return output;

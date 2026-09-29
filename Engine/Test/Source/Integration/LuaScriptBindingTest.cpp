@@ -1,5 +1,6 @@
 // Lua view of the shared script export (rpg-prototype B1, D12).
 
+#include "Core/Scripting/ScriptBindings.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/LuaScriptBinding.h"
@@ -87,6 +88,33 @@ TEST_F(LuaScriptBindingTest, MembersAreCachedPerType)
     EXPECT_TRUE(result.get<bool>(3));
     EXPECT_DOUBLE_EQ(result.get<double>(4), 0.0);
     EXPECT_FALSE(result.get<bool>(5));
+}
+
+TEST_F(LuaScriptBindingTest, ModuleFunctionsBecomeGlobalTables)
+{
+    script::registerModuleFunction("probeLua", "sum", [](script::ScriptArgs args) -> script::ScriptValue {
+        return script::scriptToNumber(args[0]) + script::scriptToNumber(args[1]);
+    });
+    script::registerModuleFunction("probeLua", "echo", [](script::ScriptArgs args) -> script::ScriptValue { return args[0]; });
+    script::registerModuleFunction("probeLua", "fail", [](script::ScriptArgs) -> script::ScriptValue {
+        throw script::ScriptError("boom");
+    });
+    sol::state lua;
+    lua.open_libraries(sol::lib::base);
+    lua["probeLua"] = lua.create_table_with("kept", true);
+    registerLuaScriptBindings(lua);
+    lua["entity"] = LuaScriptObject{script::entityRef(_entity)};
+
+    const auto result = lua.safe_script("return probeLua.sum(1, 2), probeLua.echo(entity) == entity, probeLua.kept",
+                                        sol::script_pass_on_error);
+    ASSERT_TRUE(result.valid()) << sol::error(result).what();
+    EXPECT_DOUBLE_EQ(result.get<double>(0), 3.0);
+    EXPECT_TRUE(result.get<bool>(1));
+    EXPECT_TRUE(result.get<bool>(2));
+
+    const auto failed = lua.safe_script("probeLua.fail()", sol::script_pass_on_error);
+    ASSERT_FALSE(failed.valid());
+    EXPECT_NE(std::string(sol::error(failed).what()).find("probeLua.fail: boom"), std::string::npos);
 }
 
 TEST_F(LuaScriptBindingTest, MistakesRaiseLuaErrors)
