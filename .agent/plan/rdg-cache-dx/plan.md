@@ -2,7 +2,7 @@
 
 > 建立日期：2026-09-29
 > 更新日期：2026-09-29
-> 状态：P0 skinning 生命周期收敛、P1 registry 决策诊断已落地；P2 定为部分执行（按 owner key 匹配 import 条目）；P2–P5 待做。
+> 状态：P0 skinning 生命周期收敛、P1 registry 决策诊断、P2 import 按 owner key 匹配（部分执行）已落地；P3–P5 待做。
 
 ## 目标
 
@@ -18,7 +18,7 @@
 ## 现状（2026-09-29 按代码核对）
 
 - **registry 自己做 import 替换决策。** `RenderGraphResourceRegistry::sync` 用 `diffTexture` / `diffImportedBuffer`（P1 前名为 `needs*Replacement`）比较 desc 与指针（texture 比底层 image/view 指针，buffer 比 `IBuffer` 指针），retained 列表也按指针比较后 `retireRetainedResources`。P0 的每帧 DDQ churn 就出在这条路径；P0 通过让 owner 保持指针稳定修掉了症状，判定机制未变。
-- **import 路径上 registry 会自建 GPU 对象。** `createImportedTexture` 在调用方未提供 view 时 `_factory.createImageView`，未提供 image 时 `_factory.importImage`；这些对象由 registry 条目持有并退役。
+- **import 路径上 registry 会自建 GPU 对象。** `createImportedTexture` 在调用方未提供 view 时 `_factory.createImageView`，未提供 image 时 `_factory.importImage`；这些对象由 registry 条目持有并退役。（P2 已删除：owner 必须提供 image 与 view。）
 - **`debugDump()` 看不到 registry 决策。** 只在编译失败（`RenderGraphExecutor.cpp`）和测试中调用，无运行时触发；输出的是 compiled graph，import 仅有 finalizes，transient slot/alias 只覆盖 buffer（texture 走 `acquireTransientTexture` 池，不在 dump 中）。
 - **import 入口分散。** 38 处 `importBuffer/importTexture` 调用；`makeImportedBufferDesc` 仅 PointShadow 2 处使用。已有 5 个一行转发 `makeImportedTextureDesc` 的匿名包装（SSAO、Bloom、PostProcess、Environment ×2，后两者完全相同），3 个各自写的 host-written buffer lambda（Deferred、DirectionalShadow、PointShadow）；同一个 skinning buffer 走了 3 条不同 import 路径。
 - **View target 所有权已定。** `render-arch` skill 第 18 条：View texture 唯一 owner 是 `ViewTargetStore`（generation 标记 replacement，`ViewTargetLease` 保活）。本计划不重审 View 附件本身，只审 registry 一侧对它们的 import 处理。
@@ -55,7 +55,9 @@ SceneSkinningCache 按 scene 与 flight 环复用 skinning SSBO，避免帧内 S
 - graph 运行语义不变；ya-render-3d-test 全过；HelloMaterial flush 基线不变。
 - progress.md 记录 owner 表与 **P2 决策**（执行 / 不执行 / 部分执行）及依据。
 
-### P2：import 条目按 owner key 匹配（P1 决策：部分执行）
+### P2：import 条目按 owner key 匹配（P1 决策：部分执行；已完成）
+
+实际落地的 key 是 `RGImportKey{label, scope}`：scope 由 orchestrator `build` 入口的 `RGImportScope(graph, viewId)` 设置，而不是逐个写进 `RGImported*Desc`；同 scope 重复 label 断言。结果与偏离见 progress.md P2 记录。
 
 P1 数据：稳态替换已为 0，真实 owner 重建（扩容、环境加载、resize）都被 desc+指针比较准确识别；问题在 registry 按 handle（即声明序号）匹配条目，拓扑变化（首现 pass、View 增减）会把后续 import 全部误判为替换并产生 DDQ churn；同一张图内多 View 的 label 相同，不能作身份。详见 progress.md P1 记录。
 

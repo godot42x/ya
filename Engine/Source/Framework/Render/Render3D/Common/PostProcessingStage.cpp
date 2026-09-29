@@ -1,24 +1,11 @@
 #include "Render3D/Common/PostProcessingStage.h"
 
-#include "Graph/RenderGraphImportUtils.h"
 #include "Render3D/Common/ViewGraphName.h"
 #include "RHI/Core/Swapchain.h"
 #include <algorithm>
 
 namespace ya
 {
-
-namespace
-{
-
-RGImportedTextureDesc makePostprocessImportedTextureDesc(const std::shared_ptr<ImageResource>& resource,
-                                                         std::string_view                    label,
-                                                         EImageLayout::T                     finalLayout)
-{
-    return makeImportedTextureDesc(resource, label, finalLayout);
-}
-
-} // namespace
 
 void PostProcessingStage::init(const InitDesc& desc)
 {
@@ -73,66 +60,6 @@ void PostProcessingStage::beginFrame()
     if (_postProcessor) {
         _postProcessor->beginFrame();
     }
-}
-
-RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
-                                                       Texture*     inputTexture,
-                                                       glm::vec2    viewExtent,
-                                                       FrameContext* ctx)
-{
-    (void)viewExtent;
-    if (!inputTexture || !inputTexture->isValid()) {
-        return {};
-    }
-
-    const Extent2D inputExtent = inputTexture->getExtent();
-    if (inputExtent.width == 0 || inputExtent.height == 0) {
-        return {};
-    }
-
-    const auto input = graph.importTexture(makePostprocessImportedTextureDesc(inputTexture ? inputTexture->getResourceShared() : nullptr, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
-    return appendGraphPasses(graph, input, inputExtent, ctx);
-}
-
-RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
-                                                       RenderTexture* inputImage,
-                                                       glm::vec2      viewExtent,
-                                                       FrameContext*  ctx)
-{
-    (void)viewExtent;
-
-    if (!inputImage || !inputImage->isValid()) {
-        return {};
-    }
-
-    const Extent2D inputExtent = inputImage->getExtent();
-    if (inputExtent.width == 0 || inputExtent.height == 0) {
-        return {};
-    }
-
-    const auto input = graph.importTexture(makePostprocessImportedTextureDesc(inputImage->getResourceShared(), "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
-    return appendGraphPasses(graph, input, inputExtent, ctx);
-}
-
-RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
-                                                       RGTextureHandle input,
-                                                       Extent2D        inputExtent,
-                                                       FrameContext*   ctx)
-{
-    if (!_postProcessor || !input.isValid() || inputExtent.width == 0 || inputExtent.height == 0) {
-        return {};
-    }
-
-    const auto compositeInput = appendBloomGraphPasses(graph, input, inputExtent, ctx);
-    // Finalize is unconditional: it is the pass that makes the View's color a
-    // display image, so it runs whether or not grading is on.
-    return appendFinalizeGraphPasses(graph, FinalizePassParams{
-                                                .input         = compositeInput.isValid() ? compositeInput : input,
-                                                .inputExtent   = inputExtent,
-                                                .bOutputIsSRGB = EFormat::isSRGB(_colorFormat),
-                                                .postContext   = ctx,
-                                                .viewId        = 0,
-                                            });
 }
 
 RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph,

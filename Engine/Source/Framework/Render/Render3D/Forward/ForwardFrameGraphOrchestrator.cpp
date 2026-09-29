@@ -18,6 +18,7 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
     YA_CORE_ASSERT(deps.postProcessStage != nullptr, "ForwardFrameGraphOrchestrator requires a postprocess stage");
 
     auto& graph = *inputs.graph;
+    const RGImportScope importScope(graph, inputs.viewId);
 
     ShadowGraphOutputs shadowOutputs;
     if (deps.shadowStage && inputs.bEnableShadow) {

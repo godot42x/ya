@@ -29,6 +29,7 @@ void DeferredFrameGraphOrchestrator::build(
     auto&       graph          = *inputs.graph;
     auto&       graphResources = *inputs.graphResources;
     const auto& stageCtx       = *inputs.stageCtx;
+    const RGImportScope importScope(graph, inputs.viewId);
 
     std::optional<RGPassHandle> familyPredecessor = inputs.familyPredecessor;
     bool                        bShadowAppended   = false;

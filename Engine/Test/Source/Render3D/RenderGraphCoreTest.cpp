@@ -216,14 +216,71 @@ class TestResourceFactory final : public IRenderResourceFactory
     }
 };
 
+ImageViewCreateInfo makeFullTestViewDesc(const IImage& image)
+{
+    const auto format = image.getFormat();
+    return ImageViewCreateInfo{
+        .viewType    = image.getArrayLayers() > 1 ? EImageViewType::View2DArray : EImageViewType::View2D,
+        .aspectFlags = EFormat::isDepthStencilFormat(format) ? EImageAspect::DepthStencil
+                       : EFormat::isDepthFormat(format)      ? EImageAspect::Depth
+                                                             : EImageAspect::Color,
+        .levelCount  = image.getMipLevels(),
+        .layerCount  = image.getArrayLayers(),
+    };
+}
+
+/// Owner-side image resource; defaults to a full-range view like real owners do.
 std::shared_ptr<ImageResource> makeTestImageResource(
     std::shared_ptr<IImage>     image,
     std::shared_ptr<IImageView> view = nullptr)
 {
+    if (!view) {
+        view = std::make_shared<TestImageView>(image, makeFullTestViewDesc(*image));
+    }
     auto resource       = std::make_shared<ImageResource>();
     resource->image     = std::move(image);
     resource->defaultView = std::move(view);
     return resource;
+}
+
+/// Backs a descriptor-only import with an owner-held TestImage (+ optional subresource view).
+RGImportedTextureDesc withTestBacking(
+    RGImportedTextureDesc              importedDesc,
+    std::optional<ImageViewCreateInfo> viewDesc = std::nullopt)
+{
+    const auto& src   = importedDesc.importDesc;
+    auto        image = std::make_shared<TestImage>(ImageCreateInfo{
+               .label         = src.label,
+               .format        = src.format,
+               .extent        = {.width = src.extent.width, .height = src.extent.height, .depth = 1},
+               .mipLevels     = src.mipLevels,
+               .arrayLayers   = src.arrayLayers,
+               .usage         = src.usage,
+               .initialLayout = src.initialLayout,
+    });
+    std::shared_ptr<IImageView> view;
+    if (viewDesc) {
+        view                          = std::make_shared<TestImageView>(image, *viewDesc);
+        importedDesc.subresourceRange = view->getSubresourceRange();
+    }
+    importedDesc.importDesc.nativeHandle = nullptr;
+    importedDesc.resource                = makeTestImageResource(std::move(image), std::move(view));
+    return importedDesc;
+}
+
+std::shared_ptr<ImageResource> makeOwnedTestTexture(std::string label)
+{
+    return makeTestImageResource(std::make_shared<TestImage>(ImageCreateInfo{
+        .label  = std::move(label),
+        .format = EFormat::R16G16B16A16_SFLOAT,
+        .extent = {.width = 64, .height = 64, .depth = 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }));
+}
+
+RGTextureHandle importOwnedTestTexture(RenderGraph& graph, const std::shared_ptr<ImageResource>& resource, std::string_view label)
+{
+    return graph.importTexture(makeImportedTextureDesc(resource, label, EImageLayout::ShaderReadOnlyOptimal));
 }
 
 class TestCommandBuffer final : public ICommandBuffer
@@ -397,20 +454,19 @@ TEST(RenderGraphCoreTest, CreateTextureAllocatesGenerationBackedHandle)
 TEST(RenderGraphCoreTest, ImportTextureStoresImportedDescriptor)
 {
     RenderGraph graph;
-    const auto  handle = graph.importTexture(RGImportedTextureDesc{
+    const auto  handle = graph.importTexture(withTestBacking(RGImportedTextureDesc{
          .desc = RGTextureDesc{
              .label = "swapchain",
          },
          .importDesc = ImportedImageDesc{
              .label         = "swapchain",
-             .nativeHandle  = reinterpret_cast<void*>(0x1),
              .format        = EFormat::B8G8R8A8_UNORM,
              .usage         = EImageUsage::ColorAttachment,
              .extent        = Extent3D{1920, 1080, 1},
              .initialLayout = EImageLayout::PresentSrcKHR,
              .finalLayout   = EImageLayout::PresentSrcKHR,
          },
-    });
+    }));
 
     const auto* resource = graph.getTexture(handle);
     ASSERT_NE(resource, nullptr);
@@ -418,8 +474,11 @@ TEST(RenderGraphCoreTest, ImportTextureStoresImportedDescriptor)
     EXPECT_EQ(resource->lifetime, ERGResourceLifetime::Imported);
     EXPECT_EQ(resource->desc.format, EFormat::B8G8R8A8_UNORM);
     EXPECT_EQ(resource->imported->importDesc.initialLayout, EImageLayout::PresentSrcKHR);
-    EXPECT_FALSE(resource->imported->resource);
-    EXPECT_FALSE(resource->imported->viewDesc.has_value());
+    ASSERT_TRUE(resource->imported->resource);
+    EXPECT_EQ(resource->imported->importDesc.nativeHandle,
+              static_cast<void*>(resource->imported->resource->getImage()->getHandle()));
+    EXPECT_FALSE(resource->imported->subresourceRange.has_value());
+    EXPECT_EQ(resource->importKey, (RGImportKey{.label = "swapchain", .scope = 0}));
 }
 
 TEST(RenderGraphCoreTest, CreateAndImportBufferTrackSeparateResources)
@@ -622,18 +681,17 @@ TEST(RenderGraphCoreTest, CompileRejectsReadBeforeWriteForTransientTexture)
 TEST(RenderGraphCoreTest, CompileAllowsImportedTextureReadWithoutPriorWriter)
 {
     RenderGraph graph;
-    const auto  imported = graph.importTexture(RGImportedTextureDesc{
+    const auto  imported = graph.importTexture(withTestBacking(RGImportedTextureDesc{
          .desc = RGTextureDesc{
              .label = "swapchain",
          },
          .importDesc = ImportedImageDesc{
              .label        = "swapchain",
-             .nativeHandle = reinterpret_cast<void*>(0x1),
              .format       = EFormat::B8G8R8A8_UNORM,
              .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
              .extent       = Extent3D{1280, 720, 1},
          },
-    });
+    }));
 
     const auto consumer = graph.addPass("consumer", [&](RGPassBuilder& pass) {
         pass.read(imported);
@@ -1338,34 +1396,34 @@ TEST(RenderGraphCoreTest, CompileTracksExplicitUniformAndStorageBufferStates)
 TEST(RenderGraphCoreTest, CompileUsesImportedViewRangeForTextureStatePlan)
 {
     RenderGraph graph;
-    const auto  importedFace = graph.importTexture(RGImportedTextureDesc{
-         .desc = RGTextureDesc{
-             .label       = "cubemap.face3",
-             .format      = EFormat::R16G16B16A16_SFLOAT,
-             .extent      = Extent3D{128, 128, 1},
-             .mipLevels   = 1,
-             .arrayLayers = 1,
-             .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-         },
-         .importDesc = ImportedImageDesc{
-             .label        = "cubemap.face3",
-             .nativeHandle = reinterpret_cast<void*>(0x123),
-             .format       = EFormat::R16G16B16A16_SFLOAT,
-             .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-             .extent       = Extent3D{128, 128, 1},
-             .mipLevels    = 4,
-             .arrayLayers  = 6,
-         },
-         .viewDesc = ImageViewCreateInfo{
-             .label          = "cubemap.face3.view",
-             .viewType       = EImageViewType::View2D,
-             .aspectFlags    = EImageAspect::Color,
-             .baseMipLevel   = 1,
-             .levelCount     = 1,
-             .baseArrayLayer = 3,
-             .layerCount     = 1,
-         },
-    });
+    const auto  importedFace = graph.importTexture(withTestBacking(
+        RGImportedTextureDesc{
+             .desc = RGTextureDesc{
+                 .label       = "cubemap.face3",
+                 .format      = EFormat::R16G16B16A16_SFLOAT,
+                 .extent      = Extent3D{128, 128, 1},
+                 .mipLevels   = 1,
+                 .arrayLayers = 1,
+                 .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+             },
+             .importDesc = ImportedImageDesc{
+                 .label       = "cubemap.face3",
+                 .format      = EFormat::R16G16B16A16_SFLOAT,
+                 .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                 .extent      = Extent3D{128, 128, 1},
+                 .mipLevels   = 4,
+                 .arrayLayers = 6,
+             },
+        },
+        ImageViewCreateInfo{
+            .label          = "cubemap.face3.view",
+            .viewType       = EImageViewType::View2D,
+            .aspectFlags    = EImageAspect::Color,
+            .baseMipLevel   = 1,
+            .levelCount     = 1,
+            .baseArrayLayer = 3,
+            .layerCount     = 1,
+        }));
 
     graph.addPass("face-writer", [&](RGPassBuilder& pass) {
         pass.useColorAttachment(importedFace);
@@ -1587,18 +1645,17 @@ TEST(RenderGraphCoreTest, ResourceRegistryCreatesTransientAndImportedResources)
         .extent = Extent3D{512, 512, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     });
-    const auto importedTexture = graph.importTexture(RGImportedTextureDesc{
+    const auto importedTexture = graph.importTexture(withTestBacking(RGImportedTextureDesc{
         .desc = RGTextureDesc{
             .label = "swapchain",
         },
         .importDesc = ImportedImageDesc{
             .label        = "swapchain",
-            .nativeHandle = reinterpret_cast<void*>(0x1),
             .format       = EFormat::B8G8R8A8_UNORM,
             .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
             .extent       = Extent3D{512, 512, 1},
         },
-    });
+    }));
     const auto transientBuffer = graph.createBuffer(RGBufferDesc{
         .label = "lighting.constants",
         .usage = EBufferUsage::StorageBuffer,
@@ -1626,10 +1683,12 @@ TEST(RenderGraphCoreTest, ResourceRegistryCreatesTransientAndImportedResources)
     ASSERT_NE(registry.resolveTexture(importedTexture), nullptr);
     ASSERT_NE(registry.resolveBuffer(transientBuffer), nullptr);
     EXPECT_EQ(registry.resolveBuffer(importedBuffer), &importedBacking);
+    EXPECT_EQ(registry.resolveTexture(importedTexture)->getImage(),
+              graph.getTexture(importedTexture)->imported->resource->getImage());
     EXPECT_EQ(factory.createdImages, 1u);
-    EXPECT_EQ(factory.importedImages, 1u);
+    EXPECT_EQ(factory.importedImages, 0u);
     EXPECT_EQ(factory.createdBuffers, 1u);
-    EXPECT_EQ(factory.createdViews, 2u);
+    EXPECT_EQ(factory.createdViews, 1u);
 }
 
 TEST(RenderGraphCoreTest, ResourceRegistryMaterializesOneBufferPerCompiledTransientSlot)
@@ -1814,60 +1873,6 @@ TEST(RenderGraphCoreTest, ExecutorForcesBarrierAtTransientAliasBoundary)
     EXPECT_EQ(commandBuffer.bufferBarriers[0].size, 64u);
     EXPECT_EQ(commandBuffer.bufferBarriers[1].offset, 0u);
     EXPECT_EQ(commandBuffer.bufferBarriers[1].size, 128u);
-}
-
-TEST(RenderGraphCoreTest, ResourceRegistryCanImportExistingImageWithCustomViewDesc)
-{
-    TestResourceFactory factory;
-    auto existingImage = std::make_shared<TestImage>(ImageCreateInfo{
-        .label       = "existing.cubemap",
-        .format      = EFormat::R16G16B16A16_SFLOAT,
-        .extent      = {.width = 256, .height = 256, .depth = 1},
-        .mipLevels   = 4,
-        .arrayLayers = 6,
-        .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    });
-
-    RenderGraph graph;
-    const auto faceHandle = graph.importTexture(RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = "existing.cubemap.face2",
-            .format      = EFormat::R16G16B16A16_SFLOAT,
-            .extent      = Extent3D{256, 256, 1},
-            .mipLevels   = 1,
-            .arrayLayers = 1,
-            .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        },
-        .importDesc = ImportedImageDesc{
-            .label        = "existing.cubemap.face2",
-            .nativeHandle = static_cast<void*>(existingImage->getHandle()),
-            .format       = EFormat::R16G16B16A16_SFLOAT,
-            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .extent       = Extent3D{256, 256, 1},
-            .mipLevels    = 4,
-            .arrayLayers  = 6,
-        },
-        .resource = makeTestImageResource(existingImage),
-        .viewDesc = ImageViewCreateInfo{
-            .label          = "existing.cubemap.face2.view",
-            .viewType       = EImageViewType::View2D,
-            .aspectFlags    = EImageAspect::Color,
-            .baseMipLevel   = 1,
-            .levelCount     = 1,
-            .baseArrayLayer = 2,
-            .layerCount     = 1,
-        },
-    });
-
-    RenderGraphResourceRegistry registry(factory);
-    registry.sync(graph);
-
-    const auto* imported = registry.resolveTexture(faceHandle);
-    ASSERT_NE(imported, nullptr);
-    ASSERT_NE(imported->getImage(), nullptr);
-    EXPECT_EQ(imported->getImage(), existingImage.get());
-    EXPECT_EQ(factory.importedImages, 0u);
-    EXPECT_EQ(factory.createdViews, 1u);
 }
 
 TEST(RenderGraphCoreTest, ResourceRegistryUsesProvidedImportedImageViewAndRetainsOwner)
@@ -2217,56 +2222,43 @@ TEST(RenderGraphCoreTest, ExportedTextureOwnerSurvivesReplacementAcrossPrepare)
     EXPECT_EQ(firstOwner->getWidth(), 320u);
 }
 
-TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenImportedDescChanges)
+TEST(RenderGraphCoreTest, ResourceRegistryReplacesImportWhenOwnerSwapsBackingImage)
 {
     TestResourceFactory factory;
     RenderGraphResourceRegistry registry(factory);
 
-    RenderGraph graphA;
-    const auto importedHandle = graphA.importTexture(RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label  = "history.imported",
-            .format = EFormat::R16G16B16A16_SFLOAT,
-            .extent = Extent3D{128, 128, 1},
-            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        },
-        .importDesc = ImportedImageDesc{
-            .label        = "history.imported",
-            .nativeHandle = reinterpret_cast<void*>(0x101),
-            .format       = EFormat::R16G16B16A16_SFLOAT,
-            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .extent       = Extent3D{128, 128, 1},
-        },
-    });
+    const auto importHistory = [](RenderGraph& graph) {
+        return graph.importTexture(withTestBacking(RGImportedTextureDesc{
+            .desc = RGTextureDesc{
+                .label  = "history.imported",
+                .format = EFormat::R16G16B16A16_SFLOAT,
+                .extent = Extent3D{128, 128, 1},
+                .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            },
+            .importDesc = ImportedImageDesc{
+                .label  = "history.imported",
+                .format = EFormat::R16G16B16A16_SFLOAT,
+                .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .extent = Extent3D{128, 128, 1},
+            },
+        }));
+    };
 
+    RenderGraph graphA;
+    const auto  handleA = importHistory(graphA);
     registry.sync(graphA);
-    ASSERT_NE(registry.resolveTexture(importedHandle), nullptr);
-    EXPECT_EQ(factory.importedImages, 1u);
-    EXPECT_EQ(factory.createdViews, 1u);
+    ASSERT_NE(registry.resolveTexture(handleA), nullptr);
+    EXPECT_EQ(registry.resolveTexture(handleA)->getImage(), graphA.getTexture(handleA)->imported->resource->getImage());
+    EXPECT_EQ(registry.getLastSyncStats().importBound, 1u);
 
     RenderGraph graphB;
-    graphB.importTexture(RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label  = "history.imported",
-            .format = EFormat::R16G16B16A16_SFLOAT,
-            .extent = Extent3D{128, 128, 1},
-            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        },
-        .importDesc = ImportedImageDesc{
-            .label        = "history.imported",
-            .nativeHandle = reinterpret_cast<void*>(0x202),
-            .format       = EFormat::R16G16B16A16_SFLOAT,
-            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .extent       = Extent3D{128, 128, 1},
-        },
-    });
-
+    const auto  handleB = importHistory(graphB);
     registry.sync(graphB);
-    ASSERT_NE(registry.resolveTexture(importedHandle), nullptr);
-    EXPECT_EQ(factory.importedImages, 2u);
-    EXPECT_EQ(factory.createdViews, 2u);
-    ASSERT_EQ(factory.importedImageDescs.size(), 2u);
-    EXPECT_EQ(factory.importedImageDescs[1].nativeHandle, reinterpret_cast<void*>(0x202));
+    ASSERT_NE(registry.resolveTexture(handleB), nullptr);
+    EXPECT_EQ(registry.resolveTexture(handleB)->getImage(), graphB.getTexture(handleB)->imported->resource->getImage());
+    EXPECT_EQ(registry.getLastSyncStats().importReplaced, 1u);
+    EXPECT_EQ(factory.importedImages, 0u);
+    EXPECT_EQ(factory.createdViews, 0u);
 }
 
 TEST(RenderGraphCoreTest, ImageViewDescKeyIgnoresDebugLabel)
@@ -2288,131 +2280,55 @@ TEST(RenderGraphCoreTest, ImageViewDescKeyIgnoresDebugLabel)
     EXPECT_FALSE(isSameImageViewCreateInfo(base, relabeled));
 }
 
-TEST(RenderGraphCoreTest, ResourceRegistryKeepsImportedTextureWhenOnlyViewLabelChanges)
+TEST(RenderGraphCoreTest, ResourceRegistryReplacesImportOnlyWhenOwnerViewChanges)
 {
-    TestResourceFactory factory;
-    RenderGraphResourceRegistry registry(factory);
+    render_graph_trace::setEnabled(true);
 
-    const auto buildGraph = [](std::string_view viewLabel) {
-        RenderGraph graph;
-        RGImportedTextureDesc importedDesc{};
-        importedDesc.desc = RGTextureDesc{
-            .label       = "history.imported.face",
+    TestResourceFactory         factory;
+    RenderGraphResourceRegistry registry(factory, "trace.view");
+    std::shared_ptr<IImage>     image = std::make_shared<TestImage>(ImageCreateInfo{
+            .label       = "history.face",
             .format      = EFormat::R16G16B16A16_SFLOAT,
-            .extent      = Extent3D{128, 128, 1},
-            .mipLevels   = 1,
-            .arrayLayers = 1,
+            .extent      = {.width = 128, .height = 128, .depth = 1},
+            .mipLevels   = 4,
+            .arrayLayers = 6,
             .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        };
-        importedDesc.importDesc = ImportedImageDesc{
-            .label        = "history.imported.face",
-            .nativeHandle = reinterpret_cast<void*>(0x303),
-            .format       = EFormat::R16G16B16A16_SFLOAT,
-            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .extent       = Extent3D{128, 128, 1},
-            .mipLevels    = 4,
-            .arrayLayers  = 6,
-        };
-        importedDesc.viewDesc = ImageViewCreateInfo{
-            .label          = std::string(viewLabel),
+    });
+    const auto makeFaceView = [&](uint32_t baseMipLevel) -> std::shared_ptr<IImageView> {
+        return std::make_shared<TestImageView>(image, ImageViewCreateInfo{
+            .label          = "history.face.view",
             .viewType       = EImageViewType::View2D,
             .aspectFlags    = EImageAspect::Color,
-            .baseMipLevel   = 2,
+            .baseMipLevel   = baseMipLevel,
             .levelCount     = 1,
             .baseArrayLayer = 5,
             .layerCount     = 1,
-        };
-        graph.importTexture(importedDesc);
-        return graph;
+        });
+    };
+    const auto owner     = makeTestImageResource(image);
+    const auto syncFrame = [&](const std::shared_ptr<IImageView>& view) {
+        RenderGraph graph;
+        (void)graph.importTexture(makeImportedTextureDesc(owner, view, "history.face", EImageLayout::ShaderReadOnlyOptimal));
+        registry.sync(graph);
     };
 
-    auto graphA = buildGraph("history.imported.face.view.a");
-    registry.sync(graphA);
-    EXPECT_EQ(factory.importedImages, 1u);
-    EXPECT_EQ(factory.createdViews, 1u);
+    const auto viewA = makeFaceView(2);
+    syncFrame(viewA);
+    EXPECT_EQ(registry.getLastSyncStats().importBound, 1u);
 
-    auto graphB = buildGraph("history.imported.face.view.b");
-    registry.sync(graphB);
-    EXPECT_EQ(factory.importedImages, 1u);
-    EXPECT_EQ(factory.createdViews, 1u);
-}
+    syncFrame(viewA);
+    EXPECT_FALSE(registry.getLastSyncStats().hasChurn());
+    EXPECT_EQ(registry.getLastSyncStats().importRebound, 1u);
 
-TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenViewIdentityChanges)
-{
-    TestResourceFactory factory;
-    RenderGraphResourceRegistry registry(factory);
+    syncFrame(makeFaceView(3));
+    EXPECT_EQ(registry.getLastSyncStats().importReplaced, 1u);
+    ASSERT_EQ(registry.getLastSyncEvents().size(), 1u);
+    const auto& replaced = registry.getLastSyncEvents()[0];
+    EXPECT_NE(replaced.changes & ERGImportChange::View, 0u);
+    EXPECT_EQ(replaced.changes & ERGImportChange::Image, 0u);
+    EXPECT_EQ(factory.createdViews, 0u);
 
-    RenderGraph graphA;
-    {
-        RGImportedTextureDesc importedDesc{};
-        importedDesc.desc = RGTextureDesc{
-            .label       = "history.imported.face",
-            .format      = EFormat::R16G16B16A16_SFLOAT,
-            .extent      = Extent3D{128, 128, 1},
-            .mipLevels   = 1,
-            .arrayLayers = 1,
-            .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        };
-        importedDesc.importDesc = ImportedImageDesc{
-            .label        = "history.imported.face",
-            .nativeHandle = reinterpret_cast<void*>(0x404),
-            .format       = EFormat::R16G16B16A16_SFLOAT,
-            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .extent       = Extent3D{128, 128, 1},
-            .mipLevels    = 4,
-            .arrayLayers  = 6,
-        };
-        importedDesc.viewDesc = ImageViewCreateInfo{
-            .label          = "history.imported.face.view",
-            .viewType       = EImageViewType::View2D,
-            .aspectFlags    = EImageAspect::Color,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        };
-        graphA.importTexture(importedDesc);
-    }
-
-    registry.sync(graphA);
-    EXPECT_EQ(factory.importedImages, 1u);
-    EXPECT_EQ(factory.createdViews, 1u);
-
-    RenderGraph graphB;
-    {
-        RGImportedTextureDesc importedDesc{};
-        importedDesc.desc = RGTextureDesc{
-            .label       = "history.imported.face",
-            .format      = EFormat::R16G16B16A16_SFLOAT,
-            .extent      = Extent3D{128, 128, 1},
-            .mipLevels   = 1,
-            .arrayLayers = 1,
-            .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        };
-        importedDesc.importDesc = ImportedImageDesc{
-            .label        = "history.imported.face",
-            .nativeHandle = reinterpret_cast<void*>(0x404),
-            .format       = EFormat::R16G16B16A16_SFLOAT,
-            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .extent       = Extent3D{128, 128, 1},
-            .mipLevels    = 4,
-            .arrayLayers  = 6,
-        };
-        importedDesc.viewDesc = ImageViewCreateInfo{
-            .label          = "history.imported.face.view",
-            .viewType       = EImageViewType::View2D,
-            .aspectFlags    = EImageAspect::Color,
-            .baseMipLevel   = 1,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        };
-        graphB.importTexture(importedDesc);
-    }
-
-    registry.sync(graphB);
-    EXPECT_EQ(factory.importedImages, 2u);
-    EXPECT_EQ(factory.createdViews, 2u);
+    render_graph_trace::setEnabled(false);
 }
 
 TEST(RenderGraphCoreTest, ResourceRegistryTraceSeparatesKeepAliveRefreshFromBufferReplacement)
@@ -2522,63 +2438,130 @@ TEST(RenderGraphCoreTest, ResourceRegistryTraceReportsWrapperCloneAsReboundNotRe
     render_graph_trace::setEnabled(false);
 }
 
-TEST(RenderGraphCoreTest, ResourceRegistryTraceMarksRegistryCreatedImportViewOnReplaceAndPrune)
+TEST(RenderGraphCoreTest, ResourceRegistryKeepsImportBindingsWhenAnEarlierImportIsInserted)
 {
-    render_graph_trace::setEnabled(true);
+    TestResourceFactory         factory;
+    RenderGraphResourceRegistry registry(factory);
+    const auto shadow   = makeOwnedTestTexture("owner.shadow");
+    const auto history  = makeOwnedTestTexture("owner.history");
+    const auto inserted = makeOwnedTestTexture("owner.inserted");
+
+    {
+        RenderGraph graph;
+        (void)importOwnedTestTexture(graph, shadow, "owner.shadow");
+        (void)importOwnedTestTexture(graph, history, "owner.history");
+        registry.sync(graph);
+        EXPECT_EQ(registry.getLastSyncStats().importBound, 2u);
+    }
+
+    RenderGraph graph;
+    const auto  insertedHandle = importOwnedTestTexture(graph, inserted, "owner.inserted");
+    const auto  shadowHandle   = importOwnedTestTexture(graph, shadow, "owner.shadow");
+    const auto  historyHandle  = importOwnedTestTexture(graph, history, "owner.history");
+    registry.sync(graph);
+
+    EXPECT_EQ(registry.getLastSyncStats().importReplaced, 0u);
+    EXPECT_EQ(registry.getLastSyncStats().importBound, 1u);
+    EXPECT_EQ(registry.getLastSyncStats().importRebound, 2u);
+    EXPECT_EQ(registry.resolveTexture(insertedHandle)->getImage(), inserted->getImage());
+    EXPECT_EQ(registry.resolveTexture(shadowHandle)->getImage(), shadow->getImage());
+    EXPECT_EQ(registry.resolveTexture(historyHandle)->getImage(), history->getImage());
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryKeepsSameLabelImportsDistinctAcrossScopes)
+{
+    TestResourceFactory         factory;
+    RenderGraphResourceRegistry registry(factory);
+    const auto viewOneHistory = makeOwnedTestTexture("view1.history");
+    const auto viewTwoHistory = makeOwnedTestTexture("view2.history");
+
+    const auto importInScope = [](RenderGraph& graph, uint64_t scope, const std::shared_ptr<ImageResource>& resource) {
+        const RGImportScope importScope(graph, scope);
+        return importOwnedTestTexture(graph, resource, "View.History");
+    };
+
+    {
+        RenderGraph graph;
+        const auto  first  = importInScope(graph, 1, viewOneHistory);
+        const auto  second = importInScope(graph, 2, viewTwoHistory);
+        EXPECT_EQ(graph.getImportScope(), 0u);
+        EXPECT_EQ(graph.getTexture(first)->importKey, (RGImportKey{.label = "View.History", .scope = 1}));
+        EXPECT_EQ(graph.getTexture(second)->importKey, (RGImportKey{.label = "View.History", .scope = 2}));
+        registry.sync(graph);
+        EXPECT_EQ(registry.getLastSyncStats().importBound, 2u);
+    }
+
+    RenderGraph graph;
+    const auto  second = importInScope(graph, 2, viewTwoHistory);
+    const auto  first  = importInScope(graph, 1, viewOneHistory);
+    registry.sync(graph);
+    EXPECT_FALSE(registry.getLastSyncStats().hasChurn());
+    EXPECT_EQ(registry.getLastSyncStats().importRebound, 2u);
+    EXPECT_EQ(registry.resolveTexture(first)->getImage(), viewOneHistory->getImage());
+    EXPECT_EQ(registry.resolveTexture(second)->getImage(), viewTwoHistory->getImage());
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryEvictsIdleTransientTexturesAfterSyncLimit)
+{
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+    deletionQueue.init(/*framesInFlight=*/1);
 
     TestResourceFactory         factory;
-    RenderGraphResourceRegistry registry(factory, "trace.registry-view");
-
-    const auto syncFrame = [&](uint32_t baseMipLevel) {
-        RenderGraph           graph;
-        RGImportedTextureDesc importedDesc{};
-        importedDesc.desc = RGTextureDesc{
-            .label  = "trace.native",
+    RenderGraphResourceRegistry registry(factory);
+    const auto syncScratch = [&](uint32_t width) {
+        RenderGraph graph;
+        (void)graph.createTexture(RGTextureDesc{
+            .label  = "scratch",
             .format = EFormat::R16G16B16A16_SFLOAT,
-            .extent = Extent3D{128, 128, 1},
-            .usage  = EImageUsage::Sampled,
-        };
-        importedDesc.importDesc = ImportedImageDesc{
-            .label        = "trace.native",
-            .nativeHandle = reinterpret_cast<void*>(0x505),
-            .format       = EFormat::R16G16B16A16_SFLOAT,
-            .usage        = EImageUsage::Sampled,
-            .extent       = Extent3D{128, 128, 1},
-            .mipLevels    = 4,
-        };
-        importedDesc.viewDesc = ImageViewCreateInfo{
-            .label        = "trace.native.view",
-            .viewType     = EImageViewType::View2D,
-            .aspectFlags  = EImageAspect::Color,
-            .baseMipLevel = baseMipLevel,
-            .levelCount   = 1,
-            .layerCount   = 1,
-        };
-        (void)graph.importTexture(importedDesc);
+            .extent = Extent3D{width, width, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        });
         registry.sync(graph);
     };
 
-    syncFrame(0);
-    EXPECT_EQ(registry.getLastSyncStats().registryObjectsCreated, 1u);
-    ASSERT_EQ(registry.getLastSyncEvents().size(), 1u);
-    EXPECT_TRUE(registry.getLastSyncEvents()[0].bRegistryOwnsGpuObject);
+    syncScratch(256);
+    EXPECT_EQ(registry.getTransientTexturePoolSize(), 1u);
+    for (uint64_t idleSyncs = 1; idleSyncs <= RenderGraphResourceRegistry::kTransientTextureIdleSyncLimit; ++idleSyncs) {
+        syncScratch(512);
+        EXPECT_EQ(registry.getTransientTexturePoolSize(), 2u) << "idle syncs: " << idleSyncs;
+    }
+    syncScratch(512);
+    EXPECT_EQ(registry.getTransientTexturePoolSize(), 1u);
+    EXPECT_EQ(factory.createdImages, 2u);
 
-    syncFrame(1);
-    ASSERT_EQ(registry.getLastSyncEvents().size(), 1u);
-    const auto& replaced = registry.getLastSyncEvents()[0];
-    EXPECT_EQ(replaced.kind, ERGRegistryEvent::ImportReplaced);
-    EXPECT_NE(replaced.changes & ERGImportChange::ViewDesc, 0u);
-    EXPECT_TRUE(replaced.bRegistryOwnsGpuObject);
-    EXPECT_EQ(registry.getLastSyncStats().registryObjectsRetired, 1u);
-    EXPECT_EQ(registry.getLastSyncStats().registryObjectsCreated, 1u);
+    registry.clear();
+    deletionQueue.flushAll();
+}
 
-    RenderGraph emptyGraph;
-    registry.sync(emptyGraph);
-    ASSERT_EQ(registry.getLastSyncEvents().size(), 1u);
-    EXPECT_EQ(registry.getLastSyncEvents()[0].kind, ERGRegistryEvent::ImportPruned);
-    EXPECT_EQ(registry.getLastSyncStats().registryObjectsRetired, 1u);
+TEST(RenderGraphCoreTest, ResourceRegistryClaimsKeptTransientsBeforeAcquiringNewOnes)
+{
+    TestResourceFactory         factory;
+    RenderGraphResourceRegistry registry(factory);
+    const auto declare = [](RenderGraph& graph, std::string label, uint32_t width) {
+        return graph.createTexture(RGTextureDesc{
+            .label  = std::move(label),
+            .format = EFormat::R16G16B16A16_SFLOAT,
+            .extent = Extent3D{width, width, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        });
+    };
 
-    render_graph_trace::setEnabled(false);
+    {
+        RenderGraph graph;
+        (void)declare(graph, "a", 256);
+        (void)declare(graph, "b", 512);
+        registry.sync(graph);
+    }
+
+    // Handle 0 changes desc to match the pool entry handle 1 keeps.
+    RenderGraph graph;
+    const auto  changed = declare(graph, "a", 512);
+    const auto  kept    = declare(graph, "b", 512);
+    registry.sync(graph);
+    ASSERT_NE(registry.resolveTexture(changed), nullptr);
+    ASSERT_NE(registry.resolveTexture(kept), nullptr);
+    EXPECT_NE(registry.resolveTexture(changed)->getImage(), registry.resolveTexture(kept)->getImage());
 }
 
 TEST(RenderGraphCoreTest, ResourceRegistryRecordsEventsOnlyWhileTraceEnabled)
@@ -2629,6 +2612,7 @@ TEST(RenderGraphCoreTest, DebugDumpListsImportedResourcesWithBackingIdentity)
         },
          .resource = makeTestImageResource(image),
     });
+    const auto* view = graph.getTexture(texture)->imported->resource->getImageView();
     const auto  ssbo = graph.importBuffer(RGImportedBufferDesc{
          .desc   = RGBufferDesc{.label = "dump.ssbo", .usage = EBufferUsage::StorageBuffer, .size = 128},
          .buffer = buffer.get(),
@@ -2641,7 +2625,10 @@ TEST(RenderGraphCoreTest, DebugDumpListsImportedResourcesWithBackingIdentity)
     const auto dump = graph.debugDump(graph.compile());
     EXPECT_NE(dump.find("imports(2)"), std::string::npos);
     EXPECT_NE(dump.find("texture[0] dump.target"), std::string::npos);
-    EXPECT_NE(dump.find("view=registry-creates"), std::string::npos);
+    EXPECT_NE(dump.find("scope=0"), std::string::npos);
+    std::ostringstream backing;
+    backing << "image=" << static_cast<const void*>(image.get()) << " view=" << static_cast<const void*>(view);
+    EXPECT_NE(dump.find(backing.str()), std::string::npos);
     EXPECT_NE(dump.find("buffer[0] dump.ssbo"), std::string::npos);
 }
 
@@ -2685,7 +2672,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryKeepsSharedImportedTextureWhenOnlyLayo
     auto firstResource = registry.resolveTextureShared(importedHandle);
     ASSERT_NE(firstResource, nullptr);
     EXPECT_EQ(factory.importedImages, 0u);
-    EXPECT_EQ(factory.createdViews, 1u);
+    EXPECT_EQ(factory.createdViews, 0u);
 
     RenderGraph graphB;
     graphB.importTexture(RGImportedTextureDesc{
@@ -2711,7 +2698,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryKeepsSharedImportedTextureWhenOnlyLayo
     auto secondResource = registry.resolveTextureShared(importedHandle);
     ASSERT_NE(secondResource, nullptr);
     EXPECT_EQ(factory.importedImages, 0u);
-    EXPECT_EQ(factory.createdViews, 1u);
+    EXPECT_EQ(factory.createdViews, 0u);
     EXPECT_EQ(secondResource, firstResource);
 }
 
@@ -2959,7 +2946,7 @@ TEST(RenderGraphCoreTest, RenderContextReportsDeclaredTextureAndBufferUsage)
         .size  = 64,
     });
 
-    const auto declared = graph.importTexture(RGImportedTextureDesc{
+    const auto declared = graph.importTexture(withTestBacking(RGImportedTextureDesc{
         .desc = RGTextureDesc{
             .label  = "declared",
             .format = EFormat::R8_UNORM,
@@ -2967,14 +2954,13 @@ TEST(RenderGraphCoreTest, RenderContextReportsDeclaredTextureAndBufferUsage)
             .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
         },
         .importDesc = ImportedImageDesc{
-            .label        = "declared",
-            .nativeHandle = reinterpret_cast<void*>(0x1001),
-            .format       = EFormat::R8_UNORM,
-            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .extent       = Extent3D{32, 32, 1},
+            .label  = "declared",
+            .format = EFormat::R8_UNORM,
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .extent = Extent3D{32, 32, 1},
         },
-    });
-    const auto undeclared = graph.importTexture(RGImportedTextureDesc{
+    }));
+    const auto undeclared = graph.importTexture(withTestBacking(RGImportedTextureDesc{
         .desc = RGTextureDesc{
             .label  = "undeclared",
             .format = EFormat::R8_UNORM,
@@ -2982,13 +2968,12 @@ TEST(RenderGraphCoreTest, RenderContextReportsDeclaredTextureAndBufferUsage)
             .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
         },
         .importDesc = ImportedImageDesc{
-            .label        = "undeclared",
-            .nativeHandle = reinterpret_cast<void*>(0x1002),
-            .format       = EFormat::R8_UNORM,
-            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .extent       = Extent3D{32, 32, 1},
+            .label  = "undeclared",
+            .format = EFormat::R8_UNORM,
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .extent = Extent3D{32, 32, 1},
         },
-    });
+    }));
     const auto dstBuffer = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
             .label = "dst",

@@ -1,5 +1,13 @@
 # 进度
 
+## 2026-09-29 P2 import 条目按 owner key 匹配（部分执行）
+
+- 改动：import 身份 = `RGImportKey{label, scope}`；registry 的 import 条目按 key 存（`_importedTextures` / `_importedBuffers`），handle 映射每次 sync 重建、只用于 resolve；替换判定仍是 desc + backing 指针。`importTexture` 要求 owner 提供 image 与 view（`RGImportedTextureDesc::viewDesc`、`bRegistryCreatedImportObject`、`ERGImportChange::ViewDesc` 删除），registry 不再为 import 建任何 GPU 对象。transient 纹理池条目记 `lastUsedSync`，空闲超过 `kTransientTextureIdleSyncLimit`（8 次 sync）经 DDQ 淘汰；transient 先认领保留绑定再分配，修掉"新声明纹理抢走后续 handle 仍保留的池条目"导致的别名。入口收敛：删 SSAO/Bloom/PostProcess/Environment×2 转发包装、`makeImportedSubresourceTextureDesc`，Deferred/DirectionalShadow/PointShadow 的 host-written lambda 改为直接 `makeHostWrittenImportedBufferDesc`（size 0 = 整个 buffer，由 executor `normalizeBufferState` 保证）。
+- 偏离：key 没有放进 `RGImported*Desc`，而是 graph 上的环境 scope（`RGImportScope(graph, viewId)`，在 Deferred/Forward orchestrator `build` 入口设置）+ 规范化 label。依据：同一 View 内 label 已唯一（与 `makeViewGraphName` 导出约定一致），调用点无需逐个传 key，新 import 自动带 View 身份；同 scope 重复 label 直接 `YA_CORE_ASSERT`。
+- 偏离（额外删除）：Bloom `render()` / 自带 executor / `RenderDesc.cmdBuf|sceneTexture|sceneImage`、`PostProcessingStage` 三个无调用方的 `appendGraphPasses` 重载、Deferred `makeDeferredEnvironmentImportedDesc`——都是只为旧 import 入口存在的死代码。
+- 验证：ya-render-3d-test 188 通过（删 3 个 registry 自建 view 的测试，新增 pass 插入不误替换、跨 scope 同 label、池淘汰、transient 认领顺序 4 个）；`xmake b -a` 通过。HelloMaterial 240 帧 automation（frame 60 → 800x600，frame 120 切 Forward）：sync#2 `PointShadowCull.*` 首现为 bound=7 replaced=0（P1 为 11 个误替换）；真实替换不变（点光扩容 6、环境加载 1+2、resize 12 单次）；旧 `Bloom.BlurScratch` 在 sync#69 淘汰；稳态 0 替换。DDQ flush：P1 `2/4/5/10/12/63/123` → P2 `2/5/10/12/63/71/123`（frame 4 的 11 个误替换析构消失，frame 71 为 1 个淘汰）。编辑器（默认 / material-preview）150 帧无断言、无替换。
+- 未完成：多 View 运行时仍未验证（同 P1，缺选择 automation），由单测 `ResourceRegistryKeepsSameLabelImportsDistinctAcrossScopes` 覆盖。
+
 ## 2026-09-29 P1 registry 决策诊断与 import owner 表
 
 - 改动：registry `sync` 产出 `RGRegistrySyncStats` 与结构化事件（bind/replace/retained refresh/prune/owned buffer/transient miss，附变化原因位与"registry 是否自有 GPU 对象"）；`--render-graph-trace=true` 运行时开关（关闭时只计数不存事件）；executor 带名字（Deferred/Forward/Bloom/BrdfLUT/Presentation[i]/ScreenshotCopy），开启时首帧与有替换/prune 的 sync 打印 `debugDump`（上限 4 次）；`debugDump` 新增 imports 段（wrapper/image/view 来源、buffer range、retained 数）。替换判定谓词原样保留，graph 语义不变。

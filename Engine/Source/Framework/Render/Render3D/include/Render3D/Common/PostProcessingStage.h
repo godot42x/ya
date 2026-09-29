@@ -67,18 +67,6 @@ struct PostProcessingStage
                                            RGTextureHandle bloomBlur = {},
                                            RGTextureHandle bloomComposite = {});
     RGTextureHandle appendFinalizeGraphPasses(RenderGraph& graph, const FinalizePassParams& params);
-    RGTextureHandle appendGraphPasses(RenderGraph& graph,
-                                      Texture*      inputTexture,
-                                      glm::vec2     viewExtent,
-                                      FrameContext* ctx);
-    RGTextureHandle appendGraphPasses(RenderGraph& graph,
-                                      RenderTexture* inputImage,
-                                      glm::vec2      viewExtent,
-                                      FrameContext*  ctx);
-    RGTextureHandle appendGraphPasses(RenderGraph& graph,
-                                      RGTextureHandle input,
-                                      Extent2D        inputExtent,
-                                      FrameContext*   ctx);
     [[nodiscard]] bool                       isGradingEnabled() const { return bGradingEnabled; }
     [[nodiscard]] PostProcessingState&       getState() { return _state; }
     [[nodiscard]] const PostProcessingState& getState() const { return _state; }

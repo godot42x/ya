@@ -163,26 +163,15 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendCascadePass(
         EImageLayout::ShaderReadOnlyOptimal,
         EImageUsage::DepthStencilAttachment,
         Extent3D{_shadowExtent.width, _shadowExtent.height, 1}));
-    const auto importHostWrittenBuffer = [&](const FrameUploadArena::Allocation& allocation, std::string label, EBufferUsage usage) {
-        YA_CORE_ASSERT(allocation && allocation.buffer, "Directional shadow graph requires imported buffer '{}'", label);
-        return graph.importBuffer(makeHostWrittenImportedBufferDesc(
-            allocation.buffer,
-            label,
-            usage,
-            allocation.offset,
-            allocation.size));
-    };
-    const auto frameBuffer = importHostWrittenBuffer(
-        binding->directionalFrames[cascadeIndex],
+    const auto& frameAllocation = binding->directionalFrames[cascadeIndex];
+    const auto  frameBuffer     = graph.importBuffer(makeHostWrittenImportedBufferDesc(
+        frameAllocation.buffer,
         std::format("DirectionalShadow.FrameUBO.{}", cascadeIndex),
-        EBufferUsage::UniformBuffer);
-    const auto skinningBuffer = importHostWrittenBuffer(
-        FrameUploadArena::Allocation{
-            .buffer = binding->skinningBuffer,
-            .offset = 0,
-            .size   = binding->skinningBuffer->getSize(),
-        },
-        "DirectionalShadow.SkinningSSBO", EBufferUsage::StorageBuffer);
+        EBufferUsage::UniformBuffer,
+        frameAllocation.offset,
+        frameAllocation.size));
+    const auto skinningBuffer = graph.importBuffer(makeHostWrittenImportedBufferDesc(
+        binding->skinningBuffer, "DirectionalShadow.SkinningSSBO", EBufferUsage::StorageBuffer));
     const auto frameDS = binding->directionalFrameDS[cascadeIndex];
     const auto skinningDS = binding->skinningDS;
 

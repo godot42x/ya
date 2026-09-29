@@ -95,12 +95,6 @@ RenderTargetCreateInfo buildDeferredGBufferRenderTargetSpec(Extent2D extent,
 RenderTargetCreateInfo buildDeferredViewRenderTargetSpec(Extent2D extent, EFormat::T colorFormat);
 DeferredAttachmentFormats buildDeferredFormatsFromSpec(const RenderTargetCreateInfo& spec);
 
-RGImportedTextureDesc makeDeferredEnvironmentImportedDesc(const std::shared_ptr<ImageResource>& resource,
-                                                          std::string_view                     label)
-{
-    return makeImportedTextureDesc(resource, label, EImageLayout::ShaderReadOnlyOptimal);
-}
-
 RGTextureDesc makeGraphAttachmentDesc(const RenderTargetCreateInfo& spec,
                                       const AttachmentDescription&  attachment,
                                       std::string                    label)

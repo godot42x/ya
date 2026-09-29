@@ -29,10 +29,10 @@
     },
     {
       "area": "import 条目按 owner key 匹配 + 删 registry 自建 import view + import 入口收敛 + transient 纹理池淘汰",
-      "owner": "外部 owner 在 RGImported*Desc 提供稳定 key；registry 按 key 匹配、按 backing 判替换；RenderGraphImportUtils 为唯一构造入口",
+      "owner": "RGImportKey{label, scope}（scope 由 orchestrator 的 RGImportScope(viewId) 提供）；registry 按 key 匹配、按 backing 判替换；RenderGraphImportUtils 为唯一构造入口",
       "phase": "P2",
-      "status": "todo",
-      "proof": "拓扑变化（首现 pass / View 增减）不产生误替换（P1 trace 计数）；稳态替换 0；resize 只触发 owner 单次替换且旧尺寸 transient 条目被淘汰；import 必须带 view；5 个转发包装与 3 个 host-written lambda 删除；ya-render-3d-test 全过；flush 基线不回退"
+      "status": "done",
+      "proof": "ya-render-3d-test 188 passed（含 pass 插入、跨 scope 同 label、池淘汰、transient 认领顺序）；HelloMaterial 240 帧 trace：PointShadowCull 首现 bound=7 replaced=0（P1 为 11 误替换），resize 12 单次替换，旧 Bloom.BlurScratch sync#69 淘汰，稳态 0；flush frame 4 的 11 析构消失；编辑器 150 帧无断言。多 View 运行时未验证（单测覆盖）"
     },
     {
       "area": "Bloom 垂直切片（Forward + Deferred 共用）",

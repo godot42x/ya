@@ -148,55 +148,6 @@ RGImportedTextureDesc makeImportedTextureDesc(
     };
 }
 
-RGImportedTextureDesc makeImportedSubresourceTextureDesc(
-    const std::shared_ptr<ImageResource>& resource,
-    EFormat::T format,
-    const ImageViewCreateInfo& viewDesc,
-    Extent3D logicalExtent,
-    std::string_view label,
-    EImageLayout::T finalLayout,
-    EImageUsage::T requiredUsage)
-{
-    YA_CORE_ASSERT(resource != nullptr, "Render graph subresource import requires a backing image resource");
-
-    const auto image = resource->getImageShared();
-    YA_CORE_ASSERT(image != nullptr, "Render graph subresource import requires a backing image");
-
-    const EImageUsage::T usage = mergeImportedUsage(image->getUsage(), requiredUsage);
-    const ImageSubresourceRange subresourceRange{
-        .aspectMask     = viewDesc.aspectFlags,
-        .baseMipLevel   = viewDesc.baseMipLevel,
-        .levelCount     = viewDesc.levelCount,
-        .baseArrayLayer = viewDesc.baseArrayLayer,
-        .layerCount     = viewDesc.layerCount,
-    };
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = std::string(label),
-            .format      = format,
-            .extent      = logicalExtent,
-            .mipLevels   = viewDesc.levelCount,
-            .arrayLayers = viewDesc.layerCount,
-            .usage       = usage,
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = std::string(label),
-            .nativeHandle  = static_cast<void*>(image->getHandle()),
-            .format        = format,
-            .usage         = usage,
-            .extent        = Extent3D{image->getWidth(), image->getHeight(), 1},
-            .mipLevels     = image->getMipLevels(),
-            .arrayLayers   = image->getArrayLayers(),
-            .initialLayout = getImportedInitialLayout(*image, &subresourceRange),
-            .finalLayout   = finalLayout,
-        },
-        .resource = resource,
-        .subresourceRange = subresourceRange,
-        .viewDesc = viewDesc,
-    };
-}
-
 } // namespace
 
 RGImportedBufferDesc makeImportedBufferDesc(const std::shared_ptr<IBuffer>& buffer,
@@ -346,23 +297,4 @@ RGImportedTextureDesc makeImportedTextureDesc(const std::shared_ptr<ImageResourc
     desc.retainedResources = importedResource->retainedResources;
     return desc;
 }
-
-RGImportedTextureDesc makeImportedSubresourceTextureDesc(const std::shared_ptr<ImageResource>& resource,
-                                                         const ImageViewCreateInfo& viewDesc,
-                                                         Extent3D logicalExtent,
-                                                         std::string_view label,
-                                                         EImageLayout::T finalLayout,
-                                                         EImageUsage::T requiredUsage)
-{
-    const auto image = resource ? resource->getImageShared() : nullptr;
-    return makeImportedSubresourceTextureDesc(
-        resource,
-        image ? image->getFormat() : EFormat::Undefined,
-        viewDesc,
-        logicalExtent,
-        label,
-        finalLayout,
-        requiredUsage);
-}
-
 } // namespace ya

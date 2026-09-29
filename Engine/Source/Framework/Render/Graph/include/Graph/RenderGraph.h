@@ -14,6 +14,8 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace ya
@@ -85,13 +87,34 @@ struct RGBufferRange
     uint64_t size   = 0;
 };
 
+/// Identity of an import across graph rebuilds: the owner's role label plus the
+/// import scope it was declared in (a viewId for per-View imports, 0 for
+/// graph-wide ones). The registry keeps import bindings by this key, never by
+/// declaration order, so one graph must not declare the same key twice.
+struct RGImportKey
+{
+    std::string label;
+    uint64_t    scope = 0;
+
+    bool operator==(const RGImportKey&) const = default;
+};
+
+struct RGImportKeyHash
+{
+    std::size_t operator()(const RGImportKey& key) const noexcept
+    {
+        return std::hash<std::string>{}(key.label) ^ (std::hash<uint64_t>{}(key.scope) << 1);
+    }
+};
+
+/// The owner provides the image and its view; the registry never creates GPU
+/// objects for an import.
 struct RGImportedTextureDesc
 {
     RGTextureDesc     desc;
     ImportedImageDesc importDesc;
     std::shared_ptr<ImageResource> resource = nullptr;
     std::optional<ImageSubresourceRange> subresourceRange{};
-    std::optional<ImageViewCreateInfo> viewDesc{};
     std::vector<RetainedResource> retainedResources{};
 };
 
@@ -110,6 +133,7 @@ struct RGTextureResource
     ERGResourceLifetime              lifetime = ERGResourceLifetime::Transient;
     RGTextureDesc                    desc{};
     std::optional<RGImportedTextureDesc> imported{};
+    RGImportKey                      importKey{}; ///< Set for imported textures only.
 };
 
 struct RGBufferResource
@@ -118,6 +142,7 @@ struct RGBufferResource
     ERGResourceLifetime              lifetime = ERGResourceLifetime::Transient;
     RGBufferDesc                     desc{};
     std::optional<RGImportedBufferDesc> imported{};
+    RGImportKey                      importKey{}; ///< Set for imported buffers only.
 };
 
 enum class ERGPassResourceAccess : uint8_t
@@ -590,10 +615,13 @@ class RenderGraph
     uint32_t _nextTextureGeneration = 1;
     uint32_t _nextBufferGeneration  = 1;
     uint32_t _nextPassGeneration    = 1;
+    uint64_t _importScope           = 0;
     std::vector<RGTextureResource> _textures;
     std::vector<RGBufferResource>  _buffers;
     std::vector<RGPass>            _passes;
     std::vector<RGTextureExportRequest> _textureExports;
+    std::unordered_set<RGImportKey, RGImportKeyHash> _textureImportKeys;
+    std::unordered_set<RGImportKey, RGImportKeyHash> _bufferImportKeys;
 
     template <typename HandleT, typename ResourceT>
     static const ResourceT* findResource(const std::vector<ResourceT>& resources, HandleT handle)
@@ -611,6 +639,10 @@ class RenderGraph
 
     [[nodiscard]] YA_RENDER_GRAPH_API RGBufferHandle createBuffer(const RGBufferDesc& desc);
     [[nodiscard]] YA_RENDER_GRAPH_API RGBufferHandle importBuffer(const RGImportedBufferDesc& desc);
+    /// Imports declared from now on belong to `scope`; returns the previous scope.
+    /// Prefer RGImportScope, which restores it.
+    [[nodiscard]] uint64_t exchangeImportScope(uint64_t scope) { return std::exchange(_importScope, scope); }
+    [[nodiscard]] uint64_t getImportScope() const { return _importScope; }
 
     [[nodiscard]] YA_RENDER_GRAPH_API const RGTextureResource* getTexture(RGTextureHandle handle) const;
     [[nodiscard]] YA_RENDER_GRAPH_API const RGBufferResource* getBuffer(RGBufferHandle handle) const;
@@ -636,6 +668,26 @@ class RenderGraph
         }
         return _passes.back().handle;
     }
+};
+
+/// Declares the imports of one owner instance (typically one View of a family
+/// graph) under a stable scope, so identical role labels of different Views
+/// stay distinct and adding a View does not shift anyone else's identity.
+class RGImportScope
+{
+  private:
+    RenderGraph& _graph;
+    uint64_t     _previous = 0;
+
+  public:
+    RGImportScope(RenderGraph& graph, uint64_t scope)
+        : _graph(graph)
+        , _previous(graph.exchangeImportScope(scope))
+    {}
+    ~RGImportScope() { (void)_graph.exchangeImportScope(_previous); }
+
+    RGImportScope(const RGImportScope&)            = delete;
+    RGImportScope& operator=(const RGImportScope&) = delete;
 };
 
 } // namespace ya

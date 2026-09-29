@@ -158,19 +158,8 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
     YA_CORE_ASSERT(binding != nullptr, "Point shadow graph requires a View binding");
     YA_CORE_ASSERT(binding->skinningBuffer, "Point shadow graph requires a skinning buffer");
 
-    const auto importBuffer = [&](const std::shared_ptr<IBuffer>& buffer,
-                                  std::string label,
-                                  EBufferUsage usage,
-                                  BufferResourceState initialState) {
-        YA_CORE_ASSERT(buffer != nullptr, "Point shadow graph requires imported buffer '{}'", label);
-        return graph.importBuffer(makeImportedBufferDesc(buffer, label, initialState, usage));
-    };
-    const BufferResourceState hostWriteState{
-        .stages = EPipelineStage::Host,
-        .access = EResourceAccess::HostWrite,
-    };
-    const auto skinningBuffer = importBuffer(
-        binding->skinningBuffer, "PointShadow.SkinningSSBO", EBufferUsage::StorageBuffer, hostWriteState);
+    const auto skinningBuffer = graph.importBuffer(makeHostWrittenImportedBufferDesc(
+        binding->skinningBuffer, "PointShadow.SkinningSSBO", EBufferUsage::StorageBuffer));
 
     std::optional<RGBufferHandle> drawCommands;
     std::optional<RGBufferHandle> visibleInstances;
@@ -223,16 +212,12 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
                 EImageLayout::ShaderReadOnlyOptimal,
                 EImageUsage::DepthStencilAttachment,
                 Extent3D{_shadowExtent.width, _shadowExtent.height, 1}));
-            const auto faceBuffer = importBuffer(
+            const auto faceBuffer = graph.importBuffer(makeHostWrittenImportedBufferDesc(
                 faceAllocation.buffer,
                 std::format("PointShadow.FaceUBO.{}.{}", lightIndex, faceIndex),
                 EBufferUsage::UniformBuffer,
-                BufferResourceState{
-                    .stages = EPipelineStage::Host,
-                    .access = EResourceAccess::HostWrite,
-                    .offset = faceAllocation.offset,
-                    .size   = faceAllocation.size,
-                });
+                faceAllocation.offset,
+                faceAllocation.size));
 
             graphFaces->push_back({
                 .payload    = facePayload,

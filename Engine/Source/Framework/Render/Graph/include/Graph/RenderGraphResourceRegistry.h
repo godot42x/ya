@@ -24,6 +24,7 @@ enum class ERGRegistryEvent : uint8_t
     OwnedBufferReplaced,
     OwnedBufferPruned,
     TransientTextureAllocated,    ///< Transient texture pool miss: a new registry-owned image.
+    TransientTextureEvicted,      ///< Pooled transient texture idle past the limit; retired.
     TransientBufferSlotAllocated, ///< Transient buffer pool miss: a new registry-owned buffer.
 };
 
@@ -37,12 +38,11 @@ enum T : uint32_t
     Image          = 1 << 2, ///< Underlying IImage differs.
     View           = 1 << 3, ///< Underlying IImageView differs.
     Subresource    = 1 << 4,
-    ViewDesc       = 1 << 5,
-    LayoutContract = 1 << 6, ///< initial/final layout differs.
-    Buffer         = 1 << 7, ///< Underlying IBuffer differs.
-    Wrapper        = 1 << 8, ///< ImageResource wrapper differs (informational: never replaces by itself).
-    Retained       = 1 << 9, ///< Keep-alive list differs.
-    Lifetime       = 1 << 10, ///< Handle switched between imported and registry-owned.
+    LayoutContract = 1 << 5, ///< initial/final layout differs.
+    Buffer         = 1 << 6, ///< Underlying IBuffer differs.
+    Wrapper        = 1 << 7, ///< ImageResource wrapper differs (informational: never replaces by itself).
+    Retained       = 1 << 8, ///< Keep-alive list differs.
+    Lifetime       = 1 << 9, ///< Buffer handle switched between imported and registry-owned.
 };
 } // namespace ERGImportChange
 
@@ -52,9 +52,10 @@ struct RGRegistryEventRecord
     bool             bTexture     = true;
     uint32_t         handleIndex  = 0;
     uint32_t         changes      = ERGImportChange::None;
-    /// The retired or created binding holds a GPU object the registry created itself
-    /// (image view / imported image for textures, buffer for owned/transient buffers).
+    /// The retired or created binding is a registry-owned GPU object (transient
+    /// texture/buffer, owned buffer). Imports are always owner-provided.
     bool             bRegistryOwnsGpuObject = false;
+    uint64_t         scope        = 0; ///< Import scope; 0 for registry-owned resources.
     std::string      label;
 };
 
@@ -85,8 +86,17 @@ YA_RENDER_GRAPH_API void setEnabled(bool bEnabled);
 [[nodiscard]] YA_RENDER_GRAPH_API std::string describeChanges(uint32_t changes);
 } // namespace render_graph_trace
 
+/// Import bindings are kept by RGImportKey (owner label + import scope), so a
+/// graph that inserts, drops or reorders imports only touches the imports that
+/// actually changed. Handles are per-graph positions and only map this sync's
+/// graph onto those bindings.
 class RenderGraphResourceRegistry
 {
+  public:
+    /// A pooled transient texture unused for this many syncs is retired. Several
+    /// families may share one executor, so a single idle sync is not "unused".
+    static constexpr uint64_t kTransientTextureIdleSyncLimit = 8;
+
   private:
     struct TextureEntry
     {
@@ -95,8 +105,7 @@ class RenderGraphResourceRegistry
         RGTextureDesc                allocationDesc{};
         std::optional<RGImportedTextureDesc> imported{};
         bool                         pooledTransient = false;
-        /// Import binding whose image or view the registry created (no owner-provided one).
-        bool                         bRegistryCreatedImportObject = false;
+        uint64_t                     lastUsedSync    = 0;
     };
 
     struct OwnedBufferEntry
@@ -108,35 +117,43 @@ class RenderGraphResourceRegistry
 
     struct ImportedBufferEntry
     {
-        IBuffer*                          resource = nullptr;
         std::optional<RGImportedBufferDesc> imported{};
     };
 
     IRenderResourceFactory& _factory;
     std::string             _debugName;
+    /// This sync's handle -> binding map (imported and transient); rebuilt every sync.
     std::unordered_map<RGTextureHandle, std::shared_ptr<TextureEntry>> _textures;
+    std::unordered_map<RGImportKey, std::shared_ptr<TextureEntry>, RGImportKeyHash> _importedTextures;
     std::vector<std::shared_ptr<TextureEntry>> _transientTexturePool;
     std::unordered_map<RGBufferHandle, std::shared_ptr<OwnedBufferEntry>> _ownedBuffers;
     std::vector<std::shared_ptr<OwnedBufferEntry>> _transientBufferPool;
     RGTransientBufferPoolDiagnostics _transientPoolDiagnostics{};
-    std::unordered_map<RGBufferHandle, ImportedBufferEntry> _importedBuffers;
+    std::unordered_map<RGImportKey, ImportedBufferEntry, RGImportKeyHash> _importedBuffers;
+    /// This sync's handle -> imported buffer map; rebuilt every sync.
+    std::unordered_map<RGBufferHandle, IBuffer*> _importedBufferBindings;
     RGRegistrySyncStats                _lastSyncStats{};
     /// Filled only while render_graph_trace is enabled.
     std::vector<RGRegistryEventRecord> _lastSyncEvents;
 
     static ImageResourceDesc makeImageResourceDesc(const RGTextureDesc& desc);
     static ImageViewCreateInfo makeDefaultViewDesc(const RGTextureDesc& desc);
-    std::shared_ptr<RenderTexture> createImportedTexture(const RGImportedTextureDesc& desc, bool& outRegistryCreatedObject);
+    static std::shared_ptr<RenderTexture> wrapImportedTexture(const RGImportedTextureDesc& desc);
     void recordEvent(ERGRegistryEvent kind,
                      bool             bTexture,
                      uint32_t         handleIndex,
                      uint32_t         changes,
                      bool             bRegistryOwnsGpuObject,
+                     uint64_t         scope,
                      std::string_view label);
     void logSyncEvents() const;
-    void pruneUnusedResources(const RenderGraph& graph);
-    /// Returns ERGImportChange bits; outReplace carries the (unchanged) replacement decision.
-    static uint32_t diffTexture(const TextureEntry& entry, const RGTextureResource& resource, bool& outReplace);
+    void pruneAbsentImports(const RenderGraph& graph);
+    void pruneUnusedOwnedResources(const RenderGraph& graph);
+    void syncImportedTexture(const RGTextureResource& texture);
+    void syncImportedBuffer(const RGBufferResource& buffer);
+    void evictIdleTransientTextures();
+    /// Returns ERGImportChange bits; outReplace carries the replacement decision.
+    static uint32_t diffImportedTexture(const TextureEntry& entry, const RGTextureResource& resource, bool& outReplace);
     static bool needsOwnedBufferReplacement(const OwnedBufferEntry& entry, const RGBufferResource& resource);
     static uint32_t diffImportedBuffer(const ImportedBufferEntry& entry, const RGBufferResource& resource, bool& outReplace);
     static void releaseTextureBinding(std::shared_ptr<TextureEntry>& entry);
@@ -171,6 +188,7 @@ class RenderGraphResourceRegistry
     [[nodiscard]] const RGRegistrySyncStats& getLastSyncStats() const { return _lastSyncStats; }
     [[nodiscard]] const std::vector<RGRegistryEventRecord>& getLastSyncEvents() const { return _lastSyncEvents; }
     [[nodiscard]] const std::string& getDebugName() const { return _debugName; }
+    [[nodiscard]] size_t getTransientTexturePoolSize() const { return _transientTexturePool.size(); }
 
     [[nodiscard]] const std::unordered_map<RGTextureHandle, std::shared_ptr<TextureEntry>>& getTextures() const { return _textures; }
     [[nodiscard]] const std::unordered_map<RGBufferHandle, std::shared_ptr<OwnedBufferEntry>>& getOwnedBuffers() const { return _ownedBuffers; }

@@ -3,7 +3,7 @@
 #include "Core/Base.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Pipeline.h"
-#include "Graph/RenderGraphExecutor.h"
+#include "Graph/RenderGraph.h"
 #include "RHI/Core/RenderTexture.h"
 #include "Render3D/Common/PostProcessingState.h"
 #include "Render3D/Common/ViewPassResources.h"
@@ -33,9 +33,6 @@ struct BloomPostprocessing
 
     struct RenderDesc
     {
-        ICommandBuffer*            cmdBuf            = nullptr;
-        Texture*                   sceneTexture      = nullptr;
-        RenderTexture*             sceneImage        = nullptr;
         RGTextureHandle            sceneHandle{};
         Extent2D                   renderExtent      = {};
         const PostProcessingState* state             = nullptr;
@@ -62,13 +59,11 @@ struct BloomPostprocessing
     stdptr<IGraphicsPipeline>    _compositePipeline;
 
     uint32_t _lastBlurPassCount = 0;
-    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     void init(const InitDesc& initDesc);
     void shutdown();
     void beginFrame();
     RGTextureHandle appendGraphPasses(RenderGraph& graph, const RenderDesc& desc);
-    void render(const RenderDesc& desc);
     [[nodiscard]] stdptr<IDescriptorSetLayout> getExtractDSL() const { return _extractDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getBlurDSL() const { return _blurDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getCompositeDSL() const { return _compositeDSL; }

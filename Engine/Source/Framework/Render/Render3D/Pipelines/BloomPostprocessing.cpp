@@ -3,8 +3,7 @@
 
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/DescriptorSet.h"
-#include "Graph/RenderGraphExecutor.h"
-#include "Graph/RenderGraphImportUtils.h"
+#include "Graph/RenderGraph.h"
 #include "RHI/Render.h"
 #include "RHI/Backend/TextureLibrary.h"
 
@@ -17,13 +16,6 @@ namespace ya
 
 namespace
 {
-
-RGImportedTextureDesc makeBloomImportedTextureDesc(const std::shared_ptr<ImageResource>& resource,
-                                                   std::string_view                    label,
-                                                   EImageLayout::T                     finalLayout)
-{
-    return makeImportedTextureDesc(resource, label, finalLayout);
-}
 
 template <typename TPushConstants>
 PipelineLayoutDesc makePipelineLayoutDesc(const char* label, uint32_t descriptorCount)
@@ -81,7 +73,6 @@ void BloomPostprocessing::init(const InitDesc& initDesc)
 {
     _render   = initDesc.render;
     _initDesc = initDesc;
-    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory(), "Bloom");
     initExtractPipeline();
     initBlurPipeline();
     initCompositePipeline();
@@ -89,7 +80,6 @@ void BloomPostprocessing::init(const InitDesc& initDesc)
 
 void BloomPostprocessing::shutdown()
 {
-    _graphExecutor.reset();
     _extractDSL.reset();
     _extractPipeline.reset();
     _extractPPL.reset();
@@ -178,7 +168,7 @@ void BloomPostprocessing::writeComposite(DescriptorSetHandle set, IImageView* sc
 
 RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const RenderDesc& desc)
 {
-    if ((!desc.sceneTexture && !desc.sceneImage && !desc.sceneHandle.isValid()) || !desc.state) {
+    if (!desc.sceneHandle.isValid() || !desc.state) {
         return {};
     }
     if (desc.renderExtent.width == 0 || desc.renderExtent.height == 0) {
@@ -187,11 +177,7 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
 
     const bool bBloomEnabled = desc.state->bEnableBloom;
 
-    const auto scene = desc.sceneHandle.isValid()
-        ? desc.sceneHandle
-        : desc.sceneImage
-            ? graph.importTexture(makeBloomImportedTextureDesc(desc.sceneImage->getResourceShared(), "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal))
-            : graph.importTexture(makeBloomImportedTextureDesc(desc.sceneTexture->getResourceShared(), "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal));
+    const auto scene = desc.sceneHandle;
     const auto bloomDesc = RGTextureDesc{
         .label  = "Bloom.CompositeOutput",
         .format = BloomPostprocessing::BLOOM_FORMAT,
@@ -373,23 +359,6 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
             rgCtx.endRendering();
         });
     return output;
-}
-
-void BloomPostprocessing::render(const RenderDesc& desc)
-{
-    if (!desc.cmdBuf) {
-        return;
-    }
-
-    ICommandBuffer::LabelScope labelScope(desc.cmdBuf, "BloomPostprocessing");
-    RenderGraph graph;
-    const auto  output = appendGraphPasses(graph, desc);
-    if (!output.isValid()) {
-        return;
-    }
-
-    YA_CORE_ASSERT(_graphExecutor != nullptr, "BloomPostprocessing graph executor is not initialized");
-    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *desc.cmdBuf, nullptr, nullptr);
 }
 
 } // namespace ya

@@ -24,12 +24,6 @@ constexpr std::string_view kTopologyPassSkybox            = "Deferred Skybox";
 constexpr std::string_view kTopologyPassSprites           = "Deferred Sprites";
 constexpr std::string_view kTopologyPassForwardTransparent = "Deferred Forward Transparent";
 
-RGImportedTextureDesc makeEnvironmentImportedDesc(const std::shared_ptr<ImageResource>& resource,
-                                                  std::string_view                    label)
-{
-    return makeImportedTextureDesc(resource, label, EImageLayout::ShaderReadOnlyOptimal);
-}
-
 } // namespace
 
 namespace deferred_frame_graph_passes
@@ -37,56 +31,40 @@ namespace deferred_frame_graph_passes
 
 void importFrameBuffers(DeferredFrameGraphPassContext& context)
 {
+    auto&       graph          = context.graph;
     auto&       graphResources = context.graphResources;
     const auto& frameBinding   = context.frameBinding;
 
-    const auto importHostWritten = [&graphResources, &context](
-                                       const stdptr<IBuffer>& buffer,
-                                       std::string_view       label,
-                                       EBufferUsage           usage,
-                                       uint64_t               rangeOffset,
-                                       uint64_t               rangeSize) {
-        YA_CORE_ASSERT(buffer != nullptr, "Deferred graph requires imported buffer '{}'", label);
-        return context.graph.importBuffer(makeHostWrittenImportedBufferDesc(
-            buffer,
-            label,
-            usage,
-            rangeOffset,
-            rangeSize));
-    };
-
-    graphResources.buffers.frame = importHostWritten(
+    graphResources.buffers.frame = graph.importBuffer(makeHostWrittenImportedBufferDesc(
         frameBinding.frame.buffer,
         "Deferred.FrameUBO",
         EBufferUsage::UniformBuffer,
         frameBinding.frame.offset,
-        frameBinding.frame.size);
-    graphResources.buffers.light = importHostWritten(
+        frameBinding.frame.size));
+    graphResources.buffers.light = graph.importBuffer(makeHostWrittenImportedBufferDesc(
         frameBinding.light.buffer,
         "Deferred.LightUBO",
         EBufferUsage::UniformBuffer,
         frameBinding.light.offset,
-        frameBinding.light.size);
-    graphResources.buffers.skinning = importHostWritten(
+        frameBinding.light.size));
+    graphResources.buffers.skinning = graph.importBuffer(makeHostWrittenImportedBufferDesc(
         frameBinding.skinningBuffer,
         "Deferred.SkinningSSBO",
-        EBufferUsage::StorageBuffer,
-        0,
-        0);
+        EBufferUsage::StorageBuffer));
     if (context.bUseSSAO) {
-        graphResources.buffers.ssaoFrame = importHostWritten(
+        graphResources.buffers.ssaoFrame = graph.importBuffer(makeHostWrittenImportedBufferDesc(
             frameBinding.ssaoFrame.buffer,
             "Deferred.SSAOFrameUBO",
             EBufferUsage::UniformBuffer,
             frameBinding.ssaoFrame.offset,
-            frameBinding.ssaoFrame.size);
+            frameBinding.ssaoFrame.size));
     }
-    graphResources.buffers.skyboxFrame = importHostWritten(
+    graphResources.buffers.skyboxFrame = graph.importBuffer(makeHostWrittenImportedBufferDesc(
         frameBinding.skyboxFrame.buffer,
         "Deferred.SkyboxFrameUBO",
         EBufferUsage::UniformBuffer,
         frameBinding.skyboxFrame.offset,
-        frameBinding.skyboxFrame.size);
+        frameBinding.skyboxFrame.size));
 }
 
 void createAttachmentTextures(DeferredFrameGraphPassContext& context)
@@ -249,14 +227,17 @@ void appendLight(DeferredFrameGraphPassContext& context)
 
     if (context.environmentLighting && context.environmentLighting->isComplete()) {
         graphResources.textures.environmentCubemap = graph.importTexture(
-            makeEnvironmentImportedDesc(context.environmentLighting->cubemap,
-                                         "DeferredLight.Environment.Cubemap"));
+            makeImportedTextureDesc(context.environmentLighting->cubemap,
+                                    "DeferredLight.Environment.Cubemap",
+                                    EImageLayout::ShaderReadOnlyOptimal));
         graphResources.textures.environmentIrradiance = graph.importTexture(
-            makeEnvironmentImportedDesc(context.environmentLighting->irradiance,
-                                         "DeferredLight.Environment.Irradiance"));
+            makeImportedTextureDesc(context.environmentLighting->irradiance,
+                                    "DeferredLight.Environment.Irradiance",
+                                    EImageLayout::ShaderReadOnlyOptimal));
         graphResources.textures.environmentPrefilter = graph.importTexture(
-            makeEnvironmentImportedDesc(context.environmentLighting->prefilter,
-                                         "DeferredLight.Environment.Prefilter"));
+            makeImportedTextureDesc(context.environmentLighting->prefilter,
+                                    "DeferredLight.Environment.Prefilter",
+                                    EImageLayout::ShaderReadOnlyOptimal));
         graphResources.textures.environmentBrdfLut = graph.importTexture(
             makeImportedTextureDesc(*context.environmentLighting->brdfLut,
                                     "DeferredLight.Environment.BrdfLut",

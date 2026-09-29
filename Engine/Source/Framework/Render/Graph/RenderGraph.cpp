@@ -96,7 +96,7 @@ bool hasBufferUsage(EBufferUsage haystack, EBufferUsage needle)
 
 bool usesExplicitImportedTextureSubresource(const RGImportedTextureDesc& importedDesc)
 {
-    return importedDesc.subresourceRange.has_value() || importedDesc.viewDesc.has_value();
+    return importedDesc.subresourceRange.has_value();
 }
 
 std::string formatImageUsageFlags(EImageUsage::T usage)
@@ -230,16 +230,6 @@ ImageSubresourceRange makeImportedViewRange(const RGTextureResource& resource)
     if (resource.imported && resource.imported->subresourceRange.has_value()) {
         return *resource.imported->subresourceRange;
     }
-    if (resource.imported && resource.imported->viewDesc.has_value()) {
-        const auto& viewDesc = *resource.imported->viewDesc;
-        return ImageSubresourceRange{
-            .aspectMask     = viewDesc.aspectFlags != EImageAspect::None ? viewDesc.aspectFlags : graphDefaultAspectMask(resource.desc.format),
-            .baseMipLevel   = viewDesc.baseMipLevel,
-            .levelCount     = viewDesc.levelCount,
-            .baseArrayLayer = viewDesc.baseArrayLayer,
-            .layerCount     = viewDesc.layerCount,
-        };
-    }
     return makeFullRange(resource.desc);
 }
 
@@ -274,14 +264,17 @@ void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
                        image.getArrayLayers());
     };
 
-    if (importedDesc.resource) {
-        YA_CORE_ASSERT(importedDesc.resource->getImage() != nullptr,
-                       "Imported texture '{}' requires a backing image",
-                       importedDesc.desc.label);
-        const IImage&          image        = *importedDesc.resource->getImage();
-        const auto*            imageView    = importedDesc.resource->getImageView();
-        const auto             nativeHandle = static_cast<void*>(image.getHandle());
-        const std::string_view label        = importedDesc.importDesc.label.empty() ? importedDesc.desc.label : importedDesc.importDesc.label;
+    {
+        const std::string_view label = importedDesc.importDesc.label.empty() ? importedDesc.desc.label : importedDesc.importDesc.label;
+        YA_CORE_ASSERT(importedDesc.resource != nullptr && importedDesc.resource->getImage() != nullptr,
+                       "Imported texture '{}' requires an owner-provided backing image",
+                       label);
+        YA_CORE_ASSERT(importedDesc.resource->getImageView() != nullptr,
+                       "Imported texture '{}' requires an owner-provided image view",
+                       label);
+        const IImage&     image        = *importedDesc.resource->getImage();
+        const IImageView& imageView    = *importedDesc.resource->getImageView();
+        const auto        nativeHandle = static_cast<void*>(image.getHandle());
 
         YA_CORE_ASSERT(importedDesc.importDesc.nativeHandle == nullptr || importedDesc.importDesc.nativeHandle == nativeHandle,
                        "Imported texture image/native handle mismatch for '{}'",
@@ -300,16 +293,12 @@ void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
         YA_CORE_ASSERT(importedDesc.importDesc.arrayLayers == 1 || importedDesc.importDesc.arrayLayers == image.getArrayLayers(),
                        "Imported texture image/array-layer mismatch");
 
-        if (imageView) {
-            YA_CORE_ASSERT(imageView->getImage() == &image,
-                           "Imported texture '{}' image view does not reference the backing image",
-                           label);
-        }
+        YA_CORE_ASSERT(imageView.getImage() == &image,
+                       "Imported texture '{}' image view does not reference the backing image",
+                       label);
         if (importedDesc.subresourceRange) {
             validateRange(image, *importedDesc.subresourceRange, label);
-        }
-        if (imageView && importedDesc.subresourceRange) {
-            const auto& viewRange = imageView->getSubresourceRange();
+            const auto& viewRange = imageView.getSubresourceRange();
             YA_CORE_ASSERT(viewRange.aspectMask == importedDesc.subresourceRange->aspectMask &&
                                viewRange.baseMipLevel == importedDesc.subresourceRange->baseMipLevel &&
                                viewRange.levelCount == importedDesc.subresourceRange->levelCount &&
@@ -360,14 +349,12 @@ void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
                        importedDesc.subresourceRange->layerCount);
     }
 
-    if (importedDesc.resource && importedDesc.resource->getImage() != nullptr) {
-        const EImageUsage::T backingUsage = importedDesc.resource->getImage()->getUsage();
-        YA_CORE_ASSERT(hasImageUsage(backingUsage, desc.usage),
-                       "Imported texture '{}' graph usage {} is not supported by backing image usage {}",
-                       desc.label,
-                       formatImageUsageFlags(desc.usage),
-                       formatImageUsageFlags(backingUsage));
-    }
+    const EImageUsage::T backingUsage = importedDesc.resource->getImage()->getUsage();
+    YA_CORE_ASSERT(hasImageUsage(backingUsage, desc.usage),
+                   "Imported texture '{}' graph usage {} is not supported by backing image usage {}",
+                   desc.label,
+                   formatImageUsageFlags(desc.usage),
+                   formatImageUsageFlags(backingUsage));
 }
 
 void normalizeImportedBufferDesc(RGImportedBufferDesc& importedDesc)
@@ -1034,21 +1021,26 @@ RGTextureHandle RenderGraph::createTexture(const RGTextureDesc& desc)
 
 RGTextureHandle RenderGraph::importTexture(const RGImportedTextureDesc& importedDesc)
 {
-    YA_CORE_ASSERT(importedDesc.resource || importedDesc.importDesc.nativeHandle != nullptr,
-                   "Imported texture requires either image resource or native handle");
-
     auto normalizedImported = importedDesc;
     normalizeImportedTextureDesc(normalizedImported);
+
+    RGImportKey key{.label = normalizedImported.desc.label, .scope = _importScope};
+    YA_CORE_ASSERT(!_textureImportKeys.contains(key),
+                   "RenderGraph imports texture '{}' twice in scope {}; give each owner instance its own RGImportScope",
+                   key.label,
+                   key.scope);
+    _textureImportKeys.insert(key);
 
     RGTextureHandle handle{
         .index      = static_cast<uint32_t>(_textures.size()),
         .generation = _nextTextureGeneration++,
     };
     _textures.push_back(RGTextureResource{
-        .handle   = handle,
-        .lifetime = ERGResourceLifetime::Imported,
-        .desc     = normalizedImported.desc,
-        .imported = normalizedImported,
+        .handle    = handle,
+        .lifetime  = ERGResourceLifetime::Imported,
+        .desc      = normalizedImported.desc,
+        .imported  = normalizedImported,
+        .importKey = std::move(key),
     });
     return handle;
 }
@@ -1077,15 +1069,23 @@ RGBufferHandle RenderGraph::importBuffer(const RGImportedBufferDesc& importedDes
     auto normalizedImported = importedDesc;
     normalizeImportedBufferDesc(normalizedImported);
 
+    RGImportKey key{.label = normalizedImported.desc.label, .scope = _importScope};
+    YA_CORE_ASSERT(!_bufferImportKeys.contains(key),
+                   "RenderGraph imports buffer '{}' twice in scope {}; give each owner instance its own RGImportScope",
+                   key.label,
+                   key.scope);
+    _bufferImportKeys.insert(key);
+
     RGBufferHandle handle{
         .index      = static_cast<uint32_t>(_buffers.size()),
         .generation = _nextBufferGeneration++,
     };
     _buffers.push_back(RGBufferResource{
-        .handle   = handle,
-        .lifetime = ERGResourceLifetime::Imported,
-        .desc     = normalizedImported.desc,
-        .imported = normalizedImported,
+        .handle    = handle,
+        .lifetime  = ERGResourceLifetime::Imported,
+        .desc      = normalizedImported.desc,
+        .imported  = normalizedImported,
+        .importKey = std::move(key),
     });
     return handle;
 }
@@ -1790,26 +1790,13 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
             continue;
         }
         const auto& imported = *texture.imported;
-        const auto* wrapper  = imported.resource.get();
-        const auto  image    = wrapper ? wrapper->getImageShared() : nullptr;
-        const auto  view     = wrapper ? wrapper->getImageViewShared() : nullptr;
+        const auto& wrapper  = *imported.resource;
         oss << "  texture[" << texture.handle.index << "] " << texture.desc.label
-            << " wrapper=" << static_cast<const void*>(wrapper)
-            << " image=";
-        if (image) {
-            oss << static_cast<const void*>(image.get());
-        }
-        else {
-            oss << "registry-imports(native=" << imported.importDesc.nativeHandle << ")";
-        }
-        oss << " view=";
-        if (view) {
-            oss << static_cast<const void*>(view.get());
-        }
-        else {
-            oss << "registry-creates";
-        }
-        oss << " retained=" << imported.retainedResources.size() << "\n";
+            << " scope=" << texture.importKey.scope
+            << " wrapper=" << static_cast<const void*>(&wrapper)
+            << " image=" << static_cast<const void*>(wrapper.getImage())
+            << " view=" << static_cast<const void*>(wrapper.getImageView())
+            << " retained=" << imported.retainedResources.size() << "\n";
     }
     for (const auto& buffer : _buffers) {
         if (buffer.lifetime != ERGResourceLifetime::Imported || !buffer.imported.has_value()) {
@@ -1817,6 +1804,7 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
         }
         const auto& imported = *buffer.imported;
         oss << "  buffer[" << buffer.handle.index << "] " << buffer.desc.label
+            << " scope=" << buffer.importKey.scope
             << " buffer=" << static_cast<const void*>(imported.buffer)
             << " range=" << imported.initialState.offset << "+" << imported.initialState.size
             << " retained=" << imported.retainedResources.size() << "\n";

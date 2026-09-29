@@ -62,14 +62,6 @@ struct RGBufferCopyParams
     EImageUsage::T requiredUsage = EImageUsage::None,
     std::optional<Extent3D> logicalExtent = std::nullopt);
 
-[[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedSubresourceTextureDesc(
-    const std::shared_ptr<ImageResource>& resource,
-    const ImageViewCreateInfo& viewDesc,
-    Extent3D logicalExtent,
-    std::string_view label,
-    EImageLayout::T finalLayout,
-    EImageUsage::T requiredUsage = EImageUsage::None);
-
 [[nodiscard]] YA_RENDER_GRAPH_API RGImportedBufferDesc makeImportedBufferDesc(
     const std::shared_ptr<IBuffer>& buffer,
     std::string_view label,
