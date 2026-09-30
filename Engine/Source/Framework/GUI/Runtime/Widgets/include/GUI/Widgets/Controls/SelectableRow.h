@@ -25,6 +25,11 @@ namespace ya
 /// Input semantics (same capture contract as UIButton):
 ///   - pointer press selects (requests focus + pointer capture); release
 ///     inside completes an activation;
+///   - a release whose press was a double-click ALSO fires `_onDoubleClick`,
+///     so an asset browser listens to the double-click alone (a single click
+///     selects but never navigates) while menu-style rows keep single-click
+///     activation. The widget reports the gesture; which one "opens" is the
+///     presenter's decision, mirroring TabBar's strip callback;
 ///   - Enter / Space on the focused row activates;
 ///   - detach while pressed clears all transient state.
 struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISelectableRow, FSelectableRowStyle>
@@ -76,12 +81,6 @@ struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISe
     /// Visual drop-target feedback, written by the tree drag session.
     VisualFlag _bDropHighlighted{*this};
 
-    /// Activation gesture. Default: a single click-releases activates (menu
-    /// rows, tool toggles). Content-browser rows set this so a single click
-    /// only selects and the double-click opens -- the asset-browser habit
-    /// (a click must never navigate away from under the pointer).
-    bool _bActivateOnDoubleClick = false;
-
     void setDraggable(bool value) { _bDraggable = value; }
     void setDragPayload(std::string value) { _dragPayload = std::move(value); }
     void setDragGhostLabel(std::string value) { _dragGhostLabel = std::move(value); }
@@ -99,6 +98,11 @@ struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISe
 
     std::function<void(const std::string& itemId)> _onSelect;
     std::function<void(const std::string& itemId)> _onActivate;
+    /// Fired on release when the press that opened this session was a
+    /// double-click (OS click count >= 2, or two presses inside the TabBar's
+    /// timing/slop window). Fires alongside `_onActivate`; rows that treat
+    /// opening as a double-click gesture simply leave `_onActivate` unwired.
+    std::function<void(const std::string& itemId)> _onDoubleClick;
     /// Fired when this row is the drop target of a completed drag (payload
     /// = the dragged row's payload). The row stays selected as-is; the
     /// presenter owns the model mutation (e.g. reparent).
@@ -123,8 +127,16 @@ struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISe
     VisualFlag _bPressed{*this};
     VisualFlag _bHovered{*this};
     glm::vec2  _pressPoint{};
-    /// Click count of the press that opened the current session (1 = single).
-    uint32_t   _pressClickCount = 1;
+    /// Whether the press that opened the current session was a double-click
+    /// (OS click count or the timed/slop fallback shared with the TabBar).
+    bool       _bPressWasDouble = false;
+    /// Timed-double bookkeeping for the fallback when the backend does not
+    /// deliver a click count.
+    uint64_t   _lastPressTimeMs = 0;
+    glm::vec2  _lastPressPos{};
+    bool       _bHasLastPress = false;
+    static constexpr uint64_t kDoubleClickMs   = 400;
+    static constexpr float    kDoubleClickSlop = 6.0f;
 };
 
 } // namespace ya

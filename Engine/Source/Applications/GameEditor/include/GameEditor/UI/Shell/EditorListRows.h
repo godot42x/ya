@@ -31,21 +31,21 @@ inline constexpr size_t kEditorListOverscan = 2;
     return thumbnailSize + 12.0f + editor_density::kGridLabelHeight;
 }
 
-/// Content-browser rows open on double-click: a single click only selects, so
-/// browsing never navigates out from under the pointer (UE/Qt asset-browser
-/// habit). Menu-style rows keep the single-click activate default.
+/// Asset rows report the double-click gesture as the ONLY open signal: a
+/// single click selects and never navigates out from under the pointer (the
+/// imgui-browser habit). `_onActivate` is deliberately left unwired -- it is
+/// the row's single-click/keyboard default and belongs to menu-style rows.
 inline ui::UISelectableRowWidgetBuilder contentRow(const std::string& key,
                                                    const std::string& label,
                                                    const std::string& itemId,
                                                    std::function<void(const std::string&)> onSelect,
-                                                   std::function<void(const std::string&)> onActivate)
+                                                   std::function<void(const std::string&)> onOpen)
 {
     return ui::selectableRow(key)
         .setItemId(itemId)
-        .setActivateOnDoubleClick(true)
         .setContentPadding(FMargin{6.0f, 0.0f, 0.0f, 0.0f})
         .setOnSelect(std::move(onSelect))
-        .setOnActivate(std::move(onActivate))
+        .setOnDoubleClick(std::move(onOpen))
         .child(ui::row(key + "_Content")
                    .setSpacing(editor_density::kControlSpacing)
                    .child(ui::image(key + "_Icon").setAssetPath(editor_icons::kFile),
@@ -90,9 +90,8 @@ inline void updateContentRow(UIElement& child,
                              const std::string& itemId,
                              bool selected,
                              std::function<void(const std::string&)> onSelect,
-                             std::function<void(const std::string&)> onActivate,
-                             bool bDirectory = false,
-                             bool bActivateOnDoubleClick = true)
+                             std::function<void(const std::string&)> onOpen,
+                             bool bDirectory = false)
 {
     auto* row = dynamic_cast<UISelectableRow*>(&child);
     if (!row) {
@@ -105,11 +104,13 @@ inline void updateContentRow(UIElement& child,
     if (row->_itemId != itemId) {
         row->clearTransientInputState();
     }
-    row->_bActivateOnDoubleClick = bActivateOnDoubleClick;
     row->_itemId = itemId;
     row->setSelected(selected);
     row->_onSelect = std::move(onSelect);
-    row->_onActivate = std::move(onActivate);
+    // Open is a double-click gesture only: `_onActivate` stays unwired so a
+    // single click can never navigate.
+    row->_onDoubleClick = std::move(onOpen);
+    row->_onActivate    = nullptr;
     if (UIText* text = contentRowLabel(*row)) {
         text->setText(label);
     }
@@ -122,14 +123,13 @@ inline ui::UISelectableRowWidgetBuilder contentTile(const std::string& key,
                                                    const std::string& label,
                                                    const std::string& itemId,
                                                    std::function<void(const std::string&)> onSelect,
-                                                   std::function<void(const std::string&)> onActivate)
+                                                   std::function<void(const std::string&)> onOpen)
 {
     return ui::selectableRow(key)
         .setItemId(itemId)
-        .setActivateOnDoubleClick(true)
         .setContentPadding(FMargin{4.0f, 4.0f, 4.0f, 4.0f})
         .setOnSelect(std::move(onSelect))
-        .setOnActivate(std::move(onActivate))
+        .setOnDoubleClick(std::move(onOpen))
         .child(ui::column(key + "_Content")
                    .setSpacing(4.0f)
                    .child(ui::image(key + "_Icon").setAssetPath(editor_icons::kFile),
@@ -149,7 +149,7 @@ inline void updateContentTile(UIElement& child,
                              const std::string& itemId,
                              bool selected,
                              std::function<void(const std::string&)> onSelect,
-                             std::function<void(const std::string&)> onActivate,
+                             std::function<void(const std::string&)> onOpen,
                              const std::string& iconPath,
                              float thumbnailSize)
 {
@@ -164,7 +164,8 @@ inline void updateContentTile(UIElement& child,
     row->_itemId = itemId;
     row->setSelected(selected);
     row->_onSelect = std::move(onSelect);
-    row->_onActivate = std::move(onActivate);
+    row->_onDoubleClick = std::move(onOpen);
+    row->_onActivate    = nullptr;
     if (UIText* text = contentRowLabel(*row)) {
         text->setText(label);
         text->_bWrap = true;

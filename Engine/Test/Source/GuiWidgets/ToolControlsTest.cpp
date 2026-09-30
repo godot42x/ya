@@ -836,23 +836,24 @@ TEST(ToolControlsTest, SelectableRowPressSelectsReleaseActivates)
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
 }
 
-TEST(ToolControlsTest, SelectableRowDoubleClickModeSelectsOnPressAndOpensOnDoubleClick)
+TEST(ToolControlsTest, SelectableRowReportsTheDoubleClickGestureAsItsOwnSignal)
 {
-    // Content-browser rows: one click selects (never navigates), the second
-    // click within the platform's double-click window opens.
+    // The asset-browser wiring listens to `_onDoubleClick` alone (it leaves
+    // `_onActivate`, the single-click default, unwired): the first click only
+    // selects, the second within the platform's window fires the open signal.
     WidgetTree tree({.width = 400, .height = 300});
     auto       row = std::make_shared<UISelectableRow>("Row");
-    row->_itemId                 = "asset.1";
-    row->_bActivateOnDoubleClick = true;
+    row->_itemId = "asset.1";
     FCanvasSlotArgs rowSlot;
     rowSlot.fixedSize = {200.0f, 24.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
     tree.layout();
 
     std::vector<std::string> selected;
-    std::vector<std::string> activated;
-    row->_onSelect   = [&](const std::string& id) { selected.push_back(id); };
-    row->_onActivate = [&](const std::string& id) { activated.push_back(id); };
+    std::vector<std::string> opened;
+    row->_onSelect      = [&](const std::string& id) { selected.push_back(id); };
+    row->_onDoubleClick = [&](const std::string& id) { opened.push_back(id); };
+    // `_onActivate` stays unwired, mirroring the content browser.
 
     MouseButtonPressedEvent single(EMouse::Left);
     single._clickCount = 1;
@@ -860,14 +861,40 @@ TEST(ToolControlsTest, SelectableRowDoubleClickModeSelectsOnPressAndOpensOnDoubl
     EXPECT_EQ(selected, std::vector<std::string>{"asset.1"});
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(50.0f, 12.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_TRUE(activated.empty()); // a single click must not open
+    EXPECT_TRUE(opened.empty()); // a single click must not open
 
     MouseButtonPressedEvent twice(EMouse::Left);
     twice._clickCount = 2;
     EXPECT_EQ(tree.dispatchEvent(twice, pointAt(50.0f, 12.0f)), EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(50.0f, 12.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(activated, std::vector<std::string>{"asset.1"});
+    EXPECT_EQ(opened, std::vector<std::string>{"asset.1"});
+}
+
+TEST(ToolControlsTest, SelectableRowSingleClickStillActivatesByDefault)
+{
+    // Menu-style rows keep their contract: release inside fires `_onActivate`
+    // and never the double-click signal.
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       row = std::make_shared<UISelectableRow>("Row");
+    row->_itemId = "menu.1";
+    FCanvasSlotArgs rowSlot;
+    rowSlot.fixedSize = {200.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    tree.layout();
+
+    int activated = 0;
+    int opened    = 0;
+    row->_onActivate    = [&](const std::string&) { ++activated; };
+    row->_onDoubleClick = [&](const std::string&) { ++opened; };
+
+    MouseButtonPressedEvent press(EMouse::Left);
+    press._clickCount = 1;
+    EXPECT_EQ(tree.dispatchEvent(press, pointAt(50.0f, 12.0f)), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(50.0f, 12.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(activated, 1);
+    EXPECT_EQ(opened, 0);
 }
 
 TEST(ToolControlsTest, SelectableRowRebindDropsInheritedHover)

@@ -269,15 +269,15 @@ void EditorContentBrowserTab::rebuildRows(WidgetTree& tree)
         mountKeys,
         [this, active](UIElement& child, const std::string&, size_t index) {
             const auto& mp = _explorer->getMountPoints()[index];
-            // Mounts switch on a single click (they are tabs, not assets).
+            // Mounts are tabs, not assets: a single click switches. The open
+            // action repeats the switch, so a double click is harmless.
             updateContentRow(child,
                              mp.name,
                              mp.name,
                              active != nullptr && active->name == mp.name,
                              [this](const std::string& itemId) { selectMount(itemId); },
                              [this](const std::string& itemId) { selectMount(itemId); },
-                             true,
-                             /*bActivateOnDoubleClick=*/false);
+                             true);
         },
         bindEditorListRowSlot);
 

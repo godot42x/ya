@@ -108,9 +108,20 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
     }
 
     switch (eventType) {
-    case EEvent::MouseButtonPressed:
+    case EEvent::MouseButtonPressed: {
         _bPressed = true;
-        _pressClickCount = static_cast<const MouseButtonPressedEvent&>(event).clickCount();
+        const auto& press = static_cast<const MouseButtonPressedEvent&>(event);
+        // Same double-click predicate as the TabBar strip: the backend's OS
+        // click count, or two presses inside the timing/slop window when the
+        // backend does not report one.
+        const uint64_t now = event.getTimestampMs();
+        const bool     bTimedDouble =
+            _bHasLastPress && (now - _lastPressTimeMs) < kDoubleClickMs &&
+            glm::length(ctx.logicalPoint - _lastPressPos) < kDoubleClickSlop;
+        _bPressWasDouble      = press.clickCount() >= 2 || bTimedDouble;
+        _lastPressTimeMs      = now;
+        _lastPressPos         = ctx.logicalPoint;
+        _bHasLastPress        = true;
         _pressPoint = ctx.logicalPoint;
         if (WidgetTree* tree = getTree()) {
             tree->setFocus(this);
@@ -122,6 +133,7 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
             _onSelect(_itemId);
         }
         return true;
+    }
     case EEvent::MouseMoved:
         _bHovered = bPointInside;
         (void)UIElement::handleInputEvent(event, ctx);
@@ -135,12 +147,15 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
             tree->releasePointerCapture(this);
         }
         (void)UIElement::handleInputEvent(event, ctx);
-        const bool bActivates = _bActivateOnDoubleClick ? _pressClickCount >= 2 : true;
-        if ((bPointInside || ctx.bViaCapture) && bActivates) {
+        if (bPointInside || ctx.bViaCapture) {
             if (_onActivate) {
                 _onActivate(_itemId);
             }
+            if (_bPressWasDouble && _onDoubleClick) {
+                _onDoubleClick(_itemId);
+            }
         }
+        _bPressWasDouble = false;
         return true;
     }
     default:
@@ -153,7 +168,7 @@ void UISelectableRow::clearTransientInputState()
     _bHovered = false;
     _bPressed = false;
     _bDropHighlighted = false;
-    _pressClickCount = 1;
+    _bPressWasDouble = false;
 }
 
 glm::vec2 UISelectableRow::computeDesiredSize() const
