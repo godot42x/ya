@@ -1,6 +1,8 @@
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Scene/Serialization/SceneSerializer.h"
+#include "Core/Common/AssetRef.h"
+#include "ECS/Component/2D/Sprite2DComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
@@ -346,6 +348,43 @@ TEST(SceneSerializerTest, WidgetEntriesSurviveClone)
 // state: it must never reach the scene file, neither as an entity nor as a node
 // row, because the host rebuilds it on load. This is the serialization half of
 // the companion boundary.
+// A reflection clone copies only the reflected state of an asset ref -- the
+// path. The handle is runtime-derived: the clone must re-derive it from the
+// path exactly like deserialization does, or a PIE scene clone (and every
+// duplicated node) carries slots that read as never-loaded and the render
+// contract skips them (the PIE black-viewport root cause).
+TEST(SceneSerializerTest, CloneRebindsSpriteTextureSlots)
+{
+    ensureReflectionReady();
+    if (!VirtualFileSystem::get()) {
+        VirtualFileSystem::init();
+    }
+
+    Scene scene("SpriteCloneScene");
+    auto* node   = scene.createNode3D("Sprite", scene.getRootNode());
+    ASSERT_NE(node, nullptr);
+    Entity* spriteEntity = node->getEntity();
+    ASSERT_NE(spriteEntity, nullptr);
+    auto* sprite = spriteEntity->addComponent<Sprite2DComponent>();
+    ASSERT_NE(sprite, nullptr);
+    sprite->image.fromPath("Content/Textures/__clone_rebind_missing.png");
+    // The source ref is bound (the resolver created its slot at setPath).
+    ASSERT_NE(sprite->image.textureRef._handle, nullptr);
+
+    stdptr<Scene> cloned = scene.clone();
+    ASSERT_NE(cloned, nullptr);
+    Entity* clonedEntity = cloned->getEntityByUUID(
+        spriteEntity->getComponent<IDComponent>()->_id.value);
+    ASSERT_NE(clonedEntity, nullptr);
+    auto* clonedSprite = clonedEntity->getComponent<Sprite2DComponent>();
+    ASSERT_NE(clonedSprite, nullptr);
+    EXPECT_EQ(clonedSprite->image.textureRef.getPath(), sprite->image.textureRef.getPath());
+
+    // Same bound slot as the source -- not a path-only shell with a null handle.
+    ASSERT_NE(clonedSprite->image.textureRef._handle, nullptr);
+    EXPECT_EQ(clonedSprite->image.textureRef._handle, sprite->image.textureRef._handle);
+}
+
 TEST(SceneSerializerTest, GeneratedCompanionIsNotSerialized)
 {
     ensureReflectionReady();

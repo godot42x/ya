@@ -1,5 +1,6 @@
 #include "Core/Reflection/ReflectionCopier.h"
 
+#include "Core/Common/AssetRef.h"
 #include "Core/Log.h"
 #include "Core/Reflection/PropertyExtensions.h"
 #include "Core/Reflection/ReflectionSerializer.h"
@@ -116,7 +117,18 @@ bool ReflectionCopier::copyAnyValue(void* dstValuePtr, const void* srcValuePtr, 
 
     auto& registry = ClassRegistry::instance();
     if (auto* classPtr = registry.getClass(typeIndex)) {
-        return copyClassProperties(classPtr, dstValuePtr, srcValuePtr);
+        const bool success = copyClassProperties(classPtr, dstValuePtr, srcValuePtr);
+        // An asset ref's handle is not reflected state -- only the path is.
+        // The deserialize path re-derives the handle after writing the path;
+        // the copier must too, or a reflection clone (scene PIE clone,
+        // duplicate node) keeps refs whose path is set but whose binding is
+        // empty: sprites/tilesets/models then read as not-loaded and the
+        // render contract skips them (no substitute image).
+        if (isAssetRefType(typeIndex)) {
+            auto* ref = static_cast<AssetRefBase*>(dstValuePtr);
+            ref->setPath(ref->getPath());
+        }
+        return success;
     }
 
     return false;
