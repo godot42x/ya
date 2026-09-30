@@ -422,6 +422,9 @@ UIFrameSnapshot EditorUIDesignerSession::buildPreviewSnapshot(const glm::vec2& u
     UIFrameBuildContext ctx;
     ctx.uiScale = uiScale;
     ctx.offset  = offset;
+    // Authoring canvas: a document whose root (or any subtree) ships Hidden is
+    // shown dimmed, not blanked -- the runtime hides it, the designer edits it.
+    ctx.ghostInvisibleOpacity = kDesignerGhostOpacity;
     // Strong lifetime for the preview as well: the snapshot retains textures
     // until the editor canvas compose has recorded (shared resolver rules
     // with the runtime host).

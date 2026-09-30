@@ -265,6 +265,10 @@ struct EditorUIDesignerSession
     };
 
     static constexpr float kSnapGridSize = 8.0f;
+    /// Preview opacity for widgets the runtime would not render (Hidden
+    /// subtree). The canvas must show the document being edited, so excluded
+    /// widgets read as dimmed ghosts; Collapsed has no rect and stays blank.
+    static constexpr float kDesignerGhostOpacity = 0.35f;
     /// Round an offset axis onto the grid (whole multiples), when enabled.
     [[nodiscard]] float snapAxis(float value) const
     {

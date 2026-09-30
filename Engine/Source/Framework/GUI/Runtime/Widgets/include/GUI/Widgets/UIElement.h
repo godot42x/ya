@@ -724,6 +724,11 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     virtual void paintChildren(UIFrameBuilder& builder);
     /// Subclasses draw themselves here (base: no-op).
     virtual void paintSelf(UIFrameBuilder& builder) { (void)builder; }
+    /// The visible paint walk: render transform, self clip, self + children.
+    void paintContent(UIFrameBuilder& builder);
+    /// Hidden/Collapsed widgets paint here. Default: ghost-dim when the build
+    /// context opts in (designer preview), otherwise nothing.
+    void paintGhost(UIFrameBuilder& builder);
     /// Clear this widget's paint-collected reactive dependencies before
     /// re-running its paint (dirty widget re-collects from scratch). Does NOT
     /// touch persistent (bind-time) edges. Implemented in .cpp.

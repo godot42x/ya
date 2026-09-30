@@ -72,6 +72,13 @@ struct UIFrameBuildContext
     /// and keep this as a cache hit helper. Non-null return is Ready; null is
     /// Pending — this lambda cannot express Failed.
     std::function<std::shared_ptr<Texture>(const std::string& assetPath)> textureResolver;
+
+    /// Authoring-canvas ghost. When > 0, a widget whose visibility excludes it
+    /// from rendering still paints, wrapped in this opacity (designer canvas:
+    /// a Hidden root must read as a dimmed preview, not a blank frame).
+    /// Collapsed stays unpainted even then -- it has no layout rect to ghost.
+    /// 0 keeps runtime semantics (skip render entirely).
+    float ghostInvisibleOpacity = 0.0f;
 };
 
 /// One resolved draw command (render-target pixels, top-left origin, Y down).
@@ -296,6 +303,10 @@ class YA_GUI_API UIFrameBuilder
     [[nodiscard]] size_t getItemCount() const { return _items.size(); }
     /// Whether the read cache holds a segment for `widget` (cold-start check).
     [[nodiscard]] bool hasCachedItems(const UIElement* widget) const;
+
+    /// Ghost opacity for widgets excluded from rendering (0 = skip them, the
+    /// runtime default). Read by UIElement::paint.
+    [[nodiscard]] float ghostInvisibleOpacity() const { return _ctx.ghostInvisibleOpacity; }
     /// Store this widget's newly painted segment into the write cache.
     void cacheItems(const UIElement* widget, size_t start);
     /// Append the widget's previous-frame segment from the read cache.
