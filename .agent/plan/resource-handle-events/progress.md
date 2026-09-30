@@ -45,7 +45,7 @@
 - 目标：统一编辑入口 + 材质/billboard 事件化。边界见 plan §5 H2 行；模型 / tileset 归 H3（本轮已把「tileset 并入 H3」写进 plan §4.3/§5），Terrain 归 H4，EL 归 H5。
 - 完成：
   - 统一编辑入口：`Scene::notifyComponentEdited(entity, typeIndex)` → `ECSRegistry::ComponentOps<T>::notifyEdited` 蹦床 → `registry.patch<T>`（entt on_update）+ 一次 `SceneBus::onComponentEdited` 广播；创建 / 删除由 `detail_component_mutation` 漏斗广播 `onComponentAdded` / `onComponentRemoved`。信号源各只有一个。
-  - 写入路径接线：检查器 change hook 与 undo/redo（`PropertyGraph` 默认 hook = `onEdit()` + 经 `_owner` 走漏斗，`PropertyProjection` 删材质专用投影）、脚本 `component.set`（反序列化后走漏斗）、tilemap undo（restore 后调 `onEdit()`）、companion `onUpdateHost` 的带外写入（光照 billboard 的 tint/path/direction）。场景加载 / 模型实例化 / 克隆都经 `addComponent` 创建漏斗，靠 `onComponentAdded` 发现。
+  - 写入路径接线：检查器 change hook 与 undo/redo（`PropertyGraph` 默认 hook = `onEdit()` + 经 `_owner` 走漏斗，`PropertyProjection` 删材质专用投影）、脚本 `component.set`（反序列化后走漏斗）、tilemap undo（restore 后调 `onEdit()`）、companion `onUpdateHost` 的带外写入（光照 billboard 的 tint/path/direction）。场景加载 / 模型实例化 / 克隆都经 `addComponent` 创建漏斗，靠 `onComponentAdded` 发现。（H2 后补：脚本字段写入 `afterWrite` 也经 owner 走漏斗——写入路径普查 [子任务] 核实的最后一块孔洞；方法调用保持现状，typed setter 已做本地失效。）
   - `GameplayResourceBinding` 重写：事件驱动——SceneBus 三信号入队 + 处理器持有的每实体槽订阅（fill 回调只入队）；删 per-frame `needsResolve` 扫描、30 帧审计、active 重泵循环与 `checkTexturesStaleness`；mesh 扫描保留（H3）。场景卸载后残留 fill 回调只按指针值查工作表，不触碰已销毁 registry。
   - 显式回退：`loadingSlotFallback`（白 / 平法线，`TextureLibrary` 新增 1×1 flat-normal (128,128,255)）、`failedSlotFallback`（棋盘格 + WARN）。删 `EMaterialResolveState::Resolving`、`onPropertyChanged / summarizePropertyChanges / onModified / setPathWithoutNotify`。
   - dev 一致性审计（`BUILD_DEBUG`，120 帧一次）：凡有 Loading 槽的材质 / billboard 必须已入队或已有订阅，否则断言并自愈——覆盖重泵回归类。

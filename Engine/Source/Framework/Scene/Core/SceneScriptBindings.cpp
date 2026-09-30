@@ -133,7 +133,19 @@ SceneRefKinds registerKinds()
             Entity* entity = resolveEntity(ref.a, ref.b);
             return entity ? componentOn(*entity, ref.type) : nullptr;
         },
-        .afterWrite = [](const ScriptRef&, void* component) { static_cast<IComponent*>(component)->onPostSerialize(); },
+        .afterWrite = [](const ScriptRef& ref, void* component) {
+            auto* comp = static_cast<IComponent*>(component);
+            comp->onPostSerialize();
+            // The write landed outside any typed setter: route it through
+            // the scene edit funnel so derived-work processors hear it from
+            // the one signal source (mirrors the inspector's default hook
+            // and ScriptApiCore's component.set).
+            if (Entity* owner = comp->getOwner()) {
+                if (Scene* scene = owner->getScene()) {
+                    scene->notifyComponentEdited(owner->getHandle(), ref.type);
+                }
+            }
+        },
     });
     registerEntityMethods();
     return out;

@@ -3,6 +3,7 @@
 #include "Core/Scripting/ScriptBindings.h"
 #include "ECS/Component/2D/TilemapComponent.h"
 #include "ECS/Entity.h"
+#include "ECS/SceneBus.h"
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/LuaScriptBinding.h"
 #include "Resource/AssetManager.h"
@@ -144,6 +145,34 @@ TEST_F(LuaScriptBindingTest, DestroyedEntityRaisesInsteadOfDangling)
     ASSERT_FALSE(name.valid());
     EXPECT_NE(std::string(sol::error(name).what()).find("no longer exists"), std::string::npos);
     EXPECT_FALSE(run("return transform.position").valid());
+}
+
+// A script field write lands outside any typed setter: it routes through the
+// scene edit funnel (resource-handle-events H2 follow-up) so derived-work
+// processors hear it from the one signal source.
+TEST_F(LuaScriptBindingTest, ComponentFieldWriteRoutesThroughTheSceneEditFunnel)
+{
+    auto* camera = _entity->addComponent<CameraComponent>();
+
+    int         edits   = 0;
+    DelegateHandle handle = SceneBus::get().onComponentEdited.addLambda(
+        [&](entt::registry&, entt::entity, ya::type_index_t type) {
+            if (type == type_index_v<CameraComponent>) {
+                ++edits;
+            }
+        });
+
+    const auto result = run(R"(
+        local camera = entity:get("CameraComponent")
+        camera.bPrimary = true
+        return camera.bPrimary
+    )");
+    ASSERT_TRUE(result.valid()) << sol::error(result).what();
+    EXPECT_TRUE(result.get<bool>(0));
+    EXPECT_TRUE(camera->bPrimary);
+    EXPECT_EQ(edits, 1);
+
+    SceneBus::get().onComponentEdited.remove(handle);
 }
 
 // TilemapComponent's movement query face (isSolid / worldToCell / cellToWorld
