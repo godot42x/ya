@@ -386,6 +386,55 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             });
 
         api.registerFunction(
+            "ui_designer.open",
+            "Opens a .yaui.json asset in the UI Designer (same funnel as the "
+            "content browser / inspector / hierarchy entries). Args: {path}.",
+            Json{{"path", {{"type", "string"}}}},
+            [this](const Json& args) -> Json {
+                const std::string path = args.value("path", "");
+                if (path.empty()) {
+                    throw ScriptApiRegistry::Error("ui_designer.open: path is required");
+                }
+                if (!_layer || !_layer->openDocumentEditor(EEditorDocumentKind::UI, path)) {
+                    throw ScriptApiRegistry::Error("ui_designer.open: failed to open '" + path + "'");
+                }
+                return Json{{"opened", path}};
+            });
+
+        api.registerFunction(
+            "runtime.play",
+            "Enters Play (PIE) mode on the next tick. Args: none.",
+            Json::object(),
+            [this](const Json&) -> Json {
+                App* app = App::get();
+                if (!app) {
+                    throw ScriptApiRegistry::Error("runtime.play: no app");
+                }
+                app->getTaskManager().registerTickTask([app]() { app->startRuntime(); });
+                return Json{{"requested", true}};
+            });
+
+        api.registerFunction(
+            "runtime.stop",
+            "Leaves Play / Simulate mode on the next tick. Args: none.",
+            Json::object(),
+            [this](const Json&) -> Json {
+                App* app = App::get();
+                if (!app) {
+                    throw ScriptApiRegistry::Error("runtime.stop: no app");
+                }
+                app->getTaskManager().registerTickTask([app]() {
+                    if (app->isRuntimeMode()) {
+                        app->stopRuntime();
+                    }
+                    else if (app->isSimulationMode()) {
+                        app->stopSimulation();
+                    }
+                });
+                return Json{{"requested", true}};
+            });
+
+        api.registerFunction(
             "ui_designer.pan_zoom",
             "Sets the UI Designer Canvas navigation. Args: {pan_x?, pan_y?, zoom?}.",
             Json{{"pan_x", {{"type", "number"}}}, {"pan_y", {{"type", "number"}}}, {"zoom", {{"type", "number"}}}},

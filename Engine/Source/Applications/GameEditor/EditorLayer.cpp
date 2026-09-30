@@ -190,7 +190,7 @@ void EditorLayer::createAndMountGameUI()
     markSceneDirty();
     notifyHierarchyChanged();
     setSelectedWidgetEntryId(entryId);
-    _uiDesignerSession.openDocument(path);
+    (void)openDocumentEditor(EEditorDocumentKind::UI, path);
 }
 
 void EditorLayer::mountOpenGameUI()
@@ -260,7 +260,7 @@ void EditorLayer::openGameUIEntry(const std::string& entryId)
     }
     for (const SceneWidgetEntry& entry : scene->getWidgetEntries()) {
         if (entry.entryId == entryId) {
-            _uiDesignerSession.openSceneEntry(entry);
+            (void)openDocumentEditor(EEditorDocumentKind::UI, entry.documentPath);
             return;
         }
     }

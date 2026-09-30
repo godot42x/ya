@@ -65,14 +65,15 @@ struct EditorUIDesignerSession
     // === Document lifecycle ===
     [[nodiscard]] bool hasDocument() const { return _document != nullptr; }
 
-    /// Open the Game UI document asset at `path` through the store.
-    void openDocument(std::string_view path);
+    /// Open the Game UI document asset at `path` through the store. False when
+    /// the store is unbound or the document fails to instantiate.
+    bool openDocument(std::string_view path);
     /// Create a fresh untitled document with the given root type. It has no
     /// path yet, so saving only refreshes the in-memory document.
     void newDocument(const std::string& typeId);
     /// Open the document a scene entry mounts. The entry only carries the
     /// reference, so the edited instance is the store's.
-    void openSceneEntry(const SceneWidgetEntry& entry);
+    bool openSceneEntry(const SceneWidgetEntry& entry);
     /// Rebuild the document from the preview and persist it. A document with a
     /// path is published to the store (so the hierarchy and the mounted tree
     /// see the edit immediately) and written to disk; an untitled one is only

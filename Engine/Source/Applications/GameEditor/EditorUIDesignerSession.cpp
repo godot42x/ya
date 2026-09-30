@@ -259,35 +259,36 @@ void EditorUIDesignerSession::abandonDocument()
     (void)closeSession(EEditorDocumentCloseMode::Force);
 }
 
-void EditorUIDesignerSession::openDocument(std::string_view path)
+bool EditorUIDesignerSession::openDocument(std::string_view path)
 {
     if (path.empty()) {
         YA_CORE_WARN("EditorUIDesignerSession::openDocument: empty document path");
-        return;
+        return false;
     }
     UIDocumentStore* store = documentStore();
     if (!store) {
         YA_CORE_ERROR("EditorUIDesignerSession::openDocument: no document store bound; "
                       "cannot open '{}'",
                       path);
-        return;
+        return false;
     }
     const std::shared_ptr<UIDocument> document = store->resolve(path);
     if (!document) {
-        return;
+        return false;
     }
     if (!adoptSession(makeEditorUIDocumentId(path))) {
-        return;
+        return false;
     }
     if (!installPreview(document)) {
         (void)closeSession(EEditorDocumentCloseMode::Force);
-        return;
+        return false;
     }
     _canvas.bFitPending = true;
     _documentPath = std::string(path);
     if (_owner) {
         _owner->showUIDesignerCanvas();
     }
+    return true;
 }
 
 void EditorUIDesignerSession::openUntitled(const std::shared_ptr<UIDocument>& document)
@@ -361,14 +362,14 @@ void EditorUIDesignerSession::newDocument(const std::string& typeId)
     openUntitled(document);
 }
 
-void EditorUIDesignerSession::openSceneEntry(const SceneWidgetEntry& entry)
+bool EditorUIDesignerSession::openSceneEntry(const SceneWidgetEntry& entry)
 {
     if (entry.documentPath.empty()) {
         YA_CORE_WARN("EditorUIDesignerSession::openSceneEntry: entry '{}' has no document path",
                      entry.entryId);
-        return;
+        return false;
     }
-    openDocument(entry.documentPath);
+    return openDocument(entry.documentPath);
 }
 
 void EditorUIDesignerSession::rebuildDocumentFromPreview()

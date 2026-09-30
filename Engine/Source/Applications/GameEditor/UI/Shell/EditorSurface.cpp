@@ -872,6 +872,13 @@ bool EditorSurface::openDocumentEditor(EEditorDocumentKind kind, std::string key
     EditorRootId rootId = kInvalidEditorRootId;
     switch (kind) {
     case EEditorDocumentKind::UI: {
+        // The designer session owns the live preview; the document session this
+        // function opens only binds the page. Every UI entry point funnels
+        // through here, so the load must reach the session or the page opens
+        // with "No UI document".
+        if (!_layer || !_layer->getEditorUIDesignerSession().openDocument(key)) {
+            return false;
+        }
         rootId = kUIEditorRootId;
         break;
     }

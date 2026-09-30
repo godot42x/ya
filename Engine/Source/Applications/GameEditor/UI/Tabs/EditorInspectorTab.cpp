@@ -280,7 +280,7 @@ void EditorInspectorTab::construct()
         if (!entry || entry->documentPath.empty()) {
             return;
         }
-        _layer->getEditorUIDesignerSession().openSceneEntry(*entry);
+        (void)_layer->openDocumentEditor(EEditorDocumentKind::UI, entry->documentPath);
     });
 
     auto widgetEntryForm = ui::column("InspectorWidgetEntryForm")
