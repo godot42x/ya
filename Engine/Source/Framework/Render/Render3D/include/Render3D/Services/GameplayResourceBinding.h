@@ -22,6 +22,7 @@ namespace ya
 struct Scene;
 struct Texture;
 struct TextureSlot;
+struct Model;
 
 /**
  * @brief Runtime resource resolution for the components a Scene already has.
@@ -39,14 +40,15 @@ struct TextureSlot;
 struct YA_RENDER_3D_API GameplayResourceBinding : public ISystem
 {
   public:
-    /// A texture-slot update subscription held for one entity. The handle keeps
-    /// the observed slot alive until after the token dies, so token teardown
-    /// can never touch a destroyed observers list (the component's own ref
-    /// may already be gone by the time this entry is dropped).
+    /// A slot update subscription held for one entity (texture or model
+    /// slot). The handle keeps the observed slot alive until after the token
+    /// dies, so token teardown can never touch a destroyed observers list
+    /// (the component's own ref may already be gone by the time this entry
+    /// is dropped).
     struct SlotSubscription
     {
-        AssetHandle<Texture>  handle;
-        AssetObservers::Token token;
+        std::shared_ptr<const void> handle;
+        AssetObservers::Token       token;
     };
 
     /// Per-entity derived state: the slot subscriptions that re-enqueue it.
@@ -55,7 +57,7 @@ struct YA_RENDER_3D_API GameplayResourceBinding : public ISystem
         std::vector<SlotSubscription> slotTokens;
     };
 
-    /// One Scene's material / billboard work.
+    /// One Scene's material / billboard / mesh work.
     struct SceneWork
     {
         entt::registry*    registry = nullptr;
@@ -65,6 +67,8 @@ struct YA_RENDER_3D_API GameplayResourceBinding : public ISystem
         std::unordered_set<entt::entity> dirtyMaterialSet;
         std::deque<entt::entity>         dirtyBillboardQueue;
         std::unordered_set<entt::entity> dirtyBillboardSet;
+        std::deque<entt::entity>         dirtyMeshQueue;
+        std::unordered_set<entt::entity> dirtyMeshSet;
         std::unordered_map<entt::entity, EntityWork> entityWork;
 
 #ifdef BUILD_DEBUG
@@ -72,16 +76,24 @@ struct YA_RENDER_3D_API GameplayResourceBinding : public ISystem
 #endif
     };
 
+    /// Which queue a slot update re-enqueues its entity into.
+    enum class EDirtyWork : uint8_t
+    {
+        Material,
+        Billboard,
+        Mesh,
+    };
+
     /// Frame counter for the dev-only consistency audit; bound by the Host.
     void setHostTickProvider(std::function<uint64_t()> provider) { _getHostTick = std::move(provider); }
 
     /**
-     * @brief Resolves the pending materials and billboards of exactly these
-     * Scenes. Texture refs bind their shared asset slot when their path is
-     * set, so sprites, tilemaps and UI images need no work here. Static /
-     * skinned mesh sources follow in H3; skybox / environment / terrain
-     * derived GPU work lives in EnvironmentLightingProcessor and
-     * TerrainProcessor. A Scene this call does not name has its work dropped.
+     * @brief Resolves the pending materials, billboards and meshes of
+     * exactly these Scenes. Texture refs bind their shared asset slot when
+     * their path is set, so sprites, tilemaps and UI images need no work
+     * here. Skybox / environment / terrain derived GPU work lives in
+     * EnvironmentLightingProcessor and TerrainProcessor. A Scene this call
+     * does not name has its work dropped.
      */
     void prepareScenes(std::span<Scene* const> scenes, float dt);
 
@@ -107,15 +119,18 @@ struct YA_RENDER_3D_API GameplayResourceBinding : public ISystem
 
     void enqueueMaterial(SceneWork& work, entt::entity entity);
     void enqueueBillboard(SceneWork& work, entt::entity entity);
+    void enqueueMesh(SceneWork& work, entt::entity entity);
     /// Slot-update callbacks may run while their scene is already destroyed;
     /// this only touches the work map key, so it stays inert.
-    void enqueueFromSlotUpdate(const entt::registry* registry, entt::entity entity, bool bBillboard);
+    void enqueueFromSlotUpdate(const entt::registry* registry, entt::entity entity, EDirtyWork kind);
 
     /// Subscribe a fill observer on every path-bearing texture slot of the
     /// component (materials via their slot enums, the billboard via `image`).
     template <typename Component>
     void subscribeSlotObservers(SceneWork& work, entt::entity entity, Component& component);
-    void resolvePendingMeshes(Scene& scene);
+    /// Subscribe a fill observer on a mesh source's model slot.
+    void subscribeMeshSlotObserver(SceneWork& work, entt::entity entity, const AssetHandle<Model>& handle);
+    void resolvePendingMeshes(SceneWork& work);
     void resolvePendingMaterials(SceneWork& work);
     void resolvePendingBillboards(SceneWork& work);
 #ifdef BUILD_DEBUG

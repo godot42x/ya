@@ -5,6 +5,7 @@
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/LuaScriptBinding.h"
+#include "Resource/AssetManager.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Core/SceneScriptBindings.h"
 #include "Scene3D/TransformComponent.h"
@@ -159,9 +160,10 @@ TEST_F(LuaScriptBindingTest, TilemapQueryFaceReachesLua)
     map->_editHeight = 3;
     map->layers.push_back(TilemapLayer{.name = "Ground", .cells = std::vector<int32_t>(9, 1)});
     ASSERT_TRUE(map->setCell(2, 1, 0, 5)); // tile 4
-    auto tileset         = std::make_shared<Tileset>();
-    tileset->solidTiles  = {4};
-    map->tileset._cached = tileset;
+    auto tileset        = std::make_shared<Tileset>();
+    tileset->solidTiles = {4};
+    AssetManager::get()->registerTileset("LuaTilesetQueryTest", tileset);
+    map->tileset.setPath("LuaTilesetQueryTest");
 
     const auto result = run(R"(
         local map = entity:getTilemap()

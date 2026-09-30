@@ -1,5 +1,6 @@
 #include "ECS/Component/2D/TilemapComponent.h"
 
+#include "Core/Common/AssetRef.h"
 #include "Core/Common/Tileset.h"
 #include "ECS/Entity.h"
 #include "Scene/Core/Scene.h"
@@ -14,19 +15,45 @@ namespace
 
 // A tileset whose tile 4 is a wall, mirroring tiny_town's tree canopy index
 // in the example project (solid list = {4, 16} there).
-TilesetRef makeWallTileset()
+std::shared_ptr<Tileset> makeWallTileset()
 {
     static std::shared_ptr<Tileset> shared = [] {
-        auto tileset         = std::make_shared<Tileset>();
+        auto tileset        = std::make_shared<Tileset>();
         tileset->columns     = 12;
         tileset->tileWidth   = 16;
         tileset->tileHeight  = 16;
         tileset->solidTiles  = {4};
         return tileset;
     }();
+    return shared;
+}
+
+// This gate links no resource layer, so no engine resolver is installed:
+// a local one hands the wall tileset to every tileset ref this suite binds.
+struct WallTilesetResolver final : IAssetRefResolver
+{
+    AssetHandle<Texture>  acquireTexture(const std::string&) const override { return nullptr; }
+    AssetHandle<Model>    acquireModel(const std::string&) const override { return nullptr; }
+    AssetHandle<Tileset>  acquireTileset(const std::string&) const override
+    {
+        auto slot        = std::make_shared<AssetSlot<Tileset>>();
+        slot->resource   = makeWallTileset();
+        slot->state      = EAssetSlotState::Ready;
+        return slot;
+    }
+};
+
+TilesetRef makeWallTilesetRef()
+{
+    static WallTilesetResolver resolver;
+    static bool                bInstalled = [] {
+        setAssetRefResolver(&resolver);
+        return true;
+    }();
+    (void)bInstalled;
 
     TilesetRef ref;
-    ref._cached = shared;
+    ref.setPath("WallTileset");
     return ref;
 }
 
@@ -42,7 +69,7 @@ TEST(TilemapQueryTest, SolidTileBlocks)
     map.cellSize   = glm::vec2(1.0f, 1.0f);
     map._editWidth = 4;
     map._editHeight = 3;
-    map.tileset    = makeWallTileset();
+    map.tileset    = makeWallTilesetRef();
     map.layers.push_back(TilemapLayer{.name = "Ground", .cells = std::vector<int32_t>(12, 1)});
 
     ASSERT_FALSE(map.isSolid(0, 0));
@@ -72,7 +99,7 @@ TEST(TilemapQueryTest, OutOfBoundsIsSolid)
     map.cellSize   = glm::vec2(1.0f, 1.0f);
     map._editWidth = 3;
     map._editHeight = 3;
-    map.tileset    = makeWallTileset();
+    map.tileset    = makeWallTilesetRef();
     map.layers.push_back(TilemapLayer{.name = "Ground", .cells = std::vector<int32_t>(9, 1)});
 
     EXPECT_TRUE(map.isSolid(-1, 0));
@@ -101,7 +128,7 @@ TEST(TilemapQueryTest, WorldToCellUsesTheOwnerTransform)
     map->cellSize   = glm::vec2(1.0f, 1.0f);
     map->_editWidth = 6;
     map->_editHeight = 5;
-    map->tileset    = makeWallTileset();
+    map->tileset    = makeWallTilesetRef();
     map->layers.push_back(TilemapLayer{.name = "Ground", .cells = std::vector<int32_t>(30, 1)});
 
     // Player start (0, 0.25) is cell (5, 2) in the hand-written scene.
@@ -137,7 +164,7 @@ TEST(TilemapQueryTest, OwnerlessMapUsesIdentityTransform)
     map.cellSize   = glm::vec2(2.0f, 2.0f);
     map._editWidth = 2;
     map._editHeight = 2;
-    map.tileset    = makeWallTileset();
+    map.tileset    = makeWallTilesetRef();
     map.layers.push_back(TilemapLayer{.name = "Ground", .cells = std::vector<int32_t>(4, 1)});
 
     const glm::vec2 cell = map.worldToCell(glm::vec2(3.0f, 1.0f));

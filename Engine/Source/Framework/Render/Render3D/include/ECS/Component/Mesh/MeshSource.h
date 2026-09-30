@@ -12,6 +12,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Core/Common/AssetSlot.h"
 #include "Core/Math/Geometry.h"
 #include "Core/Reflection/Reflection.h"
 
@@ -55,13 +56,11 @@ struct MeshSource
     Mesh* _cachedMesh = nullptr;
     bool  _bResolved  = false;
 
-    /// The Model the resolved mesh belongs to.
-    ///
-    /// A path-sourced mesh is a mesh inside an asset: the Mesh is owned by the
-    /// Model, and the asset cache may evict a Model that nothing holds. Keeping
-    /// the owner alive here is what makes the cached Mesh pointer something the
-    /// component can actually rely on.
-    std::shared_ptr<Model> _ownerModel;
+    /// The model slot a path-sourced mesh resolves through. The slot keeps
+    /// the Model (and with it the Mesh) alive while this source holds the
+    /// handle; its fill observers let the processor re-resolve on load
+    /// completion without polling.
+    AssetHandle<Model> _modelHandle;
 
     // ========================================
     // Resource Resolution
@@ -71,9 +70,9 @@ struct MeshSource
 
     void invalidate()
     {
-        _bResolved  = false;
-        _cachedMesh = nullptr;
-        _ownerModel.reset();
+        _bResolved   = false;
+        _cachedMesh  = nullptr;
+        _modelHandle.reset();
     }
 
     bool isResolved() const { return _bResolved; }
@@ -119,6 +118,10 @@ struct MeshSource
         _meshIndex         = meshIndex;
         _cachedMesh        = mesh;
         _bResolved         = (mesh != nullptr);
+        // resolve() rebinds the handle (and with it the fill subscription)
+        // on the processor's next pump; a stale handle from a previous path
+        // must not survive the re-point.
+        _modelHandle.reset();
     }
 };
 

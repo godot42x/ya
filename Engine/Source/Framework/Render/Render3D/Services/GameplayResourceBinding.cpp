@@ -30,21 +30,29 @@ bool isMaterialType(ya::type_index_t typeIndex)
            typeIndex == type_index_v<UnlitMaterialComponent>;
 }
 
+bool isMeshType(ya::type_index_t typeIndex)
+{
+    return typeIndex == type_index_v<StaticMeshComponent> ||
+           typeIndex == type_index_v<SkinnedMeshComponent>;
+}
+
 bool isWatchedType(ya::type_index_t typeIndex)
 {
-    return isMaterialType(typeIndex) || typeIndex == type_index_v<BillboardComponent>;
+    return isMaterialType(typeIndex) ||
+           typeIndex == type_index_v<BillboardComponent> ||
+           isMeshType(typeIndex);
 }
 
 template <typename Component, typename Fn>
-void forEachTextureSlot(Component& component, Fn&& fn)
+void forEachTextureSlot(Component&& component, Fn&& fn)
 {
-    if constexpr (std::is_same_v<Component, BillboardComponent>) {
+    using ComponentT = std::remove_cv_t<std::remove_reference_t<Component>>;
+    if constexpr (std::is_same_v<ComponentT, BillboardComponent>) {
         fn(component.image);
     }
     else {
-        for (size_t index = 0; index < static_cast<size_t>(Component::slot_enum_t::Count); ++index) {
-            if (TextureSlot* slot =
-                    component.getTextureSlot(static_cast<typename Component::slot_enum_t>(index))) {
+        for (size_t index = 0; index < static_cast<size_t>(ComponentT::slot_enum_t::Count); ++index) {
+            if (auto* slot = component.getTextureSlot(static_cast<typename ComponentT::slot_enum_t>(index))) {
                 fn(*slot);
             }
         }
@@ -99,6 +107,9 @@ void GameplayResourceBinding::onComponentAdded(entt::registry& registry, entt::e
     else if (typeIndex == type_index_v<BillboardComponent>) {
         enqueueBillboard(*work, entity);
     }
+    else if (isMeshType(typeIndex)) {
+        enqueueMesh(*work, entity);
+    }
 }
 
 void GameplayResourceBinding::onComponentEdited(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
@@ -146,7 +157,7 @@ void GameplayResourceBinding::prepareScenes(std::span<Scene* const> scenes, floa
 
         {
             YA_PROFILE_SCOPE("ResourceResolve/Meshes");
-            resolvePendingMeshes(*scene);
+            resolvePendingMeshes(work);
         }
         {
             YA_PROFILE_SCOPE("ResourceResolve/Materials");
@@ -188,6 +199,8 @@ void GameplayResourceBinding::dropWork(SceneWork& work)
     work.dirtyMaterialSet.clear();
     work.dirtyBillboardQueue.clear();
     work.dirtyBillboardSet.clear();
+    work.dirtyMeshQueue.clear();
+    work.dirtyMeshSet.clear();
     work.entityWork.clear();
 }
 
@@ -195,8 +208,10 @@ void GameplayResourceBinding::dropEntityWork(SceneWork& work, entt::entity entit
 {
     work.dirtyMaterialSet.erase(entity);
     work.dirtyBillboardSet.erase(entity);
+    work.dirtyMeshSet.erase(entity);
     std::erase(work.dirtyMaterialQueue, entity);
     std::erase(work.dirtyBillboardQueue, entity);
+    std::erase(work.dirtyMeshQueue, entity);
     work.entityWork.erase(entity);
 }
 
@@ -228,6 +243,14 @@ void GameplayResourceBinding::seedSceneResolveWork(SceneWork& work)
         (void)unused;
         enqueueBillboard(work, entity);
     }
+    for (auto&& [entity, unused] : registry.view<StaticMeshComponent>().each()) {
+        (void)unused;
+        enqueueMesh(work, entity);
+    }
+    for (auto&& [entity, unused] : registry.view<SkinnedMeshComponent>().each()) {
+        (void)unused;
+        enqueueMesh(work, entity);
+    }
 }
 
 void GameplayResourceBinding::enqueueMaterial(SceneWork& work, entt::entity entity)
@@ -255,7 +278,20 @@ void GameplayResourceBinding::enqueueBillboard(SceneWork& work, entt::entity ent
     }
 }
 
-void GameplayResourceBinding::enqueueFromSlotUpdate(const entt::registry* registry, entt::entity entity, bool bBillboard)
+void GameplayResourceBinding::enqueueMesh(SceneWork& work, entt::entity entity)
+{
+    auto& registry = *work.registry;
+    if (!registry.valid(entity) ||
+        (!registry.all_of<StaticMeshComponent>(entity) &&
+         !registry.all_of<SkinnedMeshComponent>(entity))) {
+        return;
+    }
+    if (work.dirtyMeshSet.insert(entity).second) {
+        work.dirtyMeshQueue.push_back(entity);
+    }
+}
+
+void GameplayResourceBinding::enqueueFromSlotUpdate(const entt::registry* registry, entt::entity entity, EDirtyWork kind)
 {
     // The scene may already be destroyed: look the work up by pointer value
     // and touch nothing else when it is gone. The caller's next prepare drops
@@ -264,13 +300,23 @@ void GameplayResourceBinding::enqueueFromSlotUpdate(const entt::registry* regist
     if (!work) {
         return;
     }
-    if (bBillboard) {
+    switch (kind) {
+    case EDirtyWork::Billboard:
         if (work->dirtyBillboardSet.insert(entity).second) {
             work->dirtyBillboardQueue.push_back(entity);
         }
-    }
-    else if (work->dirtyMaterialSet.insert(entity).second) {
-        work->dirtyMaterialQueue.push_back(entity);
+        break;
+    case EDirtyWork::Mesh:
+        if (work->dirtyMeshSet.insert(entity).second) {
+            work->dirtyMeshQueue.push_back(entity);
+        }
+        break;
+    case EDirtyWork::Material:
+    default:
+        if (work->dirtyMaterialSet.insert(entity).second) {
+            work->dirtyMaterialQueue.push_back(entity);
+        }
+        break;
     }
 }
 
@@ -287,33 +333,63 @@ void GameplayResourceBinding::subscribeSlotObservers(SceneWork& work, entt::enti
             return;
         }
         auto callback = [this, registry = work.registry, entity,
-                         bBillboard = std::is_same_v<Component, BillboardComponent>]()
+                         kind = std::is_same_v<Component, BillboardComponent> ? EDirtyWork::Billboard
+                                                                              : EDirtyWork::Material]()
         {
             // Slot updates land on the game thread; the callback only enqueues.
-            enqueueFromSlotUpdate(registry, entity, bBillboard);
+            enqueueFromSlotUpdate(registry, entity, kind);
         };
         entityWork.slotTokens.push_back(SlotSubscription{handle, handle->observers.subscribe(std::move(callback))});
     });
 }
 
-void GameplayResourceBinding::resolvePendingMeshes(Scene& scene)
+void GameplayResourceBinding::subscribeMeshSlotObserver(SceneWork& work, entt::entity entity, const AssetHandle<Model>& handle)
 {
-    auto& registry = scene.getRegistry();
-
-    auto resolveOne = [](auto& meshComp) {
-        if (!meshComp.isResolved() && meshComp.hasMeshSource()) {
-            meshComp.resolve();
-        }
+    if (!handle) {
+        return;
+    }
+    auto& entityWork = work.entityWork[entity];
+    auto  callback   = [this, registry = work.registry, entity]()
+    {
+        // Slot updates land on the game thread; the callback only enqueues.
+        enqueueFromSlotUpdate(registry, entity, EDirtyWork::Mesh);
     };
+    entityWork.slotTokens.push_back(SlotSubscription{handle, handle->observers.subscribe(std::move(callback))});
+}
 
-    registry.view<StaticMeshComponent>().each([&](auto entity, StaticMeshComponent& comp) {
-        (void)entity;
-        resolveOne(comp);
-    });
-    registry.view<SkinnedMeshComponent>().each([&](auto entity, SkinnedMeshComponent& comp) {
-        (void)entity;
-        resolveOne(comp);
-    });
+void GameplayResourceBinding::resolvePendingMeshes(SceneWork& work)
+{
+    auto& registry = *work.registry;
+
+    while (!work.dirtyMeshQueue.empty()) {
+        const auto entity = work.dirtyMeshQueue.front();
+        work.dirtyMeshQueue.pop_front();
+        work.dirtyMeshSet.erase(entity);
+        if (!registry.valid(entity)) {
+            work.entityWork.erase(entity);
+            continue;
+        }
+
+        // Drop the previous fill subscriptions first: resolve may have
+        // rebound the model path to a different slot, and tokens must not
+        // accumulate.
+        work.entityWork[entity].slotTokens.clear();
+
+        const auto pump = [&](auto* component) {
+            if (!component) {
+                return;
+            }
+            component->_mesh.resolve();
+            subscribeMeshSlotObserver(work, entity, component->_mesh._modelHandle);
+        };
+        const bool bPumped =
+            registry.all_of<StaticMeshComponent>(entity) || registry.all_of<SkinnedMeshComponent>(entity);
+        pump(registry.try_get<StaticMeshComponent>(entity));
+        pump(registry.try_get<SkinnedMeshComponent>(entity));
+        if (!bPumped) {
+            work.entityWork.erase(entity);
+        }
+    }
 }
 
 void GameplayResourceBinding::resolvePendingMaterials(SceneWork& work)
@@ -383,15 +459,10 @@ void GameplayResourceBinding::auditSlotSubscriptions(SceneWork& work)
     auto&  registry       = *work.registry;
     auto   enqueueMaterialFn = [this](SceneWork& w, entt::entity e) { enqueueMaterial(w, e); };
     auto   enqueueBillboardFn = [this](SceneWork& w, entt::entity e) { enqueueBillboard(w, e); };
-    const auto auditComponent = [&](auto&& view, auto&& enqueue) {
+    auto   enqueueMeshFn      = [this](SceneWork& w, entt::entity e) { enqueueMesh(w, e); };
+    const auto auditComponent = [&](auto&& view, auto&& enqueue, auto&& anySlotLoading) {
         for (auto&& [entity, component] : view.each()) {
-            bool bAnyLoading = false;
-            forEachTextureSlot(component, [&](const TextureSlot& slot) {
-                if (slot.textureRef.isLoading()) {
-                    bAnyLoading = true;
-                }
-            });
-            if (!bAnyLoading) {
+            if (!anySlotLoading(component)) {
                 continue;
             }
             // Every component with a loading slot must be queued for a
@@ -399,18 +470,34 @@ void GameplayResourceBinding::auditSlotSubscriptions(SceneWork& work)
             // means a write path or a fill escaped the funnel.
             if (!work.entityWork.contains(entity) &&
                 !work.dirtyMaterialSet.contains(entity) &&
-                !work.dirtyBillboardSet.contains(entity)) {
-                YA_CORE_ASSERT(false, "ResourceResolve audit: loading texture slot is neither queued nor subscribed");
+                !work.dirtyBillboardSet.contains(entity) &&
+                !work.dirtyMeshSet.contains(entity)) {
+                YA_CORE_ASSERT(false, "ResourceResolve audit: loading asset slot is neither queued nor subscribed");
                 YA_CORE_WARN("ResourceResolve audit: re-armed entity {} (loading slot without subscription)",
                              static_cast<uint32_t>(entity));
                 enqueue(work, entity);
             }
         }
     };
-    auditComponent(registry.view<PhongMaterialComponent>(), enqueueMaterialFn);
-    auditComponent(registry.view<PBRMaterialComponent>(), enqueueMaterialFn);
-    auditComponent(registry.view<UnlitMaterialComponent>(), enqueueMaterialFn);
-    auditComponent(registry.view<BillboardComponent>(), enqueueBillboardFn);
+    const auto anyTextureSlotLoading = [](const auto& component) {
+        bool bLoading = false;
+        forEachTextureSlot(component, [&](const TextureSlot& slot) {
+            if (slot.textureRef.isLoading()) {
+                bLoading = true;
+            }
+        });
+        return bLoading;
+    };
+    const auto anyMeshSlotLoading = [](const auto& component) {
+        const auto& handle = component._mesh._modelHandle;
+        return handle && handle->state == EAssetSlotState::Loading;
+    };
+    auditComponent(registry.view<PhongMaterialComponent>(), enqueueMaterialFn, anyTextureSlotLoading);
+    auditComponent(registry.view<PBRMaterialComponent>(), enqueueMaterialFn, anyTextureSlotLoading);
+    auditComponent(registry.view<UnlitMaterialComponent>(), enqueueMaterialFn, anyTextureSlotLoading);
+    auditComponent(registry.view<BillboardComponent>(), enqueueBillboardFn, anyTextureSlotLoading);
+    auditComponent(registry.view<StaticMeshComponent>(), enqueueMeshFn, anyMeshSlotLoading);
+    auditComponent(registry.view<SkinnedMeshComponent>(), enqueueMeshFn, anyMeshSlotLoading);
 }
 #endif
 

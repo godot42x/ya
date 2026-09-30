@@ -28,58 +28,16 @@ struct EngineAssetRefResolver final : IAssetRefResolver
         return AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{.filepath = path});
     }
 
-    void resolveAssetRef(type_index_t typeIndex, void* assetRefPtr) const override
+    AssetHandle<Model> acquireModel(const std::string& path) const override
     {
-        if (typeIndex == ya::type_index_v<ModelRef>) {
-            resolveModel(*static_cast<ModelRef*>(assetRefPtr));
-        }
-        else if (typeIndex == ya::type_index_v<MeshRef>) {
-            resolveMesh(*static_cast<MeshRef*>(assetRefPtr));
-        }
-        else {
-            YA_CORE_WARN("EngineAssetRefResolver: Unknown asset ref type index: {}", typeIndex);
-        }
-    }
-
-  private:
-    static void resolveModel(ModelRef& ref)
-    {
-        if (ref.getPath().empty()) {
-            ref._resolveState = EAssetResolveState::Empty;
-            return;
-        }
-
-        if (ref._resolveState == EAssetResolveState::Ready && ref._cachedPtr) {
-            const auto currentVersion = AssetManager::get()->getResourceVersion(ref.getPath());
-            if (ref._resolvedVersion == currentVersion) {
-                return;
-            }
-            ref._cachedPtr.reset();
-            ref._resolveState = EAssetResolveState::Dirty;
-            YA_CORE_TRACE("ModelRef: version changed for '{}', re-resolving", ref.getPath());
-        }
-
-        const auto currentVersion = AssetManager::get()->getResourceVersion(ref.getPath());
-        auto       future         = AssetManager::get()->loadModel(AssetManager::ModelLoadRequest{
-            .filepath = ref.getPath(),
+        return AssetManager::get()->loadModel(AssetManager::ModelLoadRequest{
+            .filepath = path,
         });
-        if (future.isReady()) {
-            ref._cachedPtr       = future.getShared();
-            ref._resolveState    = EAssetResolveState::Ready;
-            ref._resolvedVersion = currentVersion;
-            return;
-        }
-
-        if (ref._resolveState != EAssetResolveState::Loading) {
-            ref._resolveState = EAssetResolveState::Loading;
-        }
     }
 
-    static void resolveMesh(MeshRef& ref)
+    AssetHandle<Tileset> acquireTileset(const std::string& path) const override
     {
-        // Mesh loading not implemented yet
-        ref._resolveState = EAssetResolveState::Failed;
-        UNIMPLEMENTED();
+        return AssetManager::get()->acquireTileset(path);
     }
 };
 

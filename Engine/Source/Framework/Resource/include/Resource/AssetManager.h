@@ -4,8 +4,8 @@
 #include <string>
 #include <unordered_map>
 
-#include "Core/Common/AssetFuture.h"
 #include "Core/Common/AssetSlot.h"
+#include "Core/Common/Tileset.h"
 #include "Resource/AssetManagerTypes.h"
 #include "Resource/Core/Meta/AssetMeta.h"
 #include "Core/ResourceRegistry.h"
@@ -21,6 +21,7 @@ namespace ya
 
 class AssetModelManager;
 class AssetTextureManager;
+class AssetTilesetManager;
 struct IRender;
 
 // Asset type taxonomy is defined once by EAssetType (Core/Common/AssetRef.h).
@@ -62,6 +63,7 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
   private:
     friend class AssetTextureManager;
     friend class AssetModelManager;
+    friend class AssetTilesetManager;
 
     //  use file as a renderTargets
     std::unordered_map<FName, stdptr<Texture>> _renderTexture;
@@ -80,6 +82,7 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
 
     std::unique_ptr<AssetTextureManager> _textureManager;
     std::unique_ptr<AssetModelManager>   _modelManager;
+    std::unique_ptr<AssetTilesetManager> _tilesetManager;
     IRender*                             _render = nullptr;
 
   public:
@@ -107,26 +110,31 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     // ── Default loading (async) ─────────────────────────────────────────
     //
     // loadTexture() / loadModel() are ASYNC by default.
-    // loadTexture returns the shared slot for the request (same slot for the
-    // same path + color space); it turns Ready or Failed on the game thread
-    // when the decode completes. onReady fires once with the texture or null.
-    // loadModel returns an AssetFuture<Model> snapshot.
+    // Both return the shared slot for the request (same slot for the same
+    // request identity); it turns Ready or Failed on the game thread when the
+    // decode completes. onReady fires once with the resource or null.
     //
     // Use loadTextureSync() / loadModelSync() for must-have-now resources.
     // Sync methods return shared_ptr<T> directly (guaranteed non-null on success).
 
     AssetHandle<Texture> loadTexture(const TextureLoadRequest& request);
-
-    ModelFuture loadModel(const ModelLoadRequest& request);
+    AssetHandle<Model>   loadModel(const ModelLoadRequest& request);
 
     void                     loadTextureBatch(const TextureBatchLoadRequest& request);
     TextureBatchMemoryHandle loadTextureBatchIntoMemory(const TextureBatchMemoryLoadRequest& request);
     bool                     consumeTextureBatchMemory(TextureBatchMemoryHandle handle, TextureBatchMemory& outBatchMemory);
 
-    /**
-     * @brief Load model asynchronously (default).
-     *        Returns ModelFuture — check isReady() before using.
-     */
+    // ── Tilesets (synchronous authoring JSON) ───────────────────────────
+    //
+    // Shared tileset slot for the path; the document is parsed synchronously
+    // on first request, so the returned slot is Ready or Failed immediately.
+
+    AssetHandle<Tileset> acquireTileset(const std::string& path);
+
+    /// Install an engine-generated tileset under a name; refs bound to the
+    /// name share one Ready slot (mirrors registerTexture).
+    void registerTileset(const std::string& name, const std::shared_ptr<Tileset>& tileset);
+
     // ── Explicit synchronous loading ────────────────────────────────────
 
     std::shared_ptr<Texture> loadTextureSync(const std::string& name,
@@ -141,6 +149,8 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
 
     std::shared_ptr<Model> getModel(const std::string& filepath) const;
     bool                   isModelLoaded(const std::string& filepath) const;
+    bool                   isTilesetLoaded(const std::string& path) const;
+    std::shared_ptr<Tileset> getTileset(const std::string& path) const;
 
     static ETextureColorSpace     inferTextureColorSpace(const FName& textureSemantic);
     TextureSourceInfo             inspectTextureSource(const std::string& filepath) const;
@@ -214,9 +224,6 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     /// Check whether any texture slot of a path failed to load.
     bool isTextureLoadFailed(const std::string& filepath) const;
 
-    /// Check whether an async model load is still in flight.
-    bool isModelLoadPending(const std::string& filepath) const;
-
     /// Release all cached textures (GPU images). Hosts call this before
     /// tearing down the render backend / VMA allocator so dedicated image
     /// allocations are freed while the device is still alive. Slots still
@@ -231,6 +238,8 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     const AssetTextureManager& textureManager() const;
     AssetModelManager&         modelManager();
     const AssetModelManager&   modelManager() const;
+    AssetTilesetManager&       tilesetManager();
+    const AssetTilesetManager& tilesetManager() const;
 };
 
 } // namespace ya

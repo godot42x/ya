@@ -2,6 +2,7 @@
 
 #include "Resource/Manager/AssetModelManager.h"
 #include "Resource/Manager/AssetTextureManager.h"
+#include "Resource/Manager/AssetTilesetManager.h"
 
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Log.h"
@@ -44,6 +45,7 @@ AssetManager* AssetManager::get()
 AssetManager::AssetManager()
     : _textureManager(std::make_unique<AssetTextureManager>(*this))
     , _modelManager(std::make_unique<AssetModelManager>(*this))
+    , _tilesetManager(std::make_unique<AssetTilesetManager>())
 {
 }
 
@@ -79,6 +81,7 @@ void AssetManager::clearCache()
     YA_PROFILE_FUNCTION_LOG();
     _textureManager->clear();
     _modelManager->clear();
+    _tilesetManager->clear();
     _metaCache.clear();
 
     YA_CORE_INFO("AssetManager cleared");
@@ -150,6 +153,36 @@ const AssetTextureManager& AssetManager::textureManager() const
     return *_textureManager;
 }
 
+AssetTilesetManager& AssetManager::tilesetManager()
+{
+    return *_tilesetManager;
+}
+
+const AssetTilesetManager& AssetManager::tilesetManager() const
+{
+    return *_tilesetManager;
+}
+
+AssetHandle<Tileset> AssetManager::acquireTileset(const std::string& path)
+{
+    return tilesetManager().acquireTileset(normalizeAssetPath(path));
+}
+
+void AssetManager::registerTileset(const std::string& name, const std::shared_ptr<Tileset>& tileset)
+{
+    tilesetManager().registerTileset(normalizeAssetPath(name), tileset);
+}
+
+bool AssetManager::isTilesetLoaded(const std::string& path) const
+{
+    return tilesetManager().isTilesetLoaded(normalizeAssetPath(path));
+}
+
+std::shared_ptr<Tileset> AssetManager::getTileset(const std::string& path) const
+{
+    return tilesetManager().getTileset(normalizeAssetPath(path));
+}
+
 AssetModelManager& AssetManager::modelManager()
 {
     return *_modelManager;
@@ -200,6 +233,7 @@ size_t AssetManager::collectUnused()
     size_t         released = 0;
     released += textureManager().collectUnused(frame);
     released += modelManager().collectUnused(frame);
+    released += tilesetManager().collectUnused();
 
     if (released > 0) {
         YA_CORE_INFO("collectUnused: {} resources scheduled for deferred release", released);
@@ -213,7 +247,8 @@ void AssetManager::unload(const std::string& assetPath)
     const uint64_t frame    = getCurrentFrameIdx();
     const bool     bTexture = textureManager().unload(assetPath, frame);
     const bool     bModel   = modelManager().unload(assetPath, frame);
-    if (!bTexture && !bModel) {
+    const bool     bTileset = tilesetManager().unload(normalizeAssetPath(assetPath));
+    if (!bTexture && !bModel && !bTileset) {
         YA_CORE_WARN("unload: asset '{}' is not cached", assetPath);
     }
 }
@@ -248,6 +283,7 @@ void AssetManager::onMetaFileChanged(const std::string& metaPath)
     YA_CORE_INFO("onMetaFileChanged: meta changed for '{}', reloading affected resources", assetPath);
 
     textureManager().reload(assetPath);
+    tilesetManager().invalidate(normalizeAssetPath(assetPath));
     if (newMeta.type == "model") {
         modelManager().evictCachedAsset(assetPath, getCurrentFrameIdx());
         loadModel(ModelLoadRequest{.filepath = assetPath, .name = {}, .onReady = {}});
@@ -264,6 +300,7 @@ void AssetManager::onAssetFileChanged(const std::string& assetPath)
 
     const AssetMeta& meta = getOrLoadMeta(assetPath);
     textureManager().reload(assetPath);
+    tilesetManager().invalidate(normalizeAssetPath(assetPath));
     if (meta.type == "model") {
         modelManager().evictCachedAsset(assetPath, getCurrentFrameIdx());
         loadModel(ModelLoadRequest{.filepath = assetPath, .name = {}, .onReady = {}});
@@ -303,6 +340,7 @@ void AssetManager::invalidate(const std::string& filepath)
     _metaCache.erase(normalizedFilepath);
     textureManager().reload(normalizedFilepath);
     modelManager().evictCachedAsset(normalizedFilepath, getCurrentFrameIdx());
+    tilesetManager().invalidate(normalizedFilepath);
     bumpResourceVersion(normalizedFilepath);
 }
 

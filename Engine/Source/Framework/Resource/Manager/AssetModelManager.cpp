@@ -1,6 +1,5 @@
 #include "Resource/Manager/AssetModelManager.h"
 
-
 #include "Core/Log.h"
 #include "Resource/Core/Model/ImportedModelData.h"
 
@@ -16,16 +15,33 @@ AssetModelManager::AssetModelManager(AssetManager& owner)
 
 void AssetModelManager::clear()
 {
-    std::lock_guard lock(_mutex);
-    ++_clearGeneration;
-    modelCache.clear();
-    _modalName2Path.clear();
-    _pendingModelLoads.clear();
-    _pendingModelCallbacks.clear();
-    _failedModelLoads.clear();
+    std::vector<std::function<void()>> updateObservers;
+    {
+        std::lock_guard lock(_mutex);
+        ++_clearGeneration;
+        // Refs outlive the backend teardown that calls this; leave their
+        // slots Failed instead of pointing at destroyed GPU objects.
+        for (auto& [filepath, entry] : _entries) {
+            (void)filepath;
+            entry.slot->resource.reset();
+            entry.slot->state = EAssetSlotState::Failed;
+            ++entry.slot->generation;
+            auto observers = entry.slot->observers.gather();
+            updateObservers.insert(updateObservers.end(),
+                                    std::make_move_iterator(observers.begin()),
+                                    std::make_move_iterator(observers.end()));
+        }
+        _entries.clear();
+        _modelName2Path.clear();
+    }
+    // Slots went Failed with a generation bump; subscribers hear the
+    // update outside the lock. Teardown-path callbacks only enqueue or drop state.
+    for (auto& observer : updateObservers) {
+        observer();
+    }
 }
 
-ModelFuture AssetManager::loadModel(const ModelLoadRequest& request)
+AssetHandle<Model> AssetManager::loadModel(const ModelLoadRequest& request)
 {
     return modelManager().loadModel(request);
 }
@@ -40,11 +56,6 @@ std::shared_ptr<Model> AssetManager::loadModelSync(const std::string& name, cons
     return modelManager().loadModelSync(name, filepath);
 }
 
-bool AssetManager::isModelLoadPending(const std::string& filepath) const
-{
-    return modelManager().isModelLoadPending(filepath);
-}
-
 bool AssetManager::isModelLoaded(const std::string& filepath) const
 {
     return modelManager().isModelLoaded(filepath);
@@ -55,228 +66,237 @@ std::shared_ptr<Model> AssetManager::getModel(const std::string& filepath) const
     return modelManager().getModel(filepath);
 }
 
-ModelFuture AssetModelManager::loadModel(const AssetManager::ModelLoadRequest& request)
+AssetHandle<Model> AssetModelManager::loadModel(const AssetManager::ModelLoadRequest& request)
 {
     if (request.filepath.empty()) {
-        return {};
+        return nullptr;
     }
 
-    AssetManager::ModelLoadRequest normalized = request;
-    normalized.filepath = AssetManager::normalizeAssetPath(normalized.filepath);
+    const std::string path = AssetManager::normalizeAssetPath(request.filepath);
 
-    if (isModelLoaded(normalized.filepath)) {
-        if (!normalized.name.empty()) {
-            _modalName2Path[normalized.name] = normalized.filepath;
-        }
-        if (normalized.onReady) {
-            const auto model = modelCache[normalized.filepath];
-            AssetManager::dispatchToGameThread([onReady = normalized.onReady, model]() mutable
-                                               { onReady(model); });
-        }
-        return ModelFuture(modelCache[normalized.filepath]);
-    }
-
+    AssetHandle<Model>       handle;
+    std::shared_ptr<Model>   settledModel;
+    bool                     bSettled  = false;
+    bool                     bInserted = false;
     {
         std::lock_guard lock(_mutex);
-        if (_failedModelLoads.contains(normalized.filepath)) {
-            if (normalized.onReady) {
-                AssetManager::dispatchToGameThread([onReady = normalized.onReady]() mutable
-                                                   { onReady(nullptr); });
+        if (!request.name.empty()) {
+            _modelName2Path[request.name] = path;
+        }
+        auto [it, inserted] = _entries.try_emplace(path);
+        ModelEntry& entry   = it->second;
+        bInserted           = inserted;
+        if (inserted) {
+            entry.slot     = std::make_shared<AssetSlot<Model>>();
+            entry.filepath = path;
+        }
+        handle = entry.slot;
+        if (entry.slot->state == EAssetSlotState::Loading) {
+            if (request.onReady) {
+                entry.readyCallbacks.push_back(request.onReady);
             }
-            return {};
+        }
+        else {
+            bSettled     = true;
+            settledModel = entry.slot->resource;
         }
     }
 
-    if (!isModelLoadPending(normalized.filepath)) {
-        submitModelLoad(normalized.filepath, normalized.name);
+    if (bInserted) {
+        submitModelLoad(path);
     }
-
-    if (!normalized.name.empty()) {
-        _modalName2Path[normalized.name] = normalized.filepath;
+    if (bSettled && request.onReady) {
+        AssetManager::dispatchToGameThread([onReady = request.onReady, settledModel]() mutable
+                                            { onReady(settledModel); });
     }
-
-    if (normalized.onReady) {
-        registerModelCallback(normalized.filepath, normalized.onReady);
-    }
-
-    return {};
+    return handle;
 }
 
 std::shared_ptr<Model> AssetModelManager::loadModelSync(const std::string& filepath)
 {
-    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
-    if (isModelLoaded(normalizedFilepath)) {
-        return modelCache[normalizedFilepath];
-    }
-
-    return loadModelImpl(normalizedFilepath, "");
+    return loadModelImpl(filepath, "");
 }
 
 std::shared_ptr<Model> AssetModelManager::loadModelSync(const std::string& name, const std::string& filepath)
 {
-    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
-    if (isModelLoaded(normalizedFilepath)) {
-        return modelCache[normalizedFilepath];
-    }
-
-    auto model = loadModelImpl(normalizedFilepath, name);
+    auto model = loadModelImpl(filepath, name);
     if (model) {
-        _modalName2Path[name] = normalizedFilepath;
+        std::lock_guard lock(_mutex);
+        _modelName2Path[name] = AssetManager::normalizeAssetPath(filepath);
     }
     return model;
 }
 
-void AssetModelManager::submitModelLoad(const std::string& filepath, const std::string& name)
+std::shared_ptr<Model> AssetModelManager::getModel(const std::string& filepath) const
 {
-    YA_CORE_INFO("submitModelLoad: async decode '{}'", filepath);
-
-    auto handle = TaskQueue::get().submitWithCallback(
-        [filepath]() -> ImportedModelData
-        {
-            return ImportedModelData::decode(filepath);
-        },
-        [this, filepath, name](ImportedModelData decoded)
-        {
-            std::vector<AssetManager::ModelReadyCallback> callbacks;
-            std::shared_ptr<Model>                        readyModel;
-
-            {
-                std::lock_guard lock(_mutex);
-                auto            existing = modelCache.find(filepath);
-                if (existing != modelCache.end()) {
-                    _pendingModelLoads.erase(filepath);
-                    callbacks  = takeModelCallbacks(filepath);
-                    readyModel = existing->second;
-                }
-            }
-
-            if (readyModel) {
-                dispatchModelCallbacks(callbacks, readyModel);
-                return;
-            }
-
-            if (!decoded.isValid()) {
-                YA_CORE_WARN("Async model decode failed for '{}'", filepath);
-                {
-                    std::lock_guard lock(_mutex);
-                    _pendingModelLoads.erase(filepath);
-                    _failedModelLoads.insert(filepath);
-                    callbacks = takeModelCallbacks(filepath);
-                }
-                dispatchModelCallbacks(callbacks, nullptr);
-                return;
-            }
-
-            auto* render = _owner.getRender();
-            if (!render) {
-                YA_CORE_WARN("Async GPU mesh creation skipped for '{}' because render is unavailable", filepath);
-                {
-                    std::lock_guard lock(_mutex);
-                    _pendingModelLoads.erase(filepath);
-                    _failedModelLoads.insert(filepath);
-                    callbacks = takeModelCallbacks(filepath);
-                }
-                dispatchModelCallbacks(callbacks, nullptr);
-                return;
-            }
-
-            auto model = decoded.createModel(*render);
-            if (!model) {
-                YA_CORE_WARN("Async GPU mesh creation failed for '{}'", filepath);
-                {
-                    std::lock_guard lock(_mutex);
-                    _pendingModelLoads.erase(filepath);
-                    _failedModelLoads.insert(filepath);
-                    callbacks = takeModelCallbacks(filepath);
-                }
-                dispatchModelCallbacks(callbacks, nullptr);
-                return;
-            }
-
-            {
-                std::lock_guard lock(_mutex);
-                modelCache[filepath] = model;
-                if (!name.empty()) {
-                    _modalName2Path[name] = filepath;
-                }
-                _failedModelLoads.erase(filepath);
-                _pendingModelLoads.erase(filepath);
-                callbacks = takeModelCallbacks(filepath);
-            }
-
-            dispatchModelCallbacks(callbacks, model);
-
-            YA_CORE_INFO("Async model ready: '{}' ({} meshes, {} materials, {} bones)",
-                         filepath,
-                         model->meshes.size(),
-                         model->embeddedMaterials.size(),
-                         model->getSkeleton() ? model->getSkeleton()->bones.size() : 0);
-        });
-
+    const auto path = AssetManager::normalizeAssetPath(filepath);
     std::lock_guard lock(_mutex);
-    _pendingModelLoads[filepath] = std::move(handle);
-}
-
-bool AssetModelManager::isModelLoadPending(const std::string& filepath) const
-{
-    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
-    std::lock_guard lock(_mutex);
-    auto            it = _pendingModelLoads.find(normalizedFilepath);
-    if (it == _pendingModelLoads.end()) return false;
-    return !it->second.isReady();
+    auto            it = _entries.find(path);
+    return it != _entries.end() && it->second.slot->state == EAssetSlotState::Ready
+               ? it->second.slot->resource
+               : nullptr;
 }
 
 bool AssetModelManager::isModelLoaded(const std::string& filepath) const
 {
-    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
-    return modelCache.find(normalizedFilepath) != modelCache.end();
+    return getModel(filepath) != nullptr;
 }
 
-std::shared_ptr<Model> AssetModelManager::getModel(const std::string& filepath) const
+std::shared_ptr<Model> AssetModelManager::loadModelImpl(const std::string& filepath, const std::string& name)
 {
-    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
-    if (isModelLoaded(normalizedFilepath)) {
-        return modelCache.at(normalizedFilepath);
-    }
-    return nullptr;
-}
+    (void)name;
 
-std::shared_ptr<Model> AssetModelManager::loadModelImpl(const std::string& filepath, const std::string& identifier)
-{
-    (void)identifier;
+    const auto path = AssetManager::normalizeAssetPath(filepath);
 
-    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
-    if (isModelLoaded(normalizedFilepath)) {
-        return modelCache[normalizedFilepath];
-    }
-
-    auto decoded = ImportedModelData::decode(normalizedFilepath);
-    if (!decoded.isValid()) {
-        YA_CORE_ERROR("loadModelImpl: Failed to decode model: {}", normalizedFilepath);
+    {
         std::lock_guard lock(_mutex);
-        _failedModelLoads.insert(normalizedFilepath);
+        if (auto it = _entries.find(path); it != _entries.end() && it->second.slot->state == EAssetSlotState::Ready) {
+            return it->second.slot->resource;
+        }
+    }
+
+    auto decoded = ImportedModelData::decode(path);
+    if (!decoded.isValid()) {
+        YA_CORE_ERROR("loadModelImpl: Failed to decode model: {}", path);
+        SlotUpdate update;
+        {
+            std::lock_guard lock(_mutex);
+            auto [it, inserted] = _entries.try_emplace(path);
+            ModelEntry& entry   = it->second;
+            if (inserted) {
+                entry.slot     = std::make_shared<AssetSlot<Model>>();
+                entry.filepath = path;
+            }
+            // Supersedes any async decode still in flight for this slot.
+            entry.loadSerial = ++_nextLoadSerial;
+            update           = updateSlotLocked(entry, nullptr);
+        }
+        dispatchSlotUpdate(std::move(update), nullptr);
         return nullptr;
     }
 
     auto* render = _owner.getRender();
     if (!render) {
-        YA_CORE_ERROR("loadModelImpl: Render backend unavailable for GPU mesh creation: {}", normalizedFilepath);
-        std::lock_guard lock(_mutex);
-        _failedModelLoads.insert(normalizedFilepath);
+        YA_CORE_ERROR("loadModelImpl: Render backend unavailable for GPU mesh creation: {}", path);
+        SlotUpdate update;
+        {
+            std::lock_guard lock(_mutex);
+            auto [it, inserted] = _entries.try_emplace(path);
+            ModelEntry& entry   = it->second;
+            if (inserted) {
+                entry.slot     = std::make_shared<AssetSlot<Model>>();
+                entry.filepath = path;
+            }
+            entry.loadSerial = ++_nextLoadSerial;
+            update           = updateSlotLocked(entry, nullptr);
+        }
+        dispatchSlotUpdate(std::move(update), nullptr);
         return nullptr;
     }
 
     auto model = decoded.createModel(*render);
     if (!model) {
-        YA_CORE_ERROR("loadModelImpl: Failed to create GPU meshes for: {}", normalizedFilepath);
-        std::lock_guard lock(_mutex);
-        _failedModelLoads.insert(normalizedFilepath);
+        YA_CORE_ERROR("loadModelImpl: Failed to create GPU meshes for: {}", path);
+        SlotUpdate update;
+        {
+            std::lock_guard lock(_mutex);
+            auto [it, inserted] = _entries.try_emplace(path);
+            ModelEntry& entry   = it->second;
+            if (inserted) {
+                entry.slot     = std::make_shared<AssetSlot<Model>>();
+                entry.filepath = path;
+            }
+            entry.loadSerial = ++_nextLoadSerial;
+            update           = updateSlotLocked(entry, nullptr);
+        }
+        dispatchSlotUpdate(std::move(update), nullptr);
         return nullptr;
     }
 
-    modelCache[normalizedFilepath] = model;
-    _failedModelLoads.erase(normalizedFilepath);
+    SlotUpdate update;
+    {
+        std::lock_guard lock(_mutex);
+        auto [it, inserted] = _entries.try_emplace(path);
+        ModelEntry& entry   = it->second;
+        if (inserted) {
+            entry.slot     = std::make_shared<AssetSlot<Model>>();
+            entry.filepath = path;
+        }
+        // Supersedes any async decode still in flight for this slot.
+        entry.loadSerial = ++_nextLoadSerial;
+        update           = updateSlotLocked(entry, model);
+    }
+    dispatchSlotUpdate(std::move(update), model);
     return model;
+}
+
+void AssetModelManager::submitModelLoad(const std::string& filepath)
+{
+    YA_CORE_INFO("submitModelLoad: async decode '{}'", filepath);
+
+    uint64_t serial = 0;
+    {
+        std::lock_guard lock(_mutex);
+        auto            it = _entries.find(filepath);
+        if (it == _entries.end()) {
+            return;
+        }
+        serial                = ++_nextLoadSerial;
+        it->second.loadSerial = serial;
+    }
+
+    TaskQueue::get().submitWithCallback(
+        [filepath]() -> ImportedModelData
+        {
+            return ImportedModelData::decode(filepath);
+        },
+        [this, filepath, serial](ImportedModelData decoded)
+        {
+            completeModelLoad(filepath, serial, std::move(decoded));
+        });
+}
+
+void AssetModelManager::completeModelLoad(const std::string& filepath, uint64_t serial, ImportedModelData decoded)
+{
+    std::string label;
+    {
+        std::lock_guard lock(_mutex);
+        auto            it = _entries.find(filepath);
+        if (it == _entries.end() || it->second.loadSerial != serial) {
+            return;
+        }
+        label = it->second.filepath;
+    }
+
+    std::shared_ptr<Model> model;
+    if (decoded.isValid()) {
+        auto* render = _owner.getRender();
+        if (render) {
+            model = decoded.createModel(*render);
+        }
+    }
+    if (!model) {
+        YA_CORE_WARN("Async model decode failed for '{}'", filepath);
+    }
+
+    SlotUpdate update;
+    {
+        std::lock_guard lock(_mutex);
+        auto            it = _entries.find(filepath);
+        if (it == _entries.end() || it->second.loadSerial != serial) {
+            return;
+        }
+        update = updateSlotLocked(it->second, model);
+    }
+    dispatchSlotUpdate(std::move(update), model);
+
+    if (model) {
+        YA_CORE_INFO("Async model ready: '{}' ({} meshes, {} materials, {} bones)",
+                     label,
+                     model->meshes.size(),
+                     model->embeddedMaterials.size(),
+                     model->getSkeleton() ? model->getSkeleton()->bones.size() : 0);
+    }
 }
 
 size_t AssetModelManager::collectUnused(uint64_t frame)
@@ -284,30 +304,50 @@ size_t AssetModelManager::collectUnused(uint64_t frame)
     size_t          released = 0;
     auto&           ddq      = DeferredDeletionQueue::get();
     std::lock_guard lock(_mutex);
-    for (auto it = modelCache.begin(); it != modelCache.end();) {
-        if (it->second && it->second.use_count() == 1) {
-            ddq.enqueueResource(frame, std::move(it->second));
-            it = modelCache.erase(it);
-            ++released;
-        }
-        else {
+    for (auto it = _entries.begin(); it != _entries.end();) {
+        const auto& slot = it->second.slot;
+        // Only the manager holds the slot, and nothing outside the slot still
+        // uses the model (e.g. a mesh source that kept its handle).
+        const bool bUnused = slot.use_count() == 1 &&
+                             slot->state != EAssetSlotState::Loading &&
+                             (!slot->resource || slot->resource.use_count() == 1);
+        if (!bUnused) {
             ++it;
+            continue;
         }
+        if (slot->resource) {
+            ddq.enqueueResource(frame, std::move(slot->resource));
+        }
+        std::erase_if(_modelName2Path, [&](const auto& alias) { return alias.second == it->first; });
+        it = _entries.erase(it);
+        ++released;
     }
     return released;
 }
 
-bool AssetModelManager::unload(const std::string& cacheKey, uint64_t frame)
+bool AssetModelManager::unload(const std::string& filepath, uint64_t frame)
 {
-    const auto normalizedCacheKey = AssetManager::normalizeAssetPath(cacheKey);
-    std::lock_guard lock(_mutex);
-    auto            it = modelCache.find(normalizedCacheKey);
-    if (it == modelCache.end()) {
-        return false;
-    }
+    const auto path = AssetManager::normalizeAssetPath(filepath);
 
-    DeferredDeletionQueue::get().enqueueResource(frame, std::move(it->second));
-    modelCache.erase(it);
+    SlotUpdate update;
+    {
+        std::lock_guard lock(_mutex);
+        auto&           ddq = DeferredDeletionQueue::get();
+        auto            it  = _entries.find(path);
+        if (it == _entries.end()) {
+            return false;
+        }
+        // Refs still holding the slot see it Failed; they load again only
+        // when their path is rebound.
+        AssetSlot<Model>& slot = *it->second.slot;
+        if (slot.resource) {
+            ddq.enqueueResource(frame, std::move(slot.resource));
+        }
+        update = updateSlotLocked(it->second, nullptr);
+        std::erase_if(_modelName2Path, [&](const auto& alias) { return alias.second == path; });
+        _entries.erase(it);
+    }
+    dispatchSlotUpdate(std::move(update), nullptr);
     return true;
 }
 
@@ -318,66 +358,66 @@ void AssetModelManager::invalidate(const std::string& filepath, uint64_t frame)
 
 void AssetModelManager::evictCachedAsset(const std::string& assetPath, uint64_t frame)
 {
-    const auto normalizedAssetPath = AssetManager::normalizeAssetPath(assetPath);
-    std::lock_guard lock(_mutex);
-    auto            it = modelCache.find(normalizedAssetPath);
-    if (it != modelCache.end()) {
-        DeferredDeletionQueue::get().enqueueResource(frame, std::move(it->second));
-        modelCache.erase(it);
+    const auto path = AssetManager::normalizeAssetPath(assetPath);
+
+    SlotUpdate update;
+    {
+        std::lock_guard lock(_mutex);
+        auto&           ddq = DeferredDeletionQueue::get();
+        auto            it  = _entries.find(path);
+        if (it == _entries.end()) {
+            return;
+        }
+        AssetSlot<Model>& slot = *it->second.slot;
+        if (slot.resource) {
+            ddq.enqueueResource(frame, std::move(slot.resource));
+        }
+        update = updateSlotLocked(it->second, nullptr);
+        _entries.erase(it);
     }
+    dispatchSlotUpdate(std::move(update), nullptr);
 }
 
 void AssetModelManager::fillStats(AssetManager::CacheStats& stats) const
 {
     std::lock_guard lock(_mutex);
-    stats.modelCount += modelCache.size();
-}
-
-void AssetModelManager::registerModelCallback(const std::string& filepath, AssetManager::ModelReadyCallback onReady)
-{
-    if (!onReady) {
-        return;
-    }
-
-    std::shared_ptr<Model> readyModel;
-    {
-        std::lock_guard lock(_mutex);
-        auto            loadedIt = modelCache.find(filepath);
-        if (loadedIt != modelCache.end()) {
-            readyModel = loadedIt->second;
-        }
-        else {
-            _pendingModelCallbacks[filepath].push_back(std::move(onReady));
-            return;
+    for (const auto& [filepath, entry] : _entries) {
+        (void)filepath;
+        if (entry.slot->state == EAssetSlotState::Ready) {
+            ++stats.modelCount;
         }
     }
-
-    AssetManager::dispatchToGameThread([onReady = std::move(onReady), readyModel]() mutable
-                                       { onReady(readyModel); });
 }
 
-std::vector<AssetManager::ModelReadyCallback> AssetModelManager::takeModelCallbacks(const std::string& filepath)
+AssetModelManager::SlotUpdate AssetModelManager::updateSlotLocked(ModelEntry&                   entry,
+                                                                 const std::shared_ptr<Model>& model)
 {
-    auto it = _pendingModelCallbacks.find(filepath);
-    if (it == _pendingModelCallbacks.end()) {
-        return {};
+    AssetSlot<Model>& slot = *entry.slot;
+    if (slot.resource && slot.resource != model) {
+        DeferredDeletionQueue::get().retire(std::move(slot.resource));
     }
-
-    auto callbacks = std::move(it->second);
-    _pendingModelCallbacks.erase(it);
-    return callbacks;
+    slot.resource = model;
+    slot.state    = model ? EAssetSlotState::Ready : EAssetSlotState::Failed;
+    ++slot.generation;
+    SlotUpdate update;
+    update.readyCallbacks  = std::exchange(entry.readyCallbacks, {});
+    update.updateObservers = slot.observers.gather();
+    return update;
 }
 
-void AssetModelManager::dispatchModelCallbacks(const std::vector<AssetManager::ModelReadyCallback>& callbacks,
-                                               const std::shared_ptr<Model>&                        model)
+void AssetModelManager::dispatchSlotUpdate(SlotUpdate update, const std::shared_ptr<Model>& model)
 {
-    for (const auto& callback : callbacks) {
+    for (auto& callback : update.readyCallbacks) {
         if (!callback) {
             continue;
         }
-
-        AssetManager::dispatchToGameThread([callback, model]()
+        AssetManager::dispatchToGameThread([callback = std::move(callback), model]()
                                            { callback(model); });
+    }
+    // Updates land on the game thread (async completions hop through the
+    // TaskQueue main-thread drain); observer callbacks only enqueue work.
+    for (auto& observer : update.updateObservers) {
+        observer();
     }
 }
 

@@ -59,3 +59,27 @@
   - 材质 Loading 期间显示语义回退图（法线槽平法线），Failed 显示棋盘格且检查器报错——不再静默空槽。
 - 保留 / 未完成：mesh 扫描 / ModelRef 轮询 / TilesetRef 自缓存归 H3；resourceVersion / epoch 归 H5；实体 token 在组件删除与场景卸载之间的短暂滞留依赖 SlotSubscription 持句柄保活（见 H3/H5 清理项——不需要，句柄保活即安全）。
 - 偏离：审计从「组件状态 vs 处理器状态全量一致性」收窄为「Loading 槽必须有订阅或入队」；参数编辑的「改了但没通知」目前不可低成本检测，依赖写入路径清单（本轮已逐一接线并在本条列出）。
+
+## 2026-10-01 H3 模型/tileset 资产槽 + MeshSource/ModelInstantiation 事件化
+
+- 目标：模型槽 + tileset 资产化；`loadModel` / `acquireTileset` 返回槽；`ModelRef` / `MeshRef` / `TilesetRef` 句柄化；删 `AssetFuture` 与 ModelRef 轮询；MeshSource / ModelInstantiation 事件化。边界见 plan §5 H3 行；Terrain 归 H4，EL 归 H5，全局 `resourceVersion` 删除归 H5。
+- 完成：
+  - `Core/Common/AssetRef.h`：`ModelRef` / `MeshRef` 重写为 `AssetHandle` 句柄型（默认拷贝共享槽）；删 `resolve/invalidate/set/_cachedPtr/_resolveState/_resolvedVersion` 与 `EAssetResolveResult` / `EAssetResolveState::Dirty`；`IAssetRefResolver` 改三接口 `acquireTexture/acquireModel/acquireTileset`（删 `resolveAssetRef`）。`AssetFuture.h` 删除。
+  - `Resource/Manager/AssetModelManager` 重写为槽制（镜像 AssetTextureManager）：`ModelEntry{slot,filepath,loadSerial,readyCallbacks}`、`SlotUpdate`、`updateSlotLocked/dispatchSlotUpdate`；`loadModel` 返回槽（Loading 挂 onReady，settle 立即派发）；失败路径（解码 / 无渲染后端 / GPU 网格创建）全部落槽；`unload/invalidate/evictCachedAsset`（Failed+gen++、DDQ retire、删条目）、`collectUnused`（use_count==1 且非 Loading 才回收）、`fillStats` 只数 Ready。删 `isModelLoadPending`。
+  - 新建 `Resource/Manager/AssetTilesetManager`：`acquireTileset` 同步解析入槽（锁外 VFS 读 + `parseTilesetJson`，锁内填槽、锁外派发）；`registerTileset` 镜像 `registerTexture`；`invalidate` 删条目（下次 acquire 重解析，持有者保旧槽）。
+  - `AssetManager`：`loadModel` 返回槽、tileset 公有接口（`acquireTileset/registerTileset/isTilesetLoaded/getTileset`）、`clearCache/collectUnused/unload/invalidate/onMetaFileChanged/onAssetFileChanged` 接入 tileset 分支。
+  - `TilesetRef`：`AssetHandle<Tileset> _handle`；删进程级 weak 缓存 / mutex / `clearCache`；`getResolveState` 修为按槽态映射（此前 `_handle ? Ready` 会让 Failed 槽漏检 `PropertyAccessor` 审计）。
+  - `MeshSource`：`_ownerModel` → `_modelHandle`；`resolve()` 首次绑 `loadModel` 槽，Loading 由订阅覆盖（GRB mesh 脏队列驱动 `subscribeMeshSlotObserver`），Failed / 无 meshIndex 为 WARN 终态。
+  - `ModelInstantiationSystem` 事件化：SceneBus 三信号入队 / 退订；Loading 持 model 槽订阅（fill 回调只入队，每次 pump 重建 token 处理路径编辑换槽）；`seedSceneWork` 覆盖先于订阅存在的组件；稳态不触碰组件视图。
+  - `GameplayResourceBinding`：mesh 入 watched（`isMeshType` 静态/蒙皮）、`dirtyMeshQueue/Set`、`SlotSubscription.handle` 泛化 `shared_ptr<const void>`、`EDirtyWork{Material,Billboard,Mesh}`；dev 审计加 `anyMeshSlotLoading` 分支。
+- 验证：
+  - `ya-testing` 1494 过、1 跳过（窗口用例，环境性）。新增 `ModelAssetSlotTest`（6 例：共享与拷贝 / 缺失文件 onReady / invalidate 删条目换新槽 / unload / clear / collectUnused）、`TilesetAssetSlotTest`（5 例：缺失文件立即 Failed / 注册槽 Ready 与回收 / invalidate 重解析 / unload 通知 observers / 空路径）、`ModelInstantiationEventTest`（2 例：seed 与 bus 两条入队路径 + 缺失模型 childless 终态 + 路径编辑重入队；删组件丢弃 pending work 后槽填充惰性）。
+  - `xmake b -g test` 全闸门绿；`ya-resource-runtime-closure-test` 22/22。
+  - 冒烟全部干净退出、无新增告警：HelloMaterial runtime（模型异步解码正常、teardown 干净）、HelloMaterial editor、2DRpgPrototype editor（tilemap 无错误）、GreedySnake runtime。
+- 行为变化：
+  - 模型加载失败（含反序列化路径编辑换文件）成为槽上 Failed 终态，不再每帧重试或轮询发现。
+  - 反序列化的 ModelRef 在 `MeshSource::resolve` / 实例化 pump 首次绑槽（不再反序列化时轮询发起）。
+  - tileset 文档首次请求时同步解析进槽；Core 不再持进程级 weak 缓存。
+  - 编辑器资产审计能报出缺失 tileset（getResolveState 修正）。
+- 保留 / 未完成：Terrain 归 H4；EL 离屏回调归 H5；全局 `resourceVersion/bumpResourceVersion` 归 H5；tileset JSON 文件监听触发源仍未接线（见 todo「已记录、不在本计划」）。
+- 偏离：`fillStats.modelCount` 语义收窄为「Ready 条目数」（旧语义），避免前序套件残留的 Failed 条目污染 `AssetLibraryInspectsPaths`；`TextureAssetSlotTest` fixture 清场从 `clearTextures` 扩为 `clearCache`（新 manager 让 failed 模型 / tileset 条目可被 `collectUnused` 回收，绝对计数断言对测试顺序敏感）。

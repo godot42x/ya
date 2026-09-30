@@ -159,66 +159,41 @@ EAssetResolveState TextureRef::getResolveState() const
     return EAssetResolveState::Failed;
 }
 
-namespace
+void ModelRef::rebind()
 {
-
-template <typename T>
-EAssetResolveResult resolveViaRegistry(T& ref)
-{
+    _handle.reset();
+    if (_path.empty()) {
+        return;
+    }
     if (const auto* resolver = getAssetRefResolver()) {
-        resolver->resolveAssetRef(ya::type_index_v<T>, &ref);
+        _handle = resolver->acquireModel(_path);
     }
-    else if (ref.getPath().empty()) {
-        ref._resolveState = EAssetResolveState::Empty;
+}
+
+EAssetResolveState ModelRef::getResolveState() const
+{
+    if (_path.empty()) {
+        return EAssetResolveState::Empty;
     }
-    else {
-        // Pure GUI host without a resource layer: mark failed instead of
-        // silently staying dirty forever.
-        ref._resolveState = EAssetResolveState::Failed;
+    if (!_handle) {
+        return EAssetResolveState::Failed;
     }
-    return ref._resolveState == EAssetResolveState::Ready ? EAssetResolveResult::Ready
-         : ref._resolveState == EAssetResolveState::Loading ? EAssetResolveResult::Pending
-                                                           : EAssetResolveResult::Failed;
+    switch (_handle->state) {
+    case EAssetSlotState::Loading:
+        return EAssetResolveState::Loading;
+    case EAssetSlotState::Ready:
+        return EAssetResolveState::Ready;
+    case EAssetSlotState::Failed:
+        return EAssetResolveState::Failed;
+    }
+    return EAssetResolveState::Failed;
 }
 
-} // namespace
-
-EAssetResolveResult ModelRef::resolve()
+EAssetResolveState MeshRef::getResolveState() const
 {
-    _path = canonicalizeAssetPath(_path);
-    return resolveViaRegistry(*this);
-}
-
-EAssetResolveResult MeshRef::resolve()
-{
-    _path = canonicalizeAssetPath(_path);
-    return resolveViaRegistry(*this);
-}
-
-void ModelRef::invalidate()
-{
-    _cachedPtr.reset();
-    _resolveState = _path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty;
-}
-
-void ModelRef::set(const std::string& path, ya::Ptr<Model> ptr)
-{
-    _path         = canonicalizeAssetPath(path);
-    _cachedPtr    = std::move(ptr);
-    _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
-}
-
-void MeshRef::invalidate()
-{
-    _cachedPtr.reset();
-    _resolveState = _path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty;
-}
-
-void MeshRef::set(const std::string& path, ya::Ptr<Mesh> ptr)
-{
-    _path         = canonicalizeAssetPath(path);
-    _cachedPtr    = std::move(ptr);
-    _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
+    // Meshes are not standalone assets (see MeshRef::_handle): a path-bearing
+    // MeshRef has nothing to load from and reads as Failed.
+    return _path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Failed;
 }
 
 } // namespace ya

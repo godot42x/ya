@@ -4,6 +4,9 @@
 #include "Scene3D/Node3D.h"
 #include "Scene/Core/Scene.h"
 
+#include "Core/TypeIndex.h"
+#include "ECS/SceneBus.h"
+
 #include "Scene3D/ManagedChildComponent.h"
 
 #include "ECS/Component/Material/PBRMaterialComponent.h"
@@ -215,6 +218,40 @@ void configureUnlitMaterial(UnlitMaterialComponent& matComp,
 
 } // namespace
 
+void ModelInstantiationSystem::init()
+{
+    if (bBusSubscribed) {
+        return;
+    }
+    SceneBus& bus = SceneBus::get();
+    _componentAddedHandle =
+        bus.onComponentAdded.addLambda([this](entt::registry& reg, entt::entity entity, ya::type_index_t type) {
+            onComponentAdded(reg, entity, type);
+        });
+    _componentEditedHandle =
+        bus.onComponentEdited.addLambda([this](entt::registry& reg, entt::entity entity, ya::type_index_t type) {
+            onComponentEdited(reg, entity, type);
+        });
+    _componentRemovedHandle =
+        bus.onComponentRemoved.addLambda([this](entt::registry& reg, entt::entity entity, ya::type_index_t type) {
+            onComponentRemoved(reg, entity, type);
+        });
+    bBusSubscribed = true;
+}
+
+void ModelInstantiationSystem::shutdown()
+{
+    _sceneWork.clear();
+    if (bBusSubscribed) {
+        SceneBus& bus = SceneBus::get();
+        bus.onComponentAdded.remove(_componentAddedHandle);
+        bus.onComponentEdited.remove(_componentEditedHandle);
+        bus.onComponentRemoved.remove(_componentRemovedHandle);
+        _componentAddedHandle = _componentEditedHandle = _componentRemovedHandle = INVALID_HANDLE;
+        bBusSubscribed = false;
+    }
+}
+
 void ModelInstantiationSystem::onUpdate(float dt)
 {
     (void)dt;
@@ -227,7 +264,18 @@ void ModelInstantiationSystem::onUpdate(float dt)
         return;
     }
 
-    instantiatePendingModels(scene);
+    // A scene this tick does not name is not one the last tick left behind,
+    // so its work goes here.
+    dropWorkAbsentFrom(*scene);
+
+    SceneWork& work = _sceneWork[&scene->getRegistry()];
+    work.registry   = &scene->getRegistry();
+    if (!work.bSeeded) {
+        work.bSeeded = true;
+        seedSceneWork(work);
+    }
+
+    instantiatePendingModels(*scene, work);
 }
 
 void ModelInstantiationSystem::setSceneProvider(SceneProvider provider)
@@ -235,22 +283,144 @@ void ModelInstantiationSystem::setSceneProvider(SceneProvider provider)
     _sceneProvider = std::move(provider);
 }
 
-void ModelInstantiationSystem::instantiatePendingModels(Scene* scene)
+void ModelInstantiationSystem::onComponentAdded(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
 {
-    auto& registry = scene->getRegistry();
+    if (typeIndex != type_index_v<ModelComponent>) {
+        return;
+    }
+    if (SceneWork* work = findWork(&registry)) {
+        enqueueModel(*work, entity);
+    }
+}
 
-    registry.view<ModelComponent>().each([&](auto entityHandle, ModelComponent& modelComponent) {
-        if (modelComponent.isResolved() || !modelComponent.hasModelSource()) {
-            return;
+void ModelInstantiationSystem::onComponentEdited(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
+{
+    // Same reaction as creation: an edited component re-instantiates (the
+    // pump cleans up the previous managed children first).
+    onComponentAdded(registry, entity, typeIndex);
+}
+
+void ModelInstantiationSystem::onComponentRemoved(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
+{
+    if (typeIndex != type_index_v<ModelComponent>) {
+        return;
+    }
+    if (SceneWork* work = findWork(&registry)) {
+        dropEntityWork(*work, entity);
+    }
+}
+
+ModelInstantiationSystem::SceneWork* ModelInstantiationSystem::findWork(const entt::registry* registry)
+{
+    auto it = _sceneWork.find(registry);
+    return it != _sceneWork.end() ? &it->second : nullptr;
+}
+
+void ModelInstantiationSystem::dropWork(SceneWork& work)
+{
+    work.pendingQueue.clear();
+    work.pendingSet.clear();
+    work.entityWork.clear();
+}
+
+void ModelInstantiationSystem::dropEntityWork(SceneWork& work, entt::entity entity)
+{
+    work.pendingSet.erase(entity);
+    std::erase(work.pendingQueue, entity);
+    work.entityWork.erase(entity);
+}
+
+void ModelInstantiationSystem::dropWorkAbsentFrom(Scene& scene)
+{
+    const auto* liveRegistry = &scene.getRegistry();
+    for (auto it = _sceneWork.begin(); it != _sceneWork.end();) {
+        if (it->first == liveRegistry) {
+            ++it;
+            continue;
+        }
+        dropWork(it->second);
+        it = _sceneWork.erase(it);
+    }
+}
+
+void ModelInstantiationSystem::seedSceneWork(SceneWork& work)
+{
+    // Components that existed before this system subscribed to the bus (test
+    // fixtures, scenes rebuilt underneath) would otherwise never enqueue.
+    for (auto&& [entity, unused] : work.registry->view<ModelComponent>().each()) {
+        (void)unused;
+        enqueueModel(work, entity);
+    }
+}
+
+void ModelInstantiationSystem::enqueueModel(SceneWork& work, entt::entity entity)
+{
+    auto& registry = *work.registry;
+    if (!registry.valid(entity) || !registry.all_of<ModelComponent>(entity)) {
+        return;
+    }
+    if (work.pendingSet.insert(entity).second) {
+        work.pendingQueue.push_back(entity);
+    }
+}
+
+void ModelInstantiationSystem::enqueueFromSlotFill(const entt::registry* registry, entt::entity entity)
+{
+    // The scene may already be destroyed: look the work up by pointer value
+    // and touch nothing else when it is gone.
+    SceneWork* work = findWork(registry);
+    if (!work) {
+        return;
+    }
+    if (work->pendingSet.insert(entity).second) {
+        work->pendingQueue.push_back(entity);
+    }
+}
+
+void ModelInstantiationSystem::instantiatePendingModels(Scene& scene, SceneWork& work)
+{
+    auto& registry = *work.registry;
+
+    while (!work.pendingQueue.empty()) {
+        const auto entity = work.pendingQueue.front();
+        work.pendingQueue.pop_front();
+        work.pendingSet.erase(entity);
+        if (!registry.valid(entity)) {
+            work.entityWork.erase(entity);
+            continue;
         }
 
-        Entity* entity = scene->getEntityByEnttID(entityHandle);
-        if (!entity) {
-            return;
+        ModelComponent& modelComponent = registry.get<ModelComponent>(entity);
+        if (modelComponent.isResolved() || !modelComponent.hasModelSource()) {
+            work.entityWork.erase(entity);
+            continue;
+        }
+
+        Entity* entityWrapper = scene.getEntityByEnttID(entity);
+        if (!entityWrapper) {
+            continue;
+        }
+
+        // Hold (or re-bind) the model-slot subscription while the model is
+        // not Ready: its fill re-enqueues this entity, so no polling here.
+        // A path edit rebinds the ref's slot, so the token is rebuilt here.
+        work.entityWork.erase(entity);
+        if (const AssetHandle<Model>& handle = modelComponent._modelRef._handle; handle) {
+            if (handle->state == EAssetSlotState::Loading) {
+                work.entityWork[entity] = SlotSubscription{
+                    handle,
+                    handle->observers.subscribe([this, registry = work.registry, entity]() {
+                        // Slot fills land on the game thread; the callback
+                        // only enqueues.
+                        enqueueFromSlotFill(registry, entity);
+                    }),
+                };
+                continue;
+            }
         }
 
         try {
-            instantiateModel(scene, entity, modelComponent);
+            instantiateModel(&scene, entityWrapper, modelComponent);
         }
         catch (const std::exception& e) {
             YA_CORE_ERROR("ModelInstantiationSystem: Failed to instantiate model component: {}", e.what());
@@ -260,22 +430,24 @@ void ModelInstantiationSystem::instantiatePendingModels(Scene* scene)
             YA_CORE_ERROR("ModelInstantiationSystem: Failed to instantiate model component");
             modelComponent._bResolved = true;
         }
-    });
+    }
 }
 
 void ModelInstantiationSystem::instantiateModel(Scene* scene, Entity* entity, ModelComponent& modelComp)
 {
     if (!modelComp._modelRef.isLoaded()) {
-        const auto result = modelComp._modelRef.resolve();
-        if (result == EAssetResolveResult::Pending) {
+        // Loading is covered by the held slot subscription (the fill
+        // re-enqueues); anything else here is terminal until the component
+        // is edited or the asset reloaded.
+        const auto state = modelComp._modelRef.getResolveState();
+        if (state == EAssetResolveState::Loading) {
             return;
         }
 
-        if (result == EAssetResolveResult::Failed) {
-            YA_CORE_WARN("ModelInstantiationSystem: Failed to load model '{}'",
-                         modelComp._modelRef.getPath());
-            return;
-        }
+        YA_CORE_WARN("ModelInstantiationSystem: Failed to load model '{}' (state={})",
+                     modelComp._modelRef.getPath(),
+                     static_cast<int>(state));
+        return;
     }
 
     cleanupChildEntities(scene, entity, modelComp);

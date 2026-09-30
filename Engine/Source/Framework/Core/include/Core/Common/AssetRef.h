@@ -18,6 +18,7 @@ namespace ya
 struct Texture;
 struct Model;
 struct Mesh;
+struct Tileset;
 
 /// Canonical asset-path form shared by AssetRef and the resource layer
 /// (mount-style `Engine:` prefixes, `\` -> `/`, lexical normalization).
@@ -38,15 +39,7 @@ enum class EAssetType : uint8_t
 enum class EAssetResolveState : uint8_t
 {
     Empty = 0,
-    Dirty,
     Loading,
-    Ready,
-    Failed,
-};
-
-enum class EAssetResolveResult : uint8_t
-{
-    Pending = 0,
     Ready,
     Failed,
 };
@@ -114,45 +107,20 @@ struct YA_CORE_API ModelRef : public AssetRefBase
     YA_REFLECT_END()
     YA_REFLECT_COPIES_AS_VALUE()
 
-    ya::Ptr<Model> _cachedPtr;
-    EAssetResolveState _resolveState    = EAssetResolveState::Empty;
-    uint64_t           _resolvedVersion = 0;
+    // Shared slot for the path; copies share it. Null when the path is empty
+    // or no resource layer can load models (reads as Failed).
+    AssetHandle<Model> _handle;
 
     ModelRef() = default;
-    explicit ModelRef(const std::string& path) : AssetRefBase(path) {}
-    ModelRef(const std::string& path, ya::Ptr<Model> ptr)
-        : AssetRefBase(path), _cachedPtr(std::move(ptr))
-    {
-        _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
-    }
+    explicit ModelRef(const std::string& path) : AssetRefBase(path) { rebind(); }
 
-    ModelRef(const ModelRef& other)
-        : AssetRefBase(other), _cachedPtr(other._cachedPtr), _resolveState(other._resolveState), _resolvedVersion(other._resolvedVersion)
-    {}
-
-    ModelRef& operator=(const ModelRef& other)
-    {
-        if (this != &other) {
-            AssetRefBase::operator=(other);
-            _cachedPtr       = other._cachedPtr;
-            _resolveState    = other._resolveState;
-            _resolvedVersion = other._resolvedVersion;
-        }
-        return *this;
-    }
-
-    ModelRef(ModelRef&& other) noexcept            = default;
-    ModelRef& operator=(ModelRef&& other) noexcept = default;
-
-    Model* get() const { return _cachedPtr.get(); }
-    ya::Ptr<Model> getShared() const { return _cachedPtr; }
-    bool isLoaded() const { return _resolveState == EAssetResolveState::Ready && _cachedPtr != nullptr; }
-    bool isLoading() const { return _resolveState == EAssetResolveState::Loading; }
-    EAssetResolveState getResolveState() const { return _resolveState; }
-    EAssetResolveResult resolve();
-    void invalidate();
-    void rebind() override { invalidate(); }
-    void set(const std::string& path, ya::Ptr<Model> ptr);
+    /// The loaded model, or null unless the slot is Ready.
+    Model*              get() const { return isLoaded() ? _handle->resource.get() : nullptr; }
+    ya::Ptr<Model>      getShared() const { return isLoaded() ? _handle->resource : nullptr; }
+    bool                isLoaded() const { return _handle && _handle->state == EAssetSlotState::Ready; }
+    bool                isLoading() const { return _handle && _handle->state == EAssetSlotState::Loading; }
+    EAssetResolveState  getResolveState() const;
+    void                rebind() override;
 };
 
 struct YA_CORE_API MeshRef : public AssetRefBase
@@ -161,45 +129,23 @@ struct YA_CORE_API MeshRef : public AssetRefBase
     YA_REFLECT_END()
     YA_REFLECT_COPIES_AS_VALUE()
 
-    ya::Ptr<Mesh> _cachedPtr;
-    EAssetResolveState _resolveState    = EAssetResolveState::Empty;
-    uint64_t           _resolvedVersion = 0;
+    // Meshes are not standalone assets: they live inside a Model, and
+    // MeshSource (Model path + mesh index) is how a mesh is referenced. The
+    // handle stays null until a mesh asset type exists; a path-bearing MeshRef
+    // reads as Failed.
+    AssetHandle<Mesh> _handle;
 
     MeshRef() = default;
     explicit MeshRef(const std::string& path) : AssetRefBase(path) {}
-    MeshRef(const std::string& path, ya::Ptr<Mesh> ptr)
-        : AssetRefBase(path), _cachedPtr(std::move(ptr))
-    {
-        _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
-    }
 
-    MeshRef(const MeshRef& other)
-        : AssetRefBase(other), _cachedPtr(other._cachedPtr), _resolveState(other._resolveState), _resolvedVersion(other._resolvedVersion)
-    {}
+    /// Nothing to bind: meshes are not standalone assets (see _handle).
+    void rebind() override {}
 
-    MeshRef& operator=(const MeshRef& other)
-    {
-        if (this != &other) {
-            AssetRefBase::operator=(other);
-            _cachedPtr       = other._cachedPtr;
-            _resolveState    = other._resolveState;
-            _resolvedVersion = other._resolvedVersion;
-        }
-        return *this;
-    }
-
-    MeshRef(MeshRef&& other) noexcept            = default;
-    MeshRef& operator=(MeshRef&& other) noexcept = default;
-
-    Mesh* get() const { return _cachedPtr.get(); }
-    ya::Ptr<Mesh> getShared() const { return _cachedPtr; }
-    bool isLoaded() const { return _resolveState == EAssetResolveState::Ready && _cachedPtr != nullptr; }
-    bool isLoading() const { return _resolveState == EAssetResolveState::Loading; }
-    EAssetResolveState getResolveState() const { return _resolveState; }
-    EAssetResolveResult resolve();
-    void invalidate();
-    void rebind() override { invalidate(); }
-    void set(const std::string& path, ya::Ptr<Mesh> ptr);
+    Mesh*               get() const { return isLoaded() ? _handle->resource.get() : nullptr; }
+    ya::Ptr<Mesh>       getShared() const { return isLoaded() ? _handle->resource : nullptr; }
+    bool                isLoaded() const { return _handle && _handle->state == EAssetSlotState::Ready; }
+    bool                isLoading() const { return _handle && _handle->state == EAssetSlotState::Loading; }
+    EAssetResolveState  getResolveState() const;
 };
 
 // ============================================================================
@@ -223,9 +169,14 @@ struct IAssetRefResolver
     /// texture can be produced (no render backend).
     virtual AssetHandle<Texture> acquireTexture(const std::string &path) const = 0;
 
-    /// Polling resolve for ModelRef / MeshRef, which still cache their
-    /// resource per ref instead of sharing a slot.
-    virtual void resolveAssetRef(type_index_t typeIndex, void *assetRefPtr) const = 0;
+    /// Shared model slot for a normalized, non-empty path. Null when no
+    /// model can be produced.
+    virtual AssetHandle<Model> acquireModel(const std::string &path) const = 0;
+
+    /// Shared tileset slot for a normalized, non-empty path; tilesets are
+    /// parsed synchronously on first request. Null when no tileset can be
+    /// produced.
+    virtual AssetHandle<Tileset> acquireTileset(const std::string &path) const = 0;
 };
 
 /// Currently installed asset-ref resolver (null in pure-GUI hosts). The

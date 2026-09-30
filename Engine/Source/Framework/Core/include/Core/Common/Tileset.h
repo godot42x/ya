@@ -40,35 +40,46 @@ struct YA_CORE_API Tileset
 };
 
 // Path reference to a .yatileset.json file. Only the path is serialized; the
-// document is parsed synchronously whenever the path is bound (tileset files
-// are small authoring JSON, the same shape as .yaui.json documents, not GPU
-// resources) and shared between refs naming the same file. A ref with a
-// path but no parsed tileset failed to load.
+// document is parsed synchronously on first request (tileset files are small
+// authoring JSON, the same shape as .yaui.json documents, not GPU resources)
+// and shared between refs naming the same file through the resource layer's
+// slot. A ref with a path but no parsed tileset failed to load.
 struct YA_CORE_API TilesetRef : public AssetRefBase
 {
     YA_REFLECT_BEGIN(TilesetRef, AssetRefBase)
     YA_REFLECT_END()
     YA_REFLECT_COPIES_AS_VALUE()
 
-    std::shared_ptr<Tileset> _cached;
+    // Shared slot for the path; copies share it. Null when the path is empty
+    // or no resource layer can parse tilesets (reads as Failed).
+    AssetHandle<Tileset> _handle;
 
     TilesetRef() = default;
     explicit TilesetRef(const std::string& path) : AssetRefBase(path) { rebind(); }
 
-    Tileset* get() const { return _cached.get(); }
-    std::shared_ptr<Tileset> getShared() const { return _cached; }
-    bool isLoaded() const { return _cached != nullptr; }
-    EAssetResolveState getResolveState() const
+    Tileset*              get() const { return isLoaded() ? _handle->resource.get() : nullptr; }
+    std::shared_ptr<Tileset> getShared() const { return isLoaded() ? _handle->resource : nullptr; }
+    bool                  isLoaded() const { return _handle && _handle->state == EAssetSlotState::Ready; }
+    EAssetResolveState    getResolveState() const
     {
-        return _path.empty() ? EAssetResolveState::Empty
-             : _cached       ? EAssetResolveState::Ready
-                             : EAssetResolveState::Failed;
+        if (_path.empty()) {
+            return EAssetResolveState::Empty;
+        }
+        if (!_handle) {
+            return EAssetResolveState::Failed;
+        }
+        // Tileset slots fill synchronously (Ready or Failed); Loading is
+        // unreachable but reads as not-yet-loaded.
+        switch (_handle->state) {
+        case EAssetSlotState::Ready:
+            return EAssetResolveState::Ready;
+        case EAssetSlotState::Loading:
+        case EAssetSlotState::Failed:
+            break;
+        }
+        return EAssetResolveState::Failed;
     }
     void rebind() override;
-
-    // Drops every cached Tileset. Tests use this to keep file-backed cases
-    // from leaking into each other; the runtime never calls it.
-    static void clearCache();
 };
 
 // Parses one .yatileset.json document. Returns nullptr with outError set

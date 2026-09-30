@@ -60,9 +60,22 @@
     {
       "id": "mesh_model_events",
       "phase": "H3",
-      "status": "planned",
-      "goal": "Model and Tileset slots: loadModel/loadTileset return slots, ModelRef/MeshRef/TilesetRef hold handles (tileset parses synchronously into a slot, Core weak cache and clearCache deleted), AssetFuture and getResourceVersion polling removed; MeshSource and ModelInstantiation react via processor-held subscriptions",
-      "evidence": []
+      "status": "done",
+      "goal": "Model and Tileset slots: loadModel/acquireTileset return slots, ModelRef/MeshRef/TilesetRef hold handles (tileset parses synchronously into a slot, Core weak cache and clearCache deleted), AssetFuture and getResourceVersion polling removed; MeshSource and ModelInstantiation react via processor-held subscriptions",
+      "evidence": [
+        "Engine/Source/Framework/Resource/Manager/AssetModelManager.cpp (slot-based rewrite: SlotUpdate/updateSlotLocked/dispatchSlotUpdate)",
+        "Engine/Source/Framework/Resource/Manager/AssetTilesetManager.cpp (synchronous parse into slots; registerTileset mirrors registerTexture)",
+        "Engine/Source/Framework/Core/include/Core/Common/AssetRef.h (ModelRef/MeshRef handle-ized; IAssetRefResolver: acquireTexture/acquireModel/acquireTileset)",
+        "Engine/Source/Framework/Core/Common/AssetRef.cpp (engine resolver, three interfaces)",
+        "Engine/Source/Framework/Core/include/Core/Common/Tileset.h (TilesetRef holds AssetHandle<Tileset>; process weak cache deleted; getResolveState maps slot state)",
+        "Engine/Source/Framework/Render/Render3D/Component/Mesh/MeshSource.cpp (binds the model slot; Loading covered by subscription)",
+        "Engine/Source/Framework/Render/Adapters/ModelInstantiationSystem.cpp (event-driven: SceneBus enqueues, slot fill re-enqueues, seed covers pre-existing components)",
+        "Engine/Source/Framework/Render/Render3D/Services/GameplayResourceBinding.cpp (mesh dirty queue + mesh slot subscriptions)",
+        "Engine/Test/Source/ResourceRuntime/ModelAssetSlotTest.cpp (6 tests)",
+        "Engine/Test/Source/ResourceRuntime/TilesetAssetSlotTest.cpp (5 tests)",
+        "Engine/Test/Source/Integration/ModelInstantiationEventTest.cpp (2 tests)",
+        "1494 ya-testing cases pass; HelloMaterial runtime/editor, 2DRpgPrototype editor, GreedySnake smokes clean"
+      ]
     },
     {
       "id": "terrain_events",

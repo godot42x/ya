@@ -1,5 +1,6 @@
 #include "Core/Common/Tileset.h"
 
+#include "Core/Common/AssetRef.h"
 #include "Core/Log.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/System/VirtualFileSystem.h"
@@ -7,30 +8,12 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
-#include <mutex>
-#include <unordered_map>
 
 namespace ya
 {
 
 namespace
 {
-
-// Process-wide path -> parsed Tileset, so two tilemaps sharing one
-// .yatileset.json parse it once. Files are tiny and authoring-time; no
-// hot reload here -- an edited tileset file is picked up on scene reload,
-// while brush strokes live in the component and apply immediately.
-std::mutex& tilesetCacheMutex()
-{
-    static std::mutex mutex;
-    return mutex;
-}
-
-std::unordered_map<std::string, std::weak_ptr<Tileset>>& tilesetCache()
-{
-    static std::unordered_map<std::string, std::weak_ptr<Tileset>> cache;
-    return cache;
-}
 
 int32_t jsonInt(const nlohmann::json& j, const char* key, int32_t fallback)
 {
@@ -115,49 +98,13 @@ std::shared_ptr<Tileset> parseTilesetJson(const std::string& text, std::string& 
 
 void TilesetRef::rebind()
 {
-    _cached.reset();
+    _handle.reset();
     if (_path.empty()) {
         return;
     }
-
-    {
-        std::lock_guard<std::mutex> lock(tilesetCacheMutex());
-        if (const auto it = tilesetCache().find(_path); it != tilesetCache().end()) {
-            if (std::shared_ptr<Tileset> live = it->second.lock()) {
-                _cached = std::move(live);
-                return;
-            }
-        }
+    if (const auto* resolver = getAssetRefResolver()) {
+        _handle = resolver->acquireTileset(_path);
     }
-
-    VirtualFileSystem* vfs = VirtualFileSystem::get();
-    if (!vfs) {
-        YA_CORE_ERROR("TilesetRef: no virtual file system mounted for '{}'", _path);
-        return;
-    }
-    std::string text;
-    if (!vfs->readFileToString(_path, text) || text.empty()) {
-        YA_CORE_ERROR("TilesetRef: cannot read tileset '{}'", _path);
-        return;
-    }
-    std::string error;
-    std::shared_ptr<Tileset> tileset = parseTilesetJson(text, error);
-    if (!tileset) {
-        YA_CORE_ERROR("TilesetRef: '{}' is not a valid tileset: {}", _path, error);
-        return;
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(tilesetCacheMutex());
-        tilesetCache()[_path] = tileset;
-    }
-    _cached = std::move(tileset);
-}
-
-void TilesetRef::clearCache()
-{
-    std::lock_guard<std::mutex> lock(tilesetCacheMutex());
-    tilesetCache().clear();
 }
 
 } // namespace ya

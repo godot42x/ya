@@ -74,16 +74,18 @@ class TextureAssetSlotTest : public ::testing::Test
             VirtualFileSystem::init();
         }
         // Completion callbacks run inline; an App from an earlier test may
-        // have left its frame sink installed.
+        // have left its frame sink installed. clearCache (not clearTextures)
+        // also drops model/tileset entries earlier suites may have left in
+        // the shared AssetManager.
         AssetManager::setFrameTaskSink({});
-        AssetManager::get()->clearTextures();
+        AssetManager::get()->clearCache();
         AssetManager::get()->setRender(&render);
         TaskQueue::get().start(1);
     }
 
     void TearDown() override
     {
-        AssetManager::get()->clearTextures();
+        AssetManager::get()->clearCache();
         AssetManager::get()->setRender(nullptr);
     }
 

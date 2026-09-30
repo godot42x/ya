@@ -111,11 +111,11 @@ struct YA_RENDER_3D_API ModelComponent : public IComponent
     bool isResolved() const { return _bResolved && _modelRef.isLoaded(); }
 
     /**
-     * @brief Force re-resolve (will recreate child entities)
+     * @brief Force re-resolve (will recreate child entities); a model-path
+     *        edit also rebinds the ref's slot through setPath.
      */
     void invalidate()
     {
-        _modelRef.invalidate();
         _bResolved = false;
         // Note: Child entity cleanup should be handled by ModelInstantiationSystem
     }
@@ -147,7 +147,7 @@ struct YA_RENDER_3D_API ModelComponent : public IComponent
      */
     void setModelPath(const std::string &path)
     {
-        _modelRef = ModelRef(path);
+        _modelRef.setPath(path);
         invalidate();
     }
 };
