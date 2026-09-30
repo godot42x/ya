@@ -89,6 +89,7 @@ struct YA_CORE_API TextureRef : public AssetRefBase
 {
     YA_REFLECT_BEGIN(TextureRef, AssetRefBase)
     YA_REFLECT_END()
+    YA_REFLECT_COPIES_AS_VALUE()
 
     // Shared slot for the path; copies share it. Null when the path is empty
     // or no resource layer can load textures (reads as Failed).
@@ -111,6 +112,7 @@ struct YA_CORE_API ModelRef : public AssetRefBase
 {
     YA_REFLECT_BEGIN(ModelRef, AssetRefBase)
     YA_REFLECT_END()
+    YA_REFLECT_COPIES_AS_VALUE()
 
     ya::Ptr<Model> _cachedPtr;
     EAssetResolveState _resolveState    = EAssetResolveState::Empty;
@@ -157,6 +159,7 @@ struct YA_CORE_API MeshRef : public AssetRefBase
 {
     YA_REFLECT_BEGIN(MeshRef, AssetRefBase)
     YA_REFLECT_END()
+    YA_REFLECT_COPIES_AS_VALUE()
 
     ya::Ptr<Mesh> _cachedPtr;
     EAssetResolveState _resolveState    = EAssetResolveState::Empty;

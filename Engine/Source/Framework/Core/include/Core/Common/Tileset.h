@@ -48,6 +48,7 @@ struct YA_CORE_API TilesetRef : public AssetRefBase
 {
     YA_REFLECT_BEGIN(TilesetRef, AssetRefBase)
     YA_REFLECT_END()
+    YA_REFLECT_COPIES_AS_VALUE()
 
     std::shared_ptr<Tileset> _cached;
 

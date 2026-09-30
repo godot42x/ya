@@ -74,6 +74,12 @@ struct Class : public Field
     // 析构函数 - 用于释放动态创建的实例
     std::function<void(void *)> destructor;
 
+    // 整值拷贝（ReflectionCopier 用）。null = 默认的逐字段递归拷贝。
+    // 由 Register::copiesAsValue() 设置：值类型声明“C++ 拷贝赋值即真相”，
+    // 拷贝构造维护的派生状态（共享且已绑定的资产句柄）随整体赋值存活，
+    // 逐字段拷贝无法表达它。
+    bool (*copyAssign)(void *dst, const void *src) = nullptr;
+
     Class() = default;
     explicit Class(const std::string &inName)
     {

@@ -222,6 +222,19 @@ struct Register
         classInfo->registerConstructor<T, Args...>();
         return *this;
     }
+
+    // 声明整值拷贝语义：ReflectionCopier 遇到本类时用 C++ 拷贝赋值一步完成，
+    // 不再逐字段递归。适用于自洽的值描述类型——拷贝构造所维护的状态
+    // （如共享且已绑定的资产句柄）是类型契约的一部分，反射字段表达不了。
+    Register &copiesAsValue()
+    {
+        static_assert(std::is_copy_assignable_v<T>, "copiesAsValue requires a copy-assignable type");
+        classInfo->copyAssign = [](void *dst, const void *src) -> bool {
+            *static_cast<T *>(dst) = *static_cast<const T *>(src);
+            return true;
+        };
+        return *this;
+    }
 };
 
 

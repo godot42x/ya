@@ -51,6 +51,9 @@ struct TextureSlot
     YA_REFLECT_FIELD(uvRotation)
     YA_REFLECT_FIELD(samplerConfig)
     YA_REFLECT_END()
+    // The slot is a self-contained value: its copy-assign carries the bound
+    // (shared) handle of the nested ref, so a reflection clone stays loaded.
+    YA_REFLECT_COPIES_AS_VALUE()
 
     TextureRef    textureRef; // Serialized as path, auto-loaded on deserialize
     bool          bEnable = true;
@@ -86,3 +89,5 @@ struct TextureSlot
 };
 
 } // namespace ya
+
+

@@ -49,6 +49,17 @@ struct RegisterConstructor
 template <typename T>
 inline constexpr bool has_custom_constructor_v = RegisterConstructor<T>::has_custom_ctor;
 
+// Whole-value copy trait: a class opts in by declaring the
+// `_reflectCopiesAsValue` member type (YA_REFLECT_COPIES_AS_VALUE inside the
+// class body). Detection instead of specialization, so the declaration has no
+// ordering constraints against the class's own reflection registration.
+template <typename T, typename = void>
+struct ValueCopyTrait : std::false_type
+{};
+template <typename T>
+struct ValueCopyTrait<T, std::void_t<typename T::_reflectCopiesAsValue>> : std::true_type
+{};
+
 } // namespace ya::reflection::detail
 
 // Convenience namespace alias
@@ -213,6 +224,10 @@ struct Visitor<void>
                                                                                                                                                   \
             /* Register constructors */                                                                                                           \
             register_constructors(*reg);                                                                                                          \
+            /* Whole-value copy semantics (YA_REFLECT_COPIES_AS_VALUE) */                                                                          \
+            if constexpr (::ya::reflection::detail::ValueCopyTrait<class_t>::value) {                                                              \
+                reg->copiesAsValue();                                                                                                              \
+            }                                                                                                                                      \
                                                                                                                                                   \
             ___YA_REFLECT_EXTENSION(ClassName)                                                                                                    \
         }                                                                                                                                         \
@@ -324,6 +339,12 @@ struct Visitor<void>
 #define ___YA_REGISTER_CONSTRUCTOR_14(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
 #define ___YA_REGISTER_CONSTRUCTOR_15(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
 #define ___YA_REGISTER_CONSTRUCTOR_16(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+
+// Declare whole-value copy semantics for a reflected class: ReflectionCopier
+// assigns the whole value with the C++ copy-assign (one step) instead of
+// recursing over reflected fields. Place INSIDE the class body, after
+// YA_REFLECT_END.
+#define YA_REFLECT_COPIES_AS_VALUE() public: using _reflectCopiesAsValue = void;
 
 // clang-format off
 #define YA_REFLECT_END()                                                                               \
