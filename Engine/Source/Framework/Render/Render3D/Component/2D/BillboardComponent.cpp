@@ -3,7 +3,6 @@
 #include "Core/Math/Math.h"
 #include "Render3D/Material/MaterialFactory.h"
 #include "Render3D/Material/UnlitMaterial.h"
-#include "RHI/Backend/TextureLibrary.h"
 #include "Render/Resources/TextureSlotBinding.h"
 
 namespace ya
@@ -40,27 +39,27 @@ bool BillboardComponent::resolve()
     if (!image.hasPath()) {
         _material->clearTextureBinding(UnlitMaterial::BaseColor0);
         _material->disableTextureParam(UnlitMaterial::BaseColor0);
-        bDirty = false;
         return true;
     }
 
     if (image.isReady()) {
         _material->setTextureBinding(UnlitMaterial::BaseColor0, ya::slotToTextureBinding(image));
         _material->setTextureParam(UnlitMaterial::BaseColor0, true, FMath::build_transform_mat3(image.uvOffset, image.uvRotation, image.uvScale));
-        bDirty = false;
         return true;
     }
 
     if (image.isLoading()) {
-        bDirty = true;
-        return false;
+        // The slot observer re-queues this billboard when the update lands; the
+        // semantic default (white) keeps the material complete while it waits.
+        _material->setTextureBinding(UnlitMaterial::BaseColor0, ya::loadingSlotFallback(false));
+        return true;
     }
 
-    _material->clearTextureBinding(UnlitMaterial::BaseColor0);
-    _material->disableTextureParam(UnlitMaterial::BaseColor0);
-    YA_CORE_WARN("Billboard texture resolve failed");
-    bDirty = false;
-    return false;
+    // Failed: an explicit, visible placeholder beats an invisible empty slot.
+    YA_CORE_WARN("BillboardComponent: texture '{}' failed to load", image.textureRef.getPath());
+    _material->setTextureBinding(UnlitMaterial::BaseColor0, ya::failedSlotFallback());
+    _material->setTextureParam(UnlitMaterial::BaseColor0, true, FMath::build_transform_mat3(image.uvOffset, image.uvRotation, image.uvScale));
+    return true;
 }
 
 } // namespace ya

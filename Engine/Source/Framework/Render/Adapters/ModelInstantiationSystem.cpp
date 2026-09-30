@@ -193,14 +193,14 @@ void configureUnlitMaterial(UnlitMaterialComponent& matComp,
         return;
     }
 
-    matComp._baseColor0Slot.textureRef.setPathWithoutNotify("");
-    matComp._baseColor1Slot.textureRef.setPathWithoutNotify("");
+    matComp._baseColor0Slot.textureRef.setPath("");
+    matComp._baseColor1Slot.textureRef.setPath("");
 
     if (matData->hasTexture(MatTexture::Diffuse)) {
-        matComp._baseColor0Slot.textureRef.setPathWithoutNotify(matData->resolveTexturePath(MatTexture::Diffuse));
+        matComp._baseColor0Slot.textureRef.setPath(matData->resolveTexturePath(MatTexture::Diffuse));
     }
     if (matData->hasTexture(MatTexture::Emissive)) {
-        matComp._baseColor1Slot.textureRef.setPathWithoutNotify(matData->resolveTexturePath(MatTexture::Emissive));
+        matComp._baseColor1Slot.textureRef.setPath(matData->resolveTexturePath(MatTexture::Emissive));
     }
     if (matData->hasParam(MatParam::BaseColor)) {
         matComp._params.baseColor0 = matData->getParam<glm::vec3>(MatParam::BaseColor, glm::vec3(1.0f));

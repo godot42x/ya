@@ -6,13 +6,121 @@
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/SceneBus.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
+#include <type_traits>
 #include <vector>
 
 namespace ya
 {
+
+namespace
+{
+
+#ifdef BUILD_DEBUG
+constexpr uint64_t CONSISTENCY_AUDIT_INTERVAL_TICKS = 120;
+#endif
+
+bool isMaterialType(ya::type_index_t typeIndex)
+{
+    return typeIndex == type_index_v<PhongMaterialComponent> ||
+           typeIndex == type_index_v<PBRMaterialComponent> ||
+           typeIndex == type_index_v<UnlitMaterialComponent>;
+}
+
+bool isWatchedType(ya::type_index_t typeIndex)
+{
+    return isMaterialType(typeIndex) || typeIndex == type_index_v<BillboardComponent>;
+}
+
+template <typename Component, typename Fn>
+void forEachTextureSlot(Component& component, Fn&& fn)
+{
+    if constexpr (std::is_same_v<Component, BillboardComponent>) {
+        fn(component.image);
+    }
+    else {
+        for (size_t index = 0; index < static_cast<size_t>(Component::slot_enum_t::Count); ++index) {
+            if (TextureSlot* slot =
+                    component.getTextureSlot(static_cast<typename Component::slot_enum_t>(index))) {
+                fn(*slot);
+            }
+        }
+    }
+}
+
+} // namespace
+
+void GameplayResourceBinding::init()
+{
+    if (bBusSubscribed) {
+        return;
+    }
+    SceneBus& bus = SceneBus::get();
+    _componentAddedHandle =
+        bus.onComponentAdded.addLambda([this](entt::registry& reg, entt::entity entity, ya::type_index_t type) {
+            onComponentAdded(reg, entity, type);
+        });
+    _componentEditedHandle =
+        bus.onComponentEdited.addLambda([this](entt::registry& reg, entt::entity entity, ya::type_index_t type) {
+            onComponentEdited(reg, entity, type);
+        });
+    _componentRemovedHandle =
+        bus.onComponentRemoved.addLambda([this](entt::registry& reg, entt::entity entity, ya::type_index_t type) {
+            onComponentRemoved(reg, entity, type);
+        });
+    bBusSubscribed = true;
+}
+
+void GameplayResourceBinding::shutdown()
+{
+    dropAllWork();
+    if (bBusSubscribed) {
+        SceneBus& bus = SceneBus::get();
+        bus.onComponentAdded.remove(_componentAddedHandle);
+        bus.onComponentEdited.remove(_componentEditedHandle);
+        bus.onComponentRemoved.remove(_componentRemovedHandle);
+        _componentAddedHandle = _componentEditedHandle = _componentRemovedHandle = INVALID_HANDLE;
+        bBusSubscribed = false;
+    }
+}
+
+void GameplayResourceBinding::onComponentAdded(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
+{
+    SceneWork* work = findWork(&registry);
+    if (!work) {
+        return;
+    }
+    if (isMaterialType(typeIndex)) {
+        enqueueMaterial(*work, entity);
+    }
+    else if (typeIndex == type_index_v<BillboardComponent>) {
+        enqueueBillboard(*work, entity);
+    }
+}
+
+void GameplayResourceBinding::onComponentEdited(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
+{
+    onComponentAdded(registry, entity, typeIndex);
+}
+
+void GameplayResourceBinding::onComponentRemoved(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
+{
+    if (!isWatchedType(typeIndex)) {
+        return;
+    }
+    if (SceneWork* work = findWork(&registry)) {
+        dropEntityWork(*work, entity);
+    }
+}
+
+GameplayResourceBinding::SceneWork* GameplayResourceBinding::findWork(const entt::registry* registry)
+{
+    auto it = _sceneWork.find(registry);
+    return it != _sceneWork.end() ? &it->second : nullptr;
+}
 
 void GameplayResourceBinding::prepareScenes(std::span<Scene* const> scenes, float dt)
 {
@@ -43,21 +151,21 @@ void GameplayResourceBinding::prepareScenes(std::span<Scene* const> scenes, floa
         {
             YA_PROFILE_SCOPE("ResourceResolve/Materials");
             resolvePendingMaterials(work);
-            // Periodic staleness / missed-enqueue audit runs after the
-            // per-frame sweep so freshly modified components are already
-            // queued and only true bypasses trip the dev assertion.
-            auditMaterialWork(work);
         }
         {
             YA_PROFILE_SCOPE("ResourceResolve/Billboards");
-            resolvePendingBillboards(*scene);
+            resolvePendingBillboards(work);
         }
+#ifdef BUILD_DEBUG
+        auditSlotSubscriptions(work);
+#endif
     }
 }
 
 GameplayResourceBinding::SceneWork& GameplayResourceBinding::ensureWork(Scene& scene)
 {
-    SceneWork& work = _sceneWork[&scene];
+    SceneWork& work = _sceneWork[&scene.getRegistry()];
+    work.registry   = &scene.getRegistry();
     work.scene      = &scene;
     return work;
 }
@@ -78,14 +186,24 @@ void GameplayResourceBinding::dropWork(SceneWork& work)
 {
     work.dirtyMaterialQueue.clear();
     work.dirtyMaterialSet.clear();
-    work.activeMaterial.clear();
-    work.nextMaterialAuditTick = 0;
+    work.dirtyBillboardQueue.clear();
+    work.dirtyBillboardSet.clear();
+    work.entityWork.clear();
+}
+
+void GameplayResourceBinding::dropEntityWork(SceneWork& work, entt::entity entity)
+{
+    work.dirtyMaterialSet.erase(entity);
+    work.dirtyBillboardSet.erase(entity);
+    std::erase(work.dirtyMaterialQueue, entity);
+    std::erase(work.dirtyBillboardQueue, entity);
+    work.entityWork.erase(entity);
 }
 
 void GameplayResourceBinding::dropAllWork()
 {
-    for (auto& [scene, work] : _sceneWork) {
-        (void)scene;
+    for (auto& [registry, work] : _sceneWork) {
+        (void)registry;
         dropWork(work);
     }
     _sceneWork.clear();
@@ -93,83 +211,89 @@ void GameplayResourceBinding::dropAllWork()
 
 void GameplayResourceBinding::seedSceneResolveWork(SceneWork& work)
 {
-    auto& registry = work.scene->getRegistry();
+    auto& registry = *work.registry;
     for (auto&& [entity, unused] : registry.view<PhongMaterialComponent>().each()) {
         (void)unused;
-        markMaterialDirty(work, entity, "scene seed");
+        enqueueMaterial(work, entity);
     }
     for (auto&& [entity, unused] : registry.view<PBRMaterialComponent>().each()) {
         (void)unused;
-        markMaterialDirty(work, entity, "scene seed");
+        enqueueMaterial(work, entity);
     }
     for (auto&& [entity, unused] : registry.view<UnlitMaterialComponent>().each()) {
         (void)unused;
-        markMaterialDirty(work, entity, "scene seed");
+        enqueueMaterial(work, entity);
+    }
+    for (auto&& [entity, unused] : registry.view<BillboardComponent>().each()) {
+        (void)unused;
+        enqueueBillboard(work, entity);
     }
 }
 
-bool GameplayResourceBinding::isMaterialQueuedOrActive(const SceneWork& work, entt::entity entity) const
+void GameplayResourceBinding::enqueueMaterial(SceneWork& work, entt::entity entity)
 {
-    return work.dirtyMaterialSet.contains(entity) || work.activeMaterial.contains(entity);
-}
-
-void GameplayResourceBinding::auditMaterialWork(SceneWork& work)
-{
-    const uint64_t currentTick = _getHostTick ? _getHostTick() : 0;
-    if (work.nextMaterialAuditTick != 0 && currentTick < work.nextMaterialAuditTick) {
-        return;
-    }
-    work.nextMaterialAuditTick = currentTick + MATERIAL_AUDIT_INTERVAL_TICKS;
-
-    auto& registry = work.scene->getRegistry();
-
-    const auto auditMaterial = [&](auto&& view) {
-        for (auto&& [entity, material] : view.each()) {
-            (void)material;
-            // The per-frame needsResolve sweep should have queued every
-            // component that needs work. A component still unqueued here
-            // means a modification path bypassed the dirty queue — surface
-            // it in dev builds, self-heal in release.
-            if (material.needsResolve() && !isMaterialQueuedOrActive(work, entity)) {
-                YA_CORE_ASSERT(false, "ResourceResolve audit: material needs resolve but was not queued");
-                YA_CORE_WARN("ResourceResolve audit re-queued Material entity {}: missed enqueue",
-                             static_cast<uint32_t>(entity));
-                markMaterialDirty(work, entity, "audit: missed material enqueue");
-            }
-            // Texture staleness (hot reload) is only detected by the periodic
-            // audit; mark dirty so the next pump re-resolves the component.
-            if (material.isResolved() && material.checkTexturesStaleness()) {
-                markMaterialDirty(work, entity, "audit: texture stale");
-            }
-        }
-    };
-    auditMaterial(registry.view<PhongMaterialComponent>());
-    auditMaterial(registry.view<PBRMaterialComponent>());
-    auditMaterial(registry.view<UnlitMaterialComponent>());
-}
-
-void GameplayResourceBinding::cleanupMaterialState(SceneWork& work, entt::entity entity)
-{
-    work.dirtyMaterialSet.erase(entity);
-    work.activeMaterial.erase(entity);
-    std::erase(work.dirtyMaterialQueue, entity);
-}
-
-void GameplayResourceBinding::markMaterialDirty(SceneWork& work, entt::entity entity, const char* reason)
-{
-    auto& registry = work.scene->getRegistry();
+    auto& registry = *work.registry;
     if (!registry.valid(entity) ||
         (!registry.all_of<PhongMaterialComponent>(entity) &&
          !registry.all_of<PBRMaterialComponent>(entity) &&
          !registry.all_of<UnlitMaterialComponent>(entity))) {
-        cleanupMaterialState(work, entity);
         return;
     }
-
-    (void)reason;
     if (work.dirtyMaterialSet.insert(entity).second) {
         work.dirtyMaterialQueue.push_back(entity);
     }
+}
+
+void GameplayResourceBinding::enqueueBillboard(SceneWork& work, entt::entity entity)
+{
+    auto& registry = *work.registry;
+    if (!registry.valid(entity) || !registry.all_of<BillboardComponent>(entity)) {
+        return;
+    }
+    if (work.dirtyBillboardSet.insert(entity).second) {
+        work.dirtyBillboardQueue.push_back(entity);
+    }
+}
+
+void GameplayResourceBinding::enqueueFromSlotUpdate(const entt::registry* registry, entt::entity entity, bool bBillboard)
+{
+    // The scene may already be destroyed: look the work up by pointer value
+    // and touch nothing else when it is gone. The caller's next prepare drops
+    // absent scenes before it pumps, so a surviving entry is a live registry.
+    SceneWork* work = findWork(registry);
+    if (!work) {
+        return;
+    }
+    if (bBillboard) {
+        if (work->dirtyBillboardSet.insert(entity).second) {
+            work->dirtyBillboardQueue.push_back(entity);
+        }
+    }
+    else if (work->dirtyMaterialSet.insert(entity).second) {
+        work->dirtyMaterialQueue.push_back(entity);
+    }
+}
+
+template <typename Component>
+void GameplayResourceBinding::subscribeSlotObservers(SceneWork& work, entt::entity entity, Component& component)
+{
+    auto& entityWork = work.entityWork[entity];
+    forEachTextureSlot(component, [&](TextureSlot& slot) {
+        if (!slot.hasPath()) {
+            return;
+        }
+        const AssetHandle<Texture>& handle = slot.textureRef._handle;
+        if (!handle) {
+            return;
+        }
+        auto callback = [this, registry = work.registry, entity,
+                         bBillboard = std::is_same_v<Component, BillboardComponent>]()
+        {
+            // Slot updates land on the game thread; the callback only enqueues.
+            enqueueFromSlotUpdate(registry, entity, bBillboard);
+        };
+        entityWork.slotTokens.push_back(SlotSubscription{handle, handle->observers.subscribe(std::move(callback))});
+    });
 }
 
 void GameplayResourceBinding::resolvePendingMeshes(Scene& scene)
@@ -194,103 +318,100 @@ void GameplayResourceBinding::resolvePendingMeshes(Scene& scene)
 
 void GameplayResourceBinding::resolvePendingMaterials(SceneWork& work)
 {
-    auto& registry = work.scene->getRegistry();
-
-    // Per-frame O(1) sweep: components that were just created or modified
-    // (constructor / invalidate / reflection setter set the Dirty state
-    // without notifying the resolver) are enqueued here so they resolve on
-    // the next frame. No string normalization or staleness work happens in
-    // this sweep — that stays in the periodic audit.
-    const auto sweepNeedsResolve = [&](auto&& view) {
-        for (auto&& [entity, material] : view.each()) {
-            (void)material;
-            if (material.needsResolve() && !isMaterialQueuedOrActive(work, entity)) {
-                markMaterialDirty(work, entity, "needs-resolve sweep");
-            }
-        }
-    };
-    sweepNeedsResolve(registry.view<PhongMaterialComponent>());
-    sweepNeedsResolve(registry.view<PBRMaterialComponent>());
-    sweepNeedsResolve(registry.view<UnlitMaterialComponent>());
-
-    auto pumpOne = [&](entt::entity entity) {
-        if (!registry.valid(entity)) {
-            cleanupMaterialState(work, entity);
-            return;
-        }
-
-        auto pumpComponent = [&](auto& materialComponent) {
-            if (materialComponent.needsResolve()) {
-                materialComponent.resolve();
-            }
-            else if (materialComponent.isResolved()) {
-                materialComponent.checkTexturesStaleness();
-            }
-        };
-
-        bool bHandled = false;
-        if (auto* phong = registry.try_get<PhongMaterialComponent>(entity)) {
-            pumpComponent(*phong);
-            bHandled = true;
-        }
-        if (auto* pbr = registry.try_get<PBRMaterialComponent>(entity)) {
-            pumpComponent(*pbr);
-            bHandled = true;
-        }
-        if (auto* unlit = registry.try_get<UnlitMaterialComponent>(entity)) {
-            pumpComponent(*unlit);
-            bHandled = true;
-        }
-        if (!bHandled) {
-            cleanupMaterialState(work, entity);
-            return;
-        }
-
-        // A component stuck in the async Resolving state must keep being
-        // pumped every frame until its textures arrive.
-        const bool bStillResolving =
-            (registry.all_of<PhongMaterialComponent>(entity) &&
-             registry.get<PhongMaterialComponent>(entity).needsResolve()) ||
-            (registry.all_of<PBRMaterialComponent>(entity) &&
-             registry.get<PBRMaterialComponent>(entity).needsResolve()) ||
-            (registry.all_of<UnlitMaterialComponent>(entity) &&
-             registry.get<UnlitMaterialComponent>(entity).needsResolve());
-        if (bStillResolving) {
-            work.activeMaterial.insert(entity);
-        }
-        else {
-            work.activeMaterial.erase(entity);
-        }
-    };
+    auto& registry = *work.registry;
 
     while (!work.dirtyMaterialQueue.empty()) {
         const auto entity = work.dirtyMaterialQueue.front();
         work.dirtyMaterialQueue.pop_front();
         work.dirtyMaterialSet.erase(entity);
-        pumpOne(entity);
-    }
+        if (!registry.valid(entity)) {
+            work.entityWork.erase(entity);
+            continue;
+        }
 
-    std::vector<entt::entity> activeEntities(work.activeMaterial.begin(), work.activeMaterial.end());
-    for (const auto entity : activeEntities) {
-        pumpOne(entity);
+        // Drop the previous fill subscriptions first: resolve may have rebound
+        // paths to different slots, and tokens must not accumulate.
+        work.entityWork[entity].slotTokens.clear();
+        auto pump = [&](auto* component) {
+            if (!component) {
+                return;
+            }
+            component->resolve();
+            subscribeSlotObservers(work, entity, *component);
+        };
+        pump(registry.try_get<PhongMaterialComponent>(entity));
+        pump(registry.try_get<PBRMaterialComponent>(entity));
+        pump(registry.try_get<UnlitMaterialComponent>(entity));
     }
 }
 
-void GameplayResourceBinding::resolvePendingBillboards(Scene& scene)
+void GameplayResourceBinding::resolvePendingBillboards(SceneWork& work)
 {
-    auto& registry = scene.getRegistry();
+    auto& registry = *work.registry;
 
-    for (const auto& [entity, comp] : registry.view<BillboardComponent>().each()) {
-        (void)entity;
-        if (comp.bDirty) {
-            comp.resolve();
+    while (!work.dirtyBillboardQueue.empty()) {
+        const auto entity = work.dirtyBillboardQueue.front();
+        work.dirtyBillboardQueue.pop_front();
+        work.dirtyBillboardSet.erase(entity);
+        if (!registry.valid(entity)) {
+            work.entityWork.erase(entity);
+            continue;
+        }
+
+        // Drop the previous fill subscriptions first: resolve may have rebound
+        // the image to a different slot.
+        work.entityWork[entity].slotTokens.clear();
+        if (auto* billboard = registry.try_get<BillboardComponent>(entity)) {
+            billboard->resolve();
+            subscribeSlotObservers(work, entity, *billboard);
+        }
+        else {
+            work.entityWork.erase(entity);
         }
     }
 }
 
-void GameplayResourceBinding::shutdown()
+#ifdef BUILD_DEBUG
+void GameplayResourceBinding::auditSlotSubscriptions(SceneWork& work)
 {
-    dropAllWork();
+    const uint64_t currentTick = _getHostTick ? _getHostTick() : 0;
+    if (work.nextConsistencyAuditTick != 0 && currentTick < work.nextConsistencyAuditTick) {
+        return;
+    }
+    work.nextConsistencyAuditTick = currentTick + CONSISTENCY_AUDIT_INTERVAL_TICKS;
+
+    auto&  registry       = *work.registry;
+    auto   enqueueMaterialFn = [this](SceneWork& w, entt::entity e) { enqueueMaterial(w, e); };
+    auto   enqueueBillboardFn = [this](SceneWork& w, entt::entity e) { enqueueBillboard(w, e); };
+    const auto auditComponent = [&](auto&& view, auto&& enqueue) {
+        for (auto&& [entity, component] : view.each()) {
+            bool bAnyLoading = false;
+            forEachTextureSlot(component, [&](const TextureSlot& slot) {
+                if (slot.textureRef.isLoading()) {
+                    bAnyLoading = true;
+                }
+            });
+            if (!bAnyLoading) {
+                continue;
+            }
+            // Every component with a loading slot must be queued for a
+            // resolve or covered by a held slot subscription. Neither is true
+            // means a write path or a fill escaped the funnel.
+            if (!work.entityWork.contains(entity) &&
+                !work.dirtyMaterialSet.contains(entity) &&
+                !work.dirtyBillboardSet.contains(entity)) {
+                YA_CORE_ASSERT(false, "ResourceResolve audit: loading texture slot is neither queued nor subscribed");
+                YA_CORE_WARN("ResourceResolve audit: re-armed entity {} (loading slot without subscription)",
+                             static_cast<uint32_t>(entity));
+                enqueue(work, entity);
+            }
+        }
+    };
+    auditComponent(registry.view<PhongMaterialComponent>(), enqueueMaterialFn);
+    auditComponent(registry.view<PBRMaterialComponent>(), enqueueMaterialFn);
+    auditComponent(registry.view<UnlitMaterialComponent>(), enqueueMaterialFn);
+    auditComponent(registry.view<BillboardComponent>(), enqueueBillboardFn);
 }
+#endif
 
 } // namespace ya

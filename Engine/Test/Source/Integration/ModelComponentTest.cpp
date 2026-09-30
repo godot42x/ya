@@ -26,7 +26,7 @@ TEST(ModelComponentTest, MaterialModeRoundtrip)
     ensureReflectionReady();
 
     ModelComponent modelComponent;
-    modelComponent._modelRef.setPathWithoutNotify("Content/Models/Test.glb");
+    modelComponent._modelRef.setPath("Content/Models/Test.glb");
     modelComponent._materialType            = EModelMaterialType::PBR;
     modelComponent._customMaterialPath      = "Content/Materials/TestMaterial.yamat";
     modelComponent._useEmbeddedMaterials    = false;

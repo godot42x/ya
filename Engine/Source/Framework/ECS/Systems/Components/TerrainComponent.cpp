@@ -3,11 +3,6 @@
 namespace ya
 {
 
-TerrainComponent::TerrainComponent()
-{
-    setupCallbacks();
-}
-
 void TerrainComponent::invalidate(uint64_t rebuildNotBeforeTick)
 {
     ++_authoringVersion;
@@ -16,15 +11,7 @@ void TerrainComponent::invalidate(uint64_t rebuildNotBeforeTick)
 
 void TerrainComponent::onPostSerialize()
 {
-    setupCallbacks();
     invalidate();
-}
-
-void TerrainComponent::setupCallbacks()
-{
-    _heightMapRef.onModified.addLambda(this, [this]() {
-        invalidate();
-    });
 }
 
 } // namespace ya

@@ -32,6 +32,7 @@ ComponentType* addComponent(entt::registry& registry, entt::entity entity, Entit
     ComponentType* component = &registry.emplace<ComponentType>(entity, std::forward<Args>(args)...);
     if (component) {
         component->setOwner(owner);
+        SceneBus::get().onComponentAdded.broadcast(registry, entity, type_index_v<ComponentType>);
     }
     return component;
 }

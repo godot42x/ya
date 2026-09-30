@@ -24,6 +24,9 @@ void restoreLayer(Scene* scene, const FTileLayerSnapshot& snapshot)
         return;
     }
     map->layers[snapshot.layerIndex].cells = snapshot.cells;
+    // Same reaction the inspector's edit hook triggers: realign the restored
+    // layer against width/height (a no-op when the snapshot already matches).
+    map->onEdit();
 }
 
 } // namespace

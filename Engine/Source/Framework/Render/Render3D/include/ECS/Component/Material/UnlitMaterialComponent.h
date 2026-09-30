@@ -85,56 +85,28 @@ struct YA_RENDER_3D_API UnlitMaterialComponent : public MaterialComponent<UnlitM
     TextureSlot _baseColor1Slot;
 
   public:
-    UnlitMaterialComponent()
-    {
-        setupCallbacks();
-    }
+    // Discovery is the scene edit funnel plus slot observers held by the
+    // processor; the component subscribes to nothing (ECS storage moves it).
+    UnlitMaterialComponent() = default;
 
   private:
-    struct PropertyChangeSummary
-    {
-        std::array<bool, static_cast<size_t>(EUnlitMaterialTextureSlot::Count)> touchedSlots{};
-        bool hasTextureSlotChange     = false;
-        bool hasTextureResourceChange = false;
-    };
-
-    void setupCallbacks()
-    {
-        auto f = [this]() {
-            invalidate();
-        };
-
-        _baseColor0Slot.textureRef.onModified.addLambda(this, f);
-        _baseColor1Slot.textureRef.onModified.addLambda(this, f);
-    }
-
     TextureSlot*       getTextureSlotInternal(EUnlitMaterialTextureSlot resourceEnum);
     const TextureSlot* getTextureSlotInternal(EUnlitMaterialTextureSlot resourceEnum) const;
     void               syncParamsToMaterial();
     void               syncTextureSlot(EUnlitMaterialTextureSlot resourceEnum);
-    static PropertyChangeSummary summarizePropertyChanges(const std::vector<std::string>& propPaths);
 
   public:
+    /// Full re-sync of params and texture slots into the runtime material;
+    /// idempotent. The processor pump calls it for every queued edit and
+    /// every observed slot update.
     EMaterialResolveResult resolve() override;
-    void onPropertyChanged(const std::string& propPath);
-    void onPropertiesChanged(const std::vector<std::string>& propPaths);
 
     void invalidate()
     {
         _resolveState = EMaterialResolveState::Dirty;
     }
     bool isResolved() const { return _resolveState == EMaterialResolveState::Ready; }
-    bool needsResolve() const
-    {
-        return _resolveState == EMaterialResolveState::Dirty ||
-               _resolveState == EMaterialResolveState::Resolving;
-    }
     EMaterialResolveState getResolveState() const { return _resolveState; }
-    void markResolvedReady() { _resolveState = EMaterialResolveState::Ready; }
-
-    /// A Ready slot whose texture differs from what the runtime material
-    /// binds was reloaded since the last sync; marks the component dirty.
-    bool checkTexturesStaleness();
 
     TextureSlot* getTextureSlot(EUnlitMaterialTextureSlot resourceEnum)
     {

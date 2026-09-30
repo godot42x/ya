@@ -78,7 +78,7 @@ completion_and_make_the_final_plan(this_plan);
 | `ui-behavior-capabilities/` | `UIBehavior` 按能力登记（含同类唯一、拖放为行为种类、控件委托取代动作字符串、Lua 监听归属脚本实例）、树 tick 注册表、Lua `call()` 热路径（C1/C1b/C1c/C1d 完成，下一步 C2；排在 game-ui S4 之前） |
 | `rdg-cache-dx/` | RenderGraph import 替换决策诊断与 owner 身份收敛、Bloom 切片、Forward/Deferred/Shadow 资源容器按生命周期拆分（接手自 render-view-family）、Slang 生成 descriptor layout（P0 skinning、P1 registry 诊断、P2 import 按 owner key 匹配已落地；下一步 P3 Bloom 切片） |
 | `rpg-prototype/` | RPG Maker 式俯视 2D 示例驱动引擎：脚本中立绑定层（反射 → Lua / JS 投影，B2 插件化）、Tilemap + 编辑笔刷、通行查询、交互 / 对话、切场景、规模定案（B1 / R0–R4 已落地，R4 数据见目录内 `r4-measurements.md`；只剩 B2，排在 game-ui S7 之后；2026-09-30 评审的未排期待办见目录内 `todo.md` / `review-2026-09-30.md`） |
-| `resource-handle-events/` | 资源句柄化：加载状态归共享资产槽，ref 只持路径 + 句柄；统一编辑入口 + 槽订阅 + 离屏任务完成回调取代每帧扫描 / 审计 / 重泵，范围含 Terrain 与 EnvironmentLighting（H1 贴图槽已落地；下一步 H2 编辑入口 + 材质推送） |
+| `resource-handle-events/` | 资源句柄化：加载状态归共享资产槽，ref 只持路径 + 句柄；统一编辑入口 + 槽订阅 + 离屏任务完成回调取代每帧扫描 / 审计 / 重泵，范围含 Terrain 与 EnvironmentLighting（H1 贴图槽与 H2 编辑入口 + 材质/billboard 推送已落地；下一步 H3 模型槽 + tileset 资产化） |
 | `scene-2d-world-and-game-ui/` | 现有 Scene/Transform/Camera 上补 authored sprite，并与 UI Compose 分层形成 2D 游戏闭环（Render2DList 值化、screen/world draw contract、Render3D→GUI 解耦已落地；D1–D3 按坐标系拆 draw list / 删全局 Render2D / View overlay 归编辑器待做；P0 混合语义和 Scene graph integration 未完成） |
 
 ## 归档判据

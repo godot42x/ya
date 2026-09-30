@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <mutex>
 #include <unordered_map>
 
@@ -13,6 +14,14 @@ namespace ya
 class AssetTextureManager
 {
   private:
+    // What one slot update owes its subscribers: ready callbacks and update
+    // observers, gathered under the manager lock and dispatched outside it.
+    struct SlotUpdate
+    {
+        std::vector<AssetManager::TextureReadyCallback> readyCallbacks;
+        std::vector<std::function<void()>>              updateObservers;
+    };
+
     // One shared slot per request identity (see requestKey). The entry keeps
     // what a reload needs; the slot is what refs hold.
     struct TextureEntry
@@ -79,11 +88,12 @@ class AssetTextureManager
     void completeTextureLoad(const std::string& key, uint64_t serial, AssetManager::TextureMemoryBlock decoded);
     std::shared_ptr<Texture> uploadTexture(const AssetManager::TextureMemoryBlock& decoded, const std::string& label);
 
-    // Fill the slot and hand the callbacks back for dispatch outside the lock.
-    // A null texture marks the slot Failed. Caller holds _mutex.
-    std::vector<AssetManager::TextureReadyCallback> fillSlotLocked(TextureEntry& entry, const std::shared_ptr<Texture>& texture);
+    // Update the slot and hand the subscribers back for dispatch outside
+    // the lock. A null texture marks the slot Failed. Caller holds _mutex.
+    SlotUpdate updateSlotLocked(TextureEntry& entry, const std::shared_ptr<Texture>& texture);
     static void dispatchTextureCallbacks(std::vector<AssetManager::TextureReadyCallback> callbacks,
                                          const std::shared_ptr<Texture>&                 texture);
+    static void dispatchSlotUpdate(SlotUpdate update, const std::shared_ptr<Texture>& texture);
 };
 
 } // namespace ya

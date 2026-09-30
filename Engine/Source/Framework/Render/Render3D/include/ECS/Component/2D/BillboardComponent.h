@@ -7,7 +7,7 @@
 namespace ya
 {
 
-struct UnlitMaterial;
+    struct UnlitMaterial;
 
 struct YA_RENDER_3D_API BillboardComponent : public IComponent
 {
@@ -22,15 +22,6 @@ struct YA_RENDER_3D_API BillboardComponent : public IComponent
 
 
   public:
-    BillboardComponent()
-    {
-        image.textureRef.onModified.addLambda(this, [this]() {
-            invalidate();
-        });
-    }
-
-    ~BillboardComponent() override;
-
     bool      bVisible          = true;
     TextureSlot image;
     glm::vec4  tint             = glm::vec4(1.0f);
@@ -47,9 +38,10 @@ struct YA_RENDER_3D_API BillboardComponent : public IComponent
     /// draws stays a view decision.
     FRenderFeatureMask features = toMask(ERenderFeature::Game);
 
-    bool bDirty = true;
-    void invalidate() { bDirty = true; }
-    void onEdit() override { invalidate(); }
+    // No dirty flag, no self-subscription: discovery goes through the edit
+    // funnel (entt on_update) and the processor-held slot observers.
+
+    ~BillboardComponent() override;
 
     UnlitMaterial* getMaterial() const { return _material; }
 

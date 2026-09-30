@@ -32,4 +32,22 @@ TextureBinding slotToTextureBinding(const TextureSlot& slot)
     return tb;
 }
 
+TextureBinding loadingSlotFallback(bool bNormalMap)
+{
+    TextureBinding tb;
+    auto& library = TextureLibrary::get();
+    tb.texture = bNormalMap ? library.getFlatNormalTexture() : library.getWhiteTexture();
+    tb.sampler = library.getDefaultSampler();
+    return tb;
+}
+
+TextureBinding failedSlotFallback()
+{
+    TextureBinding tb;
+    auto& library = TextureLibrary::get();
+    tb.texture = library.getCheckerboardTexture();
+    tb.sampler = library.getDefaultSampler();
+    return tb;
+}
+
 } // namespace ya

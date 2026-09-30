@@ -2,7 +2,6 @@
 
 #include "Core/Common/AssetSlot.h"
 #include "Core/Common/Types.h"
-#include "Core/Delegate.h"
 #include "Core/Reflection/Reflection.h"
 #include "Core/System/VirtualFileSystem.h"
 #include <algorithm>
@@ -63,8 +62,6 @@ struct YA_CORE_API AssetRefBase
     std::string _path; // Serialized data: asset path
 
   public:
-    MulticastDelegate<void()> onModified;
-
     AssetRefBase() = default;
     explicit AssetRefBase(const std::string &path) : _path(normalizePath(path)) {}
 
@@ -76,30 +73,14 @@ struct YA_CORE_API AssetRefBase
     const std::string &getPath() const { return _path; }
     bool               hasPath() const { return !_path.empty(); }
     static std::string normalizePath(std::string path);
-    void               setPath(const std::string &path)
+
+    /// Set the path and bind to its asset. In-place edits are discovered
+    /// through the scene edit funnel (entt on_update), not through the ref:
+    /// a ref write on its own reaches nobody.
+    void setPath(const std::string &path)
     {
         _path = normalizePath(path);
         rebind();
-        notifyModified();
-    }
-
-    /// Set path without broadcasting onModified. Used when the owner
-    /// initializes its own slots (e.g., importing a material descriptor)
-    /// and manages its derived state itself.
-    void setPathWithoutNotify(const std::string &path)
-    {
-        _path = normalizePath(path);
-        rebind();
-    }
-
-    /**
-     * @brief Notify that the asset was modified (enqueues to deferred queue)
-     * Called by authoring UI after async file picker completes.
-     * The modification will be collected by RenderContext::beginInstance() on next frame.
-     */
-    void notifyModified()
-    {
-        onModified.broadcast();
     }
 };
 

@@ -176,6 +176,13 @@ struct YA_SCENE_CORE_API Scene
     entt::registry&       getRegistry() { return _registry; }
     const entt::registry& getRegistry() const { return _registry; }
 
+    /// The unified edit funnel: announce an in-place edit of the component
+    /// `typeIndex` on `entity`. Every write path that mutates an existing
+    /// component outside a typed setter routes through here (inspector change
+    /// hook, undo restore, script field writes), so derived-work processors
+    /// listen to exactly one signal source. No-op for unknown component types.
+    void notifyComponentEdited(entt::entity entity, ya::type_index_t typeIndex);
+
     // Find entities
     Entity              findEntityByName(const std::string& name);
     std::vector<Entity> findEntitiesByTag(const std::string& tag);

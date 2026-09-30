@@ -68,6 +68,11 @@ struct ECSRegistry
         virtual bool useReflectionSerialization(const void* component) const = 0;
         virtual void serializeCustom(const void* component, nlohmann::json& out) const { (void)component; (void)out; }
         virtual void deserializeCustom(void* component, const nlohmann::json& in) const { (void)component; (void)in; }
+
+        /// Type-erased edit notification: funnels a completed write into
+        /// registry.patch<T> (the entt on_update signal) plus the SceneBus
+        /// broadcast. Default: no ops registered for the type, nothing to funnel.
+        virtual void notifyEdited(entt::registry&, entt::entity) {}
     };
 
     template <typename T>
@@ -100,6 +105,16 @@ struct ECSRegistry
         }
         void deserializeCustom(void* component, const nlohmann::json& in) const override {
             static_cast<T*>(component)->deserializeCustom(in);
+        }
+        void notifyEdited(entt::registry& registry, entt::entity entity) override
+        {
+            if (registry.all_of<T>(entity)) {
+                // patch publishes the storage's on_update signal; this is the
+                // only way an edit is announced, so every write path must go
+                // through ECSRegistry::notifyComponentEdited.
+                registry.patch<T>(entity);
+                SceneBus::get().onComponentEdited.broadcast(registry, entity, ya::TypeIndex<T>::value());
+            }
         }
     };
 
@@ -225,6 +240,17 @@ struct ECSRegistry
     {
         auto it = _componentOps.find(typeIndex);
         return it != _componentOps.end() ? it->second : nullptr;
+    }
+
+    /// The scene edit funnel's trampoline: announce an in-place edit of the
+    /// component `typeIndex` on `entity` to every listener, through
+    /// registry.patch (entt on_update) and SceneBus::onComponentEdited.
+    /// Unknown component types have no funnel; the write stays unannounced.
+    void notifyComponentEdited(ya::type_index_t typeIndex, entt::registry& registry, entt::entity entity)
+    {
+        if (auto opsIt = _componentOps.find(typeIndex); opsIt != _componentOps.end()) {
+            opsIt->second->notifyEdited(registry, entity);
+        }
     }
 
     [[nodiscard]] const std::unordered_map<FName, type_index_t>& getTypeIndexCache() const { return _typeIndexCache; }

@@ -36,21 +36,33 @@ std::string AssetTextureManager::requestKey(const std::string& normalizedPath, A
 
 void AssetTextureManager::clear()
 {
-    std::lock_guard lock(_mutex);
-    ++_clearGeneration;
-    // Refs outlive the backend teardown that calls this; leave their slots
-    // Failed instead of pointing at destroyed GPU objects.
-    for (auto& [key, entry] : _entries) {
-        (void)key;
-        entry.slot->resource.reset();
-        entry.slot->state = EAssetSlotState::Failed;
-        ++entry.slot->generation;
+    std::vector<std::function<void()>> updateObservers;
+    {
+        std::lock_guard lock(_mutex);
+        ++_clearGeneration;
+        // Refs outlive the backend teardown that calls this; leave their slots
+        // Failed instead of pointing at destroyed GPU objects.
+        for (auto& [key, entry] : _entries) {
+            (void)key;
+            entry.slot->resource.reset();
+            entry.slot->state = EAssetSlotState::Failed;
+            ++entry.slot->generation;
+            auto observers = entry.slot->observers.gather();
+            updateObservers.insert(updateObservers.end(),
+                                 std::make_move_iterator(observers.begin()),
+                                 std::make_move_iterator(observers.end()));
+        }
+        _entries.clear();
+        _textureName2Key.clear();
+        _pendingTextureBatchMemoryLoads.clear();
+        _readyTextureBatchMemory.clear();
+        _nextTextureBatchMemoryHandle = 1;
     }
-    _entries.clear();
-    _textureName2Key.clear();
-    _pendingTextureBatchMemoryLoads.clear();
-    _readyTextureBatchMemory.clear();
-    _nextTextureBatchMemoryHandle = 1;
+    // Slots went Failed with a generation bump; subscribers hear the
+    // update outside the lock. Teardown-path callbacks only enqueue or drop state.
+    for (auto& observer : updateObservers) {
+        observer();
+    }
 }
 
 AssetHandle<Texture> AssetManager::loadTexture(const TextureLoadRequest& request)
@@ -302,6 +314,7 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
     }
 
     std::vector<AssetManager::TextureReadyCallback> callbacks;
+    SlotUpdate update;
     {
         std::lock_guard lock(_mutex);
         auto [it, inserted] = _entries.try_emplace(key);
@@ -313,12 +326,12 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
         }
         // Supersedes any async decode still in flight for this slot.
         entry.loadSerial = ++_nextLoadSerial;
-        callbacks        = fillSlotLocked(entry, texture);
+        update           = updateSlotLocked(entry, texture);
         if (!name.empty()) {
             _textureName2Key[FName(name)] = key;
         }
     }
-    dispatchTextureCallbacks(std::move(callbacks), texture);
+    dispatchSlotUpdate(std::move(update), texture);
     return texture;
 }
 
@@ -378,15 +391,16 @@ void AssetTextureManager::completeTextureLoad(const std::string&               k
     }
 
     std::vector<AssetManager::TextureReadyCallback> callbacks;
+    SlotUpdate update;
     {
         std::lock_guard lock(_mutex);
         auto            it = _entries.find(key);
         if (it == _entries.end() || it->second.loadSerial != serial) {
             return;
         }
-        callbacks = fillSlotLocked(it->second, texture);
+        update = updateSlotLocked(it->second, texture);
     }
-    dispatchTextureCallbacks(std::move(callbacks), texture);
+    dispatchSlotUpdate(std::move(update), texture);
 
     if (texture) {
         YA_CORE_TRACE("Async texture ready: '{}' ({}x{})", label, texture->getWidth(), texture->getHeight());
@@ -430,8 +444,8 @@ std::shared_ptr<Texture> AssetTextureManager::uploadTexture(const AssetManager::
     return texture;
 }
 
-std::vector<AssetManager::TextureReadyCallback> AssetTextureManager::fillSlotLocked(TextureEntry&                   entry,
-                                                                                    const std::shared_ptr<Texture>& texture)
+AssetTextureManager::SlotUpdate AssetTextureManager::updateSlotLocked(TextureEntry&                   entry,
+                                                                           const std::shared_ptr<Texture>& texture)
 {
     AssetSlot<Texture>& slot = *entry.slot;
     if (slot.resource && slot.resource != texture) {
@@ -440,7 +454,10 @@ std::vector<AssetManager::TextureReadyCallback> AssetTextureManager::fillSlotLoc
     slot.resource = texture;
     slot.state    = texture ? EAssetSlotState::Ready : EAssetSlotState::Failed;
     ++slot.generation;
-    return std::exchange(entry.readyCallbacks, {});
+    SlotUpdate dispatch;
+    dispatch.readyCallbacks = std::exchange(entry.readyCallbacks, {});
+    dispatch.updateObservers  = slot.observers.gather();
+    return dispatch;
 }
 
 void AssetTextureManager::dispatchTextureCallbacks(std::vector<AssetManager::TextureReadyCallback> callbacks,
@@ -452,6 +469,16 @@ void AssetTextureManager::dispatchTextureCallbacks(std::vector<AssetManager::Tex
         }
         AssetManager::dispatchToGameThread([callback = std::move(callback), texture]()
                                            { callback(texture); });
+    }
+}
+
+void AssetTextureManager::dispatchSlotUpdate(SlotUpdate dispatch, const std::shared_ptr<Texture>& texture)
+{
+    dispatchTextureCallbacks(std::move(dispatch.readyCallbacks), texture);
+    // Updates land on the game thread (async completions hop through the
+    // TaskQueue main-thread drain); observer callbacks only enqueue work.
+    for (auto& observer : dispatch.updateObservers) {
+        observer();
     }
 }
 
@@ -498,7 +525,7 @@ void AssetTextureManager::registerTexture(const std::string& name, const stdptr<
         return;
     }
 
-    std::vector<AssetManager::TextureReadyCallback> callbacks;
+    SlotUpdate update;
     {
         std::lock_guard lock(_mutex);
         auto [it, inserted] = _entries.try_emplace(name);
@@ -506,11 +533,11 @@ void AssetTextureManager::registerTexture(const std::string& name, const stdptr<
         if (inserted) {
             entry.slot = std::make_shared<AssetSlot<Texture>>();
         }
-        entry.loadSerial               = ++_nextLoadSerial;
-        callbacks                      = fillSlotLocked(entry, texture);
+        entry.loadSerial              = ++_nextLoadSerial;
+        update                        = updateSlotLocked(entry, texture);
         _textureName2Key[FName(name)] = name;
     }
-    dispatchTextureCallbacks(std::move(callbacks), texture);
+    dispatchSlotUpdate(std::move(update), texture);
 }
 
 bool AssetTextureManager::isTextureLoadFailed(const std::string& filepath) const
@@ -557,7 +584,7 @@ bool AssetTextureManager::unload(const std::string& filepath, uint64_t frame)
     const auto path     = AssetManager::normalizeAssetPath(filepath);
     bool       bRemoved = false;
 
-    std::vector<AssetManager::TextureReadyCallback> callbacks;
+    SlotUpdate update;
     {
         std::lock_guard lock(_mutex);
         auto&           ddq = DeferredDeletionQueue::get();
@@ -575,14 +602,19 @@ bool AssetTextureManager::unload(const std::string& filepath, uint64_t frame)
             }
             slot.state = EAssetSlotState::Failed;
             ++slot.generation;
-            auto pending = std::exchange(it->second.readyCallbacks, {});
-            callbacks.insert(callbacks.end(), std::make_move_iterator(pending.begin()), std::make_move_iterator(pending.end()));
+            auto dispatch = updateSlotLocked(it->second, nullptr);
+            update.readyCallbacks.insert(update.readyCallbacks.end(),
+                                             std::make_move_iterator(dispatch.readyCallbacks.begin()),
+                                             std::make_move_iterator(dispatch.readyCallbacks.end()));
+            update.updateObservers.insert(update.updateObservers.end(),
+                                          std::make_move_iterator(dispatch.updateObservers.begin()),
+                                          std::make_move_iterator(dispatch.updateObservers.end()));
             std::erase_if(_textureName2Key, [&](const auto& alias) { return alias.second == key; });
             _entries.erase(it);
             bRemoved = true;
         }
     }
-    dispatchTextureCallbacks(std::move(callbacks), nullptr);
+    dispatchSlotUpdate(std::move(update), nullptr);
     return bRemoved;
 }
 

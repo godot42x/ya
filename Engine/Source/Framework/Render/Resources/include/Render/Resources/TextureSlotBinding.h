@@ -30,4 +30,13 @@ YA_RENDER_RESOURCES_API ya::Ptr<Sampler> resolveSlotSampler(const TextureSlot& s
 /// Build a TextureBinding from the slot's resolved resources.
 YA_RENDER_RESOURCES_API TextureBinding slotToTextureBinding(const TextureSlot& slot);
 
+/// Binding for a slot whose texture is still loading: the semantic default
+/// (white, or a flat normal for normal-map slots), so a half-loaded material
+/// shades correctly instead of sampling garbage.
+YA_RENDER_RESOURCES_API TextureBinding loadingSlotFallback(bool bNormalMap);
+
+/// Binding for a slot whose texture failed to load: an explicit
+/// checkerboard, so the failure is visible where the texture would be.
+YA_RENDER_RESOURCES_API TextureBinding failedSlotFallback();
+
 } // namespace ya

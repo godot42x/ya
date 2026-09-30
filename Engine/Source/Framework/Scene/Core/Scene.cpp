@@ -394,6 +394,13 @@ void Scene::clear()
     _entityCounter = 0;
 }
 
+void Scene::notifyComponentEdited(entt::entity entity, ya::type_index_t typeIndex)
+{
+    if (_registry.valid(entity)) {
+        ECSRegistry::get().notifyComponentEdited(typeIndex, _registry, entity);
+    }
+}
+
 void Scene::addWidgetEntry(SceneWidgetEntry entry)
 {
     _widgetEntries.push_back(std::move(entry));

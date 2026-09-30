@@ -24,12 +24,12 @@ struct YA_ECS_SYSTEMS_API TerrainComponent : public IComponent
     float      _heightOffset   = 0.0f;
     uint32_t   _gridResolution = 128;
 
-    TerrainComponent();
-
     [[nodiscard]] bool hasHeightMap() const { return _heightMapRef.hasPath(); }
     [[nodiscard]] uint64_t getAuthoringVersion() const { return _authoringVersion; }
     [[nodiscard]] uint64_t getRebuildNotBeforeTick() const { return _rebuildNotBeforeTick; }
 
+    // Default-constructed; invalidation arrives through onEdit / onPostSerialize
+    // (H4 moves terrain rebuild onto the same edit funnel).
     void invalidate(uint64_t rebuildNotBeforeTick = 0);
     void onEdit() override { invalidate(); }
     void setRebuildNotBeforeTick(uint64_t rebuildNotBeforeTick) { _rebuildNotBeforeTick = rebuildNotBeforeTick; }
@@ -41,8 +41,6 @@ struct YA_ECS_SYSTEMS_API TerrainComponent : public IComponent
     [[nodiscard]] void* getMesh() const { return nullptr; }
 
   private:
-    void setupCallbacks();
-
     uint64_t _authoringVersion      = 1;
     uint64_t _rebuildNotBeforeTick  = 0;
 };

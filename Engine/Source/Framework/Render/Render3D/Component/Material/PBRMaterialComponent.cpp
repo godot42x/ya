@@ -1,12 +1,9 @@
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 
-#include "RHI/Backend/TextureLibrary.h"
 #include "Render/Resources/TextureSlotBinding.h"
 #include "Render3D/Material/MaterialFactory.h"
 #include "Render3D/Material/PBRMaterial.h"
 #include "Resource/Core/Model/MaterialData.h"
-
-#include <string_view>
 
 namespace ya
 {
@@ -33,31 +30,6 @@ MaterialType* createOwnedMaterial(ComponentType& comp)
     return static_cast<MaterialType*>(comp._material);
 }
 
-bool containsPathToken(std::string_view propPath, std::string_view token)
-{
-    return propPath.find(token) != std::string_view::npos;
-}
-
-TextureResource textureResourceFromPath(std::string_view propPath)
-{
-    if (propPath.starts_with("_albedoSlot"))    return TextureResource::AlbedoTexture;
-    if (propPath.starts_with("_normalSlot"))    return TextureResource::NormalTexture;
-    if (propPath.starts_with("_metallicSlot"))  return TextureResource::MetallicTexture;
-    if (propPath.starts_with("_roughnessSlot")) return TextureResource::RoughnessTexture;
-    if (propPath.starts_with("_aoSlot")) return TextureResource::AOTexture;
-    return TextureResource::Count;
-}
-
-bool isTextureRefPath(std::string_view propPath)
-{
-    return containsPathToken(propPath, "textureRef");
-}
-
-bool isParamPath(std::string_view propPath)
-{
-    return propPath.starts_with("_params");
-}
-
 } // namespace detail_pbr
 
 TextureSlot* PBRMaterialComponent::getTextureSlotInternal(EPBRMaterialTextureSlot resourceEnum)
@@ -82,21 +54,6 @@ const TextureSlot* PBRMaterialComponent::getTextureSlotInternal(EPBRMaterialText
     case PBRMaterial::AOTexture:        return &_aoSlot;
     default: return nullptr;
     }
-}
-
-PBRMaterialComponent::PropertyChangeSummary PBRMaterialComponent::summarizePropertyChanges(const std::vector<std::string>& propPaths)
-{
-    PropertyChangeSummary summary;
-    for (const auto& propPath : propPaths) {
-        auto resource = detail_pbr::textureResourceFromPath(propPath);
-        if (resource == detail_pbr::TextureResource::Count) continue;
-
-        auto index                       = static_cast<size_t>(resource);
-        summary.touchedSlots[index]      = true;
-        summary.hasTextureSlotChange     = true;
-        summary.hasTextureResourceChange = summary.hasTextureResourceChange || detail_pbr::isTextureRefPath(propPath);
-    }
-    return summary;
 }
 
 void PBRMaterialComponent::syncParamsToMaterial()
@@ -126,66 +83,44 @@ void PBRMaterialComponent::syncTextureSlot(EPBRMaterialTextureSlot resourceEnum)
     const TextureSlot* slot = getTextureSlotInternal(resourceEnum);
     if (!slot) return;
 
-    if (slot->isReady()) {
-        getMaterial()->setTextureBinding(detail_pbr::toTextureResource(resourceEnum), ya::slotToTextureBinding(*slot));
+    const auto resource = detail_pbr::toTextureResource(resourceEnum);
 
+    // PBR's setTextureParam takes an effective slot (bEnable resolved).
+    const auto effectiveParam = [&]() {
         TextureSlot effectiveSlot = *slot;
         effectiveSlot.bEnable     = slot->isEnabledEffective();
-        getMaterial()->setTextureParam(detail_pbr::toTextureResource(resourceEnum), effectiveSlot);
-    }
-    else if (slot->hasPath() && slot->textureRef.isLoading()) {
-        // Texture is being reloaded — old GPU resources may be destroyed.
-        // Use placeholder to avoid null imageView in descriptor writes.
-        auto placeholder = TextureLibrary::get().getCheckerboardTexture();
-        auto sampler     = TextureLibrary::get().getDefaultSampler();
-        if (placeholder && sampler) {
-            getMaterial()->setTextureBinding(detail_pbr::toTextureResource(resourceEnum), TextureBinding{.texture = placeholder, .sampler = sampler});
+        return effectiveSlot;
+    };
 
-            TextureSlot effectiveSlot = *slot;
-            effectiveSlot.bEnable     = slot->isEnabledEffective();
-            getMaterial()->setTextureParam(detail_pbr::toTextureResource(resourceEnum), effectiveSlot);
-        }
-        else {
-            getMaterial()->disableTextureParams(detail_pbr::toTextureResource(resourceEnum));
-            getMaterial()->clearTextureBinding(detail_pbr::toTextureResource(resourceEnum));
-        }
+    if (slot->isReady()) {
+        getMaterial()->setTextureBinding(resource, ya::slotToTextureBinding(*slot));
+        getMaterial()->setTextureParam(resource, effectiveParam());
+        return;
     }
-    else {
-        getMaterial()->disableTextureParams(detail_pbr::toTextureResource(resourceEnum));
-        getMaterial()->clearTextureBinding(detail_pbr::toTextureResource(resourceEnum));
-    }
-}
 
-bool PBRMaterialComponent::checkTexturesStaleness()
-{
-    if (!getMaterial()) {
-        return false;
+    if (!slot->hasPath()) {
+        getMaterial()->disableTextureParams(resource);
+        getMaterial()->clearTextureBinding(resource);
+        return;
     }
-    bool stale = false;
-    for (size_t index = 0; index < static_cast<size_t>(EPBRMaterialTextureSlot::Count); ++index) {
-        const auto         slotEnum = static_cast<EPBRMaterialTextureSlot>(index);
-        const TextureSlot* slot     = getTextureSlotInternal(slotEnum);
-        if (slot && slot->textureRef.isLoaded() &&
-            getMaterial()->getTextureBinding(detail_pbr::toTextureResource(slotEnum)).texture != slot->textureRef.getShared()) {
-            stale = true;
-        }
+
+    if (slot->textureRef.isLoading()) {
+        // The slot observer re-queues this component when the update lands; the
+        // semantic default (white, flat normal for normal maps) keeps the
+        // material complete and shadable while it waits.
+        getMaterial()->setTextureBinding(resource, ya::loadingSlotFallback(resourceEnum == EPBRMaterialTextureSlot::Normal));
+        getMaterial()->setTextureParam(resource, effectiveParam());
+        return;
     }
-    if (stale) {
-        invalidate();
-    }
-    return stale;
+
+    // Failed: an explicit, visible placeholder beats an invisible empty slot.
+    YA_CORE_WARN("PBRMaterialComponent: texture '{}' failed to load", slot->textureRef.getPath());
+    getMaterial()->setTextureBinding(resource, ya::failedSlotFallback());
+    getMaterial()->setTextureParam(resource, effectiveParam());
 }
 
 EMaterialResolveResult PBRMaterialComponent::resolve()
 {
-    if (_resolveState == EMaterialResolveState::Ready) {
-        return EMaterialResolveResult::Ready;
-    }
-
-    _resolveState           = EMaterialResolveState::Resolving;
-    bool success            = true;
-    bool hasPendingTextures = false;
-
     // 1. Create runtime material if not exists
     if (!_material) {
         detail_pbr::createOwnedMaterial<PBRMaterialComponent, PBRMaterial>(*this);
@@ -199,68 +134,12 @@ EMaterialResolveResult PBRMaterialComponent::resolve()
     // 2. Sync params
     syncParamsToMaterial();
 
-    // 3. Resolve texture slots
-    // NOTE: Do NOT clearTextureBindings() — keep old bindings while async reload in flight.
-
-    auto resolveSlot = [&](TextureSlot& slot, const char* name) {
-        if (!slot.hasPath() || slot.isReady()) {
-            return;
-        }
-
-        if (slot.isLoading()) {
-            hasPendingTextures = true;
-            return;
-        }
-
-        YA_CORE_WARN("PBRMaterialComponent: Failed to resolve {} texture slot", name);
-        success = false;
-    };
-
-    resolveSlot(_albedoSlot,    "albedo");
-    resolveSlot(_normalSlot,    "normal");
-    resolveSlot(_metallicSlot,  "metallic");
-    resolveSlot(_roughnessSlot, "roughness");
-    resolveSlot(_aoSlot,        "ao");
-
+    // 3. Sync every texture slot. A Loading slot binds its semantic default;
+    // the slot observer re-queues this component when the fill lands.
     syncTextureSlots();
 
-    if (!success) {
-        _resolveState = EMaterialResolveState::Failed;
-        return EMaterialResolveResult::Failed;
-    }
-
-    _resolveState = hasPendingTextures ? EMaterialResolveState::Resolving : EMaterialResolveState::Ready;
-    return hasPendingTextures ? EMaterialResolveResult::Pending : EMaterialResolveResult::Ready;
-}
-
-void PBRMaterialComponent::onPropertyChanged(const std::string& propPath)
-{
-    onPropertiesChanged({propPath});
-}
-
-void PBRMaterialComponent::onPropertiesChanged(const std::vector<std::string>& propPaths)
-{
-    bool hasParamChange = false;
-    for (const auto& propPath : propPaths) {
-        hasParamChange = hasParamChange || detail_pbr::isParamPath(propPath);
-    }
-
-    const auto summary = summarizePropertyChanges(propPaths);
-
-    if (!summary.hasTextureSlotChange && !hasParamChange) return;
-
-    if (hasParamChange) {
-        syncParamsToMaterial();
-    }
-
-    if (summary.hasTextureResourceChange) {
-        invalidate();
-    }
-
-    for (size_t index = 0; index < summary.touchedSlots.size(); ++index) {
-        if (!summary.touchedSlots[index]) continue;
-        syncTextureSlot(static_cast<EPBRMaterialTextureSlot>(index));
-    }
+    _resolveState = EMaterialResolveState::Ready;
+    return EMaterialResolveResult::Ready;
 }
 
 void PBRMaterialComponent::syncTextureSlots()
@@ -276,29 +155,29 @@ void PBRMaterialComponent::importFromDescriptor(const MaterialData& matData)
 {
     importParamsFromDescriptor(matData);
 
-    _albedoSlot.textureRef.setPathWithoutNotify("");
-    _normalSlot.textureRef.setPathWithoutNotify("");
-    _metallicSlot.textureRef.setPathWithoutNotify("");
-    _roughnessSlot.textureRef.setPathWithoutNotify("");
-    _aoSlot.textureRef.setPathWithoutNotify("");
+    _albedoSlot.textureRef.setPath("");
+    _normalSlot.textureRef.setPath("");
+    _metallicSlot.textureRef.setPath("");
+    _roughnessSlot.textureRef.setPath("");
+    _aoSlot.textureRef.setPath("");
 
     if (matData.hasTexture(MatTexture::Albedo)) {
-        _albedoSlot.textureRef.setPathWithoutNotify(matData.resolveTexturePath(MatTexture::Albedo));
+        _albedoSlot.textureRef.setPath(matData.resolveTexturePath(MatTexture::Albedo));
     }
     else if (matData.hasTexture(MatTexture::Diffuse)) {
-        _albedoSlot.textureRef.setPathWithoutNotify(matData.resolveTexturePath(MatTexture::Diffuse));
+        _albedoSlot.textureRef.setPath(matData.resolveTexturePath(MatTexture::Diffuse));
     }
     if (matData.hasTexture(MatTexture::Normal)) {
-        _normalSlot.textureRef.setPathWithoutNotify(matData.resolveTexturePath(MatTexture::Normal));
+        _normalSlot.textureRef.setPath(matData.resolveTexturePath(MatTexture::Normal));
     }
     if (matData.hasTexture(MatTexture::Metallic)) {
-        _metallicSlot.textureRef.setPathWithoutNotify(matData.resolveTexturePath(MatTexture::Metallic));
+        _metallicSlot.textureRef.setPath(matData.resolveTexturePath(MatTexture::Metallic));
     }
     if (matData.hasTexture(MatTexture::Roughness)) {
-        _roughnessSlot.textureRef.setPathWithoutNotify(matData.resolveTexturePath(MatTexture::Roughness));
+        _roughnessSlot.textureRef.setPath(matData.resolveTexturePath(MatTexture::Roughness));
     }
     if (matData.hasTexture(MatTexture::AO)) {
-        _aoSlot.textureRef.setPathWithoutNotify(matData.resolveTexturePath(MatTexture::AO));
+        _aoSlot.textureRef.setPath(matData.resolveTexturePath(MatTexture::AO));
     }
 
     if (matData.hasTexture(MatTexture::MetallicRoughness) &&

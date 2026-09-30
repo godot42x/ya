@@ -49,9 +49,8 @@ void applyBillboardDefaults(BillboardComponent& billboard, const LightBillboardC
     billboard.minWorldScale    = config.minWorldScale;
     billboard.tint             = config.tint;
     if (!billboard.image.hasPath() && billboard.image.textureRef.getPath() != config.texturePath) {
-        billboard.image.textureRef.setPathWithoutNotify(config.texturePath);
+        billboard.image.textureRef.setPath(config.texturePath);
     }
-    billboard.invalidate();
 }
 
 /// Host orientation, falling back to the component's authored direction.
@@ -113,6 +112,10 @@ CompanionSpec makeLightCompanionSpec(const LightBillboardConfig& config, bool bD
         auto* billboard = companion.getComponent<BillboardComponent>();
 
         applyBillboardDefaults(*billboard, config);
+        // Out-of-band writes on an existing component go through the scene
+        // edit funnel; the light-field writes below are covered by the notify
+        // at the end of this lambda.
+        scene.notifyComponentEdited(companion.getHandle(), type_index_v<BillboardComponent>);
 
         entt::registry& reg    = scene.getRegistry();
         const auto      handle = host.getHandle();
@@ -133,7 +136,7 @@ CompanionSpec makeLightCompanionSpec(const LightBillboardConfig& config, bool bD
             billboard->tint           = glm::vec4(light->color * std::max(light->intensity, 0.2f), 1.0f);
             billboard->worldDirection = glm::vec3(0.0f, 0.0f, -1.0f);
         }
-        billboard->invalidate();
+        scene.notifyComponentEdited(companion.getHandle(), type_index_v<BillboardComponent>);
     };
 
     return spec;

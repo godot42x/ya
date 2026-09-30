@@ -68,6 +68,12 @@ class YA_RHI_BACKEND_API TextureLibrary : public IResourceCache, public IBuiltin
     ya::Ptr<Texture> getCheckerboardTexture();
 
     /**
+     * @brief Get a 1x1 flat normal (RGB 128, 128, 255)
+     * Semantic default for normal-map slots while their texture loads
+     */
+    ya::Ptr<Texture> getFlatNormalTexture();
+
+    /**
      * @brief Get the default sampler (linear filtering)
      */
     std::shared_ptr<Sampler> getDefaultSampler() override;
@@ -118,6 +124,7 @@ class YA_RHI_BACKEND_API TextureLibrary : public IResourceCache, public IBuiltin
     std::shared_ptr<Texture> _blackTexture;
     std::shared_ptr<Texture> _multiPixelTexture;
     std::shared_ptr<Texture> _checkerboardTexture;
+    std::shared_ptr<Texture> _flatNormalTexture;
 
     // Samplers
     std::shared_ptr<Sampler> _defaultSampler;

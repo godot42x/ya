@@ -371,6 +371,9 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
             }
             ReflectionSerializer::deserializeByRuntimeReflection(ptr, *typeIndex, merged, typeName);
             static_cast<IComponent*>(ptr)->onPostSerialize();
+            // The write landed outside any typed setter: route it through the
+            // scene edit funnel so derived-work processors pick it up.
+            scene.notifyComponentEdited(handle, *typeIndex);
             return merged;
         });
 

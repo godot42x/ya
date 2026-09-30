@@ -87,7 +87,7 @@ class TextureAssetSlotTest : public ::testing::Test
         AssetManager::get()->setRender(nullptr);
     }
 
-    static bool pumpUntilSettled(const AssetHandle<Texture>& handle)
+    static bool pumpUntilUpdated(const AssetHandle<Texture>& handle)
     {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
         while (handle->state == EAssetSlotState::Loading) {
@@ -129,7 +129,7 @@ TEST_F(TextureAssetSlotTest, MissingFileTurnsEverySharingRefFailed)
         },
     });
 
-    ASSERT_TRUE(pumpUntilSettled(first._handle));
+    ASSERT_TRUE(pumpUntilUpdated(first._handle));
     EXPECT_EQ(first.getResolveState(), EAssetResolveState::Failed);
     EXPECT_EQ(copy.getResolveState(), EAssetResolveState::Failed);
     EXPECT_EQ(first.get(), nullptr);
@@ -143,15 +143,15 @@ TEST_F(TextureAssetSlotTest, MissingFileTurnsEverySharingRefFailed)
     EXPECT_EQ(later.getResolveState(), EAssetResolveState::Failed);
 }
 
-TEST_F(TextureAssetSlotTest, ReloadRefillsTheSameSlot)
+TEST_F(TextureAssetSlotTest, ReloadUpdatesTheSameSlot)
 {
     TextureRef ref(kMissingA);
-    ASSERT_TRUE(pumpUntilSettled(ref._handle));
+    ASSERT_TRUE(pumpUntilUpdated(ref._handle));
     const AssetHandle<Texture> slot = ref._handle;
 
     AssetManager::get()->invalidate(kMissingA);
     EXPECT_EQ(ref.getResolveState(), EAssetResolveState::Loading);
-    ASSERT_TRUE(pumpUntilSettled(ref._handle));
+    ASSERT_TRUE(pumpUntilUpdated(ref._handle));
 
     EXPECT_EQ(ref._handle, slot);
     EXPECT_EQ(ref.getResolveState(), EAssetResolveState::Failed);
@@ -168,7 +168,7 @@ TEST_F(TextureAssetSlotTest, UnloadFailsHeldSlotAndNextRequestGetsANewOne)
 
     TextureRef fresh(kMissingA);
     EXPECT_NE(fresh._handle, slot);
-    ASSERT_TRUE(pumpUntilSettled(fresh._handle));
+    ASSERT_TRUE(pumpUntilUpdated(fresh._handle));
 }
 
 TEST_F(TextureAssetSlotTest, ClearFailsSlotsStillHeldByRefs)
@@ -178,7 +178,7 @@ TEST_F(TextureAssetSlotTest, ClearFailsSlotsStillHeldByRefs)
     EXPECT_EQ(ref.getResolveState(), EAssetResolveState::Failed);
     EXPECT_EQ(ref.get(), nullptr);
 
-    // The decode submitted before the clear must not refill the slot.
+    // The decode submitted before the clear must not update the slot again.
     for (int i = 0; i < 50; ++i) {
         TaskQueue::get().processMainThreadCallbacks();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -191,9 +191,9 @@ TEST_F(TextureAssetSlotTest, CollectUnusedKeepsHeldSlotsAndDropsTheRest)
     TextureRef held(kMissingA);
     {
         TextureRef dropped(kMissingB);
-        ASSERT_TRUE(pumpUntilSettled(dropped._handle));
+        ASSERT_TRUE(pumpUntilUpdated(dropped._handle));
     }
-    ASSERT_TRUE(pumpUntilSettled(held._handle));
+    ASSERT_TRUE(pumpUntilUpdated(held._handle));
 
     EXPECT_EQ(AssetManager::get()->collectUnused(), 1u);
     EXPECT_TRUE(AssetManager::get()->isTextureLoadFailed(kMissingA));

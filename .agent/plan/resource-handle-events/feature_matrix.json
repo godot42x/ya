@@ -6,7 +6,7 @@
       "id": "asset_slot",
       "phase": "H1",
       "status": "done",
-      "goal": "AssetTextureManager owns one AssetSlot per request identity (normalized path | colorSpace); load completion / failure / reload fill the slot on the game thread and bump generation",
+      "goal": "AssetTextureManager owns one AssetSlot per request identity (normalized path | colorSpace); load completion / failure / reload update the slot on the game thread and bump generation",
       "evidence": [
         "Engine/Test/Source/ResourceRuntime/TextureAssetSlotTest.cpp (9 tests)",
         "progress.md 2026-09-30 H1"
@@ -35,22 +35,33 @@
     {
       "id": "edit_funnel",
       "phase": "H2",
-      "status": "planned",
+      "status": "done",
       "goal": "Scene::notifyComponentEdited -> registry.patch<T>; inspector / undo / script write / deserialize / model instantiation all route through it",
-      "evidence": []
+      "evidence": [
+        "Engine/Source/Framework/Scene/Core/Scene.cpp (Scene::notifyComponentEdited)",
+        "Engine/Source/Framework/ECS/Core/include/ECS/ECSRegistry.h (notifyEdited trampoline)",
+        "Engine/Source/Applications/GameEditor/Inspector/PropertyGraph.cpp (inspector/undo change hook)",
+        "Engine/Source/Applications/GameRuntime/ScriptApiCore.cpp (component.set)",
+        "Engine/Test/Source/Integration/SceneEditFunnelTest.cpp"
+      ]
     },
     {
       "id": "material_push",
       "phase": "H2",
-      "status": "planned",
+      "status": "done",
       "goal": "runtime Material subscribes to texture slots; material sweep and active re-pump deleted; explicit fallback (Loading -> semantic default, Failed -> checkerboard); audit is a dev-only consistency check",
-      "evidence": []
+      "evidence": [
+        "Engine/Source/Framework/Render/Render3D/Services/GameplayResourceBinding.cpp (event-driven rewrite, slot subscriptions, dev-only audit)",
+        "Engine/Source/Framework/Render/Resources/TextureSlotBinding.cpp (loadingSlotFallback / failedSlotFallback)",
+        "Engine/Source/Framework/RHI/Backend/TextureLibrary.cpp (flat-normal texture)",
+        "1473 ya-testing cases pass; HelloMaterial / GreedySnake / 2DRpgPrototype / editor smokes clean"
+      ]
     },
     {
       "id": "mesh_model_events",
       "phase": "H3",
       "status": "planned",
-      "goal": "MeshSource and ModelInstantiation react to model slot readiness via processor-held subscriptions; loadModel returns a slot, ModelRef / MeshRef hold handles, AssetFuture and getResourceVersion polling removed",
+      "goal": "Model and Tileset slots: loadModel/loadTileset return slots, ModelRef/MeshRef/TilesetRef hold handles (tileset parses synchronously into a slot, Core weak cache and clearCache deleted), AssetFuture and getResourceVersion polling removed; MeshSource and ModelInstantiation react via processor-held subscriptions",
       "evidence": []
     },
     {

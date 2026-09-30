@@ -949,7 +949,7 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
     // The raw _path field was just written; normalize it and bind the ref.
     if (isAssetRefType(prop.typeIndex)) {
         auto* ref = static_cast<AssetRefBase*>(nestedObjPtr);
-        ref->setPathWithoutNotify(ref->getPath());
+        ref->setPath(ref->getPath());
     }
 }
 

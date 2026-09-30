@@ -39,6 +39,7 @@ void TextureLibrary::clearCache()
     _blackTexture.reset();
     _multiPixelTexture.reset();
     _checkerboardTexture.reset();
+    _flatNormalTexture.reset();
 
     // Cleanup samplers
     _defaultSampler.reset();
@@ -166,6 +167,12 @@ void TextureLibrary::createTextures(IRender* render)
         }
         _checkerboardTexture = Texture::fromData(*render, size, size, pixels, "checkerboard");
     }
+
+    // Create 1x1 flat normal (0.5, 0.5, 1): the semantic default a normal-map
+    // slot binds while its texture loads, so a half-loaded material shades
+    // instead of sampling garbage.
+    color_t flatNormal{.r = 128, .g = 128, .b = 255, .a = 255};
+    _flatNormalTexture = Texture::fromData(*render, 1, 1, std::vector<color_t>{flatNormal}, "flat-normal");
 }
 
 std::shared_ptr<Texture> TextureLibrary::getWhiteTexture()
@@ -190,6 +197,12 @@ ya::Ptr<Texture> TextureLibrary::getCheckerboardTexture()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
     return ya::Ptr<Texture>(_checkerboardTexture);
+}
+
+ya::Ptr<Texture> TextureLibrary::getFlatNormalTexture()
+{
+    YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
+    return ya::Ptr<Texture>(_flatNormalTexture);
 }
 
 std::shared_ptr<Sampler> TextureLibrary::getDefaultSampler()

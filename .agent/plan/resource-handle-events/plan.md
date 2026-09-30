@@ -49,7 +49,7 @@ template <typename T>
 struct AssetSlot {
     EAssetSlotState     state = EAssetSlotState::Loading;
     std::shared_ptr<T>  resource;       // Ready 时非空；热重载期间保留旧资源
-    uint64_t            generation = 0; // 每次填槽（首次就绪 / 失败 / 热重载替换）+1
+    uint64_t            generation = 0; // 每次更新 update（首次就绪 / 失败 / 热重载替换）+1
     std::string         sourcePath;     // 规范化路径，热重载按它匹配全部变体
     AssetObservers      observers;      // RAII 订阅；只在游戏线程触发
 };
@@ -68,7 +68,7 @@ template <typename T> using AssetHandle = std::shared_ptr<const AssetSlot<T>>;
 ### 4.2 AssetManager
 
 - `acquireTexture(request) -> AssetHandle<Texture>` / `acquireModel(request) -> AssetHandle<Model>`：按 cacheKey 返回已有槽或新建 Loading 槽并提交解码。取代返回 `AssetFuture` 的 `loadTexture/loadModel`。
-- 完成：填 `resource`、置 Ready、`generation++`、通知订阅者。失败：置 Failed、`generation++`、通知。
+- 完成：update `resource`、置 Ready、`generation++`、通知订阅者。失败：置 Failed、`generation++`、通知。
 - 热重载 `onAssetFileChanged(path)`：对 `sourcePath == path` 的**所有变体槽**重新解码；完成后替换 `resource`，旧资源进延迟删除队列（规则 6/7），`generation++`，通知。重载期间槽保持 Ready + 旧资源，不闪烁。（现状只重载 SRGB 变体，属于顺带修复。）
 - `collectUnused`：释放只被管理器持有的槽（`use_count == 1`），资源走延迟删除。
 - CPU 侧批量加载（环境光照面、地形高度图）改为回调式完成：`loadTextureBatchIntoMemory(request{ onDone })`，删除 `consumeTextureBatchMemory` 轮询。
@@ -97,15 +97,20 @@ template <typename T> using AssetHandle = std::shared_ptr<const AssetSlot<T>>;
     "有路径的 ref 一定已绑定"是不变式。"是否资产引用类型"回收到 Core（四种 ref 类型本来就定义在 Core）。
   - 解析器接口收窄为"按路径取贴图槽"；没有解析器（纯 GUI 宿主）时绑定为空句柄，读作 Failed。原计划的"dev 断言"不做：
     `AssetManager` 是函数内静态单例，不存在"创建前绑定"。
-  - `TilesetRef` 不另建槽：解析同步完成，结果只有"有 / 没有"，`_cached` 本身就是共享资源；状态由路径与 `_cached` 推出。
+  - `TilesetRef` H1 不另建槽：解析同步完成，结果只有"有 / 没有"，`_cached` 本身就是共享资源；状态由路径与 `_cached` 推出。
+    H3 改为入槽（见 §5 H3 行）：tileset 表进 `AssetManager`，解析仍同步、在游戏线程首请求时做，`unload/invalidate/reload` 获得统一语义。
   - `ModelRef / MeshRef`、`loadModel` 与 `AssetFuture<Model>` 推迟到 H3（模型的消费者整体在 H3 事件化），H1 里 `rebind()` = 旧 `invalidate()`。
   - `onModified` 在 H1 保留（材质 / billboard / 地形靠它标脏），H2 随统一编辑入口删除。
 
 ### 4.4 统一编辑入口
 
 - `Scene::notifyComponentEdited(entity, type_index)`：经组件注册表的类型蹦床转成 `registry.patch<T>(entity)`，
-  所以处理器只需要监听 entt 的 `on_construct / on_update / on_destroy` 三个信号，信号源只有一个。
-- 需要接入的写入路径：检查器 change hook、undo/redo 应用、脚本字段写入、反序列化填字段之后、模型实例化生成的组件。
+  并广播一次 `SceneBus::onComponentEdited`（与 `onComponentRemoved` 同构的全局 delegate，携带 registry&）。
+  创建 / 删除由 `detail_component_mutation` 漏斗广播 `onComponentAdded / onComponentRemoved`。
+  处理器订阅 SceneBus（不直接连 entt sink：sink 连接绑定 per-scene registry 生命周期，场景析构后无法安全退订），
+  编辑、创建、删除各只有一个信号源。
+- 需要接入的写入路径：检查器 change hook、undo/redo 应用、脚本字段写入、companion 带外写入。
+  场景加载 / 模型实例化 / 克隆经 `addComponent` 创建漏斗，靠 `onComponentAdded` 发现。
   H2 开工时枚举全部写入路径（参考 `memories/component_created_without_owner.md` 的排查法），逐一接线。
 - 组件自带的 `authoringVersion` 保留为"内容版本"（派生缓存键用），但不再承担发现职责。
 
@@ -127,9 +132,9 @@ template <typename T> using AssetHandle = std::shared_ptr<const AssetSlot<T>>;
 
 | ID | 目标 | 验收 |
 | --- | --- | --- |
-| H1 | 贴图资产槽 + ref 句柄化：`AssetSlot`、`loadTexture` 返回槽、完成/失败/重载填槽、`collectUnused`；`TextureRef / TextureSlot / TilesetRef` 删 `resolve/isStale/invalidate`；`TextureFuture` 删除，全部调用方迁移（EL / Terrain 此时仍按原状态机逐帧查句柄；材质过期检测暂用"绑定的贴图 ≠ 槽里的贴图"）；sprite/tilemap/UI 分支删除；删 `ResourceTable / FResourceHandle / PathRegistry` | 槽生命周期单测（就绪 / 失败 / 重载 generation / 拷贝共享 / 无后端 Failed / clear / collectUnused / unload）；HelloMaterial、2DRpgPrototype、GreedySnake 冒烟；脚本 `asset.reload` 手测 |
+| H1 | 贴图资产槽 + ref 句柄化：`AssetSlot`、`loadTexture` 返回槽、完成/失败/重载更新（update）、`collectUnused`；`TextureRef / TextureSlot / TilesetRef` 删 `resolve/isStale/invalidate`；`TextureFuture` 删除，全部调用方迁移（EL / Terrain 此时仍按原状态机逐帧查句柄；材质过期检测暂用"绑定的贴图 ≠ 槽里的贴图"）；sprite/tilemap/UI 分支删除；删 `ResourceTable / FResourceHandle / PathRegistry` | 槽生命周期单测（就绪 / 失败 / 重载 generation / 拷贝共享 / 无后端 Failed / clear / collectUnused / unload）；HelloMaterial、2DRpgPrototype、GreedySnake 冒烟；脚本 `asset.reload` 手测 |
 | H2 | 统一编辑入口 + 材质/billboard 推送：`notifyComponentEdited`、全部写入路径接线；运行时 Material 订阅槽；删材质扫描与 active 重泵；审计降为 dev 一致性检查；删 `onModified` | 编辑入口单测（每条写入路径都触发 on_update）；检查器改贴图路径下一帧生效；缺失文件显示棋盘格且检查器报错 |
-| H3 | 模型槽 + MeshSource / ModelInstantiation 事件化：`loadModel` 返回槽、`ModelRef / MeshRef` 句柄化、删 `AssetFuture` | 模型场景冒烟；运行时加组件、改模型路径生效 |
+| H3 | 模型槽 + tileset 资产化 + MeshSource / ModelInstantiation 事件化：`loadModel` / `loadTileset` 返回槽、`ModelRef / MeshRef / TilesetRef` 句柄化（tileset 同步解析入槽，删 Core 自有 weak 缓存与 `clearCache`，走 `acquireTileset`）、删 `AssetFuture` | 模型场景冒烟；运行时加组件、改模型路径生效；tilemap 冒烟、tileset 缺失文件置 Failed |
 | H4 | Terrain 事件化：回调式高度图加载、防抖定时器、删扫描/审计/重泵 | HelloMaterial 截图自动化到 stable（`hasPendingTerrainResolve` 探针）；改高度图参数生效 |
 | H5 | EnvironmentLighting 事件化：离屏任务 `onFinished`、删扫描/审计/重泵；`GameplayResourceBinding` 收成最终形态（剩余职责不足以成类则并入处理器）；重写 `skills/resource-system`；更新 terrain 回归 memory（该类回归随重泵循环一起消失） | IBL 视觉基线（`memories/ibl_visual_regression_baseline.md`）；稳态 prepare 的组件访问计数为 0（结构指标，计数器断言）+ 多实体压力夹具验证规模无关；帧时间不退化；`rg` 检查见 session_checklist |
 

@@ -70,7 +70,7 @@ struct TextureSlot
 
     void fromPath(const std::string& path)
     {
-        textureRef.setPathWithoutNotify(path);
+        textureRef.setPath(path);
     }
 
     bool               isLoading() const { return textureRef.isLoading(); }
