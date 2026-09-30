@@ -83,3 +83,20 @@
   - 编辑器资产审计能报出缺失 tileset（getResolveState 修正）。
 - 保留 / 未完成：Terrain 归 H4；EL 离屏回调归 H5；全局 `resourceVersion/bumpResourceVersion` 归 H5；tileset JSON 文件监听触发源仍未接线（见 todo「已记录、不在本计划」）。
 - 偏离：`fillStats.modelCount` 语义收窄为「Ready 条目数」（旧语义），避免前序套件残留的 Failed 条目污染 `AssetLibraryInspectsPaths`；`TextureAssetSlotTest` fixture 清场从 `clearTextures` 扩为 `clearCache`（新 manager 让 failed 模型 / tileset 条目可被 `collectUnused` 回收，绝对计数断言对测试顺序敏感）。
+
+## 2026-10-01 H4 Terrain 事件化
+
+- 目标：Terrain 改为编辑入口发现 + 高度图批次完成回调 + 按 tick 的防抖最小堆；删作者扫描、120 tick 审计、active 重泵。边界见 plan §5 H4 行。EnvironmentLighting 的重泵与 `onFinished`、全局 `resourceVersion` 删除归 H5。
+- 完成：
+  - `TextureBatchMemoryLoadRequest::onReady`：CPU 批次解码写入 ready 表后在游戏线程回调（锁外），参数是 `consumeTextureBatchMemory` 的句柄。空路径同步完成也回调。EL 不传回调，仍按原轮询消费。
+  - `TerrainProcessor`：`init/shutdown` 订阅 SceneBus（add/edit 按 `rebuildNotBeforeTick` 排期，remove 丢状态）；首次 prepare 仍 seed 一次（覆盖 `registry.emplace` 与订阅前已存在的组件）。未来 tick 进最小堆，prepare 只看堆顶，serial 不匹配的条目是被更新的排期，弹出即丢。
+  - 高度图：到点才 `loadTextureBatchIntoMemory`，`onReady` 只入队；回调前再 prepare 保持 `LoadingHeightMap`，不再每帧重泵。处理器持有高度图槽订阅，槽更新入队（排期未到的 tick 忽略，避免绕过堆）。换路径 / 再编辑会抬高 `batchSerial`，过期回调把已完成的批次 consume 掉丢弃。
+  - 删 `sweepAuthoringDirty`、`auditResolveWork`、`active` 集合。派生缓存 GC 保留（不是组件扫描）。`getResourceVersion` 仍用作派生缓存键，删除归 H5。
+- 验证：
+  - `ya-testing` 1497 过、1 跳过。新增 `TerrainResolveEventTest`（2 例：堆顶未到保持 Dirty、到点 Loading、回调前第二次 prepare 仍 Loading、回调后缺失文件 Failed；add 之后的路径编辑与 remove 走 SceneBus，删除后的批次回调惰性）。`SceneDerivedStateTest` 的跨场景地形状态指针稳定仍过。
+  - HelloMaterial `--screenshot` 在第 45 帧达到 stable（30 warmup + 5 stable）并写出 PNG，exit 0，日志 0 error。编辑器 HelloMaterial、2DRpgPrototype、GreedySnake `--exit-after-frame=90` 均 exit 0、无 error。
+- 行为变化：
+  - 运行时加 Terrain、改高度图路径或网格参数，经编辑漏斗在下一次 prepare 排期重建（`rebuildNotBeforeTick` 在未来则等到该 tick）。
+  - 高度图文件重载通过槽订阅入队，不再靠 120 tick 审计比对 `getResourceVersion`。
+- 保留 / 未完成：EL 扫描 / 审计 / 重泵与离屏 `onFinished` 归 H5；全局 `resourceVersion` 删除归 H5；`GameplayResourceBinding` 定形与 resource-system skill 重写归 H5。
+- 偏离：防抖沿用组件上已有的 `rebuildNotBeforeTick`，没有另加固定延迟。检查器 `onEdit` 传 0，仍然立即重建，HelloMaterial 首帧加载节奏不变。

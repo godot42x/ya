@@ -1,13 +1,16 @@
 #include "Render3D/Terrain/TerrainProcessor.h"
 
 #include "Core/Log.h"
+#include "ECS/SceneBus.h"
 #include "ECS/Systems/Components/TerrainComponent.h"
 #include "RHI/Render.h"
 #include "Render3D/Terrain/TerrainMeshBuilder.h"
 #include "Resource/AssetManager.h"
+#include "Resource/Mesh.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
+#include <cstring>
 #include <format>
 
 namespace ya
@@ -94,8 +97,37 @@ std::string buildTerrainDerivedKey(const TerrainComponent& terrain, uint64_t hei
 
 } // namespace
 
+void TerrainProcessor::init()
+{
+    if (bBusSubscribed) {
+        return;
+    }
+    SceneBus& bus = SceneBus::get();
+    _componentAddedHandle =
+        bus.onComponentAdded.addLambda([this](entt::registry& registry, entt::entity entity, ya::type_index_t type) {
+            onComponentAdded(registry, entity, type);
+        });
+    _componentEditedHandle =
+        bus.onComponentEdited.addLambda([this](entt::registry& registry, entt::entity entity, ya::type_index_t type) {
+            onComponentEdited(registry, entity, type);
+        });
+    _componentRemovedHandle =
+        bus.onComponentRemoved.addLambda([this](entt::registry& registry, entt::entity entity, ya::type_index_t type) {
+            onComponentRemoved(registry, entity, type);
+        });
+    bBusSubscribed = true;
+}
+
 void TerrainProcessor::shutdown()
 {
+    if (bBusSubscribed) {
+        SceneBus& bus = SceneBus::get();
+        bus.onComponentAdded.remove(_componentAddedHandle);
+        bus.onComponentEdited.remove(_componentEditedHandle);
+        bus.onComponentRemoved.remove(_componentRemovedHandle);
+        _componentAddedHandle = _componentEditedHandle = _componentRemovedHandle = INVALID_HANDLE;
+        bBusSubscribed = false;
+    }
     clearPendingResolveStates();
 }
 
@@ -131,8 +163,7 @@ void TerrainProcessor::prepareScenes(std::span<Scene* const> scenes, float dt)
             seedSceneResolveWork(work);
         }
 
-        sweepAuthoringDirty(work);
-        auditResolveWork(work);
+        promoteDueRebuilds(work);
         gcDerivedResources(currentHostTick());
         resolvePendingTerrain(work);
     }
@@ -151,6 +182,19 @@ const TerrainProcessor::SceneWork* TerrainProcessor::findWork(const Scene& scene
     return it == _sceneWork.end() ? nullptr : &it->second;
 }
 
+TerrainProcessor::SceneWork* TerrainProcessor::findWorkByRegistry(const entt::registry* registry)
+{
+    if (!registry) {
+        return nullptr;
+    }
+    for (auto& [scene, work] : _sceneWork) {
+        if (scene && &scene->getRegistry() == registry) {
+            return &work;
+        }
+    }
+    return nullptr;
+}
+
 void TerrainProcessor::dropScenesAbsentFrom(std::span<Scene* const> scenes)
 {
     for (auto it = _sceneWork.begin(); it != _sceneWork.end();) {
@@ -165,72 +209,52 @@ void TerrainProcessor::dropScenesAbsentFrom(std::span<Scene* const> scenes)
 
 void TerrainProcessor::dropWork(SceneWork& work)
 {
-    for (auto& [entity, state] : work.states) {
-        (void)entity;
-        state = TerrainRuntimeState{};
+    // Dropping tracks unsubscribes slot observers and discards in-flight batches.
+    std::vector<entt::entity> entities;
+    entities.reserve(work.tracks.size() + work.states.size());
+    for (const auto& [entity, unused] : work.tracks) {
+        (void)unused;
+        entities.push_back(entity);
+    }
+    for (const auto& [entity, unused] : work.states) {
+        (void)unused;
+        entities.push_back(entity);
+    }
+    for (const auto entity : entities) {
+        cleanupTerrainState(work, entity);
     }
     work.states.clear();
+    work.tracks.clear();
     work.dirtyQueue.clear();
     work.dirtySet.clear();
-    work.active.clear();
-    work.nextResolveAuditTick = 0;
+    work.debounce = {};
 }
 
 void TerrainProcessor::seedSceneResolveWork(SceneWork& work)
 {
     auto& registry = work.scene->getRegistry();
     for (auto&& [entity, terrain] : registry.view<TerrainComponent>().each()) {
-        markTerrainDirty(work, entity, "scene seed", terrain.getRebuildNotBeforeTick());
+        scheduleRebuild(work, entity, terrain.getRebuildNotBeforeTick(), "scene seed");
     }
 }
 
-bool TerrainProcessor::isTerrainQueuedOrActive(const SceneWork& work, entt::entity entity) const
+void TerrainProcessor::promoteDueRebuilds(SceneWork& work)
 {
-    return work.dirtySet.contains(entity) || work.active.contains(entity);
-}
+    const uint64_t now = currentHostTick();
+    auto&          registry = work.scene->getRegistry();
+    while (!work.debounce.empty() && work.debounce.top().tick <= now) {
+        const auto entry = work.debounce.top();
+        work.debounce.pop();
 
-void TerrainProcessor::sweepAuthoringDirty(SceneWork& work)
-{
-    auto& registry = work.scene->getRegistry();
-    for (auto&& [entity, terrain] : registry.view<TerrainComponent>().each()) {
-        auto& state = work.states[entity];
-        if (terrain.getAuthoringVersion() > state.lastCompletedAuthoringVersion &&
-            !isTerrainQueuedOrActive(work, entity)) {
-            markTerrainDirty(work, entity, "authoring-version sweep", terrain.getRebuildNotBeforeTick());
+        const auto track = work.tracks.find(entry.entity);
+        if (track == work.tracks.end() || track->second.scheduleSerial != entry.serial) {
+            continue;
         }
-    }
-}
-
-void TerrainProcessor::auditResolveWork(SceneWork& work)
-{
-    const uint64_t currentTick = this->currentHostTick();
-    if (work.nextResolveAuditTick != 0 && currentTick < work.nextResolveAuditTick) {
-        return;
-    }
-    work.nextResolveAuditTick = currentTick + 120;
-
-    auto& registry = work.scene->getRegistry();
-    auto* assets   = AssetManager::get();
-
-    for (auto&& [entity, terrain] : registry.view<TerrainComponent>().each()) {
-        auto& state = work.states[entity];
-        const bool bVersionNotCompleted = terrain.getAuthoringVersion() > state.lastCompletedAuthoringVersion;
-        bool       bHeightMapStale      = false;
-        if (assets && terrain.hasHeightMap() &&
-            state.state == TerrainRuntimeState::EResolveState::Ready) {
-            bHeightMapStale = state.lastBuiltHeightMapVersion !=
-                              assets->getResourceVersion(terrain._heightMapRef.getPath());
+        if (!registry.valid(entry.entity) || !registry.all_of<TerrainComponent>(entry.entity)) {
+            cleanupTerrainState(work, entry.entity);
+            continue;
         }
-
-        if ((bVersionNotCompleted || bHeightMapStale) && !isTerrainQueuedOrActive(work, entity)) {
-            YA_CORE_WARN("ResourceResolve audit re-queued Terrain entity {}: completedVersion={}, authoringVersion={}, stale={}",
-                         static_cast<uint32_t>(entity),
-                         state.lastCompletedAuthoringVersion,
-                         terrain.getAuthoringVersion(),
-                         bHeightMapStale);
-            markTerrainDirty(work, entity, bHeightMapStale ? "audit: height map stale" : "audit: missed terrain enqueue",
-                             terrain.getRebuildNotBeforeTick());
-        }
+        enqueueTerrain(work, entry.entity);
     }
 }
 
@@ -251,13 +275,42 @@ void TerrainProcessor::gcDerivedResources(uint64_t currentTick)
 
 void TerrainProcessor::cleanupTerrainState(SceneWork& work, entt::entity entity)
 {
+    if (const auto track = work.tracks.find(entity); track != work.tracks.end()) {
+        if (track->second.inflightBatchHandle != 0) {
+            if (auto* assets = AssetManager::get()) {
+                AssetManager::TextureBatchMemory discarded;
+                assets->consumeTextureBatchMemory(track->second.inflightBatchHandle, discarded);
+            }
+        }
+        work.tracks.erase(track);
+    }
     work.states.erase(entity);
     work.dirtySet.erase(entity);
-    work.active.erase(entity);
     std::erase(work.dirtyQueue, entity);
 }
 
-void TerrainProcessor::markTerrainDirty(SceneWork& work, entt::entity entity, const char* reason, uint64_t rebuildNotBeforeTick)
+void TerrainProcessor::cancelInflightBatch(SceneWork& work, entt::entity entity)
+{
+    auto&      track  = work.tracks[entity];
+    const auto handle = track.inflightBatchHandle;
+    ++track.batchSerial;
+    track.inflightBatchHandle = 0;
+    if (const auto state = work.states.find(entity); state != work.states.end()) {
+        state->second.pendingHeightMapHandle = 0;
+    }
+    if (handle == 0) {
+        return;
+    }
+    if (auto* assets = AssetManager::get()) {
+        AssetManager::TextureBatchMemory discarded;
+        assets->consumeTextureBatchMemory(handle, discarded);
+    }
+}
+
+void TerrainProcessor::scheduleRebuild(SceneWork&            work,
+                                       entt::entity          entity,
+                                       uint64_t              rebuildNotBeforeTick,
+                                       const char*           reason)
 {
     auto& registry = work.scene->getRegistry();
     if (!registry.valid(entity) || !registry.all_of<TerrainComponent>(entity)) {
@@ -270,14 +323,135 @@ void TerrainProcessor::markTerrainDirty(SceneWork& work, entt::entity entity, co
         terrain.setRebuildNotBeforeTick(rebuildNotBeforeTick);
     }
 
+    cancelInflightBatch(work, entity);
+
     auto& state = work.states[entity];
-    state.state                      = terrain.hasHeightMap() ? TerrainRuntimeState::EResolveState::Dirty
-                                                              : TerrainRuntimeState::EResolveState::Empty;
+    auto& track = work.tracks[entity];
+    state.state = terrain.hasHeightMap() ? TerrainRuntimeState::EResolveState::Dirty
+                                          : TerrainRuntimeState::EResolveState::Empty;
     state.pendingHeightMapHandle     = 0;
     state.lastQueuedAuthoringVersion = terrain.getAuthoringVersion();
     state.lastDirtyReason            = reason ? reason : "dirty";
+
+    work.dirtySet.erase(entity);
+    std::erase(work.dirtyQueue, entity);
+
+    ++track.scheduleSerial;
+    const uint64_t now = currentHostTick();
+    const uint64_t due = rebuildNotBeforeTick > now ? rebuildNotBeforeTick : now;
+    track.scheduledTick = due;
+
+    if (due > now) {
+        // A future tick owns this rebuild. Drop the slot subscription so a
+        // height-map fill cannot jump the heap.
+        track.heightMapToken.reset();
+        track.heightMapHandle.reset();
+        work.debounce.push(SceneWork::DeferredRebuild{due, entity, track.scheduleSerial});
+        return;
+    }
+
+    enqueueTerrain(work, entity);
+}
+
+void TerrainProcessor::holdHeightMapSlot(SceneWork& work, entt::entity entity, const AssetHandle<Texture>& handle)
+{
+    auto& track = work.tracks[entity];
+    if (track.heightMapHandle == handle && track.heightMapToken.valid()) {
+        return;
+    }
+    track.heightMapToken.reset();
+    track.heightMapHandle = handle;
+    if (!handle) {
+        return;
+    }
+    const entt::registry* registry = &work.scene->getRegistry();
+    track.heightMapToken = handle->observers.subscribe([this, registry, entity]() {
+        // Slot fills land on the game thread; the callback only enqueues.
+        enqueueFromHeightMapSlot(registry, entity);
+    });
+}
+
+void TerrainProcessor::enqueueTerrain(SceneWork& work, entt::entity entity)
+{
     if (work.dirtySet.insert(entity).second) {
         work.dirtyQueue.push_back(entity);
+    }
+}
+
+void TerrainProcessor::enqueueFromHeightMapSlot(const entt::registry* registry, entt::entity entity)
+{
+    SceneWork* work = findWorkByRegistry(registry);
+    if (!work) {
+        return;
+    }
+    const auto track = work->tracks.find(entity);
+    if (track == work->tracks.end() || track->second.scheduledTick > currentHostTick()) {
+        return;
+    }
+    enqueueTerrain(*work, entity);
+}
+
+void TerrainProcessor::onHeightMapBatch(const entt::registry* registry,
+                                        entt::entity          entity,
+                                        uint64_t              serial,
+                                        uint64_t              handle)
+{
+    auto discard = [&]() {
+        if (handle == 0) {
+            return;
+        }
+        if (auto* assets = AssetManager::get()) {
+            AssetManager::TextureBatchMemory discarded;
+            assets->consumeTextureBatchMemory(handle, discarded);
+        }
+    };
+
+    SceneWork* work = findWorkByRegistry(registry);
+    if (!work) {
+        discard();
+        return;
+    }
+    const auto track = work->tracks.find(entity);
+    if (track == work->tracks.end() || track->second.batchSerial != serial) {
+        discard();
+        return;
+    }
+    enqueueTerrain(*work, entity);
+}
+
+void TerrainProcessor::onComponentAdded(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
+{
+    if (typeIndex != type_index_v<TerrainComponent>) {
+        return;
+    }
+    SceneWork* work = findWorkByRegistry(&registry);
+    if (!work || !registry.valid(entity) || !registry.all_of<TerrainComponent>(entity)) {
+        return;
+    }
+    auto& terrain = registry.get<TerrainComponent>(entity);
+    scheduleRebuild(*work, entity, terrain.getRebuildNotBeforeTick(), "component added");
+}
+
+void TerrainProcessor::onComponentEdited(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
+{
+    if (typeIndex != type_index_v<TerrainComponent>) {
+        return;
+    }
+    SceneWork* work = findWorkByRegistry(&registry);
+    if (!work || !registry.valid(entity) || !registry.all_of<TerrainComponent>(entity)) {
+        return;
+    }
+    auto& terrain = registry.get<TerrainComponent>(entity);
+    scheduleRebuild(*work, entity, terrain.getRebuildNotBeforeTick(), "component edited");
+}
+
+void TerrainProcessor::onComponentRemoved(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
+{
+    if (typeIndex != type_index_v<TerrainComponent>) {
+        return;
+    }
+    if (SceneWork* work = findWorkByRegistry(&registry)) {
+        cleanupTerrainState(*work, entity);
     }
 }
 
@@ -320,26 +494,26 @@ void TerrainProcessor::resolvePendingTerrain(SceneWork& work)
 
         auto& terrain = registry.get<TerrainComponent>(entity);
         auto& state   = work.states[entity];
+        auto& track   = work.tracks[entity];
         const uint64_t currentTick = this->currentHostTick();
 
-        if (terrain.getRebuildNotBeforeTick() > currentTick) {
-            work.active.insert(entity);
-            return;
-        }
-
         if (!terrain.hasHeightMap()) {
-            state.state = TerrainRuntimeState::EResolveState::Empty;
-            state.pendingHeightMapHandle = 0;
-            state.lastBuiltHeightMapVersion = 0;
+            track.heightMapToken.reset();
+            track.heightMapHandle.reset();
+            state.state                         = TerrainRuntimeState::EResolveState::Empty;
+            state.pendingHeightMapHandle        = 0;
+            track.inflightBatchHandle           = 0;
+            state.lastBuiltHeightMapVersion     = 0;
             state.currentDerivedKey.clear();
             state.boundResource.reset();
             state.lastCompletedAuthoringVersion = terrain.getAuthoringVersion();
-            work.active.erase(entity);
             return;
         }
 
-        const uint64_t heightMapVersion = assets->getResourceVersion(terrain._heightMapRef.getPath());
-        const std::string derivedKey = buildTerrainDerivedKey(terrain, heightMapVersion);
+        holdHeightMapSlot(work, entity, terrain._heightMapRef._handle);
+
+        const uint64_t    heightMapVersion = assets->getResourceVersion(terrain._heightMapRef.getPath());
+        const std::string derivedKey       = buildTerrainDerivedKey(terrain, heightMapVersion);
         if (!state.currentDerivedKey.empty() &&
             state.currentDerivedKey != derivedKey &&
             state.state == TerrainRuntimeState::EResolveState::Ready) {
@@ -348,14 +522,14 @@ void TerrainProcessor::resolvePendingTerrain(SceneWork& work)
 
         if (auto it = _terrainDerivedResources.find(derivedKey); it != _terrainDerivedResources.end() &&
             it->second && it->second->mesh) {
-            it->second->lastUsedTick  = currentTick;
-            state.currentDerivedKey   = derivedKey;
-            state.boundResource       = it->second;
-            state.lastBuiltHeightMapVersion = it->second->heightMapVersion;
-            state.pendingHeightMapHandle    = 0;
-            state.state                     = TerrainRuntimeState::EResolveState::Ready;
+            it->second->lastUsedTick            = currentTick;
+            state.currentDerivedKey             = derivedKey;
+            state.boundResource                 = it->second;
+            state.lastBuiltHeightMapVersion     = it->second->heightMapVersion;
+            state.pendingHeightMapHandle        = 0;
+            track.inflightBatchHandle           = 0;
+            state.state                         = TerrainRuntimeState::EResolveState::Ready;
             state.lastCompletedAuthoringVersion = terrain.getAuthoringVersion();
-            work.active.erase(entity);
             return;
         }
 
@@ -366,52 +540,56 @@ void TerrainProcessor::resolvePendingTerrain(SceneWork& work)
 
         if (state.state != TerrainRuntimeState::EResolveState::Dirty &&
             state.state != TerrainRuntimeState::EResolveState::LoadingHeightMap) {
-            state.currentDerivedKey = derivedKey;
+            state.currentDerivedKey             = derivedKey;
             state.lastCompletedAuthoringVersion = terrain.getAuthoringVersion();
-            work.active.erase(entity);
             return;
         }
 
         if (state.pendingHeightMapHandle == 0) {
+            const uint64_t            serial   = ++track.batchSerial;
+            const entt::registry*     registry = &work.scene->getRegistry();
             const auto handle = assets->loadTextureBatchIntoMemory(AssetManager::TextureBatchMemoryLoadRequest{
-                .filepaths   = {terrain._heightMapRef.getPath()},
-                .colorSpace  = AssetManager::ETextureColorSpace::Linear,
+                .filepaths  = {terrain._heightMapRef.getPath()},
+                .colorSpace = AssetManager::ETextureColorSpace::Linear,
+                .onReady    = [this, registry, entity, serial](uint64_t batchHandle) {
+                    onHeightMapBatch(registry, entity, serial, batchHandle);
+                },
             });
-            state.pendingHeightMapHandle = handle;
-            state.state                  = TerrainRuntimeState::EResolveState::LoadingHeightMap;
+            state.pendingHeightMapHandle     = handle;
+            track.inflightBatchHandle        = handle;
+            track.startedResourceVersion     = heightMapVersion;
+            state.state                       = TerrainRuntimeState::EResolveState::LoadingHeightMap;
             state.lastStartedAuthoringVersion = terrain.getAuthoringVersion();
-            work.active.insert(entity);
             return;
         }
 
         AssetManager::TextureBatchMemory batchMemory;
         if (!assets->consumeTextureBatchMemory(state.pendingHeightMapHandle, batchMemory)) {
-            work.active.insert(entity);
+            // The batch callback enqueues this entity when the decode lands.
+            // A second prepare before that must not spin.
             return;
         }
         state.pendingHeightMapHandle = 0;
+        track.inflightBatchHandle    = 0;
 
         if (!batchMemory.isValid() || batchMemory.textures.empty()) {
             YA_CORE_WARN("Terrain height map decode failed: {}", terrain._heightMapRef.getPath());
-            state.state = TerrainRuntimeState::EResolveState::Failed;
+            state.state                         = TerrainRuntimeState::EResolveState::Failed;
             state.lastCompletedAuthoringVersion = terrain.getAuthoringVersion();
-            work.active.erase(entity);
             return;
         }
 
         const auto& texture = batchMemory.textures.front();
         if (AssetManager::normalizeAssetPath(texture.filepath) != AssetManager::normalizeAssetPath(terrain._heightMapRef.getPath())) {
-            state.state = TerrainRuntimeState::EResolveState::Dirty;
-            markTerrainDirty(work, entity, "terrain stale async result", terrain.getRebuildNotBeforeTick());
+            scheduleRebuild(work, entity, terrain.getRebuildNotBeforeTick(), "terrain stale async result");
             return;
         }
 
         auto heights = extractTerrainHeights(texture);
         if (heights.empty()) {
             YA_CORE_WARN("Terrain height map has unsupported payload: {}", terrain._heightMapRef.getPath());
-            state.state = TerrainRuntimeState::EResolveState::Failed;
+            state.state                         = TerrainRuntimeState::EResolveState::Failed;
             state.lastCompletedAuthoringVersion = terrain.getAuthoringVersion();
-            work.active.erase(entity);
             return;
         }
 
@@ -426,36 +604,26 @@ void TerrainProcessor::resolvePendingTerrain(SceneWork& work)
             .heights        = heights,
         });
 
-        auto resource            = std::make_shared<TerrainDerivedResource>();
-        auto* render = getRender();
+        auto  resource = std::make_shared<TerrainDerivedResource>();
+        auto* render   = getRender();
         YA_CORE_ASSERT(render, "TerrainProcessor mesh creation requires render backend");
-        resource->mesh           = Mesh::create(*render, meshData);
-        resource->heightMapVersion = heightMapVersion;
-        resource->lastUsedTick   = currentTick;
-        _terrainDerivedResources[derivedKey] = resource;
+        resource->mesh                          = Mesh::create(*render, meshData);
+        resource->heightMapVersion              = heightMapVersion;
+        resource->lastUsedTick                  = currentTick;
+        _terrainDerivedResources[derivedKey]    = resource;
 
-        state.currentDerivedKey  = derivedKey;
-        state.boundResource      = resource;
-        state.pendingHeightMapHandle   = 0;
-        state.lastBuiltHeightMapVersion = heightMapVersion;
-        state.state                    = TerrainRuntimeState::EResolveState::Ready;
+        state.currentDerivedKey             = derivedKey;
+        state.boundResource                 = resource;
+        state.pendingHeightMapHandle        = 0;
+        state.lastBuiltHeightMapVersion     = heightMapVersion;
+        state.state                         = TerrainRuntimeState::EResolveState::Ready;
         state.lastCompletedAuthoringVersion = terrain.getAuthoringVersion();
-        work.active.erase(entity);
     };
 
     while (!work.dirtyQueue.empty()) {
         const auto entity = work.dirtyQueue.front();
         work.dirtyQueue.pop_front();
         work.dirtySet.erase(entity);
-        pumpOne(entity);
-    }
-
-    // Re-pump in-flight (active) terrains every frame so a pending height-map
-    // batch decode can be consumed once it completes. Without this pass a
-    // terrain left in LoadingHeightMap is never revisited: the audit skips
-    // active entities and the queue is empty, so the mesh is never built.
-    std::vector<entt::entity> activeEntities(work.active.begin(), work.active.end());
-    for (const auto entity : activeEntities) {
         pumpOne(entity);
     }
 }

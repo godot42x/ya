@@ -171,6 +171,9 @@ struct AssetTextureBatchMemory
 using AssetTextureReadyCallback = std::function<void(const std::shared_ptr<Texture>&)>;
 using AssetModelReadyCallback = std::function<void(const std::shared_ptr<Model>&)>;
 using AssetTextureBatchReadyCallback = std::function<void(const std::vector<std::shared_ptr<Texture>>&)>;
+/// Fires on the game thread once a CPU batch decode has been stored and can
+/// be consumed. The argument is the handle passed to consumeTextureBatchMemory.
+using AssetTextureBatchMemoryReadyCallback = std::function<void(AssetTextureBatchMemoryHandle)>;
 
 struct AssetTextureLoadRequest
 {
@@ -190,8 +193,9 @@ struct AssetTextureBatchLoadRequest
 
 struct AssetTextureBatchMemoryLoadRequest
 {
-    std::vector<std::string> filepaths;
-    AssetTextureColorSpace   colorSpace = AssetTextureColorSpace::SRGB;
+    std::vector<std::string>                filepaths;
+    AssetTextureColorSpace                  colorSpace = AssetTextureColorSpace::SRGB;
+    AssetTextureBatchMemoryReadyCallback    onReady;
 };
 
 struct AssetModelLoadRequest

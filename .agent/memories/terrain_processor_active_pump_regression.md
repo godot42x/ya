@@ -31,11 +31,10 @@ RenderFrameExtractor 不发 terrain draw item。
 - 冒烟若用不含 terrain 的场景（或不做截图自动化），不触发
   `hasPendingTerrainResolve` 阻塞路径。
 
-## 同类模式（确认保留）
+## 同类模式
 
-- EnvironmentLightingProcessor：skybox（1302 行附近）、environment（2501 行附近）
-  都有 active 重泵循环。
-- GameplayResourceBinding：`_activeMaterial` 重泵循环保留。
+- EnvironmentLightingProcessor：skybox、environment 仍有 active 重泵，留到 H5。
+- GameplayResourceBinding 的材质重泵已在 H2 删掉；TerrainProcessor 的重泵已在 H4 删掉（见文末）。
 
 ## 预防
 
@@ -45,3 +44,9 @@ RenderFrameExtractor 不发 terrain draw item。
    （`hasPendingTerrainResolve` 是现成的回归探针：stable 判定即 terrain Ready）。
 3. 与 `module_split_sed_regression.md` 同一失败类别：大块搬迁/删除后核对
    函数与循环完整性，不只看"能编译、单测过"。
+
+## H4（2026-10-01）
+
+`TerrainProcessor` 的 active 重泵已经删掉。高度图完成走批次 `onReady`（只入队）；回调到来之前再 prepare 一次，状态保持 `LoadingHeightMap`（`TerrainResolveEventTest`）。不要把重泵加回去。
+
+`EnvironmentLightingProcessor` 的 skybox / environment 重泵留到 H5。

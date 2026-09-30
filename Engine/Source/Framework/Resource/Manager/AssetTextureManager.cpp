@@ -230,9 +230,16 @@ AssetManager::TextureBatchMemoryHandle AssetTextureManager::loadTextureBatchInto
         clearGeneration = _clearGeneration;
     }
 
+    auto onReady = request.onReady;
+
     if (filepaths.empty()) {
-        std::lock_guard lock(_mutex);
-        _readyTextureBatchMemory.emplace(handleId, AssetManager::TextureBatchMemory{});
+        {
+            std::lock_guard lock(_mutex);
+            _readyTextureBatchMemory.emplace(handleId, AssetManager::TextureBatchMemory{});
+        }
+        if (onReady) {
+            onReady(handleId);
+        }
         return handleId;
     }
 
@@ -249,14 +256,21 @@ AssetManager::TextureBatchMemoryHandle AssetTextureManager::loadTextureBatchInto
 
             return batchMemory;
         },
-        [this, handleId, clearGeneration](AssetManager::TextureBatchMemory batchMemory)
+        [this, handleId, clearGeneration, onReady = std::move(onReady)](AssetManager::TextureBatchMemory batchMemory)
         {
-            std::lock_guard lock(_mutex);
-            _pendingTextureBatchMemoryLoads.erase(handleId);
-            if (clearGeneration != _clearGeneration) {
-                return;
+            bool bStored = false;
+            {
+                std::lock_guard lock(_mutex);
+                _pendingTextureBatchMemoryLoads.erase(handleId);
+                if (clearGeneration == _clearGeneration) {
+                    _readyTextureBatchMemory[handleId] = std::move(batchMemory);
+                    bStored                            = true;
+                }
             }
-            _readyTextureBatchMemory[handleId] = std::move(batchMemory);
+            // Outside the lock: the callback consumes the batch.
+            if (bStored && onReady) {
+                onReady(handleId);
+            }
         });
 
     {

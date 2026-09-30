@@ -4,7 +4,7 @@
 - [x] H1 贴图资产槽 + ref 句柄化，删 `TextureFuture` / 贴图 `resolve`，sprite/tilemap/UI 分支删除
 - [x] H2 统一编辑入口 `notifyComponentEdited`；材质 / billboard 推送；删材质扫描与重泵；审计降为 dev 一致性检查
 - [x] H3 MeshSource / ModelInstantiation 事件化；删 ModelRef 的 `getResourceVersion` 轮询与 `AssetFuture`（含模型 / tileset 槽与 `ModelRef` / `MeshRef` / `TilesetRef` 句柄化）
-- [ ] H4 Terrain 事件化（回调式高度图、防抖定时器）
+- [x] H4 Terrain 事件化（回调式高度图、防抖定时器）
 - [ ] H5 EnvironmentLighting 事件化（离屏任务 `onFinished`）；`GameplayResourceBinding` 定形；重写 resource-system skill
 
 ## 已记录、不在本计划

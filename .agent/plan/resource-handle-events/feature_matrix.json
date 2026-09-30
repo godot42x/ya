@@ -80,9 +80,14 @@
     {
       "id": "terrain_events",
       "phase": "H4",
-      "status": "planned",
+      "status": "done",
       "goal": "callback-based height map batch load, debounce timer heap; terrain sweep / audit / re-pump deleted",
-      "evidence": []
+      "evidence": [
+        "Engine/Source/Framework/Render/Render3D/Terrain/TerrainProcessor.cpp (SceneBus discovery, batch onReady enqueue, debounce min-heap)",
+        "Engine/Source/Framework/Resource/include/Resource/AssetManagerTypes.h (TextureBatchMemoryLoadRequest::onReady)",
+        "Engine/Test/Source/Integration/TerrainResolveEventTest.cpp (2 tests)",
+        "HelloMaterial screenshot reached stable at frame 45 (/tmp/h4_hm.png); editor / 2DRpgPrototype / GreedySnake smokes exit 0"
+      ]
     },
     {
       "id": "environment_lighting_events",
