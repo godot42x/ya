@@ -133,6 +133,9 @@ struct EnvironmentLightingRuntimeState
     uint64_t                                                  resultVersion                = 0;
     uint64_t                                                  lastSceneSkyboxResultVersion = 0;
     bool                                                      bSceneSkyboxDependencyReady  = false;
+    // Cached from the component when the processor reads it. Consumers must
+    // not scan the component view to recover this authoring choice.
+    bool                                                      bUsesSceneSkybox             = false;
     uint64_t                                                  lastQueuedAuthoringVersion   = 0;
     uint64_t                                                  lastStartedAuthoringVersion  = 0;
     uint64_t                                                  lastCompletedAuthoringVersion = 0;
@@ -223,14 +226,15 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
         [[nodiscard]] ESkyboxResolveState getSkyboxResolveState(entt::entity entity) const;
         [[nodiscard]] bool                isSkyboxLoading(entt::entity entity) const;
         [[nodiscard]] const SkyboxRuntimeState* findSkyboxState(entt::entity entity) const;
-        /// First entity of this Scene whose derived cubemap is ready to be
-        /// used as a source for this Scene's environment lighting.
+        /// Ready cubemap with the smallest entity index. The state table is
+        /// unordered, so that index is the scene source.
         [[nodiscard]] const SkyboxRuntimeState* findFirstReadySkyboxState() const;
         [[nodiscard]] EEnvironmentLightingSourceResolveState getEnvironmentSourceState(entt::entity entity) const;
         [[nodiscard]] EEnvironmentLightingIrradianceResolveState getEnvironmentIrradianceState(entt::entity entity) const;
         [[nodiscard]] EEnvironmentLightingPrefilterResolveState getEnvironmentPrefilterState(entt::entity entity) const;
         [[nodiscard]] bool isEnvironmentLightingLoading(entt::entity entity) const;
         [[nodiscard]] const EnvironmentLightingRuntimeState* findEnvironmentLightingState(entt::entity entity) const;
+        /// Ready irradiance map with the smallest entity index.
         [[nodiscard]] const EnvironmentLightingRuntimeState* findFirstReadyEnvironmentLightingState() const;
 
         // ── Read-only preview queries (tooling and debug) ─────────────

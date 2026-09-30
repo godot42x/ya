@@ -121,3 +121,20 @@
   - 贴图槽每次更新都推进 GUI epoch（以前只在 invalidate / 文件变化时推进按路径版本）。
 - 保留 / 未完成：本计划 H1–H5 闭环。todo 里列出的脚本 `callMethod`、tileset 文件监听、colorSpace、派生 LRU、frame task sink 悬空，都不在本计划。
 - 偏离：按路径版本表删除了，但 GUI 仍需要一个“贴图变了”的信号，所以 epoch 留下来，改由贴图槽更新推进，而不是一并删掉。`GameplayResourceBinding` 仍是独立类：mesh / material / billboard 的泵还在，没有并进别的处理器。帧时间不作为验收（TownLarge `prepareDerivedState` 基线已是 0.011 ms）。
+
+## 2026-10-01 H5 后补：EnvironmentLighting 消费侧读状态表
+
+- 目标：渲染管线每帧调用的天空盒 / 环境光照查询改为读处理器自己的状态表。边界：只改消费侧三处；seed 仍扫一次 view；提取与调试路径不改。
+- 完成：
+  - `findFirstReadySkyboxState`、`findFirstReadyEnvironmentLightingState`、`resolveSceneEnvironmentLightingResources` 遍历 `skyboxStates` / `environmentStates`。删除走 SceneBus 会清状态，状态表就是权威集合。
+  - 状态表是 `unordered_map`，按哈希序取“第一个”不确定。原来 entt view 的池顺序也不是稳定的作者顺序。确定性规则：按 `entt::to_entity`（entity index）最小者。`resolveSceneEnvironmentLightingResources` 按这个升序套用原规则——irradiance / prefilter 留下第一个就绪贡献者，之后就绪的 source 覆盖 cubemap，三项都齐就停。
+  - `usesSceneSkybox` 缓存在 `EnvironmentLightingRuntimeState::bUsesSceneSkybox`，在 `markEnvironmentLightingDirty` 和泵里随组件读取写入。消费侧不 `try_get`，也不回到 view。
+- 未改的 view 扫描：
+  - `Render3D/Debug/ViewportDebugCatalogBuilder.cpp`：`view<SkyboxComponent>` 两处、`view<EnvironmentLightingComponent>` 两处。
+  - `Render3D/Deferred/DeferredRenderPipeline.cpp`：`view<SkyboxComponent, StaticMeshComponent>`。
+  - `Render3D/Forward/ForwardViewStage.cpp`：`view<SkyboxComponent, StaticMeshComponent>`。
+  - `EnvironmentLightingProcessor::seedSceneResolveWork` 的两次 view（每个场景第一次 prepare）。
+- 验证：
+  - `xmake b ya-game-runtime ya-game-editor ya-testing 2DRpgPrototype` 通过。
+  - `ya-testing` 1500 例，1499 过、1 跳过（窗口用例，环境性）。
+  - HelloMaterial `--screenshot=/tmp/ha_hm.png` 在第 46 帧达到 stable（30 warmup + 5 stable），1158914 字节，exit 0，日志无 `[ERROR]`。
