@@ -490,7 +490,6 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
             YA_CORE_WARN("decodeTextureToMemory: Using placeholder path for '{}' ({})",
                          settings.requestedFilepath,
                          settings.diagnostic);
-            result.hardFailure = true;
             result.error       = settings.diagnostic.empty() ? "Texture import fell back to placeholder"
                                                              : settings.diagnostic;
             return result;
@@ -498,7 +497,6 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
 
         auto texture = loadKtxTexture(settings.sourceInfo.filepath, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT);
         if (!texture) {
-            result.hardFailure = true;
             result.error       = "Failed to load KTX texture";
             return result;
         }
@@ -506,7 +504,6 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
         if (texture->numFaces != 1 || texture->numLayers != 1 || texture->baseDepth > 1 || texture->isCubemap) {
             YA_CORE_ERROR("decodeTextureToMemory: Only 2D KTX textures are supported for '{}'",
                           settings.sourceInfo.filepath);
-            result.hardFailure = true;
             result.error       = "Only 2D KTX textures are supported";
             return result;
         }
@@ -518,7 +515,6 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
             {
                 YA_CORE_ERROR("decodeTextureToMemory: No runtime transcode plan for '{}'",
                               settings.sourceInfo.filepath);
-                result.hardFailure = true;
                 result.error       = "No runtime transcode plan for KTX2 texture";
                 return result;
             }
@@ -531,7 +527,6 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
                               settings.sourceInfo.filepath,
                               static_cast<int>(settings.transcodeTarget),
                               ktxErrorString(transcodeResult));
-                result.hardFailure = true;
                 result.error       = "Failed to transcode KTX2 texture";
                 return result;
             }
@@ -545,7 +540,6 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
         if (size == 0 || data == nullptr) {
             YA_CORE_ERROR("decodeTextureToMemory: KTX image data is empty for '{}'",
                           settings.sourceInfo.filepath);
-            result.hardFailure = true;
             result.error       = "KTX image data is empty";
             return result;
         }
@@ -565,7 +559,6 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
         stbi_uc* raw = stbi_load(ioPath.c_str(), &width, &height, &channels, desiredChannels);
         if (!raw) {
             YA_CORE_ERROR("decodeTextureToMemory: Failed to load '{}' (io='{}')", settings.sourceInfo.filepath, ioPath);
-            result.hardFailure = true;
             result.error       = "Failed to load texture bytes";
             return result;
         }
@@ -582,7 +575,6 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
     float* rawFloat = stbi_loadf(ioPath.c_str(), &width, &height, &channels, desiredChannels);
     if (!rawFloat) {
         YA_CORE_ERROR("decodeTextureToMemory: Failed to load HDR texture '{}' (io='{}')", settings.sourceInfo.filepath, ioPath);
-        result.hardFailure = true;
         result.error       = "Failed to load HDR texture bytes";
         return result;
     }
@@ -607,7 +599,6 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
                       static_cast<int>(settings.payloadType),
                       settings.sourceInfo.filepath);
         stbi_image_free(rawFloat);
-        result.hardFailure = true;
         result.error       = "Unsupported payload type";
         return result;
     }

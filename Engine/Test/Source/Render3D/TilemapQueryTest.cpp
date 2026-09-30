@@ -25,9 +25,8 @@ TilesetRef makeWallTileset()
         return tileset;
     }();
 
-    TilesetRef ref("Content:Tilesets/wall.yatileset.json");
-    ref._cached       = shared;
-    ref._resolveState = EAssetResolveState::Ready;
+    TilesetRef ref;
+    ref._cached = shared;
     return ref;
 }
 

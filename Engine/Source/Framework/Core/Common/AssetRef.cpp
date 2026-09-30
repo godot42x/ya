@@ -1,5 +1,7 @@
 #include "Core/Common/AssetRef.h"
 
+#include "Core/Common/Tileset.h"
+
 #include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Core/TypeIndex.h"
@@ -119,6 +121,44 @@ std::string AssetRefBase::normalizePath(std::string path)
 // layer. Actual loading is delegated to the installed asset-ref resolver.
 // ============================================================================
 
+bool isAssetRefType(type_index_t typeIndex)
+{
+    return typeIndex == ya::type_index_v<TextureRef> ||
+           typeIndex == ya::type_index_v<ModelRef> ||
+           typeIndex == ya::type_index_v<MeshRef> ||
+           typeIndex == ya::type_index_v<TilesetRef>;
+}
+
+void TextureRef::rebind()
+{
+    _handle.reset();
+    if (_path.empty()) {
+        return;
+    }
+    if (const auto* resolver = getAssetRefResolver()) {
+        _handle = resolver->acquireTexture(_path);
+    }
+}
+
+EAssetResolveState TextureRef::getResolveState() const
+{
+    if (_path.empty()) {
+        return EAssetResolveState::Empty;
+    }
+    if (!_handle) {
+        return EAssetResolveState::Failed;
+    }
+    switch (_handle->state) {
+    case EAssetSlotState::Loading:
+        return EAssetResolveState::Loading;
+    case EAssetSlotState::Ready:
+        return EAssetResolveState::Ready;
+    case EAssetSlotState::Failed:
+        return EAssetResolveState::Failed;
+    }
+    return EAssetResolveState::Failed;
+}
+
 namespace
 {
 
@@ -143,12 +183,6 @@ EAssetResolveResult resolveViaRegistry(T& ref)
 
 } // namespace
 
-EAssetResolveResult TextureRef::resolve()
-{
-    _path = canonicalizeAssetPath(_path);
-    return resolveViaRegistry(*this);
-}
-
 EAssetResolveResult ModelRef::resolve()
 {
     _path = canonicalizeAssetPath(_path);
@@ -159,30 +193,6 @@ EAssetResolveResult MeshRef::resolve()
 {
     _path = canonicalizeAssetPath(_path);
     return resolveViaRegistry(*this);
-}
-
-void TextureRef::invalidate()
-{
-    _cachedPtr.reset();
-    _resolveState = _path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty;
-}
-
-void TextureRef::set(const std::string& path, ya::Ptr<Texture> ptr)
-{
-    _path         = canonicalizeAssetPath(path);
-    _cachedPtr    = std::move(ptr);
-    _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
-}
-
-bool TextureRef::isStale() const
-{
-    if (_resolveState != EAssetResolveState::Ready || _path.empty()) {
-        return false;
-    }
-    if (const auto* resolver = getAssetRefResolver()) {
-        return resolver->isAssetRefStale(ya::type_index_v<TextureRef>, this);
-    }
-    return false;
 }
 
 void ModelRef::invalidate()
@@ -198,17 +208,6 @@ void ModelRef::set(const std::string& path, ya::Ptr<Model> ptr)
     _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
 }
 
-bool ModelRef::isStale() const
-{
-    if (_resolveState != EAssetResolveState::Ready || _path.empty()) {
-        return false;
-    }
-    if (const auto* resolver = getAssetRefResolver()) {
-        return resolver->isAssetRefStale(ya::type_index_v<ModelRef>, this);
-    }
-    return false;
-}
-
 void MeshRef::invalidate()
 {
     _cachedPtr.reset();
@@ -220,17 +219,6 @@ void MeshRef::set(const std::string& path, ya::Ptr<Mesh> ptr)
     _path         = canonicalizeAssetPath(path);
     _cachedPtr    = std::move(ptr);
     _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
-}
-
-bool MeshRef::isStale() const
-{
-    if (_resolveState != EAssetResolveState::Ready || _path.empty()) {
-        return false;
-    }
-    if (const auto* resolver = getAssetRefResolver()) {
-        return resolver->isAssetRefStale(ya::type_index_v<MeshRef>, this);
-    }
-    return false;
 }
 
 } // namespace ya

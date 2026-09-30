@@ -129,7 +129,6 @@ struct AssetTextureMemoryBlock
     EFormat::T                         format      = EFormat::R8G8B8A8_UNORM;
     AssetTexturePayloadType            payloadType = AssetTexturePayloadType::None;
     AssetResolvedTextureImportSettings importSettings;
-    bool                               hardFailure = false;
     std::string                        error;
     std::vector<uint8_t>               bytes;
 

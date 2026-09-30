@@ -132,16 +132,9 @@ struct YA_RENDER_3D_API UnlitMaterialComponent : public MaterialComponent<UnlitM
     EMaterialResolveState getResolveState() const { return _resolveState; }
     void markResolvedReady() { _resolveState = EMaterialResolveState::Ready; }
 
-    bool checkTexturesStaleness()
-    {
-        bool stale = false;
-        if (_baseColor0Slot.textureRef.isStale())  { _baseColor0Slot.textureRef.invalidate();  stale = true; }
-        if (_baseColor1Slot.textureRef.isStale())   { _baseColor1Slot.textureRef.invalidate();   stale = true; }
-        if (stale) {
-            invalidate();
-        }
-        return stale;
-    }
+    /// A Ready slot whose texture differs from what the runtime material
+    /// binds was reloaded since the last sync; marks the component dirty.
+    bool checkTexturesStaleness();
 
     TextureSlot* getTextureSlot(EUnlitMaterialTextureSlot resourceEnum)
     {

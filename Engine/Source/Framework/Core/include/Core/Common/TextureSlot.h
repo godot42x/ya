@@ -65,37 +65,24 @@ struct TextureSlot
     {}
 
     // ========================================
-    // Path / Resolve helpers
+    // Path / load-state helpers
     // ========================================
 
     void fromPath(const std::string& path)
     {
-        textureRef.set(path, nullptr);
+        textureRef.setPathWithoutNotify(path);
     }
 
-    EAssetResolveResult resolve()
-    {
-        if (!textureRef.hasPath()) {
-            return EAssetResolveResult::Ready;
-        }
-        return textureRef.resolve();
-    }
     bool               isLoading() const { return textureRef.isLoading(); }
     bool               hasPath() const { return textureRef.hasPath(); }
     bool               isReady() const { return !textureRef.hasPath() || textureRef.isLoaded(); }
-    bool               needsResolve() const { return textureRef.hasPath() && !textureRef.isLoaded(); }
     EAssetResolveState getResolveState() const { return !textureRef.hasPath() ? EAssetResolveState::Ready : textureRef.getResolveState(); }
     bool               isEnableEditable() const { return hasPath(); }
-    bool               isEnabledEffective() const { return hasPath() && textureRef.isLoaded() && textureRef.get() != nullptr && bEnable; }
+    bool               isEnabledEffective() const { return hasPath() && textureRef.isLoaded() && bEnable; }
 
-    // Legacy compatibility accessors. Prefer hasPath()/isReady()/needsResolve().
+    // Legacy compatibility accessors. Prefer hasPath()/isReady().
     bool isLoaded() const { return isReady(); }
     bool isValid() const { return isReady(); }
-
-    void invalidate()
-    {
-        textureRef.invalidate();
-    }
 };
 
 } // namespace ya

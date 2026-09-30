@@ -78,7 +78,7 @@ struct SkyboxRuntimeState
     std::array<stdptr<IImageView>, CubeFace_Count> cubemapFacePreviewViews{};
     std::shared_ptr<SkyboxPendingBatchLoadState>   pendingBatchLoadState;
     std::shared_ptr<OffscreenJobState>             pendingOffscreenProcess;
-    std::optional<TextureFuture>                   pendingCylindricalFuture;
+    AssetHandle<Texture>                           pendingCylindricalSource;
 
     [[nodiscard]] bool hasRenderableCubemap() const
     {
@@ -152,7 +152,7 @@ struct EnvironmentLightingRuntimeState
     std::shared_ptr<OffscreenJobState>                        pendingEnvironmentOffscreen;
     std::shared_ptr<OffscreenJobState>                        pendingIrradianceOffscreen;
     std::shared_ptr<OffscreenJobState>                        pendingPrefilterOffscreen;
-    std::optional<TextureFuture>                              pendingCylindricalFuture;
+    AssetHandle<Texture>                                      pendingCylindricalSource;
 
     [[nodiscard]] bool hasRenderableCubemap() const
     {

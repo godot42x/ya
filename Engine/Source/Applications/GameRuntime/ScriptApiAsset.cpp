@@ -95,10 +95,8 @@ void registerAssetScriptApis(ScriptApiRegistry& registry)
         "Removes a cached asset (GPU-safe deferred release).",
         Json{{"path", {{"type", "string"}}}},
         [](const Json& args) -> Json {
-            AssetManager&     manager = requireAssetManager();
-            const std::string path    = requirePath(args);
-            const AssetMeta&  meta    = manager.getOrLoadMeta(path);
-            manager.unload(AssetManager::makeCacheKey(path, meta));
+            const std::string path = requirePath(args);
+            requireAssetManager().unload(path);
             return Json{{"path", path}};
         });
 

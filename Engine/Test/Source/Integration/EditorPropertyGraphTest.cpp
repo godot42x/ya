@@ -676,6 +676,15 @@ TEST(EditorPropertyGraphTest, TerrainVec2AndIntegerPropertiesSupportMixedEditing
     tree.detach(*section);
 }
 
+// Inspector error display reads only the slot state, so the slot needs no
+// texture behind it.
+AssetHandle<Texture> textureSlotInState(EAssetSlotState state)
+{
+    auto slot   = std::make_shared<AssetSlot<Texture>>();
+    slot->state = state;
+    return slot;
+}
+
 struct AssetRefTestComponent
 {
     TextureRef albedo{"Content/Textures/Albedo.png"};
@@ -707,7 +716,7 @@ TEST(EditorPropertyGraphTest, AssetRefPropertyHandleReadsWritesMixedAndResolveEr
     EXPECT_EQ(first.model.getPath(), "Content/Models/Shared.glb");
     EXPECT_EQ(second.model.getPath(), "Content/Models/Shared.glb");
 
-    first.albedo._resolveState = EAssetResolveState::Failed;
+    first.albedo._handle = textureSlotInState(EAssetSlotState::Failed);
     EXPECT_TRUE(graph.find("albedo")->binding.hasAssetResolveError());
 }
 
@@ -768,7 +777,7 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionAssetPathCommitBrowseAndUndo)
 TEST(EditorPropertyGraphTest, AutoPropertySectionAssetShowsResolveErrorState)
 {
     AssetRefTestComponent value;
-    value.albedo._resolveState = EAssetResolveState::Failed;
+    value.albedo._handle = textureSlotInState(EAssetSlotState::Failed);
     auto graph = PropertyGraph::build(type_index_v<AssetRefTestComponent>, {&value});
     auto section = std::make_shared<EditorAutoPropertySection>("AutoAssetError", std::move(graph));
     WidgetTree tree({.width = 360, .height = 220});
@@ -780,7 +789,7 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionAssetShowsResolveErrorState)
     ASSERT_NE(pathField, nullptr);
     EXPECT_TRUE(pathField->hasError());
 
-    value.albedo._resolveState = EAssetResolveState::Ready;
+    value.albedo._handle = textureSlotInState(EAssetSlotState::Ready);
     section->sync(tree);
     EXPECT_FALSE(pathField->hasError());
 

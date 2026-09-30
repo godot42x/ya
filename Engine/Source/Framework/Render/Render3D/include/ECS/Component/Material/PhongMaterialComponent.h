@@ -133,11 +133,6 @@ struct YA_RENDER_3D_API PhongMaterialComponent : public MaterialComponent<PhongM
 
     void invalidate()
     {
-        // _material = nullptr;
-        // for (auto &[t, slot] : _textureSlots)
-        // {
-        //     slot.invalidate();
-        // }
         _resolveState = EMaterialResolveState::Dirty;
     }
     bool isResolved() const { return _resolveState == EMaterialResolveState::Ready; }
@@ -149,18 +144,9 @@ struct YA_RENDER_3D_API PhongMaterialComponent : public MaterialComponent<PhongM
     EMaterialResolveState getResolveState() const { return _resolveState; }
     void markResolvedReady() { _resolveState = EMaterialResolveState::Ready; }
 
-    bool checkTexturesStaleness()
-    {
-        bool stale = false;
-        if (_diffuseSlot.textureRef.isStale())    { _diffuseSlot.textureRef.invalidate();    stale = true; }
-        if (_specularSlot.textureRef.isStale())    { _specularSlot.textureRef.invalidate();    stale = true; }
-        if (_reflectionSlot.textureRef.isStale())  { _reflectionSlot.textureRef.invalidate();  stale = true; }
-        if (_normalSlot.textureRef.isStale())      { _normalSlot.textureRef.invalidate();      stale = true; }
-        if (stale) {
-            invalidate();
-        }
-        return stale;
-    }
+    /// A Ready slot whose texture differs from what the runtime material
+    /// binds was reloaded since the last sync; marks the component dirty.
+    bool checkTexturesStaleness();
 
     TextureSlot* getTextureSlot(EPhongMaterialTextureSlot resourceEnum)
     {

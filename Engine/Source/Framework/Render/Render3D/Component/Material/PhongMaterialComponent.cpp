@@ -181,6 +181,26 @@ void PhongMaterialComponent::syncTextureSlot(EPhongMaterialTextureSlot resourceE
     }
 }
 
+bool PhongMaterialComponent::checkTexturesStaleness()
+{
+    if (!getMaterial()) {
+        return false;
+    }
+    bool stale = false;
+    for (size_t index = 0; index < static_cast<size_t>(EPhongMaterialTextureSlot::Count); ++index) {
+        const auto         slotEnum = static_cast<EPhongMaterialTextureSlot>(index);
+        const TextureSlot* slot     = getTextureSlotInternal(slotEnum);
+        if (slot && slot->textureRef.isLoaded() &&
+            getMaterial()->getTextureBinding(detail_phong::toTextureResource(slotEnum)).texture != slot->textureRef.getShared()) {
+            stale = true;
+        }
+    }
+    if (stale) {
+        invalidate();
+    }
+    return stale;
+}
+
 EMaterialResolveResult PhongMaterialComponent::resolve()
 {
     if (_resolveState == EMaterialResolveState::Ready) {
@@ -211,28 +231,12 @@ EMaterialResolveResult PhongMaterialComponent::resolve()
     // asynchronously, we want to keep the old binding until the new one is ready.
     // syncTextureSlot() handles the per-slot logic.
 
-    // for (auto &[key, slot] : _textureSlots) {
-    //     if (slot.textureRef.hasPath() && !slot.isLoaded()) {
-    //         if (!slot.resolve()) {
-    //             YA_CORE_WARN("PhongMaterialComponent: Failed to resolve texture slot {} ({})",
-    //                          getMaterial()->getTextureSlotName(key),
-    //                          slot.textureRef.getPath());
-    //             success = false;
-    //             continue;
-    //         }
-    //     }
-    // }
     auto resolveSlot = [&](TextureSlot& slot, const char* name) {
         if (!slot.hasPath() || slot.isReady()) {
             return;
         }
 
-        const auto result = slot.resolve();
-        if (result == EAssetResolveResult::Ready) {
-            return;
-        }
-
-        if (result == EAssetResolveResult::Pending) {
+        if (slot.isLoading()) {
             hasPendingTextures = true;
             return;
         }

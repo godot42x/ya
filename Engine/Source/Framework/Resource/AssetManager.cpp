@@ -140,26 +140,6 @@ const AssetMeta& AssetManager::reloadMeta(const std::string& assetPath)
     return getOrLoadMeta(normalizedAssetPath);
 }
 
-std::string AssetManager::makeCacheKey(const std::string& filepath, const AssetMeta& meta)
-{
-    return normalizeAssetPath(filepath) + "|" + std::to_string(meta.propertiesHash());
-}
-
-std::string AssetManager::buildTextureCacheKey(const std::string& requestPath,
-                                               const ResolvedTextureImportSettings& settings)
-{
-    const std::string normalizedRequestPath = normalizeAssetPath(requestPath);
-    const auto& meta = getOrLoadMeta(normalizedRequestPath);
-    return normalizedRequestPath + "|" +
-           normalizeAssetPath(settings.sourceInfo.filepath) + "|" +
-           settings.sourceInfo.ioFilepath + "|" +
-           std::to_string(meta.propertiesHash()) + "|" +
-           std::to_string(static_cast<int>(settings.colorSpace)) + "|" +
-           std::to_string(static_cast<int>(settings.uploadStrategy)) + "|" +
-           std::to_string(static_cast<int>(settings.transcodeTarget)) + "|" +
-           std::to_string(static_cast<int>(settings.resolvedFormat));
-}
-
 AssetTextureManager& AssetManager::textureManager()
 {
     return *_textureManager;
@@ -209,11 +189,6 @@ void AssetManager::bumpResourceVersion(const std::string& assetPath)
     YA_CORE_TRACE("bumpResourceVersion: '{}' → v{}", normalizedAssetPath, newVersion);
 }
 
-bool AssetManager::isTextureLoadPending(const std::string& cacheKey) const
-{
-    return textureManager().isTextureLoadPending(cacheKey);
-}
-
 bool AssetManager::isTextureLoadFailed(const std::string& filepath) const
 {
     return textureManager().isTextureLoadFailed(filepath);
@@ -233,14 +208,14 @@ size_t AssetManager::collectUnused()
     return released;
 }
 
-void AssetManager::unload(const std::string& cacheKey)
+void AssetManager::unload(const std::string& assetPath)
 {
-    const uint64_t frame = getCurrentFrameIdx();
-    if (textureManager().unload(cacheKey, frame) || modelManager().unload(cacheKey, frame)) {
-        return;
+    const uint64_t frame    = getCurrentFrameIdx();
+    const bool     bTexture = textureManager().unload(assetPath, frame);
+    const bool     bModel   = modelManager().unload(assetPath, frame);
+    if (!bTexture && !bModel) {
+        YA_CORE_WARN("unload: asset '{}' is not cached", assetPath);
     }
-
-    YA_CORE_WARN("unload: cache key '{}' not found", cacheKey);
 }
 
 AssetManager::CacheStats AssetManager::getStats() const
@@ -272,12 +247,9 @@ void AssetManager::onMetaFileChanged(const std::string& metaPath)
 
     YA_CORE_INFO("onMetaFileChanged: meta changed for '{}', reloading affected resources", assetPath);
 
-    evictCachedAsset(assetPath);
-
-    if (newMeta.type == "texture") {
-        loadTexture(TextureLoadRequest{.filepath = assetPath, .name = {}, .onReady = {}, .colorSpace = ETextureColorSpace::SRGB, .textureSemantic = {}});
-    }
-    else if (newMeta.type == "model") {
+    textureManager().reload(assetPath);
+    if (newMeta.type == "model") {
+        modelManager().evictCachedAsset(assetPath, getCurrentFrameIdx());
         loadModel(ModelLoadRequest{.filepath = assetPath, .name = {}, .onReady = {}});
     }
 
@@ -288,14 +260,12 @@ void AssetManager::onAssetFileChanged(const std::string& assetPath)
 {
     YA_CORE_INFO("onAssetFileChanged: '{}' changed, reloading", assetPath);
 
-    evictCachedAsset(assetPath);
     _metaCache.erase(assetPath);
 
-    AssetMeta meta = getOrLoadMeta(assetPath);
-    if (meta.type == "texture") {
-        loadTexture(TextureLoadRequest{.filepath = assetPath, .name = {}, .onReady = {}, .colorSpace = ETextureColorSpace::SRGB, .textureSemantic = {}});
-    }
-    else if (meta.type == "model") {
+    const AssetMeta& meta = getOrLoadMeta(assetPath);
+    textureManager().reload(assetPath);
+    if (meta.type == "model") {
+        modelManager().evictCachedAsset(assetPath, getCurrentFrameIdx());
         loadModel(ModelLoadRequest{.filepath = assetPath, .name = {}, .onReady = {}});
     }
 
@@ -330,16 +300,10 @@ void AssetManager::registerTexture(const std::string& name, const stdptr<Texture
 void AssetManager::invalidate(const std::string& filepath)
 {
     const auto normalizedFilepath = normalizeAssetPath(filepath);
-    evictCachedAsset(normalizedFilepath);
     _metaCache.erase(normalizedFilepath);
+    textureManager().reload(normalizedFilepath);
+    modelManager().evictCachedAsset(normalizedFilepath, getCurrentFrameIdx());
     bumpResourceVersion(normalizedFilepath);
-}
-
-void AssetManager::evictCachedAsset(const std::string& assetPath)
-{
-    const uint64_t frame = getCurrentFrameIdx();
-    textureManager().evictCachedAsset(assetPath, frame);
-    modelManager().evictCachedAsset(assetPath, frame);
 }
 
 void AssetManager::clearTextures()

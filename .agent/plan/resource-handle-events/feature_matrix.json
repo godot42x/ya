@@ -1,0 +1,78 @@
+{
+  "plan": "resource-handle-events",
+  "status": "in_progress",
+  "features": [
+    {
+      "id": "asset_slot",
+      "phase": "H1",
+      "status": "done",
+      "goal": "AssetTextureManager owns one AssetSlot per request identity (normalized path | colorSpace); load completion / failure / reload fill the slot on the game thread and bump generation",
+      "evidence": [
+        "Engine/Test/Source/ResourceRuntime/TextureAssetSlotTest.cpp (9 tests)",
+        "progress.md 2026-09-30 H1"
+      ]
+    },
+    {
+      "id": "ref_handles",
+      "phase": "H1",
+      "status": "done",
+      "goal": "TextureRef / TextureSlot / TilesetRef hold path + handle, bind on setPath / setPathWithoutNotify / path ctor / deserialize; texture resolve / isStale / invalidate / TextureFuture removed; get() is null unless Ready (ModelRef / MeshRef move in H3)",
+      "evidence": [
+        "Engine/Source/Framework/Core/Common/AssetRef.cpp",
+        "Engine/Source/Framework/Core/Reflection/ReflectionSerializer.cpp"
+      ]
+    },
+    {
+      "id": "readonly_consumers",
+      "phase": "H1",
+      "status": "done",
+      "goal": "sprite / tilemap / UI read handles at extraction; their GameplayResourceBinding branches are deleted",
+      "evidence": [
+        "Engine/Source/Framework/Render/Render3D/Services/GameplayResourceBinding.cpp",
+        "2DRpgPrototype smoke"
+      ]
+    },
+    {
+      "id": "edit_funnel",
+      "phase": "H2",
+      "status": "planned",
+      "goal": "Scene::notifyComponentEdited -> registry.patch<T>; inspector / undo / script write / deserialize / model instantiation all route through it",
+      "evidence": []
+    },
+    {
+      "id": "material_push",
+      "phase": "H2",
+      "status": "planned",
+      "goal": "runtime Material subscribes to texture slots; material sweep and active re-pump deleted; explicit fallback (Loading -> semantic default, Failed -> checkerboard); audit is a dev-only consistency check",
+      "evidence": []
+    },
+    {
+      "id": "mesh_model_events",
+      "phase": "H3",
+      "status": "planned",
+      "goal": "MeshSource and ModelInstantiation react to model slot readiness via processor-held subscriptions; loadModel returns a slot, ModelRef / MeshRef hold handles, AssetFuture and getResourceVersion polling removed",
+      "evidence": []
+    },
+    {
+      "id": "terrain_events",
+      "phase": "H4",
+      "status": "planned",
+      "goal": "callback-based height map batch load, debounce timer heap; terrain sweep / audit / re-pump deleted",
+      "evidence": []
+    },
+    {
+      "id": "environment_lighting_events",
+      "phase": "H5",
+      "status": "planned",
+      "goal": "OffscreenJobState::onFinished, texture and batch callbacks; skybox / environment sweep / audit / re-pump deleted",
+      "evidence": []
+    },
+    {
+      "id": "steady_state_zero",
+      "phase": "H5",
+      "status": "planned",
+      "goal": "TownLarge steady state: resource prepare touches no component view; ResourceResolve/* near 0; frame time not regressed; resource-system skill rewritten",
+      "evidence": []
+    }
+  ]
+}

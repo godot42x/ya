@@ -1,11 +1,11 @@
 #pragma once
 
+#include "Core/Common/AssetSlot.h"
 #include "Core/Common/Types.h"
 #include "Core/Delegate.h"
 #include "Core/Reflection/Reflection.h"
 #include "Core/System/VirtualFileSystem.h"
 #include <algorithm>
-#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -62,30 +62,16 @@ struct YA_CORE_API AssetRefBase
   protected:
     std::string _path; // Serialized data: asset path
 
-    // Resource-version epoch observed at the last staleness check. An
-    // unchanged epoch guarantees no resource version changed, so per-frame
-    // staleness checks can skip the per-path version query entirely.
-    mutable uint64_t _lastCheckedEpoch = std::numeric_limits<uint64_t>::max();
-
   public:
     MulticastDelegate<void()> onModified;
-    // bool bValid= false;  // cannot be loaded?
-
-
 
     AssetRefBase() = default;
     explicit AssetRefBase(const std::string &path) : _path(normalizePath(path)) {}
 
-    virtual EAssetResolveResult resolve() = 0;
-    // {
-    // resolve path from abs to engine?
-    // }
-    virtual void invalidate() = 0;
-
-    /// Staleness-epoch bookkeeping shared with the asset-ref resolver
-    /// (keeps the mutable cache field encapsulated in the base class).
-    [[nodiscard]] bool hasCheckedAt(uint64_t epoch) const { return _lastCheckedEpoch == epoch; }
-    void               markCheckedAt(uint64_t epoch) const { _lastCheckedEpoch = epoch; }
+    /// Re-derive whatever the ref holds from its current path. Every path
+    /// write goes through here (setters, deserialization), so a ref with a
+    /// path is always bound to its asset.
+    virtual void rebind() = 0;
 
     const std::string &getPath() const { return _path; }
     bool               hasPath() const { return !_path.empty(); }
@@ -93,19 +79,17 @@ struct YA_CORE_API AssetRefBase
     void               setPath(const std::string &path)
     {
         _path = normalizePath(path);
-        invalidate();
+        rebind();
         notifyModified();
     }
 
-    /**
-     * @brief Set path without triggering modification callback
-     * Used when initializing from external source (e.g., shared material)
-     * where we don't want to trigger a resolve cycle
-     */
+    /// Set path without broadcasting onModified. Used when the owner
+    /// initializes its own slots (e.g., importing a material descriptor)
+    /// and manages its derived state itself.
     void setPathWithoutNotify(const std::string &path)
     {
         _path = normalizePath(path);
-        // Don't invalidate or notify - caller manages state
+        rebind();
     }
 
     /**
@@ -125,45 +109,21 @@ struct YA_CORE_API TextureRef : public AssetRefBase
     YA_REFLECT_BEGIN(TextureRef, AssetRefBase)
     YA_REFLECT_END()
 
-    ya::Ptr<Texture> _cachedPtr;
-    EAssetResolveState _resolveState    = EAssetResolveState::Empty;
-    uint64_t           _resolvedVersion = 0;
+    // Shared slot for the path; copies share it. Null when the path is empty
+    // or no resource layer can load textures (reads as Failed).
+    AssetHandle<Texture> _handle;
 
     TextureRef() = default;
-    explicit TextureRef(const std::string& path) : AssetRefBase(path) {}
-    TextureRef(const std::string& path, ya::Ptr<Texture> ptr)
-        : AssetRefBase(path), _cachedPtr(std::move(ptr))
-    {
-        _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
-    }
+    explicit TextureRef(const std::string& path) : AssetRefBase(path) { rebind(); }
 
-    TextureRef(const TextureRef& other)
-        : AssetRefBase(other), _cachedPtr(other._cachedPtr), _resolveState(other._resolveState), _resolvedVersion(other._resolvedVersion)
-    {}
-
-    TextureRef& operator=(const TextureRef& other)
-    {
-        if (this != &other) {
-            AssetRefBase::operator=(other);
-            _cachedPtr       = other._cachedPtr;
-            _resolveState    = other._resolveState;
-            _resolvedVersion = other._resolvedVersion;
-        }
-        return *this;
-    }
-
-    TextureRef(TextureRef&& other) noexcept            = default;
-    TextureRef& operator=(TextureRef&& other) noexcept = default;
-
-    Texture* get() const { return _cachedPtr.get(); }
-    ya::Ptr<Texture> getShared() const { return _cachedPtr; }
-    bool isLoaded() const { return _resolveState == EAssetResolveState::Ready && _cachedPtr != nullptr; }
-    bool isLoading() const { return _resolveState == EAssetResolveState::Loading; }
-    EAssetResolveState getResolveState() const { return _resolveState; }
-    bool isStale() const;
-    EAssetResolveResult resolve() override;
-    void invalidate() override;
-    void set(const std::string& path, ya::Ptr<Texture> ptr);
+    /// The loaded texture, or null unless the slot is Ready. No placeholder:
+    /// each consumer decides its own fallback.
+    Texture*           get() const { return isLoaded() ? _handle->resource.get() : nullptr; }
+    ya::Ptr<Texture>   getShared() const { return isLoaded() ? _handle->resource : nullptr; }
+    bool               isLoaded() const { return _handle && _handle->state == EAssetSlotState::Ready; }
+    bool               isLoading() const { return _handle && _handle->state == EAssetSlotState::Loading; }
+    EAssetResolveState getResolveState() const;
+    void               rebind() override;
 };
 
 struct YA_CORE_API ModelRef : public AssetRefBase
@@ -206,9 +166,9 @@ struct YA_CORE_API ModelRef : public AssetRefBase
     bool isLoaded() const { return _resolveState == EAssetResolveState::Ready && _cachedPtr != nullptr; }
     bool isLoading() const { return _resolveState == EAssetResolveState::Loading; }
     EAssetResolveState getResolveState() const { return _resolveState; }
-    bool isStale() const;
-    EAssetResolveResult resolve() override;
-    void invalidate() override;
+    EAssetResolveResult resolve();
+    void invalidate();
+    void rebind() override { invalidate(); }
     void set(const std::string& path, ya::Ptr<Model> ptr);
 };
 
@@ -252,9 +212,9 @@ struct YA_CORE_API MeshRef : public AssetRefBase
     bool isLoaded() const { return _resolveState == EAssetResolveState::Ready && _cachedPtr != nullptr; }
     bool isLoading() const { return _resolveState == EAssetResolveState::Loading; }
     EAssetResolveState getResolveState() const { return _resolveState; }
-    bool isStale() const;
-    EAssetResolveResult resolve() override;
-    void invalidate() override;
+    EAssetResolveResult resolve();
+    void invalidate();
+    void rebind() override { invalidate(); }
     void set(const std::string& path, ya::Ptr<Mesh> ptr);
 };
 
@@ -262,33 +222,26 @@ struct YA_CORE_API MeshRef : public AssetRefBase
 // Asset Reference Resolution Interface
 // ============================================================================
 
+/// True for the concrete asset-ref types (TextureRef / ModelRef / MeshRef /
+/// TilesetRef); reflection edits and deserializes them through AssetRefBase.
+YA_CORE_API bool isAssetRefType(type_index_t typeIndex);
+
 /**
- * @brief Interface for resolving asset references
- * Used by ReflectionSerializer to resolve asset refs after deserialization
+ * @brief Resource-layer hooks for the Core asset-ref types. The resource
+ *        layer installs one at static-init time; pure GUI hosts have none and
+ *        their refs bind to nothing (read as Failed).
  */
 struct IAssetRefResolver
 {
     virtual ~IAssetRefResolver() = default;
 
-    /**
-     * @brief Check if a type index represents an asset reference type
-     */
-    virtual bool isAssetRefType(type_index_t typeIndex) const = 0;
+    /// Shared texture slot for a normalized, non-empty path. Null when no
+    /// texture can be produced (no render backend).
+    virtual AssetHandle<Texture> acquireTexture(const std::string &path) const = 0;
 
-    /**
-     * @brief Resolve an asset reference (load the asset from path). The
-     *        resolver owns the resource-layer logic (AssetManager access)
-     *        and updates the concrete ref's state fields directly.
-     * @param typeIndex Type index of the concrete asset ref
-     * @param assetRefPtr Pointer to the asset ref instance
-     */
+    /// Polling resolve for ModelRef / MeshRef, which still cache their
+    /// resource per ref instead of sharing a slot.
     virtual void resolveAssetRef(type_index_t typeIndex, void *assetRefPtr) const = 0;
-
-    /**
-     * @brief Query whether a ready asset ref's resource version is stale.
-     *        Only invoked by Core's isStale() when a resolver is installed.
-     */
-    virtual bool isAssetRefStale(type_index_t typeIndex, const void *assetRefPtr) const = 0;
 };
 
 /// Currently installed asset-ref resolver (null in pure-GUI hosts). The

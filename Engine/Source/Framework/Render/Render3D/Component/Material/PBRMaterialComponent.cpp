@@ -156,6 +156,26 @@ void PBRMaterialComponent::syncTextureSlot(EPBRMaterialTextureSlot resourceEnum)
     }
 }
 
+bool PBRMaterialComponent::checkTexturesStaleness()
+{
+    if (!getMaterial()) {
+        return false;
+    }
+    bool stale = false;
+    for (size_t index = 0; index < static_cast<size_t>(EPBRMaterialTextureSlot::Count); ++index) {
+        const auto         slotEnum = static_cast<EPBRMaterialTextureSlot>(index);
+        const TextureSlot* slot     = getTextureSlotInternal(slotEnum);
+        if (slot && slot->textureRef.isLoaded() &&
+            getMaterial()->getTextureBinding(detail_pbr::toTextureResource(slotEnum)).texture != slot->textureRef.getShared()) {
+            stale = true;
+        }
+    }
+    if (stale) {
+        invalidate();
+    }
+    return stale;
+}
+
 EMaterialResolveResult PBRMaterialComponent::resolve()
 {
     if (_resolveState == EMaterialResolveState::Ready) {
@@ -187,12 +207,7 @@ EMaterialResolveResult PBRMaterialComponent::resolve()
             return;
         }
 
-        const auto result = slot.resolve();
-        if (result == EAssetResolveResult::Ready) {
-            return;
-        }
-
-        if (result == EAssetResolveResult::Pending) {
+        if (slot.isLoading()) {
             hasPendingTextures = true;
             return;
         }

@@ -16,9 +16,8 @@ namespace ya
 //
 // The file keeps authoring data only: which atlas image, how it is cut
 // into tiles, and which tiles are solid. It never holds GPU state -- the
-// atlas texture resolves through the embedded TextureSlot on the same
-// per-frame path as Sprite2DComponent (see GameplayResourceBinding), so a
-// tileset whose atlas is still loading simply yields no candidates.
+// embedded TextureSlot binds the atlas texture when the document is parsed,
+// so a tileset whose atlas is still loading simply yields no candidates.
 //
 // Tile indices are row-major from the top-left of the image: tile t sits at
 // (margin + col * (tileW + spacing), margin + row * (tileH + spacing)) with
@@ -40,44 +39,31 @@ struct YA_CORE_API Tileset
     [[nodiscard]] bool isSolidTile(int32_t tile) const;
 };
 
-// Path reference to a .yatileset.json file. Mirrors TextureRef: only the
-// path is serialized, the parsed Tileset is cached beside it and loaded
-// synchronously on first resolve (tileset files are small authoring JSON,
-// the same shape as .yaui.json documents, not GPU resources).
+// Path reference to a .yatileset.json file. Only the path is serialized; the
+// document is parsed synchronously whenever the path is bound (tileset files
+// are small authoring JSON, the same shape as .yaui.json documents, not GPU
+// resources) and shared between refs naming the same file. A ref with a
+// path but no parsed tileset failed to load.
 struct YA_CORE_API TilesetRef : public AssetRefBase
 {
     YA_REFLECT_BEGIN(TilesetRef, AssetRefBase)
     YA_REFLECT_END()
 
     std::shared_ptr<Tileset> _cached;
-    EAssetResolveState       _resolveState = EAssetResolveState::Empty;
 
     TilesetRef() = default;
-    explicit TilesetRef(const std::string& path) : AssetRefBase(path) {}
-
-    TilesetRef(const TilesetRef& other)
-        : AssetRefBase(other), _cached(other._cached), _resolveState(other._resolveState)
-    {}
-
-    TilesetRef& operator=(const TilesetRef& other)
-    {
-        if (this != &other) {
-            AssetRefBase::operator=(other);
-            _cached       = other._cached;
-            _resolveState = other._resolveState;
-        }
-        return *this;
-    }
-
-    TilesetRef(TilesetRef&& other) noexcept            = default;
-    TilesetRef& operator=(TilesetRef&& other) noexcept = default;
+    explicit TilesetRef(const std::string& path) : AssetRefBase(path) { rebind(); }
 
     Tileset* get() const { return _cached.get(); }
     std::shared_ptr<Tileset> getShared() const { return _cached; }
-    bool isLoaded() const { return _resolveState == EAssetResolveState::Ready && _cached != nullptr; }
-    EAssetResolveState getResolveState() const { return _resolveState; }
-    EAssetResolveResult resolve() override;
-    void invalidate() override;
+    bool isLoaded() const { return _cached != nullptr; }
+    EAssetResolveState getResolveState() const
+    {
+        return _path.empty() ? EAssetResolveState::Empty
+             : _cached       ? EAssetResolveState::Ready
+                             : EAssetResolveState::Failed;
+    }
+    void rebind() override;
 
     // Drops every cached Tileset. Tests use this to keep file-backed cases
     // from leaking into each other; the runtime never calls it.

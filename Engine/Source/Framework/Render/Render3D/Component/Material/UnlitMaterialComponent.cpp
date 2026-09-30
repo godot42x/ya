@@ -160,6 +160,26 @@ void UnlitMaterialComponent::syncTextureSlot(EUnlitMaterialTextureSlot resourceE
     }
 }
 
+bool UnlitMaterialComponent::checkTexturesStaleness()
+{
+    if (!getMaterial()) {
+        return false;
+    }
+    bool stale = false;
+    for (size_t index = 0; index < static_cast<size_t>(EUnlitMaterialTextureSlot::Count); ++index) {
+        const auto         slotEnum = static_cast<EUnlitMaterialTextureSlot>(index);
+        const TextureSlot* slot     = getTextureSlotInternal(slotEnum);
+        if (slot && slot->textureRef.isLoaded() &&
+            getMaterial()->getTextureBinding(unlit_detail::toTextureResource(slotEnum)).texture != slot->textureRef.getShared()) {
+            stale = true;
+        }
+    }
+    if (stale) {
+        invalidate();
+    }
+    return stale;
+}
+
 EMaterialResolveResult UnlitMaterialComponent::resolve()
 {
     if (_resolveState == EMaterialResolveState::Ready) {
@@ -193,12 +213,7 @@ EMaterialResolveResult UnlitMaterialComponent::resolve()
             return;
         }
 
-        const auto result = slot.resolve();
-        if (result == EAssetResolveResult::Ready) {
-            return;
-        }
-
-        if (result == EAssetResolveResult::Pending) {
+        if (slot.isLoading()) {
             hasPendingTextures = true;
             return;
         }

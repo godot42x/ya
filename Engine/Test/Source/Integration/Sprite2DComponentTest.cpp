@@ -133,8 +133,6 @@ TEST(Sprite2DComponentTest, UnloadedTextureIsNotDrawable)
     Sprite2DComponent pending;
     pending.image.fromPath("Content/Sprites/missing.png");
     EXPECT_FALSE(spriteIsDrawable(pending));
-    pending.image.textureRef.invalidate();
-    EXPECT_FALSE(spriteIsDrawable(pending));
 
     Sprite2DComponent hidden;
     hidden.bVisible = false;

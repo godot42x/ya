@@ -51,15 +51,7 @@ bool BillboardComponent::resolve()
         return true;
     }
 
-    const auto result = image.resolve();
-    if (result == EAssetResolveResult::Ready) {
-        _material->setTextureBinding(UnlitMaterial::BaseColor0, ya::slotToTextureBinding(image));
-        _material->setTextureParam(UnlitMaterial::BaseColor0, true, FMath::build_transform_mat3(image.uvOffset, image.uvRotation, image.uvScale));
-        bDirty = false;
-        return true;
-    }
-
-    if (result == EAssetResolveResult::Pending) {
+    if (image.isLoading()) {
         bDirty = true;
         return false;
     }

@@ -1,7 +1,5 @@
 #include "Core/Common/AssetRef.h"
-#include "Core/Common/Tileset.h"
 #include "Resource/AssetManager.h"
-#include "RHI/Backend/TextureLibrary.h"
 #include "Core/Log.h"
 #include "Core/TypeIndex.h"
 #include "RHI/Core/Texture.h"
@@ -14,11 +12,10 @@ namespace ya
 // ============================================================================
 // Engine asset-ref resolver.
 //
-// The concrete ref types (TextureRef/ModelRef/MeshRef) and their vtables live
-// in Core; this resolver is installed into Core's registry slot at static-init
-// time and owns the resource-layer loading logic (AssetManager / texture
-// placeholders). Pure GUI hosts never install a resolver and resolve() simply
-// marks refs failed instead of pulling the resource layer in.
+// The concrete ref types live in Core; this resolver is installed into
+// Core's registry slot at static-init time and hands them resource-layer
+// slots (AssetManager). Pure GUI hosts never install a resolver and their
+// refs bind to nothing.
 // ============================================================================
 
 namespace
@@ -26,105 +23,25 @@ namespace
 
 struct EngineAssetRefResolver final : IAssetRefResolver
 {
-    bool isAssetRefType(type_index_t typeIndex) const override
+    AssetHandle<Texture> acquireTexture(const std::string& path) const override
     {
-        return typeIndex == ya::type_index_v<TextureRef> ||
-               typeIndex == ya::type_index_v<ModelRef> ||
-               typeIndex == ya::type_index_v<MeshRef> ||
-               typeIndex == ya::type_index_v<TilesetRef>;
+        return AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{.filepath = path});
     }
 
     void resolveAssetRef(type_index_t typeIndex, void* assetRefPtr) const override
     {
-        if (typeIndex == ya::type_index_v<TextureRef>) {
-            resolveTexture(*static_cast<TextureRef*>(assetRefPtr));
-        }
-        else if (typeIndex == ya::type_index_v<ModelRef>) {
+        if (typeIndex == ya::type_index_v<ModelRef>) {
             resolveModel(*static_cast<ModelRef*>(assetRefPtr));
         }
         else if (typeIndex == ya::type_index_v<MeshRef>) {
             resolveMesh(*static_cast<MeshRef*>(assetRefPtr));
-        }
-        else if (typeIndex == ya::type_index_v<TilesetRef>) {
-            // Tileset documents load synchronously through the ref itself,
-            // like a texture resolve that already finished.
-            (void)static_cast<TilesetRef*>(assetRefPtr)->resolve();
         }
         else {
             YA_CORE_WARN("EngineAssetRefResolver: Unknown asset ref type index: {}", typeIndex);
         }
     }
 
-    bool isAssetRefStale(type_index_t typeIndex, const void* assetRefPtr) const override
-    {
-        if (typeIndex == ya::type_index_v<TextureRef>) {
-            return isStale(*static_cast<const TextureRef*>(assetRefPtr));
-        }
-        if (typeIndex == ya::type_index_v<ModelRef>) {
-            return isStale(*static_cast<const ModelRef*>(assetRefPtr));
-        }
-        if (typeIndex == ya::type_index_v<MeshRef>) {
-            return isStale(*static_cast<const MeshRef*>(assetRefPtr));
-        }
-        return false;
-    }
-
   private:
-    static void resolveTexture(TextureRef& ref)
-    {
-        if (ref.getPath().empty()) {
-            ref._resolveState = EAssetResolveState::Empty;
-            return;
-        }
-
-        const auto currentVersion = AssetManager::get()->getResourceVersion(ref.getPath());
-
-        // Ready: check version to detect reloaded resources
-        if (ref._resolveState == EAssetResolveState::Ready && ref._cachedPtr) {
-            if (ref._resolvedVersion == currentVersion) {
-                return; // Up-to-date, fast path
-            }
-            // Version changed -> stale pointer, force re-resolve
-            ref._cachedPtr.reset();
-            ref._resolveState = EAssetResolveState::Dirty;
-            YA_CORE_TRACE("TextureRef: version changed for '{}', re-resolving", ref.getPath());
-        }
-
-        if (ref._resolveState == EAssetResolveState::Failed && ref._resolvedVersion == currentVersion) {
-            return;
-        }
-
-        // Loading or Dirty: try to get the real texture from cache
-        auto future = AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
-            .filepath = ref.getPath(),
-        });
-        if (future.isReady()) {
-            ref._cachedPtr       = future.getShared();
-            ref._resolveState    = EAssetResolveState::Ready;
-            ref._resolvedVersion = currentVersion;
-            return;
-        }
-
-        if (AssetManager::get()->isTextureLoadFailed(ref.getPath())) {
-            ref._resolveState    = EAssetResolveState::Failed;
-            ref._resolvedVersion = currentVersion;
-            auto placeholder = TextureLibrary::get().getCheckerboardTexture();
-            if (placeholder) {
-                ref._cachedPtr = placeholder;
-            }
-            return;
-        }
-
-        // Not ready yet — use placeholder, stay in Loading state
-        if (ref._resolveState != EAssetResolveState::Loading) {
-            ref._resolveState = EAssetResolveState::Loading;
-            auto placeholder = TextureLibrary::get().getCheckerboardTexture();
-            if (placeholder) {
-                ref._cachedPtr = placeholder;
-            }
-        }
-    }
-
     static void resolveModel(ModelRef& ref)
     {
         if (ref.getPath().empty()) {
@@ -163,21 +80,6 @@ struct EngineAssetRefResolver final : IAssetRefResolver
         // Mesh loading not implemented yet
         ref._resolveState = EAssetResolveState::Failed;
         UNIMPLEMENTED();
-    }
-
-    template <typename T>
-    static bool isStale(const T& ref)
-    {
-        if (ref._resolveState != EAssetResolveState::Ready || ref.getPath().empty()) {
-            return false;
-        }
-        auto* const assets = AssetManager::get();
-        const auto  epoch  = assets->getResourceVersionEpoch();
-        if (ref.hasCheckedAt(epoch)) {
-            return false;
-        }
-        ref.markCheckedAt(epoch);
-        return ref._resolvedVersion != assets->getResourceVersion(ref.getPath());
     }
 };
 

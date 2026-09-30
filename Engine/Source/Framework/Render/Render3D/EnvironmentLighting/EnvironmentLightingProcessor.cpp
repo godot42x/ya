@@ -1079,7 +1079,7 @@ void retireSkyboxResources(SkyboxRuntimeState& state)
 void resetSkyboxPending(SkyboxRuntimeState& state)
 {
     state.pendingBatchLoadState.reset();
-    state.pendingCylindricalFuture.reset();
+    state.pendingCylindricalSource.reset();
     cancelOffscreenJob(state.pendingOffscreenProcess);
 }
 
@@ -1182,7 +1182,7 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(SceneWork& work)
                         });
             }
             else if (sc.hasCylindricalSource()) {
-                pendingState.pendingCylindricalFuture =
+                pendingState.pendingCylindricalSource =
                     AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
                         .filepath        = sc.cylindricalSource.filepath,
                         .name            = "SkyboxCylindricalSource",
@@ -1253,9 +1253,8 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(SceneWork& work)
                 break;
             }
             else if (sc.hasCylindricalSource()) {
-                if (!pendingState.pendingCylindricalFuture.has_value() ||
-                    !pendingState.pendingCylindricalFuture->isReady()) {
-                    pendingState.pendingCylindricalFuture =
+                if (!pendingState.pendingCylindricalSource) {
+                    pendingState.pendingCylindricalSource =
                         AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
                             .filepath        = sc.cylindricalSource.filepath,
                             .name            = "SkyboxCylindricalSource",
@@ -1264,13 +1263,13 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(SceneWork& work)
                             .textureSemantic = std::nullopt,
                         });
                 }
-                if (!pendingState.pendingCylindricalFuture.has_value() ||
-                    !pendingState.pendingCylindricalFuture->isReady()) {
+                const AssetHandle<Texture> source = pendingState.pendingCylindricalSource;
+                if (source && source->state == EAssetSlotState::Loading) {
                     break;
                 }
 
-                auto sourceTexture = pendingState.pendingCylindricalFuture->getShared();
-                pendingState.pendingCylindricalFuture.reset();
+                pendingState.pendingCylindricalSource.reset();
+                auto sourceTexture = source && source->state == EAssetSlotState::Ready ? source->resource : nullptr;
                 if (!sourceTexture || !sourceTexture->getImageView()) {
                     transition.fail("cylindrical source invalid");
                     break;
@@ -2023,7 +2022,7 @@ void retireEnvTextures(EnvironmentLightingRuntimeState& state)
 void resetEnvPending(EnvironmentLightingRuntimeState& state)
 {
     state.pendingBatchLoad.reset();
-    state.pendingCylindricalFuture.reset();
+    state.pendingCylindricalSource.reset();
     cancelOffscreenJob(state.pendingEnvironmentOffscreen);
     cancelOffscreenJob(state.pendingIrradianceOffscreen);
     cancelOffscreenJob(state.pendingPrefilterOffscreen);
@@ -2084,7 +2083,7 @@ void handleEnvironmentSourceDirty(EnvironmentLightingComponent&    component,
     }
 
     if (component.hasCylindricalSource()) {
-        state.pendingCylindricalFuture = AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
+        state.pendingCylindricalSource = AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
             .filepath        = component.cylindricalSource.filepath,
             .name            = "EnvironmentLightingCylindricalSource",
             .onReady         = {},
@@ -2150,8 +2149,8 @@ void handleEnvironmentSourceResolving(EnvironmentLightingProcessor&           sy
     }
 
     if (component.hasCylindricalSource()) {
-        if (!state.pendingCylindricalFuture.has_value() || !state.pendingCylindricalFuture->isReady()) {
-            state.pendingCylindricalFuture = AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
+        if (!state.pendingCylindricalSource) {
+            state.pendingCylindricalSource = AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
                 .filepath        = component.cylindricalSource.filepath,
                 .name            = "EnvironmentLightingCylindricalSource",
                 .onReady         = {},
@@ -2159,12 +2158,13 @@ void handleEnvironmentSourceResolving(EnvironmentLightingProcessor&           sy
                 .textureSemantic = std::nullopt,
             });
         }
-        if (!state.pendingCylindricalFuture.has_value() || !state.pendingCylindricalFuture->isReady()) {
+        const AssetHandle<Texture> source = state.pendingCylindricalSource;
+        if (source && source->state == EAssetSlotState::Loading) {
             return;
         }
 
-        const auto sourceTexture = state.pendingCylindricalFuture->getShared();
-        state.pendingCylindricalFuture.reset();
+        state.pendingCylindricalSource.reset();
+        const auto sourceTexture = source && source->state == EAssetSlotState::Ready ? source->resource : nullptr;
         if (!sourceTexture || !sourceTexture->getImageView()) {
             detail::retireEnvTextures(state);
             transition.fail("cylindrical source invalid");

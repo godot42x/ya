@@ -11,7 +11,6 @@ TerrainComponent::TerrainComponent()
 void TerrainComponent::invalidate(uint64_t rebuildNotBeforeTick)
 {
     ++_authoringVersion;
-    _heightMapRef.invalidate();
     _rebuildNotBeforeTick = rebuildNotBeforeTick;
 }
 

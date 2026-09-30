@@ -4,6 +4,7 @@
 
 #include "Core/Log.h"
 
+#include <array>
 #include <atomic>
 
 #include "Core/Common/DeferredDeletionQueue.h"
@@ -12,62 +13,47 @@ namespace ya
 {
 using namespace asset_manager_texture_detail;
 
+namespace
+{
+constexpr std::array kTextureColorSpaces = {
+    AssetManager::ETextureColorSpace::SRGB,
+    AssetManager::ETextureColorSpace::Linear,
+};
+} // namespace
+
 AssetTextureManager::AssetTextureManager(AssetManager& owner)
     : _owner(owner)
 {
+    auto unavailable   = std::make_shared<AssetSlot<Texture>>();
+    unavailable->state = EAssetSlotState::Failed;
+    _unavailableSlot   = std::move(unavailable);
 }
 
-std::shared_ptr<Texture> AssetTextureManager::findCachedLocked(const std::string& cacheKey) const
+std::string AssetTextureManager::requestKey(const std::string& normalizedPath, AssetManager::ETextureColorSpace colorSpace)
 {
-    auto it = _cacheKey2Handle.find(cacheKey);
-    if (it == _cacheKey2Handle.end()) {
-        return nullptr;
-    }
-    return _textures.getShared(it->second);
-}
-
-void AssetTextureManager::storeCachedLocked(const std::string& cacheKey, std::shared_ptr<Texture> texture)
-{
-    auto it = _cacheKey2Handle.find(cacheKey);
-    if (it != _cacheKey2Handle.end()) {
-        // RCU hot-replace in the same slot; retire the previous object so the
-        // GPU is done with it before destruction.
-        if (auto old = _textures.replace(it->second, std::move(texture))) {
-            DeferredDeletionQueue::get().retire(std::move(old));
-        }
-        return;
-    }
-    _cacheKey2Handle.emplace(cacheKey, _textures.allocate(std::move(texture)));
-}
-
-void AssetTextureManager::eraseCachedLocked(const std::string& cacheKey, uint64_t frame)
-{
-    auto it = _cacheKey2Handle.find(cacheKey);
-    if (it == _cacheKey2Handle.end()) {
-        return;
-    }
-    if (auto old = _textures.release(it->second)) {
-        DeferredDeletionQueue::get().enqueueResource(frame, std::move(old));
-    }
-    _cacheKey2Handle.erase(it);
+    return normalizedPath + "|" + AssetManager::textureColorSpaceName(colorSpace);
 }
 
 void AssetTextureManager::clear()
 {
     std::lock_guard lock(_mutex);
     ++_clearGeneration;
-    _textures.clear();
-    _cacheKey2Handle.clear();
-    _textureName2Path.clear();
-    _pendingTextureLoads.clear();
-    _failedTextureLoads.clear();
-    _pendingTextureCallbacks.clear();
+    // Refs outlive the backend teardown that calls this; leave their slots
+    // Failed instead of pointing at destroyed GPU objects.
+    for (auto& [key, entry] : _entries) {
+        (void)key;
+        entry.slot->resource.reset();
+        entry.slot->state = EAssetSlotState::Failed;
+        ++entry.slot->generation;
+    }
+    _entries.clear();
+    _textureName2Key.clear();
     _pendingTextureBatchMemoryLoads.clear();
     _readyTextureBatchMemory.clear();
     _nextTextureBatchMemoryHandle = 1;
 }
 
-TextureFuture AssetManager::loadTexture(const TextureLoadRequest& request)
+AssetHandle<Texture> AssetManager::loadTexture(const TextureLoadRequest& request)
 {
     return textureManager().loadTexture(request);
 }
@@ -96,60 +82,63 @@ std::shared_ptr<Texture> AssetManager::loadTextureSync(const std::string& name,
     return textureManager().loadTextureSync(name, filepath, colorSpace);
 }
 
-TextureFuture AssetTextureManager::loadTexture(const AssetManager::TextureLoadRequest& request)
+AssetHandle<Texture> AssetTextureManager::loadTexture(const AssetManager::TextureLoadRequest& request)
 {
     if (request.filepath.empty()) {
-        return TextureFuture();
+        return nullptr;
     }
 
-    AssetManager::TextureLoadRequest normalized = request;
-    normalized.filepath = AssetManager::normalizeAssetPath(normalized.filepath);
-
-    if (normalized.textureSemantic.has_value()) {
-        normalized.colorSpace = AssetManager::inferTextureColorSpace(*normalized.textureSemantic);
-        normalized.textureSemantic.reset();
-        return loadTexture(normalized);
-    }
-
-    const auto settings = _owner.resolveTextureImportSettings(normalized.filepath, normalized.colorSpace);
-    const auto cacheKey = _owner.buildTextureCacheKey(normalized.filepath, settings);
-
-    {
-        std::lock_guard lock(_mutex);
-        if (auto cached = findCachedLocked(cacheKey)) {
-            if (!request.name.empty()) {
-                _textureName2Path[normalized.name] = cacheKey;
-            }
-            if (normalized.onReady) {
-                AssetManager::dispatchToGameThread([onReady = normalized.onReady, texture = cached]() mutable
-                                                   { onReady(texture); });
-            }
-            return TextureFuture(cached);
-        }
-    }
-
-    if (isTextureLoadFailed(normalized.filepath)) {
-        if (normalized.onReady) {
-            AssetManager::dispatchToGameThread([onReady = normalized.onReady]() mutable
+    if (!_owner.getRender()) {
+        if (request.onReady) {
+            AssetManager::dispatchToGameThread([onReady = request.onReady]() mutable
                                                { onReady(nullptr); });
         }
-        return TextureFuture();
+        return _unavailableSlot;
     }
 
-    if (!isTextureLoadPending(cacheKey)) {
-        submitTextureLoad(normalized.filepath, cacheKey, settings, normalized.name);
-    }
+    const std::string path       = AssetManager::normalizeAssetPath(request.filepath);
+    const auto        colorSpace = request.textureSemantic.has_value()
+                                       ? AssetManager::inferTextureColorSpace(*request.textureSemantic)
+                                       : request.colorSpace;
+    const std::string key        = requestKey(path, colorSpace);
 
-    if (!normalized.name.empty()) {
+    AssetHandle<Texture>     handle;
+    std::shared_ptr<Texture> settledTexture;
+    bool                     bSettled  = false;
+    bool                     bInserted = false;
+    {
         std::lock_guard lock(_mutex);
-        _textureName2Path[normalized.name] = cacheKey;
+        if (!request.name.empty()) {
+            _textureName2Key[FName(request.name)] = key;
+        }
+        auto [it, inserted] = _entries.try_emplace(key);
+        TextureEntry& entry = it->second;
+        bInserted           = inserted;
+        if (inserted) {
+            entry.slot       = std::make_shared<AssetSlot<Texture>>();
+            entry.filepath   = path;
+            entry.colorSpace = colorSpace;
+        }
+        handle = entry.slot;
+        if (entry.slot->state == EAssetSlotState::Loading) {
+            if (request.onReady) {
+                entry.readyCallbacks.push_back(request.onReady);
+            }
+        }
+        else {
+            bSettled       = true;
+            settledTexture = entry.slot->resource;
+        }
     }
 
-    if (normalized.onReady) {
-        registerTextureCallback(cacheKey, normalized.onReady);
+    if (bInserted) {
+        submitTextureLoad(key, path, colorSpace);
     }
-
-    return TextureFuture();
+    if (bSettled && request.onReady) {
+        AssetManager::dispatchToGameThread([onReady = request.onReady, settledTexture]() mutable
+                                           { onReady(settledTexture); });
+    }
+    return handle;
 }
 
 void AssetTextureManager::loadTextureBatch(const AssetManager::TextureBatchLoadRequest& request)
@@ -285,37 +274,130 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
                                                               const std::string&               filepath,
                                                               AssetManager::ETextureColorSpace colorSpace)
 {
-    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
-    const auto settings = _owner.resolveTextureImportSettings(normalizedFilepath, colorSpace);
-    const auto cacheKey = _owner.buildTextureCacheKey(normalizedFilepath, settings);
+    const std::string path = AssetManager::normalizeAssetPath(filepath);
+    const std::string key  = requestKey(path, colorSpace);
 
     {
         std::lock_guard lock(_mutex);
-        if (auto cached = findCachedLocked(cacheKey)) {
+        if (auto it = _entries.find(key); it != _entries.end() && it->second.slot->state == EAssetSlotState::Ready) {
             if (!name.empty()) {
-                _textureName2Path[name] = cacheKey;
+                _textureName2Key[FName(name)] = key;
             }
-            return cached;
+            return it->second.slot->resource;
         }
     }
 
-    if (isTextureLoadFailed(normalizedFilepath)) {
-        YA_CORE_WARN("loadTextureSync: Skipping known failed texture: {}", normalizedFilepath);
+    if (!_owner.getRender()) {
+        YA_CORE_WARN("loadTextureSync: Render backend is not available for '{}'", path);
         return nullptr;
     }
 
-    auto decoded = decodeTextureToMemory(settings);
-    if (!decoded.isValid()) {
-        if (decoded.hardFailure) {
-            rememberTextureLoadFailure(normalizedFilepath, decoded.error.empty() ? "decode failed" : decoded.error);
+    std::shared_ptr<Texture> texture;
+    auto                     decoded = decodeTextureToMemory(_owner.resolveTextureImportSettings(path, colorSpace));
+    if (decoded.isValid()) {
+        texture = uploadTexture(decoded, name.empty() ? decoded.filepath : name);
+    }
+    else {
+        YA_CORE_WARN("loadTextureSync: Failed to decode texture '{}': {}", path, decoded.error);
+    }
+
+    std::vector<AssetManager::TextureReadyCallback> callbacks;
+    {
+        std::lock_guard lock(_mutex);
+        auto [it, inserted] = _entries.try_emplace(key);
+        TextureEntry& entry = it->second;
+        if (inserted) {
+            entry.slot       = std::make_shared<AssetSlot<Texture>>();
+            entry.filepath   = path;
+            entry.colorSpace = colorSpace;
         }
-        YA_CORE_WARN("loadTextureSync: Failed to decode texture: {}", normalizedFilepath);
-        return nullptr;
+        // Supersedes any async decode still in flight for this slot.
+        entry.loadSerial = ++_nextLoadSerial;
+        callbacks        = fillSlotLocked(entry, texture);
+        if (!name.empty()) {
+            _textureName2Key[FName(name)] = key;
+        }
+    }
+    dispatchTextureCallbacks(std::move(callbacks), texture);
+    return texture;
+}
+
+void AssetTextureManager::submitTextureLoad(const std::string&               key,
+                                            const std::string&               filepath,
+                                            AssetManager::ETextureColorSpace colorSpace)
+{
+    // Settings are resolved per submit so a reload picks up edited meta.
+    const auto settings = _owner.resolveTextureImportSettings(filepath, colorSpace);
+    YA_CORE_TRACE("submitTextureLoad: async decode '{}' (format={}, payload={})",
+                  filepath,
+                  static_cast<int>(settings.resolvedFormat),
+                  AssetManager::texturePayloadTypeName(settings.payloadType));
+
+    uint64_t serial = 0;
+    {
+        std::lock_guard lock(_mutex);
+        auto            it = _entries.find(key);
+        if (it == _entries.end()) {
+            return;
+        }
+        serial                = ++_nextLoadSerial;
+        it->second.loadSerial = serial;
     }
 
+    TaskQueue::get().submitWithCallback(
+        [settings]() -> AssetManager::TextureMemoryBlock
+        {
+            return decodeTextureToMemory(settings);
+        },
+        [this, key, serial](AssetManager::TextureMemoryBlock decoded)
+        {
+            completeTextureLoad(key, serial, std::move(decoded));
+        });
+}
+
+void AssetTextureManager::completeTextureLoad(const std::string&               key,
+                                              uint64_t                         serial,
+                                              AssetManager::TextureMemoryBlock decoded)
+{
+    std::string label;
+    {
+        std::lock_guard lock(_mutex);
+        auto            it = _entries.find(key);
+        if (it == _entries.end() || it->second.loadSerial != serial) {
+            return;
+        }
+        label = it->second.filepath;
+    }
+
+    std::shared_ptr<Texture> texture;
+    if (decoded.isValid()) {
+        texture = uploadTexture(decoded, label);
+    }
+    else {
+        YA_CORE_WARN("Async texture decode failed for '{}': {}", label, decoded.error);
+    }
+
+    std::vector<AssetManager::TextureReadyCallback> callbacks;
+    {
+        std::lock_guard lock(_mutex);
+        auto            it = _entries.find(key);
+        if (it == _entries.end() || it->second.loadSerial != serial) {
+            return;
+        }
+        callbacks = fillSlotLocked(it->second, texture);
+    }
+    dispatchTextureCallbacks(std::move(callbacks), texture);
+
+    if (texture) {
+        YA_CORE_TRACE("Async texture ready: '{}' ({}x{})", label, texture->getWidth(), texture->getHeight());
+    }
+}
+
+std::shared_ptr<Texture> AssetTextureManager::uploadTexture(const AssetManager::TextureMemoryBlock& decoded,
+                                                            const std::string&                      label)
+{
     auto* render = _owner.getRender();
     if (!render) {
-        YA_CORE_WARN("loadTextureSync: Render backend is not available for '{}'", normalizedFilepath);
         return nullptr;
     }
 
@@ -323,189 +405,81 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
     try {
         texture = Texture::fromMemory(*render, TextureMemoryCreateInfo{
             .filepath = decoded.filepath,
-            .label    = name.empty() ? decoded.filepath : name,
+            .label    = label,
             .memory   = TextureMemoryView{
-                .width     = decoded.width,
-                .height    = decoded.height,
-                .channels  = decoded.channels,
-                .mipLevels = decoded.mipLevels,
+                .width           = decoded.width,
+                .height          = decoded.height,
+                .channels        = decoded.channels,
+                .mipLevels       = decoded.mipLevels,
                 .generateMipmaps = decoded.generateMipmaps,
-                .format    = decoded.format,
-                .data      = decoded.data(),
-                .dataSize  = decoded.dataSize(),
+                .format          = decoded.format,
+                .data            = decoded.data(),
+                .dataSize        = decoded.dataSize(),
             },
         });
     }
     catch (const std::exception& e) {
-        YA_CORE_WARN("loadTextureSync: GPU upload failed for '{}' with exception: {}", normalizedFilepath, e.what());
-        return nullptr;
+        YA_CORE_WARN("GPU upload failed for '{}' with exception: {}", label, e.what());
     }
     catch (...) {
-        YA_CORE_WARN("loadTextureSync: GPU upload failed for '{}' with unknown exception", normalizedFilepath);
-        return nullptr;
+        YA_CORE_WARN("GPU upload failed for '{}' with unknown exception", label);
     }
     if (!texture) {
-        YA_CORE_WARN("loadTextureSync: Failed to create texture: {}", normalizedFilepath);
-        return nullptr;
-    }
-
-    clearTextureLoadFailure(normalizedFilepath);
-
-    {
-        std::lock_guard lock(_mutex);
-        storeCachedLocked(cacheKey, texture);
-        if (!name.empty()) {
-            _textureName2Path[name] = cacheKey;
-        }
+        YA_CORE_WARN("GPU upload failed for '{}'", label);
     }
     return texture;
 }
 
-void AssetTextureManager::submitTextureLoad(const std::string&                          filepath,
-                                            const std::string&                          cacheKey,
-                                            AssetManager::ResolvedTextureImportSettings settings,
-                                            const std::string&                          name)
+std::vector<AssetManager::TextureReadyCallback> AssetTextureManager::fillSlotLocked(TextureEntry&                   entry,
+                                                                                    const std::shared_ptr<Texture>& texture)
 {
-    YA_CORE_TRACE("submitTextureLoad: async decode '{}' (format={}, payload={})",
-                 filepath,
-                 static_cast<int>(settings.resolvedFormat),
-                 AssetManager::texturePayloadTypeName(settings.payloadType));
+    AssetSlot<Texture>& slot = *entry.slot;
+    if (slot.resource && slot.resource != texture) {
+        DeferredDeletionQueue::get().retire(std::move(slot.resource));
+    }
+    slot.resource = texture;
+    slot.state    = texture ? EAssetSlotState::Ready : EAssetSlotState::Failed;
+    ++slot.generation;
+    return std::exchange(entry.readyCallbacks, {});
+}
 
-    const uint64_t clearGeneration = [&]() {
-        std::lock_guard lock(_mutex);
-        return _clearGeneration;
-    }();
-
-    auto handle = TaskQueue::get().submitWithCallback(
-        [settings]() -> AssetManager::TextureMemoryBlock
-        {
-            return decodeTextureToMemory(settings);
-        },
-        [this, filepath, cacheKey, name, clearGeneration](AssetManager::TextureMemoryBlock decoded)
-        {
-            std::vector<AssetManager::TextureReadyCallback> callbacks;
-            std::shared_ptr<Texture>                        readyTexture;
-
-            {
-                std::lock_guard lock(_mutex);
-                if (clearGeneration != _clearGeneration) {
-                    return;
-                }
-                if (auto existing = findCachedLocked(cacheKey)) {
-                    _pendingTextureLoads.erase(cacheKey);
-                    callbacks    = takeTextureCallbacks(cacheKey);
-                    readyTexture = existing;
-                }
-            }
-
-            if (readyTexture) {
-                dispatchTextureCallbacks(callbacks, readyTexture);
-                return;
-            }
-
-            if (!decoded.isValid()) {
-                YA_CORE_WARN("Async texture decode failed for '{}'", filepath);
-                {
-                    std::lock_guard lock(_mutex);
-                    _pendingTextureLoads.erase(cacheKey);
-                    callbacks = takeTextureCallbacks(cacheKey);
-                }
-                if (decoded.hardFailure) {
-                    rememberTextureLoadFailure(filepath, decoded.error.empty() ? "decode failed" : decoded.error);
-                }
-                dispatchTextureCallbacks(callbacks, nullptr);
-                return;
-            }
-
-            std::shared_ptr<Texture> texture;
-            try {
-                auto* asyncRender = _owner.getRender();
-                texture = asyncRender ? Texture::fromMemory(*asyncRender, TextureMemoryCreateInfo{
-                    .filepath = decoded.filepath,
-                    .label    = decoded.filepath,
-                    .memory   = TextureMemoryView{
-                        .width     = decoded.width,
-                        .height    = decoded.height,
-                        .channels  = decoded.channels,
-                        .mipLevels = decoded.mipLevels,
-                        .generateMipmaps = decoded.generateMipmaps,
-                        .format    = decoded.format,
-                        .data      = decoded.data(),
-                        .dataSize  = decoded.dataSize(),
-                    },
-                }) : nullptr;
-            }
-            catch (const std::exception& e) {
-                YA_CORE_WARN("Async GPU upload failed for '{}' with exception: {}", filepath, e.what());
-            }
-            catch (...) {
-                YA_CORE_WARN("Async GPU upload failed for '{}' with unknown exception", filepath);
-            }
-            if (!texture) {
-                YA_CORE_WARN("Async GPU upload failed for '{}'", filepath);
-                {
-                    std::lock_guard lock(_mutex);
-                    _pendingTextureLoads.erase(cacheKey);
-                    callbacks = takeTextureCallbacks(cacheKey);
-                }
-                dispatchTextureCallbacks(callbacks, nullptr);
-                return;
-            }
-
-            clearTextureLoadFailure(filepath);
-
-            {
-                std::lock_guard lock(_mutex);
-                storeCachedLocked(cacheKey, texture);
-                if (!name.empty()) {
-                    _textureName2Path[name] = cacheKey;
-                }
-                _pendingTextureLoads.erase(cacheKey);
-                callbacks = takeTextureCallbacks(cacheKey);
-            }
-
-            dispatchTextureCallbacks(callbacks, texture);
-
-            YA_CORE_TRACE("Async texture ready: '{}' ({}x{})", filepath, texture->getWidth(), texture->getHeight());
-        });
-
-    std::lock_guard lock(_mutex);
-    _pendingTextureLoads[cacheKey] = std::move(handle);
+void AssetTextureManager::dispatchTextureCallbacks(std::vector<AssetManager::TextureReadyCallback> callbacks,
+                                                   const std::shared_ptr<Texture>&                 texture)
+{
+    for (auto& callback : callbacks) {
+        if (!callback) {
+            continue;
+        }
+        AssetManager::dispatchToGameThread([callback = std::move(callback), texture]()
+                                           { callback(texture); });
+    }
 }
 
 std::shared_ptr<Texture> AssetTextureManager::getTextureByPath(const std::string& filepath) const
 {
-    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
+    const auto      path = AssetManager::normalizeAssetPath(filepath);
     std::lock_guard lock(_mutex);
-
-    auto metaIt = _owner._metaCache.find(normalizedFilepath);
-    if (metaIt != _owner._metaCache.end()) {
-        const std::string cacheKey = AssetManager::makeCacheKey(normalizedFilepath, metaIt->second);
-        if (auto cached = findCachedLocked(cacheKey)) {
-            return cached;
+    for (const auto colorSpace : kTextureColorSpaces) {
+        auto it = _entries.find(requestKey(path, colorSpace));
+        if (it != _entries.end() && it->second.slot->state == EAssetSlotState::Ready) {
+            return it->second.slot->resource;
         }
     }
-
-    for (const auto& [key, handle] : _cacheKey2Handle) {
-        if (key.starts_with(normalizedFilepath + "|")) {
-            if (auto cached = _textures.getShared(handle)) {
-                return cached;
-            }
-        }
-    }
-
     return nullptr;
 }
 
 std::shared_ptr<Texture> AssetTextureManager::getTextureByName(const std::string& name) const
 {
     std::lock_guard lock(_mutex);
-    auto            nameIt = _textureName2Path.find(name);
-    if (nameIt == _textureName2Path.end()) {
+    auto            nameIt = _textureName2Key.find(FName(name));
+    if (nameIt == _textureName2Key.end()) {
         return nullptr;
     }
-
-    return findCachedLocked(nameIt->second);
+    auto it = _entries.find(nameIt->second);
+    if (it == _entries.end() || it->second.slot->state != EAssetSlotState::Ready) {
+        return nullptr;
+    }
+    return it->second.slot->resource;
 }
 
 bool AssetTextureManager::isTextureLoaded(const std::string& filepath) const
@@ -524,23 +498,32 @@ void AssetTextureManager::registerTexture(const std::string& name, const stdptr<
         return;
     }
 
-    std::lock_guard lock(_mutex);
-    storeCachedLocked(name, texture);
-    _textureName2Path[name] = name;
-}
-
-bool AssetTextureManager::isTextureLoadPending(const std::string& cacheKey) const
-{
-    std::lock_guard lock(_mutex);
-    auto            it = _pendingTextureLoads.find(cacheKey);
-    return it != _pendingTextureLoads.end() && !it->second.isReady();
+    std::vector<AssetManager::TextureReadyCallback> callbacks;
+    {
+        std::lock_guard lock(_mutex);
+        auto [it, inserted] = _entries.try_emplace(name);
+        TextureEntry& entry = it->second;
+        if (inserted) {
+            entry.slot = std::make_shared<AssetSlot<Texture>>();
+        }
+        entry.loadSerial               = ++_nextLoadSerial;
+        callbacks                      = fillSlotLocked(entry, texture);
+        _textureName2Key[FName(name)] = name;
+    }
+    dispatchTextureCallbacks(std::move(callbacks), texture);
 }
 
 bool AssetTextureManager::isTextureLoadFailed(const std::string& filepath) const
 {
-    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
+    const auto      path = AssetManager::normalizeAssetPath(filepath);
     std::lock_guard lock(_mutex);
-    return _failedTextureLoads.contains(normalizedFilepath);
+    for (const auto colorSpace : kTextureColorSpaces) {
+        auto it = _entries.find(requestKey(path, colorSpace));
+        if (it != _entries.end() && it->second.slot->state == EAssetSlotState::Failed) {
+            return true;
+        }
+    }
+    return false;
 }
 
 size_t AssetTextureManager::collectUnused(uint64_t frame)
@@ -548,126 +531,102 @@ size_t AssetTextureManager::collectUnused(uint64_t frame)
     size_t          released = 0;
     auto&           ddq      = DeferredDeletionQueue::get();
     std::lock_guard lock(_mutex);
-    for (auto it = _cacheKey2Handle.begin(); it != _cacheKey2Handle.end();) {
-        // useCount()==1 means the slot table holds the only reference.
-        if (_textures.useCount(it->second) == 1) {
-            if (auto old = _textures.release(it->second)) {
-                ddq.enqueueResource(frame, std::move(old));
-            }
-            it = _cacheKey2Handle.erase(it);
-            ++released;
-        }
-        else {
+    for (auto it = _entries.begin(); it != _entries.end();) {
+        const auto& slot = it->second.slot;
+        // Only the manager holds the slot, and nothing outside the slot still
+        // uses the texture (e.g. a material binding kept after its ref left).
+        const bool bUnused = slot.use_count() == 1 &&
+                             slot->state != EAssetSlotState::Loading &&
+                             (!slot->resource || slot->resource.use_count() == 1);
+        if (!bUnused) {
             ++it;
+            continue;
         }
+        if (slot->resource) {
+            ddq.enqueueResource(frame, std::move(slot->resource));
+        }
+        std::erase_if(_textureName2Key, [&](const auto& alias) { return alias.second == it->first; });
+        it = _entries.erase(it);
+        ++released;
     }
     return released;
 }
 
-bool AssetTextureManager::unload(const std::string& cacheKey, uint64_t frame)
+bool AssetTextureManager::unload(const std::string& filepath, uint64_t frame)
 {
-    const auto normalizedCacheKey = AssetManager::normalizeAssetPath(cacheKey);
-    std::lock_guard lock(_mutex);
-    if (!_cacheKey2Handle.contains(normalizedCacheKey)) {
-        return false;
-    }
-    eraseCachedLocked(normalizedCacheKey, frame);
-    return true;
-}
+    const auto path     = AssetManager::normalizeAssetPath(filepath);
+    bool       bRemoved = false;
 
-void AssetTextureManager::invalidate(const std::string& filepath, uint64_t frame)
-{
-    evictCachedAsset(filepath, frame);
-}
-
-void AssetTextureManager::evictCachedAsset(const std::string& assetPath, uint64_t frame)
-{
-    const auto      normalizedAssetPath = AssetManager::normalizeAssetPath(assetPath);
-    auto&           ddq                 = DeferredDeletionQueue::get();
-    std::lock_guard lock(_mutex);
-    for (auto it = _cacheKey2Handle.begin(); it != _cacheKey2Handle.end();) {
-        if (it->first == normalizedAssetPath || it->first.starts_with(normalizedAssetPath + "|")) {
-            if (auto old = _textures.release(it->second)) {
-                ddq.enqueueResource(frame, std::move(old));
+    std::vector<AssetManager::TextureReadyCallback> callbacks;
+    {
+        std::lock_guard lock(_mutex);
+        auto&           ddq = DeferredDeletionQueue::get();
+        for (const auto colorSpace : kTextureColorSpaces) {
+            const std::string key = requestKey(path, colorSpace);
+            auto              it  = _entries.find(key);
+            if (it == _entries.end()) {
+                continue;
             }
-            it = _cacheKey2Handle.erase(it);
+            // Refs still holding the slot see it Failed; they load again only
+            // when their path is rebound.
+            AssetSlot<Texture>& slot = *it->second.slot;
+            if (slot.resource) {
+                ddq.enqueueResource(frame, std::move(slot.resource));
+            }
+            slot.state = EAssetSlotState::Failed;
+            ++slot.generation;
+            auto pending = std::exchange(it->second.readyCallbacks, {});
+            callbacks.insert(callbacks.end(), std::make_move_iterator(pending.begin()), std::make_move_iterator(pending.end()));
+            std::erase_if(_textureName2Key, [&](const auto& alias) { return alias.second == key; });
+            _entries.erase(it);
+            bRemoved = true;
         }
-        else {
-            ++it;
+    }
+    dispatchTextureCallbacks(std::move(callbacks), nullptr);
+    return bRemoved;
+}
+
+void AssetTextureManager::reload(const std::string& filepath)
+{
+    const auto path = AssetManager::normalizeAssetPath(filepath);
+
+    std::vector<std::pair<std::string, AssetManager::ETextureColorSpace>> variants;
+    {
+        std::lock_guard lock(_mutex);
+        for (const auto colorSpace : kTextureColorSpaces) {
+            const std::string key = requestKey(path, colorSpace);
+            auto              it  = _entries.find(key);
+            if (it == _entries.end()) {
+                continue;
+            }
+            // A Ready slot keeps serving the previous texture until the
+            // replacement is uploaded; a Failed one retries.
+            AssetSlot<Texture>& slot = *it->second.slot;
+            if (slot.state == EAssetSlotState::Failed) {
+                slot.state = EAssetSlotState::Loading;
+            }
+            variants.emplace_back(key, colorSpace);
         }
+    }
+    for (const auto& [key, colorSpace] : variants) {
+        submitTextureLoad(key, path, colorSpace);
     }
 }
 
 void AssetTextureManager::fillStats(AssetManager::CacheStats& stats) const
 {
     std::lock_guard lock(_mutex);
-    stats.textureCount += _cacheKey2Handle.size();
-    for (const auto& [_, handle] : _cacheKey2Handle) {
-        if (auto texture = _textures.getShared(handle)) {
-            stats.textureMemoryEstimate += static_cast<size_t>(texture->getWidth()) *
-                                           texture->getHeight() *
-                                           std::max(texture->getChannels(), 1u);
-        }
-    }
-}
-
-void AssetTextureManager::registerTextureCallback(const std::string& cacheKey, AssetManager::TextureReadyCallback onReady)
-{
-    if (!onReady) {
-        return;
-    }
-
-    std::shared_ptr<Texture> readyTexture;
-    {
-        std::lock_guard lock(_mutex);
-        readyTexture = findCachedLocked(cacheKey);
-        if (!readyTexture) {
-            _pendingTextureCallbacks[cacheKey].push_back(std::move(onReady));
-            return;
-        }
-    }
-
-    AssetManager::dispatchToGameThread([onReady = std::move(onReady), readyTexture]() mutable
-                                       { onReady(readyTexture); });
-}
-
-std::vector<AssetManager::TextureReadyCallback> AssetTextureManager::takeTextureCallbacks(const std::string& cacheKey)
-{
-    auto it = _pendingTextureCallbacks.find(cacheKey);
-    if (it == _pendingTextureCallbacks.end()) {
-        return {};
-    }
-
-    auto callbacks = std::move(it->second);
-    _pendingTextureCallbacks.erase(it);
-    return callbacks;
-}
-
-void AssetTextureManager::dispatchTextureCallbacks(const std::vector<AssetManager::TextureReadyCallback>& callbacks,
-                                                   const std::shared_ptr<Texture>&                        texture)
-{
-    for (const auto& callback : callbacks) {
-        if (!callback) {
+    for (const auto& [key, entry] : _entries) {
+        (void)key;
+        const auto& texture = entry.slot->resource;
+        if (!texture) {
             continue;
         }
-
-        AssetManager::dispatchToGameThread([callback, texture]()
-                                           { callback(texture); });
+        ++stats.textureCount;
+        stats.textureMemoryEstimate += static_cast<size_t>(texture->getWidth()) *
+                                       texture->getHeight() *
+                                       std::max(texture->getChannels(), 1u);
     }
-}
-
-void AssetTextureManager::rememberTextureLoadFailure(const std::string& filepath, std::string reason)
-{
-    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
-    std::lock_guard lock(_mutex);
-    _failedTextureLoads[normalizedFilepath] = std::move(reason);
-}
-
-void AssetTextureManager::clearTextureLoadFailure(const std::string& filepath)
-{
-    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
-    std::lock_guard lock(_mutex);
-    _failedTextureLoads.erase(normalizedFilepath);
 }
 
 } // namespace ya

@@ -142,19 +142,9 @@ struct YA_RENDER_3D_API PBRMaterialComponent : public MaterialComponent<PBRMater
     EMaterialResolveState getResolveState() const { return _resolveState; }
     void                  markResolvedReady() { _resolveState = EMaterialResolveState::Ready; }
 
-    bool checkTexturesStaleness()
-    {
-        bool stale = false;
-        if (_albedoSlot.textureRef.isStale())     { _albedoSlot.textureRef.invalidate();     stale = true; }
-        if (_normalSlot.textureRef.isStale())      { _normalSlot.textureRef.invalidate();      stale = true; }
-        if (_metallicSlot.textureRef.isStale())    { _metallicSlot.textureRef.invalidate();    stale = true; }
-        if (_roughnessSlot.textureRef.isStale())   { _roughnessSlot.textureRef.invalidate();   stale = true; }
-        if (_aoSlot.textureRef.isStale())          { _aoSlot.textureRef.invalidate();          stale = true; }
-        if (stale) {
-            invalidate();
-        }
-        return stale;
-    }
+    /// A Ready slot whose texture differs from what the runtime material
+    /// binds was reloaded since the last sync; marks the component dirty.
+    bool checkTexturesStaleness();
 
     TextureSlot*       getTextureSlot(EPBRMaterialTextureSlot r) { return getTextureSlotInternal(r); }
     const TextureSlot* getTextureSlot(EPBRMaterialTextureSlot r) const { return getTextureSlotInternal(r); }

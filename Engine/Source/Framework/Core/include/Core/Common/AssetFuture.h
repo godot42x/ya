@@ -6,30 +6,27 @@ namespace ya
 {
 
 // Forward declarations
-struct Texture;
 struct Model;
 
 /**
- * @brief Lightweight "future" returned by async AssetManager::loadTexture() / loadModel().
+ * @brief Lightweight "future" returned by async AssetManager::loadModel().
  *
  * INTENTIONALLY has no implicit conversion to T* or shared_ptr<T>.
  * You MUST call isReady() before get(), or use getOr(fallback).
- * This prevents the crash pattern:  loadTexture("x.png")->getImageView()  // BOOM if async
+ * This prevents the crash pattern:  loadModel("x.glb")->getMesh(0)  // BOOM if async
  *
  * Usage:
- *   auto future = am->loadTexture("diffuse.png");
+ *   auto future = am->loadModel({.filepath = "x.glb"});
  *
  *   // Option 1: Check explicitly
  *   if (future.isReady()) {
- *       auto* tex = future.get();  // safe
+ *       auto* model = future.get();  // safe
  *   }
  *
  *   // Option 2: Use fallback
- *   auto* tex = future.getOr(placeholderTexture);  // always safe
+ *   auto* model = future.getOr(placeholderModel);  // always safe
  *
- *   // Option 3: In TAssetRef::resolve() — just retry each frame until ready
- *
- * For sync loading that must succeed immediately, use loadTextureSync() which
+ * For sync loading that must succeed immediately, use loadModelSync() which
  * returns shared_ptr<T> directly — no wrapper, no ambiguity.
  */
 template <typename T>
@@ -65,8 +62,6 @@ class AssetFuture
     std::shared_ptr<T> _resource;
 };
 
-// Convenience aliases
-using TextureFuture = AssetFuture<Texture>;
-using ModelFuture   = AssetFuture<Model>;
+using ModelFuture = AssetFuture<Model>;
 
 } // namespace ya

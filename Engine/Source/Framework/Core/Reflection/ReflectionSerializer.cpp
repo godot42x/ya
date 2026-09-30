@@ -946,10 +946,10 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
         }
     }
 
-    // TODO: async in another thread?
-    // ★ NEW: After deserialization, resolve asset references if applicable
-    if (const auto* resolver = getAssetRefResolver(); resolver && resolver->isAssetRefType(prop.typeIndex)) {
-        resolver->resolveAssetRef(prop.typeIndex, nestedObjPtr);
+    // The raw _path field was just written; normalize it and bind the ref.
+    if (isAssetRefType(prop.typeIndex)) {
+        auto* ref = static_cast<AssetRefBase*>(nestedObjPtr);
+        ref->setPathWithoutNotify(ref->getPath());
     }
 }
 

@@ -76,12 +76,7 @@ bool PropertyAccessor::isIntegerType(type_index_t typeIndex)
 
 bool PropertyAccessor::isAssetRefType(type_index_t typeIndex)
 {
-    if (const IAssetRefResolver* resolver = getAssetRefResolver()) {
-        return resolver->isAssetRefType(typeIndex);
-    }
-    return typeIndex == refl::type_index_v<TextureRef> ||
-           typeIndex == refl::type_index_v<ModelRef> ||
-           typeIndex == refl::type_index_v<MeshRef>;
+    return ya::isAssetRefType(typeIndex);
 }
 
 bool PropertyAccessor::isLeafValueType(type_index_t typeIndex)

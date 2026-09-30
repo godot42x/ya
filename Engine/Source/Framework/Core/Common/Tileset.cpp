@@ -113,62 +113,45 @@ std::shared_ptr<Tileset> parseTilesetJson(const std::string& text, std::string& 
     return tileset;
 }
 
-EAssetResolveResult TilesetRef::resolve()
+void TilesetRef::rebind()
 {
-    _path = canonicalizeAssetPath(_path);
+    _cached.reset();
     if (_path.empty()) {
-        _cached.reset();
-        _resolveState = EAssetResolveState::Empty;
-        return EAssetResolveResult::Ready;
-    }
-    if (_resolveState == EAssetResolveState::Ready && _cached) {
-        return EAssetResolveResult::Ready;
+        return;
     }
 
     {
         std::lock_guard<std::mutex> lock(tilesetCacheMutex());
         if (const auto it = tilesetCache().find(_path); it != tilesetCache().end()) {
             if (std::shared_ptr<Tileset> live = it->second.lock()) {
-                _cached       = std::move(live);
-                _resolveState = EAssetResolveState::Ready;
-                return EAssetResolveResult::Ready;
+                _cached = std::move(live);
+                return;
             }
         }
     }
 
     VirtualFileSystem* vfs = VirtualFileSystem::get();
     if (!vfs) {
-        YA_CORE_ERROR("TilesetRef::resolve: no virtual file system mounted for '{}'", _path);
-        _resolveState = EAssetResolveState::Failed;
-        return EAssetResolveResult::Failed;
+        YA_CORE_ERROR("TilesetRef: no virtual file system mounted for '{}'", _path);
+        return;
     }
     std::string text;
     if (!vfs->readFileToString(_path, text) || text.empty()) {
-        YA_CORE_ERROR("TilesetRef::resolve: cannot read tileset '{}'", _path);
-        _resolveState = EAssetResolveState::Failed;
-        return EAssetResolveResult::Failed;
+        YA_CORE_ERROR("TilesetRef: cannot read tileset '{}'", _path);
+        return;
     }
     std::string error;
     std::shared_ptr<Tileset> tileset = parseTilesetJson(text, error);
     if (!tileset) {
-        YA_CORE_ERROR("TilesetRef::resolve: '{}' is not a valid tileset: {}", _path, error);
-        _resolveState = EAssetResolveState::Failed;
-        return EAssetResolveResult::Failed;
+        YA_CORE_ERROR("TilesetRef: '{}' is not a valid tileset: {}", _path, error);
+        return;
     }
 
     {
         std::lock_guard<std::mutex> lock(tilesetCacheMutex());
         tilesetCache()[_path] = tileset;
     }
-    _cached       = std::move(tileset);
-    _resolveState = EAssetResolveState::Ready;
-    return EAssetResolveResult::Ready;
-}
-
-void TilesetRef::invalidate()
-{
-    _cached.reset();
-    _resolveState = _path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty;
+    _cached = std::move(tileset);
 }
 
 void TilesetRef::clearCache()

@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include "Core/Common/AssetFuture.h"
+#include "Core/Common/AssetSlot.h"
 #include "Resource/AssetManagerTypes.h"
 #include "Resource/Core/Meta/AssetMeta.h"
 #include "Core/ResourceRegistry.h"
@@ -103,20 +104,18 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     const AssetMeta& getOrLoadMeta(const std::string& assetPath);
     const AssetMeta& reloadMeta(const std::string& assetPath);
 
-    // ── Cache key helpers ───────────────────────────────────────────────
-
-    static std::string makeCacheKey(const std::string& filepath, const AssetMeta& meta);
-
     // ── Default loading (async) ─────────────────────────────────────────
     //
     // loadTexture() / loadModel() are ASYNC by default.
-    // They return AssetFuture<T> — a type-safe wrapper that FORCES you to
-    // check isReady() before accessing the resource.
+    // loadTexture returns the shared slot for the request (same slot for the
+    // same path + color space); it turns Ready or Failed on the game thread
+    // when the decode completes. onReady fires once with the texture or null.
+    // loadModel returns an AssetFuture<Model> snapshot.
     //
     // Use loadTextureSync() / loadModelSync() for must-have-now resources.
     // Sync methods return shared_ptr<T> directly (guaranteed non-null on success).
 
-    TextureFuture loadTexture(const TextureLoadRequest& request);
+    AssetHandle<Texture> loadTexture(const TextureLoadRequest& request);
 
     ModelFuture loadModel(const ModelLoadRequest& request);
 
@@ -158,10 +157,11 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     size_t collectUnused();
 
     /**
-     * @brief Force-unload a specific resource by its cache key.
+     * @brief Force-unload every cached variant of an asset path. Texture
+     *        slots still held by refs turn Failed.
      *        GPU-SAFE: deferred via DeferredDeletionQueue.
      */
-    void unload(const std::string& cacheKey);
+    void unload(const std::string& assetPath);
 
     struct CacheStats
     {
@@ -211,10 +211,7 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     static const char*               texturePayloadTypeName(ETexturePayloadType type);
     static const char*               textureColorSpaceName(ETextureColorSpace colorSpace);
 
-    /// Check whether an async texture load is still in flight.
-    bool isTextureLoadPending(const std::string& cacheKey) const;
-
-    /// Check whether a texture path has a remembered hard failure.
+    /// Check whether any texture slot of a path failed to load.
     bool isTextureLoadFailed(const std::string& filepath) const;
 
     /// Check whether an async model load is still in flight.
@@ -222,14 +219,11 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
 
     /// Release all cached textures (GPU images). Hosts call this before
     /// tearing down the render backend / VMA allocator so dedicated image
-    /// allocations are freed while the device is still alive.
+    /// allocations are freed while the device is still alive. Slots still
+    /// held by refs turn Failed.
     void clearTextures();
 
   private:
-    /// Get or compute+cache the cacheKey for a filepath. Returns a stable reference.
-    std::string buildTextureCacheKey(const std::string&                   requestPath,
-                                     const ResolvedTextureImportSettings& settings);
-
     static void dispatchToGameThread(std::function<void()> task);
 
 
@@ -237,8 +231,6 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     const AssetTextureManager& textureManager() const;
     AssetModelManager&         modelManager();
     const AssetModelManager&   modelManager() const;
-
-    void evictCachedAsset(const std::string& assetPath);
 };
 
 } // namespace ya

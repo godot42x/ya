@@ -1,9 +1,6 @@
 #include "Render3D/Services/GameplayResourceBinding.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/Component/2D/Sprite2DComponent.h"
-#include "ECS/Component/2D/TilemapComponent.h"
-#include "ECS/Systems/Components/UIComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
@@ -52,20 +49,8 @@ void GameplayResourceBinding::prepareScenes(std::span<Scene* const> scenes, floa
             auditMaterialWork(work);
         }
         {
-            YA_PROFILE_SCOPE("ResourceResolve/UI");
-            resolvePendingUI(*scene);
-        }
-        {
             YA_PROFILE_SCOPE("ResourceResolve/Billboards");
             resolvePendingBillboards(*scene);
-        }
-        {
-            YA_PROFILE_SCOPE("ResourceResolve/Sprites");
-            resolvePendingSprites(*scene);
-        }
-        {
-            YA_PROFILE_SCOPE("ResourceResolve/Tilemaps");
-            resolvePendingTilemaps(*scene);
         }
     }
 }
@@ -291,18 +276,6 @@ void GameplayResourceBinding::resolvePendingMaterials(SceneWork& work)
     }
 }
 
-void GameplayResourceBinding::resolvePendingUI(Scene& scene)
-{
-    auto& registry = scene.getRegistry();
-
-    registry.view<UIComponent>().each([&](auto entity, UIComponent& uiComponent) {
-        (void)entity;
-        if (!uiComponent.view.textureRef.isLoaded() && uiComponent.view.textureRef.hasPath()) {
-            uiComponent.view.textureRef.resolve();
-        }
-    });
-}
-
 void GameplayResourceBinding::resolvePendingBillboards(Scene& scene)
 {
     auto& registry = scene.getRegistry();
@@ -311,39 +284,6 @@ void GameplayResourceBinding::resolvePendingBillboards(Scene& scene)
         (void)entity;
         if (comp.bDirty) {
             comp.resolve();
-        }
-    }
-}
-
-void GameplayResourceBinding::resolvePendingSprites(Scene& scene)
-{
-    auto& registry = scene.getRegistry();
-
-    for (const auto& [entity, comp] : registry.view<Sprite2DComponent>().each()) {
-        (void)entity;
-        if (comp.image.needsResolve()) {
-            (void)comp.image.resolve();
-        }
-    }
-}
-
-void GameplayResourceBinding::resolvePendingTilemaps(Scene& scene)
-{
-    auto& registry = scene.getRegistry();
-
-    for (const auto& [entity, comp] : registry.view<TilemapComponent>().each()) {
-        (void)entity;
-        if (!comp.tileset.hasPath()) {
-            continue;
-        }
-        // The tileset document itself loads synchronously; its atlas image
-        // resolves on the texture path like every other sprite texture.
-        if (comp.tileset.resolve() != EAssetResolveResult::Ready) {
-            continue;
-        }
-        Tileset* tileset = comp.tileset.get();
-        if (tileset && tileset->atlas.needsResolve()) {
-            (void)tileset->atlas.resolve();
         }
     }
 }

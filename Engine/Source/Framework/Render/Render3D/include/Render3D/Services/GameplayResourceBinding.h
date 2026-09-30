@@ -44,8 +44,10 @@ struct YA_RENDER_3D_API GameplayResourceBinding : public ISystem
     void setHostTickProvider(std::function<uint64_t()> provider) { _getHostTick = std::move(provider); }
 
     /**
-     * @brief Resolves the pending plain resources (mesh / material / UI /
-     * billboard) of exactly these Scenes. Skybox / environment / terrain
+     * @brief Resolves the pending plain resources (mesh / material /
+     * billboard) of exactly these Scenes. Texture refs bind their shared
+     * asset slot when their path is set, so sprites, tilemaps and UI images
+     * need no per-frame work here. Skybox / environment / terrain
      * derived GPU work lives in EnvironmentLightingProcessor and
      * TerrainProcessor. A Scene this call does not name has its work dropped.
      */
@@ -69,10 +71,7 @@ struct YA_RENDER_3D_API GameplayResourceBinding : public ISystem
     void markMaterialDirty(SceneWork& work, entt::entity entity, const char* reason);
     void resolvePendingMeshes(Scene& scene);
     void resolvePendingMaterials(SceneWork& work);
-    void resolvePendingUI(Scene& scene);
     void resolvePendingBillboards(Scene& scene);
-    void resolvePendingSprites(Scene& scene);
-    void resolvePendingTilemaps(Scene& scene);
 
     std::function<uint64_t()>                   _getHostTick;
     std::unordered_map<const Scene*, SceneWork> _sceneWork;

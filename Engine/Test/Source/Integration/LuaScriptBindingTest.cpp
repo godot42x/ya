@@ -162,7 +162,6 @@ TEST_F(LuaScriptBindingTest, TilemapQueryFaceReachesLua)
     auto tileset         = std::make_shared<Tileset>();
     tileset->solidTiles  = {4};
     map->tileset._cached = tileset;
-    map->tileset._resolveState = EAssetResolveState::Ready;
 
     const auto result = run(R"(
         local map = entity:getTilemap()
