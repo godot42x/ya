@@ -836,6 +836,63 @@ TEST(ToolControlsTest, SelectableRowPressSelectsReleaseActivates)
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
 }
 
+TEST(ToolControlsTest, SelectableRowDoubleClickModeSelectsOnPressAndOpensOnDoubleClick)
+{
+    // Content-browser rows: one click selects (never navigates), the second
+    // click within the platform's double-click window opens.
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       row = std::make_shared<UISelectableRow>("Row");
+    row->_itemId                 = "asset.1";
+    row->_bActivateOnDoubleClick = true;
+    FCanvasSlotArgs rowSlot;
+    rowSlot.fixedSize = {200.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    tree.layout();
+
+    std::vector<std::string> selected;
+    std::vector<std::string> activated;
+    row->_onSelect   = [&](const std::string& id) { selected.push_back(id); };
+    row->_onActivate = [&](const std::string& id) { activated.push_back(id); };
+
+    MouseButtonPressedEvent single(EMouse::Left);
+    single._clickCount = 1;
+    EXPECT_EQ(tree.dispatchEvent(single, pointAt(50.0f, 12.0f)), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(selected, std::vector<std::string>{"asset.1"});
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(50.0f, 12.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_TRUE(activated.empty()); // a single click must not open
+
+    MouseButtonPressedEvent twice(EMouse::Left);
+    twice._clickCount = 2;
+    EXPECT_EQ(tree.dispatchEvent(twice, pointAt(50.0f, 12.0f)), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(50.0f, 12.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(activated, std::vector<std::string>{"asset.1"});
+}
+
+TEST(ToolControlsTest, SelectableRowRebindDropsInheritedHover)
+{
+    // A keyed reconciler recycles row widgets across scroll windows; state
+    // that belonged to the old item must not paint on the new one.
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       row = std::make_shared<UISelectableRow>("Row");
+    row->_itemId = "old";
+    FCanvasSlotArgs rowSlot;
+    rowSlot.fixedSize = {200.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    tree.layout();
+
+    // Hover the row, then detach/rebind it to another item (what the keyed
+    // reconciler does when the visible window slides).
+    tree.dispatchEvent(MouseMoveEvent(50.0f, 12.0f), pointAt(50.0f, 12.0f));
+    EXPECT_TRUE(row->isHovered());
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(50.0f, 12.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    row->clearTransientInputState(); // the rebind path in updateContentRow
+    EXPECT_FALSE(row->isHovered());
+}
+
 TEST(ToolControlsTest, SelectableRowEnterActivatesFocusedRow)
 {
     WidgetTree tree({.width = 400, .height = 300});

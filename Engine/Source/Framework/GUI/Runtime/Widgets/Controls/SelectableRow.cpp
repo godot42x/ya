@@ -110,6 +110,7 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
     switch (eventType) {
     case EEvent::MouseButtonPressed:
         _bPressed = true;
+        _pressClickCount = static_cast<const MouseButtonPressedEvent&>(event).clickCount();
         _pressPoint = ctx.logicalPoint;
         if (WidgetTree* tree = getTree()) {
             tree->setFocus(this);
@@ -125,7 +126,7 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
         _bHovered = bPointInside;
         (void)UIElement::handleInputEvent(event, ctx);
         return true;
-    case EEvent::MouseButtonReleased:
+    case EEvent::MouseButtonReleased: {
         if (!_bPressed) {
             return false;
         }
@@ -134,12 +135,14 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
             tree->releasePointerCapture(this);
         }
         (void)UIElement::handleInputEvent(event, ctx);
-        if (bPointInside || ctx.bViaCapture) {
+        const bool bActivates = _bActivateOnDoubleClick ? _pressClickCount >= 2 : true;
+        if ((bPointInside || ctx.bViaCapture) && bActivates) {
             if (_onActivate) {
                 _onActivate(_itemId);
             }
         }
         return true;
+    }
     default:
         return false;
     }
@@ -150,6 +153,7 @@ void UISelectableRow::clearTransientInputState()
     _bHovered = false;
     _bPressed = false;
     _bDropHighlighted = false;
+    _pressClickCount = 1;
 }
 
 glm::vec2 UISelectableRow::computeDesiredSize() const

@@ -379,6 +379,20 @@ class UISelectableRowWidgetBuilder final : public TUIWidgetChildrenBuilder<UISel
         return std::move(*this);
     }
 
+    /// Content-browser rows open on double-click so a single click only
+    /// selects; menu-style rows keep the single-click default.
+    [[nodiscard]] UISelectableRowWidgetBuilder& setActivateOnDoubleClick(bool value) &
+    {
+        _widget->_bActivateOnDoubleClick = value;
+        return *this;
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder&& setActivateOnDoubleClick(bool value) &&
+    {
+        _widget->_bActivateOnDoubleClick = value;
+        return std::move(*this);
+    }
+
     [[nodiscard]] UISelectableRowWidgetBuilder& setItemId(std::string value) &
     {
         _widget->_itemId = std::move(value);

@@ -76,6 +76,12 @@ struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISe
     /// Visual drop-target feedback, written by the tree drag session.
     VisualFlag _bDropHighlighted{*this};
 
+    /// Activation gesture. Default: a single click-releases activates (menu
+    /// rows, tool toggles). Content-browser rows set this so a single click
+    /// only selects and the double-click opens -- the asset-browser habit
+    /// (a click must never navigate away from under the pointer).
+    bool _bActivateOnDoubleClick = false;
+
     void setDraggable(bool value) { _bDraggable = value; }
     void setDragPayload(std::string value) { _dragPayload = std::move(value); }
     void setDragGhostLabel(std::string value) { _dragGhostLabel = std::move(value); }
@@ -101,6 +107,9 @@ struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISe
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
+    /// Whether the pointer is currently over this row (paint + test view of
+    /// the transient hover flag).
+    [[nodiscard]] bool isHovered() const { return _bHovered; }
     void onPointerEnter() override { _bHovered = true; }
     void onPointerLeave() override { _bHovered = false; }
     void resetHoverState() override { _bHovered = false; }
@@ -114,6 +123,8 @@ struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISe
     VisualFlag _bPressed{*this};
     VisualFlag _bHovered{*this};
     glm::vec2  _pressPoint{};
+    /// Click count of the press that opened the current session (1 = single).
+    uint32_t   _pressClickCount = 1;
 };
 
 } // namespace ya

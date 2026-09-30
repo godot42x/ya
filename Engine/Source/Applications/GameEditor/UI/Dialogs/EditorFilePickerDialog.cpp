@@ -352,7 +352,8 @@ void EditorFilePickerDialog::rebuildRows(WidgetTree& tree)
                              active != nullptr && active->name == mp.name,
                              [this](const std::string& itemId) { selectMount(itemId); },
                              [this](const std::string& itemId) { selectMount(itemId); },
-                             true);
+                             true,
+                             /*bActivateOnDoubleClick=*/false);
         },
         bindEditorListRowSlot);
 

@@ -31,6 +31,9 @@ inline constexpr size_t kEditorListOverscan = 2;
     return thumbnailSize + 12.0f + editor_density::kGridLabelHeight;
 }
 
+/// Content-browser rows open on double-click: a single click only selects, so
+/// browsing never navigates out from under the pointer (UE/Qt asset-browser
+/// habit). Menu-style rows keep the single-click activate default.
 inline ui::UISelectableRowWidgetBuilder contentRow(const std::string& key,
                                                    const std::string& label,
                                                    const std::string& itemId,
@@ -39,6 +42,7 @@ inline ui::UISelectableRowWidgetBuilder contentRow(const std::string& key,
 {
     return ui::selectableRow(key)
         .setItemId(itemId)
+        .setActivateOnDoubleClick(true)
         .setContentPadding(FMargin{6.0f, 0.0f, 0.0f, 0.0f})
         .setOnSelect(std::move(onSelect))
         .setOnActivate(std::move(onActivate))
@@ -87,13 +91,21 @@ inline void updateContentRow(UIElement& child,
                              bool selected,
                              std::function<void(const std::string&)> onSelect,
                              std::function<void(const std::string&)> onActivate,
-                             bool bDirectory = false)
+                             bool bDirectory = false,
+                             bool bActivateOnDoubleClick = true)
 {
     auto* row = dynamic_cast<UISelectableRow*>(&child);
     if (!row) {
         YA_CORE_ERROR("EditorListRows: keyed content row '{}' is not a UISelectableRow", child._name);
         return;
     }
+    // A keyed reconciler reuses widgets across scroll windows; the row's
+    // transient pointer state belongs to the OLD item, so a rebind drops it
+    // (otherwise the recycled row keeps painting hover/press).
+    if (row->_itemId != itemId) {
+        row->clearTransientInputState();
+    }
+    row->_bActivateOnDoubleClick = bActivateOnDoubleClick;
     row->_itemId = itemId;
     row->setSelected(selected);
     row->_onSelect = std::move(onSelect);
@@ -114,6 +126,7 @@ inline ui::UISelectableRowWidgetBuilder contentTile(const std::string& key,
 {
     return ui::selectableRow(key)
         .setItemId(itemId)
+        .setActivateOnDoubleClick(true)
         .setContentPadding(FMargin{4.0f, 4.0f, 4.0f, 4.0f})
         .setOnSelect(std::move(onSelect))
         .setOnActivate(std::move(onActivate))
@@ -144,6 +157,9 @@ inline void updateContentTile(UIElement& child,
     if (!row) {
         YA_CORE_ERROR("EditorListRows: keyed content tile '{}' is not a UISelectableRow", child._name);
         return;
+    }
+    if (row->_itemId != itemId) {
+        row->clearTransientInputState();
     }
     row->_itemId = itemId;
     row->setSelected(selected);
