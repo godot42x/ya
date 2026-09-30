@@ -1,5 +1,6 @@
 #include "GameEditor/UI/Ops/EditorTilemapUndo.h"
 
+#include "Core/TypeIndex.h"
 #include "ECS/Component/2D/TilemapComponent.h"
 #include "ECS/Entity.h"
 #include "GUI/Binding/UndoStack.h"
@@ -27,6 +28,10 @@ void restoreLayer(Scene* scene, const FTileLayerSnapshot& snapshot)
     // Same reaction the inspector's edit hook triggers: realign the restored
     // layer against width/height (a no-op when the snapshot already matches).
     map->onEdit();
+    // The cells were written outside any typed setter: route the edit through
+    // the scene funnel so derived-work processors hear it from the one signal
+    // source.
+    scene->notifyComponentEdited(entity->getHandle(), type_index_v<TilemapComponent>);
 }
 
 } // namespace

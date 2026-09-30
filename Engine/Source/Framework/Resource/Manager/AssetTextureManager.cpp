@@ -313,7 +313,6 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
         YA_CORE_WARN("loadTextureSync: Failed to decode texture '{}': {}", path, decoded.error);
     }
 
-    std::vector<AssetManager::TextureReadyCallback> callbacks;
     SlotUpdate update;
     {
         std::lock_guard lock(_mutex);
@@ -390,7 +389,6 @@ void AssetTextureManager::completeTextureLoad(const std::string&               k
         YA_CORE_WARN("Async texture decode failed for '{}': {}", label, decoded.error);
     }
 
-    std::vector<AssetManager::TextureReadyCallback> callbacks;
     SlotUpdate update;
     {
         std::lock_guard lock(_mutex);
@@ -600,8 +598,6 @@ bool AssetTextureManager::unload(const std::string& filepath, uint64_t frame)
             if (slot.resource) {
                 ddq.enqueueResource(frame, std::move(slot.resource));
             }
-            slot.state = EAssetSlotState::Failed;
-            ++slot.generation;
             auto dispatch = updateSlotLocked(it->second, nullptr);
             update.readyCallbacks.insert(update.readyCallbacks.end(),
                                              std::make_move_iterator(dispatch.readyCallbacks.begin()),
