@@ -480,7 +480,10 @@ Scene* EditorViewportGizmoController::viewportScene() const
 
 bool EditorViewportGizmoController::hasSelectedEntities() const
 {
-    return !selections().empty();
+    // Runtime-active reports no targets: the W/E/R switch and every pointer
+    // pick below share this gate, so the authoring gizmo is fully out of the
+    // frame while the game owns the viewport.
+    return !_bRuntimeActive && !selections().empty();
 }
 
 bool EditorViewportGizmoController::consumeReleasePick()
@@ -492,7 +495,7 @@ bool EditorViewportGizmoController::consumeReleasePick()
 
 bool EditorViewportGizmoController::hasViewportGizmoSelection() const
 {
-    if (!_bHostValid) {
+    if (!_bHostValid || _bRuntimeActive) {
         return false;
     }
     Entity* entity = selectedEntity();
@@ -725,6 +728,21 @@ void EditorViewportGizmoController::cancelDrag()
     _hoveredAxis         = EEditorViewportGizmoAxis::None;
     _bConsumeReleasePick = false;
     _undoBefore.clear();
+}
+
+void EditorViewportGizmoController::setRuntimeActive(const bool bActive)
+{
+    if (_bRuntimeActive == bActive) {
+        return;
+    }
+    _bRuntimeActive = bActive;
+    if (bActive) {
+        // Entering play with a control session: drop every hover/drag artefact
+        // so nothing of the authoring gizmo survives into the game view.
+        cancelDrag();
+        _bHovered    = false;
+        _hoveredAxis = EEditorViewportGizmoAxis::None;
+    }
 }
 
 void EditorViewportGizmoController::setOperation(EEditorViewportGizmoOperation operation)

@@ -89,7 +89,11 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
     // editor rather than from app-wide render state.
     const FRenderFeatureMask gizmoFeature = toMask(ERenderFeature::Gizmo);
     const FRenderFeatureMask baseFeatures = toMask(ERenderFeature::Game);
-    const bool               bEditorGizmos = _app->isStopped() || _layer->isEditorGizmoShown();
+    // Runtime-with-control is the game's frame: the editor's companion
+    // furniture stays out of it even when the authoring view option is on
+    // (Simulation and stopped sessions keep the authoring behaviour).
+    const bool               bEditorGizmos =
+        _app->isStopped() || (_layer->isEditorGizmoShown() && !_app->isRuntimeMode());
 
     // The authoring panel's geometry is the editor's own fact: the editor
     // declares it rather than pushing it into host state and reading it back.

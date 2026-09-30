@@ -66,6 +66,7 @@ class EditorViewportGizmoController
     bool                          _bDragging           = false;
     bool                          _bPointerInside      = false;
     bool                          _bConsumeReleasePick = false;
+    bool                          _bRuntimeActive      = false;
     glm::vec2                     _pointerLocal        = {0.0f, 0.0f};
     EEditorViewportGizmoAxis      _hoveredAxis         = EEditorViewportGizmoAxis::None;
     EEditorViewportGizmoAxis      _activeAxis          = EEditorViewportGizmoAxis::None;
@@ -94,6 +95,13 @@ class EditorViewportGizmoController
     [[nodiscard]] bool isDragging() const { return _bDragging; }
     [[nodiscard]] bool consumeReleasePick();
     [[nodiscard]] bool hasSelectedEntities() const;
+
+    /// Authoring gate, republished by the editor every frame. While the game
+    /// runs with control the viewport is the game's, not the authoring
+    /// surface: gizmos neither draw nor answer W/E/R/pointer (UE's played-
+    /// in-editor behaviour). Simulation and stopped sessions stay authoring.
+    void               setRuntimeActive(bool bActive);
+    [[nodiscard]] bool isRuntimeActive() const { return _bRuntimeActive; }
 
   private:
     [[nodiscard]] Entity* selectedEntity() const;
