@@ -102,5 +102,60 @@ TEST(EditorUIDesignerGhostTest, RuntimeBuildContextKeepsSkippingHiddenWidgets)
     EXPECT_FALSE(ghosted.items.empty());
 }
 
+// The tree's eye: presenter-owned display toggles prune whole subtrees from
+// the canvas preview only. Runtime visibility is untouched, and the toggles
+// reset when the preview is rebuilt or structurally edited (child paths are
+// positional).
+TEST(EditorUIDesignerGhostTest, DesignerDisplayTogglePrunesPreviewSubtreeOnly)
+{
+    auto& registry = UITypeRegistry::instance();
+    auto  root     = registry.createInstance(kTypeIdCanvasPanel);
+    root->_name = "Root";
+    auto border = registry.createInstance(kTypeIdBorder);
+    border->_name = "Box";
+    root->addDetachedChild(border, [](UIElement&, UISlot& edge) {
+        FCanvasSlotArgs args;
+        args.offset    = {10.0f, 20.0f};
+        args.fixedSize = {60.0f, 30.0f};
+        edge.as<UICanvasSlot>()->apply(args);
+    });
+    auto sibling = registry.createInstance(kTypeIdBorder);
+    sibling->_name = "Other";
+    root->addDetachedChild(sibling, [](UIElement&, UISlot& edge) {
+        FCanvasSlotArgs args;
+        args.offset    = {100.0f, 20.0f};
+        args.fixedSize = {60.0f, 30.0f};
+        edge.as<UICanvasSlot>()->apply(args);
+    });
+
+    FDesignerFixture       fixture;
+    EditorUIDesignerSession designer(&fixture.layer);
+    fixture.publish(*root);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    ASSERT_TRUE(designer.hasDocument());
+    ASSERT_FALSE(designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f}).items.empty());
+
+    // Eye off on the first child: its subtree drops out of the snapshot, the
+    // sibling stays. Runtime visibility fields are untouched.
+    designer.toggleDesignerHidden({0});
+    ASSERT_TRUE(designer.isDesignerHidden({0}));
+    const UIFrameSnapshot filtered = designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+    for (const UIFrameDrawItem& item : filtered.items) {
+        EXPECT_FALSE(item.pos.x < 80.0f) << "hidden subtree painted at x="
+                                         << item.pos.x;
+    }
+    EXPECT_FALSE(filtered.items.empty());
+
+    // Eye back on: the subtree returns.
+    designer.toggleDesignerHidden({0});
+    EXPECT_FALSE(designer.isDesignerHidden({0}));
+    EXPECT_FALSE(designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f}).items.empty());
+
+    // A structural edit resets the toggles: child paths are positional.
+    designer.toggleDesignerHidden({0});
+    (void)designer.addPaletteWidget(kTypeIdBorder);
+    EXPECT_FALSE(designer.isDesignerHidden({0}));
+}
+
 } // namespace
 } // namespace ya

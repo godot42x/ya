@@ -41,6 +41,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <set>
 #include <vector>
 
 namespace ya
@@ -110,6 +111,18 @@ struct EditorUIDesignerSession
     /// Child-index path of `widget` from the preview root (`{}` is the root);
     /// nullopt when it is not in the preview.
     [[nodiscard]] std::optional<std::vector<size_t>> childPathOf(const UIElement* widget) const;
+
+    // === Designer display toggles (the UI Tree's eye) ===
+    /// Whether the canvas preview skips `path`'s subtree. Authoring-display
+    /// state only: runtime visibility is the document's own property and is
+    /// not read or written here. The set is cleared whenever the preview tree
+    /// is rebuilt or structurally edited, because child paths shift with the
+    /// siblings around them.
+    [[nodiscard]] bool isDesignerHidden(const std::vector<size_t>& path) const
+    {
+        return _designerHidden.contains(path);
+    }
+    void toggleDesignerHidden(const std::vector<size_t>& path);
 
     // === Canvas view (the Canvas tab's navigation and picture) ===
     [[nodiscard]] EditorUICanvasView&       canvas() { return _canvas; }
@@ -251,6 +264,8 @@ struct EditorUIDesignerSession
     /// The preview as of the last commit: the "before" of the next edit.
     nlohmann::json                     _committedJson;
     std::optional<std::vector<size_t>> _committedSelection;
+    /// Designer-display-hidden subtrees (the tree's eye), keyed by child path.
+    std::set<std::vector<size_t>> _designerHidden;
     UndoStack                          _localUndo;
     uint64_t                           _previewGeneration = 0;
     /// Undo closures outlive this session on a shared document stack; they

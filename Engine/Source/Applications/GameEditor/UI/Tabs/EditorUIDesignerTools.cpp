@@ -218,6 +218,29 @@ void EditorUIHierarchyTab::construct()
                            })
                            .setOnContextMenu([this](const std::string& nodeId, const glm::vec2& logicalPoint) {
                                openContextMenu(nodeId, logicalPoint);
+                           })
+                           .setRowToggleSpec({
+                               .bEnabled  = true,
+                               .width     = 26.0f,
+                               .isOn      = [this](const std::string& nodeId) {
+                                   // The eye shows when the row is VISIBLE in the
+                                   // designer canvas (default): it is the display
+                                   // toggle, not the runtime visibility property.
+                                   const auto path = parseDesignerChildPath(nodeId);
+                                   EditorUIDesignerSession* panel =
+                                       _layer ? &_layer->getEditorUIDesignerSession() : nullptr;
+                                   return panel && (!path || !panel->isDesignerHidden(*path));
+                               },
+                               .onToggled = [this](const std::string& nodeId) {
+                                   if (!_layer) {
+                                       return;
+                                   }
+                                   const auto path = parseDesignerChildPath(nodeId);
+                                   if (!path) {
+                                       return;
+                                   }
+                                   _layer->getEditorUIDesignerSession().toggleDesignerHidden(*path);
+                               },
                            });
     _treeView = treeBuilder.share();
     addDetachedChild(ui::border("UIDesignerHierarchyInner")

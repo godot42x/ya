@@ -332,6 +332,9 @@ bool EditorUIDesignerSession::installPreview(const std::shared_ptr<UIDocument>& 
                                                                      fillArgs);
     YA_CORE_ASSERT(attachment.valid(), "EditorUIDesignerSession: failed to attach preview root");
     _selected = _previewRoot.get();
+    // Child paths are positional: a rebuilt preview invalidates every
+    // designer-display toggle keyed by them.
+    _designerHidden.clear();
     ++_previewGeneration;
     // The baseline is the preview's own round trip, so an untouched preview
     // never commits a spurious edit against the stored form.
@@ -415,6 +418,13 @@ bool EditorUIDesignerSession::saveDocument()
     return true;
 }
 
+void EditorUIDesignerSession::toggleDesignerHidden(const std::vector<size_t>& path)
+{
+    if (!_designerHidden.insert(path).second) {
+        _designerHidden.erase(path);
+    }
+}
+
 UIFrameSnapshot EditorUIDesignerSession::buildPreviewSnapshot(const glm::vec2& uiScale, const glm::vec2& offset)
 {
     if (!_previewTree) {
@@ -426,6 +436,11 @@ UIFrameSnapshot EditorUIDesignerSession::buildPreviewSnapshot(const glm::vec2& u
     // Authoring canvas: a document whose root (or any subtree) ships Hidden is
     // shown dimmed, not blanked -- the runtime hides it, the designer edits it.
     ctx.ghostInvisibleOpacity = kDesignerGhostOpacity;
+    // The tree's eye: presenter-owned display toggles prune whole subtrees.
+    ctx.subtreePaintFilter = [this](const UIElement& widget) {
+        const std::optional<std::vector<size_t>> path = childPathOf(&widget);
+        return !path || !_designerHidden.contains(*path);
+    };
     // Strong lifetime for the preview as well: the snapshot retains textures
     // until the editor canvas compose has recorded (shared resolver rules
     // with the runtime host).
@@ -519,6 +534,7 @@ void EditorUIDesignerSession::applyWidgetDrop(UIElement* dragged, UIElement& tar
         _previewTree->reparentAfter(target, ref);
         break;
     }
+    _designerHidden.clear();
     commitEdit("Move " + dragged->_name);
 }
 
@@ -558,6 +574,7 @@ bool EditorUIDesignerSession::addPaletteWidget(const std::string& typeId)
         return false;
     }
     _selected = widget.get();
+    _designerHidden.clear();
     commitEdit("Add " + widget->_name);
     return true;
 }
@@ -583,6 +600,7 @@ UIElement* EditorUIDesignerSession::duplicateWidget(UIElement* widget)
     parent->getSlotForChild(*copy)->deserialize(slotState);
     _previewTree->reparentAfter(*widget, copy);
     _selected = copy.get();
+    _designerHidden.clear();
     commitEdit("Duplicate " + widget->_name);
     return copy.get();
 }
@@ -613,6 +631,7 @@ bool EditorUIDesignerSession::deleteWidget(UIElement* widget)
     if (_selected == widget) {
         _selected = nullptr;
     }
+    _designerHidden.clear();
     commitEdit(label);
     return true;
 }
