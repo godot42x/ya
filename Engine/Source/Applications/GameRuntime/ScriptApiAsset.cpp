@@ -47,7 +47,7 @@ void registerAssetScriptApis(ScriptApiRegistry& registry)
 
     registry.registerFunction(
         "asset.get_info",
-        "Inspects an asset path: {path, type, resourceVersion, textureLoaded, modelLoaded, meta}.",
+        "Inspects an asset path: {path, type, textureLoaded, modelLoaded, meta}.",
         Json{{"path", {{"type", "string"}}}},
         [](const Json& args) -> Json {
             AssetManager&     manager = requireAssetManager();
@@ -56,7 +56,6 @@ void registerAssetScriptApis(ScriptApiRegistry& registry)
             return Json{
                 {"path", path},
                 {"type", meta.type},
-                {"resourceVersion", manager.getResourceVersion(path)},
                 {"textureLoaded", manager.isTextureLoaded(path)},
                 {"modelLoaded", manager.isModelLoaded(path)},
                 {"meta", meta.toJson()},
@@ -78,7 +77,7 @@ void registerAssetScriptApis(ScriptApiRegistry& registry)
 
     registry.registerFunction(
         "asset.reload",
-        "Invalidates cached data for an asset and bumps its resource version.",
+        "Invalidates cached data for an asset.",
         Json{{"path", {{"type", "string"}}}},
         [](const Json& args) -> Json {
             AssetManager&     manager = requireAssetManager();
@@ -86,7 +85,6 @@ void registerAssetScriptApis(ScriptApiRegistry& registry)
             manager.invalidate(path);
             return Json{
                 {"path", path},
-                {"resourceVersion", manager.getResourceVersion(path)},
             };
         });
 

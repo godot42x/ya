@@ -33,13 +33,14 @@ RenderFrameExtractor 不发 terrain draw item。
 
 ## 同类模式
 
-- EnvironmentLightingProcessor：skybox、environment 仍有 active 重泵，留到 H5。
-- GameplayResourceBinding 的材质重泵已在 H2 删掉；TerrainProcessor 的重泵已在 H4 删掉（见文末）。
+- GameplayResourceBinding 的材质重泵已在 H2 删掉。
+- TerrainProcessor 的重泵已在 H4 删掉；EnvironmentLightingProcessor 的 skybox / environment 重泵已在 H5 删掉（见文末）。
 
 ## 预防
 
-1. 拆分处理器时，逐函数核对"循环末尾的 active 重泵段"是否随搬移保留
-   （`rg -n "activeEntities" <文件>` 应非空）。
+1. 完成信号是回调（批次 `onReady`、槽订阅、离屏 `onFinished`），回调只入队。
+   不要为了“下一帧还能看见”把 active 重泵加回去
+   （`rg -n "activeEntities|sweepAuthoringDirty" Engine/Source/Framework/Render` 应为空）。
 2. 冒烟必须包含带 TerrainComponent 的场景并跑截图自动化
    （`hasPendingTerrainResolve` 是现成的回归探针：stable 判定即 terrain Ready）。
 3. 与 `module_split_sed_regression.md` 同一失败类别：大块搬迁/删除后核对
@@ -49,4 +50,6 @@ RenderFrameExtractor 不发 terrain draw item。
 
 `TerrainProcessor` 的 active 重泵已经删掉。高度图完成走批次 `onReady`（只入队）；回调到来之前再 prepare 一次，状态保持 `LoadingHeightMap`（`TerrainResolveEventTest`）。不要把重泵加回去。
 
-`EnvironmentLightingProcessor` 的 skybox / environment 重泵留到 H5。
+## H5（2026-10-01）
+
+`EnvironmentLightingProcessor` 的 skybox / environment active 重泵、作者扫描和 120 tick 审计已经删掉。CPU 批次 `onReady` 和离屏 `OffscreenJobState::onFinished` 只把对应实体入队；同步失败的 job 在同一次泵里落到 Failed，不再靠下一帧重泵发现。不要把重泵加回去。

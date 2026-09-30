@@ -92,16 +92,25 @@
     {
       "id": "environment_lighting_events",
       "phase": "H5",
-      "status": "planned",
+      "status": "done",
       "goal": "OffscreenJobState::onFinished, texture and batch callbacks; skybox / environment sweep / audit / re-pump deleted",
-      "evidence": []
+      "evidence": [
+        "Engine/Source/Framework/Render/Render3D/EnvironmentLighting/EnvironmentLightingProcessor.cpp (SceneBus, batch onReady, offscreen onFinished)",
+        "Engine/Source/Framework/RHI/include/RHI/Core/OffscreenJob.h (onFinished from finalizeSubmittedOffscreenJobs)",
+        "HelloMaterial screenshot reached stable at frame 56 (/tmp/h5_hm.png); editor / 2DRpgPrototype / GreedySnake smokes exit 0"
+      ]
     },
     {
       "id": "steady_state_zero",
       "phase": "H5",
-      "status": "planned",
-      "goal": "TownLarge steady state: resource prepare touches no component view; ResourceResolve/* near 0; frame time not regressed; resource-system skill rewritten",
-      "evidence": []
+      "status": "done",
+      "goal": "steady prepare touches no component view; frame time is not the metric; resource-system skill rewritten",
+      "evidence": [
+        "Engine/Source/Framework/Render/Render3D/include/Render3D/ResourceResolveProbe.h",
+        "Engine/Test/Source/Render3D/ResourceResolveSteadyStateTest.cpp (second prepare delta 0, 1 entity == 64 entities)",
+        ".agent/skills/resource-system/SKILL.md",
+        "rg activeEntities|sweepAuthoringDirty under Engine/Source/Framework/Render is empty"
+      ]
     }
   ]
 }

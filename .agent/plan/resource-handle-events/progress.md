@@ -100,3 +100,24 @@
   - 高度图文件重载通过槽订阅入队，不再靠 120 tick 审计比对 `getResourceVersion`。
 - 保留 / 未完成：EL 扫描 / 审计 / 重泵与离屏 `onFinished` 归 H5；全局 `resourceVersion` 删除归 H5；`GameplayResourceBinding` 定形与 resource-system skill 重写归 H5。
 - 偏离：防抖沿用组件上已有的 `rebuildNotBeforeTick`，没有另加固定延迟。检查器 `onEdit` 传 0，仍然立即重建，HelloMaterial 首帧加载节奏不变。
+
+## 2026-10-01 H5 EnvironmentLighting 事件化
+
+- 目标：EnvironmentLighting 改为编辑入口、批次回调和离屏 `onFinished`；删作者扫描、120 tick 审计、active 重泵。`GameplayResourceBinding` 的 debug 审计只在脏队列未排空时扫 view。删按路径的 `resourceVersion`。稳态 prepare 不扫组件 view。边界见 plan §5 H5 行。
+- 完成：
+  - `OffscreenJobState::onFinished`：`finalizeSubmittedOffscreenJobs` 在 Recorded→GpuCompleted 和 Failed 之后、清空提交列表之后调用。回调只入队。
+  - `EnvironmentLightingProcessor`：`init/shutdown` 订阅 SceneBus；首次 prepare 仍 seed 一次。天空盒 / 环境的 CPU 批次 `onReady` 和圆柱贴图 `onReady` 只入队；句柄对不上的批次被 consume 后丢弃。刚创建、仍是 Pending 的离屏任务在同一次 prepare 里再入队以便提交；Queued / Recorded 等 `onFinished`。同步失败在同一次泵里落到 Failed。
+  - 删 `sweepAuthoringDirty`、`auditResolveWork`、active 集合，以及环境状态上每帧的失效实体扫描（删除走 SceneBus）。派生缓存 GC 保留。派生键不再拼 `|v{}`。
+  - 地形派生键改用高度图槽 `generation`。
+  - 删除 `_resourceVersion` / `getResourceVersion` / `bumpResourceVersion`。`getResourceVersionEpoch` 保留，由贴图槽 `dispatchSlotUpdate` 推进，GUI 贴图目录继续用它刷新。脚本 `asset.get_info` / `asset.reload` 不再返回 resourceVersion。
+  - runtime `Material::getResourceVersion` 与 `ScreenDraw` 的版本不动。
+  - `resource-system` skill 按资产槽和事件入队重写。
+- 验证：
+  - `ya-testing` 1499 过、1 跳过。新增 `ResourceResolveSteadyState`（第二次 prepare 的组件 view 计数增量为 0，且 1 个实体与 64 个实体的 seed 计数相同）和 `OffscreenJobFinished`（GpuCompleted / Failed 通知，Pending 不通知）。
+  - HelloMaterial 截图在第 56 帧达到 stable（30 warmup + 5 stable），写出 `/tmp/h5_hm.png`（1158914 字节），exit 0，日志无 error。编辑器 HelloMaterial、2DRpgPrototype、GreedySnake `--exit-after-frame=90` 均 exit 0、无 error。
+  - `rg -n "activeEntities|sweepAuthoringDirty" Engine/Source/Framework/Render` 为空。
+- 行为变化：
+  - 天空盒和环境光照的加载完成不再靠下一帧重泵。同一次 prepare 里创建的离屏任务会立刻再入队提交。
+  - 贴图槽每次更新都推进 GUI epoch（以前只在 invalidate / 文件变化时推进按路径版本）。
+- 保留 / 未完成：本计划 H1–H5 闭环。todo 里列出的脚本 `callMethod`、tileset 文件监听、colorSpace、派生 LRU、frame task sink 悬空，都不在本计划。
+- 偏离：按路径版本表删除了，但 GUI 仍需要一个“贴图变了”的信号，所以 epoch 留下来，改由贴图槽更新推进，而不是一并删掉。`GameplayResourceBinding` 仍是独立类：mesh / material / billboard 的泵还在，没有并进别的处理器。帧时间不作为验收（TownLarge `prepareDerivedState` 基线已是 0.011 ms）。

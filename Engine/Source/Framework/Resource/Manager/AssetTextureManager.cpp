@@ -486,6 +486,9 @@ void AssetTextureManager::dispatchTextureCallbacks(std::vector<AssetManager::Tex
 
 void AssetTextureManager::dispatchSlotUpdate(SlotUpdate dispatch, const std::shared_ptr<Texture>& texture)
 {
+    if (auto* assets = AssetManager::get()) {
+        assets->noteAssetEpoch();
+    }
     dispatchTextureCallbacks(std::move(dispatch.readyCallbacks), texture);
     // Updates land on the game thread (async completions hop through the
     // TaskQueue main-thread drain); observer callbacks only enqueue work.

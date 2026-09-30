@@ -58,6 +58,9 @@ struct OffscreenJobState
     std::shared_ptr<OffscreenJobResult> result     = std::make_shared<OffscreenJobResult>();
     EOffscreenJobPhase                  phase      = EOffscreenJobPhase::Pending;
     bool                                bCancelled = false;
+    /// Game-thread notification once finalize promotes a recorded job to
+    /// GpuCompleted, or drops a failed one. The callback only enqueues work.
+    std::function<void()>               onFinished;
 
     [[nodiscard]] bool isReadyToQueue() const
     {
@@ -70,6 +73,8 @@ struct OffscreenJobState
 
 inline void finalizeSubmittedOffscreenJobs(std::vector<std::shared_ptr<OffscreenJobState>>& jobs)
 {
+    std::vector<std::function<void()>> finished;
+    finished.reserve(jobs.size());
     for (auto& job : jobs) {
         if (!job) {
             continue;
@@ -78,8 +83,18 @@ inline void finalizeSubmittedOffscreenJobs(std::vector<std::shared_ptr<Offscreen
         if (job->phase == EOffscreenJobPhase::Recorded) {
             job->phase = EOffscreenJobPhase::GpuCompleted;
         }
+        // Recorded jobs just became GpuCompleted. A record that failed is
+        // already Failed and will not be polled again, so it notifies here too.
+        if (job->onFinished &&
+            (job->phase == EOffscreenJobPhase::GpuCompleted ||
+             job->phase == EOffscreenJobPhase::Failed)) {
+            finished.push_back(job->onFinished);
+        }
     }
     jobs.clear();
+    for (auto& callback : finished) {
+        callback();
+    }
 }
 
 

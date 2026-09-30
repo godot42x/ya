@@ -4,6 +4,7 @@
 #include "ECS/SceneBus.h"
 #include "ECS/Systems/Components/TerrainComponent.h"
 #include "RHI/Render.h"
+#include "Render3D/ResourceResolveProbe.h"
 #include "Render3D/Terrain/TerrainMeshBuilder.h"
 #include "Resource/AssetManager.h"
 #include "Resource/Mesh.h"
@@ -233,6 +234,7 @@ void TerrainProcessor::dropWork(SceneWork& work)
 void TerrainProcessor::seedSceneResolveWork(SceneWork& work)
 {
     auto& registry = work.scene->getRegistry();
+    noteResourceResolveView();
     for (auto&& [entity, terrain] : registry.view<TerrainComponent>().each()) {
         scheduleRebuild(work, entity, terrain.getRebuildNotBeforeTick(), "scene seed");
     }
@@ -512,7 +514,8 @@ void TerrainProcessor::resolvePendingTerrain(SceneWork& work)
 
         holdHeightMapSlot(work, entity, terrain._heightMapRef._handle);
 
-        const uint64_t    heightMapVersion = assets->getResourceVersion(terrain._heightMapRef.getPath());
+        const auto&       heightMapHandle  = terrain._heightMapRef._handle;
+        const uint64_t    heightMapVersion = heightMapHandle ? heightMapHandle->generation : 0;
         const std::string derivedKey       = buildTerrainDerivedKey(terrain, heightMapVersion);
         if (!state.currentDerivedKey.empty() &&
             state.currentDerivedKey != derivedKey &&

@@ -1,21 +1,21 @@
 ---
 name: resource-system
-description: YA Engine 资源加载、运行时 resolve 与 environment lighting 链路。适用于排查 AssetManager、TAssetRef、ResourceResolveSystem、材质资源上传与 scene-level 环境贴图同步。
+description: YA Engine 资源加载、资产槽与派生资源准备。适用于排查 AssetManager、TextureRef/ModelRef/TilesetRef、GameplayResourceBinding、地形与 environment lighting 的事件驱动 resolve。
 ---
 
 ## 适用场景
 
 - 用户要求梳理 texture / model / material 的资源加载数据流
-- 排查资源热重载、stale pointer、placeholder、descriptor 不更新问题
+- 排查资源热重载、槽状态、placeholder、descriptor 不更新问题
 - 排查 skybox、environment cubemap、irradiance、prefilter 与 scene lighting 不同步问题
-- 修改 `AssetManager`、`TAssetRef`、`ResourceResolveSystem`、offscreen preprocess 相关代码
+- 修改 `AssetManager`、资产槽、`GameplayResourceBinding`、地形或 environment lighting 的准备链路
 
 ## 先判断是不是这里
 
 留在本 skill：
 
-- 资源是否 resolve 成功
-- 版本是否推进
+- 资源槽是否到达 Ready / Failed
+- 派生准备有没有被编辑、槽更新或离屏完成重新入队
 - descriptor / GPU 资源是否刷新
 - environment lighting 的运行时结果是否真的生成并被消费
 
@@ -27,26 +27,27 @@ description: YA Engine 资源加载、运行时 resolve 与 environment lighting
 
 ## 当前稳定边界
 
-1. `AssetManager` 是资源加载、缓存、pending 去重与 `resourceVersion` 的入口。
-2. `TAssetRef<T>` 是组件侧轻量引用，只持有 path / cachedPtr / resolvedVersion。
-3. `ResourceResolveSystem` 只负责**已有组件**的运行时 resolve，不负责 scene topology 创建。
-4. `ModelInstantiationSystem` 负责 `ModelComponent` -> 子节点 / 子实体展开，再交给普通 resolve 链。
+1. `AssetManager` 持有共享资产槽。`TextureRef` / `ModelRef` / `TilesetRef` 只持有路径和 `AssetHandle`；加载状态、资源和 `generation` 在槽上，一份。
+2. 处理器订阅 `SceneBus`（创建 / 编辑 / 删除），并持有槽订阅。回调只入队。稳态 `prepare` 不扫描组件 view；每个场景第一次 prepare 做一次 seed。
+3. `GameplayResourceBinding` 负责已有 mesh / material / billboard 的运行时 resolve，不负责 scene topology。
+4. `ModelInstantiationSystem` 负责 `ModelComponent` -> 子节点 / 子实体展开，再交给普通 resolve 链。它同样由 SceneBus 和模型槽驱动。
 5. `TextureSlot` 的 authoring 语义归 component；这里只关心它如何变成 runtime binding。
-6. 材质上传依赖 `paramVersion/resourceVersion` 与 consumer 自己的 uploaded version，不依赖“一次性全局 dirty”。
-7. `EnvironmentLighting` 是 source / irradiance / prefilter 三段分支；运行时纹理、pending job、`resultVersion` 属于 runtime state，不回写 authoring 数据。
-8. GPU 资源创建与 offscreen job 提交必须由 owner 显式提供 `IRender` /
-   `IRenderResourceFactory` / `OffscreenJobQueueService`；资源 resolve 阶段不回查
-   全局 App 获取 render 或 queue。
+6. 材质上传依赖 runtime `Material` 自己的 `paramVersion` / `resourceVersion` 与 consumer 的 uploaded version。这不是 `AssetManager` 的版本表；按路径的 `getResourceVersion` 已删除。
+7. GUI 贴图目录用 `AssetManager::getResourceVersionEpoch()`。贴图槽每次 `dispatchSlotUpdate` 推进这个 epoch。
+8. `EnvironmentLighting` 是 source / irradiance / prefilter 三段分支。运行时纹理、pending job、`resultVersion` 属于 runtime state，不回写 authoring 数据。完成靠批次 `onReady` 和离屏 `onFinished`，不靠 active 重泵。
+9. 地形高度图同样由批次 `onReady` 唤醒。派生缓存键里的高度图版本是槽 `generation`。
+10. GPU 资源创建与 offscreen job 提交必须由 owner 显式提供 `IRender` / `OffscreenJobQueueService`。准备阶段不回查全局 App。
 
 ## 主链路
 
 ### Texture
 
 ```text
-TextureSlot
-  -> TAssetRef<Texture>::resolve()
-  -> AssetManager::loadTexture()
-  -> cache / version tracking
+setPath / deserialize
+  -> TextureRef 绑定 AssetHandle
+  -> 槽 Loading / Ready / Failed
+  -> 槽 observer 或编辑入口把实体入队
+  -> GameplayResourceBinding 泵一次
   -> TextureSlot::toTextureBinding()
   -> runtime Material::setTextureBinding()
   -> MaterialDescPool::flushDirty()
@@ -55,10 +56,10 @@ TextureSlot
 
 要点：
 
-1. `resolve()` 先比较 `AssetManager::getResourceVersion()`。
-2. `loadTexture()` 应复用缓存并对 in-flight load 去重。
-3. 未 ready 时可先落 placeholder，避免 descriptor 指向空 view。
-4. 纹理更新最终靠 runtime material 的 version 推动上传。
+1. 槽按请求身份（规范化路径 + colorSpace）去重。完成、失败、热重载替换都 `generation++` 并通知订阅者。
+2. 未 ready 时可先落 placeholder，避免 descriptor 指向空 view。
+3. 纹理更新最终靠 runtime material 的 version 推动上传。
+4. 热重载走 `onAssetFileChanged` -> 槽原地重填。GUI 看到的是 epoch，不是按路径的版本。
 
 ### Material
 
@@ -72,7 +73,7 @@ MaterialComponent
 
 要点：
 
-1. 这里的重点是 runtime `Material` 作为上传前 cache / binding 容器。
+1. runtime `Material` 是上传前的 cache / binding 容器。
 2. 多个 render consumer 各自维护上传版本，不能互相清状态。
 3. authoring 语义与 editor 修改链路交给 `material-flow`。
 
@@ -80,12 +81,13 @@ MaterialComponent
 
 ```text
 ModelComponent._modelRef
-  -> ModelInstantiationSystem
+  -> 模型槽
+  -> ModelInstantiationSystem（SceneBus + 槽订阅 + 一次 seed）
   -> child MeshComponent / MaterialComponent
-  -> ResourceResolveSystem resolve 这些已有组件
+  -> GameplayResourceBinding resolve 这些已有组件
 ```
 
-关键点：模型先决定 topology，再走普通 resolve；不要把两件事揉进一个系统。
+模型先决定 topology，再走普通 resolve。
 
 ### Model 实例语义（prefab-like）
 
@@ -100,21 +102,21 @@ ModelComponent._modelRef
 
 ## Environment Lighting
 
-只保留稳定判断，不在这里堆当前实现细节。
-
 ### 结构规则
 
 1. source 负责拿到最终 environment cubemap。
 2. irradiance / prefilter 是基于 source 的派生结果，可独立启停。
 3. 三段状态与运行时结果分离：component 保存 authoring 选择，runtime state 保存纹理、pending job、`resultVersion`。
+4. 发现路径是 SceneBus 加每个场景一次 seed。CPU 批次完成和离屏 `onFinished` 把该实体重新入队。`prepare` 只泵脏队列。
+5. 派生缓存键是路径和翻转等 authoring 字段。槽内容变化靠重新入队，不靠全局 resource version。
 
 ### Source 分支
 
 ```text
 SceneSkybox / CubeFaces / Cylindrical
-  -> sourceState Dirty
-  -> resolve source
-  -> 必要时排队 offscreen job 构建 cubemap
+  -> sourceState Dirty（编辑或 seed）
+  -> 提交批次或圆柱贴图，回调入队
+  -> 必要时排队 offscreen job，onFinished 入队
   -> sourceState Ready
   -> resultVersion++
 ```
@@ -125,7 +127,7 @@ SceneSkybox / CubeFaces / Cylindrical
 source Ready
   -> irradianceState / prefilterState Dirty
   -> 创建 offscreen job
-  -> 生成派生 cubemap
+  -> onFinished 入队后采用结果
   -> Ready
 ```
 
@@ -134,6 +136,8 @@ source Ready
 1. `Disabled` 必须真的停用并回收对应运行时结果。
 2. 重新生成前要退休旧纹理，避免悬挂引用。
 3. 不能因为状态分支存在，就假设 job 已经接线且结果已经生成。
+4. 同步失败的离屏任务在同一次泵里落到 Failed 分支。不要靠下一帧的 active 重泵去发现它。
+5. 重置 pending 批次时先 `consumeTextureBatchMemory`；回调若发现句柄已经对不上，也要消费并丢弃，避免 ready-map 泄漏。
 
 ## 渲染侧消费
 
@@ -144,51 +148,40 @@ RenderRuntime
   -> 绑定对象变化时更新 descriptor
 ```
 
-说明：
-
-1. scene-level environment binding 和材质纹理上传不是同一条链。
-2. 前者更接近 runtime state 变化驱动，后者依赖 material version。
-3. 环境贴图问题通常要同时看 `ResourceResolveSystem` 与 `RenderRuntime`。
+scene-level environment binding 和材质纹理上传不是同一条链。环境贴图问题同时看 `EnvironmentLightingProcessor` 与 `RenderRuntime`。
 
 ## GPU 资源生命周期与保活（RetainedResource）
 
-核心约定（2026-08 落地）：
-
-1. **不用 tracing GC**。渲染层资源有 GPU 同步约束，主流引擎（UE / filament / bgfx）
-   都用“引用计数 + 确定性延迟释放”，不引入 GC。
-2. **保活句柄用强类型 `RetainedResource`**（`Core/Common/RetainedResource.h`）：
-   `shared_ptr<void>`（保留正确析构）+ `type_index`（类型安全）+ 可选 `string_view` debugTag。
-   不要裸用 `vector<shared_ptr<void>>` 保活资源。
-3. **语义分离 `retain` vs `retire`**：
-   - `retainedResources`：外部 keep-alive 容器（资源自己持有的 owner 链）。
-   - `retiredResources` / `retireResource()`：命令缓冲 submit 时要延迟释放的资源。
-   两者不要混用同一个词。
-4. `ICommandBuffer` 不再叫 `retainResource`，统一 `retireResource<T>(shared_ptr<T>, tag={})`。
-5. **Imported 资源的跨帧身份 = 底层 `IImage` / `IImageView` 指针，不是 `ImageResource` 包装指针。**
-   `ImageResource` 是可每帧重建的 owner 聚合器；判断复用时只能比较底层身份。
-6. 资源复用时，若发现每帧都在 `replacing` / `retire`，先查身份比较是否误用了
-   每帧重建的包装指针（详见 `../../memories/rendergraph_import_reuse_wrapper_identity_regression.md`）。
+1. **不用 tracing GC**。渲染层资源有 GPU 同步约束，用引用计数 + 确定性延迟释放。
+2. **保活句柄用强类型 `RetainedResource`**（`Core/Common/RetainedResource.h`）：`shared_ptr<void>` + `type_index` + 可选 debugTag。
+3. **`retain` 与 `retire` 分开**：`retainedResources` 是外部 keep-alive；`retireResource()` 是 submit 后延迟释放。
+4. `ICommandBuffer` 统一 `retireResource<T>(shared_ptr<T>, tag={})`。
+5. **Imported 资源的跨帧身份是底层 `IImage` / `IImageView`，不是 `ImageResource` 包装指针。**
+6. 若每帧都在 replacing / retire，先查身份比较是否误用了每帧重建的包装指针（`../../memories/rendergraph_import_reuse_wrapper_identity_regression.md`）。
 
 相关排查记忆：
 
-- `../../memories/vulkan_submit_lifecycle_debug.md`：submit 期生命周期与 keepalive。
-- `../../memories/rendergraph_import_reuse_wrapper_identity_regression.md`：import 复用失效。
+- `../../memories/vulkan_submit_lifecycle_debug.md`
+- `../../memories/rendergraph_import_reuse_wrapper_identity_regression.md`
+- `../../memories/terrain_processor_active_pump_regression.md`：地形与环境光照都不再用 active 重泵。
 
 ## 高风险模式
 
 1. 把 topology 创建和普通 resolve 混在一起。
 2. component authoring 数据与 runtime state 双写。
 3. 某个 consumer 更新了 descriptor，另一条管线仍持有旧绑定。
-4. 只改 component 状态，不同步 runtime 纹理 / pending job / `resultVersion`。
-5. mutation 入口分叉，绕过统一 add/remove 或 resolve 生命周期。
+4. 只改 component 状态，不走 SceneBus，也不推进 `resultVersion`。
+5. 在槽回调或离屏回调里改 registry、录制命令，或对同一槽订阅/退订。
+6. 恢复 active 重泵或每帧组件扫描来“补上”漏掉的完成信号。完成信号应该是回调。
 
 ## 快速排查顺序
 
-1. 资源不更新：先看 `AssetManager::getResourceVersion()` 是否变化。
+1. 资源不更新：看槽 `state` / `generation`，以及处理器是否还持有该槽的订阅。
 2. 材质纹理没刷新：看 component 是否重新 `syncTextureSlot()`，runtime material 的 `resourceVersion` 是否递增。
 3. descriptor 没刷新：看对应 consumer 的 `MaterialDescPool::flushDirty()` 是否执行。
-4. skybox / environment cubemap 没刷新：看 sourceState 是否进入 `Ready`，以及 runtime `resultVersion` 是否推进。
+4. skybox / environment cubemap 没刷新：看 source 状态是否进入 `Ready`，`resultVersion` 是否推进，离屏 job 的 `onFinished` 有没有把实体入队。
 5. irradiance / prefilter 没生效：看分支状态、pending offscreen job 和 `RenderRuntime` 绑定是否同步。
+6. 稳态 prepare 又在扫组件：看是不是 seed 之外又进了 view，或 debug 审计在空队列上仍运行。
 
 ## 相关 skills
 
@@ -199,6 +192,6 @@ RenderRuntime
 
 ## 退出条件
 
-- 已明确问题属于 resolve、runtime cache、descriptor 上传，还是 environment lighting 运行时结果
-- 已定位主要责任层：`AssetManager`、`TAssetRef`、`ResourceResolveSystem`、`ModelInstantiationSystem` 或 `RenderRuntime`
+- 已明确问题属于槽状态、派生入队、descriptor 上传，还是 environment lighting 运行时结果
+- 已定位主要责任层：`AssetManager`、资产 ref、`GameplayResourceBinding`、`ModelInstantiationSystem`、`TerrainProcessor`、`EnvironmentLightingProcessor` 或 `RenderRuntime`
 - 已知道下一步是继续改资源链路，还是转去 `material-flow` / `render-arch` / `debug-review`

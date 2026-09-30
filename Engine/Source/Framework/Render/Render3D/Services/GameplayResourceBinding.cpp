@@ -7,6 +7,7 @@
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/SceneBus.h"
+#include "Render3D/ResourceResolveProbe.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
@@ -168,7 +169,13 @@ void GameplayResourceBinding::prepareScenes(std::span<Scene* const> scenes, floa
             resolvePendingBillboards(work);
         }
 #ifdef BUILD_DEBUG
-        auditSlotSubscriptions(work);
+        // The audit walks every material, mesh and billboard view. Steady
+        // state has already drained the dirty queues, so it does not run
+        // then. A queue that survived the pump is still loading or was
+        // re-armed, which is when the consistency check has something to see.
+        if (!work.dirtyMaterialQueue.empty() || !work.dirtyBillboardQueue.empty() || !work.dirtyMeshQueue.empty()) {
+            auditSlotSubscriptions(work);
+        }
 #endif
     }
 }
@@ -227,26 +234,32 @@ void GameplayResourceBinding::dropAllWork()
 void GameplayResourceBinding::seedSceneResolveWork(SceneWork& work)
 {
     auto& registry = *work.registry;
+    noteResourceResolveView();
     for (auto&& [entity, unused] : registry.view<PhongMaterialComponent>().each()) {
         (void)unused;
         enqueueMaterial(work, entity);
     }
+    noteResourceResolveView();
     for (auto&& [entity, unused] : registry.view<PBRMaterialComponent>().each()) {
         (void)unused;
         enqueueMaterial(work, entity);
     }
+    noteResourceResolveView();
     for (auto&& [entity, unused] : registry.view<UnlitMaterialComponent>().each()) {
         (void)unused;
         enqueueMaterial(work, entity);
     }
+    noteResourceResolveView();
     for (auto&& [entity, unused] : registry.view<BillboardComponent>().each()) {
         (void)unused;
         enqueueBillboard(work, entity);
     }
+    noteResourceResolveView();
     for (auto&& [entity, unused] : registry.view<StaticMeshComponent>().each()) {
         (void)unused;
         enqueueMesh(work, entity);
     }
+    noteResourceResolveView();
     for (auto&& [entity, unused] : registry.view<SkinnedMeshComponent>().each()) {
         (void)unused;
         enqueueMesh(work, entity);
@@ -492,11 +505,17 @@ void GameplayResourceBinding::auditSlotSubscriptions(SceneWork& work)
         const auto& handle = component._mesh._modelHandle;
         return handle && handle->state == EAssetSlotState::Loading;
     };
+    noteResourceResolveView();
     auditComponent(registry.view<PhongMaterialComponent>(), enqueueMaterialFn, anyTextureSlotLoading);
+    noteResourceResolveView();
     auditComponent(registry.view<PBRMaterialComponent>(), enqueueMaterialFn, anyTextureSlotLoading);
+    noteResourceResolveView();
     auditComponent(registry.view<UnlitMaterialComponent>(), enqueueMaterialFn, anyTextureSlotLoading);
+    noteResourceResolveView();
     auditComponent(registry.view<BillboardComponent>(), enqueueBillboardFn, anyTextureSlotLoading);
+    noteResourceResolveView();
     auditComponent(registry.view<StaticMeshComponent>(), enqueueMeshFn, anyMeshSlotLoading);
+    noteResourceResolveView();
     auditComponent(registry.view<SkinnedMeshComponent>(), enqueueMeshFn, anyMeshSlotLoading);
 }
 #endif

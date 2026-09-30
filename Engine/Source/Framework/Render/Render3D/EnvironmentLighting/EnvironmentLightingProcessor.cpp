@@ -4,6 +4,8 @@
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/SceneBus.h"
+#include "Render3D/ResourceResolveProbe.h"
 #include "RHI/Render.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Core/Common/DeferredDeletionQueue.h"
@@ -12,9 +14,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <format>
-#include <vector>
-
 #include <format>
 #include <vector>
 
@@ -110,6 +109,22 @@ void copyEnvironmentResourceToRuntime(const std::shared_ptr<EnvironmentLightingD
 
 void EnvironmentLightingProcessor::init()
 {
+    if (!bBusSubscribed) {
+        SceneBus& bus = SceneBus::get();
+        _componentAddedHandle =
+            bus.onComponentAdded.addLambda([this](entt::registry& registry, entt::entity entity, ya::type_index_t type) {
+                onComponentAdded(registry, entity, type);
+            });
+        _componentEditedHandle =
+            bus.onComponentEdited.addLambda([this](entt::registry& registry, entt::entity entity, ya::type_index_t type) {
+                onComponentEdited(registry, entity, type);
+            });
+        _componentRemovedHandle =
+            bus.onComponentRemoved.addLambda([this](entt::registry& registry, entt::entity entity, ya::type_index_t type) {
+                onComponentRemoved(registry, entity, type);
+            });
+        bBusSubscribed = true;
+    }
     YA_CORE_ASSERT(_render, "EnvironmentLightingProcessor requires render before init");
     _equidistantCylindrical2CubeMap.init(_render);
     _cubeMap2IrradianceMap.init(_render);
@@ -174,8 +189,6 @@ void EnvironmentLightingProcessor::prepareScenes(std::span<Scene* const> scenes,
             seedSceneResolveWork(work);
         }
 
-        sweepAuthoringDirty(work);
-        auditResolveWork(work);
         gcDerivedResources(_getHostTick ? _getHostTick() : 0);
 
         {
@@ -249,19 +262,18 @@ void EnvironmentLightingProcessor::dropWork(SceneWork& work)
     work.dirtyEnvironmentQueue.clear();
     work.dirtySkyboxSet.clear();
     work.dirtyEnvironmentSet.clear();
-    work.activeSkybox.clear();
-    work.activeEnvironment.clear();
     work.sceneSkyboxEnvironmentDependents.clear();
-    work.nextResolveAuditTick = 0;
 }
 
 void EnvironmentLightingProcessor::seedSceneResolveWork(SceneWork& work)
 {
     auto& registry = work.scene->getRegistry();
+    noteResourceResolveView();
     for (auto&& [entity, skybox] : registry.view<SkyboxComponent>().each()) {
         (void)skybox;
         markSkyboxDirty(work, entity, "scene seed");
     }
+    noteResourceResolveView();
     for (auto&& [entity, environment] : registry.view<EnvironmentLightingComponent>().each()) {
         if (environment.usesSceneSkybox()) {
             work.sceneSkyboxEnvironmentDependents.insert(entity);
@@ -270,79 +282,109 @@ void EnvironmentLightingProcessor::seedSceneResolveWork(SceneWork& work)
     }
 }
 
-bool EnvironmentLightingProcessor::isSkyboxQueuedOrActive(const SceneWork& work, entt::entity entity) const
+EnvironmentLightingProcessor::SceneWork* EnvironmentLightingProcessor::findWorkByRegistry(const entt::registry* registry)
 {
-    return work.dirtySkyboxSet.contains(entity) || work.activeSkybox.contains(entity);
-}
-
-bool EnvironmentLightingProcessor::isEnvironmentQueuedOrActive(const SceneWork& work, entt::entity entity) const
-{
-    return work.dirtyEnvironmentSet.contains(entity) || work.activeEnvironment.contains(entity);
-}
-
-void EnvironmentLightingProcessor::sweepAuthoringDirty(SceneWork& work)
-{
-    auto& registry = work.scene->getRegistry();
-    for (auto&& [entity, skybox] : registry.view<SkyboxComponent>().each()) {
-        auto& state = work.skyboxStates[entity];
-        if (skybox.authoringVersion > state.lastCompletedAuthoringVersion && !isSkyboxQueuedOrActive(work, entity)) {
-            markSkyboxDirty(work, entity, "authoring-version sweep");
+    if (!registry) {
+        return nullptr;
+    }
+    for (auto& [scene, work] : _sceneWork) {
+        if (scene && &scene->getRegistry() == registry) {
+            return &work;
         }
     }
-    for (auto&& [entity, environment] : registry.view<EnvironmentLightingComponent>().each()) {
-        if (environment.usesSceneSkybox()) {
-            work.sceneSkyboxEnvironmentDependents.insert(entity);
-        }
-        else {
-            work.sceneSkyboxEnvironmentDependents.erase(entity);
-        }
-        auto& state = work.environmentStates[entity];
-        if (environment.authoringVersion > state.lastCompletedAuthoringVersion && !isEnvironmentQueuedOrActive(work, entity)) {
-            markEnvironmentLightingDirty(work, entity, "authoring-version sweep");
-        }
-    }
+    return nullptr;
 }
 
-void EnvironmentLightingProcessor::auditResolveWork(SceneWork& work)
+void EnvironmentLightingProcessor::enqueueSkybox(const entt::registry* registry, entt::entity entity)
 {
-    const uint64_t currentTick = _getHostTick ? _getHostTick() : 0;
-    if (work.nextResolveAuditTick != 0 && currentTick < work.nextResolveAuditTick) {
+    SceneWork* work = findWorkByRegistry(registry);
+    if (!work) {
         return;
     }
-    work.nextResolveAuditTick = currentTick + 120;
-
-    auto& registry = work.scene->getRegistry();
-    // auto* assets   = AssetManager::get();
-
-    for (auto&& [entity, skybox] : registry.view<SkyboxComponent>().each()) {
-        auto& state = work.skyboxStates[entity];
-        if (skybox.authoringVersion > state.lastCompletedAuthoringVersion && !isSkyboxQueuedOrActive(work, entity)) {
-            YA_CORE_WARN("ResourceResolve audit re-queued Skybox entity {}: completedVersion={}, authoringVersion={}",
-                         static_cast<uint32_t>(entity),
-                         state.lastCompletedAuthoringVersion,
-                         skybox.authoringVersion);
-            markSkyboxDirty(work, entity, "audit: missed skybox enqueue");
-        }
+    if (work->dirtySkyboxSet.insert(entity).second) {
+        work->dirtySkyboxQueue.push_back(entity);
     }
+}
 
-    for (auto&& [entity, environment] : registry.view<EnvironmentLightingComponent>().each()) {
-        auto& state = work.environmentStates[entity];
-        if (environment.usesSceneSkybox()) {
-            work.sceneSkyboxEnvironmentDependents.insert(entity);
-        }
-        else {
-            work.sceneSkyboxEnvironmentDependents.erase(entity);
-        }
-
-        if (environment.authoringVersion > state.lastCompletedAuthoringVersion && !isEnvironmentQueuedOrActive(work, entity)) {
-            YA_CORE_WARN("ResourceResolve audit re-queued EnvironmentLighting entity {}: completedVersion={}, authoringVersion={}",
-                         static_cast<uint32_t>(entity),
-                         state.lastCompletedAuthoringVersion,
-                         environment.authoringVersion);
-            markEnvironmentLightingDirty(work, entity, "audit: missed environment enqueue");
-        }
+void EnvironmentLightingProcessor::enqueueEnvironment(const entt::registry* registry, entt::entity entity)
+{
+    SceneWork* work = findWorkByRegistry(registry);
+    if (!work) {
+        return;
     }
+    if (work->dirtyEnvironmentSet.insert(entity).second) {
+        work->dirtyEnvironmentQueue.push_back(entity);
+    }
+}
 
+void EnvironmentLightingProcessor::onSkyboxBatch(const entt::registry* registry, entt::entity entity, uint64_t handle)
+{
+    SceneWork* work = findWorkByRegistry(registry);
+    const auto matches = work && [&] {
+        const auto it = work->skyboxStates.find(entity);
+        return it != work->skyboxStates.end() && it->second.pendingBatchLoadState &&
+               it->second.pendingBatchLoadState->batchHandle == handle;
+    }();
+    if (!matches) {
+        if (auto* assets = AssetManager::get()) {
+            AssetManager::TextureBatchMemory discarded;
+            assets->consumeTextureBatchMemory(handle, discarded);
+        }
+        return;
+    }
+    enqueueSkybox(registry, entity);
+}
+
+void EnvironmentLightingProcessor::onEnvironmentBatch(const entt::registry* registry, entt::entity entity, uint64_t handle)
+{
+    SceneWork* work = findWorkByRegistry(registry);
+    const auto matches = work && [&] {
+        const auto it = work->environmentStates.find(entity);
+        return it != work->environmentStates.end() && it->second.pendingBatchLoad &&
+               it->second.pendingBatchLoad->batchHandle == handle;
+    }();
+    if (!matches) {
+        if (auto* assets = AssetManager::get()) {
+            AssetManager::TextureBatchMemory discarded;
+            assets->consumeTextureBatchMemory(handle, discarded);
+        }
+        return;
+    }
+    enqueueEnvironment(registry, entity);
+}
+
+void EnvironmentLightingProcessor::onComponentAdded(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
+{
+    SceneWork* work = findWorkByRegistry(&registry);
+    if (!work || !registry.valid(entity)) {
+        return;
+    }
+    if (typeIndex == type_index_v<SkyboxComponent> && registry.all_of<SkyboxComponent>(entity)) {
+        markSkyboxDirty(*work, entity, "component added");
+    }
+    else if (typeIndex == type_index_v<EnvironmentLightingComponent> &&
+             registry.all_of<EnvironmentLightingComponent>(entity)) {
+        markEnvironmentLightingDirty(*work, entity, "component added");
+    }
+}
+
+void EnvironmentLightingProcessor::onComponentEdited(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
+{
+    onComponentAdded(registry, entity, typeIndex);
+}
+
+void EnvironmentLightingProcessor::onComponentRemoved(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex)
+{
+    SceneWork* work = findWorkByRegistry(&registry);
+    if (!work) {
+        return;
+    }
+    if (typeIndex == type_index_v<SkyboxComponent>) {
+        cleanupSkyboxState(*work, entity);
+    }
+    else if (typeIndex == type_index_v<EnvironmentLightingComponent>) {
+        cleanupEnvironmentLightingState(*work, entity);
+    }
 }
 
 void EnvironmentLightingProcessor::markAllSceneSkyboxEnvironmentDependentsDirty(SceneWork& work, const char* reason)
@@ -409,7 +451,6 @@ void EnvironmentLightingProcessor::cleanupSkyboxState(SceneWork& work, entt::ent
         work.skyboxStates.erase(it);
     }
     work.dirtySkyboxSet.erase(entity);
-    work.activeSkybox.erase(entity);
     std::erase(work.dirtySkyboxQueue, entity);
 }
 
@@ -420,7 +461,6 @@ void EnvironmentLightingProcessor::cleanupEnvironmentLightingState(SceneWork& wo
         work.environmentStates.erase(it);
     }
     work.dirtyEnvironmentSet.erase(entity);
-    work.activeEnvironment.erase(entity);
     work.sceneSkyboxEnvironmentDependents.erase(entity);
     std::erase(work.dirtyEnvironmentQueue, entity);
 }
@@ -491,6 +531,14 @@ void EnvironmentLightingProcessor::markEnvironmentLightingDirty(SceneWork& work,
 
 void EnvironmentLightingProcessor::shutdown()
 {
+    if (bBusSubscribed) {
+        SceneBus& bus = SceneBus::get();
+        bus.onComponentAdded.remove(_componentAddedHandle);
+        bus.onComponentEdited.remove(_componentEditedHandle);
+        bus.onComponentRemoved.remove(_componentRemovedHandle);
+        _componentAddedHandle = _componentEditedHandle = _componentRemovedHandle = INVALID_HANDLE;
+        bBusSubscribed = false;
+    }
     clearAllResolveState();
     _cubeMap2PrefilterPipeline.shutdown();
     _cubeMap2IrradianceMap.shutdown();
@@ -995,15 +1043,14 @@ std::string buildSkyboxDerivedKey(const SkyboxComponent& skybox, AssetManager* a
         std::string key = std::format("skybox|cubefaces|flip={}", skybox.cubemapSource.flipVertical ? 1 : 0);
         for (const auto& path : skybox.cubemapSource.files) {
             const auto normalized = AssetManager::normalizeAssetPath(path);
-            key += std::format("|{}|v{}", normalized, assets->getResourceVersion(normalized));
+            key += std::format("|{}", normalized);
         }
         return key;
     }
 
     const auto normalized = AssetManager::normalizeAssetPath(skybox.cylindricalSource.filepath);
-    return std::format("skybox|cyl|{}|v{}|flip={}",
+    return std::format("skybox|cyl|{}|flip={}",
                        normalized,
-                       assets->getResourceVersion(normalized),
                        skybox.cylindricalSource.flipVertical ? 1 : 0);
 }
 
@@ -1078,6 +1125,12 @@ void retireSkyboxResources(SkyboxRuntimeState& state)
 
 void resetSkyboxPending(SkyboxRuntimeState& state)
 {
+    if (state.pendingBatchLoadState && state.pendingBatchLoadState->batchHandle != 0) {
+        if (auto* assets = AssetManager::get()) {
+            AssetManager::TextureBatchMemory discarded;
+            assets->consumeTextureBatchMemory(state.pendingBatchLoadState->batchHandle, discarded);
+        }
+    }
     state.pendingBatchLoadState.reset();
     state.pendingCylindricalSource.reset();
     cancelOffscreenJob(state.pendingOffscreenProcess);
@@ -1125,7 +1178,6 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(SceneWork& work)
             pendingState.derivedKey.clear();
             pendingState.boundResource.reset();
             pendingState.lastCompletedAuthoringVersion = sc.authoringVersion;
-            work.activeSkybox.erase(entity);
             return;
         }
 
@@ -1154,7 +1206,6 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(SceneWork& work)
                     markAllSceneSkyboxEnvironmentDependentsDirty(work, "scene skybox projection rebound");
                 }
                 pendingState.lastCompletedAuthoringVersion = sc.authoringVersion;
-                work.activeSkybox.erase(entity);
                 return;
             }
         }
@@ -1175,10 +1226,14 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(SceneWork& work)
                                                    sc.cubemapSource.files.end());
                 pendingState.pendingBatchLoadState =
                     std::make_shared<SkyboxPendingBatchLoadState>();
+                const entt::registry* registryPtr = &registry;
                 pendingState.pendingBatchLoadState->batchHandle =
                     AssetManager::get()->loadTextureBatchIntoMemory(
                         AssetManager::TextureBatchMemoryLoadRequest{
                             .filepaths = facePaths,
+                            .onReady   = [this, registryPtr, entity](uint64_t handle) {
+                                onSkyboxBatch(registryPtr, entity, handle);
+                            },
                         });
             }
             else if (sc.hasCylindricalSource()) {
@@ -1186,7 +1241,9 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(SceneWork& work)
                     AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
                         .filepath        = sc.cylindricalSource.filepath,
                         .name            = "SkyboxCylindricalSource",
-                        .onReady         = {},
+                        .onReady         = [this, registryPtr = &registry, entity](const std::shared_ptr<Texture>&) {
+                            enqueueSkybox(registryPtr, entity);
+                        },
                         .colorSpace      = AssetManager::ETextureColorSpace::SRGB,
                         .textureSemantic = std::nullopt,
                     });
@@ -1258,7 +1315,9 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(SceneWork& work)
                         AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
                             .filepath        = sc.cylindricalSource.filepath,
                             .name            = "SkyboxCylindricalSource",
-                            .onReady         = {},
+                            .onReady         = [this, registryPtr = &registry, entity](const std::shared_ptr<Texture>&) {
+                            enqueueSkybox(registryPtr, entity);
+                        },
                             .colorSpace      = AssetManager::ETextureColorSpace::SRGB,
                             .textureSemantic = std::nullopt,
                         });
@@ -1329,7 +1388,6 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(SceneWork& work)
 
             if (pendingState.pendingOffscreenProcess->phase == EOffscreenJobPhase::Pending) {
                 detail::tryQueueJob(getOffscreenJobQueueService(), getRender(), pendingState.pendingOffscreenProcess);
-                break;
             }
 
             if (pendingState.pendingOffscreenProcess->phase == EOffscreenJobPhase::Queued ||
@@ -1372,12 +1430,21 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(SceneWork& work)
 
         const bool bActive = pendingState.resolveState == ESkyboxResolveState::ResolvingSource ||
                              pendingState.resolveState == ESkyboxResolveState::Preprocessing;
-        if (bActive) {
-            work.activeSkybox.insert(entity);
-        }
-        else {
+        if (!bActive) {
             pendingState.lastCompletedAuthoringVersion = sc.authoringVersion;
-            work.activeSkybox.erase(entity);
+        }
+        if (pendingState.pendingOffscreenProcess && !pendingState.pendingOffscreenProcess->onFinished) {
+            const entt::registry* registryPtr = &registry;
+            pendingState.pendingOffscreenProcess->onFinished = [this, registryPtr, entity]() {
+                enqueueSkybox(registryPtr, entity);
+            };
+        }
+        // A job created in this visit is still Pending. Queue it on the next
+        // visit of this same prepare. Queued / Recorded waits for onFinished;
+        // a batch or cylindrical slot waits for its own callback.
+        if (pendingState.pendingOffscreenProcess &&
+            pendingState.pendingOffscreenProcess->phase == EOffscreenJobPhase::Pending) {
+            enqueueSkybox(&registry, entity);
         }
 
         if (pendingState.resultVersion != previousResultVersion) {
@@ -1389,11 +1456,6 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(SceneWork& work)
         const auto entity = work.dirtySkyboxQueue.front();
         work.dirtySkyboxQueue.pop_front();
         work.dirtySkyboxSet.erase(entity);
-        pumpOne(entity);
-    }
-
-    std::vector<entt::entity> activeEntities(work.activeSkybox.begin(), work.activeSkybox.end());
-    for (const auto entity : activeEntities) {
         pumpOne(entity);
     }
 }
@@ -1487,16 +1549,15 @@ std::string buildEnvironmentDerivedKey(const EnvironmentLightingComponent& compo
         std::string key = std::format("env|cubefaces|flip={}", component.cubemapSource.flipVertical ? 1 : 0);
         for (const auto& path : component.cubemapSource.files) {
             const auto normalized = AssetManager::normalizeAssetPath(path);
-            key += std::format("|{}|v{}", normalized, assets->getResourceVersion(normalized));
+            key += std::format("|{}", normalized);
         }
         key += baseSuffix;
         return key;
     }
 
     const auto normalized = AssetManager::normalizeAssetPath(component.cylindricalSource.filepath);
-    return std::format("env|cyl|{}|v{}|flip={}{}",
+    return std::format("env|cyl|{}|flip={}{}",
                        normalized,
-                       assets->getResourceVersion(normalized),
                        component.cylindricalSource.flipVertical ? 1 : 0,
                        baseSuffix);
 }
@@ -2021,6 +2082,12 @@ void retireEnvTextures(EnvironmentLightingRuntimeState& state)
 
 void resetEnvPending(EnvironmentLightingRuntimeState& state)
 {
+    if (state.pendingBatchLoad && state.pendingBatchLoad->batchHandle != 0) {
+        if (auto* assets = AssetManager::get()) {
+            AssetManager::TextureBatchMemory discarded;
+            assets->consumeTextureBatchMemory(state.pendingBatchLoad->batchHandle, discarded);
+        }
+    }
     state.pendingBatchLoad.reset();
     state.pendingCylindricalSource.reset();
     cancelOffscreenJob(state.pendingEnvironmentOffscreen);
@@ -2066,8 +2133,11 @@ void handleEnvironmentNoSource(EnvironmentLightingComponent&    component,
     detail::resetEnvState(state);
 }
 
-void handleEnvironmentSourceDirty(EnvironmentLightingComponent&    component,
-                                  EnvironmentLightingRuntimeState& state)
+void handleEnvironmentSourceDirty(EnvironmentLightingProcessor&       system,
+                                  const entt::registry*                registry,
+                                  entt::entity                         entity,
+                                  EnvironmentLightingComponent&        component,
+                                  EnvironmentLightingRuntimeState&     state)
 {
     auto transition = makeTransition(state.sourceState, "EnvironmentLighting.Source");
     if (component.hasCubemapSource()) {
@@ -2077,6 +2147,9 @@ void handleEnvironmentSourceDirty(EnvironmentLightingComponent&    component,
             AssetManager::TextureBatchMemoryLoadRequest{
                 .filepaths  = facePaths,
                 .colorSpace = AssetManager::ETextureColorSpace::Linear,
+                .onReady    = [&system, registry, entity](uint64_t handle) {
+                    system.onEnvironmentBatch(registry, entity, handle);
+                },
             });
         transition.to(EEnvironmentLightingSourceResolveState::ResolvingSource, "source load requested");
         return;
@@ -2086,7 +2159,9 @@ void handleEnvironmentSourceDirty(EnvironmentLightingComponent&    component,
         state.pendingCylindricalSource = AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
             .filepath        = component.cylindricalSource.filepath,
             .name            = "EnvironmentLightingCylindricalSource",
-            .onReady         = {},
+            .onReady         = [&system, registry, entity](const std::shared_ptr<Texture>&) {
+                system.enqueueEnvironment(registry, entity);
+            },
             .colorSpace      = AssetManager::ETextureColorSpace::Linear,
             .textureSemantic = std::nullopt,
         });
@@ -2098,6 +2173,7 @@ void handleEnvironmentSourceDirty(EnvironmentLightingComponent&    component,
 }
 
 void handleEnvironmentSourceResolving(EnvironmentLightingProcessor&           system,
+                                      const entt::registry*            registry,
                                       entt::entity                     entity,
                                       EnvironmentLightingComponent&    component,
                                       EnvironmentLightingRuntimeState& state)
@@ -2153,7 +2229,9 @@ void handleEnvironmentSourceResolving(EnvironmentLightingProcessor&           sy
             state.pendingCylindricalSource = AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
                 .filepath        = component.cylindricalSource.filepath,
                 .name            = "EnvironmentLightingCylindricalSource",
-                .onReady         = {},
+                .onReady         = [&system, registry, entity](const std::shared_ptr<Texture>&) {
+                    system.enqueueEnvironment(registry, entity);
+                },
                 .colorSpace      = AssetManager::ETextureColorSpace::Linear,
                 .textureSemantic = std::nullopt,
             });
@@ -2211,7 +2289,6 @@ void handleEnvironmentSourceBuildingCubemap(const OffscreenJobQueueService&  que
 
     if (state.pendingEnvironmentOffscreen->phase == EOffscreenJobPhase::Pending) {
         detail::tryQueueJob(queueService, render, state.pendingEnvironmentOffscreen);
-        return;
     }
 
     if (state.pendingEnvironmentOffscreen->phase == EOffscreenJobPhase::Queued ||
@@ -2268,7 +2345,6 @@ void handleEnvironmentIrradianceBuilding(const OffscreenJobQueueService&  queueS
 
     if (state.pendingIrradianceOffscreen->phase == EOffscreenJobPhase::Pending) {
         detail::tryQueueJob(queueService, render, state.pendingIrradianceOffscreen);
-        return;
     }
 
     if (state.pendingIrradianceOffscreen->phase == EOffscreenJobPhase::Queued ||
@@ -2328,7 +2404,6 @@ void handleEnvironmentPrefilterBuilding(const OffscreenJobQueueService&  queueSe
 
     if (state.pendingPrefilterOffscreen->phase == EOffscreenJobPhase::Pending) {
         detail::tryQueueJob(queueService, render, state.pendingPrefilterOffscreen);
-        return;
     }
 
     if (state.pendingPrefilterOffscreen->phase == EOffscreenJobPhase::Queued ||
@@ -2358,6 +2433,7 @@ void handleEnvironmentPrefilterBuilding(const OffscreenJobQueueService&  queueSe
 }
 
 void resolveEnvironmentSourceState(EnvironmentLightingProcessor&           system,
+                                   const entt::registry*            registry,
                                    entt::entity                     entity,
                                    EnvironmentLightingComponent&    component,
                                    EnvironmentLightingRuntimeState& state)
@@ -2365,11 +2441,11 @@ void resolveEnvironmentSourceState(EnvironmentLightingProcessor&           syste
     switch (state.sourceState) {
     case EEnvironmentLightingSourceResolveState::Dirty:
     {
-        handleEnvironmentSourceDirty(component, state);
+        handleEnvironmentSourceDirty(system, registry, entity, component, state);
     } break;
     case EEnvironmentLightingSourceResolveState::ResolvingSource:
     {
-        handleEnvironmentSourceResolving(system, entity, component, state);
+        handleEnvironmentSourceResolving(system, registry, entity, component, state);
     } break;
     case EEnvironmentLightingSourceResolveState::BuildingEnvironmentCubemap:
     {
@@ -2473,7 +2549,6 @@ void EnvironmentLightingProcessor::resolvePendingEnvironmentLighting(SceneWork& 
             pendingState.derivedKey.clear();
             pendingState.boundResource.reset();
             pendingState.lastCompletedAuthoringVersion = elc.authoringVersion;
-            work.activeEnvironment.erase(entity);
             return;
         }
 
@@ -2522,7 +2597,6 @@ void EnvironmentLightingProcessor::resolvePendingEnvironmentLighting(SceneWork& 
                     ++pendingState.resultVersion;
                 }
                 pendingState.lastCompletedAuthoringVersion = elc.authoringVersion;
-                work.activeEnvironment.erase(entity);
                 return;
             }
         }
@@ -2541,7 +2615,7 @@ void EnvironmentLightingProcessor::resolvePendingEnvironmentLighting(SceneWork& 
 
         {
             YA_PROFILE_SCOPE("ResourceResolve/EnvironmentLighting/Source");
-            resolveEnvironmentSourceState(*this, entity, elc, pendingState);
+            resolveEnvironmentSourceState(*this, &registry, entity, elc, pendingState);
         }
         {
             YA_PROFILE_SCOPE("ResourceResolve/EnvironmentLighting/Irradiance");
@@ -2563,12 +2637,28 @@ void EnvironmentLightingProcessor::resolvePendingEnvironmentLighting(SceneWork& 
                              pendingState.sourceState == EEnvironmentLightingSourceResolveState::BuildingEnvironmentCubemap ||
                              pendingState.irradianceState == EEnvironmentLightingIrradianceResolveState::Building ||
                              pendingState.prefilterState == EEnvironmentLightingPrefilterResolveState::Building;
-        if (bActive) {
-            work.activeEnvironment.insert(entity);
-        }
-        else {
+        if (!bActive) {
             pendingState.lastCompletedAuthoringVersion = elc.authoringVersion;
-            work.activeEnvironment.erase(entity);
+        }
+        const entt::registry* registryPtr = &registry;
+        const auto arm = [this, registryPtr, entity](const std::shared_ptr<OffscreenJobState>& job) {
+            if (job && !job->onFinished) {
+                job->onFinished = [this, registryPtr, entity]() { enqueueEnvironment(registryPtr, entity); };
+            }
+        };
+        arm(pendingState.pendingEnvironmentOffscreen);
+        arm(pendingState.pendingIrradianceOffscreen);
+        arm(pendingState.pendingPrefilterOffscreen);
+        // Same-prepare continuation: a job that this visit only created is
+        // still Pending and has to be queued. An already queued job waits
+        // for onFinished instead of being polled.
+        const auto needsQueue = [](const std::shared_ptr<OffscreenJobState>& job) {
+            return job && job->phase == EOffscreenJobPhase::Pending;
+        };
+        if (needsQueue(pendingState.pendingEnvironmentOffscreen) ||
+            needsQueue(pendingState.pendingIrradianceOffscreen) ||
+            needsQueue(pendingState.pendingPrefilterOffscreen)) {
+            enqueueEnvironment(&registry, entity);
         }
 
         if (pendingState.resultVersion != previousResultVersion) {
@@ -2581,23 +2671,6 @@ void EnvironmentLightingProcessor::resolvePendingEnvironmentLighting(SceneWork& 
         work.dirtyEnvironmentQueue.pop_front();
         work.dirtyEnvironmentSet.erase(entity);
         pumpOne(entity);
-    }
-
-    std::vector<entt::entity> activeEntities(work.activeEnvironment.begin(), work.activeEnvironment.end());
-    for (const auto entity : activeEntities) {
-        pumpOne(entity);
-    }
-
-    std::vector<entt::entity> staleEntities;
-    staleEntities.reserve(work.environmentStates.size());
-    for (const auto& [entity, state] : work.environmentStates) {
-        (void)state;
-        if (!registry.valid(entity) || !registry.all_of<EnvironmentLightingComponent>(entity)) {
-            staleEntities.push_back(entity);
-        }
-    }
-    for (const auto entity : staleEntities) {
-        cleanupEnvironmentLightingState(work, entity);
     }
 }
 

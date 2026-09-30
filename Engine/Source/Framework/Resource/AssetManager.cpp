@@ -207,19 +207,9 @@ void AssetManager::dispatchToGameThread(std::function<void()> task)
     task();
 }
 
-uint64_t AssetManager::getResourceVersion(const std::string& assetPath) const
+void AssetManager::noteAssetEpoch()
 {
-    const auto normalizedAssetPath = normalizeAssetPath(assetPath);
-    auto it = _resourceVersion.find(normalizedAssetPath);
-    return (it != _resourceVersion.end()) ? it->second : 0;
-}
-
-void AssetManager::bumpResourceVersion(const std::string& assetPath)
-{
-    const auto normalizedAssetPath = normalizeAssetPath(assetPath);
-    const auto newVersion = ++_resourceVersion[normalizedAssetPath];
     ++_resourceVersionEpoch;
-    YA_CORE_TRACE("bumpResourceVersion: '{}' → v{}", normalizedAssetPath, newVersion);
 }
 
 bool AssetManager::isTextureLoadFailed(const std::string& filepath) const
@@ -288,8 +278,6 @@ void AssetManager::onMetaFileChanged(const std::string& metaPath)
         modelManager().evictCachedAsset(assetPath, getCurrentFrameIdx());
         loadModel(ModelLoadRequest{.filepath = assetPath, .name = {}, .onReady = {}});
     }
-
-    bumpResourceVersion(assetPath);
 }
 
 void AssetManager::onAssetFileChanged(const std::string& assetPath)
@@ -305,8 +293,6 @@ void AssetManager::onAssetFileChanged(const std::string& assetPath)
         modelManager().evictCachedAsset(assetPath, getCurrentFrameIdx());
         loadModel(ModelLoadRequest{.filepath = assetPath, .name = {}, .onReady = {}});
     }
-
-    bumpResourceVersion(assetPath);
 }
 
 std::shared_ptr<Texture> AssetManager::getTextureByPath(const std::string& filepath) const
@@ -341,7 +327,6 @@ void AssetManager::invalidate(const std::string& filepath)
     textureManager().reload(normalizedFilepath);
     modelManager().evictCachedAsset(normalizedFilepath, getCurrentFrameIdx());
     tilesetManager().invalidate(normalizedFilepath);
-    bumpResourceVersion(normalizedFilepath);
 }
 
 void AssetManager::clearTextures()

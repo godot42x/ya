@@ -257,10 +257,10 @@ TEST_F(ScriptApiLibraryFixture, AssetLibraryInspectsPaths)
     const auto result = _system.evalJS(
         "const info = ya.asset.get_info(\"" + quotedPath + "\");\n"
         "const stats = ya.asset.stats();\n"
-        "[info.type, info.resourceVersion, info.textureLoaded, info.modelLoaded, stats.textureCount, stats.modelCount]");
+        "[info.type, info.textureLoaded, info.modelLoaded, stats.textureCount, stats.modelCount]");
     ASSERT_TRUE(result.ok) << result.error;
     EXPECT_EQ(result.value,
-              Json::array({"texture", 0, false, false, 0, 0}));
+              Json::array({"texture", false, false, 0, 0}));
 
     std::filesystem::remove(assetPath);
 }

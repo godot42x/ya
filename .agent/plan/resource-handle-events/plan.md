@@ -72,7 +72,7 @@ template <typename T> using AssetHandle = std::shared_ptr<const AssetSlot<T>>;
 - 热重载 `onAssetFileChanged(path)`：对 `sourcePath == path` 的**所有变体槽**重新解码；完成后替换 `resource`，旧资源进延迟删除队列（规则 6/7），`generation++`，通知。重载期间槽保持 Ready + 旧资源，不闪烁。（现状只重载 SRGB 变体，属于顺带修复。）
 - `collectUnused`：释放只被管理器持有的槽（`use_count == 1`），资源走延迟删除。
 - CPU 侧批量加载（环境光照面、地形高度图）改为回调式完成：`loadTextureBatchIntoMemory(request{ onDone })`，删除 `consumeTextureBatchMemory` 轮询。
-- 删除 `_resourceVersion` / `_resourceVersionEpoch` / `getResourceVersion` / `bumpResourceVersion`；需要"内容版本"的派生缓存键改用槽 `generation`。
+- 删除按路径的 `_resourceVersion` / `getResourceVersion` / `bumpResourceVersion`；需要"内容版本"的派生缓存键改用槽 `generation`。`_resourceVersionEpoch` 留下，只作为 GUI 贴图目录的变更信号，由贴图槽更新推进。
 - H1 落地形态：
   - 贴图条目按**请求身份**（规范化路径 + colorSpace；`registerTexture` 用名字）索引，而不是按导入设置拼出的 cacheKey，
     这样 meta 变化后原槽原地重填，不用搬键。`loadTexture` 保留原名，返回 `AssetHandle<Texture>`（`onReady` 保留）。
@@ -80,7 +80,7 @@ template <typename T> using AssetHandle = std::shared_ptr<const AssetSlot<T>>;
   - 没有渲染后端（纯 GUI 宿主、无 App 的单测）时，请求得到一个共享的 Failed 槽，不建条目、不提交解码。
   - `unload(path)` 按路径强制卸载：槽置 Failed 并交出资源（顺带修掉脚本 `asset.unload` 传 `path|metaHash` 永远匹配不到的问题）。
   - `clear()`（后端销毁前）把所有槽置 Failed 并交出资源，ref 不会再拿到已销毁的 GPU 对象。
-  - resourceVersion / epoch 在 H1 保留：GUI 贴图源 `epoch()`、脚本 `asset.*`、Terrain、EL 仍在读，随各自的 checkpoint 迁走，H5 删除。
+  - 按路径的 resourceVersion 在 H1 保留：脚本 `asset.*`、Terrain、EL 仍在读，随各自的 checkpoint 迁走，H5 删除。epoch 留给 GUI 贴图目录，H5 改为由贴图槽更新推进。
 - 热重载**现状没有触发源**：`onAssetFileChanged / onMetaFileChanged` 无调用者，FileWatcher 只看 Lua；唯一入口是脚本 `asset.reload`
   （→ `invalidate`）。H1 让这三个入口都走"原地重填所有变体槽"，单测直接调用；接资产文件监听记为后续项。
 

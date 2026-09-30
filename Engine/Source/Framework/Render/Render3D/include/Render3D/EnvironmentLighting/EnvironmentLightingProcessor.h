@@ -10,7 +10,9 @@
 // parameter of every entry that needs one -- there is no active-Scene lookup.
 // ============================================================================
 
+#include "Core/Delegate.h"
 #include "Core/System/System.h"
+#include "Core/TypeIndex.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Systems/Components/TerrainComponent.h"
@@ -215,11 +217,8 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
         std::deque<entt::entity>                                          dirtyEnvironmentQueue;
         std::unordered_set<entt::entity>                                  dirtySkyboxSet;
         std::unordered_set<entt::entity>                                  dirtyEnvironmentSet;
-        std::unordered_set<entt::entity>                                  activeSkybox;
-        std::unordered_set<entt::entity>                                  activeEnvironment;
         std::unordered_set<entt::entity>                                  sceneSkyboxEnvironmentDependents;
-        uint64_t                                                          nextResolveAuditTick = 0;
-        bool                                                              bSeeded              = false;
+        bool                                                              bSeeded = false;
 
         [[nodiscard]] ESkyboxResolveState getSkyboxResolveState(entt::entity entity) const;
         [[nodiscard]] bool                isSkyboxLoading(entt::entity entity) const;
@@ -264,8 +263,6 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     void seedSceneResolveWork(SceneWork& work);
     void touchDerivedResourceUsage(SceneWork& work);
     void gcDerivedResources(uint64_t currentFrame);
-    void sweepAuthoringDirty(SceneWork& work);
-    void auditResolveWork(SceneWork& work);
     void markAllSceneSkyboxEnvironmentDependentsDirty(SceneWork& work, const char* reason);
     void markSkyboxDirty(SceneWork& work, entt::entity entity, const char* reason);
     void markEnvironmentLightingDirty(SceneWork& work, entt::entity entity, const char* reason);
@@ -274,8 +271,15 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     void clearAllResolveState();
     void cleanupSkyboxState(SceneWork& work, entt::entity entity);
     void cleanupEnvironmentLightingState(SceneWork& work, entt::entity entity);
-    [[nodiscard]] bool isSkyboxQueuedOrActive(const SceneWork& work, entt::entity entity) const;
-    [[nodiscard]] bool isEnvironmentQueuedOrActive(const SceneWork& work, entt::entity entity) const;
+    [[nodiscard]] SceneWork* findWorkByRegistry(const entt::registry* registry);
+    void onComponentAdded(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex);
+    void onComponentEdited(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex);
+    void onComponentRemoved(entt::registry& registry, entt::entity entity, ya::type_index_t typeIndex);
+
+    DelegateHandle _componentAddedHandle   = INVALID_HANDLE;
+    DelegateHandle _componentEditedHandle  = INVALID_HANDLE;
+    DelegateHandle _componentRemovedHandle = INVALID_HANDLE;
+    bool           bBusSubscribed          = false;
 
   public:
     void setRender(IRender* render) { _render = render; }
@@ -289,6 +293,14 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     /// this call does not name has its work dropped -- the same reconcile the
     /// pipelines do with the Views a tick stops declaring.
     void prepareScenes(std::span<Scene* const> scenes, float dt);
+
+    /// Completion entry points. Callbacks only enqueue; they do not mutate
+    /// the registry or record commands. A batch handle that no longer matches
+    /// the entity's pending load is consumed and discarded.
+    void enqueueSkybox(const entt::registry* registry, entt::entity entity);
+    void enqueueEnvironment(const entt::registry* registry, entt::entity entity);
+    void onSkyboxBatch(const entt::registry* registry, entt::entity entity, uint64_t handle);
+    void onEnvironmentBatch(const entt::registry* registry, entt::entity entity, uint64_t handle);
 
     void shutdown() override;
 
