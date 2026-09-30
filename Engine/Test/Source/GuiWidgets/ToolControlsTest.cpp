@@ -34,6 +34,7 @@
 
 #include <cmath>
 #include <memory>
+#include <unordered_map>
 
 namespace ya
 {
@@ -1101,6 +1102,112 @@ TEST(ToolControlsTest, TreeViewReorderUsesBehaviorBackedDragDrop)
     EXPECT_EQ(toId, "node.2");
     EXPECT_EQ(mode, 0);
     EXPECT_FALSE(tree.isDragging());
+}
+
+// The trailing row toggle (the hierarchy "eye") is its own gesture: pressing
+// the band flips the presenter state without selecting the row or starting a
+// reorder drag. The glyph state is queried live from the presenter.
+TEST(ToolControlsTest, TreeViewRowToggleIsItsOwnGestureAndDoesNotSelect)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       view = std::make_shared<UITreeView>("Tree");
+    FCanvasSlotArgs viewSlot;
+    viewSlot.offset    = {20.0f, 20.0f};
+    viewSlot.fixedSize = {220.0f, 96.0f};
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    roots->push({.id = "node.1", .label = "Node 1"});
+    roots->push({.id = "node.2", .label = "Node 2"});
+    view->bindData(roots);
+
+    std::unordered_map<std::string, bool> eyeState;
+    std::vector<std::string>              toggled;
+    view->setRowToggleSpec({
+        .bEnabled  = true,
+        .width     = 26.0f,
+        .isOn      = [&](const std::string& id) { return eyeState.count(id) != 0 && eyeState[id]; },
+        .onToggled = [&](const std::string& id) {
+            toggled.push_back(id);
+            eyeState[id] = !eyeState[id];
+        },
+    });
+
+    std::string selected;
+    view->_onSelectionChanged = [&](const std::string& id) { selected = id; };
+
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
+    tree.layout();
+
+    // The tree spans x 20..240; the toggle band is the rightmost 26px of the
+    // row: x 214..240. Row 0 spans y 20..44.
+    const WidgetEventContext bandPoint = pointAt(228.0f, 32.0f);
+    ASSERT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), bandPoint),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), bandPoint),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_EQ(toggled.size(), 1u);
+    EXPECT_EQ(toggled.front(), "node.1");
+    EXPECT_EQ(eyeState["node.1"], true);
+    // The eye is not a selection gesture.
+    EXPECT_EQ(selected, std::string{});
+
+    // A press in the row body still selects (the band only covers its own x
+    // range), and the toggle state is read live: rebuilding the snapshot sees
+    // the flipped state.
+    ASSERT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(80.0f, 32.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(selected, "node.1");
+    EXPECT_EQ(view->rowToggle().isOn("node.1"), true);
+}
+
+// The toggle glyph paints on every visible row (state queried live), not
+// only on the hovered/selected one.
+TEST(ToolControlsTest, TreeViewRowToggleGlyphPaintsOnEveryRow)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       view = std::make_shared<UITreeView>("Tree");
+    FCanvasSlotArgs viewSlot;
+    viewSlot.offset    = {20.0f, 20.0f};
+    viewSlot.fixedSize = {220.0f, 96.0f};
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    roots->push({.id = "node.1", .label = "Node 1"});
+    roots->push({.id = "node.2", .label = "Node 2"});
+    roots->push({.id = "node.3", .label = "Node 3"});
+    view->bindData(roots);
+    view->setRowToggleSpec({.bEnabled = true, .width = 26.0f, .isOn = {}, .onToggled = {}});
+
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
+    tree.layout();
+
+    const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{});
+    // Each row's toggle band is x 214..240 (tree spans 20..240): an open-eye
+    // glyph is an outline rect + pupil (bOn=false with a null query -> the
+    // closed-eye line set). Either way at least one glyph primitive must land
+    // inside every row's band.
+    std::array<int, 3> glyphsPerRow{};
+    const auto rowIndexOf = [&](const glm::vec2& point) -> int {
+        for (int row = 0; row < 3; ++row) {
+            const float rowY = 20.0f + static_cast<float>(row) * 24.0f;
+            if (point.y >= rowY && point.y < rowY + 24.0f) {
+                return row;
+            }
+        }
+        return -1;
+    };
+    for (const UIFrameDrawItem& item : snapshot.items) {
+        // Glyph primitives are lines (the outline is four line items); line
+        // items carry their geometry in lineFrom/lineTo, not pos.
+        const glm::vec2 from = item.kind == UIFrameDrawItem::EKind::Line ? item.lineFrom : item.pos;
+        if (from.x < 210.0f || from.x > 241.0f) {
+            continue;
+        }
+        const int row = rowIndexOf(from);
+        if (row >= 0) {
+            ++glyphsPerRow[static_cast<size_t>(row)];
+        }
+    }
+    for (int row = 0; row < 3; ++row) {
+        EXPECT_GT(glyphsPerRow[static_cast<size_t>(row)], 0) << "row " << row;
+    }
 }
 
 TEST(ToolControlsTest, TreeViewRightClickSelectsRowAndFiresContextMenu)

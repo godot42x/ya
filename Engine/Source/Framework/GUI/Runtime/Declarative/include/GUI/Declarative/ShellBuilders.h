@@ -74,6 +74,18 @@ class UITreeViewWidgetBuilder final : public TUIWidgetBuilder<UITreeView, UITree
         return std::move(*this);
     }
 
+    [[nodiscard]] UITreeViewWidgetBuilder& setRowToggleSpec(FRowToggleSpec spec) &
+    {
+        _widget->setRowToggleSpec(std::move(spec));
+        return *this;
+    }
+
+    [[nodiscard]] UITreeViewWidgetBuilder&& setRowToggleSpec(FRowToggleSpec spec) &&
+    {
+        _widget->setRowToggleSpec(std::move(spec));
+        return std::move(*this);
+    }
+
     [[nodiscard]] UITreeViewWidgetBuilder& bindFilter(std::shared_ptr<Reactive<std::string>> value) &
     {
         _widget->bindFilter(std::move(value));

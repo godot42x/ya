@@ -402,6 +402,52 @@ bool UITreeView::onArrow(const glm::vec2& point, const VisibleRow& row) const
     return point.x >= x0 - kHitSlack && point.x <= x0 + _arrowWidth + kHitSlack;
 }
 
+Rect2D UITreeView::rowToggleRect(int rowIndex) const
+{
+    const float width = std::max(_rowToggle.width, 12.0f);
+    return Rect2D{
+        .pos    = {_layoutRect.pos.x + _layoutRect.extent.x - width,
+                   _layoutRect.pos.y + static_cast<float>(rowIndex) * _rowHeight},
+        .extent = {width, _rowHeight},
+    };
+}
+
+bool UITreeView::onRowToggle(const glm::vec2& point, int rowIndex) const
+{
+    if (!_rowToggle.bEnabled || !_rowToggle.onToggled) {
+        return false;
+    }
+    const Rect2D band = rowToggleRect(rowIndex);
+    return point.x >= band.pos.x && point.x <= band.pos.x + band.extent.x &&
+           point.y >= band.pos.y && point.y <= band.pos.y + band.extent.y;
+}
+
+/// The eye glyph, painted from primitives so no font glyph coverage is
+/// involved: an open eye is an outlined lens + pupil, a closed eye is a lid
+/// line with two small lashes.
+void paintRowToggleGlyph(UIFrameBuilder& builder, const Rect2D& band, bool bOn, const glm::vec4& color)
+{
+    const float centerY = band.pos.y + band.extent.y * 0.5f;
+    const float lensW   = std::min(band.extent.x - 6.0f, 16.0f);
+    const float lensH   = 10.0f;
+    const float lensX   = band.pos.x + (band.extent.x - lensW) * 0.5f;
+    if (bOn) {
+        // Lens outline + pupil: the outline primitive keeps the glyph from
+        // reading as a filled pill.
+        builder.addRectOutline({glm::vec2(lensX, centerY - lensH * 0.5f), {lensW, lensH}}, color, 1.5f);
+        const float pupil = 4.0f;
+        builder.addRoundedRect({glm::vec2(lensX + lensW * 0.5f - pupil * 0.5f, centerY - pupil * 0.5f),
+                                {pupil, pupil}},
+                               color,
+                               pupil * 0.5f);
+    }
+    else {
+        builder.addLine({lensX, centerY}, {lensX + lensW, centerY}, color, 1.5f);
+        builder.addLine({lensX + 2.0f, centerY + 3.0f}, {lensX + 5.0f, centerY + 4.5f}, color, 1.0f);
+        builder.addLine({lensX + lensW - 5.0f, centerY + 4.5f}, {lensX + lensW - 2.0f, centerY + 3.0f}, color, 1.0f);
+    }
+}
+
 FDisclosureLeading UITreeView::rowLeading(const Rect2D& rowRect,
                                           int           depth,
                                           bool          bHasIcon,
@@ -499,6 +545,16 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
             builder.addText(leading.title, row.node->label, labelColor, font,
                             EWidgetAlignH::Left, EWidgetAlignV::Center);
         }
+
+        if (_rowToggle.bEnabled) {
+            const bool bOn     = _rowToggle.isOn ? _rowToggle.isOn(row.node->id) : false;
+            const bool bHover  = row.node->id == _hoveredToggleId;
+            // Full text color: a half-dimmed glyph on a dark row vanishes at
+            // this size; hover is the bright state instead.
+            const glm::vec4 glyphColor = bHover ? glm::vec4(1.0f, 1.0f, 1.0f, style.textColor.a)
+                                                : style.textColor;
+            paintRowToggleGlyph(builder, rowToggleRect(static_cast<int>(i)), bOn, glyphColor);
+        }
     }
 
     // Reorder drop highlight: a line at the insertion boundary (before /
@@ -543,6 +599,17 @@ bool UITreeView::handleInputEvent(const Event& event, const WidgetEventContext& 
             _hoveredArrowId = std::move(newArrowHover);
             markPaintDirty();
         }
+        // Trailing-toggle hover: only when the band is interactive.
+        std::string newToggleHover;
+        if (row >= 0 && _rowToggle.bEnabled && _rowToggle.onToggled &&
+            onRowToggle(ctx.logicalPoint, row)) {
+            const auto        rows = flattenVisible();
+            newToggleHover = rows[static_cast<size_t>(row)].node->id;
+        }
+        if (newToggleHover != _hoveredToggleId) {
+            _hoveredToggleId = std::move(newToggleHover);
+            markPaintDirty();
+        }
         (void)UIElement::handleInputEvent(event, ctx);
         return row >= 0;
     }
@@ -577,7 +644,14 @@ bool UITreeView::handleInputEvent(const Event& event, const WidgetEventContext& 
         const auto        rows = flattenVisible();
         const VisibleRow& row  = rows[static_cast<size_t>(rowIndex)];
 
-        if (!row.node->children.empty() && onArrow(ctx.logicalPoint, row)) {
+        if (_rowToggle.bEnabled && onRowToggle(ctx.logicalPoint, rowIndex)) {
+            // The toggle is its own gesture: it flips the presenter state and
+            // must not select the row or start a reorder drag.
+            if (_rowToggle.onToggled) {
+                _rowToggle.onToggled(row.node->id);
+            }
+        }
+        else if (!row.node->children.empty() && onArrow(ctx.logicalPoint, row)) {
             toggleExpanded(row.node->id);
         }
         else {
@@ -609,9 +683,10 @@ void UITreeView::onPointerLeave()
     // The pointer left the tree entirely (hover moved to a sibling widget):
     // the per-row hover state must clear, since no further MouseMoved will
     // reach this widget. This is the same contract Button/RadioButton use.
-    if (_hoveredRow != -1 || !_hoveredArrowId.empty()) {
+    if (_hoveredRow != -1 || !_hoveredArrowId.empty() || !_hoveredToggleId.empty()) {
         _hoveredRow = -1;
         _hoveredArrowId.clear();
+        _hoveredToggleId.clear();
         markPaintDirty();
     }
 }
@@ -620,6 +695,7 @@ void UITreeView::clearTransientInputState()
 {
     _hoveredRow = -1;
     _hoveredArrowId.clear();
+    _hoveredToggleId.clear();
     _bPressArmed = false;
     _pressRowId.clear();
     _dropRowIndex = -1;

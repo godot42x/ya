@@ -36,6 +36,20 @@ struct YA_GUI_API FTreeReorderDragDropOp : public UIDragDropOperation
     }
 };
 
+/// Trailing row toggle affordance (the hierarchy "eye"): a fixed-width hit
+/// band at each row's right edge with a two-state glyph, painted and
+/// hit-tested by the tree. The state lives with the presenter -- the widget
+/// only reports clicks and asks what to draw. All rows share one spec.
+struct YA_GUI_API FRowToggleSpec
+{
+    bool  bEnabled = false;
+    float width    = 22.0f;
+    /// State query (paint). Null paints the off glyph.
+    std::function<bool(const std::string& nodeId)> isOn;
+    /// Click sink (input). Null makes the band inert (no hover, no hit).
+    std::function<void(const std::string& nodeId)> onToggled;
+};
+
 /// Data-driven tree view (hierarchy panel first brick): a tree list with
 /// selection and expand/collapse, built on the reactive data-source contract.
 ///
@@ -139,6 +153,17 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     {
         _onContextMenu = std::move(handler);
     }
+    /// Trailing per-row toggle (the hierarchy "eye"). Paint-granularity: the
+    /// glyph state is queried per paint, so a presenter-side flip only needs
+    /// the next snapshot, not a layout pass.
+    void setRowToggleSpec(FRowToggleSpec spec)
+    {
+        // The glyph state is queried live per paint, so only the spec's shape
+        // is stored here.
+        _rowToggle = std::move(spec);
+        invalidateProperty(EUIPropertyImpact::Paint);
+    }
+    [[nodiscard]] const FRowToggleSpec& rowToggle() const { return _rowToggle; }
 
     void setDisclosureKind(EDisclosureKind kind)
     {
@@ -239,6 +264,10 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     /// already resolved by hitRowIndex, so only the horizontal band is
     /// tested here).
     [[nodiscard]] bool onArrow(const glm::vec2& point, const VisibleRow& row) const;
+    /// Whether `point` is over the trailing toggle band of the row.
+    [[nodiscard]] bool onRowToggle(const glm::vec2& point, int rowIndex) const;
+    /// The toggle band's rect for one row (paint and hit share it).
+    [[nodiscard]] Rect2D rowToggleRect(int rowIndex) const;
     /// Shared HBox leading (button + optional icon + title) for one row.
     /// Paint and hit test use this so the plus-minus box and label share
     /// the same vertically-centered band.
@@ -270,6 +299,9 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     /// Node id whose arrow button is hovered (empty when none). Drives the
     /// arrow hover highlight.
     std::string _hoveredArrowId;
+    /// Node id whose trailing toggle is hovered (empty when none).
+    std::string _hoveredToggleId;
+    FRowToggleSpec _rowToggle;
     /// Reorder drag state: the row the press started on, the press point
     /// (threshold), and the current drop row/mode while dragging.
     std::string _pressRowId;

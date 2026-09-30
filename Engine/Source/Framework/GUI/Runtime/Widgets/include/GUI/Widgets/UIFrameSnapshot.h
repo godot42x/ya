@@ -79,6 +79,12 @@ struct UIFrameBuildContext
     /// Collapsed stays unpainted even then -- it has no layout rect to ghost.
     /// 0 keeps runtime semantics (skip render entirely).
     float ghostInvisibleOpacity = 0.0f;
+
+    /// Authoring-canvas subtree filter: return false to skip a widget and its
+    /// whole subtree in this snapshot (the designer's per-node display
+    /// toggles). Evaluated once per visited widget; null paints everything.
+    /// The policy lives with the host -- the framework only runs the gate.
+    std::function<bool(const UIElement&)> subtreePaintFilter;
 };
 
 /// One resolved draw command (render-target pixels, top-left origin, Y down).
@@ -307,6 +313,11 @@ class YA_GUI_API UIFrameBuilder
     /// Ghost opacity for widgets excluded from rendering (0 = skip them, the
     /// runtime default). Read by UIElement::paint.
     [[nodiscard]] float ghostInvisibleOpacity() const { return _ctx.ghostInvisibleOpacity; }
+    /// Authoring-canvas subtree filter (null = paint everything).
+    [[nodiscard]] const std::function<bool(const UIElement&)>& subtreePaintFilter() const
+    {
+        return _ctx.subtreePaintFilter;
+    }
     /// Store this widget's newly painted segment into the write cache.
     void cacheItems(const UIElement* widget, size_t start);
     /// Append the widget's previous-frame segment from the read cache.

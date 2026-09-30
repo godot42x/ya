@@ -316,6 +316,12 @@ glm::vec2 UIElement::computeIntrinsicSize() const
 
 void UIElement::paint(UIFrameBuilder& builder)
 {
+    // Authoring-canvas subtree filter (designer display toggles): the host
+    // decides per widget; false here prunes the widget and its whole subtree.
+    const std::function<bool(const UIElement&)>& subtreeFilter = builder.subtreePaintFilter();
+    if (subtreeFilter && !subtreeFilter(*this)) {
+        return;
+    }
     if (!isVisibleForRender()) {
         paintGhost(builder);
         return;
