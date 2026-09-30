@@ -64,6 +64,8 @@ def main() -> int:
     parser.add_argument("--startup-timeout", type=int, default=180)
     parser.add_argument("--no-project-open", action="store_true")
     parser.add_argument("--skip-designer", action="store_true")
+    parser.add_argument("--window-width", type=int, default=0)
+    parser.add_argument("--window-height", type=int, default=0)
     parser.add_argument("--out-dir", default="Engine/Saved/Automation/diag")
     args = parser.parse_args()
 
@@ -82,6 +84,8 @@ def main() -> int:
                 args.project,
                 "--",
                 f"--automation-control-port={args.port}",
+                *([f"--width={args.window_width}", f"--height={args.window_height}"]
+                  if args.window_width > 0 and args.window_height > 0 else []),
                 f"--max-lifetime-seconds={args.startup_timeout + 600}",
             ],
             cwd=workspace,

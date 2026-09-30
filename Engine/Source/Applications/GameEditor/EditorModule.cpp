@@ -485,12 +485,34 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     // table of contents; these helpers are the named steps in that map.
     // -----------------------------------------------------------------
 
+    /// While the game owns the world viewport (PIE), its display root renders
+    /// where the editor shows it: the panel rect, not the window. The Hold
+    /// policy keeps window resizes out (the editor panel is the viewport, not
+    /// the window); this seed is the panel's own per-tick write, so a dock
+    /// resize or layout change re-fits the game image instead of stretching a
+    /// stale startup resolution into the new rect.
+    void seedRuntimeResolutionFromViewport(App& app, AppRenderServices& renderServices)
+    {
+        if (!app.isRuntimeMode() || !_layer->isViewportShown()) {
+            return;
+        }
+        const Rect2D viewportRect = _layer->getViewportRect();
+        if (viewportRect.extent.x > 0.0f && viewportRect.extent.y > 0.0f) {
+            renderServices.seedRenderResolution(Extent2D{
+                .width  = static_cast<uint32_t>(viewportRect.extent.x),
+                .height = static_cast<uint32_t>(viewportRect.extent.y),
+            });
+        }
+    }
+
     void updateEditorCameraAndPrepareCompose(App& app, float dt)
     {
         auto& renderServices = app.getRenderServices();
         if (!renderServices.hasRenderer()) {
             return;
         }
+
+        seedRuntimeResolutionFromViewport(app, renderServices);
 
         auto& editorCamera = _layer->getCamera();
         // Aspect follows the extent the displayed View actually rendered at --
