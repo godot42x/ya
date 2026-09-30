@@ -15,6 +15,7 @@
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "Core/Os/Os.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/UI/Shell/EditorTheme.h"
 #include "Hierarchy/Node.h"
@@ -105,11 +106,19 @@ void EditorHierarchyTab::construct()
                             return;
                         }
                         _selection->select(id);
-                        uint64_t uuid = 0;
+                        uint64_t    uuid = 0;
                         std::string entryId;
                         if (parseEditorHierarchyEntityIdKey(id, uuid)) {
-                            if (Scene* scene = _layer->getHierarchyScene()) {
-                                _layer->setSelectedEntity(scene->getEntityByUUID(uuid));
+                            Scene* scene = _layer->getHierarchyScene();
+                            Entity* entity = scene ? scene->getEntityByUUID(uuid) : nullptr;
+                            if (entity) {
+                                // Ctrl/Cmd adds or removes, Shift extends over the
+                                // visible rows; plain replaces. (Widget entries
+                                // below stay single-select.)
+                                const uint32_t mod    = Os::queryKeyModState();
+                                const bool     bMulti = (mod & EKeyMod::Ctrl) != 0 || (mod & EKeyMod::Gui) != 0;
+                                const bool     bRange = (mod & EKeyMod::Shift) != 0;
+                                applyEntitySelectionGesture(entity, bMulti, bRange);
                             }
                         }
                         else if (parseWidgetEntryKey(id, entryId)) {
@@ -246,7 +255,123 @@ void EditorHierarchyTab::pullSelectionFromLayer()
         }
     }
     std::string primary = ids.empty() ? std::string{} : ids.front();
+    if (_treeView) {
+        // Paint the whole selection, not just the primary row.
+        _treeView->setSelectedIds(std::unordered_set<std::string>(ids.begin(), ids.end()));
+    }
     _selection->replace(std::move(ids), std::move(primary));
+}
+
+void EditorHierarchyTab::collectVisibleEntityUuids(const std::vector<UITreeView::FNode>& nodes,
+                                                   std::vector<uint64_t>&                   out) const
+{
+    for (const UITreeView::FNode& node : nodes) {
+        uint64_t uuid = 0;
+        if (parseEditorHierarchyEntityIdKey(node.id, uuid)) {
+            out.push_back(uuid);
+        }
+        // Collapsed subtrees are not on screen, so a Shift range must not
+        // reach into them.
+        if (!node.children.empty() && (!_treeView || _treeView->isExpanded(node.id))) {
+            collectVisibleEntityUuids(node.children, out);
+        }
+    }
+}
+
+void EditorHierarchyTab::collectVisibleEntityUuids(std::vector<uint64_t>& out) const
+{
+    out.clear();
+    if (!_roots) {
+        return;
+    }
+    const size_t count = _roots->size();
+    std::vector<UITreeView::FNode> roots;
+    roots.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        roots.push_back(_roots->get(i));
+    }
+    collectVisibleEntityUuids(roots, out);
+}
+
+void EditorHierarchyTab::applyEntitySelectionGesture(Entity* entity, bool bMulti, bool bRange)
+{
+    Scene* scene = _layer ? _layer->getHierarchyScene() : nullptr;
+    if (!scene || !entity) {
+        return;
+    }
+
+    std::vector<Entity*> selection = _layer->getSelections();
+
+    if (bRange && _rangeAnchorUuid != 0) {
+        std::vector<uint64_t> visible;
+        collectVisibleEntityUuids(visible);
+        const auto anchorIt = std::find(visible.begin(), visible.end(), _rangeAnchorUuid);
+        const auto clickIt  = std::find(visible.begin(), visible.end(), entity->getComponent<IDComponent>()
+                                                                                 ? entity->getComponent<IDComponent>()->_id.value
+                                                                                 : 0);
+        if (anchorIt != visible.end() && clickIt != visible.end()) {
+            auto [rangeBegin, rangeEnd] = std::minmax(anchorIt, clickIt);
+            std::vector<Entity*> range;
+            range.reserve(static_cast<size_t>(std::distance(rangeBegin, rangeEnd)) + 1);
+            for (auto it = rangeBegin; it != std::next(rangeEnd); ++it) {
+                if (Entity* inRange = scene->getEntityByUUID(*it)) {
+                    range.push_back(inRange);
+                }
+            }
+            _layer->setSelections(range, entity);
+            return;
+        }
+    }
+
+    if (bMulti) {
+        const auto it = std::find(selection.begin(), selection.end(), entity);
+        if (it != selection.end()) {
+            selection.erase(it);
+            _layer->setSelections(selection, selection.empty() ? nullptr : selection.front());
+        }
+        else {
+            selection.push_back(entity);
+            _layer->setSelections(selection, entity);
+        }
+        _rangeAnchorUuid = entity->getComponent<IDComponent>() ? entity->getComponent<IDComponent>()->_id.value : 0;
+        return;
+    }
+
+    _layer->setSelectedEntity(entity);
+    _rangeAnchorUuid = entity->getComponent<IDComponent>() ? entity->getComponent<IDComponent>()->_id.value : 0;
+}
+
+void EditorHierarchyTab::groupSelectionUnderNewFolder()
+{
+    Scene* scene = _layer ? _layer->getHierarchyScene() : nullptr;
+    if (!scene) {
+        return;
+    }
+    std::vector<Entity*> selection = _layer->getSelections();
+    if (selection.empty()) {
+        return;
+    }
+
+    // The folder is an empty node under the primary's parent: the same shape
+    // the create menu makes, so it serializes and expands like any node.
+    Node* primaryNode = scene->getNodeByEntity(selection.front());
+    Node* parent      = primaryNode ? primaryNode->getParent() : scene->getRootNode();
+    Node* group       = scene->createNode3D("Group", parent);
+    if (!group) {
+        YA_CORE_WARN("EditorHierarchyTab: could not create the group node");
+        return;
+    }
+
+    const std::string groupId = editorHierarchyEntityIdKey(group->getEntity()->getComponent<IDComponent>()->_id.value);
+    for (Entity* entity : selection) {
+        if (!entity || !entity->isValid() || scene->getNodeByEntity(entity) == group) {
+            continue;
+        }
+        (void)moveEditorHierarchyEntity(*scene, editorHierarchyEntityIdKey(entity->getComponent<IDComponent>()->_id.value), groupId, /*dropMode=*/1);
+    }
+    _layer->notifyHierarchyChanged();
+    _layer->markSceneDirty();
+    _layer->setSelectedEntity(group->getEntity());
 }
 
 void EditorHierarchyTab::openContextMenu(const std::string& targetId, const glm::vec2& logicalPoint)
@@ -299,6 +424,12 @@ void EditorHierarchyTab::openContextMenu(const std::string& targetId, const glm:
         items.push_back(UIMenu::FItem::separator());
         items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.duplicate"));
         items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.delete"));
+        items.push_back(UIMenu::FItem::separator());
+        items.push_back({
+            .label    = "Group Selection",
+            .action   = [this]() { groupSelectionUnderNewFolder(); },
+            .bEnabled = !layer.getSelections().empty(),
+        });
     }
     else {
         items = makeEditorCreateMenuItems(layer);

@@ -181,6 +181,15 @@ bool UITreeView::dropPosition(const glm::vec2& point, int& outRowIndex, int& out
     return true;
 }
 
+void UITreeView::setSelectedIds(std::unordered_set<std::string> ids)
+{
+    if (_selectedIds == ids) {
+        return;
+    }
+    _selectedIds = std::move(ids);
+    markPaintDirty();
+}
+
 void UITreeView::bindSelection(std::shared_ptr<Reactive<std::string>> selectedId)
 {
     _selectedId = std::move(selectedId); // paint-collected, Paint granularity (default)
@@ -455,7 +464,8 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
                                                                   false,
                                                                   false,
                                                                   false,
-                                                                  row.node->id == selectedId,
+                                                                  row.node->id == selectedId ||
+                                                                      _selectedIds.contains(row.node->id),
                                                                   false,
                                                                   false));
         if (fill.tintColor.a > 0.0f) {

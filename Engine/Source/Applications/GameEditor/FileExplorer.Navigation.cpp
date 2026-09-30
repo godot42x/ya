@@ -133,6 +133,11 @@ bool FileExplorer::isPathWithinActiveMountPoint(const std::filesystem::path& pat
 
 void FileExplorer::setSelectedPath(const std::filesystem::path& path)
 {
+    _selectedPaths.clear();
+    if (!path.empty()) {
+        _selectedPaths.push_back(path);
+    }
+    _rangeAnchorPath = path;
     const MountPoint* previousMount = _activeMountPoint;
     const std::filesystem::path previousDir = _currentDirectory;
     for (auto& mp : _mountPoints) {
@@ -152,6 +157,51 @@ void FileExplorer::setSelectedPath(const std::filesystem::path& path)
     if (previousMount != _activeMountPoint || previousDir != _currentDirectory) {
         bumpContentGeneration();
     }
+}
+
+void FileExplorer::applySelectionGesture(const std::filesystem::path& path, bool bMulti, bool bRange)
+{
+    if (path.empty()) {
+        return;
+    }
+
+    if (bRange && !_rangeAnchorPath.empty() && path != _rangeAnchorPath) {
+        // Range follows the current directory's listed order -- what the user
+        // sees, not the filesystem's.
+        std::vector<FEntry> entries;
+        collectEntries(entries);
+        const auto locate = [&entries](const std::filesystem::path& candidate) {
+            return std::find_if(entries.begin(), entries.end(), [&candidate](const FEntry& entry) {
+                return entry.path == candidate;
+            });
+        };
+        const auto anchorIt = locate(_rangeAnchorPath);
+        const auto clickIt  = locate(path);
+        if (anchorIt != entries.end() && clickIt != entries.end()) {
+            std::vector<std::filesystem::path> range;
+            for (auto it = std::min(anchorIt, clickIt); it != std::next(std::max(anchorIt, clickIt)); ++it) {
+                range.push_back(it->path);
+            }
+            _selectedPaths = std::move(range);
+            _selectedPath  = path;
+            return;
+        }
+    }
+
+    if (bMulti) {
+        const auto it = std::find(_selectedPaths.begin(), _selectedPaths.end(), path);
+        if (it != _selectedPaths.end()) {
+            _selectedPaths.erase(it);
+        }
+        else {
+            _selectedPaths.push_back(path);
+        }
+        _selectedPath    = path;
+        _rangeAnchorPath = path;
+        return;
+    }
+
+    setSelectedPath(path);
 }
 
 bool FileExplorer::matchesExtension(const std::filesystem::path& path) const

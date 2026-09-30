@@ -1,6 +1,7 @@
 #include "GameEditor/UI/Tabs/EditorContentBrowserTab.h"
 #include "GameEditor/UI/Shell/EditorListRows.h"
 
+#include "Core/Os/Os.h"
 #include "Core/System/PathUtils.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "GUI/Declarative/Build.h"
@@ -180,7 +181,11 @@ void EditorContentBrowserTab::refreshFromTree(WidgetTree& tree)
         _entryScrollOffsetPx = 0;
     }
 
-    const std::string selectedFingerprint = _explorer->getSelectedPath().string();
+    std::string selectedFingerprint;
+    for (const auto& selected : _explorer->getSelectedPaths()) {
+        selectedFingerprint += selected.string();
+        selectedFingerprint.push_back('\n');
+    }
     if (selectedFingerprint != _selectedFingerprint) {
         _selectedFingerprint = selectedFingerprint;
         if (!_bRowsDirty) {
@@ -337,7 +342,7 @@ void EditorContentBrowserTab::rebuildRows(WidgetTree& tree)
     else {
         _entryReconciler->reconcile(
             visibleKeys,
-            [this, &entries, window, selectedPath](UIElement& child, const std::string&, size_t index) {
+            [this, &entries, window](UIElement& child, const std::string&, size_t index) {
                 const size_t itemIndex = window.first + index;
                 const auto& entry = entries[itemIndex];
                 const std::filesystem::path path = entry.path;
@@ -345,7 +350,7 @@ void EditorContentBrowserTab::rebuildRows(WidgetTree& tree)
                 updateContentRow(child,
                                  bDir ? entry.name + "/" : entry.name,
                                  entry.name,
-                                 selectedPath == path,
+                                 _explorer->isPathSelected(path),
                                  [this, path, bDir](const std::string&) { selectItem(path, bDir); },
                                  [this, path, bDir](const std::string&) { activateItem(path, bDir); },
                                  bDir);
@@ -372,7 +377,15 @@ void EditorContentBrowserTab::selectMount(const std::string& itemId)
 
 void EditorContentBrowserTab::selectItem(const std::filesystem::path& path, bool bIsDirectory)
 {
-    _explorer->setSelectedPath(path);
+    const uint32_t mod    = Os::queryKeyModState();
+    const bool     bMulti = (mod & EKeyMod::Ctrl) != 0 || (mod & EKeyMod::Gui) != 0;
+    const bool     bRange = (mod & EKeyMod::Shift) != 0;
+    if (bMulti || bRange) {
+        _explorer->applySelectionGesture(path, bMulti, bRange);
+    }
+    else {
+        _explorer->setSelectedPath(path);
+    }
     _bSelectionDirty = true;
     if (bIsDirectory) {
         return;
@@ -451,8 +464,6 @@ std::string EditorContentBrowserTab::entryIconPath(const FileExplorer::FEntry& e
 void EditorContentBrowserTab::applySelection()
 {
     const FileExplorer::MountPoint* active = _explorer->getActiveMountPoint();
-    const std::filesystem::path selectedPath = _explorer->getSelectedPath();
-    const std::string selectedName = selectedPath.filename().string();
 
     for (const auto& child : _mountList->getChildren()) {
         auto* row = dynamic_cast<UISelectableRow*>(child.get());
@@ -461,6 +472,13 @@ void EditorContentBrowserTab::applySelection()
         }
         row->setSelected(active != nullptr && row->_itemId == active->name);
     }
+
+    const auto bNameSelected = [this](const std::string& name) {
+        if (name.empty()) {
+            return false;
+        }
+        return _explorer->isPathSelected(_explorer->getCurrentDirectory() / name);
+    };
 
     if (_explorer->getViewMode() == FileExplorer::ViewMode::Icon) {
         for (const auto& row : _entryRows->getChildren()) {
@@ -472,7 +490,7 @@ void EditorContentBrowserTab::applySelection()
                 if (!selectable) {
                     continue;
                 }
-                selectable->setSelected(!selectedName.empty() && selectable->_itemId == selectedName);
+                selectable->setSelected(bNameSelected(selectable->_itemId));
             }
         }
         return;
@@ -483,7 +501,7 @@ void EditorContentBrowserTab::applySelection()
         if (!row) {
             continue;
         }
-        row->setSelected(!selectedName.empty() && row->_itemId == selectedName);
+        row->setSelected(bNameSelected(row->_itemId));
     }
 }
 
@@ -527,7 +545,7 @@ void EditorContentBrowserTab::syncGridRowTiles(WidgetTree& tree,
         updateContentTile(tile,
                           entry.name,
                           entry.name,
-                          selectedPath == path,
+                          _explorer->isPathSelected(path),
                           [this, path, bDir](const std::string&) { selectItem(path, bDir); },
                           [this, path, bDir](const std::string&) { activateItem(path, bDir); },
                           entryIconPath(entry),

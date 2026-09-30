@@ -4,8 +4,10 @@
 #include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/Controls/TreeView.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace ya
 {
@@ -46,6 +48,21 @@ class EditorHierarchyTab : public UICompoundWidget
     void unbindLayerDelegates();
     void rebuildTree();
     void pullSelectionFromLayer();
+
+    /// Modifier-aware click routing for entity rows: plain replaces, Ctrl/Cmd
+    /// toggles, Shift extends over the VISIBLE hierarchy order (what the user
+    /// sees, not the model's flat list).
+    void applyEntitySelectionGesture(struct Entity* entity, bool bMulti, bool bRange);
+    /// UUIDs of the rows currently visible, depth-first (collapsed subtrees
+    /// excluded), so Shift ranges match the painted order.
+    void collectVisibleEntityUuids(std::vector<uint64_t>& out) const;
+    void collectVisibleEntityUuids(const std::vector<UITreeView::FNode>& nodes, std::vector<uint64_t>& out) const;
+    /// One empty group node under the primary's parent with the whole
+    /// selection reparented into it; the group becomes the new selection.
+    void groupSelectionUnderNewFolder();
+
+    /// Last plain/ctrl-clicked row: the Shift range extends from here.
+    uint64_t _rangeAnchorUuid = 0;
     /// `targetId` is the right-clicked row (entity key, `ui:<entry>`,
     /// `ui-root`) or empty for blank space. The menu lists what that target
     /// supports.

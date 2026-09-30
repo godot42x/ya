@@ -11,6 +11,7 @@
 #include <memory>
 #include <limits>
 #include <string>
+#include <unordered_set>
 #include <unordered_map>
 #include <vector>
 
@@ -86,6 +87,10 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     /// Bind an external selection ref (created internally when omitted). The
     /// ref is Paint-granularity: selection only re-paints, never re-lays out.
     void bindSelection(std::shared_ptr<Reactive<std::string>> selectedId);
+    /// Additional highlighted rows beyond the bound primary (multi-select
+    /// gesture semantics belong to the presenter: it reads modifiers, drives
+    /// the model's selection bus and pushes the resulting id set back here).
+    void setSelectedIds(std::unordered_set<std::string> ids);
     [[nodiscard]] std::shared_ptr<Reactive<std::string>> getSelection() const { return _selectedId; }
 
     // === Expand state (per node id, owned by this widget) ===
@@ -255,6 +260,9 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     std::shared_ptr<ReactiveList<FNode>>     _roots;
     mutable uint64_t _observedRootsRevision = std::numeric_limits<uint64_t>::max();
     std::shared_ptr<Reactive<std::string>>   _selectedId;
+    /// Presenter-pushed multi-selection (paint only; the bound primary is
+    /// always painted too, so plain single-select callers stay unchanged).
+    std::unordered_set<std::string>          _selectedIds;
     std::shared_ptr<Reactive<std::string>>   _filterBinding;
     std::string _lastFilterApplied;
     std::unordered_map<std::string, std::shared_ptr<Reactive<bool>>> _expanded;

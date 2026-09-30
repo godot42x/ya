@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <filesystem>
+#include <vector>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -77,9 +79,22 @@ class FileExplorer
     const std::filesystem::path &getSelectedPath() const { return _selectedPath; }
 
     /**
-     * @brief 设置当前选中的路径
+     * @brief 设置当前选中的路径（单选；清空多选集）
      */
     void setSelectedPath(const std::filesystem::path &path);
+
+    /**
+     * @brief 修饰键感知的多选点击：plain 替换、Ctrl/Cmd 切换、Shift 从锚点
+     * 到点击项按当前目录可见顺序扩选。`primary`（最后点击项）决定检查器
+     * 目标；selectedPaths() 是完整选择集。
+     */
+    void applySelectionGesture(const std::filesystem::path& path, bool bMulti, bool bRange);
+
+    [[nodiscard]] const std::vector<std::filesystem::path>& getSelectedPaths() const { return _selectedPaths; }
+    [[nodiscard]] bool isPathSelected(const std::filesystem::path& path) const
+    {
+        return std::find(_selectedPaths.begin(), _selectedPaths.end(), path) != _selectedPaths.end();
+    }
 
     /**
      * @brief 获取当前目录
@@ -225,6 +240,9 @@ class FileExplorer
     MountPoint             *_activeMountPoint = nullptr;
     std::filesystem::path   _currentDirectory;
     std::filesystem::path   _selectedPath;
+    /// Multi-selection; `_selectedPath` is the primary (last clicked).
+    std::vector<std::filesystem::path> _selectedPaths;
+    std::filesystem::path              _rangeAnchorPath;
 
     std::vector<std::string> _extensions;
     FilterMode               _filterMode    = FilterMode::Both;
