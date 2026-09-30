@@ -577,6 +577,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         // splash overlay's last presented frame is on screen, and the editor
         // window shows only after the chrome below has been built.
         _launchFlow.tick();
+        // Runtime-with-control is the game's viewport: gizmos and their W/E/R
+        // switch belong to authoring sessions only.
+        if (_layer) {
+            _layer->gizmo().setRuntimeActive(app.isRuntimeMode());
+        }
         auto* render = app.getRenderServices().getRender();
         if (!render) {
             return;
@@ -830,10 +835,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                 (void)session->surface().invokeTab("ui-preview");
             }
         });
-        _layer->setOpenDocumentEditorHandler([this](EEditorDocumentKind kind, std::string key) {
+        _layer->setOpenDocumentEditorHandler([this](EEditorDocumentKind kind, std::string key) -> bool {
             if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
-                (void)session->surface().openDocumentEditor(kind, std::move(key));
+                return session->surface().openDocumentEditor(kind, std::move(key));
             }
+            return false;
         });
         _layer->setFilePickerHandler([this](FEditorFilePickerRequest request) {
             if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {

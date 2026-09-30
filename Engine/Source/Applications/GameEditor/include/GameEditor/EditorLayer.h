@@ -163,7 +163,7 @@ struct EditorLayer
     EditorFilePickerCallback  _filePickerHandler;
     std::function<void()>     _showContentBrowser;
     std::function<void()>     _showUIDesignerCanvas;
-    std::function<void(EEditorDocumentKind, std::string)> _openDocumentEditor;
+    std::function<bool(EEditorDocumentKind, std::string)> _openDocumentEditor;
     std::string               _pendingContentReveal;
     std::string _currentScenePath; // Current scene file path
     Scene*      _editableScene = nullptr;
@@ -468,16 +468,17 @@ struct EditorLayer
             _showUIDesignerCanvas();
         }
     }
-    void setOpenDocumentEditorHandler(std::function<void(EEditorDocumentKind, std::string)> handler)
+    void setOpenDocumentEditorHandler(std::function<bool(EEditorDocumentKind, std::string)> handler)
     {
         _openDocumentEditor = std::move(handler);
     }
     void clearOpenDocumentEditorHandler() { _openDocumentEditor = nullptr; }
-    void openDocumentEditor(EEditorDocumentKind kind, std::string key)
+    [[nodiscard]] bool openDocumentEditor(EEditorDocumentKind kind, std::string key)
     {
-        if (_openDocumentEditor) {
-            _openDocumentEditor(kind, std::move(key));
+        if (!_openDocumentEditor) {
+            return false;
         }
+        return _openDocumentEditor(kind, std::move(key));
     }
     void revealInContentBrowser(std::string vfsPath)
     {

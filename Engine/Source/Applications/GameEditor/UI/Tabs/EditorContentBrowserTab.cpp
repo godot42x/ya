@@ -402,6 +402,9 @@ void EditorContentBrowserTab::activateItem(const std::filesystem::path& path, bo
         _layer->openDocumentEditor(EEditorDocumentKind::Script, std::move(utf8Path));
     }
     else if (utf8Path.ends_with(".yaui.json")) {
+        // Through the document-editor entry point, not the designer session
+        // directly: that is what binds the UI root and raises the Designer
+        // tab. Talking to the session alone loaded the document invisibly.
         std::string assetPath = utf8Path;
         if (VirtualFileSystem* vfs = VirtualFileSystem::get()) {
             const std::string vfsPath = vfs->toVfsPath(assetPath);
@@ -409,7 +412,11 @@ void EditorContentBrowserTab::activateItem(const std::filesystem::path& path, bo
                 assetPath = vfsPath;
             }
         }
-        _layer->getEditorUIDesignerSession().openDocument(assetPath);
+        if (!_layer->openDocumentEditor(EEditorDocumentKind::UI, std::move(assetPath))) {
+            // Fall back to the session so a designer that is not on screen
+            // still opens the document rather than silently doing nothing.
+            _layer->getEditorUIDesignerSession().openDocument(utf8Path);
+        }
     }
     else if (utf8Path.ends_with(".mat") || utf8Path.ends_with(".material")) {
         _layer->openDocumentEditor(EEditorDocumentKind::Material, std::move(utf8Path));
