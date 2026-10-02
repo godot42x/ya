@@ -25,15 +25,24 @@ signal  = 球体表面是否能看到天空盒/环境倒影
 
 ## 推荐命令模板
 
-```bash
-python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=1500 --screenshot-frame=1500 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error
-```
-
-若需要落盘截图，再补：
+窗口和布局必须固定，否则视口尺寸会漂，逐像素对比没有意义。`--width=1024 --height=768`，`--layout-overrides` 指向一个空目录，这样走出发厂 `Level.json`，而不是本机 `Workspace.json` 里的自定义分割。出厂布局下视口是 570×370。
 
 ```bash
---screenshot=/tmp/ibl-check.png
+mkdir -p /tmp/ya-ibl-layout-empty
+python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject -- \
+    --exit-after-frame=1500 --screenshot-frame=1500 \
+    --screenshot=/tmp/ibl-check.png --screenshot-target=editor \
+    --width=1024 --height=768 \
+    --layout-overrides=/tmp/ya-ibl-layout-empty \
+    --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 \
+    --log-level=warn --log-detail-level=error
 ```
+
+`--screenshot-target=editor` 不是合法取值，解析会忽略并落到默认的 viewport。不要改成 presentation。
+
+## 已知画面
+
+H5 之前（`f3d0c1a5` 一带）的同尺寸截图里，球体有竖向条纹，地面有网点。这是当时的画面，不是窗口缩放，也不是 debug / release 的差别。H5 之后的球体反射连续。对照时以 H5 之后的 `/tmp/ibl-head-matched.png` 为同尺寸基线。
 
 ## 帧数规则
 

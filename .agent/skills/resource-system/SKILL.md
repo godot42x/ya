@@ -37,6 +37,9 @@ description: YA Engine 资源加载、资产槽与派生资源准备。适用于
 8. `EnvironmentLighting` 是 source / irradiance / prefilter 三段分支。运行时纹理、pending job、`resultVersion` 属于 runtime state，不回写 authoring 数据。完成靠批次 `onReady` 和离屏 `onFinished`，不靠 active 重泵。
 9. 地形高度图同样由批次 `onReady` 唤醒。派生缓存键里的高度图版本是槽 `generation`。
 10. GPU 资源创建与 offscreen job 提交必须由 owner 显式提供 `IRender` / `OffscreenJobQueueService`。准备阶段不回查全局 App。
+11. 槽状态只有 `Loading` / `Ready` / `Failed`。完成、失败、热重载替换都 `generation++` 并通知订阅者。没有一份给 debug 审计用的 Loading 计数。
+12. 编辑只走 `Scene::notifyComponentEdited`（检查器、undo、脚本字段写入、companion 带外写入）。创建 / 删除由组件漏斗广播。派生工作只由三类事件入队：编辑、槽更新（完成 / 失败 / 热重载）、离屏任务 `onFinished`。
+13. `GameplayResourceBinding` 的 debug 一致性审计只按 120 tick 间隔跑。它不是派生工作，不调用 `noteResourceResolveView`。发现问题只断言，不把实体重新入队。
 
 ## 主链路
 
@@ -143,10 +146,16 @@ source Ready
 
 ```text
 RenderRuntime
-  -> 查 runtime skybox / environment lighting 输出
+  -> 读处理器为该场景维护的选中来源
   -> 绑定 cubemap / irradiance / prefilter 相关资源
   -> 绑定对象变化时更新 descriptor
 ```
+
+每个场景四条通道（天空盒 cubemap、环境 cubemap、irradiance、prefilter）各自保留**最先变为就绪**的贡献者，直到它不再贡献。失效后，按变为就绪的先后，下一个仍就绪的贡献者接上。消费侧只读队首。没有环境 cubemap 贡献者时，场景 cubemap 回退到当前选中的天空盒。
+
+四条通道用同一条规则。旧的 view 循环里 cubemap 每次被后写覆盖、irradiance / prefilter 留下第一个，是循环少了空位判断，不是契约。
+
+`bUsesSceneSkybox` 只在 `markEnvironmentLightingDirty` 从组件写入一次。选中来源在这些状态切换上更新：组件增删与编辑入队（`mark*Dirty` / `cleanup*`）、天空盒与环境泵结束（批次或离屏完成后的状态）、`dropWork` 清空。天空盒选中变化时，顺带重算依赖场景天空盒的环境 cubemap 通道。
 
 scene-level environment binding 和材质纹理上传不是同一条链。环境贴图问题同时看 `EnvironmentLightingProcessor` 与 `RenderRuntime`。
 
@@ -181,7 +190,7 @@ scene-level environment binding 和材质纹理上传不是同一条链。环境
 3. descriptor 没刷新：看对应 consumer 的 `MaterialDescPool::flushDirty()` 是否执行。
 4. skybox / environment cubemap 没刷新：看 source 状态是否进入 `Ready`，`resultVersion` 是否推进，离屏 job 的 `onFinished` 有没有把实体入队。
 5. irradiance / prefilter 没生效：看分支状态、pending offscreen job 和 `RenderRuntime` 绑定是否同步。
-6. 稳态 prepare 又在扫组件：看是不是 seed 之外又进了 view，或 debug 审计在已经没有任何 Loading 槽时仍跑。审计门控是贴图/模型管理器的 Loading 槽计数（tileset 同步解析，不计入），间隔 120 tick。脏队列排空不是跳过条件。断言之后重新入队，断言本身已经暴露问题，不是静默自愈。
+6. 稳态 prepare 又在扫组件：看是不是 seed 之外又进了 view。debug 审计每 120 tick 会走 view，但它不计入 resolve 探针；探针只记准备阶段为做派生工作而遍历的 view。审计只断言，不重新入队。
 
 ## 相关 skills
 
