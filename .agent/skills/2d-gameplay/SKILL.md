@@ -17,8 +17,8 @@
   遮住后面的角色。基准取 tilemap 的 Decor 与 Overlay 层之间；ε 取小值保证
   `地图高 × ε` 仍留在两层之间（示例：基准 0.1、ε 0.005、地图 20 格）。
 - 约定收在示例 `Content/Scripts/Actor.lua`（`Actor.zFor`），Player/Npc/Sign 共用。
-  只有当第三个以上玩法脚本各自重复这段计算时，才评估下沉成组件字段；那属于
-  `scene-2d-world-and-game-ui` 的 authored sprite 能力，不在玩法计划里做。
+  这是在补"没有 y-sort"的洞：`rpg-prototype` 评审步骤 5 把画家顺序（layer → y → order）
+  做成 2D 合批的排序键后删除，届时脚本不再算 z。
 
 ## 地图即碰撞权威
 
@@ -73,6 +73,6 @@
 
 - 不引入 `Node2D` / `Transform2D` / `Camera2D`；2D 对象 = `Node3D` +
   `TransformComponent` + `Sprite2DComponent`。
-- 精灵渲染管线（合批、纹理表、纯 2D 图）归 `scene-2d-world-and-game-ui`；玩法
-  计划只产出数据与决策（R4）。
+- 精灵渲染管线（合批、纹理表、纯 2D 图）归 `rpg-prototype`（2026-10-02 合并了
+  `scene-2d-world-and-game-ui`）；动渲染前先过 P0 契约（`P0-contract-matrix.md`）。
 - 编辑器预览不运行玩法脚本；对话框等 Game UI 走 yaui（`gui-framework`）。

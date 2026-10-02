@@ -252,7 +252,7 @@ C++
   裁掉前面的几何——这是 parity 曾抓到的真 bug，改动 record 顺序时先跑
   `run_display_compose_parity.py`。
 - 顶点布局仍是 `FQuadRender::Vertex`（局部纹理 slot + 高位 mode 位编码）；typed 化（删除高位
-  bit 隐式协议）是 `scene-2d-world-and-game-ui` P1 的后续项，builder 发射方法是其插入点。
+  bit 隐式协议）归 `rpg-prototype` 评审步骤 5（`legacy_pipeline_removed`），builder 发射方法是其插入点。
 - 纹理表翻译：list 顶点编码**局部**表 slot，record 步重键进 pass 全局表（≤16）；局部表无
   容量限制，null 纹理也占独立槽位（否则 null draw 会与首个真实纹理撞号）。
 - Render2D 的裸单例只剩资源层（quadData/lineData 的 per-slot/per-flight GPU 资源、PassSlotPool）

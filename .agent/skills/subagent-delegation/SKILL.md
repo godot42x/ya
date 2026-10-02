@@ -53,6 +53,9 @@ subagent 看不到用户消息和父 agent 的历史，prompt 要自足：
 - 开工前按文件划分归属：subagent 改哪些、父 agent 改哪些，写进 prompt。
 - 有交叉的路径（比如 subagent 要归档目录，父 agent 的文档引用该目录）：让 subagent 只报告受影响的引用，父 agent 等它完成后统一修，再提交。
 - 父 agent 自己的改动在 subagent 完成前不提交，避免和它的提交交错。
+- 同一工作区共用一个暂存区：subagent 运行期间父 agent 不要 `git add` / `git mv`（`git mv` 会直接暂存重命名），
+  否则会被 subagent 的下一次 `git commit` 带走。需要移动文件时先 `git mv`，再 `git reset -q -- <路径>` 撤出暂存区，提交时再暂存。
+- 同一仓库同时只跑一份 xmake 构建；多个要构建的任务交给一个 subagent 顺序做，或者放到独立 worktree。
 
 ## 断线恢复
 
