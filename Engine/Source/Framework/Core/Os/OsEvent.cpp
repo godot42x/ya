@@ -2,6 +2,8 @@
 
 #include "Core/Base.h"
 
+#include <vector>
+
 #if USE_SDL
     #include <SDL3/SDL.h>
 #endif
@@ -196,6 +198,63 @@ void OsEventPump::warpGlobalMouse(float x, float y)
     (void)x;
     (void)y;
 #endif
+}
+
+namespace
+{
+
+struct PendingKey
+{
+    EKey::T  key            = EKey::NONE;
+    bool     bDown          = false;
+    uint32_t pollsUntilEmit = 0;
+};
+
+std::vector<PendingKey> g_injectedKeys;
+
+} // namespace
+
+void OsEventPump::emitKey(const std::function<void(const Event&)>& emit, EKey::T key, bool bDown)
+{
+    if (bDown) {
+        KeyPressedEvent event;
+        event._keyCode = key;
+        emit(event);
+        return;
+    }
+    KeyReleasedEvent event;
+    event._keyCode = key;
+    emit(event);
+}
+
+void OsEventPump::enqueueKey(EKey::T key, bool bDown, uint32_t pollsUntilEmit)
+{
+    g_injectedKeys.push_back(PendingKey{
+        .key            = key,
+        .bDown          = bDown,
+        .pollsUntilEmit = pollsUntilEmit,
+    });
+}
+
+void OsEventPump::drainInjectedKeys(const std::function<void(const Event&)>& emit)
+{
+    std::vector<PendingKey> due;
+    std::vector<PendingKey> waiting;
+    due.reserve(g_injectedKeys.size());
+    for (PendingKey& item : g_injectedKeys) {
+        if (item.pollsUntilEmit == 0) {
+            due.push_back(item);
+        }
+        else {
+            --item.pollsUntilEmit;
+            waiting.push_back(item);
+        }
+    }
+    // Events emitted below may enqueue more; those wait for a later drain.
+    g_injectedKeys = std::move(waiting);
+    for (const PendingKey& item : due) {
+        emitKey(emit, item.key, item.bDown);
+    }
 }
 
 uint32_t guiEventWindowId(const Event& event)

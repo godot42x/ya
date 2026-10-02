@@ -399,3 +399,28 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 偏离：无。`setModelPath` / `AssetRef::setPath` 没有 `YA_REFLECT_METHOD`，脚本
   今天调不到它们；漏斗覆盖的是已经反射出来的非 const 方法。`resource-leftovers.md`
   已删掉 callMethod 这一条。
+
+## 2026-10-02 — input.inject_key 与 R0–R3 按键自动化
+
+- 注入走平台键盘同一条路：`OsEventPump::emitKey` 造 `KeyPressedEvent` /
+  `KeyReleasedEvent`，命令里立刻 `App::dispatchEvent`（这一帧的 poll 已经结束，
+  排到下一轮 poll 的话脚本看不到）。`hold` 的抬起进 `enqueueKey`，由
+  `SdlEventSource::pollEvents` 在后续帧 poll 开头排空，和 SDL 事件共用 emit。
+  按下后同一帧 `wasKeyPressed`（Lua `isKeyPressed`）为真，`preUpdate` 之后为假，
+  `isKeyPressed`（Lua `isKeyDown`）保持到抬起。键名用已有的 `keyFromName`
+  （`Right` / `Space` / `W`），没有新表。
+- 命令：`input.inject_key`，参数 `{key, action: "down"|"up"|"hold", frames?}`。
+  `hold` 要求 `frames >= 1`：现在按下，过 `frames` 个逻辑帧在 poll 里抬起。
+  返回里带 `down` / `edge`，表示事件已经进了 `InputManager`。
+- 断言对话需要读挂载控件，现有命令做不到，加了 `ui.query {entry, widget?}`
+  → `{name, visible, text?}`。
+- 端到端（`python3 Script/ya.py control`，`--game`，Town 启动场景）：
+  `Script/automation/2d-rpg/walk_one_cell.py` 右走一格 `(0.5, 0.75) -> (1.5, 0.75)`；
+  `blocked_by_wall.py` 从 (16,10) 向下五格到 (16,5)，再向下被栅栏挡住，位置停在
+  `(0.5, -4.25)`；`dialogue_page.py` 走到 NPC 上方、面朝下、Space 打开对话并翻页，
+  正文从 `Welcome t` 变成 `Mind the fences`。三个脚本 exit 0。
+- 验证：`InputInjection.*` 1 通过；全量 `ya-testing` 1509 例、1508 过、1 跳过
+  （`RHISurfaceContext.ExtraWindowUnpresentableDoesNotBlockStartupWindowPresent`）；
+  GreedySnake 与 2DRpgPrototype `--exit-after-frame=120` 退出码 0。
+- 偏离：自动化 `scene.load` 会 `stopRuntime` 且不重新 `startRuntime`，脚本因此不 tick。
+  端到端不重载场景，用项目默认的 Town。`ui.query` 不在原步骤里，没有它断言不了对话正文。

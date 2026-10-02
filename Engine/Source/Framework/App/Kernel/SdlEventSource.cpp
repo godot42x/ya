@@ -7,6 +7,8 @@ namespace ya
 
 void SdlEventSource::pollEvents(const std::function<void(const Event&)>& emit)
 {
+    // Injected keys share this callback with SDL, before this frame's logic.
+    OsEventPump::drainInjectedKeys(emit);
     OsEventPump::pump();
     if (!_bPointerKnown) {
         const FOsMouseQuery mouse = OsEventPump::queryMouse();

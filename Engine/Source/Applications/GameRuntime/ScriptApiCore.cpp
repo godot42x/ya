@@ -1,11 +1,15 @@
 #include "Core/Scripting/ScriptApiRegistry.h"
 
+#include "App/Control/GuiEventDriver.h"
 #include "Core/FName.h"
+#include "Core/Os/OsEvent.h"
 #include "ECS/ECSRegistry.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
+#include "GUI/Widgets/Controls/Text.h"
 #include "GameRuntime/App.h"
+#include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "Scene/Core/SceneWidgetEntry.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -617,6 +621,42 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
             return Json{{"entryId", entryId}, {"document", path}, {"mounted", true}};
         });
 
+    registry.registerFunction(
+        "ui.query",
+        "Reads a mounted Game UI entry. Args: {entry, widget?}. "
+        "Returns {name, visible}; text widgets also return {text}. "
+        "visible is false when the widget or an ancestor is hidden.",
+        Json{{"entry", {{"type", "string"}}}, {"widget", {{"type", "string"}}}},
+        [](const Json& args) -> Json {
+            App* const app = App::get();
+            GameUIHost* const host = app ? app->getGameUIHost() : nullptr;
+            if (!host) {
+                throw Error("ui.query: no game UI host");
+            }
+            const std::string entryId = args.at("entry").get<std::string>();
+            UIElementRef root = host->findEntryRoot(entryId);
+            if (!root) {
+                throw Error(std::format("ui.query: entry '{}' is not mounted", entryId));
+            }
+            UIElement* widget = root.get();
+            if (const auto it = args.find("widget"); it != args.end() && it->is_string()) {
+                UIElementRef found = host->findInEntry(*root, it->get<std::string>());
+                if (!found) {
+                    throw Error(std::format("ui.query: widget '{}' not found in '{}'",
+                                            it->get<std::string>(), entryId));
+                }
+                widget = found.get();
+            }
+            Json out{
+                {"name", widget->_name},
+                {"visible", widget->isVisibleInTree()},
+            };
+            if (const auto* text = dynamic_cast<const UIText*>(widget)) {
+                out["text"] = text->getText();
+            }
+            return out;
+        });
+
     // ========================================================================
     // Input mode (game / UI routing + cursor baseline)
     // ========================================================================
@@ -685,6 +725,66 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
         Json::object(),
         [&](const Json&) -> Json {
             return Json{{"mode", modeToString(requireApp().getInputMode())}};
+        });
+
+    api.registerFunction(
+        "input.inject_key",
+        "Feeds a key through the same event path as a physical key. "
+        "Args: {key, action:'down'|'up'|'hold', frames?}. "
+        "Names match the GUI scenario parser (Right, Space, W, ...). "
+        "down/up dispatch immediately, so this frame's scripts see them. "
+        "hold presses now and releases after `frames` logic frames (frames >= 1).",
+        Json{{"key", {{"type", "string"}}},
+             {"action", {{"type", "string"}}},
+             {"frames", {{"type", "integer"}}}},
+        [](const Json& args) -> Json {
+            App& app = []() -> App& {
+                App* current = App::get();
+                if (!current) {
+                    throw Error("input.inject_key: app not available");
+                }
+                return *current;
+            }();
+            const std::string keyName = args.at("key").get<std::string>();
+            const EKey::T key = keyFromName(keyName);
+            if (key == EKey::NONE) {
+                throw Error(std::format("input.inject_key: unknown key '{}'", keyName));
+            }
+            const std::string action = args.at("action").get<std::string>();
+            const bool bDown = action == "down" || action == "hold";
+            const bool bUp   = action == "up";
+            if (!bDown && !bUp) {
+                throw Error("input.inject_key: action must be 'down', 'up', or 'hold'");
+            }
+            uint32_t frames = 0;
+            if (action == "hold") {
+                const auto it = args.find("frames");
+                if (it == args.end() || !it->is_number_integer() || it->get<int64_t>() < 1) {
+                    throw Error("input.inject_key: hold requires frames >= 1");
+                }
+                frames = it->get<uint32_t>();
+            }
+
+            // This command runs after the frame's poll and before scripts, so a
+            // press queued for the next poll would miss this frame. Dispatch
+            // now through the same App::dispatchEvent the pump uses.
+            const auto emitNow = [&app](const Event& event) { app.dispatchEvent(event); };
+            OsEventPump::emitKey(emitNow, key, bDown);
+            if (action == "hold") {
+                // Release at the poll `frames` boundaries later, after preUpdate
+                // has turned this press into a held key.
+                OsEventPump::enqueueKey(key, false, frames - 1);
+            }
+            Json out{
+                {"key", keyName},
+                {"action", action},
+                {"down", app.getInputManager().isKeyPressed(key)},
+                {"edge", app.getInputManager().wasKeyPressed(key)},
+            };
+            if (action == "hold") {
+                out["frames"] = frames;
+            }
+            return out;
         });
 }
 

@@ -27,6 +27,15 @@ struct YA_CORE_API OsEventPump
 {
     static void pump();
     static void poll(const std::function<void(const Event&)>& emit);
+
+    /// Build the same Core key event a physical key produces and hand it to
+    /// `emit` now. `bDown` is press, otherwise release.
+    static void emitKey(const std::function<void(const Event&)>& emit, EKey::T key, bool bDown);
+    /// Hold a key event until `drainInjectedKeys` has run `pollsUntilEmit + 1`
+    /// times (0 = the next drain). The runtime drains this at the start of
+    /// each poll, on the same callback as SDL keys, and only on the game thread.
+    static void enqueueKey(EKey::T key, bool bDown, uint32_t pollsUntilEmit);
+    static void drainInjectedKeys(const std::function<void(const Event&)>& emit);
     [[nodiscard]] static FOsMouseQuery queryMouse();
     /// Screen-space pointer, independent of mouse-focus / capture window.
     /// Used by cross-window drag hit-testing while `SDL_CaptureMouse` keeps
