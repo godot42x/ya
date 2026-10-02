@@ -267,6 +267,30 @@ struct Font
     std::shared_ptr<Font> baseFont;
     float                 scale = 1.0f;
 
+    /// Scaled view over a base font: shares the atlas texture; metrics are
+    /// pre-scaled to fontSize. baseFont is null for the base font itself.
+    /// (scale = fontSize / base->fontSize)
+
+    /// True when this base's atlas was rasterized at a specific device density
+    /// (loadFont); pre-registered headless fonts are not texel-pinned.
+    bool bTexelPinned = false;
+
+    /// Device texels per logical pixel baked into this font's atlas: 1 for a
+    /// bitmap base (its logical size IS its raster size), 1/scale for a view
+    /// over one, 0 when not texel-pinned (SDF is scale-free; pre-registered
+    /// headless fonts have no raster of their own). Text draws 1:1 against the
+    /// atlas at this rate even when the frame's mapping scale only
+    /// approximately matches (quantized densities) -- the gap is what
+    /// resampled a 7px atlas into a 7.31px box and blurred it.
+    [[nodiscard]] float deviceTexelsPerLogicalPx() const
+    {
+        const Font* base = isView() ? baseFont.get() : this;
+        if (base == nullptr || !base->bTexelPinned || base->renderMode != EFontRenderMode::Bitmap) {
+            return 0.0f;
+        }
+        return isView() ? 1.0f / scale : 1.0f;
+    }
+
     /// Atlas texture for a character (primary or fallback face). Reads the
     /// LIVE atlas handle so repack/upload updates propagate to scaled views
     /// that share the fallback chain — the cached atlasTexture fields on a

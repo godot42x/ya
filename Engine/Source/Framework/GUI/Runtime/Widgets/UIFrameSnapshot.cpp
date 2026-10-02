@@ -275,7 +275,12 @@ void UIFrameBuilder::addText(const Rect2D& logicalRect,
     const Rect2D  rect      = mapRenderTransformRect(logicalRect);
     const glm::vec2 pos      = toPx(rect.pos);
     const glm::vec2 size     = rect.extent * _ctx.uiScale;
-    const glm::vec2 textScale = _ctx.uiScale * getRenderTransformScale();
+    // Texel-pinned bitmap fonts draw 1:1 against their atlas: the frame's
+    // mapping scale (quantized densities) only approximately matches
+    // round(fontSize * dpi) / fontSize, and the gap resampled the atlas.
+    const float     texelRate  = font->deviceTexelsPerLogicalPx();
+    const glm::vec2 textScale = (texelRate > 0.0f ? glm::vec2(texelRate) : _ctx.uiScale)
+                                * getRenderTransformScale();
     glm::vec2       drawPos  = pos;
 
     const float textWidth  = font->measureText(text);

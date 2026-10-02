@@ -374,6 +374,8 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
     const uint32_t rasterSize = (chosenMode == EFontRenderMode::SDF)
                                     ? std::max(kSdfBaseSize, fontSize)
                                     : static_cast<uint32_t>(std::max(1L, std::lround(fontSize * effectiveDpi)));
+    // Remember what the atlas was baked for: bitmap text draws 1:1 against
+    // these texels (see Font::deviceTexelsPerLogicalPx).
 
     FT_Library ft{};
     if (FT_Err_Ok != FT_Init_FreeType(&ft)) {
@@ -396,6 +398,9 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
     font->lineHeight = (float)(face->size->metrics.height >> 6);    // 26.6 fixed point to integer
     font->ascent     = (float)(face->size->metrics.ascender >> 6);  // Distance from baseline to top
     font->descent    = (float)(face->size->metrics.descender >> 6); // Distance from baseline to bottom (negative)
+    // SDF is scale-free (drawn at the mapping scale); only bitmap bases are
+    // pinned to the density they were rasterized at.
+    font->bTexelPinned = (chosenMode == EFontRenderMode::Bitmap);
 
     // First pass: calculate max glyph dimensions for the seed atlas.
     uint32_t maxGlyphWidth  = 0;
