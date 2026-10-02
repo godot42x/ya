@@ -21,11 +21,29 @@
 
 #include <gtest/gtest.h>
 
+#include <fstream>
+
 namespace ya
 {
 
 namespace
 {
+
+UIElement* findNamed(UIElement& node, std::string_view name)
+{
+    if (node._name == name) {
+        return &node;
+    }
+    for (const UIElementRef& child : node.getChildren()) {
+        if (!child) {
+            continue;
+        }
+        if (UIElement* found = findNamed(*child, name)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
 
 /// Counts frames the host tree actually ticked. A behaviour is the framework's
 /// own second door into the frame lifecycle, so this asserts the host drives
@@ -681,6 +699,66 @@ TEST(GameUIHostTest, ReferenceResolutionScalesLayoutAndPointer)
     EXPECT_EQ(host.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), hit), EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(host.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), hit), EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(clicks, 1);
+}
+
+TEST(GameUIHostTest, DialogueDocumentStaysInsideNarrowAndWideCanvases)
+{
+    std::ifstream stream("Example/2DRpgPrototype/Content/UI/Dialogue.yaui.json");
+    ASSERT_TRUE(stream.is_open());
+    const auto document = UIDocument::fromJson(nlohmann::json::parse(stream));
+    ASSERT_NE(document, nullptr);
+
+    const auto roundTrip = UIDocument::fromJson(document->toJson());
+    ASSERT_NE(roundTrip, nullptr);
+
+    const auto expectInside = [](const std::shared_ptr<UIDocument>& source, Extent2D canvas, float expectedBoxWidth,
+                                 float expectedBoxX) {
+        const UIElementRef root = source->instantiate();
+        ASSERT_NE(root, nullptr);
+        WidgetTree tree(canvas);
+        FCanvasSlotArgs fill;
+        fill.anchorMin = {0.0f, 0.0f};
+        fill.anchorMax = {1.0f, 1.0f};
+        ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), root, fill).valid());
+        tree.layout();
+
+        UIElement* box  = findNamed(*root, "Box");
+        UIElement* body = findNamed(*root, "Body");
+        UIElement* hint = findNamed(*root, "Hint");
+        ASSERT_NE(box, nullptr);
+        ASSERT_NE(body, nullptr);
+        ASSERT_NE(hint, nullptr);
+
+        const auto* bodyText = dynamic_cast<UIText*>(body);
+        ASSERT_NE(bodyText, nullptr);
+        EXPECT_TRUE(bodyText->_bWrap);
+
+        EXPECT_FLOAT_EQ(box->_layoutRect.extent.x, expectedBoxWidth);
+        EXPECT_FLOAT_EQ(box->_layoutRect.extent.y, 160.0f);
+        EXPECT_FLOAT_EQ(box->_layoutRect.pos.x, expectedBoxX);
+        EXPECT_GE(box->_layoutRect.pos.x, 0.0f);
+        EXPECT_LE(box->_layoutRect.pos.x + box->_layoutRect.extent.x, static_cast<float>(canvas.width) + 0.5f);
+        EXPECT_GE(box->_layoutRect.pos.y, 0.0f);
+        EXPECT_LE(box->_layoutRect.pos.y + box->_layoutRect.extent.y, static_cast<float>(canvas.height) + 0.5f);
+
+        UIElement* frame = body->getParent();
+        ASSERT_NE(frame, nullptr);
+        EXPECT_EQ(frame->getParent(), box);
+        // Child rects are in the same space as the frame rect (it carries the
+        // box's position), so compare against that rect, not its extent alone.
+        const Rect2D frameRect = frame->_layoutRect;
+        const auto inside = [](const Rect2D& child, const Rect2D& parent) {
+            EXPECT_GE(child.pos.x, parent.pos.x - 0.5f);
+            EXPECT_GE(child.pos.y, parent.pos.y - 0.5f);
+            EXPECT_LE(child.pos.x + child.extent.x, parent.pos.x + parent.extent.x + 0.5f);
+            EXPECT_LE(child.pos.y + child.extent.y, parent.pos.y + parent.extent.y + 0.5f);
+        };
+        inside(body->_layoutRect, frameRect);
+        inside(hint->_layoutRect, frameRect);
+    };
+
+    expectInside(document, Extent2D{.width = 1280, .height = 720}, 880.0f, 200.0f);
+    expectInside(roundTrip, Extent2D{.width = 700, .height = 500}, 636.0f, 32.0f);
 }
 
 } // namespace ya
