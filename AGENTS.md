@@ -58,6 +58,7 @@ xmake project -k compile_commands
 - 文件拆分、目录重组：`./.agent/skills/code-reorganize/SKILL.md`
 - 字体栈（FontManager/Atlas/Bitmap+SDF/flavor split/CJK fallback）：`./.agent/skills/font-rendering/SKILL.md`
 - 崩溃排查、review、自检：`./.agent/skills/debug-review/SKILL.md`
+- 派发 / 续接 subagent、交接与结果核对：`./.agent/skills/subagent-delegation/SKILL.md`
 
 ## Core Rules
 

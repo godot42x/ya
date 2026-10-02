@@ -24,6 +24,7 @@
 - `cpp-style`：命名、所有权、类布局、热路径风格
 - `code-reorganize`：文件拆分、目录重组、include 修复
 - `debug-review`：崩溃排查、diff 自检、review 风险
+- `subagent-delegation`：派发 subagent（新开 / 续接 / 分叉、模型选择、交接 prompt、并行文件归属、断线恢复、结果核对）
 
 ## 维护规则
 
