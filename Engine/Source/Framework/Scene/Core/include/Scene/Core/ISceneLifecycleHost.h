@@ -20,6 +20,12 @@ struct YA_SCENE_CORE_API ISceneLifecycleHost
     virtual void registerScenePointer(const Scene* scene)   = 0;
     virtual void unregisterScenePointer(const Scene* scene) = 0;
     virtual bool isSceneValid(const Scene* scene) const     = 0;
+
+    /// ~Scene, before members are destroyed. A scene that received onSceneInit
+    /// and has not yet received onSceneDestroy gets that broadcast now, while
+    /// its registry is still alive. Already-announced scenes must not broadcast
+    /// again.
+    virtual void notifySceneDestructing(Scene* scene) = 0;
 };
 
 } // namespace ya

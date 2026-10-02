@@ -620,4 +620,95 @@ TEST(LinkageFrameworkTest, CameraBodyFollowsItsHostAfterTheCompanionExists)
     framework.shutdown();
 }
 
+// activate A, activate B, drop the last ref to A. A received onSceneInit, so
+// its destructor must announce onSceneDestroy before the registry dies.
+// Otherwise MaterialRenderLinkageRule keeps the freed registry and crashes
+// in its own destructor.
+TEST(LinkageFrameworkTest, ReplacedSceneUnloadOnLastRefDrop)
+{
+    SceneManager sceneManager;
+    SceneLifecycleHostScope lifecycleHost(&sceneManager);
+    FrameTaskCapture sink;
+    LinkageFramework framework;
+    framework.setSceneManager(&sceneManager);
+    framework.setFrameTaskSink(std::ref(sink));
+    framework.addRule(std::make_shared<MaterialRenderLinkageRule>(&framework));
+    framework.init();
+
+    auto  sceneA = std::make_shared<Scene>("SceneA");
+    auto* node   = sceneA->createNode3D("Body");
+    node->getEntity()->addComponent<PBRMaterialComponent>();
+    ASSERT_TRUE(sceneManager.activateScene(sceneA));
+    sink.drain();
+    ASSERT_FALSE(sceneA->getRegistry().on_construct<PBRMaterialComponent>().empty());
+
+    auto sceneB = std::make_shared<Scene>("SceneB");
+    ASSERT_TRUE(sceneManager.activateScene(sceneB));
+    EXPECT_EQ(sceneManager.getActiveScene(), sceneB.get());
+    EXPECT_EQ(sceneManager.getSceneByRegistry(&sceneA->getRegistry()), sceneA.get());
+
+    bool bUnloaded = false;
+    int  unloadCount = 0;
+    int  observer = 0;
+    // shared_ptr::reset nulls its pointer before the deleter runs, so the
+    // callback must compare against the raw pointer captured beforehand.
+    Scene* rawA = sceneA.get();
+    sceneManager.onSceneDestroy.addLambda(&observer, [&](Scene* dying) {
+        if (dying != rawA) {
+            return;
+        }
+        ++unloadCount;
+        bUnloaded = dying->getRegistry().on_construct<PBRMaterialComponent>().empty();
+    });
+
+    sceneA.reset();
+    EXPECT_TRUE(bUnloaded);
+    EXPECT_EQ(unloadCount, 1);
+    EXPECT_EQ(sceneManager.getActiveScene(), sceneB.get());
+    EXPECT_EQ(sceneManager.getSceneByRegistry(&sceneB->getRegistry()), sceneB.get());
+
+    framework.shutdown();
+}
+
+// The manager dies while the scene is still owned elsewhere. Destroy must be
+// announced from the manager (the scene's later destructor sees a null host)
+// so the rule drops the registry before anyone frees it.
+TEST(LinkageFrameworkTest, SceneManagerDestroyedBeforeSceneDisconnectsRules)
+{
+    auto scene = std::make_shared<Scene>("OutlivesManager");
+    bool bUnloaded = false;
+    int  observer = 0;
+    {
+        LinkageFramework framework;
+        {
+            SceneManager sceneManager;
+            SceneLifecycleHostScope lifecycleHost(&sceneManager);
+            framework.setSceneManager(&sceneManager);
+            framework.addRule(std::make_shared<MaterialRenderLinkageRule>(&framework));
+            framework.init();
+
+            auto* node = scene->createNode3D("Body");
+            node->getEntity()->addComponent<PBRMaterialComponent>();
+            ASSERT_TRUE(sceneManager.activateScene(scene));
+
+            sceneManager.onSceneDestroy.addLambda(&observer, [&](Scene* dying) {
+                if (dying != scene.get()) {
+                    return;
+                }
+                bUnloaded = dying->getRegistry().on_construct<PBRMaterialComponent>().empty();
+            });
+        }
+        EXPECT_TRUE(bUnloaded);
+        EXPECT_EQ(Scene::getLifecycleHost(), nullptr);
+        // Registry goes away while the rule still exists. The manager's
+        // destroy broadcast already disconnected it, so dropping the scene
+        // cannot call into the rule.
+        scene.reset();
+        // The manager is gone. Drop that pointer before shutdown, which still
+        // has to unsubscribe the process-wide component-removed bus.
+        framework.setSceneManager(nullptr);
+        framework.shutdown();
+    }
+}
+
 } // namespace ya

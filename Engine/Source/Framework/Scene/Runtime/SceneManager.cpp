@@ -8,8 +8,27 @@ namespace ya
 
 SceneManager::~SceneManager()
 {
-    destroySceneIfNeeded(_activeScene);
+    // Every scene that received onSceneInit gets onSceneDestroy while it is
+    // still alive, including scenes that are no longer active. Tests (and a
+    // manager torn down before its scenes) rely on this running even when
+    // ~Scene later sees a null lifecycle host.
+    while (!_reg2scene.empty()) {
+        const FInitializedScene record = _reg2scene.begin()->second;
+        if (record.lifetime.expired() || record.scene == nullptr) {
+            _reg2scene.erase(_reg2scene.begin());
+            continue;
+        }
+        announceSceneDestroy(record.scene, false);
+        if (!_reg2scene.empty() && _reg2scene.begin()->second.scene == record.scene) {
+            _reg2scene.erase(_reg2scene.begin());
+        }
+    }
 
+    _activeScene.reset();
+
+    if (Scene::getLifecycleHost() == this) {
+        Scene::setLifecycleHost(nullptr);
+    }
     _reg2scene.clear();
     _knownScenes.clear();
 }
@@ -28,6 +47,27 @@ void SceneManager::unregisterScenePointer(const Scene* ptr)
         return;
     }
     _knownScenes.erase(ptr);
+}
+
+void SceneManager::notifySceneDestructing(Scene* scene)
+{
+    announceSceneDestroy(scene, false);
+}
+
+Scene* SceneManager::getSceneByRegistry(entt::registry* reg)
+{
+    if (!reg) {
+        return nullptr;
+    }
+    const auto it = _reg2scene.find(reg);
+    if (it == _reg2scene.end()) {
+        return nullptr;
+    }
+    if (it->second.lifetime.expired()) {
+        _reg2scene.erase(it);
+        return nullptr;
+    }
+    return it->second.scene;
 }
 
 bool SceneManager::loadScene(const std::string& path)
@@ -56,7 +96,7 @@ bool SceneManager::activateScene(stdptr<Scene> scene)
         return true;
     }
 
-    initSceneIfNeeded(scene.get());
+    initSceneIfNeeded(scene);
     setActiveScene(std::move(scene));
     return true;
 }
@@ -123,13 +163,22 @@ void SceneManager::setActiveScene(stdptr<Scene> scene)
     onSceneActivated.broadcast(_activeScene.get());
 }
 
-void SceneManager::initSceneIfNeeded(Scene* scene)
+void SceneManager::initSceneIfNeeded(const stdptr<Scene>& scene)
 {
-    if (!scene || _reg2scene.contains(&scene->getRegistry())) {
+    if (!scene) {
         return;
     }
 
-    onSceneInitInternal(scene);
+    const auto it = _reg2scene.find(&scene->getRegistry());
+    if (it != _reg2scene.end()) {
+        if (!it->second.lifetime.expired() && it->second.scene == scene.get()) {
+            return;
+        }
+        _reg2scene.erase(it);
+    }
+
+    _reg2scene.emplace(&scene->getRegistry(), FInitializedScene{scene.get(), scene});
+    onSceneInit.broadcast(scene.get());
 }
 
 void SceneManager::destroySceneIfNeeded(stdptr<Scene>& scene)
@@ -145,13 +194,15 @@ void SceneManager::destroySceneIfNeeded(stdptr<Scene>& scene)
     // onSceneDestroyed). Without this keep-alive the Scene would be destroyed
     // mid-broadcast and later listeners (linkage rules disconnecting entt
     // signals) would dereference a freed Scene/registry.
+    // announceSceneDestroy also locks the weak lifetime recorded at init, so
+    // the same guarantee holds when the only remaining owner is not `scene`.
     const stdptr<Scene> keepAlive = scene;
 
     // Notify lifecycle listeners BEFORE releasing the last reference. When
     // `scene` aliases `_activeScene` (unloadScene path), resetting it first
-    // would destroy the Scene object and leave onSceneDestroyInternal with a
-    // null pointer, silently skipping the onSceneDestroy broadcast.
-    onSceneDestroyInternal(scene.get());
+    // would destroy the Scene object and leave the broadcast with a null
+    // pointer, silently skipping onSceneDestroy.
+    announceSceneDestroy(scene.get(), true);
     if (_activeScene == scene) {
         _activeScene.reset();
     }
@@ -159,26 +210,35 @@ void SceneManager::destroySceneIfNeeded(stdptr<Scene>& scene)
     // keepAlive drops here, after every listener has run.
 }
 
-void SceneManager::onSceneInitInternal(Scene* scene)
+void SceneManager::announceSceneDestroy(Scene* scene, bool bAlways)
 {
-    YA_CORE_ASSERT(scene, "SceneManager::onSceneInitInternal got null scene");
-    YA_CORE_ASSERT(!_reg2scene.contains(&scene->getRegistry()), "Scene registry already exists");
-    _reg2scene[&scene->getRegistry()] = scene;
-    onSceneInit.broadcast(scene);
-}
-
-void SceneManager::onSceneDestroyInternal(Scene* scene)
-{
-    if (!scene) {
+    if (!scene || _scenesAnnouncingDestroy.contains(scene)) {
         return;
     }
 
-    onSceneDestroy.broadcast(scene);
-
-    auto it = _reg2scene.find(&scene->getRegistry());
+    // Drop the initialized-scene entry BEFORE the broadcast. ~Scene re-enters
+    // this function (notifySceneDestructing) if a listener drops the last
+    // owner, and must observe "already announced". The weak lock below is
+    // what keeps that from happening until the broadcast returns; during
+    // ~Scene itself the weak has already expired and the registry is still
+    // alive until ~Scene calls clear().
+    bool          bInitialized = false;
+    stdptr<Scene> keepAlive;
+    const auto    it = _reg2scene.find(&scene->getRegistry());
     if (it != _reg2scene.end()) {
+        if (it->second.scene == scene) {
+            bInitialized = true;
+            keepAlive    = it->second.lifetime.lock();
+        }
         _reg2scene.erase(it);
     }
+    if (!bInitialized && !bAlways) {
+        return;
+    }
+
+    _scenesAnnouncingDestroy.insert(scene);
+    onSceneDestroy.broadcast(scene);
+    _scenesAnnouncingDestroy.erase(scene);
 }
 
 } // namespace ya

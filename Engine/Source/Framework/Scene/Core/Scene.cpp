@@ -77,6 +77,9 @@ Scene::~Scene()
     liveScenes().erase(_instanceId);
 
     if (auto *lifecycleHost = getLifecycleHost()) {
+        // Members, including the registry, are still alive. This is the
+        // path that announces onSceneDestroy when nobody called destroyScene.
+        lifecycleHost->notifySceneDestructing(this);
         lifecycleHost->unregisterScenePointer(this);
     }
 

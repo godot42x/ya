@@ -7,6 +7,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace ya
@@ -26,10 +27,21 @@ struct YA_SCENE_RUNTIME_API SceneManager : public ISceneLifecycleHost
     using SceneInitCallback = std::function<void(Scene*)>;
 
   private:
-    stdptr<Scene> _activeScene = nullptr;
-    // std::string   _currentScenePath;
-    std::unordered_map<entt::registry*, Scene*> _reg2scene;
-    std::unordered_set<const Scene*>            _knownScenes;
+    /// An initialized scene the manager does not own. `lifetime` keeps the
+    /// destroy broadcast from running the destructor mid-fanout; it expires
+    /// once the last owner drops, which is exactly when ~Scene runs.
+    struct FInitializedScene
+    {
+        Scene*               scene = nullptr;
+        std::weak_ptr<Scene> lifetime;
+    };
+
+    stdptr<Scene>                                   _activeScene = nullptr;
+    std::unordered_map<entt::registry*, FInitializedScene> _reg2scene;
+    std::unordered_set<const Scene*>                _knownScenes;
+    /// Scenes whose onSceneDestroy broadcast is on the stack. Re-entry from
+    /// ~Scene must not broadcast a second time.
+    std::unordered_set<Scene*>                      _scenesAnnouncingDestroy;
 
   public:
     /**
@@ -74,30 +86,22 @@ struct YA_SCENE_RUNTIME_API SceneManager : public ISceneLifecycleHost
     bool isSceneValid(const Scene* ptr) const override;
     void registerScenePointer(const Scene* ptr) override;
     void unregisterScenePointer(const Scene* ptr) override;
+    void notifySceneDestructing(Scene* scene) override;
 
     stdptr<Scene> cloneScene(Scene* scene) const;
 
-    Scene* getSceneByRegistry(entt::registry* reg)
-    {
-        if (!reg) {
-            return nullptr;
-        }
-        auto it = _reg2scene.find(reg);
-        if (it != _reg2scene.end()) {
-            return it->second;
-        }
-        return nullptr;
-    }
+    Scene* getSceneByRegistry(entt::registry* reg);
 
     /// @brief Check if we're in shutdown state (no scenes registered)
     bool isShuttingDown() const { return _reg2scene.empty() && !_activeScene; }
 
   private:
     void setActiveScene(stdptr<Scene> scene);
-    void initSceneIfNeeded(Scene* scene);
+    void initSceneIfNeeded(const stdptr<Scene>& scene);
     void destroySceneIfNeeded(stdptr<Scene>& scene);
-    void onSceneInitInternal(Scene* scene);
-    void onSceneDestroyInternal(Scene* scene);
+    /// `bAlways`: explicit destroyScene also notifies a scene that never
+    /// received onSceneInit. The destructor path passes false.
+    void announceSceneDestroy(Scene* scene, bool bAlways);
     // void onSceneActivatedInternal(Scene *scene);
 };
 

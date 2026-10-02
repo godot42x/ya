@@ -57,14 +57,32 @@ void EditorPlaySession::shutdown(App& app)
 
 void EditorPlaySession::onSceneActivated(App& app, Scene* scene)
 {
-    if (scene && _playScene && scene == _playScene.get()) {
+    if (!scene) {
+        return;
+    }
+
+    // begin() activates the cloned play scene while the app is still Stopped
+    // (the state flip happens after onBeforeAppStateChange). That activation
+    // is already recorded in _playScene and must not replace the authoring scene.
+    if (_playScene && scene == _playScene.get()) {
+        return;
+    }
+
+    auto* sceneManager = app.getSceneServices().getSceneManager();
+    if (!sceneManager) {
         return;
     }
 
     if (app.isStopped()) {
-        if (auto* sceneManager = app.getSceneServices().getSceneManager()) {
-            _authoringScene = sceneManager->getActiveSceneShared();
-        }
+        _authoringScene = sceneManager->getActiveSceneShared();
+        return;
+    }
+
+    // Play is running. A scene activated on the play line (world.loadScene
+    // transfer) becomes the session's play scene, so end() restores authoring
+    // and destroys it. The authoring scene itself is what end() activates.
+    if (_authoringScene && scene != _authoringScene.get() && sceneManager->getActiveScene() == scene) {
+        _playScene = sceneManager->getActiveSceneShared();
     }
 }
 
