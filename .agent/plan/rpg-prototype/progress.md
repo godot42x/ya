@@ -357,3 +357,18 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   HelloMaterial 运行时 / 编辑器、2DRpgPrototype 冒烟 exit 0。
 - 保留：MoltenVK 下 `tickGpuMs` 恒 0，GPU 时间只能由栅栏等待反推；`FPSControl` 与配置
   `fpsLimit: 60` 对不上的现象未查。
+
+## 2026-10-02 — 清空 AssetManager frame task sink
+
+- `App::quit` 在 `TaskQueue::stop()` 之后调用 `AssetManager::setFrameTaskSink({})`。
+  stop 会 join worker 并丢掉尚未执行的主线程完成回调，异步加载此后不再投递；
+  清空排在 `onQuit` / 场景卸载 / `_deleter` 之前，App 仍然有效。之后的
+  `dispatchToGameThread` 走无 sink 的内联回落。
+- 没有把 sink 从文件静态改成 `AssetManager` 成员：管理器是 Meyers 单例，进程级寿命
+  比 App 更长，搬到成员上不结束对 `&app` 的捕获，真正的修复是对称清空。
+- `LinkageFramework::setFrameTaskSink` 安全，未改：sink 是实例成员，system 在
+  `quit` 的 `_deleter` 里销毁（此时 App 仍有效），且 `shutdown` 先置取消标志。
+  已入队的延迟任务不捕获 App。
+- 验证：`ya-resource-runtime-closure-test --gtest_filter=AssetManagerFrameTaskSink.*`
+  1 通过。
+- 偏离：无。`resource-leftovers.md` 已删掉这一条。

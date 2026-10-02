@@ -507,6 +507,10 @@ void App::quit()
         app._automationControlService->shutdown();
     }
     TaskQueue::get().stop();
+    // Workers are joined and their pending completions discarded, so nothing
+    // async can still post. Drop the sink that captures this App before the
+    // rest of teardown; later dispatches run inline on this thread.
+    AssetManager::setFrameTaskSink({});
     {
         YA_PROFILE_SCOPE_LOG("Inheritance Quit");
         app.onQuit();
