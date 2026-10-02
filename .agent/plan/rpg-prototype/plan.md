@@ -144,7 +144,7 @@
 - 途中发现：精灵 pass 把图像顶行画在四边形底边（共享 quad 是 GL 约定 `texCoord.y` 朝 +Y，`uvRect` 是
   图像空间）。在 `Sprite2DWorld.slang` 里翻转 quad 的 v，quad 网格不动（光照全屏 / billboard / Quad 预设共用）。
 - 验收：`python3 Script/ya.py run --project Example/2DRpgPrototype/2DRpgPrototype.yaproject -- --exit-after-frame=120`
-  exit 0；行走 / 跟随手测（自动注入按键等 S7 的 `input.inject_key` 落地后补自动化）。
+  exit 0；行走 / 跟随手测；自动化见 `Script/automation/2d-rpg/`（`input.inject_key`，评审步骤 2）。
 
 ### R1 — Tilemap（数据 + 渲染 + 编辑笔刷 + 通行查询）
 
@@ -235,7 +235,8 @@ R1b / R1c 改的正是 R1a 引入的文件，所以按一个可验收目标一�
 - Lua 后端从 `ya-ecs-systems` 拆成独立 target；引擎、GameRuntime 只依赖中立层。
 - `world.*` / `ui.*` 手写函数、控件句柄（`LuaWidgetHandle` / `LuaWidgetScripts`）迁到中立层登记。
 - `world.viewAspect`（手写 sol2）与 `world.viewSize`（中立层）去重；新脚本函数不经 `App::get()` 取单例。
-- 前置：具名调用原语合并（`callNamed` / `invoke`）、脚本 `callMethod` 接入编辑漏斗（评审步骤 2）。
+- 前置（评审步骤 2，已完成）：具名调用只剩 `callNamed(instance, name, args, ENamedCallError)`；
+  脚本非 const 方法调用在 `ScriptRefKind::afterCall` 进编辑漏斗。
 - 验收：`rg -n "sol/|sol::" Engine/Source --glob '!**/Script/Lua/**'` 只剩 Lua 后端；
   GreedySnake、2DRpgPrototype 冒烟与脚本测试全绿。
 
@@ -245,10 +246,11 @@ R1b / R1c 改的正是 R1a 引入的文件，所以按一个可验收目标一�
 
 - `game-ui-script-framework`：S5 / S7 仍决定 `onKey`、`world.spawnSprite`、`ui.*` 的**语义**；
   这些函数的新形态直接登记在 B1 中立层，不再新增手写 sol2。B2 只迁移 S5 / S7 没有动到的手写函数
-  和控件句柄，并删除残留；动到同一函数时 S5 / S7 先落地。`input.inject_key` 由本计划在评审步骤 2
-  提供，S7 的端到端脚本直接复用。该计划 §7 的「反射自动绑定 Lua」「场景可编辑性（墙、取景）」由本计划接手。
+  和控件句柄，并删除残留；动到同一函数时 S5 / S7 先落地。`input.inject_key {key, action: down|up|hold, frames?}`
+  与 `ui.query {entry, widget?}` 已在评审步骤 2 提供，S7 的端到端脚本直接复用；按键走 `App::dispatchEvent`，
+  S5 的 `onKey` 会收到。该计划 §7 的「反射自动绑定 Lua」「场景可编辑性（墙、取景）」由本计划接手。
 - `ui-behavior-capabilities`：C3 只管生命周期回调路径 `LuaScriptingSystem::call(ELuaScriptCallback)`；
-  具名调用（脚本互调、`onShow` / `onHide`）合并为一个原语，归本计划（评审步骤 2）。两者不并存第二套调用路径。
+  具名调用（脚本互调、`onShow` / `onHide`）已合并为 `callNamed` + `ENamedCallError`，归本计划。两者不并存第二套调用路径。
 - `scene-2d-world-and-game-ui`：已合并进本计划并归档，见 §9。
 - 关卡撤销：R1 复用关卡根会话的 `UndoStack`（`EditorTransformUndo` 同款），不另造撤销栈。
 

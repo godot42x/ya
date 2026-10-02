@@ -428,8 +428,8 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
   通过 `ui.get("HUD"):setScore(n)`、`ui.get("GameOver"):show(score)` 驱动界面，
   界面脚本监听自己的按钮、向玩法暴露方法或由玩法 `ui.get(...)` 后监听，通过 `Script:onCancel` 打开设置。
 - 自动化（`ScriptApiRegistry`，仅验证用）：`ui.click({entry, widget})`，并提供对应 CLI 驱动脚本放
-  `Script/automation/greedy-snake/`。`input.inject_key` 自 2026-10-02 归 `rpg-prototype`，在其评审步骤 2
-  提前提供，本节直接复用。
+  `Script/automation/greedy-snake/`。`input.inject_key {key, action: down|up|hold, frames?}` 与 `ui.query {entry, widget?}`
+  已由 `rpg-prototype` 评审步骤 2 提供，本节直接复用。
 - 端到端脚本：开局 → 注入方向键 → 撞墙 → 截图确认 Game Over → 点击 Restart → 确认分数归零 →
   注入 Esc → 确认设置可见且蛇不动 → 点击 Fast → 关闭 → 确认恢复移动。
 - 验收：端到端脚本 exit 0；`rg -n '"HUD"|"Score"|"SpeedValue"|settingsOpen|setKeyHandler' Example/GreedSnake/Content/Scripts/Snake.lua` 无结果。

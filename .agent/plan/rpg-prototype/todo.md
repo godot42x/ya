@@ -13,10 +13,11 @@
 
 步骤 2 治理与小项
 - [x] 合并 rpg-prototype 与 scene-2d-world-and-game-ui 为 2D 世界线（scene-2d 归档，剩余项见 `plan.md` §9）；从 game-ui-script-framework / ui-behavior-capabilities 转出 B2、`input.inject_key`、`viewAspect` 的归属
-- [ ] 按键注入（`input.inject_key`）提前，补 R0–R3 行为的自动化
-- [ ] 合并 `callNamed` 与 `invoke`（B2 的前置）
-- [ ] 清空 `AssetManager::setFrameTaskSink` 悬空 sink（App 关闭时不清空）
-- [ ] 脚本 `callMethod` 接入统一编辑漏斗（B2 的前置）
+- [x] 按键注入（`input.inject_key`）提前，补 R0–R3 行为的自动化（`Script/automation/2d-rpg/`）
+- [x] 合并 `callNamed` 与 `invoke`（B2 的前置）：`callNamed(..., ENamedCallError)`
+- [x] 清空 `AssetManager::setFrameTaskSink` 悬空 sink（App 关闭时不清空）
+- [x] 脚本 `callMethod` 接入统一编辑漏斗（B2 的前置）
+- [ ] 自动化 `scene.load` 会 `stopRuntime` 但不重新 `startRuntime`，加载后脚本不 tick；端到端脚本因此只能从默认场景起跑
 
 步骤 3 P0 契约冻结（前置：步骤 2 的计划线合并）
 - [ ] 契约矩阵：混合语义、sprite 与 3D 深度的关系、资源责任、graph 策略、实例格式与排序键（layer → y → order）
