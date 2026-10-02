@@ -25,13 +25,22 @@ DynamicFontAtlas::DynamicFontAtlas(IRender& render, EFormat::T format, uint32_t 
     , _format(format)
     , _label(std::move(label))
     , _size(std::max(initialSize, 64u))
+    , _initialSize(_size)
     , _cpuData(static_cast<size_t>(_size) * _size * 4, 0) // RGBA8 staging for Bitmap flavor
 {
+    // Sentinel shelf so the first glyph packs into this page. Without it
+    // tryPack fails immediately and grow() doubles before any pixel is stored.
+    _shelves.push_back(FShelf{.y = 0, .height = 0});
 }
 
 DynamicFontAtlas::~DynamicFontAtlas() = default;
 
 bool DynamicFontAtlas::tryPack(uint32_t width, uint32_t height, uint32_t& outX, uint32_t& outY)
+{
+    return tryPack(width, height, outX, outY, _size);
+}
+
+bool DynamicFontAtlas::tryPack(uint32_t width, uint32_t height, uint32_t& outX, uint32_t& outY, uint32_t atlasSide)
 {
     // Allocate width+2*pad x height+2*pad in the atlas, but report the CONTENT
     // origin (shifted in by kGlyphPadding on every side) so callers place pixels
@@ -43,7 +52,7 @@ bool DynamicFontAtlas::tryPack(uint32_t width, uint32_t height, uint32_t& outX, 
         return false;
     }
     FShelf& shelf = _shelves.back();
-    if (shelf.height >= occupyH && _rowHeight + occupyW <= _size) {
+    if (shelf.height >= occupyH && _rowHeight + occupyW <= atlasSide) {
         outX = _rowHeight + kGlyphPadding;
         outY = shelf.y + kGlyphPadding;
         _rowHeight += occupyW;
@@ -51,7 +60,7 @@ bool DynamicFontAtlas::tryPack(uint32_t width, uint32_t height, uint32_t& outX, 
     }
     // New shelf below the current one.
     const uint32_t nextY = shelf.y + shelf.height;
-    if (nextY + occupyH > _size) {
+    if (nextY + occupyH > atlasSide) {
         return false;
     }
     _shelves.push_back(FShelf{.y = nextY, .height = occupyH});
@@ -84,8 +93,11 @@ void DynamicFontAtlas::grow()
         const size_t bytesPerPixel = 4;
         bool allFit = true;
         for (FSlot& slot : _slots) {
+            if (!slot.bLive || slot.w == 0 || slot.h == 0 || slot.pixels.empty()) {
+                continue;
+            }
             uint32_t x = 0, y = 0;
-            if (!tryPack(slot.w, slot.h, x, y)) {
+            if (!tryPack(slot.w, slot.h, x, y, newSize)) {
                 allFit = false;
                 break;
             }
@@ -116,7 +128,8 @@ void DynamicFontAtlas::grow()
     }
 }
 
-uint32_t DynamicFontAtlas::addGlyph(uint32_t width, uint32_t height, const uint8_t* inPixels)
+uint32_t DynamicFontAtlas::addGlyph(uint32_t width, uint32_t height, const uint8_t* inPixels,
+                                     uint32_t codepoint, uint32_t rasterPx)
 {
     if (width == 0 || height == 0 || !inPixels) {
         return static_cast<uint32_t>(-1);
@@ -144,6 +157,9 @@ uint32_t DynamicFontAtlas::addGlyph(uint32_t width, uint32_t height, const uint8
     slot.y = y;
     slot.w = width;
     slot.h = height;
+    slot.codepoint = codepoint;
+    slot.rasterPx  = rasterPx;
+    slot.bLive     = true;
     slot.pixels.assign(inPixels, inPixels + static_cast<size_t>(width) * height * bytesPerPixel);
 
     // Write into the CPU staging buffer (upload happens later at a safe point).
@@ -258,6 +274,123 @@ void DynamicFontAtlas::upload()
         }
     }
     _dirtyRects.clear();
+}
+
+size_t DynamicFontAtlas::releaseRasterSize(uint32_t rasterPx)
+{
+    if (rasterPx == 0) {
+        return 0;
+    }
+    size_t released = 0;
+    for (FSlot& slot : _slots) {
+        if (!slot.bLive || slot.rasterPx != rasterPx) {
+            continue;
+        }
+        slot.bLive = false;
+        slot.pixels.clear();
+        slot.pixels.shrink_to_fit();
+        ++released;
+    }
+    return released;
+}
+
+size_t DynamicFontAtlas::liveGlyphCount() const
+{
+    size_t count = 0;
+    for (const FSlot& slot : _slots) {
+        if (slot.bLive && slot.w > 0 && slot.h > 0) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+bool DynamicFontAtlas::findGlyph(uint32_t codepoint, uint32_t rasterPx, uint32_t& outSlot) const
+{
+    if (rasterPx == 0) {
+        return false;
+    }
+    for (uint32_t index = 0; index < static_cast<uint32_t>(_slots.size()); ++index) {
+        const FSlot& slot = _slots[index];
+        if (slot.bLive && slot.codepoint == codepoint && slot.rasterPx == rasterPx) {
+            outSlot = index;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<uint32_t> DynamicFontAtlas::rasterSizes() const
+{
+    std::vector<uint32_t> sizes;
+    for (const FSlot& slot : _slots) {
+        if (!slot.bLive || slot.rasterPx == 0) {
+            continue;
+        }
+        if (std::find(sizes.begin(), sizes.end(), slot.rasterPx) == sizes.end()) {
+            sizes.push_back(slot.rasterPx);
+        }
+    }
+    std::sort(sizes.begin(), sizes.end());
+    return sizes;
+}
+
+void DynamicFontAtlas::compactLive()
+{
+    std::vector<FSlot> live;
+    live.reserve(_slots.size());
+    for (FSlot& slot : _slots) {
+        if (slot.bLive && slot.w > 0 && slot.h > 0 && !slot.pixels.empty()) {
+            live.push_back(std::move(slot));
+        }
+    }
+    if (live.size() == _slots.size()) {
+        return;
+    }
+
+    const size_t bytesPerPixel = 4;
+    uint32_t side = std::max(_initialSize, 64u);
+    for (;;) {
+        std::vector<uint8_t> packed(static_cast<size_t>(side) * side * 4, 0);
+        _shelves.clear();
+        _shelves.push_back(FShelf{.y = 0, .height = 0});
+        _rowHeight = 0;
+
+        bool allFit = true;
+        for (FSlot& slot : live) {
+            uint32_t x = 0;
+            uint32_t y = 0;
+            if (!tryPack(slot.w, slot.h, x, y, side)) {
+                allFit = false;
+                break;
+            }
+            slot.x = x;
+            slot.y = y;
+            for (uint32_t row = 0; row < slot.h; ++row) {
+                std::memcpy(packed.data() + (static_cast<size_t>(y + row) * side + x) * bytesPerPixel,
+                            slot.pixels.data() + static_cast<size_t>(row) * slot.w * bytesPerPixel,
+                            static_cast<size_t>(slot.w) * bytesPerPixel);
+            }
+        }
+        if (!allFit) {
+            if (side >= kMaxAtlasSize) {
+                YA_CORE_ERROR("DynamicFontAtlas: {} cannot compact {} live glyphs", _label, live.size());
+                return;
+            }
+            side *= 2;
+            continue;
+        }
+
+        _size = side;
+        _cpuData.swap(packed);
+        _slots = std::move(live);
+        _dirtyRects.clear();
+        // Full replace, never an in-place write: a recorded frame still
+        // samples the old image at the old UVs (Core Rules 6 and 7).
+        _uploaded = false;
+        upload();
+        return;
+    }
 }
 
 void DynamicFontAtlas::retire()

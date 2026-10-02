@@ -40,6 +40,8 @@ std::string fingerprintPages(const std::vector<FontManager::FFontAtlasDebugPage>
         out += page.label;
         out += '@';
         out += std::to_string(reinterpret_cast<uintptr_t>(page.texture.get()));
+        out += '#';
+        out += std::to_string(page.glyphCount);
     }
     return out;
 }

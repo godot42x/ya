@@ -34,13 +34,17 @@ namespace ya
 /// path, which is also what FreeType hinting is tuned for.
 constexpr uint32_t kBitmapMaxSize = 48;
 
-/// Bitmap atlases are keyed by integer pixel size, and a bitmap size only
-/// exists in 1..kBitmapMaxSize, so a family has at most this many atlases.
-/// That range is the cap: a wheel zoom or a window drag cannot allocate more
-/// than one atlas per whole pixel. Oldest unused sizes are dropped past the
-/// cap; a font still held by a snapshot is kept and the cache may grow by
-/// that one until it is released.
-constexpr uint32_t kMaxBitmapAtlasesPerFamily = kBitmapMaxSize;
+/// How many raster sizes a shared face keeps. A frame uses a handful of
+/// sizes (chrome, one zoom, a tooltip); 8 is hysteresis so a window drag
+/// does not retain every pixel it passed through. Past the window the oldest
+/// size's glyphs are dropped as a unit, unless a snapshot still holds that
+/// font. Memory follows the live set, not the number of sizes ever seen.
+constexpr uint32_t kLiveRasterSizeWindow = 8;
+
+/// First page of a shared face atlas, created on the first glyph and doubled
+/// when the shelf overflows (then another page). Fallback faces stay at zero
+/// pages until something actually draws them.
+constexpr uint32_t kSharedAtlasInitialPage = 256;
 
 /// SDF sizes share one distance-field atlas and keep a per-size view (glyph
 /// metrics only). Cap the views so a zoom through large sizes does not retain
@@ -422,16 +426,36 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
     // argument; this scale is not read.
     float _activeDpiScale = 1.0f;
     uint64_t _resourceRevision = 0;
-    // Oldest raster pixel size at the front. Bitmap entries are atlases;
-    // SDF entries are views that share a base.
-    std::unordered_map<FName, std::vector<uint32_t>> _bitmapAtlasLru;
+    // SDF view objects (metrics only). The distance field itself lives in the
+    // shared SDF face atlas; this list only drops unreferenced views.
     std::unordered_map<FName, std::vector<uint32_t>> _sdfViewLru;
+
+    /// One atlas bank per (face file, render flavor), shared by every raster
+    /// size of that face. Glyphs inside the bank are keyed by
+    /// (codepoint, rasterPx). `lru` is oldest raster size at the front.
+    struct FSharedFaceAtlas
+    {
+        std::shared_ptr<FontAtlasBank>   bank;
+        std::shared_ptr<IFontRasterizer> rasterizer;
+        std::string                      path;
+        std::string                      role;
+        EFontRenderMode                  mode = EFontRenderMode::Bitmap;
+        std::vector<uint32_t>            lru;
+    };
+    std::unordered_map<std::string, FSharedFaceAtlas> _sharedFaces;
 
     void bumpResourceRevision() { ++_resourceRevision; }
 
     [[nodiscard]] std::shared_ptr<Font> findBestBase(const FName& fontName, uint32_t fontSize) const;
 
-    void rememberBitmapAtlas(const FName& fontName, uint32_t rasterPx);
+    FSharedFaceAtlas& sharedFace(IRender& render, const std::string& path, EFontRenderMode mode, std::string_view role);
+    FSharedFaceAtlas* findSharedFace(const FontAtlasBank* bank);
+    void noteLiveRasterSize(const std::shared_ptr<FontAtlasBank>& bank, uint32_t rasterPx);
+    bool evictRasterSize(FSharedFaceAtlas& face, uint32_t rasterPx);
+    [[nodiscard]] bool rasterSizeStillNeeded(const FontAtlasBank* bank, uint32_t rasterPx) const;
+    void refreshUvsForBank(const FontAtlasBank* bank);
+    void dropUnreferencedSharedFaces();
+
     void rememberSdfView(const FName& fontName, uint32_t viewPx);
 
     // Attaches a recorded fallback face to a single base font (builds its atlas
@@ -582,9 +606,12 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
         EFontRenderMode          renderMode = EFontRenderMode::Bitmap;
         uint32_t                 pageIndex  = 0;
         uint32_t                 pageCount  = 0;
+        size_t                   glyphCount = 0;
+        uint64_t                 cpuBytes   = 0;
+        std::vector<uint32_t>    rasterSizes;
         std::shared_ptr<Texture> texture;
     };
-    /// Unique atlas pages on loaded bases (views share these textures).
+    /// Shared atlas pages (one row per page, not per raster size).
     [[nodiscard]] std::vector<FFontAtlasDebugPage> collectFontAtlasDebugPages() const;
 
     // TODO: optimize key generation

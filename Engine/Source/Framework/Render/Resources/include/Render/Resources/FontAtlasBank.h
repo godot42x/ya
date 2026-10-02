@@ -39,7 +39,22 @@ public:
 
     /// Add a glyph; returns an encoded slot, or ~0u if it cannot be placed
     /// (single glyph larger than a page even after that page grows).
-    uint32_t addGlyph(uint32_t width, uint32_t height, const uint8_t* pixels);
+    /// The first call creates the first page (banks start empty).
+    uint32_t addGlyph(uint32_t width, uint32_t height, const uint8_t* pixels,
+                      uint32_t codepoint = 0, uint32_t rasterPx = 0);
+
+    /// Look up a glyph previously added with the same codepoint and raster size.
+    [[nodiscard]] bool findGlyph(uint32_t codepoint, uint32_t rasterPx,
+                                 uint32_t& outSlot, glm::vec4& outUv) const;
+
+    /// Drop every glyph tagged with `rasterPx`, repack what remains, and
+    /// retire empty pages. The old GPU image is handed to
+    /// DeferredDeletionQueue; onRepack runs once afterwards so live fonts
+    /// re-read slots. Safe-point only.
+    size_t releaseRasterSize(uint32_t rasterPx);
+
+    [[nodiscard]] size_t liveGlyphCount() const;
+    [[nodiscard]] uint64_t allocatedBytes() const;
 
     /// UV rect for an encoded slot (page + slot resolved internally).
     [[nodiscard]] glm::vec4 getUv(uint32_t encodedSlot) const;
@@ -52,6 +67,11 @@ public:
 
     /// Number of live pages.
     [[nodiscard]] size_t pageCount() const { return _pages.size(); }
+    /// Page object for debug listing (glyph count, sizes present, CPU bytes).
+    [[nodiscard]] const DynamicFontAtlas* pageAtlas(size_t pageIndex) const
+    {
+        return pageIndex < _pages.size() ? _pages[pageIndex].get() : nullptr;
+    }
     /// Texture of a specific page (for sinks / debugging).
     [[nodiscard]] std::shared_ptr<Texture> pageTexture(size_t pageIndex) const;
 

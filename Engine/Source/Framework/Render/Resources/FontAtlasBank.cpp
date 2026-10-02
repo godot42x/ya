@@ -14,7 +14,8 @@ FontAtlasBank::FontAtlasBank(IRender& render, EFormat::T format, uint32_t pageSi
     , _pageSize(std::max(pageSize, 64u))
     , _allowPageGrow(allowPageGrow)
 {
-    appendPage(); // start with one page so addGlyph always has a target
+    // No page until the first glyph. A fallback face that is never drawn
+    // must not allocate a 1024 staging buffer.
 }
 
 FontAtlasBank::~FontAtlasBank()
@@ -59,14 +60,21 @@ void FontAtlasBank::appendPage()
     _pages.push_back(std::move(page));
 }
 
-uint32_t FontAtlasBank::addGlyph(uint32_t width, uint32_t height, const uint8_t* pixels)
+uint32_t FontAtlasBank::addGlyph(uint32_t width, uint32_t height, const uint8_t* pixels,
+                                  uint32_t codepoint, uint32_t rasterPx)
 {
     if (width == 0 || height == 0 || !pixels) {
         return static_cast<uint32_t>(-1);
     }
+    if (_pages.empty()) {
+        appendPage();
+        if (_pages.empty()) {
+            return static_cast<uint32_t>(-1);
+        }
+    }
     for (;;) {
         DynamicFontAtlas& page = *_pages.back();
-        const uint32_t slot = page.addGlyph(width, height, pixels);
+        const uint32_t slot = page.addGlyph(width, height, pixels, codepoint, rasterPx);
         if (slot != ~0u) {
             return encode(static_cast<uint32_t>(_pages.size() - 1), slot);
         }
@@ -112,6 +120,61 @@ std::shared_ptr<Texture> FontAtlasBank::pageTexture(size_t pageIndex) const
         return nullptr;
     }
     return _pages[pageIndex]->texture();
+}
+
+bool FontAtlasBank::findGlyph(uint32_t codepoint, uint32_t rasterPx, uint32_t& outSlot, glm::vec4& outUv) const
+{
+    for (uint32_t pageIndex = 0; pageIndex < static_cast<uint32_t>(_pages.size()); ++pageIndex) {
+        uint32_t localSlot = 0;
+        if (!_pages[pageIndex]->findGlyph(codepoint, rasterPx, localSlot)) {
+            continue;
+        }
+        outSlot = encode(pageIndex, localSlot);
+        outUv   = _pages[pageIndex]->getUv(localSlot);
+        return true;
+    }
+    return false;
+}
+
+size_t FontAtlasBank::releaseRasterSize(uint32_t rasterPx)
+{
+    size_t released = 0;
+    for (auto& page : _pages) {
+        released += page->releaseRasterSize(rasterPx);
+    }
+    if (released == 0) {
+        return 0;
+    }
+    for (size_t index = _pages.size(); index-- > 0;) {
+        if (_pages[index]->liveGlyphCount() == 0) {
+            _pages[index]->retire();
+            _pages.erase(_pages.begin() + static_cast<ptrdiff_t>(index));
+            continue;
+        }
+        _pages[index]->compactLive();
+    }
+    if (_onRepack) {
+        _onRepack();
+    }
+    return released;
+}
+
+size_t FontAtlasBank::liveGlyphCount() const
+{
+    size_t count = 0;
+    for (const auto& page : _pages) {
+        count += page->liveGlyphCount();
+    }
+    return count;
+}
+
+uint64_t FontAtlasBank::allocatedBytes() const
+{
+    uint64_t bytes = 0;
+    for (const auto& page : _pages) {
+        bytes += page->allocatedBytes();
+    }
+    return bytes;
 }
 
 } // namespace ya

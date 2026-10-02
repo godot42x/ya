@@ -57,7 +57,7 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
    - `FTextRasterPlan planTextRaster(logicalFontPx, uiScale, dpiScale, renderScale)`。`uiScale` 是宿主缩放（设计器滚轮、用户放大），`dpiScale` 是这棵树的 logical→device，`renderScale` 是 paint 时的 render transform。em 取 **Y 轴**（字形保持方形，不按非均匀缩放拉伸）。
    - Bitmap（`round(logical * deviceScale.y) <= 48`）栅格成 `max(那个整像素, kMinBitmapRasterPx)`，`kMinBitmapRasterPx = 9`（全脚本一个下限；请求时不知道 script）。低于下限就停在 9px，字形可能溢出或被裁切。`residual` / `textScale` 是 `{1,1}`：bitmap 图集不再重采样。SDF（> 48px）按设备像素请求，视图的度量已经是这个像素大小，`textScale` 同样是 1；SDF 视图可以缩放，bitmap 不行。`ScreenDrawList::makeText` 对 texel-pinned bitmap 的非 1 scale 直接断言。
    - **布局/测量走逻辑字号**：`UIFrameBuilder::getFont(name, logicalSize)` 与 `resolveTextFont` 不带密度。`WidgetTree::buildSnapshot` 把宿主 zoom 留在 `userZoom`，把 `zoom * _dpiScale` 写入 `uiScale`（几何），把 `_dpiScale` 写入 `fontDpi`。`addText` 再用这三项向 `FontManager::getFont(family, rasterPx)` 取绘制字体。密度不改变 desired size。
-   - 缓存 key 是 `name:rasterPx`（整数），不是 float dpi。`getFont` / `loadFont` 的 `dpiScale` 参数保留但忽略。`setActiveDpiScale` 不再被读取。Bitmap 图集每族最多 `kMaxBitmapAtlasesPerFamily`（= `kBitmapMaxSize`，即 1..48 每个整像素一张）；超出时丢掉最旧且 `use_count` 只剩缓存自身的项，快照还握着的不逐出。SDF 视图另有 `kMaxSdfViewsPerFamily = 32`，共享同一张 SDF base。
+   - 缓存 key 是 `name:rasterPx`（整数），不是 float dpi。`getFont` / `loadFont` 的 `dpiScale` 参数保留但忽略。`setActiveDpiScale` 不再被读取。图集页按 **(face 文件, 渲染口味)** 共享，不按字号各建一张：拉丁 bitmap、CJK bitmap、emoji color、SDF 各一套页。glyph 在页里的键是 `(codepoint, rasterPx)`。`(face, rasterPx)` 交给调用方的 `Font` 仍是轻视图（度量 + 字符表 + 指向共享 bank 的指针），SDF 的 scaled view 走同一条。页懒创建（fallback 页要到第一个 glyph），起步 `kSharedAtlasInitialPage`（256），装不下就翻倍，顶到 4096 再追加一页。每个 face 只留 `kLiveRasterSizeWindow`（8）个栅格尺寸：多出来的最旧尺寸整组 glyph 丢掉（快照还握着的 `Font`，`use_count > 2`，不逐出）。逐出时重打包剩余 glyph，旧 GPU 图交给 `DeferredDeletionQueue`，`onRepack` 按 codepoint 重写还活着的 UV。内存跟活着的文字走，不跟见过的字号走。SDF 视图对象另有 `kMaxSdfViewsPerFamily = 32`，距离场本身在共享 SDF 页里。
    - 文字 glyph 起点在 `UIFrameBuilder::addText` emit 时吸附整设备像素（Nearest 采样下小数起点会重采样图集）。笔位用栅格字体的 advance，仍在设备像素里。
    - 设计器滚轮走同一条：预览树 dpi 保持 1，`EditorUICanvasCompositor` 把 `view.zoom` 乘进 `uiScale`，于是文字和几何一起变大，并按整像素重栅格。
    - GameUIHost 的 fit 走树 dpi 轴，不再做 1/16 量化（图集的量子是整像素栅格尺寸）。fit 低于 `GameUIHost::kMinGameUIReferenceScale`（0.5）时夹到 0.5，逻辑画布改按这个比例缩小，响应式布局重排，而不是继续把文字缩到栅格下限以下。
@@ -75,7 +75,7 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
 
 ## 排查清单
 
-- GameEditor Window 工具 tab `font-atlases`（Fonts / Font Atlases）列出 `FontManager::collectFontAtlasDebugPages()` 的每一张 GPU page（primary + 每个 fallback bank）。Combo 标签是 `{face stem}  {size}px  {Bitmap|SDF}`（非 primary 才跟 `fallbackN`，多 page 才跟 `p i/N`）；路径 / 像素尺寸 / glyph 数在 detail。预览是 **1:1 texel、左上角、竖向滚动**，走 atlas 自身 sampler（Bitmap = ClampNearest）。不要用 Image `Contain`：会把 512 page letterbox 进矮窗口并非整倍缩小，Nearest 下看起来又小又糊。Bitmap/Color 按白+alpha 预览；SDF/MSDF 按不透明 R 通道预览。
+- GameEditor Window 工具 tab `font-atlases`（Fonts / Font Atlases）列出 `FontManager::collectFontAtlasDebugPages()` 的共享页，不是每个字号一行。Combo 标签是 `{face stem}  {Bitmap|SDF|Color}  {primary|fallback}  {i}/{N}`；detail 是占用 glyph 数、像素尺寸、页上出现的栅格尺寸、1:1。预览是 **1:1 texel、左上角、竖向滚动**，走 atlas 自身 sampler（Bitmap = ClampNearest），RGBA 通道开关还在。不要用 Image `Contain`：会把 page letterbox 进矮窗口并非整倍缩小，Nearest 下看起来又小又糊。Bitmap/Color 按白+alpha 预览；SDF/MSDF 按不透明 R 通道预览。刷新指纹含 glyph 数，热路径（`getFont` / `makeText`）不按帧分配。
 - 加临时 CJK trace（`atlasIdx / fallback / page / scale / charSize`），而非靠截图猜。
 - `scale=1.0 + 全 Bitmap(renderMode=0) + page=0` → 排除 DPI / 分页 / SDF 因素，问题在 fallback 分散或 hinting。
 - 缺字/方块 → fallback 未命中或 `atlasIndex` 解析错。

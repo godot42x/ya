@@ -32,6 +32,9 @@ public:
     struct FSlot
     {
         uint32_t             x = 0, y = 0, w = 0, h = 0;
+        uint32_t             codepoint = 0; // 0 = untagged (not part of a raster-size set)
+        uint32_t             rasterPx  = 0;
+        bool                 bLive     = true;
         std::vector<uint8_t> pixels; // CPU copy (format = atlas format)
     };
 
@@ -47,7 +50,26 @@ public:
     /// (single-atlas mode). When false (paged mode, used by FontAtlasBank),
     /// addGlyph returns ~0u once the fixed page is full so the bank can open a
     /// new page. Fires onRepack after any repack so callers re-read UVs.
-    uint32_t addGlyph(uint32_t width, uint32_t height, const uint8_t* pixels);
+    /// `codepoint` + `rasterPx` tag the slot so a shared page can drop one
+    /// raster size without scanning fonts. Untagged slots (rasterPx == 0)
+    /// are never released by releaseRasterSize.
+    uint32_t addGlyph(uint32_t width, uint32_t height, const uint8_t* pixels,
+                      uint32_t codepoint = 0, uint32_t rasterPx = 0);
+
+    /// Mark every live slot of `rasterPx` dead. Does not repack; the bank
+    /// compacts afterwards so the GPU image is replaced, not overwritten.
+    size_t releaseRasterSize(uint32_t rasterPx);
+
+    /// Drop dead slots, repack the rest into the smallest power-of-two page
+    /// that fits, and replace the GPU texture (the previous image is retired
+    /// through DeferredDeletionQueue). Does not fire onRepack — the bank
+    /// fires once after every page has settled.
+    void compactLive();
+
+    [[nodiscard]] bool findGlyph(uint32_t codepoint, uint32_t rasterPx, uint32_t& outSlot) const;
+    [[nodiscard]] size_t liveGlyphCount() const;
+    [[nodiscard]] uint64_t allocatedBytes() const { return _cpuData.size(); }
+    [[nodiscard]] std::vector<uint32_t> rasterSizes() const;
 
     /// When false, addGlyph never grows — it returns ~0u on overflow so a
     /// paged owner (FontAtlasBank) can append a fresh page (Core Rule: single
@@ -87,6 +109,7 @@ private:
     };
 
     bool tryPack(uint32_t width, uint32_t height, uint32_t& outX, uint32_t& outY);
+    bool tryPack(uint32_t width, uint32_t height, uint32_t& outX, uint32_t& outY, uint32_t atlasSide);
     void grow(); // double size, re-pack all slots into the CPU buffer
 
     /// Swap in `next` as the active texture, retiring the previous one via
@@ -98,6 +121,7 @@ private:
     EFormat::T                _format;
     std::string               _label;
     uint32_t                  _size = 0;
+    uint32_t                  _initialSize = 0;
     std::vector<uint8_t>      _cpuData;                 // RGBA/RGB bytes, _size*_size
     std::vector<FSlot>        _slots;
     std::vector<FShelf>       _shelves;

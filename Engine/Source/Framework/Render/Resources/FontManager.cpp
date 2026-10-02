@@ -240,40 +240,289 @@ std::shared_ptr<Font> FontManager::findBestBase(const FName &fontName, uint32_t 
     return bestBase;
 }
 
-void FontManager::rememberBitmapAtlas(const FName& fontName, uint32_t rasterPx)
+std::string sharedAtlasLabel(EFontRenderMode mode, std::string_view role)
 {
-    auto& lru = _bitmapAtlasLru[fontName];
-    std::erase(lru, rasterPx);
-    lru.push_back(rasterPx);
-    while (lru.size() > kMaxBitmapAtlasesPerFamily) {
-        bool bEvicted = false;
-        for (auto it = lru.begin(); it != lru.end(); ++it) {
-            if (*it == rasterPx) {
-                continue;
-            }
-            const std::string key = makeCacheKey(fontName, *it);
-            auto              baseIt = _baseFontCache.find(key);
-            // Both caches hold the atlas, so use_count 2 means nothing else
-            // (a snapshot, a view) still references it. Keep a live font and
-            // allow the cache to grow until that holder releases it.
-            if (baseIt != _baseFontCache.end() && baseIt->second && baseIt->second.use_count() > 2) {
-                continue;
-            }
-            if (baseIt != _baseFontCache.end() && baseIt->second) {
-                _pendingGlyphs.erase(baseIt->second.get());
-            }
-            _baseFontCache.erase(key);
-            _fontCache.erase(key);
-            auto& sizes = _baseSizes[fontName];
-            std::erase(sizes, *it);
-            lru.erase(it);
-            bEvicted = true;
-            break;
-        }
-        if (!bEvicted) {
-            break;
+    if (mode == EFontRenderMode::Color) {
+        return "ColorFontAtlas";
+    }
+    if (mode == EFontRenderMode::SDF) {
+        return role == "fallback" ? "SDFFontAtlas_Fallback" : "SDFFontAtlas_RuntimeDefault";
+    }
+    return role == "fallback" ? "FontAtlas_Fallback" : "FontAtlas_RuntimeDefault";
+}
+
+FontManager::FSharedFaceAtlas& FontManager::sharedFace(IRender& render, const std::string& path,
+                                                      EFontRenderMode mode, std::string_view role)
+{
+    const std::string key = path + "\n" + std::to_string(static_cast<int>(mode));
+    if (auto it = _sharedFaces.find(key); it != _sharedFaces.end()) {
+        return it->second;
+    }
+    FSharedFaceAtlas face;
+    face.path       = path;
+    face.role       = std::string(role);
+    face.mode       = mode;
+    face.rasterizer = makeRasterizer(mode);
+    face.bank       = std::make_shared<FontAtlasBank>(render,
+                                                face.rasterizer->getAtlasFormat(),
+                                                kSharedAtlasInitialPage,
+                                                sharedAtlasLabel(mode, role),
+                                                true);
+    face.lru.reserve(static_cast<size_t>(kLiveRasterSizeWindow) + 1);
+    FontAtlasBank* rawBank = face.bank.get();
+    face.bank->setOnRepack([this, rawBank]() { refreshUvsForBank(rawBank); });
+    auto [it, inserted] = _sharedFaces.emplace(key, std::move(face));
+    (void)inserted;
+    return it->second;
+}
+
+FontManager::FSharedFaceAtlas* FontManager::findSharedFace(const FontAtlasBank* bank)
+{
+    if (!bank) {
+        return nullptr;
+    }
+    for (auto& [key, face] : _sharedFaces) {
+        (void)key;
+        if (face.bank.get() == bank) {
+            return &face;
         }
     }
+    return nullptr;
+}
+
+bool FontManager::rasterSizeStillNeeded(const FontAtlasBank* bank, uint32_t rasterPx) const
+{
+    if (!bank) {
+        return false;
+    }
+    for (const auto& [key, font] : _baseFontCache) {
+        (void)key;
+        if (!font) {
+            continue;
+        }
+        if (font->atlas.get() == bank && static_cast<uint32_t>(std::lround(font->fontSize)) == rasterPx) {
+            return true;
+        }
+        for (size_t index = 0; index < font->fallbacks.size(); ++index) {
+            if (font->fallbacks[index].atlas.get() != bank) {
+                continue;
+            }
+            const uint16_t atlasIndex = static_cast<uint16_t>(index + 1);
+            for (const auto& [codePoint, character] : font->characters) {
+                (void)codePoint;
+                if (character.atlasIndex == atlasIndex && character.designSize == rasterPx
+                    && character.atlasSlot != ~0u) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+void FontManager::refreshUvsForBank(const FontAtlasBank* bank)
+{
+    if (!bank) {
+        return;
+    }
+    auto refreshBase = [&](Font& font) {
+        if (font.atlas.get() == bank) {
+            for (auto& [codePoint, character] : font.characters) {
+                if (character.atlasIndex != 0) {
+                    continue;
+                }
+                const uint32_t rasterPx = character.designSize != 0
+                                              ? character.designSize
+                                              : static_cast<uint32_t>(std::lround(font.fontSize));
+                uint32_t slot = 0;
+                glm::vec4 uv{};
+                if (bank->findGlyph(codePoint, rasterPx, slot, uv)) {
+                    character.atlasSlot = slot;
+                    character.uvRect    = uv;
+                }
+                else if (character.atlasSlot != ~0u) {
+                    character.atlasSlot = ~0u;
+                    character.uvRect    = {};
+                }
+            }
+            font.atlasTexture = bank->pageCount() ? bank->pageTexture(0) : nullptr;
+            if (_fontAtlasTextureSink) {
+                _fontAtlasTextureSink(font.family,
+                                      static_cast<uint32_t>(std::lround(font.fontSize)),
+                                      font.atlasTexture);
+            }
+        }
+        for (size_t index = 0; index < font.fallbacks.size(); ++index) {
+            FFontStackEntry& fallback = font.fallbacks[index];
+            if (fallback.atlas.get() != bank) {
+                continue;
+            }
+            const uint16_t atlasIndex = static_cast<uint16_t>(index + 1);
+            fallback.atlasTexture = bank->pageCount() ? bank->pageTexture(0) : nullptr;
+            for (auto& [codePoint, character] : font.characters) {
+                if (character.atlasIndex != atlasIndex) {
+                    continue;
+                }
+                const uint32_t rasterPx = character.designSize != 0
+                                              ? character.designSize
+                                              : static_cast<uint32_t>(std::lround(font.fontSize));
+                uint32_t slot = 0;
+                glm::vec4 uv{};
+                if (bank->findGlyph(codePoint, rasterPx, slot, uv)) {
+                    character.atlasSlot = slot;
+                    character.uvRect    = uv;
+                }
+                else if (character.atlasSlot != ~0u) {
+                    character.atlasSlot = ~0u;
+                    character.uvRect    = {};
+                }
+            }
+        }
+    };
+    for (auto& [key, font] : _baseFontCache) {
+        (void)key;
+        if (font && !font->isView()) {
+            refreshBase(*font);
+        }
+    }
+    for (auto& [key, font] : _fontCache) {
+        (void)key;
+        if (!font || !font->isView() || !font->baseFont) {
+            continue;
+        }
+        const Font& base = *font->baseFont;
+        bool usesBank = base.atlas.get() == bank;
+        if (!usesBank) {
+            for (const FFontStackEntry& fallback : base.fallbacks) {
+                if (fallback.atlas.get() == bank) {
+                    usesBank = true;
+                    break;
+                }
+            }
+        }
+        if (usesBank) {
+            refreshScaledView(*font);
+        }
+    }
+}
+
+void FontManager::dropUnreferencedSharedFaces()
+{
+    for (auto it = _sharedFaces.begin(); it != _sharedFaces.end();) {
+        if (!it->second.bank || it->second.bank.use_count() == 1) {
+            it = _sharedFaces.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+}
+
+bool FontManager::evictRasterSize(FSharedFaceAtlas& face, uint32_t rasterPx)
+{
+    if (!face.bank) {
+        return true;
+    }
+    struct FVictim
+    {
+        std::string key;
+        Font*       raw = nullptr;
+        FName       family;
+    };
+    std::vector<FVictim> victims;
+    std::vector<std::shared_ptr<FontAtlasBank>> fallbackBanks;
+    for (const auto& [key, font] : _baseFontCache) {
+        if (!font || font->isView()) {
+            continue;
+        }
+        if (font->atlas.get() != face.bank.get()) {
+            continue;
+        }
+        if (static_cast<uint32_t>(std::lround(font->fontSize)) != rasterPx) {
+            continue;
+        }
+        // Both caches hold the font, so use_count 2 means no snapshot and no
+        // view still references it. A live holder keeps the size.
+        if (font.use_count() > 2) {
+            return false;
+        }
+        victims.push_back(FVictim{key, font.get(), font->family});
+        for (const FFontStackEntry& fallback : font->fallbacks) {
+            if (fallback.atlas && fallback.atlas.get() != face.bank.get()) {
+                fallbackBanks.push_back(fallback.atlas);
+            }
+        }
+    }
+    std::vector<Font*> bases;
+    bases.reserve(victims.size());
+    for (const FVictim& victim : victims) {
+        bases.push_back(victim.raw);
+        _pendingGlyphs.erase(victim.raw);
+    }
+    for (auto it = _fontCache.begin(); it != _fontCache.end();) {
+        if (!it->second) {
+            it = _fontCache.erase(it);
+            continue;
+        }
+        Font* raw  = it->second.get();
+        Font* base = it->second->baseFont ? it->second->baseFont.get() : nullptr;
+        const bool drop = std::find(bases.begin(), bases.end(), raw) != bases.end()
+                          || (base && std::find(bases.begin(), bases.end(), base) != bases.end());
+        if (!drop) {
+            ++it;
+            continue;
+        }
+        _pendingGlyphs.erase(raw);
+        it = _fontCache.erase(it);
+    }
+    for (const FVictim& victim : victims) {
+        _baseFontCache.erase(victim.key);
+        auto sizesIt = _baseSizes.find(victim.family);
+        if (sizesIt != _baseSizes.end()) {
+            std::erase(sizesIt->second, rasterPx);
+        }
+    }
+    face.bank->releaseRasterSize(rasterPx);
+    for (const std::shared_ptr<FontAtlasBank>& fallback : fallbackBanks) {
+        if (rasterSizeStillNeeded(fallback.get(), rasterPx)) {
+            continue;
+        }
+        fallback->releaseRasterSize(rasterPx);
+        if (FSharedFaceAtlas* fallbackFace = findSharedFace(fallback.get())) {
+            std::erase(fallbackFace->lru, rasterPx);
+        }
+    }
+    if (!victims.empty()) {
+        bumpResourceRevision();
+    }
+    return true;
+}
+
+void FontManager::noteLiveRasterSize(const std::shared_ptr<FontAtlasBank>& bank, uint32_t rasterPx)
+{
+    if (!bank || rasterPx == 0) {
+        return;
+    }
+    FSharedFaceAtlas* face = findSharedFace(bank.get());
+    if (!face) {
+        return;
+    }
+    std::erase(face->lru, rasterPx);
+    face->lru.push_back(rasterPx);
+    size_t spins = 0;
+    const size_t limit = face->lru.size();
+    while (face->lru.size() > kLiveRasterSizeWindow && spins < limit) {
+        const uint32_t victim = face->lru.front();
+        if (!evictRasterSize(*face, victim)) {
+            face->lru.erase(face->lru.begin());
+            face->lru.push_back(victim);
+            ++spins;
+            continue;
+        }
+        std::erase(face->lru, victim);
+        spins = 0;
+    }
+    dropUnreferencedSharedFaces();
 }
 
 void FontManager::rememberSdfView(const FName& fontName, uint32_t viewPx)
@@ -317,7 +566,14 @@ std::shared_ptr<Font> FontManager::getFont(const FName &fontName, uint32_t fontS
     // by planTextRaster before the call, so the key is the integer size.
     const std::string key = makeCacheKey(fontName, fontSize);
     if (auto it = _fontCache.find(key); it != _fontCache.end()) {
-        return it->second;
+        std::shared_ptr<Font> font = it->second;
+        if (font && font->atlas) {
+            const uint32_t rasterPx = (font->isView() && font->baseFont)
+                                          ? static_cast<uint32_t>(std::lround(font->baseFont->fontSize))
+                                          : fontSize;
+            noteLiveRasterSize(font->atlas, rasterPx);
+        }
+        return font;
     }
 
     // A hinted bitmap is pixel-aligned. Serving 16px from a 13px atlas
@@ -383,8 +639,9 @@ void FontManager::clearCache()
     _baseSizes.clear();
     _pendingGlyphs.clear();
     _fontPaths.clear();
-    _bitmapAtlasLru.clear();
+    _fallbackDefs.clear();
     _sdfViewLru.clear();
+    _sharedFaces.clear();
     // _render is a non-owning observer; a fresh loadFont will re-capture it.
     bumpResourceRevision();
     YA_CORE_INFO("Cleared all font cache");
@@ -458,87 +715,13 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
     // pinned to the density they were rasterized at.
     font->bTexelPinned = (chosenMode == EFontRenderMode::Bitmap);
 
-    // First pass: calculate max glyph dimensions for the seed atlas.
-    uint32_t maxGlyphWidth  = 0;
-    uint32_t maxGlyphHeight = 0;
+    // One bank per (face file, flavor). This size is a light font: metrics
+    // and a character map whose slots point into that shared bank.
+    FSharedFaceAtlas& shared = sharedFace(render, fontPath, chosenMode, "primary");
+    font->rasterizer = shared.rasterizer;
+    font->renderMode = chosenMode;
+    font->atlas      = shared.bank;
 
-    for (uint32_t codePoint : BASE_GLYPH_CODEPOINTS) {
-        if (FT_Load_Char(face,
-                         static_cast<FT_ULong>(codePoint),
-                         FT_LOAD_RENDER | FT_LOAD_NO_BITMAP | FT_LOAD_FORCE_AUTOHINT)) {
-            continue;
-        }
-        FT_GlyphSlot &glyph = face->glyph;
-        maxGlyphWidth       = std::max(maxGlyphWidth, glyph->bitmap.width);
-        maxGlyphHeight      = std::max(maxGlyphHeight, glyph->bitmap.rows);
-    }
-
-    // Seed atlas sized for the base ASCII run (16 glyphs/row + padding, pow2).
-    constexpr uint32_t glyphsPerRow = 16;
-    uint32_t           atlasWidth   = glyphsPerRow * (maxGlyphWidth + 2);
-    const uint32_t     totalGlyphs  = static_cast<uint32_t>(BASE_GLYPH_CODEPOINTS.size());
-    uint32_t           numRows      = (totalGlyphs + glyphsPerRow - 1) / glyphsPerRow;
-    uint32_t           atlasHeight  = numRows * (maxGlyphHeight + 2);
-
-    auto nextPow2 = [](uint32_t v) -> uint32_t {
-        v--;
-        v |= v >> 1;
-        v |= v >> 2;
-        v |= v >> 4;
-        v |= v >> 8;
-        v |= v >> 16;
-        v++;
-        return v;
-    };
-
-    atlasWidth  = nextPow2(atlasWidth);
-    atlasHeight = nextPow2(atlasHeight);
-    const uint32_t seedSize = std::max(atlasWidth, atlasHeight);
-
-    YA_CORE_INFO("Font atlas seed dimensions of {}: {}x{} (maxGlyph={}x{}), mode={}, rasterSize: {}",
-                 fontName.toString(),
-                 atlasWidth,
-                 atlasHeight,
-                 maxGlyphWidth,
-                 maxGlyphHeight,
-                 (int)chosenMode,
-                 rasterSize);
-
-    // Rasterizer + growable atlas (single texture; repack on growth).
-    // SDF mode: FreeType distance field, scale-free (crisp at any size).
-    if (chosenMode == EFontRenderMode::SDF) {
-        font->rasterizer = std::make_shared<SDFFontRasterizer>();
-        font->renderMode = EFontRenderMode::SDF;
-    }
-    else {
-        font->rasterizer = std::make_shared<BitmapFontRasterizer>();
-        font->renderMode = EFontRenderMode::Bitmap;
-    }
-    const std::string atlasLabel = font->renderMode == EFontRenderMode::SDF
-                                       ? "SDFFontAtlas_RuntimeDefault"
-                                       : "FontAtlas_RuntimeDefault";
-    // Paged bank: one page of seedSize; overflow appends a new page instead of
-    // hitting a hard ceiling (CJK-heavy text never drops glyphs).
-    font->atlas      = std::make_shared<FontAtlasBank>(render, font->rasterizer->getAtlasFormat(), seedSize, atlasLabel);
-    font->atlasTexture = font->atlas->pageTexture(0);
-    // NOTE: capture the base font by RAW pointer — the atlas is owned by the
-    // font, so the font outlives the atlas; capturing a shared_ptr here would
-    // create a Font -> atlas -> lambda -> Font reference cycle (leak).
-    font->atlas->setOnRepack([this, rawFont = font.get()]() {
-        // Repack moved every glyph: refresh the base characters' UVs (views
-        // are refreshed lazily via refreshScaledView on next ensureGlyphs).
-        for (auto& [cp, ch] : rawFont->characters) {
-            if (ch.atlasSlot != ~0u) {
-                ch.uvRect = rawFont->atlas->getUv(ch.atlasSlot);
-            }
-        }
-        rawFont->atlasTexture = rawFont->atlas->pageTexture(0);
-        if (_fontAtlasTextureSink) {
-            _fontAtlasTextureSink(FName("RuntimeDefault"), static_cast<uint32_t>(rawFont->fontSize), rawFont->atlas->pageTexture(0));
-        }
-    });
-
-    // Second pass: rasterize the base ASCII run into the dynamic atlas.
     for (uint32_t codePoint : BASE_GLYPH_CODEPOINTS) {
         GlyphBitmap glyph = font->rasterizer->rasterize(face, codePoint, rasterSize);
         Character   character;
@@ -547,8 +730,16 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
         character.advance    = glyph.advance;
         character.designSize = rasterSize;
         if (glyph.width > 0 && glyph.height > 0) {
-            character.atlasSlot = font->atlas->addGlyph(glyph.width, glyph.height, glyph.pixels.data());
-            character.uvRect    = font->atlas->getUv(character.atlasSlot);
+            uint32_t slot = 0;
+            glm::vec4 uv{};
+            if (!font->atlas->findGlyph(codePoint, rasterSize, slot, uv)) {
+                slot = font->atlas->addGlyph(glyph.width, glyph.height, glyph.pixels.data(), codePoint, rasterSize);
+                if (slot != ~0u) {
+                    uv = font->atlas->getUv(slot);
+                }
+            }
+            character.atlasSlot = slot;
+            character.uvRect    = uv;
         }
         else {
             character.atlasSlot = ~0u;
@@ -556,15 +747,24 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
         font->characters[codePoint] = character;
     }
 
+    // Growth during the loop keeps slot indices and moves UVs. Re-read them
+    // for the glyphs packed before the grow; this font is not cached yet, so
+    // the shared onRepack did not see it.
+    for (auto& [codePoint, character] : font->characters) {
+        (void)codePoint;
+        if (character.atlasIndex == 0 && character.atlasSlot != ~0u) {
+            character.uvRect = font->atlas->getUv(character.atlasSlot);
+        }
+    }
+
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
 
-    // Upload the seed atlas at a safe point (right now: font load happens at
-    // host init, outside any recording).
+    // Upload at a safe point (font load is outside command recording).
     font->atlas->upload();
-    font->atlasTexture = font->atlas->pageTexture(0);
+    font->atlasTexture = font->atlas->pageCount() ? font->atlas->pageTexture(0) : nullptr;
     if (_fontAtlasTextureSink) {
-        _fontAtlasTextureSink(fontName, rasterSize, font->atlas->pageTexture(0));
+        _fontAtlasTextureSink(fontName, rasterSize, font->atlasTexture);
     }
 
     // Cache the base font and its exact-size fast path.
@@ -576,7 +776,11 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
     }
     bumpResourceRevision();
 
-    YA_CORE_INFO("Loaded font '{}' (mode={}, rasterSize: {}, atlas: {}x{})", fontName.toString(), (int)chosenMode, rasterSize, atlasWidth, atlasHeight);
+    YA_CORE_INFO("Loaded font '{}' (mode={}, rasterSize: {}, shared pages: {})",
+                 fontName.toString(),
+                 (int)chosenMode,
+                 rasterSize,
+                 font->atlas->pageCount());
 
     // Attach any recorded fallback faces to this base so its font stack is
     // complete — covers both preloaded bases and lazily materialized ones
@@ -594,11 +798,8 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
     // rasterized at the same pixel size (attachFallbackToBase), so there is
     // no view to rescale them. SDF requests that differ from the base size
     // get a view whose metrics are already `fontSize` device pixels.
-    if (chosenMode == EFontRenderMode::Bitmap) {
-        rememberBitmapAtlas(fontName, rasterSize);
-        return font;
-    }
-    if (rasterSize == fontSize) {
+    noteLiveRasterSize(font->atlas, rasterSize);
+    if (chosenMode == EFontRenderMode::Bitmap || rasterSize == fontSize) {
         return font;
     }
     auto view = makeScaledView(font, fontSize);
@@ -665,36 +866,13 @@ void FontManager::attachFallbackToBase(IRender& render, Font& font, const FFallb
     entry.baseSize   = effectiveMode == EFontRenderMode::SDF
                            ? std::max(kSdfBaseSize, static_cast<uint32_t>(font.fontSize))
                            : static_cast<uint32_t>(font.fontSize);
-    entry.rasterizer = makeRasterizer(effectiveMode);
-    // Color emoji needs its own atlas (opaque RGBA); the atlas label must
-    // match the flavor so the sampler routing picks nearest (bitmap) or
-    // linear (SDF) accordingly.
-    const std::string label = effectiveMode == EFontRenderMode::Color ? "ColorFontAtlas"
-                              : effectiveMode == EFontRenderMode::SDF ? "SDFFontAtlas_Fallback"
-                                                                       : "FontAtlas_Fallback";
-    const uint32_t fallbackSeed = effectiveMode == EFontRenderMode::Color ? 256u : 1024u;
-    entry.atlas = std::make_shared<FontAtlasBank>(render, entry.rasterizer->getAtlasFormat(), fallbackSeed, label);
-    entry.atlas->upload();
+    // Shared with every other size of this fallback face. The page appears
+    // when the first glyph is captured, not here.
+    FSharedFaceAtlas& shared = sharedFace(render, def.path, effectiveMode, "fallback");
+    entry.rasterizer   = shared.rasterizer;
+    entry.atlas        = shared.bank;
     entry.atlasTexture = entry.atlas->pageCount() ? entry.atlas->pageTexture(0) : nullptr;
     font.fallbacks.push_back(std::move(entry));
-    const size_t fallbackIndex = font.fallbacks.size() - 1;
-    font.fallbacks[fallbackIndex].atlas->setOnRepack([rawFont = &font, fallbackIndex]() {
-        if (fallbackIndex >= rawFont->fallbacks.size()) {
-            return;
-        }
-        auto& fallback = rawFont->fallbacks[fallbackIndex];
-        if (!fallback.atlas) {
-            return;
-        }
-        const uint16_t atlasIndex = static_cast<uint16_t>(fallbackIndex + 1);
-        for (auto& [codePoint, character] : rawFont->characters) {
-            (void)codePoint;
-            if (character.atlasIndex == atlasIndex && character.atlasSlot != ~0u) {
-                character.uvRect = fallback.atlas->getUv(character.atlasSlot);
-            }
-        }
-        fallback.atlasTexture = fallback.atlas->pageTexture(0);
-    });
 }
 
 std::vector<std::string> FontManager::findCjkFontCandidates()
@@ -873,8 +1051,8 @@ bool FontManager::loadUiFontStack(IRender& render, std::string_view faceId, uint
     _baseSizes.erase(primaryName);
     _fontPaths.erase(primaryName);
     _fallbackDefs.erase(primaryName);
-    _bitmapAtlasLru.erase(primaryName);
     _sdfViewLru.erase(primaryName);
+    dropUnreferencedSharedFaces();
 
     if (!loadFont(render, primaryPath, primaryName, primarySize)) {
         YA_CORE_WARN("FontManager: failed to rasterize UI face '{}' from '{}'", faceId, primaryPath);
@@ -967,12 +1145,17 @@ void FontManager::flushPendingGlyphs(IRender& render)
             character.designSize = pixelSize;
             character.bColor     = glyph.bColor;
             if (glyph.width > 0 && glyph.height > 0) {
-                const uint32_t slot = atlas.addGlyph(glyph.width, glyph.height, glyph.pixels.data());
-                if (slot == ~0u) {
-                    return false; // atlas could not pack it (hit size ceiling) — let another face try
+                uint32_t slot = 0;
+                glm::vec4 uv{};
+                if (!atlas.findGlyph(codePoint, pixelSize, slot, uv)) {
+                    slot = atlas.addGlyph(glyph.width, glyph.height, glyph.pixels.data(), codePoint, pixelSize);
+                    if (slot == ~0u) {
+                        return false; // atlas could not pack it (hit size ceiling) — let another face try
+                    }
+                    uv = atlas.getUv(slot);
                 }
                 character.atlasSlot = slot;
-                character.uvRect    = atlas.getUv(slot);
+                character.uvRect    = uv;
             }
             else {
                 character.atlasSlot = ~0u;
@@ -1097,83 +1280,54 @@ std::shared_ptr<Font> FontManager::getAdaptiveFont(IRender&            render,
 std::vector<FontManager::FFontAtlasDebugPage> FontManager::collectFontAtlasDebugPages() const
 {
     std::vector<FFontAtlasDebugPage> pages;
-
-    const auto appendBank = [&](const FontAtlasBank* bank,
-                                std::string_view     cacheKey,
-                                float                fontSize,
-                                std::string_view     faceRole,
-                                std::string_view     facePath,
-                                EFontRenderMode      mode,
-                                size_t               glyphCount) {
-        if (!bank || bank->pageCount() == 0) {
-            return;
-        }
-        std::string stackName;
-        float       logicalSize = 0.0f;
-        float       dpi         = 1.0f;
-        splitFontCacheKey(cacheKey, stackName, logicalSize, dpi);
-        if (logicalSize <= 0.0f) {
-            logicalSize = fontSize;
-        }
-        const std::string face = atlasDebugFaceName(facePath, stackName);
-        const uint32_t pageCount = static_cast<uint32_t>(bank->pageCount());
-        for (uint32_t i = 0; i < pageCount; ++i) {
-            FFontAtlasDebugPage page;
-            page.texture    = bank->pageTexture(i);
-            page.pageIndex  = i;
-            page.pageCount  = pageCount;
-            page.renderMode = mode;
-            const uint32_t w = page.texture ? page.texture->getWidth() : bank->pageSize();
-            const uint32_t h = page.texture ? page.texture->getHeight() : bank->pageSize();
-            page.label = makeFontAtlasDebugLabel(face, logicalSize, mode, faceRole, i, pageCount, dpi);
-            page.detail = std::format("{}  ·  {}×{}  ·  {} glyphs  ·  1:1",
-                                      stackName,
-                                      w,
-                                      h,
-                                      glyphCount);
-            if (!facePath.empty()) {
-                page.detail += "  ·  ";
-                page.detail += facePath;
-            }
-            pages.push_back(std::move(page));
-        }
-    };
-
-    for (const auto& [key, font] : _baseFontCache) {
-        if (!font || font->isView()) {
+    for (const auto& [key, face] : _sharedFaces) {
+        (void)key;
+        if (!face.bank || face.bank->pageCount() == 0) {
             continue;
         }
-        size_t primaryGlyphs = 0;
-        for (const auto& [codePoint, ch] : font->characters) {
-            (void)codePoint;
-            if (ch.atlasIndex == 0) {
-                ++primaryGlyphs;
+        const std::string faceName = atlasDebugFaceName(face.path, face.role);
+        const uint32_t pageCount = static_cast<uint32_t>(face.bank->pageCount());
+        for (uint32_t i = 0; i < pageCount; ++i) {
+            const DynamicFontAtlas* atlas = face.bank->pageAtlas(i);
+            if (!atlas) {
+                continue;
             }
-        }
-        appendBank(font->atlas.get(),
-                   key,
-                   font->fontSize,
-                   "primary",
-                   font->fontPath,
-                   font->renderMode,
-                   primaryGlyphs);
-        for (size_t fallback = 0; fallback < font->fallbacks.size(); ++fallback) {
-            const FFontStackEntry& entry = font->fallbacks[fallback];
-            size_t fallbackGlyphs = 0;
-            const uint16_t atlasIndex = static_cast<uint16_t>(fallback + 1);
-            for (const auto& [codePoint, ch] : font->characters) {
-                (void)codePoint;
-                if (ch.atlasIndex == atlasIndex) {
-                    ++fallbackGlyphs;
+            FFontAtlasDebugPage page;
+            page.texture     = face.bank->pageTexture(i);
+            page.pageIndex   = i;
+            page.pageCount   = pageCount;
+            page.renderMode  = face.mode;
+            page.glyphCount  = atlas->liveGlyphCount();
+            page.cpuBytes    = atlas->allocatedBytes();
+            page.rasterSizes = atlas->rasterSizes();
+            const uint32_t w = page.texture ? page.texture->getWidth() : atlas->size();
+            const uint32_t h = page.texture ? page.texture->getHeight() : atlas->size();
+            page.label = std::format("{}  {}  {}  {}/{}",
+                                     faceName,
+                                     fontRenderModeName(face.mode),
+                                     face.role,
+                                     i + 1,
+                                     pageCount);
+            std::string sizes;
+            for (uint32_t rasterPx : page.rasterSizes) {
+                if (!sizes.empty()) {
+                    sizes += ' ';
                 }
+                sizes += std::to_string(rasterPx);
             }
-            appendBank(entry.atlas.get(),
-                       key,
-                       font->fontSize,
-                       std::format("fallback{}", fallback + 1),
-                       entry.fontPath,
-                       entry.renderMode,
-                       fallbackGlyphs);
+            if (sizes.empty()) {
+                sizes = "none";
+            }
+            page.detail = std::format("{} glyphs  ·  {}×{}  ·  sizes {}  ·  1:1",
+                                      page.glyphCount,
+                                      w,
+                                      h,
+                                      sizes);
+            if (!face.path.empty()) {
+                page.detail += "  ·  ";
+                page.detail += face.path;
+            }
+            pages.push_back(std::move(page));
         }
     }
 
