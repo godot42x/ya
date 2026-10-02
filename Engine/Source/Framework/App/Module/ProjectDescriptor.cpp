@@ -1,5 +1,6 @@
 #include "App/Module/ProjectDescriptor.h"
 
+#include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"
 
 #include <fstream>
@@ -84,6 +85,17 @@ FProjectDescriptor FProjectDescriptor::load(const std::filesystem::path& path)
             throw std::runtime_error("Project uiReferenceResolution must be non-zero: " + path.string());
         }
         descriptor.uiReferenceResolution = resolution;
+    }
+    if (json.contains("uiMinReferenceScale")) {
+        const float scale = json.at("uiMinReferenceScale").get<float>();
+        if (!(scale > 0.0f && scale <= 1.0f)) {
+            YA_CORE_WARN("Project uiMinReferenceScale {} is outside (0, 1]; using {}",
+                         scale,
+                         descriptor.uiMinReferenceScale);
+        }
+        else {
+            descriptor.uiMinReferenceScale = scale;
+        }
     }
     if (json.contains("icon")) {
         const auto icon = json.at("icon").get<std::string>();

@@ -102,6 +102,18 @@ void GameUIHost::setReferenceResolution(glm::uvec2 resolution)
     _referenceResolution = resolution;
 }
 
+void GameUIHost::setMinReferenceScale(float scale)
+{
+    if (!(scale > 0.0f && scale <= 1.0f)) {
+        YA_CORE_WARN("GameUIHost::setMinReferenceScale: {} is outside (0, 1]; using {}",
+                     scale,
+                     kMinGameUIReferenceScale);
+        _minReferenceScale = kMinGameUIReferenceScale;
+        return;
+    }
+    _minReferenceScale = scale;
+}
+
 void GameUIHost::setPresentation(const Rect2D& viewportPx, const glm::vec2& framebufferScale)
 {
     _viewportPx       = viewportPx;
@@ -111,14 +123,14 @@ void GameUIHost::setPresentation(const Rect2D& viewportPx, const glm::vec2& fram
     const float logicalHeight = std::max(viewportPx.extent.y, 1.0f) / std::max(framebufferScale.y, 0.01f);
 
     // Fit rides the tree DPI so text re-rasterizes at the device pixel size.
-    // Below kMinGameUIReferenceScale the logical canvas shrinks instead, and
+    // Below minReferenceScale() the logical canvas shrinks instead, and
     // responsive layout reflows. The fit is not snapped: font atlases are
     // keyed by integer raster pixels, which is the quantum.
     float scale = 1.0f;
     if (_referenceResolution.x > 0 && _referenceResolution.y > 0) {
         scale = std::min(logicalWidth / static_cast<float>(_referenceResolution.x),
                          logicalHeight / static_cast<float>(_referenceResolution.y));
-        scale = std::max(scale, kMinGameUIReferenceScale);
+        scale = std::max(scale, _minReferenceScale);
     }
     _referenceScale = scale;
     _tree.setDpiScale(fb * _referenceScale);

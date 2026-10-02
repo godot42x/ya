@@ -29,6 +29,10 @@ struct FProjectDescriptor
     std::filesystem::path              contentDir = "Content";
     std::optional<std::string>            defaultScene;
     std::optional<FUIReferenceResolution> uiReferenceResolution;
+    /// Smallest scale-to-fit factor. Below it the logical canvas shrinks and
+    /// layout reflows. Matches GameUIHost::kMinGameUIReferenceScale. Values
+    /// outside (0, 1] are rejected and this default is kept.
+    float uiMinReferenceScale = 0.5f;
     /// Dock / taskbar icon. PNG or BMP, project-relative or workspace-relative
     /// (`Engine/Content/...`). Omitted = engine YA branding.
     std::optional<std::string>         icon;

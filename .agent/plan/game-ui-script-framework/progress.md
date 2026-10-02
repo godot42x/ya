@@ -234,3 +234,12 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 - 去掉密度的 1/16 量化。图集按整像素栅格尺寸做键，0.54 这样的 fit 原样保留。fit 仍走树 dpi，`uiScale` 保持 1。
 
 验证：`GameUIHostTest.ReferenceScaleFloorsAndRidesTheDpiAxis`、`InputMappingFollowsTheReferenceScale`、`ReferenceResolutionScalesLayoutAndPointer`。
+
+## 2026-10-02 — 参考缩放下限改成工程字段
+
+完成：
+
+- `.yaproject` 可选字段 `uiMinReferenceScale`，缺省 0.5，与 `GameUIHost::kMinGameUIReferenceScale` 一致。`<= 0` 或 `> 1` 警告并回落。
+- `GameUIHost::setMinReferenceScale` 在 `App::applyProjectDescriptor` 里和 `uiReferenceResolution` 一起接上。
+
+验证：`ProjectDescriptorTest.LoadsUIMinReferenceScale`、`GameUIHostTest.MinReferenceScaleComesFromTheProject`。

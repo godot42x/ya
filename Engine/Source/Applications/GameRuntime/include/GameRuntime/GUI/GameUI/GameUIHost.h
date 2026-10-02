@@ -89,9 +89,16 @@ struct YA_GAME_RUNTIME_API GameUIHost
 
     /// The fit factor (viewport vs reference resolution) rides the tree's
     /// DPI axis, not uiScale: fonts re-rasterize at the final pixel size.
-    /// The fit is clamped to kMinGameUIReferenceScale. Integer font raster
-    /// sizes are the cache quantum, so the fit itself is not snapped.
+    /// The fit is clamped to minReferenceScale() (default
+    /// kMinGameUIReferenceScale). Integer font raster sizes are the cache
+    /// quantum, so the fit itself is not snapped.
     void setPresentation(const Rect2D& viewportPx, const glm::vec2& framebufferScale);
+
+    /// Floor for the reference fit. `scale` must be in (0, 1]; anything else
+    /// falls back to kMinGameUIReferenceScale. Takes effect on the next
+    /// setPresentation. Projects set this from `uiMinReferenceScale`.
+    void setMinReferenceScale(float scale);
+    [[nodiscard]] float minReferenceScale() const { return _minReferenceScale; }
 
     /// Reference resolution for scale-to-fit. Zero on either axis means scale 1
     /// (the tree lays out in viewport logical pixels). Takes effect on the next
@@ -268,6 +275,7 @@ struct YA_GAME_RUNTIME_API GameUIHost
     Rect2D                         _viewportPx{};
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};
     glm::uvec2                     _referenceResolution{0, 0};
+    float                          _minReferenceScale = kMinGameUIReferenceScale;
     float                          _referenceScale = 1.0f;
     EUIUpdateClock                 _updateClock = EUIUpdateClock::RealTime;
     std::vector<FMountedEntry>     _entries;

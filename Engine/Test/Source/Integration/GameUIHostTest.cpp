@@ -274,6 +274,29 @@ TEST(GameUIHostTest, ReferenceScaleFloorsAndRidesTheDpiAxis)
     EXPECT_LT(host.getTree().getLogicalExtent().width, 1000.0f);
 }
 
+TEST(GameUIHostTest, MinReferenceScaleComesFromTheProject)
+{
+    GameUIHost host;
+    EXPECT_FLOAT_EQ(host.minReferenceScale(), GameUIHost::kMinGameUIReferenceScale);
+
+    host.setMinReferenceScale(0.25f);
+    EXPECT_FLOAT_EQ(host.minReferenceScale(), 0.25f);
+    host.setReferenceResolution({1000, 1000});
+    // Raw fit 0.4, above the configured floor, so it is not pulled up to 0.5.
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {400.0f, 400.0f}}, {1.0f, 1.0f});
+    EXPECT_FLOAT_EQ(host.referenceScale(), 0.4f);
+
+    // Raw fit 0.1, clamped to the configured floor rather than 0.5.
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {100.0f, 100.0f}}, {1.0f, 1.0f});
+    EXPECT_FLOAT_EQ(host.referenceScale(), 0.25f);
+    EXPECT_FLOAT_EQ(host.getTree().getDpiScale(), 0.25f);
+
+    host.setMinReferenceScale(0.0f);
+    EXPECT_FLOAT_EQ(host.minReferenceScale(), GameUIHost::kMinGameUIReferenceScale);
+    host.setMinReferenceScale(1.5f);
+    EXPECT_FLOAT_EQ(host.minReferenceScale(), GameUIHost::kMinGameUIReferenceScale);
+}
+
 TEST(GameUIHostTest, InputMappingFollowsTheReferenceScale)
 {
     GameUIHost host;
