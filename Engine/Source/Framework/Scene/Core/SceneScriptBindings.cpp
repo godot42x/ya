@@ -55,6 +55,16 @@ void expectArgs(ScriptArgs args, size_t count)
     }
 }
 
+void noteComponentEdited(const ScriptRef& ref, void* component)
+{
+    auto* comp = static_cast<IComponent*>(component);
+    if (Entity* owner = comp->getOwner()) {
+        if (Scene* scene = owner->getScene()) {
+            scene->notifyComponentEdited(owner->getHandle(), ref.type);
+        }
+    }
+}
+
 ScriptNativeFn entityMethod(ScriptValue (*body)(Entity&, ScriptArgs))
 {
     return [body](void* self, const ScriptRef&, ScriptArgs args) { return body(*static_cast<Entity*>(self), args); };
@@ -134,17 +144,15 @@ SceneRefKinds registerKinds()
             return entity ? componentOn(*entity, ref.type) : nullptr;
         },
         .afterWrite = [](const ScriptRef& ref, void* component) {
-            auto* comp = static_cast<IComponent*>(component);
-            comp->onPostSerialize();
-            // The write landed outside any typed setter: route it through
-            // the scene edit funnel so derived-work processors hear it from
-            // the one signal source (mirrors the inspector's default hook
-            // and ScriptApiCore's component.set).
-            if (Entity* owner = comp->getOwner()) {
-                if (Scene* scene = owner->getScene()) {
-                    scene->notifyComponentEdited(owner->getHandle(), ref.type);
-                }
-            }
+            // A field write bypasses typed setters, so the component still
+            // needs its deserialize hook before the edit is announced.
+            static_cast<IComponent*>(component)->onPostSerialize();
+            noteComponentEdited(ref, component);
+        },
+        .afterCall = [](const ScriptRef& ref, void* component) {
+            // The method already did its own local update. Announce it on
+            // the same funnel as a field write.
+            noteComponentEdited(ref, component);
         },
     });
     registerEntityMethods();

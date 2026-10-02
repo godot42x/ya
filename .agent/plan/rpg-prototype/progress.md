@@ -384,3 +384,18 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 验证：`ya-testing --gtest_filter=LuaScriptHostTest.*:LuaEntityScriptCallTest.*:GameUIScriptTest.*`
   27 通过，含 `NamedCallSwallowContainsTargetErrors`。
 - 偏离：无。
+
+## 2026-10-02 — 脚本 callMethod 接入编辑漏斗
+
+- `ScriptRefKind` 增加 `afterCall`，由 `script::callMethod` 在反射方法成功返回后调用。
+  只对非 const 方法触发；const 来自已有的 `Function::isConst()`（`Class::function` 对
+  `Ret (T::*)(Args...) const` 的重载，不是手工标注）。组件引用的 `afterCall` 与
+  `afterWrite` 走同一个 `notifyComponentEdited`。方法自己已做本地更新，不再补
+  `onPostSerialize`。原生方法没有 const 记录，不发通知（`entityAt` 是查询）。
+  Lua / JS 都走这一层。
+- 验证：`ya-testing --gtest_filter=LuaScriptBindingTest.*` 9 通过，含
+  `ComponentMethodCallRoutesThroughTheSceneEditFunnel`（`getPosition` 不通知，
+  `setPosition` 通知一次）；`ScriptBindingTest.*` 8 通过。
+- 偏离：无。`setModelPath` / `AssetRef::setPath` 没有 `YA_REFLECT_METHOD`，脚本
+  今天调不到它们；漏斗覆盖的是已经反射出来的非 const 方法。`resource-leftovers.md`
+  已删掉 callMethod 这一条。

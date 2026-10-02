@@ -175,6 +175,41 @@ TEST_F(LuaScriptBindingTest, ComponentFieldWriteRoutesThroughTheSceneEditFunnel)
     SceneBus::get().onComponentEdited.remove(handle);
 }
 
+// A non-const method is the same edit as a field write. Const methods stay
+// quiet. Const comes from the reflected member-pointer kind.
+TEST_F(LuaScriptBindingTest, ComponentMethodCallRoutesThroughTheSceneEditFunnel)
+{
+    auto* transform = _entity->getComponent<TransformComponent>();
+
+    int            edits  = 0;
+    DelegateHandle handle = SceneBus::get().onComponentEdited.addLambda(
+        [&](entt::registry&, entt::entity, ya::type_index_t type) {
+            if (type == type_index_v<TransformComponent>) {
+                ++edits;
+            }
+        });
+
+    const auto read = run(R"(
+        local t = entity:getTransform()
+        return t:getPosition().x
+    )");
+    ASSERT_TRUE(read.valid()) << sol::error(read).what();
+    EXPECT_DOUBLE_EQ(read.get<double>(0), 0.0);
+    EXPECT_EQ(edits, 0);
+
+    const auto write = run(R"(
+        local t = entity:getTransform()
+        t:setPosition(Vec3.new(4, 5, 6))
+        return t:getPosition().y
+    )");
+    ASSERT_TRUE(write.valid()) << sol::error(write).what();
+    EXPECT_DOUBLE_EQ(write.get<double>(0), 5.0);
+    EXPECT_EQ(transform->getPosition(), glm::vec3(4.0f, 5.0f, 6.0f));
+    EXPECT_EQ(edits, 1);
+
+    SceneBus::get().onComponentEdited.remove(handle);
+}
+
 // TilemapComponent's movement query face (isSolid / worldToCell / cellToWorld
 // / bounds) reaches scripts through reflection like any other method, so a
 // gameplay script asks the map directly (rpg-prototype R1c).

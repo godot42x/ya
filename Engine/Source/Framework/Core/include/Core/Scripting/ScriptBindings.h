@@ -42,6 +42,9 @@ struct ScriptRefKind
     std::function<void*(const ScriptRef& ref)>   resolve;
     /// Runs after a script wrote a field of the resolved object.
     std::function<void(const ScriptRef&, void*)> afterWrite;
+    /// Runs after a script called a non-const method on the resolved object.
+    /// Const methods and native methods do not reach it.
+    std::function<void(const ScriptRef&, void*)> afterCall;
 };
 
 /// A function a module offers scripts as `<module>.<name>(...)`.

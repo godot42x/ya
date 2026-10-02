@@ -445,8 +445,16 @@ ScriptValue callMethod(const ScriptRef& ref, const ScriptMethod& method, ScriptA
     for (size_t index = 0; index < args.size(); ++index) {
         boxed.args.push_back(boxValue(function.argTypeIndices[index], args[index]));
     }
-    void*          self   = toOwner(resolve(ref), ref.type, method.ownerPath);
+    void*          object = resolve(ref);
+    void*          self   = toOwner(object, ref.type, method.ownerPath);
     const std::any result = function.invoker(self, boxed);
+    // Const is the reflected member-pointer kind (Function::isConst), not a
+    // hand flag. Native methods have no such record and stay quiet.
+    if (!function.isConst()) {
+        if (const auto& afterCall = kindOf(ref)->afterCall) {
+            afterCall(ref, object);
+        }
+    }
     return function.returnTypeIndex != 0 ? unboxValue(function.returnTypeIndex, result) : ScriptValue{};
 }
 

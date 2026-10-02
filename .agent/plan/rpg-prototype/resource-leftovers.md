@@ -2,7 +2,6 @@
 
 从 `resource-handle-events` 归档时原样搬出。不在那条计划里。
 
-- 脚本方法调用（`callMethod`）不走统一编辑漏斗：typed setter 已做组件本地失效（含 `setPath` rebind / `setModelPath` invalidate），但派生工作处理器听不到脚本驱动的 setter 调用；目前无生产脚本写模型/材质路径，潜伏态
 - tileset JSON 热重载触发源（H3 资产化后 `invalidate/reload` 语义随 AssetManager 统一，仍缺文件监听接线）
 - ref 按用途选择 colorSpace（现状统一 SRGB）
 - 派生资源 LRU（`gcDerivedResources` / `touchDerivedResourceUsage`）是否改引用计数
