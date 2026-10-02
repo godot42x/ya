@@ -333,7 +333,7 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 ## 2026-09-30 — 评审与双面 quad 修复
 
 - 评审（R0–R4 六个问题）写进 `review-2026-09-30.md`，未排期待办列在 `todo.md`；资源层每帧 resolve
-  另立计划 `../resource-handle-events/`。
+  另立计划 `../archive/resource-handle-events/`（已归档）。
 - 修复：共享 `EPrimitiveGeometry::Quad` 带正反两套绕序（`createFullscreenQuad` 12 个索引，背面给编辑器
   放置的 Quad 网格用）。三个使用方设 `cullMode None`，每个像素画两遍：`Sprite2DStage`（半透明精灵
   混合两次）、`LightStage`（延迟光照全屏 pass 片元开销翻倍，画面不变）、`ViewOverlayStage` billboard
