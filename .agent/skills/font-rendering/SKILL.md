@@ -52,8 +52,11 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
    - macOS `PingFang.ttc` / Windows `msyh.ttc` → 打包 Noto/SourceHan → 其余子集系统字体。
    - 调用方只取**第一个存在**的候选注册一次（见 `GUIAppHost.cpp`）。
 
-6. **DPI（自适应）**
-   - `FontManager::setActiveDpiScale(scale)` 设置激活 DPI；bitmap rasterSize = `round(fontSize * effectiveDpi)`，视图目标 = 逻辑 fontSize。
+6. **DPI（自适应，per-tree）**
+   - 密度是**树的事实**：`UIFrameBuildContext.fontDpi` 由 `WidgetTree::buildSnapshot` 从自己的 `_dpiScale` 提供，paint 路径字体查找走 `builder.getFont(...)`（或 `Style::resolveTextFont(style, builder.fontDpi())`）；`FontManager::setActiveDpiScale` 只是 buildSnapshot 内的快照级兜底（measure 路径；逻辑 metrics 与 dpi 无关）。`publishDpiScale` 只写树，不再写全局——同帧多树（PIE 的编辑器 chrome + 游戏 UI）各用各的密度。
+   - bitmap rasterSize = `round(fontSize * effectiveDpi)`，视图目标 = 逻辑 fontSize；`getFont/loadFont` 的 dpiScale 是 `std::optional<float>`（nullopt = 全局兜底；旧 float "1.0=全局" 怪癖已移除）。
+   - 文字 glyph 起点在 `UIFrameBuilder::addText` emit 时吸附整设备像素（Nearest 采样下小数起点会重采样图集）。
+   - 带连续缩放的宿主（GameUIHost 参考分辨率适配）必须把密度量化（1/16 档）再进缓存 key，否则 resize 每帧生成一套图集；GameUIHost 的 fit 因子走树 dpi 轴（`setDpiScale`），uiScale 留给用户缩放。
    - 当前 `GUIAppHost` 用 `presentExtent/logicalExtent` 比值设 DPI（非真机 DPR）；HiDPI 需改系统 API 取真机 DPR（架构改进项，非紧急）。
 
 7. **主字面必须打包进仓，不要探测系统字体**
