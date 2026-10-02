@@ -12,7 +12,7 @@
 - [x] 结论进 resource-system skill；IBL 基线换同尺寸截图；归档 `resource-handle-events`，遗留项移到 `resource-leftovers.md`
 
 步骤 2 治理与小项
-- [ ] 合并 rpg-prototype 与 scene-2d-world-and-game-ui 为 2D 世界线；从 game-ui-script-framework / ui-behavior-capabilities 转出 B2、`input.inject_key`、`viewAspect` 的归属
+- [x] 合并 rpg-prototype 与 scene-2d-world-and-game-ui 为 2D 世界线（scene-2d 归档，剩余项见 `plan.md` §9）；从 game-ui-script-framework / ui-behavior-capabilities 转出 B2、`input.inject_key`、`viewAspect` 的归属
 - [ ] 按键注入（`input.inject_key`）提前，补 R0–R3 行为的自动化
 - [ ] 合并 `callNamed` 与 `invoke`（B2 的前置）
 - [ ] 清空 `AssetManager::setFrameTaskSink` 悬空 sink（App 关闭时不清空）

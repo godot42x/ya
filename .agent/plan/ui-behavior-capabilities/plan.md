@@ -133,3 +133,5 @@ GameEditor，新增行为不改引擎 GUI 源码，GUI 也不认识它们。
 - `bindChunk` 时回调存为 `sol::protected_function`；路径只在出错时取；`bindSelf` 只在 `self`
   首次绑定或宿主变化时执行。
 - 验收：`TickOrderTest.*`、`GameUIScriptTest.*` 全绿；400 个世界脚本空 onUpdate 显著低于 600 µs/帧（同构建前后对比）。
+- 范围（2026-10-02）：只管生命周期回调路径 `call(ELuaScriptCallback)`。具名调用（脚本互调、`onShow` /
+  `onHide`）已合并为一个原语，归 `rpg-prototype`（评审步骤 2），本节不改它。

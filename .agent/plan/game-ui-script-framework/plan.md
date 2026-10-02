@@ -390,6 +390,10 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 
 目标：§1.1 中剩余硬编码项有正确的归属。
 
+归属（2026-10-02）：本节与 S7 决定 `onKey`、`world.spawnSprite`、`ui.*` 的语义；新形态直接登记在
+`rpg-prototype` B1 中立层，不新增手写 sol2。脚本对外接口收口（B2）与 `viewAspect` / `viewSize` 去重归
+`rpg-prototype`，见其 plan §5。
+
 - `onKey(key, pressed, repeat)` 作为世界脚本回调，按执行顺序在 EventPump 派发；删除
   `InputRouter::setGameKeyHandler` 与 `input:setKeyHandler`（H3）。命名输入动作（InputMap）
   不在本计划，只保留「取消」一个内置动作。
@@ -423,8 +427,9 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 - `Snake.lua` 删除全部 UI 字符串、`settingsOpen`、`setKeyHandler`（`onUiAction` 全局 C1c 已删）；
   通过 `ui.get("HUD"):setScore(n)`、`ui.get("GameOver"):show(score)` 驱动界面，
   界面脚本监听自己的按钮、向玩法暴露方法或由玩法 `ui.get(...)` 后监听，通过 `Script:onCancel` 打开设置。
-- 自动化（`ScriptApiRegistry`，仅验证用）：`input.inject_key`、`ui.click({entry, widget})`，
-  并提供对应 CLI 驱动脚本放 `Script/automation/greedy-snake/`。
+- 自动化（`ScriptApiRegistry`，仅验证用）：`ui.click({entry, widget})`，并提供对应 CLI 驱动脚本放
+  `Script/automation/greedy-snake/`。`input.inject_key` 自 2026-10-02 归 `rpg-prototype`，在其评审步骤 2
+  提前提供，本节直接复用。
 - 端到端脚本：开局 → 注入方向键 → 撞墙 → 截图确认 Game Over → 点击 Restart → 确认分数归零 →
   注入 Esc → 确认设置可见且蛇不动 → 点击 Fast → 关闭 → 确认恢复移动。
 - 验收：端到端脚本 exit 0；`rg -n '"HUD"|"Score"|"SpeedValue"|settingsOpen|setKeyHandler' Example/GreedSnake/Content/Scripts/Snake.lua` 无结果。

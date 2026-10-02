@@ -121,8 +121,76 @@
       "status": "planned",
       "driven_by": "D2: Lua becomes a plugin, QuickJS swappable",
       "evidence": [
-        "after game-ui-script-framework S7",
+        "owned here since 2026-10-02; waits on game-ui S5/S7 only where the same function changes",
+        "prerequisites: named-call primitive merge, script callMethod through the edit funnel (review step 2)",
         "sol2 only inside the Lua backend target"
+      ]
+    },
+    {
+      "id": "review_governance",
+      "phase": "review-2",
+      "status": "in_progress",
+      "driven_by": "review 2026-09-30 step 2: merge scene-2d line, ownership transfer, small items",
+      "evidence": [
+        "scene-2d-world-and-game-ui merged into this plan and archived (§9)",
+        "small items: frame-task sink teardown, named-call primitive, callMethod edit funnel, input.inject_key + R0-R3 automation"
+      ]
+    },
+    {
+      "id": "p0_contract",
+      "phase": "review-3",
+      "status": "not_started",
+      "driven_by": "renderer changes need a frozen contract (merged pipeline_contract_audit + mixed_world2d_visual_contract)",
+      "evidence": [
+        "P0-contract-matrix.md",
+        "answers for mixed / pure-2D / UI-only outputs; sort key layer -> y -> order"
+      ]
+    },
+    {
+      "id": "scene2d_module",
+      "phase": "review-4",
+      "status": "not_started",
+      "driven_by": "Sprite2D / Tilemap / Tileset live in ya-render-3d; TilemapComponent.cpp mixes data, queries, editing and render expansion",
+      "evidence": []
+    },
+    {
+      "id": "sprite_animation",
+      "phase": "review-4",
+      "status": "not_started",
+      "driven_by": "D-T2 gate fired: Player / Npc / Chest each compute uvRect",
+      "evidence": [
+        "plus Sprite2DComponent pivot / anchor"
+      ]
+    },
+    {
+      "id": "batching_core",
+      "phase": "review-5",
+      "status": "not_started",
+      "driven_by": "R4: per-candidate submission ~6.3ms of a 10.6ms frame",
+      "evidence": [
+        "shared with ScreenDrawList",
+        "painter order + y-sort as the sort key, delete z = base - y*eps",
+        "texture table direct mapping",
+        "tilemap static instance buffers",
+        "merged render2d_upload_submit_lifetime and legacy_pipeline_removed"
+      ]
+    },
+    {
+      "id": "pure_2d_view_family",
+      "phase": "review-6",
+      "status": "not_started",
+      "driven_by": "pure 2D views still run GBuffer / lighting / skybox / bloom",
+      "evidence": [
+        "prerequisite: render-view-family PreparedView / ViewFamily compiler"
+      ]
+    },
+    {
+      "id": "engine_capabilities",
+      "phase": "review-7",
+      "status": "not_started",
+      "driven_by": "2D gameplay framework lives in example scripts",
+      "evidence": [
+        "camera 2D fields + follow, InputMap, GUI text reveal, grid-move Lua library, remove hardcoded names"
       ]
     }
   ]

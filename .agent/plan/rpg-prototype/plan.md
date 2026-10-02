@@ -22,8 +22,8 @@
    - 玩法脚本 API 全靠手写绑定（`LuaScriptingSystem::bindReflectedComponents` 是空 TODO，
      `Sprite2DComponent` 在 Lua 只有 `bVisible/size/tint`）。改为反射驱动、与脚本语言无关的
      绑定层（§4 B1/B2）。
-   - 纯 2D 画面走完整 Deferred 管线、每个精灵一个 draw call。只在 R4 用数据决定，渲染改动交回
-     `scene-2d-world-and-game-ui`。
+   - 纯 2D 画面走完整 Deferred 管线、每个精灵一个 draw call。R4 用数据定案；2026-10-02 起
+     渲染改动也由本计划实现（合并自 `scene-2d-world-and-game-ui`，见 §9）。
 4. **Tilemap 是第一个引擎驱动点**，不是最后：Lua 生成的地板在编辑器里看不见、改不了，与
    「可编辑地图」相反。
 5. **纪律**：每个引擎改动必须写明是被哪个 checkpoint 的哪段游戏需求逼出来的；写不出来就不做。
@@ -53,8 +53,8 @@
 - 设计器与编辑器预览不运行玩法脚本。
 - 不造中心事件总线：交互是「玩家脚本找到目标实体 → 直接调用它脚本上的函数」。
 - 引擎与新玩法代码只依赖脚本中立层；只有 Lua 后端 include sol2（B1 起对新代码生效，B2 收口旧代码）。
-- 渲染管线改动（合批、纯 2D 图、纹理表）不在本计划实现，R4 只产出数据与决策，交给
-  `scene-2d-world-and-game-ui`。
+- 渲染改动遵守 §9 继承的约束：P0 契约冻结前不写新 pass / shader；GUI compose 与 Scene sprite
+  路径语义分离；不新增第二套 Scene scheduler / frame loop。
 - 不在帧录制中途重建 GPU 资源；tile 编辑后的候选刷新走下一帧提取。
 
 ## 3. 已确认的决策（2026-09-29）
@@ -64,7 +64,7 @@
 | D1 | 移动 / 碰撞模型 | 两种都可。先做 tile 通行表查询（按格移动足够）；查询面抽成小接口，以后接 AABB、Box2D 或 Jolt 只换实现，玩法脚本不变 |
 | D2 | 脚本绑定 | 反射了的字段 / 方法自动注册到脚本（可见性见 D12）。绑定描述与脚本语言无关；Lua 以后可以是插件，换 QuickJS 不应大改 |
 | D3 | 地图数据位置 | 场景即地图：tile 图层内联在 `TilemapComponent`；tileset 是独立资产 |
-| D4 | 计划位置 | 新开本目录；`scene-2d-world-and-game-ui` 只记渲染侧 |
+| D4 | 计划位置 | 新开本目录；`scene-2d-world-and-game-ui` 只记渲染侧。2026-10-02 两线合并到本目录，见 §9 |
 | D5 | 与活跃线的顺序 | 与 `game-ui-script-framework`（S4–S7）、`ui-behavior-capabilities`（C2/C3）交替推进，按 checkpoint 排；冲突规则见 §5 |
 | D6 | 绑定层范围 | 分两步：B1 中立层 + Lua 后端投影（组件字段 / 方法 + 模块函数），新代码只依赖中立层；B2 把 Lua 拆成独立 target、迁移控件句柄与 `world.*` / `ui.*` 手写函数 |
 | D7 | 素材 | 地图用仓库里的 Tiny Town；角色行走图先试 grok-4.7 生图，不合格再找 CC0 角色素材。素材随许可说明入 `Example/2DRpgPrototype/Content` |
@@ -230,26 +230,31 @@ R1b / R1c 改的正是 R1a 引入的文件，所以按一个可验收目标一�
 - 未决：`Render/Frame` 的 self 时间（4.3/5.0/2.9ms，疑似帧栅栏等待）在 CPU trace 里无法归因，
   需要 pass 级 scope 或 GPU timing（本机无 RenderDoc）——已列进交接项。
 
-### B2 — Lua 插件化与旧绑定收口（排在 game-ui S7 之后）
+### B2 — Lua 插件化与旧绑定收口（评审步骤 7；归属见 §5）
 
 - Lua 后端从 `ya-ecs-systems` 拆成独立 target；引擎、GameRuntime 只依赖中立层。
 - `world.*` / `ui.*` 手写函数、控件句柄（`LuaWidgetHandle` / `LuaWidgetScripts`）迁到中立层登记。
+- `world.viewAspect`（手写 sol2）与 `world.viewSize`（中立层）去重；新脚本函数不经 `App::get()` 取单例。
+- 前置：具名调用原语合并（`callNamed` / `invoke`）、脚本 `callMethod` 接入编辑漏斗（评审步骤 2）。
 - 验收：`rg -n "sol/|sol::" Engine/Source --glob '!**/Script/Lua/**'` 只剩 Lua 后端；
   GreedySnake、2DRpgPrototype 冒烟与脚本测试全绿。
 
 ## 5. 与活跃线的关系与冲突规则
 
-- `game-ui-script-framework`：拥有 `world.spawnSprite` / `onKey` / `ui.*` / 控件句柄直到 S7 完成。
-  本计划在此之前**不改这些函数**，新增函数一律走 B1 中立层；B2 在 S7 之后收口。该计划 §7 的
-  「反射自动绑定 Lua」「场景可编辑性（墙、取景）」由本计划接手。
-- `ui-behavior-capabilities`：C3（Lua `call()` 热路径）与 R2a 的具名互调都在 `LuaScriptingSystem::call`；
-  先落地的一方定接口，后到的一方复用，不并存两套调用路径。
-- `scene-2d-world-and-game-ui`：只接 R4 的渲染决策；本计划不写渲染 pass。
+2026-10-02 起三项归属转入本计划：B2 脚本对外接口收口、`input.inject_key`、`viewAspect` / `viewSize` 去重。
+
+- `game-ui-script-framework`：S5 / S7 仍决定 `onKey`、`world.spawnSprite`、`ui.*` 的**语义**；
+  这些函数的新形态直接登记在 B1 中立层，不再新增手写 sol2。B2 只迁移 S5 / S7 没有动到的手写函数
+  和控件句柄，并删除残留；动到同一函数时 S5 / S7 先落地。`input.inject_key` 由本计划在评审步骤 2
+  提供，S7 的端到端脚本直接复用。该计划 §7 的「反射自动绑定 Lua」「场景可编辑性（墙、取景）」由本计划接手。
+- `ui-behavior-capabilities`：C3 只管生命周期回调路径 `LuaScriptingSystem::call(ELuaScriptCallback)`；
+  具名调用（脚本互调、`onShow` / `onHide`）合并为一个原语，归本计划（评审步骤 2）。两者不并存第二套调用路径。
+- `scene-2d-world-and-game-ui`：已合并进本计划并归档，见 §9。
 - 关卡撤销：R1 复用关卡根会话的 `UndoStack`（`EditorTransformUndo` 同款），不另造撤销栈。
 
 ```text
-B1 ──► R0 ──► R1 ──► R2a ──► R2b ──► R3 ──► R4
-game-ui S7 ──► B2
+B1 ──► R0 ──► R1 ──► R2a ──► R2b ──► R3 ──► R4 ──► 评审步骤 1–7（review-2026-09-30.md 文末）
+game-ui S5 / S7 ──► B2（只在动到同一函数时等待）
 ```
 
 ## 6. 待定决策门（到对应 checkpoint 前确认）
@@ -264,11 +269,9 @@ game-ui S7 ──► B2
 ## 7. 不在本计划
 
 - 物理化的碰撞与触发（Box2D / Jolt 2D）；D1 的查询接口为它留位置。
-- 预制体（`game-ui-script-framework` D6 已延后）、命名输入动作系统（InputMap）。
+- 预制体（`game-ui-script-framework` D6 已延后）。
 - 战斗、背包、存档到磁盘。
 - 世界空间 UI（名字牌 / 血条）、UI 动画轨道。
-- 渲染管线改动（交 `scene-2d-world-and-game-ui`）。
-
 ## 8. 风险
 
 - 绑定层与 game-ui S5/S7 同时改脚本面 → §5 冲突规则；B1 对 `GameplayLua.cpp` 只改实体的传递方式（返回 / 接收实体引用）与删除 `hasSprite/getSprite`，不动函数语义。
@@ -276,3 +279,26 @@ game-ui S7 ──► B2
 - 生成的角色图像素网格不齐、调色板与 Tiny Town 不搭 → D7 回退到 CC0 素材，R0 验收看像素对齐。
 - 逐格一个候选、逐候选一次 draw，在大地图上可能吃紧 → R1 先做可见范围裁剪，R4 定合批。
 - tile 编辑触发候选重建的频率 → 候选每帧从组件提取，编辑只改组件数据，不碰 GPU 资源。
+
+## 9. 合并自 scene-2d-world-and-game-ui（2026-10-02）
+
+原计划归档在 `../archive/scene-2d-world-and-game-ui/`（已完成项的记录与验证都在那里）。
+`P0-contract-matrix.md` 随 P0 移到本目录。
+
+继续有效的架构约束（原 §0 / §2.4，开工渲染项前读原文）：
+
+- GUI compose 与 Scene sprite 是两条 graphics path：WidgetTree / UIFrameSnapshot 只进 GUI compose，
+  authored sprite 是 SceneSnapshot candidate；Render3D 不依赖 GUI Compose（已落地，P0 只做回归守卫）。
+- draw list 类型固定坐标系（`ScreenDrawList` 像素 / `WorldDrawList` 世界）；共享 pipeline 归持有
+  `IRender` 的一方，录制器归画这个目标的一方。
+- 纯 2D View 不支付 3D attachment / stage；不新增第二套 Scene scheduler / frame loop。
+- 不新增 Transform2D / Camera2D / Node2D；正交只是 CameraComponent 的 projection mode。
+
+未完成项并入评审步骤：
+
+| 原条目 | 内容 | 并入 |
+| --- | --- | --- |
+| `pipeline_contract_audit` | Render2D 调用方与 owner 表 | 步骤 3 P0 |
+| `mixed_world2d_visual_contract` | 混合 / 纯 2D / 只有 UI 三种输出的遮挡、顺序、混合、bloom、tone-map 预期，并可见验证 | 步骤 3 P0；排序键 layer → y → order 作为实例格式的一部分一起冻结 |
+| `render2d_upload_submit_lifetime` | 同一提交内不覆写上传；被引用的 buffer / 资源活到 submit 与所需 fence | 步骤 5 合批核心的验收条件 |
+| `legacy_pipeline_removed` | 删除 screen / world 混用的旧 shader 接口、`textureRef` 高位 mode 编码与陈旧调用方 | 步骤 5 收尾 |

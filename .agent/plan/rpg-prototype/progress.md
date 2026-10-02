@@ -424,3 +424,13 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   GreedySnake 与 2DRpgPrototype `--exit-after-frame=120` 退出码 0。
 - 偏离：自动化 `scene.load` 会 `stopRuntime` 且不重新 `startRuntime`，脚本因此不 tick。
   端到端不重载场景，用项目默认的 Town。`ui.query` 不在原步骤里，没有它断言不了对话正文。
+
+## 2026-10-02 — 合并 scene-2d-world-and-game-ui
+
+- 2D 世界只剩一条线：`scene-2d-world-and-game-ui` 归档到 `archive/`（归档理由 2：
+  被本线接管）；`P0-contract-matrix.md` 移到本目录。原线继续生效的约束收在
+  plan.md §9，四个未完成矩阵项映射到评审步骤 3 / 5（见 §9 表与 feature_matrix）。
+- 归属转移（plan.md §5）：命名调用原语、`input.inject_key` 归本线；game-ui S5/S7
+  仍定 `onKey` / `spawnSprite` / `ui.*` 的语义，但新形态注册在 B1 中立层；C3 只管
+  `call(ELuaScriptCallback)` 生命周期路径。
+- 偏离：无代码改动。

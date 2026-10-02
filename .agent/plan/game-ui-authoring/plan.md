@@ -23,7 +23,7 @@ Scene
 
 本计划只负责 Game UI 的 UIDocument、WidgetTree、mount、designer 和 UI compose；
 Scene 中的 authored 2D sprite、正交 camera 和 Scene runtime sprite-rendering workload 由
-.agent/plan/scene-2d-world-and-game-ui/ 负责。两条线共享 View/Present 时序，但不共享
+.agent/plan/rpg-prototype/ 负责（2026-10-02 合并了 scene-2d-world-and-game-ui）。两条线共享 View/Present 时序，但不共享
 Scene/ECS 与 WidgetTree 数据结构。
 
 ## 明确不做（本计划边界）
