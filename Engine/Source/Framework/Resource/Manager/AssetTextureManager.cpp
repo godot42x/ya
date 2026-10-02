@@ -45,7 +45,9 @@ void AssetTextureManager::clear()
         for (auto& [key, entry] : _entries) {
             (void)key;
             entry.slot->resource.reset();
-            entry.slot->state = EAssetSlotState::Failed;
+            const auto previous = entry.slot->state;
+            entry.slot->state   = EAssetSlotState::Failed;
+            accountSlotStateLocked(previous, entry.slot->state);
             ++entry.slot->generation;
             auto observers = entry.slot->observers.gather();
             updateObservers.insert(updateObservers.end(),
@@ -127,7 +129,7 @@ AssetHandle<Texture> AssetTextureManager::loadTexture(const AssetManager::Textur
         TextureEntry& entry = it->second;
         bInserted           = inserted;
         if (inserted) {
-            entry.slot       = std::make_shared<AssetSlot<Texture>>();
+            entry.slot       = makeLoadingSlotLocked();
             entry.filepath   = path;
             entry.colorSpace = colorSpace;
         }
@@ -333,7 +335,7 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
         auto [it, inserted] = _entries.try_emplace(key);
         TextureEntry& entry = it->second;
         if (inserted) {
-            entry.slot       = std::make_shared<AssetSlot<Texture>>();
+            entry.slot       = makeLoadingSlotLocked();
             entry.filepath   = path;
             entry.colorSpace = colorSpace;
         }
@@ -456,6 +458,26 @@ std::shared_ptr<Texture> AssetTextureManager::uploadTexture(const AssetManager::
     return texture;
 }
 
+std::shared_ptr<AssetSlot<Texture>> AssetTextureManager::makeLoadingSlotLocked()
+{
+    _loadingSlotCount.fetch_add(1, std::memory_order_relaxed);
+    return std::make_shared<AssetSlot<Texture>>();
+}
+
+void AssetTextureManager::accountSlotStateLocked(EAssetSlotState previous, EAssetSlotState next)
+{
+    if (previous == next) {
+        return;
+    }
+    if (previous == EAssetSlotState::Loading) {
+        const uint32_t observed = _loadingSlotCount.fetch_sub(1, std::memory_order_relaxed);
+        YA_CORE_ASSERT(observed > 0, "texture loading-slot count underflow");
+    }
+    else if (next == EAssetSlotState::Loading) {
+        _loadingSlotCount.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
 AssetTextureManager::SlotUpdate AssetTextureManager::updateSlotLocked(TextureEntry&                   entry,
                                                                            const std::shared_ptr<Texture>& texture)
 {
@@ -464,7 +486,9 @@ AssetTextureManager::SlotUpdate AssetTextureManager::updateSlotLocked(TextureEnt
         DeferredDeletionQueue::get().retire(std::move(slot.resource));
     }
     slot.resource = texture;
-    slot.state    = texture ? EAssetSlotState::Ready : EAssetSlotState::Failed;
+    const auto previous = slot.state;
+    slot.state          = texture ? EAssetSlotState::Ready : EAssetSlotState::Failed;
+    accountSlotStateLocked(previous, slot.state);
     ++slot.generation;
     SlotUpdate dispatch;
     dispatch.readyCallbacks = std::exchange(entry.readyCallbacks, {});
@@ -546,7 +570,7 @@ void AssetTextureManager::registerTexture(const std::string& name, const stdptr<
         auto [it, inserted] = _entries.try_emplace(name);
         TextureEntry& entry = it->second;
         if (inserted) {
-            entry.slot = std::make_shared<AssetSlot<Texture>>();
+            entry.slot = makeLoadingSlotLocked();
         }
         entry.loadSerial              = ++_nextLoadSerial;
         update                        = updateSlotLocked(entry, texture);
@@ -648,7 +672,9 @@ void AssetTextureManager::reload(const std::string& filepath)
             // replacement is uploaded; a Failed one retries.
             AssetSlot<Texture>& slot = *it->second.slot;
             if (slot.state == EAssetSlotState::Failed) {
-                slot.state = EAssetSlotState::Loading;
+                const auto previous = slot.state;
+                slot.state          = EAssetSlotState::Loading;
+                accountSlotStateLocked(previous, slot.state);
             }
             variants.emplace_back(key, colorSpace);
         }

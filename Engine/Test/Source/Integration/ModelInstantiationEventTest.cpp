@@ -12,6 +12,7 @@
 #include "ECS/SceneBus.h"
 #include "Hierarchy/Node.h"
 #include "Render/Adapters/ModelInstantiationSystem.h"
+#include "Render3D/ResourceResolveProbe.h"
 #include "Resource/AssetManager.h"
 #include "Scene/Core/Scene.h"
 
@@ -104,6 +105,22 @@ TEST_F(ModelInstantiationEventTest, MissingModelsStayChildlessAndPathEditsRequeu
     EXPECT_FALSE(component->isResolved());
     EXPECT_EQ(component->_modelRef.getResolveState(), EAssetResolveState::Failed);
     EXPECT_TRUE(node->getChildren().empty());
+}
+
+TEST_F(ModelInstantiationEventTest, SecondUpdateDoesNotRescanTheModelView)
+{
+    stdptr<Scene> scene{new Scene("ModelSteady")};
+    for (int i = 0; i < 4; ++i) {
+        scene->createNode("Model")->getEntity()->addComponent<ModelComponent>();
+    }
+
+    resourceResolveComponentTouches() = 0;
+    _system.setSceneProvider([&]() { return scene.get(); });
+    _system.onUpdate(0.0f);
+    const uint64_t seeded = resourceResolveComponentTouches();
+    EXPECT_EQ(seeded, 1u);
+    _system.onUpdate(0.0f);
+    EXPECT_EQ(resourceResolveComponentTouches(), seeded);
 }
 
 TEST_F(ModelInstantiationEventTest, RemovedComponentDropsItsPendingWork)

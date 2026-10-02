@@ -186,6 +186,11 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     uint64_t getResourceVersionEpoch() const { return _resourceVersionEpoch; }
     void     noteAssetEpoch();
 
+    /// Texture or model slots still in Loading. Tilesets settle synchronously
+    /// and never contribute. A component can hold a Loading slot only while
+    /// this is true.
+    bool hasOutstandingLoadingSlots() const;
+
     // ── Query ───────────────────────────────────────────────────────────
 
     std::shared_ptr<Texture> getTextureByPath(const std::string& filepath) const;

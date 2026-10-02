@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <mutex>
 #include <unordered_map>
@@ -49,6 +50,9 @@ class AssetTextureManager
     AssetManager::TextureBatchMemoryHandle _nextTextureBatchMemoryHandle = 1;
     uint64_t                               _clearGeneration             = 0;
     uint64_t                               _nextLoadSerial              = 0;
+    // Slots currently in Loading. Maintained on the slot-state transitions
+    // below; tileset slots are not included (they settle in the same call).
+    std::atomic<uint32_t>                  _loadingSlotCount{0};
     mutable std::mutex                     _mutex;
 
   public:
@@ -73,6 +77,8 @@ class AssetTextureManager
     void registerTexture(const std::string& name, const stdptr<Texture>& texture);
 
     bool isTextureLoadFailed(const std::string& filepath) const;
+    /// How many texture slots this manager still has in Loading.
+    uint32_t loadingSlotCount() const { return _loadingSlotCount.load(std::memory_order_relaxed); }
 
     size_t collectUnused(uint64_t frame);
     bool   unload(const std::string& filepath, uint64_t frame);
@@ -88,6 +94,10 @@ class AssetTextureManager
     void completeTextureLoad(const std::string& key, uint64_t serial, AssetManager::TextureMemoryBlock decoded);
     std::shared_ptr<Texture> uploadTexture(const AssetManager::TextureMemoryBlock& decoded, const std::string& label);
 
+    // A new entry slot starts Loading and is counted. Caller holds _mutex.
+    std::shared_ptr<AssetSlot<Texture>> makeLoadingSlotLocked();
+    // Keep _loadingSlotCount aligned with a state change. Caller holds _mutex.
+    void accountSlotStateLocked(EAssetSlotState previous, EAssetSlotState next);
     // Update the slot and hand the subscribers back for dispatch outside
     // the lock. A null texture marks the slot Failed. Caller holds _mutex.
     SlotUpdate updateSlotLocked(TextureEntry& entry, const std::shared_ptr<Texture>& texture);

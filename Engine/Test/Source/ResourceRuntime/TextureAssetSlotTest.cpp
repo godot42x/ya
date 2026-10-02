@@ -223,6 +223,22 @@ TEST_F(TextureAssetSlotTest, EmptyPathBindsNothing)
     EXPECT_FALSE(slot.isEnabledEffective());
 }
 
+TEST_F(TextureAssetSlotTest, LoadingSlotGateIsTrueOnlyWhileASlotIsLoading)
+{
+    EXPECT_FALSE(AssetManager::get()->hasOutstandingLoadingSlots());
+
+    TextureRef loading(kMissingA);
+    EXPECT_EQ(loading._handle->state, EAssetSlotState::Loading);
+    EXPECT_TRUE(AssetManager::get()->hasOutstandingLoadingSlots());
+
+    ASSERT_TRUE(pumpUntilUpdated(loading._handle));
+    EXPECT_EQ(loading._handle->state, EAssetSlotState::Failed);
+    EXPECT_FALSE(AssetManager::get()->hasOutstandingLoadingSlots());
+
+    AssetManager::get()->registerTexture("__slot_test_gate_ready", makeCpuOnlyTexture("gate-ready"));
+    EXPECT_FALSE(AssetManager::get()->hasOutstandingLoadingSlots());
+}
+
 TEST_F(TextureAssetSlotTest, WithoutRenderBackendRefsReadFailedAndNothingIsCached)
 {
     AssetManager::get()->setRender(nullptr);

@@ -27,7 +27,7 @@
 2. 稳态（无加载、无编辑、无热重载）时，资源准备阶段**不遍历任何组件 view**。
 3. 派生工作（材质 descriptor、网格取用、模型实例化、地形网格、环境光照预处理）只由三类事件触发：
    编辑改动、资产槽变化（加载完成 / 失败 / 热重载）、GPU 离屏任务完成。
-4. 删除 `resolve()` / `isStale()` / `AssetFuture` / `_resourceVersion` + epoch / 各处理器的扫描、审计（release）与 active 重泵循环。
+4. 删除 `resolve()` / `isStale()` / `AssetFuture` / 按路径的 `_resourceVersion` / 各处理器的扫描、审计（release）与 active 重泵循环。`_resourceVersionEpoch` 保留，作为 GUI 贴图目录的变更信号，由贴图槽更新推进。
 
 ## 3. 边界
 

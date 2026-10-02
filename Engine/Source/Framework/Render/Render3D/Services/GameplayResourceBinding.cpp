@@ -8,6 +8,7 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/SceneBus.h"
 #include "Render3D/ResourceResolveProbe.h"
+#include "Resource/AssetManager.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
@@ -169,11 +170,11 @@ void GameplayResourceBinding::prepareScenes(std::span<Scene* const> scenes, floa
             resolvePendingBillboards(work);
         }
 #ifdef BUILD_DEBUG
-        // The audit walks every material, mesh and billboard view. Steady
-        // state has already drained the dirty queues, so it does not run
-        // then. A queue that survived the pump is still loading or was
-        // re-armed, which is when the consistency check has something to see.
-        if (!work.dirtyMaterialQueue.empty() || !work.dirtyBillboardQueue.empty() || !work.dirtyMeshQueue.empty()) {
+        // The leak is a component whose slot is Loading while the entity is
+        // neither queued nor subscribed. That is visible only after the
+        // dirty queues have drained, so the queue is the wrong gate. No
+        // Loading slot anywhere means no component can be holding one.
+        if (const auto* assets = AssetManager::get(); assets && assets->hasOutstandingLoadingSlots()) {
             auditSlotSubscriptions(work);
         }
 #endif

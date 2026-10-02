@@ -181,7 +181,7 @@ scene-level environment binding 和材质纹理上传不是同一条链。环境
 3. descriptor 没刷新：看对应 consumer 的 `MaterialDescPool::flushDirty()` 是否执行。
 4. skybox / environment cubemap 没刷新：看 source 状态是否进入 `Ready`，`resultVersion` 是否推进，离屏 job 的 `onFinished` 有没有把实体入队。
 5. irradiance / prefilter 没生效：看分支状态、pending offscreen job 和 `RenderRuntime` 绑定是否同步。
-6. 稳态 prepare 又在扫组件：看是不是 seed 之外又进了 view，或 debug 审计在空队列上仍运行。
+6. 稳态 prepare 又在扫组件：看是不是 seed 之外又进了 view，或 debug 审计在已经没有任何 Loading 槽时仍跑。审计门控是贴图/模型管理器的 Loading 槽计数（tileset 同步解析，不计入），间隔 120 tick。脏队列排空不是跳过条件。断言之后重新入队，断言本身已经暴露问题，不是静默自愈。
 
 ## 相关 skills
 

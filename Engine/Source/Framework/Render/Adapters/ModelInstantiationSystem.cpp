@@ -19,6 +19,7 @@
 #include "ECS/Entity.h"
 
 #include "Render3D/Material/MaterialFactory.h"
+#include "Render3D/ResourceResolveProbe.h"
 #include "Render3D/Material/PBRMaterial.h"
 #include "Render3D/Material/PhongMaterial.h"
 #include "Resource/Model.h"
@@ -347,6 +348,7 @@ void ModelInstantiationSystem::seedSceneWork(SceneWork& work)
 {
     // Components that existed before this system subscribed to the bus (test
     // fixtures, scenes rebuilt underneath) would otherwise never enqueue.
+    noteResourceResolveView();
     for (auto&& [entity, unused] : work.registry->view<ModelComponent>().each()) {
         (void)unused;
         enqueueModel(work, entity);

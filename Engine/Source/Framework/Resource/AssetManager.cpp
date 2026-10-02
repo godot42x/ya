@@ -212,6 +212,11 @@ void AssetManager::noteAssetEpoch()
     ++_resourceVersionEpoch;
 }
 
+bool AssetManager::hasOutstandingLoadingSlots() const
+{
+    return textureManager().loadingSlotCount() != 0 || modelManager().loadingSlotCount() != 0;
+}
+
 bool AssetManager::isTextureLoadFailed(const std::string& filepath) const
 {
     return textureManager().isTextureLoadFailed(filepath);

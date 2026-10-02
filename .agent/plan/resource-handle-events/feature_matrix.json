@@ -1,6 +1,6 @@
 {
   "plan": "resource-handle-events",
-  "status": "in_progress",
+  "status": "done",
   "features": [
     {
       "id": "asset_slot",
