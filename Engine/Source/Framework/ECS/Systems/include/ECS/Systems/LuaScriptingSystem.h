@@ -55,6 +55,14 @@ enum class ELuaScriptCallback : uint8_t
     Destroy,
 };
 
+/// What a named call does when the target function fails. Lifecycle
+/// notifications swallow; script-to-script calls throw.
+enum class ENamedCallError : uint8_t
+{
+    Throw,
+    Swallow,
+};
+
 /// The one Lua state of a running game. Loads, calls, hot-reloads and
 /// destroys script instances for any host; entities of the active scene are
 /// the host it drives itself (`onUpdate`). Owns the engine bindings and the
@@ -118,17 +126,13 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     /// Call one lifecycle callback with `self` rebound by its host. Errors are
     /// logged and contained to this instance. False if the instance is not live.
     bool call(LuaScriptInstance& instance, ELuaScriptCallback callback, float deltaTime = 0.0f);
-    /// Call `self:<callback>(args...)` if the script defines it (own field or
-    /// class chain). True only when the callback returned `true`; a missing
-    /// callback, an error or any other result is false. Errors stay contained.
-    bool invoke(LuaScriptInstance& instance, const char* callback, const std::vector<sol::object>& args = {});
-    /// Named call for script-to-script interaction (rpg-prototype R2a):
     /// `self:<name>(args...)` with the host's self binding refreshed first.
-    /// Returns the first return value; nil when the script does not define
-    /// `name` or the instance is not live. A failing target raises ScriptError,
-    /// so the mistake surfaces at the caller instead of vanishing as a nil.
+    /// Returns the first return value; empty when the script does not define
+    /// `name` or the instance is not live. `onError` is Throw (raise
+    /// ScriptError) or Swallow (log and return empty). A boolean return is an
+    /// ordinary value; callers that mean "consumed" check it themselves.
     [[nodiscard]] script::ScriptValue callNamed(LuaScriptInstance& instance, const std::string& name,
-                                                script::ScriptArgs args);
+                                                script::ScriptArgs args, ENamedCallError onError);
     /// onDestroy, drop Lua handles and unregister. No-op if not live.
     void destroy(LuaScriptInstance& instance);
     /// destroy() every live instance, in load order.

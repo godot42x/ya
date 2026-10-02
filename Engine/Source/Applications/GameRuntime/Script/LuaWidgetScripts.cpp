@@ -265,7 +265,7 @@ void LuaWidgetScripts::update()
         const bool bVisible = owner->isVisibleInTree();
         if (bVisible != behavior->bWasVisible) {
             behavior->bWasVisible = bVisible;
-            (void)scripting.invoke(behavior->instance, bVisible ? "onShow" : "onHide");
+            (void)scripting.callNamed(behavior->instance, bVisible ? "onShow" : "onHide", {}, ENamedCallError::Swallow);
         }
     }
 }

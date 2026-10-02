@@ -218,16 +218,16 @@ TEST(LuaScriptHostTest, NamedCallReturnsValue)
     ASSERT_TRUE(rt.load(instance, "EchoHost"));
 
     const std::vector<script::ScriptValue> twoArgs = {script::ScriptValue{std::string("ab")}, script::ScriptValue{std::string("cd")}};
-    const script::ScriptValue              joined  = rt.runtime.callNamed(instance, "concat", twoArgs);
+    const script::ScriptValue              joined  = rt.runtime.callNamed(instance, "concat", twoArgs, ENamedCallError::Throw);
     ASSERT_TRUE(std::holds_alternative<std::string>(joined));
     EXPECT_EQ(std::get<std::string>(joined), "abcd");
 
     const std::vector<script::ScriptValue> oneArg = {script::ScriptValue{int64_t{7}}};
-    const script::ScriptValue              half   = rt.runtime.callNamed(instance, "half", oneArg);
+    const script::ScriptValue              half   = rt.runtime.callNamed(instance, "half", oneArg, ENamedCallError::Throw);
     ASSERT_TRUE(std::holds_alternative<double>(half));
     EXPECT_DOUBLE_EQ(std::get<double>(half), 3.5);
 
-    const script::ScriptValue nothing = rt.runtime.callNamed(instance, "none", {});
+    const script::ScriptValue nothing = rt.runtime.callNamed(instance, "none", {}, ENamedCallError::Throw);
     EXPECT_TRUE(std::holds_alternative<std::monostate>(nothing));
     // The host's binding ran before the call, like every lifecycle callback.
     EXPECT_EQ(instance.self.get<std::string>("hostName"), "EchoHost");
@@ -241,12 +241,12 @@ TEST(LuaScriptHostTest, NamedCallOnMissingFunctionIsNil)
     ASSERT_TRUE(rt.load(instance, "QuietHost"));
 
     const std::vector<script::ScriptValue> oneArg = {script::ScriptValue{int64_t{1}}};
-    const script::ScriptValue              answer = rt.runtime.callNamed(instance, "onInteract", oneArg);
+    const script::ScriptValue              answer = rt.runtime.callNamed(instance, "onInteract", oneArg, ENamedCallError::Throw);
     EXPECT_TRUE(std::holds_alternative<std::monostate>(answer));
 
     // A host that no longer resolves (destroyed instance) answers nil too.
     rt.runtime.destroy(instance);
-    const script::ScriptValue gone = rt.runtime.callNamed(instance, "onInit", {});
+    const script::ScriptValue gone = rt.runtime.callNamed(instance, "onInit", {}, ENamedCallError::Throw);
     EXPECT_TRUE(std::holds_alternative<std::monostate>(gone));
 }
 
@@ -263,13 +263,28 @@ TEST(LuaScriptHostTest, NamedCallPropagatesTargetErrors)
     EXPECT_THROW(
         {
             try {
-                (void)rt.runtime.callNamed(instance, "boom", {});
+                (void)rt.runtime.callNamed(instance, "boom", {}, ENamedCallError::Throw);
             } catch (const script::ScriptError& error) {
                 EXPECT_NE(std::string(error.what()).find("kaboom"), std::string::npos);
                 throw;
             }
         },
         script::ScriptError);
+}
+
+TEST(LuaScriptHostTest, NamedCallSwallowContainsTargetErrors)
+{
+    FRuntime rt;
+    const std::string path = rt.define("BrokenQuiet",
+                                       "local S = {}\n"
+                                       "function S:boom() error('kaboom') end\n"
+                                       "return S\n");
+    LuaScriptInstance& instance = rt.make(path);
+    ASSERT_TRUE(rt.load(instance, "BrokenQuietHost"));
+
+    script::ScriptValue value;
+    EXPECT_NO_THROW(value = rt.runtime.callNamed(instance, "boom", {}, ENamedCallError::Swallow));
+    EXPECT_TRUE(std::holds_alternative<std::monostate>(value));
 }
 
 } // namespace ya

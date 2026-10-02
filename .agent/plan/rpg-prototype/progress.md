@@ -372,3 +372,15 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 验证：`ya-resource-runtime-closure-test --gtest_filter=AssetManagerFrameTaskSink.*`
   1 通过。
 - 偏离：无。`resource-leftovers.md` 已删掉这一条。
+
+## 2026-10-02 — 合并 callNamed 与 invoke
+
+- 只留 `LuaScriptingSystem::callNamed(instance, name, ScriptArgs, ENamedCallError)`，
+  返回第一个 `ScriptValue`。`ENamedCallError::Throw` 抛 `ScriptError`（`entity:call` /
+  `callEntityScript`）；`Swallow` 记日志并返回空值（`onShow` / `onHide`）。
+  “返回 true 表示已消费”由调用方自己看返回值。删掉 sol 参数版 `invoke`。
+  生命周期 `call(instance, ELuaScriptCallback, dt)` 未动。`ScriptApiRegistry::invoke`
+  与 `JSScriptingSystem::invoke` 未动。
+- 验证：`ya-testing --gtest_filter=LuaScriptHostTest.*:LuaEntityScriptCallTest.*:GameUIScriptTest.*`
+  27 通过，含 `NamedCallSwallowContainsTargetErrors`。
+- 偏离：无。

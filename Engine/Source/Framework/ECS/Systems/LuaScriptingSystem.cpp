@@ -113,15 +113,16 @@ void rebindEntitySelf(sol::table& self, const ya::Entity* entity)
 
 /// `self:<name>(args...)` on a loaded instance whose function the caller has
 /// already found. Args cross as script values; the first return value comes
-/// back as one. A failing target raises, so a script-to-script call surfaces
-/// the target's mistake at the caller instead of disguising it as a nil.
-ya::ScriptValue callDefinedFunction(ya::LuaScriptInstance& script, const std::string& name, ya::script::ScriptArgs args)
+/// back as one. Throw surfaces the target's mistake at the caller; Swallow
+/// logs it and returns empty.
+ya::script::ScriptValue callDefinedFunction(ya::LuaScriptInstance& script, const std::string& name,
+                                            ya::script::ScriptArgs args, ya::ENamedCallError onError)
 {
     lua_State* L = script.self.lua_state();
     const sol::function function = functionField(sol::state_view(L), script.self, name.c_str());
     std::vector<sol::object> arguments;
     arguments.reserve(args.size());
-    for (const ya::ScriptValue& value : args) {
+    for (const ya::script::ScriptValue& value : args) {
         ya::pushLuaValue(L, value);
         arguments.emplace_back(L, -1);
         lua_pop(L, 1);
@@ -133,7 +134,17 @@ ya::ScriptValue callDefinedFunction(ya::LuaScriptInstance& script, const std::st
     const sol::protected_function_result result = protectedCall(function, self, sol::as_args(arguments));
     if (!result.valid()) {
         const sol::error error = result;
-        throw ya::script::ScriptError(std::format("call '{}' ({}): {}", name, path, error.what()));
+        switch (onError) {
+        case ya::ENamedCallError::Swallow:
+        {
+            YA_CORE_ERROR("Lua {} error ({}): {}", name, path, error.what());
+            return {};
+        } break;
+        case ya::ENamedCallError::Throw:
+        {
+            throw ya::script::ScriptError(std::format("call '{}' ({}): {}", name, path, error.what()));
+        } break;
+        }
     }
     if (result.return_count() == 0) {
         return {};
@@ -317,7 +328,7 @@ script::ScriptValue callEntityScript(Entity& entity, const std::string& name, sc
             continue;
         }
         rebindEntitySelf(script.self, &entity);
-        return callDefinedFunction(script, name, args);
+        return callDefinedFunction(script, name, args, ENamedCallError::Throw);
     }
     return {};
 }
@@ -743,36 +754,8 @@ bool LuaScriptingSystem::call(LuaScriptInstance& instance, ELuaScriptCallback ca
     return true;
 }
 
-bool LuaScriptingSystem::invoke(LuaScriptInstance& instance, const char* callback, const std::vector<sol::object>& args)
-{
-    ILuaScriptHost* host = hostOf(instance);
-    if (!host || !instance.bLoaded) {
-        return false;
-    }
-    host->bindSelf(instance.self);
-    const sol::function function = functionField(_lua, instance.self, callback);
-    if (!function.valid()) {
-        return false;
-    }
-    const std::string path = instance.scriptPath;
-    const sol::table  self = instance.self;
-    // The callback may move the instance's storage, so nothing below reads
-    // `instance` after the call.
-    const sol::protected_function_result result = protectedCall(function, self, sol::as_args(args));
-    if (!result.valid()) {
-        const sol::error error = result;
-        YA_CORE_ERROR("Lua {} error ({}): {}", callback, path, error.what());
-        return false;
-    }
-    if (result.return_count() == 0) {
-        return false;
-    }
-    const sol::object value = result.get<sol::object>();
-    return value.is<bool>() && value.as<bool>();
-}
-
 script::ScriptValue LuaScriptingSystem::callNamed(LuaScriptInstance& instance, const std::string& name,
-                                                  script::ScriptArgs args)
+                                                  script::ScriptArgs args, ENamedCallError onError)
 {
     ILuaScriptHost* host = hostOf(instance);
     if (!host || !instance.bLoaded) {
@@ -782,7 +765,7 @@ script::ScriptValue LuaScriptingSystem::callNamed(LuaScriptInstance& instance, c
     if (!functionField(_lua, instance.self, name.c_str()).valid()) {
         return {};
     }
-    return callDefinedFunction(instance, name, args);
+    return callDefinedFunction(instance, name, args, onError);
 }
 
 void LuaScriptingSystem::destroy(LuaScriptInstance& instance)
