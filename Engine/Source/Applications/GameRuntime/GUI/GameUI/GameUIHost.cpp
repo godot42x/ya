@@ -106,19 +106,25 @@ void GameUIHost::setPresentation(const Rect2D& viewportPx, const glm::vec2& fram
 {
     _viewportPx       = viewportPx;
     _framebufferScale = framebufferScale;
-    const float logicalWidth  = std::max(viewportPx.extent.x, 1.0f) / std::max(framebufferScale.x, 0.01f);
+    const float fb             = std::max(framebufferScale.x, 0.01f);
+    const float logicalWidth  = std::max(viewportPx.extent.x, 1.0f) / fb;
     const float logicalHeight = std::max(viewportPx.extent.y, 1.0f) / std::max(framebufferScale.y, 0.01f);
 
-    // Fit: the layout canvas is at least the reference on both axes, and the
-    // same factor is the uiScale the snapshot and the pointer mapping share.
+    // Fit: the layout canvas is at least the reference on both axes. The fit
+    // factor becomes the tree's font-raster density (see the setPresentation
+    // contract), quantized to 1/16 steps: a continuously resized viewport
+    // would otherwise materialize a new font atlas per frame.
     float scale = 1.0f;
     if (_referenceResolution.x > 0 && _referenceResolution.y > 0) {
         scale = std::min(logicalWidth / static_cast<float>(_referenceResolution.x),
                          logicalHeight / static_cast<float>(_referenceResolution.y));
         scale = std::max(scale, 0.01f);
     }
-    _referenceScale = scale;
-    _tree.setLogicalExtent(Extent2D::fromVec2({logicalWidth / scale, logicalHeight / scale}));
+    float density = fb * scale;
+    density = std::max(0.05f, std::floor(density * 16.0f + 0.5f) / 16.0f);
+    _referenceScale = density / fb; // the fit implied by the quantized density
+    _tree.setDpiScale(density);
+    _tree.setLogicalExtent(Extent2D::fromVec2({logicalWidth / _referenceScale, logicalHeight / _referenceScale}));
 }
 
 void GameUIHost::setController(std::unique_ptr<IGameUIController> controller)
@@ -232,8 +238,11 @@ EWidgetRouteResult GameUIHost::dispatchEvent(const Event& event, const glm::vec2
 
 UIFrameSnapshot GameUIHost::buildSnapshot()
 {
+    // uiScale stays 1: the whole logical->device mapping (viewport fit and
+    // framebuffer scale) rides the tree's dpi, so fonts rasterize at their
+    // final pixel size and text draws 1:1.
     UIFrameBuildContext ctx{
-        .uiScale         = _framebufferScale * _referenceScale,
+        .uiScale         = {1.0f, 1.0f},
         .offset          = _viewportPx.pos,
         .textureResolver = &resolveGameUITexture,
     };

@@ -81,6 +81,13 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// Bind the current game presentation area. `viewportPx` is the viewport
     /// rect in window pixels; `framebufferScale` maps logical UI pixels to
     /// window pixels (1 for a 1:1 window scale).
+    ///
+    /// The fit factor (viewport vs reference resolution) rides the tree's
+    /// DPI axis, not uiScale: fonts must re-rasterize at the final pixel size
+    /// or a scaled bitmap atlas turns text into blur (the Unity/UMG/Slate
+    /// approach -- scale the layout, re-rasterize the type). The density is
+    /// quantized to 1/16 steps so a continuous resize cannot spawn a new font
+    /// atlas per frame.
     void setPresentation(const Rect2D& viewportPx, const glm::vec2& framebufferScale);
 
     /// Reference resolution for scale-to-fit. Zero on either axis means scale 1
@@ -88,6 +95,8 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// setPresentation.
     void setReferenceResolution(glm::uvec2 resolution);
     [[nodiscard]] glm::uvec2 referenceResolution() const { return _referenceResolution; }
+    /// The fit factor actually in effect (quantized with the density, so the
+    /// mapping, the pointer mapping and the font raster all agree).
     [[nodiscard]] float referenceScale() const { return _referenceScale; }
 
     [[nodiscard]] WidgetTree& getTree() { return _tree; }

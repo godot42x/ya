@@ -242,6 +242,54 @@ TEST(GameUIHostTest, InputRoutesThroughPresentationMapping)
     EXPECT_EQ(clicks, 1);
 }
 
+// The reference fit factor rides the tree's DPI axis (fonts re-rasterize at
+// the final pixel size) and is quantized to 1/16 steps so a continuously
+// resized viewport cannot materialize a new font atlas per frame. The
+// mapping, the pointer mapping and the raster density all read the same
+// quantized density.
+TEST(GameUIHostTest, ReferenceScaleIsQuantizedAndRidesTheDpiAxis)
+{
+    GameUIHost host;
+    host.setReferenceResolution({1000, 1000});
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {400.0f, 300.0f}}, {2.0f, 2.0f});
+
+    // Logical viewport 200x150 vs reference 1000x1000: raw fit 0.15, density
+    // 2 x 0.15 = 0.3 -> quantized to 5/16. The stored fit is the one implied
+    // by the quantized density.
+    EXPECT_FLOAT_EQ(host.referenceScale(), 0.3125f / 2.0f);
+    EXPECT_FLOAT_EQ(host.getTree().getDpiScale(), 0.3125f);
+    EXPECT_FLOAT_EQ(host.getTree().getLogicalExtent().width, 200.0f / (0.3125f / 2.0f));
+    EXPECT_FLOAT_EQ(host.getTree().getLogicalExtent().height, 150.0f / (0.3125f / 2.0f));
+}
+
+TEST(GameUIHostTest, InputMappingFollowsTheQuantizedDensity)
+{
+    GameUIHost host;
+    host.setReferenceResolution({1000, 1000});
+    host.setPresentation(Rect2D{.pos = {100.0f, 50.0f}, .extent = {400.0f, 300.0f}}, {2.0f, 2.0f});
+
+    Scene scene("World");
+    host.onSceneActivated(scene);
+
+    auto button = std::make_shared<UIButton>("OK");
+    FCanvasSlotArgs buttonSlot;
+    buttonSlot.offset    = {100.0f, 100.0f};
+    buttonSlot.fixedSize = {80.0f, 32.0f};
+    host.addToWorld(scene, button, buttonSlot);
+
+    int clicks = 0;
+    button->onClicked.addLambda([&] { ++clicks; });
+    host.buildSnapshot();
+
+    // Logical (100,100) lands at window pos + logical x (fb x quantized fit)
+    // = (100,50) + (100,100) x 0.3125.
+    EXPECT_EQ(host.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), {100.0f + 31.25f, 50.0f + 31.25f}),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(host.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), {100.0f + 31.25f, 50.0f + 31.25f}),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(clicks, 1);
+}
+
 TEST(GameUIHostTest, BuildSnapshotComposesMountedWidgets)
 {
     GameUIHost host;
