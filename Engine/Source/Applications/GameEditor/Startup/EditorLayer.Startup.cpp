@@ -112,6 +112,7 @@ bool EditorLayer::openProjectInPlace(const std::string& projectPath)
         }
         _currentScenePath = descriptor.defaultScene.value_or(std::string{});
         _projectBrowserError.clear();
+        syncDesignResolutionFromProject();
         return true;
     }
     catch (const std::exception& exception) {

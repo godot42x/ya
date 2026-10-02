@@ -28,6 +28,21 @@ EditorLayer::EditorLayer(App* app)
         .isEditorOrthoXY = [this]() { return isEditorOrthoXY(); },
         .onTilesCommitted = [this]() { markSceneDirty(); },
     });
+    syncDesignResolutionFromProject();
+}
+
+void EditorLayer::syncDesignResolutionFromProject()
+{
+    glm::uvec2 size{1280, 720};
+    if (_app) {
+        if (const GameUIHost* ui = _app->getGameUIHost()) {
+            const glm::uvec2 ref = ui->referenceResolution();
+            if (ref.x > 0 && ref.y > 0) {
+                size = ref;
+            }
+        }
+    }
+    _uiDesignerSession.setDesignResolution(size);
 }
 
 bool EditorLayer::shouldCaptureInput() const

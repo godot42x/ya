@@ -101,6 +101,47 @@ TEST_F(ProjectDescriptorTest, LoadsAndValidatesProjectResources)
     EXPECT_TRUE(std::filesystem::is_regular_file(descriptor.resolvePath(*descriptor.defaultScene)));
     ASSERT_TRUE(descriptor.inputActions.contains("look"));
     EXPECT_FALSE(descriptor.icon.has_value());
+    EXPECT_FALSE(descriptor.uiReferenceResolution.has_value());
+}
+
+TEST_F(ProjectDescriptorTest, LoadsUIReferenceResolution)
+{
+    writeText(_root / "Content" / ".keep", "");
+    writeText(_root / "Game.yamodule",
+              R"({
+  "schemaVersion": 1,
+  "name": "Game",
+  "kind": "project",
+  "binary": "Game",
+  "dependencies": []
+})");
+    const auto descriptorPath = writeText(_root / "Game.yaproject",
+                                          R"({
+  "schemaVersion": 1,
+  "name": "Game",
+  "mainModule": "Game",
+  "modules": ["Game.yamodule"],
+  "plugins": [],
+  "contentDir": "Content",
+  "uiReferenceResolution": [1280, 720]
+})");
+
+    const auto descriptor = FProjectDescriptor::load(descriptorPath);
+    ASSERT_TRUE(descriptor.uiReferenceResolution.has_value());
+    EXPECT_EQ(descriptor.uiReferenceResolution->width, 1280u);
+    EXPECT_EQ(descriptor.uiReferenceResolution->height, 720u);
+
+    const auto invalidPath = writeText(_root / "Bad.yaproject",
+                                       R"({
+  "schemaVersion": 1,
+  "name": "Game",
+  "mainModule": "Game",
+  "modules": ["Game.yamodule"],
+  "plugins": [],
+  "contentDir": "Content",
+  "uiReferenceResolution": [0, 720]
+})");
+    EXPECT_THROW((void)FProjectDescriptor::load(invalidPath), std::runtime_error);
 }
 
 TEST_F(ProjectDescriptorTest, LoadsOptionalIcon)

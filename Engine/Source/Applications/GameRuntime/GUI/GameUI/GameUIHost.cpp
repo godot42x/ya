@@ -97,13 +97,28 @@ GameUIHost::GameUIHost() : _controller(std::make_unique<DefaultGameUIController>
 
 GameUIHost::~GameUIHost() = default;
 
+void GameUIHost::setReferenceResolution(glm::uvec2 resolution)
+{
+    _referenceResolution = resolution;
+}
+
 void GameUIHost::setPresentation(const Rect2D& viewportPx, const glm::vec2& framebufferScale)
 {
-    _viewportPx         = viewportPx;
-    _framebufferScale   = framebufferScale;
-    const float width   = std::max(viewportPx.extent.x, 1.0f) / std::max(framebufferScale.x, 0.01f);
-    const float height  = std::max(viewportPx.extent.y, 1.0f) / std::max(framebufferScale.y, 0.01f);
-    _tree.setLogicalExtent(Extent2D::fromVec2({width, height}));
+    _viewportPx       = viewportPx;
+    _framebufferScale = framebufferScale;
+    const float logicalWidth  = std::max(viewportPx.extent.x, 1.0f) / std::max(framebufferScale.x, 0.01f);
+    const float logicalHeight = std::max(viewportPx.extent.y, 1.0f) / std::max(framebufferScale.y, 0.01f);
+
+    // Fit: the layout canvas is at least the reference on both axes, and the
+    // same factor is the uiScale the snapshot and the pointer mapping share.
+    float scale = 1.0f;
+    if (_referenceResolution.x > 0 && _referenceResolution.y > 0) {
+        scale = std::min(logicalWidth / static_cast<float>(_referenceResolution.x),
+                         logicalHeight / static_cast<float>(_referenceResolution.y));
+        scale = std::max(scale, 0.01f);
+    }
+    _referenceScale = scale;
+    _tree.setLogicalExtent(Extent2D::fromVec2({logicalWidth / scale, logicalHeight / scale}));
 }
 
 void GameUIHost::setController(std::unique_ptr<IGameUIController> controller)
@@ -208,7 +223,8 @@ EWidgetRouteResult GameUIHost::dispatchEvent(const Event& event, const glm::vec2
         return EWidgetRouteResult::NotHandled;
     }
     const glm::vec2 logicalPoint =
-        (windowPoint - _viewportPx.pos) / glm::max(_framebufferScale, glm::vec2(0.01f));
+        (windowPoint - _viewportPx.pos) /
+        (glm::max(_framebufferScale, glm::vec2(0.01f)) * std::max(_referenceScale, 0.01f));
     WidgetEventContext ctx;
     ctx.logicalPoint = logicalPoint;
     return _tree.dispatchEvent(event, ctx);
@@ -217,7 +233,7 @@ EWidgetRouteResult GameUIHost::dispatchEvent(const Event& event, const glm::vec2
 UIFrameSnapshot GameUIHost::buildSnapshot()
 {
     UIFrameBuildContext ctx{
-        .uiScale         = _framebufferScale,
+        .uiScale         = _framebufferScale * _referenceScale,
         .offset          = _viewportPx.pos,
         .textureResolver = &resolveGameUITexture,
     };

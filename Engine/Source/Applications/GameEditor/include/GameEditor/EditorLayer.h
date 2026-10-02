@@ -404,6 +404,9 @@ struct EditorLayer
     [[nodiscard]] bool hasProjectLoaded() const;
     void               refreshProjectBrowser();
     [[nodiscard]] bool openProjectInPlace(const std::string& projectPath);
+    /// Designer's default canvas size is the project's UI reference resolution
+    /// when the project sets one.
+    void syncDesignResolutionFromProject();
 
     void                                              syncDebugSlotState(const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state);
     void                                              updateDebugSlotImageView(uint32_t slotIndex, const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state, bool bForceRefresh = false);

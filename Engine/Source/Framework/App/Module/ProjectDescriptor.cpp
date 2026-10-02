@@ -71,6 +71,20 @@ FProjectDescriptor FProjectDescriptor::load(const std::filesystem::path& path)
     if (json.contains("defaultScene")) {
         descriptor.defaultScene = json.at("defaultScene").get<std::string>();
     }
+    if (json.contains("uiReferenceResolution")) {
+        const auto& value = json.at("uiReferenceResolution");
+        if (!value.is_array() || value.size() != 2) {
+            throw std::runtime_error("Project uiReferenceResolution must be [width, height]: " + path.string());
+        }
+        FUIReferenceResolution resolution{
+            .width  = value.at(0).get<uint32_t>(),
+            .height = value.at(1).get<uint32_t>(),
+        };
+        if (resolution.width == 0 || resolution.height == 0) {
+            throw std::runtime_error("Project uiReferenceResolution must be non-zero: " + path.string());
+        }
+        descriptor.uiReferenceResolution = resolution;
+    }
     if (json.contains("icon")) {
         const auto icon = json.at("icon").get<std::string>();
         if (!icon.empty()) {

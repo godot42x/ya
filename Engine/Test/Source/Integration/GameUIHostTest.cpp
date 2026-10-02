@@ -638,4 +638,49 @@ TEST(GameUIHostTest, MountActivatesBehaviorSpecsInPreorderWithEntryContext)
     }
 }
 
+TEST(GameUIHostTest, ReferenceResolutionScalesLayoutAndPointer)
+{
+    GameUIHost host;
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
+    EXPECT_EQ(host.referenceScale(), 1.0f);
+    EXPECT_EQ(host.getTree().getLogicalExtent(), (Extent2D{.width = 800, .height = 600}));
+
+    host.setReferenceResolution({1280, 720});
+
+    // Viewport matches half the reference on both axes: scale 0.5, layout is the reference.
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {640.0f, 360.0f}}, {1.0f, 1.0f});
+    EXPECT_FLOAT_EQ(host.referenceScale(), 0.5f);
+    EXPECT_EQ(host.getTree().getLogicalExtent(), (Extent2D{.width = 1280, .height = 720}));
+
+    // Height matches the reference, width is half: width limits the fit.
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {640.0f, 720.0f}}, {1.0f, 1.0f});
+    EXPECT_FLOAT_EQ(host.referenceScale(), 0.5f);
+    EXPECT_EQ(host.getTree().getLogicalExtent(), (Extent2D{.width = 1280, .height = 1440}));
+
+    // Framebuffer scale 2 and a reference fold into one uiScale.
+    host.setPresentation(Rect2D{.pos = {10.0f, 20.0f}, .extent = {1280.0f, 720.0f}}, {2.0f, 2.0f});
+    EXPECT_FLOAT_EQ(host.referenceScale(), 0.5f);
+    EXPECT_EQ(host.getTree().getLogicalExtent(), (Extent2D{.width = 1280, .height = 720}));
+    const UIFrameSnapshot snapshot = host.buildSnapshot();
+    EXPECT_FLOAT_EQ(snapshot.buildContext.uiScale.x, 1.0f);
+    EXPECT_FLOAT_EQ(snapshot.buildContext.uiScale.y, 1.0f);
+
+    Scene scene("World");
+    host.onSceneActivated(scene);
+    auto button = std::make_shared<UIButton>("OK");
+    FCanvasSlotArgs buttonSlot;
+    buttonSlot.offset    = {100.0f, 100.0f};
+    buttonSlot.fixedSize = {80.0f, 32.0f};
+    host.addToWorld(scene, button, buttonSlot);
+    int clicks = 0;
+    button->onClicked.addLambda([&] { ++clicks; });
+    host.buildSnapshot();
+
+    // Layout (120, 110) * framebufferScale * referenceScale + viewport origin.
+    const glm::vec2 hit = glm::vec2{10.0f, 20.0f} + glm::vec2{120.0f, 110.0f} * (2.0f * 0.5f);
+    EXPECT_EQ(host.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), hit), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(host.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), hit), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(clicks, 1);
+}
+
 } // namespace ya

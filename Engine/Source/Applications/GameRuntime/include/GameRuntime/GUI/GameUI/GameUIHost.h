@@ -83,6 +83,13 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// window pixels (1 for a 1:1 window scale).
     void setPresentation(const Rect2D& viewportPx, const glm::vec2& framebufferScale);
 
+    /// Reference resolution for scale-to-fit. Zero on either axis means scale 1
+    /// (the tree lays out in viewport logical pixels). Takes effect on the next
+    /// setPresentation.
+    void setReferenceResolution(glm::uvec2 resolution);
+    [[nodiscard]] glm::uvec2 referenceResolution() const { return _referenceResolution; }
+    [[nodiscard]] float referenceScale() const { return _referenceScale; }
+
     [[nodiscard]] WidgetTree& getTree() { return _tree; }
     [[nodiscard]] const WidgetTree& getTree() const { return _tree; }
 
@@ -248,6 +255,8 @@ struct YA_GAME_RUNTIME_API GameUIHost
     Scene*                         _mountedScene = nullptr;
     Rect2D                         _viewportPx{};
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};
+    glm::uvec2                     _referenceResolution{0, 0};
+    float                          _referenceScale = 1.0f;
     EUIUpdateClock                 _updateClock = EUIUpdateClock::RealTime;
     std::vector<FMountedEntry>     _entries;
     std::vector<FPendingSpawn>     _pendingSpawns;

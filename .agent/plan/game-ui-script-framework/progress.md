@@ -215,3 +215,13 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 - plan.md §0 原则 5、§1.3、§3 帧顺序与回调表、S3 / S6 / S7 相应改写；S3 落地记录保留并标注。
 
 下一步不变：S4（排在 `ui-behavior-capabilities` C2 / C3 之后）。
+
+## 2026-10-02 — 游戏 UI 按工程参考分辨率等比适配视口
+
+完成：
+
+- `.yaproject` 可选字段 `uiReferenceResolution`（`[width, height]`）是参考分辨率的唯一来源。缺省时运行时 scale 为 1。
+- `GameUIHost` 用 fit（`min(viewportLogical / reference)`）把树布局在 `viewportLogical / scale`，同一 scale 乘进已有 `uiScale`，指针命中走同一映射。
+- 编辑器设计器的默认设计分辨率读这个值（工程没设时仍是 1280x720）。`2DRpgPrototype.yaproject` 设为 1280x720。
+
+验证：`GameUIHostTest.ReferenceResolutionScalesLayoutAndPointer`、`ProjectDescriptorTest.LoadsUIReferenceResolution`。
