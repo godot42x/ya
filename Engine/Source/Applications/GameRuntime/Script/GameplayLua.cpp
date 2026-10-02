@@ -1,4 +1,5 @@
 #include "GameRuntime/Script/GameplayLua.h"
+#include "GameRuntime/Script/GameplayScriptFunctions.h"
 
 #include "LuaWidgetHandle.h"
 #include "LuaWidgetScripts.h"
@@ -58,21 +59,6 @@ void destroySpriteEntity(Entity* entity)
     }
 }
 
-/// Width / height of the presented view. The playfield stays a fixed world
-/// rectangle; a script uses this only to fit that rectangle in frame.
-float viewAspect()
-{
-    App* app = App::get();
-    if (!app) {
-        return 1.0f;
-    }
-    const Extent2D resolution = app->getRenderServices().getRenderResolution();
-    if (resolution.width == 0 || resolution.height == 0) {
-        return 1.0f;
-    }
-    return static_cast<float>(resolution.width) / static_cast<float>(resolution.height);
-}
-
 } // namespace
 
 void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui)
@@ -125,7 +111,7 @@ void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui)
         return entity ? sol::optional<LuaScriptObject>(LuaScriptObject{script::entityRef(entity)}) : sol::nullopt;
     });
     world.set_function("destroyEntity", [](LuaScriptObject entity) { destroySpriteEntity(script::entityOf(entity.ref)); });
-    world.set_function("viewAspect", []() { return viewAspect(); });
+    world.set_function("viewAspect", []() { return gameplayViewAspect(); });
 
     ui.setBehaviorRuntime(std::make_unique<LuaWidgetScripts>(scripting, ui));
 

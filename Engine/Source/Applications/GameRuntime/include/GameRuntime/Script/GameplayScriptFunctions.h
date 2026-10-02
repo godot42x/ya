@@ -15,11 +15,18 @@ struct Scene;
 /// they act on the running App's active scene and view.
 ///
 ///   world.find(name)  -> the active scene's entity named `name`, or nil
-///   world.viewSize()  -> vec2 of the presented view in pixels
+///   world.viewSize()  -> pixel-perfect orthographic primary camera:
+///         vec2(halfWidth, halfHeight) in world units (resolveCameraViewFraming).
+///         Otherwise the presented view in pixels.
 ///   world.loadScene(path, spawnName) -> switch scenes at the frame-end
 ///       structural flush, then place the entity named "Player" on the spawn
 ///       marker `spawnName` (rpg R3)
 YA_GAME_RUNTIME_API void registerGameplayScriptFunctions();
+
+/// Width / height of the presented view. A pixel-perfect orthographic primary
+/// camera reports `halfWidth / halfHeight` from `resolveCameraViewFraming`;
+/// that ratio is the output aspect. Everyone else gets the pixel aspect.
+[[nodiscard]] YA_GAME_RUNTIME_API float gameplayViewAspect();
 
 /// Places the scene's "Player" entity on the spawn marker named `spawnName`
 /// (a Node3D at scene root; only its position is taken). A missing marker or

@@ -8,8 +8,10 @@
 #include "ECS/Component/2D/Sprite2DComponent.h"
 #include "ECS/Component/2D/TilemapComponent.h"
 #include "ECS/Entity.h"
+#include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "ECS/Systems/TransformSystem.h"
+#include "GameRuntime/Render/SceneCameraQuery.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Core/SceneScriptBindings.h"
 #include "Scene3D/TransformComponent.h"
@@ -49,15 +51,34 @@ ScriptValue find(ScriptArgs args)
     return script::entityRef(entity);
 }
 
+struct PresentedView
+{
+    glm::vec2              pixelExtent = glm::vec2(0.0f);
+    const CameraComponent* camera      = nullptr;
+};
+
+PresentedView currentPresentedView()
+{
+    PresentedView presented;
+    App*          app = App::get();
+    if (!app) {
+        return presented;
+    }
+    const Extent2D resolution = app->getRenderServices().getRenderResolution();
+    presented.pixelExtent     = glm::vec2(static_cast<float>(resolution.width), static_cast<float>(resolution.height));
+    Scene*  scene             = app->getSceneServices().getActiveScene();
+    Entity* cameraEntity      = scene ? findPrimaryCamera(*scene) : nullptr;
+    presented.camera          = cameraEntity && cameraEntity->hasComponent<CameraComponent>()
+                                    ? cameraEntity->getComponent<CameraComponent>()
+                                    : nullptr;
+    return presented;
+}
+
 ScriptValue viewSize(ScriptArgs args)
 {
     expectArgCount(args, 0);
-    App* app = App::get();
-    if (!app) {
-        return glm::vec2(0.0f);
-    }
-    const Extent2D resolution = app->getRenderServices().getRenderResolution();
-    return glm::vec2(static_cast<float>(resolution.width), static_cast<float>(resolution.height));
+    const PresentedView presented = currentPresentedView();
+    return scriptViewSize(presented.camera, presented.pixelExtent);
 }
 
 /// `map:entityAt(x, y[, except])` — the first actor in the cell (rpg-prototype
@@ -105,6 +126,12 @@ ScriptValue entityAtCell(void* self, const ScriptRef&, ScriptArgs args)
 }
 
 } // namespace
+
+float gameplayViewAspect()
+{
+    const PresentedView presented = currentPresentedView();
+    return scriptViewAspect(presented.camera, presented.pixelExtent);
+}
 
 void placePlayerAtSpawn(Scene& scene, const std::string& spawnName)
 {

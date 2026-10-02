@@ -3,7 +3,6 @@
 #include "GameEditor/EditorLayer.h"
 #include "GameRuntime/App.h"
 #include "GameRuntime/AppRenderServices.h"
-#include "GameRuntime/Render/SceneCameraQuery.h"
 
 #include "Core/Camera/Camera.h"
 #include "ECS/Systems/Components/CameraComponent.h"
@@ -46,16 +45,6 @@ namespace
         .pos    = {hostExtent.x - margin - width, hostExtent.y - margin - height},
         .extent = {width, height},
     };
-}
-
-/// The preview renders into its own small RT, so its projection follows that
-/// rect's aspect unless the camera pins its own.
-glm::mat4 cameraProjectionForOutput(const CameraComponent& camera, const glm::vec2& outputExtent)
-{
-    const float outputAspect = (outputExtent.x > 0.0f && outputExtent.y > 0.0f)
-        ? outputExtent.x / outputExtent.y
-        : camera._aspectRatio;
-    return camera.getProjection(outputAspect);
 }
 
 } // namespace
@@ -134,12 +123,14 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
         .pos    = {0.0f, 0.0f},
         .extent = previewRect.extent,
     };
+    const CameraRenderMatrices frame =
+        buildCameraRenderMatrices(*cameraComponent, previewCamera, previewOutput.extent);
     collector.declare(SceneViewDesc{
         .scene             = context.activeScene,
         .viewId            = previewKey().viewId(),
-        .view              = cameraView(*previewCamera),
-        .projection        = cameraProjectionForOutput(*cameraComponent, previewOutput.extent),
-        .cameraPos         = transformComponent->getWorldPosition(),
+        .view              = frame.view,
+        .projection        = frame.projection,
+        .cameraPos         = frame.cameraPos,
         .outputRect      = previewOutput,
         // The preview is material, not the display: it renders into its own
         // image, and the viewport chrome samples it. Declaring it

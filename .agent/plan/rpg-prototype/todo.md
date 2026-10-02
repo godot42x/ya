@@ -47,6 +47,10 @@
 并行
 - [ ] 定 flight 深度：`kFramesInFlight` 保持 1 或真 overlap（`waitFrameFence` 约 2ms/帧；归 `../render-view-family/`，本线不做）
 
+## 用户报告（2026-10-02，不在评审 7 步内）
+
+- [ ] Pixel-perfect camera：`CameraComponent` 整数缩放 + 提取期 texel 吸附（`plan.md` §10）
+
 ## 已拆出
 
 - 资源层每帧 resolve → `../archive/resource-handle-events/`（H1–H5 已完成并归档）

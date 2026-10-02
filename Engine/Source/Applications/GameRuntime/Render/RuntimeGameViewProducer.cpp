@@ -5,7 +5,6 @@
 
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "Render3D/Common/RenderFeatures.h"
-#include "Scene3D/TransformComponent.h"
 
 namespace ya
 {
@@ -33,15 +32,12 @@ void RuntimeGameViewProducer::collectSceneViews(const SceneViewCollectContext& c
 
     Entity* camera = findPrimaryCamera(*context.activeScene);
     if (camera && camera->isValid() && camera->hasComponent<CameraComponent>()) {
-        auto* cameraComponent    = camera->getComponent<CameraComponent>();
-        auto* transformComponent = camera->getComponent<TransformComponent>();
+        auto* cameraComponent = camera->getComponent<CameraComponent>();
         const glm::vec2 outputExtent = context.renderResolution.toVec2();
-        const float     outputAspect = (outputExtent.x > 0.0f && outputExtent.y > 0.0f)
-                ? outputExtent.x / outputExtent.y
-                : cameraComponent->_aspectRatio;
-        primary.view       = cameraView(*camera);
-        primary.projection = cameraComponent->getProjection(outputAspect);
-        primary.cameraPos  = transformComponent ? transformComponent->getWorldPosition() : glm::vec3(0.0f);
+        const CameraRenderMatrices frame = buildCameraRenderMatrices(*cameraComponent, camera, outputExtent);
+        primary.view       = frame.view;
+        primary.projection = frame.projection;
+        primary.cameraPos  = frame.cameraPos;
         // The view is rendered from that camera, so that camera's own generated
         // body is not part of what it sees.
         primary.viewOwner = camera->getHandle();

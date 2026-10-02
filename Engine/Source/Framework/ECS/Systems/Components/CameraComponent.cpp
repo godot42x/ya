@@ -3,6 +3,7 @@
 
 #include "Scene3D/TransformComponent.h"
 
+#include <cmath>
 #include <limits>
 
 
@@ -59,25 +60,162 @@ bool resolveOwnerWorldPose(Entity* owner, FOwnerWorldPose& out)
     return true;
 }
 
+float snapAxis(float value, float step, float phase)
+{
+    if (!(step > 0.0f)) {
+        return value;
+    }
+    const float shifted = (value - phase) / step;
+    return phase + std::floor(shifted + 0.5f) * step;
+}
+
+glm::mat4 viewFromPose(const FOwnerWorldPose& pose)
+{
+    const glm::vec3 forward = pose.rotation * FMath::Vector::WorldForward;
+    const glm::vec3 up      = pose.rotation * FMath::Vector::WorldUp;
+    return FMath::lookAt(pose.position, pose.position + forward, up);
+}
+
+glm::mat4 projectionFromFraming(const CameraComponent& camera, const CameraViewFraming& framing)
+{
+    if (camera._projection == ECameraProjection::Orthographic) {
+        return FMath::orthographic(-framing.halfWidth,
+                                   framing.halfWidth,
+                                   -framing.halfHeight,
+                                   framing.halfHeight,
+                                   camera._nearClip,
+                                   camera._farClip);
+    }
+    return FMath::perspective(glm::radians(camera._fov), framing.aspect, camera._nearClip, camera._farClip);
+}
+
+float phaseForAxis(float step, float extentPx)
+{
+    if (!(step > 0.0f) || !(extentPx >= 1.0f)) {
+        return 0.0f;
+    }
+    const int pixels = static_cast<int>(std::floor(extentPx));
+    return (pixels & 1) != 0 ? 0.5f * step : 0.0f;
+}
+
 } // namespace
+
+glm::vec3 snapWorldXY(glm::vec3 position, float step, float phaseX, float phaseY)
+{
+    position.x = snapAxis(position.x, step, phaseX);
+    position.y = snapAxis(position.y, step, phaseY);
+    return position;
+}
+
+CameraViewFraming resolveCameraViewFraming(const CameraComponent& camera,
+                                          float                  outputAspect,
+                                          glm::vec2              outputExtentPx)
+{
+    const bool bHavePixels = outputExtentPx.x > 0.0f && outputExtentPx.y >= 1.0f;
+    const bool bPixelPerfectOrtho =
+        camera._pixelPerfect && camera._projection == ECameraProjection::Orthographic && bHavePixels;
+
+    CameraViewFraming framing;
+    // A pinned aspect stretches a pixel-perfect view, so texels stop being square.
+    // The real output aspect is what keeps one texel on an integer pixel square.
+    if (bPixelPerfectOrtho) {
+        framing.aspect = outputExtentPx.x / outputExtentPx.y;
+    }
+    else if (camera._fixedAspectRatio) {
+        framing.aspect = camera._aspectRatio;
+    }
+    else {
+        framing.aspect = outputAspect > 0.0f ? outputAspect : camera._aspectRatio;
+    }
+
+    if (camera._projection != ECameraProjection::Orthographic) {
+        return framing;
+    }
+
+    const bool bCanZoom = bPixelPerfectOrtho && camera._pixelsPerUnit > 0.0f && camera._referenceHeightPx > 0.0f;
+    if (!bCanZoom) {
+        framing.halfHeight = camera._orthoHalfHeight;
+        framing.halfWidth  = framing.halfHeight * framing.aspect;
+        return framing;
+    }
+
+    const float rawZoom = std::floor(outputExtentPx.y / camera._referenceHeightPx);
+    framing.zoom        = rawZoom < 1.0f ? 1 : static_cast<int>(rawZoom);
+    const float zoom    = static_cast<float>(framing.zoom);
+    framing.halfHeight  = outputExtentPx.y / (2.0f * camera._pixelsPerUnit * zoom);
+    framing.halfWidth   = framing.halfHeight * framing.aspect;
+    framing.snapStep    = 1.0f / (camera._pixelsPerUnit * zoom);
+    framing.snapPhaseX  = phaseForAxis(framing.snapStep, outputExtentPx.x);
+    framing.snapPhaseY  = phaseForAxis(framing.snapStep, outputExtentPx.y);
+    return framing;
+}
 
 glm::mat4 CameraComponent::getProjection(float outputAspect) const
 {
-    const float aspect = _fixedAspectRatio ? _aspectRatio : outputAspect;
-    if (_projection == ECameraProjection::Orthographic) {
-        const float halfHeight = _orthoHalfHeight;
-        const float halfWidth  = halfHeight * aspect;
-        return FMath::orthographic(-halfWidth, halfWidth, -halfHeight, halfHeight, _nearClip, _farClip);
+    return projectionFromFraming(*this, resolveCameraViewFraming(*this, outputAspect, glm::vec2(0.0f)));
+}
+
+glm::mat4 CameraComponent::getProjection(glm::vec2 outputExtentPx) const
+{
+    const float outputAspect = (outputExtentPx.x > 0.0f && outputExtentPx.y > 0.0f)
+                                   ? outputExtentPx.x / outputExtentPx.y
+                                   : _aspectRatio;
+    return projectionFromFraming(*this, resolveCameraViewFraming(*this, outputAspect, outputExtentPx));
+}
+
+CameraRenderMatrices buildCameraRenderMatrices(const CameraComponent& camera, Entity* owner, glm::vec2 outputExtentPx)
+{
+    const float outputAspect = (outputExtentPx.x > 0.0f && outputExtentPx.y > 0.0f)
+                                   ? outputExtentPx.x / outputExtentPx.y
+                                   : camera._aspectRatio;
+    CameraRenderMatrices matrices;
+    matrices.framing    = resolveCameraViewFraming(camera, outputAspect, outputExtentPx);
+    matrices.projection = projectionFromFraming(camera, matrices.framing);
+    if (FOwnerWorldPose pose; resolveOwnerWorldPose(owner, pose)) {
+        if (matrices.framing.snapStep > 0.0f) {
+            pose.position = snapWorldXY(pose.position,
+                                        matrices.framing.snapStep,
+                                        matrices.framing.snapPhaseX,
+                                        matrices.framing.snapPhaseY);
+        }
+        matrices.cameraPos = pose.position;
+        matrices.view      = viewFromPose(pose);
     }
-    return FMath::perspective(glm::radians(_fov), aspect, _nearClip, _farClip);
+    return matrices;
+}
+
+glm::vec2 scriptViewSize(const CameraComponent* camera, glm::vec2 outputExtentPx)
+{
+    if (!camera || !camera->_pixelPerfect || camera->_projection != ECameraProjection::Orthographic) {
+        return outputExtentPx;
+    }
+    if (outputExtentPx.x <= 0.0f || outputExtentPx.y < 1.0f) {
+        return glm::vec2(0.0f);
+    }
+    const CameraViewFraming framing =
+        resolveCameraViewFraming(*camera, outputExtentPx.x / outputExtentPx.y, outputExtentPx);
+    return glm::vec2(framing.halfWidth, framing.halfHeight);
+}
+
+float scriptViewAspect(const CameraComponent* camera, glm::vec2 outputExtentPx)
+{
+    if (outputExtentPx.x <= 0.0f || outputExtentPx.y <= 0.0f) {
+        return 1.0f;
+    }
+    if (camera && camera->_pixelPerfect && camera->_projection == ECameraProjection::Orthographic) {
+        const CameraViewFraming framing =
+            resolveCameraViewFraming(*camera, outputExtentPx.x / outputExtentPx.y, outputExtentPx);
+        if (framing.halfHeight > 0.0f) {
+            return framing.halfWidth / framing.halfHeight;
+        }
+    }
+    return outputExtentPx.x / outputExtentPx.y;
 }
 
 glm::mat4 cameraViewFromOwner(Entity* owner)
 {
     if (FOwnerWorldPose pose; resolveOwnerWorldPose(owner, pose)) {
-        const glm::vec3 forward = pose.rotation * FMath::Vector::WorldForward;
-        const glm::vec3 up      = pose.rotation * FMath::Vector::WorldUp;
-        return FMath::lookAt(pose.position, pose.position + forward, up);
+        return viewFromPose(pose);
     }
     return glm::mat4(1.0f);
 }

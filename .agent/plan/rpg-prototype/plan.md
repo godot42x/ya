@@ -304,3 +304,20 @@ game-ui S5 / S7 ──► B2（只在动到同一函数时等待）
 | `mixed_world2d_visual_contract` | 混合 / 纯 2D / 只有 UI 三种输出的遮挡、顺序、混合、bloom、tone-map 预期，并可见验证 | 步骤 3 P0；排序键 layer → y → order 作为实例格式的一部分一起冻结 |
 | `render2d_upload_submit_lifetime` | 同一提交内不覆写上传；被引用的 buffer / 资源活到 submit 与所需 fence | 步骤 5 合批核心的验收条件 |
 | `legacy_pipeline_removed` | 删除 screen / world 混用的旧 shader 接口、`textureRef` 高位 mode 编码与陈旧调用方 | 步骤 5 收尾 |
+
+## 10. Pixel-perfect camera（用户报告 2026-10-02）
+
+不在评审 7 步里。小视口（约 596×419、500×350）下 16 texel/单位的世界发糊、闪烁：正交相机若按固定世界高度取景，最近邻且无 mip 的贴图会被非整数倍缩小，texel 被不均匀丢掉。用户选了 Unity 式 Pixel Perfect Camera，不要固定内部分辨率，也不要开 mipmap。
+
+范围：挂在现有 `CameraComponent` 上的可选开关，默认关，3D 和旧场景不变。不新增 pass / shader / 渲染路径（§2、§9：P0 冻结前禁止；步骤 5 会重写精灵 pass）。投影用的输出尺寸是该 View 的 `outputRect`（`RuntimeGameViewProducer` 的 `renderResolution`、编辑器预览的 preview extent），调用点上已经有，不是窗口尺寸。
+
+唯一函数 `resolveCameraViewFraming(camera, outputAspect, outputExtentPx)`，`buildCameraRenderMatrices` 用它生成 view / projection。渲染提取、`world.viewSize` / `world.viewAspect`、预览线框都走它，不复制公式。
+
+- 字段：`_pixelPerfect`（默认 false）、`_pixelsPerUnit`（默认 16）、`_referenceHeightPx`（默认 192）。Town / House / TownLarge 显式打开，数值保持今天 1280×720 的取景。
+- 只按高度取整数 zoom：`zoom = max(1, floor(viewHeightPx / referenceHeightPx))`。半高 = `viewHeightPx / (2 * pixelsPerUnit * zoom)`，半宽跟**真实**宽高比（pixel perfect 时不用 `_fixedAspectRatio`，否则横向会被拉开，texel 不再是正方形）。像素是正方形，所以横向的「设备像素 / texel」和纵向相同，不需要参考宽度；参考宽度只会改取景（letterbox 或多裁一刀），这一轮不引入。
+- 视口比参考矮时 zoom 停在 1，半高变小，少看一些世界，绝不低于 1 设备像素 / texel。变大时 zoom 按整数上台阶。
+- 今天脚本在 720p 的取景是 zoom 3、半高 7.5（`FollowCamera.lua` 的 16×12 格 = 192），不是场景里写死的 8。`_referenceHeightPx = 192`、`_pixelsPerUnit = 16` 与之相同。
+- 相机眼位置在 `buildCameraRenderMatrices` 里吸附，不写回 Transform。步长是一个设备像素 `1 / (pixelsPerUnit * zoom)`。视口宽或高为奇数时，该轴再偏半个设备像素，让 texel 边界落在像素边上而不是像素中心（否则 419 这种奇数高会在边界上闪）。偶数尺寸相位为 0，与今天脚本的吸附一致。
+- 精灵 / tile 的 `worldCenter` 在 `RenderFrameExtractor::extractSceneSnapshot` 里吸附到 texel 网格 `1 / pixelsPerUnit`。候选被所有 View 共享，不能按某一个 View 的 zoom 改坐标；整数 zoom 的设备像素网格是 texel 网格的细分，相机又吸附在设备像素上，所以精灵不会落在半个设备像素上。这一步在候选上，步骤 5 重写 pass 之后还在。
+- `world.viewSize()`：主相机打开 pixel perfect 且是正交时，返回 `(halfWidth, halfHeight)` 世界单位；否则仍是呈现视图像素（旧契约）。`world.viewAspect()` 仍是宽/高；pixel perfect 时等于 `halfWidth / halfHeight`。跟随脚本用它钳制地图，不再自己写 `orthoHalfHeight`、不再自己算 zoom。
+- 编辑器正交 XY 视口是 `FreeCamera`，不读这个开关。对话框不读相机。`_orthoHalfHeight` 在开关关闭时仍是半高（自动化回归场景不打开开关）。

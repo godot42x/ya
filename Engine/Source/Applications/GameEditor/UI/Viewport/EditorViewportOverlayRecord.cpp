@@ -8,6 +8,7 @@
 #include "ECS/Systems/TransformSystem.h"
 #include "Scene3D/TransformComponent.h"
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/EditorViewProducer.h"
 #include "GameRuntime/Render/SceneCameraQuery.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "Render/Resources/FontManager.h"
@@ -123,11 +124,20 @@ void recordSelectedCameraFrustum(WorldDrawList& list, EditorLayer& layer)
         return;
     }
 
+    glm::mat4 view       = cameraView(*selected);
+    glm::mat4 projection = camera->getProjection(camera->_aspectRatio);
+    // The wireframe is the frustum the preview inset shows. Pixel-perfect size
+    // depends on that inset's pixel height; a fixed aspect would not match it.
+    if (camera->_pixelPerfect) {
+        const Rect2D preview = EditorViewProducer::previewRect(layer.getViewportRect());
+        if (preview.extent.x > 0.0f && preview.extent.y >= 1.0f) {
+            const CameraRenderMatrices frame = buildCameraRenderMatrices(*camera, selected, preview.extent);
+            view                             = frame.view;
+            projection                       = frame.projection;
+        }
+    }
     std::vector<RenderOverlayLine3D> lines;
-    appendCameraFrustumOverlayLines(lines,
-                                    cameraView(*selected),
-                                    camera->getProjection(camera->_aspectRatio),
-                                    kSelectedCameraFrustumColor);
+    appendCameraFrustumOverlayLines(lines, view, projection, kSelectedCameraFrustumColor);
     for (const RenderOverlayLine3D& line : lines) {
         list.makeLine(line.from, line.to, line.color);
     }
