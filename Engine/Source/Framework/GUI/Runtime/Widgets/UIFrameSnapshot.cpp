@@ -1,5 +1,6 @@
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
+#include "GUI/Widgets/TextRaster.h"
 #include "RHI/Core/Texture.h"
 #include "Render/Resources/FontManager.h"
 
@@ -10,11 +11,7 @@ namespace ya
 
 std::shared_ptr<Font> UIFrameBuilder::getFont(const FName& fontName, uint32_t fontSize) const
 {
-    // The tree's density wins when provided; the global active DPI stays the
-    // fallback for ad-hoc builders (tests, overlays outside a snapshot).
-    if (_ctx.fontDpi > 0.0f) {
-        return FontManager::get()->getFont(fontName, fontSize, _ctx.fontDpi);
-    }
+    // Logical metrics. The device-pixel atlas is chosen in addText.
     return FontManager::get()->getFont(fontName, fontSize);
 }
 
@@ -272,18 +269,39 @@ void UIFrameBuilder::addText(const Rect2D& logicalRect,
         }
     }
 
-    const Rect2D  rect      = mapRenderTransformRect(logicalRect);
-    const glm::vec2 pos      = toPx(rect.pos);
-    const glm::vec2 size     = rect.extent * _ctx.uiScale;
-    // Texel-pinned bitmap fonts draw 1:1 against their atlas: the frame's
-    // mapping scale (quantized densities) only approximately matches
-    // round(fontSize * dpi) / fontSize, and the gap resampled the atlas.
-    const float     texelRate  = font->deviceTexelsPerLogicalPx();
-    const glm::vec2 textScale = (texelRate > 0.0f ? glm::vec2(texelRate) : _ctx.uiScale)
-                                * getRenderTransformScale();
-    glm::vec2       drawPos  = pos;
+    const Rect2D    rect = mapRenderTransformRect(logicalRect);
+    const glm::vec2 pos  = toPx(rect.pos);
+    const glm::vec2 size = rect.extent * _ctx.uiScale;
+    // A tree snapshot folded DPI into uiScale and kept the host zoom on
+    // userZoom. An ad-hoc builder (fontDpi == 0) carries the whole scale in
+    // uiScale.
+    const glm::vec2 zoom = _ctx.fontDpi > 0.0f ? _ctx.userZoom : _ctx.uiScale;
+    const float     dpi  = _ctx.fontDpi > 0.0f ? _ctx.fontDpi : 1.0f;
+    const FTextRasterPlan plan = planTextRaster(font->fontSize, zoom, dpi, getRenderTransformScale());
 
-    const float textWidth  = font->measureText(text);
+    std::shared_ptr<Font> drawFont = font;
+    glm::vec2             textScale{1.0f, 1.0f};
+    if (font->family.isValid()) {
+        if (auto raster = FontManager::get()->getFont(font->family, plan.rasterPx)) {
+            drawFont = std::move(raster);
+        }
+    }
+    if (drawFont.get() == font.get()) {
+        // No device-size atlas. A texel-pinned bitmap must not be resampled;
+        // it draws at its own pixel size. SDF and unpinned faces still scale.
+        const bool bPinnedBitmap = font->deviceTexelsPerLogicalPx() > 0.0f;
+        textScale = bPinnedBitmap ? glm::vec2(1.0f, 1.0f) : plan.deviceScale;
+    }
+    if (drawFont.get() != font.get()) {
+        if (FontManager::get()->requestGlyphs(*drawFont, text)) {
+            if (UIElement* widget = currentPaintWidget()) {
+                widget->markLayoutDirty();
+            }
+        }
+    }
+    glm::vec2 drawPos = pos;
+
+    const float textWidth  = drawFont->measureText(text);
     const float textScaleX = textScale.x;
     const float textScaleY = textScale.y;
     if (hAlign == EWidgetAlignH::Center) {
@@ -293,24 +311,22 @@ void UIFrameBuilder::addText(const Rect2D& logicalRect,
         drawPos.x += size.x - textWidth * textScaleX;
     }
     if (vAlign == EWidgetAlignV::Center) {
-        drawPos.y += (size.y - font->lineHeight * textScaleY) * 0.5f;
+        drawPos.y += (size.y - drawFont->lineHeight * textScaleY) * 0.5f;
     }
     else if (vAlign == EWidgetAlignV::Bottom) {
-        drawPos.y += size.y - font->lineHeight * textScaleY;
+        drawPos.y += size.y - drawFont->lineHeight * textScaleY;
     }
 
-    // Glyph origins snap to whole device pixels: a bitmap glyph rasterized at
-    // the density ctx.fontDpi asks for maps 1:1 onto the raster only when its
-    // start sample is integral, and a fractional start under Nearest sampling
-    // resamples the atlas (the blur this snap exists to prevent).
+    // Glyph origins snap to whole device pixels. A fractional start under
+    // Nearest sampling resamples the atlas.
     drawPos = glm::round(drawPos);
 
     UIFrameDrawItem item;
     item.kind  = UIFrameDrawItem::EKind::Text;
     item.pos   = drawPos;
-    item.size  = {textWidth * textScaleX, font->lineHeight * textScaleY};
+    item.size  = {textWidth * textScaleX, drawFont->lineHeight * textScaleY};
     item.color = mapRenderTransformColor(color);
-    item.font  = font;
+    item.font  = drawFont;
     item.text  = text;
     item.textScale = textScale;
     if (!_clipStack.empty()) {

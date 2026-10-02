@@ -44,7 +44,7 @@ float parseFloatView(std::string_view text, float fallback)
     return parsed.ec == std::errc{} ? value : fallback;
 }
 
-/// `_baseFontCache` keys are `name:size` (registerFont) or `name:size:dpi` (loadFont).
+/// `_baseFontCache` keys are `name:rasterPx`. A legacy `name:size:dpi` key still parses.
 void splitFontCacheKey(std::string_view key, std::string& stackName, float& logicalSize, float& dpi)
 {
     dpi          = 1.0f;
@@ -139,6 +139,7 @@ std::shared_ptr<Font> makeScaledView(const std::shared_ptr<Font>& base, uint32_t
     view->ascent      = base->ascent * scale;
     view->descent     = base->descent * scale;
     view->fontPath    = base->fontPath;
+    view->family      = base->family;
     view->renderMode  = base->renderMode;
     view->atlasTexture = base->atlasTexture;
     view->atlas        = base->atlas;
@@ -192,14 +193,10 @@ void FontManager::registerFont(const FName &fontName, uint32_t fontSize, std::sh
         return;
     }
     font->fontSize = static_cast<float>(fontSize);
+    font->family   = fontName;
     const std::string baseKey = makeCacheKey(fontName, fontSize);
     _baseFontCache[baseKey] = font;
     _fontCache[baseKey] = font;
-    // getFont() uses a DPI-qualified cache key so bitmap glyphs cannot be
-    // reused across device scales. Pre-registered/headless fonts have no
-    // rasterization path, so register the current active scale explicitly;
-    // otherwise every lookup misses the pre-registered font and returns null.
-    _fontCache[baseKey + std::format(":{}", _activeDpiScale)] = font;
     auto& sizes = _baseSizes[fontName];
     if (std::find(sizes.begin(), sizes.end(), fontSize) == sizes.end()) {
         sizes.push_back(fontSize);
@@ -243,74 +240,125 @@ std::shared_ptr<Font> FontManager::findBestBase(const FName &fontName, uint32_t 
     return bestBase;
 }
 
+void FontManager::rememberBitmapAtlas(const FName& fontName, uint32_t rasterPx)
+{
+    auto& lru = _bitmapAtlasLru[fontName];
+    std::erase(lru, rasterPx);
+    lru.push_back(rasterPx);
+    while (lru.size() > kMaxBitmapAtlasesPerFamily) {
+        bool bEvicted = false;
+        for (auto it = lru.begin(); it != lru.end(); ++it) {
+            if (*it == rasterPx) {
+                continue;
+            }
+            const std::string key = makeCacheKey(fontName, *it);
+            auto              baseIt = _baseFontCache.find(key);
+            // Both caches hold the atlas, so use_count 2 means nothing else
+            // (a snapshot, a view) still references it. Keep a live font and
+            // allow the cache to grow until that holder releases it.
+            if (baseIt != _baseFontCache.end() && baseIt->second && baseIt->second.use_count() > 2) {
+                continue;
+            }
+            if (baseIt != _baseFontCache.end() && baseIt->second) {
+                _pendingGlyphs.erase(baseIt->second.get());
+            }
+            _baseFontCache.erase(key);
+            _fontCache.erase(key);
+            auto& sizes = _baseSizes[fontName];
+            std::erase(sizes, *it);
+            lru.erase(it);
+            bEvicted = true;
+            break;
+        }
+        if (!bEvicted) {
+            break;
+        }
+    }
+}
+
+void FontManager::rememberSdfView(const FName& fontName, uint32_t viewPx)
+{
+    auto& lru = _sdfViewLru[fontName];
+    std::erase(lru, viewPx);
+    lru.push_back(viewPx);
+    while (lru.size() > kMaxSdfViewsPerFamily) {
+        bool bEvicted = false;
+        for (auto it = lru.begin(); it != lru.end(); ++it) {
+            if (*it == viewPx) {
+                continue;
+            }
+            const std::string key = makeCacheKey(fontName, *it);
+            auto              cacheIt = _fontCache.find(key);
+            if (cacheIt != _fontCache.end() && cacheIt->second && cacheIt->second.use_count() > 1) {
+                continue;
+            }
+            // Drop the view only. The shared SDF base stays.
+            if (cacheIt != _fontCache.end() && cacheIt->second && cacheIt->second->isView()) {
+                _pendingGlyphs.erase(cacheIt->second.get());
+                _fontCache.erase(cacheIt);
+            }
+            lru.erase(it);
+            bEvicted = true;
+            break;
+        }
+        if (!bEvicted) {
+            break;
+        }
+    }
+}
+
 std::shared_ptr<Font> FontManager::getFont(const FName &fontName, uint32_t fontSize, std::optional<float> dpiScale)
 {
-    // When no explicit dpiScale is passed, use the host-provided active device
-    // scale so bitmap glyphs are baked at the device resolution.
-    const float effectiveDpi = dpiScale.value_or(_activeDpiScale);
-    // Fast path: exact-size view or base already materialized. The raster size
-    // of a bitmap glyph depends on dpiScale, so the cache key must include it.
-    const std::string key = makeCacheKey(fontName, fontSize) + std::format(":{}", effectiveDpi);
+    (void)dpiScale;
+    if (fontSize == 0) {
+        fontSize = 1;
+    }
+    // The requested size IS the device pixel size. Zoom and DPI are folded
+    // by planTextRaster before the call, so the key is the integer size.
+    const std::string key = makeCacheKey(fontName, fontSize);
     if (auto it = _fontCache.find(key); it != _fontCache.end()) {
         return it->second;
     }
 
-    // Bitmap flavor MUST be rasterized at the exact display size. A hinted
-    // coverage glyph is pixel-aligned by construction; serving a 16px request
-    // from a 13px base via a scaled view stretches the bitmap by a
-    // non-integer factor (16/13), and nearest sampling at those fractional
-    // positions skips stroke texels — thin bars render broken/narrow and
-    // diagonal tips drop. So for bitmap sizes only an EXACT-size base may
-    // serve the request; anything else lazily rasterizes a new base. dpiScale
-    // bakes the raster at the device size so texels map 1:1 to screen pixels
-    // (no fractional minification — ImGui bakes at RasterizerDensity).
+    // A hinted bitmap is pixel-aligned. Serving 16px from a 13px atlas
+    // stretches by 16/13 and nearest sampling drops stroke texels. Only an
+    // exact-size bitmap atlas may serve the request. An unpinned
+    // pre-registered face has no file to rasterize, so a scaled view is the
+    // headless stand-in.
     if (chooseModeForSize(fontSize) == EFontRenderMode::Bitmap) {
-        // If the family already has a registered base, prefer returning a
-        // scaled view from that base. This keeps synthetic / pre-registered
-        // font tests working even when there is no file-backed rasterization
-        // path to lazily materialize from.
-        if (auto base = findBestBase(fontName, fontSize)) {
+        if (auto base = findBestBase(fontName, fontSize); base && !base->bTexelPinned) {
             auto view = makeScaledView(base, fontSize);
             _fontCache[key] = view;
             return view;
         }
-
-        // A base rasterized at a different dpiScale cannot be reused (its glyph
-        // texels are sized for another device resolution). Lazily materialize a
-        // dpi-aware base instead.
         auto pathIt = _fontPaths.find(fontName);
         if (_render && pathIt != _fontPaths.end()) {
-            YA_CORE_INFO("FontManager: lazily building bitmap base '{}' size {} dpiScale {} (exact-size device raster)",
-                         fontName.toString(), fontSize, effectiveDpi);
-            return loadFont(*_render, pathIt->second, fontName, fontSize, std::nullopt, effectiveDpi);
+            YA_CORE_INFO("FontManager: lazily building bitmap base '{}' size {} (exact device raster)",
+                         fontName.toString(), fontSize);
+            return loadFont(*_render, pathIt->second, fontName, fontSize);
         }
         YA_CORE_WARN("Font '{}' not in cache. Call loadFont first.", fontName.toString());
         return nullptr;
     }
 
-    // SDF flavor: the distance field is scale-free by design, so the closest
-    // SDF base serves the request through a scaled view.
-    auto base = findBestBase(fontName, fontSize);
-    if (base) {
-        // The view always carries the LOGICAL size. The draw side multiplies by
-        // uiScale to reach the device footprint. Bitmap bases are rasterized at
-        // the device size (so the atlas texel count == device footprint), and
-        // rescaleCharacter's view/base factor folds that device raster back down
-        // to logical; the net result is a 1:1 texel->pixel map on screen. SDF
-        // carries the logical size directly (its field is scale-free).
+    // SDF is scale-free. The closest base serves a view whose metrics are
+    // already the requested device pixels; makeText then draws at scale 1.
+    if (auto base = findBestBase(fontName, fontSize)) {
+        if (static_cast<uint32_t>(std::lround(base->fontSize)) == fontSize) {
+            _fontCache[key] = base;
+            return base;
+        }
         auto view = makeScaledView(base, fontSize);
         _fontCache[key] = view;
+        rememberSdfView(fontName, fontSize);
         return view;
     }
 
-    // No preloaded SDF base (e.g. only small bitmap bases exist). Lazily
-    // materialize one; loadFont rasterizes SDF at the 64px base and returns a
-    // scaled view for the requested size.
     auto pathIt = _fontPaths.find(fontName);
     if (_render && pathIt != _fontPaths.end()) {
         YA_CORE_INFO("FontManager: lazily building '{}' size {} (no preloaded base in that flavor)",
                      fontName.toString(), fontSize);
-        return loadFont(*_render, pathIt->second, fontName, fontSize, std::nullopt, effectiveDpi);
+        return loadFont(*_render, pathIt->second, fontName, fontSize);
     }
 
     YA_CORE_WARN("Font '{}' not in cache. Call loadFont first.", fontName.toString());
@@ -335,6 +383,8 @@ void FontManager::clearCache()
     _baseSizes.clear();
     _pendingGlyphs.clear();
     _fontPaths.clear();
+    _bitmapAtlasLru.clear();
+    _sdfViewLru.clear();
     // _render is a non-owning observer; a fresh loadFont will re-capture it.
     bumpResourceRevision();
     YA_CORE_INFO("Cleared all font cache");
@@ -344,20 +394,18 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
                                             std::optional<EFontRenderMode> mode, std::optional<float> dpiScale)
 {
     YA_PROFILE_FUNCTION_LOG();
-    // When no explicit dpiScale is passed, use the host-provided active device
-    // scale so bitmap glyphs are baked at the device resolution.
-    const float effectiveDpi = dpiScale.value_or(_activeDpiScale);
+    // `fontSize` is the device pixel size. dpiScale is not part of the key.
+    (void)dpiScale;
+    if (fontSize == 0) {
+        fontSize = 1;
+    }
     // Capture the render handle so getFont() can lazily build a base in the
     // correct flavor when none is preloaded (font-framework plan §1).
     _render = &render;
     _fontPaths[fontName] = fontPath;
 
-    // Idempotent per (name, size, dpiScale): callers can materialize multiple
-    // bases for the same font family; getFont() picks the closest base and
-    // scales from it. Bitmap raster size depends on dpiScale, so it is part of
-    // the key.
-    const std::string baseKey = makeCacheKey(fontName, fontSize) + std::format(":{}", effectiveDpi);
-    if (auto it = _baseFontCache.find(baseKey); it != _baseFontCache.end()) {
+    const std::string requestKey = makeCacheKey(fontName, fontSize);
+    if (auto it = _fontCache.find(requestKey); it != _fontCache.end()) {
         return it->second;
     }
 
@@ -366,16 +414,23 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
     // SDF distance field. An explicit mode overrides the auto split.
     const EFontRenderMode chosenMode = mode.value_or(chooseModeForSize(fontSize));
 
-    // SDF needs a rasterization base larger than the target to leave distance-
-    // field headroom; the glyphs are then served through a scaled view. Bitmap
-    // is rasterized at the exact device size (hinting nails strokes to pixels).
-    // dpiScale bakes bitmap at round(size * dpiScale) so on-screen texels map
-    // 1:1 to device pixels (no fractional minification under Nearest sampling).
+    // Bitmap is rasterized at the requested device pixel size and returned as
+    // that atlas (no scaled view). SDF keeps one base at max(kSdfBaseSize,
+    // request) and serves other sizes as views whose metrics are already the
+    // requested pixel size.
     const uint32_t rasterSize = (chosenMode == EFontRenderMode::SDF)
                                     ? std::max(kSdfBaseSize, fontSize)
-                                    : static_cast<uint32_t>(std::max(1L, std::lround(fontSize * effectiveDpi)));
-    // Remember what the atlas was baked for: bitmap text draws 1:1 against
-    // these texels (see Font::deviceTexelsPerLogicalPx).
+                                    : fontSize;
+    const std::string baseKey = makeCacheKey(fontName, rasterSize);
+    if (auto it = _baseFontCache.find(baseKey); it != _baseFontCache.end()) {
+        if (chosenMode == EFontRenderMode::Bitmap || rasterSize == fontSize) {
+            return it->second;
+        }
+        auto view = makeScaledView(it->second, fontSize);
+        _fontCache[requestKey] = view;
+        rememberSdfView(fontName, fontSize);
+        return view;
+    }
 
     FT_Library ft{};
     if (FT_Err_Ok != FT_Init_FreeType(&ft)) {
@@ -395,6 +450,7 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
     auto font        = std::make_shared<Font>();
     font->fontSize   = (float)rasterSize;
     font->fontPath   = fontPath;
+    font->family     = fontName;
     font->lineHeight = (float)(face->size->metrics.height >> 6);    // 26.6 fixed point to integer
     font->ascent     = (float)(face->size->metrics.ascender >> 6);  // Distance from baseline to top
     font->descent    = (float)(face->size->metrics.descender >> 6); // Distance from baseline to bottom (negative)
@@ -534,24 +590,20 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
         }
     }
 
-    // Every request is served through a display-size scaled view. The view
-    // carries the LOGICAL size; the draw side multiplies by uiScale to reach
-    // the device footprint. Bitmap bases are rasterized at the device size
-    // (atlas texel count == device footprint) and rescaleCharacter folds that
-    // device raster back down to logical, so the net on-screen map is 1:1 texel
-    // -> pixel (ImGui bakes at RasterizerDensity for the same reason). SDF
-    // bases are larger than the target (distance-field headroom) and carry the
-    // logical size directly (scale-free). The view layer is still required
-    // because fallback glyphs are rasterized at their OWN base sizes (e.g. 64px
-    // SDF CJK attached to a 13px bitmap base) and need per-glyph
-    // fontSize/designSize scaling in rescaleCharacter.
-    // The view carries the LOGICAL size; the draw side multiplies by uiScale to
-    // reach the device footprint. Bitmap bases are rasterized at the device
-    // size (atlas texel count == device footprint) and rescaleCharacter folds
-    // that back to logical, giving a 1:1 texel->pixel map on screen. SDF carries
-    // the logical size directly.
+    // Bitmap atlases are the draw font: fallback faces on a bitmap base are
+    // rasterized at the same pixel size (attachFallbackToBase), so there is
+    // no view to rescale them. SDF requests that differ from the base size
+    // get a view whose metrics are already `fontSize` device pixels.
+    if (chosenMode == EFontRenderMode::Bitmap) {
+        rememberBitmapAtlas(fontName, rasterSize);
+        return font;
+    }
+    if (rasterSize == fontSize) {
+        return font;
+    }
     auto view = makeScaledView(font, fontSize);
-    _fontCache[makeCacheKey(fontName, fontSize) + std::format(":{}", effectiveDpi)] = view;
+    _fontCache[makeCacheKey(fontName, fontSize)] = view;
+    rememberSdfView(fontName, fontSize);
     return view;
 }
 
@@ -790,7 +842,7 @@ bool FontManager::loadUiFontStack(IRender& render, std::string_view faceId, uint
     }
 
     // Replace, do not add: the face is identified by its name, and loadFont is
-    // idempotent per (name, size, dpi), so reloading the same name would hand
+    // idempotent per (name, raster px), so reloading the same name would hand
     // back the previously rasterized face. Drop every registration this name
     // owns - cached views, bases, its size list, its fallback defs and the
     // recorded path - then load. Dropping the cached VIEWS matters as much as
@@ -799,14 +851,30 @@ bool FontManager::loadUiFontStack(IRender& render, std::string_view faceId, uint
     const FName primaryName(DEFAULT_RUNTIME_FONT_NAME);
     const std::string prefix = primaryName.toString() + ":";
     for (auto it = _fontCache.begin(); it != _fontCache.end();) {
-        it = it->first.starts_with(prefix) ? _fontCache.erase(it) : std::next(it);
+        if (!it->first.starts_with(prefix)) {
+            ++it;
+            continue;
+        }
+        if (it->second) {
+            _pendingGlyphs.erase(it->second.get());
+        }
+        it = _fontCache.erase(it);
     }
     for (auto it = _baseFontCache.begin(); it != _baseFontCache.end();) {
-        it = it->first.starts_with(prefix) ? _baseFontCache.erase(it) : std::next(it);
+        if (!it->first.starts_with(prefix)) {
+            ++it;
+            continue;
+        }
+        if (it->second) {
+            _pendingGlyphs.erase(it->second.get());
+        }
+        it = _baseFontCache.erase(it);
     }
     _baseSizes.erase(primaryName);
     _fontPaths.erase(primaryName);
     _fallbackDefs.erase(primaryName);
+    _bitmapAtlasLru.erase(primaryName);
+    _sdfViewLru.erase(primaryName);
 
     if (!loadFont(render, primaryPath, primaryName, primarySize)) {
         YA_CORE_WARN("FontManager: failed to rasterize UI face '{}' from '{}'", faceId, primaryPath);

@@ -2015,8 +2015,9 @@ std::shared_ptr<Font> makeSnapshotTestFont(float fontSize, float advancePerChar)
         ch.uvRect   = {};
         ch.size     = {static_cast<int>(advancePerChar), static_cast<int>(fontSize)};
         ch.bearing  = {0, 0};
-        ch.advance  = {advancePerChar, 0.0f};
-        ch.bInAtlas = true;
+        ch.advance    = {advancePerChar, 0.0f};
+        ch.designSize = static_cast<uint32_t>(fontSize);
+        ch.bInAtlas   = true;
         font->characters[cp] = ch;
     }
     return font;
@@ -2057,47 +2058,43 @@ TEST(UIFrameSnapshotTest, FontManagerRevisionBumpsOnRegister)
 // Paint-time font lookups take the density from the snapshot context, not
 // from the process-global active DPI: two trees with different densities
 // (editor chrome vs game UI in PIE) interleave snapshots in one frame.
-TEST(UIFrameSnapshotTest, BuilderFontLookupFollowsTheSnapshotDensity)
+TEST(UIFrameSnapshotTest, BuilderFontLookupUsesLogicalSize)
 {
-    // Register the same face under two densities (registerFont keys the
-    // current active scale), then restore the global.
-    FontManager::get()->setActiveDpiScale(1.0f);
+    // Density is not a cache key. The same pixel size is one font; the draw
+    // path asks for a different size when the tree is scaled.
     FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 16, makeSnapshotTestFont(16.0f, 8.0f));
     auto fontAtOne = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 16, 1.0f);
-    FontManager::get()->setActiveDpiScale(2.0f);
-    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 16, makeSnapshotTestFont(16.0f, 9.0f));
     auto fontAtTwo = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 16, 2.0f);
-    FontManager::get()->setActiveDpiScale(1.0f);
     ASSERT_NE(fontAtOne, nullptr);
-    ASSERT_NE(fontAtTwo, nullptr);
-    ASSERT_NE(fontAtOne, fontAtTwo);
+    EXPECT_EQ(fontAtOne, fontAtTwo);
 
-    // The context density wins...
     UIFrameBuildContext ctxAtTwo{};
     ctxAtTwo.fontDpi = 2.0f;
-    UIFrameBuilder   builderAtTwo(ctxAtTwo);
-    EXPECT_EQ(builderAtTwo.getFont(DEFAULT_RUNTIME_FONT_NAME, 16), fontAtTwo);
+    UIFrameBuilder builderAtTwo(ctxAtTwo);
+    EXPECT_EQ(builderAtTwo.getFont(DEFAULT_RUNTIME_FONT_NAME, 16), fontAtOne);
 
-    // ...and no density means the global active DPI (1.0 here).
-    UIFrameBuildContext ctxGlobal{};
-    UIFrameBuilder      builderGlobal(ctxGlobal);
-    EXPECT_EQ(builderGlobal.getFont(DEFAULT_RUNTIME_FONT_NAME, 16), fontAtOne);
+    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 32, makeSnapshotTestFont(32.0f, 16.0f));
+    auto font32 = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 32);
 
-    // A tree-scoped snapshot carries its own density: the text item's font is
-    // the dpi-2 instance even though the global active DPI is 1.0 here. (The
-    // snapshot also re-scopes the global to the tree as the fallback for
-    // measure-time lookups -- logical metrics are dpi-independent, so that
-    // leak is harmless.)
     WidgetTree tree({.width = 200, .height = 100});
     tree.setDpiScale(2.0f);
-    auto  text = std::make_shared<UIText>("Label");
+    auto text = std::make_shared<UIText>("Label");
     text->setText("AB");
     FCanvasSlotArgs slot;
     slot.fixedSize = {100.0f, 24.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
     const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{});
-    ASSERT_FALSE(snapshot.items.empty());
-    EXPECT_EQ(snapshot.items.front().font.get(), fontAtTwo.get());
+    const UIFrameDrawItem* drawn = nullptr;
+    for (const UIFrameDrawItem& item : snapshot.items) {
+        if (item.kind == UIFrameDrawItem::EKind::Text) {
+            drawn = &item;
+            break;
+        }
+    }
+    ASSERT_NE(drawn, nullptr);
+    EXPECT_EQ(drawn->font.get(), font32.get());
+    EXPECT_FLOAT_EQ(drawn->textScale.x, 1.0f);
+    EXPECT_FLOAT_EQ(drawn->textScale.y, 1.0f);
 }
 
 // Glyph origins snap to whole device pixels: a fractional start would

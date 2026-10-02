@@ -34,6 +34,19 @@ namespace ya
 /// path, which is also what FreeType hinting is tuned for.
 constexpr uint32_t kBitmapMaxSize = 48;
 
+/// Bitmap atlases are keyed by integer pixel size, and a bitmap size only
+/// exists in 1..kBitmapMaxSize, so a family has at most this many atlases.
+/// That range is the cap: a wheel zoom or a window drag cannot allocate more
+/// than one atlas per whole pixel. Oldest unused sizes are dropped past the
+/// cap; a font still held by a snapshot is kept and the cache may grow by
+/// that one until it is released.
+constexpr uint32_t kMaxBitmapAtlasesPerFamily = kBitmapMaxSize;
+
+/// SDF sizes share one distance-field atlas and keep a per-size view (glyph
+/// metrics only). Cap the views so a zoom through large sizes does not retain
+/// every integer.
+constexpr uint32_t kMaxSdfViewsPerFamily = 32;
+
 /// Rasterization base size for SDF glyphs. SDF needs headroom around each
 /// stroke to encode a usable distance field; rasterizing at the target size
 /// (e.g. 13px) leaves no band and collapses thin strokes. 64px base + a
@@ -258,6 +271,10 @@ struct Font
     float                                   ascent     = 0;         // Distance from baseline to top of tallest glyph
     float                                   descent    = 0;         // Distance from baseline to bottom of lowest glyph
     std::string                             fontPath;               // Path to font file (primary face)
+    /// Family this face was registered or loaded under. Empty on a font that
+    /// was never handed to FontManager. Draw code uses it to fetch the
+    /// device-pixel raster of the same face.
+    FName                                   family;
     std::shared_ptr<Texture>                atlasTexture = nullptr; // deprecated mirror; use atlas (bank)
     std::shared_ptr<FontAtlasBank>          atlas        = nullptr; // Primary paged atlas (host-loaded fonts)
     std::shared_ptr<IFontRasterizer>        rasterizer   = nullptr; // Primary glyph flavor rasterizer
@@ -276,12 +293,10 @@ struct Font
     bool bTexelPinned = false;
 
     /// Device texels per logical pixel baked into this font's atlas: 1 for a
-    /// bitmap base (its logical size IS its raster size), 1/scale for a view
-    /// over one, 0 when not texel-pinned (SDF is scale-free; pre-registered
-    /// headless fonts have no raster of their own). Text draws 1:1 against the
-    /// atlas at this rate even when the frame's mapping scale only
-    /// approximately matches (quantized densities) -- the gap is what
-    /// resampled a 7px atlas into a 7.31px box and blurred it.
+    /// bitmap base (callers request the device pixel size, so the logical
+    /// size of a bitmap base IS its raster size), 1/scale for a view over
+    /// one, 0 when not texel-pinned. UI text does not draw at this rate.
+    /// `planTextRaster` requests `rasterPx` and draws bitmap runs at scale 1.
     [[nodiscard]] float deviceTexelsPerLogicalPx() const
     {
         const Font* base = isView() ? baseFont.get() : this;
@@ -403,15 +418,21 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
     // -> codepoints. Flushed by flushPendingGlyphs at a frame boundary.
     std::unordered_map<Font*, std::unordered_set<uint32_t>> _pendingGlyphs;
     bool _bNewGlyphsCaptured = false;
-    // Host-provided device-pixel scale (GUI uiScale). Bitmap glyphs are baked
-    // at round(size * _activeDpiScale) so they map 1:1 to screen pixels on
-    // Retina/HiDPI. SDF ignores it. Defaults to 1.0 (logical pixels).
+    // Retained so existing hosts still compile. Raster size is the fontSize
+    // argument; this scale is not read.
     float _activeDpiScale = 1.0f;
     uint64_t _resourceRevision = 0;
+    // Oldest raster pixel size at the front. Bitmap entries are atlases;
+    // SDF entries are views that share a base.
+    std::unordered_map<FName, std::vector<uint32_t>> _bitmapAtlasLru;
+    std::unordered_map<FName, std::vector<uint32_t>> _sdfViewLru;
 
     void bumpResourceRevision() { ++_resourceRevision; }
 
     [[nodiscard]] std::shared_ptr<Font> findBestBase(const FName& fontName, uint32_t fontSize) const;
+
+    void rememberBitmapAtlas(const FName& fontName, uint32_t rasterPx);
+    void rememberSdfView(const FName& fontName, uint32_t viewPx);
 
     // Attaches a recorded fallback face to a single base font (builds its atlas
     // + repack callback). Shared by addFontFallback (existing bases) and
@@ -436,30 +457,30 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
      * @param fontSize Font size in pixels
      * @return Shared pointer to loaded font, or nullptr on failure
      */
-    /// Load a font rasterized in `renderMode` at `fontSize`. When `mode` is
+    /// Load a font rasterized at `fontSize` device pixels. When `mode` is
     /// nullopt the manager auto-selects per the size split (font-framework
-    /// plan §1): small sizes use the hinted grayscale bitmap, larger sizes
-    /// use the SDF distance field. Small glyphs never go through SDF — its
-    /// 8-bit field cannot preserve thin strokes at tiny pixel sizes.
+    /// plan §1): sizes at or below kBitmapMaxSize use the hinted grayscale
+    /// bitmap, larger sizes use the SDF distance field. The size argument is
+    /// the raster pixel size; callers (planTextRaster) already folded zoom
+    /// and DPI into it. `dpiScale` is accepted and ignored so existing call
+    /// sites keep compiling. Bitmap requests return the atlas itself (no
+    /// scaled view). SDF requests share a base of max(kSdfBaseSize, size) and
+    /// return a view whose metrics are already `fontSize` pixels.
     std::shared_ptr<Font> loadFont(IRender& render, const std::string &fontPath, const FName &fontName, uint32_t fontSize,
                                    std::optional<EFontRenderMode> mode = std::nullopt,
                                    std::optional<float> dpiScale = std::nullopt);
 
-    /// @param dpiScale Device-pixel scale (e.g. GUI uiScale on Retina). Bitmap
-    /// glyphs are rasterized at round(fontSize * dpiScale) so texels map 1:1 to
-    /// screen pixels (no fractional minification under Nearest sampling — ImGui
-    /// bakes at RasterizerDensity for the same reason). SDF is scale-free and
-    /// ignores dpiScale. When omitted, the manager uses the active DPI scale
-    /// set by the host (setActiveDpiScale) — bitmap glyphs must be baked at the
-    /// device resolution, which the host knows, not the widget. Trees that own
-    /// a per-tree density pass it explicitly (the old "1.0 means global" quirk
-    /// made an exactly-1.0 tree unpinnable).
+    /// Font whose metrics are `fontSize` device pixels. The cache key is
+    /// name + that integer size. `dpiScale` is accepted and ignored: a second
+    /// density is a different pixel size, and the caller passes that size.
+    /// A real bitmap atlas is never scaled to a nearby size; a missing size
+    /// is rasterized. An unpinned pre-registered face (tests, no file) may
+    /// still be served as a scaled view.
     std::shared_ptr<Font> getFont(const FName &fontName, uint32_t fontSize,
                                   std::optional<float> dpiScale = std::nullopt);
 
-    /// Host sets the device-pixel scale (GUI uiScale) once per frame so bitmap
-    /// glyphs are rasterized at the correct device resolution. Widgets call
-    /// getFont(name, size) without dpiScale; the active scale is applied here.
+    /// Retained for hosts that still publish a window scale. Rasterization
+    /// does not read it; request the device pixel size from getFont/loadFont.
     void setActiveDpiScale(float dpiScale) { _activeDpiScale = dpiScale; }
     float getActiveDpiScale() const { return _activeDpiScale; }
 

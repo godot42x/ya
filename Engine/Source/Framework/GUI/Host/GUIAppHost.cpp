@@ -1191,11 +1191,6 @@ float GUIWindowHost::refreshDevicePixelRatio()
     if (_impl->tree) {
         _impl->tree->publishDpiScale(scale);
     }
-    else {
-        // init() calls this before the tree exists; the font stack is the
-        // consumer that early. The first tick publishes to the tree too.
-        FontManager::get()->setActiveDpiScale(scale);
-    }
     return scale;
 }
 

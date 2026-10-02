@@ -19,6 +19,11 @@ GlyphBitmap BitmapFontRasterizer::rasterize(FT_Face face, uint32_t codepoint, ui
     // FreeType executing it at 12ppem snaps Hiragino `4`'s crossbar off the
     // pixel grid. FORCE_AUTOHINT follows the outline; NO_BITMAP ignores sbit
     // strikes that exist only at exact ppem and would make sizes inconsistent.
+    // TARGET_NORMAL (the FT_LOAD_RENDER default) keeps more ink at 9–12px
+    // than TARGET_LIGHT or NO_HINTING: Inter 'l' at 9px is a 1px stem
+    // (coverage sum 1428) under these flags, and 2px wide with light or no
+    // hint; Hiragino 中/国 at 9px cover 5174/8456 versus ~4k/6.4k without.
+    // Do not switch the target.
     if (FT_Load_Char(face,
                      static_cast<FT_ULong>(codepoint),
                      FT_LOAD_RENDER | FT_LOAD_NO_BITMAP | FT_LOAD_FORCE_AUTOHINT)) {

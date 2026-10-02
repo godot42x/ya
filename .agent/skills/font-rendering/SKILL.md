@@ -47,17 +47,21 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
    - Apple CJK face（Hiragino 等）的 hint bytecode 是给 Core Text 写的。FreeType 在 12ppem 执行它会把 `'4'` 横笔 snap 出像素格（覆盖≈0），Fonts.app 大字预览仍是完整轮廓。这不是缺 glyph，也不是换字体能修的。
    - `FT_LOAD_TARGET_LIGHT` 对带 bytecode 的 TTF **不会**关掉 native hinter；必须 `FORCE_AUTOHINT`。
    - `NO_BITMAP` 忽略只在特定 ppem 存在的 sbit strike。
+   - 保持 `FT_LOAD_RENDER` 的默认 `TARGET_NORMAL`，不要改成 `TARGET_LIGHT` 或 `NO_HINTING`。FreeType 2.14.3 对 Inter-Regular 与 Hiragino Sans GB 的覆盖和（灰度和 / ink = 像素 > 16）：9px 的 Inter `l` 在当前 flags 下是 1×7 的实茎（sum 1428），light 与 no-hint 都是 2×7；Inter `4` 在 9px 宽度 5 对 6。Hiragino `中` 9px：5174 / 4062 / 3925；`国` 9px：8456 / 6455 / 6350（顺序：当前 flags / TARGET_LIGHT+AUTOHINT / NO_HINTING）。小字上当前 flags 的墨最多，没有 glyph 掉成 0。native bytecode 不在这组对比里，`FORCE_AUTOHINT` 继续开着。
 
 5. **候选顺序 `findCjkFontCandidates()` = best-first 单一全覆封面孔优先**
    - macOS `PingFang.ttc` / Windows `msyh.ttc` → 打包 Noto/SourceHan → 其余子集系统字体。
    - 调用方只取**第一个存在**的候选注册一次（见 `GUIAppHost.cpp`）。
 
-6. **DPI（自适应，per-tree）**
-   - 密度是**树的事实**：`UIFrameBuildContext.fontDpi` 由 `WidgetTree::buildSnapshot` 从自己的 `_dpiScale` 提供，paint 路径字体查找走 `builder.getFont(...)`（或 `Style::resolveTextFont(style, builder.fontDpi())`）；`FontManager::setActiveDpiScale` 只是 buildSnapshot 内的快照级兜底（measure 路径；逻辑 metrics 与 dpi 无关）。`publishDpiScale` 只写树，不再写全局——同帧多树（PIE 的编辑器 chrome + 游戏 UI）各用各的密度。
-   - bitmap rasterSize = `round(fontSize * effectiveDpi)`，视图目标 = 逻辑 fontSize；`getFont/loadFont` 的 dpiScale 是 `std::optional<float>`（nullopt = 全局兜底；旧 float "1.0=全局" 怪癖已移除）。
-   - 文字 glyph 起点在 `UIFrameBuilder::addText` emit 时吸附整设备像素（Nearest 采样下小数起点会重采样图集）。
-   - 带连续缩放的宿主（GameUIHost 参考分辨率适配）必须把密度量化（1/16 档）再进缓存 key，否则 resize 每帧生成一套图集；GameUIHost 的 fit 因子走树 dpi 轴（`setDpiScale`），uiScale 留给用户缩放。
-   - 当前 `GUIAppHost` 用 `presentExtent/logicalExtent` 比值设 DPI（非真机 DPR）；HiDPI 需改系统 API 取真机 DPR（架构改进项，非紧急）。
+6. **文字缩放只有一个入口：`planTextRaster`（`GUI/Widgets/TextRaster.h`）**
+   - `FTextRasterPlan planTextRaster(logicalFontPx, uiScale, dpiScale, renderScale)`。`uiScale` 是宿主缩放（设计器滚轮、用户放大），`dpiScale` 是这棵树的 logical→device，`renderScale` 是 paint 时的 render transform。em 取 **Y 轴**（字形保持方形，不按非均匀缩放拉伸）。
+   - Bitmap（`round(logical * deviceScale.y) <= 48`）栅格成 `max(那个整像素, kMinBitmapRasterPx)`，`kMinBitmapRasterPx = 9`（全脚本一个下限；请求时不知道 script）。低于下限就停在 9px，字形可能溢出或被裁切。`residual` / `textScale` 是 `{1,1}`：bitmap 图集不再重采样。SDF（> 48px）按设备像素请求，视图的度量已经是这个像素大小，`textScale` 同样是 1；SDF 视图可以缩放，bitmap 不行。`ScreenDrawList::makeText` 对 texel-pinned bitmap 的非 1 scale 直接断言。
+   - **布局/测量走逻辑字号**：`UIFrameBuilder::getFont(name, logicalSize)` 与 `resolveTextFont` 不带密度。`WidgetTree::buildSnapshot` 把宿主 zoom 留在 `userZoom`，把 `zoom * _dpiScale` 写入 `uiScale`（几何），把 `_dpiScale` 写入 `fontDpi`。`addText` 再用这三项向 `FontManager::getFont(family, rasterPx)` 取绘制字体。密度不改变 desired size。
+   - 缓存 key 是 `name:rasterPx`（整数），不是 float dpi。`getFont` / `loadFont` 的 `dpiScale` 参数保留但忽略。`setActiveDpiScale` 不再被读取。Bitmap 图集每族最多 `kMaxBitmapAtlasesPerFamily`（= `kBitmapMaxSize`，即 1..48 每个整像素一张）；超出时丢掉最旧且 `use_count` 只剩缓存自身的项，快照还握着的不逐出。SDF 视图另有 `kMaxSdfViewsPerFamily = 32`，共享同一张 SDF base。
+   - 文字 glyph 起点在 `UIFrameBuilder::addText` emit 时吸附整设备像素（Nearest 采样下小数起点会重采样图集）。笔位用栅格字体的 advance，仍在设备像素里。
+   - 设计器滚轮走同一条：预览树 dpi 保持 1，`EditorUICanvasCompositor` 把 `view.zoom` 乘进 `uiScale`，于是文字和几何一起变大，并按整像素重栅格。
+   - GameUIHost 的 fit 仍走树 dpi 轴，并且仍按 1/16 量化密度（float dpi 缓存已经不存在，这档量化会在游戏 UI 的 scale 下限里一起拿掉）。
+   - 当前 `GUIAppHost` 用 `presentExtent/logicalExtent` 比值设树 DPI（非真机 DPR）；HiDPI 需改系统 API 取真机 DPR（架构改进项，非紧急）。
 
 7. **主字面必须打包进仓，不要探测系统字体**
    - 可选的 UI 字面目录是 `FontManager::uiFontFaces()`（`FUiFontFace{id, label, bundledPath, systemPath, bMonospace}`），**按 id 选，不按路径选**：路径是机器细节，把路径存进 config 会在文件搬走或换机后失效。默认 `defaultUiFontFace()` = `"inter"` → `Engine/Content/Fonts/Inter-Regular.ttf`（Inter，OFL，随仓；许可在 `Engine/Content/Fonts/Inter-OFL.txt`）。
@@ -65,7 +69,7 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
    - 打包而不是走系统路径，是为了让文本度量在 macOS / Windows 完全一致：golden 图像与 `dumpSnapshot` 摘要是**跨 run** 比对，系统字体探测会让它们跨机漂移。JetBrains Mono 仍在 `Engine/Content/Fonts/`，给需要等宽的 code / console 面用。
    - 注册名 `DEFAULT_RUNTIME_FONT_NAME`（`RuntimeDefault`）**不要改**：大量测试用它注册合成字体。换字面 = 换 catalog id，不是换这个名字。第二个已注册 family 是 `MONO_UI_FONT_NAME`（`RuntimeMono`→ JetBrains Mono）。
    - **只有一个入口**：`FontManager::loadUiFontStack(render, faceId, size)` —— 它按 id 建**整个栈**（主字面 + 一个 CJK fallback + 内置 emoji + mono family）。GUI host（`FGUIWindowHostConfig::uiFontFace`）与 game/editor runtime（`ui_font_settings::apply`）都走它，不要再各自拼字体栈。曾经 runtime 单独去 `findCjkFontCandidates()` 里挑第一个存在的主字面——那些字面**不是只有 CJK**，它们自带一套拉丁设计，于是同一套框架下编辑器把英文渲染成 Hiragino/PingFang（Windows 上是 msyh），跟 host 不一致，而且在没有全覆封面孔的机器上会落到更老的系统字体。
-   - **重复调用 = 换字面，不是空操作**：`loadFont` 按 (name,size,dpi) 幂等，所以只再 load 一次会把旧字面**原样返回**、切换静默失效。`loadUiFontStack` 先按 name 前缀逐出 `_fontCache` / `_baseFontCache`（**视图也要逐出**：它持有旧 base 的 shared_ptr，留着就等于旧字面还活着）、`_baseSizes` / `_fontPaths` / `_fallbackDefs`，再 load，最后 bump `resourceRevision()`。`WidgetTree` 在下一次 `buildSnapshot` 开头 poll 到这个 revision，整树重测文字度量——所以换字面**不需要**额外的 dirty 钩子。
+   - **重复调用 = 换字面，不是空操作**：`loadFont` 按 (name, raster px) 幂等，所以只再 load 一次会把旧字面**原样返回**、切换静默失效。`loadUiFontStack` 先按 name 前缀逐出 `_fontCache` / `_baseFontCache`（**视图也要逐出**：它持有旧 base 的 shared_ptr，留着就等于旧字面还活着）、`_baseSizes` / `_fontPaths` / `_fallbackDefs`，再 load，最后 bump `resourceRevision()`。`WidgetTree` 在下一次 `buildSnapshot` 开头 poll 到这个 revision，整树重测文字度量——所以换字面**不需要**额外的 dirty 钩子。
    - **用户选择是 app 策略，不是 framework 机制**：`GameRuntime/Utility/UiFontSettings.h`（`faceId` / `setFaceId` / `availableFaces` / `apply` / `applyAndStore`，config document `ui`，key `font.face`）。存的是**id**；未知/过期的 id 回落到默认（而不是让外壳没有文字），且不覆写存值，这样重装字面后还能回来。`applyAndStore` **先加载成功再落盘**：会持久化一个本机渲染不出来的字面是最坏的结果。
    - **单控件换族**走 `FTextStyle::fontFamily`（配 `UIText::setFontFamily`）。空 = 引擎 UI 主字面，所以「换默认字面」是整壳一次动作，而不是扫遍每个 style key。paint 与 measure **必须**共用 `resolveTextFont(style)`，否则度量与绘制会用不同字面。族名没注册时**回落**到 UI 主字面并 warn —— 族是可选精修，拼错不该让 label 变成空白。
 

@@ -42,15 +42,14 @@ struct Font;
 /// The host owns the mapping (viewport rect, framebuffer scale, editor preview
 /// offset/scale); widgets never see ImGui or window coordinates.
 ///
-/// `uiScale` is the USER ZOOM (app/settings-level magnification, default 1.0).
-/// It is orthogonal to the device-pixel-ratio DPI mapping, which WidgetTree
-/// carries separately (setDpiScale) and folds in internally to produce the
-/// final logical->target-pixel factor (= uiScale * dpiScale). Keeping the two
-/// apart means a DPI change on monitor move never depends on, or mutates, the
-/// user's chosen zoom, and vice-versa.
+/// `uiScale` on a WidgetTree snapshot is the final logical->target-pixel
+/// factor (user zoom * tree DPI). `userZoom` keeps the host zoom that went
+/// into that product so text can re-rasterize from zoom and DPI separately.
+/// Ad-hoc builders leave `fontDpi` at 0 and `userZoom` at 1; their `uiScale`
+/// is the whole device scale.
 struct UIFrameBuildContext
 {
-    glm::vec2 uiScale = {1.0f, 1.0f}; // user zoom: logical px -> (pre-DPI) target px
+    glm::vec2 uiScale = {1.0f, 1.0f}; // logical px -> target px (zoom * DPI inside a tree)
     glm::vec2 offset  = {0.0f, 0.0f}; // render-target px origin of logical (0,0)
 
     /// Host-provided monotonic generation token: bump when the texture
@@ -87,12 +86,17 @@ struct UIFrameBuildContext
     /// The policy lives with the host -- the framework only runs the gate.
     std::function<bool(const UIElement&)> subtreePaintFilter;
 
-    /// This tree's font-raster density (device pixels per logical font pixel).
-    /// 0 = not provided: font lookups fall back to FontManager's global active
-    /// DPI. WidgetTree::buildSnapshot always provides its own, so two trees
-    /// with different densities painted in one frame each rasterize at their
-    /// own size instead of racing a process-global.
+    /// This tree's device pixels per logical pixel. 0 = ad-hoc builder: text
+    /// follows `uiScale` alone. WidgetTree::buildSnapshot always sets it, so
+    /// two trees painted in one frame each rasterize at their own size.
+    /// Measure stays on the logical font; `planTextRaster` folds this with
+    /// `userZoom` at draw time.
     float fontDpi = 0.0f;
+
+    /// Host zoom before this tree folded DPI into `uiScale`. Meaningful when
+    /// `fontDpi > 0`. Ad-hoc builders leave it at 1 and put the whole scale
+    /// in `uiScale`.
+    glm::vec2 userZoom = {1.0f, 1.0f};
 };
 
 /// One resolved draw command (render-target pixels, top-left origin, Y down).
@@ -329,16 +333,15 @@ class YA_GUI_API UIFrameBuilder
         return _ctx.subtreePaintFilter;
     }
 
-    /// Font lookup for paint paths. Paint-time font resolution must go through
-    /// here rather than FontManager directly: the raster density is a property
-    /// of the tree being painted (ctx.fontDpi), and a process-global active
-    /// DPI cannot answer for two trees with different densities in one frame.
-    /// Returns null like FontManager::getFont when the font is unavailable.
+    /// Logical-size font for measure and for the face `addText` then re-rasterizes
+    /// at the device pixel size. The size argument is logical pixels; density
+    /// is applied by `planTextRaster`, not by this lookup.
     std::shared_ptr<Font> getFont(const FName& fontName, uint32_t fontSize) const;
 
-    /// The tree's font density when provided (nullopt = fall back to the
-    /// global active DPI). For helpers that resolve fonts on the caller's
-    /// behalf (e.g. Style::resolveTextFont).
+    /// The tree's device-pixel ratio when this snapshot came from a tree
+    /// (nullopt on an ad-hoc builder). Helpers that resolve fonts
+    /// (Style::resolveTextFont) may pass it; FontManager ignores it and
+    /// `addText` is what re-rasterizes.
     [[nodiscard]] std::optional<float> fontDpi() const
     {
         if (_ctx.fontDpi > 0.0f) {

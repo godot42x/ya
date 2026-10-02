@@ -54,7 +54,6 @@
 #include "RHI/Core/Texture.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/CommandBuffer.h"
-#include "Render/Resources/FontManager.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
@@ -546,9 +545,6 @@ void EditorSurface::applyWindowMetrics(const EditorWindowMetrics& metrics)
         return;
     }
     applyEditorWindowMetrics(*_tree, metrics);
-    if (auto* fonts = FontManager::get()) {
-        fonts->setActiveDpiScale(_tree->getDpiScale());
-    }
 }
 
 void EditorSurface::persistDockLayouts()

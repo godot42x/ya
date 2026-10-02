@@ -903,18 +903,15 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
         _lastTextureEpoch = epoch;
     }
 
-    // Pass the DPI-folded scale to the builder: uiScale is the single
-    // logical->target-pixel factor it reads. User zoom (ctx.uiScale) and DPI
-    // (_dpiScale) stay decoupled up to this point. Font lookups take THIS
-    // tree's density from the context; the global active DPI is scoped to the
-    // snapshot only as a fallback for measure-time and out-of-snapshot lookups
-    // (logical font metrics are dpi-independent, so those calls never need a
-    // specific density).
+    // uiScale is the single logical->target-pixel factor geometry reads
+    // (user zoom * DPI). userZoom keeps the host zoom so planTextRaster can
+    // fold zoom and DPI into one integer raster size. Measure stays on the
+    // logical font; nothing here writes a process-global DPI.
     UIFrameBuildContext effectiveCtx = ctx;
+    effectiveCtx.userZoom = ctx.uiScale;
     effectiveCtx.uiScale = effectiveScale;
     effectiveCtx.fontDpi = _dpiScale;
     effectiveCtx.textureCatalog = &_textureCatalog;
-    FontManager::get()->setActiveDpiScale(_dpiScale);
 
     std::chrono::steady_clock::duration layoutDur{};
     if (_bLayoutDirty) {

@@ -194,6 +194,20 @@ void ScreenDrawList::makeText(const std::string& text,
 {
     YA_CORE_ASSERT(font != nullptr, "ScreenDrawList::makeText called with a null font");
 
+    const Font* pinnedBase = font->isView() ? font->baseFont.get() : font;
+    const bool  bPinnedBitmap = pinnedBase != nullptr
+        && pinnedBase->bTexelPinned
+        && pinnedBase->renderMode == EFontRenderMode::Bitmap
+        && font->renderMode == EFontRenderMode::Bitmap;
+    if (bPinnedBitmap) {
+        const bool bScaleOne = std::abs(scale.x - 1.0f) <= 1e-3f && std::abs(scale.y - 1.0f) <= 1e-3f;
+        const bool bViewOne  = !font->isView() || std::abs(font->scale - 1.0f) <= 1e-3f;
+        YA_CORE_ASSERT(bScaleOne && bViewOne,
+                       "ScreenDrawList::makeText resampling a bitmap font (scale {}, {}); rasterize at the device pixel size",
+                       scale.x,
+                       scale.y);
+    }
+
     float cursorX = position.x;
     float cursorY = position.y;
 
