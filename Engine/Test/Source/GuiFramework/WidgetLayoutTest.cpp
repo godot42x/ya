@@ -357,6 +357,30 @@ TEST(WidgetLayoutTest, CanvasFixedFillAnchorsStillStretch)
     EXPECT_FLOAT_EQ(panel->_layoutRect.extent.y, 300.0f);
 }
 
+TEST(WidgetLayoutTest, CanvasMaxSizeCentersStretchChildInTheAnchorSpan)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto panel = std::make_shared<UICanvasPanel>("Capped");
+    FCanvasSlotArgs args;
+    args.anchorMin  = {0.0f, 1.0f};
+    args.anchorMax  = {1.0f, 1.0f};
+    args.offset     = {0.0f, -20.0f};
+    args.offsets    = FMargin(16.0f, 0.0f, 16.0f, 0.0f);
+    args.maxSize    = {200.0f, 1000000.0f};
+    args.fixedSize  = {0.0f, 40.0f};
+    args.alignmentH = EWidgetAlignH::Center;
+    args.pivot      = {0.0f, 1.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, args).valid());
+    tree.layout();
+
+    // Available width is 400 - 32. The cap is 200, centered in that span.
+    // Bottom edge sits 20px above the parent bottom (pivot y = 1).
+    EXPECT_FLOAT_EQ(panel->_layoutRect.extent.x, 200.0f);
+    EXPECT_FLOAT_EQ(panel->_layoutRect.extent.y, 40.0f);
+    EXPECT_FLOAT_EQ(panel->_layoutRect.pos.x, 16.0f + (368.0f - 200.0f) * 0.5f);
+    EXPECT_FLOAT_EQ(panel->_layoutRect.pos.y, 300.0f - 20.0f - 40.0f);
+}
+
 // === Button content-slot sizing ===
 
 TEST(WidgetLayoutTest, ButtonSizesToTextContentWithPadding)

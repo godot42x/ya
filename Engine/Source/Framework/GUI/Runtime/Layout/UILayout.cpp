@@ -550,9 +550,11 @@ Rect2D UICanvasLayout::resolveChildRect(const UIElement& child, const UICanvasSl
     // alignment has room to move a fixed-size child within it.
     Rect2D area = anchorRect;
     area.pos += glm::vec2{insets.left, insets.top};
+    // maxSize clamps the child, not this area, so a stretch child with a max
+    // width can still be centered in the full anchor span.
     const glm::vec2 stretchBound{
-        anchorSpan.x != 0.0f ? anchorRect.extent.x : contentRect.extent.x,
-        anchorSpan.y != 0.0f ? anchorRect.extent.y : contentRect.extent.y,
+        anchorSpan.x != 0.0f ? anchorSpan.x : contentRect.extent.x,
+        anchorSpan.y != 0.0f ? anchorSpan.y : contentRect.extent.y,
     };
     area.extent = glm::max(stretchBound - insetH, glm::vec2{0.0f, 0.0f});
 
