@@ -263,6 +263,7 @@ void EnvironmentLightingProcessor::dropWork(SceneWork& work)
     work.dirtySkyboxSet.clear();
     work.dirtyEnvironmentSet.clear();
     work.sceneSkyboxEnvironmentDependents.clear();
+    work.clearSelectedSources();
 }
 
 void EnvironmentLightingProcessor::seedSceneResolveWork(SceneWork& work)
@@ -452,6 +453,7 @@ void EnvironmentLightingProcessor::cleanupSkyboxState(SceneWork& work, entt::ent
     }
     work.dirtySkyboxSet.erase(entity);
     std::erase(work.dirtySkyboxQueue, entity);
+    work.noteSkyboxContribution(entity);
 }
 
 void EnvironmentLightingProcessor::cleanupEnvironmentLightingState(SceneWork& work, entt::entity entity)
@@ -463,6 +465,7 @@ void EnvironmentLightingProcessor::cleanupEnvironmentLightingState(SceneWork& wo
     work.dirtyEnvironmentSet.erase(entity);
     work.sceneSkyboxEnvironmentDependents.erase(entity);
     std::erase(work.dirtyEnvironmentQueue, entity);
+    work.noteEnvironmentContribution(entity);
 }
 
 void EnvironmentLightingProcessor::markSkyboxDirty(Scene& scene, entt::entity entity, const char* reason)
@@ -494,6 +497,7 @@ void EnvironmentLightingProcessor::markSkyboxDirty(SceneWork& work, entt::entity
     if (work.dirtySkyboxSet.insert(entity).second) {
         work.dirtySkyboxQueue.push_back(entity);
     }
+    work.noteSkyboxContribution(entity);
 }
 
 void EnvironmentLightingProcessor::markEnvironmentLightingDirty(SceneWork& work, entt::entity entity, const char* reason)
@@ -528,6 +532,7 @@ void EnvironmentLightingProcessor::markEnvironmentLightingDirty(SceneWork& work,
     if (work.dirtyEnvironmentSet.insert(entity).second) {
         work.dirtyEnvironmentQueue.push_back(entity);
     }
+    work.noteEnvironmentContribution(entity);
 }
 
 void EnvironmentLightingProcessor::shutdown()
@@ -573,20 +578,77 @@ EEnvironmentLightingSourceResolveState EnvironmentLightingProcessor::SceneWork::
     return it == environmentStates.end() ? EEnvironmentLightingSourceResolveState::Empty : it->second.sourceState;
 }
 
+namespace
+{
+
+void noteReadyContributor(std::deque<entt::entity>& ready, entt::entity entity, bool contributes)
+{
+    const auto it = std::ranges::find(ready, entity);
+    if (contributes) {
+        if (it == ready.end()) {
+            ready.push_back(entity);
+        }
+        return;
+    }
+    if (it != ready.end()) {
+        ready.erase(it);
+    }
+}
+
+} // namespace
+
+void EnvironmentLightingProcessor::SceneWork::noteSkyboxContribution(entt::entity entity)
+{
+    const entt::entity before = readySkyboxes.empty() ? entt::null : readySkyboxes.front();
+    const auto*        state  = findSkyboxState(entity);
+    const bool         contributes = state &&
+                             state->resolveState == ESkyboxResolveState::Ready &&
+                             state->hasRenderableCubemap();
+    noteReadyContributor(readySkyboxes, entity, contributes);
+    const entt::entity after = readySkyboxes.empty() ? entt::null : readySkyboxes.front();
+    if (before == after) {
+        return;
+    }
+    // Cubemap contributors that alias the scene skybox follow this change.
+    const std::vector<entt::entity> dependents(sceneSkyboxEnvironmentDependents.begin(),
+                                               sceneSkyboxEnvironmentDependents.end());
+    for (const entt::entity dependent : dependents) {
+        noteEnvironmentContribution(dependent);
+    }
+}
+
+void EnvironmentLightingProcessor::SceneWork::noteEnvironmentContribution(entt::entity entity)
+{
+    const auto* state       = findEnvironmentLightingState(entity);
+    const auto* skybox      = readySkyboxes.empty() ? nullptr : findSkyboxState(readySkyboxes.front());
+    const bool  skyboxReady = skybox && skybox->hasRenderableCubemap();
+    const bool  sourceReady = state && state->sourceState == EEnvironmentLightingSourceResolveState::Ready;
+    const bool  cubemap     = sourceReady && (state->bUsesSceneSkybox ? skyboxReady : state->hasRenderableCubemap());
+    const bool  irradiance  = state &&
+                             state->irradianceState == EEnvironmentLightingIrradianceResolveState::Ready &&
+                             state->hasIrradianceMap();
+    const bool prefilter = state &&
+                           state->prefilterState == EEnvironmentLightingPrefilterResolveState::Ready &&
+                           state->hasPrefilterMap();
+    noteReadyContributor(readyEnvironmentCubemaps, entity, cubemap);
+    noteReadyContributor(readyIrradiance, entity, irradiance);
+    noteReadyContributor(readyPrefilter, entity, prefilter);
+}
+
+void EnvironmentLightingProcessor::SceneWork::clearSelectedSources()
+{
+    readySkyboxes.clear();
+    readyEnvironmentCubemaps.clear();
+    readyIrradiance.clear();
+    readyPrefilter.clear();
+}
+
 const SkyboxRuntimeState* EnvironmentLightingProcessor::SceneWork::findFirstReadySkyboxState() const
 {
-    const SkyboxRuntimeState* chosen       = nullptr;
-    entt::entity              chosenEntity = entt::null;
-    for (const auto& [entity, state] : skyboxStates) {
-        if (state.resolveState != ESkyboxResolveState::Ready || !state.hasRenderableCubemap()) {
-            continue;
-        }
-        if (!chosen || entt::to_entity(entity) < entt::to_entity(chosenEntity)) {
-            chosen       = &state;
-            chosenEntity = entity;
-        }
+    if (readySkyboxes.empty()) {
+        return nullptr;
     }
-    return chosen;
+    return findSkyboxState(readySkyboxes.front());
 }
 
 const SkyboxRuntimeState* EnvironmentLightingProcessor::findFirstSceneSkyboxState(Scene* scene) const
@@ -623,18 +685,49 @@ const EnvironmentLightingRuntimeState* EnvironmentLightingProcessor::SceneWork::
 
 const EnvironmentLightingRuntimeState* EnvironmentLightingProcessor::SceneWork::findFirstReadyEnvironmentLightingState() const
 {
-    const EnvironmentLightingRuntimeState* chosen       = nullptr;
-    entt::entity                           chosenEntity = entt::null;
-    for (const auto& [entity, state] : environmentStates) {
-        if (state.irradianceState != EEnvironmentLightingIrradianceResolveState::Ready || !state.hasIrradianceMap()) {
-            continue;
-        }
-        if (!chosen || entt::to_entity(entity) < entt::to_entity(chosenEntity)) {
-            chosen       = &state;
-            chosenEntity = entity;
+    if (readyIrradiance.empty()) {
+        return nullptr;
+    }
+    return findEnvironmentLightingState(readyIrradiance.front());
+}
+
+EnvironmentLightingSceneResources EnvironmentLightingProcessor::SceneWork::resolveSelectedResources() const
+{
+    EnvironmentLightingSceneResources resources{};
+    const auto*                       skyboxState = findFirstReadySkyboxState();
+    if (skyboxState) {
+        resources.cubemap = detail::ownerResourceOf(skyboxState->cubemapRenderImage, skyboxState->cubemapTexture);
+    }
+
+    if (!readyEnvironmentCubemaps.empty()) {
+        const auto* state = findEnvironmentLightingState(readyEnvironmentCubemaps.front());
+        if (state && state->sourceState == EEnvironmentLightingSourceResolveState::Ready) {
+            if (state->bUsesSceneSkybox) {
+                resources.cubemap = skyboxState
+                                        ? detail::ownerResourceOf(skyboxState->cubemapRenderImage, skyboxState->cubemapTexture)
+                                        : nullptr;
+            }
+            else if (state->hasRenderableCubemap()) {
+                resources.cubemap = detail::ownerResourceOf(state->cubemapRenderImage, state->cubemapTexture);
+            }
         }
     }
-    return chosen;
+
+    if (!readyIrradiance.empty()) {
+        const auto* state = findEnvironmentLightingState(readyIrradiance.front());
+        if (state && state->irradianceState == EEnvironmentLightingIrradianceResolveState::Ready && state->hasIrradianceMap()) {
+            resources.irradiance = state->irradianceRenderImage ? state->irradianceRenderImage->getResourceShared() : nullptr;
+        }
+    }
+
+    if (!readyPrefilter.empty()) {
+        const auto* state = findEnvironmentLightingState(readyPrefilter.front());
+        if (state && state->prefilterState == EEnvironmentLightingPrefilterResolveState::Ready && state->hasPrefilterMap()) {
+            resources.prefilter = state->prefilterRenderImage ? state->prefilterRenderImage->getResourceShared() : nullptr;
+        }
+    }
+
+    return resources;
 }
 
 const EnvironmentLightingRuntimeState* EnvironmentLightingProcessor::findFirstSceneEnvironmentLightingState(Scene* scene) const
@@ -660,59 +753,8 @@ EnvironmentLightingSceneResources EnvironmentLightingProcessor::resolveSceneEnvi
         return resources;
     }
 
-    const auto* skyboxState = findFirstSceneSkyboxState(scene);
-    if (skyboxState) {
-        resources.cubemap = detail::ownerResourceOf(skyboxState->cubemapRenderImage, skyboxState->cubemapTexture);
-    }
-
     const SceneWork* work = findWork(*scene);
-    if (!work) {
-        return resources;
-    }
-
-    // environmentStates is unordered. Ascending entity index stands in for
-    // the old view order: irradiance and prefilter keep the first ready
-    // contributor, and a later ready source overwrites the cubemap until
-    // all three resources are filled.
-    std::vector<entt::entity> entities;
-    entities.reserve(work->environmentStates.size());
-    for (const auto& [entity, state] : work->environmentStates) {
-        (void)state;
-        entities.push_back(entity);
-    }
-    std::ranges::sort(entities, [](entt::entity a, entt::entity b) {
-        return entt::to_entity(a) < entt::to_entity(b);
-    });
-
-    for (const entt::entity entity : entities) {
-        const auto* state = work->findEnvironmentLightingState(entity);
-        if (!state) {
-            continue;
-        }
-
-        if (state->sourceState == EEnvironmentLightingSourceResolveState::Ready) {
-            if (state->bUsesSceneSkybox) {
-                resources.cubemap = skyboxState ? detail::ownerResourceOf(skyboxState->cubemapRenderImage, skyboxState->cubemapTexture) : nullptr;
-            }
-            else if (state->hasRenderableCubemap()) {
-                resources.cubemap = detail::ownerResourceOf(state->cubemapRenderImage, state->cubemapTexture);
-            }
-        }
-
-        if (!resources.irradiance && state->irradianceState == EEnvironmentLightingIrradianceResolveState::Ready && state->hasIrradianceMap()) {
-            resources.irradiance = state->irradianceRenderImage ? state->irradianceRenderImage->getResourceShared() : nullptr;
-        }
-
-        if (!resources.prefilter && state->prefilterState == EEnvironmentLightingPrefilterResolveState::Ready && state->hasPrefilterMap()) {
-            resources.prefilter = state->prefilterRenderImage ? state->prefilterRenderImage->getResourceShared() : nullptr;
-        }
-
-        if (resources.cubemap && resources.irradiance && resources.prefilter) {
-            break;
-        }
-    }
-
-    return resources;
+    return work ? work->resolveSelectedResources() : resources;
 }
 
 SkyboxPreviewInfo EnvironmentLightingProcessor::SceneWork::getSkyboxPreview(entt::entity entity) const
@@ -1179,6 +1221,12 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(SceneWork& work)
     auto* assets   = AssetManager::get();
 
     auto pumpOne = [&](entt::entity entity) {
+        struct RefreshSelection {
+            SceneWork&   work;
+            entt::entity entity;
+            ~RefreshSelection() { work.noteSkyboxContribution(entity); }
+        } refreshSelection{work, entity};
+
         YA_PROFILE_SCOPE("ResourceResolve/Skybox/Entity");
         if (!registry.valid(entity) || !registry.all_of<SkyboxComponent>(entity)) {
             cleanupSkyboxState(work, entity);
@@ -2547,6 +2595,12 @@ void EnvironmentLightingProcessor::resolvePendingEnvironmentLighting(SceneWork& 
     const auto* sceneSkyboxState = findFirstSceneSkyboxState(work.scene);
 
     auto pumpOne = [&](entt::entity entity) {
+        struct RefreshSelection {
+            SceneWork&   work;
+            entt::entity entity;
+            ~RefreshSelection() { work.noteEnvironmentContribution(entity); }
+        } refreshSelection{work, entity};
+
         YA_PROFILE_SCOPE("ResourceResolve/EnvironmentLighting/Entity");
         if (!registry.valid(entity) || !registry.all_of<EnvironmentLightingComponent>(entity)) {
             cleanupEnvironmentLightingState(work, entity);
@@ -2555,7 +2609,6 @@ void EnvironmentLightingProcessor::resolvePendingEnvironmentLighting(SceneWork& 
 
         auto& elc          = registry.get<EnvironmentLightingComponent>(entity);
         auto& pendingState = work.environmentStates[entity];
-        pendingState.bUsesSceneSkybox = elc.usesSceneSkybox();
         const auto previousResultVersion = pendingState.resultVersion;
         const std::string derivedKey = buildEnvironmentDerivedKey(elc, assets, sceneSkyboxState);
 
@@ -2563,13 +2616,6 @@ void EnvironmentLightingProcessor::resolvePendingEnvironmentLighting(SceneWork& 
             detail::resetEnvState(pendingState);
             pendingState.authoringVersion = elc.authoringVersion;
             pendingState.lastStartedAuthoringVersion = elc.authoringVersion;
-        }
-
-        if (pendingState.bUsesSceneSkybox) {
-            work.sceneSkyboxEnvironmentDependents.insert(entity);
-        }
-        else {
-            work.sceneSkyboxEnvironmentDependents.erase(entity);
         }
 
         if (!elc.hasSource()) {

@@ -133,8 +133,8 @@ struct EnvironmentLightingRuntimeState
     uint64_t                                                  resultVersion                = 0;
     uint64_t                                                  lastSceneSkyboxResultVersion = 0;
     bool                                                      bSceneSkyboxDependencyReady  = false;
-    // Cached from the component when the processor reads it. Consumers must
-    // not scan the component view to recover this authoring choice.
+    // Written only from the component in markEnvironmentLightingDirty.
+    // Selection and consumers read this instead of the component.
     bool                                                      bUsesSceneSkybox             = false;
     uint64_t                                                  lastQueuedAuthoringVersion   = 0;
     uint64_t                                                  lastStartedAuthoringVersion  = 0;
@@ -222,20 +222,32 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
         std::unordered_set<entt::entity>                                  dirtyEnvironmentSet;
         std::unordered_set<entt::entity>                                  sceneSkyboxEnvironmentDependents;
         bool                                                              bSeeded = false;
+        // Each channel keeps contributors in the order they became ready.
+        // The front holds the channel until it stops contributing; the next
+        // entry then takes over. Consumers read the front.
+        std::deque<entt::entity>                                          readySkyboxes;
+        std::deque<entt::entity>                                          readyEnvironmentCubemaps;
+        std::deque<entt::entity>                                          readyIrradiance;
+        std::deque<entt::entity>                                          readyPrefilter;
 
         [[nodiscard]] ESkyboxResolveState getSkyboxResolveState(entt::entity entity) const;
         [[nodiscard]] bool                isSkyboxLoading(entt::entity entity) const;
         [[nodiscard]] const SkyboxRuntimeState* findSkyboxState(entt::entity entity) const;
-        /// Ready cubemap with the smallest entity index. The state table is
-        /// unordered, so that index is the scene source.
+        /// Skybox that became ready first and still has a cubemap.
         [[nodiscard]] const SkyboxRuntimeState* findFirstReadySkyboxState() const;
         [[nodiscard]] EEnvironmentLightingSourceResolveState getEnvironmentSourceState(entt::entity entity) const;
         [[nodiscard]] EEnvironmentLightingIrradianceResolveState getEnvironmentIrradianceState(entt::entity entity) const;
         [[nodiscard]] EEnvironmentLightingPrefilterResolveState getEnvironmentPrefilterState(entt::entity entity) const;
         [[nodiscard]] bool isEnvironmentLightingLoading(entt::entity entity) const;
         [[nodiscard]] const EnvironmentLightingRuntimeState* findEnvironmentLightingState(entt::entity entity) const;
-        /// Ready irradiance map with the smallest entity index.
+        /// Environment state that became irradiance-ready first and still contributes.
         [[nodiscard]] const EnvironmentLightingRuntimeState* findFirstReadyEnvironmentLightingState() const;
+        /// Place this entity on or off the skybox channel from its current state.
+        void noteSkyboxContribution(entt::entity entity);
+        /// Place this entity on or off the cubemap, irradiance, and prefilter channels.
+        void noteEnvironmentContribution(entt::entity entity);
+        void clearSelectedSources();
+        [[nodiscard]] EnvironmentLightingSceneResources resolveSelectedResources() const;
 
         // ── Read-only preview queries (tooling and debug) ─────────────
         [[nodiscard]] SkyboxPreviewInfo              getSkyboxPreview(entt::entity entity) const;

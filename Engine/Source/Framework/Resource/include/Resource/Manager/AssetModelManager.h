@@ -2,7 +2,6 @@
 
 #include "Core/Base.h"
 
-#include <atomic>
 #include <functional>
 #include <mutex>
 
@@ -42,8 +41,6 @@ class AssetModelManager
     std::unordered_map<std::string, std::string> _modelName2Path;
     uint64_t                                    _clearGeneration = 0;
     uint64_t                                    _nextLoadSerial  = 0;
-    // Slots currently in Loading. Maintained on the slot-state transitions below.
-    std::atomic<uint32_t>                       _loadingSlotCount{0};
     mutable std::mutex                          _mutex;
 
   public:
@@ -62,8 +59,6 @@ class AssetModelManager
     void   invalidate(const std::string& filepath, uint64_t frame);
     void   evictCachedAsset(const std::string& assetPath, uint64_t frame);
     void   fillStats(AssetManager::CacheStats& stats) const;
-    /// How many model slots this manager still has in Loading.
-    uint32_t loadingSlotCount() const { return _loadingSlotCount.load(std::memory_order_relaxed); }
 
   private:
     std::shared_ptr<Model> loadModelImpl(const std::string& filepath, const std::string& name);
@@ -71,10 +66,6 @@ class AssetModelManager
     void submitModelLoad(const std::string& filepath);
     void completeModelLoad(const std::string& filepath, uint64_t serial, ImportedModelData decoded);
 
-    // A new entry slot starts Loading and is counted. Caller holds _mutex.
-    std::shared_ptr<AssetSlot<Model>> makeLoadingSlotLocked();
-    // Keep _loadingSlotCount aligned with a state change. Caller holds _mutex.
-    void accountSlotStateLocked(EAssetSlotState previous, EAssetSlotState next);
     // Update the slot and hand the subscribers back for dispatch outside
     // the lock. A null model marks the slot Failed. Caller holds _mutex.
     SlotUpdate updateSlotLocked(ModelEntry& entry, const std::shared_ptr<Model>& model);

@@ -8,7 +8,6 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/SceneBus.h"
 #include "Render3D/ResourceResolveProbe.h"
-#include "Resource/AssetManager.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
@@ -170,13 +169,9 @@ void GameplayResourceBinding::prepareScenes(std::span<Scene* const> scenes, floa
             resolvePendingBillboards(work);
         }
 #ifdef BUILD_DEBUG
-        // The leak is a component whose slot is Loading while the entity is
-        // neither queued nor subscribed. That is visible only after the
-        // dirty queues have drained, so the queue is the wrong gate. No
-        // Loading slot anywhere means no component can be holding one.
-        if (const auto* assets = AssetManager::get(); assets && assets->hasOutstandingLoadingSlots()) {
-            auditSlotSubscriptions(work);
-        }
+        // Interval lives inside the audit. The walk is a consistency check,
+        // not derived work, so it does not count on the resolve probe.
+        auditSlotSubscriptions(work);
 #endif
     }
 }
@@ -470,26 +465,19 @@ void GameplayResourceBinding::auditSlotSubscriptions(SceneWork& work)
     }
     work.nextConsistencyAuditTick = currentTick + CONSISTENCY_AUDIT_INTERVAL_TICKS;
 
-    auto&  registry       = *work.registry;
-    auto   enqueueMaterialFn = [this](SceneWork& w, entt::entity e) { enqueueMaterial(w, e); };
-    auto   enqueueBillboardFn = [this](SceneWork& w, entt::entity e) { enqueueBillboard(w, e); };
-    auto   enqueueMeshFn      = [this](SceneWork& w, entt::entity e) { enqueueMesh(w, e); };
-    const auto auditComponent = [&](auto&& view, auto&& enqueue, auto&& anySlotLoading) {
+    auto& registry = *work.registry;
+    const auto auditComponent = [&](auto&& view, auto&& anySlotLoading) {
         for (auto&& [entity, component] : view.each()) {
             if (!anySlotLoading(component)) {
                 continue;
             }
-            // Every component with a loading slot must be queued for a
-            // resolve or covered by a held slot subscription. Neither is true
-            // means a write path or a fill escaped the funnel.
+            // A loading slot must be queued or covered by a held subscription.
+            // The assert is the report. Re-queueing would hide the miss.
             if (!work.entityWork.contains(entity) &&
                 !work.dirtyMaterialSet.contains(entity) &&
                 !work.dirtyBillboardSet.contains(entity) &&
                 !work.dirtyMeshSet.contains(entity)) {
                 YA_CORE_ASSERT(false, "ResourceResolve audit: loading asset slot is neither queued nor subscribed");
-                YA_CORE_WARN("ResourceResolve audit: re-armed entity {} (loading slot without subscription)",
-                             static_cast<uint32_t>(entity));
-                enqueue(work, entity);
             }
         }
     };
@@ -506,18 +494,12 @@ void GameplayResourceBinding::auditSlotSubscriptions(SceneWork& work)
         const auto& handle = component._mesh._modelHandle;
         return handle && handle->state == EAssetSlotState::Loading;
     };
-    noteResourceResolveView();
-    auditComponent(registry.view<PhongMaterialComponent>(), enqueueMaterialFn, anyTextureSlotLoading);
-    noteResourceResolveView();
-    auditComponent(registry.view<PBRMaterialComponent>(), enqueueMaterialFn, anyTextureSlotLoading);
-    noteResourceResolveView();
-    auditComponent(registry.view<UnlitMaterialComponent>(), enqueueMaterialFn, anyTextureSlotLoading);
-    noteResourceResolveView();
-    auditComponent(registry.view<BillboardComponent>(), enqueueBillboardFn, anyTextureSlotLoading);
-    noteResourceResolveView();
-    auditComponent(registry.view<StaticMeshComponent>(), enqueueMeshFn, anyMeshSlotLoading);
-    noteResourceResolveView();
-    auditComponent(registry.view<SkinnedMeshComponent>(), enqueueMeshFn, anyMeshSlotLoading);
+    auditComponent(registry.view<PhongMaterialComponent>(), anyTextureSlotLoading);
+    auditComponent(registry.view<PBRMaterialComponent>(), anyTextureSlotLoading);
+    auditComponent(registry.view<UnlitMaterialComponent>(), anyTextureSlotLoading);
+    auditComponent(registry.view<BillboardComponent>(), anyTextureSlotLoading);
+    auditComponent(registry.view<StaticMeshComponent>(), anyMeshSlotLoading);
+    auditComponent(registry.view<SkinnedMeshComponent>(), anyMeshSlotLoading);
 }
 #endif
 

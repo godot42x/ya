@@ -160,18 +160,5 @@ TEST_F(ModelAssetSlotTest, CollectUnusedKeepsHeldSlotsAndDropsTheRest)
     EXPECT_FALSE(AssetManager::get()->isModelLoaded(kMissingModelB));
 }
 
-TEST_F(ModelAssetSlotTest, LoadingSlotGateTracksModelSlots)
-{
-    EXPECT_FALSE(AssetManager::get()->hasOutstandingLoadingSlots());
-
-    ModelRef loading(kMissingModelA);
-    EXPECT_EQ(loading._handle->state, EAssetSlotState::Loading);
-    EXPECT_TRUE(AssetManager::get()->hasOutstandingLoadingSlots());
-
-    ASSERT_TRUE(pumpUntilSettled(loading._handle));
-    EXPECT_EQ(loading._handle->state, EAssetSlotState::Failed);
-    EXPECT_FALSE(AssetManager::get()->hasOutstandingLoadingSlots());
-}
-
 } // namespace
 } // namespace ya

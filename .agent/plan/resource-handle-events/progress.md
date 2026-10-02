@@ -154,3 +154,18 @@
   - TownLarge profile（600 帧，跳过 60，540 帧）：iterate 均值 10.900 ms（p50 10.882，p95 11.595）。`Render/Frame` inclusive 10.839 ms、self 0.005 ms。`VulkanRender::waitFrameFence` 2.014 ms。`prepareDerivedState` inclusive 0.0054 ms、self 0.0015 ms。`ResourceResolve/GameplayBinding` 0.0016、Terrain 0.0005、EnvironmentLighting 0.0005、Skybox 0.0004。对照 r4 §7 的 0.011 ms，资源准备没有变慢。
 - 保留 / 未完成：todo 里脚本 `callMethod`、tileset 文件监听、colorSpace、派生 LRU、frame task sink 悬空，仍不在本计划。preh5 的 TownLarge profile 没跑成：链接 `2DRpgPrototype` 时 `Entry.cpp` 按 `2dRpgPrototype` 和 `2DRpgPrototype` 两条路径各编了一次，`_yaGetModuleApi` 重复符号。
 - 偏离：`consumeTextureBatchMemory` 仍在。`TerrainProcessor` 和 `EnvironmentLightingProcessor` 在批次 `onReady` 之后用它把 CPU 内存从 ready 表取走。回调交回的是句柄，不是像素。它不再被每帧轮询。删掉就没有取走批次的入口。
+
+## 2026-10-02 收尾重构：去掉 Loading 计数，选中来源由处理器维护
+
+- 目标：e08f9fba 的 Loading 槽计数和 12adb2c2 的每帧排序都是补丁。删掉计数，审计只留间隔；环境光照在状态切换时维护选中来源。不改写那两个提交。
+- 完成：
+  - 删除 `_loadingSlotCount` / `makeLoadingSlotLocked` / `accountSlotStateLocked` / `hasOutstandingLoadingSlots`，以及 `LoadingSlotGate*` 两个测试。
+  - debug 审计只按 120 tick 间隔跑。遍历不调用 `noteResourceResolveView`：探针只记准备阶段为做派生工作而走的 view。断言后不再重新入队。`ModelInstantiationSystem::seedSceneWork` 的探针和 `SecondUpdateDoesNotRescanTheModelView` 保留。
+  - 选中来源契约：每个场景四条通道（天空盒 cubemap、环境 cubemap、irradiance、prefilter）各自保留最先变为就绪的贡献者，直到它不再贡献；然后按变为就绪的先后，下一个仍就绪的接上。没有环境 cubemap 贡献者时，场景 cubemap 回退到当前选中的天空盒。旧 view 循环里 cubemap 后写覆盖、irradiance/prefilter 取第一个，是少了空位判断，已统一成这一条。
+  - `bUsesSceneSkybox` 只在 `markEnvironmentLightingDirty` 写入。更新点：`mark*Dirty`、`cleanup*`、天空盒/环境泵结束、`dropWork`；天空盒选中变化时重算依赖它的环境 cubemap 通道。
+- 验证：
+  - 过滤 `TextureAssetSlotTest.*:ModelAssetSlotTest.*:ModelInstantiationEventTest.*:ResourceResolveSteadyState.*:OffscreenJobFinished.*:EnvironmentLightingSelection.*:SceneDerivedStateTest.*`：27 过。`SecondPrepareTouchesNoComponentViewAndIgnoresEntityCount` 与 `SecondUpdateDoesNotRescanTheModelView` 仍要求第二次不再增加探针，没有为审计放宽。
+  - `ya-testing`（沙箱外）：1505 例，1504 过，1 跳过（`RHISurfaceContext.ExtraWindowUnpresentableDoesNotBlockStartupWindowPresent`）。上次 1503 / 1502 / 1：删 2 个 Loading 门控测试，加 4 个选中来源测试。
+  - IBL：同上尺寸方法，`/tmp/ibl-cleanup.png` 与 `/tmp/ibl-head-matched.png` 都是 570×370，SHA-256 同为 `9e6e300ec2fe350702a13f2d7a3508b9734ee7f3b6c4cbed1ca4f4f400363ace`，210900 像素逐像素差 0。
+- 保留 / 未完成：todo 里「已记录、不在本计划」搬到 `rpg-prototype/resource-leftovers.md`。`consumeTextureBatchMemory` 仍在，理由同上。
+- 偏离：无。
