@@ -49,7 +49,7 @@
 
 ## 用户报告（2026-10-02，不在评审 7 步内）
 
-- [ ] Pixel-perfect camera：`CameraComponent` 整数缩放 + 提取期 texel 吸附（`plan.md` §10）
+- [x] Pixel-perfect camera：`CameraComponent` 整数缩放 + 提取期 texel 吸附（`plan.md` §10）
 
 ## 已拆出
 

@@ -1,13 +1,11 @@
--- Eases the camera toward the player, frames the view pixel-perfectly (every
--- texel covers a whole number of screen pixels) and keeps the view inside the
--- map so the player never sees past its edge.
+-- Eases the camera toward the player and keeps the framed rectangle inside
+-- the map. Zoom and device-pixel snapping live on CameraComponent
+-- (resolveCameraViewFraming). This script only follows and clamps.
 local ScriptBase = require("ScriptBase")
 local Script = ScriptBase:new()
 
 local TARGET_NAME = "Player"
 local MAP_NAME = "TilemapGround"
-local TEXELS_PER_UNIT = 16
-local MIN_VISIBLE_TILES = 12 -- vertically; the zoom is the largest that still shows this many
 local FOLLOW_RATE = 6 -- per second; higher follows tighter
 
 function Script:onInit()
@@ -27,16 +25,29 @@ end
 
 function Script:onUpdate(dt)
     self.target = self.target or world.find(TARGET_NAME)
-    local view = world.viewSize()
-    if not self.target or view.y < 1 then
+    if not self.target then
         return
     end
 
-    local zoom = math.max(1, math.floor(view.y / (TEXELS_PER_UNIT * MIN_VISIBLE_TILES)))
-    local pixelsPerUnit = TEXELS_PER_UNIT * zoom
-    local halfHeight = view.y / (2 * pixelsPerUnit)
-    self.camera.orthoHalfHeight = halfHeight
-    local halfWidth = halfHeight * (view.x / view.y)
+    local halfWidth
+    local halfHeight
+    if self.camera.pixelPerfect then
+        -- (halfWidth, halfHeight) in world units, from the same framing the
+        -- projection uses. (0, 0) means the view extent is not ready yet.
+        local half = world.viewSize()
+        if half.y <= 0 then
+            return
+        end
+        halfWidth = half.x
+        halfHeight = half.y
+    else
+        local view = world.viewSize()
+        if view.y < 1 then
+            return
+        end
+        halfHeight = self.camera.orthoHalfHeight
+        halfWidth = halfHeight * (view.x / view.y)
+    end
 
     local goal = self.target:getTransform():getPosition()
     local blend = 1 - math.exp(-FOLLOW_RATE * dt)
@@ -62,9 +73,6 @@ function Script:onUpdate(dt)
         end
     end
 
-    -- Whole screen pixels, so the world does not shimmer while the camera eases.
-    x = math.floor(x * pixelsPerUnit + 0.5) / pixelsPerUnit
-    y = math.floor(y * pixelsPerUnit + 0.5) / pixelsPerUnit
     self.transform:setPosition(Vec3.new(x, y, self.z))
 end
 

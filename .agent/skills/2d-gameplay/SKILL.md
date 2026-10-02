@@ -69,6 +69,19 @@
 - Lua 全局是小写 `time`（`LuaTimeApi` 实例）与 `input` / `log`；大写 `Time` 是
   usertype 表，不能在其上调方法。
 
+## 像素完美相机
+
+俯视像素画的取景在 `CameraComponent` 上，脚本不再自己算 zoom：
+
+- `_pixelPerfect` 默认关。打开后正交半高由 `resolveCameraViewFraming` 按该 View 的输出像素（`outputRect`，不是窗口）计算：`zoom = max(1, floor(viewHeight / _referenceHeightPx))`，半高 = `viewHeight / (2 * _pixelsPerUnit * zoom)`，半宽跟真实宽高比。zoom 是整数且不低于 1：视口比参考矮时少看一些世界，一个 texel 至少占一个设备像素。
+- 只按高度取 zoom。像素是正方形，半宽跟真实宽高比走，横向的 texel→像素比和纵向相同，不另设参考宽度。pixel perfect 不用 `_fixedAspectRatio`，否则横向会被拉开。
+- 相机眼在 `buildCameraRenderMatrices` 里吸附到设备像素（不写 Transform）。宽或高为奇数时该轴偏半个设备像素，texel 边落在像素边上。偶数尺寸相位为 0。
+- 精灵 / tile 的 `worldCenter` 在 `RenderFrameExtractor::extractSceneSnapshot` 吸附到 `1 / _pixelsPerUnit`。候选被所有 View 共享；整数 zoom 的设备像素是 texel 的细分，再叠加每 View 的眼吸附，精灵不会落在半个设备像素上。
+- `world.viewSize()`：主相机是 pixel-perfect 正交时返回 `(halfWidth, halfHeight)` 世界单位，否则仍是像素尺寸。`world.viewAspect()` 仍是宽/高，pixel perfect 时等于 `halfWidth / halfHeight`。跟随脚本用它钳制地图。
+- 编辑器正交 XY 视口是自由相机，不读这个开关。
+
+Tiny Town（Town / House / TownLarge）：`_pixelsPerUnit = 16`，`_referenceHeightPx = 192`（12 格）。1280×720 时 zoom = 3，半高 7.5。
+
 ## 边界
 
 - 不引入 `Node2D` / `Transform2D` / `Camera2D`；2D 对象 = `Node3D` +
