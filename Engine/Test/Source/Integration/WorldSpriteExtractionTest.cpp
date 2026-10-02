@@ -5,6 +5,7 @@
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 
+#include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
@@ -205,6 +206,31 @@ TEST(WorldSpriteExtractionTest, TwoViewsShareTheSnapshotAndOwnOnlyTheirOrder)
     EXPECT_EQ(&frontView.worldSprites[0], &snapshot->worldSprites[1]);
     EXPECT_EQ(&backView.worldSprites[0], &snapshot->worldSprites[0]);
     EXPECT_EQ(&frontView.worldSprites[0], &backView.worldSprites[1]);
+}
+
+TEST(WorldSpriteExtractionTest, PixelSnapLandsCandidateCentersOnTheTexelGrid)
+{
+    const float step = 1.0f / 16.0f;
+    std::vector<WorldSpriteCandidate> sprites{
+        makeCandidate(glm::vec3(1.03f, -2.2f, 0.4f), 0, 0, 1.0f),
+        makeCandidate(glm::vec3(0.5f, 0.75f, 0.1f), 0, 0, 1.0f),
+    };
+    const glm::vec3 unsnapped = sprites[0].worldCenter;
+
+    RenderFrameExtractor::snapSpriteCandidatesToTexelGrid(sprites, 0.0f);
+    EXPECT_EQ(sprites[0].worldCenter, unsnapped);
+
+    RenderFrameExtractor::snapSpriteCandidatesToTexelGrid(sprites, step);
+    for (const WorldSpriteCandidate& sprite : sprites) {
+        const float qx = sprite.worldCenter.x / step;
+        const float qy = sprite.worldCenter.y / step;
+        EXPECT_NEAR(qx, std::round(qx), 1e-4f);
+        EXPECT_NEAR(qy, std::round(qy), 1e-4f);
+    }
+    EXPECT_NEAR(sprites[0].worldCenter.z, 0.4f, 1e-5f);
+    // Already on the 1/16 grid (player feet): snapping is a no-op.
+    EXPECT_NEAR(sprites[1].worldCenter.x, 0.5f, 1e-5f);
+    EXPECT_NEAR(sprites[1].worldCenter.y, 0.75f, 1e-5f);
 }
 
 } // namespace ya

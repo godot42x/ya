@@ -64,6 +64,13 @@ struct RenderFrameExtractor
                                                                    const Sprite2DComponent& sprite,
                                                                    uint32_t                 entityId);
 
+    /// Snap sprite and tile centers onto the texel grid (`1 / pixelsPerUnit`).
+    /// Candidates are shared by every View, so this is not the per-view device
+    /// pixel (`1 / (pixelsPerUnit * zoom)`): an integer zoom divides that texel,
+    /// and the camera eye is snapped per view, so a texel-aligned sprite still
+    /// lands on a device-pixel boundary. A non-positive step leaves them alone.
+    static void snapSpriteCandidatesToTexelGrid(std::vector<WorldSpriteCandidate>& sprites, float texelStep);
+
   private:
     static void extractCamera(const ViewPrepareInput& input, RenderFrameData& out);
     static void extractSceneLights(entt::registry& reg, SceneSnapshot& out);

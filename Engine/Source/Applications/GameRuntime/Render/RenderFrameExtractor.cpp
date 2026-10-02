@@ -7,6 +7,7 @@
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Terrain/TerrainProcessor.h"
 
+#include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/2D/Sprite2DComponent.h"
@@ -23,6 +24,7 @@
 #include "Scene3D/TransformComponent.h"
 #include "Scene3D/ManagedChildComponent.h"
 #include "ECS/Systems/TransformSystem.h"
+#include "GameRuntime/Render/SceneCameraQuery.h"
 #include "Scene/Core/Scene.h"
 #include "Render/Adapters/Companion/CompanionManager.h"
 #include "Render/Resources/TextureSlotBinding.h"
@@ -148,6 +150,16 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
     extractSceneLights(registry, outSnapshot);
     extractSprites(input.scene, registry, outSnapshot);
     extractTilemaps(input.scene, registry, outSnapshot);
+    // Texel grid of the primary camera. Zoom is per view and is applied when
+    // that view snaps its eye; this grid is the one every integer zoom shares.
+    float texelStep = 0.0f;
+    if (Entity* camera = findPrimaryCamera(*input.scene)) {
+        if (const auto* component = camera->getComponent<CameraComponent>();
+            component && component->_pixelPerfect && component->_pixelsPerUnit > 0.0f) {
+            texelStep = 1.0f / component->_pixelsPerUnit;
+        }
+    }
+    snapSpriteCandidatesToTexelGrid(outSnapshot.worldSprites, texelStep);
     auto drawCtx = DrawItemExtractionContext{
         .registry         = &registry,
         .sceneSnapshot    = &outSnapshot,
@@ -186,6 +198,16 @@ WorldSpriteCandidate RenderFrameExtractor::buildSpriteCandidate(const glm::mat4&
     candidate.sortOrder    = sprite.sortOrder;
     candidate.bTranslucent = sprite.tint.a < 1.0f;
     return candidate;
+}
+
+void RenderFrameExtractor::snapSpriteCandidatesToTexelGrid(std::vector<WorldSpriteCandidate>& sprites, float texelStep)
+{
+    if (!(texelStep > 0.0f)) {
+        return;
+    }
+    for (WorldSpriteCandidate& sprite : sprites) {
+        sprite.worldCenter = snapWorldXY(sprite.worldCenter, texelStep, 0.0f, 0.0f);
+    }
 }
 
 void RenderFrameExtractor::extractSprites(Scene* scene, entt::registry& reg, SceneSnapshot& out)
