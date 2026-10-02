@@ -173,7 +173,8 @@ struct FTextStyle
 /// Resolve the font a text style should draw with: its own family when it names
 /// one, else the engine UI face. ONE entry point so paint and measurement cannot
 /// disagree about which face (and therefore which metrics) a label uses.
-[[nodiscard]] YA_GUI_API std::shared_ptr<Font> resolveTextFont(const FTextStyle& style);
+[[nodiscard]] YA_GUI_API std::shared_ptr<Font>
+resolveTextFont(const FTextStyle& style, std::optional<float> dpi = std::nullopt);
 
 /// Panel / card chrome: one fill brush, which owns the panel's corner radius
 /// and edge (`fillColor.cornerRadius` / `.borderColor`). Used by `UIBorder`.

@@ -32,7 +32,7 @@ void UIRadioButton::paintSelf(UIFrameBuilder& builder)
         builder.addBrush(core, FBrush::solid(style.dotFillColor, core.extent.y * 0.5f));
     }
 
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font && !_label.empty()) {
         const Rect2D labelRect{
             .pos    = {_layoutRect.pos.x + 24.0f, _layoutRect.pos.y},

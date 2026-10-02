@@ -62,7 +62,7 @@ void UIComboBox::paintSelf(UIFrameBuilder& builder)
                      resolveVisualFill(visualChrome(style),
                                        composeVisualFlags(_bHovered, false, false, !isEnabled(), false, false, false)));
 
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
+    auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (font) {
         Rect2D textRect = _layoutRect;
         textRect.pos.x += 10.0f;

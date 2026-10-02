@@ -41,7 +41,7 @@ YA_REFLECT_END_EXTERNAL()
 namespace ya
 {
 
-std::shared_ptr<Font> resolveTextFont(const FTextStyle& style)
+std::shared_ptr<Font> resolveTextFont(const FTextStyle& style, std::optional<float> dpi)
 {
     // Empty family = the engine UI face. Everything that follows from a family
     // (metrics, glyph coverage, fallback stack) is the font manager's business;
@@ -50,7 +50,7 @@ std::shared_ptr<Font> resolveTextFont(const FTextStyle& style)
     FontManager* manager = FontManager::get();
     if (!style.fontFamily.empty()) {
         const FName named(style.fontFamily);
-        if (auto font = manager->getFont(named, style.fontSize)) {
+        if (auto font = manager->getFont(named, style.fontSize, dpi)) {
             return font;
         }
         // A named family that is not registered must not blank the label: the
@@ -58,7 +58,7 @@ std::shared_ptr<Font> resolveTextFont(const FTextStyle& style)
         // load) has to degrade to readable text, not to no text.
         YA_CORE_WARN("Text family '{}' is not registered; falling back to the UI face", style.fontFamily);
     }
-    return manager->getFont(FName(DEFAULT_RUNTIME_FONT_NAME), style.fontSize);
+    return manager->getFont(FName(DEFAULT_RUNTIME_FONT_NAME), style.fontSize, dpi);
 }
 
 } // namespace ya

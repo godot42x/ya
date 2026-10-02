@@ -20,7 +20,7 @@ void UIDragDropTile::paintSelf(UIFrameBuilder& builder)
                                                            : static_cast<bool>(_bPressed);
     builder.addBrush(_layoutRect, bActive ? style.activeFill : style.normalFill);
 
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
+    auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (!font) {
         return;
     }

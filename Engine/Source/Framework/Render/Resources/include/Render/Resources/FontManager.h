@@ -418,17 +418,20 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
     /// use the SDF distance field. Small glyphs never go through SDF — its
     /// 8-bit field cannot preserve thin strokes at tiny pixel sizes.
     std::shared_ptr<Font> loadFont(IRender& render, const std::string &fontPath, const FName &fontName, uint32_t fontSize,
-                                   std::optional<EFontRenderMode> mode = std::nullopt, float dpiScale = 1.0f);
+                                   std::optional<EFontRenderMode> mode = std::nullopt,
+                                   std::optional<float> dpiScale = std::nullopt);
 
     /// @param dpiScale Device-pixel scale (e.g. GUI uiScale on Retina). Bitmap
     /// glyphs are rasterized at round(fontSize * dpiScale) so texels map 1:1 to
     /// screen pixels (no fractional minification under Nearest sampling — ImGui
     /// bakes at RasterizerDensity for the same reason). SDF is scale-free and
-    /// ignores dpiScale. Defaults to 1.0 (logical pixels). When omitted, the
-    /// manager uses the active DPI scale set by the host (setActiveDpiScale) —
-    /// bitmap glyphs must be baked at the device resolution, which the host
-    /// knows, not the widget.
-    std::shared_ptr<Font> getFont(const FName &fontName, uint32_t fontSize, float dpiScale = 1.0f);
+    /// ignores dpiScale. When omitted, the manager uses the active DPI scale
+    /// set by the host (setActiveDpiScale) — bitmap glyphs must be baked at the
+    /// device resolution, which the host knows, not the widget. Trees that own
+    /// a per-tree density pass it explicitly (the old "1.0 means global" quirk
+    /// made an exactly-1.0 tree unpinnable).
+    std::shared_ptr<Font> getFont(const FName &fontName, uint32_t fontSize,
+                                  std::optional<float> dpiScale = std::nullopt);
 
     /// Host sets the device-pixel scale (GUI uiScale) once per frame so bitmap
     /// glyphs are rasterized at the correct device resolution. Widgets call

@@ -366,7 +366,7 @@ void UITabBar::paintSelf(UIFrameBuilder& builder)
                         1.0f);
     }
     if (_tabs.empty() && !_emptyPlaceholder.empty()) {
-        auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 13);
+        auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, 13);
         if (font) {
             builder.addText(_layoutRect, _emptyPlaceholder, style.placeholderTextColor,
                             font, EWidgetAlignH::Center, EWidgetAlignV::Center);

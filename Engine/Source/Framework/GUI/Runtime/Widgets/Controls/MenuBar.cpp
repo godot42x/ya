@@ -38,7 +38,7 @@ void UIMenuBarItem::paintSelf(UIFrameBuilder& builder)
                     {_layoutRect.pos.x + _layoutRect.extent.x, separatorY},
                     style.separatorColor,
                     1.0f);
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {
         builder.addText(_layoutRect, label, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     }

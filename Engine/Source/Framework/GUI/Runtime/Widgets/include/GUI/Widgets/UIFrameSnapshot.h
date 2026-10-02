@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <optional>
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -85,6 +86,13 @@ struct UIFrameBuildContext
     /// toggles). Evaluated once per visited widget; null paints everything.
     /// The policy lives with the host -- the framework only runs the gate.
     std::function<bool(const UIElement&)> subtreePaintFilter;
+
+    /// This tree's font-raster density (device pixels per logical font pixel).
+    /// 0 = not provided: font lookups fall back to FontManager's global active
+    /// DPI. WidgetTree::buildSnapshot always provides its own, so two trees
+    /// with different densities painted in one frame each rasterize at their
+    /// own size instead of racing a process-global.
+    float fontDpi = 0.0f;
 };
 
 /// One resolved draw command (render-target pixels, top-left origin, Y down).
@@ -159,6 +167,8 @@ struct UIFrameSnapshot
         .extent = glm::max(rect.extent - glm::vec2(inset * 2.0f), glm::vec2(0.0f)),
     };
 }
+
+struct Font;
 
 /// Accumulates resolved draw items during the pre-graph paint pass.
 class YA_GUI_API UIFrameBuilder
@@ -317,6 +327,24 @@ class YA_GUI_API UIFrameBuilder
     [[nodiscard]] const std::function<bool(const UIElement&)>& subtreePaintFilter() const
     {
         return _ctx.subtreePaintFilter;
+    }
+
+    /// Font lookup for paint paths. Paint-time font resolution must go through
+    /// here rather than FontManager directly: the raster density is a property
+    /// of the tree being painted (ctx.fontDpi), and a process-global active
+    /// DPI cannot answer for two trees with different densities in one frame.
+    /// Returns null like FontManager::getFont when the font is unavailable.
+    std::shared_ptr<Font> getFont(const FName& fontName, uint32_t fontSize) const;
+
+    /// The tree's font density when provided (nullopt = fall back to the
+    /// global active DPI). For helpers that resolve fonts on the caller's
+    /// behalf (e.g. Style::resolveTextFont).
+    [[nodiscard]] std::optional<float> fontDpi() const
+    {
+        if (_ctx.fontDpi > 0.0f) {
+            return _ctx.fontDpi;
+        }
+        return std::nullopt;
     }
     /// Store this widget's newly painted segment into the write cache.
     void cacheItems(const UIElement* widget, size_t start);

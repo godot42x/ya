@@ -37,7 +37,7 @@ void UITextField::paintSelf(UIFrameBuilder& builder)
     // ONE state surface and the border of that state follows.
     builder.addBrush(_layoutRect, fill);
 
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, resolvedFontSize());
+    auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, resolvedFontSize());
     if (!font) {
         return;
     }

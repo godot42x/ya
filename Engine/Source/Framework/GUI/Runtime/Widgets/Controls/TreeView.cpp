@@ -473,7 +473,7 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
 
     const auto rows = flattenVisible();
     const FTreeViewStyle& style = resolvedStyle();
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
+    auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
 
     // Resolve the selection first so the dependency is recorded even when no
     // font is available (mirrors UIText::resolvedText ordering).

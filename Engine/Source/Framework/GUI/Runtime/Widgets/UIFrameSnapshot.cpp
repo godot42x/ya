@@ -8,6 +8,16 @@
 namespace ya
 {
 
+std::shared_ptr<Font> UIFrameBuilder::getFont(const FName& fontName, uint32_t fontSize) const
+{
+    // The tree's density wins when provided; the global active DPI stays the
+    // fallback for ad-hoc builders (tests, overlays outside a snapshot).
+    if (_ctx.fontDpi > 0.0f) {
+        return FontManager::get()->getFont(fontName, fontSize, _ctx.fontDpi);
+    }
+    return FontManager::get()->getFont(fontName, fontSize);
+}
+
 void UIFrameBuilder::pushClip(const Rect2D& logicalClip)
 {
     // A clip pushed while a render transform is active lives in the
@@ -283,6 +293,12 @@ void UIFrameBuilder::addText(const Rect2D& logicalRect,
     else if (vAlign == EWidgetAlignV::Bottom) {
         drawPos.y += size.y - font->lineHeight * textScaleY;
     }
+
+    // Glyph origins snap to whole device pixels: a bitmap glyph rasterized at
+    // the density ctx.fontDpi asks for maps 1:1 onto the raster only when its
+    // start sample is integral, and a fractional start under Nearest sampling
+    // resamples the atlas (the blur this snap exists to prevent).
+    drawPos = glm::round(drawPos);
 
     UIFrameDrawItem item;
     item.kind  = UIFrameDrawItem::EKind::Text;

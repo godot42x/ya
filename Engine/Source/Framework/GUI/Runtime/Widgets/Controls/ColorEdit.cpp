@@ -466,7 +466,7 @@ class FColorSwatch final : public UIElement
         if (!bMixed) {
             return;
         }
-        auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
+        auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
         if (font) {
             builder.addText(_layoutRect, "—", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
         }

@@ -232,7 +232,7 @@ void UIExpander::paintSelf(UIFrameBuilder& builder)
         }
     }
 
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
+    auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     const float packH = font ? static_cast<float>(font->lineHeight) : 0.0f;
     const FDisclosureLeading leading = layoutDisclosureLeading(header,
                                                                _arrowWidth,

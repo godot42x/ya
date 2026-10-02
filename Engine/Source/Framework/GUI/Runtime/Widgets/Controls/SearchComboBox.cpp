@@ -102,7 +102,7 @@ void UISearchComboBox::paintSelf(UIFrameBuilder& builder)
 {
     const FSearchComboStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.backgroundFill);
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (!font) {
         return;
     }

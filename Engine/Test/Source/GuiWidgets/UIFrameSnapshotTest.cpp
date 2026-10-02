@@ -35,6 +35,8 @@
 #include "Render/Resources/FontManager.h"
 #include "RHI/Core/Texture.h"
 
+#include <cmath>
+
 #include <gtest/gtest.h>
 
 #include <set>
@@ -2050,6 +2052,82 @@ TEST(UIFrameSnapshotTest, FontManagerRevisionBumpsOnRegister)
     const uint64_t before = FontManager::get()->resourceRevision();
     FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 16, makeSnapshotTestFont(16.0f, 8.0f));
     EXPECT_GT(FontManager::get()->resourceRevision(), before);
+}
+
+// Paint-time font lookups take the density from the snapshot context, not
+// from the process-global active DPI: two trees with different densities
+// (editor chrome vs game UI in PIE) interleave snapshots in one frame.
+TEST(UIFrameSnapshotTest, BuilderFontLookupFollowsTheSnapshotDensity)
+{
+    // Register the same face under two densities (registerFont keys the
+    // current active scale), then restore the global.
+    FontManager::get()->setActiveDpiScale(1.0f);
+    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 16, makeSnapshotTestFont(16.0f, 8.0f));
+    auto fontAtOne = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 16, 1.0f);
+    FontManager::get()->setActiveDpiScale(2.0f);
+    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 16, makeSnapshotTestFont(16.0f, 9.0f));
+    auto fontAtTwo = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 16, 2.0f);
+    FontManager::get()->setActiveDpiScale(1.0f);
+    ASSERT_NE(fontAtOne, nullptr);
+    ASSERT_NE(fontAtTwo, nullptr);
+    ASSERT_NE(fontAtOne, fontAtTwo);
+
+    // The context density wins...
+    UIFrameBuildContext ctxAtTwo{};
+    ctxAtTwo.fontDpi = 2.0f;
+    UIFrameBuilder   builderAtTwo(ctxAtTwo);
+    EXPECT_EQ(builderAtTwo.getFont(DEFAULT_RUNTIME_FONT_NAME, 16), fontAtTwo);
+
+    // ...and no density means the global active DPI (1.0 here).
+    UIFrameBuildContext ctxGlobal{};
+    UIFrameBuilder      builderGlobal(ctxGlobal);
+    EXPECT_EQ(builderGlobal.getFont(DEFAULT_RUNTIME_FONT_NAME, 16), fontAtOne);
+
+    // A tree-scoped snapshot carries its own density: the text item's font is
+    // the dpi-2 instance even though the global active DPI is 1.0 here. (The
+    // snapshot also re-scopes the global to the tree as the fallback for
+    // measure-time lookups -- logical metrics are dpi-independent, so that
+    // leak is harmless.)
+    WidgetTree tree({.width = 200, .height = 100});
+    tree.setDpiScale(2.0f);
+    auto  text = std::make_shared<UIText>("Label");
+    text->setText("AB");
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {100.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
+    const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_FALSE(snapshot.items.empty());
+    EXPECT_EQ(snapshot.items.front().font.get(), fontAtTwo.get());
+}
+
+// Glyph origins snap to whole device pixels: a fractional start would
+// resample the bitmap atlas under Nearest sampling and blur the text.
+TEST(UIFrameSnapshotTest, TextOriginsSnapToWholeDevicePixels)
+{
+    FontManager::get()->setActiveDpiScale(1.0f);
+    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 16, makeSnapshotTestFont(16.0f, 8.0f));
+
+    WidgetTree tree({.width = 200, .height = 100});
+    auto  text = std::make_shared<UIText>("Label");
+    text->setText("AB");
+    FCanvasSlotArgs slot;
+    slot.offset    = {10.0f, 10.0f};
+    slot.fixedSize = {100.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
+
+    UIFrameBuildContext ctx{};
+    ctx.offset = {10.5f, 20.25f}; // fractional target-space origin
+    const UIFrameSnapshot snapshot = tree.buildSnapshot(ctx);
+    bool bFoundText = false;
+    for (const UIFrameDrawItem& item : snapshot.items) {
+        if (item.kind != UIFrameDrawItem::EKind::Text) {
+            continue;
+        }
+        bFoundText = true;
+        EXPECT_NEAR(item.pos.x, std::round(item.pos.x), 1e-4f);
+        EXPECT_NEAR(item.pos.y, std::round(item.pos.y), 1e-4f);
+    }
+    EXPECT_TRUE(bFoundText);
 }
 
 TEST(UIFrameSnapshotTest, FontResourceReadyRelayoutsNestedText)

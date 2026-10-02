@@ -20,7 +20,7 @@ void UIText::paintSelf(UIFrameBuilder& builder)
                                                                : ReactiveBase::EDirtyLevel::Paint;
     const std::string&               text  = resolvedText(level);
     const FTextStyle                style = resolvedStyle(level);
-    auto                             font  = resolveTextFont(style);
+    auto                             font  = resolveTextFont(style, builder.fontDpi());
     if (!font) {
         return;
     }

@@ -98,7 +98,7 @@ void UISpinBox::paintSelf(UIFrameBuilder& builder)
     builder.addBrush(minusRect, _hoveredZone == 0 ? style.buttonHoveredFill : style.buttonFill);
     builder.addBrush(plusRect, _hoveredZone == 1 ? style.buttonHoveredFill : style.buttonFill);
 
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (!font) {
         return;
     }

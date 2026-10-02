@@ -114,7 +114,7 @@ void UIDragFloat::paintSelf(UIFrameBuilder& builder)
     // The state brush owns fill + edge (FBrush::borderColor), so a hover or a
     // drag lifts the outline with the fill instead of a parallel outline field.
     builder.addBrush(_layoutRect, fill);
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
+    auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (!font) {
         return;
     }

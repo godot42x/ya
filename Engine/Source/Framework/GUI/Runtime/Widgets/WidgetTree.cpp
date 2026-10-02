@@ -754,10 +754,12 @@ void WidgetTree::setDpiScale(float scale)
 
 void WidgetTree::publishDpiScale(float scale)
 {
+    // The tree folds it into target-pixel mapping AND its own font lookups at
+    // buildSnapshot (ctx.fontDpi). No process-global write here: two trees with
+    // different densities (editor chrome vs game UI in PIE) interleave their
+    // snapshots in one frame, and a global active DPI would make whichever
+    // published last answer for both.
     setDpiScale(scale);
-    // Same value on both consumers: the tree folds it into target-pixel
-    // mapping at buildSnapshot; the font stack rasterizes glyphs at it.
-    FontManager::get()->setActiveDpiScale(_dpiScale);
 }
 
 void WidgetTree::setClipboardText(std::string text)
@@ -903,10 +905,16 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 
     // Pass the DPI-folded scale to the builder: uiScale is the single
     // logical->target-pixel factor it reads. User zoom (ctx.uiScale) and DPI
-    // (_dpiScale) stay decoupled up to this point.
+    // (_dpiScale) stay decoupled up to this point. Font lookups take THIS
+    // tree's density from the context; the global active DPI is scoped to the
+    // snapshot only as a fallback for measure-time and out-of-snapshot lookups
+    // (logical font metrics are dpi-independent, so those calls never need a
+    // specific density).
     UIFrameBuildContext effectiveCtx = ctx;
     effectiveCtx.uiScale = effectiveScale;
+    effectiveCtx.fontDpi = _dpiScale;
     effectiveCtx.textureCatalog = &_textureCatalog;
+    FontManager::get()->setActiveDpiScale(_dpiScale);
 
     std::chrono::steady_clock::duration layoutDur{};
     if (_bLayoutDirty) {

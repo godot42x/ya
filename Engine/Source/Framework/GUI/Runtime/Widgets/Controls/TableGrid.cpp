@@ -205,7 +205,7 @@ void UITableGrid::paintSelf(UIFrameBuilder& builder)
     // font is available.
     const std::string selectedId = _selectedId ? _selectedId->get() : std::string{};
 
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     const auto colRects = columnRects();
     if (!_rows || colRects.empty()) {
         return;

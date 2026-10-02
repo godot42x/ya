@@ -243,11 +243,11 @@ std::shared_ptr<Font> FontManager::findBestBase(const FName &fontName, uint32_t 
     return bestBase;
 }
 
-std::shared_ptr<Font> FontManager::getFont(const FName &fontName, uint32_t fontSize, float dpiScale)
+std::shared_ptr<Font> FontManager::getFont(const FName &fontName, uint32_t fontSize, std::optional<float> dpiScale)
 {
-    // When no explicit dpiScale is passed (default 1.0), use the host-provided
-    // active device scale so bitmap glyphs are baked at the device resolution.
-    const float effectiveDpi = (dpiScale != 1.0f) ? dpiScale : _activeDpiScale;
+    // When no explicit dpiScale is passed, use the host-provided active device
+    // scale so bitmap glyphs are baked at the device resolution.
+    const float effectiveDpi = dpiScale.value_or(_activeDpiScale);
     // Fast path: exact-size view or base already materialized. The raster size
     // of a bitmap glyph depends on dpiScale, so the cache key must include it.
     const std::string key = makeCacheKey(fontName, fontSize) + std::format(":{}", effectiveDpi);
@@ -341,12 +341,12 @@ void FontManager::clearCache()
 }
 
 std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &fontPath, const FName &fontName, uint32_t fontSize,
-                                            std::optional<EFontRenderMode> mode, float dpiScale)
+                                            std::optional<EFontRenderMode> mode, std::optional<float> dpiScale)
 {
     YA_PROFILE_FUNCTION_LOG();
-    // When no explicit dpiScale is passed (default 1.0), use the host-provided
-    // active device scale so bitmap glyphs are baked at the device resolution.
-    const float effectiveDpi = (dpiScale != 1.0f) ? dpiScale : _activeDpiScale;
+    // When no explicit dpiScale is passed, use the host-provided active device
+    // scale so bitmap glyphs are baked at the device resolution.
+    const float effectiveDpi = dpiScale.value_or(_activeDpiScale);
     // Capture the render handle so getFont() can lazily build a base in the
     // correct flavor when none is preloaded (font-framework plan §1).
     _render = &render;
