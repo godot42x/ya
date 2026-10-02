@@ -82,12 +82,15 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// rect in window pixels; `framebufferScale` maps logical UI pixels to
     /// window pixels (1 for a 1:1 window scale).
     ///
+    /// Below this fit the logical canvas shrinks and layout reflows. Scaling
+    /// the reference design any smaller keeps bitmap text at the raster floor
+    /// and lets it overflow the widgets that were authored for the reference.
+    static constexpr float kMinGameUIReferenceScale = 0.5f;
+
     /// The fit factor (viewport vs reference resolution) rides the tree's
-    /// DPI axis, not uiScale: fonts must re-rasterize at the final pixel size
-    /// or a scaled bitmap atlas turns text into blur (the Unity/UMG/Slate
-    /// approach -- scale the layout, re-rasterize the type). The density is
-    /// quantized to 1/16 steps so a continuous resize cannot spawn a new font
-    /// atlas per frame.
+    /// DPI axis, not uiScale: fonts re-rasterize at the final pixel size.
+    /// The fit is clamped to kMinGameUIReferenceScale. Integer font raster
+    /// sizes are the cache quantum, so the fit itself is not snapped.
     void setPresentation(const Rect2D& viewportPx, const glm::vec2& framebufferScale);
 
     /// Reference resolution for scale-to-fit. Zero on either axis means scale 1
@@ -95,8 +98,8 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// setPresentation.
     void setReferenceResolution(glm::uvec2 resolution);
     [[nodiscard]] glm::uvec2 referenceResolution() const { return _referenceResolution; }
-    /// The fit factor actually in effect (quantized with the density, so the
-    /// mapping, the pointer mapping and the font raster all agree).
+    /// The fit factor actually in effect (clamped to kMinGameUIReferenceScale).
+    /// Pointer mapping and the tree DPI both read it.
     [[nodiscard]] float referenceScale() const { return _referenceScale; }
 
     [[nodiscard]] WidgetTree& getTree() { return _tree; }

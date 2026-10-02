@@ -110,20 +110,18 @@ void GameUIHost::setPresentation(const Rect2D& viewportPx, const glm::vec2& fram
     const float logicalWidth  = std::max(viewportPx.extent.x, 1.0f) / fb;
     const float logicalHeight = std::max(viewportPx.extent.y, 1.0f) / std::max(framebufferScale.y, 0.01f);
 
-    // Fit: the layout canvas is at least the reference on both axes. The fit
-    // factor becomes the tree's font-raster density (see the setPresentation
-    // contract), quantized to 1/16 steps: a continuously resized viewport
-    // would otherwise materialize a new font atlas per frame.
+    // Fit rides the tree DPI so text re-rasterizes at the device pixel size.
+    // Below kMinGameUIReferenceScale the logical canvas shrinks instead, and
+    // responsive layout reflows. The fit is not snapped: font atlases are
+    // keyed by integer raster pixels, which is the quantum.
     float scale = 1.0f;
     if (_referenceResolution.x > 0 && _referenceResolution.y > 0) {
         scale = std::min(logicalWidth / static_cast<float>(_referenceResolution.x),
                          logicalHeight / static_cast<float>(_referenceResolution.y));
-        scale = std::max(scale, 0.01f);
+        scale = std::max(scale, kMinGameUIReferenceScale);
     }
-    float density = fb * scale;
-    density = std::max(0.05f, std::floor(density * 16.0f + 0.5f) / 16.0f);
-    _referenceScale = density / fb; // the fit implied by the quantized density
-    _tree.setDpiScale(density);
+    _referenceScale = scale;
+    _tree.setDpiScale(fb * _referenceScale);
     _tree.setLogicalExtent(Extent2D::fromVec2({logicalWidth / _referenceScale, logicalHeight / _referenceScale}));
 }
 

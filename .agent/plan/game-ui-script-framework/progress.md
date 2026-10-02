@@ -225,3 +225,12 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 - 编辑器设计器的默认设计分辨率读这个值（工程没设时仍是 1280x720）。`2DRpgPrototype.yaproject` 设为 1280x720。
 
 验证：`GameUIHostTest.ReferenceResolutionScalesLayoutAndPointer`、`ProjectDescriptorTest.LoadsUIReferenceResolution`。
+
+## 2026-10-02 — 参考分辨率适配的缩放下限
+
+完成：
+
+- `GameUIHost::kMinGameUIReferenceScale`（0.5）。fit 低于它时夹到 0.5，逻辑画布缩小，布局重排，不再继续缩小文字。
+- 去掉密度的 1/16 量化。图集按整像素栅格尺寸做键，0.54 这样的 fit 原样保留。fit 仍走树 dpi，`uiScale` 保持 1。
+
+验证：`GameUIHostTest.ReferenceScaleFloorsAndRidesTheDpiAxis`、`InputMappingFollowsTheReferenceScale`、`ReferenceResolutionScalesLayoutAndPointer`。

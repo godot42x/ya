@@ -21,6 +21,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <fstream>
 
 namespace ya
@@ -242,27 +243,38 @@ TEST(GameUIHostTest, InputRoutesThroughPresentationMapping)
     EXPECT_EQ(clicks, 1);
 }
 
-// The reference fit factor rides the tree's DPI axis (fonts re-rasterize at
-// the final pixel size) and is quantized to 1/16 steps so a continuously
-// resized viewport cannot materialize a new font atlas per frame. The
-// mapping, the pointer mapping and the raster density all read the same
-// quantized density.
-TEST(GameUIHostTest, ReferenceScaleIsQuantizedAndRidesTheDpiAxis)
+// The reference fit rides the tree's DPI axis (fonts re-rasterize at the
+// final pixel size). It is not snapped to a fraction: integer font raster
+// sizes are the atlas quantum. Below kMinGameUIReferenceScale the logical
+// canvas shrinks so layout reflows instead of scaling further.
+TEST(GameUIHostTest, ReferenceScaleFloorsAndRidesTheDpiAxis)
 {
+    EXPECT_FLOAT_EQ(GameUIHost::kMinGameUIReferenceScale, 0.5f);
+
     GameUIHost host;
     host.setReferenceResolution({1000, 1000});
-    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {400.0f, 300.0f}}, {2.0f, 2.0f});
 
-    // Logical viewport 200x150 vs reference 1000x1000: raw fit 0.15, density
-    // 2 x 0.15 = 0.3 -> quantized to 5/16. The stored fit is the one implied
-    // by the quantized density.
-    EXPECT_FLOAT_EQ(host.referenceScale(), 0.3125f / 2.0f);
-    EXPECT_FLOAT_EQ(host.getTree().getDpiScale(), 0.3125f);
-    EXPECT_FLOAT_EQ(host.getTree().getLogicalExtent().width, 200.0f / (0.3125f / 2.0f));
-    EXPECT_FLOAT_EQ(host.getTree().getLogicalExtent().height, 150.0f / (0.3125f / 2.0f));
+    // 540 / 1000 = 0.54, above the floor, and not a 1/16 step. It stays 0.54.
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {540.0f, 540.0f}}, {1.0f, 1.0f});
+    const float unsnapped = 540.0f / 1000.0f;
+    EXPECT_FLOAT_EQ(host.referenceScale(), unsnapped);
+    EXPECT_FLOAT_EQ(host.getTree().getDpiScale(), unsnapped);
+    EXPECT_NE(unsnapped, std::floor(unsnapped * 16.0f + 0.5f) / 16.0f);
+    // Extent2D stores whole pixels, so 540/0.54 (999.99994) lands on 999.
+    EXPECT_EQ(host.getTree().getLogicalExtent().width, static_cast<uint32_t>(540.0f / unsnapped));
+    EXPECT_EQ(host.getTree().getLogicalExtent().height, static_cast<uint32_t>(540.0f / unsnapped));
+
+    // Logical viewport 200x150 vs reference 1000: raw fit 0.15, clamped to the
+    // floor. The layout canvas is smaller than the reference, so it reflows.
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {400.0f, 300.0f}}, {2.0f, 2.0f});
+    EXPECT_FLOAT_EQ(host.referenceScale(), GameUIHost::kMinGameUIReferenceScale);
+    EXPECT_FLOAT_EQ(host.getTree().getDpiScale(), 2.0f * GameUIHost::kMinGameUIReferenceScale);
+    EXPECT_FLOAT_EQ(host.getTree().getLogicalExtent().width, 200.0f / GameUIHost::kMinGameUIReferenceScale);
+    EXPECT_FLOAT_EQ(host.getTree().getLogicalExtent().height, 150.0f / GameUIHost::kMinGameUIReferenceScale);
+    EXPECT_LT(host.getTree().getLogicalExtent().width, 1000.0f);
 }
 
-TEST(GameUIHostTest, InputMappingFollowsTheQuantizedDensity)
+TEST(GameUIHostTest, InputMappingFollowsTheReferenceScale)
 {
     GameUIHost host;
     host.setReferenceResolution({1000, 1000});
@@ -281,11 +293,14 @@ TEST(GameUIHostTest, InputMappingFollowsTheQuantizedDensity)
     button->onClicked.addLambda([&] { ++clicks; });
     host.buildSnapshot();
 
-    // Logical (100,100) lands at window pos + logical x (fb x quantized fit)
-    // = (100,50) + (100,100) x 0.3125.
-    EXPECT_EQ(host.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), {100.0f + 31.25f, 50.0f + 31.25f}),
+    // Raw fit 0.15 clamps to the floor. Logical (100,100) lands at
+    // window pos + logical * (framebufferScale * referenceScale).
+    const float devicePerLogical = 2.0f * GameUIHost::kMinGameUIReferenceScale;
+    EXPECT_EQ(host.dispatchEvent(MouseButtonPressedEvent(EMouse::Left),
+                                 {100.0f + 100.0f * devicePerLogical, 50.0f + 100.0f * devicePerLogical}),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(host.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), {100.0f + 31.25f, 50.0f + 31.25f}),
+    EXPECT_EQ(host.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left),
+                                 {100.0f + 100.0f * devicePerLogical, 50.0f + 100.0f * devicePerLogical}),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(clicks, 1);
 }

@@ -60,7 +60,7 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
    - 缓存 key 是 `name:rasterPx`（整数），不是 float dpi。`getFont` / `loadFont` 的 `dpiScale` 参数保留但忽略。`setActiveDpiScale` 不再被读取。Bitmap 图集每族最多 `kMaxBitmapAtlasesPerFamily`（= `kBitmapMaxSize`，即 1..48 每个整像素一张）；超出时丢掉最旧且 `use_count` 只剩缓存自身的项，快照还握着的不逐出。SDF 视图另有 `kMaxSdfViewsPerFamily = 32`，共享同一张 SDF base。
    - 文字 glyph 起点在 `UIFrameBuilder::addText` emit 时吸附整设备像素（Nearest 采样下小数起点会重采样图集）。笔位用栅格字体的 advance，仍在设备像素里。
    - 设计器滚轮走同一条：预览树 dpi 保持 1，`EditorUICanvasCompositor` 把 `view.zoom` 乘进 `uiScale`，于是文字和几何一起变大，并按整像素重栅格。
-   - GameUIHost 的 fit 仍走树 dpi 轴，并且仍按 1/16 量化密度（float dpi 缓存已经不存在，这档量化会在游戏 UI 的 scale 下限里一起拿掉）。
+   - GameUIHost 的 fit 走树 dpi 轴，不再做 1/16 量化（图集的量子是整像素栅格尺寸）。fit 低于 `GameUIHost::kMinGameUIReferenceScale`（0.5）时夹到 0.5，逻辑画布改按这个比例缩小，响应式布局重排，而不是继续把文字缩到栅格下限以下。
    - 当前 `GUIAppHost` 用 `presentExtent/logicalExtent` 比值设树 DPI（非真机 DPR）；HiDPI 需改系统 API 取真机 DPR（架构改进项，非紧急）。
 
 7. **主字面必须打包进仓，不要探测系统字体**
