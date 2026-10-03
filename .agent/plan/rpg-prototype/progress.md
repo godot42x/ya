@@ -463,3 +463,21 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   `ya.py run` 2DRpgPrototype `--exit-after-frame=120` 退出码 0。
 - 偏离 / 未完成：`SpriteAnimation` 与 pivot 是步骤 4 的后两项，下一个 checkpoint；两个头里关于「不透明写深度」的
   注释还是旧口径，随步骤 5 一起改，没有顺手动。
+
+## 2026-10-03 — SpriteAnimation（评审步骤 4，第二部分）
+
+- 设计由用户选定：组件自带 `columns × rows` 均匀网格（帧下标 = `row * columns + column`，行主序），不复用 Tileset 资产、不逐帧写
+  uvRect；时间由引擎系统推进，脚本只调 `anim:play(name)` / `setFrame` / `stop`。
+- `SpriteAnimationComponent`（`Scene2D`）：`columns / rows / clips[{name, frames, fps, bLoop}] / clip`（开局自动播的片段）；
+  运行态（片段下标、已播时间、是否在播）不序列化。只写同实体 `Sprite2DComponent.uvRect`，翻转、尺寸、tint 不碰。
+  `play` / `setFrame` 立即写 uvRect，因为系统在 Lua 之前跑，不立即写脚本要晚一帧才看到。同名片段正在播时 `play` 是空操作，
+  脚本可以每帧调。未知片段返回 false 并告警。
+- `SpriteAnimationSystem`：Simulation 组（游戏暂停时跟着停）；tick 策略只在 runtime / simulation 模式推进，因为 uvRect 要序列化，
+  编辑器里不能让动画改写正在编辑的场景。
+- Player 的走路循环（`WALK_COLUMNS` + `walkTime`）、Npc 转向、Chest 开合都改成按名播片段；`Actor.heroFrame` 和 Chest 的图集计算删除。
+  Town / House / TownLarge 场景加了组件；`Tools/make_scale_scene.py` 同步产出，重新生成会得到同样的组件。
+- 验证：`SpriteAnimationTest` 9 例（网格、立即写、未知片段、不重启、循环 / 一次性、setFrame、首帧启动、策略关闭时不推进、序列化往返）；
+  `ya-testing` 1559 过、1 跳过（同前）；新增 `Script/automation/2d-rpg/walk_animation.py`（站立朝下 → 右走循环三个列 → 松开站立朝右），
+  同目录三个旧脚本照样通过；编辑器冒烟门禁 83 / 84 fps，字体构建 0。
+- 偏离 / 未覆盖：House 里宝箱开合没有在 play 下端到端验证（`scene.load` 不重启 runtime，已知问题），只验证了场景载入后组件
+  数据正确；Inspector 里编辑 clips 没有目视确认。pivot 是步骤 4 最后一项，下一个 checkpoint。

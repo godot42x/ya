@@ -160,10 +160,13 @@
     {
       "id": "sprite_animation",
       "phase": "review-4",
-      "status": "not_started",
+      "status": "done",
       "driven_by": "D-T2 gate fired: Player / Npc / Chest each compute uvRect",
       "evidence": [
-        "plus Sprite2DComponent pivot / anchor"
+        "SpriteAnimationComponent (columns x rows grid, named clips) + SpriteAnimationSystem (Simulation group, runtime/simulation only); Player / Npc / Chest scripts play clips by name",
+        "SpriteAnimationTest 9 cases; Script/automation/2d-rpg/walk_animation.py; Town / House / TownLarge scenes carry the component",
+        "not covered: Chest open/close in House under play (scene.load does not restart runtime); Inspector editing of clips not eyeballed",
+        "pivot / anchor on Sprite2DComponent is the next checkpoint, not part of this entry"
       ]
     },
     {

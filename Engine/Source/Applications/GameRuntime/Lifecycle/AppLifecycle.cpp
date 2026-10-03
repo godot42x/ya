@@ -48,6 +48,7 @@
 #include "Render3D/Material/MaterialFactory.h"
 
 #include "ECS/Systems/AnimationSystem.h"
+#include "Scene2D/SpriteAnimationSystem.h"
 
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
@@ -309,6 +310,19 @@ void App::init(AppDesc ci)
     });
     sys4->init();
     app._systems.emplace_back(sys4, ESystemTickGroup::Simulation);
+    auto spriteAnimation = ya::makeShared<SpriteAnimationSystem>();
+    spriteAnimation->_sceneProvider = [&app]() -> Scene*
+    {
+        return app.getSceneServices().getActiveScene();
+    };
+    // Authored uvRect is serialized: animate only a running game, never a
+    // scene open for editing.
+    spriteAnimation->_tickPolicy = [&app]()
+    {
+        return app.isRuntimeMode() || app.isSimulationMode();
+    };
+    spriteAnimation->init();
+    app._systems.emplace_back(spriteAnimation, ESystemTickGroup::Simulation);
     auto sys5 = ya::makeShared<LinkageFramework>();
     // Light billboard policy is injected here (Host owns the config source);
     // the adapter never reaches Host/Config.

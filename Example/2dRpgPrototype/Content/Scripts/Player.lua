@@ -1,5 +1,7 @@
--- Grid walking: one tile per step, eased between tiles, four facings with a
--- three-frame walk cycle from Textures/hero_walk.png (16x24 frames).
+-- Grid walking: one tile per step, eased between tiles, four facings. The
+-- frames come from the entity's SpriteAnimationComponent (clips idle_<facing>
+-- and walk_<facing> over Textures/hero_walk.png); this script only names the
+-- clip that fits the pose.
 --
 -- The player keeps no grid of its own: its cell is a cell of the
 -- TilemapComponent named below, so "where is this tile" (cellToWorld), "may I
@@ -11,20 +13,15 @@ local Actor = require("Actor")
 local Script = ScriptBase:new()
 
 local STEP_SECONDS = 0.2
-local FRAME_SECONDS = 0.12
 local TEXELS_PER_UNIT = 16
 local MAP_NAME = "TilemapGround"
 
--- Walk columns of hero_walk.png: 0 left foot, 1 stand, 2 right foot.
-local STAND_COLUMN = 1
-local WALK_COLUMNS = { 0, 1, 2, 1 }
-
 -- Checked in order; the first key held wins.
 local DIRECTIONS = {
-    { keys = { EKey.Up, EKey.K_W }, dx = 0, dy = 1, row = 3 },
-    { keys = { EKey.Down, EKey.K_S }, dx = 0, dy = -1, row = 0 },
-    { keys = { EKey.Left, EKey.K_A }, dx = -1, dy = 0, row = 1 },
-    { keys = { EKey.Right, EKey.K_D }, dx = 1, dy = 0, row = 2 },
+    { keys = { EKey.Up, EKey.K_W }, dx = 0, dy = 1, name = "up" },
+    { keys = { EKey.Down, EKey.K_S }, dx = 0, dy = -1, name = "down" },
+    { keys = { EKey.Left, EKey.K_A }, dx = -1, dy = 0, name = "left" },
+    { keys = { EKey.Right, EKey.K_D }, dx = 1, dy = 0, name = "right" },
 }
 
 -- Facing something and tapping one of these triggers its onInteract.
@@ -65,8 +62,10 @@ local function confirmHeld()
     return false
 end
 
-function Script:showFrame(column)
-    self.sprite.uvRect = Actor.heroFrame(column, self.facing.row)
+-- Standing or walking, facing where the last step went. play() on the clip
+-- that is already running is a no-op, so this is safe to call every tick.
+function Script:showPose(bWalking)
+    self.anim:play((bWalking and "walk_" or "idle_") .. self.facing.name)
 end
 
 -- Put the sprite on its current cell, or between the two cells of a step in
@@ -129,6 +128,7 @@ end
 function Script:onInit()
     self.transform = self.entity:getTransform()
     self.sprite = self.entity:getSprite2D()
+    self.anim = self.entity:getSpriteAnimation()
     -- The sprite is centred on the entity and may be taller than a tile; lift
     -- it so the feet stand on the tile's bottom edge.
     self.footLift = (self.sprite.size.y - 1) / 2
@@ -140,10 +140,9 @@ function Script:onInit()
     self.to = nil
     self.facing = DIRECTIONS[2]
     self.progress = 0
-    self.walkTime = 0
     self.talking = false
     self.bConfirmArmed = true
-    self:showFrame(STAND_COLUMN)
+    self:showPose(false)
     self:applyPosition()
 end
 
@@ -161,16 +160,14 @@ function Script:onUpdate(dt)
 
     if self.talking then
         self.progress = 0
-        self.walkTime = 0
-        self:showFrame(STAND_COLUMN)
+        self:showPose(false)
         self:applyPosition()
         return
     end
 
     if not self.to and not self:tryStep(0) then
         self.progress = 0
-        self.walkTime = 0
-        self:showFrame(STAND_COLUMN)
+        self:showPose(false)
         self:applyPosition()
         if self.bConfirmArmed and confirmPressed() then
             self.bConfirmArmed = false
@@ -190,9 +187,7 @@ function Script:onUpdate(dt)
     end
     self:applyPosition()
 
-    self.walkTime = self.walkTime + dt
-    local frame = math.floor(self.walkTime / FRAME_SECONDS) % #WALK_COLUMNS + 1
-    self:showFrame(WALK_COLUMNS[frame])
+    self:showPose(true)
 end
 
 return Script

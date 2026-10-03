@@ -25,7 +25,7 @@
 
 步骤 4 2D 模块（可与步骤 3 并行）
 - [x] `Scene2D` target（`ya-scene-2d`）：Sprite2D / Tilemap 移出 `ya-render-3d`（Tileset 数据本来在 Core），`TilemapComponent.cpp` 拆成数据+编辑 / 查询 / 渲染展开
-- [ ] `SpriteAnimation` 组件（D-T2 决策门已触发），删 Player / Npc / Chest 三处 `uvRect`
+- [x] `SpriteAnimationComponent` + `SpriteAnimationSystem`（D-T2 决策门已触发），Player / Npc / Chest 三处脚本的 `uvRect` 计算已删，`Actor.heroFrame` 已删
 - [ ] `Sprite2DComponent` pivot / anchor
 
 步骤 5 2D 合批核心（前置：步骤 3、4）

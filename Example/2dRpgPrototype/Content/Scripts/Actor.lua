@@ -17,12 +17,4 @@ function Actor.zFor(y)
     return Actor.Z_BASE - y * Actor.Z_PER_Y
 end
 
--- hero_walk.png frame window: 3 columns (left foot, stand, right foot) x
--- 4 rows (down, left, right, up); column 1 is standing.
-function Actor.heroFrame(column, row)
-    local u0 = column / 3
-    local v0 = row / 4
-    return Vec4.new(u0, v0, u0 + 1 / 3, v0 + 1 / 4)
-end
-
 return Actor

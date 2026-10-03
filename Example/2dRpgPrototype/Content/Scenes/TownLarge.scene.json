@@ -119,6 +119,21 @@
           "sortOrder": 0,
           "pickId": 0
         },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true },
+            { "name": "walk_down", "frames": [0, 1, 2, 1], "fps": 8.3333, "bLoop": true },
+            { "name": "walk_left", "frames": [3, 4, 5, 4], "fps": 8.3333, "bLoop": true },
+            { "name": "walk_right", "frames": [6, 7, 8, 7], "fps": 8.3333, "bLoop": true },
+            { "name": "walk_up", "frames": [9, 10, 11, 10], "fps": 8.3333, "bLoop": true }
+          ],
+          "clip": "idle_down"
+        },
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -196,6 +211,17 @@
           "layer": 0,
           "sortOrder": 0,
           "pickId": 0
+        },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
         },
         "LuaScriptComponent": {
           "scripts": [
@@ -275,6 +301,17 @@
           "sortOrder": 0,
           "pickId": 0
         },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
+        },
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -352,6 +389,17 @@
           "layer": 0,
           "sortOrder": 0,
           "pickId": 0
+        },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
         },
         "LuaScriptComponent": {
           "scripts": [
@@ -431,6 +479,17 @@
           "sortOrder": 0,
           "pickId": 0
         },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
+        },
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -508,6 +567,17 @@
           "layer": 0,
           "sortOrder": 0,
           "pickId": 0
+        },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
         },
         "LuaScriptComponent": {
           "scripts": [
@@ -587,6 +657,17 @@
           "sortOrder": 0,
           "pickId": 0
         },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
+        },
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -664,6 +745,17 @@
           "layer": 0,
           "sortOrder": 0,
           "pickId": 0
+        },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
         },
         "LuaScriptComponent": {
           "scripts": [
@@ -743,6 +835,17 @@
           "sortOrder": 0,
           "pickId": 0
         },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
+        },
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -820,6 +923,17 @@
           "layer": 0,
           "sortOrder": 0,
           "pickId": 0
+        },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
         },
         "LuaScriptComponent": {
           "scripts": [
@@ -899,6 +1013,17 @@
           "sortOrder": 0,
           "pickId": 0
         },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
+        },
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -976,6 +1101,17 @@
           "layer": 0,
           "sortOrder": 0,
           "pickId": 0
+        },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
         },
         "LuaScriptComponent": {
           "scripts": [
@@ -1055,6 +1191,17 @@
           "sortOrder": 0,
           "pickId": 0
         },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
+        },
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -1132,6 +1279,17 @@
           "layer": 0,
           "sortOrder": 0,
           "pickId": 0
+        },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
         },
         "LuaScriptComponent": {
           "scripts": [
@@ -1211,6 +1369,17 @@
           "sortOrder": 0,
           "pickId": 0
         },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
+        },
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -1288,6 +1457,17 @@
           "layer": 0,
           "sortOrder": 0,
           "pickId": 0
+        },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
         },
         "LuaScriptComponent": {
           "scripts": [
@@ -1367,6 +1547,17 @@
           "sortOrder": 0,
           "pickId": 0
         },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
+        },
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -1444,6 +1635,17 @@
           "layer": 0,
           "sortOrder": 0,
           "pickId": 0
+        },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
         },
         "LuaScriptComponent": {
           "scripts": [
@@ -1523,6 +1725,17 @@
           "sortOrder": 0,
           "pickId": 0
         },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
+        },
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -1601,6 +1814,17 @@
           "sortOrder": 0,
           "pickId": 0
         },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
+        },
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -1678,6 +1902,17 @@
           "layer": 0,
           "sortOrder": 0,
           "pickId": 0
+        },
+        "SpriteAnimationComponent": {
+          "columns": 3,
+          "rows": 4,
+          "clips": [
+            { "name": "idle_down", "frames": [1], "fps": 1.0, "bLoop": true },
+            { "name": "idle_left", "frames": [4], "fps": 1.0, "bLoop": true },
+            { "name": "idle_right", "frames": [7], "fps": 1.0, "bLoop": true },
+            { "name": "idle_up", "frames": [10], "fps": 1.0, "bLoop": true }
+          ],
+          "clip": "idle_down"
         },
         "LuaScriptComponent": {
           "scripts": [

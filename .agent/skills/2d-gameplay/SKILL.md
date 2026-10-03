@@ -20,6 +20,14 @@
   这是在补"没有 y-sort"的洞：`rpg-prototype` 评审步骤 5 把画家顺序（layer → y → order）
   做成 2D 合批的排序键后删除，届时脚本不再算 z。
 
+## 帧动画
+
+- 精灵换帧用 `SpriteAnimationComponent`（`Scene2D/SpriteAnimationComponent.h`，与 `Sprite2DComponent` 同实体），脚本不再自己算 `uvRect`。
+- 图像按 `columns × rows` 均匀切格，帧下标 = `row * columns + column`，行主序、从左上开始。`clips` 是命名片段：`frames`（可重复，如走路 `{0,1,2,1}`）、`fps`、`bLoop`。`clip` 是游戏开始时自动播的片段。
+- 脚本：`local anim = self.entity:getSpriteAnimation()`，`anim:play("walk_left")`（每帧都调没关系：正在播的同名片段不重启；未知名字返回 false 并告警）、`anim:stop()`、`anim:setFrame(i)`（停下并显示某一帧）、`anim:isPlaying()`、`anim:currentClip()`。
+- 组件只写 `Sprite2DComponent.uvRect`。`play` / `setFrame` 立即写，脚本同一帧就看到；时间由 `SpriteAnimationSystem` 推进（Simulation 组，游戏暂停时停；只在 runtime / simulation 模式推进，编辑器里不动，免得改写要序列化的 `uvRect`）。场景里的 `uvRect` 仍应摆成待机帧，编辑器预览看的是它。
+- 一次性片段（`bLoop = false`）停在最后一帧，`isPlaying()` 变 false；再 `play` 同一个片段会重来。
+
 ## 地图即碰撞权威
 
 - 通行、格子的定义全部问 tilemap 组件，不问物理：`worldToCell` / `cellToWorld` /

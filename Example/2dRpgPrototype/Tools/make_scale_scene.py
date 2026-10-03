@@ -41,6 +41,23 @@ HERO_SHEET = "Content:Textures/hero_walk.png"
 ATLAS_TILESET = "Content:Tilesets/town.yatileset.json"
 STAND_DOWN_FRAME = (1 / 3, 0.0, 2 / 3, 0.25)
 
+# hero_walk.png is a 3x4 grid (left foot, stand, right foot; down, left, right,
+# up). Frame index = row * 3 + column. Actors play clips by name from scripts.
+_FACINGS = [("down", 0), ("left", 1), ("right", 2), ("up", 3)]
+_WALK_FPS = 8.3333
+
+
+def _clip(name: str, frames: list[int], fps: float) -> dict:
+    return {"name": name, "frames": frames, "fps": fps, "bLoop": True}
+
+
+def hero_animation(walks: bool) -> dict:
+    clips = [_clip(f"idle_{name}", [row * 3 + 1], 1.0) for name, row in _FACINGS]
+    if walks:
+        clips += [_clip(f"walk_{name}", [row * 3, row * 3 + 1, row * 3 + 2, row * 3 + 1], _WALK_FPS)
+                  for name, row in _FACINGS]
+    return {"columns": 3, "rows": 4, "clips": clips, "clip": "idle_down"}
+
 
 def player_cell() -> tuple[int, int]:
     return (WIDTH // 2, HEIGHT // 2)
@@ -103,8 +120,8 @@ def build_layers() -> tuple[list[int], list[int], list[int]]:
 def sprite_entity(entity_id: int, name: str, position: tuple[float, float, float],
                   texture: str, uv_rect: tuple[float, float, float, float],
                   size: tuple[float, float], tint: tuple[float, float, float, float],
-                  script: str) -> dict:
-    return {
+                  script: str, animation: dict | None = None) -> dict:
+    entity = {
         "id": entity_id,
         "name": name,
         "components": {
@@ -135,6 +152,15 @@ def sprite_entity(entity_id: int, name: str, position: tuple[float, float, float
             "LuaScriptComponent": {"scripts": [{"enabled": True, "scriptPath": script}]},
         },
     }
+    if animation is not None:
+        components = entity["components"]
+        entity["components"] = {
+            key: value for key, value in (
+                list(components.items())[:2]
+                + [("SpriteAnimationComponent", animation)]
+                + list(components.items())[2:])
+        }
+    return entity
 
 
 def camera_entity() -> dict:
@@ -198,7 +224,7 @@ def build_entities() -> tuple[list[dict], tuple[list[int], list[int], list[int]]
     entities: list[dict] = [
         camera_entity(),
         sprite_entity(1021, "Player", (player_cell()[0] + 0.5, player_cell()[1] + 0.5, 0.1), HERO_SHEET, STAND_DOWN_FRAME,
-                      (1.0, 1.5), (1.0, 1.0, 1.0, 1.0), "Content/Scripts/Player.lua"),
+                      (1.0, 1.5), (1.0, 1.0, 1.0, 1.0), "Content/Scripts/Player.lua", hero_animation(True)),
     ]
 
     rng = random.Random(7)
@@ -210,7 +236,7 @@ def build_entities() -> tuple[list[dict], tuple[list[int], list[int], list[int]]
         tint = (0.55 + 0.25 * ((index % 3) / 2.0), 0.7 + 0.2 * (index % 2), 1.0, 1.0)
         entities.append(sprite_entity(1100 + index, f"Npc{index + 1}", (x + 0.5, y + 0.5, 0.1),
                                       HERO_SHEET, STAND_DOWN_FRAME, (1.0, 1.5), tint,
-                                      "Content/Scripts/Npc.lua"))
+                                      "Content/Scripts/Npc.lua", hero_animation(False)))
 
     entities.append(tilemap_entity(ground, decor, overlay))
     return entities, (ground, decor, overlay)

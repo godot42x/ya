@@ -11,6 +11,7 @@ target("ya-scene-2d")
     add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h")
     add_deps("ya-foundation-core", "ya-ecs-core", "ya-scene-3d", { public = true })
-    -- TransformSystem::computeWorldMatrix, used by the tilemap query face.
-    add_deps("ya-ecs-systems")
+    -- TransformSystem::computeWorldMatrix (tilemap query face) and Scene
+    -- (SpriteAnimationSystem walks its registry).
+    add_deps("ya-ecs-systems", "ya-scene-core")
     add_packages("glm", "entt", { public = true })
