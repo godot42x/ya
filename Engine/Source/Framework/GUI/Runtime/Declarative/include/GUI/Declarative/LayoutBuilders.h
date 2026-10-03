@@ -679,6 +679,36 @@ class UIExpanderWidgetBuilder final : public TUIWidgetChildrenBuilder<UIExpander
 
     using TUIWidgetChildrenBuilder::child;
 
+    /// Attach into the header's trailing actions region (`UIExpanderHeader`)
+    /// instead of the collapsible body. Overlay slot semantics: `hAlign(End)`
+    /// pins a control to the header's right edge. The region is created on
+    /// first use and survives collapse.
+    UIExpanderWidgetBuilder& headerChild(UIElementRef node, const FOverlaySlotArgs& slot) &
+    {
+        _widget->getHeaderActions().addDetachedChild(std::move(node), [&slot](UIElement&, UISlot& childSlot) {
+            childSlot.applyArgs(slot);
+        });
+        return *this;
+    }
+    UIExpanderWidgetBuilder&& headerChild(UIElementRef node, const FOverlaySlotArgs& slot) &&
+    {
+        headerChild(std::move(node), slot);
+        return std::move(*this);
+    }
+
+    template<UIWidgetBuilder TChild>
+    UIExpanderWidgetBuilder& headerChild(TChild&& builder, const FOverlaySlotArgs& slot) &
+    {
+        headerChild(takeMountRef(std::forward<TChild>(builder)), slot);
+        return *this;
+    }
+    template<UIWidgetBuilder TChild>
+    UIExpanderWidgetBuilder&& headerChild(TChild&& builder, const FOverlaySlotArgs& slot) &&
+    {
+        headerChild(takeMountRef(std::forward<TChild>(builder)), slot);
+        return std::move(*this);
+    }
+
     UIExpanderWidgetBuilder& child(UIElementRef node, const FBoxSlotArgs& slot) &
     {
         this->applySlotArgs(std::move(node), slot);

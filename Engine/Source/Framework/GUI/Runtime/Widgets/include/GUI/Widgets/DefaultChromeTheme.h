@@ -474,7 +474,9 @@ inline void defineChromeStyles(ya::UITheme& theme, const tokens::FPalette& p)
     expander.hoveredFill     = surface(p.hover, radius::kRow);
     expander.pressedFill     = surface(p.pressed, radius::kRow);
     expander.focusedFill     = surface(p.selected, radius::kRow);
-    expander.arrowColor      = p.text3;
+    // The disclosure is the header's primary affordance: text2 ink, and the
+    // arrow box lights only while the pointer is on it.
+    expander.arrowColor      = p.text2;
     expander.arrowHoveredFill = surface(p.hover, radius::kChip);
     expander.guideColor      = p.borderSubtle;
     expander.fontSize        = ya::gui_type::kSmall;

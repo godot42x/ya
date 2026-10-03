@@ -163,6 +163,25 @@ inline std::shared_ptr<UITheme> buildEditorTheme(
     tree.fontSize       = editor_type::kBody;
     bake.defineFamilyAndEditor(StyleKey::Tree, std::move(tree));
 
+    // Header action buttons (component-header Remove). They sit ON the framed
+    // expander bar, whose fill is `raised` — the same plane as the default
+    // button fill, so the button read as part of the bar and the plain hover
+    // wash (~0.015 over raised) never separated the states. A sunk `well`
+    // fill separates the control from the bar; hover lifts it light, press
+    // goes to the pressed wash.
+    const gui_chrome::tokens::FPalette palette = gui_chrome::tokens::palette(bDark, flavor);
+    FButtonStyle headerButton = bake.copyFamily<FButtonStyle>(StyleKey::Button);
+    headerButton.normalFill  = gui_chrome::tokens::surface(palette.well,
+                                                           gui_chrome::tokens::radius::kControl,
+                                                           palette.borderSubtle);
+    headerButton.hoveredFill = gui_chrome::tokens::surface(palette.hover,
+                                                           gui_chrome::tokens::radius::kControl,
+                                                           palette.borderHover);
+    headerButton.pressedFill = gui_chrome::tokens::surface(palette.pressed,
+                                                           gui_chrome::tokens::radius::kControl,
+                                                           palette.borderHover);
+    bake.defineEditorOnly("header_button", std::move(headerButton));
+
     FMenuStyle menu = bake.copyFamily<FMenuStyle>(StyleKey::Menu);
     menu.fontSize   = editor_type::kBody;
     bake.defineFamilyAndEditor(StyleKey::Menu, std::move(menu));

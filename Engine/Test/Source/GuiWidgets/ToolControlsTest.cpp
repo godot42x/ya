@@ -27,6 +27,9 @@
 #include "GUI/Widgets/Controls/SpinBox.h"
 #include "GUI/Widgets/Controls/ColorEdit.h"
 #include "GUI/Widgets/Controls/Expander.h"
+#include "GUI/Widgets/UIDocument.h"
+#include "GUI/Widgets/UITypeIds.h"
+#include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "Render/Resources/FontManager.h"
 
@@ -2474,6 +2477,178 @@ TEST(ToolControlsTest, ExpanderHiddenDisclosureKeepsIconOnly)
     EXPECT_EQ((*node)["control"]["disclosure"], "hidden");
     EXPECT_TRUE((*node)["control"]["hasIcon"].get<bool>());
 }
+
+TEST(ToolControlsTest, ExpanderArrowHoverLightsOnlyOverTheArrow)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       expander = std::make_shared<UIExpander>("Section");
+    expander->setTitle("Transform");
+    expander->setFramed(true);
+    expander->setExpanded(true);
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {200.0f, 60.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    tree.layout();
+
+    // Over the title: the header row is hovered, the arrow is not.
+    tree.dispatchEvent(MouseMoveEvent(100.0f, 8.0f), pointAt(100.0f, 8.0f));
+    EXPECT_EQ(tree.getHovered(), expander.get());
+    EXPECT_TRUE(expander->_bHovered);
+    EXPECT_FALSE(expander->_bArrowHovered);
+
+    // Over the disclosure box: only now does the arrow light.
+    tree.dispatchEvent(MouseMoveEvent(10.0f, 8.0f), pointAt(10.0f, 8.0f));
+    EXPECT_TRUE(expander->_bArrowHovered);
+
+    // Back off the arrow (still on the header): arrow hover clears.
+    tree.dispatchEvent(MouseMoveEvent(100.0f, 8.0f), pointAt(100.0f, 8.0f));
+    EXPECT_FALSE(expander->_bArrowHovered);
+    EXPECT_TRUE(expander->_bHovered);
+}
+
+TEST(ToolControlsTest, ExpanderHeaderActionClicksButDoesNotToggle)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       expander = std::make_shared<UIExpander>("Section");
+    expander->setTitle("Transform");
+    expander->setFramed(true);
+    expander->setExpanded(true);
+    int actions = 0;
+    int toggles = 0;
+    expander->_onExpandedChanged = [&toggles](bool) { ++toggles; };
+    auto remove = std::make_shared<UIButton>("Remove");
+    remove->addDetachedChild(std::make_shared<UIText>("RemoveLabel"));
+    remove->onClicked.addLambda([&actions]() { ++actions; });
+    expander->getHeaderActions().addDetachedChild(remove, [](UIElement&, UISlot& childSlot) {
+        if (auto* overlay = childSlot.as<UIOverlaySlot>()) {
+            // Explicit size: the test env has no fonts, so an empty-label
+            // button measures 0 and a zero rect would still hit (inclusive
+            // edges), which would fake this test.
+            overlay->setHAlign(EUIOverlayAlignment::End);
+            overlay->setVAlign(EUIOverlayAlignment::Center);
+            overlay->setPreferredSize({48.0f, 20.0f});
+        }
+    });
+    auto body = std::make_shared<UIButton>("BodyBtn");
+    body->addDetachedChild(std::make_shared<UIText>("BodyLabel"));
+    expander->addDetachedChild(body, [](UIElement&, UISlot& childSlot) {
+        if (auto* box = childSlot.as<UIBoxSlot>()) {
+            box->setPreferredSize({180.0f, 28.0f});
+        }
+    });
+
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {200.0f, 80.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    tree.layout();
+
+    const Rect2D removeRect = remove->getLayoutRect();
+    ASSERT_GT(removeRect.extent.x, 0.0f);
+    ASSERT_GT(removeRect.extent.y, 0.0f);
+    // Pinned to the header row's right edge, vertically centered in it.
+    EXPECT_NEAR(removeRect.pos.y + removeRect.extent.y * 0.5f,
+                expander->_headerHeight * 0.5f,
+                1.0f);
+    EXPECT_GT(expander->getLayoutRect().pos.x + expander->getLayoutRect().extent.x - removeRect.pos.x - removeRect.extent.x,
+              -1.0f);
+    const glm::vec2 removeCenter = removeRect.pos + removeRect.extent * 0.5f;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(removeCenter.x, removeCenter.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(removeCenter.x, removeCenter.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(actions, 1);
+    EXPECT_EQ(toggles, 0);
+    EXPECT_TRUE(expander->isExpanded());
+
+    // The rest of the header still toggles.
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 12.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(40.0f, 12.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(expander->isExpanded());
+    EXPECT_EQ(actions, 1);
+    EXPECT_EQ(toggles, 1);
+}
+
+TEST(ToolControlsTest, ExpanderHeaderActionsSurviveCollapse)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       expander = std::make_shared<UIExpander>("Section");
+    expander->setTitle("Transform");
+    expander->setFramed(true);
+    expander->setExpanded(true);
+    int actions = 0;
+    auto remove = std::make_shared<UIButton>("Remove");
+    remove->addDetachedChild(std::make_shared<UIText>("RemoveLabel"));
+    remove->onClicked.addLambda([&actions]() { ++actions; });
+    expander->getHeaderActions().addDetachedChild(remove, [](UIElement&, UISlot& childSlot) {
+        if (auto* overlay = childSlot.as<UIOverlaySlot>()) {
+            overlay->setHAlign(EUIOverlayAlignment::End);
+            overlay->setVAlign(EUIOverlayAlignment::Center);
+            overlay->setPreferredSize({48.0f, 20.0f});
+        }
+    });
+
+    FCanvasSlotArgs slot;
+    slot.fixedSize      = {200.0f, 0.0f};
+    slot.widthSizeMode  = EWidgetSizeMode::Fixed;
+    slot.heightSizeMode = EWidgetSizeMode::Auto;
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    tree.layout();
+
+    expander->setExpanded(false);
+    tree.layout();
+
+    // Collapsed = header height only, but the header actions keep their rect
+    // inside the header row and stay clickable.
+    EXPECT_NEAR(expander->getLayoutRect().extent.y, expander->_headerHeight, 0.5f);
+    const Rect2D removeRect = remove->getLayoutRect();
+    ASSERT_GT(removeRect.extent.x, 0.0f);
+    ASSERT_GT(removeRect.extent.y, 0.0f);
+    EXPECT_LT(removeRect.pos.y + removeRect.extent.y, expander->_headerHeight + 1.0f);
+    const glm::vec2 removeCenter = removeRect.pos + removeRect.extent * 0.5f;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(removeCenter.x, removeCenter.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(removeCenter.x, removeCenter.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(actions, 1);
+    EXPECT_FALSE(expander->isExpanded());
+}
+
+TEST(ToolControlsTest, ExpanderHeaderActionsRoundTripThroughDocument)
+{
+    auto& registry = UITypeRegistry::instance();
+    auto  expander = std::static_pointer_cast<UIExpander>(registry.createInstance(kTypeIdExpander));
+    expander->getHeaderActions().addDetachedChild(registry.createInstance(kTypeIdButton));
+    expander->addDetachedChild(registry.createInstance(kTypeIdText));
+
+    auto document = UIDocument::fromWidget(*expander);
+    ASSERT_NE(document, nullptr);
+    auto restored = std::static_pointer_cast<UIExpander>(document->instantiate());
+    ASSERT_NE(restored, nullptr);
+
+    // The region is recognized as header chrome again, not duplicated and not
+    // re-created as a second region.
+    EXPECT_EQ(restored->getChildren().size(), 2u);
+    UIExpanderHeader* actions = restored->findHeaderActions();
+    ASSERT_NE(actions, nullptr);
+    ASSERT_EQ(actions->getChildren().size(), 1u);
+    EXPECT_NE(dynamic_cast<UIButton*>(actions->getChildren().front().get()), nullptr);
+
+    WidgetTree tree({.width = 400, .height = 300});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {200.0f, 60.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), restored, slot);
+    tree.layout();
+    const UISlot* headerSlot = restored->getSlotForChild(*actions);    ASSERT_NE(headerSlot, nullptr);
+    if (const auto* box = headerSlot->as<UIBoxSlot>()) {
+        EXPECT_FALSE(box->participatesInLayout());
+    }
+    else {
+        FAIL() << "expander header child must ride a box slot";
+    }
+}
+
 
 TEST(ToolControlsTest, DragFloatOutlineSitsInsideLayoutRect)
 {

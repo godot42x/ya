@@ -3,6 +3,7 @@
 #include "GUI/Layout/UIBoxLayout.h"
 #include "GUI/Widgets/Brush.h"
 #include "GUI/Widgets/Controls/DisclosureChrome.h"
+#include "GUI/Widgets/Controls/Overlay.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
@@ -11,6 +12,22 @@
 
 namespace ya
 {
+
+/// Trailing actions region of a `UIExpander` header (`engine.expander_header`).
+/// A real child widget so header controls are ordinary widgets — buttons,
+/// checkboxes, custom chrome — composed with standard overlay slots
+/// (`hAlign(End)` pins a control to the header's right edge). The expander
+/// keeps the region alive while collapsed (it is header chrome, not body) and
+/// clamps its painted title while the region is occupied.
+struct YA_GUI_API UIExpanderHeader final : public UIOverlay
+{
+    YA_REFLECT_BEGIN(UIExpanderHeader, UIOverlay)
+    YA_REFLECT_END()
+
+    explicit UIExpanderHeader(std::string name = "ExpanderHeader");
+
+    [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIExpanderHeader>; }
+};
 
 /// ImGui `TreeNode`: a layout host whose children are the body. The header
 /// (disclosure mark, optional icon, title) is painted by this widget.
@@ -25,7 +42,9 @@ namespace ya
 ///
 /// Children are hit-tested first, so body controls keep their input. Header
 /// clicks land here because no child covers the header. `_hitFilter` is Stop
-/// so a header click does not fall through the panel.
+/// so a header click does not fall through the panel. A `UIExpanderHeader`
+/// child (header actions) is the exception: it rides the header row, survives
+/// collapse, and its controls win the hit over the header toggle.
 struct YA_GUI_API UIExpander : public UIElement, public UIStyledWidget<UIExpander, FExpanderStyle>
 {
     using SlotArgs = FBoxSlotArgs;
@@ -53,6 +72,9 @@ struct YA_GUI_API UIExpander : public UIElement, public UIStyledWidget<UIExpande
     VisualFlag _bHovered{*this};
     VisualFlag _bPressed{*this};
     VisualFlag _bFocused{*this};
+    /// Per-control hover for the disclosure mark: the arrow box lights only
+    /// while the pointer is on it, not anywhere on the header row.
+    VisualFlag _bArrowHovered{*this};
 
     std::function<void(bool expanded)> _onExpandedChanged;
 
@@ -68,6 +90,15 @@ struct YA_GUI_API UIExpander : public UIElement, public UIStyledWidget<UIExpande
 
     void setTitle(std::string value);
     [[nodiscard]] const std::string& getTitle() const { return _title; }
+
+    /// Trailing header actions region (see `UIExpanderHeader`). Created on
+    /// first use — an expander without header actions carries none. Attach
+    /// controls to the returned region, not to the expander; its box slot
+    /// opts out of the body layout.
+    [[nodiscard]] UIExpanderHeader& getHeaderActions();
+    /// The live region without creating one (null until `getHeaderActions`).
+    [[nodiscard]] UIExpanderHeader* findHeaderActions();
+    [[nodiscard]] const UIExpanderHeader* findHeaderActions() const;
 
     /// Optional leading icon after the disclosure: `mark icon Name`. Empty
     /// resource means no icon. Hide the mark with
@@ -120,7 +151,11 @@ struct YA_GUI_API UIExpander : public UIElement, public UIStyledWidget<UIExpande
     [[nodiscard]] bool hitTestSelf(const glm::vec2& logicalPoint) const override;
     [[nodiscard]] bool isHoverable() const override { return true; }
     void onPointerEnter() override { _bHovered = true; }
-    void onPointerLeave() override { _bHovered = false; }
+    void onPointerLeave() override
+    {
+        _bHovered      = false;
+        _bArrowHovered = false;
+    }
     void resetHoverState() override { onPointerLeave(); }
     void clearTransientInputState() override;
     void onFocusGained(bool bFromKeyboard) override { _bFocused = bFromKeyboard; }
@@ -132,6 +167,13 @@ struct YA_GUI_API UIExpander : public UIElement, public UIStyledWidget<UIExpande
   private:
     void applyFramedDefaults();
     [[nodiscard]] Rect2D headerRect() const;
+    /// Trailing region of the header row: right of the disclosure/icon mark,
+    /// full header height. The painted title clamps to the region's occupied
+    /// children (see `headerActionsLeft`).
+    [[nodiscard]] Rect2D headerActionsRect() const;
+    /// Left edge of the region's rendered children, or the header's right edge
+    /// when the region is empty/absent.
+    [[nodiscard]] float  headerActionsLeft() const;
     [[nodiscard]] Rect2D bodyContentRect() const;
     [[nodiscard]] Rect2D arrowRect() const;
     [[nodiscard]] bool   headerContains(const glm::vec2& point) const;

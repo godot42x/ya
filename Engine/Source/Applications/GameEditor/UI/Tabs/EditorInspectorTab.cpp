@@ -505,8 +505,18 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
         auto column = ui::column("InspectorCompBody_" + name)
                           .setSpacing(editor_density::kRowSpacing)
                           .child(body);
+
+        auto header = ui::collapsingHeader("InspectorComp_" + name)
+                          .setTitle(name)
+                          .setDisclosureKind(EDisclosureKind::Chevron)
+                          .setExpanded(expanded)
+                          .setPadding({editor_density::kPanelPadding, editor_density::kPanelPadding})
+                          .setSpacing(editor_density::kRowSpacing);
         if (canRemoveAuthoringComponent(targets, type)) {
-            auto remove = labeledButton("InspectorRemove_" + name, "Remove Component");
+            auto remove = labeledButton("InspectorRemove_" + name, "Remove");
+            // Sits on the framed expander bar: needs its own fill or it reads
+            // as part of the bar (both are `raised` by default).
+            (void)remove.setStyleKey(editorStyle("header_button"));
             (void)remove.setOnClick([this, type]() {
                 const std::vector<Entity*> current = editorSelectionEntities(*_layer, _selection);
                 if (!removeAuthoringComponent(current, type)) {
@@ -517,17 +527,13 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
                     _layer->notifyHierarchyChanged();
                 }
             });
-            column.child(std::move(remove),
-                         ui::boxSlot().preferredSize({0.0f, editor_density::kToolbarHeight}));
+            header.headerChild(std::move(remove),
+                               ui::overlaySlot().hAlign(EUIOverlayAlignment::End)
+                                                .vAlign(EUIOverlayAlignment::Center)
+                                                .inset(FMargin{0.0f, 0.0f, 6.0f, 0.0f}));
         }
 
-        auto expander = ui::collapsingHeader("InspectorComp_" + name)
-                            .setTitle(name)
-                            .setExpanded(expanded)
-                            .setPadding({editor_density::kPanelPadding, editor_density::kPanelPadding})
-                            .setSpacing(editor_density::kRowSpacing)
-                            .child(std::move(column))
-                            .share();
+        auto expander = std::move(header).child(std::move(column)).share();
         expander->_onExpandedChanged = [this, name](bool value) {
             _componentExpanded[name] = value;
         };

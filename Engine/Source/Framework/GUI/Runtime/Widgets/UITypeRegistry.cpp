@@ -102,6 +102,8 @@ void UITypeRegistry::ensureBuiltinTypesRegistered()
                  [] { return std::make_shared<UITreeView>("TreeView"); });
     registerType({.typeId = kTypeIdExpander, .displayName = "Expander", .category = "Layout"},
                  [] { return std::make_shared<UIExpander>("Expander"); });
+    registerType({.typeId = kTypeIdExpanderHeader, .displayName = "Expander Header", .category = "Layout"},
+                 [] { return std::make_shared<UIExpanderHeader>("ExpanderHeader"); });
     registerType({.typeId = kTypeIdDockSpace, .displayName = "Dock Space", .category = "Layout"},
                  [] { return std::make_shared<UIDockSpace>("DockSpace"); });
     registerType({.typeId = kTypeIdPopupOverlay, .displayName = "Popup Overlay", .category = "Layout"},

@@ -1,8 +1,11 @@
 #include "GUI/Widgets/Controls/Expander.h"
 
 #include "Core/KeyCode.h"
+#include "Core/Log.h"
 #include "GUI/Widgets/Controls/DisclosureChrome.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
+#include "GUI/Widgets/UITypeIds.h"
+#include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "Render/Resources/FontManager.h"
 
@@ -10,6 +13,24 @@
 
 namespace ya
 {
+
+namespace
+{
+
+// Matches hitTestLayoutRect's inclusive edges, so the hover region and the hit
+// region agree at the boundary pixels.
+bool rectContains(const Rect2D& rect, const glm::vec2& point)
+{
+    return point.x >= rect.pos.x && point.x <= rect.pos.x + rect.extent.x &&
+           point.y >= rect.pos.y && point.y <= rect.pos.y + rect.extent.y;
+}
+
+} // namespace
+
+UIExpanderHeader::UIExpanderHeader(std::string name)
+    : UIOverlay(std::move(name))
+{
+}
 
 UIExpander::UIExpander(std::string name)
     : UIElement(std::move(name), "expander")
@@ -116,6 +137,69 @@ void UIExpander::setExpanded(bool expanded)
     }
 }
 
+UIExpanderHeader* UIExpander::findHeaderActions()
+{
+    for (const UIElementRef& child : getChildren()) {
+        if (auto* header = dynamic_cast<UIExpanderHeader*>(child.get())) {
+            return header;
+        }
+    }
+    return nullptr;
+}
+
+const UIExpanderHeader* UIExpander::findHeaderActions() const
+{
+    for (const UIElementRef& child : getChildren()) {
+        if (auto* header = dynamic_cast<const UIExpanderHeader*>(child.get())) {
+            return header;
+        }
+    }
+    return nullptr;
+}
+
+UIExpanderHeader& UIExpander::getHeaderActions()
+{
+    if (UIExpanderHeader* existing = findHeaderActions()) {
+        return *existing;
+    }
+    // Through the registry so the region carries its type id: document
+    // round-trips keep the region (and its children) as header chrome.
+    UIElementRef created = UITypeRegistry::instance().createInstance(kTypeIdExpanderHeader);
+    YA_CORE_ASSERT(created, "UIExpanderHeader is not registered in UITypeRegistry");
+    UIExpanderHeader& ref = *static_cast<UIExpanderHeader*>(created.get());
+    addDetachedChild(std::move(created));
+    return ref;
+}
+
+Rect2D UIExpander::headerActionsRect() const
+{
+    const Rect2D header = headerRect();
+    FDisclosureLeading leading = layoutDisclosureLeading(header,
+                                                               _arrowWidth,
+                                                               showsDisclosureButton(_disclosure),
+                                                               brushHasIcon(_icon));
+    return {
+        .pos    = {leading.title.pos.x, header.pos.y},
+        .extent = {std::max(0.0f, header.pos.x + header.extent.x - leading.title.pos.x), header.extent.y},
+    };
+}
+
+float UIExpander::headerActionsLeft() const
+{
+    const UIExpanderHeader* actions = findHeaderActions();
+    if (!actions) {
+        return _layoutRect.pos.x + _layoutRect.extent.x;
+    }
+    const Rect2D region = headerActionsRect();
+    float       left    = region.pos.x + region.extent.x;
+    for (const UIElementRef& child : actions->getChildren()) {
+        if (child->isVisibleForRender() && child->participatesInLayout()) {
+            left = std::min(left, child->getLayoutRect().pos.x);
+        }
+    }
+    return left;
+}
+
 void UIExpander::toggleExpanded()
 {
     setExpanded(!_bExpanded);
@@ -163,11 +247,16 @@ void UIExpander::collapseChildren()
     // Keep collapsed children out of the header and body hit regions. A
     // zero-extent rect at the origin would still contain its own origin
     // (hitTestLayoutRect uses inclusive edges) and steal the top-left pixel.
+    // The header actions region is header chrome, not body: it keeps its rect.
     const Rect2D collapsed{
         .pos    = {_layoutRect.pos.x, _layoutRect.pos.y + _layoutRect.extent.y + 1.0f},
         .extent = {0.0f, 0.0f},
     };
+    UIExpanderHeader* const actions = findHeaderActions();
     for (UIElement* child : getChildrenInPaintOrder()) {
+        if (child == actions) {
+            continue;
+        }
         child->layoutAssigned(collapsed);
     }
 }
@@ -175,6 +264,9 @@ void UIExpander::collapseChildren()
 void UIExpander::applyAssignedLayout(const Rect2D& rect)
 {
     setLayoutRect(rect);
+    if (UIExpanderHeader* actions = findHeaderActions()) {
+        actions->layoutAssigned(headerActionsRect());
+    }
     if (!_bExpanded) {
         collapseChildren();
         return;
@@ -194,7 +286,17 @@ glm::vec2 UIExpander::computeDesiredSize() const
 
 std::unique_ptr<UISlot> UIExpander::createSlotForChild(UIElement& child)
 {
-    return _bodyLayout.createSlot(*this, child);
+    auto slot = _bodyLayout.createSlot(*this, child);
+    // The header actions region rides the header row, not the body column:
+    // the body box layout must skip it (measure + arrange), the expander
+    // assigns its rect itself. Applies however the child arrived — lazy
+    // `getHeaderActions()` or a document child re-attached on instantiate.
+    if (dynamic_cast<UIExpanderHeader*>(&child)) {
+        if (auto* box = slot->as<UIBoxSlot>()) {
+            box->setParticipatesInLayout(false);
+        }
+    }
+    return slot;
 }
 
 void UIExpander::paintSelf(UIFrameBuilder& builder)
@@ -234,7 +336,7 @@ void UIExpander::paintSelf(UIFrameBuilder& builder)
 
     auto font = builder.getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     const float packH = font ? static_cast<float>(font->lineHeight) : 0.0f;
-    const FDisclosureLeading leading = layoutDisclosureLeading(header,
+    FDisclosureLeading leading = layoutDisclosureLeading(header,
                                                                _arrowWidth,
                                                                showsDisclosureButton(_disclosure),
                                                                brushHasIcon(_icon),
@@ -244,7 +346,7 @@ void UIExpander::paintSelf(UIFrameBuilder& builder)
                           FDisclosurePaint{
                               .buttonRect  = leading.button,
                               .bExpanded   = _bExpanded,
-                              .bHovered    = _bHovered,
+                              .bHovered    = _bArrowHovered.get(),
                               .color       = style.arrowColor,
                               .hoveredFill = style.arrowHoveredFill,
                               .spec        = _disclosure,
@@ -252,6 +354,12 @@ void UIExpander::paintSelf(UIFrameBuilder& builder)
                           });
     if (brushHasIcon(_icon)) {
         builder.addBrush(leading.icon, _icon);
+    }
+    // A header actions region keeps the title clear of its rendered children;
+    // an empty (or absent) region leaves the title full width.
+    const float actionsLeft = headerActionsLeft();
+    if (actionsLeft < leading.title.pos.x + leading.title.extent.x) {
+        leading.title.extent.x = std::max(0.0f, actionsLeft - 4.0f - leading.title.pos.x);
     }
     if (font) {
         builder.addText(leading.title, _title, style.textColor, font,
@@ -262,6 +370,12 @@ void UIExpander::paintSelf(UIFrameBuilder& builder)
 void UIExpander::paintChildren(UIFrameBuilder& builder)
 {
     if (!_bExpanded) {
+        // Body is folded away, but the header actions region is header
+        // chrome: its controls stay rendered (and hit-testable) while
+        // collapsed.
+        if (UIExpanderHeader* actions = findHeaderActions()) {
+            actions->paint(builder);
+        }
         return;
     }
     UIElement::paintChildren(builder);
@@ -289,6 +403,11 @@ bool UIExpander::handleInputEvent(const Event& event, const WidgetEventContext& 
     if (!ctx.bViaCapture && !bPointOnHeader) {
         return false;
     }
+
+    // The disclosure marks its own hover on every pointer position we see
+    // here (move/press/release); leaving the widget clears it in
+    // onPointerLeave.
+    _bArrowHovered = rectContains(arrowRect(), ctx.logicalPoint);
 
     switch (eventType) {
     case EEvent::MouseButtonPressed:
@@ -319,8 +438,9 @@ bool UIExpander::handleInputEvent(const Event& event, const WidgetEventContext& 
 
 void UIExpander::clearTransientInputState()
 {
-    _bHovered = false;
-    _bPressed = false;
+    _bHovered      = false;
+    _bPressed      = false;
+    _bArrowHovered = false;
 }
 
 } // namespace ya
