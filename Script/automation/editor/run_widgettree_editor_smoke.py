@@ -39,6 +39,10 @@ def main() -> int:
     parser.add_argument("--startup-timeout", type=int, default=120)
     parser.add_argument("--frame-budget", type=int, default=240)
     parser.add_argument("--min-frame-delta", type=int, default=30)
+    parser.add_argument("--perf-window", type=float, default=0.0,
+                        help="seconds per steady-state window; 0 keeps the smoke functional only")
+    parser.add_argument("--min-fps", type=float, default=25.0)
+    parser.add_argument("--pie", action="store_true", help="gate the steady state while the game runs too")
     parser.add_argument("--presentation-shot", default="Engine/Saved/Automation/widgettree-editor-smoke-presentation.png")
     args = parser.parse_args()
 
@@ -69,7 +73,7 @@ def main() -> int:
                 # Bounded on purpose: the finally-block kills this process,
                 # not the engine it spawned.
                 f"--max-lifetime-seconds={args.startup_timeout + 600}",
-                f"--exit-after-frame={args.frame_budget}",
+                *([] if args.perf_window > 0.0 else [f"--exit-after-frame={args.frame_budget}"]),
             ],
             cwd=workspace,
             stdout=log_handle,
@@ -90,6 +94,13 @@ def main() -> int:
                     str(args.min_frame_delta),
                     "--timeout",
                     str(args.startup_timeout),
+                    "--engine-log",
+                    engine_log,
+                    "--perf-window",
+                    str(args.perf_window),
+                    "--min-fps",
+                    str(args.min_fps),
+                    *(["--pie"] if args.pie else []),
                 ],
                 cwd=workspace,
             )

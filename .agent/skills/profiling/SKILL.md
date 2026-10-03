@@ -41,6 +41,22 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
 2. 若需要更多线索，优先升到 `info`，不要直接开 `trace`。
 3. 分析结果时先 `rg` 过滤模块和关键词，再决定是否展开整段日志。
 
+## 编辑器稳态性能门禁
+
+改渲染、文字、字体、View 密度、编辑器面板之后，跑一遍真实编辑器的稳态门禁（不是只跑独立 `--game`）：
+
+```bash
+python3 Script/automation/editor/run_widgettree_editor_smoke.py \
+  --project Example/2DRpgPrototype/2DRpgPrototype.yaproject --skip-build --perf-window 8 --pie
+```
+
+- 分别在编辑态和 PIE 态量 8 秒：帧率不得低于 `--min-fps`（默认 25，debug 构建实测约 80），
+  稳态窗口里字体重建（`lazily building`）必须为 0。
+- 全程日志不得出现 `raster sizes are in use at once`（字体每帧逐出重建）和
+  `is not the panel device size`（视口图与面板设备像素不一致，即放大糊图）。
+- 为什么有它：字体图集按个数逐出时，编辑器一帧 13 个字号超过 8 个的窗口，每帧重建三个字号，FPS 掉到 7；
+  独立游戏模式和单元测试都测不出。修复前该门禁实测 8.4 fps、8 秒 202 次重建；修复后 82 fps、0 次。
+
 ## 相关 skills
 
 - `ya-build`：构建模式、运行入口和目标选择
