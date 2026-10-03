@@ -497,3 +497,18 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   `CameraProjection.PixelPerfectFieldsRoundTrip` 改成断言默认值被省略；`ya-testing` 1574 ran / 1573 passed / 1 skipped（同前）。
   估算：TownLarge 一个 Player Sprite2D 块 1037 → 约 569 字节。
 - 未完成：三个示例场景还没用引擎重存（并入 P2 的场景迁移，只重写一次）。
+
+## 2026-10-04 — 步骤 4c P2a：SpriteAnimationSet 资产与开闭的资产类型注册
+
+- 起因：新增一个资产类型要改约 14 个引擎文件（`AssetManager` 逐类型方法与聚合、`IAssetRefResolver` 纯虚函数、`isAssetRefType`、
+  `PropertyAccessor` 的 Failed 判断、`EEditorAssetPickerKind` 与两处 switch、`openXxxPicker`…），用户的游戏模块碰不到这些，不能自定义资产。
+- 做法：`Core/Common/AssetTypeRegistry`（描述：name / displayName / extensions / refType / resourceType / store）+ 类型擦除 `IAssetStore`
+  + `DocumentAssetRef<T>` + 通用 `AssetDocumentManager<T, Traits>`（从 Resource 挪到 Core，只依赖 Core 头）。Tileset 与 SpriteAnimationSet 是
+  两个实例，各在自己的 cpp 里一处 `registerDocument`；Texture / Model / Mesh 只登记描述（选择器扩展名），store 为空。`AssetManager` 的清理 /
+  collectUnused / unload / invalidate / 文件与 meta 变更遍历 registry；`IAssetRefResolver` 只剩贴图和模型；`AssetRefBase::getResolveState()` 虚函数取代类型判断；
+  选择器请求由描述生成，`EEditorAssetPickerKind`、`PropertyCapabilityRegistry`、`openTilesetPicker` 删除。
+- 验证：`ya-testing` 1585 ran / 1584 passed / 1 skipped（同前一个窗口用例）；`DocumentAssetOpenClosedTest` 在测试里定义玩具资产，只调注册函数就得到
+  共享槽、Failed、unload / invalidate / collectUnused / clearCache 聚合、`isAssetRefType`、选择器请求；Tileset 既有测试不变。
+- 未完成 / 偏离：Texture / Model / Mesh 仍走 resolver 与 AssetManager 的贴图模型链路；内容浏览器双击按后缀硬编码（`.scene.json` / `.lua` /
+  `.yaui.json` / `.mat`），P3 一起做成「扩展名 → 打开器」注册表；选择器配置 scope 由 `assetPickerDialog.texture` 变成 `assetPickerDialog.Texture`
+  （保存过的对话框位置会重置一次）。静态注册依赖该 cpp 被链接进来（静态库被丢弃时不会注册），游戏模块要保证。

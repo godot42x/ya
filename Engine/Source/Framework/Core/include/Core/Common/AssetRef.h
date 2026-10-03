@@ -18,7 +18,6 @@ namespace ya
 struct Texture;
 struct Model;
 struct Mesh;
-struct Tileset;
 
 /// Canonical asset-path form shared by AssetRef and the resource layer
 /// (mount-style `Engine:` prefixes, `\` -> `/`, lexical normalization).
@@ -63,6 +62,13 @@ struct YA_CORE_API AssetRefBase
     /// path is always bound to its asset.
     virtual void rebind() = 0;
 
+    /// Empty path is Empty. Anything else that a subclass does not refine
+    /// reads as Failed (no slot, or a slot that is not Ready).
+    [[nodiscard]] virtual EAssetResolveState getResolveState() const
+    {
+        return _path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Failed;
+    }
+
     const std::string &getPath() const { return _path; }
     bool               hasPath() const { return !_path.empty(); }
     static std::string normalizePath(std::string path);
@@ -97,7 +103,7 @@ struct YA_CORE_API TextureRef : public AssetRefBase
     ya::Ptr<Texture>   getShared() const { return isLoaded() ? _handle->resource : nullptr; }
     bool               isLoaded() const { return _handle && _handle->state == EAssetSlotState::Ready; }
     bool               isLoading() const { return _handle && _handle->state == EAssetSlotState::Loading; }
-    EAssetResolveState getResolveState() const;
+    EAssetResolveState getResolveState() const override;
     void               rebind() override;
 };
 
@@ -119,7 +125,7 @@ struct YA_CORE_API ModelRef : public AssetRefBase
     ya::Ptr<Model>      getShared() const { return isLoaded() ? _handle->resource : nullptr; }
     bool                isLoaded() const { return _handle && _handle->state == EAssetSlotState::Ready; }
     bool                isLoading() const { return _handle && _handle->state == EAssetSlotState::Loading; }
-    EAssetResolveState  getResolveState() const;
+    EAssetResolveState  getResolveState() const override;
     void                rebind() override;
 };
 
@@ -145,15 +151,15 @@ struct YA_CORE_API MeshRef : public AssetRefBase
     ya::Ptr<Mesh>       getShared() const { return isLoaded() ? _handle->resource : nullptr; }
     bool                isLoaded() const { return _handle && _handle->state == EAssetSlotState::Ready; }
     bool                isLoading() const { return _handle && _handle->state == EAssetSlotState::Loading; }
-    EAssetResolveState  getResolveState() const;
+    EAssetResolveState  getResolveState() const override;
 };
 
 // ============================================================================
 // Asset Reference Resolution Interface
 // ============================================================================
 
-/// True for the concrete asset-ref types (TextureRef / ModelRef / MeshRef /
-/// TilesetRef); reflection edits and deserializes them through AssetRefBase.
+/// True when `typeIndex` is a ref type registered with AssetTypeRegistry.
+/// Reflection edits and deserializes those through AssetRefBase.
 YA_CORE_API bool isAssetRefType(type_index_t typeIndex);
 
 /**
@@ -172,11 +178,6 @@ struct IAssetRefResolver
     /// Shared model slot for a normalized, non-empty path. Null when no
     /// model can be produced.
     virtual AssetHandle<Model> acquireModel(const std::string &path) const = 0;
-
-    /// Shared tileset slot for a normalized, non-empty path; tilesets are
-    /// parsed synchronously on first request. Null when no tileset can be
-    /// produced.
-    virtual AssetHandle<Tileset> acquireTileset(const std::string &path) const = 0;
 };
 
 /// Currently installed asset-ref resolver (null in pure-GUI hosts). The

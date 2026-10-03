@@ -896,11 +896,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                 session->surface().openSceneSaveDialog();
             }
         });
-        _layer->setAssetPickerHandler([this](EEditorAssetPickerKind kind,
+        _layer->setAssetPickerHandler([this](type_index_t refType,
                                              std::string currentPath,
                                              std::function<void(std::string)> onPicked) {
             if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
-                session->surface().openAssetPickerDialog(kind, std::move(currentPath), std::move(onPicked));
+                session->surface().openAssetPickerDialog(refType, std::move(currentPath), std::move(onPicked));
             }
         });
         _layer->setShowContentBrowserHandler([this]() {

@@ -1,6 +1,6 @@
 #include "Core/Common/AssetRef.h"
 
-#include "Core/Common/Tileset.h"
+#include "Core/Common/AssetTypeRegistry.h"
 
 #include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"
@@ -123,11 +123,46 @@ std::string AssetRefBase::normalizePath(std::string path)
 
 bool isAssetRefType(type_index_t typeIndex)
 {
-    return typeIndex == ya::type_index_v<TextureRef> ||
-           typeIndex == ya::type_index_v<ModelRef> ||
-           typeIndex == ya::type_index_v<MeshRef> ||
-           typeIndex == ya::type_index_v<TilesetRef>;
+    return AssetTypeRegistry::get().findByRefType(typeIndex).has_value();
 }
+
+namespace
+{
+
+struct BuiltinAssetTypeRegistration
+{
+    BuiltinAssetTypeRegistration()
+    {
+        AssetTypeRegistry::get().registerType(AssetTypeDesc{
+            .name         = "Texture",
+            .displayName  = "Select Texture",
+            .extensions   = {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".hdr", ".ktx", ".ktx2"},
+            .refType      = ya::type_index_v<TextureRef>,
+            .resourceType = ya::type_index_v<Texture>,
+            .store        = nullptr,
+        });
+        AssetTypeRegistry::get().registerType(AssetTypeDesc{
+            .name         = "Model",
+            .displayName  = "Select Model",
+            .extensions   = {".obj", ".fbx", ".gltf", ".glb", ".dae"},
+            .refType      = ya::type_index_v<ModelRef>,
+            .resourceType = ya::type_index_v<Model>,
+            .store        = nullptr,
+        });
+        AssetTypeRegistry::get().registerType(AssetTypeDesc{
+            .name         = "Mesh",
+            .displayName  = "Select Model",
+            .extensions   = {".obj", ".fbx", ".gltf", ".glb", ".dae"},
+            .refType      = ya::type_index_v<MeshRef>,
+            .resourceType = ya::type_index_v<Mesh>,
+            .store        = nullptr,
+        });
+    }
+};
+
+const BuiltinAssetTypeRegistration g_builtinAssetTypes;
+
+} // namespace
 
 void TextureRef::rebind()
 {

@@ -173,7 +173,7 @@ struct EditorSurface : IEditorViewportHostSink
     void openSceneSaveDialog(std::function<void()> onSaved = {});
     void promptUnsavedChanges(std::function<void()> proceed);
     void openFilePickerDialog(FEditorFilePickerRequest request);
-    void openAssetPickerDialog(EEditorAssetPickerKind kind,
+    void openAssetPickerDialog(type_index_t refType,
                                std::string currentPath,
                                std::function<void(std::string)> onPicked);
     void openEditorSettingsDialog();

@@ -75,9 +75,12 @@ void FilePicker::openModelPicker(const std::string &currentPath, Callback onConf
     open("Select Model", currentPath, {".obj", ".fbx", ".gltf", ".glb", ".dae"}, onConfirm);
 }
 
-void FilePicker::openTilesetPicker(const std::string &currentPath, Callback onConfirm)
+void FilePicker::openAssetPicker(const std::string &title,
+                                 const std::vector<std::string> &extensions,
+                                 const std::string &currentPath,
+                                 Callback onConfirm)
 {
-    open("Select Tileset", currentPath, {".yatileset.json"}, onConfirm);
+    open(title, currentPath, extensions, onConfirm);
 }
 
 void FilePicker::openDirectoryPicker(const std::string &currentPath,

@@ -3,6 +3,7 @@
 // binds Ready or Failed immediately; same-path refs and copies share the
 // slot. No render backend and no task queue are involved.
 
+#include "Core/Common/AssetTypeRegistry.h"
 #include "Core/Common/Tileset.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Resource/AssetManager.h"
@@ -51,8 +52,10 @@ TEST_F(TilesetAssetSlotTest, MissingFileFailsEverySharingRefImmediately)
     EXPECT_EQ(first.isLoaded(), false);
     EXPECT_EQ(first.get(), nullptr);
     EXPECT_EQ(first._handle->generation, 1u);
-    EXPECT_FALSE(AssetManager::get()->isTilesetLoaded(kMissingTileset));
-    EXPECT_EQ(AssetManager::get()->getTileset(kMissingTileset), nullptr);
+    IDocumentAssetStore<Tileset>* tilesets = AssetTypeRegistry::get().store<Tileset>();
+    ASSERT_NE(tilesets, nullptr);
+    EXPECT_FALSE(tilesets->isLoaded(kMissingTileset));
+    EXPECT_EQ(tilesets->get(kMissingTileset), nullptr);
 }
 
 TEST_F(TilesetAssetSlotTest, RegisteredTilesetIsOneReadySlotUntilUnused)
@@ -62,7 +65,7 @@ TEST_F(TilesetAssetSlotTest, RegisteredTilesetIsOneReadySlotUntilUnused)
     TilesetRef copy = first;
     auto       slot = first._handle;
 
-    AssetManager::get()->registerTileset(kTilesetName, tileset);
+    AssetTypeRegistry::get().store<Tileset>()->registerAsset(kTilesetName, tileset);
 
     // Rebinding after the registration binds the same Ready slot.
     TilesetRef second;
@@ -73,7 +76,7 @@ TEST_F(TilesetAssetSlotTest, RegisteredTilesetIsOneReadySlotUntilUnused)
     EXPECT_EQ(first._handle, second._handle);
     EXPECT_EQ(first._handle, slot);
     EXPECT_EQ(first.get(), tileset.get());
-    EXPECT_TRUE(AssetManager::get()->isTilesetLoaded(kTilesetName));
+    EXPECT_TRUE(AssetTypeRegistry::get().store<Tileset>()->isLoaded(kTilesetName));
     EXPECT_EQ(slot->generation, 2u);
 
     // The refs drop their slots; only the manager still holds it.
@@ -84,11 +87,11 @@ TEST_F(TilesetAssetSlotTest, RegisteredTilesetIsOneReadySlotUntilUnused)
     tileset = nullptr;
     slot   = nullptr;
     EXPECT_EQ(AssetManager::get()->collectUnused(), 0u);
-    EXPECT_TRUE(AssetManager::get()->isTilesetLoaded(kTilesetName));
+    EXPECT_TRUE(AssetTypeRegistry::get().store<Tileset>()->isLoaded(kTilesetName));
 
     keeper = TilesetRef{};
     EXPECT_EQ(AssetManager::get()->collectUnused(), 1u);
-    EXPECT_FALSE(AssetManager::get()->isTilesetLoaded(kTilesetName));
+    EXPECT_FALSE(AssetTypeRegistry::get().store<Tileset>()->isLoaded(kTilesetName));
 }
 
 TEST_F(TilesetAssetSlotTest, InvalidateDropsTheEntryAndNextAcquireParsesAgain)
@@ -97,7 +100,7 @@ TEST_F(TilesetAssetSlotTest, InvalidateDropsTheEntryAndNextAcquireParsesAgain)
     TilesetRef ref(kTilesetName);
     const auto slot = ref._handle;
 
-    AssetManager::get()->registerTileset(kTilesetName, tileset);
+    AssetTypeRegistry::get().store<Tileset>()->registerAsset(kTilesetName, tileset);
     EXPECT_EQ(ref.getResolveState(), EAssetResolveState::Ready);
 
     AssetManager::get()->invalidate(kTilesetName);
@@ -115,7 +118,7 @@ TEST_F(TilesetAssetSlotTest, UnloadFailsHeldSlotsAndNotifiesObservers)
 {
     auto       tileset = std::make_shared<Tileset>();
     TilesetRef ref(kTilesetName);
-    AssetManager::get()->registerTileset(kTilesetName, tileset);
+    AssetTypeRegistry::get().store<Tileset>()->registerAsset(kTilesetName, tileset);
 
     int        notifications = 0;
     const auto before       = ref._handle->generation;

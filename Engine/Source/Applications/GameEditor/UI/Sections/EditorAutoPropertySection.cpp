@@ -1,5 +1,6 @@
 #include "GameEditor/UI/Sections/EditorAutoPropertySection.h"
 
+#include "Core/Common/AssetRef.h"
 #include "Core/Reflection/MetadataSupport.h"
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Declarative/Build.h"
@@ -744,15 +745,15 @@ void EditorAutoPropertySection::buildAssetEditor(const PropertyNode& node,
                               return;
                           }
                           const PropertyHandle binding = _editors[index].node->binding;
-                          const std::optional<EEditorAssetPickerKind> kind = binding.assetRefKind();
-                          if (!kind) {
+                          const std::optional<AssetTypeDesc> desc = binding.assetTypeDesc();
+                          if (!desc) {
                               return;
                           }
                           std::string current;
                           if (!binding.tryGetAssetPath(current)) {
                               return;
                           }
-                          _assetPicker(*kind, current, [this, index](std::string path) {
+                          _assetPicker(desc->refType, current, [this, index](std::string path) {
                               commitAssetPath(index, std::move(path));
                           });
                       })
@@ -783,7 +784,9 @@ void EditorAutoPropertySection::buildAssetEditor(const PropertyNode& node,
     assetCol.child(std::move(buttonRow),
                    FBoxSlotArgs{.preferredSize = {0.0f, editor_density::kRowHeight}});
     std::shared_ptr<UIImage> preview;
-    if (node.binding.assetRefKind() == EEditorAssetPickerKind::Texture) {
+    const std::optional<AssetTypeDesc> assetDesc = node.binding.assetTypeDesc();
+    const bool bTexturePreview = assetDesc && assetDesc->refType == ya::type_index_v<TextureRef>;
+    if (bTexturePreview) {
         preview = std::make_shared<UIImage>(node.name + "_Preview");
         preview->setScaleMode(EImageScaleMode::Contain);
         assetCol.child(preview,
@@ -794,7 +797,7 @@ void EditorAutoPropertySection::buildAssetEditor(const PropertyNode& node,
                        });
     }
     row.child(std::move(assetCol),
-              fillAssetSlot(node.binding.assetRefKind() == EEditorAssetPickerKind::Texture));
+              fillAssetSlot(bTexturePreview));
     if (!node.bEditable) {
         assetPath->setEnabled(false);
         browse->setEnabled(false);

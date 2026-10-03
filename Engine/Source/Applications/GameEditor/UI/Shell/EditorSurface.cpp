@@ -1004,11 +1004,15 @@ void EditorSurface::syncWindowTitle()
     native->setTitle(_windowTitle);
 }
 
-void EditorSurface::openAssetPickerDialog(EEditorAssetPickerKind kind,
+void EditorSurface::openAssetPickerDialog(type_index_t refType,
                                           std::string currentPath,
                                           std::function<void(std::string)> onPicked)
 {
-    openFilePickerDialog(makeAssetPickerRequest(kind, std::move(currentPath), std::move(onPicked)));
+    const std::optional<AssetTypeDesc> desc = AssetTypeRegistry::get().findByRefType(refType);
+    if (!desc) {
+        return;
+    }
+    openFilePickerDialog(makeAssetPickerRequest(*desc, std::move(currentPath), std::move(onPicked)));
 }
 
 void EditorSurface::showContentBrowser()

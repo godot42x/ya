@@ -1,7 +1,6 @@
 #include "Core/Reflection/PropertyAccessor.h"
 
 #include "Core/Common/AssetRef.h"
-#include "Core/Common/Tileset.h"
 #include "Core/Reflection/PropertyExtensions.h"
 #include "reflects-core/lib.h"
 
@@ -688,19 +687,7 @@ bool PropertyAccessor::hasAssetResolveError(const FPropertySlot& slot, const voi
     if (!ref->hasPath()) {
         return false;
     }
-    if (type == refl::type_index_v<TextureRef>) {
-        return static_cast<const TextureRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
-    }
-    if (type == refl::type_index_v<ModelRef>) {
-        return static_cast<const ModelRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
-    }
-    if (type == refl::type_index_v<MeshRef>) {
-        return static_cast<const MeshRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
-    }
-    if (type == refl::type_index_v<TilesetRef>) {
-        return static_cast<const TilesetRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
-    }
-    return false;
+    return ref->getResolveState() == EAssetResolveState::Failed;
 }
 
 } // namespace ya::reflection

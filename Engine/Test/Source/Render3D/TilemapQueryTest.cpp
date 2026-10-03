@@ -1,6 +1,6 @@
 #include "Scene2D/TilemapComponent.h"
 
-#include "Core/Common/AssetRef.h"
+#include "Core/Common/AssetTypeRegistry.h"
 #include "Core/Common/Tileset.h"
 #include "ECS/Entity.h"
 #include "Scene/Core/Scene.h"
@@ -28,30 +28,12 @@ std::shared_ptr<Tileset> makeWallTileset()
     return shared;
 }
 
-// This gate links no resource layer, so no engine resolver is installed:
-// a local one hands the wall tileset to every tileset ref this suite binds.
-struct WallTilesetResolver final : IAssetRefResolver
-{
-    AssetHandle<Texture>  acquireTexture(const std::string&) const override { return nullptr; }
-    AssetHandle<Model>    acquireModel(const std::string&) const override { return nullptr; }
-    AssetHandle<Tileset>  acquireTileset(const std::string&) const override
-    {
-        auto slot        = std::make_shared<AssetSlot<Tileset>>();
-        slot->resource   = makeWallTileset();
-        slot->state      = EAssetSlotState::Ready;
-        return slot;
-    }
-};
-
 TilesetRef makeWallTilesetRef()
 {
-    static WallTilesetResolver resolver;
-    static bool                bInstalled = [] {
-        setAssetRefResolver(&resolver);
-        return true;
-    }();
-    (void)bInstalled;
-
+    // The document store lives in Core, so this suite does not install a resolver.
+    if (IDocumentAssetStore<Tileset>* store = AssetTypeRegistry::get().store<Tileset>()) {
+        store->registerAsset("WallTileset", makeWallTileset());
+    }
     TilesetRef ref;
     ref.setPath("WallTileset");
     return ref;

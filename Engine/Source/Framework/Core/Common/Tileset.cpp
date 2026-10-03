@@ -1,6 +1,6 @@
 #include "Core/Common/Tileset.h"
 
-#include "Core/Common/AssetRef.h"
+#include "Core/Common/AssetDocumentManager.h"
 #include "Core/Log.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/System/VirtualFileSystem.h"
@@ -96,16 +96,39 @@ std::shared_ptr<Tileset> parseTilesetJson(const std::string& text, std::string& 
     return tileset;
 }
 
-void TilesetRef::rebind()
+namespace
 {
-    _handle.reset();
-    if (_path.empty()) {
-        return;
+
+struct TilesetDocumentTraits
+{
+    static std::shared_ptr<Tileset> parse(const std::string& text, std::string& error)
+    {
+        return parseTilesetJson(text, error);
     }
-    if (const auto* resolver = getAssetRefResolver()) {
-        _handle = resolver->acquireTileset(_path);
+
+    static void logCannotRead(const std::string& path)
+    {
+        YA_CORE_ERROR("AssetTilesetManager: cannot read tileset '{}'", path);
     }
-}
+
+    static void logInvalid(const std::string& path, const std::string& error)
+    {
+        YA_CORE_ERROR("AssetTilesetManager: '{}' is not a valid tileset: {}", path, error);
+    }
+};
+
+struct TilesetAssetRegistration
+{
+    TilesetAssetRegistration()
+    {
+        AssetTypeRegistry::registerDocument<Tileset, TilesetDocumentTraits, TilesetRef>(
+            "Tileset", "Select Tileset", {".yatileset.json"});
+    }
+};
+
+const TilesetAssetRegistration g_tilesetAssetRegistration;
+
+} // namespace
 
 } // namespace ya
 

@@ -5,7 +5,7 @@
 #include "Core/Reflection/MetadataSupport.h"
 #include "Core/Reflection/PropertyAccessor.h"
 
-#include "GameEditor/UI/Dialogs/EditorAssetPicker.h"
+#include "Core/Common/AssetTypeRegistry.h"
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -48,7 +48,7 @@ class PropertyHandle final
     [[nodiscard]] bool isEnum() const;
     [[nodiscard]] bool isColor() const;
     [[nodiscard]] bool isAssetRef() const;
-    [[nodiscard]] std::optional<EEditorAssetPickerKind> assetRefKind() const;
+    [[nodiscard]] std::optional<AssetTypeDesc> assetTypeDesc() const;
     [[nodiscard]] bool isMixed() const;
     [[nodiscard]] bool isMixedVec3Axis(int axis) const;
     [[nodiscard]] bool isMixedVecAxis(int axis, int componentCount) const;

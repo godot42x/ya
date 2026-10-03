@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Common/SpriteAnimationSet.h"
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
 
@@ -11,23 +12,6 @@
 
 namespace ya
 {
-
-// One named run of sheet frames. `frames` are sheet indices (row-major from
-// the top-left of the image), so a walk cycle may revisit a frame: {0, 1, 2, 1}.
-struct YA_SCENE_2D_API SpriteAnimationClip
-{
-    YA_REFLECT_BEGIN(SpriteAnimationClip)
-    YA_REFLECT_FIELD(name)
-    YA_REFLECT_FIELD(frames)
-    YA_REFLECT_FIELD(fps)
-    YA_REFLECT_FIELD(bLoop)
-    YA_REFLECT_END()
-
-    std::string          name;
-    std::vector<int32_t> frames;
-    float                fps   = 8.0f;
-    bool                 bLoop = true;
-};
 
 // Frame animation for the Sprite2DComponent on the same entity: it chooses
 // which window of the sprite's image to show. The image is cut into a uniform

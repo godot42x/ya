@@ -120,26 +120,19 @@ std::string projectedFingerprint(const std::vector<Entity*>& entities)
 
 EditorAssetPickerCallback makeAssetPicker(EditorLayer* layer)
 {
-    return [layer](EEditorAssetPickerKind kind, std::string currentPath, std::function<void(std::string)> onPicked) {
+    return [layer](type_index_t refType, std::string currentPath, std::function<void(std::string)> onPicked) {
         if (!layer) {
             return;
         }
         if (layer->_assetPickerHandler) {
-            layer->_assetPickerHandler(kind, std::move(currentPath), std::move(onPicked));
+            layer->_assetPickerHandler(refType, std::move(currentPath), std::move(onPicked));
             return;
         }
-        switch (kind) {
-        case EEditorAssetPickerKind::Texture:
-            layer->_filePicker.openTexturePicker(currentPath, std::move(onPicked));
-            break;
-        case EEditorAssetPickerKind::Model:
-        case EEditorAssetPickerKind::Mesh:
-            layer->_filePicker.openModelPicker(currentPath, std::move(onPicked));
-            break;
-        case EEditorAssetPickerKind::Tileset:
-            layer->_filePicker.openTilesetPicker(currentPath, std::move(onPicked));
-            break;
+        const std::optional<AssetTypeDesc> desc = AssetTypeRegistry::get().findByRefType(refType);
+        if (!desc) {
+            return;
         }
+        layer->_filePicker.openAssetPicker(desc->displayName, desc->extensions, currentPath, std::move(onPicked));
     };
 }
 

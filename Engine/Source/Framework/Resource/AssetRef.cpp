@@ -35,10 +35,6 @@ struct EngineAssetRefResolver final : IAssetRefResolver
         });
     }
 
-    AssetHandle<Tileset> acquireTileset(const std::string& path) const override
-    {
-        return AssetManager::get()->acquireTileset(path);
-    }
 };
 
 struct ResolverRegistrar

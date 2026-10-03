@@ -705,7 +705,9 @@ TEST(EditorPropertyGraphTest, AssetRefPropertyHandleReadsWritesMixedAndResolveEr
     const PropertyNode* model = graph.find("model");
     ASSERT_NE(model, nullptr);
     EXPECT_TRUE(model->binding.isAssetRef());
-    EXPECT_EQ(model->binding.assetRefKind(), EEditorAssetPickerKind::Model);
+    const std::optional<AssetTypeDesc> modelDesc = model->binding.assetTypeDesc();
+    ASSERT_TRUE(modelDesc.has_value());
+    EXPECT_EQ(modelDesc->refType, ya::type_index_v<ModelRef>);
     EXPECT_TRUE(model->binding.isMixed());
     EXPECT_TRUE(graph.hasRetainedEditors());
 
@@ -725,7 +727,7 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionAssetPathCommitBrowseAndUndo)
     AssetRefTestComponent value;
     auto graph = PropertyGraph::build(type_index_v<AssetRefTestComponent>, {&value});
     UndoStack stack;
-    EEditorAssetPickerKind requestedKind = EEditorAssetPickerKind::Texture;
+    type_index_t requestedType = ya::type_index_v<TextureRef>;
     std::string requestedPath;
     std::string revealedPath;
     auto section = std::make_shared<EditorAutoPropertySection>(
@@ -733,8 +735,8 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionAssetPathCommitBrowseAndUndo)
         std::move(graph),
         &stack,
         std::string{},
-        [&](EEditorAssetPickerKind kind, std::string currentPath, std::function<void(std::string)> onPicked) {
-            requestedKind = kind;
+        [&](type_index_t refType, std::string currentPath, std::function<void(std::string)> onPicked) {
+            requestedType = refType;
             requestedPath = currentPath;
             onPicked("Content/Textures/Picked.png");
         },
@@ -759,7 +761,7 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionAssetPathCommitBrowseAndUndo)
     EXPECT_EQ(value.model.getPath(), "Content/Models/Typed.glb");
 
     browse->onClicked.broadcast();
-    EXPECT_EQ(requestedKind, EEditorAssetPickerKind::Model);
+    EXPECT_EQ(requestedType, ya::type_index_v<ModelRef>);
     EXPECT_EQ(requestedPath, "Content/Models/Typed.glb");
     EXPECT_EQ(value.model.getPath(), "Content/Textures/Picked.png");
 

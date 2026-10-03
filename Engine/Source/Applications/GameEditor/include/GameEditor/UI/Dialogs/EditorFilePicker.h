@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Common/AssetTypeRegistry.h"
 #include "GameEditor/FileExplorer.h"
 #include "GameEditor/UI/Dialogs/EditorAssetPicker.h"
 
@@ -125,34 +126,16 @@ using EditorFilePickerCallback = std::function<void(FEditorFilePickerRequest req
     return request;
 }
 
-[[nodiscard]] inline FEditorFilePickerRequest makeAssetPickerRequest(EEditorAssetPickerKind kind,
+[[nodiscard]] inline FEditorFilePickerRequest makeAssetPickerRequest(const AssetTypeDesc& desc,
                                                                      std::string currentPath,
                                                                      std::function<void(std::string)> onPicked)
 {
     FEditorFilePickerRequest request;
-    switch (kind) {
-    case EEditorAssetPickerKind::Texture: {
-        request.title = "Select Texture";
-        request.configScope = "assetPickerDialog.texture";
-        request.extensions = {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".hdr", ".ktx", ".ktx2"};
-        break;
-    }
-    case EEditorAssetPickerKind::Model:
-    case EEditorAssetPickerKind::Mesh: {
-        request.title = "Select Model";
-        request.configScope = "assetPickerDialog.model";
-        request.extensions = {".obj", ".fbx", ".gltf", ".glb", ".dae"};
-        break;
-    }
-    case EEditorAssetPickerKind::Tileset: {
-        request.title = "Select Tileset";
-        request.configScope = "assetPickerDialog.tileset";
-        request.extensions = {".yatileset.json"};
-        break;
-    }
-    }
-    request.currentPath = std::move(currentPath);
-    request.onPicked = std::move(onPicked);
+    request.title        = desc.displayName;
+    request.configScope  = "assetPickerDialog." + desc.name;
+    request.extensions   = desc.extensions;
+    request.currentPath  = std::move(currentPath);
+    request.onPicked     = std::move(onPicked);
     return request;
 }
 

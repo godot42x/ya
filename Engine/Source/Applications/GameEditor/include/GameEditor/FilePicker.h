@@ -96,9 +96,12 @@ struct FilePicker
     void openModelPicker(const std::string &currentPath, Callback onConfirm);
 
     /**
-     * @brief 打开图块集选择器
+     * @brief 按资产类型描述打开选择器（标题 + 扩展名来自 AssetTypeRegistry）
      */
-    void openTilesetPicker(const std::string &currentPath, Callback onConfirm);
+    void openAssetPicker(const std::string &title,
+                         const std::vector<std::string> &extensions,
+                         const std::string &currentPath,
+                         Callback onConfirm);
 
     /**
      * @brief 打开目录选择器

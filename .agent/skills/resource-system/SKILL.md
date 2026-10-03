@@ -27,7 +27,7 @@ description: YA Engine 资源加载、资产槽与派生资源准备。适用于
 
 ## 当前稳定边界
 
-1. `AssetManager` 持有共享资产槽。`TextureRef` / `ModelRef` / `TilesetRef` 只持有路径和 `AssetHandle`；加载状态、资源和 `generation` 在槽上，一份。
+1. 贴图和模型槽在 `AssetManager`。文档型资产（Tileset、SpriteAnimationSet，以及注册进来的其它文档）的槽在 `AssetTypeRegistry` 的 store 上，`AssetManager` 只做 clear / collectUnused / unload / invalidate 聚合。Ref 只持有路径和 `AssetHandle`；加载状态、资源和 `generation` 在槽上，一份。
 2. 处理器订阅 `SceneBus`（创建 / 编辑 / 删除），并持有槽订阅。回调只入队。稳态 `prepare` 不扫描组件 view；每个场景第一次 prepare 做一次 seed。
 3. `GameplayResourceBinding` 负责已有 mesh / material / billboard 的运行时 resolve，不负责 scene topology。
 4. `ModelInstantiationSystem` 负责 `ModelComponent` -> 子节点 / 子实体展开，再交给普通 resolve 链。它同样由 SceneBus 和模型槽驱动。
@@ -191,6 +191,31 @@ scene-level environment binding 和材质纹理上传不是同一条链。环境
 4. skybox / environment cubemap 没刷新：看 source 状态是否进入 `Ready`，`resultVersion` 是否推进，离屏 job 的 `onFinished` 有没有把实体入队。
 5. irradiance / prefilter 没生效：看分支状态、pending offscreen job 和 `RenderRuntime` 绑定是否同步。
 6. 稳态 prepare 又在扫组件：看是不是 seed 之外又进了 view。debug 审计每 120 tick 会走 view，但它不计入 resolve 探针；探针只记准备阶段为做派生工作而遍历的 view。审计只断言，不重新入队。
+
+## 新增文档型资产
+
+文档型资产（同步 JSON，一个路径一个槽）是开闭的。新增一种 = 资产自己的类型 + parse/serialize + **一处注册**，不改 `AssetManager`、`IAssetRefResolver`、`isAssetRefType`、`PropertyAccessor` 或编辑器选择器枚举。
+
+要写的：
+
+1. 资源类型 `T` 和薄 Ref `RefT : DocumentAssetRef<T>`（保留反射类型名；`_handle` / `get` / `isLoaded` / `getResolveState` / `rebind` 在基类上）。
+2. `Traits`：`parse(text, error)`、`logCannotRead(path)`、`logInvalid(path, error)`。日志用字面量 `YA_CORE_ERROR`。
+3. 在该资产的 cpp 里静态初始化调用
+   `AssetTypeRegistry::registerDocument<T, Traits, RefT>(name, displayName, {".ext"})`。
+   声明在 `AssetTypeRegistry`，定义在 `Core/Common/AssetDocumentManager.h`。
+
+注册之后自动成立的：
+
+- 同路径 Ref 共享一个槽；解析失败是 `Failed`。
+- `AssetManager::clearCache` / `collectUnused` / `unload` / `invalidate` 以及 meta、文件变更会走到这个 store。带已注册扩展名的路径只打到对应 store；没有扩展名的 `registerAsset` 名字会问每一个 store。
+- `isAssetRefType` 和 Inspector 的 Failed 判定认这个 Ref。选择器标题和扩展名来自 `AssetTypeDesc`（`makeAssetPickerRequest`）。
+
+不需要改、也不要再加分支的地方：`AssetManager` 的逐类型方法、`IAssetRefResolver` 的 acquire、`PropertyCapabilityRegistry`（已删除）、`EEditorAssetPickerKind`（已删除）。
+
+仍然硬编码、不走这套注册的：
+
+- 异步 GPU 资产 Texture / Model / Mesh。它们只在 `Core/Common/AssetRef.cpp` 登记描述（选择器扩展名），槽仍由 `IAssetRefResolver` + `AssetManager` 的贴图/模型链路管。`store` 为空。
+- 内容浏览器双击打开编辑器：`EditorContentBrowserTab::activateItem` 按后缀写死 `.scene.json`、`.lua`、`.yaui.json`、`.mat` / `.material`。文档资产双击不会进编辑器，留给 P3 的「扩展名 → 打开器」注册表。
 
 ## 相关 skills
 

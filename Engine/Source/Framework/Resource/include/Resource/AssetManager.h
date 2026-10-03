@@ -5,7 +5,6 @@
 #include <unordered_map>
 
 #include "Core/Common/AssetSlot.h"
-#include "Core/Common/Tileset.h"
 #include "Resource/AssetManagerTypes.h"
 #include "Resource/Core/Meta/AssetMeta.h"
 #include "Core/ResourceRegistry.h"
@@ -21,7 +20,6 @@ namespace ya
 
 class AssetModelManager;
 class AssetTextureManager;
-class AssetTilesetManager;
 struct IRender;
 
 // Asset type taxonomy is defined once by EAssetType (Core/Common/AssetRef.h).
@@ -63,7 +61,6 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
   private:
     friend class AssetTextureManager;
     friend class AssetModelManager;
-    friend class AssetTilesetManager;
 
     //  use file as a renderTargets
     std::unordered_map<FName, stdptr<Texture>> _renderTexture;
@@ -78,7 +75,6 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
 
     std::unique_ptr<AssetTextureManager> _textureManager;
     std::unique_ptr<AssetModelManager>   _modelManager;
-    std::unique_ptr<AssetTilesetManager> _tilesetManager;
     IRender*                             _render = nullptr;
 
   public:
@@ -120,17 +116,6 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     TextureBatchMemoryHandle loadTextureBatchIntoMemory(const TextureBatchMemoryLoadRequest& request);
     bool                     consumeTextureBatchMemory(TextureBatchMemoryHandle handle, TextureBatchMemory& outBatchMemory);
 
-    // ── Tilesets (synchronous authoring JSON) ───────────────────────────
-    //
-    // Shared tileset slot for the path; the document is parsed synchronously
-    // on first request, so the returned slot is Ready or Failed immediately.
-
-    AssetHandle<Tileset> acquireTileset(const std::string& path);
-
-    /// Install an engine-generated tileset under a name; refs bound to the
-    /// name share one Ready slot (mirrors registerTexture).
-    void registerTileset(const std::string& name, const std::shared_ptr<Tileset>& tileset);
-
     // ── Explicit synchronous loading ────────────────────────────────────
 
     std::shared_ptr<Texture> loadTextureSync(const std::string& name,
@@ -145,8 +130,6 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
 
     std::shared_ptr<Model> getModel(const std::string& filepath) const;
     bool                   isModelLoaded(const std::string& filepath) const;
-    bool                   isTilesetLoaded(const std::string& path) const;
-    std::shared_ptr<Tileset> getTileset(const std::string& path) const;
 
     static ETextureColorSpace     inferTextureColorSpace(const FName& textureSemantic);
     TextureSourceInfo             inspectTextureSource(const std::string& filepath) const;
@@ -220,8 +203,6 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     const AssetTextureManager& textureManager() const;
     AssetModelManager&         modelManager();
     const AssetModelManager&   modelManager() const;
-    AssetTilesetManager&       tilesetManager();
-    const AssetTilesetManager& tilesetManager() const;
 };
 
 } // namespace ya

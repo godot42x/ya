@@ -6,6 +6,7 @@
 #include "ECS/SceneBus.h"
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/LuaScriptBinding.h"
+#include "Core/Common/AssetTypeRegistry.h"
 #include "Resource/AssetManager.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Core/SceneScriptBindings.h"
@@ -226,7 +227,7 @@ TEST_F(LuaScriptBindingTest, TilemapQueryFaceReachesLua)
     ASSERT_TRUE(map->setCell(2, 1, 0, 5)); // tile 4
     auto tileset        = std::make_shared<Tileset>();
     tileset->solidTiles = {4};
-    AssetManager::get()->registerTileset("LuaTilesetQueryTest", tileset);
+    AssetTypeRegistry::get().store<Tileset>()->registerAsset("LuaTilesetQueryTest", tileset);
     map->tileset.setPath("LuaTilesetQueryTest");
 
     const auto result = run(R"(

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Common/DocumentAssetRef.h"
 #include "Core/Common/TextureSlot.h"
 #include "Core/Reflection/Reflection.h"
 
@@ -44,42 +45,14 @@ struct YA_CORE_API Tileset
 // authoring JSON, the same shape as .yaui.json documents, not GPU resources)
 // and shared between refs naming the same file through the resource layer's
 // slot. A ref with a path but no parsed tileset failed to load.
-struct YA_CORE_API TilesetRef : public AssetRefBase
+struct YA_CORE_API TilesetRef : public DocumentAssetRef<Tileset>
 {
     YA_REFLECT_BEGIN(TilesetRef, AssetRefBase)
     YA_REFLECT_END()
     YA_REFLECT_COPIES_AS_VALUE()
 
-    // Shared slot for the path; copies share it. Null when the path is empty
-    // or no resource layer can parse tilesets (reads as Failed).
-    AssetHandle<Tileset> _handle;
-
     TilesetRef() = default;
-    explicit TilesetRef(const std::string& path) : AssetRefBase(path) { rebind(); }
-
-    Tileset*              get() const { return isLoaded() ? _handle->resource.get() : nullptr; }
-    std::shared_ptr<Tileset> getShared() const { return isLoaded() ? _handle->resource : nullptr; }
-    bool                  isLoaded() const { return _handle && _handle->state == EAssetSlotState::Ready; }
-    EAssetResolveState    getResolveState() const
-    {
-        if (_path.empty()) {
-            return EAssetResolveState::Empty;
-        }
-        if (!_handle) {
-            return EAssetResolveState::Failed;
-        }
-        // Tileset slots fill synchronously (Ready or Failed); Loading is
-        // unreachable but reads as not-yet-loaded.
-        switch (_handle->state) {
-        case EAssetSlotState::Ready:
-            return EAssetResolveState::Ready;
-        case EAssetSlotState::Loading:
-        case EAssetSlotState::Failed:
-            break;
-        }
-        return EAssetResolveState::Failed;
-    }
-    void rebind() override;
+    explicit TilesetRef(const std::string& path) : DocumentAssetRef<Tileset>(path) {}
 };
 
 // Parses one .yatileset.json document. Returns nullptr with outError set
