@@ -33,6 +33,11 @@ public:
     void setAxis(EScrollAxis value);
     void setScrollOffset(float value);
     void setScrollStep(float value);
+    /// When set, a child wider (vertical scroll) or taller (horizontal scroll)
+    /// than the viewport keeps that desired cross size and is clipped, instead
+    /// of being squeezed onto the viewport edge. The unused wheel axis pans it.
+    void setCrossAxisUsesDesiredSize(bool value);
+    [[nodiscard]] bool crossAxisUsesDesiredSize() const { return _bCrossAxisUsesDesiredSize; }
     /// Applies the pointer wheel delta along the configured axis. Returns
     /// true only if the offset changed; callers then consume the route.
     bool scroll(const glm::vec2& wheelDelta);
@@ -52,9 +57,12 @@ public:
 
 private:
     EScrollAxis   _axis = EScrollAxis::Vertical;
+    bool          _bCrossAxisUsesDesiredSize = false;
     mutable float _scrollOffset = 0.0f; // runtime state, not authored
+    mutable float _crossScrollOffset = 0.0f;
     float         _scrollStep = 40.0f;
     mutable float _maxScrollOffset = 0.0f;
+    mutable float _maxCrossScrollOffset = 0.0f;
 };
 
 } // namespace ya

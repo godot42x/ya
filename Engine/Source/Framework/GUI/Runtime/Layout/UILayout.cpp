@@ -1626,17 +1626,38 @@ void UIScrollLayout::setScrollStep(float value)
     }
 }
 
+void UIScrollLayout::setCrossAxisUsesDesiredSize(bool value)
+{
+    if (_bCrossAxisUsesDesiredSize != value) {
+        _bCrossAxisUsesDesiredSize = value;
+        invalidateArrange();
+    }
+}
+
 bool UIScrollLayout::scroll(const glm::vec2& wheelDelta)
 {
-    const float delta = _axis == EScrollAxis::Vertical ? -wheelDelta.y : -wheelDelta.x;
-    if (delta == 0.0f || !isScrollable()) {
+    bool changed = false;
+    const float mainDelta = _axis == EScrollAxis::Vertical ? -wheelDelta.y : -wheelDelta.x;
+    if (mainDelta != 0.0f && _maxScrollOffset > 0.0f) {
+        const float newOffset = std::clamp(_scrollOffset + mainDelta * _scrollStep, 0.0f, _maxScrollOffset);
+        if (newOffset != _scrollOffset) {
+            _scrollOffset = newOffset;
+            changed = true;
+        }
+    }
+    if (_bCrossAxisUsesDesiredSize) {
+        const float crossDelta = _axis == EScrollAxis::Vertical ? -wheelDelta.x : -wheelDelta.y;
+        if (crossDelta != 0.0f && _maxCrossScrollOffset > 0.0f) {
+            const float newOffset = std::clamp(_crossScrollOffset + crossDelta * _scrollStep, 0.0f, _maxCrossScrollOffset);
+            if (newOffset != _crossScrollOffset) {
+                _crossScrollOffset = newOffset;
+                changed = true;
+            }
+        }
+    }
+    if (!changed) {
         return false;
     }
-    const float newOffset = std::clamp(_scrollOffset + delta * _scrollStep, 0.0f, _maxScrollOffset);
-    if (newOffset == _scrollOffset) {
-        return false;
-    }
-    _scrollOffset = newOffset;
     invalidateArrange();
     return true;
 }
@@ -1665,6 +1686,10 @@ void UIScrollLayout::onArrange(UIElement& parent, const Rect2D& rect) const
     const float contentMain = bVertical ? std::max(desired.y, rect.extent.y)
                                         : std::max(desired.x, rect.extent.x);
     const float viewportMain = bVertical ? rect.extent.y : rect.extent.x;
+    const float viewportCross = bVertical ? rect.extent.x : rect.extent.y;
+    const float desiredCross = bVertical ? desired.x : desired.y;
+    const float contentCross = _bCrossAxisUsesDesiredSize ? std::max(viewportCross, desiredCross)
+                                                          : viewportCross;
     const float newMaxOffset = std::max(0.0f, contentMain - viewportMain);
     const float newOffset    = std::clamp(_scrollOffset, 0.0f, newMaxOffset);
 
@@ -1672,9 +1697,14 @@ void UIScrollLayout::onArrange(UIElement& parent, const Rect2D& rect) const
     // (content shrank/grew) the owner must re-paint even though its own
     // layout rect did not change — otherwise the incremental paint cache
     // keeps the stale thumb/track (the G2 validation frame catches this).
-    if (newMaxOffset != _maxScrollOffset || newOffset != _scrollOffset) {
-        _maxScrollOffset = newMaxOffset;
-        _scrollOffset    = newOffset;
+    const float newMaxCross = std::max(0.0f, contentCross - viewportCross);
+    const float newCross    = std::clamp(_crossScrollOffset, 0.0f, newMaxCross);
+    if (newMaxOffset != _maxScrollOffset || newOffset != _scrollOffset ||
+        newMaxCross != _maxCrossScrollOffset || newCross != _crossScrollOffset) {
+        _maxScrollOffset      = newMaxOffset;
+        _scrollOffset         = newOffset;
+        _maxCrossScrollOffset = newMaxCross;
+        _crossScrollOffset    = newCross;
         invalidateSubtreePaint();
     }
 
@@ -1683,11 +1713,13 @@ void UIScrollLayout::onArrange(UIElement& parent, const Rect2D& rect) const
     Rect2D contentRect = rect;
     if (bVertical) {
         contentRect.pos.y -= _scrollOffset;
-        contentRect.extent = {rect.extent.x, contentMain};
+        contentRect.pos.x -= _crossScrollOffset;
+        contentRect.extent = {contentCross, contentMain};
     }
     else {
         contentRect.pos.x -= _scrollOffset;
-        contentRect.extent = {contentMain, rect.extent.y};
+        contentRect.pos.y -= _crossScrollOffset;
+        contentRect.extent = {contentMain, contentCross};
     }
     assignChildRect(*children[0], applyCrossAlign(parent, *children[0], contentRect, !bVertical));
 }

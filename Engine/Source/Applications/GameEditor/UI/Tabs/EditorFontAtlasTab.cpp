@@ -118,6 +118,9 @@ void EditorFontAtlasTab::construct()
                        .vAlign(EUIOverlayAlignment::Start))
             .share();
     _previewScroll = previewScroll;
+    // A page is texel-sized. The default vertical scroll squeezes that width
+    // into the panel and Stretch then pulls the glyphs tall.
+    _previewScroll->getScrollLayout().setCrossAxisUsesDesiredSize(true);
 
     auto channels = ui::row("FontAtlasChannels").setSpacing(editor_density::kControlSpacing);
     for (int channel = 0; channel < 4; ++channel) {
@@ -276,8 +279,16 @@ void EditorFontAtlasTab::bindPreview()
     const uintptr_t textureId = reinterpret_cast<uintptr_t>(page.texture.get());
     const float     texW      = page.texture ? static_cast<float>(page.texture->getWidth()) : 1.0f;
     const float     texH      = page.texture ? static_cast<float>(page.texture->getHeight()) : 1.0f;
-    _previewFrame->setWidthOverride(std::max(texW, 1.0f));
-    _previewFrame->setHeightOverride(std::max(texH, 1.0f));
+    // One texel per device pixel. The tree dpi turns logical points into
+    // device pixels, so the frame is the texture size divided by that.
+    float dpi = 1.0f;
+    if (const WidgetTree* tree = getTree()) {
+        if (tree->getDpiScale() > 0.0f) {
+            dpi = tree->getDpiScale();
+        }
+    }
+    _previewFrame->setWidthOverride(std::max(texW / dpi, 1.0f));
+    _previewFrame->setHeightOverride(std::max(texH / dpi, 1.0f));
     if (textureId != _boundTexture) {
         _previewScroll->setScrollOffset(0.0f);
         _boundTexture = textureId;

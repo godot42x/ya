@@ -589,6 +589,27 @@ TEST(WidgetLayoutTest, ScrollViewportContentMainUsesAutoSizeChild)
     EXPECT_GT(scroll->getMaxScrollOffset(), 0.0f);
 }
 
+TEST(WidgetLayoutTest, ScrollCrossAxisKeepsDesiredSizeWhenAsked)
+{
+    WidgetTree tree({.width = 100, .height = 80});
+    auto scroll = std::make_shared<UIScrollViewport>("Scroll");
+    scroll->getScrollLayout().setCrossAxisUsesDesiredSize(true);
+    FCanvasSlotArgs scrollArgs;
+    scrollArgs.anchorMax = {1.0f, 1.0f};
+    scrollArgs.fixedSize  = {100.0f, 80.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), scroll, scrollArgs).valid());
+
+    auto frame = std::make_shared<UISizeBox>("Frame");
+    frame->setWidthOverride(400.0f);
+    frame->setHeightOverride(200.0f);
+    tree.attach(*scroll, frame);
+    tree.layout();
+
+    EXPECT_FLOAT_EQ(frame->_layoutRect.extent.x, 400.0f);
+    EXPECT_FLOAT_EQ(frame->_layoutRect.extent.y, 200.0f);
+    EXPECT_GT(scroll->getMaxScrollOffset(), 0.0f);
+}
+
 TEST(WidgetLayoutTest, SplitPaneDesiredSizeAggregatesAutoChildren)
 {
     registerSyntheticFont(16, 8.0f);
