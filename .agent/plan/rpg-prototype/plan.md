@@ -32,7 +32,7 @@
 
 | # | 能力 | 现状 | 锚点 |
 | --- | --- | --- | --- |
-| G1 | 2D 世界对象 | `Sprite2DComponent`：`image/size/uvRect/flip/tint/layer/sortOrder` 均已反射，编辑器 Sprite 预设可建 | `Render3D/include/ECS/Component/2D/Sprite2DComponent.h`，`EditorModule.cpp` Sprite 预设 |
+| G1 | 2D 世界对象 | `Sprite2DComponent`：`image/size/uvRect/flip/tint/layer/sortOrder` 均已反射，编辑器 Sprite 预设可建 | `Scene2D/Sprite2DComponent.h`（`Framework/Scene/Scene2D`），`EditorModule.cpp` Sprite 预设 |
 | G2 | 精灵排序 | 不透明（`tint.a >= 1`）alpha 裁剪 + 写深度；半透明按 `layer → sortOrder → 视深` | `Sprite2DWorld.slang` `discard`，`Sprite2DStage.h` |
 | G3 | 精灵渲染 | 只在 Deferred 图里（`appendSprite2D`），Forward 没有；逐候选一次 draw；每 View 纹理表 16 张 | `DeferredFrameGraphPasses.cpp`，`Sprite2DStage::drawSprites`，`kTextureTableSize` |
 | G4 | 精灵候选 | `WorldSpriteCandidate` 自带世界轴、uv、纹理，不绑死实体 → 非实体来源（tile）可以直接产候选 | `RenderFrameData.h`，`RenderFrameExtractor.cpp extractSprites` |

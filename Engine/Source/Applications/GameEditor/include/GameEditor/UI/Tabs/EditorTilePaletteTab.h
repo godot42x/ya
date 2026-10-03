@@ -1,7 +1,7 @@
 #pragma once
 
 #include "GameEditor/UI/Viewport/EditorTileBrushController.h"
-#include "ECS/Component/2D/TilemapComponent.h"
+#include "Scene2D/TilemapComponent.h"
 #include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/Controls/Image.h"
 

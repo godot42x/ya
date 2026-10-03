@@ -193,6 +193,7 @@ do
         "ya-scene-runtime",
         "ya-scene-serialization",
         "ya-scene-3d",
+        "ya-scene-2d",
         "ya-ecs-core",
         "ya-ecs-systems",
         "ya-component-linkage",

@@ -1,6 +1,6 @@
 #include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/UI/Sections/EditorAutoPropertySection.h"
-#include "ECS/Component/2D/TilemapComponent.h"
+#include "Scene2D/TilemapComponent.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <gtest/gtest.h>

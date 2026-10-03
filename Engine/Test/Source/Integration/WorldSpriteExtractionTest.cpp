@@ -1,5 +1,5 @@
 #include "Core/Reflection/DeferredInitializer.h"
-#include "ECS/Component/2D/Sprite2DComponent.h"
+#include "Scene2D/Sprite2DComponent.h"
 #include "ECS/Entity.h"
 #include "GameRuntime/Render/RenderFrameExtractor.h"
 #include "Hierarchy/Node.h"

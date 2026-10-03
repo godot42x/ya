@@ -10,7 +10,7 @@
 #include "Core/Event.h"
 #include "Core/Log.h"
 
-#include "ECS/Component/2D/Sprite2DComponent.h"
+#include "Scene2D/Sprite2DComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/LuaScriptBinding.h"
 #include "ECS/Systems/LuaScriptingSystem.h"

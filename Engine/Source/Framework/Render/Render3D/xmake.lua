@@ -13,7 +13,7 @@ target("ya-render-3d")
     add_deps(
         "ya-render-resources",
         "ya-resource-core", "ya-resource-loader", "ya-resource-runtime",
-        "ya-render-graph",
+        "ya-render-graph", "ya-scene-2d",
         { public = true })
     add_deps("ya-ecs-core", "ya-ecs-systems", "ya-render-2d")
     -- Implementation-only deps: scene data/lifecycle and the backend builtin.

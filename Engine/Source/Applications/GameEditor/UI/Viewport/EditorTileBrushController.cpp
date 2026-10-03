@@ -2,7 +2,7 @@
 
 #include "Core/Log.h"
 #include "ECS/Component.h"
-#include "ECS/Component/2D/TilemapComponent.h"
+#include "Scene2D/TilemapComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "GameEditor/UI/Ops/EditorTilemapUndo.h"

@@ -1,4 +1,4 @@
-#include "ECS/Component/2D/Sprite2DComponent.h"
+#include "Scene2D/Sprite2DComponent.h"
 
 namespace ya
 {

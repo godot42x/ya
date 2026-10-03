@@ -149,9 +149,13 @@
     {
       "id": "scene2d_module",
       "phase": "review-4",
-      "status": "not_started",
+      "status": "done",
       "driven_by": "Sprite2D / Tilemap / Tileset live in ya-render-3d; TilemapComponent.cpp mixes data, queries, editing and render expansion",
-      "evidence": []
+      "evidence": [
+        "ya-scene-2d (Framework/Scene/Scene2D): Sprite2DComponent, TilemapComponent (data + edit), TilemapQuery.cpp; no renderer dependency",
+        "tile -> WorldSpriteCandidate expansion moved to ya-render-3d Render3D/Common/TilemapExtraction.{h,cpp}",
+        "ya-testing 1550 passed / 1 skipped; editor smoke gate and 2DRpgPrototype run exit 0"
+      ]
     },
     {
       "id": "sprite_animation",

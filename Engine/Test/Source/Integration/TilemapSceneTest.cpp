@@ -1,6 +1,6 @@
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Core/Reflection/ReflectionSerializer.h"
-#include "ECS/Component/2D/TilemapComponent.h"
+#include "Scene2D/TilemapComponent.h"
 
 #include <gtest/gtest.h>
 

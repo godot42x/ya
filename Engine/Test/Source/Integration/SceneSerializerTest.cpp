@@ -2,7 +2,7 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "Scene/Serialization/SceneSerializer.h"
 #include "Core/Common/AssetRef.h"
-#include "ECS/Component/2D/Sprite2DComponent.h"
+#include "Scene2D/Sprite2DComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"

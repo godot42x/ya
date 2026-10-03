@@ -3,8 +3,8 @@
 // script; everything else (camera, bare transforms) never answers.
 
 #include "Core/Scripting/ScriptBindings.h"
-#include "ECS/Component/2D/Sprite2DComponent.h"
-#include "ECS/Component/2D/TilemapComponent.h"
+#include "Scene2D/Sprite2DComponent.h"
+#include "Scene2D/TilemapComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "GameRuntime/Script/GameplayScriptFunctions.h"

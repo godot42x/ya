@@ -6,7 +6,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
-#include "ECS/Component/2D/Sprite2DComponent.h"
+#include "Scene2D/Sprite2DComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/CameraController/FreeCameraController.h"

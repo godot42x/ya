@@ -449,3 +449,17 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 保留：摆在矩阵开头的 owner 表作为 `pipeline_contract_audit` 的结论；`kTextureTableSize = 16` 与分批规则（不为合批打乱顺序）。
 - 偏离 / 未完成：纯 2D View 的 graph 策略用户选择先不定，等 `render-view-family` P3；混合场景的像素验收没有证据，
   本步骤不写代码，已整理成步骤 5 的验收项。`2d-gameplay` skill 里的 z 约定仍然有效，到步骤 5 才删。
+
+## 2026-10-03 — Scene2D 模块（评审步骤 4，第一部分）
+
+- 新 target `ya-scene-2d`（`Framework/Scene/Scene2D`，公开头 `Scene2D/Sprite2DComponent.h`、`Scene2D/TilemapComponent.h`，
+  导出宏 `YA_SCENE_2D_API`）。依赖 `ya-scene-3d` / `ya-ecs-core` / `ya-ecs-systems`，不依赖渲染。
+  `ya-render-3d` 公开依赖它；`ya-engine` 聚合目标也加了。
+- `TilemapComponent.cpp` 拆三份：数据 + 编辑（`TilemapComponent.cpp`）、查询面（`TilemapQuery.cpp`，
+  世界矩阵经 `TransformSystem`）、tile 到 `WorldSpriteCandidate` 的展开（留在 render-3d：
+  `Render3D/Common/TilemapExtraction.{h,cpp}`，`TilemapExtractionInput` 与 `appendTilemapCandidates` 一起搬）。
+  行为没变，只搬代码和 include 路径；`ECS/Component/2D/` 下只剩 `BillboardComponent`。
+- 验证：`ya-testing` 1550 过、1 跳过（同前）；编辑器冒烟门禁（2DRpgPrototype）编辑态 78 fps、PIE 80 fps、字体构建 0；
+  `ya.py run` 2DRpgPrototype `--exit-after-frame=120` 退出码 0。
+- 偏离 / 未完成：`SpriteAnimation` 与 pivot 是步骤 4 的后两项，下一个 checkpoint；两个头里关于「不透明写深度」的
+  注释还是旧口径，随步骤 5 一起改，没有顺手动。

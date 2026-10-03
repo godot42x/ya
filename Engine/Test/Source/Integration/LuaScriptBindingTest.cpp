@@ -1,7 +1,7 @@
 // Lua view of the shared script export (rpg-prototype B1, D12).
 
 #include "Core/Scripting/ScriptBindings.h"
-#include "ECS/Component/2D/TilemapComponent.h"
+#include "Scene2D/TilemapComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/SceneBus.h"
 #include "ECS/Systems/Components/CameraComponent.h"

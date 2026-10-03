@@ -1,7 +1,7 @@
 #include "GameEditor/UI/Ops/EditorTilemapUndo.h"
 
 #include "Core/TypeIndex.h"
-#include "ECS/Component/2D/TilemapComponent.h"
+#include "Scene2D/TilemapComponent.h"
 #include "ECS/Entity.h"
 #include "GUI/Binding/UndoStack.h"
 #include "Scene/Core/Scene.h"

@@ -2,7 +2,7 @@
 #include "Core/Camera/Camera.h"
 #include "Render/Adapters/Companion/CompanionManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/Component/2D/Sprite2DComponent.h"
+#include "Scene2D/Sprite2DComponent.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"

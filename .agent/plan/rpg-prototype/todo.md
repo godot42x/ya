@@ -24,7 +24,7 @@
 - [ ] 纯 2D View 的 graph 策略未选（workload 跳 stage 还是单独 2D graph），随步骤 6 / `render-view-family` P3 定；混合场景的像素验收随步骤 5
 
 步骤 4 2D 模块（可与步骤 3 并行）
-- [ ] `Scene2D` target：Sprite2D / Tilemap / Tileset 移出 `ya-render-3d`，拆开 `TilemapComponent.cpp` 的数据 / 查询 / 编辑 / 渲染展开
+- [x] `Scene2D` target（`ya-scene-2d`）：Sprite2D / Tilemap 移出 `ya-render-3d`（Tileset 数据本来在 Core），`TilemapComponent.cpp` 拆成数据+编辑 / 查询 / 渲染展开
 - [ ] `SpriteAnimation` 组件（D-T2 决策门已触发），删 Player / Npc / Chest 三处 `uvRect`
 - [ ] `Sprite2DComponent` pivot / anchor
 

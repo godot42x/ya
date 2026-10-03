@@ -22,7 +22,7 @@ namespace ya
 /// `sortOrder`, then view depth. `uvRect` and the flip flags are sampled
 /// by that pass. A sprite whose texture is unset, still loading, or failed
 /// is not drawn; there is no substitute image.
-struct YA_RENDER_3D_API Sprite2DComponent : public IComponent
+struct YA_SCENE_2D_API Sprite2DComponent : public IComponent
 {
     YA_REFLECT_BEGIN(Sprite2DComponent, IComponent)
     YA_REFLECT_FIELD(bVisible)
@@ -53,6 +53,6 @@ struct YA_RENDER_3D_API Sprite2DComponent : public IComponent
 
 /// True only when the sprite should be drawn. Unset, pending, and failed
 /// textures all return false; callers must not invent a second placeholder.
-[[nodiscard]] YA_RENDER_3D_API bool spriteIsDrawable(const Sprite2DComponent& sprite);
+[[nodiscard]] YA_SCENE_2D_API bool spriteIsDrawable(const Sprite2DComponent& sprite);
 
 } // namespace ya

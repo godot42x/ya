@@ -13,15 +13,12 @@
 namespace ya
 {
 
-struct TextureBinding;
-struct WorldSpriteCandidate;
-
 // One paint layer of a tilemap: a dense grid of cell values plus the height
 // the layer floats above the tilemap origin. Cell value 0 is empty, any
 // other value is (tile index + 1) into the Tileset. Cells are row-major
 // from the bottom-left: cells[y * width + x], so the first row in the
 // serialized array is the world-bottom row.
-struct YA_RENDER_3D_API TilemapLayer
+struct YA_SCENE_2D_API TilemapLayer
 {
     YA_REFLECT_BEGIN(TilemapLayer)
     YA_REFLECT_FIELD(name)
@@ -36,15 +33,16 @@ struct YA_RENDER_3D_API TilemapLayer
 
 // Authored tile grid on a Node3D. Position, rotation and scale stay on
 // TransformComponent; this type only says which tile sits on which cell.
-// Rendering expands every non-empty cell into a WorldSpriteCandidate and
-// reuses Sprite2DStage, so there is no tilemap pass: a tile is drawn
-// exactly like a 1x1 sprite whose uvRect is the tile window.
+// Rendering expands every non-empty cell into a WorldSpriteCandidate
+// (Render3D/Common/TilemapExtraction.h) and reuses Sprite2DStage, so there is
+// no tilemap pass: a tile is drawn exactly like a 1x1 sprite whose uvRect is
+// the tile window.
 //
 // Cell (x, y) centers on ((x + 0.5) * cellSize.x, (y + 0.5) * cellSize.y,
 // layer.zOffset) in tilemap-local space, transformed by the entity world
 // matrix. Opaque tiles depth-test and depth-write like opaque sprites, so
 // a layer with a higher zOffset occludes what is below it.
-struct YA_RENDER_3D_API TilemapComponent : public IComponent
+struct YA_SCENE_2D_API TilemapComponent : public IComponent
 {
     YA_REFLECT_BEGIN(TilemapComponent, IComponent)
     YA_REFLECT_FIELD(tileset)
@@ -120,36 +118,5 @@ struct YA_RENDER_3D_API TilemapComponent : public IComponent
     // Fill the clamped range on one layer; returns cells written.
     int32_t fillRect(int32_t minX, int32_t minY, int32_t maxX, int32_t maxY, size_t layerIndex, int32_t value);
 };
-
-// Everything appendTilemapCandidates needs besides the component itself.
-// textureWidth/Height are the resolved atlas pixels; the atlas TextureSlot
-// already resolved them before this runs, so a zero extent only means
-// "not ready yet" and yields no candidates.
-struct TilemapExtractionInput
-{
-    const TilemapComponent* map           = nullptr;
-    const Tileset*          tileset       = nullptr;
-    glm::mat4               world         = glm::mat4(1.0f);
-    uint32_t                entityId      = 0;
-    const TextureBinding*   atlas         = nullptr;
-    uint32_t                textureWidth  = 0;
-    uint32_t                textureHeight = 0;
-    // Optional inclusive cell range. The scene snapshot passes the whole
-    // map; a future view-frustum or chunk cache can narrow it. Empty when
-    // min > max after clamping.
-    bool    bHasVisibleRange = false;
-    int32_t minX = 0;
-    int32_t minY = 0;
-    int32_t maxX = -1;
-    int32_t maxY = -1;
-};
-
-// Expands the non-empty cells in range into sprite candidates, one per
-// (layer, cell). A tile whose window falls outside the atlas, and a layer
-// whose cell count does not match width * height, are skipped: extraction
-// never invents pixels for authoring mistakes. Appends to out, so one call
-// per tilemap entity accumulates the snapshot.
-YA_RENDER_3D_API void appendTilemapCandidates(const TilemapExtractionInput&     in,
-                                              std::vector<WorldSpriteCandidate>& out);
 
 } // namespace ya

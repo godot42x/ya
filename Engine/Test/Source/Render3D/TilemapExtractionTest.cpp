@@ -1,4 +1,6 @@
-#include "ECS/Component/2D/TilemapComponent.h"
+#include "Scene2D/TilemapComponent.h"
+#include "Render3D/Common/TilemapExtraction.h"
+#include "Render3D/Common/TilemapExtraction.h"
 
 #include "Render3D/RenderFrameData.h"
 #include "RHI/Core/Texture.h"

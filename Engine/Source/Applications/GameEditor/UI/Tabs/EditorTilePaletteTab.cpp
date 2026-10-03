@@ -2,7 +2,7 @@
 
 #include "Core/Event.h"
 #include "Core/Log.h"
-#include "ECS/Component/2D/TilemapComponent.h"
+#include "Scene2D/TilemapComponent.h"
 #include "ECS/Entity.h"
 #include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/WidgetTree.h"

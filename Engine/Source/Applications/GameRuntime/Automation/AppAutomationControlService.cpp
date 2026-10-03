@@ -13,7 +13,7 @@
 #include "ECS/ECSRegistry.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/Component/2D/Sprite2DComponent.h"
+#include "Scene2D/Sprite2DComponent.h"
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"

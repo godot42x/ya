@@ -77,7 +77,7 @@ function ya_engine_defines()
         "YA_CORE_API", "YA_RHI_API", "YA_RHI_BACKEND_API", "YA_RENDER_RESOURCES_API", "YA_RENDER_2D_API", "YA_GUI_API",
         "YA_APP_KERNEL_API", "YA_APP_CONTROL_API", "YA_MODULE_MANAGER_API",
         "YA_SCENE_CORE_API", "YA_SCENE_RUNTIME_API", "YA_SCENE_SERIALIZATION_API",
-        "YA_SCENE_3D_API", "YA_RESOURCE_API", "YA_RENDER_GRAPH_API",
+        "YA_SCENE_3D_API", "YA_SCENE_2D_API", "YA_RESOURCE_API", "YA_RENDER_GRAPH_API",
         "YA_RENDER_3D_API", "YA_RENDER_ECS_ADAPTERS_API", "YA_ECS_CORE_API", "YA_GAMEPLAY_ECS_API", "YA_ECS_SYSTEMS_API", "YA_COMPONENT_LINKAGE_API", "YA_PHYSICS_API",
         "YA_GAME_RUNTIME_API", "YA_GAME_EDITOR_API", "YA_RESOURCE_CORE_API", "YA_RESOURCE_LOADER_API",
     }
@@ -110,6 +110,7 @@ if get_config("ya_profile") ~= "gui" then
     includes("./Framework/Scene/Runtime/xmake.lua")
     includes("./Framework/Scene/Serialization/xmake.lua")
     includes("./Framework/Scene/Scene3D/xmake.lua")
+    includes("./Framework/Scene/Scene2D/xmake.lua")
     includes("./Framework/Resource/Core/xmake.lua")
     includes("./Framework/Resource/Loader/xmake.lua")
     includes("./Framework/Resource/xmake.lua")

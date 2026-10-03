@@ -1,6 +1,6 @@
 #include "Core/Math/Ray.h"
 #include "Core/Reflection/DeferredInitializer.h"
-#include "ECS/Component/2D/Sprite2DComponent.h"
+#include "Scene2D/Sprite2DComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/Systems/TransformSystem.h"

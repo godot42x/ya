@@ -1,4 +1,4 @@
-#include "ECS/Component/2D/TilemapComponent.h"
+#include "Scene2D/TilemapComponent.h"
 
 #include "Core/Common/AssetRef.h"
 #include "Core/Common/Tileset.h"
