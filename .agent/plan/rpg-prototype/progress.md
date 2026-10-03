@@ -553,3 +553,11 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   Town 的 TilemapGround 排到 `entities` 末尾。玩家位置、相机未变。
 - 验证：新增 7 个单测；`ya-testing` 1597 ran / 1596 passed / 1 skipped；四条玩法脚本通过；Town 前后截图 0 像素差；编辑器冒烟 editing 65.1 / play 43.1 fps。
 - 注意：Hero walk 的 `fps` 在文件里是 `8.33329963684082`（float 提升为 double 的写法），是序列化不动点，不影响语义。
+
+## 2026-10-04 — P3a 内容浏览器打开器注册表
+
+- 决策：动画集编辑页签的图集来源 = 资产里加可选 `atlas`（页签独立打开，没有实体上下文）；Godot 式切帧编辑器留作后续优化。P3 拆为 a 注册表 / b 页签 / c Inspector 面板。
+- `GameEditor/UI/Shell/EditorContentOpenerRegistry`：进程级表，key = 后缀（最长匹配、大小写不敏感、可省略前导点），value = `std::function<void(EditorLayer&, std::string)>`；
+  `get()` 首次使用时灌入内建打开器，之后同后缀覆盖、新后缀追加。`EditorContentBrowserTab::activateItem` 只剩目录进入 + `selectItem` + 注册表查找。
+- 验证：6 个新单测；`ya-testing` 1603 ran / 1602 passed / 1 skipped；`--editor-tab=content-browser` 冒烟 exit 0。
+- 未验证：没有在编辑器里真双击四类文件（打开调用原样搬入，单测只覆盖匹配）。行为差异：`Hero.LUA` 这类大写后缀现在也能打开。

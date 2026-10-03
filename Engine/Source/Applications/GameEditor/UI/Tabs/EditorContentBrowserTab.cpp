@@ -20,6 +20,7 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/FileExplorer.h"
+#include "GameEditor/UI/Shell/EditorContentOpenerRegistry.h"
 
 #include <algorithm>
 #include <cmath>
@@ -408,27 +409,8 @@ void EditorContentBrowserTab::activateItem(const std::filesystem::path& path, bo
     }
     selectItem(path, false);
     std::string utf8Path = path_utils::pathToUtf8String(path);
-    if (utf8Path.ends_with(".scene.json")) {
-        _layer->cmdLoadScene(std::move(utf8Path));
-    }
-    else if (utf8Path.ends_with(".lua")) {
-        _layer->openDocumentEditor(EEditorDocumentKind::Script, std::move(utf8Path));
-    }
-    else if (utf8Path.ends_with(".yaui.json")) {
-        // One funnel for every UI entry (content browser, inspector, hierarchy
-        // context menu): it loads the designer session, binds the UI page and
-        // raises the tab.
-        std::string assetPath = utf8Path;
-        if (VirtualFileSystem* vfs = VirtualFileSystem::get()) {
-            const std::string vfsPath = vfs->toVfsPath(assetPath);
-            if (!vfsPath.empty()) {
-                assetPath = vfsPath;
-            }
-        }
-        (void)_layer->openDocumentEditor(EEditorDocumentKind::UI, std::move(assetPath));
-    }
-    else if (utf8Path.ends_with(".mat") || utf8Path.ends_with(".material")) {
-        _layer->openDocumentEditor(EEditorDocumentKind::Material, std::move(utf8Path));
+    if (const EditorContentOpener* opener = EditorContentOpenerRegistry::get().find(utf8Path)) {
+        (*opener)(*_layer, std::move(utf8Path));
     }
 }
 
