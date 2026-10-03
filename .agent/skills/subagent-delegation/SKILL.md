@@ -60,6 +60,7 @@ description: 派发 subagent 的规则：新开 / 续接（resume）/ 分叉（s
 - 只能用会话 `<available_subagent_models>` 列表里的 slug；用户说的模型不在列表里，就告诉用户，不要替换。
 - 默认用非 fast 版本（如 `grok-4.7-high`），`-fast` 只在用户明确要时用。用户反馈过 fast 版本产出的实现偏脏。
 - 用户点名模型后，同一任务的后续 subagent 沿用该模型。
+- 已观察到：全新创建、传 `grok-4.7-high` 的 subagent 在界面里不带 fast；被**续接**过的同一模型 subagent 在界面里显示 "High Fast"（2026-10-03，两次用户反馈都对应续接过的 agent）。Cursor 本地模型表把 `grok-4.7-high` 映射到 `fast=false`，原因未确认，但 Task 工具没有 fast 参数可传。用户禁止 fast 时：该模型不要续接，每次新开并写完整交接 prompt；或者换别的模型。
 
 ## 新开时的交接 prompt
 
