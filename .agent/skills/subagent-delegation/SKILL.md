@@ -60,7 +60,8 @@ description: 派发 subagent 的规则：新开 / 续接（resume）/ 分叉（s
 - 只能用会话 `<available_subagent_models>` 列表里的 slug；用户说的模型不在列表里，就告诉用户，不要替换。
 - 默认用非 fast 版本（如 `grok-4.7-high`），`-fast` 只在用户明确要时用。用户反馈过 fast 版本产出的实现偏脏。
 - 用户点名模型后，同一任务的后续 subagent 沿用该模型。
-- 已观察到：全新创建、传 `grok-4.7-high` 的 subagent 在界面里不带 fast；被**续接**过的同一模型 subagent 在界面里显示 "High Fast"（2026-10-03，两次用户反馈都对应续接过的 agent）。Cursor 本地模型表把 `grok-4.7-high` 映射到 `fast=false`，原因未确认，但 Task 工具没有 fast 参数可传。用户禁止 fast 时：该模型不要续接，每次新开并写完整交接 prompt；或者换别的模型。
+- **Task 的 `model` 传 `grok-4.7-high` 也会得到 fast（2026-10-03 查实）。** Cursor 日志 `fixupModelConfig: populating selectedModels from modelName` 显示 slug 的 `-high` / `-high-fast` 后缀被丢掉，只剩 `grok-4.7`，composer 的参数数为 0；请求时用目录默认值补成 3 个参数，随后 `Healed stale per-composer parameters` 把它们写进 composer。state.vscdb 里所有经 Task 创建的 grok-4.7 subagent 都是 `reasoning_effort=high, fast=true`，`-fast` 与否无区别；用户自己开的 composer 才是 `fast=false`。界面标签在第一次运行结束、heal 之后才变成 "High Fast"，所以新开的 agent 刚创建时看起来是对的。
+- Task 工具没有 fast 参数，续接 / 新开都躲不掉。用户禁止 fast 时：不要用 Grok 4.7 派 subagent（换别的模型或自己做），或者让用户在 Cursor 设置里给该 subagent 类型配 `subagentModelOverrides`（用户已给 `explore` 配过 `fast=false`），配好后用探针确认再用。
 
 ## 新开时的交接 prompt
 
