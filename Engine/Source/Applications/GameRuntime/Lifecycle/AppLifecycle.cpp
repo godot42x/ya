@@ -55,6 +55,7 @@
 #include "GUI/Host/NativeWindowManager.h"
 #include "Render3D/RenderDeviceState.h"
 
+#include <algorithm>
 #include <format>
 #include <csignal>
 #include <filesystem>
@@ -67,6 +68,42 @@
 
 namespace ya
 {
+
+namespace
+{
+
+/// Standalone game only. The editor window must not inherit a game-derived
+/// minimum. No reference resolution means no minimum.
+void applyStandaloneGameWindowMinimum(App& app, INativeWindow* window)
+{
+    if (!window || app.getDesc().bEditor || !app.getGameUIHost()) {
+        return;
+    }
+    const glm::uvec2 ref = app.getGameUIHost()->referenceResolution();
+    std::optional<FUIReferenceResolution> resolution;
+    if (ref.x > 0 && ref.y > 0) {
+        resolution = FUIReferenceResolution{.width = ref.x, .height = ref.y};
+    }
+    const auto minimum = gameWindowMinimumSize(resolution);
+    if (!minimum) {
+        return;
+    }
+    const int minWidth  = static_cast<int>(minimum->width);
+    const int minHeight = static_cast<int>(minimum->height);
+    if (!window->setMinimumSize(minWidth, minHeight)) {
+        return;
+    }
+    int width  = 0;
+    int height = 0;
+    window->getWindowSize(width, height);
+    const int clampedWidth  = std::max(width, minWidth);
+    const int clampedHeight = std::max(height, minHeight);
+    if (clampedWidth != width || clampedHeight != height) {
+        window->setWindowSize(clampedWidth, clampedHeight);
+    }
+}
+
+} // namespace
 
 std::string App::resolveStartupScenePath(const AppDesc& appDesc)
 {
@@ -213,6 +250,7 @@ void App::init(AppDesc ci)
         app._renderState->hostSurfaceId = mainWindow ? render->findSurfaceId(*mainWindow) : SurfaceId{};
 
         app.inputRouter.setWindow(mainWindow);
+        applyStandaloneGameWindowMinimum(app, mainWindow);
 
         // Seed to the drawable so the first frame is 1:1 with the swapchain.
         // A later resize keeps that match. An explicit resolution (automation)

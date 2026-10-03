@@ -70,6 +70,12 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
             }
             return std::make_shared<EditorViewportTab>(ctx.viewportHost);
         },
+        .onSpawnComplete = [](FEditorTabSpawnContext& ctx, UIElement&) {
+            if (ctx.setMinSize) {
+                ctx.setMinSize(editor_density::kViewportDockMinWidth,
+                               editor_density::kViewportDockMinHeight);
+            }
+        },
     });
     registry.add({
         .tabId = "play-toolbar",

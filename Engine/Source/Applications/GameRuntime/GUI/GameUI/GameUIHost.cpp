@@ -15,6 +15,7 @@
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <utility>
 
@@ -102,18 +103,6 @@ void GameUIHost::setReferenceResolution(glm::uvec2 resolution)
     _referenceResolution = resolution;
 }
 
-void GameUIHost::setMinReferenceScale(float scale)
-{
-    if (!(scale > 0.0f && scale <= 1.0f)) {
-        YA_CORE_WARN("GameUIHost::setMinReferenceScale: {} is outside (0, 1]; using {}",
-                     scale,
-                     kMinGameUIReferenceScale);
-        _minReferenceScale = kMinGameUIReferenceScale;
-        return;
-    }
-    _minReferenceScale = scale;
-}
-
 void GameUIHost::setPresentation(const Rect2D& viewportPx, const glm::vec2& framebufferScale)
 {
     _viewportPx       = viewportPx;
@@ -123,14 +112,17 @@ void GameUIHost::setPresentation(const Rect2D& viewportPx, const glm::vec2& fram
     const float logicalHeight = std::max(viewportPx.extent.y, 1.0f) / std::max(framebufferScale.y, 0.01f);
 
     // Fit rides the tree DPI so text re-rasterizes at the device pixel size.
-    // Below minReferenceScale() the logical canvas shrinks instead, and
-    // responsive layout reflows. The fit is not snapped: font atlases are
-    // keyed by integer raster pixels, which is the quantum.
+    // It is continuous: there is no min UI scale. A non-finite or non-positive
+    // result (degenerate input the extent/density epsilons did not catch)
+    // falls back to 1, which lays the tree out in the logical viewport.
+    // Font atlases are keyed by integer raster pixels, which is the quantum.
     float scale = 1.0f;
     if (_referenceResolution.x > 0 && _referenceResolution.y > 0) {
         scale = std::min(logicalWidth / static_cast<float>(_referenceResolution.x),
                          logicalHeight / static_cast<float>(_referenceResolution.y));
-        scale = std::max(scale, _minReferenceScale);
+        if (!std::isfinite(scale) || scale <= 0.0f) {
+            scale = 1.0f;
+        }
     }
     _referenceScale = scale;
     _tree.setDpiScale(fb * _referenceScale);
@@ -238,9 +230,11 @@ EWidgetRouteResult GameUIHost::dispatchEvent(const Event& event, const glm::vec2
     if (!bInViewport) {
         return EWidgetRouteResult::NotHandled;
     }
+    // Same scale setPresentation stored. The framebuffer epsilon matches the
+    // one used to derive the logical viewport; the fit itself is not floored.
     const glm::vec2 logicalPoint =
         (windowPoint - _viewportPx.pos) /
-        (glm::max(_framebufferScale, glm::vec2(0.01f)) * std::max(_referenceScale, 0.01f));
+        (glm::max(_framebufferScale, glm::vec2(0.01f)) * _referenceScale);
     WidgetEventContext ctx;
     ctx.logicalPoint = logicalPoint;
     return _tree.dispatchEvent(event, ctx);

@@ -300,6 +300,14 @@ bool SDLNativeWindow::setWindowSize(int width, int height)
     return false;
 }
 
+bool SDLNativeWindow::setMinimumSize(int width, int height)
+{
+    if (!nativeWindowHandle || width <= 0 || height <= 0) {
+        return false;
+    }
+    return SDL_SetWindowMinimumSize(static_cast<SDL_Window*>(nativeWindowHandle), width, height);
+}
+
 bool SDLNativeWindow::getWindowPosition(int& x, int& y) const
 {
     x = 0;

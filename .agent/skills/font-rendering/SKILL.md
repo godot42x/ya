@@ -60,7 +60,7 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
    - 缓存 key 是 `name:rasterPx`（整数），不是 float dpi。`getFont` / `loadFont` 的 `dpiScale` 参数保留但忽略。`setActiveDpiScale` 不再被读取。图集页按 **(face 文件, 渲染口味)** 共享，不按字号各建一张：拉丁 bitmap、CJK bitmap、emoji color、SDF 各一套页。glyph 在页里的键是 `(codepoint, rasterPx)`。`(face, rasterPx)` 交给调用方的 `Font` 仍是轻视图（度量 + 字符表 + 指向共享 bank 的指针），SDF 的 scaled view 走同一条。页懒创建（fallback 页要到第一个 glyph），起步 `kSharedAtlasInitialPage`（256），装不下就翻倍，顶到 4096 再追加一页。每个 face 只留 `kLiveRasterSizeWindow`（8）个栅格尺寸：多出来的最旧尺寸整组 glyph 丢掉（快照还握着的 `Font`，`use_count > 2`，不逐出）。逐出时重打包剩余 glyph，旧 GPU 图交给 `DeferredDeletionQueue`，`onRepack` 按 codepoint 重写还活着的 UV。内存跟活着的文字走，不跟见过的字号走。SDF 视图对象另有 `kMaxSdfViewsPerFamily = 32`，距离场本身在共享 SDF 页里。
    - 文字 glyph 起点在 `UIFrameBuilder::addText` emit 时吸附整设备像素（Nearest 采样下小数起点会重采样图集）。笔位用栅格字体的 advance，仍在设备像素里。
    - 设计器滚轮走同一条：预览树 dpi 保持 1，`EditorUICanvasCompositor` 把 `view.zoom` 乘进 `uiScale`，于是文字和几何一起变大，并按整像素重栅格。
-   - GameUIHost 的 fit 走树 dpi 轴，不再做 1/16 量化（图集的量子是整像素栅格尺寸）。下限是工程可选字段 `uiMinReferenceScale`（`(0, 1]`，缺省或非法值回落到 `GameUIHost::kMinGameUIReferenceScale` = 0.5）。fit 低于它时夹住，逻辑画布改按这个比例缩小，响应式布局重排，而不是继续把文字缩到栅格下限以下。
+   - GameUIHost 的 fit 走树 dpi 轴，不再做 1/16 量化（图集的量子是整像素栅格尺寸）。fit = `min(逻辑宽 / 参考宽, 逻辑高 / 参考高)`，连续，没有 min UI scale。低于 9px 栅格下限的文字会停在 9px 并溢出 slot，所以独立游戏窗口有最小尺寸（参考分辨率的一半），编辑器视口 split 有 320x180 的拖动下限。
    - 当前 `GUIAppHost` 用 `presentExtent/logicalExtent` 比值设树 DPI（非真机 DPR）；HiDPI 需改系统 API 取真机 DPR（架构改进项，非紧急）。
 
 7. **主字面必须打包进仓，不要探测系统字体**

@@ -130,7 +130,6 @@ TEST_F(ProjectDescriptorTest, LoadsUIReferenceResolution)
     ASSERT_TRUE(descriptor.uiReferenceResolution.has_value());
     EXPECT_EQ(descriptor.uiReferenceResolution->width, 1280u);
     EXPECT_EQ(descriptor.uiReferenceResolution->height, 720u);
-    EXPECT_FLOAT_EQ(descriptor.uiMinReferenceScale, 0.5f);
 
     const auto invalidPath = writeText(_root / "Bad.yaproject",
                                        R"({
@@ -145,7 +144,7 @@ TEST_F(ProjectDescriptorTest, LoadsUIReferenceResolution)
     EXPECT_THROW((void)FProjectDescriptor::load(invalidPath), std::runtime_error);
 }
 
-TEST_F(ProjectDescriptorTest, LoadsUIMinReferenceScale)
+TEST_F(ProjectDescriptorTest, LegacyUIMinReferenceScaleStillLoads)
 {
     writeText(_root / "Content" / ".keep", "");
     writeText(_root / "Game.yamodule",
@@ -164,36 +163,29 @@ TEST_F(ProjectDescriptorTest, LoadsUIMinReferenceScale)
   "modules": ["Game.yamodule"],
   "plugins": [],
   "contentDir": "Content",
+  "uiReferenceResolution": [1280, 720],
   "uiMinReferenceScale": 0.25
 })");
     const auto descriptor = FProjectDescriptor::load(descriptorPath);
-    EXPECT_FLOAT_EQ(descriptor.uiMinReferenceScale, 0.25f);
+    ASSERT_TRUE(descriptor.uiReferenceResolution.has_value());
+    EXPECT_EQ(descriptor.uiReferenceResolution->width, 1280u);
+    EXPECT_EQ(descriptor.uiReferenceResolution->height, 720u);
+}
 
-    const auto rejectedPath = writeText(_root / "BadFloor.yaproject",
-                                        R"({
-  "schemaVersion": 1,
-  "name": "Game",
-  "mainModule": "Game",
-  "modules": ["Game.yamodule"],
-  "plugins": [],
-  "contentDir": "Content",
-  "uiMinReferenceScale": 1.5
-})");
-    const auto rejected = FProjectDescriptor::load(rejectedPath);
-    EXPECT_FLOAT_EQ(rejected.uiMinReferenceScale, 0.5f);
+TEST_F(ProjectDescriptorTest, GameWindowMinimumIsHalfTheReference)
+{
+    const auto minimum = gameWindowMinimumSize(std::make_optional(FUIReferenceResolution{.width = 1280u, .height = 720u}));
+    ASSERT_TRUE(minimum.has_value());
+    EXPECT_EQ(minimum->width, 640u);
+    EXPECT_EQ(minimum->height, 360u);
 
-    const auto zeroPath = writeText(_root / "ZeroFloor.yaproject",
-                                    R"({
-  "schemaVersion": 1,
-  "name": "Game",
-  "mainModule": "Game",
-  "modules": ["Game.yamodule"],
-  "plugins": [],
-  "contentDir": "Content",
-  "uiMinReferenceScale": 0
-})");
-    const auto zero = FProjectDescriptor::load(zeroPath);
-    EXPECT_FLOAT_EQ(zero.uiMinReferenceScale, 0.5f);
+    const auto tiny = gameWindowMinimumSize(std::make_optional(FUIReferenceResolution{.width = 1u, .height = 1u}));
+    ASSERT_TRUE(tiny.has_value());
+    EXPECT_EQ(tiny->width, 1u);
+    EXPECT_EQ(tiny->height, 1u);
+
+    EXPECT_FALSE(gameWindowMinimumSize(std::nullopt).has_value());
+    EXPECT_FALSE(gameWindowMinimumSize(std::make_optional(FUIReferenceResolution{})).has_value());
 }
 
 TEST_F(ProjectDescriptorTest, LoadsOptionalIcon)

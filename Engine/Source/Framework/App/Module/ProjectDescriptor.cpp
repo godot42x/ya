@@ -86,17 +86,6 @@ FProjectDescriptor FProjectDescriptor::load(const std::filesystem::path& path)
         }
         descriptor.uiReferenceResolution = resolution;
     }
-    if (json.contains("uiMinReferenceScale")) {
-        const float scale = json.at("uiMinReferenceScale").get<float>();
-        if (!(scale > 0.0f && scale <= 1.0f)) {
-            YA_CORE_WARN("Project uiMinReferenceScale {} is outside (0, 1]; using {}",
-                         scale,
-                         descriptor.uiMinReferenceScale);
-        }
-        else {
-            descriptor.uiMinReferenceScale = scale;
-        }
-    }
     if (json.contains("icon")) {
         const auto icon = json.at("icon").get<std::string>();
         if (!icon.empty()) {

@@ -48,6 +48,25 @@ void applyHostedSplitMinExtent(FDockContext* dock, DockPanelId id, float extent)
     dock->notifyDockLayoutListeners();
 }
 
+/// Both axes, via the nearest split of each orientation. Same live-sync
+/// rule as `applyHostedSplitMinExtent`: the model min is what the next
+/// arrange copies onto the split pane.
+void applyHostedSplitMinSize(FDockContext* dock, DockPanelId id, float minWidth, float minHeight)
+{
+    if (!dock) {
+        return;
+    }
+    FDockNode* leaf = dock->dockModel().findLeafForPanel(id);
+    if (!leaf) {
+        return;
+    }
+    raiseDockLeafMinSize(*leaf, minWidth, minHeight);
+    if (UIDockSpace* space = dock->dockSpace()) {
+        space->markLayoutDirty();
+    }
+    dock->notifyDockLayoutListeners();
+}
+
 } // namespace
 
 nlohmann::json EditorDockWorkspace::factoryLayout()
@@ -358,6 +377,9 @@ bool EditorDockWorkspace::applyLayoutDocument(const nlohmann::json& layout, bool
                 ctx.setMinExtent = [dock = _host.dock, id = panel->id](float extent) {
                     applyHostedSplitMinExtent(dock, id, extent);
                 };
+                ctx.setMinSize = [dock = _host.dock, id = panel->id](float width, float height) {
+                    applyHostedSplitMinSize(dock, id, width, height);
+                };
                 spawner->onSpawnComplete(ctx, *panel->widget);
             }
         }
@@ -498,6 +520,9 @@ bool EditorDockWorkspace::materializeTab(std::string_view tabId)
         FEditorTabSpawnContext callbackContext = makeSpawnContext(*spawner);
         callbackContext.setMinExtent = [dock = _host.dock, id](float extent) {
             applyHostedSplitMinExtent(dock, id, extent);
+        };
+        callbackContext.setMinSize = [dock = _host.dock, id](float width, float height) {
+            applyHostedSplitMinSize(dock, id, width, height);
         };
         if (const FDockContext::FPanel* panel = _host.dock->findPanel(id); panel && panel->widget) {
             spawner->onSpawnComplete(callbackContext, *panel->widget);

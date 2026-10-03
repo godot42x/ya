@@ -70,6 +70,46 @@ TEST(DockNodeTest, CardinalSplitCreatesStableBinaryTree)
     EXPECT_TRUE(model.validateInvariants());
 }
 
+TEST(DockNodeTest, RaiseDockLeafMinSizeFloorsNearestSplitPerAxis)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "hierarchy");
+    registerPanel(model, 2, "play-toolbar");
+    registerPanel(model, 3, "viewport");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.splitLeaf(model.findLeafForPanel(1)->id, EDockCardinalSide::East, 2));
+    ASSERT_TRUE(model.splitLeaf(model.findLeafForPanel(2)->id, EDockCardinalSide::South, 3));
+
+    FDockNode* viewport = model.findLeafForPanel(3);
+    ASSERT_NE(viewport, nullptr);
+    ASSERT_NE(viewport->parent, nullptr);
+    ASSERT_EQ(viewport->parent->orientation, EDockSplitOrientation::Horizontal);
+    ASSERT_NE(viewport->parent->parent, nullptr);
+    ASSERT_EQ(viewport->parent->parent->orientation, EDockSplitOrientation::Vertical);
+
+    raiseDockLeafMinSize(*viewport, 320.0f, 180.0f);
+
+    FDockNode* heightSplit = viewport->parent;
+    const int heightSide = dockSplitSideContaining(*heightSplit, *viewport);
+    ASSERT_GE(heightSide, 0);
+    EXPECT_FLOAT_EQ(heightSplit->minExtent[heightSide], 180.0f);
+    EXPECT_FLOAT_EQ(heightSplit->minExtent[1 - heightSide], 10.0f);
+
+    FDockNode* widthSplit = heightSplit->parent;
+    const int widthSide = dockSplitSideContaining(*widthSplit, *viewport);
+    ASSERT_GE(widthSide, 0);
+    EXPECT_FLOAT_EQ(widthSplit->minExtent[widthSide], 320.0f);
+    EXPECT_FLOAT_EQ(widthSplit->minExtent[1 - widthSide], 10.0f);
+
+    heightSplit->minExtent[heightSide] = 400.0f;
+    raiseDockLeafMinSize(*viewport, 320.0f, 180.0f);
+    EXPECT_FLOAT_EQ(heightSplit->minExtent[heightSide], 400.0f);
+
+    raiseDockLeafMinSize(*viewport, 0.0f, 220.0f);
+    EXPECT_FLOAT_EQ(widthSplit->minExtent[widthSide], 320.0f);
+    EXPECT_FLOAT_EQ(heightSplit->minExtent[heightSide], 400.0f);
+}
+
 TEST(DockNodeTest, MoveCollapsesEmptySourceAndPreservesTargetOrder)
 {
     FDockTreeModel model;

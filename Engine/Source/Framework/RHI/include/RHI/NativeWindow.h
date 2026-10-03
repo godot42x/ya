@@ -185,6 +185,14 @@ struct INativeWindow
         YA_CORE_ERROR("setWindowSize not implemented in INativeWindow");
         return false;
     }
+    /// Smallest logical client size the user can drag the window to. Same
+    /// space as `setWindowSize`. Default is a no-op (no minimum).
+    virtual bool setMinimumSize(int width, int height)
+    {
+        (void)width;
+        (void)height;
+        return false;
+    }
     virtual bool getWindowPosition(int& x, int& y) const
     {
         x = 0;
@@ -249,6 +257,7 @@ class YA_RHI_API SDLNativeWindow final : public INativeWindow
     bool hide() override;
     bool show() override;
     bool setWindowSize(int width, int height) override;
+    bool setMinimumSize(int width, int height) override;
     bool getWindowPosition(int& x, int& y) const override;
     bool setWindowPosition(int x, int y) override;
     [[nodiscard]] int getDisplayIndex() const override;

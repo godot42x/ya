@@ -270,7 +270,6 @@ void App::applyProjectDescriptor(const FProjectDescriptor& descriptor)
     if (_gameUIHost) {
         const FUIReferenceResolution resolution = descriptor.uiReferenceResolution.value_or(FUIReferenceResolution{});
         _gameUIHost->setReferenceResolution({resolution.width, resolution.height});
-        _gameUIHost->setMinReferenceScale(descriptor.uiMinReferenceScale);
     }
 
     if (_ci.projectRoot) {

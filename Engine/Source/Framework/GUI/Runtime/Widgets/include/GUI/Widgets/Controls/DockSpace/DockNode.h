@@ -81,6 +81,58 @@ struct FDockNode
     EDockLeafRole              leafRole            = EDockLeafRole::Generic;
 };
 
+/// Which child of `split` contains `leaf` (0 or 1). -1 when `leaf` is not
+/// under that split.
+[[nodiscard]] inline int dockSplitSideContaining(const FDockNode& split, const FDockNode& leaf)
+{
+    const FDockNode* cursor = &leaf;
+    while (cursor->parent && cursor->parent != &split) {
+        cursor = cursor->parent;
+    }
+    if (cursor->parent != &split) {
+        return -1;
+    }
+    return split.child[1].get() == cursor ? 1 : 0;
+}
+
+/// Raise the nearest ancestor split of each axis so `leaf` cannot be dragged
+/// below `minWidth` x `minHeight` (logical points). Vertical splits are the
+/// width axis, horizontal splits the height axis, matching `UISplitPane`.
+/// A non-positive component leaves that axis alone. Only the nearest split
+/// of that orientation is raised: between the leaf and that split, every
+/// intervening split is the other axis, so the leaf spans the full extent
+/// of that child. A further ancestor also contains siblings on this axis, and
+/// a floor there would not keep this leaf above the minimum. An existing
+/// larger min is kept.
+inline void raiseDockLeafMinSize(FDockNode& leaf, float minWidth, float minHeight)
+{
+    bool bWidthDone  = minWidth <= 0.0f;
+    bool bHeightDone = minHeight <= 0.0f;
+    for (FDockNode* node = leaf.parent; node && !(bWidthDone && bHeightDone); node = node->parent) {
+        if (node->kind != EDockNodeKind::Split) {
+            continue;
+        }
+        const bool bVertical = node->orientation == EDockSplitOrientation::Vertical;
+        if ((bVertical && bWidthDone) || (!bVertical && bHeightDone)) {
+            continue;
+        }
+        const int side = dockSplitSideContaining(*node, leaf);
+        if (side < 0) {
+            break;
+        }
+        const float requested = bVertical ? minWidth : minHeight;
+        if (node->minExtent[side] < requested) {
+            node->minExtent[side] = requested;
+        }
+        if (bVertical) {
+            bWidthDone = true;
+        }
+        else {
+            bHeightDone = true;
+        }
+    }
+}
+
 /// Page wells are chrome-owned and may hide the inner strip at any count.
 /// Tools/Generic stacks may hide the title bar only when they hold at most
 /// one tab (empty extra-window wells included).

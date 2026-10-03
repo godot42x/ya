@@ -53,6 +53,11 @@ inline constexpr float kMenuHeight        = 24.0f;
 /// Play dock split: inner tab strip + toolbar row. Pixel min only; ratio is
 /// unchanged so the user can still drag extra space onto the Viewport.
 inline constexpr float kPlayToolbarDockMin = kToolbarHeight + kMenuHeight;
+/// Viewport drag floor, logical points. Half of 640x360, itself half of the
+/// 1280x720 reference. Below this a 13px hint sits under the 9px raster
+/// floor and overflows its slot. This is a pane size, not a UI scale.
+inline constexpr float kViewportDockMinWidth  = 320.0f;
+inline constexpr float kViewportDockMinHeight = 180.0f;
 inline constexpr float kListRowHeight     = 22.0f;
 inline constexpr float kToolbarIconSize   = 16.0f;
 inline constexpr float kListIconSize      = 16.0f;

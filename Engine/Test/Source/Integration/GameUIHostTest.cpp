@@ -246,17 +246,14 @@ TEST(GameUIHostTest, InputRoutesThroughPresentationMapping)
 }
 
 // The reference fit rides the tree's DPI axis (fonts re-rasterize at the
-// final pixel size). It is not snapped to a fraction: integer font raster
-// sizes are the atlas quantum. Below kMinGameUIReferenceScale the logical
-// canvas shrinks so layout reflows instead of scaling further.
-TEST(GameUIHostTest, ReferenceScaleFloorsAndRidesTheDpiAxis)
+// final pixel size). It is not snapped, and it has no floor: integer font
+// raster sizes are the atlas quantum. The logical canvas is viewport / fit.
+TEST(GameUIHostTest, ReferenceScaleFollowsTheViewportContinuously)
 {
-    EXPECT_FLOAT_EQ(GameUIHost::kMinGameUIReferenceScale, 0.5f);
-
     GameUIHost host;
     host.setReferenceResolution({1000, 1000});
 
-    // 540 / 1000 = 0.54, above the floor, and not a 1/16 step. It stays 0.54.
+    // 540 / 1000 = 0.54, not a 1/16 step. It stays 0.54.
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {540.0f, 540.0f}}, {1.0f, 1.0f});
     const float unsnapped = 540.0f / 1000.0f;
     EXPECT_FLOAT_EQ(host.referenceScale(), unsnapped);
@@ -266,40 +263,40 @@ TEST(GameUIHostTest, ReferenceScaleFloorsAndRidesTheDpiAxis)
     EXPECT_EQ(host.getTree().getLogicalExtent().width, static_cast<uint32_t>(540.0f / unsnapped));
     EXPECT_EQ(host.getTree().getLogicalExtent().height, static_cast<uint32_t>(540.0f / unsnapped));
 
-    // Logical viewport 200x150 vs reference 1000: raw fit 0.15, clamped to the
-    // floor. The layout canvas is smaller than the reference, so it reflows.
-    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {400.0f, 300.0f}}, {2.0f, 2.0f});
-    EXPECT_FLOAT_EQ(host.referenceScale(), GameUIHost::kMinGameUIReferenceScale);
-    EXPECT_FLOAT_EQ(host.getTree().getDpiScale(), 2.0f * GameUIHost::kMinGameUIReferenceScale);
-    EXPECT_FLOAT_EQ(host.getTree().getLogicalExtent().width, 200.0f / GameUIHost::kMinGameUIReferenceScale);
-    EXPECT_FLOAT_EQ(host.getTree().getLogicalExtent().height, 150.0f / GameUIHost::kMinGameUIReferenceScale);
-    EXPECT_LT(host.getTree().getLogicalExtent().width, 1000.0f);
+    // Raw fit 0.27 stays 0.27. The canvas is the reference, viewport / scale.
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {270.0f, 270.0f}}, {1.0f, 1.0f});
+    EXPECT_FLOAT_EQ(host.referenceScale(), 0.27f);
+    EXPECT_FLOAT_EQ(host.getTree().getDpiScale(), 0.27f);
+    EXPECT_EQ(host.getTree().getLogicalExtent().width, static_cast<uint32_t>(270.0f / 0.27f));
+    EXPECT_EQ(host.getTree().getLogicalExtent().height, static_cast<uint32_t>(270.0f / 0.27f));
 }
 
 TEST(GameUIHostTest, DensityDoublesRasterAndKeepsTheLogicalCanvas)
 {
     GameUIHost host;
     host.setReferenceResolution({1280, 720});
-    host.setMinReferenceScale(0.5f);
 
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {349.0f, 197.0f}}, {1.0f, 1.0f});
-    const float logicalScale = host.referenceScale();
+    const float expected = std::min(349.0f / 1280.0f, 197.0f / 720.0f);
+    EXPECT_FLOAT_EQ(host.referenceScale(), expected);
+    EXPECT_LT(expected, 0.5f);
     const auto  logicalCanvas = host.getTree().getLogicalExtent();
     const float logicalDpi    = host.getTree().getDpiScale();
+    EXPECT_FLOAT_EQ(logicalDpi, expected);
 
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {698.0f, 394.0f}}, {2.0f, 2.0f});
-    EXPECT_FLOAT_EQ(host.referenceScale(), logicalScale);
-    EXPECT_FLOAT_EQ(host.referenceScale(), 0.5f);
+    EXPECT_FLOAT_EQ(host.referenceScale(), expected);
     EXPECT_EQ(host.getTree().getLogicalExtent().width, logicalCanvas.width);
     EXPECT_EQ(host.getTree().getLogicalExtent().height, logicalCanvas.height);
     EXPECT_FLOAT_EQ(host.getTree().getDpiScale(), logicalDpi * 2.0f);
 
-    // The dialogue hint is 13 logical px. At the 0.5 floor and density 1 the
-    // 9px raster floor is larger than the layout slot; density 2 clears it.
+    // 13px hint at this fit is under the 9px raster floor on both densities.
+    // The floor is a render-layer safety value; the window minimum is what
+    // keeps a real presentation from living here.
     const FTextRasterPlan atDensity1 = planTextRaster(13.0f, glm::vec2(1.0f), logicalDpi, glm::vec2(1.0f));
     const FTextRasterPlan atDensity2 = planTextRaster(13.0f, glm::vec2(1.0f), logicalDpi * 2.0f, glm::vec2(1.0f));
     EXPECT_EQ(atDensity1.rasterPx, 9);
-    EXPECT_EQ(atDensity2.rasterPx, 13);
+    EXPECT_EQ(atDensity2.rasterPx, 9);
 }
 
 TEST(GameUIHostTest, WindowPointMapsIntoTheLogicalViewport)
@@ -323,29 +320,6 @@ TEST(GameUIHostTest, WindowPointMapsIntoTheLogicalViewport)
     EXPECT_FLOAT_EQ(unit->y, 4.0f);
 }
 
-TEST(GameUIHostTest, MinReferenceScaleComesFromTheProject)
-{
-    GameUIHost host;
-    EXPECT_FLOAT_EQ(host.minReferenceScale(), GameUIHost::kMinGameUIReferenceScale);
-
-    host.setMinReferenceScale(0.25f);
-    EXPECT_FLOAT_EQ(host.minReferenceScale(), 0.25f);
-    host.setReferenceResolution({1000, 1000});
-    // Raw fit 0.4, above the configured floor, so it is not pulled up to 0.5.
-    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {400.0f, 400.0f}}, {1.0f, 1.0f});
-    EXPECT_FLOAT_EQ(host.referenceScale(), 0.4f);
-
-    // Raw fit 0.1, clamped to the configured floor rather than 0.5.
-    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {100.0f, 100.0f}}, {1.0f, 1.0f});
-    EXPECT_FLOAT_EQ(host.referenceScale(), 0.25f);
-    EXPECT_FLOAT_EQ(host.getTree().getDpiScale(), 0.25f);
-
-    host.setMinReferenceScale(0.0f);
-    EXPECT_FLOAT_EQ(host.minReferenceScale(), GameUIHost::kMinGameUIReferenceScale);
-    host.setMinReferenceScale(1.5f);
-    EXPECT_FLOAT_EQ(host.minReferenceScale(), GameUIHost::kMinGameUIReferenceScale);
-}
-
 TEST(GameUIHostTest, InputMappingFollowsTheReferenceScale)
 {
     GameUIHost host;
@@ -365,14 +339,15 @@ TEST(GameUIHostTest, InputMappingFollowsTheReferenceScale)
     button->onClicked.addLambda([&] { ++clicks; });
     host.buildSnapshot();
 
-    // Raw fit 0.15 clamps to the floor. Logical (100,100) lands at
+    // Logical viewport is 200x150 against a 1000 reference, so the fit is
+    // 0.15. The button centre, logical (140,116), lands at
     // window pos + logical * (framebufferScale * referenceScale).
-    const float devicePerLogical = 2.0f * GameUIHost::kMinGameUIReferenceScale;
-    EXPECT_EQ(host.dispatchEvent(MouseButtonPressedEvent(EMouse::Left),
-                                 {100.0f + 100.0f * devicePerLogical, 50.0f + 100.0f * devicePerLogical}),
+    EXPECT_FLOAT_EQ(host.referenceScale(), 0.15f);
+    const float     devicePerLogical = 2.0f * 0.15f;
+    const glm::vec2 centre{100.0f + 140.0f * devicePerLogical, 50.0f + 116.0f * devicePerLogical};
+    EXPECT_EQ(host.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), centre),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(host.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left),
-                                 {100.0f + 100.0f * devicePerLogical, 50.0f + 100.0f * devicePerLogical}),
+    EXPECT_EQ(host.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), centre),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(clicks, 1);
 }

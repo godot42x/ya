@@ -653,6 +653,29 @@ TEST(WidgetLayoutTest, SplitPaneZeroRatioUsesMinFirstExtentPixels)
     EXPECT_GT(second->_layoutRect.extent.y, 250.0f);
 }
 
+TEST(WidgetLayoutTest, SplitPaneFullRatioKeepsSecondExtentAtItsMinimum)
+{
+    WidgetTree tree({.width = 800, .height = 200});
+    auto split = std::make_shared<UISplitPane>("Split");
+    split->setOrientation(ESplitOrientation::Vertical);
+    split->setSplitRatio(1.0f);
+    split->setMinFirstExtent(40.0f);
+    split->setMinSecondExtent(180.0f);
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, fill);
+
+    auto first = std::make_shared<UICanvasPanel>("First");
+    auto second = std::make_shared<UICanvasPanel>("Second");
+    tree.attach(*split, first);
+    tree.attach(*split, second);
+    tree.layout();
+
+    EXPECT_NEAR(second->_layoutRect.extent.x, 180.0f, 1.0f);
+    EXPECT_GT(first->_layoutRect.extent.x, 400.0f);
+}
+
 TEST(WidgetLayoutTest, BoxSlotsAreParentOwnedAndRecreatedOnReparent)
 {
     WidgetTree tree({.width = 400, .height = 200});

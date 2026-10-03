@@ -55,6 +55,10 @@ struct FEditorTabSpawnContext
     /// rewrite ratio. No-op when the tab is not under a split. Valid only from
     /// onSpawnComplete.
     std::function<void(float)> setMinExtent;
+    /// Logical-point floor for both axes. Each axis is raised on the nearest
+    /// ancestor split of that orientation. A non-positive component leaves
+    /// that axis alone. Valid only from onSpawnComplete.
+    std::function<void(float width, float height)> setMinSize;
 };
 
 struct FEditorTabSpawner

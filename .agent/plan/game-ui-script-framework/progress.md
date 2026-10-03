@@ -226,30 +226,31 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 
 验证：`GameUIHostTest.ReferenceResolutionScalesLayoutAndPointer`、`ProjectDescriptorTest.LoadsUIReferenceResolution`。
 
-## 2026-10-02 — 参考分辨率适配的缩放下限
+## 2026-10-02 — 参考分辨率 fit 不做 1/16 量化
 
 完成：
 
-- `GameUIHost::kMinGameUIReferenceScale`（0.5）。fit 低于它时夹到 0.5，逻辑画布缩小，布局重排，不再继续缩小文字。
-- 去掉密度的 1/16 量化。图集按整像素栅格尺寸做键，0.54 这样的 fit 原样保留。fit 仍走树 dpi，`uiScale` 保持 1。
+- 去掉密度的 1/16 量化。图集按整像素栅格尺寸做键，0.54 这样的 fit 原样保留。fit 走树 dpi，`uiScale` 保持 1。
 
-验证：`GameUIHostTest.ReferenceScaleFloorsAndRidesTheDpiAxis`、`InputMappingFollowsTheReferenceScale`、`ReferenceResolutionScalesLayoutAndPointer`。
+验证：`GameUIHostTest.ReferenceScaleFollowsTheViewportContinuously`、`InputMappingFollowsTheReferenceScale`、`ReferenceResolutionScalesLayoutAndPointer`。
 
-## 2026-10-02 — 参考缩放下限改成工程字段
+## 2026-10-03 — 参考 fit 是连续函数，下限改成窗口和面板尺寸
 
 完成：
 
-- `.yaproject` 可选字段 `uiMinReferenceScale`，缺省 0.5，与 `GameUIHost::kMinGameUIReferenceScale` 一致。`<= 0` 或 `> 1` 警告并回落。
-- `GameUIHost::setMinReferenceScale` 在 `App::applyProjectDescriptor` 里和 `uiReferenceResolution` 一起接上。
+- fit = `min(logicalW / refW, logicalH / refH)`，没有可调的 min UI scale。`kMinGameUIReferenceScale`、`setMinReferenceScale`、`.yaproject` 的 `uiMinReferenceScale` 都删了。旧工程文件里残留的 `uiMinReferenceScale` 当未知键忽略，照常加载。零或 NaN 的退化 fit 回落到 1。
+- 栅格侧 `planTextRaster` 的 9px bitmap 下限保留。fit 再小，字形仍停在 9px，会溢出按参考分辨率排的 slot。所以下限放在窗口和面板尺寸上，不放在 scale 上。
+- 独立游戏窗口：`INativeWindow::setMinimumSize`（SDL3 `SDL_SetWindowMinimumSize`）。尺寸是参考分辨率的一半，1280x720 → 640x360 逻辑点，定义在 `gameWindowMinimumSize`。没有参考分辨率就不设最小值。编辑器窗口不套这个游戏最小值。
+- 编辑器视口：`raiseDockLeafMinSize` 把 320x180 逻辑点写到离视口最近的那条宽轴 split 和那条高轴 split 的 `minExtent`（`editor_density::kViewportDockMinWidth / Height`）。320x180 是 640x360 的一半。拖分隔条不能把视口再缩小；已有更大的 min 保留。
 
-验证：`ProjectDescriptorTest.LoadsUIMinReferenceScale`、`GameUIHostTest.MinReferenceScaleComesFromTheProject`。
+验证：`GameUIHostTest.ReferenceScaleFollowsTheViewportContinuously`、`DensityDoublesRasterAndKeepsTheLogicalCanvas`、`InputMappingFollowsTheReferenceScale`、`ProjectDescriptorTest.LegacyUIMinReferenceScaleStillLoads`、`GameWindowMinimumIsHalfTheReference`、`DockNodeTest.RaiseDockLeafMinSizeFloorsNearestSplitPerAxis`、`WidgetLayoutTest.SplitPaneFullRatioKeepsSecondExtentAtItsMinimum`。
 
 ## 2026-10-03 — View 像素密度
 
 完成：
 
 - `SceneViewDesc::pixelDensity`：设备像素每逻辑点。View 的 `outputRect.extent` 是设备像素，逻辑画布是 extent / density。
-- `GameUIHost::setPresentation` 的 framebuffer scale 改接这个密度，不再接 `renderScale`。参考 fit 仍按逻辑尺寸，下限策略不变。
+- `GameUIHost::setPresentation` 的 framebuffer scale 改接这个密度，不再接 `renderScale`。参考 fit 仍按逻辑尺寸，并且是连续的，没有 scale 下限。
 - 编辑器 PIE 面板与独立游戏窗口都按窗口 drawable 出图，面板逻辑尺寸不变。
 
 验证：`GameUIHostTest.DensityDoublesRasterAndKeepsTheLogicalCanvas`、`WindowPointMapsIntoTheLogicalViewport`。

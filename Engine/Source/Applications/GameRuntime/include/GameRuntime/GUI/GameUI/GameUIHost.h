@@ -83,31 +83,24 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// (device pixels per logical point), so the logical canvas is
     /// `viewportPx / framebufferScale`. It is not the host `renderScale`.
     ///
-    /// Below this fit the logical canvas shrinks and layout reflows. Scaling
-    /// the reference design any smaller keeps bitmap text at the raster floor
-    /// and lets it overflow the widgets that were authored for the reference.
-    static constexpr float kMinGameUIReferenceScale = 0.5f;
-
     /// The fit factor (viewport vs reference resolution) rides the tree's
     /// DPI axis, not uiScale: fonts re-rasterize at the final pixel size.
-    /// The fit is clamped to minReferenceScale() (default
-    /// kMinGameUIReferenceScale). Integer font raster sizes are the cache
-    /// quantum, so the fit itself is not snapped.
+    /// It is `min(logical / reference)` with no floor. A degenerate
+    /// (non-finite or non-positive) fit falls back to 1. Integer font raster
+    /// sizes are the cache quantum, so the fit itself is not snapped.
+    /// Bitmap text still has its own 9px raster floor in `planTextRaster`;
+    /// below that, glyphs can overflow the slot they were authored for.
+    /// Window and viewport minimum sizes are what keep a presentation out
+    /// of that range. There is no min UI scale.
     void setPresentation(const Rect2D& viewportPx, const glm::vec2& framebufferScale);
-
-    /// Floor for the reference fit. `scale` must be in (0, 1]; anything else
-    /// falls back to kMinGameUIReferenceScale. Takes effect on the next
-    /// setPresentation. Projects set this from `uiMinReferenceScale`.
-    void setMinReferenceScale(float scale);
-    [[nodiscard]] float minReferenceScale() const { return _minReferenceScale; }
 
     /// Reference resolution for scale-to-fit. Zero on either axis means scale 1
     /// (the tree lays out in viewport logical pixels). Takes effect on the next
     /// setPresentation.
     void setReferenceResolution(glm::uvec2 resolution);
     [[nodiscard]] glm::uvec2 referenceResolution() const { return _referenceResolution; }
-    /// The fit factor actually in effect (clamped to kMinGameUIReferenceScale).
-    /// Pointer mapping and the tree DPI both read it.
+    /// The fit factor actually in effect. Pointer mapping and the tree DPI
+    /// both read it.
     [[nodiscard]] float referenceScale() const { return _referenceScale; }
 
     [[nodiscard]] WidgetTree& getTree() { return _tree; }
@@ -276,7 +269,6 @@ struct YA_GAME_RUNTIME_API GameUIHost
     Rect2D                         _viewportPx{};
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};
     glm::uvec2                     _referenceResolution{0, 0};
-    float                          _minReferenceScale = kMinGameUIReferenceScale;
     float                          _referenceScale = 1.0f;
     EUIUpdateClock                 _updateClock = EUIUpdateClock::RealTime;
     std::vector<FMountedEntry>     _entries;
