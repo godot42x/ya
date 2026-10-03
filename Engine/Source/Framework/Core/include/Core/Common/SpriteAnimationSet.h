@@ -15,8 +15,7 @@ namespace ya
 
 // One named run of sheet frames. `frames` are sheet indices (row-major from
 // the top-left of the image), so a walk cycle may revisit a frame: {0, 1, 2, 1}.
-// Field names match the clips embedded in SpriteAnimationComponent so a
-// document and a component describe the same clip.
+// Field names are the clip document: name, frames, fps, bLoop.
 struct YA_CORE_API SpriteAnimationClip
 {
     YA_REFLECT_BEGIN(SpriteAnimationClip)

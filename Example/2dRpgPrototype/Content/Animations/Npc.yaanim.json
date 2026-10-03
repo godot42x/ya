@@ -1,0 +1,38 @@
+{
+  "columns": 3,
+  "rows": 4,
+  "clips": [
+    {
+      "name": "idle_down",
+      "frames": [
+        1
+      ],
+      "fps": 1.0,
+      "bLoop": true
+    },
+    {
+      "name": "idle_left",
+      "frames": [
+        4
+      ],
+      "fps": 1.0,
+      "bLoop": true
+    },
+    {
+      "name": "idle_right",
+      "frames": [
+        7
+      ],
+      "fps": 1.0,
+      "bLoop": true
+    },
+    {
+      "name": "idle_up",
+      "frames": [
+        10
+      ],
+      "fps": 1.0,
+      "bLoop": true
+    }
+  ]
+}

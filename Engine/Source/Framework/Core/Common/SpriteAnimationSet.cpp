@@ -104,19 +104,24 @@ bool validateClips(const nlohmann::json& json, int32_t columns, int32_t rows, st
             }
         }
 
+        // Omitted fps / bLoop keep the struct defaults (8.0 / true), matching
+        // scene files that drop default fields. A present value of the wrong
+        // type is still an error.
         const auto fpsIt = clip.find("fps");
-        if (fpsIt == clip.end() || !fpsIt->is_number()) {
-            outError = "missing or invalid field 'fps'";
-            return false;
-        }
-        if (fpsIt->get<double>() <= 0.0) {
-            outError = "fps must be > 0";
-            return false;
+        if (fpsIt != clip.end()) {
+            if (!fpsIt->is_number()) {
+                outError = "invalid field 'fps'";
+                return false;
+            }
+            if (fpsIt->get<double>() <= 0.0) {
+                outError = "fps must be > 0";
+                return false;
+            }
         }
 
         const auto loopIt = clip.find("bLoop");
-        if (loopIt == clip.end() || !loopIt->is_boolean()) {
-            outError = "missing or invalid field 'bLoop'";
+        if (loopIt != clip.end() && !loopIt->is_boolean()) {
+            outError = "invalid field 'bLoop'";
             return false;
         }
     }

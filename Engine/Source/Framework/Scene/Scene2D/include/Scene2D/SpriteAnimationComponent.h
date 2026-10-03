@@ -8,15 +8,14 @@
 
 #include <cstdint>
 #include <string>
-#include <vector>
 
 namespace ya
 {
 
-// Frame animation for the Sprite2DComponent on the same entity: it chooses
-// which window of the sprite's image to show. The image is cut into a uniform
-// `columns` x `rows` grid; a frame index is `row * columns + column`, counted
-// from the top-left (the image-space convention of `Sprite2DComponent::uvRect`).
+// Frame animation for the Sprite2DComponent on the same entity. The sheet
+// layout and the named clips live in a shared .yaanim.json
+// (`animation`); this component only stores that reference and the clip
+// that starts when the game starts running (`clip`).
 //
 // The component writes `Sprite2DComponent::uvRect` and nothing else, so size,
 // tint, flip and sort stay with the sprite. The write happens immediately in
@@ -26,13 +25,13 @@ namespace ya
 // scene file says.
 //
 // A script drives it by name: `anim:play("walk_left")` every tick is fine, a
-// clip that is already playing is not restarted.
+// clip that is already playing is not restarted. The playing clip is remembered
+// by name. A cached sheet index is reused only while the asset slot's
+// generation is unchanged; a reload resolves the name again.
 struct YA_SCENE_2D_API SpriteAnimationComponent : public IComponent
 {
     YA_REFLECT_BEGIN(SpriteAnimationComponent, IComponent)
-    YA_REFLECT_FIELD(columns)
-    YA_REFLECT_FIELD(rows)
-    YA_REFLECT_FIELD(clips)
+    YA_REFLECT_FIELD(animation)
     YA_REFLECT_FIELD(clip)
     YA_REFLECT_METHOD(play, .tooltip("Start a clip by name; false when the clip does not exist"))
     YA_REFLECT_METHOD(stop, .tooltip("Hold the current frame"))
@@ -41,38 +40,48 @@ struct YA_SCENE_2D_API SpriteAnimationComponent : public IComponent
     YA_REFLECT_METHOD(currentClip, .tooltip("Name of the clip last started, empty when none"))
     YA_REFLECT_END()
 
-    int32_t                          columns = 1;
-    int32_t                          rows    = 1;
-    std::vector<SpriteAnimationClip> clips;
+    SpriteAnimationSetRef animation;
     /// Clip that starts when the game starts running. Empty = none.
-    std::string                      clip;
+    std::string           clip;
 
-    // Runtime state, not serialized.
-    int32_t _clipIndex = -1;
-    float   _elapsed   = 0.0f;
-    bool    _bPlaying  = false;
-    bool    _bStarted  = false;
+    // Runtime state, not serialized. The playing clip is a name; the index
+    // is valid only for `_resolvedSlot` at `_resolvedGeneration`.
+    std::string                           _playingClip;
+    int32_t                               _clipIndex          = -1;
+    uint64_t                              _resolvedGeneration = 0;
+    const AssetSlot<SpriteAnimationSet>*  _resolvedSlot       = nullptr;
+    float                                 _elapsed            = 0.0f;
+    bool                                  _bPlaying           = false;
+    bool                                  _bStarted           = false;
+    bool                                  _bWarnedUnloaded    = false;
 
-    [[nodiscard]] bool isValid() const { return columns > 0 && rows > 0; }
-
-    /// Image-space window of one sheet frame: (u0, v0, u1, v1). A frame outside
-    /// the grid has no window (zero rect), which nothing draws.
+    /// Image-space window of one sheet frame: (u0, v0, u1, v1). Forwards to
+    /// the asset. An unloaded asset or a frame outside the grid has no window
+    /// (zero rect), which nothing draws.
     [[nodiscard]] glm::vec4 frameRect(int32_t frame) const;
-    [[nodiscard]] int32_t   findClip(const std::string& name) const;
 
-    bool        play(const std::string& name);
-    void        stop();
-    void        setFrame(int32_t frame);
+    bool                      play(const std::string& name);
+    void                      stop();
+    void                      setFrame(int32_t frame);
     [[nodiscard]] bool        isPlaying() const { return _bPlaying; }
     [[nodiscard]] std::string currentClip() const;
 
     /// Moves the playhead by `deltaSeconds` and shows the frame it lands on.
-    /// The first call starts the authored `clip`.
+    /// The first call starts the authored `clip`. An unloaded asset does nothing.
     void advance(float deltaSeconds);
 
+    /// Inspector edits (a new asset, a new start clip) drop the playhead so
+    /// the next `advance` starts `clip` again.
+    void onEdit() override;
+
   private:
+    void warnUnloadedOnce();
+    /// Point `_clipIndex` at `_playingClip` in the current asset. False when
+    /// the asset has no such clip; the index is then left unused.
+    bool resolvePlayingClip();
     void showFrame(int32_t frame) const;
     void showClipFrame() const;
+    void resetRuntime();
 };
 
 } // namespace ya

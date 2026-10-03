@@ -12,39 +12,64 @@ namespace ya
 
 glm::vec4 SpriteAnimationComponent::frameRect(int32_t frame) const
 {
-    if (!isValid() || frame < 0 || frame >= columns * rows) {
-        return glm::vec4(0.0f);
-    }
-    const int32_t column = frame % columns;
-    const int32_t row    = frame / columns;
-    const float   cw     = 1.0f / static_cast<float>(columns);
-    const float   rh     = 1.0f / static_cast<float>(rows);
-    return glm::vec4(static_cast<float>(column) * cw, static_cast<float>(row) * rh,
-                     static_cast<float>(column + 1) * cw, static_cast<float>(row + 1) * rh);
-}
-
-int32_t SpriteAnimationComponent::findClip(const std::string& name) const
-{
-    for (size_t i = 0; i < clips.size(); ++i) {
-        if (clips[i].name == name) {
-            return static_cast<int32_t>(i);
-        }
-    }
-    return -1;
+    const SpriteAnimationSet* set = animation.get();
+    return set ? set->frameRect(frame) : glm::vec4(0.0f);
 }
 
 std::string SpriteAnimationComponent::currentClip() const
 {
-    return _clipIndex >= 0 && static_cast<size_t>(_clipIndex) < clips.size() ? clips[_clipIndex].name : std::string();
+    return _playingClip;
+}
+
+void SpriteAnimationComponent::warnUnloadedOnce()
+{
+    if (_bWarnedUnloaded) {
+        return;
+    }
+    _bWarnedUnloaded = true;
+    YA_CORE_WARN("SpriteAnimation: animation asset is not loaded");
+}
+
+bool SpriteAnimationComponent::resolvePlayingClip()
+{
+    const SpriteAnimationSet*            set        = animation.get();
+    const AssetSlot<SpriteAnimationSet>* slot       = animation._handle ? animation._handle.get() : nullptr;
+    const uint64_t                       generation = slot ? slot->generation : 0;
+    if (set && _resolvedSlot == slot && _resolvedGeneration == generation && _clipIndex >= 0 &&
+        static_cast<size_t>(_clipIndex) < set->clips.size() &&
+        set->clips[static_cast<size_t>(_clipIndex)].name == _playingClip) {
+        return true;
+    }
+
+    _resolvedSlot       = slot;
+    _resolvedGeneration = generation;
+    _clipIndex          = -1;
+    if (!set || _playingClip.empty()) {
+        return false;
+    }
+    for (size_t i = 0; i < set->clips.size(); ++i) {
+        if (set->clips[i].name == _playingClip) {
+            _clipIndex = static_cast<int32_t>(i);
+            return true;
+        }
+    }
+    // The name is gone after a reload. Drop it instead of reading off the end.
+    _playingClip.clear();
+    _bPlaying = false;
+    return false;
 }
 
 void SpriteAnimationComponent::showFrame(int32_t frame) const
 {
-    const glm::vec4 rect = frameRect(frame);
+    const SpriteAnimationSet* set = animation.get();
+    if (!set) {
+        return;
+    }
+    const glm::vec4 rect = set->frameRect(frame);
     if (rect.z <= rect.x) {
         // Outside the grid: leave the sprite on its last window rather than
         // draw nothing, and say so, because it is an authoring mistake.
-        YA_CORE_WARN("SpriteAnimation: frame {} is outside the {}x{} sheet", frame, columns, rows);
+        YA_CORE_WARN("SpriteAnimation: frame {} is outside the {}x{} sheet", frame, set->columns, set->rows);
         return;
     }
     Entity* owner = getOwner();
@@ -58,10 +83,11 @@ void SpriteAnimationComponent::showFrame(int32_t frame) const
 
 void SpriteAnimationComponent::showClipFrame() const
 {
-    if (_clipIndex < 0 || static_cast<size_t>(_clipIndex) >= clips.size()) {
+    const SpriteAnimationSet* set = animation.get();
+    if (!set || _clipIndex < 0 || static_cast<size_t>(_clipIndex) >= set->clips.size()) {
         return;
     }
-    const SpriteAnimationClip& current = clips[_clipIndex];
+    const SpriteAnimationClip& current = set->clips[static_cast<size_t>(_clipIndex)];
     if (current.frames.empty()) {
         return;
     }
@@ -76,18 +102,44 @@ void SpriteAnimationComponent::showClipFrame() const
 
 bool SpriteAnimationComponent::play(const std::string& name)
 {
-    const int32_t index = findClip(name);
-    if (index < 0) {
+    const SpriteAnimationSet* set = animation.get();
+    if (!set) {
+        warnUnloadedOnce();
+        return false;
+    }
+    _bWarnedUnloaded = false;
+
+    const SpriteAnimationClip* found = set->findClip(name);
+    if (!found) {
         YA_CORE_WARN("SpriteAnimation: no clip named '{}'", name);
         return false;
     }
-    _bStarted = true;
-    if (index == _clipIndex && _bPlaying) {
+
+    _bStarted                                            = true;
+    const AssetSlot<SpriteAnimationSet>* slot            = animation._handle.get();
+    const uint64_t                       generation      = slot ? slot->generation : 0;
+    const bool                           bSameGeneration = _resolvedSlot == slot && _resolvedGeneration == generation;
+    if (_bPlaying && _playingClip == name && bSameGeneration) {
         return true;
     }
-    _clipIndex = index;
-    _elapsed   = 0.0f;
-    _bPlaying  = true;
+
+    // Same name already running across a reload: keep the playhead, retarget
+    // the index. A different name starts over.
+    const bool bContinue = _bPlaying && _playingClip == name;
+    _playingClip         = name;
+    _resolvedSlot        = slot;
+    _resolvedGeneration  = generation;
+    _clipIndex           = -1;
+    for (size_t i = 0; i < set->clips.size(); ++i) {
+        if (set->clips[i].name == name) {
+            _clipIndex = static_cast<int32_t>(i);
+            break;
+        }
+    }
+    if (!bContinue) {
+        _elapsed = 0.0f;
+    }
+    _bPlaying = true;
     showClipFrame();
     return true;
 }
@@ -103,6 +155,9 @@ void SpriteAnimationComponent::setFrame(int32_t frame)
     _bStarted  = true;
     _bPlaying  = false;
     _clipIndex = -1;
+    _playingClip.clear();
+    _resolvedSlot       = nullptr;
+    _resolvedGeneration = 0;
     showFrame(frame);
 }
 
@@ -114,10 +169,20 @@ void SpriteAnimationComponent::advance(float deltaSeconds)
             play(clip);
         }
     }
-    if (!_bPlaying || _clipIndex < 0 || static_cast<size_t>(_clipIndex) >= clips.size()) {
+    if (!_bPlaying) {
         return;
     }
-    const SpriteAnimationClip& current = clips[_clipIndex];
+    if (!animation.isLoaded()) {
+        warnUnloadedOnce();
+        return;
+    }
+    _bWarnedUnloaded = false;
+    if (!resolvePlayingClip()) {
+        return;
+    }
+
+    const SpriteAnimationSet*  set     = animation.get();
+    const SpriteAnimationClip& current = set->clips[static_cast<size_t>(_clipIndex)];
     if (current.frames.empty() || current.fps <= 0.0f) {
         _bPlaying = false;
         return;
@@ -137,6 +202,23 @@ void SpriteAnimationComponent::advance(float deltaSeconds)
         }
     }
     showClipFrame();
+}
+
+void SpriteAnimationComponent::onEdit()
+{
+    resetRuntime();
+}
+
+void SpriteAnimationComponent::resetRuntime()
+{
+    _playingClip.clear();
+    _clipIndex          = -1;
+    _resolvedGeneration = 0;
+    _resolvedSlot       = nullptr;
+    _elapsed            = 0.0f;
+    _bPlaying           = false;
+    _bStarted           = false;
+    _bWarnedUnloaded    = false;
 }
 
 } // namespace ya

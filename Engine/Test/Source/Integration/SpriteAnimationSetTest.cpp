@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <memory>
 #include <string>
 
 namespace ya
@@ -129,28 +130,55 @@ TEST_F(SpriteAnimationSetTest, RejectsIllegalDocuments)
         "fps must be > 0");
     expectRejected(
         R"({"columns": 3, "rows": 4, "clips": [
-            {"name": "idle_down", "frames": [0], "bLoop": true}
+            {"name": "idle_down", "frames": [0], "fps": "fast", "bLoop": true}
         ]})",
         "fps");
+    expectRejected(
+        R"({"columns": 3, "rows": 4, "clips": [
+            {"name": "idle_down", "frames": [0], "fps": 1.0, "bLoop": "yes"}
+        ]})",
+        "bLoop");
+}
+
+TEST_F(SpriteAnimationSetTest, FpsAndLoopDefaultWhenOmitted)
+{
+    std::string error;
+    const auto  parsed = parseSpriteAnimationSetJson(R"({
+        "columns": 3,
+        "rows": 4,
+        "clips": [ {"name": "idle_down", "frames": [1]} ]
+    })",
+                                                    error);
+    ASSERT_NE(parsed, nullptr) << error;
+    ASSERT_EQ(parsed->clips.size(), 1u);
+    EXPECT_FLOAT_EQ(parsed->clips[0].fps, 8.0f);
+    EXPECT_TRUE(parsed->clips[0].bLoop);
 }
 
 TEST(SpriteAnimationSetFrameRect, MatchesSpriteAnimationComponent)
 {
+    auto* store = AssetTypeRegistry::get().store<SpriteAnimationSet>();
+    ASSERT_NE(store, nullptr);
     const int32_t grids[][2] = {{3, 4}, {1, 1}, {4, 1}, {0, 4}, {2, 0}};
     for (const auto& grid : grids) {
+        auto set     = std::make_shared<SpriteAnimationSet>();
+        set->columns = grid[0];
+        set->rows    = grid[1];
+        const std::string name = "frame-rect-" + std::to_string(grid[0]) + "x" + std::to_string(grid[1]);
+        store->registerAsset(name, set);
+
         SpriteAnimationComponent component;
-        SpriteAnimationSet       set;
-        component.columns = set.columns = grid[0];
-        component.rows = set.rows = grid[1];
+        component.animation = SpriteAnimationSetRef(name);
         const int32_t last = grid[0] > 0 && grid[1] > 0 ? grid[0] * grid[1] : 0;
         for (int32_t frame = -1; frame <= last; ++frame) {
-            const glm::vec4 fromSet       = set.frameRect(frame);
+            const glm::vec4 fromSet       = set->frameRect(frame);
             const glm::vec4 fromComponent = component.frameRect(frame);
             EXPECT_FLOAT_EQ(fromSet.x, fromComponent.x) << frame;
             EXPECT_FLOAT_EQ(fromSet.y, fromComponent.y) << frame;
             EXPECT_FLOAT_EQ(fromSet.z, fromComponent.z) << frame;
             EXPECT_FLOAT_EQ(fromSet.w, fromComponent.w) << frame;
         }
+        store->unload(name);
     }
 }
 

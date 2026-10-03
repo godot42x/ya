@@ -512,3 +512,17 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 未完成 / 偏离：Texture / Model / Mesh 仍走 resolver 与 AssetManager 的贴图模型链路；内容浏览器双击按后缀硬编码（`.scene.json` / `.lua` /
   `.yaui.json` / `.mat`），P3 一起做成「扩展名 → 打开器」注册表；选择器配置 scope 由 `assetPickerDialog.texture` 变成 `assetPickerDialog.Texture`
   （保存过的对话框位置会重置一次）。静态注册依赖该 cpp 被链接进来（静态库被丢弃时不会注册），游戏模块要保证。
+
+## 2026-10-04 — 步骤 4c P2b：SpriteAnimationComponent 改为引用 .yaanim.json
+
+- `SpriteAnimationComponent` 只存 `animation`（`SpriteAnimationSetRef`）和开局 `clip`；`columns / rows / clips` 删除，旧场景一次迁完，不做兼容读取。
+  运行态以片段**名字**为准，下标缓存绑定资产槽的 `generation`（并校验该下标的名字），热重载后按名字重新解析；资产未加载时 `advance` 不动、
+  `play` 返回 false，告警只打一次；Inspector 的 `onEdit` 清运行态。Lua 绑定和 `SpriteAnimationSystem` 没改。
+- 解析放宽：`fps` / `bLoop` 缺省用 8.0 / true（与默认值省略一致），写了但类型不对仍报错。
+- 示例：`Content/Animations/{Hero,Npc,Chest}.yaanim.json`（3×4 八段 / 3×4 四段 / 12×11 两段）；三个场景的动画块换成引用，其余字节不变
+  （Town 15931→15154，House 8602→7988，TownLarge 87294→82603）；`make_scale_scene.py` 产出引用；`2d-gameplay` skill 改成资产模型。
+  引用在场景里的形状是现有约定 `__base__/AssetRefBase/_path`，所以体积只小一点，真正的瘦身要等引擎重存场景后默认值省略生效。
+- 验证：`ya-testing` 1590 ran / 1589 passed / 1 skipped（同前）；`walk_one_cell` / `blocked_by_wall` / `dialogue_page` / `walk_animation` 四条通过；
+  编辑器冒烟 exit 0，编辑 72.5 fps、游玩 83.9 fps，字体构建 0。
+- 偏离 / 注意：已持有的 Ref 在 store `invalidate`（丢条目）后仍握旧槽，要 `rebind()`；同槽被 `registerAsset` 覆盖时 `generation` 递增、按名字重解析，
+  所以 P3 的编辑器保存应走覆盖同槽而不是 invalidate。场景尚未用引擎重存（默认值省略未落到文件）。

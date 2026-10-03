@@ -42,21 +42,17 @@ ATLAS_TILESET = "Content:Tilesets/town.yatileset.json"
 STAND_DOWN_FRAME = (1 / 3, 0.0, 2 / 3, 0.25)
 
 # hero_walk.png is a 3x4 grid (left foot, stand, right foot; down, left, right,
-# up). Frame index = row * 3 + column. Actors play clips by name from scripts.
-_FACINGS = [("down", 0), ("left", 1), ("right", 2), ("up", 3)]
-_WALK_FPS = 8.3333
-
-
-def _clip(name: str, frames: list[int], fps: float) -> dict:
-    return {"name": name, "frames": frames, "fps": fps, "bLoop": True}
+# up). The clips live in Content/Animations, not in the scene. Player walks;
+# NPCs only idle. Both start on idle_down.
+HERO_ANIMATION = "Content:Animations/Hero.yaanim.json"
+NPC_ANIMATION = "Content:Animations/Npc.yaanim.json"
 
 
 def hero_animation(walks: bool) -> dict:
-    clips = [_clip(f"idle_{name}", [row * 3 + 1], 1.0) for name, row in _FACINGS]
-    if walks:
-        clips += [_clip(f"walk_{name}", [row * 3, row * 3 + 1, row * 3 + 2, row * 3 + 1], _WALK_FPS)
-                  for name, row in _FACINGS]
-    return {"columns": 3, "rows": 4, "clips": clips, "clip": "idle_down"}
+    return {
+        "animation": {"__base__": {"AssetRefBase": {"_path": HERO_ANIMATION if walks else NPC_ANIMATION}}},
+        "clip": "idle_down",
+    }
 
 
 def player_cell() -> tuple[int, int]:
