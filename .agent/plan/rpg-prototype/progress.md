@@ -438,3 +438,14 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 ## 2026-10-03 — 像素完美相机的高度是 View 设备像素
 
 `resolveCameraViewFraming` 的高度是该 View 的设备像素（`outputRect.extent` = 逻辑点 × `pixelDensity`）。2x 表面上整数 zoom 翻倍，一个 texel 占 `zoom` 个设备像素。脚本的 `viewSize` / `viewAspect` 仍是世界半宽高和宽高比，不改成像素。
+
+## 2026-10-03 — P0 契约冻结（评审步骤 3，只改文档）
+
+- 精灵之间的前后关系改为只用画家顺序：精灵对 3D 不透明深度只测不写，不透明与半透明走同一条混合管线。
+  依据是主流 2D 引擎（Unity 2D、Godot 4、Bevy）都是画家顺序，只有 Unreal Paper2D 靠深度；深度方案需要
+  `z = 基准 − y × ε` 约定，抗锯齿边缘的美术也会出问题。用户在三个方案里选了画家顺序。
+- 排序键 `(layer, ySortRank, yKey, order, tiebreak)`，y-sort 逐对象开关（`Sprite2DComponent` 与 tilemap 子层各一个，
+  tilemap 默认关）。比较函数只有一个，提取期排序与 2D 拾取共用。冻结在 `P0-contract-matrix.md` 的 C1–C5。
+- 保留：摆在矩阵开头的 owner 表作为 `pipeline_contract_audit` 的结论；`kTextureTableSize = 16` 与分批规则（不为合批打乱顺序）。
+- 偏离 / 未完成：纯 2D View 的 graph 策略用户选择先不定，等 `render-view-family` P3；混合场景的像素验收没有证据，
+  本步骤不写代码，已整理成步骤 5 的验收项。`2d-gameplay` skill 里的 z 约定仍然有效，到步骤 5 才删。

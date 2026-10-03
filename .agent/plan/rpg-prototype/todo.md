@@ -20,7 +20,8 @@
 - [ ] 自动化 `scene.load` 会 `stopRuntime` 但不重新 `startRuntime`，加载后脚本不 tick；端到端脚本因此只能从默认场景起跑
 
 步骤 3 P0 契约冻结（前置：步骤 2 的计划线合并）
-- [ ] 契约矩阵：混合语义、sprite 与 3D 深度的关系、资源责任、graph 策略、实例格式与排序键（layer → y → order）
+- [x] 契约矩阵：混合语义、sprite 与 3D 深度的关系、资源责任、实例格式与排序键（layer → y → order）冻结在 `P0-contract-matrix.md` 文末（C1–C5）；精灵只用画家顺序、不写深度，y-sort 逐对象开关
+- [ ] 纯 2D View 的 graph 策略未选（workload 跳 stage 还是单独 2D graph），随步骤 6 / `render-view-family` P3 定；混合场景的像素验收随步骤 5
 
 步骤 4 2D 模块（可与步骤 3 并行）
 - [ ] `Scene2D` target：Sprite2D / Tilemap / Tileset 移出 `ya-render-3d`，拆开 `TilemapComponent.cpp` 的数据 / 查询 / 编辑 / 渲染展开

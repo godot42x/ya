@@ -77,7 +77,7 @@ completion_and_make_the_final_plan(this_plan);
 | `game-ui-script-framework/` | 界面自带脚本（与宿主无关的 Lua 运行时 + GUI 不透明行为描述）、帧顺序/暂停/结构变更时机成为契约、条目模态与取消路由；验收用例 GreedSnake（F0–S3 与性能检查点已落地；下一步 S4） |
 | `ui-behavior-capabilities/` | `UIBehavior` 按能力登记（含同类唯一、拖放为行为种类、控件委托取代动作字符串、Lua 监听归属脚本实例）、树 tick 注册表、Lua `call()` 热路径（C1/C1b/C1c/C1d 完成，下一步 C2；排在 game-ui S4 之前） |
 | `rdg-cache-dx/` | RenderGraph import 替换决策诊断与 owner 身份收敛、Bloom 切片、Forward/Deferred/Shadow 资源容器按生命周期拆分（接手自 render-view-family）、Slang 生成 descriptor layout（P0 skinning、P1 registry 诊断、P2 import 按 owner key 匹配已落地；下一步 P3 Bloom 切片） |
-| `rpg-prototype/` | 2D 世界线（2026-10-02 合并 `scene-2d-world-and-game-ui`）：RPG Maker 式俯视 2D 示例驱动引擎，脚本中立绑定层（B2 收口归本线）、Tilemap、通行查询、交互 / 对话、切场景，以及 2D 渲染（P0 契约、合批核心与 y-sort、纯 2D View 家族）。B1 / R0–R4 已落地；评审后待办按 7 步排，见目录内 `todo.md` / `review-2026-09-30.md`；步骤 1 已完成，当前步骤 2 治理与小项 |
+| `rpg-prototype/` | 2D 世界线（2026-10-02 合并 `scene-2d-world-and-game-ui`）：RPG Maker 式俯视 2D 示例驱动引擎，脚本中立绑定层（B2 收口归本线）、Tilemap、通行查询、交互 / 对话、切场景，以及 2D 渲染（P0 契约、合批核心与 y-sort、纯 2D View 家族）。B1 / R0–R4 已落地；评审后待办按 7 步排，见目录内 `todo.md` / `review-2026-09-30.md`；步骤 1–3 已完成（P0 契约已冻结），下一步骤 4 2D 模块 |
 
 ## 归档判据
 

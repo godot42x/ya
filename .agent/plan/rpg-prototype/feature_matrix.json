@@ -139,11 +139,11 @@
     {
       "id": "p0_contract",
       "phase": "review-3",
-      "status": "not_started",
+      "status": "done",
       "driven_by": "renderer changes need a frozen contract (merged pipeline_contract_audit + mixed_world2d_visual_contract)",
       "evidence": [
-        "P0-contract-matrix.md",
-        "answers for mixed / pure-2D / UI-only outputs; sort key layer -> y -> order"
+        "P0-contract-matrix.md C1-C5 (2026-10-03): painter order only, sprites do not write depth; key (layer, ySortRank, yKey, order, tiebreak); instance format and batching; resource lifetime; graph position",
+        "not decided: pure-2D graph strategy (step 6 / render-view-family P3); mixed-scene pixel checks land with step 5 batching core"
       ]
     },
     {

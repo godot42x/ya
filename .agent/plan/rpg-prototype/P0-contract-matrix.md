@@ -11,7 +11,7 @@ callback 或 global state 不得进入后续 phase。
 | World sprite candidate | `RenderFrameExtractor::extractSprites`（每 Scene+revision 一次；组件只存 authored reference，resolved binding 在抽取期由 `slotToTextureBinding` 取得） | active Deferred graph 的 `appendSprite2D`（读 View 的 bucket，不再遍历 ECS） | RenderFrameExtractor + active Scene graph | candidate 持有 `TextureBinding`（强引用），保证 texture/image/descriptor 活到 submit/fence；不在 recording 期 resolve |
 | Camera projection | CameraComponent 当前无参 getProjection | Runtime/Editor producer | CameraComponent 纯 projection function；producer 传 effective aspect | 不读 Window/Swapchain；View declaration 前生成 |
 | Camera view | CameraComponent 当前 getFreeView/getOrbitView | Runtime/Editor producer | SceneCameraQuery / producer/controller | 只读 Transform；禁止 projection getter 修改 Transform |
-| World2D target | View 的 SceneColor（load/store）+ GBuffer depth（load/store） | `appendSprite2D`：skybox 之后、bloom 之前 | active Deferred graph | 已落地：opaque 写深度、translucent 只测；无 sprite 的 View 不建 pass；纯 2D-only graph 仍待 P5 的 View workload 声明 |
+| World2D target | View 的 SceneColor（load/store）+ GBuffer depth（load/store） | `appendSprite2D`：skybox 之后、bloom 之前 | active Deferred graph | 现状：opaque 写深度、translucent 只测；无 sprite 的 View 不建 pass。**2026-10-03 冻结为只测不写（见文末 C1）**；纯 2D View 的 graph 策略待步骤 6（C5） |
 | Game UI snapshot | GameUIHost / EditorGameUIPreview | GameRuntime / GameEditor 显式调用 GUI compose | GameRuntime / GameEditor compose owner | graph build 前冻结；recording 不访问 WidgetTree；Render3D 不持有 snapshot |
 | UI target | Runtime 当前写 View display image；Editor/standalone 由各自 host 选择 | Render2DComposePass | 应用/GUI host 提供明确的目标图像、extent、encoding | compose helper 不猜产品语义；不为不同产品场景复制 renderer |
 | Render2D list / batch cursor | `Render2DList` value builder（像素 + 世界混装）+ 静态 `Render2D::recordRender2DList` | GUI compose、editor overlay；World2D 尚无生产者 | D1：`ScreenDrawList` / `WorldDrawList` 分类型；`ScreenDrawRecorder` / `WorldDrawRecorder` 由目标 owner 持有（见 plan §2.4） | flight/submit 范围内保活；禁止后续 flush 覆写在提交中的数据；录制器销毁走 DeferredDeletionQueue |
@@ -36,6 +36,8 @@ callback 或 global state 不得进入后续 phase。
    数据，destination policy 留在应用/GUI host；不按产品名称建立四套同构 renderer。
 
 ## P0 冻结前还必须查清的决策
+
+（2026-10-03 已按文末「2026-10-03 冻结」回答，其中纯 2D graph 与 Render2D 后端 seam 两项未选，见 C5 与步骤 5。下面保留原问题。）
 
 - 先画一张“混合场景预期结果表”，并通过可见输出校验：
   - sprite 在 3D opaque 几何前/后时，是否按 Transform.z 做真实深度遮挡；
@@ -113,12 +115,90 @@ View overlay 不在这张表里：它是 GameEditor 自己的 pass，颜色 Load
   深度测试/写入均关闭，后画的世界线会覆盖 gizmo handle。D2 以固定相位（世界 → 屏幕）解决。
 - 分层结论、三类世界 2D 的区分、两条分叉的持有者表见 plan.md §2.4；执行见 §4A D1–D3。
 
-### 混合场景验收记录（P0 必填）
+## 2026-10-03 冻结（评审步骤 3）
 
-| 场景 | 预期可见结果 | 已验证证据 |
+只产出契约，不改代码。下面每一条都写明「现状 → 冻结后」，实现落在步骤 4 / 5 / 6。
+之前的 owner / producer 表（本文件开头）就是 `pipeline_contract_audit` 的结论，不再另写一份。
+
+### C1 精灵之间的前后关系：只有画家顺序
+
+比较过 Unity 2D（Sorting Layer → Order → 距离，透明队列，不写深度）、Godot 4（z_index → 树序，
+节点级 y-sort，2D 无深度缓冲）、Bevy（按 z 排，不写深度）、Unreal Paper2D（半透明按优先级加距离，
+Masked 写深度）。2D 引擎主流是画家顺序，只有从 3D 长出来的 Paper2D 靠深度。
+
+| | 现状 | 冻结后 |
 | --- | --- | --- |
-| sprite 在 3D opaque 前/后 | 待冻结；说明 Transform.z 与 depth test/write 的关系 | 待补混合输出截图/像素断言 |
-| 两个 sprite 重叠 | 待冻结 layer/sortOrder/worldZ/tie-break | 待补可见顺序验证 |
-| sprite 与 3D transparent 相交/重叠 | 待冻结 MVP 支持边界 | 待补视觉验证或明确限制 |
-| 半透明 sprite + bloom/tone-map | 待冻结 blend/color encoding/bloom/tone-map 规则 | 待补颜色输出验证 |
-| 空 sprite 列表、Scene 仍需 clear | 待冻结 2D-only 与 mixed graph 的合法空 workload 行为 | 待补可见输出验证 |
+| 不透明精灵 | 无混合，`a < 0.01` 丢弃，写深度 | 与半透明同一条管线，混合开启，`a < 0.01` 只作为提前丢弃 |
+| 半透明精灵 | 测深度、不写深度，另走一遍 | 同上，不再分两遍 |
+| 深度附件 | `Load / Store`，测试 `LessOrEqual` | 只读测试（`LessOrEqual`），不写。graph 里声明为只读深度 |
+| 精灵之间 | 不透明先、半透明后，再按 layer、sortOrder，最后到相机的距离（远到近）；不透明还要靠深度 | 只看排序键（C2），`Transform.z` 与精灵之间的顺序无关 |
+| `Transform.z` 的作用 | 精灵间深度、对 3D 不透明的遮挡 | 只用于被 3D 不透明几何遮挡 |
+
+后果（已接受）：
+- 精灵不再写深度，编辑器 billboard 图标（灯、相机）会画在精灵之上。
+- 精灵不再遮挡 3D 前向透明物体（粒子等）；2D 玩法线用不到。
+- 鼠标拾取与绘制共用同一个比较函数（C2），拾取取绘制顺序里最后的一个。
+- `Actor.zFor` 与 `z = 基准 − y × ε` 约定随步骤 5 删除，`2d-gameplay` skill 同步改。
+
+### C2 排序键：layer → y → order
+
+比较函数只有一个，放在 `Scene2D`（步骤 4），提取期排序与 2D 拾取都调它。
+
+```
+key = (layer, ySortRank, yKey, order, tiebreak)   // 全部升序，后画的在上面
+```
+
+- `layer`：`Sprite2DComponent::layer` / `TilemapComponent::layer`（int，已有）。
+- `ySortRank`：未开 y-sort 的对象为 0，开了的为 1。同一 `layer` 里不 y-sort 的先画，y-sort 的后画；
+  所以「y 项恒为 0」不会和 y-sort 对象混成任意顺序。
+- `yKey`：开 y-sort 的对象取 `-sortY`（世界 y 越大越早画，越靠屏幕下方越晚画）；不开的恒为 0。
+  `sortY` 是对象排序点的世界 y，取 texel 吸附之后的值，同一行的对象落在同一个 `yKey`，由 `order` 决定。
+  排序点在 pivot 落地（步骤 4）之前是精灵底边中点，之后是 pivot。
+- `order`：`Sprite2DComponent::sortOrder`；tilemap 取子层下标 `layerIndex`（现状）。
+- `tiebreak`：实体 id，其次 tile 的提取顺序（行优先），保证同键时结果稳定、不依赖 `std::sort` 的不稳定性。
+- y-sort 是逐对象开关：`Sprite2DComponent::bYSort`、`TilemapLayer::bYSort`，tilemap 子层默认关。
+  字段名与序列化形状在步骤 4 定，这里只冻结语义。
+- 未开 y-sort 的 tile 层不会因为 y 在同层里穿插：`yKey` 恒为 0，行优先提取顺序即 tiebreak。
+
+### C3 实例格式与分批
+
+| 项 | 冻结 |
+| --- | --- |
+| 实例数据 | `worldCenter`(3) + `axisX`(3) + `axisY`(3) + `uvRect`(4，翻转已折进 uv) + `tint`(4) + 纹理槽下标；与现有 push constant 内容一致，只是从逐 draw 变成逐实例 |
+| 排序键不进 GPU | 排序在 CPU，输出绘制顺序；GPU 只看顺序 |
+| 分批 | 按排好的顺序，连续同管线、同纹理表的一段合成一批。**禁止为了合批把顺序打乱**（不得按纹理重排） |
+| 切批条件 | 纹理表（`kTextureTableSize = 16`）装不下下一个纹理，或管线状态变化 |
+| 共享核心 | 与 `ScreenDrawList` 共享 quad 实例核心、批游标和纹理表；前端各自处理相机矩阵 / 像素裁剪 |
+| 纹理表 | 按资产槽身份作键，直接映射，不再每帧重建加线性查找（步骤 5） |
+
+### C4 资源责任
+
+- candidate 持有 `TextureBinding` 强引用，抽取期解析，录制期不 resolve（与矩阵开头一致，不变）。
+- 实例缓冲按 flight 保活，销毁走 `DeferredDeletionQueue`；同一提交内不覆写已经上传的数据；被引用的
+  buffer / texture 活到 submit 与所需 fence（`render2d_upload_submit_lifetime`，步骤 5 的验收条件）。
+- tilemap 静态实例缓冲只在编辑时重建，重建信号走编辑漏斗（步骤 5）。
+
+### C5 graph 位置与纯 2D
+
+- Sprite pass 的位置不变：天空盒之后、Bloom 之前，写 `viewColor`，所以精灵不受光照，经过 Bloom 与 tone-map，
+  与 3D 场景共用同一套颜色处理。
+- 内容门：View 没有精灵就不加这个 pass（已有，`appendSprite2D`）。
+- 纯 2D View 怎么不分配 / 不执行 GBuffer、光照、天空盒、Bloom：**本次不选**。候选是「View 声明 workload，
+  同一张 Deferred graph 跳过不需要的 stage」与「单独一张 2D-only graph」，等 `render-view-family` P3 的
+  ViewFamily compiler 再定（步骤 6）。约束不变：不新增第二套 Scene scheduler，纯 2D 不支付 3D attachment。
+- 空 sprite 列表且场景需要 clear：由前面的 pass（GBuffer / 光照 / 天空盒）负责，精灵 pass 不参与；
+  纯 2D 的 clear 归属随上一条一起定。
+
+### 混合场景预期（冻结）与验收
+
+「已验证证据」一列现在没有数据：本步骤只冻结契约，不写代码，所以没有可见输出可以校验。
+每一行是步骤 5 合批核心的验收项，到时用自动化截图 / 像素断言补。
+
+| 场景 | 冻结的预期可见结果 | 验收（步骤 5） |
+| --- | --- | --- |
+| sprite 在 3D opaque 前/后 | sprite 用真实 `Transform.z` 对 3D 不透明深度做测试：在几何后面的部分被遮住，在前面的完整可见。精灵不写深度 | 一个立方体穿过精灵平面的截图，像素断言交线两侧 |
+| 两个 sprite 重叠 | 只由 C2 的键决定，与 `Transform.z` 无关；同键按 tiebreak 稳定 | 同位置、不同 z 的两个精灵，调换 z 画面不变；调换 order 画面变 |
+| 同层 y-sort | 开 y-sort 的对象，y 小（更靠屏幕下方）的盖住 y 大的 | 两个角色上下相邻重叠，上下交换后遮挡随之交换 |
+| sprite 与 3D transparent 相交/重叠 | **不支持顺序交织**：3D 前向透明物体总在所有精灵之后画，只测 3D 不透明深度（精灵不写深度，所以精灵后面的透明物体会盖在精灵上）。MVP 的明确限制 | 文档化的限制，不做像素断言 |
+| 半透明 sprite + bloom/tone-map | 半透明精灵 `SrcAlpha / OneMinusSrcAlpha` 混合进场景颜色，高亮精灵进入 Bloom，与 3D 共用 tone-map | 半透明精灵叠 3D 地面，比较与现状的逐像素差异，差异只来自「不透明不再硬裁」 |
+| 空 sprite 列表、Scene 仍需 clear | 没有精灵 pass，输出就是前面 pass 的结果 | 无精灵场景截图与现状逐像素一致 |

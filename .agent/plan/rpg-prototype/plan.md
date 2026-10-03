@@ -300,8 +300,8 @@ game-ui S5 / S7 ──► B2（只在动到同一函数时等待）
 
 | 原条目 | 内容 | 并入 |
 | --- | --- | --- |
-| `pipeline_contract_audit` | Render2D 调用方与 owner 表 | 步骤 3 P0 |
-| `mixed_world2d_visual_contract` | 混合 / 纯 2D / 只有 UI 三种输出的遮挡、顺序、混合、bloom、tone-map 预期，并可见验证 | 步骤 3 P0；排序键 layer → y → order 作为实例格式的一部分一起冻结 |
+| `pipeline_contract_audit` | Render2D 调用方与 owner 表 | 步骤 3 P0，已完成（`P0-contract-matrix.md` 开头的表即结论） |
+| `mixed_world2d_visual_contract` | 混合 / 纯 2D / 只有 UI 三种输出的遮挡、顺序、混合、bloom、tone-map 预期，并可见验证 | 步骤 3 P0，契约已冻结（C1–C5，2026-10-03）；像素验收移到步骤 5 |
 | `render2d_upload_submit_lifetime` | 同一提交内不覆写上传；被引用的 buffer / 资源活到 submit 与所需 fence | 步骤 5 合批核心的验收条件 |
 | `legacy_pipeline_removed` | 删除 screen / world 混用的旧 shader 接口、`textureRef` 高位 mode 编码与陈旧调用方 | 步骤 5 收尾 |
 
