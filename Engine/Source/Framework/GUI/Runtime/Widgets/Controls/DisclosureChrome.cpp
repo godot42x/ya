@@ -59,8 +59,11 @@ void paintChevron(UIFrameBuilder& builder, const Rect2D& boxRect, bool bExpanded
         }
         return glm::vec2{c.x - r.y, c.y + r.x};
     };
-    builder.addLine(map(r1), map(r2), color, 1.5f);
-    builder.addLine(map(r2), map(r3), color, 1.5f);
+    // Diagonal strokes: the hard rotated quad staircases on the 1x surface and
+    // the OS upscale smears the steps; the AA fringe keeps the mark legible.
+    constexpr float kChevronFeather = 0.55f;
+    builder.addLine(map(r1), map(r2), color, 1.5f, kChevronFeather);
+    builder.addLine(map(r2), map(r3), color, 1.5f, kChevronFeather);
 }
 
 void paintDisclosureImage(UIFrameBuilder& builder, const Rect2D& boxRect, const FDisclosureSpec& spec, bool bExpanded)

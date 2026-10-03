@@ -134,6 +134,10 @@ struct UIFrameDrawItem
     glm::vec2 lineFrom      = {0.0f, 0.0f};
     glm::vec2 lineTo        = {0.0f, 0.0f};
     float     lineThickness = 1.0f;
+    /// Geometric AA fringe outside the core, in px (0 = hard edge). Diagonal
+    /// strokes (chevrons) need this: a hard rotated quad staircases on the
+    /// 1x surface, and the OS upscale smears the steps into mush.
+    float     lineFeather   = 0.0f;
     /// Per-vertex colors for Sprite, Y-down ImGui order: TL, TR, BR, BL.
     /// Ignored unless `bPerVertexColor`. `color` stays `vertexColors[0]` for dump.
     std::array<glm::vec4, 4> vertexColors{};
@@ -148,7 +152,8 @@ struct UIFrameDrawItem
                texture == other.texture && uvOffset == other.uvOffset && uvScale == other.uvScale &&
                cornerRadius == other.cornerRadius && font == other.font && text == other.text &&
                textScale == other.textScale && lineFrom == other.lineFrom && lineTo == other.lineTo &&
-               lineThickness == other.lineThickness && vertexColors == other.vertexColors &&
+               lineThickness == other.lineThickness && lineFeather == other.lineFeather &&
+               vertexColors == other.vertexColors &&
                bPerVertexColor == other.bPerVertexColor && bOpaqueSample == other.bOpaqueSample;
     }
 };
@@ -271,11 +276,13 @@ class YA_GUI_API UIFrameBuilder
 
     /// Record a line segment (logical px endpoints). Drawn as a thin rotated
     /// quad of `thickness` width in the compose pass, so any angle works;
-    /// honors the current clip stack like sprites/text.
+    /// honors the current clip stack like sprites/text. `feather` is the AA
+    /// fringe in px (0 = hard edge) — use it for diagonal strokes.
     void addLine(const glm::vec2& logicalFrom,
                  const glm::vec2& logicalTo,
                  const glm::vec4& color,
-                 float            thickness = 1.0f);
+                 float            thickness = 1.0f,
+                 float            feather   = 0.0f);
 
     /// Record a rectangle outline (4 line segments, logical rect).
     void addRectOutline(const Rect2D& logicalRect, const glm::vec4& color, float thickness = 1.0f);

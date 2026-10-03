@@ -99,7 +99,7 @@ void emitSnapshotItem(ScreenDrawList& list, const UIFrameDrawItem& item)
         }
     }
     else if (item.kind == UIFrameDrawItem::EKind::Line) {
-        list.strokeLine(item.lineFrom, item.lineTo, item.color, item.lineThickness);
+        list.strokeLine(item.lineFrom, item.lineTo, item.color, item.lineThickness, item.lineFeather);
     }
     else {
         list.makeText(item.text,

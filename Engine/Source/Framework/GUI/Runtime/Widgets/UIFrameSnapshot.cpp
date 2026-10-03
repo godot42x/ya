@@ -341,7 +341,8 @@ void UIFrameBuilder::addText(const Rect2D& logicalRect,
 void UIFrameBuilder::addLine(const glm::vec2& logicalFrom,
                              const glm::vec2& logicalTo,
                              const glm::vec4& color,
-                             float            thickness)
+                             float            thickness,
+                             float            feather)
 {
     const float scaleMix = 0.5f * (getRenderTransformScale().x + getRenderTransformScale().y);
     UIFrameDrawItem item;
@@ -350,6 +351,7 @@ void UIFrameBuilder::addLine(const glm::vec2& logicalFrom,
     item.lineTo        = toPx(mapRenderTransformPoint(logicalTo));
     item.color         = mapRenderTransformColor(color);
     item.lineThickness = thickness * scaleMix;
+    item.lineFeather   = feather * scaleMix;
     if (!_clipStack.empty()) {
         item.bClipped = true;
         const Rect2D& clip = _clipStack.back();
@@ -379,8 +381,10 @@ void UIFrameBuilder::addCheckMark(const Rect2D& boxRect, const glm::vec4& color)
     const glm::vec2 p0{x + w * 0.22f, y + h * 0.52f};
     const glm::vec2 p1{x + w * 0.42f, y + h * 0.74f};
     const glm::vec2 p2{x + w * 0.80f, y + h * 0.26f};
-    addLine(p0, p1, color, thickness);
-    addLine(p1, p2, color, thickness);
+    // Same diagonal-stroke rule as the chevron: without the AA fringe the
+    // hard rotated quads staircase and the OS upscale smears them.
+    addLine(p0, p1, color, thickness, 0.55f);
+    addLine(p1, p2, color, thickness, 0.55f);
 }
 
 void UIFrameBuilder::addBezierCubic(const glm::vec2& p0,

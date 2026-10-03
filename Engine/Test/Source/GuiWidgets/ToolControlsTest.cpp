@@ -2421,18 +2421,23 @@ TEST(ToolControlsTest, ExpanderChevronDoesNotPaintAsciiGlyphs)
     tree.layout();
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
-    bool bFoundAscii = false;
-    bool bFoundLine  = false;
+    bool bFoundAscii  = false;
+    bool bFoundLine   = false;
+    bool bLineAA      = false;
     for (const auto& draw : snap.items) {
         if (draw.kind == UIFrameDrawItem::EKind::Text && (draw.text == "v" || draw.text == ">")) {
             bFoundAscii = true;
         }
         if (draw.kind == UIFrameDrawItem::EKind::Line) {
             bFoundLine = true;
+            // Diagonal strokes must carry the AA fringe: a hard rotated quad
+            // staircases on the 1x surface and blurs under the OS upscale.
+            bLineAA = bLineAA || draw.lineFeather > 0.0f;
         }
     }
     EXPECT_FALSE(bFoundAscii);
     EXPECT_TRUE(bFoundLine);
+    EXPECT_TRUE(bLineAA);
 }
 
 TEST(ToolControlsTest, ExpanderGlyphModePaintsConfiguredPair)
