@@ -30,12 +30,12 @@
 
 步骤 4c 场景数据瘦身与动画资产（2026-10-03 用户提出，三项已拍板：json_prune / asset / set_editor）
 - [x] P1 场景组件默认值省略：`SceneSerializer::serializeEntity` 把组件 JSON 与「默认构造实例的 JSON」递归对比，等于默认的字段不写；组件本身仍写 `{}`；`IComponentOps::createDefaultInstance()` 提供默认实例；全部已注册组件经 addComponent 创建后与 `T{}` 一致（有测试守）
-- [ ] P1 收尾：已有场景用引擎重存一遍（不手改），并入 P2 的场景迁移，只重写一次
+- [x] P1 收尾：已有场景用引擎重存一遍（不手改），并入 P2 的场景迁移，只重写一次
 - [x] P2a `SpriteAnimationSet` 资产类型（`.yaanim.json`：columns / rows / clips；解析 + 序列化 + 校验）；并把「每种资产改一堆引擎文件」改成开闭：`AssetTypeRegistry` + `DocumentAssetRef<T>` + 通用 `AssetDocumentManager`（Core），新增文档型资产 = 类型 + parse + 一处 `registerDocument`；`EEditorAssetPickerKind` / `PropertyCapabilityRegistry` / `AssetManager` 的 Tileset 专属方法删除；开闭测试用玩具资产证明
 - [x] P2b `SpriteAnimationComponent` 只留资产引用 + 当前 clip 名；Hero / Npc / Chest 三份数据抽成 `.yaanim.json`，TownLarge 21 个重复块（仅 2 种内容）迁成引用；解析允许 fps / bLoop 缺省（与默认值省略一致）；场景用引擎重存
 - [ ] P3 编辑器：资产选择器分类 + 组件面板 clip 下拉与播放/停止；`SpriteAnimationSet` 编辑页签（仿 Tile Palette：图集网格点选帧、clip 增删改、fps / loop、预览播放）
 - 顺序：P1 → P2 → pivot → 引擎重存场景 → P3（共享构建，串行）
-- [ ] 用引擎 load→save 重存 Town / House / TownLarge，让默认值省略落到文件（单独提交，前后截图对照）
+- [x] 用引擎 load→save 重存 Town / House / TownLarge，让默认值省略落到文件（单独提交，前后截图对照）
 - 风险：省略默认值后，场景隐含依赖代码里的默认值，以后改默认值会改变旧场景（需写进 scene-serialization 相关 skill）
 
 步骤 5 2D 合批核心（前置：步骤 3、4）

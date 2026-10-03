@@ -11,7 +11,9 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <string>
 
 namespace ya
@@ -52,6 +54,27 @@ const char* kHeroDocument = R"({
         {"name": "walk_down", "frames": [0, 1, 2, 1], "fps": 8.0, "bLoop": false}
     ]
 })";
+
+TEST_F(SpriteAnimationSetTest, ExampleDocumentsMatchSerializerBytes)
+{
+    const char* paths[] = {
+        "Example/2DRpgPrototype/Content/Animations/Hero.yaanim.json",
+        "Example/2DRpgPrototype/Content/Animations/Npc.yaanim.json",
+        "Example/2DRpgPrototype/Content/Animations/Chest.yaanim.json",
+    };
+    for (const char* path : paths) {
+        std::ifstream input(path);
+        ASSERT_TRUE(input.is_open()) << path;
+        std::stringstream buffer;
+        buffer << input.rdbuf();
+        const std::string text = buffer.str();
+
+        std::string error;
+        const auto  parsed = parseSpriteAnimationSetJson(text, error);
+        ASSERT_NE(parsed, nullptr) << path << ": " << error;
+        EXPECT_EQ(text, serializeSpriteAnimationSetJson(*parsed)) << path;
+    }
+}
 
 TEST_F(SpriteAnimationSetTest, ParseRoundTrip)
 {

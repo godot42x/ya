@@ -1,38 +1,30 @@
 {
-  "columns": 3,
-  "rows": 4,
   "clips": [
     {
-      "name": "idle_down",
-      "frames": [
-        1
-      ],
+      "bLoop": true,
       "fps": 1.0,
-      "bLoop": true
+      "frames": [1],
+      "name": "idle_down"
     },
     {
-      "name": "idle_left",
-      "frames": [
-        4
-      ],
+      "bLoop": true,
       "fps": 1.0,
-      "bLoop": true
+      "frames": [4],
+      "name": "idle_left"
     },
     {
-      "name": "idle_right",
-      "frames": [
-        7
-      ],
+      "bLoop": true,
       "fps": 1.0,
-      "bLoop": true
+      "frames": [7],
+      "name": "idle_right"
     },
     {
-      "name": "idle_up",
-      "frames": [
-        10
-      ],
+      "bLoop": true,
       "fps": 1.0,
-      "bLoop": true
+      "frames": [10],
+      "name": "idle_up"
     }
-  ]
+  ],
+  "columns": 3,
+  "rows": 4
 }

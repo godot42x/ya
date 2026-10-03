@@ -540,3 +540,16 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   编辑器冒烟 81.6 / 83.8 fps、字体构建 0。截图：玩家世界位置不变，NPC 整体上移 0.25（脚从探出格子底边 0.25 收到底边上），
   相机跟随实体 y 一并下移 0.25；玩家在 NPC 南北两侧时更靠南的画在前面。
 - 未验证：House / TownLarge 没有实际启动，门的换图没跑；场景里默认值还没裁剪（下一步用引擎重存）。
+
+## 2026-10-04 — 紧凑 JSON 输出 + 引擎重存示例场景（步骤 4c 收尾）
+
+- 第一次重存发现场景反而变大：`SceneSerializer::saveToFile` 用 `dump(4)`，每个数组元素独占一行（TownLarge tile 数组一数一行），
+  Town 15245→79275、TownLarge 84325→481608，抵消了默认值省略。该次结果未提交。
+- 新增 `Core/Common/JsonFormat.h/.cpp`：`dumpJsonCompactLeaves(json, indent=2, wrapColumn=100)`——对象逐键展开，全标量数组写一行、超列宽在元素间折行，
+  含容器的数组展开，键序沿用 nlohmann。接入 `SceneSerializer::saveToFile` 与 `serializeSpriteAnimationSetJson`；三份 `.yaanim.json` 按新格式重写，
+  `SpriteAnimationSetTest.ExampleDocumentsMatchSerializerBytes` 锁定逐字节一致。`AssetMeta.cpp` 的 `dump(4)` 未动。
+- 引擎 load→save 重存三个场景（runtime 停稳后）：Town 15245→13965，House 8034→6281，TownLarge 84325→73178。按实体 id 对齐比较 `changed=0`，
+  只剩：删默认值字段、新增 `version` / 空 `children` / `overrides`、`Content:`→`Content/`、~1e-6 浮点舍入；tile 单元格与实体 id 集合相同；
+  Town 的 TilemapGround 排到 `entities` 末尾。玩家位置、相机未变。
+- 验证：新增 7 个单测；`ya-testing` 1597 ran / 1596 passed / 1 skipped；四条玩法脚本通过；Town 前后截图 0 像素差；编辑器冒烟 editing 65.1 / play 43.1 fps。
+- 注意：Hero walk 的 `fps` 在文件里是 `8.33329963684082`（float 提升为 double 的写法），是序列化不动点，不影响语义。

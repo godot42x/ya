@@ -1,22 +1,18 @@
 {
-  "columns": 12,
-  "rows": 11,
   "clips": [
     {
-      "name": "closed",
-      "frames": [
-        107
-      ],
+      "bLoop": true,
       "fps": 1.0,
-      "bLoop": true
+      "frames": [107],
+      "name": "closed"
     },
     {
-      "name": "open",
-      "frames": [
-        94
-      ],
+      "bLoop": true,
       "fps": 1.0,
-      "bLoop": true
+      "frames": [94],
+      "name": "open"
     }
-  ]
+  ],
+  "columns": 12,
+  "rows": 11
 }

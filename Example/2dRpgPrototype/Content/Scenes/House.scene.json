@@ -1,29 +1,14 @@
 {
-  "name": "House",
   "entities": [
     {
-      "id": 1001,
-      "name": "Camera",
       "components": {
-        "TransformComponent": {
-          "_position": [5.5, 3.5, 24.0],
-          "_rotation": [0.0, 0.0, 0.0],
-          "_scale": [1.0, 1.0, 1.0]
-        },
         "CameraComponent": {
-          "bPrimary": true,
-          "_projection": "Orthographic",
+          "_distance": 24.0,
+          "_farClip": 100.0,
           "_orthoHalfHeight": 8.0,
           "_pixelPerfect": true,
-          "_pixelsPerUnit": 16.0,
-          "_referenceHeightPx": 192.0,
-          "_fov": 45.0,
-          "_aspectRatio": 1.7777778,
-          "_nearClip": 0.1,
-          "_farClip": 100.0,
-          "_fixedAspectRatio": false,
-          "_distance": 24.0,
-          "_focusPoint": [0.0, 0.0, 0.0]
+          "_projection": "Orthographic",
+          "bPrimary": true
         },
         "LuaScriptComponent": {
           "scripts": [
@@ -32,57 +17,16 @@
               "scriptPath": "Content/Scripts/FollowCamera.lua"
             }
           ]
+        },
+        "TransformComponent": {
+          "_position": [5.5, 3.5, 24.0]
         }
-      }
+      },
+      "id": 1001,
+      "name": "Camera"
     },
     {
-      "id": 1021,
-      "name": "Player",
       "components": {
-        "TransformComponent": {
-          "_position": [5.5, 4.5, 0.1],
-          "_rotation": [0.0, 0.0, 0.0],
-          "_scale": [1.0, 1.0, 1.0]
-        },
-        "Sprite2DComponent": {
-          "bVisible": true,
-          "image": {
-            "bEnable": true,
-            "samplerConfig": {
-              "addressMode": "ClampToEdge",
-              "filterMode": "Nearest"
-            },
-            "textureRef": {
-              "__base__": {
-                "AssetRefBase": {
-                  "_path": "Content:Textures/hero_walk.png"
-                }
-              }
-            },
-            "uvOffset": [0.0, 0.0],
-            "uvRotation": 0.0,
-            "uvScale": [1.0, 1.0]
-          },
-          "size": [1.0, 1.5],
-          "pivot": [0.5, 0.3333333333333333],
-          "uvRect": [0.3333333333333333, 0.0, 0.6666666666666666, 0.25],
-          "bFlipU": false,
-          "bFlipV": false,
-          "tint": [1.0, 1.0, 1.0, 1.0],
-          "layer": 0,
-          "sortOrder": 0,
-          "pickId": 0
-        },
-        "SpriteAnimationComponent": {
-          "animation": {
-            "__base__": {
-              "AssetRefBase": {
-                "_path": "Content:Animations/Hero.yaanim.json"
-              }
-            }
-          },
-          "clip": "idle_down"
-        },
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -90,64 +34,9 @@
               "scriptPath": "Content/Scripts/Player.lua"
             }
           ]
-        }
-      }
-    },
-    {
-      "id": 2000,
-      "name": "TilemapGround",
-      "components": {
-        "TransformComponent": {
-          "_position": [0.0, 0.0, 0.0],
-          "_rotation": [0.0, 0.0, 0.0],
-          "_scale": [1.0, 1.0, 1.0]
-        },
-        "TilemapComponent": {
-          "tileset": {
-            "__base__": {
-              "AssetRefBase": {
-                "_path": "Content:Tilesets/town.yatileset.json"
-              }
-            }
-          },
-          "cellSize": [1.0, 1.0],
-          "width": 10,
-          "height": 7,
-          "layers": [
-            {
-              "name": "Ground",
-              "zOffset": 0.0,
-              "cells": [100, 100, 100, 100, 100, 109, 100, 100, 100, 100, 100, 109, 109, 109, 109, 109, 109, 109, 109, 100, 100, 109, 109, 109, 109, 109, 109, 109, 109, 100, 100, 109, 109, 109, 109, 109, 109, 109, 109, 100, 100, 109, 109, 109, 109, 109, 109, 109, 109, 100, 100, 109, 109, 109, 109, 109, 109, 109, 109, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
-            }
-          ],
-          "layer": 0
-        }
-      }
-    },
-    {
-      "id": 3001,
-      "name": "SpawnFromTown",
-      "components": {
-        "TransformComponent": {
-          "_position": [5.5, 1.5, 0.0],
-          "_rotation": [0.0, 0.0, 0.0],
-          "_scale": [1.0, 1.0, 1.0]
-        }
-      }
-    },
-    {
-      "id": 3002,
-      "name": "DoorToTown",
-      "components": {
-        "TransformComponent": {
-          "_position": [5.5, 0.5, 0.012],
-          "_rotation": [0.0, 0.0, 0.0],
-          "_scale": [1.0, 1.0, 1.0]
         },
         "Sprite2DComponent": {
-          "bVisible": true,
           "image": {
-            "bEnable": true,
             "samplerConfig": {
               "addressMode": "ClampToEdge",
               "filterMode": "Nearest"
@@ -155,84 +44,109 @@
             "textureRef": {
               "__base__": {
                 "AssetRefBase": {
-                  "_path": "Content:Textures/tiny_town.png"
+                  "_path": "Content/Textures/hero_walk.png"
                 }
-              }
-            },
-            "uvOffset": [0.0, 0.0],
-            "uvRotation": 0.0,
-            "uvScale": [1.0, 1.0]
-          },
-          "size": [1.0, 1.0],
-          "uvRect": [0.16666666666666666, 0.5454545454545454, 0.25, 0.6363636363636364],
-          "bFlipU": false,
-          "bFlipV": false,
-          "tint": [1.0, 1.0, 1.0, 1.0],
-          "layer": 0,
-          "sortOrder": 0,
-          "pickId": 0
-        },
-        "LuaScriptComponent": {
-          "scripts": [
-            {
-              "enabled": true,
-              "scriptPath": "Content/Scripts/Door.lua",
-              "propertyOverrides": {
-                "targetScene": "Content/Scenes/Town.scene.json",
-                "spawnName": "SpawnFromHouse"
               }
             }
-          ]
-        }
-      }
-    },
-    {
-      "id": 3003,
-      "name": "Chest",
-      "components": {
-        "TransformComponent": {
-          "_position": [7.5, 4.5, 0.08],
-          "_rotation": [0.0, 0.0, 0.0],
-          "_scale": [1.0, 1.0, 1.0]
-        },
-        "Sprite2DComponent": {
-          "bVisible": true,
-          "image": {
-            "bEnable": true,
-            "samplerConfig": {
-              "addressMode": "ClampToEdge",
-              "filterMode": "Nearest"
-            },
-            "textureRef": {
-              "__base__": {
-                "AssetRefBase": {
-                  "_path": "Content:Textures/tiny_town.png"
-                }
-              }
-            },
-            "uvOffset": [0.0, 0.0],
-            "uvRotation": 0.0,
-            "uvScale": [1.0, 1.0]
           },
-          "size": [1.0, 1.0],
-          "uvRect": [0.9166666666666666, 0.7272727272727273, 1.0, 0.8181818181818182],
-          "bFlipU": false,
-          "bFlipV": false,
-          "tint": [1.0, 1.0, 1.0, 1.0],
-          "layer": 0,
-          "sortOrder": 0,
-          "pickId": 0
+          "pivot": [0.5, 0.333333],
+          "size": [1.0, 1.5],
+          "uvRect": [0.333333, 0.0, 0.666667, 0.25]
         },
         "SpriteAnimationComponent": {
           "animation": {
             "__base__": {
               "AssetRefBase": {
-                "_path": "Content:Animations/Chest.yaanim.json"
+                "_path": "Content/Animations/Hero.yaanim.json"
               }
             }
           },
-          "clip": "closed"
+          "clip": "idle_down"
         },
+        "TransformComponent": {
+          "_position": [5.5, 4.5, 0.1]
+        }
+      },
+      "id": 1021,
+      "name": "Player"
+    },
+    {
+      "components": {
+        "TilemapComponent": {
+          "height": 7,
+          "layers": [
+            {
+              "cells": [100, 100, 100, 100, 100, 109, 100, 100, 100, 100, 100, 109, 109, 109, 109,
+                109, 109, 109, 109, 100, 100, 109, 109, 109, 109, 109, 109, 109, 109, 100, 100, 109,
+                109, 109, 109, 109, 109, 109, 109, 100, 100, 109, 109, 109, 109, 109, 109, 109, 109,
+                100, 100, 109, 109, 109, 109, 109, 109, 109, 109, 100, 100, 100, 100, 100, 100, 100,
+                100, 100, 100, 100],
+              "name": "Ground",
+              "zOffset": 0.0
+            }
+          ],
+          "tileset": {
+            "__base__": {
+              "AssetRefBase": {
+                "_path": "Content/Tilesets/town.yatileset.json"
+              }
+            }
+          },
+          "width": 10
+        },
+        "TransformComponent": {}
+      },
+      "id": 2000,
+      "name": "TilemapGround"
+    },
+    {
+      "components": {
+        "TransformComponent": {
+          "_position": [5.5, 1.5, 0.0]
+        }
+      },
+      "id": 3001,
+      "name": "SpawnFromTown"
+    },
+    {
+      "components": {
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "propertyOverrides": {
+                "spawnName": "SpawnFromHouse",
+                "targetScene": "Content/Scenes/Town.scene.json"
+              },
+              "scriptPath": "Content/Scripts/Door.lua"
+            }
+          ]
+        },
+        "Sprite2DComponent": {
+          "image": {
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content/Textures/tiny_town.png"
+                }
+              }
+            }
+          },
+          "uvRect": [0.166667, 0.545455, 0.25, 0.636364]
+        },
+        "TransformComponent": {
+          "_position": [5.5, 0.5, 0.012]
+        }
+      },
+      "id": 3002,
+      "name": "DoorToTown"
+    },
+    {
+      "components": {
         "LuaScriptComponent": {
           "scripts": [
             {
@@ -240,61 +154,101 @@
               "scriptPath": "Content/Scripts/Chest.lua"
             }
           ]
+        },
+        "Sprite2DComponent": {
+          "image": {
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content/Textures/tiny_town.png"
+                }
+              }
+            }
+          },
+          "uvRect": [0.916667, 0.727273, 1.0, 0.818182]
+        },
+        "SpriteAnimationComponent": {
+          "animation": {
+            "__base__": {
+              "AssetRefBase": {
+                "_path": "Content/Animations/Chest.yaanim.json"
+              }
+            }
+          },
+          "clip": "closed"
+        },
+        "TransformComponent": {
+          "_position": [7.5, 4.5, 0.08]
         }
-      }
+      },
+      "id": 3003,
+      "name": "Chest"
     }
   ],
+  "name": "House",
   "nodeTree": {
-    "name": "scene_root",
     "children": [
       {
-        "name": "Camera",
-        "entityRef": 1001
+        "children": [],
+        "entityRef": 1001,
+        "name": "Camera"
       },
       {
-        "name": "Player",
-        "entityRef": 1021
+        "entityRef": 1021,
+        "name": "Player"
       },
       {
-        "name": "TilemapGround",
-        "entityRef": 2000
+        "entityRef": 2000,
+        "name": "TilemapGround"
       },
       {
-        "name": "SpawnFromTown",
-        "entityRef": 3001
+        "entityRef": 3001,
+        "name": "SpawnFromTown"
       },
       {
-        "name": "DoorToTown",
-        "entityRef": 3002
+        "entityRef": 3002,
+        "name": "DoorToTown"
       },
       {
-        "name": "Chest",
-        "entityRef": 3003
+        "entityRef": 3003,
+        "name": "Chest"
       }
-    ]
+    ],
+    "name": "scene_root"
   },
+  "version": "1.0",
   "widgetEntries": [
     {
-      "entryId": "Dialogue",
-      "zOrder": 10,
       "autoMount": true,
       "document": "Content:UI/Dialogue.yaui.json",
+      "entryId": "Dialogue",
+      "overrides": {},
       "rootSlot": {
-        "type": "canvas",
-        "anchorMin": [0.0, 0.0],
-        "anchorMax": [1.0, 1.0],
-        "offset": [0.0, 0.0],
-        "minSize": [0.0, 0.0],
-        "maxSize": [1000000.0, 1000000.0],
-        "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
         "alignmentH": 0,
         "alignmentV": 0,
-        "widthSizeMode": 0,
+        "anchorMax": [1.0, 1.0],
+        "anchorMin": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0],
         "heightSizeMode": 0,
+        "maxSize": [1000000.0, 1000000.0],
+        "minSize": [0.0, 0.0],
+        "offset": [0.0, 0.0],
+        "offsets": {
+          "bottom": 0.0,
+          "left": 0.0,
+          "right": 0.0,
+          "top": 0.0
+        },
         "pivot": [0.0, 0.0],
         "preferredSize": [0.0, 0.0],
-        "fixedSize": [0.0, 0.0]
-      }
+        "type": "canvas",
+        "widthSizeMode": 0
+      },
+      "zOrder": 10
     }
   ]
 }

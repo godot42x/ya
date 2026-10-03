@@ -1,6 +1,7 @@
 #include "Core/Common/SpriteAnimationSet.h"
 
 #include "Core/Common/AssetDocumentManager.h"
+#include "Core/Common/JsonFormat.h"
 #include "Core/Log.h"
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Core/Reflection/ReflectionSerializer.h"
@@ -164,7 +165,7 @@ std::shared_ptr<SpriteAnimationSet> parseSpriteAnimationSetJson(const std::strin
 std::string serializeSpriteAnimationSetJson(const SpriteAnimationSet& set)
 {
     reflection::DeferredInitializerQueue::instance().executeAll();
-    return ReflectionSerializer::serializeByRuntimeReflection(set, "SpriteAnimationSet").dump();
+    return dumpJsonCompactLeaves(ReflectionSerializer::serializeByRuntimeReflection(set, "SpriteAnimationSet"));
 }
 
 namespace

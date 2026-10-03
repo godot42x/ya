@@ -1,4 +1,5 @@
 #include "Scene/Serialization/SceneSerializer.h"
+#include "Core/Common/JsonFormat.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Log.h"
 #include "Core/Reflection/DeferredInitializer.h"
@@ -177,7 +178,7 @@ bool SceneSerializer::saveToFile(const std::string& filepath)
         nlohmann::json j = serialize();
         normalizePaths(j);
         normalizeSceneJsonNumbers(j);
-        VirtualFileSystem::get()->saveToFile(filepath, j.dump(4, ' ', false));
+        VirtualFileSystem::get()->saveToFile(filepath, dumpJsonCompactLeaves(j));
         YA_CORE_INFO("Scene saved to: {}", filepath);
         return true;
     }
