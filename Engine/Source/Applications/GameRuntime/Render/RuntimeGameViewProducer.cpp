@@ -23,6 +23,7 @@ void RuntimeGameViewProducer::collectSceneViews(const SceneViewCollectContext& c
         // resolution. The window is not consulted: how this image is presented is
         // the presentation pass's business.
         .outputRect = Rect2D{.pos = {0.0f, 0.0f}, .extent = context.renderResolution.toVec2()},
+        .pixelDensity = context.pixelDensity > 0.0f ? context.pixelDensity : 1.0f,
         // Generated editor companions are editor furniture and this is the game
         // view, so it draws authored content, always. "Show Editor Gizmos" is
         // the editor's view option; it never reaches a view the editor does not

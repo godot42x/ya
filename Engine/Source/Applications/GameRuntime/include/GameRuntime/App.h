@@ -321,6 +321,11 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
 
     glm::vec2 getLastMousePos() const { return _lastMousePos; }
 
+    /// FollowWindow: render resolution becomes the main window's drawable
+    /// pixels, and the logical viewport is the window's point size. Hold
+    /// (the editor panel) leaves the resolution alone.
+    void adoptMainWindowDrawable();
+
   protected:
     virtual void onEnterRuntime();
     virtual void onEnterSimulation() {}

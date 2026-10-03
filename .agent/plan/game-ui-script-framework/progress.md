@@ -243,3 +243,13 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 - `GameUIHost::setMinReferenceScale` 在 `App::applyProjectDescriptor` 里和 `uiReferenceResolution` 一起接上。
 
 验证：`ProjectDescriptorTest.LoadsUIMinReferenceScale`、`GameUIHostTest.MinReferenceScaleComesFromTheProject`。
+
+## 2026-10-03 — View 像素密度
+
+完成：
+
+- `SceneViewDesc::pixelDensity`：设备像素每逻辑点。View 的 `outputRect.extent` 是设备像素，逻辑画布是 extent / density。
+- `GameUIHost::setPresentation` 的 framebuffer scale 改接这个密度，不再接 `renderScale`。参考 fit 仍按逻辑尺寸，下限策略不变。
+- 编辑器 PIE 面板与独立游戏窗口都按窗口 drawable 出图，面板逻辑尺寸不变。
+
+验证：`GameUIHostTest.DensityDoublesRasterAndKeepsTheLogicalCanvas`、`WindowPointMapsIntoTheLogicalViewport`。

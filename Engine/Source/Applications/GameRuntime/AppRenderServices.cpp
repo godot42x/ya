@@ -88,15 +88,39 @@ void AppRenderServices::holdRenderResolution()
     _state->hostSettings.resolutionPolicy = EHostResolutionPolicy::Hold;
 }
 
-void AppRenderServices::adoptWindowClientSize(Extent2D clientSize)
+void AppRenderServices::adoptWindowClientSize(Extent2D drawableSize)
 {
     if (!_state || _state->hostSettings.resolutionPolicy != EHostResolutionPolicy::FollowWindow) {
         return;
     }
-    if (clientSize.width == 0 || clientSize.height == 0) {
+    if (drawableSize.width == 0 || drawableSize.height == 0) {
         return;
     }
-    _state->hostSettings.renderResolution = clientSize;
+    _state->hostSettings.renderResolution = drawableSize;
+}
+
+void AppRenderServices::setPixelDensity(float density)
+{
+    YA_CORE_ASSERT(_state, "Render services are not available");
+    _state->hostSettings.pixelDensity = density > 0.0f ? density : 1.0f;
+}
+
+float AppRenderServices::getPixelDensity() const
+{
+    YA_CORE_ASSERT(_state, "Render services are not available");
+    return _state->hostSettings.pixelDensity;
+}
+
+void AppRenderServices::setLogicalViewport(const Rect2D& viewport)
+{
+    YA_CORE_ASSERT(_state, "Render services are not available");
+    _state->hostSettings.logicalViewport = viewport;
+}
+
+const Rect2D& AppRenderServices::getLogicalViewport() const
+{
+    YA_CORE_ASSERT(_state, "Render services are not available");
+    return _state->hostSettings.logicalViewport;
 }
 
 Extent2D AppRenderServices::getRenderResolution() const

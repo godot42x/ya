@@ -3,6 +3,7 @@
 #include "Core/Common/Types.h"
 #include "Render3D/Common/RenderFeatures.h"
 
+#include <cmath>
 #include <cstdint>
 #include <glm/glm.hpp>
 
@@ -78,9 +79,14 @@ struct SceneViewDesc
     glm::mat4 view       = glm::mat4(1.0f);
     glm::mat4 projection = glm::mat4(1.0f);
     glm::vec3 cameraPos  = glm::vec3(0.0f);
-    /// This View's own offscreen camera rect (origin at its RT top-left). Not
-    /// chrome widget offset.
+    /// This View's render target, in device pixels (origin at the RT top-left).
+    /// Not the chrome widget's logical rect and not the window.
     Rect2D    outputRect{};
+    /// Device pixels per logical point of the surface that shows this View.
+    /// 1 when the declarer has no separate logical space. Game UI divides
+    /// `outputRect` by this to get the logical canvas. This is not
+    /// `renderScale` (the host supersample setting).
+    float pixelDensity = 1.0f;
     /// Whether this declaration's output is what a display shows: the surface's
     /// fullscreen image in a game, the panel's image in the editor. False marks
     /// a View rendered as material for something else to sample (the editor's
@@ -102,5 +108,16 @@ struct SceneViewDesc
     /// product would be one more copy that can disagree with them.
     [[nodiscard]] glm::mat4 viewProjection() const { return makeCameraViewProjection(projection, view); }
 };
+
+/// Whole device pixels for a logical extent. `pixelDensity` is device pixels
+/// per logical point; a non-positive density is 1.
+[[nodiscard]] inline glm::vec2 devicePixelExtent(glm::vec2 logicalExtent, float pixelDensity)
+{
+    const float density = pixelDensity > 0.0f ? pixelDensity : 1.0f;
+    return {
+        std::round(logicalExtent.x * density),
+        std::round(logicalExtent.y * density),
+    };
+}
 
 } // namespace ya

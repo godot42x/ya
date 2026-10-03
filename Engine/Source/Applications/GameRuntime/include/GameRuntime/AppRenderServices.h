@@ -65,9 +65,13 @@ class YA_GAME_RUNTIME_API AppRenderServices
     /// Editor: the panel is the viewport, so a window resize must not retarget
     /// the host resolution.
     void                                                 holdRenderResolution();
-    /// While policy is `FollowWindow`, copy the window client size into the
+    /// While policy is `FollowWindow`, copy the window drawable size into the
     /// render resolution. A zero extent (minimize) is ignored. No-op otherwise.
-    void                                                 adoptWindowClientSize(Extent2D clientSize);
+    void                                                 adoptWindowClientSize(Extent2D drawableSize);
+    void                                                 setPixelDensity(float density);
+    [[nodiscard]] float                                  getPixelDensity() const;
+    void                                                 setLogicalViewport(const Rect2D& viewport);
+    [[nodiscard]] const Rect2D&                          getLogicalViewport() const;
     /// The *requested* resolution. It is what the host viewport's View will be
     /// sized from, so it is the honest answer for reporting and for a
     /// read-modify-write in the control plane. The rectangle actually rendered

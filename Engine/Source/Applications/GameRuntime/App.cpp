@@ -1,5 +1,6 @@
 #include "GameRuntime/App.h"
 #include "GameRuntime/AppRenderState.h"
+#include "GameRuntime/HostRenderSettings.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/IRuntimeModule.h"
 #include "GameRuntime/Lifecycle/GameRuntimeTickOrchestrator.h"
@@ -407,10 +408,10 @@ EWidgetRouteResult App::dispatchUIInputEvent(const Event& event)
         return EWidgetRouteResult::NotHandled;
     }
 
-    // An explicit resolution is stretched onto the window. Widgets were laid
-    // out in that resolution, so a window-space click has to be mapped back
-    // before the hit test. FollowWindow keeps the two sizes equal, and Hold
-    // (the editor panel) is already in window pixels.
+    // The presentation rect is the view's device pixels. Mouse events are
+    // window logical points. ExplicitStretch maps the whole window onto the
+    // caller's resolution. FollowWindow and Hold map through the logical
+    // viewport and the view's pixel density.
     glm::vec2 presentedPoint = _lastMousePos;
     if (_renderState &&
         _renderState->hostSettings.resolutionPolicy == EHostResolutionPolicy::ExplicitStretch) {
@@ -426,6 +427,15 @@ EWidgetRouteResult App::dispatchUIInputEvent(const Event& event)
             presentedPoint.x = _lastMousePos.x * static_cast<float>(resolution.width) / static_cast<float>(winW);
             presentedPoint.y = _lastMousePos.y * static_cast<float>(resolution.height) / static_cast<float>(winH);
         }
+    }
+    else if (_renderState) {
+        const auto mapped = mapWindowPointToViewPixels(_lastMousePos,
+                                                       _renderState->hostSettings.logicalViewport,
+                                                       _renderState->hostSettings.pixelDensity);
+        if (!mapped) {
+            return EWidgetRouteResult::NotHandled;
+        }
+        presentedPoint = *mapped;
     }
 
     switch (gameUIHost->dispatchEvent(event, presentedPoint)) {

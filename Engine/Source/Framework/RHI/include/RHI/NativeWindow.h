@@ -92,11 +92,10 @@ struct INativeWindow
 
     [[nodiscard]] void *getNativeWindowHandle() const { return nativeWindowHandle; }
 
-    /// Device pixel ratio (content scale) of the display the window lives on.
-    /// Set by the backend at create/resize time from the window-system DPI,
-    /// NOT derived from present/logical extent — that avoids the classic
-    /// "DPI assumed 1.0" pitfall on HiDPI monitors. Defaults to 1.0 when no
-    /// native window exists (headless/scenario).
+    /// Device pixels per logical point of this window's back buffer.
+    /// `SDL_GetWindowPixelDensity`: 1 when the drawable matches the logical
+    /// size, 2 on a Retina back buffer. Defaults to 1 when no native window
+    /// exists (headless/scenario).
     [[nodiscard]] float getDpiScale() const { return dpiScale; }
 
     // TODO: support multiple windows
@@ -166,7 +165,11 @@ struct INativeWindow
         width  = static_cast<float>(w);
         height = static_cast<float>(h);
     }
+    /// Logical client size (points). Mouse events use this space.
     virtual void getWindowSize(int &width, int &height) = 0;
+    /// Back-buffer pixels. Defaults to the logical size when the backend has
+    /// no separate drawable.
+    virtual void getDrawableSize(int &width, int &height) { getWindowSize(width, height); }
     /// Iconified / minimized. Present surfaces skip acquire while this is true.
     [[nodiscard]] virtual bool isMinimized() const { return false; }
     virtual bool minimize() { return false; }
@@ -238,6 +241,7 @@ class YA_RHI_API SDLNativeWindow final : public INativeWindow
     [[nodiscard]] uint32_t getWindowID() const override;
 
     void getWindowSize(int &width, int &height) override;
+    void getDrawableSize(int &width, int &height) override;
     [[nodiscard]] bool isMinimized() const override;
     bool minimize() override;
     bool restoreFromMinimize() override;

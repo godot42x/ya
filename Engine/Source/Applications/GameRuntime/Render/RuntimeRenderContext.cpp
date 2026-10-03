@@ -330,9 +330,13 @@ void RuntimeRenderContext::declareViews(App& app, float dt, SceneRenderScheduler
     // global switch to hide a view another layer declared.
     SceneViewCollector collector;
     auto* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
+    const float viewDensity = hostSettings.resolutionPolicy == EHostResolutionPolicy::ExplicitStretch
+                                  ? 1.0f
+                                  : (hostSettings.pixelDensity > 0.0f ? hostSettings.pixelDensity : 1.0f);
     const SceneViewCollectContext collectContext{
         .activeScene      = scene,
         .renderResolution = hostSettings.renderResolution,
+        .pixelDensity     = viewDensity,
         .hostTick         = App::_hostTick,
         .deltaTime        = dt,
     };
@@ -441,8 +445,8 @@ RuntimeRenderContext::TickFrame RuntimeRenderContext::buildGameRenderFrame(
     const SceneViewTask* displayRoot = sceneRender.displayRootTask();
     if ((app.isRuntimeMode() || app.isSimulationMode()) && scene && displayRoot) {
         if (auto* gameUIHost = app.getGameUIHost()) {
-            gameUIHost->setPresentation(displayRoot->desc.outputRect,
-                                        glm::vec2(tickFrame.frame.renderScale));
+            const float density = displayRoot->desc.pixelDensity > 0.0f ? displayRoot->desc.pixelDensity : 1.0f;
+            gameUIHost->setPresentation(displayRoot->desc.outputRect, glm::vec2(density));
             // Lay out and paint only. The tree was advanced in the logic
             // tick's UI step (GameRuntimeTickOrchestrator::tickUILogic), so no
             // UI logic runs while the frame is being built.

@@ -212,19 +212,12 @@ void App::init(AppDesc ci)
         });
         app._renderState->hostSurfaceId = mainWindow ? render->findSurfaceId(*mainWindow) : SurfaceId{};
 
-        int winW = 0, winH = 0;
-        if (mainWindow) {
-            mainWindow->getWindowSize(winW, winH);
-        }
         app.inputRouter.setWindow(mainWindow);
 
-        // Seed to the window so the first frame is 1:1. This does not opt out of
-        // FollowWindow: a later resize keeps that match. An explicit resolution
-        // (automation) goes through setRenderResolution and then stretches.
-        app.getRenderServices().seedRenderResolution(Extent2D{
-            .width  = app._ci.width > 0 ? static_cast<uint32_t>(app._ci.width) : static_cast<uint32_t>(winW),
-            .height = app._ci.height > 0 ? static_cast<uint32_t>(app._ci.height) : static_cast<uint32_t>(winH),
-        });
+        // Seed to the drawable so the first frame is 1:1 with the swapchain.
+        // A later resize keeps that match. An explicit resolution (automation)
+        // goes through setRenderResolution and then stretches.
+        app.adoptMainWindowDrawable();
     }
 
     app._sceneManager = new SceneManager();

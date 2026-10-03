@@ -41,6 +41,10 @@ int App::onEvent(const Event& event)
     case EEvent::WindowRestore:
         if (isMainWindowEvent(static_cast<const WindowRestoreEvent&>(event))) {
             _bMinimized = false;
+            // SDL reports a backing-store change that did not change the
+            // logical size as restore. Re-read the drawable so FollowWindow
+            // stays 1:1 with it.
+            adoptMainWindowDrawable();
         }
         break;
     case EEvent::WindowMinimize:
@@ -110,6 +114,38 @@ int App::onEvent(const Event& event)
     return 0;
 }
 
+void App::adoptMainWindowDrawable()
+{
+    NativeWindowManager* nwm = getNativeWindowManager();
+    INativeWindow* window = nwm ? nwm->getMainWindow() : nullptr;
+    if (!window) {
+        return;
+    }
+    window->refreshDpiScale();
+    int logicalW = 0;
+    int logicalH = 0;
+    int pixelW   = 0;
+    int pixelH   = 0;
+    window->getWindowSize(logicalW, logicalH);
+    window->getDrawableSize(pixelW, pixelH);
+    if (pixelW <= 0 || pixelH <= 0) {
+        return;
+    }
+    auto& renderServices = getRenderServices();
+    renderServices.adoptWindowClientSize(Extent2D{
+        .width  = static_cast<uint32_t>(pixelW),
+        .height = static_cast<uint32_t>(pixelH),
+    });
+    if (renderServices.getHostRenderSettings().resolutionPolicy != EHostResolutionPolicy::FollowWindow) {
+        return;
+    }
+    renderServices.setPixelDensity(window->getDpiScale());
+    renderServices.setLogicalViewport(Rect2D{
+        .pos    = {0.0f, 0.0f},
+        .extent = {static_cast<float>(logicalW), static_cast<float>(logicalH)},
+    });
+}
+
 bool App::handleWindowResized(const WindowResizeEvent& event)
 {
     const auto* nativeWindowManager = getNativeWindowManager();
@@ -121,14 +157,7 @@ bool App::handleWindowResized(const WindowResizeEvent& event)
     auto  h           = event.GetHeight();
     float aspectRatio = h > 0 ? static_cast<float>(w) / static_cast<float>(h) : 1.f;
     YA_CORE_DEBUG("Window({}) resized to {}x{}, aspectRatio: {} ",event.getWindowID(), w, h, aspectRatio);
-    if (w > 0 && h > 0) {
-        // Same space as the mouse (SDL client points). While the resolution
-        // follows the window, the view, the UI, and this size stay 1:1.
-        getRenderServices().adoptWindowClientSize(Extent2D{
-            .width  = static_cast<uint32_t>(w),
-            .height = static_cast<uint32_t>(h),
-        });
-    }
+    adoptMainWindowDrawable();
     if (NativeWindowManager* nwm = getNativeWindowManager()) {
         if (INativeWindow* window = nwm->getMainWindow()) {
             applyWindowChrome(*window, mainWindowChromeMode(), true);

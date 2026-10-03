@@ -25,6 +25,10 @@ struct SceneViewCollectContext
     /// result onto whatever surface is showing it. A producer with its own
     /// geometry (an editor panel) ignores this and declares its own rect.
     Extent2D renderResolution{};
+    /// Device pixels per logical point of the host viewport. The game view
+    /// copies this onto its declaration. 1 when the host has not separated
+    /// the two.
+    float    pixelDensity = 1.0f;
     uint64_t hostTick  = 0;
     float    deltaTime = 0.0f;
 };

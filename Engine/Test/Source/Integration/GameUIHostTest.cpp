@@ -7,6 +7,8 @@
 // that assert on produced draw items mount a Border.
 
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
+#include "GameRuntime/HostRenderSettings.h"
+#include "GUI/Widgets/TextRaster.h"
 
 #include "Core/Event.h"
 
@@ -272,6 +274,53 @@ TEST(GameUIHostTest, ReferenceScaleFloorsAndRidesTheDpiAxis)
     EXPECT_FLOAT_EQ(host.getTree().getLogicalExtent().width, 200.0f / GameUIHost::kMinGameUIReferenceScale);
     EXPECT_FLOAT_EQ(host.getTree().getLogicalExtent().height, 150.0f / GameUIHost::kMinGameUIReferenceScale);
     EXPECT_LT(host.getTree().getLogicalExtent().width, 1000.0f);
+}
+
+TEST(GameUIHostTest, DensityDoublesRasterAndKeepsTheLogicalCanvas)
+{
+    GameUIHost host;
+    host.setReferenceResolution({1280, 720});
+    host.setMinReferenceScale(0.5f);
+
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {349.0f, 197.0f}}, {1.0f, 1.0f});
+    const float logicalScale = host.referenceScale();
+    const auto  logicalCanvas = host.getTree().getLogicalExtent();
+    const float logicalDpi    = host.getTree().getDpiScale();
+
+    host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {698.0f, 394.0f}}, {2.0f, 2.0f});
+    EXPECT_FLOAT_EQ(host.referenceScale(), logicalScale);
+    EXPECT_FLOAT_EQ(host.referenceScale(), 0.5f);
+    EXPECT_EQ(host.getTree().getLogicalExtent().width, logicalCanvas.width);
+    EXPECT_EQ(host.getTree().getLogicalExtent().height, logicalCanvas.height);
+    EXPECT_FLOAT_EQ(host.getTree().getDpiScale(), logicalDpi * 2.0f);
+
+    // The dialogue hint is 13 logical px. At the 0.5 floor and density 1 the
+    // 9px raster floor is larger than the layout slot; density 2 clears it.
+    const FTextRasterPlan atDensity1 = planTextRaster(13.0f, glm::vec2(1.0f), logicalDpi, glm::vec2(1.0f));
+    const FTextRasterPlan atDensity2 = planTextRaster(13.0f, glm::vec2(1.0f), logicalDpi * 2.0f, glm::vec2(1.0f));
+    EXPECT_EQ(atDensity1.rasterPx, 9);
+    EXPECT_EQ(atDensity2.rasterPx, 13);
+}
+
+TEST(GameUIHostTest, WindowPointMapsIntoTheLogicalViewport)
+{
+    const Rect2D panel{.pos = {40.0f, 20.0f}, .extent = {349.0f, 197.0f}};
+    const auto inside = mapWindowPointToViewPixels({50.0f, 30.0f}, panel, 2.0f);
+    ASSERT_TRUE(inside.has_value());
+    EXPECT_FLOAT_EQ(inside->x, 20.0f);
+    EXPECT_FLOAT_EQ(inside->y, 20.0f);
+
+    EXPECT_FALSE(mapWindowPointToViewPixels({10.0f, 30.0f}, panel, 2.0f).has_value());
+
+    const auto wholeWindow = mapWindowPointToViewPixels({12.0f, 8.0f}, {}, 2.0f);
+    ASSERT_TRUE(wholeWindow.has_value());
+    EXPECT_FLOAT_EQ(wholeWindow->x, 24.0f);
+    EXPECT_FLOAT_EQ(wholeWindow->y, 16.0f);
+
+    const auto unit = mapWindowPointToViewPixels({3.0f, 4.0f}, {}, 0.0f);
+    ASSERT_TRUE(unit.has_value());
+    EXPECT_FLOAT_EQ(unit->x, 3.0f);
+    EXPECT_FLOAT_EQ(unit->y, 4.0f);
 }
 
 TEST(GameUIHostTest, MinReferenceScaleComesFromTheProject)

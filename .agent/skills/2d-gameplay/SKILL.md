@@ -73,7 +73,7 @@
 
 俯视像素画的取景在 `CameraComponent` 上，脚本不再自己算 zoom：
 
-- `_pixelPerfect` 默认关。打开后正交半高由 `resolveCameraViewFraming` 按该 View 的输出像素（`outputRect`，不是窗口）计算：`zoom = max(1, floor(viewHeight / _referenceHeightPx))`，半高 = `viewHeight / (2 * _pixelsPerUnit * zoom)`，半宽跟真实宽高比。zoom 是整数且不低于 1：视口比参考矮时少看一些世界，一个 texel 至少占一个设备像素。
+- `_pixelPerfect` 默认关。打开后正交半高由 `resolveCameraViewFraming` 按该 View 的**设备像素**高度（`outputRect.extent`，等于逻辑点乘 `SceneViewDesc::pixelDensity`，不是窗口逻辑尺寸）计算：`zoom = max(1, floor(viewHeight / _referenceHeightPx))`，半高 = `viewHeight / (2 * _pixelsPerUnit * zoom)`，半宽跟真实宽高比。zoom 是整数且不低于 1：视口比参考矮时少看一些世界，一个 texel 至少占一个设备像素。2x 密度下 zoom 翻倍。
 - 只按高度取 zoom。像素是正方形，半宽跟真实宽高比走，横向的 texel→像素比和纵向相同，不另设参考宽度。pixel perfect 不用 `_fixedAspectRatio`，否则横向会被拉开。
 - 相机眼在 `buildCameraRenderMatrices` 里吸附到设备像素（不写 Transform）。宽或高为奇数时该轴偏半个设备像素，texel 边落在像素边上。偶数尺寸相位为 0。
 - 精灵 / tile 的 `worldCenter` 在 `RenderFrameExtractor::extractSceneSnapshot` 吸附到 `1 / _pixelsPerUnit`。候选被所有 View 共享；整数 zoom 的设备像素是 texel 的细分，再叠加每 View 的眼吸附，精灵不会落在半个设备像素上。

@@ -434,3 +434,7 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   仍定 `onKey` / `spawnSprite` / `ui.*` 的语义，但新形态注册在 B1 中立层；C3 只管
   `call(ELuaScriptCallback)` 生命周期路径。
 - 偏离：无代码改动。
+
+## 2026-10-03 — 像素完美相机的高度是 View 设备像素
+
+`resolveCameraViewFraming` 的高度是该 View 的设备像素（`outputRect.extent` = 逻辑点 × `pixelDensity`）。2x 表面上整数 zoom 翻倍，一个 texel 占 `zoom` 个设备像素。脚本的 `viewSize` / `viewAspect` 仍是世界半宽高和宽高比，不改成像素。

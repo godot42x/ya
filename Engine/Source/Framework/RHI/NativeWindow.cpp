@@ -143,6 +143,9 @@ bool SDLNativeWindow::recreate(const WindowCreateInfo &ci)
     if (ci.bHidden) {
         flags |= SDL_WINDOW_HIDDEN;
     }
+    // The back buffer is device pixels. Without this flag SDL keeps the
+    // drawable equal to the logical size and the OS magnifies the window.
+    flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
 
     SDL_Window *window = SDL_CreateWindow(ci.title.c_str(), static_cast<int>(ci.width), static_cast<int>(ci.height), flags);
     if (!window) {
@@ -209,6 +212,16 @@ void SDLNativeWindow::getWindowSize(int &width, int &height)
     SDL_GetWindowSize(static_cast<SDL_Window *>(nativeWindowHandle), &width, &height);
 }
 
+void SDLNativeWindow::getDrawableSize(int &width, int &height)
+{
+    if (!nativeWindowHandle) {
+        width  = 0;
+        height = 0;
+        return;
+    }
+    SDL_GetWindowSizeInPixels(static_cast<SDL_Window *>(nativeWindowHandle), &width, &height);
+}
+
 bool SDLNativeWindow::isMinimized() const
 {
     if (!nativeWindowHandle) {
@@ -271,10 +284,10 @@ void SDLNativeWindow::refreshDpiScale()
         dpiScale = 1.0f;
         return;
     }
-    // SDL3: content scale == device pixel ratio for the window's current
-    // display. Returns 1.0 on standard-DPI monitors, 2.0 / 1.5x on Retina etc.
-    const float scale = SDL_GetWindowDisplayScale(static_cast<SDL_Window *>(nativeWindowHandle));
-    dpiScale          = (scale > 0.0f) ? scale : 1.0f;
+    // Drawable pixels per logical point. Display content scale stays 1 when
+    // the back buffer is not high-density, so it is the wrong number here.
+    const float density = SDL_GetWindowPixelDensity(static_cast<SDL_Window *>(nativeWindowHandle));
+    dpiScale            = (density > 0.0f) ? density : 1.0f;
 }
 
 bool SDLNativeWindow::setWindowSize(int width, int height)

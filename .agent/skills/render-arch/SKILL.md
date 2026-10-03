@@ -114,6 +114,12 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
       "这一帧实际渲染成多大"问 renderer 的已发布输出（`getViewportExtent()`）。
     - presentation 的拉伸是**按渲染图像素 1:1** 贴上去的（只 tone map，不做 fit）。宽高比不同的
       窗口会被拉伸；letterbox / fit 是一个需要先决定"多出来的像素画什么"的呈现特性，要单独做。
+    - `FollowWindow` 写入的分辨率是窗口 **drawable**（`SDL_GetWindowSizeInPixels`），不是逻辑点。
+      窗口以 `SDL_WINDOW_HIGH_PIXEL_DENSITY` 创建，这样 swapchain 才是设备像素。`Hold`（编辑器
+      面板）把 View 的 `outputRect.extent` 写成 `logical * pixelDensity`，`pixelDensity` 是设备像素
+      每逻辑点，挂在 `SceneViewDesc` 上，由拥有这块表面的一方填写。逻辑布局是 `extent / pixelDensity`。
+      `renderScale` 是超采样设置，不参与这个密度，也不决定 View 尺寸。`ExplicitStretch` 的分辨率就是
+      调用方要的像素，View 密度为 1。
 18. **View target 资源只有一套所有权，落在 `ViewTargetStore`。** 对任意一张 View texture，
     生命周期是固定的：由 store 在安全点按 `ViewTargetRequest` 创建（exact reuse，generation 递增标记
     replacement）；长期持有者是 store 的 live View allocation；本帧使用由 `RenderSubmission` 持有的

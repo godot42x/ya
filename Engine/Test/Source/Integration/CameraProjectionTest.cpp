@@ -174,6 +174,19 @@ TEST(CameraProjection, PixelPerfectZoomTableMatchesTheFrustum)
     }
 }
 
+TEST(CameraProjection, PixelPerfectZoomFollowsDevicePixelHeight)
+{
+    const CameraComponent camera = pixelPerfectCamera();
+    const CameraViewFraming logical = resolveCameraViewFraming(camera, 349.0f / 197.0f, {349.0f, 197.0f});
+    const CameraViewFraming device  = resolveCameraViewFraming(camera, 349.0f / 197.0f, {698.0f, 394.0f});
+    EXPECT_EQ(logical.zoom, 1);
+    EXPECT_EQ(device.zoom, 2);
+    // Zoom doubled with the pixel height, so the world frustum is unchanged
+    // and one texel covers two device pixels.
+    EXPECT_NEAR(device.halfHeight, logical.halfHeight, 1e-4f);
+    EXPECT_NEAR(device.halfHeight, 394.0f / (2.0f * 16.0f * 2.0f), 1e-4f);
+}
+
 TEST(CameraProjection, PixelPerfectSnapsTheEyeAndLeavesTheTransform)
 {
     Scene scene("PixelSnapScene");

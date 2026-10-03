@@ -175,7 +175,7 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   （anchor/caret、Shift+方向、拖选、primary+A），以及
   primary+C/X/V（Cmd macOS / Ctrl 别处）经 `WidgetTree` clipboard（作用在选区上；
   无选区时拷切整缓冲）。默认内存缓冲；windowed host（含 extra 窗）用
-  `bindSdlClipboard` 接同一块 OS clipboard。DPI 由 `setDpiScale` 与 `uiScale` 正交折叠。文字不在几何缩放之后重采样：`planTextRaster` 把 zoom、树 dpi、render-transform scale 收成整像素栅格尺寸，bitmap 的 `textScale` 为 1（见 font-rendering skill）。
+  `bindSdlClipboard` 接同一块 OS clipboard。DPI 由 `setDpiScale` 与 `uiScale` 正交折叠。文字不在几何缩放之后重采样：`planTextRaster` 把 zoom、树 dpi、render-transform scale 收成整像素栅格尺寸，bitmap 的 `textScale` 为 1（见 font-rendering skill）。游戏 UI 的 framebuffer scale 是所在 View 的 `pixelDensity`（设备像素 / 逻辑点），不是宿主 `renderScale`；参考分辨率 fit 在逻辑尺寸上算。
   焦点/悬停时 `getCursor()` 为 `ECursorType::IBeam`。`UIDragFloat` / `UISpinBox`
   的 `_bEditing` 复用同一套 `FTextEditState`，不要再写第三套迷你编辑器。
   IME / 文本输入：`WidgetTree::wantsTextInput()` 沿 **focus path** 问每个节点的

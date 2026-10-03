@@ -78,9 +78,10 @@ struct YA_GAME_RUNTIME_API GameUIHost
     GameUIHost(const GameUIHost&)            = delete;
     GameUIHost& operator=(const GameUIHost&) = delete;
 
-    /// Bind the current game presentation area. `viewportPx` is the viewport
-    /// rect in window pixels; `framebufferScale` maps logical UI pixels to
-    /// window pixels (1 for a 1:1 window scale).
+    /// Bind the current game presentation area. `viewportPx` is the view's
+    /// device-pixel rect. `framebufferScale` is that view's pixel density
+    /// (device pixels per logical point), so the logical canvas is
+    /// `viewportPx / framebufferScale`. It is not the host `renderScale`.
     ///
     /// Below this fit the logical canvas shrinks and layout reflows. Scaling
     /// the reference design any smaller keeps bitmap text at the raster floor
