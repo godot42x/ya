@@ -5,8 +5,6 @@
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
-#include "GUI/Widgets/Controls/Panel.h"
-#include "GUI/Widgets/Controls/Text.h"
 #include "GameEditor/UI/Shell/EditorListRows.h"
 #include "GameEditor/UI/Shell/EditorTheme.h"
 #include "GameRuntime/App.h"
@@ -40,26 +38,26 @@ void EditorPlayToolbarTab::construct()
             (void)_actions->execute("runtime.stop");
         }
     });
-    auto modeText = ui::text("PlayToolbarMode").setStyleKey(editorStyle(StyleKey::Text)).setText("EDIT");
 
     _playButton     = play.share();
     _simulateButton = simulate.share();
     _stopButton     = stop.share();
-    _modeText       = modeText.share();
 
-    addDetachedChild(ui::canvasPanel("PlayToolbarHost")
-                         .child(ui::row("PlayToolbarRow")
-                                    .setSpacing(6.0f)
-                                    .setPadding({6.0f, 2.0f})
-                                    .child(_playButton, ui::boxSlot().preferredSize({76.0f, 26.0f}))
-                                    .child(_simulateButton, ui::boxSlot().preferredSize({96.0f, 26.0f}))
-                                    .child(_stopButton, ui::boxSlot().preferredSize({76.0f, 26.0f}))
-                                    .child(_modeText, ui::boxSlot().preferredSize({88.0f, 26.0f}))
-                                    .release(),
-                                ui::canvasSlot()
-                                    .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
-                                    .size({0.0f, editor_density::kToolbarHeight}))
-                         .release());
+    // The compound's content slot centers the hug-content row; the buttons
+    // read as a mode group, the active one highlighted (see refresh).
+    addDetachedChild(ui::row("PlayToolbarRow")
+                         .setSpacing(6.0f)
+                         .setPadding({6.0f, 2.0f})
+                         .child(_playButton, ui::boxSlot().preferredSize({76.0f, 26.0f}))
+                         .child(_simulateButton, ui::boxSlot().preferredSize({96.0f, 26.0f}))
+                         .child(_stopButton, ui::boxSlot().preferredSize({76.0f, 26.0f}))
+                         .release(),
+                     [](UIElement&, UISlot& slot) {
+                         if (auto* content = slot.as<UIContentSlot>()) {
+                             content->setHAlign(EUIOverlayAlignment::Center);
+                             content->setVAlign(EUIOverlayAlignment::Center);
+                         }
+                     });
 }
 
 void EditorPlayToolbarTab::onAttached()
@@ -82,20 +80,19 @@ void EditorPlayToolbarTab::refresh()
     if (!_app) {
         return;
     }
-    if (_modeText) {
-        const char* label = _app->isRuntimeMode()      ? "PLAYING"
-                            : _app->isSimulationMode() ? "SIMULATING"
-                                                       : "EDIT";
-        _modeText->setText(label);
-    }
+    // The mode buttons read as a radio group: the active mode's button is
+    // highlighted (selectedFill) and stays enabled — re-clicking it is a
+    // guarded no-op in startRuntime / startSimulation.
+    const bool bPlaying    = _app->isRuntimeMode();
+    const bool bSimulating = _app->isSimulationMode();
     if (_playButton) {
-        _playButton->setEnabled(_app->isStopped());
+        _playButton->setSelected(bPlaying);
     }
     if (_simulateButton) {
-        _simulateButton->setEnabled(_app->isStopped());
+        _simulateButton->setSelected(bSimulating);
     }
     if (_stopButton) {
-        _stopButton->setEnabled(!_app->isStopped());
+        _stopButton->setEnabled(bPlaying || bSimulating);
     }
 }
 

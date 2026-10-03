@@ -39,7 +39,7 @@ void UIButton::paintSelf(UIFrameBuilder& builder)
                                                               _bPressed,
                                                               _bFocused,
                                                               !bEnabled,
-                                                              false,
+                                                              _bSelected,
                                                               false,
                                                               false));
     builder.addBrush(_layoutRect, fill);
@@ -53,6 +53,7 @@ void UIButton::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& 
         {"hovered", _bHovered.get()},
         {"pressed", _bPressed.get()},
         {"focused", _bFocused.get()},
+        {"selected", _bSelected.get()},
     };
 }
 

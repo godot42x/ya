@@ -506,6 +506,47 @@ TEST(ToolControlsTest, ButtonHoverClearsOnPointerLeave)
     EXPECT_EQ(tree.getHovered(), nullptr);
 }
 
+TEST(ToolControlsTest, ButtonSelectedPaintsSelectedFill)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       plain  = std::make_shared<UIButton>("Plain");
+    auto       active = std::make_shared<UIButton>("Active");
+    active->setSelected(true);
+    FCanvasSlotArgs slotA;
+    slotA.offset    = {10.0f, 10.0f};
+    slotA.fixedSize = {60.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), plain, slotA);
+    FCanvasSlotArgs slotB;
+    slotB.offset    = {90.0f, 10.0f};
+    slotB.fixedSize = {60.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), active, slotB);
+    tree.layout();
+
+    // The selection rides the runtime diagnostics like hover/pressed/focused.
+    const nlohmann::json dump = dumpWidgetTree(tree);
+    EXPECT_EQ((*findWidgetNode(dump, "Plain"))["control"]["selected"], false);
+    EXPECT_EQ((*findWidgetNode(dump, "Active"))["control"]["selected"], true);
+
+    // Selected paints the style's selectedFill, not the normal fill (default
+    // style: neutral gray vs accent blue).
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    auto                  fillAt = [&](const glm::vec2& center) -> const glm::vec4* {
+        for (const auto& draw : snap.items) {
+            if (draw.kind == UIFrameDrawItem::EKind::Sprite && draw.pos.x <= center.x &&
+                center.x <= draw.pos.x + draw.size.x && draw.pos.y <= center.y &&
+                center.y <= draw.pos.y + draw.size.y) {
+                return &draw.color;
+            }
+        }
+        return nullptr;
+    };
+    const glm::vec4* plainFill  = fillAt({40.0f, 22.0f});
+    const glm::vec4* activeFill = fillAt({120.0f, 22.0f});
+    ASSERT_NE(plainFill, nullptr);
+    ASSERT_NE(activeFill, nullptr);
+    EXPECT_NE(*plainFill, *activeFill);
+}
+
 TEST(ToolControlsTest, ToolbarSiblingHoverSwitchesAndClears)
 {
     // Reproduce the GUIWorkbench Editor toolbar: a horizontal box with several

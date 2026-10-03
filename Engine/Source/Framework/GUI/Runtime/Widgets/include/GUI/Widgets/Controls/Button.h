@@ -67,6 +67,10 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
     VisualFlag            _bHovered{*this};
     VisualFlag            _bPressed{*this};
     VisualFlag            _bFocused{*this};
+    /// Presenter-owned selection (active mode in a button group, current
+    /// tool). Paints `selectedFill`, which loses to the disabled state — a
+    /// disabled button never reads as selected.
+    VisualFlag            _bSelected{*this};
     /// Pointer click or keyboard activation. Listeners may detach the button.
     MulticastDelegate<void()> onClicked;
 
@@ -76,6 +80,9 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
     {
         return isEnabledInTree() && (!_enabledBinding || _enabledBinding->get());
     }
+
+    void               setSelected(bool selected) { _bSelected = selected; }
+    [[nodiscard]] bool isSelected() const { return _bSelected; }
 
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
