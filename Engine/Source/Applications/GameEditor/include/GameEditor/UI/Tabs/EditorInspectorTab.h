@@ -2,6 +2,7 @@
 
 #include "Core/Delegate.h"
 #include "GUI/Widgets/CompoundWidget.h"
+#include "GameEditor/Inspector/EditorComponentSectionRegistry.h"
 
 #include <memory>
 #include <string>
@@ -20,7 +21,6 @@ struct UIContainer;
 struct UIButton;
 struct UIMenu;
 class EditorAutoPropertySection;
-class EditorLuaScriptSection;
 struct WidgetTree;
 class UndoStack;
 struct SelectionModel;
@@ -59,7 +59,7 @@ class EditorInspectorTab : public UICompoundWidget
     std::shared_ptr<UIMenu> _addComponentMenu;
     std::vector<std::shared_ptr<UIElement>> _projectedWidgets;
     std::vector<std::shared_ptr<EditorAutoPropertySection>> _projectedSections;
-    std::vector<std::shared_ptr<EditorLuaScriptSection>> _luaSections;
+    std::vector<EditorInspectorSectionHost> _customSections;
     std::string _projectedFingerprint;
     DelegateHandle _selectionHandle = INVALID_HANDLE;
     DelegateHandle _hierarchyHandle = INVALID_HANDLE;

@@ -1,6 +1,5 @@
 #include "GameEditor/UI/Tabs/EditorInspectorTab.h"
 #include "GameEditor/UI/Sections/EditorAutoPropertySection.h"
-#include "GameEditor/UI/Sections/EditorLuaScriptSection.h"
 #include "GameEditor/UI/Dialogs/EditorAssetPicker.h"
 #include "GameEditor/UI/Dialogs/EditorFilePicker.h"
 #include "GameEditor/UI/Ops/EditorComponentOps.h"
@@ -11,7 +10,6 @@
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/ECSRegistry.h"
-#include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Binding/SelectionModel.h"
 #include "GUI/Declarative/Build.h"
@@ -145,7 +143,7 @@ EditorRevealAssetCallback makeRevealAsset(EditorLayer* layer)
     };
 }
 
-EditorLuaScriptSection::ScriptPicker makeScriptPicker(EditorLayer* layer)
+EditorScriptPicker makeScriptPicker(EditorLayer* layer)
 {
     return [layer](std::string currentPath, std::function<void(std::string)> onPicked) {
         if (!layer) {
@@ -378,11 +376,16 @@ void EditorInspectorTab::unbindLayerDelegates()
     }
 }
 
-void EditorInspectorTab::tick(float)
+void EditorInspectorTab::tick(float deltaSeconds)
 {
     WidgetTree* tree = getTree();
     if (!tree) {
         return;
+    }
+    for (EditorInspectorSectionHost& section : _customSections) {
+        if (section.tick) {
+            section.tick(deltaSeconds);
+        }
     }
     syncProjectedValues(*tree);
 }
@@ -411,7 +414,7 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
     }
     _projectedWidgets.clear();
     _projectedSections.clear();
-    _luaSections.clear();
+    _customSections.clear();
     if (entities.empty() || !_projectedHost) {
         if (_addComponentButton) {
             _addComponentButton->setVisibility(EWidgetVisibility::Collapsed);
@@ -537,23 +540,34 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
         return true;
     };
 
+    registerBuiltinInspectorSections();
     for (FEntry& entry : entries) {
-        if (entry.type == type_index_v<LuaScriptComponent>) {
-            if (entities.size() != 1) {
-                continue;
-            }
+        const EditorComponentSectionRegistry::EChoice choice =
+            EditorComponentSectionRegistry::instance().choose(entry.type, entities.size());
+        if (choice == EditorComponentSectionRegistry::EChoice::Skip) {
+            continue;
+        }
+        if (choice == EditorComponentSectionRegistry::EChoice::Custom) {
             uint64_t uuid = 0;
             if (auto* id = entities.front()->getComponent<IDComponent>()) {
                 uuid = id->_id.value;
             }
-            auto luaSection = std::make_shared<EditorLuaScriptSection>(
-                "InspectorLua_" + entry.name,
-                *_layer,
-                uuid,
-                [this]() { noteSceneMutated(); },
-                makeScriptPicker(_layer));
-            if (attachExpander(entry.name, luaSection, entry.type, entities)) {
-                _luaSections.push_back(std::move(luaSection));
+            const EditorComponentSectionRegistry::Entry* sectionEntry =
+                EditorComponentSectionRegistry::instance().find(entry.type);
+            EditorInspectorSectionHost host =
+                sectionEntry->make(EditorInspectorSectionRequest{
+                    .name         = "InspectorCustom_" + entry.name,
+                    .layer        = _layer,
+                    .entityUuid   = uuid,
+                    .undo         = _undo,
+                    .bReadOnly    = bReadOnlySelection,
+                    .onMutated    = [this]() { noteSceneMutated(); },
+                    .assetPicker  = makeAssetPicker(_layer),
+                    .revealAsset  = makeRevealAsset(_layer),
+                    .scriptPicker = makeScriptPicker(_layer),
+                });
+            if (host.widget && attachExpander(entry.name, host.widget, entry.type, entities)) {
+                _customSections.push_back(std::move(host));
             }
             continue;
         }
@@ -716,9 +730,9 @@ void EditorInspectorTab::syncProjectedValues(WidgetTree& tree)
             section->sync(tree);
         }
     }
-    for (const auto& section : _luaSections) {
-        if (section) {
-            section->sync(tree);
+    for (EditorInspectorSectionHost& section : _customSections) {
+        if (section.sync) {
+            section.sync(tree);
         }
     }
 }

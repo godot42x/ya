@@ -65,6 +65,8 @@ struct YA_SCENE_2D_API SpriteAnimationComponent : public IComponent
     void                      setFrame(int32_t frame);
     [[nodiscard]] bool        isPlaying() const { return _bPlaying; }
     [[nodiscard]] std::string currentClip() const;
+    /// Sheet index `showClipFrame` would display, or -1 when no clip is resolved.
+    [[nodiscard]] int32_t shownFrame() const;
 
     /// Moves the playhead by `deltaSeconds` and shows the frame it lands on.
     /// The first call starts the authored `clip`. An unloaded asset does nothing.

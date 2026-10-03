@@ -81,15 +81,15 @@ void SpriteAnimationComponent::showFrame(int32_t frame) const
     }
 }
 
-void SpriteAnimationComponent::showClipFrame() const
+int32_t SpriteAnimationComponent::shownFrame() const
 {
     const SpriteAnimationSet* set = animation.get();
     if (!set || _clipIndex < 0 || static_cast<size_t>(_clipIndex) >= set->clips.size()) {
-        return;
+        return -1;
     }
     const SpriteAnimationClip& current = set->clips[static_cast<size_t>(_clipIndex)];
     if (current.frames.empty()) {
-        return;
+        return -1;
     }
     const int32_t count = static_cast<int32_t>(current.frames.size());
     int32_t       index = 0;
@@ -97,7 +97,16 @@ void SpriteAnimationComponent::showClipFrame() const
         index = static_cast<int32_t>(std::floor(_elapsed * current.fps));
         index = std::clamp(index, 0, count - 1);
     }
-    showFrame(current.frames[static_cast<size_t>(index)]);
+    return current.frames[static_cast<size_t>(index)];
+}
+
+void SpriteAnimationComponent::showClipFrame() const
+{
+    const int32_t frame = shownFrame();
+    if (frame < 0) {
+        return;
+    }
+    showFrame(frame);
 }
 
 bool SpriteAnimationComponent::play(const std::string& name)

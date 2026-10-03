@@ -572,3 +572,14 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 验证：新增 8 个测试；`ya-testing` 1611 ran / 1610 passed / 1 skipped；编辑器 `--open-asset` 冒烟 exit 0，Hero / Chest 页签截图可见网格、序号、clip 列表、预览；三份 `.yaanim.json` 运行后 diff 仅 atlas 一行。
   为 unity 批次补了四处仅 include 的改动（`PropertyProjection.cpp`、`Sprite2DStage.cpp`、`PresentationGraphService.h`、`GUIWindowPresent.cpp`）。
 - 未在实机点过：点格追加帧并保存、播放/暂停、贴图选择器、dirty 时拒绝切换、关闭未保存无弹窗。侧栏窄时 Rows 与 Play 会被裁切。
+
+## 2026-10-04 — P3c SpriteAnimationComponent Inspector 面板
+
+- 命名：用户确认不重命名，保持 `SpriteAnimation*`（中途发起的 Frame* 重命名已取消并还原，未提交）。
+- `EditorComponentSectionRegistry`（GameEditor/Inspector）：组件类型 → 自定义 section 工厂；单选走工厂，多选可配置回退 `EditorAutoPropertySection` 或跳过。
+  `EditorInspectorTab` 不再有具体组件类型分支，Lua 脚本 section 迁入内建注册（行为不变，多选仍不画）。
+- `EditorSpriteAnimationSection`：动画集行（路径 / Browse / Show，类型来自 `AssetTypeRegistry`）+ Edit（打开动画集页签）；clip 下拉取自已加载动画集的 clips，写回走 undo / `onEdit`；
+  不在列表里的 clip 保留原文并提示，未加载时禁用不改值；Play / Stop + 只读状态行（clip、图集帧号、是否播放，`SpriteAnimationComponent::shownFrame()`）。
+- 预览方案：`SpriteAnimationSystem` 编辑态不推进，`uvRect` 是会序列化的反射字段。预览只在 section 内：Play 记下当前 `uvRect` → `play` → section tick 调 `advance`；Stop 或 section 销毁（换选中）时 `stop()` 并写回 `uvRect`；不标脏场景。
+- 验证：新增 5 个测试（含 `PreviewDoesNotChangeSerializedScene`）；`ya-testing` 1616 ran / 1615 passed / 1 skipped；四条玩法脚本通过；编辑器打开 Town 冒烟 exit 0。
+- 未验证：选中 Player 后的真实 Inspector（无编辑器 automation 可选中实体）、真实文件对话框、Edit 实机打开页签。

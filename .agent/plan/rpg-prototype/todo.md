@@ -35,8 +35,8 @@
 - [x] P2b `SpriteAnimationComponent` 只留资产引用 + 当前 clip 名；Hero / Npc / Chest 三份数据抽成 `.yaanim.json`，TownLarge 21 个重复块（仅 2 种内容）迁成引用；解析允许 fps / bLoop 缺省（与默认值省略一致）；场景用引擎重存
 - [x] P3a 内容浏览器「后缀 → 打开器」注册表 `EditorContentOpenerRegistry`（`activateItem` 不再有后缀字面量；`.scene.json/.lua/.yaui.json/.mat/.material` 迁为内建打开器，其它模块可追加）
 - [x] P3b `SpriteAnimationSet` 加可选 `atlas`（图集贴图路径，仅编辑/预览用，运行时不读）+ 动画集编辑页签 + 注册 `.yaanim.json` 打开器；保存走覆盖同槽（`registerAsset`）使已加载引用热更新。完整的 Godot 式「选图后自动切帧」编辑器留作后续优化
-- [ ] P3c `SpriteAnimationComponent` Inspector 面板（动画集选择、clip 下拉、播放/停止；仿 Lua 脚本组件的专属 section）
-- [ ] （P3 总目标，已拆为 a/b/c）资产选择器分类 + 组件面板 clip 下拉与播放/停止；`SpriteAnimationSet` 编辑页签（仿 Tile Palette：图集网格点选帧、clip 增删改、fps / loop、预览播放）
+- [x] P3c `SpriteAnimationComponent` Inspector 面板（动画集选择、clip 下拉、播放/停止；仿 Lua 脚本组件的专属 section）
+- [x] （P3 总目标，已拆为 a/b/c，全部完成）资产选择器分类 + 组件面板 clip 下拉与播放/停止；`SpriteAnimationSet` 编辑页签（仿 Tile Palette：图集网格点选帧、clip 增删改、fps / loop、预览播放）
 - 顺序：P1 → P2 → pivot → 引擎重存场景 → P3（共享构建，串行）
 - [x] 用引擎 load→save 重存 Town / House / TownLarge，让默认值省略落到文件（单独提交，前后截图对照）
 - 风险：省略默认值后，场景隐含依赖代码里的默认值，以后改默认值会改变旧场景（需写进 scene-serialization 相关 skill）
