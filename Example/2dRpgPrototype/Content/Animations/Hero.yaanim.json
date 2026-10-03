@@ -1,4 +1,5 @@
 {
+  "atlas": "Content/Textures/hero_walk.png",
   "clips": [
     {
       "bLoop": true,

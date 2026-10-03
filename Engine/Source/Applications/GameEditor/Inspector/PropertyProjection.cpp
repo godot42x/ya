@@ -1,4 +1,5 @@
 #include "GameEditor/Inspector/PropertyProjection.h"
+#include "GameEditor/Inspector/PropertyGraph.h"
 
 #include "Scene3D/TransformComponent.h"
 

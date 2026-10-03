@@ -561,3 +561,14 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   `get()` 首次使用时灌入内建打开器，之后同后缀覆盖、新后缀追加。`EditorContentBrowserTab::activateItem` 只剩目录进入 + `selectItem` + 注册表查找。
 - 验证：6 个新单测；`ya-testing` 1603 ran / 1602 passed / 1 skipped；`--editor-tab=content-browser` 冒烟 exit 0。
 - 未验证：没有在编辑器里真双击四类文件（打开调用原样搬入，单测只覆盖匹配）。行为差异：`Hero.LUA` 这类大写后缀现在也能打开。
+
+## 2026-10-04 — P3b 动画集编辑页签
+
+- `SpriteAnimationSet::atlas`（可选，编辑/预览用，运行时不读；空则序列化省略；非字符串报 `invalid field 'atlas'`）。Hero / Npc 填 `Content/Textures/hero_walk.png`，Chest 填 `tiny_town.png`。
+- `GameEditor/Animation/SpriteAnimationSetEditModel`：与 GUI 无关的编辑模型（工作副本、dirty、clip/frame/fps/loop/grid/atlas 编辑、校验 = `parse(serialize())`、revert、save）。
+  保存 = 序列化 → VFS 写文件 → `registerAsset` 覆盖同一 canonical 槽键（`Content/Animations/Hero.yaanim.json`），generation 递增，已持有的 Ref 热更新。
+- `EditorAnimationSetTab`（spawner `animation-set-editor`，独立 tool tab，未加 `EEditorDocumentKind`——现有四种是重型窗口根）：路径 / Save / Revert / 校验信息、图集网格 + 序号 + 点格追加帧、clip 列表与帧序列、fps / loop、预览播放（`addSprite` 的 uv 子矩形）。
+  `EditorLayer` 持有待打开路径；dirty 时拒绝切换另一份并提示，Save / Revert 后下一 tick 加载。`.yaanim.json` 经 `EditorContentOpenerRegistry` 注册；新增通用 `--open-asset <path>`。
+- 验证：新增 8 个测试；`ya-testing` 1611 ran / 1610 passed / 1 skipped；编辑器 `--open-asset` 冒烟 exit 0，Hero / Chest 页签截图可见网格、序号、clip 列表、预览；三份 `.yaanim.json` 运行后 diff 仅 atlas 一行。
+  为 unity 批次补了四处仅 include 的改动（`PropertyProjection.cpp`、`Sprite2DStage.cpp`、`PresentationGraphService.h`、`GUIWindowPresent.cpp`）。
+- 未在实机点过：点格追加帧并保存、播放/暂停、贴图选择器、dirty 时拒绝切换、关闭未保存无弹窗。侧栏窄时 Rows 与 Play 会被裁切。

@@ -165,8 +165,11 @@ struct EditorLayer
     EditorFilePickerCallback  _filePickerHandler;
     std::function<void()>     _showContentBrowser;
     std::function<void()>     _showUIDesignerCanvas;
+    std::function<void()>     _showAnimationSetEditor;
     std::function<bool(EEditorDocumentKind, std::string)> _openDocumentEditor;
     std::string               _pendingContentReveal;
+    std::string               _pendingAnimationSetPath;
+    std::string               _animationSetNotice;
     std::string _currentScenePath; // Current scene file path
     Scene*      _editableScene = nullptr;
     bool        _bSceneDirty = false;
@@ -473,6 +476,8 @@ struct EditorLayer
     void clearShowContentBrowserHandler() { _showContentBrowser = nullptr; }
     void setShowUIDesignerCanvasHandler(std::function<void()> handler) { _showUIDesignerCanvas = std::move(handler); }
     void clearShowUIDesignerCanvasHandler() { _showUIDesignerCanvas = nullptr; }
+    void setShowAnimationSetEditorHandler(std::function<void()> handler) { _showAnimationSetEditor = std::move(handler); }
+    void clearShowAnimationSetEditorHandler() { _showAnimationSetEditor = nullptr; }
     /// Bring the UI Designer's Canvas tab forward (a document was just opened).
     void showUIDesignerCanvas()
     {
@@ -505,6 +510,20 @@ struct EditorLayer
         path.swap(_pendingContentReveal);
         return path;
     }
+
+    /// Queue an animation-set document and bring its tab forward. The tab
+    /// applies the path: a dirty document stays put until Save or Revert.
+    void requestOpenAnimationSet(std::string assetPath)
+    {
+        _pendingAnimationSetPath = std::move(assetPath);
+        if (_showAnimationSetEditor) {
+            _showAnimationSetEditor();
+        }
+    }
+    [[nodiscard]] const std::string& pendingAnimationSetPath() const { return _pendingAnimationSetPath; }
+    void clearPendingAnimationSetPath() { _pendingAnimationSetPath.clear(); }
+    void setAnimationSetNotice(std::string notice) { _animationSetNotice = std::move(notice); }
+    [[nodiscard]] const std::string& animationSetNotice() const { return _animationSetNotice; }
 };
 
 } // namespace ya

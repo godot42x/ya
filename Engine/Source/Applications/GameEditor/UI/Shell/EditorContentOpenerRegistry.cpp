@@ -1,6 +1,7 @@
 #include "GameEditor/UI/Shell/EditorContentOpenerRegistry.h"
 
 #include "Core/System/VirtualFileSystem.h"
+#include "GameEditor/Animation/SpriteAnimationSetEditModel.h"
 #include "GameEditor/EditorLayer.h"
 
 namespace ya
@@ -124,6 +125,13 @@ void registerBuiltinContentOpeners(EditorContentOpenerRegistry& registry)
     };
     registry.registerOpener(".mat", openMaterial);
     registry.registerOpener(".material", openMaterial);
+    registry.registerOpener(".yaanim.json", [](EditorLayer& layer, std::string utf8Path) {
+        std::string assetPath = SpriteAnimationSetEditModel::canonicalAssetPath(utf8Path);
+        if (assetPath.empty()) {
+            assetPath = std::move(utf8Path);
+        }
+        layer.requestOpenAnimationSet(std::move(assetPath));
+    });
 }
 
 } // namespace ya

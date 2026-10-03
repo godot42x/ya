@@ -6,6 +6,7 @@
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/PresentFrame.h"
 #include "RHI/Core/RenderSurfaceContext.h"
+#include "RHI/Core/Swapchain.h"
 #include "RHI/Render.h"
 #include "Render/Resources/FontManager.h"
 

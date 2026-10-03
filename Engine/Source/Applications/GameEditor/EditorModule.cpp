@@ -913,6 +913,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                 (void)session->surface().invokeTab("ui-preview");
             }
         });
+        _layer->setShowAnimationSetEditorHandler([this]() {
+            if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
+                (void)session->surface().invokeTab("animation-set-editor");
+            }
+        });
         _layer->setOpenDocumentEditorHandler([this](EEditorDocumentKind kind, std::string key) -> bool {
             if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
                 return session->surface().openDocumentEditor(kind, std::move(key));

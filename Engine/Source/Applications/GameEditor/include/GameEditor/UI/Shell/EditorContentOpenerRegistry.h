@@ -44,7 +44,7 @@ class YA_GAME_EDITOR_API EditorContentOpenerRegistry
     [[nodiscard]] const std::vector<FEditorContentOpener>& all() const { return _openers; }
 };
 
-/// .scene.json, .lua, .yaui.json, .mat and .material. Does not clear openers
+/// .scene.json, .lua, .yaui.json, .mat, .material and .yaanim.json. Does not clear openers
 /// already registered for other suffixes.
 YA_GAME_EDITOR_API void registerBuiltinContentOpeners(EditorContentOpenerRegistry& registry);
 

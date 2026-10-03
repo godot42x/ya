@@ -8,6 +8,7 @@
 #include "GameEditor/UI/Dialogs/EditorSettingsDialog.h"
 #include "GameEditor/UI/Dialogs/EditorConfirmDialog.h"
 #include "GameEditor/UI/Ops/EditorCreateMenu.h"
+#include "GameEditor/UI/Shell/EditorContentOpenerRegistry.h"
 #include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
 
 #include "Core/Event.h"
@@ -634,6 +635,16 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
 
     if (const std::optional<std::string>& editorTab = app->getDesc().editorTab; editorTab && !editorTab->empty()) {
         _workspace.invokeTab(*editorTab);
+    }
+    if (_layer) {
+        if (const std::optional<std::string>& openAsset = app->getDesc().openAsset; openAsset && !openAsset->empty()) {
+            if (const EditorContentOpener* opener = EditorContentOpenerRegistry::get().find(*openAsset)) {
+                (*opener)(*_layer, *openAsset);
+            }
+            else {
+                YA_CORE_WARN("No content opener registered for '{}'", *openAsset);
+            }
+        }
     }
 
     _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(_layer->gizmo());

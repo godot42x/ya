@@ -139,6 +139,7 @@ void AppDesc::init(int argc, char** argv)
         .opt<bool>("", {"editor"}, "Enable the Editor module", "false")
         .opt<std::string>("", {"editor-chrome"}, "Editor chrome host: widgettree (default) or imgui")
         .opt<std::string>("", {"editor-tab"}, "Open and activate an editor tab by stable id after workspace restore")
+        .opt<std::string>("", {"open-asset"}, "Open an asset through the content opener registry after workspace restore")
         .opt<std::string>("", {"layout-defaults"}, "Root of the shipped dock layout documents")
         .opt<std::string>("", {"layout-overrides"}, "Root of this machine's dock layout documents")
         .opt<std::string>("", {"screenshot"}, "Automation screenshot output PNG path")
@@ -210,6 +211,9 @@ void AppDesc::init(int argc, char** argv)
     }
     if (std::string tab; params.tryGet<std::string>("editor-tab", tab)) {
         editorTab = std::move(tab);
+    }
+    if (std::string asset; params.tryGet<std::string>("open-asset", asset)) {
+        openAsset = std::move(asset);
     }
     if (std::string root; params.tryGet<std::string>("layout-defaults", root)) {
         layoutDefaultsRoot = std::move(root);

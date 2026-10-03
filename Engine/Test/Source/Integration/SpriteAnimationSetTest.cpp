@@ -95,6 +95,7 @@ TEST_F(SpriteAnimationSetTest, ParseRoundTrip)
     ASSERT_NE(parsed->findClip("walk_down"), nullptr);
     EXPECT_EQ(parsed->findClip("walk_down")->frames.size(), 4u);
     EXPECT_EQ(parsed->findClip("missing"), nullptr);
+    EXPECT_TRUE(parsed->atlas.empty());
 
     const auto again = parseSpriteAnimationSetJson(serializeSpriteAnimationSetJson(*parsed), error);
     ASSERT_NE(again, nullptr) << error;
@@ -161,6 +162,34 @@ TEST_F(SpriteAnimationSetTest, RejectsIllegalDocuments)
             {"name": "idle_down", "frames": [0], "fps": 1.0, "bLoop": "yes"}
         ]})",
         "bLoop");
+    expectRejected(
+        R"({"atlas": 1, "columns": 3, "rows": 4, "clips": [
+            {"name": "idle_down", "frames": [0], "fps": 1.0, "bLoop": true}
+        ]})",
+        "atlas");
+}
+
+TEST_F(SpriteAnimationSetTest, AtlasRoundTripOmitsEmpty)
+{
+    std::string error;
+    const auto  missing = parseSpriteAnimationSetJson(kHeroDocument, error);
+    ASSERT_NE(missing, nullptr) << error;
+    EXPECT_TRUE(missing->atlas.empty());
+    EXPECT_EQ(serializeSpriteAnimationSetJson(*missing).find("\"atlas\""), std::string::npos);
+
+    missing->atlas = "Content/Textures/hero_walk.png";
+    const std::string withAtlas = serializeSpriteAnimationSetJson(*missing);
+    EXPECT_NE(withAtlas.find("\"atlas\": \"Content/Textures/hero_walk.png\""), std::string::npos);
+    const auto again = parseSpriteAnimationSetJson(withAtlas, error);
+    ASSERT_NE(again, nullptr) << error;
+    EXPECT_EQ(again->atlas, "Content/Textures/hero_walk.png");
+
+    again->atlas.clear();
+    EXPECT_EQ(serializeSpriteAnimationSetJson(*again).find("\"atlas\""), std::string::npos);
+    const auto emptyAtlas =
+        parseSpriteAnimationSetJson(R"({"atlas": "", "columns": 1, "rows": 1, "clips": []})", error);
+    ASSERT_NE(emptyAtlas, nullptr) << error;
+    EXPECT_TRUE(emptyAtlas->atlas.empty());
 }
 
 TEST_F(SpriteAnimationSetTest, FpsAndLoopDefaultWhenOmitted)

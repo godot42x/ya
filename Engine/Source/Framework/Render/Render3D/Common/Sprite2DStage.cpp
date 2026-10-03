@@ -4,6 +4,7 @@
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Render.h"
 #include "Render3D/Common/RenderFeatures.h"
 
 #include <algorithm>

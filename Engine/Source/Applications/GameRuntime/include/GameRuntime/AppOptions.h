@@ -122,6 +122,8 @@ struct YA_GAME_RUNTIME_API AppDesc
     std::optional<std::string> editorChrome;
     /// Open and activate this editor tab after workspace restore (`--editor-tab`).
     std::optional<std::string> editorTab;
+    /// Open this asset through EditorContentOpenerRegistry after workspace restore (`--open-asset`).
+    std::optional<std::string> openAsset;
     /// Where the product's dock layout documents live. Two roots because a
     /// shipped default and this machine's arrangement have different owners:
     /// the first is content, the second is a cache. Unset keeps the game

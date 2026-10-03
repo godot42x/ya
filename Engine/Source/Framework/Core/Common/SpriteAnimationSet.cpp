@@ -147,6 +147,10 @@ std::shared_ptr<SpriteAnimationSet> parseSpriteAnimationSetJson(const std::strin
         outError = "sprite animation set root must be an object";
         return nullptr;
     }
+    if (const auto atlasIt = json.find("atlas"); atlasIt != json.end() && !atlasIt->is_string()) {
+        outError = "invalid field 'atlas'";
+        return nullptr;
+    }
 
     int32_t columns = 0;
     int32_t rows    = 0;
@@ -165,7 +169,11 @@ std::shared_ptr<SpriteAnimationSet> parseSpriteAnimationSetJson(const std::strin
 std::string serializeSpriteAnimationSetJson(const SpriteAnimationSet& set)
 {
     reflection::DeferredInitializerQueue::instance().executeAll();
-    return dumpJsonCompactLeaves(ReflectionSerializer::serializeByRuntimeReflection(set, "SpriteAnimationSet"));
+    nlohmann::json json = ReflectionSerializer::serializeByRuntimeReflection(set, "SpriteAnimationSet");
+    if (json.is_object() && set.atlas.empty()) {
+        json.erase("atlas");
+    }
+    return dumpJsonCompactLeaves(json);
 }
 
 namespace

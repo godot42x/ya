@@ -115,4 +115,21 @@ TEST(EditorTabSpawnerRegistryTest, BuiltinFontAtlasesSpawnDoesNotRequireHost)
     EXPECT_NE(fonts->spawn(ctx), nullptr);
 }
 
+TEST(EditorTabSpawnerRegistryTest, BuiltinAnimationSetEditorRequiresLayer)
+{
+    EditorTabSpawnerRegistry registry;
+    registerBuiltinEditorTabSpawners(registry);
+    const FEditorTabSpawner* anim = registry.find("animation-set-editor");
+    ASSERT_NE(anim, nullptr);
+    EXPECT_EQ(anim->title, "Anim");
+    EXPECT_EQ(anim->toolsMenuLabel, "Animation Set");
+    EXPECT_EQ(anim->scope, EEditorTabScope::EditorOwnedTool);
+    EXPECT_EQ(anim->ownerEditorId, kLevelEditorRootId);
+    EXPECT_EQ(anim->placement, EEditorTabPlacement::EditorOwnedNested);
+    EXPECT_EQ(anim->detachPolicy, EEditorTabDetachPolicy::TearOffKeepOwner);
+
+    FEditorTabSpawnContext ctx;
+    EXPECT_EQ(anim->spawn(ctx), nullptr);
+}
+
 } // namespace ya

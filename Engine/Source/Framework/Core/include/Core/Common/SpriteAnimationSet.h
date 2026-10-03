@@ -36,15 +36,22 @@ struct YA_CORE_API SpriteAnimationClip
 //
 // The image is cut into a uniform `columns` x `rows` grid. A frame index is
 // `row * columns + column`, counted from the top-left (the image-space
-// convention of `Sprite2DComponent::uvRect`).
+// convention of `Sprite2DComponent::uvRect`). One frame's pixel size is the
+// texture size divided by that grid; it is not stored.
+//
+// `atlas` is the sheet texture path for the editor preview only. Playback
+// (`SpriteAnimationSystem` / `SpriteAnimationComponent`) does not read it.
+// Empty means no preview sheet, and the key is omitted from the file.
 struct YA_CORE_API SpriteAnimationSet
 {
     YA_REFLECT_BEGIN(SpriteAnimationSet)
+    YA_REFLECT_FIELD(atlas)
     YA_REFLECT_FIELD(columns)
     YA_REFLECT_FIELD(rows)
     YA_REFLECT_FIELD(clips)
     YA_REFLECT_END()
 
+    std::string                      atlas;
     int32_t                          columns = 1;
     int32_t                          rows    = 1;
     std::vector<SpriteAnimationClip> clips;

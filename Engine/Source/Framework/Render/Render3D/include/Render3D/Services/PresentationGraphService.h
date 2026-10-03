@@ -4,6 +4,7 @@
 
 #include "Core/Common/Types.h"
 #include "Graph/RenderGraph.h"
+#include "Graph/RenderGraphExecutor.h"
 #include "RHI/RenderDefines.h"
 #include "Render3D/Common/FrameRecordExtensions.h"
 #include "Render3D/Common/SurfaceImage.h"
@@ -19,7 +20,6 @@ struct IRender;
 struct IRenderSurfaceContext;
 struct ISwapchain;
 class RenderSubmission;
-class RenderGraphExecutor;
 struct RenderTexture;
 struct ISurfaceBackdropWriter;
 

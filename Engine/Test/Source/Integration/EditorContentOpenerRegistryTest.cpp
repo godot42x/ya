@@ -121,7 +121,8 @@ TEST(EditorContentOpenerRegistryTest, BuiltinOpenersIncludeTheFourContentSuffixe
     EXPECT_TRUE(hasExtension(registry, ".yaui.json"));
     EXPECT_TRUE(hasExtension(registry, ".mat"));
     EXPECT_TRUE(hasExtension(registry, ".material"));
-    EXPECT_EQ(registry.all().size(), 5u);
+    EXPECT_TRUE(hasExtension(registry, ".yaanim.json"));
+    EXPECT_EQ(registry.all().size(), 6u);
 
     EXPECT_NE(registry.find("Town.scene.json"), nullptr);
     EXPECT_NE(registry.find("Hero.LUA"), nullptr);
@@ -129,11 +130,23 @@ TEST(EditorContentOpenerRegistryTest, BuiltinOpenersIncludeTheFourContentSuffixe
     EXPECT_NE(registry.find("Lit.MAT"), nullptr);
     EXPECT_NE(registry.find("Lit.MATERIAL"), nullptr);
     EXPECT_NE(registry.find("Lit.material"), registry.find("Lit.mat"));
-    EXPECT_EQ(registry.find("Hero.yaanim.json"), nullptr);
+    EXPECT_NE(registry.find("Hero.yaanim.json"), nullptr);
     EXPECT_EQ(registry.find("notes.txt"), nullptr);
 
     registerBuiltinContentOpeners(registry);
-    EXPECT_EQ(registry.all().size(), 5u);
+    EXPECT_EQ(registry.all().size(), 6u);
+}
+
+TEST(EditorContentOpenerRegistryTest, YaAnimOpenerIsRegistered)
+{
+    EditorContentOpenerRegistry registry;
+    registerBuiltinContentOpeners(registry);
+    EXPECT_NE(registry.find("Content/Animations/Hero.yaanim.json"), nullptr);
+    EXPECT_NE(registry.find("Hero.YAANIM.JSON"), nullptr);
+    EXPECT_EQ(registry.find("Hero.yaanim.json.bak"), nullptr);
+
+    const EditorContentOpenerRegistry& process = EditorContentOpenerRegistry::get();
+    EXPECT_NE(process.find("Hero.yaanim.json"), nullptr);
 }
 
 TEST(EditorContentOpenerRegistryTest, ProcessRegistryIncludesBuiltinOpeners)
