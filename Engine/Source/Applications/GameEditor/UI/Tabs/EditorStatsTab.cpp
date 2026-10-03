@@ -37,13 +37,17 @@ void EditorStatsTab::tick(float deltaSeconds)
     App* app = App::get();
     const float fps = deltaSeconds > 0.0f ? 1.0f / deltaSeconds : 0.0f;
     const glm::vec2 viewport = _layer->getViewportSize();
+    const float     density  = _layer->viewportPixelDensity();
+    const glm::vec2 device   = viewport * density;
     _statsText->setText(std::format(
-        "Frame {}\nDelta {:.2f} ms\nFPS {:.1f}\nViewport {:.0f} x {:.0f}",
+        "Frame {}\nDelta {:.2f} ms\nFPS {:.1f}\nViewport {:.0f} x {:.0f}\nPixels {:.0f} x {:.0f}",
         app ? app->getHostTick() : 0,
         deltaSeconds * 1000.0f,
         fps,
         viewport.x,
-        viewport.y));
+        viewport.y,
+        device.x,
+        device.y));
 }
 
 } // namespace ya

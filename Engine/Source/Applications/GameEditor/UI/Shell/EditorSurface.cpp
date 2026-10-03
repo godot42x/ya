@@ -23,6 +23,9 @@
 #include "GameEditor/EditorViewProducer.h"
 #include "GameEditor/UI/Shell/EditorTheme.h"
 #include "GameRuntime/App.h"
+#include "Render3D/Common/SceneViewDesc.h"
+
+#include <cmath>
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Host/OsClipboard.h"
@@ -171,6 +174,9 @@ void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
     snapshotCtx.textureResolver = &resolveGameUITexture;
     _snapshot = _tree->buildSnapshot(snapshotCtx);
     publishTitleClientHits();
+    if (_layer) {
+        _layer->setViewportPixelDensity(context.metrics.dpiScale);
+    }
     publishViewportRect();
     syncViewportHostState(context);
 }
@@ -719,6 +725,25 @@ void EditorSurface::pushViewportDisplay()
         _viewportHost->setDisplayImage(_viewportTexture, false);
     }
 
+    if (_viewportTexture && _viewportHost && _layer) {
+        const glm::vec2 device = devicePixelExtent(_viewportHost->imageRect().extent, _layer->viewportPixelDensity());
+        const float     dw     = static_cast<float>(_viewportTexture->getWidth());
+        const float     dh     = static_cast<float>(_viewportTexture->getHeight());
+        // The image widget stretches this texture across the panel's device
+        // quad. A gap larger than a rounding pixel is the magnification that
+        // blurs the view. Logged once per pair so a resize frame can catch up.
+        static int mismatches = 0;
+        const bool bMismatch = device.x >= 2.0f && device.y >= 2.0f &&
+                               (std::abs(dw - device.x) > 1.5f || std::abs(dh - device.y) > 1.5f);
+        if (!bMismatch) {
+            mismatches = 0;
+        }
+        else if (++mismatches == 2) {
+            YA_CORE_ERROR("viewport image {}x{} is not the panel device size {}x{}",
+                          dw, dh, device.x, device.y);
+        }
+    }
+
     // Chrome stacked on the world image is pushed with it: same frame, same
     // origin, same coordinate space (viewport-local logical pixels). A cleared
     // texture collapses the panel, which is also what stops the layer from
@@ -994,7 +1019,8 @@ void EditorSurface::syncViewportHostState(const FEditorSurfaceContext& context)
 
     FEditorViewportHostState state{};
     state.widgetRect = _viewportHost->imageRect();
-    state.extent     = state.widgetRect.extent;
+    state.extent       = state.widgetRect.extent;
+    state.pixelDensity = context.metrics.dpiScale > 0.0f ? context.metrics.dpiScale : 1.0f;
     state.bHovered   = isViewportHovered();
     state.bFocused   = isViewportFocused();
     state.view       = context.view;

@@ -766,6 +766,10 @@ void EditorViewportGizmoController::recordOverlay(ScreenDrawList& list) const
     }
 
     const EEditorViewportGizmoAxis highlightedAxis = _bDragging ? _activeAxis : _hoveredAxis;
+    // Hit testing stays in logical points. This list is drawn into the view
+    // target, which is device pixels.
+    const float density = _hostState.pixelDensity > 0.0f ? _hostState.pixelDensity : 1.0f;
+    const auto devicePoint = [density](glm::vec2 logical) { return logical * density; };
 
     if (_operation == EEditorViewportGizmoOperation::Rotate) {
         for (const auto& axis : frame->axes) {
@@ -786,7 +790,7 @@ void EditorViewportGizmoController::recordOverlay(ScreenDrawList& list) const
                 glm::vec2 screen{};
                 const bool bOk = projectWorldToViewport(_hostState, world, screen);
                 if (bOk && bPrev) {
-                    drawScreenLine(list, prevScreen, screen, color, thickness);
+                    drawScreenLine(list, devicePoint(prevScreen), devicePoint(screen), color, thickness * density);
                 }
                 prevScreen = screen;
                 bPrev      = bOk;
@@ -804,17 +808,23 @@ void EditorViewportGizmoController::recordOverlay(ScreenDrawList& list) const
         const glm::vec4 color       = gizmoAxisColor(axis.axis, highlighted, pressed);
         const float     thickness   = gizmoLineThickness(highlighted, pressed);
         const float     handle      = gizmoHandlePixels(highlighted, pressed);
-        drawScreenLine(list, frame->originScreen, axis.screenEnd, color, thickness);
+        drawScreenLine(list, devicePoint(frame->originScreen), devicePoint(axis.screenEnd), color, thickness * density);
         if (axis.bReversed) {
-            drawHatchedAxis(list, frame->originScreen, axis.screenEnd, color);
-            drawScreenCircleOutline(list, axis.screenEnd, handle * 0.55f, color, std::max(1.5f, thickness * 0.7f));
+            drawHatchedAxis(list, devicePoint(frame->originScreen), devicePoint(axis.screenEnd), color);
+            drawScreenCircleOutline(list,
+                                    devicePoint(axis.screenEnd),
+                                    handle * 0.55f * density,
+                                    color,
+                                    std::max(1.5f, thickness * 0.7f) * density);
         }
         else {
             auto* white = TextureLibrary::get().getWhiteTexture().get();
-            list.makeSprite(glm::vec3(axis.screenEnd.x - handle * 0.5f,
-                                      axis.screenEnd.y - handle * 0.5f,
+            const glm::vec2 end = devicePoint(axis.screenEnd);
+            const float     deviceHandle = handle * density;
+            list.makeSprite(glm::vec3(end.x - deviceHandle * 0.5f,
+                                      end.y - deviceHandle * 0.5f,
                                       0.0f),
-                            glm::vec2(handle, handle),
+                            glm::vec2(deviceHandle, deviceHandle),
                             white,
                             color);
         }

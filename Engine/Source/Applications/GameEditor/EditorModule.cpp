@@ -33,6 +33,7 @@
 #include "GameEditor/UI/Shell/EditorWindowRegistry.h"
 #include "GameEditor/UI/Shell/EditorLaunchFlow.h"
 #include "GameRuntime/App.h"
+#include "Render3D/Common/SceneViewDesc.h"
 #include "GameRuntime/Automation/EditorAutomationControl.h"
 #include "GameRuntime/IRuntimeModule.h"
 #include "GUI/Compose/GuiFrameInspectorOverlay.h"
@@ -498,9 +499,10 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         }
         const Rect2D viewportRect = _layer->getViewportRect();
         if (viewportRect.extent.x > 0.0f && viewportRect.extent.y > 0.0f) {
+            const glm::vec2 device = devicePixelExtent(viewportRect.extent, _layer->viewportPixelDensity());
             renderServices.seedRenderResolution(Extent2D{
-                .width  = static_cast<uint32_t>(viewportRect.extent.x),
-                .height = static_cast<uint32_t>(viewportRect.extent.y),
+                .width  = static_cast<uint32_t>(device.x),
+                .height = static_cast<uint32_t>(device.y),
             });
         }
     }
@@ -512,6 +514,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             return;
         }
 
+        // The panel stays in logical points. The view target and the game UI
+        // density are the window's device pixels per point, published by the
+        // surface with the panel rect.
+        renderServices.setPixelDensity(_layer->viewportPixelDensity());
+        renderServices.setLogicalViewport(_layer->getViewportRect());
         seedRuntimeResolutionFromViewport(app, renderServices);
 
         auto& editorCamera = _layer->getCamera();

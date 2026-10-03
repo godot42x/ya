@@ -6,6 +6,7 @@
 
 #include "Core/Camera/Camera.h"
 #include "ECS/Systems/Components/CameraComponent.h"
+#include "Render3D/Common/SceneViewDesc.h"
 #include "Scene3D/TransformComponent.h"
 
 namespace
@@ -87,6 +88,8 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
     // The authoring panel's geometry is the editor's own fact: the editor
     // declares it rather than pushing it into host state and reading it back.
     const Rect2D authoringRect = _layer->getViewportRect();
+    const float  density       = _layer->viewportPixelDensity();
+    const glm::vec2 deviceExtent = devicePixelExtent(authoringRect.extent, density);
 
     // While the game runs, its own producer owns the world viewport: the editor
     // camera is not what that viewport shows, so only the preview is ours.
@@ -98,7 +101,8 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
             .view         = editorCamera.getViewMatrix(),
             .projection   = editorCamera.getProjectionMatrix(),
             .cameraPos    = editorCamera.getPosition(),
-            .outputRect = authoringRect,
+            .outputRect = Rect2D{.pos = authoringRect.pos, .extent = deviceExtent},
+            .pixelDensity = density > 0.0f ? density : 1.0f,
             .features     = baseFeatures | (bEditorGizmos ? gizmoFeature : 0u),
         });
     }
@@ -121,7 +125,7 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
     }
     const Rect2D previewOutput{
         .pos    = {0.0f, 0.0f},
-        .extent = previewRect.extent,
+        .extent = devicePixelExtent(previewRect.extent, density),
     };
     const CameraRenderMatrices frame =
         buildCameraRenderMatrices(*cameraComponent, previewCamera, previewOutput.extent);
@@ -132,6 +136,7 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
         .projection        = frame.projection,
         .cameraPos         = frame.cameraPos,
         .outputRect      = previewOutput,
+        .pixelDensity    = density > 0.0f ? density : 1.0f,
         // The preview is material, not the display: it renders into its own
         // image, and the viewport chrome samples it. Declaring it
         // non-display-root is what keeps the authoring viewport (declared by

@@ -87,6 +87,31 @@ TEST(EditorViewProducerTest, AuthoringViewportDrawsEditorFurnitureWhileAuthoring
     EXPECT_TRUE(drawsGizmos(*primary));
     // No camera is selected, so there is no camera preview inset to declare.
     EXPECT_EQ(findNonDisplayRoot(collector), nullptr);
+    EXPECT_FLOAT_EQ(primary->pixelDensity, 1.0f);
+}
+
+TEST(EditorViewProducerTest, AuthoringViewportExtentIsLogicalTimesPixelDensity)
+{
+    App                app;
+    EditorLayer        layer(&app);
+    EditorViewProducer producer;
+    producer.bind(app, layer);
+    layer.addViewportShown();
+    layer.setViewportPixelDensity(2.0f);
+
+    Scene scene("Authoring");
+    layer.notifyViewportWidgetRect(Rect2D{.pos = {12.0f, 24.0f}, .extent = {349.0f, 197.0f}}, {});
+
+    SceneViewCollector collector;
+    producer.collectSceneViews(makeEditorContext(scene), collector);
+
+    const SceneViewDesc* primary = findView(collector, producer.authoringKey().viewId());
+    ASSERT_NE(primary, nullptr);
+    EXPECT_FLOAT_EQ(primary->outputRect.pos.x, 12.0f);
+    EXPECT_FLOAT_EQ(primary->outputRect.pos.y, 24.0f);
+    EXPECT_FLOAT_EQ(primary->outputRect.extent.x, 698.0f);
+    EXPECT_FLOAT_EQ(primary->outputRect.extent.y, 394.0f);
+    EXPECT_FLOAT_EQ(primary->pixelDensity, 2.0f);
 }
 
 TEST(EditorViewProducerTest, AuthoringViewportFallsBackToItsDefaultSizeBeforeLayout)

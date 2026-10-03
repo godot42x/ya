@@ -18,6 +18,9 @@ struct FEditorViewportHostState
 {
     Rect2D    widgetRect{};
     glm::vec2 extent{0.0f};
+    /// Device pixels per logical point. Screen overlays drawn into the view
+    /// target multiply logical positions by this. Pointer hits stay logical.
+    float     pixelDensity = 1.0f;
     bool      bHovered  = false;
     bool      bFocused  = false;
     glm::mat4 view{1.0f};

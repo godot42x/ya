@@ -12,6 +12,7 @@
 #include "GameRuntime/Render/SceneCameraQuery.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "Render/Resources/FontManager.h"
+#include "GUI/Widgets/TextRaster.h"
 #include "Render2D/ScreenDrawList.h"
 #include "Render3D/WorldDraw.h"
 #include "Render3D/Common/CameraFrustumOverlay.h"
@@ -95,16 +96,25 @@ void recordCameraHud(ScreenDrawList& list, EditorLayer& layer)
     if (texts.empty()) {
         return;
     }
-    list.makeSprite(glm::vec3(6.0f, 6.0f, 0.0f),
-                         glm::vec2(240.0f, 46.0f),
+    const float density = layer.viewportPixelDensity() > 0.0f ? layer.viewportPixelDensity() : 1.0f;
+    list.makeSprite(glm::vec3(6.0f, 6.0f, 0.0f) * density,
+                         glm::vec2(240.0f, 46.0f) * density,
                          TextureLibrary::get().getWhiteTexture().get(),
                          glm::vec4(0.0f, 0.0f, 0.0f, 0.36f));
     for (const auto& text : texts) {
-        auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, text.fontSize);
+        const FTextRasterPlan plan = planTextRaster(static_cast<float>(text.fontSize),
+                                                    glm::vec2(1.0f),
+                                                    density,
+                                                    glm::vec2(1.0f));
+        auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, plan.rasterPx);
         if (!font) {
             continue;
         }
-        list.makeText(text.text, glm::vec3(text.viewPos, text.depth), text.color, font.get());
+        list.makeText(text.text,
+                      glm::vec3(text.viewPos * density, text.depth),
+                      text.color,
+                      font.get(),
+                      plan.residual);
     }
 }
 

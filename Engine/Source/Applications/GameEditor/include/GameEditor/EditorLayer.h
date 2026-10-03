@@ -78,6 +78,8 @@ struct EditorLayer
     // present surface. Before the first layout the panel has no rect yet, so
     // the default size stands in (see getViewportRect).
     glm::vec2                _viewportSize = {1280.f, 720.f};
+    /// Device pixels per logical point of the window that shows this panel.
+    float                    _viewportPixelDensity = 1.0f;
     glm::vec2                _viewportBounds[2]; // Min and max bounds
     Rect2D                   viewportRect;
     /// Camera preview panel stacked on the viewport image, in tree-logical
@@ -237,6 +239,13 @@ struct EditorLayer
     /// together, so the layer can tell "on the world image" from "on the
     /// preview panel" without holding a second copy of the layout.
     void notifyViewportWidgetRect(const Rect2D& rect, const Rect2D& previewPanelRect);
+    /// Device pixels per logical point. The authoring view's render target is
+    /// `getViewportRect().extent *` this. 1 until the surface publishes a scale.
+    void setViewportPixelDensity(float density)
+    {
+        _viewportPixelDensity = density > 0.0f ? density : 1.0f;
+    }
+    [[nodiscard]] float viewportPixelDensity() const { return _viewportPixelDensity; }
     void                                          setViewportHoverFocus(bool hovered, bool focused);
     [[nodiscard]] const std::vector<std::string>& getDiscoveredProjects() const
     {
