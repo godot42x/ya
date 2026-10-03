@@ -34,12 +34,17 @@ namespace ya
 /// path, which is also what FreeType hinting is tuned for.
 constexpr uint32_t kBitmapMaxSize = 48;
 
-/// How many raster sizes a shared face keeps. A frame uses a handful of
-/// sizes (chrome, one zoom, a tooltip); 8 is hysteresis so a window drag
-/// does not retain every pixel it passed through. Past the window the oldest
-/// size's glyphs are dropped as a unit, unless a snapshot still holds that
-/// font. Memory follows the live set, not the number of sizes ever seen.
-constexpr uint32_t kLiveRasterSizeWindow = 8;
+/// A shared face keeps a raster size until nothing has asked for it for
+/// `kRasterSizeIdleTicks` flushes (about that many frames). Eviction is by
+/// idleness, not by a count of sizes: one frame can legitimately use a dozen
+/// sizes (editor chrome plus game UI at the panel density), and a count below
+/// that working set evicts and rebuilds the same sizes every frame. A window
+/// drag or zoom sweep passes through many sizes once; they idle out.
+constexpr uint64_t kRasterSizeIdleTicks = 240;
+/// Hard ceiling on raster sizes per face, so a sweep cannot retain every size
+/// until it idles. Past it the least recently used size is dropped even if it
+/// is not idle yet. Keep it above the largest per-frame working set.
+constexpr uint32_t kMaxLiveRasterSizes = 24;
 
 /// First page of a shared face atlas, created on the first glyph and doubled
 /// when the shelf overflows (then another page). Fallback faces stay at zero
@@ -441,8 +446,14 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
         std::string                      role;
         EFontRenderMode                  mode = EFontRenderMode::Bitmap;
         std::vector<uint32_t>            lru;
+        /// `FontManager::_atlasTick` when each raster size was last asked for.
+        std::unordered_map<uint32_t, uint64_t> lastUseTick;
     };
     std::unordered_map<std::string, FSharedFaceAtlas> _sharedFaces;
+
+    /// Advances once per flushPendingGlyphs (one host frame boundary). Raster
+    /// size idleness is measured in these.
+    uint64_t _atlasTick = 0;
 
     void bumpResourceRevision() { ++_resourceRevision; }
 

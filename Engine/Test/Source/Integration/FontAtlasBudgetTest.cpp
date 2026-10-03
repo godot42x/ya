@@ -110,7 +110,7 @@ TEST(FontAtlasBudget, Sizes9To48WithCjkStayWithinLiveText)
     uint64_t sequenceCpu = 0;
     for (const FontManager::FFontAtlasDebugPage& page : FontManager::get()->collectFontAtlasDebugPages()) {
         sequenceCpu += page.cpuBytes;
-        EXPECT_LE(page.rasterSizes.size(), static_cast<size_t>(kLiveRasterSizeWindow));
+        EXPECT_LE(page.rasterSizes.size(), static_cast<size_t>(kMaxLiveRasterSizes));
         std::cout << "FONT_ATLAS_PAGE " << page.label << " | " << page.detail << "\n";
     }
     std::cout << "FONT_ATLAS_BUDGET sequence pages=" << sequence.pages
@@ -125,7 +125,7 @@ TEST(FontAtlasBudget, Sizes9To48WithCjkStayWithinLiveText)
     uint64_t stressCpu = 0;
     for (const FontManager::FFontAtlasDebugPage& page : FontManager::get()->collectFontAtlasDebugPages()) {
         stressCpu += page.cpuBytes;
-        EXPECT_LE(page.rasterSizes.size(), static_cast<size_t>(kLiveRasterSizeWindow));
+        EXPECT_LE(page.rasterSizes.size(), static_cast<size_t>(kMaxLiveRasterSizes));
     }
     std::cout << "FONT_ATLAS_BUDGET stress pages=" << stress.pages
               << " gpuBytes=" << stress.gpuBytes << " cpuBytes=" << stressCpu << "\n";
@@ -140,11 +140,13 @@ TEST(FontAtlasBudget, Sizes9To48WithCjkStayWithinLiveText)
 
     // Before this contract the same 9..48 walk allocated 123 pages and
     // 1,049,886,720 GPU texel bytes (one bank per size, eager 1024/2048
-    // fallback pages). After: kLiveRasterSizeWindow sizes per face, pages
+    // fallback pages). After: at most kMaxLiveRasterSizes sizes per face, pages
     // start at 256 and double. The UI stack also keeps the monospace face at
-    // its one loaded size. Two 2048 pages (Latin growth + slack) is 32 MiB —
-    // the ceiling for this workload, not a per-size atlas cap.
-    constexpr uint64_t kGpuBound = 2ull * 2048ull * 2048ull * 4ull;
+    // its one loaded size. The metric counts 4 bytes per texel although the
+    // bitmap pages are single channel, so the real footprint is a quarter of
+    // it. 72 MiB here is the ceiling for this 40-size sweep, not a per-size
+    // atlas cap; the steady state (stress, a working set that fits) is far lower.
+    constexpr uint64_t kGpuBound = 72ull * 1024ull * 1024ull;
     EXPECT_GT(sequence.pages, 0u);
     EXPECT_GT(sequence.gpuBytes, 0u);
     EXPECT_LE(sequence.pages, 6u);
@@ -214,7 +216,7 @@ TEST(FontAtlasBudget, HeldFontAndInflightTextureSurviveEviction)
 
     bool bHeldSizeListed = false;
     for (const FontManager::FFontAtlasDebugPage& page : FontManager::get()->collectFontAtlasDebugPages()) {
-        EXPECT_LE(page.rasterSizes.size(), static_cast<size_t>(kLiveRasterSizeWindow));
+        EXPECT_LE(page.rasterSizes.size(), static_cast<size_t>(kMaxLiveRasterSizes));
         for (uint32_t rasterPx : page.rasterSizes) {
             if (rasterPx == 16 && page.label.find("primary") != std::string::npos
                 && page.label.find("Inter") != std::string::npos) {
@@ -226,6 +228,93 @@ TEST(FontAtlasBudget, HeldFontAndInflightTextureSurviveEviction)
 
     held.reset();
     inflight.reset();
+    shutdownProbe(render);
+}
+
+// The regression: a per-frame working set larger than the old 8-size window
+// evicted and rebuilt the same sizes every frame (46 ms each in the editor).
+// A working set that fits under the cap must be built once and then served
+// from cache: no revision bump, no rebuild, however many frames pass.
+TEST(FontAtlasBudget, PerFrameWorkingSetIsBuiltOnce)
+{
+    SDLNativeWindow window;
+    if (!createProbeWindow(window)) {
+        GTEST_SKIP() << "SDL native window create failed";
+    }
+    const RenderCreateInfo renderCI{
+        .renderAPI = ERenderAPI::Vulkan,
+        .startupSurfaces = {
+            StartupSurfaceDesc{
+                .window      = &window,
+                .swapchainCI = SwapchainCreateInfo{.bEnableTransferSrc = true, .width = 160, .height = 120},
+            },
+        },
+    };
+    IRender* render = IRender::create(renderCI);
+    ASSERT_NE(render, nullptr);
+    ASSERT_TRUE(render->init(renderCI));
+    FontManager::get()->clearCache();
+    ASSERT_TRUE(FontManager::get()->loadUiFontStack(*render, "inter", 16));
+
+    // Editor chrome plus game UI at the panel density: 13 distinct sizes.
+    const std::vector<uint32_t> workingSet = {11, 12, 13, 14, 16, 17, 18, 20, 22, 23, 24, 26, 32};
+    ASSERT_GT(workingSet.size(), static_cast<size_t>(8));
+    ASSERT_LE(workingSet.size(), static_cast<size_t>(kMaxLiveRasterSizes));
+    for (uint32_t size : workingSet) {
+        requestSize(*render, size, "Ag中");
+    }
+    const uint64_t revisionAfterWarmup = FontManager::get()->resourceRevision();
+
+    // Longer than the idle window, so a size touched every frame is never idle.
+    for (uint64_t frame = 0; frame < kRasterSizeIdleTicks * 2; ++frame) {
+        for (uint32_t size : workingSet) {
+            std::shared_ptr<Font> font = FontManager::get()->getFont(FName(DEFAULT_RUNTIME_FONT_NAME), size);
+            ASSERT_NE(font, nullptr);
+        }
+        FontManager::get()->flushPendingGlyphs(*render);
+    }
+    EXPECT_EQ(FontManager::get()->resourceRevision(), revisionAfterWarmup);
+
+    shutdownProbe(render);
+}
+
+// Sizes a sweep passed through once leave when they have idled out.
+TEST(FontAtlasBudget, IdleSizesAreDroppedAfterTheIdleWindow)
+{
+    SDLNativeWindow window;
+    if (!createProbeWindow(window)) {
+        GTEST_SKIP() << "SDL native window create failed";
+    }
+    const RenderCreateInfo renderCI{
+        .renderAPI = ERenderAPI::Vulkan,
+        .startupSurfaces = {
+            StartupSurfaceDesc{
+                .window      = &window,
+                .swapchainCI = SwapchainCreateInfo{.bEnableTransferSrc = true, .width = 160, .height = 120},
+            },
+        },
+    };
+    IRender* render = IRender::create(renderCI);
+    ASSERT_NE(render, nullptr);
+    ASSERT_TRUE(render->init(renderCI));
+    FontManager::get()->clearCache();
+    ASSERT_TRUE(FontManager::get()->loadUiFontStack(*render, "inter", 16));
+
+    for (uint32_t size = 20; size < 30; ++size) {
+        requestSize(*render, size, "Ag");
+    }
+    // Keep one size alive while the others idle past the window.
+    for (uint64_t frame = 0; frame < kRasterSizeIdleTicks + 8; ++frame) {
+        std::shared_ptr<Font> font = FontManager::get()->getFont(FName(DEFAULT_RUNTIME_FONT_NAME), 16);
+        ASSERT_NE(font, nullptr);
+        FontManager::get()->flushPendingGlyphs(*render);
+    }
+    for (const FontManager::FFontAtlasDebugPage& page : FontManager::get()->collectFontAtlasDebugPages()) {
+        for (uint32_t rasterPx : page.rasterSizes) {
+            EXPECT_TRUE(rasterPx < 20 || rasterPx >= 30) << page.label << " still holds idle size " << rasterPx;
+        }
+    }
+
     shutdownProbe(render);
 }
 

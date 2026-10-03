@@ -268,7 +268,7 @@ FontManager::FSharedFaceAtlas& FontManager::sharedFace(IRender& render, const st
                                                 kSharedAtlasInitialPage,
                                                 sharedAtlasLabel(mode, role),
                                                 true);
-    face.lru.reserve(static_cast<size_t>(kLiveRasterSizeWindow) + 1);
+    face.lru.reserve(static_cast<size_t>(kMaxLiveRasterSizes) + 1);
     FontAtlasBank* rawBank = face.bank.get();
     face.bank->setOnRepack([this, rawBank]() { refreshUvsForBank(rawBank); });
     auto [it, inserted] = _sharedFaces.emplace(key, std::move(face));
@@ -490,6 +490,7 @@ bool FontManager::evictRasterSize(FSharedFaceAtlas& face, uint32_t rasterPx)
         fallback->releaseRasterSize(rasterPx);
         if (FSharedFaceAtlas* fallbackFace = findSharedFace(fallback.get())) {
             std::erase(fallbackFace->lru, rasterPx);
+            fallbackFace->lastUseTick.erase(rasterPx);
         }
     }
     if (!victims.empty()) {
@@ -509,10 +510,25 @@ void FontManager::noteLiveRasterSize(const std::shared_ptr<FontAtlasBank>& bank,
     }
     std::erase(face->lru, rasterPx);
     face->lru.push_back(rasterPx);
+    face->lastUseTick[rasterPx] = _atlasTick;
     size_t spins = 0;
     const size_t limit = face->lru.size();
-    while (face->lru.size() > kLiveRasterSizeWindow && spins < limit) {
+    while (face->lru.size() > 1 && spins < limit) {
         const uint32_t victim = face->lru.front();
+        const uint64_t idle   = _atlasTick - face->lastUseTick[victim];
+        const bool     bOverCap = face->lru.size() > kMaxLiveRasterSizes;
+        if (!bOverCap && idle < kRasterSizeIdleTicks) {
+            break;
+        }
+        if (bOverCap && idle < 2) {
+            static bool bWarned = false;
+            if (!bWarned) {
+                bWarned = true;
+                YA_CORE_WARN("FontManager: more than {} raster sizes are in use at once; size {} is evicted "
+                             "while still in use and will be rebuilt (per-frame font thrash)",
+                             kMaxLiveRasterSizes, victim);
+            }
+        }
         if (!evictRasterSize(*face, victim)) {
             face->lru.erase(face->lru.begin());
             face->lru.push_back(victim);
@@ -520,6 +536,7 @@ void FontManager::noteLiveRasterSize(const std::shared_ptr<FontAtlasBank>& bank,
             continue;
         }
         std::erase(face->lru, victim);
+        face->lastUseTick.erase(victim);
         spins = 0;
     }
     dropUnreferencedSharedFaces();
@@ -1111,6 +1128,7 @@ bool FontManager::consumeNewGlyphCapture()
 
 void FontManager::flushPendingGlyphs(IRender& render)
 {
+    ++_atlasTick;
     if (_pendingGlyphs.empty()) {
         return;
     }
