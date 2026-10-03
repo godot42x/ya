@@ -318,4 +318,49 @@ TEST(FontAtlasBudget, IdleSizesAreDroppedAfterTheIdleWindow)
     shutdownProbe(render);
 }
 
+// Layout measures at the logical size, glyphs are drawn at the device size.
+// Advances must scale linearly with the raster size, otherwise line width,
+// caret and selection drift from the drawn glyphs (hinted advances were
+// rounded per size: 22px was 5% off 2x the 11px run).
+TEST(FontAtlasBudget, AdvanceScalesLinearlyWithRasterSize)
+{
+    SDLNativeWindow window;
+    if (!createProbeWindow(window)) {
+        GTEST_SKIP() << "SDL native window create failed";
+    }
+    const RenderCreateInfo renderCI{
+        .renderAPI = ERenderAPI::Vulkan,
+        .startupSurfaces = {
+            StartupSurfaceDesc{
+                .window      = &window,
+                .swapchainCI = SwapchainCreateInfo{.bEnableTransferSrc = true, .width = 160, .height = 120},
+            },
+        },
+    };
+    IRender* render = IRender::create(renderCI);
+    ASSERT_NE(render, nullptr);
+    ASSERT_TRUE(render->init(renderCI));
+    FontManager::get()->clearCache();
+    ASSERT_TRUE(FontManager::get()->loadUiFontStack(*render, "inter", 16));
+
+    const std::string text = "The quick brown fox jumps over the lazy dog 0123456789";
+    for (uint32_t logical : {11u, 13u, 14u, 16u}) {
+        for (float scale : {1.0f, 1.25f, 1.5f, 2.0f, 2.5f}) {
+            const uint32_t raster = static_cast<uint32_t>(std::lround(logical * scale));
+            requestSize(*render, logical, text);
+            requestSize(*render, raster, text);
+            const auto lf = FontManager::get()->getFont(FName(DEFAULT_RUNTIME_FONT_NAME), logical);
+            const auto rf = FontManager::get()->getFont(FName(DEFAULT_RUNTIME_FONT_NAME), raster);
+            ASSERT_NE(lf, nullptr);
+            ASSERT_NE(rf, nullptr);
+            // Only the size quantisation (lround) is allowed to differ.
+            const float expected = lf->measureText(text) * static_cast<float>(raster) / static_cast<float>(logical);
+            const float actual   = rf->measureText(text);
+            EXPECT_NEAR(actual, expected, 0.001f * expected + 0.5f)
+                << logical << "px -> " << raster << "px";
+        }
+    }
+    shutdownProbe(render);
+}
+
 } // namespace ya

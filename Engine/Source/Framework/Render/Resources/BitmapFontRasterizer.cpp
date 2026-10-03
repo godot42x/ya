@@ -8,6 +8,23 @@
 namespace ya
 {
 
+namespace
+{
+// The hinted `advance` is rounded to whole pixels per size, so text width is
+// not proportional to the size: a 22px run is not 2x the 11px run. Layout
+// measures at the logical size while the glyphs are drawn at the device
+// size, so the hinted advance made layout, caret and selection drift from
+// the drawn glyphs by several px per line. The linear advance (16.16 px,
+// unhinted) scales with the size; the pen stays fractional and each glyph
+// origin is rounded at draw time (ScreenDrawList::makeText). Glyph images
+// stay hinted.
+glm::vec2 linearAdvance(const FT_GlyphSlot glyph)
+{
+    return {static_cast<float>(glyph->linearHoriAdvance) / 65536.0f,
+            static_cast<float>(glyph->advance.y) / 64.0f};
+}
+} // namespace
+
 GlyphBitmap BitmapFontRasterizer::rasterize(FT_Face face, uint32_t codepoint, uint32_t pixelSize)
 {
     GlyphBitmap out;
@@ -37,16 +54,14 @@ GlyphBitmap BitmapFontRasterizer::rasterize(FT_Face face, uint32_t codepoint, ui
         out.width  = 0;
         out.height = 0;
         out.bearing = {glyph->bitmap_left, glyph->bitmap_top};
-        out.advance = {static_cast<float>(glyph->advance.x) / 64.0f,
-                       static_cast<float>(glyph->advance.y) / 64.0f};
+        out.advance = linearAdvance(glyph);
         return out;
     }
 
     out.width   = bitmap.width;
     out.height  = bitmap.rows;
     out.bearing = {glyph->bitmap_left, glyph->bitmap_top};
-    out.advance = {static_cast<float>(glyph->advance.x) / 64.0f,
-                   static_cast<float>(glyph->advance.y) / 64.0f};
+    out.advance = linearAdvance(glyph);
 
     // FreeType grayscale coverage -> RGBA8 (white + alpha), matching the
     // legacy atlas encoding so sampling/alpha behavior is unchanged.
