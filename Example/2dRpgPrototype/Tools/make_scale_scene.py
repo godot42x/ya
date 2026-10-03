@@ -113,10 +113,17 @@ def build_layers() -> tuple[list[int], list[int], list[int]]:
     return ground, decor, overlay
 
 
+# (0, 0) is the quad's bottom-left. y = 1/3 on a 1.5-tall sprite puts the
+# bottom edge half a cell below the entity, so an entity on the cell centre
+# stands with its feet on the cell's bottom edge.
+CHARACTER_PIVOT = (0.5, 1 / 3)
+
+
 def sprite_entity(entity_id: int, name: str, position: tuple[float, float, float],
                   texture: str, uv_rect: tuple[float, float, float, float],
                   size: tuple[float, float], tint: tuple[float, float, float, float],
-                  script: str, animation: dict | None = None) -> dict:
+                  script: str, animation: dict | None = None,
+                  pivot: tuple[float, float] | None = None) -> dict:
     entity = {
         "id": entity_id,
         "name": name,
@@ -137,6 +144,7 @@ def sprite_entity(entity_id: int, name: str, position: tuple[float, float, float
                     "uvScale": [1.0, 1.0],
                 },
                 "size": list(size),
+                **({"pivot": list(pivot)} if pivot is not None else {}),
                 "uvRect": list(uv_rect),
                 "bFlipU": False,
                 "bFlipV": False,
@@ -220,7 +228,8 @@ def build_entities() -> tuple[list[dict], tuple[list[int], list[int], list[int]]
     entities: list[dict] = [
         camera_entity(),
         sprite_entity(1021, "Player", (player_cell()[0] + 0.5, player_cell()[1] + 0.5, 0.1), HERO_SHEET, STAND_DOWN_FRAME,
-                      (1.0, 1.5), (1.0, 1.0, 1.0, 1.0), "Content/Scripts/Player.lua", hero_animation(True)),
+                      (1.0, 1.5), (1.0, 1.0, 1.0, 1.0), "Content/Scripts/Player.lua", hero_animation(True),
+                      CHARACTER_PIVOT),
     ]
 
     rng = random.Random(7)
@@ -232,7 +241,8 @@ def build_entities() -> tuple[list[dict], tuple[list[int], list[int], list[int]]
         tint = (0.55 + 0.25 * ((index % 3) / 2.0), 0.7 + 0.2 * (index % 2), 1.0, 1.0)
         entities.append(sprite_entity(1100 + index, f"Npc{index + 1}", (x + 0.5, y + 0.5, 0.1),
                                       HERO_SHEET, STAND_DOWN_FRAME, (1.0, 1.5), tint,
-                                      "Content/Scripts/Npc.lua", hero_animation(False)))
+                                      "Content/Scripts/Npc.lua", hero_animation(False),
+                                      CHARACTER_PIVOT))
 
     entities.append(tilemap_entity(ground, decor, overlay))
     return entities, (ground, decor, overlay)

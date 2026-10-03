@@ -61,7 +61,8 @@ struct RenderDrawItem
 /// its submission completed.
 struct WorldSpriteCandidate
 {
-    /// Quad center in world space: the entity's world position.
+    /// Quad centre in world space. With the default pivot this is the entity
+    /// position; any other pivot shifts it so that point stays on the entity.
     glm::vec3 worldCenter = glm::vec3(0.0f);
     /// World axes scaled by the authored size: the quad corner at quad-space
     /// (cx, cy) sits at `worldCenter + axisX * cx + axisY * cy`, with cx and cy

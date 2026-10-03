@@ -1,6 +1,7 @@
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Scene2D/Sprite2DComponent.h"
 #include "ECS/Entity.h"
+#include "ECS/Systems/Components/CameraComponent.h"
 #include "GameRuntime/Render/RenderFrameExtractor.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
@@ -231,6 +232,100 @@ TEST(WorldSpriteExtractionTest, PixelSnapLandsCandidateCentersOnTheTexelGrid)
     // Already on the 1/16 grid (player feet): snapping is a no-op.
     EXPECT_NEAR(sprites[1].worldCenter.x, 0.5f, 1e-5f);
     EXPECT_NEAR(sprites[1].worldCenter.y, 0.75f, 1e-5f);
+}
+
+TEST(WorldSpriteExtractionTest, DefaultPivotKeepsTheCentreOnTheEntity)
+{
+    Sprite2DComponent sprite;
+    sprite.size = {2.0f, 4.0f};
+    const glm::mat4 world = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 2.0f, 3.0f));
+    const WorldSpriteCandidate candidate = RenderFrameExtractor::buildSpriteCandidate(world, sprite, 1u);
+    EXPECT_EQ(spriteQuadCenterOffset(sprite), glm::vec2(0.0f));
+    EXPECT_EQ(candidate.worldCenter, glm::vec3(1.0f, 2.0f, 3.0f));
+}
+
+TEST(WorldSpriteExtractionTest, BottomPivotPutsTheBottomEdgeOnTheEntity)
+{
+    Sprite2DComponent sprite;
+    sprite.size  = {2.0f, 4.0f};
+    sprite.pivot = {0.5f, 0.0f};
+    const glm::vec3 entityPos{3.0f, 4.0f, 1.0f};
+    const glm::mat4 world = glm::translate(glm::mat4(1.0f), entityPos);
+    const WorldSpriteCandidate candidate = RenderFrameExtractor::buildSpriteCandidate(world, sprite, 1u);
+
+    EXPECT_EQ(spriteQuadCenterOffset(sprite), glm::vec2(0.0f, 2.0f));
+    EXPECT_NEAR(candidate.worldCenter.x, 3.0f, 1e-5f);
+    EXPECT_NEAR(candidate.worldCenter.y, 6.0f, 1e-5f);
+    EXPECT_NEAR(candidate.worldCenter.z, 1.0f, 1e-5f);
+    const glm::vec3 bottomEdge = candidate.worldCenter + candidate.axisY * -0.5f;
+    EXPECT_NEAR(bottomEdge.x, entityPos.x, 1e-5f);
+    EXPECT_NEAR(bottomEdge.y, entityPos.y, 1e-5f);
+    EXPECT_NEAR(bottomEdge.z, entityPos.z, 1e-5f);
+}
+
+TEST(WorldSpriteExtractionTest, PivotFollowsRotatedAndScaledAxes)
+{
+    Sprite2DComponent sprite;
+    sprite.size  = {1.0f, 1.5f};
+    sprite.pivot = {0.25f, 0.0f};
+    // 90 degrees about Z, scale (2, 3, 1). Local +X becomes world +Y, local +Y becomes world -X.
+    const glm::vec3 entityPos{5.0f, 6.0f, 7.0f};
+    const glm::mat4 world = glm::translate(glm::mat4(1.0f), entityPos) *
+                            glm::rotate(glm::mat4(1.0f), kQuarterTurn, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                            glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 3.0f, 1.0f));
+    const WorldSpriteCandidate candidate = RenderFrameExtractor::buildSpriteCandidate(world, sprite, 1u);
+
+    EXPECT_NEAR(spriteQuadCenterOffset(sprite).x, 0.25f, 1e-5f);
+    EXPECT_NEAR(spriteQuadCenterOffset(sprite).y, 0.75f, 1e-5f);
+    // centre = entity + axisX*(0.5-pivot.x) + axisY*(0.5-pivot.y)
+    EXPECT_NEAR(candidate.worldCenter.x, 2.75f, 1e-4f);
+    EXPECT_NEAR(candidate.worldCenter.y, 6.5f, 1e-4f);
+    EXPECT_NEAR(candidate.worldCenter.z, 7.0f, 1e-4f);
+    const glm::vec3 pivotOnQuad = candidate.worldCenter
+                                + candidate.axisX * (sprite.pivot.x - 0.5f)
+                                + candidate.axisY * (sprite.pivot.y - 0.5f);
+    EXPECT_NEAR(pivotOnQuad.x, entityPos.x, 1e-4f);
+    EXPECT_NEAR(pivotOnQuad.y, entityPos.y, 1e-4f);
+    EXPECT_NEAR(pivotOnQuad.z, entityPos.z, 1e-4f);
+}
+
+TEST(WorldSpriteExtractionTest, IntegerTexelPivotOffsetSnapsWithTheCentre)
+{
+    // 1 x 1.5 at 16 px/unit is 16 x 24 texels. Pivot offset 0.25 units is 4 texels.
+    constexpr float kPixelsPerUnit = 16.0f;
+    const float step = 1.0f / kPixelsPerUnit;
+    Sprite2DComponent sprite;
+    sprite.size  = {1.0f, 1.5f};
+    sprite.pivot = {0.25f, 0.5f};
+    const glm::vec3 entityPos{1.03f, -2.2f, 0.4f};
+    const glm::mat4 world = glm::translate(glm::mat4(1.0f), entityPos);
+    const WorldSpriteCandidate built = RenderFrameExtractor::buildSpriteCandidate(world, sprite, 1u);
+    const glm::vec2 offset = spriteQuadCenterOffset(sprite);
+    EXPECT_NEAR(offset.x, 0.25f, 1e-6f);
+    EXPECT_NEAR(offset.y, 0.0f, 1e-6f);
+
+    std::vector<WorldSpriteCandidate> sprites{built};
+    RenderFrameExtractor::snapSpriteCandidatesToTexelGrid(sprites, step);
+    const glm::vec3 snapped = sprites[0].worldCenter;
+
+    const auto onGrid = [&](float value) {
+        const float quanta = value / step;
+        EXPECT_NEAR(quanta, std::round(quanta), 1e-4f);
+    };
+    onGrid(snapped.x);
+    onGrid(snapped.y);
+    EXPECT_NEAR(snapped.z, entityPos.z, 1e-5f);
+    // Even texel counts: snapping the centre puts every edge on a texel boundary.
+    onGrid(snapped.x - sprite.size.x * 0.5f);
+    onGrid(snapped.x + sprite.size.x * 0.5f);
+    onGrid(snapped.y - sprite.size.y * 0.5f);
+    onGrid(snapped.y + sprite.size.y * 0.5f);
+
+    // The offset is a whole number of texels, so snapping the centre is the same
+    // as snapping the pivot (the entity) and adding the offset back.
+    const glm::vec3 snappedPivot = snapWorldXY(entityPos, step, 0.0f, 0.0f);
+    EXPECT_NEAR(snapped.x, snappedPivot.x + offset.x, 1e-4f);
+    EXPECT_NEAR(snapped.y, snappedPivot.y + offset.y, 1e-4f);
 }
 
 } // namespace ya

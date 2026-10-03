@@ -76,8 +76,9 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
             testMeshComponent(handle, tc, mc);
         });
 
-    // Authored sprites are a local XY quad. Overlapping hits at the same
-    // distance fall back to layer, then sortOrder, so the front sprite wins.
+    // Authored sprites are a local XY quad whose pivot sits on the entity.
+    // Overlapping hits at the same distance fall back to layer, then
+    // sortOrder, so the front sprite wins.
     struct SpritePick
     {
         Entity* entity = nullptr;
@@ -110,8 +111,9 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
                 localOrigin.x + localDirection.x * tLocal,
                 localOrigin.y + localDirection.y * tLocal,
             };
-            if (std::abs(localHit.x) > sprite.size.x * 0.5f ||
-                std::abs(localHit.y) > sprite.size.y * 0.5f) {
+            const glm::vec2 center = spriteQuadCenterOffset(sprite);
+            if (std::abs(localHit.x - center.x) > sprite.size.x * 0.5f ||
+                std::abs(localHit.y - center.y) > sprite.size.y * 0.5f) {
                 return;
             }
             const glm::vec3 worldHit = glm::vec3(world * glm::vec4(localHit, 0.0f, 1.0f));

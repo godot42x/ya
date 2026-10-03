@@ -163,10 +163,21 @@
       "status": "done",
       "driven_by": "D-T2 gate fired: Player / Npc / Chest each compute uvRect",
       "evidence": [
-        "SpriteAnimationComponent (columns x rows grid, named clips) + SpriteAnimationSystem (Simulation group, runtime/simulation only); Player / Npc / Chest scripts play clips by name",
-        "SpriteAnimationTest 9 cases; Script/automation/2d-rpg/walk_animation.py; Town / House / TownLarge scenes carry the component",
-        "not covered: Chest open/close in House under play (scene.load does not restart runtime); Inspector editing of clips not eyeballed",
-        "pivot / anchor on Sprite2DComponent is the next checkpoint, not part of this entry"
+        "SpriteAnimationComponent references a shared SpriteAnimationSet (.yaanim.json: columns x rows grid, named clips) + SpriteAnimationSystem (Simulation group, runtime/simulation only); Player / Npc / Chest scripts play clips by name",
+        "SpriteAnimationTest / SpriteAnimationSetTest; Script/automation/2d-rpg/walk_animation.py; Town / House / TownLarge scenes carry the component with a Content:Animations/*.yaanim.json reference",
+        "not covered: Chest open/close in House under play (scene.load does not restart runtime); no Inspector clip editing yet (step 4c P3)"
+      ]
+    },
+    {
+      "id": "sprite_pivot",
+      "phase": "review-4",
+      "status": "done",
+      "driven_by": "character sprites are taller than a cell; Player.lua lifted the entity by footLift to stand on the tile edge",
+      "evidence": [
+        "Sprite2DComponent::pivot (normalized 0..1, default 0.5,0.5) + spriteQuadCenterOffset shared by RenderFrameExtractor::buildSpriteCandidate and RayCastMousePickingSystem",
+        "7 unit tests (default centre, bottom pivot, rotated/scaled axes, texel snapping, serialization incl. missing field, picking)",
+        "Player / Npc use pivot (0.5, 1/3); footLift removed from Player.lua; rpg_control FOOT_LIFT 0.0; 4 gameplay automation scripts pass",
+        "pivot is the y-sort point once step 5 lands (P0 contract C2)"
       ]
     },
     {

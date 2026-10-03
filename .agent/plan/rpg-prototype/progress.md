@@ -526,3 +526,17 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   编辑器冒烟 exit 0，编辑 72.5 fps、游玩 83.9 fps，字体构建 0。
 - 偏离 / 注意：已持有的 Ref 在 store `invalidate`（丢条目）后仍握旧槽，要 `rebind()`；同槽被 `registerAsset` 覆盖时 `generation` 递增、按名字重解析，
   所以 P3 的编辑器保存应走覆盖同槽而不是 invalidate。场景尚未用引擎重存（默认值省略未落到文件）。
+
+## 2026-10-04 — Sprite2D pivot（评审步骤 4 最后一项）
+
+- `Sprite2DComponent::pivot`：归一化（0,0 左下，1,1 右上），默认 (0.5, 0.5)，缺字段的旧场景加载后居中不变。pivot 点落在实体位置，
+  也是 y-sort 点（P0 契约 C2）。`spriteQuadCenterOffset(sprite)` 返回 quad 中心相对实体的局部偏移，`RenderFrameExtractor::buildSpriteCandidate`
+  和 `RayCastMousePickingSystem` 共用；吸附仍吸附 quad 中心（示例偏移 0.25 = 4 texel，吸中心与吸 pivot 等价）。
+  Sprite2DStage / shader / tilemap / z 约定没动。
+- 示例：Player / Npc 用 pivot (0.5, 1/3)（1×1.5 精灵，底边落在格子底边），实体放在格子中心；`Player.lua` 的 `footLift` 与只为它存在的
+  `getSprite2D` 删除；Town 里 Player y 0.75→0.5；`rpg_control.FOOT_LIFT` 0.25→0.0；`make_scale_scene.py` 产出同样数据。
+  Chest / Sign / Door 保持居中。
+- 验证：7 个新单测；`ya-testing` 1590 ran / 1589 passed / 1 skipped（同前）；四条玩法脚本通过（走格 (0.5,0.5)→(1.5,0.5)，栅栏停在 (0.5,-4.5)）；
+  编辑器冒烟 81.6 / 83.8 fps、字体构建 0。截图：玩家世界位置不变，NPC 整体上移 0.25（脚从探出格子底边 0.25 收到底边上），
+  相机跟随实体 y 一并下移 0.25；玩家在 NPC 南北两侧时更靠南的画在前面。
+- 未验证：House / TownLarge 没有实际启动，门的换图没跑；场景里默认值还没裁剪（下一步用引擎重存）。

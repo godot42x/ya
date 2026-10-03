@@ -11,10 +11,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 PROJECT = "Example/2DRpgPrototype/2DRpgPrototype.yaproject"
 
-# TilemapGround sits at (-16, -10); the player sprite is 1.5 cells tall, so
-# its feet add 0.25 above the cell centre (Player.lua footLift).
+# TilemapGround sits at (-16, -10). The player entity is the cell centre;
+# Sprite2DComponent.pivot puts the feet on the cell's bottom edge, so the
+# entity is not lifted above that centre.
 TILEMAP_ORIGIN = (-16.0, -10.0)
-FOOT_LIFT = 0.25
+FOOT_LIFT = 0.0
 CELL = 1.0
 START_CELL = (16, 10)
 

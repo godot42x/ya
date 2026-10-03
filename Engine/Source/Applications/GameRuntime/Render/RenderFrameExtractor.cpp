@@ -176,11 +176,15 @@ WorldSpriteCandidate RenderFrameExtractor::buildSpriteCandidate(const glm::mat4&
                                                                uint32_t                 entityId)
 {
     WorldSpriteCandidate candidate{};
-    candidate.worldCenter = glm::vec3(world[3]);
     // The quad is the entity's local XY rectangle scaled by the authored size,
-    // so the world axes carry rotation, scale and size together.
+    // so the world axes carry rotation, scale and size together. The pivot
+    // sits on the entity; `worldCenter` is the quad's centre.
     candidate.axisX = glm::vec3(world[0]) * sprite.size.x;
     candidate.axisY = glm::vec3(world[1]) * sprite.size.y;
+    const glm::vec2 centerOffset = spriteQuadCenterOffset(sprite);
+    candidate.worldCenter = glm::vec3(world[3])
+                          + glm::vec3(world[0]) * centerOffset.x
+                          + glm::vec3(world[1]) * centerOffset.y;
     candidate.uvRect = sprite.uvRect;
     if (sprite.bFlipU) {
         std::swap(candidate.uvRect.x, candidate.uvRect.z);

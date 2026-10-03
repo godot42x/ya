@@ -4,6 +4,7 @@
 #include "ECS/Entity.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/Systems/TransformSystem.h"
+#include "GameRuntime/Render/RenderFrameExtractor.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Serialization/SceneSerializer.h"
@@ -55,6 +56,7 @@ TEST(Sprite2DComponentTest, RoundTripCloneDuplicateAndDestroy)
 
     sprite->bVisible  = true;
     sprite->size      = {2.0f, 3.5f};
+    sprite->pivot     = {0.25f, 0.0f};
     sprite->uvRect    = {0.1f, 0.2f, 0.8f, 0.9f};
     sprite->bFlipU    = true;
     sprite->bFlipV    = false;
@@ -86,6 +88,7 @@ TEST(Sprite2DComponentTest, RoundTripCloneDuplicateAndDestroy)
     auto* loadedSprite = loadedNode->getEntity()->getComponent<Sprite2DComponent>();
     ASSERT_NE(loadedSprite, nullptr);
     EXPECT_EQ(loadedSprite->size, glm::vec2(2.0f, 3.5f));
+    EXPECT_EQ(loadedSprite->pivot, glm::vec2(0.25f, 0.0f));
     EXPECT_EQ(loadedSprite->uvRect, glm::vec4(0.1f, 0.2f, 0.8f, 0.9f));
     EXPECT_TRUE(loadedSprite->bFlipU);
     EXPECT_FALSE(loadedSprite->bFlipV);
@@ -104,6 +107,7 @@ TEST(Sprite2DComponentTest, RoundTripCloneDuplicateAndDestroy)
     ASSERT_NE(clonedSprite, nullptr);
     EXPECT_NE(clonedSprite, sprite);
     EXPECT_EQ(clonedSprite->size, sprite->size);
+    EXPECT_EQ(clonedSprite->pivot, sprite->pivot);
     EXPECT_EQ(clonedSprite->sortOrder, sprite->sortOrder);
     EXPECT_EQ(clonedSprite->image.textureRef.getPath(), sprite->image.textureRef.getPath());
 
@@ -113,6 +117,7 @@ TEST(Sprite2DComponentTest, RoundTripCloneDuplicateAndDestroy)
     auto* duplicatedSprite = duplicate->getEntity()->getComponent<Sprite2DComponent>();
     ASSERT_NE(duplicatedSprite, nullptr);
     EXPECT_EQ(duplicatedSprite->layer, 4);
+    EXPECT_EQ(duplicatedSprite->pivot, glm::vec2(0.25f, 0.0f));
     EXPECT_EQ(duplicatedSprite->pickId, 11);
     EXPECT_EQ(duplicatedSprite->image.textureRef.getPath(), "Content/Sprites/hero.png");
 
@@ -123,6 +128,52 @@ TEST(Sprite2DComponentTest, RoundTripCloneDuplicateAndDestroy)
         ++remaining;
     });
     EXPECT_EQ(remaining, 1);
+}
+
+TEST(Sprite2DComponentTest, DefaultPivotCentersTheQuad)
+{
+    Sprite2DComponent sprite;
+    sprite.size = {2.0f, 3.5f};
+    EXPECT_EQ(sprite.pivot, glm::vec2(0.5f, 0.5f));
+    EXPECT_EQ(spriteQuadCenterOffset(sprite), glm::vec2(0.0f));
+}
+
+TEST(Sprite2DComponentTest, PivotRoundTripsAndMissingFieldKeepsTheCentre)
+{
+    ensureReflectionReady();
+
+    Scene scene("SpritePivot");
+    Node* node = nullptr;
+    Sprite2DComponent* sprite = addSprite(scene, node, "Hero");
+    ASSERT_NE(sprite, nullptr);
+    sprite->size  = {1.0f, 1.5f};
+    sprite->pivot = {0.5f, 0.0f};
+
+    SceneSerializer serializer(&scene);
+    nlohmann::json saved = serializer.serialize();
+    ASSERT_TRUE(saved.contains("entities"));
+    bool bSawPivot = false;
+    for (auto& entityJson : saved["entities"]) {
+        if (!entityJson.contains("components") || !entityJson["components"].contains("Sprite2DComponent")) {
+            continue;
+        }
+        auto& component = entityJson["components"]["Sprite2DComponent"];
+        ASSERT_TRUE(component.contains("pivot"));
+        bSawPivot = true;
+        component.erase("pivot");
+    }
+    EXPECT_TRUE(bSawPivot);
+
+    Scene loaded("SpritePivotLegacy");
+    SceneSerializer loadedSerializer(&loaded);
+    loadedSerializer.deserialize(saved);
+    Node* loadedNode = loaded.findNodeByPath("/Hero");
+    ASSERT_NE(loadedNode, nullptr);
+    auto* loadedSprite = loadedNode->getEntity()->getComponent<Sprite2DComponent>();
+    ASSERT_NE(loadedSprite, nullptr);
+    EXPECT_EQ(loadedSprite->size, glm::vec2(1.0f, 1.5f));
+    EXPECT_EQ(loadedSprite->pivot, glm::vec2(0.5f, 0.5f));
+    EXPECT_EQ(spriteQuadCenterOffset(*loadedSprite), glm::vec2(0.0f));
 }
 
 TEST(Sprite2DComponentTest, UnloadedTextureIsNotDrawable)
@@ -179,6 +230,56 @@ TEST(Sprite2DComponentTest, RayHitsLocalQuadAndPrefersFrontSprite)
     const auto hidden = RayCastMousePickingSystem::raycast(&scene, toward);
     ASSERT_TRUE(hidden.has_value());
     EXPECT_EQ(hidden->entity, backNode->getEntity());
+}
+
+TEST(Sprite2DComponentTest, RayHitsTheQuadWhereThePivotDrawsIt)
+{
+    ensureReflectionReady();
+
+    Scene scene("SpritePivotPick");
+    Node* node = nullptr;
+    Sprite2DComponent* sprite = addSprite(scene, node, "Feet");
+    ASSERT_NE(sprite, nullptr);
+    // Bottom-edge centre on the entity: local quad is x in [-1, 1], y in [0, 4].
+    sprite->size  = {2.0f, 4.0f};
+    sprite->pivot = {0.5f, 0.0f};
+    place(node->getEntity(), {0.0f, 0.0f, 0.0f});
+
+    const auto hitAt = [](float x, float y) {
+        return Ray{glm::vec3{x, y, 5.0f}, glm::vec3{0.0f, 0.0f, -1.0f}};
+    };
+    EXPECT_TRUE(RayCastMousePickingSystem::raycast(&scene, hitAt(0.0f, 0.05f)).has_value());
+    EXPECT_TRUE(RayCastMousePickingSystem::raycast(&scene, hitAt(0.0f, 2.0f)).has_value());
+    EXPECT_TRUE(RayCastMousePickingSystem::raycast(&scene, hitAt(0.0f, 3.0f)).has_value());
+    // Below the bottom edge. A centred quad of this size would still contain y = -1.
+    EXPECT_FALSE(RayCastMousePickingSystem::raycast(&scene, hitAt(0.0f, -1.0f)).has_value());
+    EXPECT_FALSE(RayCastMousePickingSystem::raycast(&scene, hitAt(0.0f, 4.1f)).has_value());
+
+    // Rotation and scale go through the same world matrix the extractor uses,
+    // so a ray through the drawn centre hits and a ray past the drawn edge misses.
+    auto* transform = node->getEntity()->getComponent<TransformComponent>();
+    sprite->size    = {1.0f, 1.5f};
+    sprite->pivot   = {0.25f, 0.0f};
+    transform->setPosition({5.0f, 6.0f, 0.0f});
+    transform->setRotation({0.0f, 0.0f, 90.0f});
+    transform->setScale({2.0f, 3.0f, 1.0f});
+    TransformSystem::computeWorldMatrix(transform);
+    const WorldSpriteCandidate drawn = RenderFrameExtractor::buildSpriteCandidate(
+        transform->getTransform(), *sprite, 1u);
+    const glm::vec3 entityPos = glm::vec3(transform->getTransform()[3]);
+    const glm::vec3 pivotOnQuad = drawn.worldCenter
+                                + drawn.axisX * (sprite->pivot.x - 0.5f)
+                                + drawn.axisY * (sprite->pivot.y - 0.5f);
+    EXPECT_NEAR(pivotOnQuad.x, entityPos.x, 1e-4f);
+    EXPECT_NEAR(pivotOnQuad.y, entityPos.y, 1e-4f);
+    EXPECT_NEAR(pivotOnQuad.z, entityPos.z, 1e-4f);
+
+    const auto rayThrough = [](const glm::vec3& point) {
+        return Ray{point + glm::vec3{0.0f, 0.0f, 5.0f}, glm::vec3{0.0f, 0.0f, -1.0f}};
+    };
+    EXPECT_TRUE(RayCastMousePickingSystem::raycast(&scene, rayThrough(drawn.worldCenter)).has_value());
+    const glm::vec3 outside = drawn.worldCenter + drawn.axisX * 0.75f;
+    EXPECT_FALSE(RayCastMousePickingSystem::raycast(&scene, rayThrough(outside)).has_value());
 }
 
 } // namespace ya

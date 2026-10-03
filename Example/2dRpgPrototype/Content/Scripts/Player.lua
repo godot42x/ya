@@ -70,8 +70,9 @@ end
 
 -- Put the sprite on its current cell, or between the two cells of a step in
 -- progress. The map says where a cell centre is, so a non-unit cell size and
--- a moved tilemap need nothing here. The feet carry the depth: lower on
--- screen draws in front of the actors behind (Actor.zFor).
+-- a moved tilemap need nothing here. The entity sits on that centre; the
+-- sprite pivot puts the feet on the cell's bottom edge. Depth uses the same
+-- y (Actor.zFor): lower on screen draws in front of the actors behind.
 function Script:applyPosition()
     local from = self.map:cellToWorld(self.cell.x, self.cell.y)
     local x, y = from.x, from.y
@@ -80,7 +81,7 @@ function Script:applyPosition()
         x = from.x + (target.x - from.x) * self.progress
         y = from.y + (target.y - from.y) * self.progress
     end
-    self.transform:setPosition(Vec3.new(snap(x), snap(y + self.footLift), Actor.zFor(y)))
+    self.transform:setPosition(Vec3.new(snap(x), snap(y), Actor.zFor(y)))
 end
 
 function Script:tryStep(carry)
@@ -127,11 +128,7 @@ end
 
 function Script:onInit()
     self.transform = self.entity:getTransform()
-    self.sprite = self.entity:getSprite2D()
     self.anim = self.entity:getSpriteAnimation()
-    -- The sprite is centred on the entity and may be taller than a tile; lift
-    -- it so the feet stand on the tile's bottom edge.
-    self.footLift = (self.sprite.size.y - 1) / 2
     local position = self.transform:getPosition()
     self.map = world.find(MAP_NAME):getTilemap()
     -- Start on whichever cell the authored position lands on.
