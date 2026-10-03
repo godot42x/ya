@@ -18,6 +18,7 @@ target("ya-gui-host")
     add_packages("glm", { public = true })
     if is_plat("macosx") then
         add_files("Window/GUIWindowChromeCocoa.mm")
+        add_files("Window/GUIApplicationMenuCocoa.mm")
         add_frameworks("AppKit")
         add_mxxflags("-fobjc-arc")
     end

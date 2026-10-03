@@ -82,11 +82,22 @@ struct YA_GUI_API UIMenuBar : public UIContainer
     /// = disabled entry, only visual). Returns the created item.
     UIMenuBarItem* addItem(const std::string& label, std::function<std::shared_ptr<UIMenu>()> menuFactory);
 
+    /// Registered entries in bar order (label + factory). Mirrors the bar
+    /// buttons for consumers that need the menu STRUCTURE rather than the
+    /// widgets (e.g. a native application-menu mirror).
+    struct FEntry
+    {
+        std::string                              label;
+        std::function<std::shared_ptr<UIMenu>()> menuFactory;
+    };
+    [[nodiscard]] const std::vector<FEntry>& getEntries() const { return _entries; }
+
     /// Close the currently open menu (no-op when none).
     void closeOpenMenu();
     [[nodiscard]] UIMenu* getOpenMenu() const { return _openMenu.get(); }
 
   private:
+    std::vector<FEntry> _entries;
     std::shared_ptr<UIMenu> _openMenu;
     /// Item whose menu is currently open (null when none). Drives click
     /// toggle and hover-switch semantics.

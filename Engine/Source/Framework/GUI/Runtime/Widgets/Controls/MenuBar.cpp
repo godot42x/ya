@@ -90,6 +90,7 @@ UIMenuBarItem* UIMenuBar::addItem(const std::string& label, std::function<std::s
 {
     auto item = std::make_shared<UIMenuBarItem>(std::format("MenuBar_{}", label));
     item->_label     = label;
+    _entries.push_back({label, menuFactory});
     // Size from the same font measurement the menu items use, so bar labels
     // never overflow their button and stay consistent with the menus.
     const auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, item->_fontSize);

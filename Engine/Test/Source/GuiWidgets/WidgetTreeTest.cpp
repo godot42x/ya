@@ -24,6 +24,7 @@
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/TabBar.h"
+#include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/Brush.h"
@@ -2560,6 +2561,68 @@ TEST(WidgetTreeTest, DockSpaceInWellMoveReordersWithoutDragSession)
               EWidgetRouteResult::HandledExclusive);
     EXPECT_FALSE(tree.isDragging());
     EXPECT_EQ(ws->dockModel().getRootNode()->kind, EDockNodeKind::Stack);
+}
+
+TEST(WidgetTreeTest, TabBarInColumnContainerPaintsAllTabs)
+{
+    // Synthetic 8px-advance font (same shape as ToolControlsTest's helper):
+    // tab labels measure and paint without a GPU atlas.
+    auto font        = std::make_shared<Font>();
+    font->fontSize   = 13;
+    font->lineHeight = 17.0f;
+    font->ascent     = 13.0f;
+    font->descent    = 3.0f;
+    for (uint32_t cp = 32; cp < 127; ++cp) {
+        Character ch;
+        ch.size     = {8, 13};
+        ch.bearing  = {0, 0};
+        ch.advance  = {8.0f, 0.0f};
+        ch.bInAtlas = true;
+        font->characters[cp] = ch;
+    }
+    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 13, font);
+
+    // EditorSurface top-bar mirror: a self-sizing column holds the page tab
+    // strip as a box child with band margins. Every tab must keep its rect
+    // and paint its label — a margin or container reparent must not drop
+    // tabs (regression: only the selected tab rendered).
+    WidgetTree tree({.width = 800, .height = 600});
+    auto topBar = std::make_shared<UIContainer>("TopBar");
+    topBar->setDirection(EWidgetBoxLayout::Vertical);
+    topBar->setSpacing(0.0f);
+    topBar->setPadding({0.0f, 0.0f});
+    FCanvasSlotArgs topArgs;
+    topArgs.offset = {0.0f, 0.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), topBar, topArgs);
+
+    auto bar = std::make_shared<UITabBar>("Pages");
+    bar->_bDraggableTabs = true;
+    topBar->addDetachedChild(bar, [](UIElement&, UISlot& slot) {
+        if (auto* box = slot.as<UIBoxSlot>()) {
+            box->setMargin(FMargin{80.0f, 0.0f, 100.0f, 0.0f});
+        }
+    });
+    (void)bar->addTab("Level");
+    (void)bar->addTab("UI");
+    tree.layout();
+
+    ASSERT_EQ(bar->getChildren().size(), 2u);
+    for (const auto& child : bar->getChildren()) {
+        EXPECT_GT(child->getLayoutRect().extent.x, 0.0f) << child->_name;
+        EXPECT_GT(child->getLayoutRect().extent.y, 0.0f) << child->_name;
+    }
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    bool bLevelText = false;
+    bool bUiText    = false;
+    for (const auto& draw : snap.items) {
+        if (draw.kind == UIFrameDrawItem::EKind::Text) {
+            bLevelText = bLevelText || draw.text == "Level";
+            bUiText    = bUiText || draw.text == "UI";
+        }
+    }
+    EXPECT_TRUE(bLevelText);
+    EXPECT_TRUE(bUiText);
 }
 
 TEST(WidgetTreeTest, LockedTabPressDoesNotArmGhost)
