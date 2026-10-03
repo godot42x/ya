@@ -29,6 +29,11 @@
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Host/OsClipboard.h"
+#if defined(__APPLE__)
+#include "GUI/Host/GUIApplicationMenu.h"
+#endif
+#include "Core/Config/ConfigManager.h"
+#include "Core/Log.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
@@ -105,6 +110,7 @@ void EditorSurface::shutdown()
 {
     closeViewportContextMenu();
     _bViewportRightPressPending = false;
+    removeApplicationMenu();
     if (_layer && _windowId == kDefaultEditorWindowId) {
         _layer->clearUnsavedGuard();
     }
@@ -168,6 +174,7 @@ void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
 
     applyWindowMetrics(context.metrics);
     syncWindowTitle();
+    syncChromeTopInset();
     _tree->tick(dt);
     pushViewportDisplay();
     UIFrameBuildContext snapshotCtx;
@@ -186,6 +193,7 @@ void EditorSurface::rebuild(const FEditorSurfaceContext& context)
     _presentSurface = context.presentSurface;
     closeViewportContextMenu();
     _bViewportRightPressPending = false;
+    removeApplicationMenu();
     _root.reset();
     _titleBar.reset();
     _pageTabBar.reset();
@@ -254,6 +262,21 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
             promptUnsavedChanges(std::move(proceed));
         });
     }
+    {
+        const std::string placement =
+            ConfigManager::get().getOr<std::string>("editor", "menuBarPlacement", "auto");
+#if defined(__APPLE__)
+        constexpr bool bApplicationMenuSupported = true;
+#else
+        constexpr bool bApplicationMenuSupported = false;
+#endif
+        if (placement == "native" || (placement == "auto" && bApplicationMenuSupported)) {
+            _menuBarPlacement = EEditorMenuBarPlacement::NativeApplication;
+        }
+        else if (placement != "auto" && placement != "window") {
+            YA_CORE_WARN("Ignoring invalid editor.menuBarPlacement '{}', using window", placement);
+        }
+    }
     _root = ui::canvasPanel("EditorRoot").share();
     FCanvasSlotArgs fillArgs;
     fillArgs.anchorMin = {0.0f, 0.0f};
@@ -268,11 +291,22 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
                          .release(),
                      ui::canvasSlot().fill());
 
-    const float titleH   = context.metrics.chromeInsetTop > 0.0f
-                             ? context.metrics.chromeInsetTop
-                             : kMenuHeight;
-    const float menuY    = titleH;
-    const float chromeTop = menuY + kMenuHeight;
+    // Both chrome rows live in one self-sizing container that overlays the
+    // hybrid title band (y = 0): WindowTop puts the menu bar in the band
+    // (right of the traffic lights) with the tabs directly below;
+    // NativeApplication puts only the tabs in the band (the menu is the
+    // system menu bar / notch row). Band rows carry the traffic-light /
+    // drag-gutter margins; the body's top inset reads the container's
+    // laid-out height (`_chromeTop`, synced in tick).
+    const bool  bNativeMenu = _menuBarPlacement == EEditorMenuBarPlacement::NativeApplication;
+    const float titleH      = context.metrics.chromeInsetTop > 0.0f
+                                 ? context.metrics.chromeInsetTop
+                                 : kMenuHeight;
+    const FMargin bandInsets{context.metrics.chromeInsetLeft,
+                             0.0f,
+                             context.metrics.chromeDragGutter,
+                             0.0f};
+    _chromeTop = kMenuHeight; // pre-layout estimate; tick refines from the container
 
     _titleBar = std::make_shared<UICanvasPanel>("EditorTitleBar");
     _titleBar->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
@@ -289,6 +323,20 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
                          .setVisibility(EWidgetVisibility::HitTestInvisible)
                          .release(),
                      ui::canvasSlot().fill());
+
+    _topBar = std::static_pointer_cast<UIContainer>(ui::column("EditorTopBar")
+                  .setSpacing(0.0f)
+                  .setPadding({0.0f, 0.0f})
+                  .release());
+    // Point anchor + offset moves the min corner only: X spans the window
+    // (anchor 0..1), Y stays content-measured (insets here would promote the
+    // axis to a full-window stretch and break the body's top inset).
+    (void)ui::attach(*_tree,
+                     *_root,
+                     _topBar,
+                     ui::canvasSlot()
+                         .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
+                         .offset({0.0f, 0.0f}));
 
     _pageTabBar = std::make_shared<UITabBar>("EditorPageTabs");
     _pageTabBar->_bDraggableTabs = true;
@@ -364,25 +412,18 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
         };
         _pageTabBar->addBehavior(drop);
     }
-    (void)ui::attach(*_tree,
-                    *_root,
-                    _pageTabBar,
-                    ui::canvasSlot()
-                        .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
-                        .size({0.0f, titleH})
-                        .insets(FMargin{context.metrics.chromeInsetLeft,
-                                        0.0f,
-                                        context.metrics.chromeDragGutter,
-                                        0.0f}));
-
+    // Row order follows the placement. WindowTop: the menu bar rides the
+    // title band (traffic lights left, drag gutter right), the tab strip
+    // expands to the row below it. NativeApplication: the tabs ride the band
+    // (the menu is the system menu bar) and the body starts right below.
     _menuBar = ui::menuBar("EditorMenu").share();
-    (void)ui::attach(*_tree,
-                    *_root,
-                    _menuBar,
-                    ui::canvasSlot()
-                        .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
-                        .offset({0.0f, menuY})
-                        .size({0.0f, kMenuHeight}));
+    if (!bNativeMenu) {
+        _menuBar->setPadding({4.0f, 0.0f}); // items fit the band height
+        (void)ui::attach(*_tree,
+                        *_topBar,
+                        _menuBar,
+                        ui::boxSlot().margin(bandInsets).preferredSize({0.0f, titleH}));
+    }
 
     _menuBar->addItem("File", [this]() {
         return UIMenu::create({
@@ -447,6 +488,56 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
         return UIMenu::create(std::move(items));
     });
 
+#if defined(__APPLE__)
+    if (bNativeMenu) {
+        // The native menus re-evaluate the bar's live structure on every
+        // open, so check states stay fresh and menus registered later (the
+        // Window menu below) appear on the next open/refresh.
+        installApplicationMenu([this]() {
+            std::vector<FNativeMenuDesc> menus;
+            if (_menuBar) {
+                for (const UIMenuBar::FEntry& entry : _menuBar->getEntries()) {
+                    FNativeMenuDesc desc;
+                    desc.title      = entry.label;
+                    desc.buildItems = [entry]() {
+                        if (!entry.menuFactory) {
+                            return std::vector<FNativeMenuItem>{};
+                        }
+                        auto menu = entry.menuFactory();
+                        std::vector<FNativeMenuItem> items;
+                        if (menu) {
+                            for (UIMenuItem* widget : menu->menuItems()) {
+                                if (widget->_bSeparator) {
+                                    items.push_back(FNativeMenuItem::separator());
+                                    continue;
+                                }
+                                FNativeMenuItem item;
+                                item.label      = widget->_label;
+                                item.bCheckable = widget->_bCheckable;
+                                item.bChecked   = widget->_bChecked;
+                                item.bEnabled   = widget->_bEnabled;
+                                item.action     = widget->_onAction;
+                                items.push_back(std::move(item));
+                            }
+                        }
+                        return items;
+                    };
+                    menus.push_back(std::move(desc));
+                }
+            }
+            return menus;
+        });
+    }
+#endif
+
+    // The tab bar is the other row: in the band for native, right under the
+    // menu row for window-top.
+    (void)ui::attach(*_tree,
+                    *_topBar,
+                    _pageTabBar,
+                    bNativeMenu ? ui::boxSlot().margin(bandInsets)
+                                : ui::boxSlot());
+
     _dockContext = std::make_shared<FDockContext>();
     _dockContext->bAllowFloating = true;
     _dockContext->bAllowTearOff  = true;
@@ -464,7 +555,7 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
                     ui::canvasSlot()
                         .fill()
                         .insets(FMargin{editor_density::kChromeInset,
-                                        chromeTop,
+                                        _chromeTop,
                                         editor_density::kChromeInset,
                                         editor_density::kChromeInset}));
 
@@ -522,6 +613,13 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
         .rootFor         = rootFor,
     });
     _workspace.buildWindowMenu();
+#if defined(__APPLE__)
+    if (_menuBarPlacement == EEditorMenuBarPlacement::NativeApplication) {
+        // Window entries register after the install; AppKit does not send
+        // menuNeedsUpdate for the bar itself, so refresh the titles now.
+        refreshApplicationMenu();
+    }
+#endif
     _workspace.applyWorkspaceLayout();
     _dockContext->fireDockUpdated();
     _ownedDockContext->fireDockUpdated();
@@ -551,6 +649,33 @@ void EditorSurface::applyWindowMetrics(const EditorWindowMetrics& metrics)
         return;
     }
     applyEditorWindowMetrics(*_tree, metrics);
+}
+
+/// The body's top inset is the laid-out height of the self-sizing top bar,
+/// which overlays the title band and carries every chrome row (menu / tabs,
+/// per placement). Read after layout, so adding/removing a row never needs a
+/// hand-computed offset. The first frame runs on the constructor's estimate;
+/// a changed height re-invalidates the dock slot and lands the next pass.
+void EditorSurface::syncChromeTopInset()
+{
+    if (!_topBar || !_dockSpace) {
+        return;
+    }
+    const Rect2D& rect = _topBar->getLayoutRect();
+    const float   top  = rect.extent.y > 0.0f ? rect.extent.y : editor_density::kMenuHeight;
+    if (top == _chromeTop) {
+        return;
+    }
+    _chromeTop = top;
+    if (_root) {
+        if (UISlot* slot = _root->getSlotForChild(*_dockSpace)) {
+            if (auto* canvas = slot->as<UICanvasSlot>()) {
+                FMargin insets = canvas->getOffsets();
+                insets.top     = top;
+                canvas->setOffsets(insets);
+            }
+        }
+    }
 }
 
 void EditorSurface::persistDockLayouts()
@@ -631,6 +756,17 @@ void EditorSurface::publishTitleClientHits()
         return;
     }
     std::vector<FWindowChromeRect> hits;
+    if (_menuBar) {
+        const Rect2D& rect = _menuBar->getLayoutRect();
+        if (rect.extent.x > 0.0f && rect.extent.y > 0.0f) {
+            hits.push_back(FWindowChromeRect{
+                rect.pos.x,
+                rect.pos.y,
+                rect.extent.x,
+                rect.extent.y,
+            });
+        }
+    }
     if (_pageTabBar) {
         const Rect2D& rect = _pageTabBar->getLayoutRect();
         if (rect.extent.x > 0.0f && rect.extent.y > 0.0f) {

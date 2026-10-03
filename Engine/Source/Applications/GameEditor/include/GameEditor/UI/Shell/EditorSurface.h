@@ -19,6 +19,16 @@
 namespace ya
 {
 
+/// Where the editor menu structure renders (config `editor.menuBarPlacement`).
+enum class EEditorMenuBarPlacement : uint8_t
+{
+    /// In-window menu bar row (the cross-platform default).
+    WindowTop,
+    /// macOS: the system application menu (notch row); the editor drops its
+    /// in-window menu row and the tab bar moves to the top.
+    NativeApplication,
+};
+
 struct IRenderSurfaceContext;
 struct App;
 struct EditorLayer;
@@ -35,6 +45,8 @@ struct UIMenu;
 struct UIMenuBar;
 struct UITabBar;
 struct UICanvasPanel;
+struct UIElement;
+struct UIContainer;
 struct UITheme;
 struct WidgetTree;
 struct IImage;
@@ -65,9 +77,19 @@ struct EditorSurface : IEditorViewportHostSink
 
     std::shared_ptr<UICanvasPanel>         _root;
     std::shared_ptr<UICanvasPanel>         _titleBar;
+    /// Row container under the title band: the menu bar and the page tab bar
+    /// stack by content (rows may be absent per placement), so no offset is
+    /// hand-computed. The body's top inset reads the container's laid-out
+    /// height every frame (`_chromeTop`).
+    std::shared_ptr<UIContainer>     _topBar;
+    float                            _chromeTop = 0.0f;
     std::shared_ptr<UITabBar>        _pageTabBar;
     std::vector<std::string>         _pageTabKeys;
     std::shared_ptr<UIMenuBar>       _menuBar;
+    /// Where the menu structure renders. `NativeApplication` is macOS-only
+    /// (system menu bar / notch row); an unrecognized or unsupported
+    /// placement falls back to `WindowTop`.
+    EEditorMenuBarPlacement _menuBarPlacement = EEditorMenuBarPlacement::WindowTop;
     std::shared_ptr<FDockContext>    _dockContext;
     std::shared_ptr<FDockContext>    _ownedDockContext;
     std::shared_ptr<UIDockSpace>     _dockSpace;
@@ -169,6 +191,8 @@ struct EditorSurface : IEditorViewportHostSink
     [[nodiscard]] Rect2D previewPanelLocalRect() const;
     void syncViewportHostState(const FEditorSurfaceContext& context);
     void applyWindowMetrics(const EditorWindowMetrics& metrics);
+    /// Sync the body's top inset from the laid-out top-bar height.
+    void syncChromeTopInset();
     void persistDockLayouts();
     void installDockNoTargetTearOff();
     /// Double-click on the empty page-tab strip (not a tab button, not a
