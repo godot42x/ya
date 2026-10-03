@@ -26,7 +26,15 @@
 步骤 4 2D 模块（可与步骤 3 并行）
 - [x] `Scene2D` target（`ya-scene-2d`）：Sprite2D / Tilemap 移出 `ya-render-3d`（Tileset 数据本来在 Core），`TilemapComponent.cpp` 拆成数据+编辑 / 查询 / 渲染展开
 - [x] `SpriteAnimationComponent` + `SpriteAnimationSystem`（D-T2 决策门已触发），Player / Npc / Chest 三处脚本的 `uvRect` 计算已删，`Actor.heroFrame` 已删
-- [ ] `Sprite2DComponent` pivot / anchor
+- [ ] `Sprite2DComponent` pivot / anchor（归一化 0..1，默认 0.5,0.5；A 引擎代码+测试 / B 示例+自动化+文档，B 等 4c 迁完场景再做，场景只改一遍）
+
+步骤 4c 场景数据瘦身与动画资产（2026-10-03 用户提出，三项已拍板：json_prune / asset / set_editor）
+- [x] P1 场景组件默认值省略：`SceneSerializer::serializeEntity` 把组件 JSON 与「默认构造实例的 JSON」递归对比，等于默认的字段不写；组件本身仍写 `{}`；`IComponentOps::createDefaultInstance()` 提供默认实例；全部已注册组件经 addComponent 创建后与 `T{}` 一致（有测试守）
+- [ ] P1 收尾：已有场景用引擎重存一遍（不手改），并入 P2 的场景迁移，只重写一次
+- [ ] P2 `SpriteAnimationSet` 资产（`.yaanim.json`：columns / rows / clips，仿 Tileset：Core/Common + `SpriteAnimationSetRef` + Resource manager）；`SpriteAnimationComponent` 只留资产引用 + 当前 clip 名；TownLarge 21 个重复块（仅 2 种内容）迁成引用
+- [ ] P3 编辑器：资产选择器分类 + 组件面板 clip 下拉与播放/停止；`SpriteAnimationSet` 编辑页签（仿 Tile Palette：图集网格点选帧、clip 增删改、fps / loop、预览播放）
+- 顺序：P1 → P2 → P3 → pivot B（共享构建，串行；P1 / P2 的场景重写合并成一次）
+- 风险：省略默认值后，场景隐含依赖代码里的默认值，以后改默认值会改变旧场景（需写进 scene-serialization 相关 skill）
 
 步骤 5 2D 合批核心（前置：步骤 3、4）
 - [ ] 精灵实例化，一开始就与 `ScreenDrawList` 共享 quad 合批核心（不在 `Sprite2DStage` 里单独做再推倒）

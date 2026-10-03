@@ -278,8 +278,10 @@ TEST(CameraProjection, PixelPerfectFieldsRoundTrip)
     const nlohmann::json saved = serializer.serialize();
     const auto& componentJson = saved["entities"][0]["components"]["CameraComponent"];
     EXPECT_EQ(componentJson["_pixelPerfect"], true);
-    EXPECT_FLOAT_EQ(componentJson["_pixelsPerUnit"].get<float>(), 16.0f);
-    EXPECT_FLOAT_EQ(componentJson["_referenceHeightPx"].get<float>(), 192.0f);
+    // 16 px/unit and 192 px are CameraComponent's defaults, so the scene file
+    // omits them. Loading still restores those values.
+    EXPECT_FALSE(componentJson.contains("_pixelsPerUnit"));
+    EXPECT_FALSE(componentJson.contains("_referenceHeightPx"));
 
     Scene loaded("PixelPerfectLoaded");
     SceneSerializer loadedSerializer(&loaded);

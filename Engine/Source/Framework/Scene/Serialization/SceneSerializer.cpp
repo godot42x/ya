@@ -6,12 +6,14 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "Resource/AssetManager.h"
 #include "Scene3D/ManagedChildComponent.h"
+#include "ECS/ECSRegistry.h"
 #include "ECS/Entity.h"
 #include "Scene/Core/SceneWidgetEntry.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -95,6 +97,68 @@ void normalizeSceneJsonPaths(nlohmann::json& json)
 
         normalizeSceneJsonPaths(value);
     }
+}
+
+// Drop reflected fields that still equal a default-constructed instance.
+// Objects recurse (including `__base__`). An object that trims down to empty
+// is removed when the default is also an object. Arrays compare as a whole.
+// Returns true when `value` itself should be removed.
+bool omitFieldsEqualToDefault(nlohmann::json& value, const nlohmann::json& defaults)
+{
+    if (value.is_object() && defaults.is_object()) {
+        std::vector<std::string> drop;
+        for (auto it = value.begin(); it != value.end(); ++it) {
+            const auto found = defaults.find(it.key());
+            if (found == defaults.end()) {
+                continue;
+            }
+            if (omitFieldsEqualToDefault(it.value(), *found)) {
+                drop.push_back(it.key());
+            }
+        }
+        for (const std::string& key : drop) {
+            value.erase(key);
+        }
+        return value.empty();
+    }
+
+    if (value.is_array() && defaults.is_array()) {
+        return value == defaults;
+    }
+
+    if (value.is_object() || value.is_array() || defaults.is_object() || defaults.is_array()) {
+        return false;
+    }
+
+    return value == defaults;
+}
+
+// Same serializeByRuntimeReflection path as the live component (typeIndex +
+// name), cached per type so each entity does not construct another T{}.
+// The pointer stays valid until the next cache insertion.
+const nlohmann::json* cachedDefaultReflectionJson(ya::type_index_t typeIndex, const std::string& typeName)
+{
+    struct Entry
+    {
+        bool           bHasDefault = false;
+        nlohmann::json json;
+    };
+
+    static std::unordered_map<ya::type_index_t, Entry> cache;
+    if (const auto it = cache.find(typeIndex); it != cache.end()) {
+        return it->second.bHasDefault ? &it->second.json : nullptr;
+    }
+
+    Entry entry;
+    const auto* ops = ECSRegistry::get().getComponentOps(typeIndex);
+    const std::shared_ptr<void> instance = ops ? ops->createDefaultInstance() : nullptr;
+    if (instance) {
+        entry.bHasDefault = true;
+        entry.json = ReflectionSerializer::serializeByRuntimeReflection(instance.get(), typeIndex, typeName);
+    }
+
+    const auto it = cache.emplace(typeIndex, std::move(entry)).first;
+    return it->second.bHasDefault ? &it->second.json : nullptr;
 }
 
 } // namespace
@@ -341,8 +405,19 @@ nlohmann::json SceneSerializer::serializeEntity(Entity* entity)
 
         nlohmann::json componentJson;
         const auto* ops = reg.getComponentOps(typeIndex);
+        const std::string typeName = name.toString();
+        // Only the reflection payload is trimmed. Custom output is appended
+        // afterwards and is kept even when every reflected field is default.
         if (!ops || ops->useReflectionSerialization(componentPtr)) {
-            componentJson = ::ya::ReflectionSerializer::serializeByRuntimeReflection(componentPtr, typeIndex, name.toString());
+            componentJson = ::ya::ReflectionSerializer::serializeByRuntimeReflection(componentPtr, typeIndex, typeName);
+            if (ops) {
+                if (const nlohmann::json* defaults = cachedDefaultReflectionJson(typeIndex, typeName)) {
+                    omitFieldsEqualToDefault(componentJson, *defaults);
+                }
+            }
+            if (!componentJson.is_object()) {
+                componentJson = nlohmann::json::object();
+            }
         }
         if (ops) {
             ops->serializeCustom(componentPtr, componentJson);

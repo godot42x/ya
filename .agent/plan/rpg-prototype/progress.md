@@ -481,3 +481,19 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   同目录三个旧脚本照样通过；编辑器冒烟门禁 83 / 84 fps，字体构建 0。
 - 偏离 / 未覆盖：House 里宝箱开合没有在 play 下端到端验证（`scene.load` 不重启 runtime，已知问题），只验证了场景载入后组件
   数据正确；Inspector 里编辑 clips 没有目视确认。pivot 是步骤 4 最后一项，下一个 checkpoint。
+
+## 2026-10-03 — 步骤 4c P1：场景组件默认值省略
+
+- 起因：TownLarge 里每个 `Sprite2DComponent` 都写满 `image.samplerConfig / uvOffset / tint / flip / layer …`
+  等默认值；反序列化本来就只覆盖出现的字段，缺的保持构造默认值，所以不用改加载。
+- 机制（用户选定 json_prune）：`SceneSerializer::serializeEntity` 把组件的反射 JSON 与 `T{}` 的反射 JSON 递归对比，等于默认的不写。
+  对象递归（含 `__base__`），裁空且默认也是对象则删键，数组整体相等才删；组件键保留（全默认写 `{}`）；
+  `useReflectionSerialization()==false` 的组件（`LuaScriptComponent`）的自定义输出不裁剪。默认实例入口是
+  `IComponentOps::createDefaultInstance()`（`std::shared_ptr<void>`，不可默认构造返回空、不裁剪），默认 JSON 按类型缓存，
+  与实体走同一个 `serializeByRuntimeReflection`。
+- 代价：场景隐含依赖代码里的默认值，改默认值会改变旧场景（已写进 `scene-object-boundary` 第 10 条）。
+- 验证：`SceneSerializerDefaultsTest` 7 例（默认写 `{}`、只写被改字段与嵌套子键、往返、旧版全量 JSON 与稀疏 JSON 加载一致、
+  所有注册组件可默认构造、所有注册组件经 addComponent 创建后与 `T{}` 一致、Lua 自定义输出不裁剪）；
+  `CameraProjection.PixelPerfectFieldsRoundTrip` 改成断言默认值被省略；`ya-testing` 1574 ran / 1573 passed / 1 skipped（同前）。
+  估算：TownLarge 一个 Player Sprite2D 块 1037 → 约 569 字节。
+- 未完成：三个示例场景还没用引擎重存（并入 P2 的场景迁移，只重写一次）。

@@ -4,6 +4,7 @@
 
 #include <concepts>
 #include <entt/entt.hpp>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -66,6 +67,13 @@ struct ECSRegistry
                             EClonePolicy policy) = 0;
 
         virtual bool useReflectionSerialization(const void* component) const = 0;
+
+        /// Type-erased `T{}` so scene serialization can drop reflected fields
+        /// that still equal the default. Null when T is not default-constructible;
+        /// the caller then writes every reflected field. `_owner` is null, which
+        /// is fine: serialization only reads reflected fields.
+        virtual std::shared_ptr<void> createDefaultInstance() const { return nullptr; }
+
         virtual void serializeCustom(const void* component, nlohmann::json& out) const { (void)component; (void)out; }
         virtual void deserializeCustom(void* component, const nlohmann::json& in) const { (void)component; (void)in; }
 
@@ -99,6 +107,15 @@ struct ECSRegistry
 
         bool useReflectionSerialization(const void* component) const override {
             return static_cast<const T*>(component)->useReflectionSerialization();
+        }
+        std::shared_ptr<void> createDefaultInstance() const override
+        {
+            if constexpr (std::default_initializable<T>) {
+                return std::make_shared<T>();
+            }
+            else {
+                return nullptr;
+            }
         }
         void serializeCustom(const void* component, nlohmann::json& out) const override {
             static_cast<const T*>(component)->serializeCustom(out);

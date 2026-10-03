@@ -81,6 +81,14 @@ transform for free, and why companion components never track position themselves
    back to a default and the mesh, the view and the wireframe drawn from it
    disagree while only one of them is right. Never create-then-patch: patch is
    forgettable, an argument is not.
+10. **Scene files omit reflected fields that still equal `T{}`.**
+   `SceneSerializer` compares a component's reflection JSON with the reflection
+   JSON of a default-constructed instance and drops equal fields. Objects
+   recurse, including `__base__`; an object that becomes empty is removed;
+   arrays compare as a whole. The component key itself stays, even as `{}`.
+   Custom output (`useReflectionSerialization() == false`, for example
+   `LuaScriptComponent`) is not trimmed. A missing field means the code
+   default, so changing a component default changes how old scenes load.
 
 ## Anti-patterns
 
