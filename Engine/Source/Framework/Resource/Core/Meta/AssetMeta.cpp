@@ -1,5 +1,6 @@
 #include "Resource/Core/Meta/AssetMeta.h"
 
+#include "Core/Common/JsonFormat.h"
 #include "Core/Log.h"
 
 #include <filesystem>
@@ -122,7 +123,10 @@ void AssetMeta::saveToFile(const std::string& metaPath) const
         return;
     }
 
-    file << toJson().dump(4, ' ', false); // Pretty-print with 4-space indent
+    // Same leaf layout as scenes and animation sets: objects expand, scalar
+    // arrays stay on one line. loadFromFile parses either this or the older
+    // dump(4) text.
+    file << dumpJsonCompactLeaves(toJson());
     YA_CORE_INFO("AssetMeta: saved '{}'", metaPath);
 }
 
