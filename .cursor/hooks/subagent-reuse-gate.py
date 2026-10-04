@@ -54,8 +54,15 @@ def record_violation(payload, note):
     try:
         os.makedirs(VIOLATIONS_DIR, exist_ok=True)
         path = os.path.join(VIOLATIONS_DIR, str(payload.get("conversation_id") or "unknown") + ".jsonl")
+        # Cursor invokes the hook twice per dispatch; count one dispatch once.
+        call_id = payload.get("tool_call_id") or payload.get("subagent_id")
+        if call_id and os.path.isfile(path):
+            with open(path, encoding="utf-8") as f:
+                if any(json.loads(line).get("call_id") == call_id for line in f if line.strip()):
+                    return
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps({
+                "call_id": call_id,
                 "subagent_type": payload.get("subagent_type"),
                 "task": (payload.get("task") or "")[:120],
                 "note": note,
