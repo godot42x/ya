@@ -9,16 +9,25 @@
 - 写 2D 玩法脚本（行走、交互、遮挡）或给它们加引擎能力时。
 - 判断某个 2D 玩法需求该落在脚本、组件还是渲染层时。
 
-## 角色前后遮挡（z 约定）
+## 角色前后遮挡（画家顺序 + y-sort）
 
-不透明精灵 alpha 裁剪并写深度（`Sprite2DWorld.slang`），所以前后遮挡用深度表达：
+精灵之间只有画家顺序，比较函数在 `Scene2D/SpriteDrawOrder.h`。键是
+`(layer, ySortRank, yKey, order, tiebreak)`，全升序，后画的在上面。
+`Transform.z` 不参与这个键：它只拿来和 3D 不透明几何做深度测试（只测不写）。
 
-- **角色 z = 图层基准 − y × ε**。世界 y 越小（屏幕越靠下）z 越大，越靠近相机，
-  遮住后面的角色。基准取 tilemap 的 Decor 与 Overlay 层之间；ε 取小值保证
-  `地图高 × ε` 仍留在两层之间（示例：基准 0.1、ε 0.005、地图 20 格）。
-- 约定收在示例 `Content/Scripts/Actor.lua`（`Actor.zFor`），Player/Npc/Sign 共用。
-  这是在补"没有 y-sort"的洞：`rpg-prototype` 评审步骤 5 把画家顺序（layer → y → order）
-  做成 2D 合批的排序键后删除，届时脚本不再算 z。y-sort 的排序点是 pivot。
+- `layer`：`Sprite2DComponent.layer`，tile 子层是 `TilemapComponent.layer + TilemapLayer.layerOffset`。
+- `ySortRank`：`bYSort` 关为 0、开为 1。同一 layer 里没开 y-sort 的先画。
+- `yKey`：开了 y-sort 取 `-sortY`，否则恒为 0。`sortY` 是排序点的世界 y，texel 吸附之后。
+  排序点是 pivot：精灵用实体世界位置，tile 用该格中心（pivot 0.5, 0.5）。世界 y 越大
+  （屏幕越靠上）越早画，越靠屏幕下方越晚画、盖住上面的。
+- `order`：`Sprite2DComponent.sortOrder`；tilemap 子层用 `layerIndex`。
+- tiebreak：实体 id，然后 tile 的行优先提取顺序。
+
+示例：Ground / Decor / Overlay 三个子层都在组件 `layer` 0。Overlay 的 `layerOffset = 1`，
+所以盖住角色。Player / Npc / Sign / Chest 开 `bYSort`，Door 不开。Door 的 `sortOrder`
+是 1：地面子层的 order 是 0，装饰子层是 1，门要画在地面之上；和装饰层 order 相同时
+tilemap 的实体 id 更大，装饰仍然盖住门。角色和家具的 `Transform.z` 是常量 0.1，落在
+Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色层一致。脚本不再按 y 写 z。
 
 ## 脚与 pivot
 

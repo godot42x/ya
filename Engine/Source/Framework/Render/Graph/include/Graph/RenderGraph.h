@@ -151,6 +151,8 @@ enum class ERGPassResourceAccess : uint8_t
     Write,
     ColorAttachment,
     DepthAttachment,
+    /// Depth test of an existing depth image. The pass is not its writer.
+    DepthReadOnly,
     TransferSrc,
     TransferDst,
 };
@@ -205,6 +207,9 @@ struct RGDepthAttachmentDesc
     EAttachmentLoadOp::T     loadOp     = EAttachmentLoadOp::Load;
     EAttachmentStoreOp::T    storeOp    = EAttachmentStoreOp::Store;
     EImageLayout::T          finalLayout = EImageLayout::DepthStencilAttachmentOptimal;
+    /// Test the loaded depth without recording this pass as its writer.
+    /// The pipeline must keep depth writes disabled.
+    bool                     bReadOnly = false;
 };
 
 struct RGRasterPassDesc

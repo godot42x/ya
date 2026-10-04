@@ -22,12 +22,13 @@ struct Mesh;
 /// plane, so rotating the entity turns the quad. A camera-facing quad is a
 /// billboard and stays in ViewOverlayStage.
 ///
-/// The draw policy comes from the component and is not re-decided here: an
-/// opaque sprite (`tint.a` >= 1) depth-tests and depth-writes, so scene
-/// geometry occludes it and it occludes whatever is drawn after it; a
-/// translucent sprite depth-tests without writing and relies on the View's own
-/// order. Running inside the scene graph (after opaque geometry, before bloom)
-/// is what makes both true -- it is not an overlay on the finished image.
+/// One pipeline for every sprite: alpha blend, depth test `LessOrEqual`,
+/// depth writes off. 3D opaque geometry can cover a sprite; sprites cover
+/// each other only by the painter order already on the candidate list.
+/// `a < 0.01` is discarded in the shader as an early-out, not a second
+/// policy. Running inside the scene graph (after opaque geometry, before
+/// bloom) is what shares the scene's color and depth -- it is not an overlay
+/// on the finished image.
 ///
 /// The stage holds no per-View state: candidates arrive through
 /// `RenderStageContext::frameData`, and the View's bindings are allocated by the
@@ -71,7 +72,7 @@ struct YA_RENDER_3D_API Sprite2DStage : public IRenderStage
     [[nodiscard]] stdptr<IDescriptorSetLayout> getTextureDSL() const { return _textureDSL; }
 
   private:
-    [[nodiscard]] GraphicsPipelineCreateInfo makePipelineCreateInfo(bool bTranslucent) const;
+    [[nodiscard]] GraphicsPipelineCreateInfo makePipelineCreateInfo() const;
     /// The View's sprite texture table, in slot order. Built by the same
     /// implementation that writes the descriptor set, so a sprite's slot and the
     /// image written to that slot cannot disagree.
@@ -82,11 +83,8 @@ struct YA_RENDER_3D_API Sprite2DStage : public IRenderStage
 
     stdptr<IDescriptorSetLayout> _frameDSL;
     stdptr<IDescriptorSetLayout> _textureDSL;
-    stdptr<IPipelineLayout>      _pipelineLayout;
-    /// Opaque writes depth; translucent only tests it. Two pipelines because
-    /// depth-write is pipeline state, not a per-draw argument.
-    stdptr<IGraphicsPipeline>    _opaquePipeline;
-    stdptr<IGraphicsPipeline>    _translucentPipeline;
+    stdptr<IPipelineLayout>   _pipelineLayout;
+    stdptr<IGraphicsPipeline> _pipeline;
     Mesh*                        _quadMesh = nullptr;
     bool                         _bReverseViewportY = true;
 };

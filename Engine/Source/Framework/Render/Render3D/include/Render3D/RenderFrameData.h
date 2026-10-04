@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render3D/Material/Material.h"
+#include "Scene2D/SpriteDrawOrder.h"
 #include "Render3D/Common/RenderFeatures.h"
 #include "Render3D/Common/RenderViewSceneResources.h"
 #include "Resource/Mesh.h"
@@ -76,12 +77,12 @@ struct WorldSpriteCandidate
     /// Resolved texture + sampler. Only drawable sprites are extracted, so this
     /// is never the "still loading" empty binding.
     TextureBinding texture{};
-    uint32_t       entityId  = 0;
-    int32_t        layer     = 0;
-    int32_t        sortOrder = 0;
-    /// `tint.a` < 1: the sprite blends, so it must not write depth (see the
-    /// component's draw policy). The pass picks its pipeline from this.
-    bool bTranslucent = false;
+    /// Painter key. Filled at extraction; texel snap rewrites `yKey` from
+    /// `sortPointY` before the view sorts.
+    SpriteDrawKey  drawKey{};
+    /// World y of the sort point (sprite pivot, or the tile's cell centre)
+    /// after texel snap. Y-sort off still stores it, and `drawKey.yKey` stays 0.
+    float          sortPointY = 0.0f;
     /// Which views may draw this sprite; a generated companion would take its
     /// host's set, exactly like RenderDrawItem::features.
     FRenderFeatureMask features = toMask(ERenderFeature::Game);

@@ -3,7 +3,6 @@
 -- player through map:entityAt, so it reads as a body on the map without any
 -- collision code here.
 local ScriptBase = require("ScriptBase")
-local Actor = require("Actor")
 local Script = ScriptBase:new()
 
 local LINES = {
@@ -19,9 +18,6 @@ end
 function Script:onInit()
     self.transform = self.entity:getTransform()
     self.anim = self.entity:getSpriteAnimation()
-    local position = self.transform:getPosition()
-    -- Static actors claim their depth once; only walkers recompute per step.
-    self.transform:setPosition(Vec3.new(position.x, position.y, Actor.zFor(position.y)))
     self:face("down")
 end
 

@@ -1354,6 +1354,50 @@ TEST(RenderGraphCoreTest, CompileBuildsBufferAndDepthStatePlans)
     EXPECT_EQ(bufferStates[0].requiredState.size, 256u);
 }
 
+TEST(RenderGraphCoreTest, ReadOnlyDepthDoesNotBecomeTheDepthWriter)
+{
+    RenderGraph graph;
+    const auto depth = graph.createTexture(RGTextureDesc{
+        .label  = "depth",
+        .format = EFormat::D32_SFLOAT,
+        .extent = Extent3D{64, 64, 1},
+        .usage  = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
+    });
+
+    const auto writer = graph.addPass("write-depth", [&](RGPassBuilder& pass) {
+        pass.useDepthAttachment(depth);
+    }, [](RGRenderContext&) {});
+    const auto reader = graph.addPass("test-depth", [&](RGPassBuilder& pass) {
+        pass.declareRaster({
+            .renderArea = {.extent = {64, 64}},
+            .depth = RGDepthAttachmentDesc{
+                .depth     = depth,
+                .bReadOnly = true,
+            },
+        });
+    }, [](RGRenderContext&) {});
+    const auto later = graph.addPass("sample-depth", [&](RGPassBuilder& pass) {
+        pass.read(depth);
+    }, [](RGRenderContext&) {});
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid()) << compiled.issues.front().message;
+
+    const RGPass* testPass = graph.getPass(reader);
+    ASSERT_NE(testPass, nullptr);
+    ASSERT_EQ(testPass->textures.size(), 1u);
+    EXPECT_EQ(testPass->textures[0].access, ERGPassResourceAccess::DepthReadOnly);
+
+    const auto hasEdge = [&](RGPassHandle from, RGPassHandle to) {
+        return std::find(compiled.dependencies.begin(),
+                         compiled.dependencies.end(),
+                         RGDependencyEdge{from, to}) != compiled.dependencies.end();
+    };
+    EXPECT_TRUE(hasEdge(writer, reader));
+    EXPECT_TRUE(hasEdge(writer, later));
+    EXPECT_FALSE(hasEdge(reader, later));
+}
+
 TEST(RenderGraphCoreTest, CompileTracksExplicitUniformAndStorageBufferStates)
 {
     RenderGraph graph;

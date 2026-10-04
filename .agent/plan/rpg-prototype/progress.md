@@ -583,3 +583,13 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 预览方案：`SpriteAnimationSystem` 编辑态不推进，`uvRect` 是会序列化的反射字段。预览只在 section 内：Play 记下当前 `uvRect` → `play` → section tick 调 `advance`；Stop 或 section 销毁（换选中）时 `stop()` 并写回 `uvRect`；不标脏场景。
 - 验证：新增 5 个测试（含 `PreviewDoesNotChangeSerializedScene`）；`ya-testing` 1616 ran / 1615 passed / 1 skipped；四条玩法脚本通过；编辑器打开 Town 冒烟 exit 0。
 - 未验证：选中 Player 后的真实 Inspector（无编辑器 automation 可选中实体）、真实文件对话框、Edit 实机打开页签。
+
+## 2026-10-04 — 步骤 5a 画家顺序 + y-sort
+
+- 方案与切分（用户拍板）：5a 语义 → 5b 实例化 + 槽身份纹理表（只与 ScreenDrawList 共享纹理表和批游标，目标 TownLarge `recordFamily` self ≤ 1.5ms、三场景像素 0 差）→ 5c tilemap 静态实例缓冲。
+- C1：`Sprite2DStage` 单一管线（混合开，深度 `LessOrEqual` 只测不写，`a<0.01` discard 保留）；`bTranslucent` 删除；render graph 新增 `ERGPassResourceAccess::DepthReadOnly` / `RGDepthAttachmentDesc::bReadOnly`（layout 仍是 DepthStencilAttachmentOptimal，该 access 不算 writer）。
+- C2：`Scene2D/SpriteDrawOrder.h` 唯一比较函数 `(layer, ySortRank, yKey, order, entityId, sequence)`；提取与 `prepareView` `stable_sort`，拾取保留绘制更晚的命中。`Sprite2DComponent::bYSort`、`TilemapLayer::bYSort`、`TilemapLayer::layerOffset`（C2 增补，见 P0 矩阵）；排序点 = 实体世界位置（pivot，texel 吸附后），tile 取格子中心。
+- 删除 `Actor.lua` / `zFor`；Player / Npc / Sign 不再写 z；三个场景角色/家具 z 统一 0.1，Player/Npc/Sign/Chest `bYSort`，Overlay `layerOffset=1`，Door `sortOrder=1`；`make_scale_scene.py`、`2d-gameplay` skill 同步。
+- 验证：`ya-testing` 1626 ran / 1625 passed / 1 skipped（净增 10）；四条玩法脚本、编辑器冒烟 exit 0；House 与无精灵场景 0 像素差，Town 相机在第 40 帧偏 1 设备像素，对齐后 32 像素通道差 ≤ 1，TownLarge 热启动 0 差；
+  Player 走到 NPC 上方/下方各一张，屏幕更靠下者盖住更靠上者。
+- 未验证：立方体穿过精灵平面的 3D 交线截图；Overlay 盖住角色的实际交叠截图（Town 里树冠下方一格是实心，走不进去，只有 `TilemapExtractionTest.LayerOffsetAndYSortFeedThePainterKey` 覆盖）。

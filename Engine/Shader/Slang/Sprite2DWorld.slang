@@ -83,9 +83,8 @@ SpriteVertexOutput vertWorldMain(SpriteVertexInput input)
 float4 fragWorldMain(SpriteVertexOutput input) : SV_Target
 {
     float4 color = uTextures[input.textureIndex].Sample(input.texCoord) * input.tint;
-    // An opaque sprite is cut out by its own texture rather than blended: the
-    // pass binds it without blending and writes depth, so dropping fully
-    // transparent texels here is what keeps its silhouette clean.
+    // Early-out for texels that would not change the framebuffer. The pass
+    // always blends (SrcAlpha / OneMinusSrcAlpha) and never writes depth.
     if (color.a < 0.01) {
         discard;
     }

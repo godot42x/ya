@@ -1,7 +1,6 @@
 -- A signpost: static, interactive. The plank warms while read and the
 -- Dialogue entry carries its text.
 local ScriptBase = require("ScriptBase")
-local Actor = require("Actor")
 local Script = ScriptBase:new()
 
 local TINT_IDLE = Vec4.new(1.0, 1.0, 1.0, 1.0)
@@ -14,8 +13,6 @@ local LINES = {
 
 function Script:onInit()
     self.sprite = self.entity:getSprite2D()
-    local position = self.entity:getTransform():getPosition()
-    self.entity:getTransform():setPosition(Vec3.new(position.x, position.y, Actor.zFor(position.y)))
 end
 
 function Script:onInteract()

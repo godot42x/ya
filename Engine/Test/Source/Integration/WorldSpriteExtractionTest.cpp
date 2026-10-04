@@ -1,5 +1,6 @@
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Scene2D/Sprite2DComponent.h"
+#include "Scene2D/SpriteDrawOrder.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "GameRuntime/Render/RenderFrameExtractor.h"
@@ -27,14 +28,19 @@ void ensureReflectionReady()
     }
 }
 
-WorldSpriteCandidate makeCandidate(const glm::vec3& center, int32_t layer, int32_t sortOrder, float alpha)
+WorldSpriteCandidate makeCandidate(const glm::vec3& center,
+                                     int32_t           layer,
+                                     int32_t           sortOrder,
+                                     float             alpha,
+                                     bool              bYSort    = false,
+                                     uint32_t          entityId  = 0,
+                                     uint32_t          sequence  = 0)
 {
     WorldSpriteCandidate candidate{};
-    candidate.worldCenter  = center;
-    candidate.layer        = layer;
-    candidate.sortOrder    = sortOrder;
-    candidate.tint         = glm::vec4(1.0f, 1.0f, 1.0f, alpha);
-    candidate.bTranslucent = alpha < 1.0f;
+    candidate.worldCenter = center;
+    candidate.sortPointY  = center.y;
+    candidate.drawKey     = makeSpriteDrawKey(layer, bYSort, center.y, sortOrder, entityId, sequence);
+    candidate.tint        = glm::vec4(1.0f, 1.0f, 1.0f, alpha);
     return candidate;
 }
 
@@ -89,23 +95,25 @@ TEST(WorldSpriteExtractionTest, CandidateCarriesTransformUvAndTranslucency)
     // Flip U swaps the atlas window's u pair; flip V is off, so v stays.
     EXPECT_EQ(candidate.uvRect, glm::vec4(0.9f, 0.2f, 0.1f, 0.8f));
     EXPECT_EQ(candidate.tint, glm::vec4(0.5f, 0.25f, 0.75f, 1.0f));
-    EXPECT_FALSE(candidate.bTranslucent);
-    EXPECT_EQ(candidate.entityId, 42u);
-    EXPECT_EQ(candidate.layer, 3);
-    EXPECT_EQ(candidate.sortOrder, 5);
+    EXPECT_EQ(candidate.drawKey.entityId, 42u);
+    EXPECT_EQ(candidate.drawKey.layer, 3);
+    EXPECT_EQ(candidate.drawKey.order, 5);
+    EXPECT_EQ(candidate.drawKey.ySortRank, 0);
+    EXPECT_FLOAT_EQ(candidate.sortPointY, 2.0f);
 }
 
-TEST(WorldSpriteExtractionTest, TintAlphaDecidesTheBlendPolicy)
+TEST(WorldSpriteExtractionTest, TintAlphaDoesNotChangeTheDrawKey)
 {
     Sprite2DComponent sprite;
     sprite.tint = glm::vec4(1.0f, 1.0f, 1.0f, 0.5f);
 
     const auto half = RenderFrameExtractor::buildSpriteCandidate(glm::mat4(1.0f), sprite, 1u);
-    EXPECT_TRUE(half.bTranslucent);
-
     sprite.tint.a = 1.0f;
     const auto opaque = RenderFrameExtractor::buildSpriteCandidate(glm::mat4(1.0f), sprite, 1u);
-    EXPECT_FALSE(opaque.bTranslucent);
+    EXPECT_FLOAT_EQ(half.tint.a, 0.5f);
+    EXPECT_FLOAT_EQ(opaque.tint.a, 1.0f);
+    EXPECT_TRUE(spriteDrawsBefore(half.drawKey, opaque.drawKey) == false);
+    EXPECT_TRUE(spriteDrawsBefore(opaque.drawKey, half.drawKey) == false);
 }
 
 TEST(WorldSpriteExtractionTest, SpritesWithoutAResolvedTextureAreNeverExtracted)
@@ -142,25 +150,94 @@ TEST(WorldSpriteExtractionTest, SpritesWithoutAResolvedTextureAreNeverExtracted)
     EXPECT_TRUE(snapshot.worldSprites.empty());
 }
 
-TEST(WorldSpriteExtractionTest, ViewOrderPaintsOpaqueFirstThenLayerThenFarToNear)
+TEST(WorldSpriteExtractionTest, ViewOrderFollowsThePainterKeyNotCameraDepth)
 {
     auto snapshot = snapshotWith({
-        makeCandidate(glm::vec3(0.0f, 0.0f, 0.0f), 0, 0, 0.5f),  // [0] blended, nearest
-        makeCandidate(glm::vec3(0.0f, 0.0f, 4.0f), 0, 0, 1.0f),  // [1] opaque, near
-        makeCandidate(glm::vec3(0.0f, 0.0f, -4.0f), 0, 0, 1.0f), // [2] opaque, far
-        makeCandidate(glm::vec3(0.0f, 0.0f, 0.0f), 7, 0, 1.0f),  // [3] opaque, top layer
+        makeCandidate(glm::vec3(0.0f, 2.0f, 0.0f), 0, 0, 1.0f, true, 1),  // [0] y-sort, higher on screen
+        makeCandidate(glm::vec3(0.0f, 0.0f, 4.0f), 0, 0, 1.0f, true, 2),  // [1] y-sort, lower on screen
+        makeCandidate(glm::vec3(0.0f, 0.0f, -4.0f), 1, 0, 0.5f, false, 3), // [2] next layer, translucent
+        makeCandidate(glm::vec3(0.0f, 9.0f, 1.0f), 0, 5, 1.0f, false, 4),  // [3] no y-sort, paints first
     });
 
-    RenderFrameData frame;
-    RenderFrameExtractor::prepareView(viewAt(glm::vec3(0.0f, 0.0f, 10.0f)), snapshot, frame);
+    RenderFrameData nearCamera;
+    RenderFrameData farCamera;
+    RenderFrameExtractor::prepareView(viewAt(glm::vec3(0.0f, 0.0f, 10.0f)), snapshot, nearCamera);
+    RenderFrameExtractor::prepareView(viewAt(glm::vec3(0.0f, 0.0f, -10.0f)), snapshot, farCamera);
 
-    ASSERT_EQ(frame.worldSprites.size(), 4u);
-    // Opaque before blended, then the higher layer last, then far to near.
-    const std::vector<uint32_t> expectedOrder{2u, 1u, 3u, 0u};
+    ASSERT_EQ(nearCamera.worldSprites.size(), 4u);
+    // Rank 0 before rank 1, then smaller world y (larger yKey) last, then the higher layer.
+    const std::vector<uint32_t> expectedOrder{3u, 0u, 1u, 2u};
     for (size_t index = 0; index < expectedOrder.size(); ++index) {
-        EXPECT_EQ(&frame.worldSprites[index], &snapshot->worldSprites[expectedOrder[index]])
+        EXPECT_EQ(&nearCamera.worldSprites[index], &snapshot->worldSprites[expectedOrder[index]])
             << "sprite " << index << " is not the expected candidate";
+        EXPECT_EQ(&farCamera.worldSprites[index], &nearCamera.worldSprites[index]);
     }
+}
+
+TEST(WorldSpriteExtractionTest, SwappingZDoesNotChangeOrderSwappingOrderDoes)
+{
+    auto snapshot = snapshotWith({
+        makeCandidate(glm::vec3(1.0f, 2.0f, 0.2f), 0, 1, 1.0f, false, 1),
+        makeCandidate(glm::vec3(1.0f, 2.0f, 4.0f), 0, 3, 1.0f, false, 2),
+    });
+
+    const auto orderOf = [](const std::shared_ptr<const SceneSnapshot>& source) {
+        RenderFrameData frame;
+        RenderFrameExtractor::prepareView(viewAt(glm::vec3(0.0f, 0.0f, 10.0f)), source, frame);
+        std::vector<uint32_t> ids;
+        for (const WorldSpriteCandidate& sprite : frame.worldSprites) {
+            ids.push_back(sprite.drawKey.entityId);
+        }
+        return ids;
+    };
+
+    const std::vector<uint32_t> before = orderOf(snapshot);
+    EXPECT_EQ(before, (std::vector<uint32_t>{1u, 2u}));
+
+    auto swappedZ = snapshotWith({
+        makeCandidate(glm::vec3(1.0f, 2.0f, 4.0f), 0, 1, 1.0f, false, 1),
+        makeCandidate(glm::vec3(1.0f, 2.0f, 0.2f), 0, 3, 1.0f, false, 2),
+    });
+    EXPECT_EQ(orderOf(swappedZ), before);
+
+    auto swappedOrder = snapshotWith({
+        makeCandidate(glm::vec3(1.0f, 2.0f, 0.2f), 0, 3, 1.0f, false, 1),
+        makeCandidate(glm::vec3(1.0f, 2.0f, 4.0f), 0, 1, 1.0f, false, 2),
+    });
+    EXPECT_EQ(orderOf(swappedOrder), (std::vector<uint32_t>{2u, 1u}));
+}
+
+TEST(WorldSpriteExtractionTest, YSortCoversTheLowerSpriteAndIgnoresYWhenOff)
+{
+    auto sorted = snapshotWith({
+        makeCandidate(glm::vec3(0.0f, 3.0f, 0.1f), 0, 0, 1.0f, true, 1),
+        makeCandidate(glm::vec3(0.0f, 1.0f, 0.9f), 0, 0, 1.0f, true, 2),
+    });
+    auto swapped = snapshotWith({
+        makeCandidate(glm::vec3(0.0f, 1.0f, 0.1f), 0, 0, 1.0f, true, 1),
+        makeCandidate(glm::vec3(0.0f, 3.0f, 0.9f), 0, 0, 1.0f, true, 2),
+    });
+    auto unsorted = snapshotWith({
+        makeCandidate(glm::vec3(0.0f, 3.0f, 0.1f), 0, 1, 1.0f, false, 1),
+        makeCandidate(glm::vec3(0.0f, 1.0f, 0.9f), 0, 4, 1.0f, false, 2),
+    });
+
+    const auto backEntity = [](const std::shared_ptr<const SceneSnapshot>& source) {
+        RenderFrameData frame;
+        RenderFrameExtractor::prepareView(viewAt(glm::vec3(0.0f)), source, frame);
+        return frame.worldSprites[0].drawKey.entityId;
+    };
+    const auto frontEntity = [](const std::shared_ptr<const SceneSnapshot>& source) {
+        RenderFrameData frame;
+        RenderFrameExtractor::prepareView(viewAt(glm::vec3(0.0f)), source, frame);
+        return frame.worldSprites[frame.worldSprites.size() - 1].drawKey.entityId;
+    };
+
+    EXPECT_EQ(backEntity(sorted), 1u);
+    EXPECT_EQ(frontEntity(sorted), 2u);
+    EXPECT_EQ(frontEntity(swapped), 1u);
+    // Y-sort off: the lower sprite does not jump in front. order does.
+    EXPECT_EQ(frontEntity(unsorted), 2u);
 }
 
 TEST(WorldSpriteExtractionTest, ViewGateDropsSpritesItMustNotDraw)
@@ -203,10 +280,10 @@ TEST(WorldSpriteExtractionTest, TwoViewsShareTheSnapshotAndOwnOnlyTheirOrder)
     ASSERT_EQ(frontView.worldSprites.size(), 2u);
     ASSERT_EQ(backView.worldSprites.size(), 2u);
 
-    // Same candidates, opposite depth order: the order is the View's.
-    EXPECT_EQ(&frontView.worldSprites[0], &snapshot->worldSprites[1]);
+    // The painter key ignores the camera, so both views share one order.
+    EXPECT_EQ(&frontView.worldSprites[0], &snapshot->worldSprites[0]);
     EXPECT_EQ(&backView.worldSprites[0], &snapshot->worldSprites[0]);
-    EXPECT_EQ(&frontView.worldSprites[0], &backView.worldSprites[1]);
+    EXPECT_EQ(&frontView.worldSprites[1], &backView.worldSprites[1]);
 }
 
 TEST(WorldSpriteExtractionTest, PixelSnapLandsCandidateCentersOnTheTexelGrid)
@@ -326,6 +403,30 @@ TEST(WorldSpriteExtractionTest, IntegerTexelPivotOffsetSnapsWithTheCentre)
     const glm::vec3 snappedPivot = snapWorldXY(entityPos, step, 0.0f, 0.0f);
     EXPECT_NEAR(snapped.x, snappedPivot.x + offset.x, 1e-4f);
     EXPECT_NEAR(snapped.y, snappedPivot.y + offset.y, 1e-4f);
+}
+
+TEST(WorldSpriteExtractionTest, YSortKeyUsesTheSnappedPivotNotTheQuadCentre)
+{
+    constexpr float kPixelsPerUnit = 16.0f;
+    const float step = 1.0f / kPixelsPerUnit;
+    Sprite2DComponent sprite;
+    sprite.size  = {1.0f, 1.5f};
+    sprite.pivot = {0.5f, 0.0f};
+    sprite.bYSort = true;
+    const glm::vec3 entityPos{1.03f, -2.2f, 0.4f};
+    const glm::mat4 world = glm::translate(glm::mat4(1.0f), entityPos);
+    std::vector<WorldSpriteCandidate> sprites{
+        RenderFrameExtractor::buildSpriteCandidate(world, sprite, 7u),
+    };
+    EXPECT_NEAR(sprites[0].sortPointY, entityPos.y, 1e-5f);
+    EXPECT_GT(std::abs(sprites[0].worldCenter.y - sprites[0].sortPointY), 0.1f);
+
+    RenderFrameExtractor::snapSpriteCandidatesToTexelGrid(sprites, step);
+    const glm::vec3 snappedPivot = snapWorldXY(entityPos, step, 0.0f, 0.0f);
+    EXPECT_NEAR(sprites[0].sortPointY, snappedPivot.y, 1e-4f);
+    EXPECT_NEAR(sprites[0].drawKey.yKey, -snappedPivot.y, 1e-4f);
+    EXPECT_EQ(sprites[0].drawKey.ySortRank, 1);
+    EXPECT_NE(sprites[0].worldCenter.y, sprites[0].sortPointY);
 }
 
 } // namespace ya

@@ -1,6 +1,7 @@
 #include "Core/Math/Ray.h"
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Scene2D/Sprite2DComponent.h"
+#include "Scene2D/SpriteDrawOrder.h"
 #include "ECS/Entity.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/Systems/TransformSystem.h"
@@ -280,6 +281,61 @@ TEST(Sprite2DComponentTest, RayHitsTheQuadWhereThePivotDrawsIt)
     EXPECT_TRUE(RayCastMousePickingSystem::raycast(&scene, rayThrough(drawn.worldCenter)).has_value());
     const glm::vec3 outside = drawn.worldCenter + drawn.axisX * 0.75f;
     EXPECT_FALSE(RayCastMousePickingSystem::raycast(&scene, rayThrough(outside)).has_value());
+}
+
+TEST(Sprite2DComponentTest, PickFollowsPainterOrderNotDepth)
+{
+    ensureReflectionReady();
+
+    Scene scene("SpritePickOrder");
+    Node* lowNode = nullptr;
+    Node* highNode = nullptr;
+    Sprite2DComponent* low = addSprite(scene, lowNode, "Low");
+    Sprite2DComponent* high = addSprite(scene, highNode, "High");
+    ASSERT_NE(low, nullptr);
+    ASSERT_NE(high, nullptr);
+    low->size = {2.0f, 2.0f};
+    high->size = {2.0f, 2.0f};
+    low->bYSort = true;
+    high->bYSort = true;
+    place(lowNode->getEntity(), {0.0f, 0.0f, 0.2f});
+    place(highNode->getEntity(), {0.0f, 1.0f, 5.0f});
+
+    const Ray toward{glm::vec3{0.0f, 0.5f, 8.0f}, glm::vec3{0.0f, 0.0f, -1.0f}};
+    const auto lowerOnScreen = RayCastMousePickingSystem::raycast(&scene, toward);
+    ASSERT_TRUE(lowerOnScreen.has_value());
+    EXPECT_EQ(lowerOnScreen->entity, lowNode->getEntity());
+
+    const SpriteDrawKey lowKey = makeSpriteDrawKey(0, true, 0.0f, 0, 0, 0);
+    const SpriteDrawKey highKey = makeSpriteDrawKey(0, true, 1.0f, 0, 0, 0);
+    EXPECT_TRUE(spriteDrawsBefore(highKey, lowKey));
+
+    place(lowNode->getEntity(), {0.0f, 1.0f, 5.0f});
+    place(highNode->getEntity(), {0.0f, 0.0f, 0.2f});
+    const auto swapped = RayCastMousePickingSystem::raycast(&scene, toward);
+    ASSERT_TRUE(swapped.has_value());
+    EXPECT_EQ(swapped->entity, highNode->getEntity());
+
+    low->bYSort = false;
+    high->bYSort = false;
+    low->sortOrder = 1;
+    high->sortOrder = 4;
+    // `low` is closer to the camera. Painter order still picks the higher sortOrder.
+    place(lowNode->getEntity(), {0.0f, 0.0f, 4.0f});
+    place(highNode->getEntity(), {0.0f, 0.0f, 0.1f});
+    const auto byOrder = RayCastMousePickingSystem::raycast(&scene, toward);
+    ASSERT_TRUE(byOrder.has_value());
+    EXPECT_EQ(byOrder->entity, highNode->getEntity());
+
+    place(highNode->getEntity(), {0.0f, 0.0f, 2.0f});
+    const auto zIgnored = RayCastMousePickingSystem::raycast(&scene, toward);
+    ASSERT_TRUE(zIgnored.has_value());
+    EXPECT_EQ(zIgnored->entity, highNode->getEntity());
+
+    high->sortOrder = 0;
+    const auto orderSwapped = RayCastMousePickingSystem::raycast(&scene, toward);
+    ASSERT_TRUE(orderSwapped.has_value());
+    EXPECT_EQ(orderSwapped->entity, lowNode->getEntity());
 }
 
 } // namespace ya

@@ -1,3 +1,4 @@
+#include "Scene2D/SpriteDrawOrder.h"
 #include "Scene2D/TilemapComponent.h"
 #include "Render3D/Common/TilemapExtraction.h"
 #include "Render3D/Common/TilemapExtraction.h"
@@ -71,14 +72,17 @@ TEST(TilemapExtractionTest, OnlyVisibleCellsBecomeCandidates)
     EXPECT_FLOAT_EQ(out[0].worldCenter.x, 1.5f);
     EXPECT_FLOAT_EQ(out[0].worldCenter.y, 1.5f);
     EXPECT_FLOAT_EQ(out[0].worldCenter.z, 0.0f);
-    EXPECT_EQ(out[0].entityId, 42u);
+    EXPECT_EQ(out[0].drawKey.entityId, 42u);
+    EXPECT_EQ(out[0].drawKey.layer, 0);
+    EXPECT_EQ(out[0].drawKey.order, 0);
+    EXPECT_EQ(out[0].drawKey.ySortRank, 0);
+    EXPECT_FLOAT_EQ(out[0].sortPointY, 1.5f);
     // Tile 0 is the top-left 16x16 window, shrunk by half a texel per side
     // because the packed atlas has no gutter.
     EXPECT_FLOAT_EQ(out[0].uvRect.x, 0.5f / 192.0f);
     EXPECT_FLOAT_EQ(out[0].uvRect.z, 15.5f / 192.0f);
     EXPECT_FLOAT_EQ(out[0].uvRect.y, 0.5f / 176.0f);
     EXPECT_FLOAT_EQ(out[0].uvRect.w, 15.5f / 176.0f);
-    EXPECT_FALSE(out[0].bTranslucent);
 }
 
 // Empty cells and tile windows outside the atlas pixels produce nothing:
@@ -105,7 +109,55 @@ TEST(TilemapExtractionTest, EmptyCellsAreSkipped)
     ASSERT_EQ(out.size(), 1u);
     EXPECT_FLOAT_EQ(out[0].worldCenter.x, 1.5f);
     EXPECT_FLOAT_EQ(out[0].worldCenter.y, 0.5f);
-    EXPECT_EQ(out[0].entityId, 7u);
+    EXPECT_EQ(out[0].drawKey.entityId, 7u);
+}
+
+TEST(TilemapExtractionTest, LayerOffsetAndYSortFeedThePainterKey)
+{
+    const Tileset tileset = makeTileset();
+    TilemapComponent map = makeMap(2, 2, {1, 1, 0, 1});
+    map.layer = 3;
+    map.layers[0].bYSort = false;
+    TilemapLayer overlay;
+    overlay.name = "Overlay";
+    overlay.layerOffset = 1;
+    overlay.bYSort = true;
+    overlay.zOffset = 0.2f;
+    overlay.cells = {0, 1, 1, 0};
+    map.layers.push_back(std::move(overlay));
+    const TextureBinding binding{};
+
+    TilemapExtractionInput in;
+    in.map           = &map;
+    in.tileset       = &tileset;
+    in.world         = glm::mat4(1.0f);
+    in.entityId      = 9;
+    in.atlas         = &binding;
+    in.textureWidth  = 192;
+    in.textureHeight = 176;
+
+    std::vector<WorldSpriteCandidate> out;
+    appendTilemapCandidates(in, out);
+
+    // Ground: (0,0), (1,0), (1,1). Overlay: (1,0), (0,1).
+    ASSERT_EQ(out.size(), 5u);
+    EXPECT_EQ(out[0].drawKey.layer, 3);
+    EXPECT_EQ(out[0].drawKey.order, 0);
+    EXPECT_EQ(out[0].drawKey.ySortRank, 0);
+    EXPECT_FLOAT_EQ(out[0].drawKey.yKey, 0.0f);
+    EXPECT_EQ(out[0].drawKey.sequence, 0u);
+    EXPECT_EQ(out[2].drawKey.sequence, 2u);
+
+    EXPECT_EQ(out[3].drawKey.layer, 4);
+    EXPECT_EQ(out[3].drawKey.order, 1);
+    EXPECT_EQ(out[3].drawKey.ySortRank, 1);
+    EXPECT_FLOAT_EQ(out[3].sortPointY, 0.5f);
+    EXPECT_FLOAT_EQ(out[3].drawKey.yKey, -0.5f);
+    EXPECT_EQ(out[3].drawKey.sequence, 0u);
+    EXPECT_FLOAT_EQ(out[4].sortPointY, 1.5f);
+    EXPECT_FLOAT_EQ(out[4].drawKey.yKey, -1.5f);
+    EXPECT_EQ(out[4].drawKey.sequence, 1u);
+    EXPECT_TRUE(spriteDrawsBefore(out[0].drawKey, out[3].drawKey));
 }
 
 } // namespace ya

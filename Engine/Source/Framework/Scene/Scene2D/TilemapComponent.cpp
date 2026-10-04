@@ -116,4 +116,28 @@ int32_t TilemapComponent::fillRect(int32_t minX, int32_t minY, int32_t maxX, int
     return written;
 }
 
+void TilemapComponent::serializeCustom(nlohmann::json& out) const
+{
+    // `layers` is an array, and arrays are compared as a whole, so a default
+    // field inside a layer would be written. These two default to "off" and
+    // stay out of the file; zOffset is left as the array already stored it.
+    const auto layers = out.find("layers");
+    if (layers == out.end() || !layers->is_array()) {
+        return;
+    }
+    for (auto& layer : *layers) {
+        if (!layer.is_object()) {
+            continue;
+        }
+        if (const auto ySort = layer.find("bYSort");
+            ySort != layer.end() && ySort->is_boolean() && !ySort->get<bool>()) {
+            layer.erase(ySort);
+        }
+        if (const auto offset = layer.find("layerOffset");
+            offset != layer.end() && offset->is_number_integer() && offset->get<int>() == 0) {
+            layer.erase(offset);
+        }
+    }
+}
+
 } // namespace ya

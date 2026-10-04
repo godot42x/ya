@@ -42,10 +42,10 @@
 - 风险：省略默认值后，场景隐含依赖代码里的默认值，以后改默认值会改变旧场景（需写进 scene-serialization 相关 skill）
 
 步骤 5 2D 合批核心（前置：步骤 3、4）
-- [ ] 精灵实例化，一开始就与 `ScreenDrawList` 共享 quad 合批核心（不在 `Sprite2DStage` 里单独做再推倒）
-- [ ] 画家顺序 + y-sort 作为合批排序键，删 `z = base − y·ε`
-- [ ] 纹理表每帧重建 + `slotFor` 线性查找 → 直接映射（按资产槽身份作键）
-- [ ] tilemap 每图层 / 区块静态实例缓冲，只在编辑时重建
+- [ ] 5b 精灵实例化（验收：TownLarge `recordFamily` self ≤ 1.5ms、三场景像素 0 差），与 `ScreenDrawList` 共享 quad 合批核心（不在 `Sprite2DStage` 里单独做再推倒）
+- [x] 5a 画家顺序 + y-sort（单一混合管线、深度只测不写、`spriteDrawsBefore` 排序键、`bYSort`/`layerOffset`），删 `z = base − y·ε` / `Actor.zFor`；拾取共用比较函数
+- [ ] 5b 纹理表每帧重建 + `slotFor` 线性查找 → 直接映射（与 ScreenDrawList 只共享纹理表 + 批游标，顶点格式各自保留）（按资产槽身份作键）
+- [ ] 5c tilemap 每图层 / 区块静态实例缓冲，只在编辑时重建
 
 步骤 6 纯 2D View 家族（前置：`../render-view-family/` P3 的 `PreparedView` / ViewFamily compiler）
 - [ ] 纯 2D View 不跑 GBuffer / 光照 / 天空盒 / Bloom

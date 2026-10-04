@@ -2,6 +2,7 @@
 
 #include "Render3D/RenderFrameData.h"
 #include "RHI/Core/Texture.h"
+#include "Scene2D/SpriteDrawOrder.h"
 
 #include <algorithm>
 
@@ -82,6 +83,7 @@ void appendTilemapCandidates(const TilemapExtractionInput& in, std::vector<World
         if (static_cast<int32_t>(layer.cells.size()) != map.width * map.height) {
             continue;
         }
+        uint32_t sequence = 0;
         for (int32_t y = minY; y <= maxY; ++y) {
             for (int32_t x = minX; x <= maxX; ++x) {
                 const int32_t value = layer.cells[static_cast<size_t>(map.cellIndex(x, y))];
@@ -103,11 +105,15 @@ void appendTilemapCandidates(const TilemapExtractionInput& in, std::vector<World
                 candidate.axisY       = axisY;
                 candidate.uvRect      = uv;
                 candidate.tint        = glm::vec4(1.0f);
-                candidate.texture     = *in.atlas;
-                candidate.entityId    = in.entityId;
-                candidate.layer       = map.layer;
-                candidate.sortOrder   = static_cast<int32_t>(layerIndex);
-                candidate.bTranslucent = false;
+                candidate.texture    = *in.atlas;
+                candidate.sortPointY = candidate.worldCenter.y;
+                candidate.drawKey    = makeSpriteDrawKey(map.layer + layer.layerOffset,
+                                                         layer.bYSort,
+                                                         candidate.sortPointY,
+                                                         static_cast<int32_t>(layerIndex),
+                                                         in.entityId,
+                                                         sequence);
+                ++sequence;
                 out.push_back(candidate);
             }
         }

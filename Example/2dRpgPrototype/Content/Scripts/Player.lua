@@ -9,7 +9,6 @@
 -- answers. Painting a wall in the editor, or placing an NPC, blocks the
 -- player without touching this script.
 local ScriptBase = require("ScriptBase")
-local Actor = require("Actor")
 local Script = ScriptBase:new()
 
 local STEP_SECONDS = 0.2
@@ -71,8 +70,9 @@ end
 -- Put the sprite on its current cell, or between the two cells of a step in
 -- progress. The map says where a cell centre is, so a non-unit cell size and
 -- a moved tilemap need nothing here. The entity sits on that centre; the
--- sprite pivot puts the feet on the cell's bottom edge. Depth uses the same
--- y (Actor.zFor): lower on screen draws in front of the actors behind.
+-- sprite pivot puts the feet on the cell's bottom edge. Who covers whom is
+-- the sprite's y-sort (the pivot), not this z. z stays the authored depth
+-- against 3D geometry.
 function Script:applyPosition()
     local from = self.map:cellToWorld(self.cell.x, self.cell.y)
     local x, y = from.x, from.y
@@ -81,7 +81,8 @@ function Script:applyPosition()
         x = from.x + (target.x - from.x) * self.progress
         y = from.y + (target.y - from.y) * self.progress
     end
-    self.transform:setPosition(Vec3.new(snap(x), snap(y), Actor.zFor(y)))
+    local z = self.transform:getPosition().z
+    self.transform:setPosition(Vec3.new(snap(x), snap(y), z))
 end
 
 function Script:tryStep(carry)

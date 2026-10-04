@@ -36,6 +36,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -81,6 +82,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -127,6 +129,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -173,6 +176,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -219,6 +223,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -265,6 +270,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -311,6 +317,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -357,6 +364,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -403,6 +411,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -449,6 +458,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -495,6 +505,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -541,6 +552,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -587,6 +599,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -633,6 +646,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -679,6 +693,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -725,6 +740,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -771,6 +787,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -817,6 +834,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -863,6 +881,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -909,6 +928,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -955,6 +975,7 @@
           ]
         },
         "Sprite2DComponent": {
+          "bYSort": true,
           "image": {
             "samplerConfig": {
               "addressMode": "ClampToEdge",
@@ -1449,6 +1470,7 @@
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+              "layerOffset": 1,
               "name": "Overlay",
               "zOffset": 0.2
             }

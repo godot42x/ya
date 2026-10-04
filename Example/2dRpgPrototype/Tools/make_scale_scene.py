@@ -82,8 +82,8 @@ def build_layers() -> tuple[list[int], list[int], list[int]]:
         put(decor, 1, y, FENCE)
         put(decor, WIDTH - 2, y, FENCE)
 
-    # Tree clusters: trunk on decor, canopy above it on overlay, so the player
-    # walks behind the crown (depth order, G2).
+    # Tree clusters: trunk on decor, canopy on overlay. Overlay's layerOffset
+    # paints the crown after the player, so the player walks behind it.
     trees = 0
     for _ in range(max(20, WIDTH * HEIGHT // 16)):
         x = rng.randrange(3, WIDTH - 3)
@@ -123,7 +123,8 @@ def sprite_entity(entity_id: int, name: str, position: tuple[float, float, float
                   texture: str, uv_rect: tuple[float, float, float, float],
                   size: tuple[float, float], tint: tuple[float, float, float, float],
                   script: str, animation: dict | None = None,
-                  pivot: tuple[float, float] | None = None) -> dict:
+                  pivot: tuple[float, float] | None = None,
+                  b_y_sort: bool = False) -> dict:
     entity = {
         "id": entity_id,
         "name": name,
@@ -151,6 +152,7 @@ def sprite_entity(entity_id: int, name: str, position: tuple[float, float, float
                 "tint": list(tint),
                 "layer": 0,
                 "sortOrder": 0,
+                **({"bYSort": True} if b_y_sort else {}),
                 "pickId": 0,
             },
             "LuaScriptComponent": {"scripts": [{"enabled": True, "scriptPath": script}]},
@@ -215,7 +217,7 @@ def tilemap_entity(ground: list[int], decor: list[int], overlay: list[int]) -> d
                 "layers": [
                     {"name": "Ground", "zOffset": 0.0, "cells": "@@GROUND@@"},
                     {"name": "Decor", "zOffset": 0.03, "cells": "@@DECOR@@"},
-                    {"name": "Overlay", "zOffset": 0.2, "cells": "@@OVERLAY@@"},
+                    {"name": "Overlay", "zOffset": 0.2, "layerOffset": 1, "cells": "@@OVERLAY@@"},
                 ],
                 "layer": 0,
             },
@@ -229,7 +231,7 @@ def build_entities() -> tuple[list[dict], tuple[list[int], list[int], list[int]]
         camera_entity(),
         sprite_entity(1021, "Player", (player_cell()[0] + 0.5, player_cell()[1] + 0.5, 0.1), HERO_SHEET, STAND_DOWN_FRAME,
                       (1.0, 1.5), (1.0, 1.0, 1.0, 1.0), "Content/Scripts/Player.lua", hero_animation(True),
-                      CHARACTER_PIVOT),
+                      CHARACTER_PIVOT, True),
     ]
 
     rng = random.Random(7)
@@ -242,7 +244,7 @@ def build_entities() -> tuple[list[dict], tuple[list[int], list[int], list[int]]
         entities.append(sprite_entity(1100 + index, f"Npc{index + 1}", (x + 0.5, y + 0.5, 0.1),
                                       HERO_SHEET, STAND_DOWN_FRAME, (1.0, 1.5), tint,
                                       "Content/Scripts/Npc.lua", hero_animation(False),
-                                      CHARACTER_PIVOT))
+                                      CHARACTER_PIVOT, True))
 
     entities.append(tilemap_entity(ground, decor, overlay))
     return entities, (ground, decor, overlay)

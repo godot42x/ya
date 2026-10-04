@@ -58,6 +58,7 @@ const char* toString(ERGPassResourceAccess access)
     case ERGPassResourceAccess::Write:           return "Write";
     case ERGPassResourceAccess::ColorAttachment: return "ColorAttachment";
     case ERGPassResourceAccess::DepthAttachment: return "DepthAttachment";
+    case ERGPassResourceAccess::DepthReadOnly:   return "DepthReadOnly";
     case ERGPassResourceAccess::TransferSrc:     return "TransferSrc";
     case ERGPassResourceAccess::TransferDst:     return "TransferDst";
     }
@@ -155,6 +156,13 @@ std::string formatBufferUsageFlags(EBufferUsage usage)
 bool isTransferTextureAccess(ERGPassResourceAccess access)
 {
     return access == ERGPassResourceAccess::TransferSrc || access == ERGPassResourceAccess::TransferDst;
+}
+
+bool isRasterAttachmentAccess(ERGPassResourceAccess access)
+{
+    return access == ERGPassResourceAccess::ColorAttachment ||
+           access == ERGPassResourceAccess::DepthAttachment ||
+           access == ERGPassResourceAccess::DepthReadOnly;
 }
 
 bool isTransferBufferAccess(ERGBufferAccess access)
@@ -391,6 +399,7 @@ EImageLayout::T makeTextureLayout(ERGPassResourceAccess access)
     case ERGPassResourceAccess::Write:           return EImageLayout::General;
     case ERGPassResourceAccess::ColorAttachment: return EImageLayout::ColorAttachmentOptimal;
     case ERGPassResourceAccess::DepthAttachment: return EImageLayout::DepthStencilAttachmentOptimal;
+    case ERGPassResourceAccess::DepthReadOnly:   return EImageLayout::DepthStencilAttachmentOptimal;
     case ERGPassResourceAccess::TransferSrc:     return EImageLayout::TransferSrc;
     case ERGPassResourceAccess::TransferDst:     return EImageLayout::TransferDst;
     }
@@ -524,6 +533,7 @@ std::string describeRequiredImageUsage(ERGPassResourceAccess access)
     case ERGPassResourceAccess::Write:           return "Storage";
     case ERGPassResourceAccess::ColorAttachment: return "ColorAttachment";
     case ERGPassResourceAccess::DepthAttachment: return "DepthStencilAttachment";
+    case ERGPassResourceAccess::DepthReadOnly:   return "DepthStencilAttachment";
     case ERGPassResourceAccess::TransferSrc:     return "TransferSrc";
     case ERGPassResourceAccess::TransferDst:     return "TransferDst";
     }
@@ -977,7 +987,11 @@ void RGPassBuilder::declareRaster(const RGRasterPassDesc& desc)
     }
 
     if (desc.depth.has_value()) {
-        currentPass.textures.push_back({.handle = desc.depth->depth, .access = ERGPassResourceAccess::DepthAttachment});
+        currentPass.textures.push_back({
+            .handle = desc.depth->depth,
+            .access = desc.depth->bReadOnly ? ERGPassResourceAccess::DepthReadOnly
+                                            : ERGPassResourceAccess::DepthAttachment,
+        });
     }
 }
 
@@ -1204,8 +1218,7 @@ RGCompiledGraph RenderGraph::compile() const
         bool hasNonTransferUsage = false;
 
         for (const auto& usage : pass.textures) {
-            if (usage.access == ERGPassResourceAccess::ColorAttachment ||
-                usage.access == ERGPassResourceAccess::DepthAttachment) {
+            if (isRasterAttachmentAccess(usage.access)) {
                 hasRasterUsage = true;
             }
             else if (isTransferTextureAccess(usage.access)) {
@@ -1241,8 +1254,7 @@ RGCompiledGraph RenderGraph::compile() const
         bool hasOtherUsage    = false;
 
         for (const auto& usage : pass.textures) {
-            if (usage.access == ERGPassResourceAccess::ColorAttachment ||
-                usage.access == ERGPassResourceAccess::DepthAttachment) {
+            if (isRasterAttachmentAccess(usage.access)) {
                 hasRasterUsage = true;
             }
             else if (isTransferTextureAccess(usage.access)) {
@@ -1322,6 +1334,7 @@ RGCompiledGraph RenderGraph::compile() const
                 case ERGPassResourceAccess::ColorAttachment:
                     return EImageUsage::ColorAttachment;
                 case ERGPassResourceAccess::DepthAttachment:
+                case ERGPassResourceAccess::DepthReadOnly:
                     return EImageUsage::DepthStencilAttachment;
                 case ERGPassResourceAccess::TransferSrc:
                     return EImageUsage::TransferSrc;

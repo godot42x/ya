@@ -1,5 +1,7 @@
 #include "GameRuntime/Render/RenderFrameExtractor.h"
 
+#include "Scene2D/SpriteDrawOrder.h"
+
 #include "Render3D/Material/PBRMaterial.h"
 #include "Render3D/Material/PhongMaterial.h"
 #include "Render3D/Material/SimpleMaterial.h"
@@ -162,6 +164,13 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
         }
     }
     snapSpriteCandidatesToTexelGrid(outSnapshot.worldSprites, texelStep);
+    // The painter key does not depend on the camera, so the shared snapshot
+    // is already in draw order. Each view filters it and sorts again with the
+    // same comparison.
+    std::stable_sort(outSnapshot.worldSprites.begin(), outSnapshot.worldSprites.end(),
+                     [](const WorldSpriteCandidate& lhs, const WorldSpriteCandidate& rhs) {
+                         return spriteDrawsBefore(lhs.drawKey, rhs.drawKey);
+                     });
     auto drawCtx = DrawItemExtractionContext{
         .registry         = &registry,
         .sceneSnapshot    = &outSnapshot,
@@ -199,20 +208,21 @@ WorldSpriteCandidate RenderFrameExtractor::buildSpriteCandidate(const glm::mat4&
     if (sprite.image.hasPath()) {
         candidate.texture = slotToTextureBinding(sprite.image);
     }
-    candidate.entityId     = entityId;
-    candidate.layer        = sprite.layer;
-    candidate.sortOrder    = sprite.sortOrder;
-    candidate.bTranslucent = sprite.tint.a < 1.0f;
+    candidate.sortPointY = glm::vec3(world[3]).y;
+    candidate.drawKey    = makeSpriteDrawKey(sprite.layer, sprite.bYSort, candidate.sortPointY,
+                                             sprite.sortOrder, entityId, 0);
     return candidate;
 }
 
 void RenderFrameExtractor::snapSpriteCandidatesToTexelGrid(std::vector<WorldSpriteCandidate>& sprites, float texelStep)
 {
-    if (!(texelStep > 0.0f)) {
-        return;
-    }
+    const bool bSnap = texelStep > 0.0f;
     for (WorldSpriteCandidate& sprite : sprites) {
-        sprite.worldCenter = snapWorldXY(sprite.worldCenter, texelStep, 0.0f, 0.0f);
+        if (bSnap) {
+            sprite.worldCenter = snapWorldXY(sprite.worldCenter, texelStep, 0.0f, 0.0f);
+            sprite.sortPointY  = snapWorldXY(glm::vec3(0.0f, sprite.sortPointY, 0.0f), texelStep, 0.0f, 0.0f).y;
+        }
+        sprite.drawKey.yKey = sprite.drawKey.ySortRank != 0 ? -sprite.sortPointY : 0.0f;
     }
 }
 
@@ -685,31 +695,15 @@ void RenderFrameExtractor::sortViewBuckets(const glm::vec3& cameraPos, RenderFra
     sortBuckets(out.drawBuckets.staticMeshes);
     sortBuckets(out.drawBuckets.skinnedMeshes);
 
-    // Sprites are painted in this order, so it doubles as the answer to which
-    // sprite is on top: opaque pairs first (a blended quad drawn before an
-    // opaque one would be overwritten by a pass that only cares about depth),
-    // then the authored layer and sort order, both ascending so the bigger one
-    // paints last -- the same pair the ray pick prefers at equal distance --
-    // and finally far to near so the nearest quad blends last.
-    const auto distanceToCamera2 = [&cameraPos](const WorldSpriteCandidate& sprite)
-    {
-        return glm::distance2(cameraPos, sprite.worldCenter);
-    };
-    std::sort(out.worldSprites.order.begin(), out.worldSprites.order.end(), [&](uint32_t lhs, uint32_t rhs)
-              {
-                  const auto& a = (*out.worldSprites.source)[lhs];
-                  const auto& b = (*out.worldSprites.source)[rhs];
-                  if (a.bTranslucent != b.bTranslucent) {
-                      return !a.bTranslucent;
-                  }
-                  if (a.layer != b.layer) {
-                      return a.layer < b.layer;
-                  }
-                  if (a.sortOrder != b.sortOrder) {
-                      return a.sortOrder < b.sortOrder;
-                  }
-                  return distanceToCamera2(a) > distanceToCamera2(b);
-              });
+    // Sprites paint in painter order. The key does not use the camera, so two
+    // views of one snapshot agree. stable_sort keeps a fully tied pair in the
+    // order extraction produced.
+    std::stable_sort(out.worldSprites.order.begin(), out.worldSprites.order.end(), [&](uint32_t lhs, uint32_t rhs)
+                     {
+                         const auto& a = (*out.worldSprites.source)[lhs];
+                         const auto& b = (*out.worldSprites.source)[rhs];
+                         return spriteDrawsBefore(a.drawKey, b.drawKey);
+                     });
 }
 
 } // namespace ya

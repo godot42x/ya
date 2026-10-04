@@ -67,6 +67,7 @@ void expectSpriteEqual(const Sprite2DComponent& lhs, const Sprite2DComponent& rh
     EXPECT_EQ(lhs.tint, rhs.tint);
     EXPECT_EQ(lhs.layer, rhs.layer);
     EXPECT_EQ(lhs.sortOrder, rhs.sortOrder);
+    EXPECT_EQ(lhs.bYSort, rhs.bYSort);
     EXPECT_EQ(lhs.pickId, rhs.pickId);
     EXPECT_EQ(lhs.image.bEnable, rhs.image.bEnable);
     EXPECT_EQ(lhs.image.uvScale, rhs.image.uvScale);
@@ -274,6 +275,76 @@ TEST(SceneSerializerDefaultsTest, RoundTripKeepsEditedAndDefaultFields)
     EXPECT_EQ(loadedMap->layers[1].name, "Overlay");
     EXPECT_FLOAT_EQ(loadedMap->layers[1].zOffset, 0.25f);
     EXPECT_EQ(loadedMap->layers[1].cells, overlay.cells);
+    EXPECT_FALSE(loadedMap->layers[0].bYSort);
+    EXPECT_EQ(loadedMap->layers[0].layerOffset, 0);
+    EXPECT_FALSE((*mapJson)["layers"][0].contains("bYSort"));
+    EXPECT_FALSE((*mapJson)["layers"][0].contains("layerOffset"));
+    EXPECT_FALSE((*mapJson)["layers"][1].contains("bYSort"));
+    EXPECT_FALSE((*mapJson)["layers"][1].contains("layerOffset"));
+}
+
+TEST(SceneSerializerDefaultsTest, YSortAndLayerOffsetOmitTheirDefaults)
+{
+    ensureReflectionReady();
+
+    Scene scene("YSortDefaults");
+    Node* heroNode = scene.createNode3D("Hero", scene.getRootNode());
+    ASSERT_NE(heroNode, nullptr);
+    auto* sprite = heroNode->getEntity()->addComponent<Sprite2DComponent>();
+    ASSERT_NE(sprite, nullptr);
+    sprite->bYSort = true;
+
+    Node* propNode = scene.createNode3D("Prop", scene.getRootNode());
+    ASSERT_NE(propNode, nullptr);
+    ASSERT_NE(propNode->getEntity()->addComponent<Sprite2DComponent>(), nullptr);
+
+    Node* mapNode = scene.createNode3D("Ground", scene.getRootNode());
+    ASSERT_NE(mapNode, nullptr);
+    auto* map = mapNode->getEntity()->addComponent<TilemapComponent>();
+    ASSERT_NE(map, nullptr);
+    map->width = 1;
+    map->height = 1;
+    TilemapLayer ground;
+    ground.name = "Ground";
+    ground.cells = {1};
+    TilemapLayer overlay;
+    overlay.name = "Overlay";
+    overlay.layerOffset = 1;
+    overlay.bYSort = true;
+    overlay.cells = {2};
+    map->layers = {ground, overlay};
+
+    SceneSerializer serializer(&scene);
+    const nlohmann::json saved = serializer.serialize();
+
+    const nlohmann::json* hero = findComponent(saved, "Hero", "Sprite2DComponent");
+    ASSERT_NE(hero, nullptr);
+    EXPECT_EQ(hero->value("bYSort", false), true);
+    EXPECT_TRUE(hero->contains("bYSort"));
+
+    const nlohmann::json* prop = findComponent(saved, "Prop", "Sprite2DComponent");
+    ASSERT_NE(prop, nullptr);
+    EXPECT_FALSE(prop->contains("bYSort"));
+
+    const nlohmann::json* mapJson = findComponent(saved, "Ground", "TilemapComponent");
+    ASSERT_NE(mapJson, nullptr);
+    ASSERT_EQ((*mapJson)["layers"].size(), 2u);
+    EXPECT_FALSE((*mapJson)["layers"][0].contains("bYSort"));
+    EXPECT_FALSE((*mapJson)["layers"][0].contains("layerOffset"));
+    EXPECT_EQ((*mapJson)["layers"][1]["bYSort"], true);
+    EXPECT_EQ((*mapJson)["layers"][1]["layerOffset"], 1);
+
+    Scene loaded("YSortDefaultsLoaded");
+    SceneSerializer loadedSerializer(&loaded);
+    loadedSerializer.deserialize(saved);
+    auto* loadedMap = loaded.getEntityByName("Ground")->getComponent<TilemapComponent>();
+    ASSERT_NE(loadedMap, nullptr);
+    EXPECT_FALSE(loadedMap->layers[0].bYSort);
+    EXPECT_EQ(loadedMap->layers[0].layerOffset, 0);
+    EXPECT_TRUE(loadedMap->layers[1].bYSort);
+    EXPECT_EQ(loadedMap->layers[1].layerOffset, 1);
+    EXPECT_TRUE(loaded.getEntityByName("Hero")->getComponent<Sprite2DComponent>()->bYSort);
+    EXPECT_FALSE(loaded.getEntityByName("Prop")->getComponent<Sprite2DComponent>()->bYSort);
 }
 
 TEST(SceneSerializerDefaultsTest, LegacyFullAndSparseJsonLoadTheSameValues)

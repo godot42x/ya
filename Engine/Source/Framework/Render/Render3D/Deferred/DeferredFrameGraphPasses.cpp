@@ -458,6 +458,7 @@ void appendSprite2D(DeferredFrameGraphPassContext& context)
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                    .bReadOnly   = true,
                 },
             });
         },

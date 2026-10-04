@@ -57,21 +57,18 @@ void Sprite2DStage::init(IRender* render)
         {PushConstantRange{.offset = 0, .size = sizeof(PushConstant), .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment}},
         {_frameDSL, _textureDSL});
 
-    // Formats are placeholders until the View's attachments are known; both
-    // pipelines are rebuilt by refreshPipelineFormats before the first draw.
-    _opaquePipeline = IGraphicsPipeline::create(_render);
-    YA_CORE_ASSERT(_opaquePipeline && _opaquePipeline->recreate(makePipelineCreateInfo(false)),
-                   "Failed to create the opaque scene sprite pipeline");
-    _translucentPipeline = IGraphicsPipeline::create(_render);
-    YA_CORE_ASSERT(_translucentPipeline && _translucentPipeline->recreate(makePipelineCreateInfo(true)),
-                   "Failed to create the translucent scene sprite pipeline");
+    // Formats are placeholders until the View's attachments are known; the
+    // pipeline is rebuilt by refreshPipelineFormats before the first draw.
+    _pipeline = IGraphicsPipeline::create(_render);
+    YA_CORE_ASSERT(_pipeline && _pipeline->recreate(makePipelineCreateInfo()),
+                   "Failed to create the scene sprite pipeline");
 }
 
-GraphicsPipelineCreateInfo Sprite2DStage::makePipelineCreateInfo(bool bTranslucent) const
+GraphicsPipelineCreateInfo Sprite2DStage::makePipelineCreateInfo() const
 {
     return GraphicsPipelineCreateInfo{
         .pipelineRenderingInfo = {
-            .label                  = bTranslucent ? "Scene Sprite (translucent)" : "Scene Sprite (opaque)",
+            .label                  = "Scene Sprite",
             .colorAttachmentFormats = {kPlaceholderColorFormat},
             .depthAttachmentFormat  = kPlaceholderDepthFormat,
         },
@@ -100,12 +97,12 @@ GraphicsPipelineCreateInfo Sprite2DStage::makePipelineCreateInfo(bool bTransluce
         .rasterizationState = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::Back, .frontFace = EFrontFaceType::CounterClockWise},
         .depthStencilState  = {
             .bDepthTestEnable  = true,
-            .bDepthWriteEnable = !bTranslucent,
+            .bDepthWriteEnable = false,
             .depthCompareOp    = ECompareOp::LessOrEqual,
         },
         .colorBlendState = {.attachments = {{
             .index               = 0,
-            .bBlendEnable        = bTranslucent,
+            .bBlendEnable        = true,
             .srcColorBlendFactor = EBlendFactor::SrcAlpha,
             .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
             .colorBlendOp        = EBlendOp::Add,
@@ -121,8 +118,7 @@ GraphicsPipelineCreateInfo Sprite2DStage::makePipelineCreateInfo(bool bTransluce
 void Sprite2DStage::destroy()
 {
     _quadMesh = nullptr;
-    _opaquePipeline.reset();
-    _translucentPipeline.reset();
+    _pipeline.reset();
     _pipelineLayout.reset();
     _textureDSL.reset();
     _frameDSL.reset();
@@ -147,8 +143,7 @@ void Sprite2DStage::refreshPipelineFormats(EFormat::T colorFormat, EFormat::T de
         pipeline->updateDesc(std::move(ci));
     };
 
-    refresh(_opaquePipeline);
-    refresh(_translucentPipeline);
+    refresh(_pipeline);
 }
 
 Sprite2DStage::FrameData Sprite2DStage::buildFrameData(const RenderStageContext& ctx)
@@ -218,7 +213,7 @@ void Sprite2DStage::drawSprites(const RenderStageContext& ctx, const Sprite2DPas
     if (frameData.worldSprites.empty()) {
         return;
     }
-    if (!_opaquePipeline || !_translucentPipeline || !_pipelineLayout || !_quadMesh) {
+    if (!_pipeline || !_pipelineLayout || !_quadMesh) {
         return;
     }
     if (!bindings.frame.set || !bindings.textures.set) {
@@ -254,18 +249,11 @@ void Sprite2DStage::drawSprites(const RenderStageContext& ctx, const Sprite2DPas
         return kNoTextureSlot;
     };
 
-    bool bBoundTranslucent = false;
-    bool bPipelineBound    = false;
+    cmdBuf->bindPipeline(_pipeline.get());
     for (const WorldSpriteCandidate& sprite : frameData.worldSprites) {
         const uint32_t textureSlot = slotFor(sprite.texture);
         if (textureSlot == kNoTextureSlot) {
             continue;
-        }
-
-        if (!bPipelineBound || bBoundTranslucent != sprite.bTranslucent) {
-            cmdBuf->bindPipeline(sprite.bTranslucent ? _translucentPipeline.get() : _opaquePipeline.get());
-            bBoundTranslucent = sprite.bTranslucent;
-            bPipelineBound    = true;
         }
 
         PushConstant pc{};

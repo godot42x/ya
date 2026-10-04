@@ -138,7 +138,7 @@ Masked 写深度）。2D 引擎主流是画家顺序，只有从 3D 长出来的
 - 精灵不再写深度，编辑器 billboard 图标（灯、相机）会画在精灵之上。
 - 精灵不再遮挡 3D 前向透明物体（粒子等）；2D 玩法线用不到。
 - 鼠标拾取与绘制共用同一个比较函数（C2），拾取取绘制顺序里最后的一个。
-- `Actor.zFor` 与 `z = 基准 − y × ε` 约定随步骤 5 删除，`2d-gameplay` skill 同步改。
+- `Actor.zFor` 与 `z = 基准 − y × ε` 约定随步骤 5 删除，`2d-gameplay` skill 同步改（5a 已完成）。
 
 ### C2 排序键：layer → y → order
 
@@ -159,6 +159,10 @@ key = (layer, ySortRank, yKey, order, tiebreak)   // 全部升序，后画的在
 - y-sort 是逐对象开关：`Sprite2DComponent::bYSort`、`TilemapLayer::bYSort`，tilemap 子层默认关。
   字段名与序列化形状在步骤 4 定，这里只冻结语义。
 - 未开 y-sort 的 tile 层不会因为 y 在同层里穿插：`yKey` 恒为 0，行优先提取顺序即 tiebreak。
+
+**C2 增补（5a，2026-10-04）**：`TilemapLayer::layerOffset`（int，默认 0 不序列化）。tile 绘制 layer = `TilemapComponent::layer + layerOffset`，order = `layerIndex`。
+原因：`layer` 是组件级，而 `ySortRank` 让未开 y-sort 的先画，Overlay 子层（rank 0）否则会被角色（rank 1）盖住；Overlay 设 `layerOffset = 1`。
+`zOffset` 只留给 3D 不透明遮挡。同 order、同 layer、都不 y-sort 时由实体 id 决定先后——Town 的门（id 1024）因此需要 `sortOrder = 1`，否则被 TilemapGround（id 2000）盖住；这是数据层面的显式表达，不是排序规则的例外。
 
 ### C3 实例格式与分批
 

@@ -13,9 +13,10 @@
 namespace ya
 {
 
-// One paint layer of a tilemap: a dense grid of cell values plus the height
-// the layer floats above the tilemap origin. Cell value 0 is empty, any
-// other value is (tile index + 1) into the Tileset. Cells are row-major
+// One paint layer of a tilemap: a dense grid of cell values, a depth offset
+// against 3D geometry, and this sub-layer's painter-key fields. Cell value 0
+// is empty, any other value is (tile index + 1) into the Tileset. Cells are
+// row-major
 // from the bottom-left: cells[y * width + x], so the first row in the
 // serialized array is the world-bottom row.
 struct YA_SCENE_2D_API TilemapLayer
@@ -23,11 +24,22 @@ struct YA_SCENE_2D_API TilemapLayer
     YA_REFLECT_BEGIN(TilemapLayer)
     YA_REFLECT_FIELD(name)
     YA_REFLECT_FIELD(zOffset)
+    YA_REFLECT_FIELD(bYSort)
+    YA_REFLECT_FIELD(layerOffset)
     YA_REFLECT_FIELD(cells)
     YA_REFLECT_END()
 
-    std::string          name;
-    float                zOffset = 0.0f;
+    std::string name;
+    /// Depth against 3D opaque geometry. It does not order this layer against
+    /// other sprites or tiles; that is the painter key.
+    float       zOffset = 0.0f;
+    /// Sort each tile by its cell centre's world y. Off, the y term is zero
+    /// and the row-major extraction order is the tiebreak.
+    bool        bYSort = false;
+    /// Added to `TilemapComponent::layer` for this sub-layer's painter layer.
+    /// Zero stays on the component layer. A higher offset paints later, so an
+    /// overlay can cover y-sorted actors that share the component layer.
+    int32_t     layerOffset = 0;
     std::vector<int32_t> cells;
 };
 
@@ -40,8 +52,9 @@ struct YA_SCENE_2D_API TilemapLayer
 //
 // Cell (x, y) centers on ((x + 0.5) * cellSize.x, (y + 0.5) * cellSize.y,
 // layer.zOffset) in tilemap-local space, transformed by the entity world
-// matrix. Opaque tiles depth-test and depth-write like opaque sprites, so
-// a layer with a higher zOffset occludes what is below it.
+// matrix. zOffset is only the depth tested against 3D opaque geometry.
+// Painter order uses `layer + layerOffset`, then the sub-layer index, and
+// the cell centre's world y when that sub-layer's y-sort is on.
 struct YA_SCENE_2D_API TilemapComponent : public IComponent
 {
     YA_REFLECT_BEGIN(TilemapComponent, IComponent)
@@ -110,6 +123,9 @@ struct YA_SCENE_2D_API TilemapComponent : public IComponent
 
     void onEdit() override;
     void onPostSerialize() override;
+    // The layers array is omitted as a whole, so a default bYSort / layerOffset
+    // inside a saved layer would otherwise be written. Drop just those two.
+    void serializeCustom(nlohmann::json& out) const override;
     // Resize keeping the overlapping cells at the same origin; new cells
     // are empty. Non-positive sizes are ignored.
     void resize(int32_t newWidth, int32_t newHeight);

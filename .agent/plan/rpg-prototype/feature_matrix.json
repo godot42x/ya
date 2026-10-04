@@ -181,13 +181,26 @@
       ]
     },
     {
+      "id": "sprite_painter_order",
+      "phase": "review-5a",
+      "status": "done",
+      "driven_by": "sprite-vs-sprite order was a z = base - y*eps convention in Actor.lua; opaque/translucent split drew in two passes",
+      "evidence": [
+        "single sprite pipeline: blend on, depth LessOrEqual test only (graph DepthReadOnly access); Transform.z only depth-tests against 3D opaque",
+        "Scene2D/SpriteDrawOrder.h spriteDrawsBefore: (layer, ySortRank, yKey, order, entityId, sequence); extraction stable_sort and RayCastMousePickingSystem share it",
+        "Sprite2DComponent::bYSort, TilemapLayer::bYSort and layerOffset (C2 amendment: Overlay sublayer above y-sorted actors); defaults omitted from scene files",
+        "Actor.lua / zFor deleted; Player/Npc/Sign/Chest bYSort; Door sortOrder 1 so ground (same order, larger entity id) does not cover it",
+        "not covered: 3D cube crossing a sprite plane screenshot; Overlay-over-actor overlap screenshot (covered by TilemapExtractionTest only)"
+      ]
+    },
+    {
       "id": "batching_core",
       "phase": "review-5",
       "status": "not_started",
       "driven_by": "R4: per-candidate submission ~6.3ms of a 10.6ms frame",
       "evidence": [
         "shared with ScreenDrawList",
-        "painter order + y-sort as the sort key, delete z = base - y*eps",
+        "painter order + y-sort as the sort key (done in sprite_painter_order, step 5a)",
         "texture table direct mapping",
         "tilemap static instance buffers",
         "merged render2d_upload_submit_lifetime and legacy_pipeline_removed"

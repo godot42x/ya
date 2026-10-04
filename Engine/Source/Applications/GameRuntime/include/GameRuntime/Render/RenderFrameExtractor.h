@@ -79,8 +79,8 @@ struct RenderFrameExtractor
     static void prepareViewLights(const ViewPrepareInput& input, RenderFrameData& out);
     static int32_t registerSkinningPalette(DrawItemExtractionContext& ctx, entt::entity entity, Mesh* mesh);
     static void extractDrawItems(DrawItemExtractionContext& ctx);
-    /// Order every View-owned bucket: candidate visibility is already decided,
-    /// this only writes the camera-dependent order.
+    /// Order every View-owned bucket. Mesh buckets are camera-distance ordered.
+    /// Sprites use the painter key, which does not depend on the camera.
     static void sortViewBuckets(const glm::vec3& cameraPos, RenderFrameData& out);
 };
 

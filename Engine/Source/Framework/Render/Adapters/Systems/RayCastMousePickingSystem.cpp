@@ -3,6 +3,8 @@
 #include "Render/Adapters/Companion/CompanionManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "Scene2D/Sprite2DComponent.h"
+#include "Scene2D/SpriteDrawOrder.h"
+#include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
@@ -77,14 +79,21 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
         });
 
     // Authored sprites are a local XY quad whose pivot sits on the entity.
-    // Overlapping hits at the same distance fall back to layer, then
-    // sortOrder, so the front sprite wins.
+    // Overlapping hits take the one that paints last, using the same key as
+    // extraction. Texel snap matches the primary pixel-perfect camera.
+    float texelStep = 0.0f;
+    for (const auto& [handle, camera] : registry.view<CameraComponent>().each()) {
+        (void)handle;
+        if (texelStep <= 0.0f && camera.bPrimary && camera._pixelPerfect && camera._pixelsPerUnit > 0.0f) {
+            texelStep = 1.0f / camera._pixelsPerUnit;
+        }
+    }
+
     struct SpritePick
     {
-        Entity* entity = nullptr;
-        float   distance = 0.0f;
-        int32_t layer = 0;
-        int32_t sortOrder = 0;
+        Entity*       entity = nullptr;
+        float         distance = 0.0f;
+        SpriteDrawKey key{};
     };
     std::optional<SpritePick> bestSprite;
     registry.view<Sprite2DComponent, TransformComponent>().each(
@@ -125,23 +134,17 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
             if (!entity) {
                 return;
             }
+            float sortY = glm::vec3(world[3]).y;
+            if (texelStep > 0.0f) {
+                sortY = snapWorldXY(glm::vec3(0.0f, sortY, 0.0f), texelStep, 0.0f, 0.0f).y;
+            }
             const SpritePick candidate{
                 .entity    = entity,
                 .distance  = distance,
-                .layer     = sprite.layer,
-                .sortOrder = sprite.sortOrder,
+                .key       = makeSpriteDrawKey(sprite.layer, sprite.bYSort, sortY, sprite.sortOrder,
+                                               static_cast<uint32_t>(handle), 0),
             };
-            if (!bestSprite) {
-                bestSprite = candidate;
-                return;
-            }
-            constexpr float kTie = 1e-3f;
-            const bool bCloser = candidate.distance + kTie < bestSprite->distance;
-            const bool bTie = std::abs(candidate.distance - bestSprite->distance) <= kTie;
-            const bool bInFront = candidate.layer > bestSprite->layer ||
-                                  (candidate.layer == bestSprite->layer &&
-                                   candidate.sortOrder > bestSprite->sortOrder);
-            if (bCloser || (bTie && bInFront)) {
+            if (!bestSprite || spriteDrawsBefore(bestSprite->key, candidate.key)) {
                 bestSprite = candidate;
             }
         });
