@@ -84,7 +84,7 @@ Cursor 侧文件的行为。
 | P7 拒绝能否拦住 | **拦不住**（JSON `permission: deny` 与退出码 2 都试过，subagent 照常运行） | 未验证 | 未验证 | 未验证 |
 | P8 钩子每次派发调用次数 | **2 次** | 未验证 | 未验证 | 未验证 |
 | P9 结束时塞回消息 | 有（`stop` 钩子的 `followup_message`，实测生效） | 未验证 | 未验证 | 未验证 |
-| P10 模型参数回落 | 有：首次运行用保存的偏好，结束后被「自愈」按目录默认变体写成 `fast=true`，续接读到它；实际请求值待用量页证实。agent 文件里的括号参数似乎不进入 composer 存档。详见 `subagent-delegation`「模型」一节 | 未验证 | 未验证 | 未验证 |
+| P10 模型参数回落 | 有：首次运行用保存的偏好，结束后被「自愈」按目录默认变体写成 `fast=true`，续接读到它；用量 CSV 已证实续接变 fast（显式传 model 也无效）且缓存失效。agent 文件里的括号参数似乎不进入 composer 存档。详见 `subagent-delegation`「模型」一节 | 未验证 | 未验证 | 未验证 |
 | P11 可读他人转写 | 有（`agent-transcripts/<会话>/subagents/<id>.jsonl`）；侧聊里钩子 payload 的 `transcript_path` 为空，需扫描所有项目转写根目录；续接只能由派发它的会话发起（否则 `parent mismatch`） | 未验证 | 未验证 | 未验证 |
 | P12 每个 subagent 单独设环境变量 | 未验证（现行做法：prompt 要求 worker 自己 `export YA_AGENT_NAME`） | 未验证 | 未验证 | 未验证 |
 

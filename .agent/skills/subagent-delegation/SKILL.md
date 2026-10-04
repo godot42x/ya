@@ -46,6 +46,8 @@ description: 派发 subagent 的规则：新开 / 续接（resume）/ 分叉（s
 
 ## 按线复用（subagent 池）
 
+> **Grok 4.7 暂停续接（2026-10-05 用量 CSV 证实）：** 续接会变 `grok-4.7-high-fast` 且缓存失效，见 `## 模型`。用户禁止 fast 时，Grok 4.7 的线一律新开并交接；下面的复用规则对其他不回落的模型照常适用。
+
 父 agent 在会话里维护一张「线 → agent id」表，派任务前先查表，再决定续接还是新开。
 线按**上下文归属**分，不按目录：谁最近读过、改过相关代码，就续接谁。
 
@@ -87,11 +89,12 @@ description: 派发 subagent 的规则：新开 / 续接（resume）/ 分叉（s
 - **Task 的 `model` 传 `grok-4.7-high` 也会得到 fast（2026-10-03 查实）。** Cursor 日志 `fixupModelConfig: populating selectedModels from modelName` 显示 slug 的 `-high` / `-high-fast` 后缀被丢掉，只剩 `grok-4.7`，composer 的参数数为 0；请求时用目录默认值补成 3 个参数，随后 `Healed stale per-composer parameters` 把它们写进 composer。state.vscdb 里所有经 Task 创建的 grok-4.7 subagent 都是 `reasoning_effort=high, fast=true`，`-fast` 与否无区别；用户自己开的 composer 才是 `fast=false`。界面标签在第一次运行结束、heal 之后才变成 "High Fast"，所以新开的 agent 刚创建时看起来是对的。
 - **续接为什么变 fast（2026-10-05 实验，结论分「已证实」和「待证实」）。**
   - 已证实（日志）：subagent 首次运行时 composer 存档参数是空的，请求用保存的偏好补全（`buildRequestedModel` 此时 `composerModelName=grok-4.7`、`resolvedParams=3`）；首次运行结束约 4 秒后 `Healed stale per-composer parameters`（`beforeCount=0 afterCount=3`）按模型目录默认变体写入 `fast=true`，**不看用户偏好**；之后每次续接 `buildRequestedModel` 读到的是这份已写入的值（`composerModelName` 同时变成 `grok-4.7-high`）。新开与续接在本地可见状态上的差别只有这一步，与用户「返工前无 fast、续接后有 fast」的观察吻合。
-  - 待证实：首次运行和续接**实际发给后端**的 `fast` 值。本机日志只打印参数个数，请求追踪日志 10/4 14:36 后不再写，转写里没有模型字段，只能看 cursor.com 用量页。探针：侧聊里的 `ed1dc31e` / `2f2944b3`，首次 02:29:44 / 02:29:45，续接 02:30:50（不带 `model`）/ 02:30:51（带 `model: grok-4.7-high`）。
+  - **已证实（2026-10-05 用量 CSV）：续接一定变 fast，显式传 `model` 救不了。** 探针结果：两个新开的 subagent 首次运行都是 `grok-4.7-high`（02:29:45 / 02:29:46）；一小时后两次续接都是 `grok-4.7-high-fast`（02:30:51），包括显式传了 `model: grok-4.7-high` 的那一个。与自愈把 `fast=true` 写入存档、续接读存档的时间线吻合。
+  - **续接还会打穿缓存。** 变体从非 fast 换到 fast，缓存不共享：当天 18 条 fast 记录里有 5 条几乎没有 cache read（例如 14:35 是 19 万 uncached 输入对 5 千 cache read），合计约 69 万 uncached 输入；32 条非 fast 记录里只有 1 条这样。也就是说续接不但单价更高，连「复用上下文」本身的缓存收益也没了。（这是由用量数据推断的因果，不是 Cursor 官方说明。）
   - 撤回：先前「在 agent 文件里加 `context=256k` 后新 worker 不再 fast」的结论不成立——当时读到的空参数是自愈前的状态。`.cursor/agents/*.md` 括号里的参数（`fast=false` 等）看起来没有进入 composer 存档（首次运行后存档仍是空），但这是读存档的推断，没有直接实测。
 - **Task 的 `model` 参数不接受括号语法**（传 `grok-4.7[...fast=false]` 报 `Invalid model selection`），只接受会话 `<available_subagent_models>` 里的 slug。官方说的「续接时再传一次 `model`，IDE 会尊重」，在我们这里只能传 `grok-4.7-high` 这种 slug；本地实测带与不带，composer 存档和请求构造日志完全一样，没看到差别。
 - 官方对应 issue（均为已知 bug、未给修复时间）：[续接回落到 fast](https://forum.cursor.com/t/resume-to-first-party-non-fast-models-redirects-to-fast-variants/166470)（与本问题一致，推理强度也失效）、[续接回落到父会话模型](https://forum.cursor.com/t/resuming-a-subagent-in-cursor-ide-switches-it-to-the-parent-agent-s-model-instead-of-keeping-the-subagent-s-original-model/165649)（官方绕法：续接时显式再传 `model`，或不续接直接新开）、[续接用错模型（3.5.3 修过后回归）](https://forum.cursor.com/t/subagent-resume-runs-an-incorrect-model/160590)、[模型选择不被尊重](https://forum.cursor.com/t/subagent-model-choice-not-respected/163645)、[CLI 变 fast](https://forum.cursor.com/t/cli-subagents-changing-model-to-composer-2-5-fast-mode-by-itself/162752)。文档：[Subagents 的 Model parameters](https://cursor.com/docs/subagents)。
-- **对「优先续接」的影响。** 若用量页证实续接是 fast，续接省的上下文开销会被 fast 的单价抵消。此时不要一刀切：短任务、上下文小的返工新开更划算；长上下文、返工量大的才续接。判断依据是用量页上同类任务两种方式的实际花费，不是本地存档。
+- **对「优先续接」的影响。** 续接已证实是 fast 且缓存失效，在 Cursor 修复前，用户禁止 fast 时**不要续接 Grok 4.7 subagent**，一律新开并在 prompt 里交接（`## 新开时的交接 prompt`）；「按线复用」对 Grok 4.7 暂时停用。只有用量页证实某个模型续接不回落时才恢复。
 - Task 工具没有 fast 参数，续接 / 新开都躲不掉。用户禁止 fast 时：不要用 Grok 4.7 派 subagent（换别的模型或自己做），或者让用户在 Cursor 设置里给该 subagent 类型配 `subagentModelOverrides`（用户已给 `explore` 配过 `fast=false`），配好后用探针确认再用。
 
 ## 项目内 agent（`.cursor/agents/`）
