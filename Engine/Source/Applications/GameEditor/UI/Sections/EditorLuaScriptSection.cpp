@@ -1,5 +1,6 @@
 #include "GameEditor/UI/Sections/EditorLuaScriptSection.h"
 
+#include "Core/Scripting/ScriptValue.h"
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
@@ -19,10 +20,9 @@
 #include "GameEditor/UI/Shell/EditorTheme.h"
 #include "Scene/Core/Scene.h"
 
-#include <any>
 #include <format>
 #include <glm/glm.hpp>
-#include <type_traits>
+#include <variant>
 
 namespace ya
 {
@@ -48,35 +48,15 @@ LuaScriptComponent* scriptComponentOn(EditorLayer* layer, uint64_t uuid)
 
 void storeOverride(LuaScriptInstance& script,
                    LuaScriptProperty& prop,
-                   std::any value)
+                   script::ScriptValue value)
 {
     script.propertyOverrides[prop.name] = value;
     prop.value = std::move(value);
 }
 
-template <typename T>
-T anyAs(const std::any& value, T fallback = T{})
+bool scriptValuePresent(const script::ScriptValue& value)
 {
-    if (value.type() == typeid(T)) {
-        return std::any_cast<T>(value);
-    }
-    if constexpr (std::is_same_v<T, float>) {
-        if (value.type() == typeid(double)) {
-            return static_cast<float>(std::any_cast<double>(value));
-        }
-        if (value.type() == typeid(int)) {
-            return static_cast<float>(std::any_cast<int>(value));
-        }
-    }
-    if constexpr (std::is_same_v<T, int>) {
-        if (value.type() == typeid(float)) {
-            return static_cast<int>(std::any_cast<float>(value));
-        }
-        if (value.type() == typeid(double)) {
-            return static_cast<int>(std::any_cast<double>(value));
-        }
-    }
-    return fallback;
+    return !std::holds_alternative<std::monostate>(value);
 }
 
 } // namespace
@@ -296,29 +276,8 @@ void EditorLuaScriptSection::rebuildRows()
                     if (prop.typeHint == "float") {
                         auto drag = std::make_shared<UIDragFloat>(std::format("{}_Prop{}Value", key, p));
                         drag->setStyleKey(editorStyle(StyleKey::DragFloat));
-                        if (prop.value.has_value()) {
-                            drag->setValue(anyAs<float>(prop.value), false);
-                        }
-                        drag->_min = prop.min;
-                        drag->_max = prop.max;
-                        drag->_onValueChanged = [this, i, p](float value) {
-                            LuaScriptComponent* target = scriptComponentOn(_layer, _entityUuid);
-                            if (!target || i >= target->scripts.size() ||
-                                p >= target->scripts[i].properties.size()) {
-                                return;
-                            }
-                            storeOverride(target->scripts[i], target->scripts[i].properties[p], value);
-                            noteMutated();
-                        };
-                        row.child(drag, ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight}));
-                    }
-                    else if (prop.typeHint == "int") {
-                        auto drag = std::make_shared<UIDragFloat>(std::format("{}_Prop{}Value", key, p));
-                        drag->setStyleKey(editorStyle(StyleKey::DragFloat));
-                        drag->_decimals = 0;
-                        drag->_speed = 1.0f;
-                        if (prop.value.has_value()) {
-                            drag->setValue(static_cast<float>(anyAs<int>(prop.value)), false);
+                        if (scriptValuePresent(prop.value)) {
+                            drag->setValue(static_cast<float>(script::scriptToNumber(prop.value)), false);
                         }
                         drag->_min = prop.min;
                         drag->_max = prop.max;
@@ -330,13 +289,36 @@ void EditorLuaScriptSection::rebuildRows()
                             }
                             storeOverride(target->scripts[i],
                                           target->scripts[i].properties[p],
-                                          static_cast<int>(value));
+                                          static_cast<double>(value));
+                            noteMutated();
+                        };
+                        row.child(drag, ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight}));
+                    }
+                    else if (prop.typeHint == "int") {
+                        auto drag = std::make_shared<UIDragFloat>(std::format("{}_Prop{}Value", key, p));
+                        drag->setStyleKey(editorStyle(StyleKey::DragFloat));
+                        drag->_decimals = 0;
+                        drag->_speed = 1.0f;
+                        if (scriptValuePresent(prop.value)) {
+                            drag->setValue(static_cast<float>(script::scriptToInteger(prop.value)), false);
+                        }
+                        drag->_min = prop.min;
+                        drag->_max = prop.max;
+                        drag->_onValueChanged = [this, i, p](float value) {
+                            LuaScriptComponent* target = scriptComponentOn(_layer, _entityUuid);
+                            if (!target || i >= target->scripts.size() ||
+                                p >= target->scripts[i].properties.size()) {
+                                return;
+                            }
+                            storeOverride(target->scripts[i],
+                                          target->scripts[i].properties[p],
+                                          static_cast<int64_t>(static_cast<int>(value)));
                             noteMutated();
                         };
                         row.child(drag, ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight}));
                     }
                     else if (prop.typeHint == "bool") {
-                        bool checked = anyAs<bool>(prop.value);
+                        const bool checked = std::holds_alternative<bool>(prop.value) && std::get<bool>(prop.value);
                         auto box = ui::checkBox(std::format("{}_Prop{}Value", key, p)).setChecked(checked);
                         box.setOnChanged([this, i, p](bool value) {
                             LuaScriptComponent* target = scriptComponentOn(_layer, _entityUuid);
@@ -351,7 +333,9 @@ void EditorLuaScriptSection::rebuildRows()
                                   ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight}));
                     }
                     else if (prop.typeHint == "string") {
-                        std::string text = anyAs<std::string>(prop.value);
+                        const std::string text = std::holds_alternative<std::string>(prop.value)
+                                                      ? std::get<std::string>(prop.value)
+                                                      : std::string{};
                         auto field = ui::textField(std::format("{}_Prop{}Value", key, p))
                                          .setStyleKey(editorStyle(StyleKey::TextField))
                                          .setText(text);
@@ -368,7 +352,9 @@ void EditorLuaScriptSection::rebuildRows()
                                   ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight}));
                     }
                     else if (prop.typeHint == "Vec3") {
-                        glm::vec3 value = anyAs<glm::vec3>(prop.value);
+                        const glm::vec3 value = std::holds_alternative<glm::vec3>(prop.value)
+                                                    ? std::get<glm::vec3>(prop.value)
+                                                    : glm::vec3{};
                         for (int axis = 0; axis < 3; ++axis) {
                             auto drag = std::make_shared<UIDragFloat>(
                                 std::format("{}_Prop{}Axis{}", key, p, axis));
@@ -381,7 +367,9 @@ void EditorLuaScriptSection::rebuildRows()
                                     return;
                                 }
                                 auto& inst = target->scripts[i];
-                                glm::vec3 vec = anyAs<glm::vec3>(inst.properties[p].value);
+                                glm::vec3 vec = std::holds_alternative<glm::vec3>(inst.properties[p].value)
+                                                    ? std::get<glm::vec3>(inst.properties[p].value)
+                                                    : glm::vec3{};
                                 vec[axis] = component;
                                 storeOverride(inst, inst.properties[p], vec);
                                 noteMutated();

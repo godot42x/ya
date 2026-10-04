@@ -2,12 +2,13 @@
 #include "Core/Log.h"
 #include "Core/System/PathUtils.h"
 #include "Resource/AssetManager.h"
-#include <any>
 #include <cmath>
 #include <glm/glm.hpp>
 #include <limits>
 #include <string_view>
+#include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 
@@ -16,7 +17,10 @@ namespace ya
 namespace
 {
 
-std::any solToAny(const sol::object& value, std::string_view typeHint)
+/// `int` hints narrow to int, then store int64_t. `float` hints narrow to
+/// float, then store double. JSON still splits them with `is_number_integer`
+/// / `is_number_float`.
+script::ScriptValue solToScriptValue(const sol::object& value, std::string_view typeHint)
 {
     if (!value.valid() || value.get_type() == sol::type::lua_nil) {
         return {};
@@ -24,10 +28,10 @@ std::any solToAny(const sol::object& value, std::string_view typeHint)
 
     try {
         if (typeHint == "float") {
-            return value.as<float>();
+            return static_cast<double>(value.as<float>());
         }
         if (typeHint == "int") {
-            return value.as<int>();
+            return static_cast<int64_t>(value.as<int>());
         }
         if (typeHint == "bool") {
             return value.as<bool>();
@@ -51,7 +55,7 @@ std::any solToAny(const sol::object& value, std::string_view typeHint)
         case sol::type::boolean:
             return value.as<bool>();
         case sol::type::number:
-            return value.as<float>();
+            return static_cast<double>(value.as<float>());
         case sol::type::string:
             return value.as<std::string>();
         default:
@@ -67,16 +71,20 @@ std::any solToAny(const sol::object& value, std::string_view typeHint)
 }
 
 /// A Lua value carrying `value`'s type, or an invalid object when the type
-/// cannot cross (the caller reports it). The type list is the whole dispatch.
-template <typename... TTypes>
-sol::object makeLuaObject(sol::state& lua, const std::any& value)
+/// cannot cross (the caller reports it).
+sol::object pushScriptValue(sol::state& lua, const script::ScriptValue& value)
 {
-    sol::object made;
-    const bool  bKnown = ((value.type() == typeid(TTypes)
-                               ? (made = sol::make_object(lua, std::any_cast<TTypes>(value)), true)
-                               : false)
-                              || ...);
-    return bKnown ? made : sol::object{};
+    return std::visit(
+        [&lua](const auto& held) -> sol::object {
+            using T = std::decay_t<decltype(held)>;
+            if constexpr (std::is_same_v<T, std::monostate> || std::is_same_v<T, script::ScriptRef>) {
+                return sol::object{};
+            }
+            else {
+                return sol::make_object(lua, held);
+            }
+        },
+        value);
 }
 
 } // namespace
@@ -158,7 +166,7 @@ void LuaScriptInstance::capturePropertiesFrom(sol::table table)
             table[propName] = *propValue;
             currentValue    = *propValue;
         }
-        prop.value = solToAny(currentValue, prop.typeHint);
+        prop.value = solToScriptValue(currentValue, prop.typeHint);
         properties.push_back(std::move(prop));
     }
 }
@@ -190,24 +198,23 @@ void LuaScriptInstance::applyPropertyOverridesTo(sol::table table, sol::state& l
                  propertyOverrides.size(),
                  scriptPath);
 
-    for (const auto& [propName, anyValue] : propertyOverrides) {
-        if (!anyValue.has_value()) {
+    for (const auto& [propName, value] : propertyOverrides) {
+        if (std::holds_alternative<std::monostate>(value)) {
             YA_CORE_WARN("[LuaScript] Property '{}' has no value, skipping", propName);
             continue;
         }
 
         try {
-            const sol::object luaValue =
-                makeLuaObject<int, float, double, bool, std::string, glm::vec2, glm::vec3, glm::vec4>(lua, anyValue);
+            const sol::object luaValue = pushScriptValue(lua, value);
             if (!luaValue.valid()) {
                 YA_CORE_WARN("[LuaScript] Unsupported type for property '{}': {}",
                              propName,
-                             anyValue.type().name());
+                             script::scriptValueTypeName(value));
                 continue;
             }
 
             table[propName] = luaValue;
-            YA_CORE_TRACE("[LuaScript]   {} = ({})", propName, anyValue.type().name());
+            YA_CORE_TRACE("[LuaScript]   {} = ({})", propName, script::scriptValueTypeName(value));
         }
         catch (const std::exception& e) {
             YA_CORE_ERROR("[LuaScript] Failed to apply property '{}': {}", propName, e.what());

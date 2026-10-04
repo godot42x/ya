@@ -17,8 +17,8 @@ namespace ya
 
 struct LuaScriptComponent : public IComponent
 {
-    // Registration-only: the scripts vector uses custom UI rendering (DetailsView.Components.Basic.cpp)
-    // because sol::object / sol::function / std::any cannot be trivially reflected.
+    // Registration-only. Live handles do not enter reflection; scripts are
+    // serialized by hand instead of as a reflected property list.
     YA_REFLECT_BEGIN(LuaScriptComponent)
     YA_REFLECT_END()
 
@@ -81,26 +81,20 @@ struct LuaScriptComponent : public IComponent
             if (!script.propertyOverrides.empty()) {
                 nlohmann::json overrides = nlohmann::json::object();
                 for (const auto& [propName, value] : script.propertyOverrides) {
-                    if (value.type() == typeid(int))
-                        overrides[propName] = std::any_cast<int>(value);
-                    else if (value.type() == typeid(float))
-                        overrides[propName] = std::any_cast<float>(value);
-                    else if (value.type() == typeid(double))
-                        overrides[propName] = std::any_cast<double>(value);
-                    else if (value.type() == typeid(bool))
-                        overrides[propName] = std::any_cast<bool>(value);
-                    else if (value.type() == typeid(std::string))
-                        overrides[propName] = std::any_cast<std::string>(value);
-                    else if (value.type() == typeid(glm::vec2)) {
-                        auto vec = std::any_cast<glm::vec2>(value);
-                        overrides[propName] = nlohmann::json::array({vec.x, vec.y});
-                    } else if (value.type() == typeid(glm::vec3)) {
-                        auto vec = std::any_cast<glm::vec3>(value);
-                        overrides[propName] = nlohmann::json::array({vec.x, vec.y, vec.z});
-                    } else if (value.type() == typeid(glm::vec4)) {
-                        auto vec = std::any_cast<glm::vec4>(value);
-                        overrides[propName] = nlohmann::json::array({vec.x, vec.y, vec.z, vec.w});
-                    }
+                    if (const auto* integer = std::get_if<int64_t>(&value))
+                        overrides[propName] = *integer;
+                    else if (const auto* number = std::get_if<double>(&value))
+                        overrides[propName] = *number;
+                    else if (const auto* flag = std::get_if<bool>(&value))
+                        overrides[propName] = *flag;
+                    else if (const auto* text = std::get_if<std::string>(&value))
+                        overrides[propName] = *text;
+                    else if (const auto* vec = std::get_if<glm::vec2>(&value))
+                        overrides[propName] = nlohmann::json::array({vec->x, vec->y});
+                    else if (const auto* vec = std::get_if<glm::vec3>(&value))
+                        overrides[propName] = nlohmann::json::array({vec->x, vec->y, vec->z});
+                    else if (const auto* vec = std::get_if<glm::vec4>(&value))
+                        overrides[propName] = nlohmann::json::array({vec->x, vec->y, vec->z, vec->w});
                 }
                 s["propertyOverrides"] = std::move(overrides);
             }
@@ -129,9 +123,9 @@ struct LuaScriptComponent : public IComponent
                 if (valueJson.is_boolean())
                     script->propertyOverrides[propName] = valueJson.get<bool>();
                 else if (valueJson.is_number_integer())
-                    script->propertyOverrides[propName] = valueJson.get<int>();
+                    script->propertyOverrides[propName] = valueJson.get<int64_t>();
                 else if (valueJson.is_number_float())
-                    script->propertyOverrides[propName] = valueJson.get<float>();
+                    script->propertyOverrides[propName] = valueJson.get<double>();
                 else if (valueJson.is_string())
                     script->propertyOverrides[propName] = valueJson.get<std::string>();
                 else if (valueJson.is_array() && valueJson.size() == 2)

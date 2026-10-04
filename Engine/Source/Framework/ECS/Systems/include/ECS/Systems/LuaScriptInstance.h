@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/Scripting/ScriptValue.h"
 
-#include <any>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -21,13 +21,13 @@ struct LuaListenerScope;
 /// keep after the Lua state that produced it is gone.
 struct LuaScriptProperty
 {
-    std::string name;
-    std::any    value;
-    std::string typeHint;
-    float       min             = 0.0f;
-    float       max             = 100.0f;
-    std::string tooltip         = "";
-    std::string serializedValue = "";
+    std::string         name;
+    script::ScriptValue value;
+    std::string         typeHint;
+    float               min             = 0.0f;
+    float               max             = 100.0f;
+    std::string         tooltip         = "";
+    std::string         serializedValue = "";
 };
 
 /// One script attached to one host. The authored half (path, enabled, order
@@ -55,8 +55,8 @@ struct LuaScriptInstance
     sol::function onEnable;
     sol::function onDisable;
 
-    std::vector<LuaScriptProperty>            properties;
-    std::unordered_map<std::string, std::any> propertyOverrides;
+    std::vector<LuaScriptProperty>                       properties;
+    std::unordered_map<std::string, script::ScriptValue> propertyOverrides;
 
     bool enabled = true;
 
