@@ -9,6 +9,9 @@ Steps:
     1. Run slangc to produce reflection JSON (+ throwaway .spv).
     2. Parse the JSON, collect struct definitions in dependency order.
     3. Emit a C++ header with alignas(16) + static_assert(sizeof/offsetof) guards.
+       Uniform and push-constant structs come from offset/size bindings.
+       A struct marked [YaVertexInput] and used as a vertex entry parameter
+       is also emitted, with a VertexInputField table (location, offset, format).
 
 The script is incremental: if the output header is newer than the .slang source,
 it will be skipped (pass --force to override).
@@ -343,6 +346,168 @@ def is_uniform_struct(struct_node: dict) -> bool:
     return False
 
 
+# Slang user attribute (Common/VertexInput.slang). Reflection reports it on
+# the struct type as userAttribs[].name. Unknown [[ya::...]] attributes are
+# dropped from the JSON, so the declared attribute is the marker.
+VERTEX_INPUT_ATTRIB = "YaVertexInput"
+
+# Default glm (aligned gentypes off): 32-bit vectors are tightly packed and
+# aligned to the scalar. This is the layout static_assert checks.
+_VERTEX_SCALAR = {
+    "float32": ("Float32", 4),
+    "int32": ("Int32", 4),
+    "uint32": ("Uint32", 4),
+}
+
+
+def _align_up(value: int, align: int) -> int:
+    return (value + align - 1) // align * align
+
+
+def _has_user_attrib(type_node: dict, name: str) -> bool:
+    for attrib in type_node.get("userAttribs") or []:
+        if attrib.get("name") == name:
+            return True
+    return False
+
+
+def _vertex_field_layout(type_node: dict) -> tuple[str, int, int, str, int]:
+    """Natural C++ layout of one vertex-input field.
+
+    Returns (cpp_type, size, align, VertexInputScalar name, components).
+    """
+    kind = type_node.get("kind", "")
+    if kind == "scalar":
+        scalar = type_node.get("scalarType", "")
+        info = _VERTEX_SCALAR.get(scalar)
+        if info is None:
+            raise ValueError(f"vertex input scalar {scalar!r} is not supported")
+        enum_name, size = info
+        cpp, _suffix = slang_type_to_cpp(type_node)
+        return cpp, size, size, enum_name, 1
+    if kind == "vector":
+        element = type_node.get("elementType") or {}
+        scalar = element.get("scalarType", "")
+        count = int(type_node.get("elementCount") or 0)
+        info = _VERTEX_SCALAR.get(scalar)
+        if info is None or count < 1 or count > 4:
+            raise ValueError(f"vertex input vector {scalar}x{count} is not supported")
+        enum_name, scalar_size = info
+        cpp, _suffix = slang_type_to_cpp(type_node)
+        return cpp, scalar_size * count, scalar_size, enum_name, count
+    raise ValueError(f"vertex input field type {kind!r} is not supported")
+
+
+def collect_vertex_input_structs(data: dict) -> list[tuple[dict, int]]:
+    """[YaVertexInput] structs that are parameters of a vertex entry.
+
+    Returns the struct and the parameter's varyingInput base location.
+    Slang's SPIR-V location is that base plus the field's binding index.
+    A field ``[[vk::location]]`` is relative to the parameter, so the field
+    index alone is not the SPIR-V location when another vertex parameter
+    precedes this struct.
+    """
+    found: list[tuple[dict, int]] = []
+    seen: set[str] = set()
+    for entry in data.get("entryPoints", []):
+        if entry.get("stage") != "vertex":
+            continue
+        for param in entry.get("parameters", []):
+            type_node = param.get("type") or {}
+            if type_node.get("kind") != "struct":
+                continue
+            if not _has_user_attrib(type_node, VERTEX_INPUT_ATTRIB):
+                continue
+            name = type_node.get("name")
+            if not name or name in seen:
+                continue
+            binding = param.get("binding") or {}
+            if binding.get("kind") != "varyingInput" or "index" not in binding:
+                raise ValueError(
+                    f"{name} is marked {VERTEX_INPUT_ATTRIB} but is not a vertex varying input"
+                )
+            seen.add(name)
+            found.append((type_node, int(binding["index"])))
+    return found
+
+
+def _vertex_input_preamble() -> str:
+    return "\n".join([
+        "// Vertex input records marked [YaVertexInput] in the .slang source.",
+        "// location is the SPIR-V input location. offset is the byte offset in",
+        "// this C++ record; the vertex-buffer stride is sizeof the struct.",
+        "enum class VertexInputScalar : uint32_t",
+        "{",
+        "    Float32 = 0,",
+        "    Int32 = 1,",
+        "    Uint32 = 2,",
+        "};",
+        "",
+        "struct VertexInputField",
+        "{",
+        "    const char* name;",
+        "    uint32_t location;",
+        "    uint32_t offset;",
+        "    uint32_t components;",
+        "    VertexInputScalar scalar;",
+        "};",
+        "",
+    ])
+
+
+def gen_vertex_input_struct(struct_node: dict, base_location: int) -> str:
+    """Emit the C++ record and its VertexInputField table."""
+    name = struct_node["name"]
+    fields = struct_node.get("fields") or []
+    if not fields:
+        raise ValueError(f"{name} has no vertex input fields")
+
+    cursor = 0
+    max_align = 1
+    laid_out = []
+    for field in fields:
+        binding = field.get("binding") or {}
+        if binding.get("kind") != "varyingInput" or "index" not in binding:
+            raise ValueError(f"{name}::{field.get('name')} has no varyingInput location")
+        cpp_type, size, align, scalar, components = _vertex_field_layout(field["type"])
+        offset = _align_up(cursor, align)
+        laid_out.append({
+            "name": field["name"],
+            "cpp": cpp_type,
+            "offset": offset,
+            "location": base_location + int(binding["index"]),
+            "components": components,
+            "scalar": scalar,
+        })
+        cursor = offset + size
+        max_align = max(max_align, align)
+
+    # No alignas(16): that would round the stride up and the instance buffer
+    # would carry tail padding the attributes do not describe. Natural
+    # alignment of these glm types is the scalar alignment computed above.
+    total_size = _align_up(cursor, max_align)
+    lines = [f"struct {name}", "{"]
+    for field in laid_out:
+        lines.append(f"    {field['cpp']} {field['name']};")
+    lines.append("};")
+    lines.append(f'static_assert(sizeof({name}) == {total_size}, "Size mismatch for {name}");')
+    for field in laid_out:
+        lines.append(
+            f'static_assert(SLANG_OFFSETOF({name}, {field["name"]}) == {field["offset"]}, '
+            f'"Offset mismatch for {name}::{field["name"]}");'
+        )
+    lines.append("")
+    lines.append(f"inline constexpr VertexInputField {name}Fields[] = {{")
+    for field in laid_out:
+        lines.append(
+            f'    {{"{field["name"]}", {field["location"]}, {field["offset"]}, '
+            f'{field["components"]}, VertexInputScalar::{field["scalar"]}}},'
+        )
+    lines.append("};")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def gen_struct(struct_node: dict, struct_sizes: dict[str, int]) -> str:
     """Generate C++ struct definition with auto-padding and static_assert guards."""
     name = struct_node["name"]
@@ -424,8 +589,13 @@ def generate_header(json_path: str, output_path: str, namespace: str, slang_sour
         for param in ep.get("parameters", []):
             collect_structs(param.get("type"), visited, ordered, struct_sizes)
 
-    # Filter: only emit structs with uniform bindings (offset/size)
+    # Filter: only emit structs with uniform bindings (offset/size).
+    # Vertex inputs are varying and stay out unless marked [YaVertexInput].
     ordered = [s for s in ordered if is_uniform_struct(s)]
+    vertex_inputs = collect_vertex_input_structs(data)
+    if vertex_inputs:
+        vertex_names = {node["name"] for node, _base in vertex_inputs}
+        ordered = [s for s in ordered if s["name"] not in vertex_names]
 
     lines = []
     lines.append("// Auto-generated by slang_gen_header.py")
@@ -462,8 +632,12 @@ def generate_header(json_path: str, output_path: str, namespace: str, slang_sour
                 lines.append(f"    {member_name} = {member_value},")
             lines.append("};")
             lines.append("")
+    if vertex_inputs:
+        lines.append(_vertex_input_preamble())
     for struct_node in ordered:
         lines.append(gen_struct(struct_node, struct_sizes))
+    for struct_node, base_location in vertex_inputs:
+        lines.append(gen_vertex_input_struct(struct_node, base_location))
     if namespace:
         lines.append(f"}} // namespace {namespace}")
     lines.append("")

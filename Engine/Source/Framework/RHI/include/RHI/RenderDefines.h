@@ -212,6 +212,46 @@ struct VertexAttribute
     size_t                    offset;
 };
 
+// Each shader header that emits a [YaVertexInput] record defines
+// VertexInputScalar in that shader's namespace (Float32 / Int32 / Uint32).
+// One template accepts any of those enums; a single shared enum would be a
+// second definition next to every generated copy.
+template <typename Scalar>
+inline EVertexAttributeFormat::T vertexAttributeFormat(Scalar scalar, uint32_t components)
+{
+    switch (scalar) {
+    case Scalar::Float32:
+        switch (components) {
+        case 1: return EVertexAttributeFormat::Float32;
+        case 2: return EVertexAttributeFormat::Float32x2;
+        case 3: return EVertexAttributeFormat::Float32x3;
+        case 4: return EVertexAttributeFormat::Float32x4;
+        default: break;
+        }
+        break;
+    case Scalar::Int32:
+        switch (components) {
+        case 1: return EVertexAttributeFormat::Int32;
+        case 2: return EVertexAttributeFormat::Int32x2;
+        case 3: return EVertexAttributeFormat::Int32x3;
+        case 4: return EVertexAttributeFormat::Int32x4;
+        default: break;
+        }
+        break;
+    case Scalar::Uint32:
+        switch (components) {
+        case 1: return EVertexAttributeFormat::Uint32;
+        case 2: return EVertexAttributeFormat::Uint32x2;
+        case 3: return EVertexAttributeFormat::Uint32x3;
+        case 4: return EVertexAttributeFormat::Uint32x4;
+        default: break;
+        }
+        break;
+    }
+    YA_CORE_ASSERT(false, "vertex input field has no attribute format");
+    return EVertexAttributeFormat::Float32;
+}
+
 
 namespace EShaderStage
 {

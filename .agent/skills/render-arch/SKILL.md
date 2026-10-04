@@ -235,11 +235,12 @@ C++
 
 落地规则：
 
-1. 不要手写与 shader-facing layout 对应的 C++ 结构体，包括 UBO、SSBO、push constant、indirect command。
+1. 不要手写与 shader-facing layout 对应的 C++ 结构体，包括 UBO、SSBO、push constant、indirect command，以及标了 `[YaVertexInput]` 的顶点输入结构。
 2. C++ 侧必须 include `Engine/Shader/Slang/Generated/*.slang.h`，消费 `slang_types::` 里的生成类型。
 3. 若生成头缺少需要的 shader-facing 类型，修 shader 源或生成脚本，不在 C++ 侧补 mirror struct。
-4. 配置常量优先以 `Engine/Config/Engine.jsonc` 为单一事实源，其余文件只消费不重定义。
-5. 若值变更，优先改配置或生成脚本，再运行 `xmake ya-shader`。
+4. 顶点输入默认不进生成头（varying 绑定没有 uniform offset）。需要 C++ 记录时，结构体标 `[YaVertexInput]`（`Common/VertexInput.slang`），并作为顶点入口参数。Slang 把字段 `binding.index` 记成相对该参数的下标，SPIR-V location 是参数 `binding.index`（基址）加上这个下标。`Sprite2DWorld` 的网格输入占 0–2，所以实例参数写 `[[vk::location(3)]]`、字段不再写 location，生成表里的 location 才是 3–8。若把 3–8 写在字段上，反射下标仍是 3–8，但 SPIR-V 会再加基址变成 6–11。缺 location 的字段生成失败。布局按 glm 默认对齐，并发出 `VertexInputField`（location、offset、分量数、标量种类）。没标的顶点输入保持不发。不要用一条顶点阶段不读的 push constant 去喂生成器。`VertexInputScalar` 留在各 shader 的生成命名空间里；C++ 用 `vertexAttributeFormat` 模板映射到 `EVertexAttributeFormat`，不另做一份共享枚举。
+5. 配置常量优先以 `Engine/Config/Engine.jsonc` 为单一事实源，其余文件只消费不重定义。
+6. 若值变更，优先改配置或生成脚本，再运行 `xmake ya-shader`。
 
 ## Dynamic Rendering / Layout 约束
 
@@ -254,11 +255,15 @@ C++
 
 **世界精灵**（`Sprite2DStage`，场景图里、深度只读、在 skybox 之后 bloom 之前）：
 
-- 一个共享 quad 网格，binding 0 顶点速率。每个精灵是 `Sprite2DWorld.slang` 生成的
-  `SpriteInstance`（80 字节：worldCenter、textureIndex、axisX、axisY、uvRect、tint；
-  翻转已折进 uv）。GPU 侧结构以生成头为事实源。实例数据走 binding 1、
-  `EVertexInputRate::Instance`（`VertexBufferDescription::inputRate`）。不要改回
-  逐精灵 push constant，也不要改成 host-visible SSBO。
+- 一个共享 quad 网格，binding 0 顶点速率。每个精灵是 `Sprite2DWorld.slang` 里
+  `[YaVertexInput] struct SpriteInstance`（72 字节：worldCenter、textureIndex、
+  axisX、axisY、uvRect、tint；翻转已折进 uv）。顶点入口是
+  `[[vk::location(3)]] SpriteInstance`，SPIR-V location 仍是 3–8。生成头的
+  `SpriteInstanceFields` 是 location / offset 的事实源，`Sprite2DStage` 用
+  `vertexAttributeFormat` 把它填进 binding 1 的顶点属性。实例数据走
+  binding 1、`EVertexInputRate::Instance`（`VertexBufferDescription::inputRate`；
+  速率是管线状态，不是 SPIR-V 修饰）。不要改回逐精灵 push constant，也不要改成
+  host-visible SSBO。
 - 纹理槽下标是 flat varying（`nointerpolation`），片元用 `uTextures[slot]`，和
   `Sprite2DScreen.slang` 一样，不依赖 descriptor indexing。
 - 合批在 `Render2D/TextureTableBatch.h`：`planInstancedDraws` 是纯 CPU。已排好的

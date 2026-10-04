@@ -32,6 +32,27 @@ TextureBinding whiteBinding()
     };
 }
 
+std::vector<VertexAttribute> makeVertexAttributes()
+{
+    // Locations 0-2 are the shared quad mesh (ya::Vertex), not a generated
+    // vertex-input record. Locations 3-8 and their byte offsets come from
+    // SpriteInstanceFields.
+    std::vector<VertexAttribute> attributes = {
+        {.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)},
+        {.bufferSlot = 0, .location = 1, .format = EVertexAttributeFormat::Float2, .offset = offsetof(ya::Vertex, texCoord0)},
+        {.bufferSlot = 0, .location = 2, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, normal)},
+    };
+    for (const auto& field : slang_types::Sprite2DWorld::SpriteInstanceFields) {
+        attributes.push_back(VertexAttribute{
+            .bufferSlot = 1,
+            .location   = field.location,
+            .format     = vertexAttributeFormat(field.scalar, field.components),
+            .offset     = field.offset,
+        });
+    }
+    return attributes;
+}
+
 } // namespace
 
 void Sprite2DStage::init(IRender* render)
@@ -99,17 +120,7 @@ GraphicsPipelineCreateInfo Sprite2DStage::makePipelineCreateInfo() const
                 VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex), .inputRate = EVertexInputRate::Vertex},
                 VertexBufferDescription{.slot = 1, .pitch = sizeof(Instance), .inputRate = EVertexInputRate::Instance},
             },
-            .vertexAttributes  = {
-                {.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)},
-                {.bufferSlot = 0, .location = 1, .format = EVertexAttributeFormat::Float2, .offset = offsetof(ya::Vertex, texCoord0)},
-                {.bufferSlot = 0, .location = 2, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, normal)},
-                {.bufferSlot = 1, .location = 3, .format = EVertexAttributeFormat::Float3, .offset = offsetof(Instance, worldCenter)},
-                {.bufferSlot = 1, .location = 4, .format = EVertexAttributeFormat::Uint32, .offset = offsetof(Instance, textureIndex)},
-                {.bufferSlot = 1, .location = 5, .format = EVertexAttributeFormat::Float3, .offset = offsetof(Instance, axisX)},
-                {.bufferSlot = 1, .location = 6, .format = EVertexAttributeFormat::Float3, .offset = offsetof(Instance, axisY)},
-                {.bufferSlot = 1, .location = 7, .format = EVertexAttributeFormat::Float4, .offset = offsetof(Instance, uvRect)},
-                {.bufferSlot = 1, .location = 8, .format = EVertexAttributeFormat::Float4, .offset = offsetof(Instance, tint)},
-            },
+            .vertexAttributes  = makeVertexAttributes(),
             .defines = {
                 std::format("TEXTURE_SET_SIZE {}", kTextureTableSize),
             },

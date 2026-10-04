@@ -10,6 +10,7 @@
 // primitives (see Sprite2DScreen.slang).
 
 #include "Common/Limits.slang"
+#include "Common/VertexInput.slang"
 
 #ifndef TEXTURE_SET_SIZE
 #define TEXTURE_SET_SIZE 16
@@ -24,31 +25,30 @@ struct FrameData
 
 [[vk::binding(0, 1)]] Sampler2D uTextures[TEXTURE_SET_SIZE];
 
-// One sprite in the shared-quad instance buffer. Field order is the GPU
-// record: the generated C++ header is the only copy of these offsets.
-// `axisX`/`axisY` already carry the entity's rotation, scale and the
-// component's size, so a far sprite looks smaller only because projection
-// makes it smaller. Flip flags are baked into `uvRect` before upload.
+// One sprite in the shared-quad instance buffer. [YaVertexInput] is what
+// asks the header generator for the C++ record and SpriteInstanceFields
+// (SPIR-V location, byte offset, components). `axisX`/`axisY` already carry
+// the entity's rotation, scale and the component's size, so a far sprite
+// looks smaller only because projection makes it smaller. Flip flags are
+// baked into `uvRect` before upload.
 //
-// This struct is a push-constant parameter only so `slang_gen_header.py`
-// emits the offsets. The vertex stage reads the `[[vk::location]]` arguments
-// below, not `pc` (an unused push constant is dropped from SPIR-V). The
-// pipeline binds those locations at `offsetof(SpriteInstance, field)` with
-// instance rate. Do not delete `pc`: without it there is no generated type.
+// [[vk::location(3)]] on the parameter is the SPIR-V base. Field locations in
+// reflection are relative to it (0..5 here), and the generated table stores
+// base + field index, which is the SPIR-V location 3-8. Writing those
+// locations on the fields instead shifts SPIR-V by this parameter's base
+// (the mesh inputs occupy 0-2, so field location 3 becomes SPIR-V 6).
+// Instance rate is the pipeline binding (binding 1), not a SPIR-V decoration.
+[YaVertexInput]
 struct SpriteInstance
 {
     float3 worldCenter;
     uint   textureIndex;
     float3 axisX;
-    uint   _pad0;
     float3 axisY;
-    uint   _pad1;
     // Atlas window (u0, v0, u1, v1).
     float4 uvRect;
     float4 tint;
 };
-
-[[vk::push_constant]] SpriteInstance pc;
 
 struct SpriteVertexInput
 {
@@ -68,26 +68,21 @@ struct SpriteVertexOutput
 [shader("vertex")]
 SpriteVertexOutput vertWorldMain(
     SpriteVertexInput input,
-    [[vk::location(3)]] float3 worldCenter,
-    [[vk::location(4)]] uint   textureIndex,
-    [[vk::location(5)]] float3 axisX,
-    [[vk::location(6)]] float3 axisY,
-    [[vk::location(7)]] float4 uvRect,
-    [[vk::location(8)]] float4 tint)
+    [[vk::location(3)]] SpriteInstance instance)
 {
     // The shared primitive quad spans [-1, 1]; the authored quad is `size` world
     // units across, so half of the primitive range is the quad-space corner.
     float2 corner   = input.pos.xy * 0.5;
-    float3 worldPos = worldCenter + axisX * corner.x + axisY * corner.y;
+    float3 worldPos = instance.worldCenter + instance.axisX * corner.x + instance.axisY * corner.y;
 
     SpriteVertexOutput output;
     output.sv_position  = mul(uFrame.viewProj, float4(worldPos, 1.0));
     // uvRect is in image space (v0 = the image's top rows), while the shared
     // quad's texCoord.y grows toward +Y. The quad's top edge shows v0.
     float2 quadUv       = float2(input.texCoord.x, 1.0 - input.texCoord.y);
-    output.texCoord     = lerp(uvRect.xy, uvRect.zw, quadUv);
-    output.tint         = tint;
-    output.textureIndex = textureIndex;
+    output.texCoord     = lerp(instance.uvRect.xy, instance.uvRect.zw, quadUv);
+    output.tint         = instance.tint;
+    output.textureIndex = instance.textureIndex;
     return output;
 }
 
