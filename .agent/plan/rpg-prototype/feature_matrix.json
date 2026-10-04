@@ -203,7 +203,7 @@
         "5b-2 done: ScreenDrawList/ScreenDrawRecorder use TextureTableCursor + planScreenDrawRemap; hand-written tables removed; UI pixels unchanged",
         "painter order + y-sort as the sort key (done in sprite_painter_order, step 5a)",
         "texture table direct mapping",
-        "tilemap static instance buffers",
+        "tilemap static instance buffers: deferred (measured 0.245 ms/frame on TownLarge, see progress.md 5c); viewport culling first when maps grow",
         "merged render2d_upload_submit_lifetime and legacy_pipeline_removed"
       ]
     },

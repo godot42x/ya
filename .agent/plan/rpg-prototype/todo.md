@@ -46,7 +46,7 @@
 - [x] 5b-2 `ScreenDrawList` 迁移到同一纹理表 + 批游标（顶点格式保留，UI 像素不变）
 - [x] 5a 画家顺序 + y-sort（单一混合管线、深度只测不写、`spriteDrawsBefore` 排序键、`bYSort`/`layerOffset`），删 `z = base − y·ε` / `Actor.zFor`；拾取共用比较函数
 - [x] 5b-1 世界精灵纹理表直接映射（按绑定身份：纹理 + view + sampler 作键）
-- [ ] 5c tilemap 每图层 / 区块静态实例缓冲，只在编辑时重建
+- [~] 5c tilemap 静态实例缓冲：**推迟**（2026-10-04 度量：TownLarge tilemap+精灵 CPU 合计 0.245ms/帧，占整帧 3%，整帧卡在 `waitFrameFence` 5.83ms；见 `progress.md`）。触发条件：单图 ≥2 万实例或明确要做 256² 地图；届时先做视口裁剪（填 `bHasVisibleRange`，约两处调用点），再评估未开 y-sort 子层的静态缓冲（整层作排序单元、失效走 `onComponentEdited`、笔刷结束补发通知）
 
 步骤 6 纯 2D View 家族（前置：`../render-view-family/` P3 的 `PreparedView` / ViewFamily compiler）
 - [ ] 纯 2D View 不跑 GBuffer / 光照 / 天空盒 / Bloom

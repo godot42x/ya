@@ -625,3 +625,13 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 验证：新增 9 个测试（切批期望按旧录制器算法写死，没有重跑旧二进制取数）；`ya-testing` 1652 ran / 1651 passed / 1 skipped；四条玩法脚本、编辑器冒烟 exit 0；
   像素对照 GUIWorkbench / GreedySnake / RPG 编辑器（含动画集页签）/ 对话框页 0 差；HelloMaterial 编辑器 149 像素，仅 Stats 面板帧号末位。
 - 未验证：屏幕录制 CPU 耗时（没有现成度量）；OpenGL 屏幕路径。
+
+## 2026-10-04 — 步骤 5c 度量：推迟 tilemap 静态实例缓冲
+
+- 度量（profile 构建，TownLarge，540 帧均值，trace `/tmp/r5c_townlarge.json`，临时 profile scope 已还原）：tile 展开 0.054 + 精灵候选 0.001 + texel 吸附 0.009 + 排序 0.117（快照 0.084 + 视图 0.032）+ 视图桶 0.009 + 批规划/写入/描述符 0.048 + 录制 draw 0.008 = **0.245 ms/帧**（占整帧 3%）。
+  整帧 `iterate` 8.238ms 顶着 120fps 上限：`waitFrameFence` 5.830（71%）、`SubmitPresent` 1.143、`Tick/FpsControl` 0.529。5134 实例 × 80B = 401KiB/帧，上传 0.006ms。
+- 外推：256×256×3 全满 196608 实例，线性约 9.4ms CPU / 15MiB 上传；视口约看到全图 7% 量级的 tile。**地图变大时先要视口裁剪**（`bHasVisibleRange` 现在没开，全图展开），静态全图缓冲只是把成本挪到顶点阶段。
+- 失效核实：没有 tilemap generation；抽取每帧重读组件所以现在不需要信号。若做缓存需重建的触发：`setCell`/`fillRect`/`resize`/`onEdit`、撤销重做（已走 `notifyComponentEdited`）、Inspector 属性（已走漏斗）、tileset/atlas 热更新、实体 Transform/父节点、`pixelsPerUnit`、场景加载与克隆；
+  texel 吸附打在世界坐标上、不依赖相机位置，但与矩阵 uniform 不可交换（TownLarge 开了 pixel-perfect，uniform 替代不了重建）；笔刷正向笔画只调 `setCell`/`fillRect` 不发 `notifyComponentEdited`，做缓存时应在笔画结束补发现有信号。
+- 画家顺序兼容：未开 `bYSort` 的子层整层可作一个排序单元（别的实体 `entityId` 不同，不会插进层内序列），两层之间要给 `order` 落在其间的精灵留位；开了 `bYSort` 的层必须走动态路径。
+- 决策：推迟 5c；写入 `todo.md` 的触发条件（≥2 万实例或 256² 地图时先做视口裁剪）。
