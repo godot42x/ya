@@ -40,6 +40,26 @@ TEST(SceneWidgetEntryTest, EntryJsonRoundtripWithDocumentReferenceAndOverrides)
     EXPECT_EQ(reloaded.overrides.fieldOverrides.at("_color")[0], 1.0);
 }
 
+TEST(SceneWidgetEntryTest, EmptyOverridesAreOmittedAndLoadAsNone)
+{
+    SceneWidgetEntry entry;
+    entry.entryId      = "HUD";
+    entry.documentPath = "Example/Game/Content/UI/HUD.yaui";
+
+    const nlohmann::json json = entry.toJson();
+    EXPECT_FALSE(json.contains("overrides"));
+
+    nlohmann::json legacy = json;
+    legacy["overrides"]   = nlohmann::json::object();
+
+    const SceneWidgetEntry fromMissing = SceneWidgetEntry::fromJson(json);
+    const SceneWidgetEntry fromEmpty   = SceneWidgetEntry::fromJson(legacy);
+    EXPECT_TRUE(fromMissing.overrides.empty());
+    EXPECT_TRUE(fromEmpty.overrides.empty());
+    EXPECT_EQ(fromMissing.entryId, fromEmpty.entryId);
+    EXPECT_EQ(fromMissing.documentPath, fromEmpty.documentPath);
+}
+
 TEST(SceneWidgetEntryTest, OverrideAppliesToOwnAndBaseFields)
 {
     auto& registry = UITypeRegistry::instance();

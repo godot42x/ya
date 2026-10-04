@@ -1496,7 +1496,6 @@
   "nodeTree": {
     "children": [
       {
-        "children": [],
         "entityRef": 1001,
         "name": "Camera"
       },
@@ -1597,7 +1596,6 @@
       "autoMount": true,
       "document": "Content:UI/Dialogue.yaui.json",
       "entryId": "Dialogue",
-      "overrides": {},
       "rootSlot": {
         "alignmentH": 0,
         "alignmentV": 0,

@@ -137,8 +137,8 @@
               }
             }
           },
-          "uvRect": [0.166667, 0.545455, 0.25, 0.636364],
-          "sortOrder": 1
+          "sortOrder": 1,
+          "uvRect": [0.166667, 0.545455, 0.25, 0.636364]
         },
         "TransformComponent": {
           "_position": [5.5, 0.5, 0.1]
@@ -196,7 +196,6 @@
   "nodeTree": {
     "children": [
       {
-        "children": [],
         "entityRef": 1001,
         "name": "Camera"
       },
@@ -229,7 +228,6 @@
       "autoMount": true,
       "document": "Content:UI/Dialogue.yaui.json",
       "entryId": "Dialogue",
-      "overrides": {},
       "rootSlot": {
         "alignmentH": 0,
         "alignmentV": 0,

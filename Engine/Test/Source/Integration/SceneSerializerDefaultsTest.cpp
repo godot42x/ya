@@ -5,9 +5,11 @@
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "Scene/Core/Scene.h"
+#include "Scene/Core/SceneWidgetEntry.h"
 #include "Scene/Serialization/SceneSerializer.h"
 #include "Scene2D/Sprite2DComponent.h"
 #include "Scene2D/TilemapComponent.h"
+#include "Scene3D/ManagedChildComponent.h"
 #include "Scene3D/TransformComponent.h"
 
 #include <gtest/gtest.h>
@@ -533,6 +535,132 @@ TEST(SceneSerializerDefaultsTest, LuaScriptCustomOutputIsNotStripped)
     EXPECT_TRUE((*playerJson)["scripts"][0].contains("enabled"));
     EXPECT_EQ((*playerJson)["scripts"][0]["enabled"], true);
     EXPECT_FALSE((*playerJson)["scripts"][0].contains("executionOrder"));
+}
+
+namespace
+{
+
+const nlohmann::json* findNode(const nlohmann::json& nodes, const std::string& name)
+{
+    if (!nodes.is_array()) {
+        return nullptr;
+    }
+    for (const auto& node : nodes) {
+        if (node.value("name", std::string{}) == name) {
+            return &node;
+        }
+        if (node.contains("children")) {
+            if (const nlohmann::json* found = findNode(node["children"], name)) {
+                return found;
+            }
+        }
+    }
+    return nullptr;
+}
+
+nlohmann::json* findNodeMutable(nlohmann::json& nodes, const std::string& name)
+{
+    if (!nodes.is_array()) {
+        return nullptr;
+    }
+    for (auto& node : nodes) {
+        if (node.value("name", std::string{}) == name) {
+            return &node;
+        }
+        if (node.contains("children")) {
+            if (nlohmann::json* found = findNodeMutable(node["children"], name)) {
+                return found;
+            }
+        }
+    }
+    return nullptr;
+}
+
+} // namespace
+
+// A host whose only child is a companion used to write `"children": []`, and
+// every widget entry wrote `"overrides": {}`. Both load the same when the key
+// is missing. A real child and a real override stay.
+TEST(SceneSerializerDefaultsTest, EmptyContainersMatchMissingKeys)
+{
+    ensureReflectionReady();
+
+    Scene scene("SparseContainers");
+    Node* camera = scene.createNode3D("Camera", scene.getRootNode());
+    ASSERT_NE(camera, nullptr);
+    Node* body = scene.createNode3D("CameraBody", camera);
+    ASSERT_NE(body, nullptr);
+    ASSERT_NE(body->getEntity()->addComponent<ManagedChildComponent>(), nullptr);
+
+    Node* chest = scene.createNode3D("Chest", scene.getRootNode());
+    ASSERT_NE(chest, nullptr);
+    ASSERT_NE(scene.createNode3D("Lid", chest), nullptr);
+
+    SceneWidgetEntry dialogue;
+    dialogue.entryId      = "Dialogue";
+    dialogue.documentPath = "Content/UI/Dialogue.yaui.json";
+    scene.addWidgetEntry(dialogue);
+
+    SceneWidgetEntry hud;
+    hud.entryId      = "HUD";
+    hud.documentPath = "Content/UI/HUD.yaui.json";
+    hud.overrides.fieldOverrides["title"] = "Hello";
+    scene.addWidgetEntry(hud);
+
+    SceneSerializer serializer(&scene);
+    const nlohmann::json saved = serializer.serialize();
+    EXPECT_EQ(saved.value("version", std::string{}), "1.0");
+
+    ASSERT_TRUE(saved.contains("nodeTree"));
+    const nlohmann::json* cameraJson = findNode(saved["nodeTree"]["children"], "Camera");
+    const nlohmann::json* chestJson  = findNode(saved["nodeTree"]["children"], "Chest");
+    ASSERT_NE(cameraJson, nullptr);
+    ASSERT_NE(chestJson, nullptr);
+    EXPECT_FALSE(cameraJson->contains("children"));
+    ASSERT_TRUE(chestJson->contains("children"));
+    ASSERT_EQ((*chestJson)["children"].size(), 1u);
+    EXPECT_EQ((*chestJson)["children"][0]["name"], "Lid");
+
+    ASSERT_TRUE(saved.contains("widgetEntries"));
+    const nlohmann::json* dialogueJson = nullptr;
+    const nlohmann::json* hudJson      = nullptr;
+    for (const auto& entry : saved["widgetEntries"]) {
+        if (entry.value("entryId", std::string{}) == "Dialogue") {
+            dialogueJson = &entry;
+        }
+        else if (entry.value("entryId", std::string{}) == "HUD") {
+            hudJson = &entry;
+        }
+    }
+    ASSERT_NE(dialogueJson, nullptr);
+    ASSERT_NE(hudJson, nullptr);
+    EXPECT_FALSE(dialogueJson->contains("overrides"));
+    ASSERT_TRUE(hudJson->contains("overrides"));
+    EXPECT_EQ((*hudJson)["overrides"]["title"], "Hello");
+
+    // The file format marker and a non-empty container are not defaults to drop.
+    EXPECT_TRUE(saved.contains("version"));
+    EXPECT_FALSE(saved["entities"].empty());
+
+    nlohmann::json legacy = saved;
+    nlohmann::json* legacyCamera = findNodeMutable(legacy["nodeTree"]["children"], "Camera");
+    ASSERT_NE(legacyCamera, nullptr);
+    (*legacyCamera)["children"] = nlohmann::json::array();
+    for (auto& entry : legacy["widgetEntries"]) {
+        if (entry.value("entryId", std::string{}) == "Dialogue") {
+            entry["overrides"] = nlohmann::json::object();
+        }
+    }
+
+    Scene fromSaved("FromSaved");
+    Scene fromLegacy("FromLegacy");
+    SceneSerializer(&fromSaved).deserialize(saved);
+    SceneSerializer(&fromLegacy).deserialize(legacy);
+
+    const nlohmann::json resaved = SceneSerializer(&fromSaved).serialize();
+    const nlohmann::json fromLegacySaved = SceneSerializer(&fromLegacy).serialize();
+    EXPECT_EQ(resaved, saved);
+    EXPECT_EQ(fromLegacySaved, saved);
 }
 
 } // namespace ya

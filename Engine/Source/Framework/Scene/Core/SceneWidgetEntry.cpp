@@ -186,7 +186,10 @@ nlohmann::json SceneWidgetEntry::toJson() const
         YA_CORE_ERROR("SceneWidgetEntry::toJson: entry '{}' has no document path", entryId);
     }
     j["rootSlot"] = canvasSlotToJson(rootSlot);
-    j["overrides"] = overrides.toJson();
+    // Missing overrides and an empty object both load as no field overrides.
+    if (!overrides.empty()) {
+        j["overrides"] = overrides.toJson();
+    }
     return j;
 }
 

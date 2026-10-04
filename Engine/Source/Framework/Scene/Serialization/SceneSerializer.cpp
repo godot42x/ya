@@ -513,16 +513,24 @@ nlohmann::json SceneSerializer::serializeNodeTree(Node* node)
             j["entityRef"] = idComp->_id.value;
         }
     }
-    // ★ 递归序列化子节点（跳过被动态管理的子节点）
+    // Recurse into authored children. Companions are skipped, and a node whose
+    // only children are companions writes no key: deserialize treats a missing
+    // `children` the same as an empty array.
     if (node->hasChildren()) {
-        j["children"] = nlohmann::json::array();
+        nlohmann::json children = nlohmann::json::array();
         for (Node* child : node->getChildren()) {
             if (Entity* childEntity = child->getEntity()) {
                 if (_scene->getRegistry().any_of<ManagedChildComponent>(childEntity->getHandle())) {
                     continue;
                 }
             }
-            j["children"].push_back(serializeNodeTree(child));
+            const nlohmann::json childJson = serializeNodeTree(child);
+            if (!childJson.empty()) {
+                children.push_back(childJson);
+            }
+        }
+        if (!children.empty()) {
+            j["children"] = std::move(children);
         }
     }
 

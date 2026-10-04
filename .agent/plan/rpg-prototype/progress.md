@@ -655,3 +655,10 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 根因：`make_scale_scene.py` 把格子下标当世界坐标。tilemap 原点 (-32,-32)、64×64，中心格 (32,32) 的格心世界坐标是 (0.5,0.5)，原写 (32.5,32.5) 落在地图外一格；相机、NPC 同一错误。改为 `cell_world(cell, z)`，NPC 额外跳过 tileset `solid` 格（Npc3 原目标是树，沿原步进挪到 (12,24)）。
 - `scene_load_ticks.py` 的 TownLarge 一步由“只换朝向”改为从 (0.5,0.5) 真实走到 (1.5,0.5)（实测停在 (1.4375,0.5)，在 `rpg.step` 容差内）。
 - 场景只含这件事的变化（44 处 xy，z 不变）；空容器省略与重存另见下一条。
+
+## 2026-10-05 — 场景省略空容器
+
+- 实体本身不写 `children` / `overrides`；会写出的空容器只剩两处：相机节点滤掉 companion 后的 `children: []`，和每个 widget 条目的 `overrides: {}`。缺键与空容器加载结果相同（测试按“保存→加载→重存逐字相等”断言），有真实子节点 / 字段覆盖时仍写出。保留不删：文件级 `version`、`{}` 的组件键、`rootSlot` 各字段、Lua 空 `scripts` 数组。
+- Town / House / TownLarge 用引擎重存，各少 47 字节（Town 14046、House 6309、TownLarge 73715）；帧 480 截图相对重存前 0 差。
+- 同批：`AssetMeta::saveToFile` 改走 `dumpJsonCompactLeaves`（旧 `dump(4)` 文本仍可读；仓库里没有 `.ya-meta.json`）。
+- 验证：`ya-testing` 1662 ran / 1661 passed / 1 skipped。

@@ -418,9 +418,9 @@ TEST(SceneSerializerTest, GeneratedCompanionIsNotSerialized)
     const auto& roots = saved["nodeTree"]["children"];
     ASSERT_EQ(roots.size(), 1u);
     EXPECT_EQ(roots[0]["name"].get<std::string>(), "Camera");
-    // The companion node is gone from the tree; the camera keeps its own mesh.
-    ASSERT_TRUE(roots[0].contains("children"));
-    EXPECT_TRUE(roots[0]["children"].empty());
+    // The companion is not a row, and the empty children array is omitted:
+    // deserialize treats a missing key the same as [].
+    EXPECT_FALSE(roots[0].contains("children"));
     EXPECT_TRUE(saved["entities"][0]["components"].contains("StaticMeshComponent"));
 }
 
