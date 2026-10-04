@@ -5,7 +5,7 @@
 #include "ECS/Entity.h"
 #include "ECS/SceneBus.h"
 #include "ECS/Systems/Components/CameraComponent.h"
-#include "ECS/Systems/LuaScriptBinding.h"
+#include "Script/Lua/LuaTesting.h"
 #include "Core/Common/AssetTypeRegistry.h"
 #include "Resource/AssetManager.h"
 #include "Scene/Core/Scene.h"

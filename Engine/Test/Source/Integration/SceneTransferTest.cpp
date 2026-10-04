@@ -7,7 +7,7 @@
 #include "GameRuntime/AppSceneServices.h"
 #include "GameRuntime/Script/GameplayScriptFunctions.h"
 #include "ECS/Entity.h"
-#include "ECS/Systems/LuaScriptingSystem.h"
+#include "Script/Lua/LuaTesting.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 #include "Scene3D/Node3D.h"

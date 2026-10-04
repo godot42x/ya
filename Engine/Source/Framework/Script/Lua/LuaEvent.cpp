@@ -1,4 +1,4 @@
-#include "ECS/Systems/LuaEvent.h"
+#include "Script/Lua/LuaEvent.h"
 
 namespace ya
 {

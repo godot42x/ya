@@ -706,3 +706,10 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 契约保持：热重载保持同一 `runtimeId` 但换整张 `self`；计时器仍用 `lua_rawequal(selfOf(id), owner)` 判断是否该停（设计文档原写「旧 id 一释放就停」不成立，热重载不换 id）；`ui.get` 推回的仍是同一张 Lua 表。
 - 过渡形态（B2-4 收掉）：侧表是 `LuaScriptingSystem.cpp` 里的三张进程级静态表；`LuaScriptingSystem.h` 仍 include sol，`rg` 验收还不会绿。
 - 验证：脚本过滤 96 个通过；全量 ya-testing 1672 ran / 1671 passed / 1 skipped；GreedySnake / 2DRpgPrototype 120 帧、编辑器 30 帧冒烟；2D 自动化七条通过。
+
+## 2026-10-05 — B2-4 Lua 后端拆成 `ya-script-lua`
+
+- 新 target `ya-script-lua`（`Engine/Source/Framework/Script/Lua/`，公开路径 `Script/Lua/...`，不进 `ya-engine` 聚合）。搬入 `LuaScriptingSystem` / `LuaScriptBinding` / `LuaEvent`、`LuaScriptLive.cpp`（原 `LuaScriptInstance.cpp` 的 sol 捕获）、`ScriptPropertyPreview.cpp`（原 `EditorLuaPreview`）。ECS 只留无 sol 的 `ScriptInstance.h` 与 `ScriptPropertyPreview.h`；`ya-ecs-systems` / `ya-engine` 不再带 `sol2` / `lua` 包；`ya-game-editor` 不链接新 target，检查器经 ECS 侧预览指针取属性（指针为空则不画属性行）。
+- B2-3 的三张进程级静态表收进 `LuaScriptingSystem::_instances`（成员排在 `sol::state` 之后）；按 id 丢表没有系统指针，所以 Lua DLL 里留一张不含 sol 的 id → 系统裸指针注册表。测试入口 `Script/Lua/LuaTesting.h`。
+- `rg -n "sol/|sol::" Engine/Source --glob '!**/Script/Lua/**'` 现在只剩 `GameplayLua.cpp`、`LuaWidgetHandle.*`、`LuaWidgetScripts.*`（B2-6/B2-7）。`ya-game-runtime` 仍暂时依赖 `ya-script-lua`（B2-5 拆）；`installLuaScriptBackend` 未做。
+- 验证：脚本过滤 96 个通过；全量 ya-testing 1672 ran / 1671 passed / 1 skipped（`GUIWindowManagerTest.IsolatesPointerFocusCaptureTooltipDpiAndSnapshot` 在约 22 次运行里出现 2 次失败、其余通过，与 Lua 无关，未定位）；GreedySnake / 2DRpgPrototype 120 帧、编辑器 30 帧冒烟；2D 自动化七条通过。

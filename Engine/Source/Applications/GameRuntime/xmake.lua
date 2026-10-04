@@ -25,5 +25,7 @@ target("ya-game-runtime")
     -- frame loop); the include root is exposed by ya-rhi-vulkan
     -- (backend-common no longer re-exports it).
     add_deps("ya-rhi-vulkan")
+    -- B2-4: GameRuntime still constructs LuaScriptingSystem. B2-5 removes this edge.
+    add_deps("ya-script-lua")
     add_packages("glm", "nlohmann_json", "cxxopts", { public = true })
     add_packages("vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk", "stb")

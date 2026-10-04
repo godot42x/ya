@@ -23,17 +23,17 @@ struct LuaScriptObject
 /// (`world.find`...). Called once per state; script objects need no
 /// registration. The full mechanism of script objects in Lua is documented
 /// at the top of LuaScriptBinding.cpp.
-YA_ECS_SYSTEMS_API void registerLuaScriptBindings(sol::state_view lua);
+YA_SCRIPT_LUA_API void registerLuaScriptBindings(sol::state_view lua);
 
-YA_ECS_SYSTEMS_API int                 pushLuaValue(lua_State* L, const script::ScriptValue& value);
+YA_SCRIPT_LUA_API int                 pushLuaValue(lua_State* L, const script::ScriptValue& value);
 /// Throws script::ScriptError for a value no engine type can take.
-[[nodiscard]] YA_ECS_SYSTEMS_API script::ScriptValue toScriptValue(lua_State* L, int index);
+[[nodiscard]] YA_SCRIPT_LUA_API script::ScriptValue toScriptValue(lua_State* L, int index);
 
-[[nodiscard]] YA_ECS_SYSTEMS_API bool isLuaScriptObject(lua_State* L, int index);
+[[nodiscard]] YA_SCRIPT_LUA_API bool isLuaScriptObject(lua_State* L, int index);
 
 // sol2 customization: LuaScriptObject crosses as the userdata above.
-YA_ECS_SYSTEMS_API int             sol_lua_push(lua_State* L, const LuaScriptObject& object);
-YA_ECS_SYSTEMS_API LuaScriptObject sol_lua_get(sol::types<LuaScriptObject>, lua_State* L, int index, sol::stack::record& tracking);
+YA_SCRIPT_LUA_API int             sol_lua_push(lua_State* L, const LuaScriptObject& object);
+YA_SCRIPT_LUA_API LuaScriptObject sol_lua_get(sol::types<LuaScriptObject>, lua_State* L, int index, sol::stack::record& tracking);
 
 template <typename Handler>
 bool sol_lua_check(sol::types<LuaScriptObject>, lua_State* L, int index, Handler&& handler, sol::stack::record& tracking)

@@ -29,7 +29,8 @@
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Systems/Components/PointLightComponent.h"
-#include "ECS/Systems/LuaScriptingSystem.h"
+#include "Script/Lua/LuaScriptingSystem.h"
+#include "Script/Lua/ScriptPropertyPreview.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/Systems/JSScriptingSystem.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
@@ -420,6 +421,16 @@ void App::init(AppDesc ci)
         app._luaScriptingSystem->shutdown();
         delete app._luaScriptingSystem;
         app._luaScriptingSystem = nullptr; });
+
+    // Property preview is a second Lua state, not the play state. Explicit
+    // create/destroy (not a process static) so its sol objects die while we
+    // still own the state. B2-5 folds this into installLuaScriptBackend.
+    IScriptPropertyPreview* propertyPreview = createScriptPropertyPreview();
+    setScriptPropertyPreview(propertyPreview);
+    app._deleter.push("ScriptPropertyPreview", [propertyPreview](void*) {
+        setScriptPropertyPreview(nullptr);
+        destroyScriptPropertyPreview(propertyPreview);
+    });
 
     RayCastMousePickingSystem::setAppStateProvider([]() {
         return App::get() ? App::get()->getAppState() : AppState::Stopped;

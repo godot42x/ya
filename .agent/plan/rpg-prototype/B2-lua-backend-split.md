@@ -603,6 +603,8 @@ sol 注册还在，只换捕获的上下文。
 - 验证：上一档全部脚本测试 + `ya-ecs-systems` 的编译（由 `ya-testing` 带起来）。`rg` 仍会命中 `GameplayLua.cpp`、`LuaWidgetHandle.*`、`LuaWidgetScripts.*`。
 - 串行于 B2-3。移动用 `git mv`，不要在同一提交里覆盖已有路径。
 
+B2-4 实现注记（侧表归属）：每张活表在它所属的 `LuaScriptingSystem::_instances` 里，随该对象销毁，且排在 `sol::state` 之前，所以 sol 对象先于 `lua_State` 死。不再有进程级 `liveTables` / `stateById`。`dropScriptInstance(runtimeId)`（组件 `releaseLuaHandles`、编辑器改路径）手里没有系统指针，两个系统的 id 又不能撞，所以 Lua DLL 里留**一张** id → `LuaScriptingSystem*` 的注册表，外加进程级 id 计数器。表里只有裸指针，没有 sol，没有要跟着 `lua_State` 死的静态对象。ECS 侧用 `setDropScriptInstance` 函数指针调用它（状态在 `ya-ecs-systems` 的 cpp，不在头文件里）。属性预览同理：`setScriptPropertyPreview` 的指针在 ECS cpp；对象由 App 显式 create/destroy，不放进程静态。`installLuaScriptBackend` 仍是 B2-5。
+
 ### B2-5 — GameRuntime 只剩中立接口；变体加臂
 
 这是 §6 拍板之后的第一个提交。

@@ -17,7 +17,7 @@
 // Names written on `self` (reserved): widget, root, setTickEnabled, after,
 // every, find, spawn.
 
-#include "ECS/Systems/LuaScriptingSystem.h"
+#include "Script/Lua/LuaScriptingSystem.h"
 
 #include "GameRuntime/GUI/GameUI/IGameUIBehaviorRuntime.h"
 
@@ -36,7 +36,7 @@ struct LuaWidgetScripts;
 
 struct LuaWidgetScriptBehavior final : UIBehaviorWith<LuaWidgetScriptBehavior, IUITickable>
 {
-    LuaScriptInstance        instance;
+    ScriptInstance        instance;
     /// Null once the runtime is gone; the behaviour is inert from then on.
     LuaWidgetScripts*        runtime = nullptr;
     std::string              entryId;

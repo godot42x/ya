@@ -9,7 +9,7 @@
 
 #include "Core/Event.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
-#include "ECS/Systems/LuaScriptingSystem.h"
+#include "Script/Lua/LuaTesting.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/UIDocument.h"
@@ -88,7 +88,7 @@ struct FUIScripts
 
     void addScript(const std::string& name, std::string source)
     {
-        sources[LuaScriptInstance::normalizeScriptPath(scriptPath(name))] = std::move(source);
+        sources[ScriptInstance::normalizeScriptPath(scriptPath(name))] = std::move(source);
     }
 
     static UIElementRef widget(const char* typeId, const std::string& name, const std::string& script = {})

@@ -43,7 +43,7 @@ struct FWidgetScriptHost final : ILuaScriptHost
 
     explicit FWidgetScriptHost(std::weak_ptr<LuaWidgetScriptBehavior> inBehavior) : behavior(std::move(inBehavior)) {}
 
-    LuaScriptInstance* resolve(uint64_t instanceId) override
+    ScriptInstance* resolve(uint64_t instanceId) override
     {
         auto live = behavior.lock();
         return live && live->instance.runtimeId == instanceId ? &live->instance : nullptr;
@@ -204,7 +204,7 @@ void LuaWidgetScripts::activate(UIElement& widget, const FUIBehaviorSpec& spec, 
         return;
     }
     auto behavior                 = std::make_shared<LuaWidgetScriptBehavior>();
-    behavior->instance.scriptPath = LuaScriptInstance::normalizeScriptPath(script->get<std::string>());
+    behavior->instance.scriptPath = ScriptInstance::normalizeScriptPath(script->get<std::string>());
     behavior->runtime             = this;
     behavior->entryId             = std::string(context.entryId);
     behavior->entryRoot           = context.entryRoot.weak_from_this();

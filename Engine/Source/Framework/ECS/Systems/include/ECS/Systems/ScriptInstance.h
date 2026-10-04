@@ -15,7 +15,7 @@ namespace ya
 
 /// One editable script property: the C++ copy of a `_PROPERTIES` row, safe to
 /// keep after the Lua state that produced it is gone.
-struct LuaScriptProperty
+struct ScriptProperty
 {
     std::string         name;
     script::ScriptValue value;
@@ -28,10 +28,10 @@ struct LuaScriptProperty
 
 /// One script attached to one host. The authored half (path, enabled, order
 /// override, property overrides) is what hosts serialize. Live Lua tables and
-/// callbacks are not stored here: `LuaScriptingSystem` keeps them in a side
-/// table keyed by (`lua_State*`, `runtimeId`). `runtimeId == 0` means no live
-/// table. The editor preview never assigns an id.
-struct LuaScriptInstance
+/// callbacks are not stored here: the Lua backend keeps them on the system
+/// that loaded the instance, keyed by `runtimeId`. `runtimeId == 0` means no
+/// live table. The editor preview never assigns an id.
+struct ScriptInstance
 {
     std::string scriptPath;
     bool        bLoaded                    = false;
@@ -40,7 +40,7 @@ struct LuaScriptInstance
     /// Key in the runtime's live registry; 0 while not loaded by a runtime.
     uint64_t runtimeId = 0;
 
-    std::vector<LuaScriptProperty>                       properties;
+    std::vector<ScriptProperty>                       properties;
     std::unordered_map<std::string, script::ScriptValue> propertyOverrides;
 
     bool enabled = true;
@@ -55,5 +55,16 @@ struct LuaScriptInstance
 
     static YA_ECS_SYSTEMS_API std::string normalizeScriptPath(std::string_view path);
 };
+
+/// Installed by the Lua backend. ECS can drop a live table by id (component
+/// release, an editor path change) without including a Lua header. The
+/// function itself lives in the Lua module; this pointer lives in
+/// ya-ecs-systems so there is one copy across DLLs. Sol tables are not
+/// stored here.
+YA_ECS_SYSTEMS_API void setDropScriptInstance(void (*fn)(uint64_t runtimeId));
+
+/// No-op for 0, an unknown id, or before a backend installs the hook.
+/// Does not run onDestroy.
+YA_ECS_SYSTEMS_API void dropScriptInstance(uint64_t runtimeId);
 
 } // namespace ya

@@ -1,8 +1,5 @@
-#include "ECS/Systems/LuaScriptInstance.h"
-#include "ECS/Systems/LuaScriptingSystem.h"
+#include "Script/Lua/LuaScriptingSystem.h"
 #include "Core/Log.h"
-#include "Core/System/PathUtils.h"
-#include "Resource/AssetManager.h"
 #include <cmath>
 #include <glm/glm.hpp>
 #include <limits>
@@ -90,12 +87,7 @@ sol::object pushScriptValue(sol::state& lua, const script::ScriptValue& value)
 
 } // namespace
 
-std::string LuaScriptInstance::normalizeScriptPath(std::string_view path)
-{
-    return AssetManager::normalizeScriptAssetPath(path);
-}
-
-void captureScriptProperties(LuaScriptInstance& instance, sol::table table)
+void captureScriptProperties(ScriptInstance& instance, sol::table table)
 {
     instance.properties.clear();
     if (!table.valid()) {
@@ -139,7 +131,7 @@ void captureScriptProperties(LuaScriptInstance& instance, sol::table table)
             continue;
         }
 
-        LuaScriptProperty prop;
+        ScriptProperty prop;
         prop.name = propName;
 
         sol::optional<std::string> typeHint = propDef["type"];
@@ -163,7 +155,7 @@ void captureScriptProperties(LuaScriptInstance& instance, sol::table table)
     }
 }
 
-void applyScriptPropertyOverrides(const LuaScriptInstance& instance, sol::table table, sol::state& lua)
+void applyScriptPropertyOverrides(const ScriptInstance& instance, sol::table table, sol::state& lua)
 {
     if (!table.valid() || instance.propertyOverrides.empty()) {
         return;

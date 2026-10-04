@@ -14,6 +14,5 @@ target("ya-ecs-systems")
     -- Implementation-only deps: resource runtime for model data, scene data
     -- and the scene-tree base (Node) for TransformSystem.
     add_deps("ya-resource-loader", "ya-resource-runtime", "ya-scene-core", "ya-hierarchy")
-    -- Lua scripting (component + system) and JS scripting.
-    add_packages("quickjs-ng", "nlohmann_json", "entt", "glm", "sol2", { public = true })
-    add_packages("lua")
+    -- JS scripting stays in this target. The Lua backend is ya-script-lua.
+    add_packages("quickjs-ng", "nlohmann_json", "entt", "glm", { public = true })

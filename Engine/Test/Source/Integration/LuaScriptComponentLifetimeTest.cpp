@@ -1,5 +1,5 @@
 #include "ECS/Systems/Components/LuaScriptComponent.h"
-#include "ECS/Systems/LuaScriptingSystem.h"
+#include "Script/Lua/LuaTesting.h"
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -13,7 +13,7 @@ namespace ya
 
 TEST(LuaScriptComponentLifetimeTest, CapturedPropertiesSurviveLuaStateDeath)
 {
-    LuaScriptInstance script;
+    ScriptInstance script;
     script.scriptPath = "Content/Scripts/Spin.lua";
     script.propertyOverrides["radius"] = 3.5;
 
@@ -67,11 +67,11 @@ TEST(LuaScriptComponentLifetimeTest, CapturePropertiesFromMultipleEntries)
     addProp("name", std::string{"camera"}, "string", 0.0f, 0.0f);
     table["_PROPERTIES"] = props;
 
-    LuaScriptInstance script;
+    ScriptInstance script;
     captureScriptProperties(script, table);
 
     ASSERT_EQ(script.properties.size(), 4u);
-    std::unordered_map<std::string, LuaScriptProperty> byName;
+    std::unordered_map<std::string, ScriptProperty> byName;
     for (auto& prop : script.properties) {
         byName.emplace(prop.name, prop);
     }

@@ -228,10 +228,8 @@ do
     add_packages("glad")
     add_packages("cxxopts", { public = true })
     add_packages("entt", { public = true })
-    add_packages("lua", { public = true })
     add_packages("freetype")
     add_packages("nlohmann_json", { public = true })
-    add_packages("sol2", { public = true })
     add_packages("joltphysics")
     add_packages("quickjs-ng")
 

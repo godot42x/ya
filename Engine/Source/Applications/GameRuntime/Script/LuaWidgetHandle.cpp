@@ -2,7 +2,7 @@
 
 #include "Core/Log.h"
 
-#include "ECS/Systems/LuaEvent.h"
+#include "Script/Lua/LuaEvent.h"
 
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 

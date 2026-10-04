@@ -8,7 +8,7 @@
 #include "Core/System/System.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
-#include "ECS/Systems/LuaScriptingSystem.h"
+#include "Script/Lua/LuaTesting.h"
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UIDocumentStore.h"
 #include "GUI/Widgets/UITypeIds.h"
@@ -63,7 +63,7 @@ struct FLuaWorld
         lua.lua().set_function("removeScript", [this](const std::string& node, const std::string& script) {
             if (Node* target = findNode(node)) {
                 target->getEntity()->getComponent<LuaScriptComponent>()->removeScript(
-                    LuaScriptInstance::normalizeScriptPath("Test/Scripts/" + script + ".lua"));
+                    ScriptInstance::normalizeScriptPath("Test/Scripts/" + script + ".lua"));
             }
         });
     }
@@ -73,7 +73,7 @@ struct FLuaWorld
     /// `order` is the script-declared default; nullopt declares none.
     std::string defineScript(const std::string& name, std::optional<int> order = std::nullopt, std::string onUpdateBody = {})
     {
-        const std::string path = LuaScriptInstance::normalizeScriptPath("Test/Scripts/" + name + ".lua");
+        const std::string path = ScriptInstance::normalizeScriptPath("Test/Scripts/" + name + ".lua");
         std::string source = "local S = {}\n";
         if (order) {
             source += std::format("S.executionOrder = {}\n", *order);
@@ -91,9 +91,9 @@ struct FLuaWorld
     }
 
     /// Node named `name` under `parent`, running Test/Scripts/<name>.lua.
-    LuaScriptInstance* addScripted(const std::string& name, Node* parent = nullptr)
+    ScriptInstance* addScripted(const std::string& name, Node* parent = nullptr)
     {
-        const std::string path = LuaScriptInstance::normalizeScriptPath("Test/Scripts/" + name + ".lua");
+        const std::string path = ScriptInstance::normalizeScriptPath("Test/Scripts/" + name + ".lua");
         if (!sources.contains(path)) {
             defineScript(name);
         }
@@ -220,7 +220,7 @@ TEST(TickOrderTest, NewInstancesInitAllThenStartAllBeforeAnyUpdate)
 TEST(TickOrderTest, ScriptBaseInstanceResolvesUndefinedCallbacksThroughItsClass)
 {
     FLuaWorld world;
-    const std::string path = LuaScriptInstance::normalizeScriptPath("Test/Scripts/Derived.lua");
+    const std::string path = ScriptInstance::normalizeScriptPath("Test/Scripts/Derived.lua");
     world.sources[path] =
         "local S = require('ScriptBase'):new()\n"
         "function S:onUpdate(dt) table.insert(TRACE, 'update:Derived') end\n"

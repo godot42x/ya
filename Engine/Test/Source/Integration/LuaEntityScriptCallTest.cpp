@@ -5,8 +5,7 @@
 #include "Core/Scripting/ScriptBindings.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
-#include "ECS/Systems/LuaScriptBinding.h"
-#include "ECS/Systems/LuaScriptingSystem.h"
+#include "Script/Lua/LuaTesting.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Core/SceneScriptBindings.h"
 #include "Scene3D/Node3D.h"
@@ -52,7 +51,7 @@ struct FWorld
 
     std::string define(const std::string& name, std::string source)
     {
-        const std::string path = LuaScriptInstance::normalizeScriptPath("Test/Scripts/" + name + ".lua");
+        const std::string path = ScriptInstance::normalizeScriptPath("Test/Scripts/" + name + ".lua");
         sources[path]          = std::move(source);
         return path;
     }

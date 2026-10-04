@@ -119,6 +119,7 @@ if get_config("ya_profile") ~= "gui" then
     includes("./Framework/ECS/Core/xmake.lua")
     includes("./Framework/ECS/Linkage/xmake.lua")
     includes("./Framework/ECS/Systems/xmake.lua")
+    includes("./Framework/Script/Lua/xmake.lua")
     includes("./Framework/Physics/xmake.lua")
     includes("./Framework/Render/Adapters/xmake.lua")
 

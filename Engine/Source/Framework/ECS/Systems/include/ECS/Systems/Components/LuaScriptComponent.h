@@ -6,7 +6,7 @@
 
 #include "Core/Api.h"
 #include "ECS/Component.h"
-#include "ECS/Systems/LuaScriptInstance.h"
+#include "ECS/Systems/ScriptInstance.h"
 
 #include <algorithm>
 #include <string>
@@ -22,21 +22,21 @@ struct LuaScriptComponent : public IComponent
     YA_REFLECT_BEGIN(LuaScriptComponent)
     YA_REFLECT_END()
 
-    std::vector<LuaScriptInstance> scripts;
+    std::vector<ScriptInstance> scripts;
 
     // Unity-like API
-    LuaScriptInstance *addScript(const std::string &path)
+    ScriptInstance *addScript(const std::string &path)
     {
-        scripts.push_back({.scriptPath = LuaScriptInstance::normalizeScriptPath(path)});
+        scripts.push_back({.scriptPath = ScriptInstance::normalizeScriptPath(path)});
         return &scripts.back();
     }
 
-    LuaScriptInstance *attachScript(const std::string &path)
+    ScriptInstance *attachScript(const std::string &path)
     {
         return addScript(path);
     }
 
-    LuaScriptInstance *getScript(const std::string &path)
+    ScriptInstance *getScript(const std::string &path)
     {
         auto it = std::find_if(scripts.begin(), scripts.end(), [&](auto &s) { return s.scriptPath == path; });
         return it != scripts.end() ? &(*it) : nullptr;
@@ -71,7 +71,7 @@ struct LuaScriptComponent : public IComponent
         auto scriptsJson = nlohmann::json::array();
         for (const auto& script : scripts) {
             nlohmann::json s;
-            s["scriptPath"] = LuaScriptInstance::normalizeScriptPath(script.scriptPath);
+            s["scriptPath"] = ScriptInstance::normalizeScriptPath(script.scriptPath);
             s["enabled"]    = script.enabled;
             if (script.executionOrderOverride) {
                 s["executionOrder"] = *script.executionOrderOverride;
@@ -144,7 +144,7 @@ struct LuaScriptComponent : public IComponent
         scripts.reserve(srcLua.scripts.size());
         for (const auto& sourceScript : srcLua.scripts) {
             auto& script = scripts.emplace_back();
-            script.scriptPath = LuaScriptInstance::normalizeScriptPath(sourceScript.scriptPath);
+            script.scriptPath = ScriptInstance::normalizeScriptPath(sourceScript.scriptPath);
             script.enabled = sourceScript.enabled;
             script.executionOrderOverride = sourceScript.executionOrderOverride;
             script.propertyOverrides = sourceScript.propertyOverrides;

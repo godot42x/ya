@@ -1,6 +1,6 @@
 // LuaScriptingSystem instances on hosts that are not entities (game-ui-script-framework S1).
 
-#include "ECS/Systems/LuaScriptingSystem.h"
+#include "Script/Lua/LuaTesting.h"
 
 #include <gtest/gtest.h>
 
@@ -20,14 +20,14 @@ namespace
 /// only points at it and names itself on `self`.
 struct FTestHost final : ILuaScriptHost
 {
-    LuaScriptInstance* instance;
+    ScriptInstance* instance;
     std::string        name;
     const bool*        bAlive;
 
-    FTestHost(LuaScriptInstance* inInstance, std::string inName, const bool* inAlive)
+    FTestHost(ScriptInstance* inInstance, std::string inName, const bool* inAlive)
         : instance(inInstance), name(std::move(inName)), bAlive(inAlive) {}
 
-    LuaScriptInstance* resolve(uint64_t instanceId) override
+    ScriptInstance* resolve(uint64_t instanceId) override
     {
         return (!bAlive || *bAlive) && instance->runtimeId == instanceId ? instance : nullptr;
     }
@@ -41,7 +41,7 @@ struct FRuntime
     std::map<std::string, std::string> sources;
     /// Declared after `runtime` so they are destroyed first. `~FRuntime`
     /// calls destroyAll while both are still alive.
-    std::deque<LuaScriptInstance> instances;
+    std::deque<ScriptInstance> instances;
 
     FRuntime()
     {
@@ -62,16 +62,16 @@ struct FRuntime
 
     ~FRuntime() { runtime.destroyAll(); }
 
-    LuaScriptInstance& make(const std::string& path) { return instances.emplace_back(LuaScriptInstance{.scriptPath = path}); }
+    ScriptInstance& make(const std::string& path) { return instances.emplace_back(ScriptInstance{.scriptPath = path}); }
 
     std::string define(const std::string& name, std::string source)
     {
-        const std::string path = LuaScriptInstance::normalizeScriptPath("Test/Scripts/" + name + ".lua");
+        const std::string path = ScriptInstance::normalizeScriptPath("Test/Scripts/" + name + ".lua");
         sources[path]          = std::move(source);
         return path;
     }
 
-    bool load(LuaScriptInstance& instance, const std::string& hostName, const bool* bAlive = nullptr)
+    bool load(ScriptInstance& instance, const std::string& hostName, const bool* bAlive = nullptr)
     {
         return runtime.load(instance, std::make_unique<FTestHost>(&instance, hostName, bAlive));
     }
@@ -103,8 +103,8 @@ TEST(LuaScriptHostTest, SameScriptOnTwoHostsHasIndependentSelf)
                                        "  table.insert(TRACE, self.hostName .. ':' .. self.count)\n"
                                        "end\n"
                                        "return S\n");
-    LuaScriptInstance& a = rt.make(path);
-    LuaScriptInstance& b = rt.make(path);
+    ScriptInstance& a = rt.make(path);
+    ScriptInstance& b = rt.make(path);
     ASSERT_TRUE(rt.load(a, "A"));
     ASSERT_TRUE(rt.load(b, "B"));
     EXPECT_NE(a.runtimeId, b.runtimeId);
@@ -127,7 +127,7 @@ TEST(LuaScriptHostTest, HotReloadReachesNonEntityHosts)
                                        "function S:onInit() table.insert(TRACE, 'init1:' .. self.hostName) end\n"
                                        "function S:onDestroy() table.insert(TRACE, 'destroy1') end\n"
                                        "return S\n");
-    LuaScriptInstance& instance = rt.make(path);
+    ScriptInstance& instance = rt.make(path);
     ASSERT_TRUE(rt.load(instance, "Panel"));
     rt.runtime.call(instance, ELuaScriptCallback::Init);
     rt.runtime.selfOf(instance.runtimeId)["speed"] = 7;
@@ -156,8 +156,8 @@ TEST(LuaScriptHostTest, CallbackErrorDoesNotStopOtherInstances)
                                        "local S = {}\n"
                                        "function S:onUpdate(dt) table.insert(TRACE, 'good') end\n"
                                        "return S\n");
-    LuaScriptInstance& a = rt.make(bad);
-    LuaScriptInstance& b = rt.make(good);
+    ScriptInstance& a = rt.make(bad);
+    ScriptInstance& b = rt.make(good);
     ASSERT_TRUE(rt.load(a, "A"));
     ASSERT_TRUE(rt.load(b, "B"));
 
@@ -172,7 +172,7 @@ TEST(LuaScriptHostTest, CallbackErrorDoesNotStopOtherInstances)
 TEST(LuaScriptHostTest, DestroyFromOwnOnDestroyRunsOnce)
 {
     FRuntime rt;
-    LuaScriptInstance& instance = rt.make(rt.define("Selfish",
+    ScriptInstance& instance = rt.make(rt.define("Selfish",
                                                     "local S = {}\n"
                                                     "function S:onDestroy() table.insert(TRACE, 'destroy'); destroyMe() end\n"
                                                     "return S\n"));
@@ -192,8 +192,8 @@ TEST(LuaScriptHostTest, GoneHostLeavesTheRegistry)
     FRuntime rt;
     const std::string path = rt.define("Plain", "local S = {}\nfunction S:onInit() table.insert(TRACE, 'init') end\nreturn S\n");
     bool              bAlive = true;
-    LuaScriptInstance& kept = rt.make(path);
-    LuaScriptInstance& dropped = rt.make(path);
+    ScriptInstance& kept = rt.make(path);
+    ScriptInstance& dropped = rt.make(path);
     ASSERT_TRUE(rt.load(kept, "Kept"));
     ASSERT_TRUE(rt.load(dropped, "Dropped", &bAlive));
 
@@ -215,7 +215,7 @@ TEST(LuaScriptHostTest, NamedCallReturnsValue)
                                        "function S:half(n) return n / 2 end\n"
                                        "function S:none() end\n"
                                        "return S\n");
-    LuaScriptInstance& instance = rt.make(path);
+    ScriptInstance& instance = rt.make(path);
     ASSERT_TRUE(rt.load(instance, "EchoHost"));
 
     const std::vector<script::ScriptValue> twoArgs = {script::ScriptValue{std::string("ab")}, script::ScriptValue{std::string("cd")}};
@@ -238,7 +238,7 @@ TEST(LuaScriptHostTest, NamedCallOnMissingFunctionIsNil)
 {
     FRuntime rt;
     const std::string path = rt.define("Quiet", "local S = {}\nfunction S:onInit() end\nreturn S\n");
-    LuaScriptInstance& instance = rt.make(path);
+    ScriptInstance& instance = rt.make(path);
     ASSERT_TRUE(rt.load(instance, "QuietHost"));
 
     const std::vector<script::ScriptValue> oneArg = {script::ScriptValue{int64_t{1}}};
@@ -258,7 +258,7 @@ TEST(LuaScriptHostTest, NamedCallPropagatesTargetErrors)
                                        "local S = {}\n"
                                        "function S:boom() error('kaboom') end\n"
                                        "return S\n");
-    LuaScriptInstance& instance = rt.make(path);
+    ScriptInstance& instance = rt.make(path);
     ASSERT_TRUE(rt.load(instance, "BrokenHost"));
 
     EXPECT_THROW(
@@ -280,7 +280,7 @@ TEST(LuaScriptHostTest, NamedCallSwallowContainsTargetErrors)
                                        "local S = {}\n"
                                        "function S:boom() error('kaboom') end\n"
                                        "return S\n");
-    LuaScriptInstance& instance = rt.make(path);
+    ScriptInstance& instance = rt.make(path);
     ASSERT_TRUE(rt.load(instance, "BrokenQuietHost"));
 
     script::ScriptValue value;

@@ -4,7 +4,6 @@
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
-#include "ECS/Systems/LuaScriptingSystem.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
@@ -47,8 +46,8 @@ LuaScriptComponent* scriptComponentOn(EditorLayer* layer, uint64_t uuid)
     return entity->tryGetComponent<LuaScriptComponent>();
 }
 
-void storeOverride(LuaScriptInstance& script,
-                   LuaScriptProperty& prop,
+void storeOverride(ScriptInstance& script,
+                   ScriptProperty& prop,
                    script::ScriptValue value)
 {
     script.propertyOverrides[prop.name] = value;
@@ -74,31 +73,6 @@ EditorLuaScriptSection::EditorLuaScriptSection(std::string name,
     , _picker(std::move(picker))
 {
     enableTick();
-}
-
-EditorLuaScriptSection::~EditorLuaScriptSection()
-{
-    releasePreviewHandles();
-}
-
-void EditorLuaScriptSection::releasePreviewHandles()
-{
-    auto releaseOnScene = [this](Scene* scene) {
-        if (!scene || _entityUuid == 0) {
-            return;
-        }
-        Entity* entity = scene->getEntityByUUID(_entityUuid);
-        if (!entity || !entity->isValid()) {
-            return;
-        }
-        if (LuaScriptComponent* lsc = entity->tryGetComponent<LuaScriptComponent>()) {
-            _preview.releaseMatching(*lsc);
-        }
-    };
-    if (_layer) {
-        releaseOnScene(_layer->getHierarchyScene());
-        releaseOnScene(_layer->getEditableScene());
-    }
 }
 
 void EditorLuaScriptSection::noteMutated()
@@ -185,7 +159,9 @@ void EditorLuaScriptSection::rebuildRows()
             _layer->getHierarchyScene() == _layer->getEditableScene();
         if (bAuthoringScene && !script.scriptPath.empty() && !script.bLoaded &&
             !script.bAuthoringPreviewAttempted) {
-            _preview.load(script);
+            if (IScriptPropertyPreview* preview = scriptPropertyPreview()) {
+                preview->load(script);
+            }
         }
 
         const std::string key = std::format("LuaScript_{}", i);
@@ -198,9 +174,9 @@ void EditorLuaScriptSection::rebuildRows()
                 return;
             }
             auto& row = target->scripts[i];
-            row.scriptPath = LuaScriptInstance::normalizeScriptPath(text);
+            row.scriptPath = ScriptInstance::normalizeScriptPath(text);
             if (row.runtimeId != 0) {
-                dropLuaScriptLive(row.runtimeId);
+                dropScriptInstance(row.runtimeId);
             }
             row.runtimeId = 0;
             row.bLoaded = false;
@@ -223,9 +199,9 @@ void EditorLuaScriptSection::rebuildRows()
                     return;
                 }
                 inner->scripts[i].scriptPath =
-                    LuaScriptInstance::normalizeScriptPath(path);
+                    ScriptInstance::normalizeScriptPath(path);
                 if (inner->scripts[i].runtimeId != 0) {
-                    dropLuaScriptLive(inner->scripts[i].runtimeId);
+                    dropScriptInstance(inner->scripts[i].runtimeId);
                 }
                 inner->scripts[i].runtimeId = 0;
                 inner->scripts[i].bLoaded = false;

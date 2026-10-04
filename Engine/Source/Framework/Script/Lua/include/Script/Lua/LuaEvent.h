@@ -49,14 +49,14 @@ struct LuaListenerScope
 
   public:
     /// The scope of the live script instance whose `self` this is, or null.
-    static YA_ECS_SYSTEMS_API std::shared_ptr<LuaListenerScope> of(const sol::object& self);
+    static YA_SCRIPT_LUA_API std::shared_ptr<LuaListenerScope> of(const sol::object& self);
     /// A fresh scope for a newly bound `self`, recorded on it.
-    static YA_ECS_SYSTEMS_API std::shared_ptr<LuaListenerScope> bind(sol::table& self, const std::string& scriptPath);
+    static YA_SCRIPT_LUA_API std::shared_ptr<LuaListenerScope> bind(sol::table& self, const std::string& scriptPath);
     /// Register the hidden `self` field type and the no-argument `Event`.
-    static YA_ECS_SYSTEMS_API void registerTypes(sol::state& lua);
+    static YA_SCRIPT_LUA_API void registerTypes(sol::state& lua);
 
-    YA_ECS_SYSTEMS_API uint32_t hold(sol::protected_function fn, const char* event);
-    YA_ECS_SYSTEMS_API void     drop(uint32_t slot);
+    YA_SCRIPT_LUA_API uint32_t hold(sol::protected_function fn, const char* event);
+    YA_SCRIPT_LUA_API void     drop(uint32_t slot);
 
     template <typename... Args>
     void call(uint32_t slot, Args&&... args)

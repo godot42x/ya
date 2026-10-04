@@ -25,7 +25,7 @@
 // modules move engine objects through sol) and the Vec2/3/4 value types,
 // which stay sol usertypes end to end (registration, conversion, checks).
 
-#include "ECS/Systems/LuaScriptBinding.h"
+#include "Script/Lua/LuaScriptBinding.h"
 
 #include "Core/Scripting/ScriptBindings.h"
 #include "Scene/Core/SceneScriptBindings.h"
