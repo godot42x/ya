@@ -382,7 +382,21 @@ void App::init(AppDesc ci)
     }
 
     // Before any script state is built: backends project module functions then.
-    registerGameplayScriptFunctions();
+    // Closures capture this app the same way setRuntimeServices does.
+    const GameplayScriptContext scriptContext{
+        .activeScene     = [&app]() -> Scene* { return app.getSceneServices().getActiveScene(); },
+        .presentedPixels = [&app]() { return app.getRenderServices().getRenderResolution().toVec2(); },
+        .requestSceneTransfer = [&app](std::string path, std::string spawn) {
+            app.getSceneServices().requestSceneTransfer(path, spawn);
+        },
+        .inputRouter = &app.getInputRouter(),
+    };
+    registerGameplayScriptFunctions(scriptContext);
+    // The module registry outlives this App. Pushed before the Lua deleter so
+    // it runs after it (LIFO): shutdown still sees this app, then the closures
+    // that captured it are dropped. Also covers a throw before the Lua deleter
+    // is pushed.
+    app._deleter.push("GameplayScriptContext", [](void*) { registerGameplayScriptFunctions({}); });
 
     app._luaScriptingSystem = new LuaScriptingSystem();
     app._luaScriptingSystem->setRuntimeServices({
@@ -394,7 +408,7 @@ void App::init(AppDesc ci)
     });
     app._luaScriptingSystem->init();
     if (GameUIHost* gameUI = app.getGameUIHost()) {
-        bindGameplayLua(*app._luaScriptingSystem, *gameUI);
+        bindGameplayLua(*app._luaScriptingSystem, *gameUI, scriptContext);
     }
     app._deleter.push("LuaScriptingSystem", [&app](void*)
                       {

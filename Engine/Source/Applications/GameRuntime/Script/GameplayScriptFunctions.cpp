@@ -1,8 +1,5 @@
 #include "GameRuntime/Script/GameplayScriptFunctions.h"
 
-#include "GameRuntime/App.h"
-#include "GameRuntime/AppSceneServices.h"
-
 #include "Core/Log.h"
 #include "Core/Scripting/ScriptBindings.h"
 #include "Scene2D/Sprite2DComponent.h"
@@ -21,6 +18,21 @@
 
 namespace ya
 {
+
+GameplayPresentedView gameplayPresentedView(const GameplayScriptContext& ctx)
+{
+    GameplayPresentedView presented;
+    if (ctx.presentedPixels) {
+        presented.pixelExtent = ctx.presentedPixels();
+    }
+    Scene*        scene        = ctx.activeScene ? ctx.activeScene() : nullptr;
+    Entity*       cameraEntity = scene ? findPrimaryCamera(*scene) : nullptr;
+    presented.camera           = cameraEntity && cameraEntity->hasComponent<CameraComponent>()
+                                     ? cameraEntity->getComponent<CameraComponent>()
+                                     : nullptr;
+    return presented;
+}
+
 namespace
 {
 
@@ -36,11 +48,10 @@ void expectArgCount(ScriptArgs args, size_t count)
     }
 }
 
-ScriptValue find(ScriptArgs args)
+ScriptValue find(const GameplayScriptContext& ctx, ScriptArgs args)
 {
     expectArgCount(args, 1);
-    App*   app   = App::get();
-    Scene* scene = app ? app->getSceneServices().getActiveScene() : nullptr;
+    Scene* scene = ctx.activeScene ? ctx.activeScene() : nullptr;
     if (!scene) {
         throw ScriptError("no active scene");
     }
@@ -51,33 +62,10 @@ ScriptValue find(ScriptArgs args)
     return script::entityRef(entity);
 }
 
-struct PresentedView
-{
-    glm::vec2              pixelExtent = glm::vec2(0.0f);
-    const CameraComponent* camera      = nullptr;
-};
-
-PresentedView currentPresentedView()
-{
-    PresentedView presented;
-    App*          app = App::get();
-    if (!app) {
-        return presented;
-    }
-    const Extent2D resolution = app->getRenderServices().getRenderResolution();
-    presented.pixelExtent     = glm::vec2(static_cast<float>(resolution.width), static_cast<float>(resolution.height));
-    Scene*  scene             = app->getSceneServices().getActiveScene();
-    Entity* cameraEntity      = scene ? findPrimaryCamera(*scene) : nullptr;
-    presented.camera          = cameraEntity && cameraEntity->hasComponent<CameraComponent>()
-                                    ? cameraEntity->getComponent<CameraComponent>()
-                                    : nullptr;
-    return presented;
-}
-
-ScriptValue viewSize(ScriptArgs args)
+ScriptValue viewSize(const GameplayScriptContext& ctx, ScriptArgs args)
 {
     expectArgCount(args, 0);
-    const PresentedView presented = currentPresentedView();
+    const GameplayPresentedView presented = gameplayPresentedView(ctx);
     return scriptViewSize(presented.camera, presented.pixelExtent);
 }
 
@@ -127,12 +115,6 @@ ScriptValue entityAtCell(void* self, const ScriptRef&, ScriptArgs args)
 
 } // namespace
 
-float gameplayViewAspect()
-{
-    const PresentedView presented = currentPresentedView();
-    return scriptViewAspect(presented.camera, presented.pixelExtent);
-}
-
 void placePlayerAtSpawn(Scene& scene, const std::string& spawnName)
 {
     Entity* marker = scene.getEntityByName(spawnName);
@@ -157,24 +139,24 @@ void placePlayerAtSpawn(Scene& scene, const std::string& spawnName)
     playerTransform->setPosition({spawn.x, spawn.y, current.z});
 }
 
-void registerGameplayScriptFunctions()
+void registerGameplayScriptFunctions(GameplayScriptContext ctx)
 {
-    script::registerModuleFunction("world", "find", &find);
-    script::registerModuleFunction("world", "viewSize", &viewSize);
+    script::registerModuleFunction("world", "find", [ctx](ScriptArgs args) { return find(ctx, args); });
+    script::registerModuleFunction("world", "viewSize", [ctx](ScriptArgs args) { return viewSize(ctx, args); });
     // A native method on the map component rather than a world function: the
     // cell questions (worldToCell / isSolid / bounds) all live on the map, so
-    // "who is in this cell" is asked of the map too.
+    // "who is in this cell" is asked of the map too. It does not close over
+    // `ctx`; the first registration wins once the type export is built.
     script::addNativeMethod(type_index_v<TilemapComponent>, "entityAt", &entityAtCell);
-    script::registerModuleFunction("world", "loadScene", [](script::ScriptArgs args) -> ScriptValue {
+    script::registerModuleFunction("world", "loadScene", [ctx](ScriptArgs args) -> ScriptValue {
         if (args.empty() || args.size() > 2) {
             throw ScriptError("expects loadScene(path) or loadScene(path, spawnName)");
         }
-        App* app = App::get();
-        if (!app) {
+        if (!ctx.requestSceneTransfer) {
             throw ScriptError("no running app");
         }
-        app->getSceneServices().requestSceneTransfer(script::scriptToString(args[0]),
-                                                     args.size() > 1 ? script::scriptToString(args[1]) : std::string{});
+        ctx.requestSceneTransfer(script::scriptToString(args[0]),
+                                 args.size() > 1 ? script::scriptToString(args[1]) : std::string{});
         return {};
     });
 }

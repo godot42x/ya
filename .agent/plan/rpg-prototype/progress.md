@@ -674,3 +674,9 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - `LuaScriptProperty::value` / `propertyOverrides` 从 `std::any` 换成 `script::ScriptValue`（int→int64_t，float→double，向量同类型，空→monostate）；`LuaScriptComponent.h` 序列化阶梯与 `EditorLuaScriptSection` 的 `anyAs` 随之替换。场景 JSON 每个值的编码与旧阶梯逐值一致（`PropertyOverrideJsonMatchesLegacyEncoding`），现有场景未改。
 - 设计与拍板结果见 `B2-lua-backend-split.md` §8（含 `world.scriptOf` 直调面并入 B2-6）。
 - 验证：LuaScriptComponentLifetime / SceneSerializerDefaults / EditorComponent / ScriptBinding / LuaScript / LuaEntity / GameUIScript / TickOrder / SceneTransfer / ScriptApi 共 102 个测试通过。
+
+## 2026-10-05 — B2-2 玩法脚本函数不再经 App::get()
+
+- `GameplayScriptContext`（activeScene / presentedPixels / requestSceneTransfer / inputRouter）由 `AppLifecycle` 构造并注入 `registerGameplayScriptFunctions` 与 `bindGameplayLua`；`find` / `viewSize` / `loadScene` / `spawnSprite` / `destroyEntity` / `setKeyHandler` 的 5 处 `App::get()` 去掉。`viewAspect` 与 `viewSize` 共用 `gameplayPresentedView`，`gameplayViewAspect()` 删除。退出时 deleter 清空捕获。`spawnSprite` 探针图与 `setKeyHandler` 回调语义冻结不变。
+- 仍有 `App::get()`：`AppLifecycle.cpp` 里 `RayCastMousePickingSystem` 的应用状态（非脚本函数，不在 B2 范围）。`entityAt` 不用 context。
+- 验证：`ya-testing` 1663 ran / 1662 passed / 1 skipped；2D 自动化六条 + `property_override.py` 通过；GreedySnake / 2DRpgPrototype 120 帧冒烟退出码 0。
