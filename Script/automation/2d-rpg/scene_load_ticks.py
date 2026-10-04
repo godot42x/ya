@@ -12,10 +12,6 @@ TOWN_LARGE = "Content/Scenes/TownLarge.scene.json"
 HOUSE_START = (5.5, 4.5)
 HOUSE_RIGHT = (6.5, 4.5)
 
-# hero_walk.png is 3x4. idle_down is row 0; idle_right is row 2 (v0 = 0.5).
-ROW_DOWN_V0 = 0.0
-ROW_RIGHT_V0 = 0.5
-
 
 def scene_name() -> str:
     summary = rpg.call("scene.get_active")
@@ -38,14 +34,6 @@ def load_scene(path: str, name: str) -> int:
     return rpg.wait_until(ready, 15.0, f"{name} with a Player")
 
 
-def uv_origin(entity_id: int) -> tuple[float, float]:
-    component = rpg.call("component.get", {"id": entity_id, "type": "Sprite2DComponent"})
-    rect = rpg._find_field(component, "uvRect")
-    if not isinstance(rect, list) or len(rect) < 2:
-        raise SystemExit(f"Sprite2DComponent has no uvRect: {component}")
-    return (float(rect[0]), float(rect[1]))
-
-
 def walk_house() -> None:
     entity_id = load_scene(HOUSE, "House")
 
@@ -58,36 +46,30 @@ def walk_house() -> None:
     print(f"House: walked one cell {HOUSE_START} -> {arrived}")
 
 
-def face_town_large() -> None:
-    # The authored player sits just off the 64x64 tilemap (world 32.5,32.5
-    # against a map that ends at 32), so a step cannot land. Holding a
-    # direction still runs Player.lua: it turns and plays idle_right.
+# TownLarge's tilemap origin is (-32, -32) on a 64x64 map. The fixture spawns
+# on the centre cell (32, 32); that cell's centre is world (0.5, 0.5). The
+# cell to the right is grass inside the clear disc.
+TOWN_LARGE_START = (0.5, 0.5)
+TOWN_LARGE_RIGHT = (1.5, 0.5)
+
+
+def walk_town_large() -> None:
     entity_id = load_scene(TOWN_LARGE, "TownLarge")
 
-    def standing_down():
-        _u0, v0 = uv_origin(entity_id)
-        return True if abs(v0 - ROW_DOWN_V0) < 1e-3 else None
+    def at_start():
+        position = rpg.player_position(entity_id)
+        return position if rpg.near(position, TOWN_LARGE_START) else None
 
-    rpg.wait_until(standing_down, 5.0, "TownLarge player standing down")
-    before = rpg.player_position(entity_id)
-    rpg.call("input.inject_key", {"key": "Right", "action": "hold", "frames": 30})
-
-    def facing_right():
-        _u0, v0 = uv_origin(entity_id)
-        return True if abs(v0 - ROW_RIGHT_V0) < 1e-3 else None
-
-    rpg.wait_until(facing_right, 2.0, "TownLarge player facing right")
-    stayed = rpg.player_position(entity_id)
-    if not rpg.near(stayed, before):
-        raise SystemExit(f"off-map player moved: {before} -> {stayed}")
-    print(f"TownLarge: scripts ticked, facing changed to right at {stayed}")
+    rpg.wait_until(at_start, 5.0, f"TownLarge player at {TOWN_LARGE_START}")
+    arrived = rpg.step(entity_id, "Right", TOWN_LARGE_RIGHT)
+    print(f"TownLarge: walked one cell {TOWN_LARGE_START} -> {arrived}")
 
 
 def main() -> None:
     rpg.start()
     try:
         walk_house()
-        face_town_large()
+        walk_town_large()
     finally:
         rpg.stop()
 

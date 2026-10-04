@@ -19,7 +19,7 @@
           ]
         },
         "TransformComponent": {
-          "_position": [32.5, 32.5, 24.0]
+          "_position": [0.5, 0.5, 24.0]
         }
       },
       "id": 1001,
@@ -65,7 +65,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [32.5, 32.5, 0.1]
+          "_position": [0.5, 0.5, 0.1]
         }
       },
       "id": 1021,
@@ -112,7 +112,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [6.5, 7.5, 0.1]
+          "_position": [-25.5, -24.5, 0.1]
         }
       },
       "id": 1100,
@@ -159,7 +159,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [9.5, 11.5, 0.1]
+          "_position": [-22.5, -20.5, 0.1]
         }
       },
       "id": 1101,
@@ -206,7 +206,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [12.5, 17.5, 0.1]
+          "_position": [-19.5, -7.5, 0.1]
         }
       },
       "id": 1102,
@@ -253,7 +253,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [15.5, 23.5, 0.1]
+          "_position": [-16.5, -8.5, 0.1]
         }
       },
       "id": 1103,
@@ -300,7 +300,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [18.5, 26.5, 0.1]
+          "_position": [-13.5, -5.5, 0.1]
         }
       },
       "id": 1104,
@@ -347,7 +347,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [21.5, 31.5, 0.1]
+          "_position": [-10.5, -0.5, 0.1]
         }
       },
       "id": 1105,
@@ -394,7 +394,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [24.5, 38.5, 0.1]
+          "_position": [-7.5, 6.5, 0.1]
         }
       },
       "id": 1106,
@@ -441,7 +441,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [27.5, 41.5, 0.1]
+          "_position": [-4.5, 9.5, 0.1]
         }
       },
       "id": 1107,
@@ -488,7 +488,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [30.5, 47.5, 0.1]
+          "_position": [-1.5, 15.5, 0.1]
         }
       },
       "id": 1108,
@@ -535,7 +535,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [33.5, 53.5, 0.1]
+          "_position": [1.5, 21.5, 0.1]
         }
       },
       "id": 1109,
@@ -582,7 +582,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [36.5, 56.5, 0.1]
+          "_position": [4.5, 24.5, 0.1]
         }
       },
       "id": 1110,
@@ -629,7 +629,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [39.5, 11.5, 0.1]
+          "_position": [7.5, -20.5, 0.1]
         }
       },
       "id": 1111,
@@ -676,7 +676,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [42.5, 14.5, 0.1]
+          "_position": [10.5, -17.5, 0.1]
         }
       },
       "id": 1112,
@@ -723,7 +723,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [45.5, 19.5, 0.1]
+          "_position": [13.5, -12.5, 0.1]
         }
       },
       "id": 1113,
@@ -770,7 +770,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [48.5, 24.5, 0.1]
+          "_position": [16.5, -7.5, 0.1]
         }
       },
       "id": 1114,
@@ -817,7 +817,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [51.5, 30.5, 0.1]
+          "_position": [19.5, -1.5, 0.1]
         }
       },
       "id": 1115,
@@ -864,7 +864,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [54.5, 35.5, 0.1]
+          "_position": [22.5, 3.5, 0.1]
         }
       },
       "id": 1116,
@@ -911,7 +911,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [57.5, 39.5, 0.1]
+          "_position": [25.5, 7.5, 0.1]
         }
       },
       "id": 1117,
@@ -958,7 +958,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [8.5, 44.5, 0.1]
+          "_position": [-23.5, 12.5, 0.1]
         }
       },
       "id": 1118,
@@ -1005,7 +1005,7 @@
           "clip": "idle_down"
         },
         "TransformComponent": {
-          "_position": [11.5, 49.5, 0.1]
+          "_position": [-20.5, 17.5, 0.1]
         }
       },
       "id": 1119,

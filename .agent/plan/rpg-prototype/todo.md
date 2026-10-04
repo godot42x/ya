@@ -18,7 +18,7 @@
 - [x] 清空 `AssetManager::setFrameTaskSink` 悬空 sink（App 关闭时不清空）
 - [x] 脚本 `callMethod` 接入统一编辑漏斗（B2 的前置）
 - [x] 自动化 `scene.load` 保持调用前的运行模式（`App::loadSceneKeepingRunMode`）；编辑器打开场景仍停在编辑态；`scene_load_ticks.py` 端到端验证 House / TownLarge
-- [ ] TownLarge 玩家出生点 (32.5, 32.5) 在 tilemap（原点 -32，64 格）之外一格，走不进去；`make_scale_scene.py` 的夹具问题
+- [x] TownLarge 出生点修复：脚本把格子下标当世界坐标（tilemap 原点 -32），玩家 / 相机 / NPC 改为格心世界坐标；Npc3 落在树上，沿原步进挪到可走格；`scene_load_ticks.py` 的 TownLarge 改为真实走一格
 
 步骤 3 P0 契约冻结（前置：步骤 2 的计划线合并）
 - [x] 契约矩阵：混合语义、sprite 与 3D 深度的关系、资源责任、实例格式与排序键（layer → y → order）冻结在 `P0-contract-matrix.md` 文末（C1–C5）；精灵只用画家顺序、不写深度，y-sort 逐对象开关

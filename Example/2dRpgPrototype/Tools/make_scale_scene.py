@@ -56,7 +56,34 @@ def hero_animation(walks: bool) -> dict:
 
 
 def player_cell() -> tuple[int, int]:
+    """Centre cell. An even edge lands on index size/2, the cell just past the
+    geometric centre, which is still inside the map."""
     return (WIDTH // 2, HEIGHT // 2)
+
+
+def map_origin() -> tuple[float, float]:
+    """TilemapGround's local (0, 0) in world space. Cell indices are not world
+    positions: the map is centred on the origin, so cell (0, 0) sits at
+    (-width/2, -height/2)."""
+    return (-(WIDTH / 2.0), -(HEIGHT / 2.0))
+
+
+def cell_world(cell_x: int, cell_y: int, z: float) -> tuple[float, float, float]:
+    origin_x, origin_y = map_origin()
+    return (origin_x + cell_x + 0.5, origin_y + cell_y + 0.5, z)
+
+
+def solid_tile_indices() -> set[int]:
+    tileset = json.loads((ROOT / "Content/Tilesets/town.yatileset.json").read_text(encoding="utf-8"))
+    return {int(tile) for tile in tileset["solid"]}
+
+
+def cell_is_solid(layers: tuple[list[int], ...], solid: set[int], x: int, y: int) -> bool:
+    for layer in layers:
+        value = layer[y * WIDTH + x]
+        if value > 0 and (value - 1) in solid:
+            return True
+    return False
 
 
 def in_clear_zone(x: int, y: int) -> bool:
@@ -170,12 +197,13 @@ def sprite_entity(entity_id: int, name: str, position: tuple[float, float, float
 
 
 def camera_entity() -> dict:
+    cell_x, cell_y = player_cell()
     return {
         "id": 1001,
         "name": "Camera",
         "components": {
             "TransformComponent": {
-                "_position": [WIDTH / 2 + 0.5, HEIGHT / 2 + 0.5, 24.0],
+                "_position": list(cell_world(cell_x, cell_y, 24.0)),
                 "_rotation": [0.0, 0.0, 0.0],
                 "_scale": [1.0, 1.0, 1.0],
             },
@@ -205,7 +233,7 @@ def tilemap_entity(ground: list[int], decor: list[int], overlay: list[int]) -> d
         "name": "TilemapGround",
         "components": {
             "TransformComponent": {
-                "_position": [-(WIDTH / 2.0), -(HEIGHT / 2.0), 0.0],
+                "_position": [map_origin()[0], map_origin()[1], 0.0],
                 "_rotation": [0.0, 0.0, 0.0],
                 "_scale": [1.0, 1.0, 1.0],
             },
@@ -227,9 +255,12 @@ def tilemap_entity(ground: list[int], decor: list[int], overlay: list[int]) -> d
 
 def build_entities() -> tuple[list[dict], tuple[list[int], list[int], list[int]]]:
     ground, decor, overlay = build_layers()
+    layers = (ground, decor, overlay)
+    solid = solid_tile_indices()
+    spawn = player_cell()
     entities: list[dict] = [
         camera_entity(),
-        sprite_entity(1021, "Player", (player_cell()[0] + 0.5, player_cell()[1] + 0.5, 0.1), HERO_SHEET, STAND_DOWN_FRAME,
+        sprite_entity(1021, "Player", cell_world(spawn[0], spawn[1], 0.1), HERO_SHEET, STAND_DOWN_FRAME,
                       (1.0, 1.5), (1.0, 1.0, 1.0, 1.0), "Content/Scripts/Player.lua", hero_animation(True),
                       CHARACTER_PIVOT, True),
     ]
@@ -238,10 +269,16 @@ def build_entities() -> tuple[list[dict], tuple[list[int], list[int], list[int]]
     for index in range(NPC_COUNT):
         x = 6 + (index * 3) % (WIDTH - 12)
         y = 6 + (index * 5 + rng.randrange(0, 3)) % (HEIGHT - 12)
-        while in_clear_zone(x, y):
+        # The clear disc around the player, and any solid tile (tree, fence),
+        # are not a place to stand. The same step the clear-zone loop used.
+        steps = 0
+        while in_clear_zone(x, y) or cell_is_solid(layers, solid, x, y):
             y = (y + 1) % (HEIGHT - 12) + 6
+            steps += 1
+            if steps > HEIGHT:
+                raise SystemExit(f"no walkable cell for Npc{index + 1}")
         tint = (0.55 + 0.25 * ((index % 3) / 2.0), 0.7 + 0.2 * (index % 2), 1.0, 1.0)
-        entities.append(sprite_entity(1100 + index, f"Npc{index + 1}", (x + 0.5, y + 0.5, 0.1),
+        entities.append(sprite_entity(1100 + index, f"Npc{index + 1}", cell_world(x, y, 0.1),
                                       HERO_SHEET, STAND_DOWN_FRAME, (1.0, 1.5), tint,
                                       "Content/Scripts/Npc.lua", hero_animation(False),
                                       CHARACTER_PIVOT, True))
@@ -305,7 +342,11 @@ def main() -> None:
 
     painted = sum(1 for layer in (ground, decor, overlay) for value in layer if value)
     sprites = sum(1 for e in entities if "Sprite2DComponent" in e["components"])
-    print(f"wrote {SCENE.relative_to(ROOT.parent.parent)}")
+    try:
+        shown = SCENE.resolve().relative_to(ROOT.parent.parent)
+    except ValueError:
+        shown = SCENE
+    print(f"wrote {shown}")
     print(f"map {WIDTH}x{HEIGHT} x3 layers, painted cells={painted}, sprite entities={sprites}")
 
 
