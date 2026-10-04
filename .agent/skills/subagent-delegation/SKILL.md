@@ -20,6 +20,29 @@ description: 派发 subagent 的规则：新开 / 续接（resume）/ 分叉（s
 
 默认：同一条线上的后续任务优先续接已结束的 subagent，不要每次都新开。
 
+### 派发声明（门禁）
+
+每次 `Task` 的 prompt 里必须单独写一行声明，否则 `.cursor/hooks/subagent-reuse-gate.py`
+记为违规：
+
+```text
+派发：续接 <agent-id>
+派发：新开 <新线|换模型|方案推翻|上下文过长|断线> -- <一句话说明>
+```
+
+- `续接 <id>`：hook 会核对这个 id 在本会话的 `subagents/` 下真的存在，编造的 id 记违规。
+- 只读单次类型（`explore`、`browser-use`、`bugbot`、`security-review`、`cursor-guide`、
+  `ci-investigator`、`best-of-n-runner`）免声明。
+- 派任务前先查「线 → agent id」表。同一条线上有已结束的 subagent 却声明「新线」，等于说谎，
+  不要这样写。
+
+**能力边界（Cursor 3.23.12 实测）**：`preToolUse` 对 `Task` 不触发；`subagentStart`
+返回 `deny` 或退出码 2 都**拦不住** subagent 启动。所以这是检测门禁而不是硬阻断：违规时
+`subagentStart` 记录到 `/tmp/ya-subagent-violations/`，父 agent 结束这一轮时
+`.cursor/hooks/subagent-reuse-followup.py`（`stop` 钩子）把违规清单作为 `followup_message`
+塞回来，逼父 agent 当场说明并补救。日志在 `/tmp/ya-subagent-gate.log`。以后 Cursor 若让
+`deny` 生效，这套脚本不用改就变成硬阻断。
+
 ## 按线复用（subagent 池）
 
 父 agent 在会话里维护一张「线 → agent id」表，派任务前先查表，再决定续接还是新开。
