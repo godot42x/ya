@@ -642,3 +642,10 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 修复放在命令层：`scene.load` 改走 `App::loadSceneKeepingRunMode`（捕获调用前 `AppState`，加载后回到该模式；是重新开局，不是 `world.loadScene` 的同局转移）；`AppSceneServices::loadScene`（编辑器双击 / `cmdLoadScene` / `cmdOpenScene` / `openProject`）仍停在编辑态。没有给共享加载函数加布尔参数。
 - 验证：新增 5 个无 GPU 用例（`AppLifecycleTest`）；`ya-testing` 1657 ran / 1656 passed / 1 skipped；四条玩法脚本 + 新 `scene_load_ticks.py`（House 从 (5.5, 4.5) 走到 (6.5, 4.5)；TownLarge 靠朝向换帧证明脚本在 tick）；编辑器宿主 `scene.load` 仍停在编辑态，play 中再 `scene.load` 日志为 stop → 加载 → start。
 - 发现：TownLarge 出生点在地图外一格，已记入 todo。编辑器 play 内注入方向键不会让玩家走格（编辑器输入路径吃掉按键），编辑器侧只验证到“重新 start”和 FollowCamera 生效。
+
+## 2026-10-04 — 5a 视觉验收补齐
+
+- 新增 `Script/automation/2d-rpg/painter_order_visual.py`（runtime 宿主，/tmp 混合场景 + API 创建的 StaticMesh Cube / Unlit / Sprite2D，不入库场景资产），带像素断言：
+  立方体绕 Y 转 45° 穿过精灵平面，中心立方体挡住精灵、两翼精灵盖住立方体、精灵外侧无立方体（精灵只测不写深度）；同位置红蓝精灵调换 z 画面像素差 0，调换 `sortOrder` 顶色变化（153660 像素）；
+  Town 第一棵树（树冠格 (8,7)，树干格 (8,6)）：Player 放到树干中心，Overlay 树冠盖住角色头部，Decor 树干在角色之下（canopy 重叠 0/49 差、trunk 49/49 差、角色可见差 y∈[-3.991,-2.938] 止于树冠下沿 -3.0）。
+- 结论：5a 没有发现缺陷。编辑器 play 内需先点 viewport 才路由输入（已写入 `2d-gameplay` skill）；编辑器宿主下的这条验收未跑。
