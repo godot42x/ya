@@ -10,10 +10,14 @@ prompt must carry one declaration line:
 
 续接: <agent-id> must be a subagent that exists in this conversation
 (its transcript is under agent-transcripts/<conversation>/subagents/).
+An id owned by another conversation is denied too: Cursor rejects it with
+"Subagent parent mismatch". `transcript_path` is empty in side chats, so
+the lookup scans every project transcript root instead of trusting it.
 新开: category is one of 新线 | 换模型 | 方案推翻 | 上下文过长 | 断线.
 Read-only single-shot types (explore, browser-use, ...) are exempt.
 No declaration, a made-up id, or an unknown category is denied.
 """
+import glob
 import json
 import os
 import re
@@ -46,6 +50,22 @@ def log(message):
 
 
 VIOLATIONS_DIR = "/tmp/ya-subagent-violations"
+
+
+def subagent_owners(agent_id, transcript_path):
+    """Conversation ids whose transcripts hold this subagent.
+
+    `transcript_path` is empty in side chats, so it cannot be the only anchor:
+    also scan every project's agent-transcripts directory (ids are UUIDs).
+    """
+    roots = set(glob.glob(os.path.expanduser("~/.cursor/projects/*/agent-transcripts")))
+    if transcript_path:
+        roots.add(os.path.dirname(os.path.dirname(transcript_path)))
+    owners = set()
+    for root in roots:
+        for hit in glob.glob(os.path.join(root, "*", "subagents", agent_id + ".jsonl")):
+            owners.add(os.path.basename(os.path.dirname(os.path.dirname(hit))))
+    return owners
 
 
 def record_violation(payload, note):
@@ -82,14 +102,19 @@ def decide(payload):
     resume = RESUME_RE.search(task)
     if resume:
         agent_id = resume.group(1).lower()
-        transcript = payload.get("transcript_path") or ""
-        known = os.path.join(os.path.dirname(transcript), "subagents", agent_id + ".jsonl")
-        if os.path.isfile(known):
-            return True, f"resume {agent_id}"
-        return False, (
-            f"声明续接的 agent {agent_id} 在本会话里找不到"
-            f"（{known}）。检查 id，或改成「派发：新开 <类别>」并说明理由。"
-        )
+        owners = subagent_owners(agent_id, payload.get("transcript_path") or "")
+        if not owners:
+            return False, (
+                f"声明续接的 agent {agent_id} 在任何会话的 subagents/ 下都找不到。"
+                "检查 id，或改成「派发：新开 <类别>」并说明理由。"
+            )
+        current = payload.get("conversation_id") or ""
+        if current and current not in owners:
+            return False, (
+                f"agent {agent_id} 属于会话 {', '.join(sorted(owners))}，当前会话 {current} 不能续接它"
+                "（Cursor 会报 parent mismatch）。在当前会话里新开，或回到那个会话续接。"
+            )
+        return True, f"resume {agent_id}"
 
     fresh = FRESH_RE.search(task)
     if fresh:
