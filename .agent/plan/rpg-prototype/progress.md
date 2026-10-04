@@ -604,3 +604,14 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 验证：新增 9 个测试；`ya-testing` 1635 ran / 1634 passed / 1 skipped；四条玩法脚本通过；编辑器 `--open-asset` 冒烟 exit 0；Town / House / TownLarge 前后截图字节相同；示例场景未改（实体 image 路径本就等于 atlas）。
 - 已知代价：被驱动的 `Sprite2D.image` 路径与 `uvRect` 仍写进场景（派生值）；空 atlas 不会把之前写上的路径改回去。序列化抑制留待后续。
   `SpriteAnimationSystem.h` 里「policy 为假时不能写 uvRect」的注释已与 `.cpp` 不一致（该头是用户未提交文件，未改）。
+
+## 2026-10-04 — 步骤 5b-1 世界精灵实例化 + 槽身份纹理表
+
+- `Sprite2DStage` 改为按批实例化：一个共享 quad + 实例缓冲（`slang_types::Sprite2DWorld::SpriteInstance`，80 字节，worldCenter / textureIndex / axisX / axisY / uvRect / tint），顶点输入走 per-instance rate（RHI 新增 `EVertexInputRate`，Vulkan 映射 `VK_VERTEX_INPUT_RATE_INSTANCE`），
+  `textureIndex` 作 flat varying（与屏幕精灵一致，不需要 descriptor indexing）。批切片用顶点缓冲字节偏移，不用 `baseInstance`。
+- `Render2D/TextureTableBatch.h`：`TextureTableKey`（纹理 + image view + sampler；`fromTexture` 留给 5b-2）、`TextureTableCursor`（epoch 戳开放寻址，槽 0 白，满了返回空）、`planInstancedDraws`（纯 CPU，保持传入顺序，装不下就切批并在新表重映射）。
+  装不下的精灵不再被丢掉；容量 16 含槽 0，一批最多 15 张内容纹理；A B A 能放下时仍是一批。
+- 资源：实例缓冲是精灵阶段自己的 `FrameUploadArena`（只 VertexBuffer 用途），按 flight 保活、只增不减，增长在 `updateTextures`（录制前），销毁走 `DeferredDeletionQueue`；纹理描述符集按 flight 池，一批一个 set。
+- 度量（profile 构建，TownLarge，540 帧）：`recordFamily` self 7.516 → **0.425 ms**（目标 ≤1.5），`iterate` 12.162 → 8.382ms（顶到 120fps 上限），`SubmitPresent` 0.510 → 3.355（垂直同步等待记在 present 上）。
+- 验证：新增 8 个测试；`ya-testing` 1643 ran / 1642 passed / 1 skipped；四条玩法脚本、编辑器冒烟 exit 0；House / TownLarge / HelloMaterial / Player 在 NPC 上下两张与改前逐字节相同，Town 一次 1 设备像素跟随抖动，紧接着重截与改前相同；20 种纹理压力场景（/tmp，未入库）不丢精灵。
+- 债务 / 未验证：`Sprite2DWorld.slang` 里用一个顶点阶段不读的 `[[vk::push_constant]] SpriteInstance pc` 让生成器发出结构体偏移（生成器只对 uniform 类型发 C++ 类型）——后续应让 `slang_gen_header.py` 支持顶点输入结构；OpenGL 后端管线整文件仍注释，实例路径没有同步，仅 Vulkan/MoltenVK 实测；`backpack/normal.png`（4096²）在截图帧不可绘制，疑为异步加载未就绪，未深究。

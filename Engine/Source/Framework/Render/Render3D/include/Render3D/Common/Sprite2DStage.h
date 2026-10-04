@@ -3,15 +3,19 @@
 #include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Stage/IRenderStage.h"
 #include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/FrameUploadArena.h"
 #include "RHI/Core/Pipeline.h"
 
 #include "Sprite2DWorld.slang.h"
 
 #include <cstdint>
+#include <memory>
+#include <vector>
 
 namespace ya
 {
 
+class RenderSubmission;
 struct Mesh;
 
 /// Scene sprite stage: draws the View's authored sprites (`Sprite2DComponent`
@@ -35,14 +39,12 @@ struct Mesh;
 /// pipeline recording it.
 struct YA_RENDER_3D_API Sprite2DStage : public IRenderStage
 {
-    using FrameData    = slang_types::Sprite2DWorld::FrameData;
-    using PushConstant = slang_types::Sprite2DWorld::SpritePushConstant;
+    using FrameData = slang_types::Sprite2DWorld::FrameData;
+    using Instance  = slang_types::Sprite2DWorld::SpriteInstance;
 
-    /// Textures one View's sprite table can hold. A sprite whose texture does
-    /// not fit is not drawn -- sampling a substitute image would be a draw the
-    /// component never asked for.
+    /// Textures one batch's table can hold, including the white sentinel in
+    /// slot 0. A texture that does not fit starts a new batch; it is not dropped.
     static constexpr uint32_t kTextureTableSize = 16;
-    static constexpr uint32_t kNoTextureSlot    = ~uint32_t{0};
 
     Sprite2DStage() : IRenderStage("SceneSprites") {}
 
@@ -55,10 +57,12 @@ struct YA_RENDER_3D_API Sprite2DStage : public IRenderStage
     /// `ctx.frameData`, so recording never walks the Scene's ECS.
     void executeSprites(const RenderStageContext& ctx, const Sprite2DPassBindings& bindings);
 
-    /// Fill one View's sprite texture table from its candidate bucket. Called
-    /// while the View's resources are allocated -- before the graph is built,
-    /// because a descriptor set must not be written while recording.
-    void updateTextures(const RenderFrameData& frameData, Sprite2DPassBindings& bindings);
+    /// Plan this View's batches, upload the instance buffer, and write one
+    /// texture table per batch. Called while the View's resources are allocated
+    /// -- before the graph is built, because a descriptor set must not be
+    /// written while recording. The instance buffer and the descriptor-set
+    /// pool grow here, outside that recording.
+    void updateTextures(RenderSubmission& submission, const RenderFrameData& frameData, Sprite2DPassBindings& bindings);
 
     /// Rebuild the sprite pipelines against the View's attachment formats.
     void refreshPipelineFormats(EFormat::T colorFormat, EFormat::T depthFormat);
@@ -72,21 +76,28 @@ struct YA_RENDER_3D_API Sprite2DStage : public IRenderStage
     [[nodiscard]] stdptr<IDescriptorSetLayout> getTextureDSL() const { return _textureDSL; }
 
   private:
+    struct TextureSetFlight
+    {
+        std::vector<DescriptorSetHandle> sets;
+        uint32_t                         cursor     = 0;
+        uint64_t                         frameToken = 0;
+        bool                             bHasToken  = false;
+    };
+
     [[nodiscard]] GraphicsPipelineCreateInfo makePipelineCreateInfo() const;
-    /// The View's sprite texture table, in slot order. Built by the same
-    /// implementation that writes the descriptor set, so a sprite's slot and the
-    /// image written to that slot cannot disagree.
-    [[nodiscard]] static std::vector<TextureBinding> buildTextureTable(const RenderFrameData& frameData);
+    [[nodiscard]] DescriptorSetHandle acquireTextureSet(RenderSubmission& submission);
     void drawSprites(const RenderStageContext& ctx, const Sprite2DPassBindings& bindings);
 
     IRender* _render = nullptr;
 
     stdptr<IDescriptorSetLayout> _frameDSL;
     stdptr<IDescriptorSetLayout> _textureDSL;
-    stdptr<IPipelineLayout>   _pipelineLayout;
-    stdptr<IGraphicsPipeline> _pipeline;
-    Mesh*                        _quadMesh = nullptr;
-    bool                         _bReverseViewportY = true;
+    stdptr<IPipelineLayout>      _pipelineLayout;
+    stdptr<IGraphicsPipeline>    _pipeline;
+    std::unique_ptr<FrameUploadArena> _instanceUploads;
+    std::vector<TextureSetFlight>     _textureSetFlights;
+    Mesh* _quadMesh            = nullptr;
+    bool  _bReverseViewportY   = true;
 };
 
 } // namespace ya

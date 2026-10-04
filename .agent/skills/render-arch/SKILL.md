@@ -248,21 +248,36 @@ C++
 3. 多 layer image 的 barrier 必须覆盖所有 layer / mip，避免只过渡 layer 0。
 4. 若怀疑 layout 问题，先看 `VulkanCommandBuffer`、`VulkanImage`、`VulkanRenderTarget` 的 transition 路径是否一致。
 
-## 2D draw path（Render2DList）
+## 2D draw path
 
-- 2D 内容是**值**：产品代码构建 `Render2DList`（纯 CPU，无 cmdBuf/passSlot/device，clip 栈与
-  纹理表 builder 本地），再经 `Render2D::recordRender2DList(list, ctx)` 一步变成 GPU 工作。
-  不存在 process-global session/pending kind；两个 list 可并行构建（未来 family/面板级并行）。
-- record 步的批边界与旧立即 flusher 一致：**kind 变化、clip 变化、区域容量（MaxVertexCount）、
-  纹理表容量（16）**各成一次 region draw。合并不同 clip 的同 kind 命令会让后面的 scissor
-  裁掉前面的几何——这是 parity 曾抓到的真 bug，改动 record 顺序时先跑
-  `run_display_compose_parity.py`。
-- 顶点布局仍是 `FQuadRender::Vertex`（局部纹理 slot + 高位 mode 位编码）；typed 化（删除高位
-  bit 隐式协议）归 `rpg-prototype` 评审步骤 5（`legacy_pipeline_removed`），builder 发射方法是其插入点。
-- 纹理表翻译：list 顶点编码**局部**表 slot，record 步重键进 pass 全局表（≤16）；局部表无
-  容量限制，null 纹理也占独立槽位（否则 null draw 会与首个真实纹理撞号）。
-- Render2D 的裸单例只剩资源层（quadData/lineData 的 per-slot/per-flight GPU 资源、PassSlotPool）
-  与诊断（debug/lastFrameStats）；会话层已消失。
+两条路径，不要混成一条。
+
+**世界精灵**（`Sprite2DStage`，场景图里、深度只读、在 skybox 之后 bloom 之前）：
+
+- 一个共享 quad 网格，binding 0 顶点速率。每个精灵是 `Sprite2DWorld.slang` 生成的
+  `SpriteInstance`（80 字节：worldCenter、textureIndex、axisX、axisY、uvRect、tint；
+  翻转已折进 uv）。GPU 侧结构以生成头为事实源。实例数据走 binding 1、
+  `EVertexInputRate::Instance`（`VertexBufferDescription::inputRate`）。不要改回
+  逐精灵 push constant，也不要改成 host-visible SSBO。
+- 纹理槽下标是 flat varying（`nointerpolation`），片元用 `uTextures[slot]`，和
+  `Sprite2DScreen.slang` 一样，不依赖 descriptor indexing。
+- 合批在 `Render2D/TextureTableBatch.h`：`planInstancedDraws` 是纯 CPU。已排好的
+  顺序不许为合批重排。连续精灵共用一张 16 槽表，槽 0 是白纹理；下一张纹理装不下
+  就切批并在新表里重映射，不丢精灵。键是绑定身份（image view + sampler），epoch
+  直接映射，O(1)，不再每帧线性 `slotFor`。
+- 实例缓冲是 stage 上按 flight 的 `FrameUploadArena`（只作 VertexBuffer），容量只增
+  不减，增长和描述符集池的增长都在 graph 录制之前（`updateTextures`）。同一
+  submission 内不覆写已上传的区间。描述符集按 flight 复用，用完才长。
+- 管线状态仍只有一条：SrcAlpha / OneMinusSrcAlpha，深度 LessOrEqual 只测不写，
+  `a < 0.01` discard，背面剔除 + CCW。空列表不加 pass。
+
+**屏幕绘制**（`ScreenDrawList` / `ScreenDrawRecorder`）还是展开顶点，不是实例：
+
+- 局部纹理槽写在顶点里，录制时重映射进 16 槽表；表满了 flush 再开一批。null 纹理
+  占槽 0（白）。kind / clip / `MaxVertexCount` 也会切批，合并不同 clip 会让后面的
+  scissor 裁掉前面的几何。
+- 5b-2 再迁到上面的纹理表组件。组件的键已经能表达 `Texture*`（`fromTexture`）和
+  绑定身份（`fromBinding`），槽 0 白、满了切批重映射。本任务不要改 `ScreenDrawList`。
 
 ## 退出条件
 

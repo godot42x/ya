@@ -450,7 +450,9 @@ bool VulkanPipeline::createPipelineInternal()
                 vertexBindingDescriptions.push_back({
                     .binding   = bufferDesc.slot,
                     .stride    = static_cast<uint32_t>(bufferDesc.pitch),
-                    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX, // TODO: instance drawing refactor?
+                    .inputRate = bufferDesc.inputRate == EVertexInputRate::Instance
+                                     ? VK_VERTEX_INPUT_RATE_INSTANCE
+                                     : VK_VERTEX_INPUT_RATE_VERTEX,
                 });
             }
         }

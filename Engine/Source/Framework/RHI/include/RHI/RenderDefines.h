@@ -139,10 +139,17 @@ struct ClearValue
 };
 
 
+enum class EVertexInputRate : uint8_t
+{
+    Vertex = 0,
+    Instance,
+};
+
 struct VertexBufferDescription
 {
-    uint32_t slot;
-    uint32_t pitch;
+    uint32_t         slot      = 0;
+    uint32_t         pitch     = 0;
+    EVertexInputRate inputRate = EVertexInputRate::Vertex;
 };
 
 namespace EVertexAttributeFormat

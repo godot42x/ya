@@ -303,11 +303,7 @@ void allocateDeferredViewPassResources(
             &frame,
             sizeof(frame),
             resources.sprite.frame);
-        resources.sprite.textures.set = allocateCombinedImageSamplerSet(
-            submission,
-            spriteStage->getTextureDSL(),
-            Sprite2DStage::kTextureTableSize);
-        spriteStage->updateTextures(*frameData, resources.sprite);
+        spriteStage->updateTextures(submission, *frameData, resources.sprite);
     }
     if (postStage) {
         allocateBloomPassBindings(

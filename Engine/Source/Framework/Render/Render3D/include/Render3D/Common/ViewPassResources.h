@@ -2,9 +2,11 @@
 
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/FrameUploadArena.h"
+#include "RHI/Core/Texture.h"
 
 #include <array>
 #include <cstdint>
+#include <vector>
 
 namespace ya
 {
@@ -49,12 +51,24 @@ struct OverlayPassBindings
     CombinedImageSamplerPassBinding billboardTextures;
 };
 
-/// One View's scene-sprite pass: its frame constant plus the sprite texture
-/// table the View's candidates were deduped into.
+/// One instanced draw: a slice of the View's instance buffer plus the texture
+/// table those instances sample. `textures[0]` is the white sentinel.
+struct SpriteTextureBatch
+{
+    uint32_t                   firstInstance = 0;
+    uint32_t                   instanceCount = 0;
+    DescriptorSetHandle        set{};
+    std::vector<TextureBinding> textures;
+};
+
+/// One View's scene-sprite pass. The instance buffer is a flight-scoped upload
+/// slice; each batch's texture bindings are held here so the descriptor write
+/// stays valid until the submission that recorded the draw has retired.
 struct Sprite2DPassBindings
 {
-    UniformBufferPassBinding        frame;
-    CombinedImageSamplerPassBinding textures;
+    UniformBufferPassBinding          frame;
+    FrameUploadArena::Allocation      instances;
+    std::vector<SpriteTextureBatch>   batches;
 };
 
 struct ForwardDebugPassBindings
