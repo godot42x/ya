@@ -115,28 +115,32 @@ ScriptValue entityAtCell(void* self, const ScriptRef&, ScriptArgs args)
 
 } // namespace
 
-void placePlayerAtSpawn(Scene& scene, const std::string& spawnName)
+void placePlayerAtSpawn(Scene& scene, const std::string& spawnName, const std::string& actorName)
 {
     Entity* marker = scene.getEntityByName(spawnName);
     if (!marker) {
         YA_CORE_WARN("placePlayerAtSpawn: no spawn marker named '{}'", spawnName);
         return;
     }
-    Entity* player = scene.getEntityByName("Player");
-    if (!player) {
-        YA_CORE_WARN("placePlayerAtSpawn: no entity named 'Player' in this scene");
+    if (actorName.empty()) {
+        YA_CORE_WARN("placePlayerAtSpawn: no actor name; the caller names the entity to place");
+        return;
+    }
+    Entity* actor = scene.getEntityByName(actorName);
+    if (!actor) {
+        YA_CORE_WARN("placePlayerAtSpawn: no entity named '{}' in this scene", actorName);
         return;
     }
     auto* markerTransform = marker->hasComponent<TransformComponent>() ? marker->getComponent<TransformComponent>() : nullptr;
-    auto* playerTransform = player->hasComponent<TransformComponent>() ? player->getComponent<TransformComponent>() : nullptr;
-    if (!markerTransform || !playerTransform) {
+    auto* actorTransform  = actor->hasComponent<TransformComponent>() ? actor->getComponent<TransformComponent>() : nullptr;
+    if (!markerTransform || !actorTransform) {
         return;
     }
     // Spawn markers live at scene root, so the local position is the world
-    // position; z stays the player's own (it sets its depth itself).
-    const glm::vec3 spawn = markerTransform->getPosition();
-    const glm::vec3 current = playerTransform->getPosition();
-    playerTransform->setPosition({spawn.x, spawn.y, current.z});
+    // position; z stays the actor's own (it sets its depth itself).
+    const glm::vec3 spawn   = markerTransform->getPosition();
+    const glm::vec3 current = actorTransform->getPosition();
+    actorTransform->setPosition({spawn.x, spawn.y, current.z});
 }
 
 void registerGameplayScriptFunctions(GameplayScriptContext ctx)
@@ -149,14 +153,15 @@ void registerGameplayScriptFunctions(GameplayScriptContext ctx)
     // `ctx`; the first registration wins once the type export is built.
     script::addNativeMethod(type_index_v<TilemapComponent>, "entityAt", &entityAtCell);
     script::registerModuleFunction("world", "loadScene", [ctx](ScriptArgs args) -> ScriptValue {
-        if (args.empty() || args.size() > 2) {
-            throw ScriptError("expects loadScene(path) or loadScene(path, spawnName)");
+        if (args.empty() || args.size() > 3) {
+            throw ScriptError("expects loadScene(path), loadScene(path, spawnName), or loadScene(path, spawnName, actorName)");
         }
         if (!ctx.requestSceneTransfer) {
             throw ScriptError("no running app");
         }
         ctx.requestSceneTransfer(script::scriptToString(args[0]),
-                                 args.size() > 1 ? script::scriptToString(args[1]) : std::string{});
+                                 args.size() > 1 ? script::scriptToString(args[1]) : std::string{},
+                                 args.size() > 2 ? script::scriptToString(args[2]) : std::string{});
         return {};
     });
 }

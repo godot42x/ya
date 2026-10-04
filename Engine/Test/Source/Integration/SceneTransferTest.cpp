@@ -28,10 +28,10 @@ namespace
 /// A scene file with a Player (at 1,1) and, when asked, a spawn marker at
 /// (5.5, 1.5). Written to a temp dir so the transfer exercises the real
 /// loadScene path.
-void writeSceneFile(const std::filesystem::path& path, const std::string& sceneName, bool bWithSpawn)
+void writeSceneFile(const std::filesystem::path& path, const std::string& sceneName, bool bWithSpawn, const std::string& actorName = "Player")
 {
     Scene    scene{sceneName};
-    Node3D*  player = scene.createNode3D("Player");
+    Node3D*  player = scene.createNode3D(actorName);
     player->getEntity()->getComponent<TransformComponent>()->setPosition({1.0f, 1.0f, 0.1f});
     if (bWithSpawn) {
         Node3D* marker = scene.createNode3D("SpawnFromTown");
@@ -85,7 +85,7 @@ TEST_F(SceneTransferTest, PersistentStateSurvivesTransfer)
 {
     lua->persistentState()["chest"] = true;
 
-    app.getSceneServices().requestSceneTransfer((dir / "House.scene.json").string(), "SpawnFromTown");
+    app.getSceneServices().requestSceneTransfer((dir / "House.scene.json").string(), "SpawnFromTown", "Player");
     app.getSceneServices().runPendingSceneTransfer();
 
     Scene* active = sceneManager->getActiveScene();
@@ -108,7 +108,7 @@ TEST_F(SceneTransferTest, PersistentStateSurvivesTransfer)
 
 TEST_F(SceneTransferTest, TransferWithoutSpawnKeepsAuthoredPositions)
 {
-    app.getSceneServices().requestSceneTransfer((dir / "House.scene.json").string(), "");
+    app.getSceneServices().requestSceneTransfer((dir / "House.scene.json").string(), "", "");
     app.getSceneServices().runPendingSceneTransfer();
 
     Scene* active = sceneManager->getActiveScene();
@@ -144,7 +144,7 @@ TEST_F(SceneTransferTest, SpawnPointPlacesPlayer)
     Node3D* marker = scene.createNode3D("SpawnFromTown");
     marker->getEntity()->getComponent<TransformComponent>()->setPosition({7.5f, 3.5f, 0.0f});
 
-    placePlayerAtSpawn(scene, "SpawnFromTown");
+    placePlayerAtSpawn(scene, "SpawnFromTown", "Player");
 
     const glm::vec3 position = player->getEntity()->getComponent<TransformComponent>()->getPosition();
     EXPECT_FLOAT_EQ(position.x, 7.5f);
@@ -152,9 +152,52 @@ TEST_F(SceneTransferTest, SpawnPointPlacesPlayer)
     EXPECT_FLOAT_EQ(position.z, 0.1f);
 
     // A missing marker logs and leaves the scene as authored.
-    placePlayerAtSpawn(scene, "NoSuchSpawn");
+    placePlayerAtSpawn(scene, "NoSuchSpawn", "Player");
     const glm::vec3 untouched = player->getEntity()->getComponent<TransformComponent>()->getPosition();
     EXPECT_FLOAT_EQ(untouched.x, 7.5f);
+}
+
+TEST_F(SceneTransferTest, SpawnPlacesTheNamedActor)
+{
+    Scene   scene{"Town"};
+    Node3D* player = scene.createNode3D("Player");
+    player->getEntity()->getComponent<TransformComponent>()->setPosition({1.0f, 1.0f, 0.1f});
+    Node3D* hero = scene.createNode3D("Hero");
+    hero->getEntity()->getComponent<TransformComponent>()->setPosition({2.0f, 2.0f, 0.4f});
+    Node3D* marker = scene.createNode3D("SpawnFromTown");
+    marker->getEntity()->getComponent<TransformComponent>()->setPosition({7.5f, 3.5f, 0.0f});
+
+    // The name is an argument. "Player" is not a fallback, so it stays put.
+    placePlayerAtSpawn(scene, "SpawnFromTown", "Hero");
+
+    const glm::vec3 heroPosition = hero->getEntity()->getComponent<TransformComponent>()->getPosition();
+    EXPECT_FLOAT_EQ(heroPosition.x, 7.5f);
+    EXPECT_FLOAT_EQ(heroPosition.y, 3.5f);
+    EXPECT_FLOAT_EQ(heroPosition.z, 0.4f);
+    const glm::vec3 playerPosition = player->getEntity()->getComponent<TransformComponent>()->getPosition();
+    EXPECT_FLOAT_EQ(playerPosition.x, 1.0f);
+    EXPECT_FLOAT_EQ(playerPosition.y, 1.0f);
+
+    placePlayerAtSpawn(scene, "SpawnFromTown", "");
+    const glm::vec3 still = hero->getEntity()->getComponent<TransformComponent>()->getPosition();
+    EXPECT_FLOAT_EQ(still.x, 7.5f);
+}
+
+TEST_F(SceneTransferTest, TransferPlacesTheNamedActor)
+{
+    writeSceneFile(dir / "HeroHouse.scene.json", "HeroHouse", true, "Hero");
+    app.getSceneServices().requestSceneTransfer((dir / "HeroHouse.scene.json").string(), "SpawnFromTown", "Hero");
+    app.getSceneServices().runPendingSceneTransfer();
+
+    Scene* active = sceneManager->getActiveScene();
+    ASSERT_NE(active, nullptr);
+    EXPECT_EQ(active->getEntityByName("Player"), nullptr);
+    Entity* hero = active->getEntityByName("Hero");
+    ASSERT_NE(hero, nullptr);
+    const glm::vec3 position = hero->getComponent<TransformComponent>()->getPosition();
+    EXPECT_FLOAT_EQ(position.x, 5.5f);
+    EXPECT_FLOAT_EQ(position.y, 1.5f);
+    EXPECT_FLOAT_EQ(position.z, 0.1f);
 }
 
 } // namespace

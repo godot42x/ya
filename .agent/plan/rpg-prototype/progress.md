@@ -686,3 +686,9 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 地图名、相机跟随目标、对话框名改成脚本属性（`self:properties`，场景 `propertyOverrides` 覆盖）：`Player.mapName` / `dialogueName`，`FollowCamera.targetName` / `mapName`，`Npc` / `Chest` / `Sign` 的 `dialogueName`；默认值等于原常量，Town / House / TownLarge 不改。
 - 新增 `PropertyOverride.scene.json` 与 `Script/automation/2d-rpg/property_override.py`：地图/角色/对话框改名后角色仍能走、相机仍夹边、对话仍锁移动。
 - 仍硬编码：C++ `placePlayerAtSpawn` 按名 "Player"、`spawnSprite` 贴图、方向键/确认键（等 InputMap）、`Npc.lua` 的 `world.find("Player")`。
+
+## 2026-10-05 — C++ 侧去硬编码
+
+- `world.loadScene(path[, spawnName[, actorName]])`：落点实体名由调用方传入，`placePlayerAtSpawn(scene, spawnName, actorName)` 不再写死 "Player"；名字随 `requestSceneTransfer` 带到帧尾。空 `actorName` 不移动任何人。Door 的脚本属性 `actorName` 默认 "Player"，现有场景不改。不用相机 `targetName`：落点发生在脚本加载之前，属性默认值那时只在 Lua 源里。
+- `world.spawnSprite(name[, texturePath])`：缺省/空串仍用探针图，路径走 `TextureSlot::fromPath`。
+- 验证：SceneTransfer / GameUIScript 新增用例；全量 ya-testing 1672 ran / 1671 passed / 1 skipped；2D 自动化七条、两个 120 帧冒烟通过。

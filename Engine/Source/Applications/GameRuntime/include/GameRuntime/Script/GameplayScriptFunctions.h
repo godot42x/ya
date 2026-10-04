@@ -22,7 +22,9 @@ struct GameplayScriptContext
 {
     std::function<Scene*()>                                  activeScene;
     std::function<glm::vec2()>                               presentedPixels;
-    std::function<void(std::string path, std::string spawn)> requestSceneTransfer;
+    /// `spawn` is the destination marker; `actor` is the entity to move onto it.
+    /// An empty actor moves nobody — the caller supplies the name.
+    std::function<void(std::string path, std::string spawn, std::string actor)> requestSceneTransfer;
     /// `Input.setKeyHandler` captures this at bind time. Null ignores the call.
     InputRouter*                                             inputRouter = nullptr;
 };
@@ -46,18 +48,19 @@ struct GameplayPresentedView
 ///   world.viewSize()  -> pixel-perfect orthographic primary camera:
 ///         vec2(halfWidth, halfHeight) in world units (resolveCameraViewFraming).
 ///         Otherwise the presented view in pixels.
-///   world.loadScene(path, spawnName) -> switch scenes at the frame-end
-///       structural flush, then place the entity named "Player" on the spawn
-///       marker `spawnName` (rpg R3)
+///   world.loadScene(path[, spawnName[, actorName]]) -> switch scenes at the
+///       frame-end structural flush. When `spawnName` is set, place the entity
+///       named `actorName` on that marker (rpg R3). An omitted or empty
+///       `actorName` moves nobody.
 ///
 /// `entityAt` is registered here too. It does not use `ctx`: the map answers
 /// from its owning scene.
 YA_GAME_RUNTIME_API void registerGameplayScriptFunctions(GameplayScriptContext ctx = {});
 
-/// Places the scene's "Player" entity on the spawn marker named `spawnName`
-/// (a Node3D at scene root; only its position is taken). A missing marker or
-/// player logs a warning and leaves the scene as authored — the gameplay
-/// actor's name is the contract, nothing else is hardwired.
-YA_GAME_RUNTIME_API void placePlayerAtSpawn(Scene& scene, const std::string& spawnName);
+/// Places the entity named `actorName` on the spawn marker named `spawnName`
+/// (a Node3D at scene root; only its position is taken). z stays the actor's.
+/// A missing marker, an empty `actorName`, or a missing entity logs a warning
+/// and leaves the scene as authored. The name comes from the caller.
+YA_GAME_RUNTIME_API void placePlayerAtSpawn(Scene& scene, const std::string& spawnName, const std::string& actorName);
 
 } // namespace ya

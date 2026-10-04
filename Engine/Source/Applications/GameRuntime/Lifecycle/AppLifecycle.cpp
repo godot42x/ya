@@ -386,8 +386,8 @@ void App::init(AppDesc ci)
     const GameplayScriptContext scriptContext{
         .activeScene     = [&app]() -> Scene* { return app.getSceneServices().getActiveScene(); },
         .presentedPixels = [&app]() { return app.getRenderServices().getRenderResolution().toVec2(); },
-        .requestSceneTransfer = [&app](std::string path, std::string spawn) {
-            app.getSceneServices().requestSceneTransfer(path, spawn);
+        .requestSceneTransfer = [&app](std::string path, std::string spawn, std::string actor) {
+            app.getSceneServices().requestSceneTransfer(path, spawn, actor);
         },
         .inputRouter = &app.getInputRouter(),
     };

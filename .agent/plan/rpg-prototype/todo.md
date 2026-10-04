@@ -59,7 +59,7 @@
 - [ ] InputMap（命名动作）
 - [ ] GUI 文本 reveal（逐字显示）
 - [x] 按格移动做成引擎 Lua 库
-- [ ] 去硬编码：`"Player"`、`kSpriteTexture`、`TilemapGround` / `"Dialogue"` 命名约定
+- [x] 去硬编码：`"Player"`、`kSpriteTexture`、`TilemapGround` / `"Dialogue"` 命名约定（C++ 侧：`loadScene` 带 `actorName`、`spawnSprite` 可传贴图；剩 `Npc.lua` 的 `world.find("Player")`、`kSpriteTexture` 缺省、自动化按名找）
 
 并行
 - [ ] 定 flight 深度：`kFramesInFlight` 保持 1 或真 overlap（`waitFrameFence` 约 2ms/帧；归 `../render-view-family/`，本线不做）

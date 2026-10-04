@@ -20,6 +20,8 @@ struct LuaScriptingSystem;
 /// `gameplayPresentedView` (the same read as `world.viewSize`), and
 /// `Input.setKeyHandler` captures `ctx.inputRouter` at bind time. An empty
 /// context leaves those calls with no scene and no key router.
+/// `world.spawnSprite(name [, texturePath])`: a missing or blank path keeps
+/// the probe texture; a path goes through `TextureSlot::fromPath`.
 YA_GAME_RUNTIME_API void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui, GameplayScriptContext ctx = {});
 
 } // namespace ya

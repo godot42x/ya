@@ -121,14 +121,14 @@ Entity* AppSceneServices::getPrimaryCamera() const
     return scene ? findPrimaryCamera(*scene) : nullptr;
 }
 
-void AppSceneServices::requestSceneTransfer(const std::string& path, const std::string& spawnName)
+void AppSceneServices::requestSceneTransfer(const std::string& path, const std::string& spawnName, const std::string& actorName)
 {
     if (path.empty()) {
         YA_CORE_WARN("world.loadScene: empty path");
         return;
     }
     // A frame's last request wins: one slot, no queue to drain.
-    _pendingTransfer = FPendingTransfer{.path = path, .spawnName = spawnName};
+    _pendingTransfer = FPendingTransfer{.path = path, .spawnName = spawnName, .actorName = actorName};
 }
 
 void AppSceneServices::runPendingSceneTransfer()
@@ -168,7 +168,7 @@ void AppSceneServices::runPendingSceneTransfer()
     }
     if (!transfer.spawnName.empty()) {
         if (Scene* scene = getActiveScene()) {
-            placePlayerAtSpawn(*scene, transfer.spawnName);
+            placePlayerAtSpawn(*scene, transfer.spawnName, transfer.actorName);
         }
     }
     YA_CORE_INFO("Scene transferred to '{}' (spawn '{}')", transfer.path, transfer.spawnName);

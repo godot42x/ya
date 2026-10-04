@@ -26,6 +26,8 @@ class YA_GAME_RUNTIME_API AppSceneServices
     {
         std::string path;
         std::string spawnName;
+        /// Entity in the destination scene to move onto `spawnName`. Empty moves nobody.
+        std::string actorName;
     };
     std::optional<FPendingTransfer> _pendingTransfer;
 
@@ -54,10 +56,11 @@ class YA_GAME_RUNTIME_API AppSceneServices
     Entity* getPrimaryCamera() const;
 
     // === Scene transfer during play (rpg R3) ===
-    /// Queue a gameplay scene switch (`world.loadScene(path, spawnName)`).
+    /// Queue a gameplay scene switch (`world.loadScene(path, spawnName, actorName)`).
     /// Executed at the frame-end structural flush, never inline: a switch
     /// stops every script, which must not happen while one is running.
-    void requestSceneTransfer(const std::string& path, const std::string& spawnName);
+    /// `actorName` is the destination entity placed on `spawnName`; empty moves nobody.
+    void requestSceneTransfer(const std::string& path, const std::string& spawnName, const std::string& actorName);
     /// Run the queued transfer, if any. Keeps the play session: app state, the
     /// UI host and the persistent script state are untouched; the old scene's
     /// scripts stop, the scene swaps, the spawn places the player.

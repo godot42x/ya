@@ -17,6 +17,7 @@
 #include "GUI/Widgets/UITypeIds.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "Scene/Core/Scene.h"
+#include "Scene2D/Sprite2DComponent.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -613,6 +614,46 @@ crate:find("Lid"):destroy()
     EXPECT_EQ(ui.mounted("HUD", "Lid"), nullptr) << "destroying inside a pending spawn takes effect";
     ui.run("gone = not toast.valid and not box.valid");
     EXPECT_TRUE(ui.global<bool>("gone"));
+}
+
+TEST(GameUIScriptTest, SpawnSpriteTakesOptionalTexturePath)
+{
+    Scene              scene{"World"};
+    LuaScriptingSystem lua;
+    GameUIHost         host;
+    lua.setRuntimeServices({
+        .activeScene = [&scene]() -> Scene* { return &scene; },
+    });
+    lua.init();
+    bindGameplayLua(lua, host, GameplayScriptContext{
+                                   .activeScene = [&scene]() -> Scene* { return &scene; },
+                               });
+
+    lua.lua().script("probe = world.spawnSprite('Probe')");
+    lua.lua().script("blank = world.spawnSprite('Blank', '')");
+    lua.lua().script("custom = world.spawnSprite('Custom', 'Content/Sprites/hero.png')");
+
+    auto spriteOf = [&scene](const char* name) -> Sprite2DComponent* {
+        Entity* entity = scene.getEntityByName(name);
+        EXPECT_NE(entity, nullptr);
+        return entity ? entity->getComponent<Sprite2DComponent>() : nullptr;
+    };
+    Sprite2DComponent* probe  = spriteOf("Probe");
+    Sprite2DComponent* blank  = spriteOf("Blank");
+    Sprite2DComponent* custom = spriteOf("Custom");
+    ASSERT_NE(probe, nullptr);
+    ASSERT_NE(blank, nullptr);
+    ASSERT_NE(custom, nullptr);
+
+    const std::string probePath = canonicalizeAssetPath("Engine:Content/TestTextures/sprite2d_probe_64.png");
+    EXPECT_EQ(probe->image.textureRef.getPath(), probePath);
+    EXPECT_EQ(blank->image.textureRef.getPath(), probePath);
+    EXPECT_EQ(custom->image.textureRef.getPath(), canonicalizeAssetPath("Content/Sprites/hero.png"));
+    EXPECT_FLOAT_EQ(custom->size.x, 1.0f);
+    EXPECT_FLOAT_EQ(custom->size.y, 1.0f);
+
+    host.setBehaviorRuntime(nullptr);
+    lua.onStop();
 }
 
 TEST(GameUIScriptTest, AddToWorldWidgetRunsScriptsAndFinds)

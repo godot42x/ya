@@ -25,7 +25,9 @@ namespace
 
 constexpr const char* kSpriteTexture = "Engine:Content/TestTextures/sprite2d_probe_64.png";
 
-Entity* spawnSprite(const GameplayScriptContext& ctx, const std::string& name)
+/// `texturePath` empty keeps the probe image. A caller-supplied path is stored
+/// through `TextureSlot::fromPath` (the same asset-path form as a scene sprite).
+Entity* spawnSprite(const GameplayScriptContext& ctx, const std::string& name, const std::string& texturePath)
 {
     Scene* scene = ctx.activeScene ? ctx.activeScene() : nullptr;
     if (!scene) {
@@ -37,7 +39,7 @@ Entity* spawnSprite(const GameplayScriptContext& ctx, const std::string& name)
         return nullptr;
     }
     Sprite2DComponent* sprite = node->getEntity()->addComponent<Sprite2DComponent>();
-    sprite->image.fromPath(kSpriteTexture);
+    sprite->image.fromPath(texturePath.empty() ? kSpriteTexture : texturePath);
     sprite->size = {1.0f, 1.0f};
     return node->getEntity();
 }
@@ -100,8 +102,11 @@ void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui, GameplayScri
 
     // Module functions registered through the script export already live here.
     sol::table world = lua["world"].get_or_create<sol::table>();
-    world.set_function("spawnSprite", [ctx](const std::string& name) -> sol::optional<LuaScriptObject> {
-        Entity* entity = spawnSprite(ctx, name);
+    // Second argument is optional. Omitted or blank keeps the probe texture so
+    // existing one-argument callers (GreedySnake) stay valid.
+    world.set_function("spawnSprite", [ctx](const std::string& name, sol::optional<std::string> texturePath) -> sol::optional<LuaScriptObject> {
+        const std::string& path = texturePath.value_or("");
+        Entity* entity = spawnSprite(ctx, name, path);
         return entity ? sol::optional<LuaScriptObject>(LuaScriptObject{script::entityRef(entity)}) : sol::nullopt;
     });
     world.set_function("destroyEntity", [ctx](LuaScriptObject entity) {
