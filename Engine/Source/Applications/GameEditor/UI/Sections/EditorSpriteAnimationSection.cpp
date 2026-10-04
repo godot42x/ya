@@ -102,7 +102,7 @@ void EditorSpriteAnimationSection::noteMutated()
     }
 }
 
-void EditorSpriteAnimationSection::restoreUv()
+void EditorSpriteAnimationSection::restorePreview()
 {
     if (!_bHaveSavedUv || !_resolve) {
         _bHaveSavedUv = false;
@@ -113,6 +113,9 @@ void EditorSpriteAnimationSection::restoreUv()
     if (owner) {
         if (Sprite2DComponent* sprite = owner->tryGetComponent<Sprite2DComponent>()) {
             sprite->uvRect = _savedUv;
+            if (sprite->image.textureRef.getPath() != _savedImagePath) {
+                sprite->image.textureRef.setPath(_savedImagePath);
+            }
         }
     }
     _bHaveSavedUv = false;
@@ -128,7 +131,7 @@ void EditorSpriteAnimationSection::endPreview()
             animation->stop();
         }
     }
-    restoreUv();
+    restorePreview();
     _bPreviewing = false;
 }
 
@@ -144,13 +147,14 @@ void EditorSpriteAnimationSection::beginPreview()
     if (!_bPreviewing) {
         if (Entity* owner = animation->getOwner()) {
             if (Sprite2DComponent* sprite = owner->tryGetComponent<Sprite2DComponent>()) {
-                _savedUv      = sprite->uvRect;
-                _bHaveSavedUv = true;
+                _savedUv        = sprite->uvRect;
+                _savedImagePath = sprite->image.textureRef.getPath();
+                _bHaveSavedUv   = true;
             }
         }
     }
     if (!animation->play(animation->clip)) {
-        restoreUv();
+        restorePreview();
         _bPreviewing = false;
         return;
     }
@@ -296,6 +300,12 @@ void EditorSpriteAnimationSection::construct()
     hint->setVisibility(EWidgetVisibility::Collapsed);
     _hint = hint;
 
+    auto atlasNote = std::make_shared<UIText>("AnimAtlasNote");
+    atlasNote->setStyleKey(editorStyle(StyleKey::TextMuted));
+    atlasNote->setText("贴图由动画集提供");
+    atlasNote->setVisibility(EWidgetVisibility::Collapsed);
+    _atlasNote = atlasNote;
+
     auto play = ui::button("AnimPlay", "Play")
                     .setContentPadding({6.0f, 2.0f})
                     .setOnClick([this]() { beginPreview(); })
@@ -338,6 +348,7 @@ void EditorSpriteAnimationSection::construct()
                          .child(std::move(buttonRow))
                          .child(std::move(clipRow))
                          .child(hint)
+                         .child(atlasNote)
                          .child(std::move(transport))
                          .child(status)
                          .release());
@@ -424,6 +435,12 @@ void EditorSpriteAnimationSection::sync(WidgetTree& tree)
             _hint->setText(hint);
             _hint->setVisibility(EWidgetVisibility::Visible);
         }
+    }
+
+    if (_atlasNote) {
+        const SpriteAnimationSet* set = animation ? animation->animation.get() : nullptr;
+        const bool                 bHasAtlas = set && !set->atlas.empty();
+        _atlasNote->setVisibility(bHasAtlas ? EWidgetVisibility::Visible : EWidgetVisibility::Collapsed);
     }
 
     if (_play) {

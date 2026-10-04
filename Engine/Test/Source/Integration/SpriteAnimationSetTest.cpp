@@ -1,6 +1,9 @@
 // SpriteAnimationSet is a shared .yaanim.json document: reflection parse and
 // serialize, the same frame window as SpriteAnimationComponent, and one slot
-// per path through AssetManager.
+// per path. `atlas` is the sheet texture the component displays from. Empty
+// is legal (the sprite keeps its own texture) and is omitted from the file;
+// a non-string atlas is rejected. The document does not check that the
+// texture file exists.
 
 #include "Core/Common/AssetTypeRegistry.h"
 #include "Core/Common/SpriteAnimationSet.h"

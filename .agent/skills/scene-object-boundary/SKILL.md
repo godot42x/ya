@@ -81,7 +81,8 @@ transform for free, and why companion components never track position themselves
    back to a default and the mesh, the view and the wireframe drawn from it
    disagree while only one of them is right. Never create-then-patch: patch is
    forgettable, an argument is not.
-10. **Scene files omit reflected fields that still equal `T{}`.**
+10. **A sprite animation with a non-empty atlas drives derived sprite fields that stay in the scene file.** `SpriteAnimationComponent` writes the host `Sprite2DComponent`'s `image` path and `uvRect` when the set's `atlas` is set. Those values are derived and are still serialized. An empty `atlas` leaves the sprite texture alone on purpose, so one sheet layout can skin several sprites.
+11. **Scene files omit reflected fields that still equal `T{}`.**
    `SceneSerializer` compares a component's reflection JSON with the reflection
    JSON of a default-constructed instance and drops equal fields. Objects
    recurse, including `__base__`; an object that becomes empty is removed;

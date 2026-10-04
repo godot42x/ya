@@ -280,4 +280,57 @@ TEST(EditorSpriteAnimationSectionTest, PreviewDoesNotChangeSerializedScene)
     EXPECT_EQ(serializer.serialize(), before);
 }
 
+TEST(EditorSpriteAnimationSectionTest, AtlasNoteHiddenWhenTheSetHasNoAtlas)
+{
+    FFixture   fixture;
+    WidgetTree tree({.width = 360, .height = 240});
+    auto       section = attachSection(tree, fixture, nullptr);
+    auto*      note    = findControl<UIText>(*section, "AnimAtlasNote");
+    ASSERT_NE(note, nullptr);
+    EXPECT_EQ(note->getVisibility(), EWidgetVisibility::Collapsed);
+    EXPECT_EQ(note->getText(), "贴图由动画集提供");
+    tree.detach(*section);
+}
+
+TEST(EditorSpriteAnimationSectionTest, PreviewRestoresAtlasImagePathAndUv)
+{
+    FFixture fixture;
+    auto     withAtlas = makeSet();
+    withAtlas->atlas   = "Content/Textures/sheet.png";
+    AssetTypeRegistry::get().store<SpriteAnimationSet>()->registerAsset(kAsset, withAtlas);
+    fixture.sprite->image.textureRef.setPath("Content/Textures/skin.png");
+    fixture.sprite->image.samplerConfig.filterMode = EFilter::Nearest;
+
+    WidgetTree      tree({.width = 360, .height = 280});
+    auto            section = attachSection(tree, fixture, nullptr);
+    SceneSerializer serializer(&fixture.scene);
+    const glm::vec4 authored = fixture.sprite->uvRect;
+    const nlohmann::json before = serializer.serialize();
+
+    auto* note = findControl<UIText>(*section, "AnimAtlasNote");
+    auto* play = findControl<UIButton>(*section, "AnimPlay");
+    auto* stop = findControl<UIButton>(*section, "AnimStop");
+    ASSERT_NE(note, nullptr);
+    ASSERT_NE(play, nullptr);
+    ASSERT_NE(stop, nullptr);
+    EXPECT_EQ(note->getVisibility(), EWidgetVisibility::Visible);
+    EXPECT_EQ(note->getText(), "贴图由动画集提供");
+
+    play->onClicked.broadcast();
+    section->tickSection(0.2f);
+    EXPECT_EQ(fixture.sprite->image.textureRef.getPath(), "Content/Textures/sheet.png");
+    EXPECT_EQ(fixture.sprite->image.samplerConfig.filterMode, EFilter::Nearest);
+    EXPECT_NE(fixture.sprite->uvRect, authored);
+    EXPECT_NE(serializer.serialize(), before);
+
+    stop->onClicked.broadcast();
+    EXPECT_FALSE(fixture.animation->isPlaying());
+    EXPECT_EQ(fixture.sprite->image.textureRef.getPath(), "Content/Textures/skin.png");
+    EXPECT_EQ(fixture.sprite->image.samplerConfig.filterMode, EFilter::Nearest);
+    EXPECT_EQ(fixture.sprite->uvRect, authored);
+    EXPECT_EQ(serializer.serialize(), before);
+
+    tree.detach(*section);
+}
+
 } // namespace ya

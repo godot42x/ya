@@ -27,7 +27,7 @@ description: YA Engine 资源加载、资产槽与派生资源准备。适用于
 
 ## 当前稳定边界
 
-1. 贴图和模型槽在 `AssetManager`。文档型资产（Tileset、SpriteAnimationSet，以及注册进来的其它文档）的槽在 `AssetTypeRegistry` 的 store 上，`AssetManager` 只做 clear / collectUnused / unload / invalidate 聚合。Ref 只持有路径和 `AssetHandle`；加载状态、资源和 `generation` 在槽上，一份。
+1. 贴图和模型槽在 `AssetManager`。文档型资产（Tileset、SpriteAnimationSet，以及注册进来的其它文档）的槽在 `AssetTypeRegistry` 的 store 上，`AssetManager` 只做 clear / collectUnused / unload / invalidate 聚合。Ref 只持有路径和 `AssetHandle`；加载状态、资源和 `generation` 在槽上，一份。`SpriteAnimationSet.atlas` 非空时是该动画集拥有的贴图路径：显示帧时写到同实体 `Sprite2DComponent.image` 的路径上，采样配置留在精灵上。空 `atlas` 不改贴图。
 2. 处理器订阅 `SceneBus`（创建 / 编辑 / 删除），并持有槽订阅。回调只入队。稳态 `prepare` 不扫描组件 view；每个场景第一次 prepare 做一次 seed。
 3. `GameplayResourceBinding` 负责已有 mesh / material / billboard 的运行时 resolve，不负责 scene topology。
 4. `ModelInstantiationSystem` 负责 `ModelComponent` -> 子节点 / 子实体展开，再交给普通 resolve 链。它同样由 SceneBus 和模型槽驱动。

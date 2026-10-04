@@ -258,7 +258,7 @@ void EditorAnimationSetTab::construct()
     _errorText = ui::text("AnimError").setText("").setStyleKey("text.small").setWrap(true).share();
     _noticeText = ui::text("AnimNotice").setText("").setStyleKey("text.muted").setWrap(true).share();
     _atlasHint = ui::text("AnimAtlasHint")
-                     .setText("No atlas. Pick a texture to preview the sheet.")
+                     .setText("Empty atlas: sprites use their own Sprite2D texture.")
                      .setStyleKey("text.muted")
                      .setWrap(true)
                      .share();

@@ -1,7 +1,21 @@
 #include "Scene2D/Sprite2DComponent.h"
 
+#include "ECS/Entity.h"
+#include "Scene2D/SpriteAnimationComponent.h"
+
 namespace ya
 {
+
+void Sprite2DComponent::onPostSerialize()
+{
+    Entity* owner = getOwner();
+    if (!owner) {
+        return;
+    }
+    if (SpriteAnimationComponent* animation = owner->tryGetComponent<SpriteAnimationComponent>()) {
+        animation->applyDisplayedFrame();
+    }
+}
 
 bool spriteIsDrawable(const Sprite2DComponent& sprite)
 {

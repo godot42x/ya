@@ -60,6 +60,11 @@ struct YA_SCENE_2D_API Sprite2DComponent : public IComponent
     bool        bYSort = false;
     /// Optional authoring id for a later pick group. Zero means "this entity".
     int32_t     pickId = 0;
+
+    /// After load or clone, a sibling animation applies its resting frame.
+    /// Component order in the file is not fixed, so whichever of the two
+    /// finishes second is the one that can see both.
+    void onPostSerialize() override;
 };
 
 /// True only when the sprite should be drawn. Unset, pending, and failed

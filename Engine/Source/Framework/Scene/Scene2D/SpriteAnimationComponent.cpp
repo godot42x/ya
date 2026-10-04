@@ -1,5 +1,7 @@
 #include "Scene2D/SpriteAnimationComponent.h"
 
+#include "Core/Common/AssetRef.h"
+#include "Core/Common/AssetSlot.h"
 #include "Core/Log.h"
 #include "ECS/Entity.h"
 #include "Scene2D/Sprite2DComponent.h"
@@ -59,7 +61,39 @@ bool SpriteAnimationComponent::resolvePlayingClip()
     return false;
 }
 
-void SpriteAnimationComponent::showFrame(int32_t frame) const
+void SpriteAnimationComponent::syncAtlasImage(const SpriteAnimationSet& set, Sprite2DComponent& sprite)
+{
+    if (set.atlas.empty()) {
+        _bImageSyncValid = false;
+        return;
+    }
+
+    TextureRef&        image       = sprite.image.textureRef;
+    const std::string& currentPath = image.getPath();
+    bool               bSamePath   = currentPath == set.atlas;
+    if (!bSamePath) {
+        bSamePath = currentPath == AssetRefBase::normalizePath(set.atlas);
+    }
+
+    const AssetSlot<Texture>* imageSlot       = image._handle.get();
+    const uint64_t            imageGeneration = imageSlot ? imageSlot->generation : 0;
+    const bool                bSameSlot       = _bImageSyncValid && _syncedImageSlot == imageSlot &&
+                                 _syncedImageGeneration == imageGeneration;
+    if (bSamePath && bSameSlot) {
+        return;
+    }
+    // First observation of an already-correct path records the slot and does
+    // not rebind. A later generation change (hot reload) does.
+    if (!bSamePath || (_bImageSyncValid && !bSameSlot)) {
+        image.setPath(set.atlas);
+        imageSlot = image._handle.get();
+    }
+    _bImageSyncValid       = true;
+    _syncedImageSlot       = imageSlot;
+    _syncedImageGeneration = imageSlot ? imageSlot->generation : 0;
+}
+
+void SpriteAnimationComponent::showFrame(int32_t frame)
 {
     const SpriteAnimationSet* set = animation.get();
     if (!set) {
@@ -76,9 +110,17 @@ void SpriteAnimationComponent::showFrame(int32_t frame) const
     if (!owner) {
         return;
     }
-    if (auto* sprite = owner->getComponent<Sprite2DComponent>()) {
+    Sprite2DComponent* sprite = owner->tryGetComponent<Sprite2DComponent>();
+    if (!sprite) {
+        return;
+    }
+    // Serialized uv windows are rounded. Rewriting an equal window would
+    // change the scene file without changing the picture.
+    const glm::vec4 delta = glm::abs(sprite->uvRect - rect);
+    if (delta.x > 1.0e-4f || delta.y > 1.0e-4f || delta.z > 1.0e-4f || delta.w > 1.0e-4f) {
         sprite->uvRect = rect;
     }
+    syncAtlasImage(*set, *sprite);
 }
 
 int32_t SpriteAnimationComponent::shownFrame() const
@@ -100,7 +142,7 @@ int32_t SpriteAnimationComponent::shownFrame() const
     return current.frames[static_cast<size_t>(index)];
 }
 
-void SpriteAnimationComponent::showClipFrame() const
+void SpriteAnimationComponent::showClipFrame()
 {
     const int32_t frame = shownFrame();
     if (frame < 0) {
@@ -213,9 +255,72 @@ void SpriteAnimationComponent::advance(float deltaSeconds)
     showClipFrame();
 }
 
+void SpriteAnimationComponent::applyDisplayedFrame()
+{
+    const SpriteAnimationSet*            set   = animation.get();
+    const AssetSlot<SpriteAnimationSet>* slot  = animation._handle ? animation._handle.get() : nullptr;
+    Entity*                              owner = getOwner();
+    Sprite2DComponent*                   sprite = owner ? owner->tryGetComponent<Sprite2DComponent>() : nullptr;
+    if (!set || !sprite) {
+        // Empty path: nothing to show. A path that has not loaded yet, or a
+        // sprite that is deserialized after this component, retries.
+        const bool bOweDisplay = animation.hasPath() || set != nullptr;
+        _bDisplayPending       = bOweDisplay && (!sprite || !set);
+        _bAppliedDisplay       = !_bDisplayPending;
+        if (!_bDisplayPending) {
+            _appliedSetSlot       = slot;
+            _appliedSetGeneration = slot ? slot->generation : 0;
+        }
+        return;
+    }
+
+    _appliedSetSlot       = slot;
+    _appliedSetGeneration = slot ? slot->generation : 0;
+    _bAppliedDisplay      = true;
+    _bDisplayPending      = false;
+
+    int32_t frame = -1;
+    if (_clipIndex >= 0) {
+        frame = shownFrame();
+    }
+    if (frame < 0 && !clip.empty()) {
+        if (const SpriteAnimationClip* authored = set->findClip(clip)) {
+            if (!authored->frames.empty()) {
+                frame = authored->frames.front();
+            }
+        }
+    }
+    if (frame >= 0) {
+        showFrame(frame);
+    }
+}
+
+void SpriteAnimationComponent::refreshDisplayedFrame()
+{
+    if (!_bAppliedDisplay && !_bDisplayPending) {
+        return;
+    }
+    if (_bDisplayPending) {
+        applyDisplayedFrame();
+        return;
+    }
+    const AssetSlot<SpriteAnimationSet>* slot       = animation._handle ? animation._handle.get() : nullptr;
+    const uint64_t                       generation = slot ? slot->generation : 0;
+    if (slot == _appliedSetSlot && generation == _appliedSetGeneration) {
+        return;
+    }
+    applyDisplayedFrame();
+}
+
 void SpriteAnimationComponent::onEdit()
 {
     resetRuntime();
+    applyDisplayedFrame();
+}
+
+void SpriteAnimationComponent::onPostSerialize()
+{
+    applyDisplayedFrame();
 }
 
 void SpriteAnimationComponent::resetRuntime()

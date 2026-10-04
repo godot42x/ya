@@ -94,6 +94,7 @@ TEST_F(SpriteAnimationSetEditModelTest, MutationsValidateAndRevert)
     EXPECT_EQ(model.document().clips[0].name, "idle_down");
 }
 
+// Empty atlas stays legal: playback then uses each sprite's own texture.
 TEST_F(SpriteAnimationSetEditModelTest, AtlasEmptyIsOmittedAndRoundTrips)
 {
     SpriteAnimationSetEditModel model;

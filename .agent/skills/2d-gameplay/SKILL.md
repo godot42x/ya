@@ -36,11 +36,13 @@ Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色�
 ## 帧动画
 
 - 精灵换帧用 `SpriteAnimationComponent`（`Scene2D/SpriteAnimationComponent.h`，与 `Sprite2DComponent` 同实体），脚本不再自己算 `uvRect`。
-- 切格和片段在共享的 `.yaanim.json`（`SpriteAnimationSet`）里，不在组件上。文件字段：`columns`、`rows`、`clips`（`name`、`frames`、`fps`、`bLoop`）。图像按 `columns × rows` 均匀切格，帧下标 = `row * columns + column`，行主序、从左上开始。`frames` 可重复，如走路 `{0,1,2,1}`。`fps` 缺省 8、`bLoop` 缺省 true；写了但类型不对仍然非法。示例：`Content/Animations/Hero.yaanim.json`（3×4，走+站）、`Npc.yaanim.json`（只站）、`Chest.yaanim.json`（12×11，closed/open）。
+- 切格和片段在共享的 `.yaanim.json`（`SpriteAnimationSet`）里，不在组件上。文件字段：`atlas`、`columns`、`rows`、`clips`（`name`、`frames`、`fps`、`bLoop`）。图像按 `columns × rows` 均匀切格，帧下标 = `row * columns + column`，行主序、从左上开始。`frames` 可重复，如走路 `{0,1,2,1}`。`fps` 缺省 8、`bLoop` 缺省 true；写了但类型不对仍然非法。`atlas` 是这套动画拥有的贴图路径，可空（空则不写进文件）。示例：`Content/Animations/Hero.yaanim.json`（3×4，走+站）、`Npc.yaanim.json`（只站）、`Chest.yaanim.json`（12×11，closed/open）。
 - 组件只存 `animation`（`SpriteAnimationSetRef`，序列化形状与 `textureRef` 相同）和 `clip`（游戏开始时自动播的片段名）。多个实体引用同一文件、共享一个槽；改这一份资产，所有引用一起生效。
 - 脚本：`local anim = self.entity:getSpriteAnimation()`，`anim:play("walk_left")`（每帧都调没关系：正在播的同名片段不重启；未知名字返回 false 并告警）、`anim:stop()`、`anim:setFrame(i)`（停下并显示某一帧）、`anim:isPlaying()`、`anim:currentClip()`。资产没加载时 `advance` 不动、`play` 返回 false，告警只打一次。
-- 组件只写 `Sprite2DComponent.uvRect`。`play` / `setFrame` 立即写，脚本同一帧就看到；时间由 `SpriteAnimationSystem` 推进（Simulation 组，游戏暂停时停；只在 runtime / simulation 模式推进，编辑器里不动，免得改写要序列化的 `uvRect`）。场景里的 `uvRect` 仍应摆成待机帧，编辑器预览看的是它。
-- 正在播的片段以名字为准。槽 `generation` 变了（资产重载）就按名字重新找下标，不沿用旧下标。Inspector 改 `animation` 会清掉运行态，下次 `advance` 再从 `clip` 开始。
+- `atlas` 非空时，显示帧会把同实体 `Sprite2DComponent.image` 的路径写成 atlas，并写 `uvRect`。只改路径，保留 `samplerConfig`。路径和贴图槽 generation 都没变时不重新 rebind。`atlas` 为空是有意的：只写 `uvRect`，贴图继续用 Sprite2D 自己的，同一套切格可以套不同皮肤。
+- `play` / `setFrame` 立即写，脚本同一帧就看到。时间由 `SpriteAnimationSystem` 推进（Simulation 组，游戏暂停时停；只在 runtime / simulation 模式推进播放头）。加载完成、Inspector 改 `animation` / `clip`、以及动画集槽 generation 变化时，会套用当前帧；没在播就套 `clip` 的第一帧，所以视口不播放时也是对的图和对的帧。
+- 带 atlas 的动画组件驱动的 `Sprite2D.image` 路径和 `uvRect` 仍写进场景文件，存的是派生值。
+- 正在播的片段以名字为准。槽 `generation` 变了（资产重载）就按名字重新找下标，不沿用旧下标。Inspector 改 `animation` 会清掉运行态，并立刻按新的 `clip` 显示初始帧。
 - 一次性片段（`bLoop = false`）停在最后一帧，`isPlaying()` 变 false；再 `play` 同一个片段会重来。
 
 ## 地图即碰撞权威

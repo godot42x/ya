@@ -39,9 +39,11 @@ struct YA_CORE_API SpriteAnimationClip
 // convention of `Sprite2DComponent::uvRect`). One frame's pixel size is the
 // texture size divided by that grid; it is not stored.
 //
-// `atlas` is the sheet texture path for the editor preview only. Playback
-// (`SpriteAnimationSystem` / `SpriteAnimationComponent`) does not read it.
-// Empty means no preview sheet, and the key is omitted from the file.
+// `atlas` is the sheet texture this set owns. While a frame is showing,
+// `SpriteAnimationComponent` writes that path onto the sibling sprite
+// (sampler settings stay on the sprite) and writes the frame's uv window.
+// Empty is legal and omitted from the file: the sprite keeps its own
+// texture, so several skins can share one sheet layout.
 struct YA_CORE_API SpriteAnimationSet
 {
     YA_REFLECT_BEGIN(SpriteAnimationSet)

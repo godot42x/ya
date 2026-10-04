@@ -7,10 +7,17 @@
 #include "Scene2D/Sprite2DComponent.h"
 #include "Scene2D/SpriteAnimationComponent.h"
 #include "Scene2D/SpriteAnimationSystem.h"
+#include "Core/System/VirtualFileSystem.h"
+#include "RHI/Core/Texture.h"
 
 #include <gtest/gtest.h>
 
+#include <array>
+#include <filesystem>
+#include <fstream>
+#include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 
 namespace ya
@@ -270,6 +277,299 @@ TEST(SpriteAnimationTest, AuthoredFieldsRoundTripAndRuntimeStateDoesNot)
     EXPECT_EQ(copy->clip, "idle");
     EXPECT_FALSE(copy->isPlaying());
     EXPECT_TRUE(copy->currentClip().empty());
+}
+
+struct FCountingTextureResolver final : IAssetRefResolver
+{
+    AssetSlot<Texture> slot{};
+    mutable int        acquires = 0;
+
+    FCountingTextureResolver()
+    {
+        slot.state      = EAssetSlotState::Failed;
+        slot.generation = 3;
+    }
+
+    AssetHandle<Texture> acquireTexture(const std::string&) const override
+    {
+        ++acquires;
+        return AssetHandle<Texture>(&slot, [](const AssetSlot<Texture>*) {});
+    }
+
+    AssetHandle<Model> acquireModel(const std::string&) const override { return {}; }
+};
+
+struct FResolverGuard
+{
+    const IAssetRefResolver* previous = nullptr;
+
+    explicit FResolverGuard(const IAssetRefResolver* next)
+        : previous(getAssetRefResolver())
+    {
+        setAssetRefResolver(next);
+    }
+
+    ~FResolverGuard() { setAssetRefResolver(previous); }
+};
+
+TEST(SpriteAnimationTest, EmptyAtlasLeavesTheSpriteImageAlone)
+{
+    FCountingTextureResolver resolver;
+    FResolverGuard           guard(&resolver);
+    FHeroFixture             hero;
+    hero.sprite->image.samplerConfig.filterMode = EFilter::Nearest;
+    hero.sprite->image.textureRef.setPath("Content/Textures/skin.png");
+    const int afterSkin = resolver.acquires;
+
+    EXPECT_TRUE(hero.animation->play("walk"));
+    EXPECT_EQ(hero.sprite->uvRect, hero.animation->frameRect(0));
+    hero.animation->advance(0.3f); // {0,1,2,1} at 10 fps lands on frame 1
+    EXPECT_EQ(hero.sprite->image.textureRef.getPath(), "Content/Textures/skin.png");
+    EXPECT_EQ(hero.sprite->image.samplerConfig.filterMode, EFilter::Nearest);
+    EXPECT_EQ(hero.sprite->uvRect, hero.animation->frameRect(1));
+    EXPECT_EQ(resolver.acquires, afterSkin);
+}
+
+TEST(SpriteAnimationTest, AtlasPathRebindsOnlyWhenPathOrGenerationChanges)
+{
+    FCountingTextureResolver resolver;
+    FResolverGuard           guard(&resolver);
+    FHeroFixture             hero;
+    hero.animation->animation.get()->atlas = "Content/Textures/hero_walk.png";
+    hero.sprite->image.samplerConfig.filterMode  = EFilter::Nearest;
+    hero.sprite->image.samplerConfig.addressMode = ESamplerAddressMode::ClampToEdge;
+
+    hero.sprite->image.textureRef.setPath("Content/Textures/hero_walk.png");
+    const int afterMatch = resolver.acquires;
+    EXPECT_TRUE(hero.animation->play("walk"));
+    hero.animation->advance(0.25f);
+    EXPECT_EQ(resolver.acquires, afterMatch);
+    EXPECT_EQ(hero.sprite->image.samplerConfig.filterMode, EFilter::Nearest);
+    EXPECT_EQ(hero.sprite->image.samplerConfig.addressMode, ESamplerAddressMode::ClampToEdge);
+
+    hero.sprite->image.textureRef.setPath("Content/Textures/skin.png");
+    const int afterSkin = resolver.acquires;
+    EXPECT_TRUE(hero.animation->play("idle"));
+    EXPECT_EQ(hero.sprite->image.textureRef.getPath(), "Content/Textures/hero_walk.png");
+    EXPECT_EQ(hero.sprite->uvRect, hero.animation->frameRect(1));
+    EXPECT_EQ(hero.sprite->image.samplerConfig.filterMode, EFilter::Nearest);
+    EXPECT_EQ(resolver.acquires, afterSkin + 1);
+
+    hero.animation->advance(0.2f);
+    EXPECT_EQ(resolver.acquires, afterSkin + 1);
+
+    resolver.slot.generation += 1;
+    hero.animation->advance(0.2f);
+    EXPECT_EQ(resolver.acquires, afterSkin + 2);
+    EXPECT_EQ(hero.sprite->image.textureRef.getPath(), "Content/Textures/hero_walk.png");
+    EXPECT_EQ(hero.sprite->image.samplerConfig.filterMode, EFilter::Nearest);
+}
+
+TEST(SpriteAnimationTest, EditAppliesTheInitialFrame)
+{
+    FHeroFixture hero;
+    hero.animation->animation.get()->atlas = "Content/Textures/hero_walk.png";
+    hero.animation->clip                    = "walk";
+    hero.sprite->image.textureRef.setPath("Content/Textures/skin.png");
+    hero.sprite->image.samplerConfig.filterMode = EFilter::Nearest;
+    EXPECT_TRUE(hero.animation->play("idle"));
+
+    hero.animation->onEdit();
+    EXPECT_FALSE(hero.animation->isPlaying());
+    EXPECT_TRUE(hero.animation->currentClip().empty());
+    EXPECT_EQ(hero.sprite->image.textureRef.getPath(), "Content/Textures/hero_walk.png");
+    EXPECT_EQ(hero.sprite->image.samplerConfig.filterMode, EFilter::Nearest);
+    EXPECT_EQ(hero.sprite->uvRect, hero.animation->frameRect(0));
+}
+
+TEST(SpriteAnimationTest, LoadAppliesTheInitialFrameAndKeepsSampler)
+{
+    FHeroFixture hero;
+    hero.animation->animation.get()->atlas = "Content/Textures/hero_walk.png";
+    hero.animation->clip                    = "idle";
+    hero.sprite->image.textureRef.setPath("Content/Textures/skin.png");
+    hero.sprite->image.samplerConfig.filterMode  = EFilter::Nearest;
+    hero.sprite->image.samplerConfig.addressMode = ESamplerAddressMode::ClampToEdge;
+    hero.sprite->uvRect                          = glm::vec4(0.1f, 0.2f, 0.3f, 0.4f);
+
+    SceneSerializer      serializer(&hero.scene);
+    const nlohmann::json saved = serializer.serialize();
+
+    Scene           loaded("LoadedAtlas");
+    SceneSerializer loader(&loaded);
+    loader.deserialize(saved);
+    Node* node = loaded.findNodeByPath("/Hero");
+    ASSERT_NE(node, nullptr);
+    auto* sprite    = node->getEntity()->getComponent<Sprite2DComponent>();
+    auto* animation = node->getEntity()->getComponent<SpriteAnimationComponent>();
+    ASSERT_NE(sprite, nullptr);
+    ASSERT_NE(animation, nullptr);
+    EXPECT_EQ(sprite->image.textureRef.getPath(), "Content/Textures/hero_walk.png");
+    EXPECT_EQ(sprite->image.samplerConfig.filterMode, EFilter::Nearest);
+    EXPECT_EQ(sprite->image.samplerConfig.addressMode, ESamplerAddressMode::ClampToEdge);
+    EXPECT_EQ(sprite->uvRect, animation->frameRect(1));
+    EXPECT_FALSE(animation->isPlaying());
+}
+
+TEST(SpriteAnimationTest, SpriteArrivingAfterAnimationStillShowsTheInitialFrame)
+{
+    ensureReflectionReady();
+    constexpr const char* kAsset = "sprite-anim-late-sprite";
+    auto                  set    = makeHeroSet();
+    set->atlas                   = "Content/Textures/hero_walk.png";
+    AssetTypeRegistry::get().store<SpriteAnimationSet>()->registerAsset(kAsset, set);
+
+    Scene   scene{"LateSprite"};
+    Entity* entity    = scene.createNode3D("Hero", scene.getRootNode())->getEntity();
+    auto*   animation = entity->addComponent<SpriteAnimationComponent>();
+    animation->animation = SpriteAnimationSetRef(kAsset);
+    animation->clip      = "idle";
+    animation->onPostSerialize();
+
+    auto* sprite = entity->addComponent<Sprite2DComponent>();
+    sprite->image.textureRef.setPath("Content/Textures/skin.png");
+    sprite->image.samplerConfig.filterMode = EFilter::Nearest;
+    sprite->onPostSerialize();
+    EXPECT_EQ(sprite->image.textureRef.getPath(), "Content/Textures/hero_walk.png");
+    EXPECT_EQ(sprite->image.samplerConfig.filterMode, EFilter::Nearest);
+    EXPECT_EQ(sprite->uvRect, animation->frameRect(1));
+}
+
+TEST(SpriteAnimationTest, HotReloadAppliesTheInitialFrameWithoutAdvancing)
+{
+    FHeroFixture hero;
+    hero.animation->clip                    = "idle";
+    hero.animation->animation.get()->atlas  = "Content/Textures/hero_walk.png";
+    hero.sprite->image.samplerConfig.filterMode = EFilter::Nearest;
+    hero.animation->onEdit();
+    EXPECT_EQ(hero.sprite->image.textureRef.getPath(), "Content/Textures/hero_walk.png");
+
+    auto revised     = makeHeroSet();
+    revised->atlas   = "Content/Textures/other_sheet.png";
+    revised->clips   = {{.name = "idle", .frames = {2}, .fps = 1.0f, .bLoop = true}};
+    AssetTypeRegistry::get().store<SpriteAnimationSet>()->registerAsset(kHeroAsset, revised);
+
+    bool                  bPlaying = false;
+    SpriteAnimationSystem system;
+    system._sceneProvider = [&hero]() { return &hero.scene; };
+    system._tickPolicy    = [&bPlaying]() { return bPlaying; };
+    system.onUpdate(1.0f);
+    EXPECT_FALSE(hero.animation->isPlaying());
+    EXPECT_TRUE(hero.animation->currentClip().empty());
+    EXPECT_EQ(hero.sprite->image.textureRef.getPath(), "Content/Textures/other_sheet.png");
+    EXPECT_EQ(hero.sprite->uvRect, hero.animation->frameRect(2));
+    EXPECT_EQ(hero.sprite->image.samplerConfig.filterMode, EFilter::Nearest);
+}
+
+struct SpriteSheetFields
+{
+    std::string          path;
+    std::array<double, 4> uv{};
+};
+
+std::map<uint64_t, SpriteSheetFields> animatedSpriteFields(const nlohmann::json& sceneJson)
+{
+    std::map<uint64_t, SpriteSheetFields> fields;
+    for (const auto& entityJson : sceneJson.at("entities")) {
+        const auto& components = entityJson.at("components");
+        if (!components.contains("SpriteAnimationComponent") || !components.contains("Sprite2DComponent")) {
+            continue;
+        }
+        const auto& image = components.at("Sprite2DComponent").at("image");
+        const auto& uv    = components.at("Sprite2DComponent").at("uvRect");
+        SpriteSheetFields entry;
+        entry.path = image.at("textureRef").at("__base__").at("AssetRefBase").at("_path").get<std::string>();
+        for (int index = 0; index < 4; ++index) {
+            entry.uv[static_cast<size_t>(index)] = uv.at(index).get<double>();
+        }
+        fields.emplace(entityJson.at("id").get<uint64_t>(), std::move(entry));
+    }
+    return fields;
+}
+
+// Mounts the example Content root so Content/ animation documents resolve,
+// then checks that a load already showing the atlas frame does not rewrite
+// the derived image path or uvRect on save.
+TEST(SpriteAnimationTest, ExampleScenesRoundTripKeepsDerivedSpriteFields)
+{
+    if (!VirtualFileSystem::get()) {
+        VirtualFileSystem::init();
+    }
+    VirtualFileSystem* vfs = VirtualFileSystem::get();
+    const auto contentRoot = std::filesystem::current_path() / "Example/2dRpgPrototype/Content";
+    vfs->mount("Content", contentRoot);
+    struct UnmountContent
+    {
+        VirtualFileSystem* vfs = nullptr;
+        ~UnmountContent()
+        {
+            if (vfs) {
+                vfs->unmount("Content");
+            }
+        }
+    } unmount{vfs};
+    AssetTypeRegistry::get().store<SpriteAnimationSet>()->clear();
+
+    const char* paths[] = {
+        "Content/Scenes/Town.scene.json",
+        "Content/Scenes/House.scene.json",
+        "Content/Scenes/TownLarge.scene.json",
+    };
+    for (const char* path : paths) {
+        std::ifstream input(vfs->translatePath(path), std::ios::binary);
+        ASSERT_TRUE(input.is_open()) << path;
+        std::ostringstream beforeStream;
+        beforeStream << input.rdbuf();
+        const auto beforeFields = animatedSpriteFields(nlohmann::json::parse(beforeStream.str()));
+        ASSERT_FALSE(beforeFields.empty()) << path;
+
+        Scene           scene{"RoundTrip"};
+        SceneSerializer serializer(&scene);
+        ASSERT_TRUE(serializer.loadFromFile(path)) << path;
+
+        auto view = scene.getRegistry().view<SpriteAnimationComponent, Sprite2DComponent>();
+        std::size_t animatedCount = 0;
+        for (auto entity : view) {
+            ++animatedCount;
+            auto& animation = view.get<SpriteAnimationComponent>(entity);
+            auto& sprite    = view.get<Sprite2DComponent>(entity);
+            const SpriteAnimationSet* set = animation.animation.get();
+            ASSERT_NE(set, nullptr) << path;
+            ASSERT_FALSE(set->atlas.empty()) << path;
+            EXPECT_EQ(sprite.image.textureRef.getPath(), set->atlas) << path;
+            EXPECT_EQ(sprite.image.samplerConfig.filterMode, EFilter::Nearest) << path;
+            const SpriteAnimationClip* authored = set->findClip(animation.clip);
+            ASSERT_NE(authored, nullptr) << animation.clip;
+            ASSERT_FALSE(authored->frames.empty());
+            const glm::vec4 expected = set->frameRect(authored->frames.front());
+            EXPECT_NEAR(sprite.uvRect.x, expected.x, 1e-4f) << path;
+            EXPECT_NEAR(sprite.uvRect.y, expected.y, 1e-4f) << path;
+            EXPECT_NEAR(sprite.uvRect.z, expected.z, 1e-4f) << path;
+            EXPECT_NEAR(sprite.uvRect.w, expected.w, 1e-4f) << path;
+            EXPECT_FALSE(animation.isPlaying());
+        }
+        EXPECT_EQ(animatedCount, beforeFields.size()) << path;
+
+        const std::string out = "/tmp/ya-scene-roundtrip.json";
+        ASSERT_TRUE(serializer.saveToFile(out));
+        std::ifstream saved(out, std::ios::binary);
+        ASSERT_TRUE(saved.is_open());
+        std::ostringstream afterStream;
+        afterStream << saved.rdbuf();
+        const auto afterFields = animatedSpriteFields(nlohmann::json::parse(afterStream.str()));
+        ASSERT_EQ(afterFields.size(), beforeFields.size()) << path;
+        for (const auto& [id, before] : beforeFields) {
+            const auto found = afterFields.find(id);
+            ASSERT_NE(found, afterFields.end()) << id;
+            EXPECT_EQ(found->second.path, before.path) << path << " entity " << id;
+            for (int index = 0; index < 4; ++index) {
+                EXPECT_NEAR(found->second.uv[static_cast<size_t>(index)],
+                            before.uv[static_cast<size_t>(index)],
+                            1e-6)
+                    << path << " entity " << id;
+            }
+        }
+    }
 }
 
 TEST(SpriteAnimationTest, TwoEntitiesShareOneAssetSlot)

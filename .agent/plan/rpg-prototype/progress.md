@@ -593,3 +593,14 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 验证：`ya-testing` 1626 ran / 1625 passed / 1 skipped（净增 10）；四条玩法脚本、编辑器冒烟 exit 0；House 与无精灵场景 0 像素差，Town 相机在第 40 帧偏 1 设备像素，对齐后 32 像素通道差 ≤ 1，TownLarge 热启动 0 差；
   Player 走到 NPC 上方/下方各一张，屏幕更靠下者盖住更靠上者。
 - 未验证：立方体穿过精灵平面的 3D 交线截图；Overlay 盖住角色的实际交叠截图（Town 里树冠下方一格是实心，走不进去，只有 `TilemapExtractionTest.LayerOffsetAndYSortFeedThePainterKey` 覆盖）。
+
+## 2026-10-04 — SpriteAnimationSet 拥有贴图（atlas 运行时语义）
+
+- 问题（用户提出）：同一张图集在 `Sprite2DComponent::image`、`SpriteAnimationSet::atlas`（仅预览）、动画组件三处各写各的，运行时不一致也不报错。拍板「方案 1」：帧资源拥有贴图，动画组件驱动渲染器。
+- `atlas` 非空：显示帧时同时把同实体 `Sprite2DComponent::image` 的**路径**设为 atlas（不动 `samplerConfig`；路径和贴图槽 generation 都没变不重复 rebind）。`atlas` 为空：只写 `uvRect`，贴图用 Sprite2D 自己的（有意保留：同一布局可套多种皮肤）。
+- 一致性：不新增系统。加载 / 克隆走 `onPostSerialize`（动画组件与 Sprite2D 谁后到都会再套一次），Inspector 改动走 `onEdit`（先 reset 再套 clip 首帧），动画集热更新由已在 Simulation 组的 `SpriteAnimationSystem` 在编辑态也 `refreshDisplayedFrame`（只跳过 `advance`）。
+  `uvRect` 差值 ≤1e-4 视为相同不重写，避免场景文件因舍入变化。
+- 编辑器：动画面板在 atlas 非空时显示只读「贴图由动画集提供」，预览停止恢复路径与 `uvRect`；动画集页签空 atlas 文案改为「使用 Sprite2D 自己的贴图」。skills（2d-gameplay / resource-system / scene-object-boundary）同步。
+- 验证：新增 9 个测试；`ya-testing` 1635 ran / 1634 passed / 1 skipped；四条玩法脚本通过；编辑器 `--open-asset` 冒烟 exit 0；Town / House / TownLarge 前后截图字节相同；示例场景未改（实体 image 路径本就等于 atlas）。
+- 已知代价：被驱动的 `Sprite2D.image` 路径与 `uvRect` 仍写进场景（派生值）；空 atlas 不会把之前写上的路径改回去。序列化抑制留待后续。
+  `SpriteAnimationSystem.h` 里「policy 为假时不能写 uvRect」的注释已与 `.cpp` 不一致（该头是用户未提交文件，未改）。

@@ -25,7 +25,8 @@ struct WidgetTree;
 
 /// Inspector body for one `SpriteAnimationComponent`: asset row (path, Browse,
 /// Show, Edit), clip combo, and a preview that advances only while this
-/// section is playing. Preview writes `uvRect` and puts it back on stop.
+/// section is playing. Preview writes `uvRect` and, when the set owns an
+/// atlas, the sprite image path, and puts both back on stop.
 class YA_GAME_EDITOR_API EditorSpriteAnimationSection final : public UICompoundWidget
 {
     using Resolver = std::function<SpriteAnimationComponent*()>;
@@ -49,12 +50,14 @@ class YA_GAME_EDITOR_API EditorSpriteAnimationSection final : public UICompoundW
     std::shared_ptr<UIButton>    _edit;
     std::shared_ptr<UIComboBox>  _clips;
     std::shared_ptr<UIText>      _hint;
+    std::shared_ptr<UIText>      _atlasNote;
     std::shared_ptr<UIButton>    _play;
     std::shared_ptr<UIButton>    _stop;
     std::shared_ptr<UIText>      _status;
 
-    glm::vec4 _savedUv{0.0f, 0.0f, 1.0f, 1.0f};
-    bool      _bHaveSavedUv = false;
+    glm::vec4   _savedUv{0.0f, 0.0f, 1.0f, 1.0f};
+    std::string _savedImagePath;
+    bool        _bHaveSavedUv = false;
     bool      _bPreviewing  = false;
 
   public:
@@ -77,7 +80,7 @@ class YA_GAME_EDITOR_API EditorSpriteAnimationSection final : public UICompoundW
   private:
     void beginPreview();
     void endPreview();
-    void restoreUv();
+    void restorePreview();
     void commitClip(const std::string& value);
     void commitAssetPath(const std::string& value);
     void noteMutated();
