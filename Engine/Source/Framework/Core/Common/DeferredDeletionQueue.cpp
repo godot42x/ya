@@ -1,5 +1,6 @@
 #include "Core/Common/DeferredDeletionQueue.h"
 
+#include "Core/Manager/Facade.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Log.h"
 
@@ -80,6 +81,7 @@ size_t DeferredDeletionQueue::flush(uint64_t currentFrameIndex)
 size_t DeferredDeletionQueue::flushAll()
 {
     std::lock_guard lock(_mutex);
+    auto start = facade().clockManager.now();
 
     size_t count = _entries.size();
     for (auto& entry : _entries) {
@@ -88,8 +90,10 @@ size_t DeferredDeletionQueue::flushAll()
     _entries.clear();
 
     if (count > 0) {
-        YA_CORE_INFO("DeferredDeletionQueue::flushAll: executed {} destructors", count);
-    }
+        auto end = facade().clockManager.now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+        YA_CORE_INFO("DeferredDeletionQueue::flushAll: executed {} destructors in {} ms", count, duration);
+    } 
 
     return count;
 }

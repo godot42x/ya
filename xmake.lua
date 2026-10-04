@@ -22,6 +22,57 @@ option("ya_linkage")
     set_description("Module linkage: shared module libraries or static monolith")
 option_end()
 
+-- macOS clang on this tree peaks around 1.5 GiB RSS per translation unit.
+-- xmake's default is ncpu+2, which swaps a 16 GiB laptop. Cap the default
+-- from physical RAM (minus a reserve for the OS and editor) and from memory
+-- that is free right now, then allow two extra jobs to spill into swap.
+-- An explicit `xmake -j N` is left unchanged.
+rule("ya.macos.compile_jobs")
+    set_kind("project")
+    before_build(function ()
+        if os.host() ~= "macosx" then
+            return
+        end
+        import("core.base.option")
+        local options = option.options()
+        if options.jobs ~= nil then
+            return
+        end
+
+        local per_job_mb = 1536
+        local reserve_mb = 3072
+        local total_mb = os.meminfo("totalsize") or 0
+        local avail_mb = os.meminfo("availsize") or total_mb
+        local ncpu = os.cpuinfo("ncpu") or 1
+
+        local function jobs_for(mb)
+            if mb <= 0 then
+                return 1
+            end
+            return math.max(1, math.floor(mb / per_job_mb))
+        end
+
+        local cap = math.min(ncpu, jobs_for(total_mb - reserve_mb), jobs_for(avail_mb))
+        cap = math.max(1, cap)
+        -- Two jobs past the RAM budget; the rest stays on physical memory.
+        local swap_jobs = 2
+        cap = math.min(ncpu, cap + swap_jobs)
+        local default_jobs = os.default_njob()
+        if cap >= default_jobs then
+            return
+        end
+
+        options.jobs = tostring(cap)
+        cprint(
+            "${bright}macos: compile jobs %d (xmake default %d; %.1f GiB free / %.1f GiB)${clear}",
+            cap,
+            default_jobs,
+            avail_mb / 1024,
+            total_mb / 1024)
+    end)
+rule_end()
+add_rules("ya.macos.compile_jobs")
+
 -- NOTE (macOS Vulkan SDK): installed by Script/setup_vulkan_sdk_macos.py into
 -- the MAIN project's repo-local dir Engine/ThirdParty/VulkanSDK (real files;
 -- $YA_CACHE_ROOT / git config ya.cacheRoot / $YA_VULKAN_SDK_ROOT override the

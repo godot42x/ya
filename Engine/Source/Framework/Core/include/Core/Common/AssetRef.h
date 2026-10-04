@@ -55,6 +55,7 @@ struct YA_CORE_API AssetRefBase
 
   public:
     AssetRefBase() = default;
+    virtual ~AssetRefBase() = default;
     explicit AssetRefBase(const std::string &path) : _path(normalizePath(path)) {}
 
     /// Re-derive whatever the ref holds from its current path. Every path

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/System/System.h"
+#include "Core/Api.h"
 
 #include <functional>
 
