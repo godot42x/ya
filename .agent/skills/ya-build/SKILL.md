@@ -107,7 +107,7 @@ make test
    authored key（`_stableKey`，直构控件在 `_name`）或类型查找，见
    `EditorPropertyGraphTest` 的 `findControlByKeySuffix`。
 2. **读源码文本的用例**用 `#include "TestSource.h"` 的 `readEngineSource()`：它按仓库根
-   标记（`Engine/Source` + `Xmake`）向上查找，不要写 `__FILE__` 加固定 `../..` 层数——
+   标记（`Engine/Source` + `xmake`）向上查找，不要写 `__FILE__` 加固定 `../..` 层数——
    用例换一个 suite 目录就会静默读到空文件。
 
 ### 模式 2：项目相关 / editor（Script/ya.py）

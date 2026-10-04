@@ -59,7 +59,7 @@ def wait_for_port(port: int, timeout_s: float) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Designer preview + play diagnosis")
     parser.add_argument("--port", type=int, default=19997)
-    parser.add_argument("--project", default="Example/2DRpgPrototype/2DRpgPrototype.yaproject")
+    parser.add_argument("--project", default="Example/2dRpgPrototype/2dRpgPrototype.yaproject")
     parser.add_argument("--ui-doc", default="Content:UI/Dialogue.yaui.json")
     parser.add_argument("--startup-timeout", type=int, default=180)
     parser.add_argument("--no-project-open", action="store_true")

@@ -54,8 +54,8 @@ def disable_submodule_filemode(submodule_path):
         print(f"-- warn: failed to set core.fileMode=false for {submodule_path}: {e}", file=sys.stderr)
 
 
-# Submodules touched by the chmod pass (and the log.cc plugin, which also sees
-# phantom mode diffs after its own post-checkout hooks on macOS).
+# Submodules touched by the chmod pass. log.cc and utility.cc are vendored
+# sources in this repo, not submodules, so they are not in this list.
 third_party_dirs = [
     "Engine/ThirdParty/ImGui",
     "Engine/ThirdParty/ImGuizmo",
@@ -63,10 +63,7 @@ third_party_dirs = [
     "Engine/ThirdParty/Vulkan-Samples-Assets",
 ]
 
-submodules_needing_filemode_off = third_party_dirs + [
-    "Engine/Plugins/log.cc",
-    "Engine/Plugins/utility.cc",
-]
+submodules_needing_filemode_off = third_party_dirs
 
 
 now = time.time()

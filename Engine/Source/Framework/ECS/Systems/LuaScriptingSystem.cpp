@@ -395,7 +395,7 @@ void LuaScriptingSystem::init()
     // body captures nothing, so a second init (tests) never rebinds a dangling
     // system.
     script::addNativeMethod(type_index_v<Entity>, "call",
-                            [](void* self, const script::ScriptRef&, script::ScriptArgs args) -> ScriptValue {
+                            [](void* self, const script::ScriptRef&, script::ScriptArgs args) -> script::ScriptValue {
                                 if (args.empty()) {
                                     throw script::ScriptError("call: expects the function name as its first argument");
                                 }

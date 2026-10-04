@@ -78,6 +78,19 @@ add_cxflags("/Zc:preprocessor", { force = true })
   会报 C7595；宏里用 `__VA_OPT__` 时格式串必须是字面量。
 - `/utf-8` 编译选项已在根 `xmake.lua` 全局开启，新目标不需要重复加。
 
+### 7. Linux / libstdc++ 与大小写敏感路径
+
+- `va_list` 在 System V ABI（Linux x86_64 libstdc++）是数组，`va_list list = nullptr`
+  非法。只声明，紧接着 `va_start`。MSVC / Apple 上 `va_list` 是指针，去掉
+  `= nullptr` 同样正确。
+- `namespace ya` 里没有裸名 `ScriptValue`。lambda 返回类型写 `script::ScriptValue`
+  （Clang 不靠 MSVC 的宽松查找放行）。
+- 磁盘路径大小写就是规范：`xmake/`、`xmake/rule.lua`、根目录 `test/Test.xmake.lua`、
+  `Example/2dRpgPrototype`。xmake `includes`、`#include`、测试和脚本里的文件路径都用
+  这个大小写。`Engine/Test/` 仍是大写 T，和根目录 `test/` 不是同一个目录。
+- `log.cc` / `utility.cc` 随引擎源码走，不再是子模块。libstdc++ 不会像 libc++ 那样
+  传递包含 `<condition_variable>`、`<algorithm>`、`<cctype>`、`<string>`，用到就显式包含。
+
 ## 切换设备后的处理流程
 
 1. `python3 Script/ya.py cfg` 刷新本机配置（MSVC 工具链、包缓存不同）。
@@ -87,6 +100,7 @@ add_cxflags("/Zc:preprocessor", { force = true })
    - `LNK2019/LNK2001` → 规则 2 / 规则 3（用 dumpbin 区分）
    - `C1083 cannot open include file` → 规则 4
    - `__VA_OPT__` / `C3861` / `C7595` → 规则 5
+   - Linux `va_list` / 未限定 `ScriptValue` / 路径大小写 / 缺标准头 → 规则 7
    - 其余 → 规则 6 或查 `ya-build`
 4. 收尾验证：`xmake r ya-testing`（全量测试）、`xmake b` 确认 100% 通过。
 5. 若修复涉及公共头/导出/xmake 配置，把新坑补回本 skill 或 memory。

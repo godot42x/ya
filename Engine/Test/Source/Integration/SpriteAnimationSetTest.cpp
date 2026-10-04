@@ -58,9 +58,9 @@ const char* kHeroDocument = R"({
 TEST_F(SpriteAnimationSetTest, ExampleDocumentsMatchSerializerBytes)
 {
     const char* paths[] = {
-        "Example/2DRpgPrototype/Content/Animations/Hero.yaanim.json",
-        "Example/2DRpgPrototype/Content/Animations/Npc.yaanim.json",
-        "Example/2DRpgPrototype/Content/Animations/Chest.yaanim.json",
+        "Example/2dRpgPrototype/Content/Animations/Hero.yaanim.json",
+        "Example/2dRpgPrototype/Content/Animations/Npc.yaanim.json",
+        "Example/2dRpgPrototype/Content/Animations/Chest.yaanim.json",
     };
     for (const char* path : paths) {
         std::ifstream input(path);

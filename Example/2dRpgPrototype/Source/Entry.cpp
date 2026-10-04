@@ -1,5 +1,5 @@
 
-#include "2DRpgPrototype.h"
+#include "2dRpgPrototype.h"
 
 extern "C" YA_MODULE_EXPORT const ya::FYaModuleApi* yaGetModuleApi(uint32_t hostAbi)
 {
