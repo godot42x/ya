@@ -249,6 +249,24 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
    `../memories/stale_test_assertions_after_contract_change.md`。
 4. 构建没问题时再转去具体模块 skill。
 
+## 并行 agent 的独占构建锁
+
+同一仓库、同一构建目录同一时间只能有一份 xmake 构建 / `ya.py test` / `ya.py run` 在跑。多个 agent
+并行时用 `Script/agent/ya_lock.sh` 排队，并且能看到是谁占着：
+
+```bash
+export YA_AGENT_NAME=<你的名字>                       # 让别人看得到你是谁
+Script/agent/ya_lock.sh run -- python3 Script/ya.py test --target ya
+Script/agent/ya_lock.sh run -- python3 Script/ya.py run --project <p> -- --exit-after-frame=120
+Script/agent/ya_lock.sh status                    # free，或「held by 'x' (pid) for Ns: <命令>」
+```
+
+- `run` 拿不到锁会等待，每 30 秒打印一次占用者；默认 3600 秒超时，退出码 75（`YA_BUILD_LOCK_TIMEOUT` 可改）。
+- 锁是目录 `/tmp/ya-build.lock.d`（`YA_BUILD_LOCK_DIR` 可改）+ pid/owner/cmd/since；占用者进程死掉会被自动回收，不用手工删。
+- 锁内嵌套 `run` 直接执行（`YA_BUILD_LOCK_HELD=1`），不会死锁。
+- 只包「自己会结束」的命令（构建、测试、带 `--exit-after-frame` / `--max-lifetime-seconds` 的运行）。**不要把长驻进程放在锁里**（编辑器常驻、`control start` 的实例）。
+- 并行时只有一个 agent 的构建在跑，其余在等；纯读代码、写代码、跑 Python 脚本不需要锁。派发并行 worker 时，prompt 必须要求它们用这个锁，并说明各自的文件范围互不重叠（见 `subagent-delegation`）。
+
 ## 共享缓存（多 worktree / 多 agent 并行）
 
 大体积产物（Vulkan SDK、重型 submodule）以**真实文件**存放在主项目自己的

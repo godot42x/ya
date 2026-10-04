@@ -63,6 +63,31 @@ description: 派发 subagent 的规则：新开 / 续接（resume）/ 分叉（s
 - **Task 的 `model` 传 `grok-4.7-high` 也会得到 fast（2026-10-03 查实）。** Cursor 日志 `fixupModelConfig: populating selectedModels from modelName` 显示 slug 的 `-high` / `-high-fast` 后缀被丢掉，只剩 `grok-4.7`，composer 的参数数为 0；请求时用目录默认值补成 3 个参数，随后 `Healed stale per-composer parameters` 把它们写进 composer。state.vscdb 里所有经 Task 创建的 grok-4.7 subagent 都是 `reasoning_effort=high, fast=true`，`-fast` 与否无区别；用户自己开的 composer 才是 `fast=false`。界面标签在第一次运行结束、heal 之后才变成 "High Fast"，所以新开的 agent 刚创建时看起来是对的。
 - Task 工具没有 fast 参数，续接 / 新开都躲不掉。用户禁止 fast 时：不要用 Grok 4.7 派 subagent（换别的模型或自己做），或者让用户在 Cursor 设置里给该 subagent 类型配 `subagentModelOverrides`（用户已给 `explore` 配过 `fast=false`），配好后用探针确认再用。
 
+## 项目内 agent（`.cursor/agents/`）
+
+与本仓库相关的 subagent 定义放在仓库 `.cursor/agents/`，随仓库走；不放用户目录。
+
+| agent | 用途 | 模型 |
+| --- | --- | --- |
+| `ya-worker` | 实现 / 返工 / 收尾，可改文件、跑构建测试 | `grok-4.7[reasoning_effort=high,fast=false]` |
+| `ya-reviewer` | 只读审查：diff 范围、用户改动保留、测试复现、实现质量 | 同上，`readonly: true` |
+| `explore`（内置） | 只读探索 | 用户已配 `fast=false` |
+
+- 用 agent 文件里的 `model` 参数指定 `fast=false`，绕开 Task 的 `model` slug 被补成 fast 的问题。派发时不传 `model`。
+- 按**角色**分，不按模块分：模块知识在 skills 里，agent 按需读。角色少，前缀稳定，缓存可复用。
+- 通用规则（环境坑、提交约定、回报格式、开工前 `git status`）写在 agent 正文里，**派发 prompt 只写本任务的方案、步骤、验证基线、禁区**。
+- 不要把每天都在变的内容（用户未提交文件清单）写进 agent 正文。agent 开工前自己跑 `git status`，开工前已存在的改动一律视为不是自己的；prompt 只补「父 agent 正在并行改的文件」。
+- 长任务用 `run_in_background: true`，并读 subagent 的 transcript 判断是否在推进；不要阻塞等待（阻塞式派发看不到它是否已出错或被终止）。
+
+## 并行派发
+
+- 能并行的前提：各 worker 的**文件范围互不重叠**（含生成物和共用的场景 / 资产文件）；有重叠的事项合并给同一个 worker 按顺序做，或串行。
+- 共用一个构建目录，构建 / 测试 / 运行同一时间只能一份：prompt 里要求 worker 把这些命令包进
+  `Script/agent/ya_lock.sh run -- <命令>`，先 `export YA_AGENT_NAME=<任务名>`，用 `Script/agent/ya_lock.sh status`
+  看谁占着（规则见 `ya-build` skill「并行 agent 的独占构建锁」）。长驻进程不放进锁。
+- 提交仍由父 agent 做：要求每个 worker 报告按「一个可验收目标一个提交」分好的文件清单，父 agent 按路径分别暂存。
+- 并行 worker 同时改同一类共享文件（如示例场景）是冲突来源，派发前先拆开顺序。
+
 ## 新开时的交接 prompt
 
 subagent 看不到用户消息和父 agent 的历史，prompt 要自足：
