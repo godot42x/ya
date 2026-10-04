@@ -4,6 +4,7 @@
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
+#include "ECS/Systems/LuaScriptingSystem.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
@@ -198,7 +199,10 @@ void EditorLuaScriptSection::rebuildRows()
             }
             auto& row = target->scripts[i];
             row.scriptPath = LuaScriptInstance::normalizeScriptPath(text);
-            row.releaseLuaHandles();
+            if (row.runtimeId != 0) {
+                dropLuaScriptLive(row.runtimeId);
+            }
+            row.runtimeId = 0;
             row.bLoaded = false;
             row.bAuthoringPreviewAttempted = false;
             row.bAuthoringPreviewLoaded = false;
@@ -220,7 +224,10 @@ void EditorLuaScriptSection::rebuildRows()
                 }
                 inner->scripts[i].scriptPath =
                     LuaScriptInstance::normalizeScriptPath(path);
-                inner->scripts[i].releaseLuaHandles();
+                if (inner->scripts[i].runtimeId != 0) {
+                    dropLuaScriptLive(inner->scripts[i].runtimeId);
+                }
+                inner->scripts[i].runtimeId = 0;
                 inner->scripts[i].bLoaded = false;
                 inner->scripts[i].bAuthoringPreviewAttempted = false;
                 inner->scripts[i].bAuthoringPreviewLoaded = false;

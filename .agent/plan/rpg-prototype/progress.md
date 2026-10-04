@@ -699,3 +699,10 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 顺带修：`InputManager::init()` 原来在描述符应用之后把动作表刷回内置键位，自定义表在 runtime 里不生效；现在不覆盖已装好的表。
 - `Player.lua` / `Dialogue.lua` 删掉键表，改查动作。不做：运行时重绑、手柄、UI 面板、组合键。
 - 验证：`InputMapTest` 6 个；全量 ya-testing 1672 ran / 1671 passed / 1 skipped；2D 自动化七条通过。
+
+## 2026-10-05 — B2-3 侧表：公开实例头去掉 sol
+
+- 活的 `self` 表、回调、`LuaListenerScope` 从 `LuaScriptInstance` 挪进 `LuaScriptingSystem.cpp` 的侧表（`(lua_State*, runtimeId)` 索引；id 进程内递增不复用）。`LuaScriptInstance.h` 不再 include sol；属性捕获 / 覆盖写回改为自由函数；`LuaScriptComponent::releaseLuaHandles` 按 `runtimeId` 摘表。`LuaWidgetScripts` / `EditorLuaPreview` / `EditorLuaScriptSection` 随之改读侧表。
+- 契约保持：热重载保持同一 `runtimeId` 但换整张 `self`；计时器仍用 `lua_rawequal(selfOf(id), owner)` 判断是否该停（设计文档原写「旧 id 一释放就停」不成立，热重载不换 id）；`ui.get` 推回的仍是同一张 Lua 表。
+- 过渡形态（B2-4 收掉）：侧表是 `LuaScriptingSystem.cpp` 里的三张进程级静态表；`LuaScriptingSystem.h` 仍 include sol，`rg` 验收还不会绿。
+- 验证：脚本过滤 96 个通过；全量 ya-testing 1672 ran / 1671 passed / 1 skipped；GreedySnake / 2DRpgPrototype 120 帧、编辑器 30 帧冒烟；2D 自动化七条通过。

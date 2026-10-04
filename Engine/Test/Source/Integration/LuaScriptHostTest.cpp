@@ -39,8 +39,9 @@ struct FRuntime
 {
     LuaScriptingSystem                 runtime;
     std::map<std::string, std::string> sources;
-    /// After `runtime`: instances hold refs into its state, so they die first.
-    std::deque<LuaScriptInstance>      instances;
+    /// Declared after `runtime` so they are destroyed first. `~FRuntime`
+    /// calls destroyAll while both are still alive.
+    std::deque<LuaScriptInstance> instances;
 
     FRuntime()
     {
@@ -114,8 +115,8 @@ TEST(LuaScriptHostTest, SameScriptOnTwoHostsHasIndependentSelf)
     rt.runtime.call(a, ELuaScriptCallback::Update, 0.016f);
     rt.runtime.call(b, ELuaScriptCallback::Update, 0.016f);
     EXPECT_EQ(rt.takeTrace(), (Trace{"A:1", "A:2", "B:1"}));
-    EXPECT_EQ(a.self.get<int>("count"), 2);
-    EXPECT_EQ(b.self.get<int>("count"), 1);
+    EXPECT_EQ(rt.runtime.selfOf(a.runtimeId).get<int>("count"), 2);
+    EXPECT_EQ(rt.runtime.selfOf(b.runtimeId).get<int>("count"), 1);
 }
 
 TEST(LuaScriptHostTest, HotReloadReachesNonEntityHosts)
@@ -129,7 +130,7 @@ TEST(LuaScriptHostTest, HotReloadReachesNonEntityHosts)
     LuaScriptInstance& instance = rt.make(path);
     ASSERT_TRUE(rt.load(instance, "Panel"));
     rt.runtime.call(instance, ELuaScriptCallback::Init);
-    instance.self["speed"] = 7;
+    rt.runtime.selfOf(instance.runtimeId)["speed"] = 7;
     (void)rt.takeTrace();
 
     rt.define("Widget",
@@ -141,7 +142,7 @@ TEST(LuaScriptHostTest, HotReloadReachesNonEntityHosts)
 
     EXPECT_EQ(rt.takeTrace(), (Trace{"destroy1", "init2:Panel", "start2"}));
     EXPECT_TRUE(instance.bLoaded);
-    EXPECT_EQ(instance.self.get<int>("speed"), 7);
+    EXPECT_EQ(rt.runtime.selfOf(instance.runtimeId).get<int>("speed"), 7);
 }
 
 TEST(LuaScriptHostTest, CallbackErrorDoesNotStopOtherInstances)
@@ -182,7 +183,7 @@ TEST(LuaScriptHostTest, DestroyFromOwnOnDestroyRunsOnce)
     EXPECT_EQ(rt.takeTrace(), (Trace{"destroy"}));
     EXPECT_FALSE(instance.bLoaded);
     EXPECT_EQ(instance.runtimeId, 0u);
-    EXPECT_FALSE(instance.self.valid());
+    EXPECT_FALSE(rt.runtime.selfOf(instance.runtimeId).valid());
     EXPECT_EQ(rt.runtime.liveCount(), 0u);
 }
 
@@ -230,7 +231,7 @@ TEST(LuaScriptHostTest, NamedCallReturnsValue)
     const script::ScriptValue nothing = rt.runtime.callNamed(instance, "none", {}, ENamedCallError::Throw);
     EXPECT_TRUE(std::holds_alternative<std::monostate>(nothing));
     // The host's binding ran before the call, like every lifecycle callback.
-    EXPECT_EQ(instance.self.get<std::string>("hostName"), "EchoHost");
+    EXPECT_EQ(rt.runtime.selfOf(instance.runtimeId).get<std::string>("hostName"), "EchoHost");
 }
 
 TEST(LuaScriptHostTest, NamedCallOnMissingFunctionIsNil)

@@ -1,4 +1,5 @@
 #include "ECS/Systems/LuaScriptInstance.h"
+#include "ECS/Systems/LuaScriptingSystem.h"
 #include "Core/Log.h"
 #include "Core/System/PathUtils.h"
 #include "Resource/AssetManager.h"
@@ -94,18 +95,9 @@ std::string LuaScriptInstance::normalizeScriptPath(std::string_view path)
     return AssetManager::normalizeScriptAssetPath(path);
 }
 
-void LuaScriptInstance::refreshProperties()
+void captureScriptProperties(LuaScriptInstance& instance, sol::table table)
 {
-    if (!self.valid()) {
-        properties.clear();
-        return;
-    }
-    capturePropertiesFrom(self);
-}
-
-void LuaScriptInstance::capturePropertiesFrom(sol::table table)
-{
-    properties.clear();
+    instance.properties.clear();
     if (!table.valid()) {
         return;
     }
@@ -167,38 +159,21 @@ void LuaScriptInstance::capturePropertiesFrom(sol::table table)
             currentValue    = *propValue;
         }
         prop.value = solToScriptValue(currentValue, prop.typeHint);
-        properties.push_back(std::move(prop));
+        instance.properties.push_back(std::move(prop));
     }
 }
 
-void LuaScriptInstance::releaseLuaHandles()
+void applyScriptPropertyOverrides(const LuaScriptInstance& instance, sol::table table, sol::state& lua)
 {
-    listeners.reset();
-    self      = sol::lua_nil;
-    onInit    = sol::lua_nil;
-    onStart   = sol::lua_nil;
-    onUpdate  = sol::lua_nil;
-    onDestroy = sol::lua_nil;
-    onEnable  = sol::lua_nil;
-    onDisable = sol::lua_nil;
-}
-
-void LuaScriptInstance::applyPropertyOverrides(sol::state& lua)
-{
-    applyPropertyOverridesTo(self, lua);
-}
-
-void LuaScriptInstance::applyPropertyOverridesTo(sol::table table, sol::state& lua)
-{
-    if (!table.valid() || propertyOverrides.empty()) {
+    if (!table.valid() || instance.propertyOverrides.empty()) {
         return;
     }
 
     YA_CORE_INFO("[LuaScript] Applying {} property overrides to {}",
-                 propertyOverrides.size(),
-                 scriptPath);
+                 instance.propertyOverrides.size(),
+                 instance.scriptPath);
 
-    for (const auto& [propName, value] : propertyOverrides) {
+    for (const auto& [propName, value] : instance.propertyOverrides) {
         if (std::holds_alternative<std::monostate>(value)) {
             YA_CORE_WARN("[LuaScript] Property '{}' has no value, skipping", propName);
             continue;

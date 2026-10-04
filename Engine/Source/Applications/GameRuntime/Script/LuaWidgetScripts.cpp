@@ -95,7 +95,10 @@ sol::object addScriptTimer(const sol::table& self, float delaySeconds, float int
         behavior.get(), delaySeconds, intervalSeconds,
         [weak = std::weak_ptr(behavior), fn, owner = self, path = behavior->instance.scriptPath]() -> bool {
             auto live = weak.lock();
-            if (!live || !live->runtime || !live->instance.bLoaded || !sameTable(live->instance.self, owner)) {
+            const sol::table current = live && live->runtime
+                                            ? live->runtime->scripting.selfOf(live->instance.runtimeId)
+                                            : sol::table{};
+            if (!live || !live->runtime || !live->instance.bLoaded || !sameTable(current, owner)) {
                 return false;
             }
             const sol::protected_function_result result = fn(owner);
@@ -299,7 +302,7 @@ sol::object LuaWidgetScripts::scriptSelfOf(const UIElement& widget)
 {
     const LuaWidgetScriptBehavior* script = widget.findBehavior<LuaWidgetScriptBehavior>();
     if (script && script->runtime && script->instance.bLoaded) {
-        return script->instance.self;
+        return script->runtime->scripting.selfOf(script->instance.runtimeId);
     }
     return {};
 }

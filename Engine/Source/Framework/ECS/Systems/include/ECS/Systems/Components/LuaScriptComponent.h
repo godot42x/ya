@@ -48,14 +48,13 @@ struct LuaScriptComponent : public IComponent
                       scripts.end());
     }
 
-    void releaseLuaHandles()
-    {
-        for (auto& script : scripts) {
-            script.releaseLuaHandles();
-        }
-    }
+    /// Drop each row's live table when `runtimeId != 0`, without running
+    /// onDestroy. Preview rows never receive an id, so this is a no-op for
+    /// them. The play runtime's side table owns the handles; clearing an id
+    /// here releases that entry while its state is still alive.
+    YA_ECS_SYSTEMS_API void releaseLuaHandles();
 
-    /// Drop Lua handles then discard every script row. Call only when the
+    /// Drop live tables then discard every script row. Call only when the
     /// component itself is going away, not when pausing play.
     void cleanup()
     {

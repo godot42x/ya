@@ -2,6 +2,7 @@
 
 #include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "ECS/Systems/LuaScriptingSystem.h"
 
 #include <glm/glm.hpp>
 
@@ -45,21 +46,9 @@ void EditorLuaPreview::ensureReady()
 
 void EditorLuaPreview::releaseMatching(LuaScriptComponent& component)
 {
-    if (!_bReady) {
-        return;
-    }
-    lua_State* const L = _lua.lua_state();
-    if (!L) {
-        return;
-    }
-    for (auto& script : component.scripts) {
-        const bool bOurs =
-            (script.self.valid() && script.self.lua_state() == L) ||
-            (script.onInit.valid() && script.onInit.lua_state() == L);
-        if (bOurs) {
-            script.releaseLuaHandles();
-        }
-    }
+    // Load keeps its table on the stack and never publishes a runtimeId, so
+    // this state has no sol handles on the component to unref.
+    (void)component;
 }
 
 bool EditorLuaPreview::load(LuaScriptInstance& script)
@@ -101,8 +90,8 @@ bool EditorLuaPreview::load(LuaScriptInstance& script)
         }
 
         sol::table table = result;
-        script.applyPropertyOverridesTo(table, _lua);
-        script.capturePropertiesFrom(table);
+        applyScriptPropertyOverrides(script, table, _lua);
+        captureScriptProperties(script, table);
         script.bAuthoringPreviewLoaded = true;
         return true;
     }

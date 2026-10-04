@@ -1,4 +1,5 @@
 #include "ECS/Systems/Components/LuaScriptComponent.h"
+#include "ECS/Systems/LuaScriptingSystem.h"
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -27,12 +28,9 @@ TEST(LuaScriptComponentLifetimeTest, CapturedPropertiesSurviveLuaStateDeath)
         props["radius"] = radius;
         table["_PROPERTIES"] = props;
 
-        script.applyPropertyOverridesTo(table, lua);
-        script.capturePropertiesFrom(table);
-        script.self = table;
-        script.releaseLuaHandles();
+        applyScriptPropertyOverrides(script, table, lua);
+        captureScriptProperties(script, table);
 
-        EXPECT_FALSE(script.self.valid());
         ASSERT_EQ(script.properties.size(), 1u);
         EXPECT_EQ(script.properties[0].name, "radius");
         ASSERT_TRUE(std::holds_alternative<double>(script.properties[0].value));
@@ -70,7 +68,7 @@ TEST(LuaScriptComponentLifetimeTest, CapturePropertiesFromMultipleEntries)
     table["_PROPERTIES"] = props;
 
     LuaScriptInstance script;
-    script.capturePropertiesFrom(table);
+    captureScriptProperties(script, table);
 
     ASSERT_EQ(script.properties.size(), 4u);
     std::unordered_map<std::string, LuaScriptProperty> byName;
@@ -92,16 +90,13 @@ TEST(LuaScriptComponentLifetimeTest, CapturePropertiesFromMultipleEntries)
 
 TEST(LuaScriptComponentLifetimeTest, CloneCustomDropsLuaHandlesAndKeepsOverrides)
 {
-    sol::state lua;
-    lua.open_libraries(sol::lib::base);
-
     LuaScriptComponent src;
     auto* instance = src.addScript("Content/Scripts/Spin.lua");
     ASSERT_NE(instance, nullptr);
     instance->enabled = false;
     instance->propertyOverrides["speed"] = int64_t{12};
-    instance->self = lua.create_table();
     instance->bAuthoringPreviewLoaded = true;
+    instance->runtimeId = 0;
 
     LuaScriptComponent dst;
     dst.cloneCustom(src);
@@ -109,7 +104,7 @@ TEST(LuaScriptComponentLifetimeTest, CloneCustomDropsLuaHandlesAndKeepsOverrides
     ASSERT_EQ(dst.scripts.size(), 1u);
     EXPECT_EQ(dst.scripts[0].scriptPath, instance->scriptPath);
     EXPECT_FALSE(dst.scripts[0].enabled);
-    EXPECT_FALSE(dst.scripts[0].self.valid());
+    EXPECT_EQ(dst.scripts[0].runtimeId, 0u);
     EXPECT_FALSE(dst.scripts[0].bLoaded);
     EXPECT_FALSE(dst.scripts[0].bAuthoringPreviewLoaded);
     EXPECT_TRUE(dst.scripts[0].properties.empty());

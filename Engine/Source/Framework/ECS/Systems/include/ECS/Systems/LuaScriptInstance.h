@@ -4,9 +4,7 @@
 #include "Core/Scripting/ScriptValue.h"
 
 #include <cstdint>
-#include <memory>
 #include <optional>
-#include <sol/sol.hpp>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -14,8 +12,6 @@
 
 namespace ya
 {
-
-struct LuaListenerScope;
 
 /// One editable script property: the C++ copy of a `_PROPERTIES` row, safe to
 /// keep after the Lua state that produced it is gone.
@@ -31,9 +27,10 @@ struct LuaScriptProperty
 };
 
 /// One script attached to one host. The authored half (path, enabled, order
-/// override, property overrides) is what hosts serialize; the rest is live
-/// state owned by whichever Lua state loaded it (`LuaScriptingSystem` for play,
-/// the editor preview for property rows).
+/// override, property overrides) is what hosts serialize. Live Lua tables and
+/// callbacks are not stored here: `LuaScriptingSystem` keeps them in a side
+/// table keyed by (`lua_State*`, `runtimeId`). `runtimeId == 0` means no live
+/// table. The editor preview never assigns an id.
 struct LuaScriptInstance
 {
     std::string scriptPath;
@@ -41,19 +38,7 @@ struct LuaScriptInstance
     bool        bAuthoringPreviewAttempted = false;
     bool        bAuthoringPreviewLoaded    = false;
     /// Key in the runtime's live registry; 0 while not loaded by a runtime.
-    uint64_t    runtimeId = 0;
-
-    sol::table self;
-    /// Lua listeners this instance added to delegates; made with each new
-    /// `self` and dropped with it, which ends those listeners.
-    std::shared_ptr<LuaListenerScope> listeners;
-
-    sol::function onInit;
-    sol::function onStart;
-    sol::function onUpdate;
-    sol::function onDestroy;
-    sol::function onEnable;
-    sol::function onDisable;
+    uint64_t runtimeId = 0;
 
     std::vector<LuaScriptProperty>                       properties;
     std::unordered_map<std::string, script::ScriptValue> propertyOverrides;
@@ -61,20 +46,12 @@ struct LuaScriptInstance
     bool enabled = true;
 
     /// `executionOrder` declared by the script table; read on load, not serialized.
-    int                scriptExecutionOrder = 0;
+    int scriptExecutionOrder = 0;
     /// Per-instance override, serialized only when set.
     std::optional<int> executionOrderOverride;
 
     /// Lower runs first. Ties fall back to the host's own order.
     [[nodiscard]] int executionOrder() const { return executionOrderOverride.value_or(scriptExecutionOrder); }
-
-    YA_ECS_SYSTEMS_API void refreshProperties();
-    YA_ECS_SYSTEMS_API void capturePropertiesFrom(sol::table table);
-    YA_ECS_SYSTEMS_API void applyPropertyOverrides(sol::state& lua);
-    YA_ECS_SYSTEMS_API void applyPropertyOverridesTo(sol::table table, sol::state& lua);
-    /// Drop sol handles while their lua_State is still alive. Keeps path,
-    /// enabled, propertyOverrides, and captured C++ property rows.
-    YA_ECS_SYSTEMS_API void releaseLuaHandles();
 
     static YA_ECS_SYSTEMS_API std::string normalizeScriptPath(std::string_view path);
 };

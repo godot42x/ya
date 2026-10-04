@@ -9,7 +9,7 @@
 // `self` must be the `self` of a live script instance: every listener has
 // exactly one owner. The delegate holds only a weak token; the Lua function
 // lives in the owner's LuaListenerScope, which goes with the instance's `self`
-// (LuaScriptInstance::releaseLuaHandles, or a hot reload binding a new one).
+// (the runtime side table dropping that entry, or a hot reload binding a new one).
 // So a listener never outlives its script, and no Lua reference sits in a
 // delegate that may outlive the Lua state.
 //

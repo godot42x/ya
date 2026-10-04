@@ -72,11 +72,11 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
   private:
     LuaRuntimeServices _services;
     sol::state         _lua;
-    /// Live instances by id. Ordered by id, i.e. load order, so reload and
-    /// destroyAll are deterministic. Ids are never reused.
+    /// Hosts by id. Ordered by id, i.e. load order, so reload and destroyAll
+    /// are deterministic. Ids are never reused. Sol tables live in the cpp
+    /// side table, keyed by the same id, not in this map.
     std::map<uint64_t, std::unique_ptr<ILuaScriptHost>> _live;
-    uint64_t _nextId           = 1;
-    bool     _hotReloadEnabled = false;
+    bool _hotReloadEnabled = false;
     /// Scene-tree pre-order rank by entity index, for world-script order;
     /// rebuilt only when the active scene tree's revision moves.
     std::vector<uint32_t> _treeRanks;
@@ -133,7 +133,13 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
     /// ordinary value; callers that mean "consumed" check it themselves.
     [[nodiscard]] script::ScriptValue callNamed(LuaScriptInstance& instance, const std::string& name,
                                                 script::ScriptArgs args, ENamedCallError onError);
-    /// onDestroy, drop Lua handles and unregister. No-op if not live.
+    /// The live `self` of `runtimeId`, or an invalid table. This is the script's
+    /// own table; callers that care about identity compare it with lua_rawequal.
+    [[nodiscard]] sol::table selfOf(uint64_t runtimeId) const;
+    /// Drop the live table and unregister `runtimeId` without running onDestroy.
+    /// No-op for 0 or an id this system does not own.
+    void dropInstance(uint64_t runtimeId);
+    /// onDestroy, drop the live table and unregister. No-op if not live.
     void destroy(LuaScriptInstance& instance);
     /// destroy() every live instance, in load order.
     void destroyAll();
@@ -155,7 +161,9 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
 
   private:
     [[nodiscard]] bool readSource(const std::string& path, std::string& out) const;
-    /// Run `source` and bind the returned table onto `instance` (self and callbacks).
+    /// Run `source` and publish the returned table into the live side table.
+    /// A first load allocates `runtimeId`. A reload replaces the table for the
+    /// id the instance already has; a failed chunk leaves that table in place.
     bool bindChunk(LuaScriptInstance& instance, const std::string& source);
     /// Hot-reload one live instance from `source`: onDestroy, rebind, restore
     /// the saved property values, onInit, onStart. False when it did not
@@ -172,6 +180,14 @@ struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
 /// Nil when no script defines the name; a failing target raises ScriptError.
 [[nodiscard]] YA_ECS_SYSTEMS_API script::ScriptValue callEntityScript(Entity& entity, const std::string& name,
                                                                       script::ScriptArgs args);
+
+/// Copy `_PROPERTIES` from `table` into `instance.properties`. `table` is not retained.
+YA_ECS_SYSTEMS_API void captureScriptProperties(LuaScriptInstance& instance, sol::table table);
+/// Write `instance.propertyOverrides` onto `table`.
+YA_ECS_SYSTEMS_API void applyScriptPropertyOverrides(const LuaScriptInstance& instance, sol::table table, sol::state& lua);
+/// `dropInstance` for callers that only have an id (an editor row, a component).
+/// 0 and an unknown id are no-ops. Does not run onDestroy.
+YA_ECS_SYSTEMS_API void dropLuaScriptLive(uint64_t runtimeId);
 
 
 

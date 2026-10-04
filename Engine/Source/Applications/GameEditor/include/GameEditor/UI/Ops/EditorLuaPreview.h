@@ -23,8 +23,8 @@ class EditorLuaPreview
     /// table dies with this function, while `_lua` is still alive.
     bool load(LuaScriptInstance& script);
 
-    /// Unref any handles on `component` that belong to this preview state.
-    /// Must run before `~EditorLuaPreview`.
+    /// Preview load does not leave sol handles on `component`. Kept so section
+    /// teardown still has a hook before `~EditorLuaPreview`.
     void releaseMatching(LuaScriptComponent& component);
 };
 
