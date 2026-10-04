@@ -40,6 +40,7 @@ struct LuaInputApi
     [[nodiscard]] glm::vec2 getMouseDelta() const { return input ? input->getMouseDelta() : glm::vec2(0.0f); }
     [[nodiscard]] glm::vec2 getMouseScrollDelta() const { return input ? input->getMouseScrollDelta() : glm::vec2(0.0f); }
     [[nodiscard]] bool isActionDown(const std::string& action) const { return input && input->isActionPressed(action); }
+    [[nodiscard]] bool isActionPressed(const std::string& action) const { return input && input->wasActionPressed(action); }
     [[nodiscard]] bool wasActionPressed(const std::string& action) const { return input && input->wasActionPressed(action); }
     [[nodiscard]] bool wasActionReleased(const std::string& action) const { return input && input->wasActionReleased(action); }
 
@@ -426,6 +427,8 @@ void LuaScriptingSystem::init()
         &LuaInputApi::getMouseScrollDelta,
         "isActionDown",
         &LuaInputApi::isActionDown,
+        "isActionPressed",
+        &LuaInputApi::isActionPressed,
         "wasActionPressed",
         &LuaInputApi::wasActionPressed,
         "wasActionReleased",

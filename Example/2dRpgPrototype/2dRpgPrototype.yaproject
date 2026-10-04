@@ -6,5 +6,6 @@
   "plugins": [],
   "contentDir": "Content",
   "defaultScene": "Content/Scenes/Town.scene.json",
-  "uiReferenceResolution": [1280, 720]
+  "uiReferenceResolution": [1280, 720],
+  "inputMap": "InputMap.json"
 }

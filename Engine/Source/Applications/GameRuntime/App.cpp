@@ -266,7 +266,7 @@ void App::applyProjectDescriptor(const FProjectDescriptor& descriptor)
     _ci.projectPath      = descriptor.sourcePath.string();
     _ci.projectRoot      = descriptor.sourcePath.parent_path().string();
     _ci.defaultScenePath = descriptor.defaultScene;
-    inputManager.configureActionBindings(descriptor.inputActions);
+    inputManager.configureActionBindings(descriptor.inputActions, !descriptor.inputMap.has_value());
     if (_gameUIHost) {
         const FUIReferenceResolution resolution = descriptor.uiReferenceResolution.value_or(FUIReferenceResolution{});
         _gameUIHost->setReferenceResolution({resolution.width, resolution.height});

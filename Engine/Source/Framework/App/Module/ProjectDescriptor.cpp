@@ -48,6 +48,52 @@ std::filesystem::path resolveProjectPath(const std::filesystem::path& projectRoo
     return projectRelative;
 }
 
+/// Action name → key-name list. Missing or unreadable file warns and returns
+/// false; `out` is cleared. Does not throw.
+bool readInputMap(const std::filesystem::path& path,
+                  std::unordered_map<std::string, std::vector<std::string>>& out)
+{
+    out.clear();
+    std::ifstream stream(path);
+    if (!stream.is_open()) {
+        YA_CORE_WARN("InputMap missing: {}", path.string());
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(stream);
+    }
+    catch (const std::exception&) {
+        YA_CORE_WARN("InputMap invalid: {}", path.string());
+        return false;
+    }
+    if (!json.is_object()) {
+        YA_CORE_WARN("InputMap invalid: {}", path.string());
+        return false;
+    }
+
+    for (const auto& [actionName, bindings] : json.items()) {
+        if (!bindings.is_array()) {
+            YA_CORE_WARN("InputMap invalid: {}", path.string());
+            out.clear();
+            return false;
+        }
+        std::vector<std::string> keys;
+        keys.reserve(bindings.size());
+        for (const auto& binding : bindings) {
+            if (!binding.is_string()) {
+                YA_CORE_WARN("InputMap invalid: {}", path.string());
+                out.clear();
+                return false;
+            }
+            keys.push_back(binding.get<std::string>());
+        }
+        out.emplace(actionName, std::move(keys));
+    }
+    return true;
+}
+
 }
 
 FProjectDescriptor FProjectDescriptor::load(const std::filesystem::path& path)
@@ -150,6 +196,20 @@ FProjectDescriptor FProjectDescriptor::load(const std::filesystem::path& path)
             throw std::runtime_error("Project icon not found: " + resolvedIcon.string());
         }
         descriptor.icon = resolvedIcon.string();
+    }
+    if (json.contains("inputMap")) {
+        descriptor.inputActions.clear();
+        const auto& value = json.at("inputMap");
+        if (!value.is_string() || value.get<std::string>().empty()) {
+            YA_CORE_WARN("InputMap path missing: {}", path.string());
+            descriptor.inputMap        = std::filesystem::path{};
+            descriptor.bInputMapLoaded = false;
+        }
+        else {
+            const auto resolved        = resolveProjectPath(root, value.get<std::string>());
+            descriptor.inputMap        = resolved;
+            descriptor.bInputMapLoaded = readInputMap(resolved, descriptor.inputActions);
+        }
     }
     return descriptor;
 }

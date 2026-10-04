@@ -1,6 +1,6 @@
--- Reads keys and talks. Grid walking (one tile per step, eased, four
--- facings, arrival poke) lives in GridMover. This script turns the held key
--- into a direction and, on confirm, asks the faced cell for onInteract.
+-- Reads input actions and talks. Grid walking (one tile per step, eased, four
+-- facings, arrival poke) lives in GridMover. This script turns the held
+-- action into a direction and, on confirm, asks the faced cell for onInteract.
 local ScriptBase = require("ScriptBase")
 local GridMover = require("GridMover")
 local Script = ScriptBase:new()
@@ -20,45 +20,30 @@ Script:properties({
     }
 })
 
--- Checked in order; the first key held wins.
+-- Checked in order; the first held action wins. Keys are InputMap.json.
 local DIRECTIONS = {
-    { keys = { EKey.Up, EKey.K_W }, dx = 0, dy = 1, name = "up" },
-    { keys = { EKey.Down, EKey.K_S }, dx = 0, dy = -1, name = "down" },
-    { keys = { EKey.Left, EKey.K_A }, dx = -1, dy = 0, name = "left" },
-    { keys = { EKey.Right, EKey.K_D }, dx = 1, dy = 0, name = "right" },
+    { action = "move_up", dx = 0, dy = 1, name = "up" },
+    { action = "move_down", dx = 0, dy = -1, name = "down" },
+    { action = "move_left", dx = -1, dy = 0, name = "left" },
+    { action = "move_right", dx = 1, dy = 0, name = "right" },
 }
-
--- Facing something and tapping one of these triggers its onInteract.
-local CONFIRM_KEYS = { EKey.Space, EKey.Enter, EKey.K_E }
 
 local function heldDirection()
     for _, direction in ipairs(DIRECTIONS) do
-        for _, key in ipairs(direction.keys) do
-            if input:isKeyDown(key) then
-                return direction
-            end
+        if input:isActionDown(direction.action) then
+            return direction
         end
     end
     return nil
 end
 
 local function confirmPressed()
-    for _, key in ipairs(CONFIRM_KEYS) do
-        -- isKeyPressed is the down edge (isKeyDown is the held state).
-        if input:isKeyPressed(key) then
-            return true
-        end
-    end
-    return false
+    -- isActionPressed is the down edge (isActionDown is the held state).
+    return input:isActionPressed("confirm")
 end
 
 local function confirmHeld()
-    for _, key in ipairs(CONFIRM_KEYS) do
-        if input:isKeyDown(key) then
-            return true
-        end
-    end
-    return false
+    return input:isActionDown("confirm")
 end
 
 -- Standing or walking, facing where the last step went. play() on the clip

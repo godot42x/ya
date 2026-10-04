@@ -1,0 +1,7 @@
+{
+  "move_up": ["Up", "W"],
+  "move_down": ["Down", "S"],
+  "move_left": ["Left", "A"],
+  "move_right": ["Right", "D"],
+  "confirm": ["Space", "Enter", "E"]
+}

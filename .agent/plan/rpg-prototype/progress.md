@@ -692,3 +692,10 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - `world.loadScene(path[, spawnName[, actorName]])`：落点实体名由调用方传入，`placePlayerAtSpawn(scene, spawnName, actorName)` 不再写死 "Player"；名字随 `requestSceneTransfer` 带到帧尾。空 `actorName` 不移动任何人。Door 的脚本属性 `actorName` 默认 "Player"，现有场景不改。不用相机 `targetName`：落点发生在脚本加载之前，属性默认值那时只在 Lua 源里。
 - `world.spawnSprite(name[, texturePath])`：缺省/空串仍用探针图，路径走 `TextureSlot::fromPath`。
 - 验证：SceneTransfer / GameUIScript 新增用例；全量 ya-testing 1672 ran / 1671 passed / 1 skipped；2D 自动化七条、两个 120 帧冒烟通过。
+
+## 2026-10-05 — 最小 InputMap（命名动作）
+
+- `.yaproject` 的 `inputMap` 指向项目内一份 JSON（动作名 → 按键名数组，任一键成立；路径走 `FProjectDescriptor::resolvePath`）。2D RPG 原型：`Example/2DRpgPrototype/InputMap.json`（move_up/down/left/right、confirm），默认键位与原硬编码相同。Lua：`input:isActionDown` / `input:isActionPressed`（按下沿）。缺文件 / 坏文件 / 缺动作：告警并返回 false，未知动作名只告警一次；没写 `inputMap` 的项目沿用 `inputActions` 或内置键位。
+- 顺带修：`InputManager::init()` 原来在描述符应用之后把动作表刷回内置键位，自定义表在 runtime 里不生效；现在不覆盖已装好的表。
+- `Player.lua` / `Dialogue.lua` 删掉键表，改查动作。不做：运行时重绑、手柄、UI 面板、组合键。
+- 验证：`InputMapTest` 6 个；全量 ya-testing 1672 ran / 1671 passed / 1 skipped；2D 自动化七条通过。

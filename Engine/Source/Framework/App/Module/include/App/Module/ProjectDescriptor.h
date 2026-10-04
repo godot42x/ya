@@ -34,6 +34,11 @@ struct FProjectDescriptor
     /// (`Engine/Content/...`). Omitted = engine YA branding.
     std::optional<std::string>         icon;
     std::unordered_map<std::string, std::vector<std::string>> inputActions;
+    /// Resolved `inputMap` path. Absent: use inline `inputActions`, or the
+    /// built-in keys when those are empty too.
+    std::optional<std::filesystem::path> inputMap;
+    /// False when `inputMap` is set but the file is missing or not a key list.
+    bool                               bInputMapLoaded = false;
     std::filesystem::path              sourcePath;
 
     [[nodiscard]] static YA_MODULE_MANAGER_API FProjectDescriptor load(const std::filesystem::path& path);

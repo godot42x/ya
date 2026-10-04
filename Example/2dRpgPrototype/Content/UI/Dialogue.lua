@@ -4,7 +4,7 @@
 --   ui.get("Dialogue"):say(lines, onDone)
 --
 -- `lines` is an array of pages. The typewriter reveals the current page one
--- character at a time (self:every); confirm (Space/Enter/E) first reveals the
+-- character at a time (self:every); the confirm action first reveals the
 -- rest of the page, then advances, then closes and calls onDone. The frame
 -- that opened the box ignores confirm, so the press that started the talk
 -- never skips the first page. string.sub slices bytes: keep the pages ASCII
@@ -13,16 +13,10 @@ local ScriptBase = require("ScriptBase")
 local Script = ScriptBase:new()
 
 local REVEAL_SECONDS = 0.02
-local CONFIRM_KEYS = { EKey.Space, EKey.Enter, EKey.K_E }
 
 local function confirmPressed()
-    for _, key in ipairs(CONFIRM_KEYS) do
-        -- isKeyPressed is the down edge (isKeyDown is the held state).
-        if input:isKeyPressed(key) then
-            return true
-        end
-    end
-    return false
+    -- isActionPressed is the down edge (isActionDown is the held state).
+    return input:isActionPressed("confirm")
 end
 
 -- True while a dialogue is on screen; the player script holds movement by

@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "Core/Event.h"
@@ -52,6 +53,11 @@ struct YA_CORE_API InputManager
     std::unordered_map<EMouse::T, KeyState> previousMouseStates;
 
     std::unordered_map<std::string, ActionBinding, StringHash, std::equal_to<>> _actionBindings;
+    /// Unknown names already reported. findAction is const; cleared when the map is replaced.
+    mutable std::unordered_set<std::string, StringHash, std::equal_to<>> _warnedMissingActions;
+    /// Set once a project map or the built-in defaults have been applied.
+    /// init() runs after descriptor apply and must not replace that map.
+    bool _bActionMapConfigured = false;
 
     glm::vec2 mousePosition{0.0f, 0.0f};
     glm::vec2 previousMousePosition{0.0f, 0.0f};
@@ -88,7 +94,10 @@ struct YA_CORE_API InputManager
     void clearActionBindings();
     void bindAction(const std::string& actionName, EKey::T key);
     void bindAction(const std::string& actionName, EMouse::T button);
-    void configureActionBindings(const std::unordered_map<std::string, std::vector<std::string>>& actionBindings);
+    /// `bDefaultsWhenEmpty`: an omitted map installs the built-in keys. An
+    /// InputMap file that is missing or empty does not (`false`).
+    void configureActionBindings(const std::unordered_map<std::string, std::vector<std::string>>& actionBindings,
+                                 bool bDefaultsWhenEmpty = true);
     [[nodiscard]] bool isActionPressed(std::string_view actionName) const;
     [[nodiscard]] bool wasActionPressed(std::string_view actionName) const;
     [[nodiscard]] bool wasActionReleased(std::string_view actionName) const;
@@ -104,6 +113,7 @@ struct YA_CORE_API InputManager
     EventProcessState processEvent(const Event &event);
 
   private:
+    [[nodiscard]] const ActionBinding* findAction(std::string_view actionName) const;
     void setKeyState(EKey::T keycode, KeyState state) { currentKeyStates[keycode] = state; }
     void setMouseState(EMouse::T button, KeyState state) { currentMouseStates[button] = state; }
     void setMousePosition(glm::vec2 position, glm::vec2 delta);

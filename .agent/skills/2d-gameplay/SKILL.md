@@ -98,7 +98,7 @@ Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色�
   玩家脚本每帧轮询 `dialogue:busy()`，game-ui S4 的 modal 条目落地后才迁移。
   `ui.get` 在条目脚本加载完成前的头几帧回落成控件句柄，轮询侧必须容错
   （`dialogue.busy ~= nil` 再调用）。
-- 一次按键只做一件事：对话框忽略「开框那一帧」的确认键（`time:getFrameIndex()`），
+- 一次按键只做一件事：对话框忽略「开框那一帧」的 `confirm`（`time:getFrameIndex()`），
   玩家侧触发交互后要求确认键完全松开才再武装（re-arm），否则同一次按键会同时
   推进对话又再次触发交互。
 - Lua 全局是小写 `time`（`LuaTimeApi` 实例）与 `input` / `log`；大写 `Time` 是
@@ -116,6 +116,19 @@ Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色�
 - 编辑器正交 XY 视口是自由相机，不读这个开关。
 
 Tiny Town（Town / House / TownLarge）：`_pixelsPerUnit = 16`，`_referenceHeightPx = 192`（12 格）。1280×720 时 zoom = 3，半高 7.5。
+
+## 输入动作（InputMap）
+
+按键表在项目数据文件里，不在脚本里。`.yaproject` 的 `inputMap` 是项目相对路径
+（`FProjectDescriptor::resolvePath`：先项目根，再工作区根）。文件是「动作名 → 按键名
+数组」，例如 `move_up: ["Up", "W"]`、`confirm: ["Space", "Enter", "E"]`。一个动作里
+任一键按下即成立。
+
+脚本：`input:isActionDown(name)` 是按住，`input:isActionPressed(name)` 是本帧按下沿
+（和 `isKeyDown` / `isKeyPressed` 同一对）。2D RPG 原型的文件是
+`Example/2DRpgPrototype/InputMap.json`；方向谁优先仍由 `Player.lua` 的检查顺序决定。
+缺文件或没有这个动作：`YA_CORE_WARN`，查询返回 false，不崩。没写 `inputMap` 的项目
+沿用 `.yaproject` 里的 `inputActions`，都没有则用引擎内置键位。
 
 ## 边界
 

@@ -141,7 +141,12 @@ InputManager::~InputManager()
 
 void InputManager::init()
 {
+    // Descriptor apply runs before this. Don't replace a map it already set.
+    if (_bActionMapConfigured) {
+        return;
+    }
     bindDefaultGameplayActions(*this);
+    _bActionMapConfigured = true;
 }
 
 void InputManager::preUpdate()
@@ -176,6 +181,7 @@ void InputManager::cancelHeldKeys()
 void InputManager::clearActionBindings()
 {
     _actionBindings.clear();
+    _warnedMissingActions.clear();
 }
 
 void InputManager::bindAction(const std::string& actionName, EKey::T key)
@@ -188,10 +194,17 @@ void InputManager::bindAction(const std::string& actionName, EMouse::T button)
     _actionBindings[actionName].mouseButtons.push_back(button);
 }
 
-void InputManager::configureActionBindings(const std::unordered_map<std::string, std::vector<std::string>>& actionBindings)
+void InputManager::configureActionBindings(const std::unordered_map<std::string, std::vector<std::string>>& actionBindings,
+                                           bool bDefaultsWhenEmpty)
 {
+    _bActionMapConfigured = true;
     if (actionBindings.empty()) {
-        bindDefaultGameplayActions(*this);
+        if (bDefaultsWhenEmpty) {
+            bindDefaultGameplayActions(*this);
+        }
+        else {
+            clearActionBindings();
+        }
         return;
     }
 
@@ -216,19 +229,32 @@ void InputManager::configureActionBindings(const std::unordered_map<std::string,
     }
 }
 
-bool InputManager::isActionPressed(std::string_view actionName) const
+const InputManager::ActionBinding* InputManager::findAction(std::string_view actionName) const
 {
     const auto it = _actionBindings.find(actionName);
     if (it == _actionBindings.end()) {
+        if (_warnedMissingActions.find(actionName) == _warnedMissingActions.end()) {
+            _warnedMissingActions.emplace(actionName);
+            YA_CORE_WARN("Input: no action '{}'", actionName);
+        }
+        return nullptr;
+    }
+    return &it->second;
+}
+
+bool InputManager::isActionPressed(std::string_view actionName) const
+{
+    const ActionBinding* action = findAction(actionName);
+    if (!action) {
         return false;
     }
 
-    for (const auto key : it->second.keys) {
+    for (const auto key : action->keys) {
         if (isKeyPressed(key)) {
             return true;
         }
     }
-    for (const auto button : it->second.mouseButtons) {
+    for (const auto button : action->mouseButtons) {
         if (isMouseButtonPressed(button)) {
             return true;
         }
@@ -238,17 +264,17 @@ bool InputManager::isActionPressed(std::string_view actionName) const
 
 bool InputManager::wasActionPressed(std::string_view actionName) const
 {
-    const auto it = _actionBindings.find(actionName);
-    if (it == _actionBindings.end()) {
+    const ActionBinding* action = findAction(actionName);
+    if (!action) {
         return false;
     }
 
-    for (const auto key : it->second.keys) {
+    for (const auto key : action->keys) {
         if (wasKeyPressed(key)) {
             return true;
         }
     }
-    for (const auto button : it->second.mouseButtons) {
+    for (const auto button : action->mouseButtons) {
         if (wasMouseButtonPressed(button)) {
             return true;
         }
@@ -258,17 +284,17 @@ bool InputManager::wasActionPressed(std::string_view actionName) const
 
 bool InputManager::wasActionReleased(std::string_view actionName) const
 {
-    const auto it = _actionBindings.find(actionName);
-    if (it == _actionBindings.end()) {
+    const ActionBinding* action = findAction(actionName);
+    if (!action) {
         return false;
     }
 
-    for (const auto key : it->second.keys) {
+    for (const auto key : action->keys) {
         if (wasKeyReleased(key)) {
             return true;
         }
     }
-    for (const auto button : it->second.mouseButtons) {
+    for (const auto button : action->mouseButtons) {
         if (wasMouseButtonReleased(button)) {
             return true;
         }
