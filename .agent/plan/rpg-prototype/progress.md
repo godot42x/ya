@@ -662,3 +662,9 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - Town / House / TownLarge 用引擎重存，各少 47 字节（Town 14046、House 6309、TownLarge 73715）；帧 480 截图相对重存前 0 差。
 - 同批：`AssetMeta::saveToFile` 改走 `dumpJsonCompactLeaves`（旧 `dump(4)` 文本仍可读；仓库里没有 `.ya-meta.json`）。
 - 验证：`ya-testing` 1662 ran / 1661 passed / 1 skipped。
+
+## 2026-10-05 — 按格移动抽成引擎 Lua 库
+
+- `Engine/Content/Lua/GridMover.lua`（`Class.define("GridMover")`，构造用 `GridMover:new(entity, {map, stepSeconds, texelsPerUnit, facing})`）：步进、缓动、texel 吸附、碰撞（isSolid / entityAt / blocksEntry）、到达触发 `onPlayerEnter`、对话冻结。库内没有动画、实体名、地图名、按键；`update(dt, direction)` 返回这一帧是否在走。
+- `Player.lua` 只读键、对话冻结、确认键交互，并按 `update` 返回值选 `idle_/walk_<facing>` clip。Npc / Chest / Door / Sign 的朝向与阻挡是各自的交互回答，不收进库。
+- 验证：`luajit Engine/Test/Lua/GridMoverTest.lua`（8 用例 47 断言，独立 LuaJIT 脚本，未接入 gtest）；`Script/automation/2d-rpg/` 六条脚本脚本未改、全部通过。

@@ -1,18 +1,10 @@
--- Grid walking: one tile per step, eased between tiles, four facings. The
--- frames come from the entity's SpriteAnimationComponent (clips idle_<facing>
--- and walk_<facing> over Textures/hero_walk.png); this script only names the
--- clip that fits the pose.
---
--- The player keeps no grid of its own: its cell is a cell of the
--- TilemapComponent named below, so "where is this tile" (cellToWorld), "may I
--- enter it" (isSolid) and "who stands there" (entityAt) are the map's
--- answers. Painting a wall in the editor, or placing an NPC, blocks the
--- player without touching this script.
+-- Reads keys and talks. Grid walking (one tile per step, eased, four
+-- facings, arrival poke) lives in GridMover. This script turns the held key
+-- into a direction and, on confirm, asks the faced cell for onInteract.
 local ScriptBase = require("ScriptBase")
+local GridMover = require("GridMover")
 local Script = ScriptBase:new()
 
-local STEP_SECONDS = 0.2
-local TEXELS_PER_UNIT = 16
 local MAP_NAME = "TilemapGround"
 
 -- Checked in order; the first key held wins.
@@ -37,11 +29,6 @@ local function heldDirection()
     return nil
 end
 
--- Whole texels, so the nearest-filtered sprite never lands between two.
-local function snap(value)
-    return math.floor(value * TEXELS_PER_UNIT + 0.5) / TEXELS_PER_UNIT
-end
-
 local function confirmPressed()
     for _, key in ipairs(CONFIRM_KEYS) do
         -- isKeyPressed is the down edge (isKeyDown is the held state).
@@ -63,85 +50,34 @@ end
 
 -- Standing or walking, facing where the last step went. play() on the clip
 -- that is already running is a no-op, so this is safe to call every tick.
+-- bWalking is GridMover:update's return; dialogue and spawn pass false.
 function Script:showPose(bWalking)
-    self.anim:play((bWalking and "walk_" or "idle_") .. self.facing.name)
-end
-
--- Put the sprite on its current cell, or between the two cells of a step in
--- progress. The map says where a cell centre is, so a non-unit cell size and
--- a moved tilemap need nothing here. The entity sits on that centre; the
--- sprite pivot puts the feet on the cell's bottom edge. Who covers whom is
--- the sprite's y-sort (the pivot), not this z. z stays the authored depth
--- against 3D geometry.
-function Script:applyPosition()
-    local from = self.map:cellToWorld(self.cell.x, self.cell.y)
-    local x, y = from.x, from.y
-    if self.to then
-        local target = self.map:cellToWorld(self.to.x, self.to.y)
-        x = from.x + (target.x - from.x) * self.progress
-        y = from.y + (target.y - from.y) * self.progress
-    end
-    local z = self.transform:getPosition().z
-    self.transform:setPosition(Vec3.new(snap(x), snap(y), z))
-end
-
-function Script:tryStep(carry)
-    local direction = heldDirection()
-    if not direction then
-        return false
-    end
-    self.facing = direction
-    local nextX = self.cell.x + direction.dx
-    local nextY = self.cell.y + direction.dy
-    -- The map is the collision authority: a solid tile (painted wall, tree
-    -- canopy) or a cell off the map is never entered. An actor's cell blocks
-    -- too -- unless its script answers blocksEntry() == false (doors are
-    -- walked through); a missing answer means solid.
-    if self.map:isSolid(nextX, nextY) then
-        return false
-    end
-    local occupant = self.map:entityAt(nextX, nextY)
-    if occupant ~= nil and occupant:call("blocksEntry") ~= false then
-        return false
-    end
-    self.to = { x = nextX, y = nextY }
-    self.progress = carry
-    return true
-end
-
--- Stepping onto an event's cell pokes it (doors switch maps this way). The
--- player itself is excluded from the query, so the event behind it is seen.
-function Script:pokeArrival()
-    local occupant = self.map:entityAt(self.cell.x, self.cell.y, self.entity)
-    if occupant then
-        occupant:call("onPlayerEnter")
-    end
+    self.anim:play((bWalking and "walk_" or "idle_") .. self.mover.facing.name)
 end
 
 -- The actor in the cell we face gets its onInteract; a quiet cell does
 -- nothing. The NPC answers by turning toward us, the sign by "being read".
 function Script:interact()
-    local target = self.map:entityAt(self.cell.x + self.facing.dx, self.cell.y + self.facing.dy)
+    local cell = self.mover.cell
+    local facing = self.mover.facing
+    local target = self.map:entityAt(cell.x + facing.dx, cell.y + facing.dy)
     if target then
         target:call("onInteract")
     end
 end
 
 function Script:onInit()
-    self.transform = self.entity:getTransform()
     self.anim = self.entity:getSpriteAnimation()
-    local position = self.transform:getPosition()
     self.map = world.find(MAP_NAME):getTilemap()
-    -- Start on whichever cell the authored position lands on.
-    local cell = self.map:worldToCell(Vec2.new(position.x, position.y))
-    self.cell = { x = cell.x, y = cell.y }
-    self.to = nil
-    self.facing = DIRECTIONS[2]
-    self.progress = 0
     self.talking = false
     self.bConfirmArmed = true
+    self.mover = GridMover:new(self.entity, {
+        map = self.map,
+        stepSeconds = 0.2,
+        texelsPerUnit = 16,
+        facing = DIRECTIONS[2],
+    })
     self:showPose(false)
-    self:applyPosition()
 end
 
 function Script:onUpdate(dt)
@@ -157,35 +93,17 @@ function Script:onUpdate(dt)
     end
 
     if self.talking then
-        self.progress = 0
+        self.mover:freeze()
         self:showPose(false)
-        self:applyPosition()
         return
     end
 
-    if not self.to and not self:tryStep(0) then
-        self.progress = 0
-        self:showPose(false)
-        self:applyPosition()
-        if self.bConfirmArmed and confirmPressed() then
-            self.bConfirmArmed = false
-            self:interact()
-        end
-        return
+    local walking = self.mover:update(dt, heldDirection())
+    self:showPose(walking)
+    if not walking and self.bConfirmArmed and confirmPressed() then
+        self.bConfirmArmed = false
+        self:interact()
     end
-
-    self.progress = self.progress + dt / STEP_SECONDS
-    if self.progress >= 1 then
-        self.cell = self.to
-        self.to = nil
-        -- Poke the cell we just walked onto before possibly walking on.
-        self:pokeArrival()
-        -- Keep walking without a stop frame while a direction stays held.
-        self:tryStep(self.progress - 1)
-    end
-    self:applyPosition()
-
-    self:showPose(true)
 end
 
 return Script

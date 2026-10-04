@@ -57,7 +57,7 @@
 - [ ] 相机 2D 字段（每单位像素数、像素吸附、整数缩放）+ 相机跟随组件
 - [ ] InputMap（命名动作）
 - [ ] GUI 文本 reveal（逐字显示）
-- [ ] 按格移动做成引擎 Lua 库
+- [x] 按格移动做成引擎 Lua 库
 - [ ] 去硬编码：`"Player"`、`kSpriteTexture`、`TilemapGround` / `"Dialogue"` 命名约定
 
 并行
