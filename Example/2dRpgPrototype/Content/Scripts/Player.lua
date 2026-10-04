@@ -53,14 +53,18 @@ function Script:showPose(bWalking)
     self.anim:play((bWalking and "walk_" or "idle_") .. self.mover.facing.name)
 end
 
--- The actor in the cell we face gets its onInteract; a quiet cell does
--- nothing. The NPC answers by turning toward us, the sign by "being read".
+-- The actor in the cell we face gets its onInteract; a quiet cell, or a
+-- script with no such method, does nothing. The NPC answers by turning
+-- toward us, the sign by "being read".
 function Script:interact()
     local cell = self.mover.cell
     local facing = self.mover.facing
     local target = self.map:entityAt(cell.x + facing.dx, cell.y + facing.dy)
     if target then
-        target:call("onInteract")
+        local s = world.scriptOf(target)
+        if s ~= nil and s.onInteract ~= nil then
+            s:onInteract()
+        end
     end
 end
 
@@ -83,9 +87,11 @@ function Script:onUpdate(dt)
     -- game-ui S4 modal entry once that lands). One press must never trigger
     -- twice: the confirm key has to be released again before interacting.
     -- ui.get falls back to the root widget handle for the first frames of a
-    -- scene, until the entry's script has loaded; only the script has :busy().
+    -- scene, until the entry's script has loaded. The handle is a script
+    -- reference: reading a field it does not have raises, so only a table
+    -- (the live self) is asked :busy().
     local dialogue = ui.get(self.dialogueName)
-    self.talking = dialogue ~= nil and dialogue.busy ~= nil and dialogue:busy()
+    self.talking = type(dialogue) == "table" and dialogue.busy ~= nil and dialogue:busy()
     if not confirmHeld() then
         self.bConfirmArmed = true
     end

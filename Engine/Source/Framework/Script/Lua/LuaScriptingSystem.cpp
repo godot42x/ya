@@ -1,5 +1,4 @@
 #include "Script/Lua/LuaScriptingSystem.h"
-#include "Script/Lua/LuaEvent.h"
 #include "Script/Lua/LuaScriptBinding.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
@@ -19,6 +18,8 @@
 #include <functional>
 #include <iterator>
 #include <map>
+#include <memory>
+#include <new>
 #include <optional>
 #include <unordered_map>
 #include <utility>
@@ -170,6 +171,76 @@ void invokeLuaCallback(const sol::function& callback, std::string_view what, std
     }
 }
 
+int destroySelfMethod(lua_State* L)
+{
+    auto* fn = static_cast<ya::script::ScriptFunction*>(lua_touserdata(L, 1));
+    std::destroy_at(fn);
+    return 0;
+}
+
+int callSelfMethod(lua_State* L)
+{
+    int results = -1;
+    try {
+        const auto* fn = static_cast<const ya::script::ScriptFunction*>(lua_touserdata(L, lua_upvalueindex(1)));
+        std::vector<ya::script::ScriptValue> args;
+        const int last = lua_gettop(L);
+        for (int index = 2; index <= last; ++index) {
+            args.push_back(ya::toScriptValue(L, index));
+        }
+        const ya::script::ScriptValue result = (*fn)(args);
+        if (std::holds_alternative<std::monostate>(result)) {
+            results = 0;
+        }
+        else {
+            results = ya::pushLuaValue(L, result);
+        }
+    }
+    catch (const std::exception& e) {
+        lua_pushstring(L, e.what());
+    }
+    return results >= 0 ? results : lua_error(L);
+}
+
+void installSelfMethod(lua_State* L, int table, const std::string& name, const ya::script::ScriptFunction& fn)
+{
+    lua_pushlstring(L, name.data(), name.size());
+    const bool bAlready = lua_rawget(L, table) == LUA_TFUNCTION;
+    lua_pop(L, 1);
+    if (bAlready) {
+        return;
+    }
+    void* memory = lua_newuserdata(L, sizeof(ya::script::ScriptFunction));
+    new (memory) ya::script::ScriptFunction(fn);
+    if (luaL_newmetatable(L, "ya.ScriptSelfMethod")) {
+        lua_pushcfunction(L, &destroySelfMethod);
+        lua_setfield(L, -2, "__gc");
+    }
+    lua_setmetatable(L, -2);
+    lua_pushcclosure(L, &callSelfMethod, 1);
+    lua_pushlstring(L, name.data(), name.size());
+    lua_insert(L, -2);
+    lua_rawset(L, table);
+}
+
+void applyHostSelf(sol::table& self, ya::IScriptInstanceHost& host)
+{
+    ya::ScriptSelfBuilder builder;
+    host.contributeSelf(builder);
+    lua_State* L = self.lua_state();
+    self.push(L);
+    const int table = lua_absindex(L, -1);
+    for (const ya::ScriptSelfBuilder::Field& field : builder.fields) {
+        lua_pushlstring(L, field.name.data(), field.name.size());
+        ya::pushLuaValue(L, field.value);
+        lua_rawset(L, table);
+    }
+    for (const ya::ScriptSelfBuilder::Method& method : builder.methods) {
+        installSelfMethod(L, table, method.name, method.fn);
+    }
+    lua_pop(L, 1);
+}
+
 /// Id → owning system, and the process-wide id counter.
 ///
 /// Sol tables are not in this registry. Each LuaScriptingSystem keeps those
@@ -217,7 +288,7 @@ ya::ScriptInstance* findScript(ya::Scene& scene, entt::entity handle, uint64_t i
 /// A script on an entity of the active scene. The scene is asked for on every
 /// use instead of kept: a scene unloaded while its scripts are live leaves the
 /// host resolving nothing (ids are never reused), never a dangling scene.
-struct FEntityScriptHost final : ya::ILuaScriptHost
+struct FEntityScriptHost final : ya::IScriptInstanceHost
 {
     const std::function<ya::Scene*()>* activeScene;
     entt::entity                       handle;
@@ -233,11 +304,11 @@ struct FEntityScriptHost final : ya::ILuaScriptHost
         return current ? findScript(*current, handle, instanceId) : nullptr;
     }
 
-    void bindSelf(sol::table& self) override
+    void contributeSelf(ya::ScriptSelfBuilder& out) override
     {
         ya::Scene*        current = scene();
         const ya::Entity* entity  = current ? current->getEntityByEnttID(handle) : nullptr;
-        rebindEntitySelf(self, entity);
+        out.field("entity", entity ? ya::script::ScriptValue{ya::script::entityRef(entity)} : ya::script::ScriptValue{});
     }
 };
 
@@ -329,16 +400,30 @@ namespace ya
 /// moves with EnTT storage, and the editor preview state must not share it.
 /// Owned by one LuaScriptingSystem (`_instances`), so the key is just the
 /// process-wide runtimeId.
+/// Listeners and timer callbacks retained for one self. Dropping it (destroy
+/// or a hot reload binding a new table) releases those functions.
+struct ListenerOwner
+{
+    std::vector<script::ScriptFnHandle> functions;
+
+    ~ListenerOwner()
+    {
+        for (const script::ScriptFnHandle fn : functions) {
+            LuaScriptingSystem::releaseFunction(fn.id);
+        }
+    }
+};
+
 struct LuaInstanceLive
 {
-    sol::table                            self;
-    sol::function                         onInit;
-    sol::function                         onStart;
-    sol::function                         onUpdate;
-    sol::function                         onDestroy;
-    sol::function                         onEnable;
-    sol::function                         onDisable;
-    std::shared_ptr<LuaListenerScope> listeners;
+    sol::table                     self;
+    sol::function                  onInit;
+    sol::function                  onStart;
+    sol::function                  onUpdate;
+    sol::function                  onDestroy;
+    sol::function                  onEnable;
+    sol::function                  onDisable;
+    std::shared_ptr<ListenerOwner> listeners;
 };
 
 struct LuaHeldFunction
@@ -349,8 +434,9 @@ struct LuaHeldFunction
 
 struct LuaInstanceStore
 {
-    std::map<uint64_t, LuaInstanceLive>            byId;
+    /// Destroyed after `byId`, so a listener owner's release still sees the map.
     std::unordered_map<uint64_t, LuaHeldFunction> functions;
+    std::map<uint64_t, LuaInstanceLive>           byId;
 };
 
 script::ScriptValue callEntityScript(Entity& entity, const std::string& name, script::ScriptArgs args)
@@ -559,8 +645,6 @@ void LuaScriptingSystem::init()
                         sol::lib::math,
                         sol::lib::table,
                         sol::lib::os);
-    LuaListenerScope::registerTypes(lua);
-
     // 设置全局环境标识
     lua["IS_EDITOR"]  = false;
     lua["IS_RUNTIME"] = true;
@@ -931,7 +1015,7 @@ bool LuaScriptingSystem::bindChunk(ScriptInstance& instance, const std::string& 
         sol::table scriptTable = _lua.script(source);
         LuaInstanceLive bound;
         bound.self      = std::move(scriptTable);
-        bound.listeners = LuaListenerScope::bind(bound.self, instance.scriptPath);
+        bound.listeners = std::make_shared<ListenerOwner>();
         bound.onInit    = functionField(_lua, bound.self, "onInit");
         bound.onStart   = functionField(_lua, bound.self, "onStart");
         bound.onUpdate  = functionField(_lua, bound.self, "onUpdate");
@@ -1003,7 +1087,7 @@ void dropLuaScriptLive(uint64_t runtimeId)
     it->second->dropInstance(runtimeId);
 }
 
-ILuaScriptHost* LuaScriptingSystem::hostOf(const ScriptInstance& instance) const
+IScriptInstanceHost* LuaScriptingSystem::hostOf(const ScriptInstance& instance) const
 {
     if (instance.runtimeId == 0) {
         return nullptr;
@@ -1022,7 +1106,7 @@ std::vector<uint64_t> LuaScriptingSystem::liveIds() const
     return ids;
 }
 
-bool LuaScriptingSystem::load(ScriptInstance& instance, std::unique_ptr<ILuaScriptHost> host)
+bool LuaScriptingSystem::load(ScriptInstance& instance, std::unique_ptr<IScriptInstanceHost> host)
 {
     YA_PROFILE_SCOPE("LuaScriptingSystem::loadScript");
     if (!host || instance.scriptPath.empty()) {
@@ -1045,7 +1129,7 @@ bool LuaScriptingSystem::load(ScriptInstance& instance, std::unique_ptr<ILuaScri
         dropInstance(instance.runtimeId);
         return false;
     }
-    host->bindSelf(live->self);
+    applyHostSelf(live->self, *host);
     captureScriptProperties(instance, live->self);
     applyScriptPropertyOverrides(instance, live->self, _lua);
     instance.bLoaded = true;
@@ -1056,12 +1140,12 @@ bool LuaScriptingSystem::load(ScriptInstance& instance, std::unique_ptr<ILuaScri
 
 bool LuaScriptingSystem::call(ScriptInstance& instance, ELuaScriptCallback which, float deltaTime)
 {
-    ILuaScriptHost*  host = hostOf(instance);
+    IScriptInstanceHost*  host = hostOf(instance);
     LuaInstanceLive* live = findLive(instance.runtimeId);
     if (!host || !instance.bLoaded || !live) {
         return false;
     }
-    host->bindSelf(live->self);
+    applyHostSelf(live->self, *host);
     // Copied out of the side table: the callback may destroy this instance and
     // drop the entry. Nothing below reads `instance` (its storage may move).
     const std::string path = instance.scriptPath;
@@ -1102,12 +1186,12 @@ bool LuaScriptingSystem::call(ScriptInstance& instance, ELuaScriptCallback which
 script::ScriptValue LuaScriptingSystem::callNamed(ScriptInstance& instance, const std::string& name,
                                                   script::ScriptArgs args, ENamedCallError onError)
 {
-    ILuaScriptHost*  host = hostOf(instance);
+    IScriptInstanceHost*  host = hostOf(instance);
     LuaInstanceLive* live = findLive(instance.runtimeId);
     if (!host || !instance.bLoaded || !live) {
         return {};
     }
-    host->bindSelf(live->self);
+    applyHostSelf(live->self, *host);
     sol::table self = live->self;
     if (!functionField(_lua, self, name.c_str()).valid()) {
         return {};
@@ -1124,10 +1208,10 @@ void LuaScriptingSystem::destroy(ScriptInstance& instance)
     }
     // Unregistered before onDestroy runs, so a callback that destroys the same
     // instance again is a no-op instead of a recursion.
-    std::unique_ptr<ILuaScriptHost> host = std::move(node.mapped());
+    std::unique_ptr<IScriptInstanceHost> host = std::move(node.mapped());
     if (instance.bLoaded) {
         if (LuaInstanceLive* live = findLive(id)) {
-            host->bindSelf(live->self);
+            applyHostSelf(live->self, *host);
             const std::string   path      = instance.scriptPath;
             const sol::function onDestroy = live->onDestroy;
             const sol::table    self      = live->self;
@@ -1158,7 +1242,7 @@ void LuaScriptingSystem::destroyAll()
     }
 }
 
-bool LuaScriptingSystem::reloadInstance(ILuaScriptHost* host, uint64_t id, const std::string& source)
+bool LuaScriptingSystem::reloadInstance(IScriptInstanceHost* host, uint64_t id, const std::string& source)
 {
     ScriptInstance* instance = host->resolve(id);
     if (!instance) {
@@ -1184,7 +1268,7 @@ bool LuaScriptingSystem::reloadInstance(ILuaScriptHost* host, uint64_t id, const
     if (!live) {
         return false;
     }
-    host->bindSelf(live->self);
+    applyHostSelf(live->self, *host);
     captureScriptProperties(*instance, live->self);
     for (const auto& [name, value] : savedProperties) {
         if (value.valid()) {
@@ -1213,7 +1297,7 @@ void LuaScriptingSystem::reloadScript(const std::string& scriptPath)
         if (it == _live.end()) {
             continue;
         }
-        ILuaScriptHost*    host     = it->second.get();
+        IScriptInstanceHost*    host     = it->second.get();
         ScriptInstance* instance = host->resolve(id);
         if (!instance) {
             eraseLive(id);
@@ -1288,6 +1372,102 @@ void LuaScriptingSystem::disableHotReload()
 
     _hotReloadEnabled = false;
     YA_CORE_INFO("[Hot Reload] Disabled");
+}
+
+namespace
+{
+
+LuaScriptingSystem* asLuaRuntime(IWorldScriptRuntime& runtime)
+{
+    auto* concrete = dynamic_cast<LuaScriptingSystem*>(&runtime);
+    if (!concrete) {
+        YA_CORE_ERROR("script instance op: world script runtime is not the Lua backend");
+    }
+    return concrete;
+}
+
+} // namespace
+
+bool loadScriptInstance(IWorldScriptRuntime& runtime, ScriptInstance& instance, std::unique_ptr<IScriptInstanceHost> host)
+{
+    LuaScriptingSystem* system = asLuaRuntime(runtime);
+    return system ? system->load(instance, std::move(host)) : false;
+}
+
+bool callScriptInstance(IWorldScriptRuntime& runtime, ScriptInstance& instance, EScriptCallback which, float deltaTime)
+{
+    LuaScriptingSystem* system = asLuaRuntime(runtime);
+    if (!system) {
+        return false;
+    }
+    ELuaScriptCallback callback = ELuaScriptCallback::Init;
+    switch (which) {
+    case EScriptCallback::Init:    callback = ELuaScriptCallback::Init; break;
+    case EScriptCallback::Start:   callback = ELuaScriptCallback::Start; break;
+    case EScriptCallback::Update:  callback = ELuaScriptCallback::Update; break;
+    case EScriptCallback::Destroy: callback = ELuaScriptCallback::Destroy; break;
+    }
+    return system->call(instance, callback, deltaTime);
+}
+
+script::ScriptValue callScriptInstanceNamed(IWorldScriptRuntime& runtime, ScriptInstance& instance, const std::string& name,
+                                            script::ScriptArgs args, bool bSwallowErrors)
+{
+    LuaScriptingSystem* system = asLuaRuntime(runtime);
+    if (!system) {
+        return {};
+    }
+    return system->callNamed(instance, name, args, bSwallowErrors ? ENamedCallError::Swallow : ENamedCallError::Throw);
+}
+
+void destroyScriptInstance(IWorldScriptRuntime& runtime, ScriptInstance& instance)
+{
+    if (LuaScriptingSystem* system = asLuaRuntime(runtime)) {
+        system->destroy(instance);
+    }
+}
+
+std::shared_ptr<void> scriptInstanceListenerOwner(uint64_t runtimeId)
+{
+    const auto owner = liveOwners().byId.find(runtimeId);
+    if (owner == liveOwners().byId.end() || !owner->second) {
+        return {};
+    }
+    const LuaInstanceLive* live = owner->second->findLive(runtimeId);
+    if (!live || !live->listeners) {
+        return {};
+    }
+    return live->listeners;
+}
+
+bool retainInstanceFunction(uint64_t runtimeId, script::ScriptFnHandle fn)
+{
+    if (fn.id == 0 || !scriptFunctionAlive(fn)) {
+        return false;
+    }
+    const auto owner = liveOwners().byId.find(runtimeId);
+    if (owner == liveOwners().byId.end() || !owner->second) {
+        return false;
+    }
+    LuaInstanceLive* live = owner->second->findLive(runtimeId);
+    if (!live || !live->listeners) {
+        return false;
+    }
+    LuaScriptingSystem::retainFunction(fn.id);
+    live->listeners->functions.push_back(fn);
+    return true;
+}
+
+bool scriptFunctionAlive(script::ScriptFnHandle fn)
+{
+    if (fn.id == 0) {
+        return false;
+    }
+    const auto held = liveOwners().fnOwner.find(fn.id);
+    if (held == liveOwners().fnOwner.end() || !held->second || !held->second->_instances) {
+        return false;
+    }
+    return held->second->_instances->functions.contains(fn.id);
 }
 
 } // namespace ya

@@ -1,8 +1,8 @@
 #pragma once
 
-// `script.lua` widget behaviours: a Lua script instance hosted by a widget.
+// `script.lua` widget behaviours: a script instance hosted by a widget.
 //
-// Lifecycle (UI scripts are event-driven, see plan D4):
+// Lifecycle (UI scripts are event-driven):
 //   activation (mount)      -> behaviour created, nothing runs
 //   next UILogic            -> the batch loads, onInit all, then onStart all
 //   visibility change       -> onShow / onHide in the next UILogic
@@ -10,18 +10,17 @@
 //   self:after / self:every -> host-clock timers, visible or not
 //   widget leaves the tree  -> timers cancelled, onDestroy
 //
-// Any script (UI or world) listens to a control directly through its handle,
-// `btn.onClicked:add(self, fn)` (ECS/Systems/LuaEvent.h); the listener ends
-// with that script instance.
+// A script listens to a control through its handle, `btn.onClicked:add(self, fn)`.
+// The listener ends with that script instance.
 //
 // Names written on `self` (reserved): widget, root, setTickEnabled, after,
 // every, find, spawn.
 
-#include "Script/Lua/LuaScriptingSystem.h"
-
-#include "GameRuntime/GUI/GameUI/IGameUIBehaviorRuntime.h"
-
+#include "Core/Scripting/ScriptValue.h"
+#include "ECS/Systems/ScriptInstance.h"
+#include "ECS/Systems/WorldScriptRuntime.h"
 #include "GUI/Widgets/UIBehavior.h"
+#include "GameRuntime/GUI/GameUI/IGameUIBehaviorRuntime.h"
 
 #include <memory>
 #include <string>
@@ -36,15 +35,15 @@ struct LuaWidgetScripts;
 
 struct LuaWidgetScriptBehavior final : UIBehaviorWith<LuaWidgetScriptBehavior, IUITickable>
 {
-    ScriptInstance        instance;
+    ScriptInstance               instance;
     /// Null once the runtime is gone; the behaviour is inert from then on.
-    LuaWidgetScripts*        runtime = nullptr;
-    std::string              entryId;
-    std::weak_ptr<UIElement> entryRoot;
-    int32_t                  entryZOrder     = 0;
-    uint64_t                 activationIndex = 0;
-    bool                     bTickEnabled    = false;
-    bool                     bWasVisible     = false;
+    LuaWidgetScripts*            runtime = nullptr;
+    std::string                  entryId;
+    std::weak_ptr<UIElement>     entryRoot;
+    int32_t                      entryZOrder     = 0;
+    uint64_t                     activationIndex = 0;
+    bool                         bTickEnabled    = false;
+    bool                         bWasVisible     = false;
 
     ~LuaWidgetScriptBehavior() override;
 
@@ -55,22 +54,20 @@ struct LuaWidgetScriptBehavior final : UIBehaviorWith<LuaWidgetScriptBehavior, I
 
 struct LuaWidgetScripts final : IGameUIBehaviorRuntime
 {
-    LuaScriptingSystem& scripting;
-    GameUIHost&         host;
+    IWorldScriptRuntime& scripting;
+    GameUIHost&          host;
 
   private:
     /// Activated, not yet started.
     std::vector<std::weak_ptr<LuaWidgetScriptBehavior>> _fresh;
     std::vector<std::weak_ptr<LuaWidgetScriptBehavior>> _started;
     /// The tree visibility revision `_started` was last checked against.
-    uint64_t _seenVisibilityRevision = 0;
-    /// Functions every widget script finds on `self`.
-    sol::table                      _selfApi;
-    uint64_t                        _nextActivation = 0;
+    uint64_t                        _seenVisibilityRevision = 0;
+    uint64_t                        _nextActivation         = 0;
     std::unordered_set<std::string> _warnedTypes;
 
   public:
-    LuaWidgetScripts(LuaScriptingSystem& inScripting, GameUIHost& inHost);
+    LuaWidgetScripts(IWorldScriptRuntime& inScripting, GameUIHost& inHost);
     ~LuaWidgetScripts() override;
     LuaWidgetScripts(const LuaWidgetScripts&)            = delete;
     LuaWidgetScripts& operator=(const LuaWidgetScripts&) = delete;
@@ -80,10 +77,8 @@ struct LuaWidgetScripts final : IGameUIBehaviorRuntime
 
     /// Cancel `behavior`'s timers and destroy its instance (onDestroy).
     void release(LuaWidgetScriptBehavior& behavior);
-    /// Put the host fields and the self API on a freshly bound `self`.
-    void bindSelf(const std::shared_ptr<LuaWidgetScriptBehavior>& behavior, sol::table& self);
-    /// The `self` of the first loaded script on `widget`, or nil.
-    [[nodiscard]] static sol::object scriptSelfOf(const UIElement& widget);
+    /// The loaded script on `widget`, or an empty handle.
+    [[nodiscard]] static script::ScriptSelfHandle scriptSelfOf(const UIElement& widget);
 };
 
 } // namespace ya

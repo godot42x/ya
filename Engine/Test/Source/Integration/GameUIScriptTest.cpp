@@ -59,6 +59,12 @@ struct FUIScripts
 
     FUIScripts()
     {
+        // `ui.*` is projected when the state is built, so it has to be
+        // registered first. The destructor drops the capture of this host.
+        GameplayScriptContext ctx;
+        ctx.activeScene = [this]() -> Scene* { return &scene; };
+        ctx.gameUI      = &host;
+        registerGameplayScriptFunctions(ctx);
         lua.setRuntimeServices({
             .activeScene = [this]() -> Scene* { return &scene; },
             .readScript  = [this](const std::string& path, std::string& out) {
@@ -71,7 +77,7 @@ struct FUIScripts
             },
         });
         lua.init();
-        bindGameplayLua(lua, host);
+        bindGameplayLua(lua, host, ctx);
         host.setDocumentStore(&documents);
         host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
         lua.lua()["trace"] = lua.lua().create_table();
@@ -82,6 +88,7 @@ struct FUIScripts
         host.onSceneDeactivated(scene);
         host.setBehaviorRuntime(nullptr);
         lua.destroyAll();
+        registerGameplayScriptFunctions({});
     }
 
     static std::string scriptPath(const std::string& name) { return "Test/UI/" + name + ".lua"; }
@@ -618,16 +625,24 @@ crate:find("Lid"):destroy()
 
 TEST(GameUIScriptTest, SpawnSpriteTakesOptionalTexturePath)
 {
-    Scene              scene{"World"};
+    Scene scene{"World"};
+    // Clears the process-wide module registry after this lua state is gone
+    // (member order: scene, guard, lua — lua dies first, then the guard).
+    struct ClearGameplayScripts
+    {
+        ~ClearGameplayScripts() { registerGameplayScriptFunctions({}); }
+    } clear;
     LuaScriptingSystem lua;
     GameUIHost         host;
+    const GameplayScriptContext ctx{
+        .activeScene = [&scene]() -> Scene* { return &scene; },
+    };
+    registerGameplayScriptFunctions(ctx);
     lua.setRuntimeServices({
         .activeScene = [&scene]() -> Scene* { return &scene; },
     });
     lua.init();
-    bindGameplayLua(lua, host, GameplayScriptContext{
-                                   .activeScene = [&scene]() -> Scene* { return &scene; },
-                               });
+    bindGameplayLua(lua, host, ctx);
 
     lua.lua().script("probe = world.spawnSprite('Probe')");
     lua.lua().script("blank = world.spawnSprite('Blank', '')");

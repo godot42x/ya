@@ -273,6 +273,11 @@ void collectMembers(const Class& cls, const std::vector<type_index_t>& path, Typ
             continue;
         }
         std::string name = scriptNameOf(propertyName);
+        // A native field already registered under this name keeps it. Widget
+        // `text` / `name` go through setters; the reflected member would not.
+        if (const auto existing = out.fields.find(name); existing != out.fields.end() && !existing->second.property) {
+            continue;
+        }
         out.fields.insert_or_assign(name,
                                     ScriptField{
                                         .name      = name,
@@ -287,6 +292,9 @@ void collectMembers(const Class& cls, const std::vector<type_index_t>& path, Typ
             continue;
         }
         std::string name = scriptNameOf(functionName);
+        if (const auto existing = out.methods.find(name); existing != out.methods.end() && !existing->second.function) {
+            continue;
+        }
         out.methods.insert_or_assign(name, ScriptMethod{.name = name, .function = &function, .ownerPath = path});
     }
 }
@@ -405,10 +413,18 @@ void addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn)
 void addNativeField(type_index_t type, std::string name, ScriptNativeField field)
 {
     TypeExport& entry = state().types[type];
-    if (entry.fields.find(name) != entry.fields.end()) {
+    const bool  bReadOnly = !field.write;
+    if (const auto it = entry.fields.find(name); it != entry.fields.end()) {
+        if (!it->second.property) {
+            return;
+        }
+        it->second.property = nullptr;
+        it->second.ownerPath.clear();
+        it->second.bReadOnly   = bReadOnly;
+        it->second.nativeRead  = std::move(field.read);
+        it->second.nativeWrite = std::move(field.write);
         return;
     }
-    const bool  bReadOnly = !field.write;
     ScriptField scriptField{
         .name        = name,
         .property    = nullptr,
@@ -508,15 +524,25 @@ void* resolve(const ScriptRef& ref)
 
 ScriptValue readField(const ScriptRef& ref, const ScriptField& field)
 {
+    // Native readers run even when the object is gone. Widget `valid` returns
+    // false in that case; other readers return nil themselves. A reflected
+    // field still short-circuits to nil.
+    if (!field.property && field.nativeRead) {
+        void* object = tryResolve(ref);
+        if (!object) {
+            if (const ScriptRefKind* kind = kindOf(ref); kind && kind->missingIsNil) {
+                return field.nativeRead(nullptr, ref);
+            }
+            object = resolve(ref);
+        }
+        return field.nativeRead(object, ref);
+    }
     if (isMissing(ref)) {
         warnMissingOnce(ref);
         return {};
     }
     if (!field.property) {
-        if (!field.nativeRead) {
-            throw ScriptError(std::format("field '{}' cannot be read", field.name));
-        }
-        return field.nativeRead(resolve(ref), ref);
+        throw ScriptError(std::format("field '{}' cannot be read", field.name));
     }
     const Property& prop = *field.property;
     return loadValue(prop.typeIndex, prop.addressGetter(toOwner(resolve(ref), ref.type, field.ownerPath)));
@@ -580,12 +606,12 @@ ScriptValue callMethod(const ScriptRef& ref, const ScriptMethod& method, ScriptA
 
 ScriptValue readField(const ScriptRef& ref, std::string_view field)
 {
+    if (const ScriptField* found = findField(ref.type, field)) {
+        return readField(ref, *found);
+    }
     if (isMissing(ref)) {
         warnMissingOnce(ref);
         return {};
-    }
-    if (const ScriptField* found = findField(ref.type, field)) {
-        return readField(ref, *found);
     }
     throw ScriptError(std::format("{} has no field '{}'", displayName(ref.type), field));
 }

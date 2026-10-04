@@ -1,21 +1,21 @@
 #include "LuaWidgetHandle.h"
 
+#include "WidgetScriptRefs.h"
+
+#include "Core/Delegate.h"
 #include "Core/Log.h"
-
-#include "Script/Lua/LuaEvent.h"
-
+#include "Core/Scripting/ScriptBindings.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
-
 #include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "Script/Lua/ScriptInstanceOps.h"
 
-#include <optional>
+#include <string_view>
 
 namespace ya
 {
-
 namespace
 {
 
@@ -32,229 +32,326 @@ UIElement* findInSubtree(UIElement& node, std::string_view name)
     return nullptr;
 }
 
-} // namespace
-
-bool LuaWidgetHandle::live() const
+UIElement* requireLive(void* self, const script::ScriptRef& ref, const char* operation)
 {
-    UIElementRef locked = widget.lock();
-    return locked && (locked->isAttached() || (host && host->isPendingSpawn(*locked)));
-}
-
-UIElement* LuaWidgetHandle::get(const char* operation) const
-{
-    if (live()) {
-        return widget.lock().get();
+    auto* widget = static_cast<UIElement*>(self);
+    if (widget && widgetLive(widget)) {
+        return widget;
     }
-    if (!bWarned) {
-        bWarned = true;
-        YA_CORE_WARN("Lua widget handle: '{}' on a widget that is no longer in the UI; ignored", operation);
-    }
+    warnWidgetGone(ref.a != 0 ? ref.a : (widget ? widget->getRuntimeId() : 0), operation);
     return nullptr;
 }
 
-sol::object makeLuaWidgetHandle(sol::state_view lua, GameUIHost& host, const UIElementRef& widget)
+script::ScriptValue widgetValue(GameUIHost& host, const UIElementRef& widget)
 {
-    if (!widget) {
-        return sol::make_object(lua, sol::lua_nil);
+    const script::ScriptRef ref = widgetScriptRef(host, widget);
+    if (!ref) {
+        return {};
     }
-    const auto make = [&]<typename THandle>() {
-        THandle handle;
-        handle.widget = widget;
-        handle.host   = &host;
-        return sol::make_object(lua, std::move(handle));
-    };
-    UIElement* raw = widget.get();
-    if (dynamic_cast<UIText*>(raw)) {
-        return make.template operator()<LuaTextHandle>();
-    }
-    if (dynamic_cast<UIButton*>(raw)) {
-        return make.template operator()<LuaButtonHandle>();
-    }
-    if (dynamic_cast<UIImage*>(raw)) {
-        return make.template operator()<LuaImageHandle>();
-    }
-    if (dynamic_cast<UIBorder*>(raw)) {
-        return make.template operator()<LuaBorderHandle>();
-    }
-    return make.template operator()<LuaWidgetHandle>();
+    return ref;
 }
 
-void bindLuaWidgetHandles(sol::state& lua)
+script::ScriptNativeField nameField()
 {
-    const auto base = sol::base_classes;
-    const auto bases = sol::bases<LuaWidgetHandle>();
-
-    lua.new_usertype<LuaWidgetHandle>(
-        "Widget",
-        sol::no_constructor,
-        "valid",
-        sol::readonly_property([](const LuaWidgetHandle& h) { return h.live(); }),
-        "name",
-        sol::readonly_property([](const LuaWidgetHandle& h) -> std::optional<std::string> {
-            if (UIElement* w = h.get("name")) {
-                return w->_name;
+    return script::ScriptNativeField{
+        .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
+            UIElement* widget = requireLive(self, ref, "name");
+            if (!widget) {
+                return {};
             }
-            return std::nullopt;
-        }),
-        "visible",
-        sol::property(
-            [](const LuaWidgetHandle& h) -> std::optional<bool> {
-                if (UIElement* w = h.get("visible")) {
-                    return w->isVisibleForRender();
-                }
-                return std::nullopt;
-            },
-            [](LuaWidgetHandle& h, bool bVisible) {
-                if (UIElement* w = h.get("visible")) {
-                    w->setVisibility(bVisible ? EWidgetVisibility::Visible : EWidgetVisibility::Hidden);
-                }
-            }),
-        "find",
-        [](const LuaWidgetHandle& h, const std::string& name, sol::this_state state) -> sol::object {
-            UIElement* w = h.get("find");
-            if (!w) {
-                return sol::make_object(state, sol::lua_nil);
-            }
-            // A pending spawn is in no entry yet: search what it will bring.
-            if (!w->isAttached()) {
-                UIElement* found = findInSubtree(*w, name);
-                return makeLuaWidgetHandle(state, *h.host, found ? found->shared_from_this() : nullptr);
-            }
-            UIElement* root = h.host->entryRootOf(*w);
-            return makeLuaWidgetHandle(state, *h.host, root ? h.host->findInEntry(*root, name) : nullptr);
+            return widget->_name;
         },
-        "destroy",
-        [](const LuaWidgetHandle& h) {
-            if (UIElement* w = h.get("destroy")) {
-                h.host->queueDestroy(*w);
+    };
+}
+
+script::ScriptNativeField visibleField()
+{
+    return script::ScriptNativeField{
+        .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
+            UIElement* widget = requireLive(self, ref, "visible");
+            if (!widget) {
+                return {};
+            }
+            return widget->isVisibleForRender();
+        },
+        .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
+            UIElement* widget = requireLive(self, ref, "visible");
+            if (!widget) {
+                return;
+            }
+            widget->setVisibility(script::scriptToBool(value) ? EWidgetVisibility::Visible : EWidgetVisibility::Hidden);
+        },
+    };
+}
+
+UIButton* liveButton(const script::ScriptRef& ref)
+{
+    auto* button = dynamic_cast<UIButton*>(resolveWidget(ref.a));
+    if (!button || !widgetLive(button)) {
+        warnWidgetGone(ref.a, "onClicked");
+        return nullptr;
+    }
+    return button;
+}
+
+script::ScriptValue addClicked(void* /*self*/, const script::ScriptRef& ref, script::ScriptArgs args)
+{
+    UIButton* button = liveButton(ref);
+    if (!button) {
+        return int64_t{0};
+    }
+    const auto* owner = args.size() > 0 ? std::get_if<script::ScriptSelfHandle>(&args[0]) : nullptr;
+    const auto* fn    = args.size() > 1 ? std::get_if<script::ScriptFnHandle>(&args[1]) : nullptr;
+    if (!owner || owner->runtimeId == 0 || !fn || fn->id == 0) {
+        if (!fn || fn->id == 0) {
+            YA_CORE_ERROR("Lua Button.onClicked:add: callback is not a function");
+        }
+        else {
+            YA_CORE_ERROR("Lua Button.onClicked:add: the owner must be a live script's self");
+        }
+        return int64_t{0};
+    }
+    const std::shared_ptr<void> kept = scriptInstanceListenerOwner(owner->runtimeId);
+    if (!kept || !retainInstanceFunction(owner->runtimeId, *fn)) {
+        YA_CORE_ERROR("Lua Button.onClicked:add: the owner must be a live script's self");
+        return int64_t{0};
+    }
+    const script::ScriptFnHandle   held = *fn;
+    const script::ScriptSelfHandle self = *owner;
+    const std::weak_ptr<void>      weak = kept;
+    const DelegateHandle           handle = button->onClicked.addWeakLambda(weak, [held, self, weak]() {
+        if (weak.expired() || !scriptFunctionAlive(held)) {
+            return;
+        }
+        if (script::IScriptCallbacks* callbacks = script::scriptCallbacks()) {
+            callbacks->invoke(held, self, {});
+        }
+    });
+    return static_cast<int64_t>(handle);
+}
+
+script::ScriptValue removeClicked(void* /*self*/, const script::ScriptRef& ref, script::ScriptArgs args)
+{
+    UIButton* button = liveButton(ref);
+    if (!button || args.empty()) {
+        return false;
+    }
+    const int64_t handle = script::scriptToInteger(args[0]);
+    if (handle <= 0) {
+        return false;
+    }
+    return button->onClicked.remove(static_cast<DelegateHandle>(handle));
+}
+
+script::ScriptValue removeAllClicked(void* /*self*/, const script::ScriptRef& ref, script::ScriptArgs args)
+{
+    UIButton* button = liveButton(ref);
+    const auto* owner = !args.empty() ? std::get_if<script::ScriptSelfHandle>(&args[0]) : nullptr;
+    if (!button || !owner || owner->runtimeId == 0) {
+        return int64_t{0};
+    }
+    const std::shared_ptr<void> kept = scriptInstanceListenerOwner(owner->runtimeId);
+    if (!kept) {
+        return int64_t{0};
+    }
+    return static_cast<int64_t>(button->onClicked.removeAll(kept.get()));
+}
+
+template <typename T>
+T* liveAs(void* self, const script::ScriptRef& ref, const char* operation)
+{
+    return dynamic_cast<T*>(requireLive(self, ref, operation));
+}
+
+} // namespace
+
+script::ScriptRef widgetScriptRef(GameUIHost& host, const UIElementRef& widget)
+{
+    if (!widget) {
+        return {};
+    }
+    (void)widgetRefKind();
+    trackWidget(host, widget);
+    const type_index_t type = widget->getTypeIndex();
+    if (type != type_index_v<UIElement>) {
+        script::addScriptBase(type, type_index_v<UIElement>);
+    }
+    script::addNativeField(type, "name", nameField());
+    return script::ScriptRef{
+        .type = type,
+        .kind = widgetRefKind(),
+        .a    = widget->getRuntimeId(),
+        .b    = 0,
+    };
+}
+
+void registerWidgetScriptSurface()
+{
+    const type_index_t element = type_index_v<UIElement>;
+    const type_index_t text    = type_index_v<UIText>;
+    const type_index_t button  = type_index_v<UIButton>;
+    const type_index_t image   = type_index_v<UIImage>;
+    const type_index_t border  = type_index_v<UIBorder>;
+    const type_index_t timer   = type_index_v<WidgetScriptTimerTag>;
+    const type_index_t clicked = type_index_v<WidgetScriptButtonClickedTag>;
+
+    script::setScriptTypeName(element, "Widget");
+    script::setScriptTypeName(text, "Text");
+    script::setScriptTypeName(button, "Button");
+    script::setScriptTypeName(image, "Image");
+    script::setScriptTypeName(border, "Border");
+    script::setScriptTypeName(timer, "UITimer");
+    script::setScriptTypeName(clicked, "Event");
+
+    script::addNativeField(element, "valid", script::ScriptNativeField{
+        .read = [](void* self, const script::ScriptRef&) -> script::ScriptValue {
+            return self && widgetLive(static_cast<const UIElement*>(self));
+        },
+    });
+    script::addNativeField(element, "name", nameField());
+    script::addNativeField(element, "visible", visibleField());
+    script::addNativeMethod(element, "find", [](void* self, const script::ScriptRef& ref, script::ScriptArgs args) -> script::ScriptValue {
+        UIElement* widget = requireLive(self, ref, "find");
+        GameUIHost* host = widget ? widgetHost(widget->getRuntimeId()) : nullptr;
+        if (!widget || !host || args.empty()) {
+            return {};
+        }
+        const std::string name = script::scriptToString(args[0]);
+        UIElement* found = nullptr;
+        if (!widget->isAttached()) {
+            found = findInSubtree(*widget, name);
+        }
+        else if (UIElement* root = host->entryRootOf(*widget)) {
+            found = host->findInEntry(*root, name).get();
+        }
+        return found ? widgetValue(*host, found->shared_from_this()) : script::ScriptValue{};
+    });
+    script::addNativeMethod(element, "destroy", [](void* self, const script::ScriptRef& ref, script::ScriptArgs) -> script::ScriptValue {
+        if (UIElement* widget = requireLive(self, ref, "destroy")) {
+            if (GameUIHost* host = widgetHost(widget->getRuntimeId())) {
+                host->queueDestroy(*widget);
+            }
+        }
+        return {};
+    });
+    script::addNativeMethod(element, "layout", [](void* self, const script::ScriptRef& ref, script::ScriptArgs) -> script::ScriptValue {
+        if (UIElement* widget = requireLive(self, ref, "layout")) {
+            if (GameUIHost* host = widgetHost(widget->getRuntimeId())) {
+                host->layoutNow();
+            }
+        }
+        return {};
+    });
+    script::addNativeMethod(element, "rect", [](void* self, const script::ScriptRef& ref, script::ScriptArgs) -> script::ScriptValue {
+        UIElement* widget = requireLive(self, ref, "rect");
+        if (!widget) {
+            return {};
+        }
+        const Rect2D& rect = widget->getLayoutRect();
+        return script::ScriptRect{
+            .x = rect.pos.x,
+            .y = rect.pos.y,
+            .w = rect.extent.x,
+            .h = rect.extent.y,
+        };
+    });
+
+    script::addScriptBase(text, element);
+    script::addScriptBase(button, element);
+    script::addScriptBase(image, element);
+    script::addScriptBase(border, element);
+
+    script::addNativeField(text, "text", script::ScriptNativeField{
+        .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
+            auto* widget = liveAs<UIText>(self, ref, "text");
+            return widget ? script::ScriptValue{widget->getText()} : script::ScriptValue{};
+        },
+        .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
+            if (auto* widget = liveAs<UIText>(self, ref, "text")) {
+                widget->setText(script::scriptToString(value));
             }
         },
-        "layout",
-        [](const LuaWidgetHandle& h) {
-            if (h.get("layout")) {
-                h.host->layoutNow();
+    });
+    script::addNativeField(text, "color", script::ScriptNativeField{
+        .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
+            auto* widget = liveAs<UIText>(self, ref, "color");
+            return widget ? script::ScriptValue{widget->_color} : script::ScriptValue{};
+        },
+        .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
+            auto* widget = liveAs<UIText>(self, ref, "color");
+            const auto* color = std::get_if<glm::vec4>(&value);
+            if (widget && color) {
+                widget->setColor(*color);
             }
         },
-        "rect",
-        [](const LuaWidgetHandle& h, sol::this_state state) -> sol::object {
-            sol::state_view lua(state);
-            UIElement* w = h.get("rect");
-            if (!w) {
-                return sol::make_object(lua, sol::lua_nil);
+    });
+    script::addNativeField(text, "fontSize", script::ScriptNativeField{
+        .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
+            auto* widget = liveAs<UIText>(self, ref, "fontSize");
+            return widget ? script::ScriptValue{static_cast<int64_t>(widget->_fontSize)} : script::ScriptValue{};
+        },
+        .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
+            if (auto* widget = liveAs<UIText>(self, ref, "fontSize")) {
+                const int64_t size = script::scriptToInteger(value);
+                if (size >= 0) {
+                    widget->setFontSize(static_cast<uint32_t>(size));
+                }
             }
-            const Rect2D& rect = w->getLayoutRect();
-            return sol::make_object(lua, lua.create_table_with("x", rect.pos.x, "y", rect.pos.y,
-                                                               "w", rect.extent.x, "h", rect.extent.y));
-        });
+        },
+    });
 
-    lua.new_usertype<LuaTextHandle>(
-        "Text",
-        sol::no_constructor,
-        base,
-        bases,
-        "text",
-        sol::property(
-            [](const LuaTextHandle& h) -> std::optional<std::string> {
-                if (auto* text = h.as<UIText>("text")) {
-                    return text->getText();
-                }
-                return std::nullopt;
-            },
-            [](LuaTextHandle& h, const std::string& value) {
-                if (auto* text = h.as<UIText>("text")) {
-                    text->setText(value);
-                }
-            }),
-        "color",
-        sol::property(
-            [](const LuaTextHandle& h) -> std::optional<glm::vec4> {
-                if (auto* text = h.as<UIText>("color")) {
-                    return text->_color;
-                }
-                return std::nullopt;
-            },
-            [](LuaTextHandle& h, const glm::vec4& value) {
-                if (auto* text = h.as<UIText>("color")) {
-                    text->setColor(value);
-                }
-            }),
-        "fontSize",
-        sol::property(
-            [](const LuaTextHandle& h) -> std::optional<uint32_t> {
-                if (auto* text = h.as<UIText>("fontSize")) {
-                    return text->_fontSize;
-                }
-                return std::nullopt;
-            },
-            [](LuaTextHandle& h, uint32_t value) {
-                if (auto* text = h.as<UIText>("fontSize")) {
-                    text->setFontSize(value);
-                }
-            }));
+    script::addNativeField(button, "onClicked", script::ScriptNativeField{
+        .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
+            // A detached button still yields an event; add/remove no-op and warn once.
+            (void)requireLive(self, ref, "onClicked");
+            return makeButtonClickedRef(ref.a);
+        },
+    });
+    script::addNativeField(button, "enabled", script::ScriptNativeField{
+        .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
+            auto* widget = liveAs<UIButton>(self, ref, "enabled");
+            return widget ? script::ScriptValue{widget->isEnabled()} : script::ScriptValue{};
+        },
+        .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
+            if (auto* widget = liveAs<UIButton>(self, ref, "enabled")) {
+                widget->setEnabled(script::scriptToBool(value));
+            }
+        },
+    });
 
-    lua.new_usertype<LuaButtonHandle>(
-        "Button",
-        sol::no_constructor,
-        base,
-        bases,
-        "onClicked",
-        sol::readonly_property([](const LuaButtonHandle& h) {
-            auto* button = h.as<UIButton>("onClicked");
-            return makeLuaEvent(button ? std::static_pointer_cast<UIButton>(button->shared_from_this()) : nullptr,
-                                &UIButton::onClicked,
-                                "Button.onClicked");
-        }),
-        "enabled",
-        sol::property(
-            [](const LuaButtonHandle& h) -> std::optional<bool> {
-                if (auto* button = h.as<UIButton>("enabled")) {
-                    return button->isEnabled();
-                }
-                return std::nullopt;
-            },
-            [](LuaButtonHandle& h, bool bEnabled) {
-                if (auto* button = h.as<UIButton>("enabled")) {
-                    button->setEnabled(bEnabled);
-                }
-            }));
+    script::addNativeField(image, "texture", script::ScriptNativeField{
+        .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
+            auto* widget = liveAs<UIImage>(self, ref, "texture");
+            return widget ? script::ScriptValue{widget->_assetPath} : script::ScriptValue{};
+        },
+        .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
+            if (auto* widget = liveAs<UIImage>(self, ref, "texture")) {
+                widget->setAssetPath(script::scriptToString(value));
+            }
+        },
+    });
 
-    lua.new_usertype<LuaImageHandle>(
-        "Image",
-        sol::no_constructor,
-        base,
-        bases,
-        "texture",
-        sol::property(
-            [](const LuaImageHandle& h) -> std::optional<std::string> {
-                if (auto* image = h.as<UIImage>("texture")) {
-                    return image->_assetPath;
-                }
-                return std::nullopt;
-            },
-            [](LuaImageHandle& h, const std::string& path) {
-                if (auto* image = h.as<UIImage>("texture")) {
-                    image->setAssetPath(path);
-                }
-            }));
+    script::addNativeField(border, "fill", script::ScriptNativeField{
+        .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
+            auto* widget = liveAs<UIBorder>(self, ref, "fill");
+            return widget ? script::ScriptValue{widget->getColor()} : script::ScriptValue{};
+        },
+        .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
+            auto* widget = liveAs<UIBorder>(self, ref, "fill");
+            const auto* color = std::get_if<glm::vec4>(&value);
+            if (widget && color) {
+                widget->setColor(*color);
+            }
+        },
+    });
 
-    lua.new_usertype<LuaBorderHandle>(
-        "Border",
-        sol::no_constructor,
-        base,
-        bases,
-        "fill",
-        sol::property(
-            [](const LuaBorderHandle& h) -> std::optional<glm::vec4> {
-                if (auto* border = h.as<UIBorder>("fill")) {
-                    return border->getColor();
-                }
-                return std::nullopt;
-            },
-            [](LuaBorderHandle& h, const glm::vec4& value) {
-                if (auto* border = h.as<UIBorder>("fill")) {
-                    border->setColor(value);
-                }
-            }));
+    script::addNativeMethod(timer, "cancel", [](void*, const script::ScriptRef& ref, script::ScriptArgs) -> script::ScriptValue {
+        cancelWidgetTimer(ref);
+        return {};
+    });
+    script::addNativeMethod(clicked, "add", &addClicked);
+    script::addNativeMethod(clicked, "remove", &removeClicked);
+    script::addNativeMethod(clicked, "removeAll", &removeAllClicked);
 }
 
 } // namespace ya

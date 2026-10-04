@@ -721,3 +721,13 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 边界结论：`GameplayLua.cpp` / `LuaWidget*` 按文档留在 GameRuntime 并仍含 sol（它们依赖 App / gui-widgets，`ya-script-lua` 不能依赖这些），所以 `ya-game-runtime` 的 `sol2` / `lua` 包与对 `ya-script-lua` 的依赖到 B2-6/B2-7 之后才能去；`bindGameplayLua` 参数已是接口，函数体内 `dynamic_cast` 回具体类型（过渡）。`ya-render-3d` 去掉未使用的 `sol2`；`ya-runtime` 加 `ya-script-lua`。
 - 提醒 B2-7：登记控件 `valid` 时，`missingIsNil` 的短路会让所有读变 nil，而今天 `valid` 在控件已摘掉时返回 false，要保持。
 - 验证：脚本过滤 96 个通过；全量 ya-testing 1672 ran / 1671 passed / 1 skipped；GreedySnake / 2DRpgPrototype 120 帧、编辑器 30 帧冒烟；2D 自动化七条通过。
+
+## 2026-10-05 — B2-6/B2-7 手写 sol 收口，GameRuntime 不再含 sol
+
+- 合并为一个提交：B2-6 的 `ui.get` 要用 B2-7 的 `widgetScriptRef` / `scriptSelfOf`，单独提交 B2-6 过不了编译。
+- B2-6：`world.spawnSprite` / `destroyEntity` / `viewAspect` / `scriptOf`、`Input.setKeyHandler`、`ui.get` / `setText` / `setVisible` 全走 `registerModuleFunction`。`world.scriptOf(entity[, path])` 经 `ScriptSelfHandle` 返回目标脚本的活 `self`（无脚本 / 路径对不上为 nil，返回前重绑 `self.entity`）。`GridMover` 的 `blocksEntry` / `onPlayerEnter`、`Player.lua` 的 `onInteract` 由 `:call("...")` 转发改为 `scriptOf` 直调，写错方法名当场 `attempt to call`。`Input` usertype 会盖掉投影表，所以 `bindGameplayLua` 保留，用来在 init 之后装回 `setKeyHandler`；函数体已无 `dynamic_cast`、无 sol。
+- B2-7：`LuaWidgetHandle` / `LuaWidgetScripts` 改为 `ScriptRef` + 原生字段/方法，引用表在 `WidgetScriptRefs.cpp`；`ILuaScriptHost::bindSelf` 换成 `IScriptInstanceHost::contributeSelf`；`TLuaEvent` / `LuaListenerScope` / `makeLuaEvent` 无调用方已删。`missingIsNil` 下原生 `valid` 仍对已摘掉的控件返回 false。
+- 入口脚本未加载前，`ui.get` 返回控件 `ScriptRef`，读未知字段会报错，所以 `Player.lua` 先判 `type(dialogue) == "table"` 再问 `busy`。
+- `ya-game-runtime` 的 xmake 去掉 `lua` / `sol2` 包，保留对 `ya-script-lua` 的依赖（只用无 sol 的 `LuaBackend.h` / `ScriptInstanceOps.h`）。`rg -n "sol/|sol::" Engine/Source --glob '!**/Script/Lua/**'` 无命中。
+- 遗留：`LuaScriptBinding.cpp` 的 `MethodCall::arguments` 把无法跨界的普通表参数吞成 nil（为保住 `ListenersEndWithTheirScriptInstance` 里 `add({}, fn)` 返回 0 的契约），语义偏宽，之后应改成只针对 owner 参数；`LuaScriptBinding.cpp` 有一行旧注释仍提 `bindSelf`。
+- 验证：全量 ya-testing 1677 ran / 1676 passed / 1 skipped（5 个 `ScriptOf*` 新增）；`luajit Engine/Test/Lua/GridMoverTest.lua` 47 个断言；GreedySnake / 2DRpgPrototype 120 帧、编辑器 30 帧冒烟；2D 自动化七条通过（`walk_one_cell` worker 侧首跑超时一次，我这边一次通过）。

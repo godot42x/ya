@@ -1,5 +1,6 @@
 #include "GameRuntime/Script/GameplayScriptFunctions.h"
 
+#include "Core/Event.h"
 #include "Core/Log.h"
 #include "Core/Scripting/ScriptBindings.h"
 #include "Scene2D/Sprite2DComponent.h"
@@ -8,13 +9,21 @@
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "ECS/Systems/TransformSystem.h"
+#include "ECS/Systems/WorldScriptRuntime.h"
+#include "GameRuntime/GUI/GameUI/GameUIHost.h"
+#include "GameRuntime/InputRouter.h"
+#include "LuaWidgetHandle.h"
+#include "LuaWidgetScripts.h"
 #include "GameRuntime/Render/SceneCameraQuery.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Core/SceneScriptBindings.h"
+#include "Scene3D/Node3D.h"
 #include "Scene3D/TransformComponent.h"
+#include "Script/Lua/LuaBackend.h"
 
 #include <cmath>
 #include <format>
+#include <memory>
 
 namespace ya
 {
@@ -113,6 +122,202 @@ ScriptValue entityAtCell(void* self, const ScriptRef&, ScriptArgs args)
     return {};
 }
 
+constexpr const char* kSpriteTexture = "Engine:Content/TestTextures/sprite2d_probe_64.png";
+
+/// `texturePath` empty keeps the probe image. A caller-supplied path is stored
+/// through `TextureSlot::fromPath` (the same asset-path form as a scene sprite).
+Entity* spawnSprite(const GameplayScriptContext& ctx, const std::string& name, const std::string& texturePath)
+{
+    Scene* scene = ctx.activeScene ? ctx.activeScene() : nullptr;
+    if (!scene) {
+        YA_CORE_ERROR("world.spawnSprite: no active scene");
+        return nullptr;
+    }
+    Node3D* node = scene->createNode3D(name.empty() ? "Sprite" : name);
+    if (!node || !node->getEntity()) {
+        return nullptr;
+    }
+    Sprite2DComponent* sprite = node->getEntity()->addComponent<Sprite2DComponent>();
+    sprite->image.fromPath(texturePath.empty() ? kSpriteTexture : texturePath);
+    sprite->size = {1.0f, 1.0f};
+    return node->getEntity();
+}
+
+void destroySpriteEntity(const GameplayScriptContext& ctx, Entity* entity)
+{
+    Scene* scene = ctx.activeScene ? ctx.activeScene() : nullptr;
+    if (!scene || !entity) {
+        return;
+    }
+    if (Node* node = scene->getNodeByEntity(entity)) {
+        scene->queueDestroyNode(node);
+    }
+}
+
+std::string optionalString(const ScriptValue& value)
+{
+    if (std::holds_alternative<std::monostate>(value)) {
+        return {};
+    }
+    return script::scriptToString(value);
+}
+
+ScriptValue spawnSpriteFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    if (args.empty() || args.size() > 2) {
+        throw ScriptError("expects spawnSprite(name) or spawnSprite(name, texturePath)");
+    }
+    const std::string name = script::scriptToString(args[0]);
+    const std::string path = args.size() > 1 ? optionalString(args[1]) : std::string{};
+    Entity*           entity = spawnSprite(ctx, name, path);
+    if (!entity) {
+        return {};
+    }
+    return script::entityRef(entity);
+}
+
+ScriptValue destroyEntityFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 1);
+    if (!std::holds_alternative<ScriptRef>(args[0])) {
+        throw ScriptError("expected an entity");
+    }
+    destroySpriteEntity(ctx, script::entityOf(std::get<ScriptRef>(args[0])));
+    return {};
+}
+
+ScriptValue viewAspect(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 0);
+    const GameplayPresentedView presented = gameplayPresentedView(ctx);
+    return static_cast<double>(scriptViewAspect(presented.camera, presented.pixelExtent));
+}
+
+ScriptValue scriptOf(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    if (args.empty() || args.size() > 2) {
+        throw ScriptError("expects scriptOf(entity) or scriptOf(entity, path)");
+    }
+    if (!std::holds_alternative<ScriptRef>(args[0])) {
+        throw ScriptError("expected an entity");
+    }
+    Entity* entity = script::entityOf(std::get<ScriptRef>(args[0]));
+    if (!entity) {
+        return {};
+    }
+    const std::string path = args.size() > 1 ? optionalString(args[1]) : std::string{};
+    if (!ctx.worldRuntime) {
+        return {};
+    }
+    IWorldScriptRuntime* runtime = ctx.worldRuntime();
+    if (!runtime) {
+        return {};
+    }
+    const script::ScriptSelfHandle self = entityScriptSelf(*runtime, *entity, path);
+    if (self.runtimeId == 0) {
+        return {};
+    }
+    return self;
+}
+
+/// One process-wide slot: re-registering replaces the function in place, and
+/// the router callback reads the handle through this pointer. Retain keeps the
+/// Lua function alive until the next set or a clear. Releasing after the Lua
+/// state is already gone is a no-op (the owner map drops the id on destruction).
+ScriptValue setKeyHandler(const GameplayScriptContext& ctx, const std::shared_ptr<script::ScriptFnHandle>& held, ScriptArgs args)
+{
+    if (!ctx.inputRouter) {
+        return {};
+    }
+    script::ScriptFnHandle next;
+    if (!args.empty() && std::holds_alternative<script::ScriptFnHandle>(args[0])) {
+        next = std::get<script::ScriptFnHandle>(args[0]);
+    }
+    if (script::IScriptCallbacks* callbacks = script::scriptCallbacks()) {
+        if (held->id != 0 && held->id != next.id) {
+            callbacks->release(*held);
+        }
+        if (next.id != 0 && next.id != held->id) {
+            callbacks->retain(next);
+        }
+    }
+    *held = next;
+    if (next.id == 0) {
+        ctx.inputRouter->setGameKeyHandler(nullptr);
+        return {};
+    }
+    ctx.inputRouter->setGameKeyHandler([held, runtime = ctx.worldRuntime](const Event& event) {
+        IWorldScriptRuntime* scripts = runtime ? runtime() : nullptr;
+        if (!scripts || held->id == 0) {
+            return false;
+        }
+        const bool pressed = event.getEventType() == EEvent::KeyPressed;
+        EKey::T    key     = EKey::NONE;
+        bool       repeat  = false;
+        if (pressed) {
+            const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
+            key                  = keyEvent.getKeyCode();
+            repeat               = keyEvent.isRepeat();
+        }
+        else {
+            key = static_cast<const KeyReleasedEvent&>(event).getKeyCode();
+        }
+        const script::ScriptValue callArgs[] = {
+            static_cast<int64_t>(key),
+            pressed,
+            repeat,
+        };
+        const script::ScriptValue result = callHeldScriptFunction(*scripts, *held, callArgs);
+        return std::holds_alternative<bool>(result) && std::get<bool>(result);
+    });
+    return {};
+}
+
+ScriptValue uiGet(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 1);
+    if (!ctx.gameUI) {
+        return {};
+    }
+    const std::string entryId = script::scriptToString(args[0]);
+    UIElementRef      root    = ctx.gameUI->findEntryRoot(entryId);
+    if (!root) {
+        YA_CORE_WARN("ui.get: no mounted Game UI entry '{}'", entryId);
+        return {};
+    }
+    // A loaded entry script answers as its self table. Otherwise the root
+    // widget handle, so `.name` still works on an entry that has no script.
+    const script::ScriptSelfHandle self = LuaWidgetScripts::scriptSelfOf(*root);
+    if (self.runtimeId != 0) {
+        return self;
+    }
+    const script::ScriptRef handle = widgetScriptRef(*ctx.gameUI, root);
+    if (!handle) {
+        return {};
+    }
+    return handle;
+}
+
+ScriptValue setText(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 3);
+    if (!ctx.gameUI) {
+        return false;
+    }
+    return ctx.gameUI->setMountedText(script::scriptToString(args[0]), script::scriptToString(args[1]), script::scriptToString(args[2]));
+}
+
+ScriptValue setVisible(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 3);
+    if (!ctx.gameUI) {
+        return false;
+    }
+    return ctx.gameUI->setMountedVisible(script::scriptToString(args[0]),
+                                         script::scriptToString(args[1]),
+                                         script::scriptToBool(args[2]));
+}
+
 } // namespace
 
 void placePlayerAtSpawn(Scene& scene, const std::string& spawnName, const std::string& actorName)
@@ -164,6 +369,30 @@ void registerGameplayScriptFunctions(GameplayScriptContext ctx)
                                  args.size() > 2 ? script::scriptToString(args[2]) : std::string{});
         return {};
     });
+    script::registerModuleFunction("world", "viewAspect", [ctx](ScriptArgs args) { return viewAspect(ctx, args); });
+    script::registerModuleFunction("world", "spawnSprite", [ctx](ScriptArgs args) { return spawnSpriteFn(ctx, args); });
+    script::registerModuleFunction("world", "destroyEntity", [ctx](ScriptArgs args) { return destroyEntityFn(ctx, args); });
+    script::registerModuleFunction("world", "scriptOf", [ctx](ScriptArgs args) { return scriptOf(ctx, args); });
+    // The closure installed on the Input usertype keeps a pointer to this
+    // entry. Re-registration replaces `fn` in place, so one shared slot is
+    // enough for the retain/release pair.
+    // Dropping the slot releases whatever handler is still installed. That runs
+    // after a later registration replaces this function, or at app shutdown
+    // (the Lua state has already erased the id, and release is then a no-op).
+    auto heldKeyHandler = std::shared_ptr<script::ScriptFnHandle>(new script::ScriptFnHandle{}, [](script::ScriptFnHandle* handle) {
+        if (handle->id != 0) {
+            if (script::IScriptCallbacks* callbacks = script::scriptCallbacks()) {
+                callbacks->release(*handle);
+            }
+        }
+        delete handle;
+    });
+    script::registerModuleFunction("Input", "setKeyHandler", [ctx, heldKeyHandler](ScriptArgs args) {
+        return setKeyHandler(ctx, heldKeyHandler, args);
+    });
+    script::registerModuleFunction("ui", "get", [ctx](ScriptArgs args) { return uiGet(ctx, args); });
+    script::registerModuleFunction("ui", "setText", [ctx](ScriptArgs args) { return setText(ctx, args); });
+    script::registerModuleFunction("ui", "setVisible", [ctx](ScriptArgs args) { return setVisible(ctx, args); });
 }
 
 } // namespace ya

@@ -23,6 +23,16 @@ function Vec3.new(x, y, z)
     return { x = x, y = y, z = z }
 end
 
+-- GridMover asks the global `world`, not the harness local of that name.
+-- `actor(nil)` still has a self table and simply does not define blocksEntry.
+world = {}
+function world.scriptOf(occupant)
+    if occupant == nil then
+        return nil
+    end
+    return occupant.self
+end
+
 local GridMover = require("GridMover")
 
 local passed = 0
@@ -103,18 +113,20 @@ end
 
 local function actor(blocksEntry, onEnter)
     local calls = {}
-    local occupant = { calls = calls }
-    function occupant:call(name)
-        calls[#calls + 1] = name
-        if name == "blocksEntry" then
+    local self = { calls = calls }
+    if blocksEntry ~= nil then
+        function self:blocksEntry()
+            calls[#calls + 1] = "blocksEntry"
             return blocksEntry
         end
-        if name == "onPlayerEnter" and onEnter then
+    end
+    if onEnter then
+        function self:onPlayerEnter()
+            calls[#calls + 1] = "onPlayerEnter"
             onEnter()
         end
-        return nil
     end
-    return occupant
+    return { calls = calls, self = self }
 end
 
 local right = { dx = 1, dy = 0, name = "right" }
@@ -167,7 +179,7 @@ local function caseOccupantBlocks()
     local world = harness({ occupants = { ["1,0"] = silent } })
     local walking = world.mover:update(0.1, right)
     check(walking == false and world.mover.to == nil, "a missing blocksEntry blocks")
-    check(silent.calls[1] == "blocksEntry", "the occupant is asked blocksEntry")
+    check(silent.calls[1] == nil, "a missing blocksEntry is not invoked")
 
     world = harness({ occupants = { ["1,0"] = firm } })
     walking = world.mover:update(0.1, right)

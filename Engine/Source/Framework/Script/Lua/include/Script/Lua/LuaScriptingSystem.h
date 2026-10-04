@@ -3,6 +3,7 @@
 #include "ECS/Systems/WorldScriptRuntime.h"
 #include "Core/Input/InputManager.h"
 #include "Core/Scripting/ScriptValue.h"
+#include "Script/Lua/ScriptInstanceOps.h"
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -19,22 +20,6 @@ struct Scene;
 struct Entity;
 struct LuaInstanceLive;
 struct LuaInstanceStore;
-
-/// What a script instance is attached to. The system keeps one host per live
-/// instance and never learns the host's type: an entity, a widget, anything
-/// that can hand back its instance and put its own fields on `self`.
-struct ILuaScriptHost
-{
-    virtual ~ILuaScriptHost() = default;
-
-    /// The instance this host carries (`runtimeId == instanceId`), or null once
-    /// the host or the instance is gone. Called on every operation, so an
-    /// instance stored in movable storage may be looked up afresh.
-    [[nodiscard]] virtual ScriptInstance* resolve(uint64_t instanceId) = 0;
-    /// Write the host's fields on `self` (e.g. `self.entity`). Runs after the
-    /// chunk loads and before every callback.
-    virtual void bindSelf(sol::table& self) = 0;
-};
 
 enum class ELuaScriptCallback : uint8_t
 {
@@ -65,7 +50,7 @@ struct YA_SCRIPT_LUA_API LuaScriptingSystem : public IWorldScriptRuntime
     /// Hosts by id. Ordered by id, i.e. load order, so reload and destroyAll
     /// are deterministic. Ids are never reused. Sol tables live in
     /// `_instances`, not in this map.
-    std::map<uint64_t, std::unique_ptr<ILuaScriptHost>> _live;
+    std::map<uint64_t, std::unique_ptr<IScriptInstanceHost>> _live;
     bool _hotReloadEnabled = false;
     /// Scene-tree pre-order rank by entity index, for world-script order;
     /// rebuilt only when the active scene tree's revision moves.
@@ -119,7 +104,7 @@ struct YA_SCRIPT_LUA_API LuaScriptingSystem : public IWorldScriptRuntime
     /// Run `instance.scriptPath`, bind its callbacks, let `host` fill `self`,
     /// capture properties and apply overrides, then register the instance.
     /// Calls no lifecycle callback: the caller owns when onInit / onStart run.
-    bool load(ScriptInstance& instance, std::unique_ptr<ILuaScriptHost> host);
+    bool load(ScriptInstance& instance, std::unique_ptr<IScriptInstanceHost> host);
     /// Call one lifecycle callback with `self` rebound by its host. Errors are
     /// logged and contained to this instance. False if the instance is not live.
     bool call(ScriptInstance& instance, ELuaScriptCallback callback, float deltaTime = 0.0f);
@@ -179,8 +164,12 @@ struct YA_SCRIPT_LUA_API LuaScriptingSystem : public IWorldScriptRuntime
     /// Hot-reload one live instance from `source`: onDestroy, rebind, restore
     /// the saved property values, onInit, onStart. False when it did not
     /// survive its own onDestroy or the chunk failed to load.
-    bool reloadInstance(ILuaScriptHost* host, uint64_t id, const std::string& source);
-    [[nodiscard]] ILuaScriptHost* hostOf(const ScriptInstance& instance) const;
+    bool reloadInstance(IScriptInstanceHost* host, uint64_t id, const std::string& source);
+    [[nodiscard]] IScriptInstanceHost* hostOf(const ScriptInstance& instance) const;
+
+    friend std::shared_ptr<void> scriptInstanceListenerOwner(uint64_t runtimeId);
+    friend bool                  retainInstanceFunction(uint64_t runtimeId, script::ScriptFnHandle fn);
+    friend bool                  scriptFunctionAlive(script::ScriptFnHandle fn);
     [[nodiscard]] LuaInstanceLive* findLive(uint64_t runtimeId);
     [[nodiscard]] const LuaInstanceLive* findLive(uint64_t runtimeId) const;
     void eraseLive(uint64_t runtimeId);
@@ -190,7 +179,7 @@ struct YA_SCRIPT_LUA_API LuaScriptingSystem : public IWorldScriptRuntime
 
 /// The entity face of callNamed, exported to scripts as `entity:call(name, ...)`
 /// (rpg-prototype R2a). The first loaded script on `entity` that defines `name`
-/// answers, with `self.entity` rebound first — what its host's bindSelf does.
+/// answers, with `self.entity` rebound first — what its host's contributeSelf does.
 /// Nil when no script defines the name; a failing target raises ScriptError.
 [[nodiscard]] YA_SCRIPT_LUA_API script::ScriptValue callEntityScript(Entity& entity, const std::string& name,
                                                                       script::ScriptArgs args);

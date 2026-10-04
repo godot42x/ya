@@ -1,14 +1,41 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/Scripting/ScriptValue.h"
+
+#include <string_view>
 
 namespace ya
 {
+
+struct Entity;
+struct IWorldScriptRuntime;
 
 /// Install the Lua world-script runtime and the editor property preview.
 /// Call once, from the process entry (YARuntime and the test runner), before
 /// any App is constructed. A missing call leaves gameplay scripts off and
 /// the inspector without property rows.
 YA_SCRIPT_LUA_API void installLuaScriptBackend();
+
+/// The `Input` usertype is built after module functions are projected, so it
+/// replaces the `Input` table. Put the registered `Input.setKeyHandler` back
+/// on that type. Colon calls pass the userdata first; the closure drops it.
+/// No-op when the function was never registered or this runtime is not Lua.
+YA_SCRIPT_LUA_API void attachInputSetKeyHandler(IWorldScriptRuntime& runtime);
+
+/// First loaded script on `entity` (optionally the one whose path normalizes
+/// to `path`). Rebinds `self.entity` the same way `entity:call` does, then
+/// returns that live table's id. `runtimeId == 0` when nothing matches.
+/// A non-Lua runtime returns an empty handle.
+[[nodiscard]] YA_SCRIPT_LUA_API script::ScriptSelfHandle entityScriptSelf(IWorldScriptRuntime& runtime,
+                                                                          Entity&              entity,
+                                                                          std::string_view     path);
+
+/// Call a held function with no `self` and return its first value. Errors are
+/// logged and come back empty. `IScriptCallbacks::invoke` drops the return;
+/// the key handler needs the bool.
+[[nodiscard]] YA_SCRIPT_LUA_API script::ScriptValue callHeldScriptFunction(IWorldScriptRuntime&     runtime,
+                                                                           script::ScriptFnHandle   fn,
+                                                                           script::ScriptArgs       args);
 
 } // namespace ya

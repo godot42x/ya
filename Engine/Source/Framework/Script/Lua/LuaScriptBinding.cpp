@@ -199,7 +199,17 @@ class MethodCall
         const int                last = lua_gettop(_L);
         args.reserve(last >= kFirstArgument ? last - kFirstArgument + 1 : 0);
         for (int index = kFirstArgument; index <= last; ++index) {
-            args.push_back(toScriptValue(_L, index));
+            try {
+                args.push_back(toScriptValue(_L, index));
+            }
+            catch (const ScriptError&) {
+                // A table that is not a live self cannot cross. `onClicked:add({}, fn)`
+                // treats that owner as absent and returns 0, instead of raising.
+                if (lua_type(_L, index) != LUA_TTABLE) {
+                    throw;
+                }
+                args.push_back({});
+            }
         }
         return args;
     }

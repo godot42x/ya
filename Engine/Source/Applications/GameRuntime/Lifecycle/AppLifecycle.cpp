@@ -390,6 +390,8 @@ void App::init(AppDesc ci)
             app.getSceneServices().requestSceneTransfer(path, spawn, actor);
         },
         .inputRouter = &app.getInputRouter(),
+        .worldRuntime = [&app]() -> IWorldScriptRuntime* { return app._luaScriptingSystem; },
+        .gameUI       = app.getGameUIHost(),
     };
     registerGameplayScriptFunctions(scriptContext);
     // The module registry outlives this App. Pushed before the Lua deleter so

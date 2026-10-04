@@ -9,20 +9,13 @@ namespace ya
 struct GameUIHost;
 struct IWorldScriptRuntime;
 
-/// Gameplay Lua surface for the 2D sample: sprite read/write, sprite spawn,
-/// and the mounted-document text/visibility bridge. Registered by the host
-/// after the world script runtime's `init`. The body still casts to the Lua
-/// backend (B2-6 removes that). GUI widgets stay free of Lua; this file
-/// lives in GameRuntime because that is the module that already sees both
-/// the script state and `Sprite2DComponent`.
+/// After the world script runtime's `init`: put `Input.setKeyHandler` back on
+/// the Input usertype (init replaces the projected module table) and install
+/// the widget script runtime.
 ///
-/// `ctx` is the same context passed to `registerGameplayScriptFunctions`.
-/// `spawnSprite` / `destroyEntity` use its scene, `viewAspect` uses
-/// `gameplayPresentedView` (the same read as `world.viewSize`), and
-/// `Input.setKeyHandler` captures `ctx.inputRouter` at bind time. An empty
-/// context leaves those calls with no scene and no key router.
-/// `world.spawnSprite(name [, texturePath])`: a missing or blank path keeps
-/// the probe texture; a path goes through `TextureSlot::fromPath`.
+/// `world.*`, `Input.setKeyHandler` and `ui.*` are module functions registered
+/// before `init` via `registerGameplayScriptFunctions`. `ctx` is unused here;
+/// callers that already pass the same context keep compiling.
 YA_GAME_RUNTIME_API void bindGameplayLua(IWorldScriptRuntime& runtime, GameUIHost& ui, GameplayScriptContext ctx = {});
 
 } // namespace ya

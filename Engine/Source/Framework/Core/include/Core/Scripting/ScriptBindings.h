@@ -78,8 +78,9 @@ struct ScriptMethod;
 YA_CORE_API uint32_t registerRefKind(ScriptRefKind kind);
 /// A reflected method of the same name wins over a native one.
 YA_CORE_API void     addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn);
-/// A reflected field of the same name wins. A second registration of `name`
-/// does not replace the first.
+/// A native field hides a reflected field of the same name. The existing
+/// entry is updated in place, so a handle already handed to a backend stays
+/// valid. A second native registration of `name` does not replace the first.
 YA_CORE_API void     addNativeField(type_index_t type, std::string name, ScriptNativeField field);
 /// `derived`'s lookup continues into `base` when its own table misses.
 /// The first base wins; a later call does not replace it. A member registered

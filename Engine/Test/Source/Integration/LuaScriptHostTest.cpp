@@ -18,11 +18,11 @@ namespace
 
 /// A host that is not an entity: the instance lives in the test, the host
 /// only points at it and names itself on `self`.
-struct FTestHost final : ILuaScriptHost
+struct FTestHost final : IScriptInstanceHost
 {
     ScriptInstance* instance;
-    std::string        name;
-    const bool*        bAlive;
+    std::string     name;
+    const bool*     bAlive;
 
     FTestHost(ScriptInstance* inInstance, std::string inName, const bool* inAlive)
         : instance(inInstance), name(std::move(inName)), bAlive(inAlive) {}
@@ -32,7 +32,7 @@ struct FTestHost final : ILuaScriptHost
         return (!bAlive || *bAlive) && instance->runtimeId == instanceId ? instance : nullptr;
     }
 
-    void bindSelf(sol::table& self) override { self["hostName"] = name; }
+    void contributeSelf(ScriptSelfBuilder& out) override { out.field("hostName", name); }
 };
 
 struct FRuntime

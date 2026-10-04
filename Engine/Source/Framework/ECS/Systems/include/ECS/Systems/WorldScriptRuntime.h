@@ -1,10 +1,15 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/Scripting/ScriptBindings.h"
+#include "ECS/Systems/ScriptInstance.h"
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace ya
 {
@@ -47,5 +52,49 @@ using WorldScriptRuntimeFactory = IWorldScriptRuntime* (*)();
 
 YA_ECS_SYSTEMS_API void                 setWorldScriptRuntimeFactory(WorldScriptRuntimeFactory factory);
 YA_ECS_SYSTEMS_API IWorldScriptRuntime* createWorldScriptRuntime();
+
+/// What one host adds to a freshly bound `self`. The language backend rawsets
+/// these onto the table; the host never sees the language runtime.
+struct ScriptSelfBuilder
+{
+    struct Field
+    {
+        std::string         name;
+        script::ScriptValue value;
+    };
+    struct Method
+    {
+        std::string            name;
+        script::ScriptFunction fn;
+    };
+
+    std::vector<Field>  fields;
+    std::vector<Method> methods;
+
+    void field(std::string name, script::ScriptValue value)
+    {
+        fields.push_back(Field{.name = std::move(name), .value = std::move(value)});
+    }
+
+    void method(std::string name, script::ScriptFunction fn)
+    {
+        methods.push_back(Method{.name = std::move(name), .fn = std::move(fn)});
+    }
+};
+
+/// What a script instance is attached to. The runtime keeps one host per live
+/// instance and never learns the host's type.
+struct IScriptInstanceHost
+{
+    virtual ~IScriptInstanceHost() = default;
+
+    /// The instance this host carries (`runtimeId == instanceId`), or null once
+    /// the host or the instance is gone. Called on every operation, so an
+    /// instance stored in movable storage may be looked up afresh.
+    [[nodiscard]] virtual ScriptInstance* resolve(uint64_t instanceId) = 0;
+    /// Fields and methods the backend rawsets onto `self`. Runs after the
+    /// chunk loads and before every callback.
+    virtual void contributeSelf(ScriptSelfBuilder& out) = 0;
+};
 
 } // namespace ya

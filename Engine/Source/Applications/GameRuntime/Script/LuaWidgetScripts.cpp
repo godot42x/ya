@@ -1,43 +1,23 @@
 #include "LuaWidgetScripts.h"
 
 #include "LuaWidgetHandle.h"
+#include "WidgetScriptRefs.h"
 
 #include "Core/Log.h"
-
+#include "Core/Scripting/ScriptBindings.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
-
 #include "GUI/Widgets/UIElement.h"
+#include "Script/Lua/ScriptInstanceOps.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace ya
 {
-
 namespace
 {
 
-/// What `self.__widgetScript` holds: the way back from a script's `self` to
-/// the behaviour that hosts it.
-struct FWidgetScriptRef
-{
-    std::weak_ptr<LuaWidgetScriptBehavior> behavior;
-};
-
-struct FLuaUITimer
-{
-    GameUIHost* host = nullptr;
-    uint64_t    id   = 0;
-
-    void cancel()
-    {
-        if (host && id != 0) {
-            host->cancelTimer(id);
-        }
-        id = 0;
-    }
-};
-
-struct FWidgetScriptHost final : ILuaScriptHost
+struct FWidgetScriptHost final : IScriptInstanceHost
 {
     std::weak_ptr<LuaWidgetScriptBehavior> behavior;
 
@@ -45,70 +25,109 @@ struct FWidgetScriptHost final : ILuaScriptHost
 
     ScriptInstance* resolve(uint64_t instanceId) override
     {
-        auto live = behavior.lock();
+        const std::shared_ptr<LuaWidgetScriptBehavior> live = behavior.lock();
         return live && live->instance.runtimeId == instanceId ? &live->instance : nullptr;
     }
 
-    void bindSelf(sol::table& self) override
-    {
-        if (auto live = behavior.lock(); live && live->runtime) {
-            live->runtime->bindSelf(live, self);
-        }
-    }
+    void contributeSelf(ScriptSelfBuilder& out) override;
 };
 
-std::shared_ptr<LuaWidgetScriptBehavior> behaviorOf(const sol::table& self)
+script::ScriptValue widgetRefValue(GameUIHost& host, const UIElementRef& widget)
 {
-    const sol::optional<FWidgetScriptRef&> ref = self.raw_get<sol::optional<FWidgetScriptRef&>>("__widgetScript");
-    return ref ? ref->behavior.lock() : nullptr;
+    const script::ScriptRef ref = widgetScriptRef(host, widget);
+    return ref ? script::ScriptValue{ref} : script::ScriptValue{};
 }
 
-bool sameTable(const sol::table& a, const sol::table& b)
+script::ScriptValue addScriptTimer(const std::shared_ptr<LuaWidgetScriptBehavior>& behavior, script::ScriptArgs args, bool bRepeat)
 {
-    if (!a.valid() || !b.valid()) {
-        return false;
-    }
-    lua_State* L = a.lua_state();
-    a.push(L);
-    b.push(L);
-    const bool bSame = lua_rawequal(L, -1, -2) != 0;
-    lua_pop(L, 2);
-    return bSame;
-}
-
-sol::object addScriptTimer(const sol::table& self, float delaySeconds, float intervalSeconds,
-                           const sol::protected_function& fn, sol::this_state state)
-{
-    sol::state_view lua(state);
-    auto            behavior = behaviorOf(self);
     if (!behavior || !behavior->runtime) {
-        return sol::make_object(lua, sol::lua_nil);
+        return {};
     }
-    if (!fn.valid()) {
+    if (args.size() < 2) {
         YA_CORE_WARN("Lua widget timer ({}): callback is not a function", behavior->instance.scriptPath);
-        return sol::make_object(lua, sol::lua_nil);
+        return {};
     }
+    const auto* fn = std::get_if<script::ScriptFnHandle>(&args[1]);
+    if (!fn || fn->id == 0 || !retainInstanceFunction(behavior->instance.runtimeId, *fn)) {
+        YA_CORE_WARN("Lua widget timer ({}): callback is not a function", behavior->instance.scriptPath);
+        return {};
+    }
+    const float delay = static_cast<float>(script::scriptToNumber(args[0]));
+    const float interval = bRepeat ? delay : 0.0f;
     GameUIHost& host = behavior->runtime->host;
-    // A timer belongs to the instance that made it: once that instance is
-    // destroyed or replaced by a hot reload (a new `self`), it stops.
-    const uint64_t id = host.addTimer(
-        behavior.get(), delaySeconds, intervalSeconds,
-        [weak = std::weak_ptr(behavior), fn, owner = self, path = behavior->instance.scriptPath]() -> bool {
-            auto live = weak.lock();
-            const sol::table current = live && live->runtime
-                                            ? live->runtime->scripting.selfOf(live->instance.runtimeId)
-                                            : sol::table{};
-            if (!live || !live->runtime || !live->instance.bLoaded || !sameTable(current, owner)) {
-                return false;
+    const script::ScriptFnHandle held = *fn;
+    const script::ScriptSelfHandle self{.runtimeId = behavior->instance.runtimeId};
+    const std::weak_ptr<LuaWidgetScriptBehavior> weak = behavior;
+    // The function is retained on this instance. Replacing or destroying the
+    // self releases it, and the timer stops instead of calling into the new table.
+    const uint64_t id = host.addTimer(behavior.get(), delay, interval, [weak, held, self]() -> bool {
+        const std::shared_ptr<LuaWidgetScriptBehavior> live = weak.lock();
+        if (!live || !live->runtime || !live->instance.bLoaded || !scriptFunctionAlive(held)) {
+            return false;
+        }
+        if (script::IScriptCallbacks* callbacks = script::scriptCallbacks()) {
+            callbacks->invoke(held, self, {});
+        }
+        return true;
+    });
+    return makeWidgetTimerRef(host, id);
+}
+
+void fillWidgetSelf(const std::shared_ptr<LuaWidgetScriptBehavior>& behavior, ScriptSelfBuilder& out)
+{
+    LuaWidgetScripts& runtime = *behavior->runtime;
+    const std::weak_ptr<LuaWidgetScriptBehavior> weak = behavior;
+    // Detach clears the owner before onDestroy. Leave the fields already on
+    // this self so `self.widget.name` still resolves for that callback.
+    if (UIElement* owner = behavior->getOwner()) {
+        out.field("widget", widgetRefValue(runtime.host, owner->shared_from_this()));
+    }
+    if (const UIElementRef root = behavior->entryRoot.lock()) {
+        out.field("root", widgetRefValue(runtime.host, root));
+    }
+    out.method("setTickEnabled", [weak](script::ScriptArgs args) -> script::ScriptValue {
+        if (const std::shared_ptr<LuaWidgetScriptBehavior> live = weak.lock(); live && !args.empty()) {
+            live->bTickEnabled = script::scriptToBool(args[0]);
+        }
+        return {};
+    });
+    out.method("after", [weak](script::ScriptArgs args) -> script::ScriptValue {
+        return addScriptTimer(weak.lock(), args, false);
+    });
+    out.method("every", [weak](script::ScriptArgs args) -> script::ScriptValue {
+        return addScriptTimer(weak.lock(), args, true);
+    });
+    out.method("find", [weak](script::ScriptArgs args) -> script::ScriptValue {
+        const std::shared_ptr<LuaWidgetScriptBehavior> live = weak.lock();
+        const UIElementRef root = live ? live->entryRoot.lock() : nullptr;
+        if (!live || !live->runtime || !root || args.empty()) {
+            return {};
+        }
+        return widgetRefValue(live->runtime->host, live->runtime->host.findInEntry(*root, script::scriptToString(args[0])));
+    });
+    out.method("spawn", [weak](script::ScriptArgs args) -> script::ScriptValue {
+        const std::shared_ptr<LuaWidgetScriptBehavior> live = weak.lock();
+        if (!live || !live->runtime || args.size() < 2) {
+            return {};
+        }
+        const auto* parent = std::get_if<script::ScriptRef>(&args[1]);
+        UIElement* under = parent ? resolveWidget(parent->a) : nullptr;
+        if (!under || !widgetLive(under)) {
+            if (parent) {
+                warnWidgetGone(parent->a, "spawn");
             }
-            const sol::protected_function_result result = fn(owner);
-            if (!result.valid()) {
-                const sol::error error = result;
-                YA_CORE_ERROR("Lua widget timer error ({}): {}", path, error.what());
-            }
-            return true;
-        });
-    return sol::make_object(lua, FLuaUITimer{.host = &host, .id = id});
+            return {};
+        }
+        GameUIHost& host = live->runtime->host;
+        return widgetRefValue(host, host.queueSpawn(script::scriptToString(args[0]), *under));
+    });
+}
+
+void FWidgetScriptHost::contributeSelf(ScriptSelfBuilder& out)
+{
+    if (const std::shared_ptr<LuaWidgetScriptBehavior> live = behavior.lock(); live && live->runtime) {
+        fillWidgetSelf(live, out);
+    }
 }
 
 } // namespace
@@ -124,7 +143,7 @@ void LuaWidgetScriptBehavior::tick(UIElement& owner, float deltaSeconds)
 {
     (void)owner;
     if (runtime) {
-        runtime->scripting.call(instance, ELuaScriptCallback::Update, deltaSeconds);
+        (void)callScriptInstance(runtime->scripting, instance, EScriptCallback::Update, deltaSeconds);
     }
 }
 
@@ -136,43 +155,10 @@ void LuaWidgetScriptBehavior::onDetached(UIElement& owner)
     }
 }
 
-LuaWidgetScripts::LuaWidgetScripts(LuaScriptingSystem& inScripting, GameUIHost& inHost)
+LuaWidgetScripts::LuaWidgetScripts(IWorldScriptRuntime& inScripting, GameUIHost& inHost)
     : scripting(inScripting), host(inHost)
 {
-    sol::state& lua = scripting.lua();
-    lua.new_usertype<FWidgetScriptRef>("__WidgetScriptRef", sol::no_constructor);
-    lua.new_usertype<FLuaUITimer>("UITimer", sol::no_constructor, "cancel", &FLuaUITimer::cancel);
-    bindLuaWidgetHandles(lua);
-
-    _selfApi = lua.create_table();
-    _selfApi.set_function("setTickEnabled", [](const sol::table& self, bool bEnabled) {
-        if (auto behavior = behaviorOf(self)) {
-            behavior->bTickEnabled = bEnabled;
-        }
-    });
-    _selfApi.set_function("after", [](const sol::table& self, float seconds, const sol::protected_function& fn,
-                                      sol::this_state state) { return addScriptTimer(self, seconds, 0.0f, fn, state); });
-    _selfApi.set_function("every", [](const sol::table& self, float seconds, const sol::protected_function& fn,
-                                      sol::this_state state) { return addScriptTimer(self, seconds, seconds, fn, state); });
-    _selfApi.set_function("find", [](const sol::table& self, const std::string& name, sol::this_state state) -> sol::object {
-        auto         behavior = behaviorOf(self);
-        UIElementRef root     = behavior ? behavior->entryRoot.lock() : nullptr;
-        if (!root || !behavior->runtime) {
-            return sol::make_object(state, sol::lua_nil);
-        }
-        GameUIHost& host = behavior->runtime->host;
-        return makeLuaWidgetHandle(state, host, host.findInEntry(*root, name));
-    });
-    _selfApi.set_function("spawn", [](const sol::table& self, const std::string& documentPath,
-                                      const LuaWidgetHandle& parent, sol::this_state state) -> sol::object {
-        auto        behavior = behaviorOf(self);
-        UIElement*  under    = behavior && behavior->runtime ? parent.get("spawn") : nullptr;
-        if (!under) {
-            return sol::make_object(state, sol::lua_nil);
-        }
-        GameUIHost& host = behavior->runtime->host;
-        return makeLuaWidgetHandle(state, host, host.queueSpawn(documentPath, *under));
-    });
+    (void)widgetRefKind();
 }
 
 LuaWidgetScripts::~LuaWidgetScripts()
@@ -183,7 +169,7 @@ LuaWidgetScripts::~LuaWidgetScripts()
     for (const auto& weak : all) {
         if (auto behavior = weak.lock(); behavior && behavior->runtime == this) {
             behavior->runtime = nullptr;
-            scripting.destroy(behavior->instance);
+            destroyScriptInstance(scripting, behavior->instance);
             host.cancelTimersOf(behavior.get());
         }
     }
@@ -220,8 +206,6 @@ void LuaWidgetScripts::activate(UIElement& widget, const FUIBehaviorSpec& spec, 
 
 void LuaWidgetScripts::update()
 {
-    // Start the batch activated since the last step: across entries by zOrder,
-    // then mount order; within an entry in tree pre-order (activation order).
     std::vector<std::shared_ptr<LuaWidgetScriptBehavior>> batch;
     for (const auto& weak : std::exchange(_fresh, {})) {
         if (auto behavior = weak.lock(); behavior && behavior->runtime == this && behavior->getOwner()) {
@@ -234,13 +218,13 @@ void LuaWidgetScripts::update()
     });
     for (const auto& behavior : batch) {
         _started.push_back(behavior);
-        (void)scripting.load(behavior->instance, std::make_unique<FWidgetScriptHost>(behavior));
+        (void)loadScriptInstance(scripting, behavior->instance, std::make_unique<FWidgetScriptHost>(behavior));
     }
     for (const auto& behavior : batch) {
-        scripting.call(behavior->instance, ELuaScriptCallback::Init);
+        (void)callScriptInstance(scripting, behavior->instance, EScriptCallback::Init);
     }
     for (const auto& behavior : batch) {
-        scripting.call(behavior->instance, ELuaScriptCallback::Start);
+        (void)callScriptInstance(scripting, behavior->instance, EScriptCallback::Start);
     }
     for (const auto& behavior : batch) {
         if (const UIElement* owner = behavior->getOwner()) {
@@ -248,17 +232,12 @@ void LuaWidgetScripts::update()
         }
     }
 
-    // onShow / onHide: effective visibility can only have changed if the
-    // tree's visibility revision moved. Read before the callbacks, so a change
-    // they make is seen next update.
     const uint64_t visibilityRevision = host.getTree().getVisibilityRevision();
     if (visibilityRevision == _seenVisibilityRevision) {
         return;
     }
     _seenVisibilityRevision = visibilityRevision;
     std::erase_if(_started, [](const auto& weak) { return weak.expired(); });
-    // Only this function appends to `_started`; a callback can end behaviours
-    // (their weak refs expire) but not add any.
     for (size_t i = 0; i < _started.size(); ++i) {
         auto             behavior = _started[i].lock();
         const UIElement* owner    = behavior ? behavior->getOwner() : nullptr;
@@ -268,7 +247,7 @@ void LuaWidgetScripts::update()
         const bool bVisible = owner->isVisibleInTree();
         if (bVisible != behavior->bWasVisible) {
             behavior->bWasVisible = bVisible;
-            (void)scripting.callNamed(behavior->instance, bVisible ? "onShow" : "onHide", {}, ENamedCallError::Swallow);
+            (void)callScriptInstanceNamed(scripting, behavior->instance, bVisible ? "onShow" : "onHide", {}, true);
         }
     }
 }
@@ -277,32 +256,15 @@ void LuaWidgetScripts::release(LuaWidgetScriptBehavior& behavior)
 {
     // Destroy first: an onDestroy that starts a timer makes one that finds its
     // instance gone and drops itself.
-    scripting.destroy(behavior.instance);
+    destroyScriptInstance(scripting, behavior.instance);
     host.cancelTimersOf(&behavior);
 }
 
-void LuaWidgetScripts::bindSelf(const std::shared_ptr<LuaWidgetScriptBehavior>& behavior, sol::table& self)
-{
-    // Once per `self`: the fields never change for a behaviour, and a hot
-    // reload produces a new `self` that arrives here unbound.
-    if (self.raw_get<sol::object>("__widgetScript").get_type() != sol::type::lua_nil) {
-        return;
-    }
-    sol::state_view lua(self.lua_state());
-    self.raw_set("__widgetScript", FWidgetScriptRef{.behavior = behavior});
-    UIElement* owner = behavior->getOwner();
-    self.raw_set("widget", makeLuaWidgetHandle(lua, host, owner ? owner->shared_from_this() : nullptr));
-    self.raw_set("root", makeLuaWidgetHandle(lua, host, behavior->entryRoot.lock()));
-    for (const auto& [key, value] : _selfApi) {
-        self.raw_set(key, value);
-    }
-}
-
-sol::object LuaWidgetScripts::scriptSelfOf(const UIElement& widget)
+script::ScriptSelfHandle LuaWidgetScripts::scriptSelfOf(const UIElement& widget)
 {
     const LuaWidgetScriptBehavior* script = widget.findBehavior<LuaWidgetScriptBehavior>();
-    if (script && script->runtime && script->instance.bLoaded) {
-        return script->runtime->scripting.selfOf(script->instance.runtimeId);
+    if (script && script->runtime && script->instance.bLoaded && script->instance.runtimeId != 0) {
+        return script::ScriptSelfHandle{.runtimeId = script->instance.runtimeId};
     }
     return {};
 }

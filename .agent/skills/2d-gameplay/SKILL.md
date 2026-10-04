@@ -54,11 +54,13 @@ Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色�
   注册）。行走地图实体默认叫 `TilemapGround`：`Player.lua` / `FollowCamera.lua` 的 `mapName` 用这个默认，场景 `propertyOverrides` 可改；Town / House / TownLarge 不写覆盖。
 - `isSolid` 出界算阻挡；`entityAt` 返回「格子里第一个 actor」——actor = 同时有
   Sprite2DComponent 与 LuaScriptComponent 的实体。相机、纯变换实体永远不算。
-- 玩法脚本（Player.lua）组合三者判进格：`isSolid(...)`，以及
-  `occupant:call("blocksEntry") ~= false`（门作答 false 可穿行；无作答 = 阻挡）。
-  走上新格时用 `entityAt(x, y, self.entity)` 排除自己再触发其 `onPlayerEnter`（门、
-  陷阱都是这个入口）。引擎不在 isSolid 里掺实体感知——tilemap 组件看不见场景，查询的
-  注册点在 GameRuntime `GameplayScriptFunctions.cpp`（能同时看到 Scene 与组件）。
+- 玩法脚本（`GridMover.lua`）组合三者判进格：`isSolid(...)`，以及
+  `world.scriptOf(occupant)` 上的 `blocksEntry`。无脚本、无该方法、或返回值不是
+  false 都阻挡；只有 `s:blocksEntry() == false` 才可穿行。走上新格时用
+  `entityAt(x, y, self.entity)` 排除自己，再对 `scriptOf` 得到的表调
+  `onPlayerEnter`（门、陷阱都是这个入口；没有该方法就不调用）。引擎不在 isSolid
+  里掺实体感知——tilemap 组件看不见场景，查询的注册点在 GameRuntime
+  `GameplayScriptFunctions.cpp`（能同时看到 Scene 与组件）。
 - 手写场景注意：**cell 值 = tile 序号 + 1**（0 = 空）；TilesetRef 的 JSON 形状是
   `{"__base__": {"AssetRefBase": {"_path": ...}}}`，不是 TextureSlot 那套字段。
 
@@ -80,13 +82,21 @@ Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色�
 
 ## 脚本互调
 
-- 交互 = 「玩家脚本找到目标实体 → 直接调它脚本上的函数」：
-  `target:call("onInteract", ...)`。没有中心事件总线。
-- 语义：实体上第一个定义了该名字的已加载脚本作答；未定义返回 nil；目标脚本
-  出错抛 ScriptError 到调用方（错误不能伪装成安静地返回 nil）。
-- 实现入口：`LuaScriptingSystem::callNamed`（实例面）+ `callEntityScript`
-  （实体面，`ECS/Systems/LuaScriptingSystem.cpp`），以无捕获原生方法挂在
-  Entity 类型上，Lua / JS 共用。
+- 玩法 Lua 直接拿对方的 self：`local s = world.scriptOf(entity[, path])`。
+  返回的是那张活表，所以写错方法名当场 `attempt to call nil`；没有已加载脚本
+  返回 nil。可选 `path` 按规范化后的脚本路径过滤。返回前会把 `self.entity`
+  重新绑到这个实体，和 `call` 一样。
+- 表只在当次使用，不要存过帧。热重载保持同一个 runtimeId，但整张 self 换成新表；
+  手里的旧表不再是对方的脚本。
+- 直调优先。`entity:call("onInteract")` 只留给协议问询和 JS：目标上第一个定义了
+  该名字的已加载脚本作答，未定义返回 nil，目标出错抛到调用方。玩法侧
+  （`Player.lua` 的 `interact`、`GridMover.lua` 的 `blocksEntry` /
+  `onPlayerEnter`）走 `scriptOf`。可选方法先判空再调，避免把「没有这个函数」
+  变成错误。
+- `call` 的实现入口仍是 `LuaScriptingSystem::callNamed` 与 `callEntityScript`
+  （`Script/Lua/LuaScriptingSystem.cpp`），以无捕获原生方法挂在 Entity 上，
+  Lua / JS 共用。`scriptOf` 登记在 `GameplayScriptFunctions.cpp`，Lua 侧把
+  `ScriptSelfHandle` 推回那张表。
 
 ## 对话框（Game UI 条目）
 
@@ -96,8 +106,8 @@ Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色�
   `dialogueName` 默认 `"Dialogue"`，场景 `propertyOverrides` 可改。跟随相机的目标
   默认 `"Player"`（`FollowCamera.lua` 的 `targetName`）。**移动锁由玩法状态控制**——
   玩家脚本每帧轮询 `dialogue:busy()`，game-ui S4 的 modal 条目落地后才迁移。
-  `ui.get` 在条目脚本加载完成前的头几帧回落成控件句柄，轮询侧必须容错
-  （`dialogue.busy ~= nil` 再调用）。
+  `ui.get` 在条目脚本加载完成前的头几帧回落成控件 `ScriptRef`（读未知字段会报错，
+  不是 nil）。轮询侧先确认拿到的是表，再 `dialogue.busy ~= nil` 然后调用。
 - 一次按键只做一件事：对话框忽略「开框那一帧」的 `confirm`（`time:getFrameIndex()`），
   玩家侧触发交互后要求确认键完全松开才再武装（re-arm），否则同一次按键会同时
   推进对话又再次触发交互。

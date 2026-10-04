@@ -67,8 +67,9 @@ end
 
 -- direction nil refuses without turning. A solid tile (or a cell off the
 -- map) is never entered. An actor's cell blocks too -- unless its script
--- answers blocksEntry() == false; a missing answer means solid. Facing
--- updates even when the step is refused, so a held direction turns in place.
+-- answers blocksEntry() == false. No script, no method, or any other answer
+-- stays solid. Facing updates even when the step is refused, so a held
+-- direction turns in place.
 function GridMover:tryStep(direction, carry)
     if not direction then
         return false
@@ -80,8 +81,11 @@ function GridMover:tryStep(direction, carry)
         return false
     end
     local occupant = self.map:entityAt(nextX, nextY)
-    if occupant ~= nil and occupant:call("blocksEntry") ~= false then
-        return false
+    if occupant ~= nil then
+        local s = world.scriptOf(occupant)
+        if not (s ~= nil and s.blocksEntry ~= nil and s:blocksEntry() == false) then
+            return false
+        end
     end
     self.to = { x = nextX, y = nextY }
     self.progress = carry
@@ -93,7 +97,10 @@ end
 function GridMover:pokeArrival()
     local occupant = self.map:entityAt(self.cell.x, self.cell.y, self.entity)
     if occupant then
-        occupant:call("onPlayerEnter")
+        local s = world.scriptOf(occupant)
+        if s ~= nil and s.onPlayerEnter ~= nil then
+            s:onPlayerEnter()
+        end
     end
 end
 
