@@ -109,17 +109,21 @@ void ScreenDrawList::appendQuadIndices(uint32_t a, uint32_t b, uint32_t c, uint3
 
 uint32_t ScreenDrawList::findOrAddTexture(const Ptr<Texture>& texture)
 {
-    uint32_t textureIdx = 0;
-    auto it = texturePtr2Idx.find(texture.get());
-    if (it != texturePtr2Idx.end()) {
-        textureIdx = it->second;
+    // Slot 0 stays the null key, matching the GPU table's white slot. A real
+    // texture therefore starts at slot 1 even when it is the first one drawn.
+    if (textures.empty()) {
+        textures.push_back(nullptr);
+    }
+    const std::optional<uint32_t> slot = _textureCatalog.tryAdd(TextureTableKey::fromTexture(texture.get()));
+    YA_CORE_ASSERT(slot.has_value(), "Screen draw list texture catalog exceeded its cursor capacity");
+    const uint32_t index = *slot;
+    if (index == textures.size()) {
+        textures.push_back(texture);
     }
     else {
-        textures.push_back(texture);
-        textureIdx = static_cast<uint32_t>(textures.size() - 1);
-        texturePtr2Idx.emplace(texture.get(), textureIdx);
+        YA_CORE_ASSERT(index < textures.size(), "Screen draw texture slot is outside the catalog");
     }
-    return textureIdx;
+    return index;
 }
 
 void ScreenDrawList::appendQuad(const ScreenAffine&             transform,

@@ -43,7 +43,7 @@
 
 步骤 5 2D 合批核心（前置：步骤 3、4）
 - [x] 5b-1 世界精灵实例化（`recordFamily` self 7.516 → 0.425ms，像素 0 差）；纹理表组件 `Render2D/TextureTableBatch.h`（槽身份键、epoch 直接映射、满了切批）
-- [ ] 5b-2 `ScreenDrawList` 迁移到同一纹理表 + 批游标（顶点格式保留，UI 像素不变）
+- [x] 5b-2 `ScreenDrawList` 迁移到同一纹理表 + 批游标（顶点格式保留，UI 像素不变）
 - [x] 5a 画家顺序 + y-sort（单一混合管线、深度只测不写、`spriteDrawsBefore` 排序键、`bYSort`/`layerOffset`），删 `z = base − y·ε` / `Actor.zFor`；拾取共用比较函数
 - [x] 5b-1 世界精灵纹理表直接映射（按绑定身份：纹理 + view + sampler 作键）
 - [ ] 5c tilemap 每图层 / 区块静态实例缓冲，只在编辑时重建

@@ -365,7 +365,7 @@ void ScreenDrawRecorder::begin(const Extent2D& extent, uint32_t flightSlot)
     _frameUboUploaded = false;
     resources.activeResourceDS = {};
     resources.nextResourceDS = 0;
-    resetTextureBatch();
+    _textureBindings.clear();
 
     const float w = static_cast<float>(extent.width);
     const float h = static_cast<float>(extent.height);
@@ -440,19 +440,6 @@ void ScreenDrawRecorder::flush(ICommandBuffer* cmdBuf, uint32_t width, uint32_t 
     _indexCount = 0;
 }
 
-void ScreenDrawRecorder::resetTextureBatch()
-{
-    _textureBindings.clear();
-    _texturePtr2Idx.clear();
-    _textureBindings.push_back(TextureBinding{
-        .texture = TextureLibrary::get().getWhiteTexture(),
-        .sampler = TextureLibrary::get().getDefaultSampler(),
-    });
-    _lastPushTextureSlot = static_cast<int>(_textureBindings.size() - 1);
-    _resourceVersion = std::max<uint64_t>(_resourceVersion + 1, 1);
-    _uploadedResourceVersion = 0;
-}
-
 void ScreenDrawRecorder::updateResources(DescriptorSetHandle dsHandle)
 {
     std::vector<DescriptorImageInfo> imageInfos;
@@ -482,34 +469,6 @@ DescriptorSetHandle ScreenDrawRecorder::acquireResourceDS(Flight& flight)
     return flight.resourceDSPool[flight.nextResourceDS++];
 }
 
-uint32_t ScreenDrawRecorder::findOrAddTexture(ya::Ptr<Texture> texture)
-{
-    uint32_t textureIdx = 0;
-    if (texture) {
-        auto it = _texturePtr2Idx.find(texture.get());
-        if (it != _texturePtr2Idx.end()) {
-            textureIdx = it->second;
-            if (_textureBindings[textureIdx].texture != texture) {
-                _textureBindings[textureIdx].texture = texture;
-                ++_resourceVersion;
-            }
-        }
-        else {
-            YA_CORE_ASSERT(_textureBindings.size() < kScreenTextureSetSize,
-                           "Screen draw texture table overflow without a record-step check");
-            _textureBindings.push_back(TextureBinding{
-                .texture = texture,
-                .sampler = resolveSamplerForTexture(texture.get()),
-            });
-            textureIdx = static_cast<uint32_t>(_textureBindings.size() - 1);
-            _texturePtr2Idx[texture.get()] = textureIdx;
-            _lastPushTextureSlot = static_cast<int>(textureIdx);
-            ++_resourceVersion;
-        }
-    }
-    return textureIdx;
-}
-
 ScreenDrawFrameStats ScreenDrawRecorder::record(ScreenDrawList& list, const ScreenDrawTarget& target)
 {
     ScreenDrawFrameStats stats{};
@@ -524,111 +483,72 @@ ScreenDrawFrameStats ScreenDrawRecorder::record(ScreenDrawList& list, const Scre
     const uint32_t flightSlot = static_cast<uint32_t>(_render->recordedFrameIndex() % framesInFlight);
     begin(Extent2D{.width = target.width, .height = target.height}, flightSlot);
 
-    constexpr uint32_t kUnmapped = ~0u;
-    std::vector<uint32_t> localToGlobal(list.textures.size(), kUnmapped);
-    std::unordered_map<uint32_t, uint32_t> copied;
-    bool bOpen = false;
-    bool bClipped = false;
-    Rect2D clip{};
-
-    auto flushBatch = [&]() {
-        flush(target.cmd, target.width, target.height, bClipped, clip, &stats);
-        copied.clear();
-    };
-    auto flushOpen = [&]() {
-        if (!bOpen) {
-            return;
-        }
-        flushBatch();
-        bOpen = false;
-    };
-
-    auto placeTriangle = [&](uint32_t i0, uint32_t i1, uint32_t i2) {
-        const uint32_t src[3] = {i0, i1, i2};
-        for (int attempt = 0; attempt < 8; ++attempt) {
-            uint32_t uniqueNew[3]{};
-            uint32_t newVerts = 0;
-            bool bNeedTextureFlush = false;
-            for (uint32_t s : src) {
-                if (copied.contains(s)) {
-                    continue;
-                }
-                bool bSeen = false;
-                for (uint32_t n = 0; n < newVerts; ++n) {
-                    if (uniqueNew[n] == s) {
-                        bSeen = true;
-                        break;
-                    }
-                }
-                if (bSeen) {
-                    continue;
-                }
-                uniqueNew[newVerts++] = s;
-                const uint32_t slot = list.vertices[s].textureSlot;
-                YA_CORE_ASSERT(slot < localToGlobal.size(), "Screen draw texture slot out of range");
-                if (localToGlobal[slot] == kUnmapped && textureTableFull()) {
-                    bNeedTextureFlush = true;
-                }
-            }
-            if (bNeedTextureFlush) {
-                if (_vertexCount > 0) {
-                    flushBatch();
-                }
-                resetTextureBatch();
-                std::fill(localToGlobal.begin(), localToGlobal.end(), kUnmapped);
-                bOpen = true;
-                continue;
-            }
-            const bool bFits = _vertexCount + newVerts <= ScreenDrawPipelines::MaxVertexCount
-                && _indexCount + 3 <= ScreenDrawPipelines::MaxIndexCount;
-            if (!bFits) {
-                YA_CORE_ASSERT(_vertexCount > 0 || _indexCount > 0,
-                               "Screen draw triangle does not fit in an empty batch");
-                flushBatch();
-                continue;
-            }
-            auto put = [&](uint32_t s) -> uint32_t {
-                if (const auto it = copied.find(s); it != copied.end()) {
-                    return it->second;
-                }
-                const uint32_t slot = list.vertices[s].textureSlot;
-                if (localToGlobal[slot] == kUnmapped) {
-                    localToGlobal[slot] = findOrAddTexture(list.textures[slot].get());
-                }
-                ScreenVertex vertex = list.vertices[s];
-                vertex.textureSlot = localToGlobal[slot];
-                *_vertexPtr++ = vertex;
-                const uint32_t local = _vertexCount++;
-                copied.emplace(s, local);
-                return local;
-            };
-            YA_CORE_ASSERT(_indexPtr != nullptr, "Screen draw index buffer is not mapped");
-            uint32_t* dst = _indexPtr + _batchStartIndex + _indexCount;
-            dst[0] = put(i0);
-            dst[1] = put(i1);
-            dst[2] = put(i2);
-            _indexCount += 3;
-            return;
-        }
-        YA_CORE_ASSERT(false, "Screen draw failed to place a triangle");
-    };
-
-    for (const ScreenDrawList::Command& command : list.commands) {
-        const bool bBoundary = !bOpen || bClipped != command.bClipped
-            || (command.bClipped && (clip.pos != command.clip.pos || clip.extent != command.clip.extent));
-        if (bBoundary) {
-            flushOpen();
-            bOpen = true;
-            bClipped = command.bClipped;
-            clip = command.clip;
-        }
-        YA_CORE_ASSERT(command.indexCount % 3 == 0, "Screen draw command index count is not a triangle list");
-        const uint32_t indexEnd = command.firstIndex + command.indexCount;
-        for (uint32_t index = command.firstIndex; index < indexEnd; index += 3) {
-            placeTriangle(list.indices[index], list.indices[index + 1], list.indices[index + 2]);
-        }
+    std::vector<TextureTableKey> catalogKeys;
+    catalogKeys.reserve(list.textures.size());
+    for (const Ptr<Texture>& texture : list.textures) {
+        catalogKeys.push_back(TextureTableKey::fromTexture(texture.get()));
     }
-    flushOpen();
+    std::vector<ScreenDrawCommandSpan> spans;
+    spans.reserve(list.commands.size());
+    for (const ScreenDrawList::Command& command : list.commands) {
+        spans.push_back(ScreenDrawCommandSpan{
+            .firstIndex = command.firstIndex,
+            .indexCount = command.indexCount,
+            .bClipped   = command.bClipped,
+            .clip       = command.clip,
+        });
+    }
+    const ScreenDrawRemap remap = planScreenDrawRemap(
+        list.indices,
+        static_cast<uint32_t>(list.vertices.size()),
+        [&](uint32_t vertex) { return list.vertices[vertex].textureSlot; },
+        catalogKeys,
+        TextureTableKey::fromTexture(nullptr),
+        spans,
+        static_cast<uint32_t>(ScreenDrawPipelines::MaxVertexCount),
+        static_cast<uint32_t>(ScreenDrawPipelines::MaxIndexCount),
+        kScreenTextureSetSize);
+
+    std::vector<uint32_t> uploadedSlots;
+    for (const ScreenDrawBatchRange& batch : remap.batches) {
+        YA_CORE_ASSERT(_vertexPtr != nullptr && _indexPtr != nullptr, "Screen draw buffers are not mapped");
+        for (uint32_t i = 0; i < batch.vertexCount; ++i) {
+            const uint32_t source = remap.sourceVertices[batch.firstVertex + i];
+            ScreenVertex vertex   = list.vertices[source];
+            vertex.textureSlot    = remap.gpuSlots[batch.firstVertex + i];
+            *_vertexPtr++         = vertex;
+        }
+        uint32_t* dst = _indexPtr + _batchStartIndex;
+        for (uint32_t i = 0; i < batch.indexCount; ++i) {
+            dst[i] = remap.indices[batch.firstIndex + i];
+        }
+        _vertexCount = batch.vertexCount;
+        _indexCount  = batch.indexCount;
+
+        if (uploadedSlots != batch.catalogSlots) {
+            _textureBindings.clear();
+            _textureBindings.reserve(batch.catalogSlots.size());
+            for (uint32_t catalog : batch.catalogSlots) {
+                if (catalog == kScreenDrawWhiteCatalog) {
+                    _textureBindings.push_back(TextureBinding{
+                        .texture = TextureLibrary::get().getWhiteTexture(),
+                        .sampler = TextureLibrary::get().getDefaultSampler(),
+                    });
+                }
+                else {
+                    const Ptr<Texture> texture = list.textures[catalog];
+                    _textureBindings.push_back(TextureBinding{
+                        .texture = texture,
+                        .sampler = resolveSamplerForTexture(texture.get()),
+                    });
+                }
+            }
+            _resourceVersion         = std::max<uint64_t>(_resourceVersion + 1, 1);
+            _uploadedResourceVersion = 0;
+            uploadedSlots            = batch.catalogSlots;
+        }
+        flush(target.cmd, target.width, target.height, batch.bClipped, batch.clip, &stats);
+    }
     return stats;
 }
 

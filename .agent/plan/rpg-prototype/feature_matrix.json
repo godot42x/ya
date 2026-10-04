@@ -200,7 +200,7 @@
       "driven_by": "R4: per-candidate submission ~6.3ms of a 10.6ms frame",
       "evidence": [
         "5b-1 done: world sprites drawn as instanced batches (SpriteInstance from Slang generated header, per-instance vertex rate), TextureTableCursor/planInstancedDraws in Render2D; TownLarge recordFamily self 7.516 -> 0.425 ms",
-        "5b-2 pending: ScreenDrawList adopts the shared texture table + batch cursor",
+        "5b-2 done: ScreenDrawList/ScreenDrawRecorder use TextureTableCursor + planScreenDrawRemap; hand-written tables removed; UI pixels unchanged",
         "painter order + y-sort as the sort key (done in sprite_painter_order, step 5a)",
         "texture table direct mapping",
         "tilemap static instance buffers",

@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "Core/Common/Types.h"
+#include "Render2D/TextureTableBatch.h"
 
 #include <glm/glm.hpp>
 
@@ -9,7 +10,6 @@
 #include <cstdint>
 #include <span>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -195,7 +195,10 @@ struct YA_RENDER_2D_API ScreenDrawList
                           const glm::vec4&    uvRect,
                           uint32_t            sampleMode);
 
-    std::unordered_map<const Texture*, uint32_t> texturePtr2Idx;
+    /// List-wide catalog. Slot 0 is the null/white key. This is not the 16-slot
+    /// GPU table: a full GPU table cuts batches at record time, not commands.
+    static constexpr uint32_t kTextureCatalogCapacity = 1u << 20;
+    TextureTableCursor        _textureCatalog{TextureTableKey::fromTexture(nullptr), kTextureCatalogCapacity};
     uint32_t commandCount  = 0;
     bool     bPending      = false;
     uint32_t pendingFirst      = 0;

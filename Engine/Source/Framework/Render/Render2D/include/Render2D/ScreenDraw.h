@@ -10,7 +10,6 @@
 
 #include <array>
 #include <memory>
-#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -117,8 +116,6 @@ struct YA_RENDER_2D_API ScreenDrawRecorder
 
     [[nodiscard]] ScreenDrawFrameStats record(ScreenDrawList& list, const ScreenDrawTarget& target);
 
-    [[nodiscard]] bool textureTableFull() const { return _textureBindings.size() >= kScreenTextureSetSize; }
-
   private:
     struct Flight
     {
@@ -136,10 +133,8 @@ struct YA_RENDER_2D_API ScreenDrawRecorder
     void ensureResources();
     void begin(const Extent2D& extent, uint32_t flightSlot);
     void flush(ICommandBuffer* cmdBuf, uint32_t width, uint32_t height, bool bClipped, const Rect2D& clip, ScreenDrawFrameStats* stats);
-    void resetTextureBatch();
     void updateResources(DescriptorSetHandle dsHandle);
     [[nodiscard]] DescriptorSetHandle acquireResourceDS(Flight& flight);
-    [[nodiscard]] uint32_t findOrAddTexture(ya::Ptr<Texture> texture);
     [[nodiscard]] Flight& activeFlight() { return _flights[_activeFlightIndex]; }
 
     ScreenDrawPipelines* _pipelines = nullptr;
@@ -164,8 +159,6 @@ struct YA_RENDER_2D_API ScreenDrawRecorder
     uint64_t      _uploadedResourceVersion = 0;
     bool          _frameUboUploaded = false;
     std::vector<TextureBinding> _textureBindings;
-    std::unordered_map<const Texture*, uint32_t> _texturePtr2Idx;
-    int _lastPushTextureSlot = -1;
 };
 
 } // namespace ya

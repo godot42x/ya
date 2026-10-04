@@ -271,13 +271,17 @@ C++
 - 管线状态仍只有一条：SrcAlpha / OneMinusSrcAlpha，深度 LessOrEqual 只测不写，
   `a < 0.01` discard，背面剔除 + CCW。空列表不加 pass。
 
-**屏幕绘制**（`ScreenDrawList` / `ScreenDrawRecorder`）还是展开顶点，不是实例：
+**屏幕绘制**（`ScreenDrawList` / `ScreenDrawRecorder`）仍是展开顶点，不是实例：
 
-- 局部纹理槽写在顶点里，录制时重映射进 16 槽表；表满了 flush 再开一批。null 纹理
-  占槽 0（白）。kind / clip / `MaxVertexCount` 也会切批，合并不同 clip 会让后面的
-  scissor 裁掉前面的几何。
-- 5b-2 再迁到上面的纹理表组件。组件的键已经能表达 `Texture*`（`fromTexture`）和
-  绑定身份（`fromBinding`），槽 0 白、满了切批重映射。本任务不要改 `ScreenDrawList`。
+- 顶点格式仍是 `ScreenVertex`。列表用 `TextureTableCursor` 做整表目录（`fromTexture`，
+  槽 0 是 null/白，容量远大于 16，所以**不**在 command 边界上按纹理切）。录制时
+  `planScreenDrawRemap` 用同一张 16 槽表重映射：槽 0 白，键相等复用，装不下就
+  flush 并在新表重映射。null 纹理进槽 0。clip 变化和 `MaxVertexCount` /
+  `MaxIndexCount` 只 flush 几何、不清纹理表；表满的判断在放三角形之前，和迁移前
+  一样（未映射的槽在表已满时会切批，包括还没映射过的 null）。
+- 采样模式（Coverage / SDF / Opaque）、圆角、字体图集、clip 栈、帧环和描述符池
+  都不变。UI 的键只有 `Texture*`；sampler 来自纹理的 sampler category，同一张
+  `Texture*` 不会带两套 sampler。世界精灵的键仍是绑定身份。
 
 ## 退出条件
 

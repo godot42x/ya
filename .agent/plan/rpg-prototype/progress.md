@@ -615,3 +615,13 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 度量（profile 构建，TownLarge，540 帧）：`recordFamily` self 7.516 → **0.425 ms**（目标 ≤1.5），`iterate` 12.162 → 8.382ms（顶到 120fps 上限），`SubmitPresent` 0.510 → 3.355（垂直同步等待记在 present 上）。
 - 验证：新增 8 个测试；`ya-testing` 1643 ran / 1642 passed / 1 skipped；四条玩法脚本、编辑器冒烟 exit 0；House / TownLarge / HelloMaterial / Player 在 NPC 上下两张与改前逐字节相同，Town 一次 1 设备像素跟随抖动，紧接着重截与改前相同；20 种纹理压力场景（/tmp，未入库）不丢精灵。
 - 债务 / 未验证：`Sprite2DWorld.slang` 里用一个顶点阶段不读的 `[[vk::push_constant]] SpriteInstance pc` 让生成器发出结构体偏移（生成器只对 uniform 类型发 C++ 类型）——后续应让 `slang_gen_header.py` 支持顶点输入结构；OpenGL 后端管线整文件仍注释，实例路径没有同步，仅 Vulkan/MoltenVK 实测；`backpack/normal.png`（4096²）在截图帧不可绘制，疑为异步加载未就绪，未深究。
+
+## 2026-10-04 — 步骤 5b-2 ScreenDrawList 迁移到共享纹理表
+
+- 删除：`ScreenDrawList` 无上限 `unordered_map<const Texture*, uint32_t>`，录制器的 `findOrAddTexture` / `resetTextureBatch` / `textureTableFull` / `_texturePtr2Idx` / `_lastPushTextureSlot`，`ScreenDraw.cpp` 手写的 `placeTriangle` 切批循环。
+- `TextureTableBatch.h` 新增 `planScreenDrawRemap`（+ `ScreenDrawCommandSpan` / `ScreenDrawBatchRange` / `ScreenDrawRemap`）：整段 command 的切批、顶点去重与批内索引；`TextureTableCursor` 与世界精灵的 `planInstancedDraws` 未变。
+  CPU 目录用同一游标（容量 `1<<20`），16 槽切批留在录制时（command 仍只在 clip 变化和 `seal()` 时关闭，避免改 `ScreenDrawListTest` 与 clip 快照）。
+- 语义差异：CPU `vertex.textureSlot` 现在槽 0 固定是 null/白、第一张实纹理是槽 1（旧 map 首张在槽 0）；只有录制器读该字段并按键重映射，GPU 顺序仍是首次出现顺序。切批点（clip、顶点/索引容量、表满、未映射的 null 在表满时仍切批）与迁移前一致；描述符集仅在 `catalogSlots` 变化时重写。
+- 验证：新增 9 个测试（切批期望按旧录制器算法写死，没有重跑旧二进制取数）；`ya-testing` 1652 ran / 1651 passed / 1 skipped；四条玩法脚本、编辑器冒烟 exit 0；
+  像素对照 GUIWorkbench / GreedySnake / RPG 编辑器（含动画集页签）/ 对话框页 0 差；HelloMaterial 编辑器 149 像素，仅 Stats 面板帧号末位。
+- 未验证：屏幕录制 CPU 耗时（没有现成度量）；OpenGL 屏幕路径。
