@@ -5,6 +5,6 @@
 
 includes("./HelloMaterial/xmake.lua")
 includes("./GreedySnake/xmake.lua")
-includes("./2DRpgPrototype/xmake.lua")
+includes("./2dRpgPrototype/xmake.lua")
 includes("./GUIFrameworkSmoke/xmake.lua")
 includes("./GUIWorkbench/xmake.lua")

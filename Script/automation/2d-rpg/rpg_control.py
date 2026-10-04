@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-PROJECT = "Example/2DRpgPrototype/2DRpgPrototype.yaproject"
+PROJECT = "Example/2dRpgPrototype/2dRpgPrototype.yaproject"
 
 # TilemapGround sits at (-16, -10). The player entity is the cell centre;
 # Sprite2DComponent.pivot puts the feet on the cell's bottom edge, so the

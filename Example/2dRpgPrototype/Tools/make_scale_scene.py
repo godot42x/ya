@@ -2,7 +2,7 @@
 """Generate the R4 scale scene: 64x64, three layers, 20 NPCs.
 
 Deterministic (fixed seed), so the measurement fixture is reproducible:
-    python3 Example/2DRpgPrototype/Tools/make_scale_scene.py
+    python3 Example/2dRpgPrototype/Tools/make_scale_scene.py
 writes Content/Scenes/TownLarge.scene.json.
 
 It is a measurement fixture, not a hand-authored map: the editor can open and
@@ -18,7 +18,7 @@ import json
 import random
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]          # Example/2DRpgPrototype
+ROOT = Path(__file__).resolve().parents[1]          # Example/2dRpgPrototype
 SCENE = ROOT / "Content/Scenes/TownLarge.scene.json"
 
 WIDTH, HEIGHT = 64, 64
