@@ -5,7 +5,20 @@ local ScriptBase = require("ScriptBase")
 local GridMover = require("GridMover")
 local Script = ScriptBase:new()
 
-local MAP_NAME = "TilemapGround"
+-- Scene propertyOverrides. Defaults are the names Town, House, and TownLarge
+-- already use, so those scenes need no overrides.
+Script.mapName = "TilemapGround"
+Script.dialogueName = "Dialogue"
+Script:properties({
+    mapName = {
+        type = "string",
+        tooltip = "Tilemap entity this player walks on"
+    },
+    dialogueName = {
+        type = "string",
+        tooltip = "Game UI entry polled for dialogue:busy()"
+    }
+})
 
 -- Checked in order; the first key held wins.
 local DIRECTIONS = {
@@ -68,7 +81,7 @@ end
 
 function Script:onInit()
     self.anim = self.entity:getSpriteAnimation()
-    self.map = world.find(MAP_NAME):getTilemap()
+    self.map = world.find(self.mapName):getTilemap()
     self.talking = false
     self.bConfirmArmed = true
     self.mover = GridMover:new(self.entity, {
@@ -86,7 +99,7 @@ function Script:onUpdate(dt)
     -- twice: the confirm key has to be released again before interacting.
     -- ui.get falls back to the root widget handle for the first frames of a
     -- scene, until the entry's script has loaded; only the script has :busy().
-    local dialogue = ui.get("Dialogue")
+    local dialogue = ui.get(self.dialogueName)
     self.talking = dialogue ~= nil and dialogue.busy ~= nil and dialogue:busy()
     if not confirmHeld() then
         self.bConfirmArmed = true

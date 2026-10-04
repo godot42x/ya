@@ -3,6 +3,14 @@
 local ScriptBase = require("ScriptBase")
 local Script = ScriptBase:new()
 
+Script.dialogueName = "Dialogue"
+Script:properties({
+    dialogueName = {
+        type = "string",
+        tooltip = "Game UI entry this sign talks through"
+    }
+})
+
 local TINT_IDLE = Vec4.new(1.0, 1.0, 1.0, 1.0)
 local TINT_READ = Vec4.new(1.0, 0.85, 0.45, 1.0)
 
@@ -18,7 +26,7 @@ end
 function Script:onInteract()
     self.bRead = not self.bRead
     self.sprite.tint = self.bRead and TINT_READ or TINT_IDLE
-    local dialogue = ui.get("Dialogue")
+    local dialogue = ui.get(self.dialogueName)
     if dialogue then
         dialogue:say(LINES)
     else

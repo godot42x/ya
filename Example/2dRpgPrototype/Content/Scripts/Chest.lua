@@ -5,6 +5,14 @@
 local ScriptBase = require("ScriptBase")
 local Script = ScriptBase:new()
 
+Script.dialogueName = "Dialogue"
+Script:properties({
+    dialogueName = {
+        type = "string",
+        tooltip = "Game UI entry this pot talks through"
+    }
+})
+
 local LINES_OPENED = { "You opened the storage pot." }
 local LINES_EMPTY = { "The pot is empty now." }
 
@@ -35,7 +43,7 @@ function Script:onInteract()
         Persist.opened[self.entity:getName()] = true
         self:applyState()
     end
-    local dialogue = ui.get("Dialogue")
+    local dialogue = ui.get(self.dialogueName)
     if dialogue then
         dialogue:say(bWasOpened and LINES_EMPTY or LINES_OPENED)
     end

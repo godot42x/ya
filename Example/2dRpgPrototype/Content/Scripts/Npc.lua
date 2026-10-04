@@ -5,6 +5,14 @@
 local ScriptBase = require("ScriptBase")
 local Script = ScriptBase:new()
 
+Script.dialogueName = "Dialogue"
+Script:properties({
+    dialogueName = {
+        type = "string",
+        tooltip = "Game UI entry this villager talks through"
+    }
+})
+
 local LINES = {
     "Welcome to Tiny Town!",
     "Mind the fences -- the map keeps the roads, not me.",
@@ -37,7 +45,7 @@ function Script:onInteract()
         end
         self:face(facing)
     end
-    local dialogue = ui.get("Dialogue")
+    local dialogue = ui.get(self.dialogueName)
     if dialogue then
         dialogue:say(LINES)
     else

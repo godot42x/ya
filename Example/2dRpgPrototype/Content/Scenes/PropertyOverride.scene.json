@@ -1,0 +1,200 @@
+{
+  "entities": [
+    {
+      "components": {
+        "CameraComponent": {
+          "_distance": 24.0,
+          "_farClip": 100.0,
+          "_orthoHalfHeight": 20.0,
+          "_pixelPerfect": false,
+          "_projection": "Orthographic",
+          "bPrimary": true
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "propertyOverrides": {
+                "mapName": "WalkMap",
+                "targetName": "Hero"
+              },
+              "scriptPath": "Content/Scripts/FollowCamera.lua"
+            }
+          ]
+        },
+        "TransformComponent": {
+          "_position": [8.0, 6.0, 24.0]
+        }
+      },
+      "id": 1001,
+      "name": "Camera"
+    },
+    {
+      "components": {
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "propertyOverrides": {
+                "dialogueName": "TalkBox",
+                "mapName": "WalkMap"
+              },
+              "scriptPath": "Content/Scripts/Player.lua"
+            }
+          ]
+        },
+        "Sprite2DComponent": {
+          "bYSort": true,
+          "image": {
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content/Textures/hero_walk.png"
+                }
+              }
+            }
+          },
+          "pivot": [0.5, 0.333333],
+          "size": [1.0, 1.5],
+          "uvRect": [0.333333, 0.0, 0.666667, 0.25]
+        },
+        "SpriteAnimationComponent": {
+          "animation": {
+            "__base__": {
+              "AssetRefBase": {
+                "_path": "Content/Animations/Hero.yaanim.json"
+              }
+            }
+          },
+          "clip": "idle_down"
+        },
+        "TransformComponent": {
+          "_position": [5.5, 4.5, 0.1]
+        }
+      },
+      "id": 1021,
+      "name": "Hero"
+    },
+    {
+      "components": {
+        "TilemapComponent": {
+          "height": 7,
+          "layers": [
+            {
+              "cells": [100, 100, 100, 100, 100, 109, 100, 100, 100, 100, 100, 109, 109, 109, 109,
+                109, 109, 109, 109, 100, 100, 109, 109, 109, 109, 109, 109, 109, 109, 100, 100, 109,
+                109, 109, 109, 109, 109, 109, 109, 100, 100, 109, 109, 109, 109, 109, 109, 109, 109,
+                100, 100, 109, 109, 109, 109, 109, 109, 109, 109, 100, 100, 100, 100, 100, 100, 100,
+                100, 100, 100, 100],
+              "name": "Ground",
+              "zOffset": 0.0
+            }
+          ],
+          "tileset": {
+            "__base__": {
+              "AssetRefBase": {
+                "_path": "Content/Tilesets/town.yatileset.json"
+              }
+            }
+          },
+          "width": 10
+        },
+        "TransformComponent": {}
+      },
+      "id": 2000,
+      "name": "WalkMap"
+    },
+    {
+      "components": {
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "propertyOverrides": {
+                "dialogueName": "TalkBox"
+              },
+              "scriptPath": "Content/Scripts/Sign.lua"
+            }
+          ]
+        },
+        "Sprite2DComponent": {
+          "image": {
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content/Textures/tiny_town.png"
+                }
+              }
+            }
+          },
+          "uvRect": [0.166667, 0.545455, 0.25, 0.636364]
+        },
+        "TransformComponent": {
+          "_position": [7.5, 4.5, 0.1]
+        }
+      },
+      "id": 3001,
+      "name": "Sign"
+    }
+  ],
+  "name": "PropertyOverride",
+  "nodeTree": {
+    "children": [
+      {
+        "entityRef": 1001,
+        "name": "Camera"
+      },
+      {
+        "entityRef": 1021,
+        "name": "Hero"
+      },
+      {
+        "entityRef": 2000,
+        "name": "WalkMap"
+      },
+      {
+        "entityRef": 3001,
+        "name": "Sign"
+      }
+    ],
+    "name": "scene_root"
+  },
+  "version": "1.0",
+  "widgetEntries": [
+    {
+      "autoMount": true,
+      "document": "Content:UI/Dialogue.yaui.json",
+      "entryId": "TalkBox",
+      "rootSlot": {
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "anchorMax": [1.0, 1.0],
+        "anchorMin": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0],
+        "heightSizeMode": 0,
+        "maxSize": [1000000.0, 1000000.0],
+        "minSize": [0.0, 0.0],
+        "offset": [0.0, 0.0],
+        "offsets": {
+          "bottom": 0.0,
+          "left": 0.0,
+          "right": 0.0,
+          "top": 0.0
+        },
+        "pivot": [0.0, 0.0],
+        "preferredSize": [0.0, 0.0],
+        "type": "canvas",
+        "widthSizeMode": 0
+      },
+      "zOrder": 10
+    }
+  ]
+}

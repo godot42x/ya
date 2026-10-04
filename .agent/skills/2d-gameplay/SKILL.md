@@ -51,7 +51,7 @@ Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色�
 
 - 通行、格子的定义全部问 tilemap 组件，不问物理：`worldToCell` / `cellToWorld` /
   `isSolid` / `bounds`（反射方法），加 `entityAt(x, y[, except])`（原生方法，GameRuntime
-  注册）。**每个场景的行走地图实体都叫 `TilemapGround`**——Player.lua 按这个名字找地图。
+  注册）。行走地图实体默认叫 `TilemapGround`：`Player.lua` / `FollowCamera.lua` 的 `mapName` 用这个默认，场景 `propertyOverrides` 可改；Town / House / TownLarge 不写覆盖。
 - `isSolid` 出界算阻挡；`entityAt` 返回「格子里第一个 actor」——actor = 同时有
   Sprite2DComponent 与 LuaScriptComponent 的实体。相机、纯变换实体永远不算。
 - 玩法脚本（Player.lua）组合三者判进格：`isSolid(...)`，以及
@@ -90,10 +90,12 @@ Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色�
 
 - 对话框是一个 autoMount 的 Game UI 条目（`widgetEntries`），根 panel 挂
   `script.lua` behavior 并常驻 Hidden；脚本提供 `say(lines, onDone)` 与 `busy()`。
-- 玩法侧（NPC / 玩家脚本）经 `ui.get("Dialogue"):say(...)` 说话；**移动锁由玩法
-  状态控制**——玩家脚本每帧轮询 `dialogue:busy()`，game-ui S4 的 modal 条目落地后
-  才迁移。`ui.get` 在条目脚本加载完成前的头几帧回落成控件句柄，轮询侧必须
-  容错（`dialogue.busy ~= nil` 再调用）。
+- 玩法侧（NPC / 玩家 / 箱子 / 告示牌）经 `ui.get(self.dialogueName):say(...)` 说话。
+  `dialogueName` 默认 `"Dialogue"`，场景 `propertyOverrides` 可改。跟随相机的目标
+  默认 `"Player"`（`FollowCamera.lua` 的 `targetName`）。**移动锁由玩法状态控制**——
+  玩家脚本每帧轮询 `dialogue:busy()`，game-ui S4 的 modal 条目落地后才迁移。
+  `ui.get` 在条目脚本加载完成前的头几帧回落成控件句柄，轮询侧必须容错
+  （`dialogue.busy ~= nil` 再调用）。
 - 一次按键只做一件事：对话框忽略「开框那一帧」的确认键（`time:getFrameIndex()`），
   玩家侧触发交互后要求确认键完全松开才再武装（re-arm），否则同一次按键会同时
   推进对话又再次触发交互。

@@ -4,8 +4,20 @@
 local ScriptBase = require("ScriptBase")
 local Script = ScriptBase:new()
 
-local TARGET_NAME = "Player"
-local MAP_NAME = "TilemapGround"
+-- Scene propertyOverrides. Defaults match Town, House, and TownLarge.
+Script.targetName = "Player"
+Script.mapName = "TilemapGround"
+Script:properties({
+    targetName = {
+        type = "string",
+        tooltip = "Entity this camera eases toward"
+    },
+    mapName = {
+        type = "string",
+        tooltip = "Tilemap entity used to clamp the frame; empty skips the clamp"
+    }
+})
+
 local FOLLOW_RATE = 6 -- per second; higher follows tighter
 
 function Script:onInit()
@@ -19,12 +31,12 @@ function Script:onInit()
     -- The clamp is optional: a scene without the map still follows the player
     -- (useful while a map is being authored, and required once gameplay can
     -- switch scenes).
-    local mapEntity = world.find(MAP_NAME)
+    local mapEntity = world.find(self.mapName)
     self.map = mapEntity and mapEntity:getTilemap() or nil
 end
 
 function Script:onUpdate(dt)
-    self.target = self.target or world.find(TARGET_NAME)
+    self.target = self.target or world.find(self.targetName)
     if not self.target then
         return
     end
