@@ -88,8 +88,8 @@ add_cxflags("/Zc:preprocessor", { force = true })
 - 磁盘路径大小写就是规范：`xmake/`、`xmake/rule.lua`、根目录 `test/Test.xmake.lua`、
   `Example/2dRpgPrototype`。xmake `includes`、`#include`、测试和脚本里的文件路径都用
   这个大小写。`Engine/Test/` 仍是大写 T，和根目录 `test/` 不是同一个目录。
-- `log.cc` / `utility.cc` 随引擎源码走，不再是子模块。libstdc++ 不会像 libc++ 那样
-  传递包含 `<condition_variable>`、`<algorithm>`、`<cctype>`、`<string>`，用到就显式包含。
+- `log.cc` / `utility.cc` 仍是子模块。libstdc++ 不会传递包含
+  `<condition_variable>`、`<algorithm>`、`<cctype>`、`<string>`；缺了就改子模块并更新主仓库 gitlink，不要把子模块拆进主仓库。
 
 ## 切换设备后的处理流程
 
