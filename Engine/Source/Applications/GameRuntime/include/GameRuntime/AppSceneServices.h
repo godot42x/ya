@@ -42,6 +42,8 @@ class YA_GAME_RUNTIME_API AppSceneServices
     [[nodiscard]] Scene*        getActiveScene() const;
     [[nodiscard]] bool          hasScene() const;
 
+    /// Open a scene document and leave play. Stays stopped; this is the editor
+    /// open-scene path. Automation `scene.load` keeps the caller's run mode.
     bool loadScene(const std::string& path);
     bool unloadScene();
     bool saveScene(const std::string& path);

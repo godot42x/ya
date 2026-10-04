@@ -55,6 +55,10 @@ class AppModuleTestAccess
     {
         return app.loadSceneInternal(path);
     }
+    static bool loadSceneKeepingRunMode(App& app, const std::string& path)
+    {
+        return app.loadSceneKeepingRunMode(path);
+    }
 };
 
 } // namespace ya

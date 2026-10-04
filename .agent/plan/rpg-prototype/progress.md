@@ -635,3 +635,10 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
   texel 吸附打在世界坐标上、不依赖相机位置，但与矩阵 uniform 不可交换（TownLarge 开了 pixel-perfect，uniform 替代不了重建）；笔刷正向笔画只调 `setCell`/`fillRect` 不发 `notifyComponentEdited`，做缓存时应在笔画结束补发现有信号。
 - 画家顺序兼容：未开 `bYSort` 的子层整层可作一个排序单元（别的实体 `entityId` 不同，不会插进层内序列），两层之间要给 `order` 落在其间的精灵留位；开了 `bYSort` 的层必须走动态路径。
 - 决策：推迟 5c；写入 `todo.md` 的触发条件（≥2 万实例或 256² 地图时先做视口裁剪）。
+
+## 2026-10-04 — 自动化 `scene.load` 保持运行模式
+
+- 根因：`scene.load` 与编辑器打开场景共用 `App::loadSceneInternal`，它在 Runtime / Simulation 下 `stopRuntime` / `stopSimulation` 后换场景、不再启动；纯 runtime 的 `--scene=` 是“加载完再 `startRuntime`”，所以已在 play 时再 `scene.load` 就停在编辑态，脚本不 tick。
+- 修复放在命令层：`scene.load` 改走 `App::loadSceneKeepingRunMode`（捕获调用前 `AppState`，加载后回到该模式；是重新开局，不是 `world.loadScene` 的同局转移）；`AppSceneServices::loadScene`（编辑器双击 / `cmdLoadScene` / `cmdOpenScene` / `openProject`）仍停在编辑态。没有给共享加载函数加布尔参数。
+- 验证：新增 5 个无 GPU 用例（`AppLifecycleTest`）；`ya-testing` 1657 ran / 1656 passed / 1 skipped；四条玩法脚本 + 新 `scene_load_ticks.py`（House 从 (5.5, 4.5) 走到 (6.5, 4.5)；TownLarge 靠朝向换帧证明脚本在 tick）；编辑器宿主 `scene.load` 仍停在编辑态，play 中再 `scene.load` 日志为 stop → 加载 → start。
+- 发现：TownLarge 出生点在地图外一格，已记入 todo。编辑器 play 内注入方向键不会让玩家走格（编辑器输入路径吃掉按键），编辑器侧只验证到“重新 start”和 FollowCamera 生效。

@@ -336,7 +336,13 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
   private:
     void handleSystemSignals();
     [[nodiscard]] static std::string resolveStartupScenePath(const AppDesc& appDesc);
+    /// Replace the active scene and leave play. Editor open-scene and project
+    /// open use this, so the session stays stopped afterwards.
     [[nodiscard]] bool loadSceneInternal(const std::string& path);
+    /// `scene.load`: replace the scene, then return to the run mode from
+    /// before the call. Play restarts (scripts init and tick); edit stays
+    /// stopped. Not the editor's open-scene command.
+    [[nodiscard]] bool loadSceneKeepingRunMode(const std::string& path);
     [[nodiscard]] bool unloadSceneInternal();
     void handleSceneInit(Scene* scene);
     void handleSceneDestroy(Scene* scene);

@@ -65,6 +65,10 @@ Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色�
 - 换图只有一条玩法路：`world.loadScene(path, spawnName)`。它只排队，在**帧尾结构变更
   阶段**执行（转移会停掉全部脚本，不能内联）；转移保持 play 会话——app 状态、UI host、
   `Persist` 常驻表都不动。
+- 自动化命令 `scene.load` 不是这条路。它保持**调用前的运行模式**：play 里调用会退出
+  当前局，再在新场景上重新 `startRuntime` / `startSimulation`（脚本重新 init/tick，
+  `Persist` 随退局清空）；编辑态调用只换场景、留在编辑态。编辑器里打开 `.scene.json`
+  仍是「退出 play、留在编辑态」，走 `AppSceneServices::loadScene`，不走 `scene.load`。
 - 跨场景状态只进 `Persist` 全局表（按实体名等做键）；退出 play（stopRuntime /
   stopSimulation）换新表，转移不碰它。不要依赖「全局变量碰巧没被清」。
 - 出生点：场景根上一个命名 Node3D；引擎把名为 `Player` 的实体放到标记的 x/y 上，

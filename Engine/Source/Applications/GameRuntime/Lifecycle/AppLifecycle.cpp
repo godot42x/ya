@@ -419,7 +419,9 @@ void App::init(AppDesc ci)
         api.setActiveSceneProvider([&app]() -> Scene* { return app.getSceneServices().getActiveScene(); });
         api.setSaveSceneFn([&app](const std::string& path, Scene& scene) -> bool
                            { return app._sceneManager->serializeToFile(path, &scene); });
-        api.setLoadSceneFn([&app](const std::string& path) -> bool { return app.loadSceneInternal(path); });
+        // scene.load keeps the caller's run mode. Editor open-scene goes
+        // through AppSceneServices::loadScene and stays stopped.
+        api.setLoadSceneFn([&app](const std::string& path) -> bool { return app.loadSceneKeepingRunMode(path); });
 
         // The app layer owns the script API catalog (scene/entity/component
         // authoring + asset APIs); JSScriptingSystem only binds the registry.
@@ -637,6 +639,33 @@ bool App::loadSceneInternal(const std::string& path)
 
     if (app._sceneManager) {
         return app._sceneManager->loadScene(resolveProjectScenePath(app, path));
+    }
+    return false;
+}
+
+bool App::loadSceneKeepingRunMode(const std::string& path)
+{
+    App& app = *this;
+    // Captured before loadSceneInternal, which leaves play so the document
+    // can be replaced. Restoring the mode is what makes a play-mode
+    // scene.load init and tick scripts on the new scene.
+    const AppState mode = app._appState;
+    if (!app.loadSceneInternal(path)) {
+        return false;
+    }
+
+    switch (mode) {
+    case AppState::Runtime: {
+        app.startRuntime();
+        return app.isRuntimeMode();
+    }
+    case AppState::Simulation: {
+        app.startSimulation();
+        return app.isSimulationMode();
+    }
+    case AppState::Stopped: {
+        return app.isStopped();
+    }
     }
     return false;
 }

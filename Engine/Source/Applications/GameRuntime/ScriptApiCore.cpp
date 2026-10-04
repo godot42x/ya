@@ -214,7 +214,9 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
 
     registry.registerFunction(
         "scene.load",
-        "Loads a scene from the given path and activates it.",
+        "Loads a scene from the given path and activates it, keeping the run mode "
+        "from before the call. Play restarts on the new scene so scripts init and "
+        "tick; an edit session stays stopped.",
         Json{{"path", {{"type", "string"}}}},
         [](const Json& args) -> Json {
             const auto path = args.at("path").get<std::string>();

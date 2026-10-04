@@ -333,5 +333,102 @@ TEST_F(AppLifecycleTest, SaveScenePersistsAndReloadsRoundTrip)
     std::filesystem::remove(savePath, removeError);
 }
 
+std::filesystem::path writeNamedScene(const std::filesystem::path& dir, const std::string& sceneName)
+{
+    std::filesystem::create_directories(dir);
+    const auto path = dir / (sceneName + ".scene.json");
+    Scene      scene{sceneName};
+    SceneManager writer;
+    EXPECT_TRUE(writer.serializeToFile(path.string(), &scene));
+    return path;
+}
+
+/// scene.load keeps the run mode. Editor open-scene (AppSceneServices::loadScene)
+/// leaves play and stays there.
+TEST_F(AppLifecycleTest, ScriptSceneLoadRestartsRuntime)
+{
+    const auto dir    = std::filesystem::temp_directory_path() / "ya-scene-load-mode-runtime";
+    const auto first  = writeNamedScene(dir, "First");
+    const auto second = writeNamedScene(dir, "Second");
+
+    ASSERT_TRUE(AppModuleTestAccess::loadScene(app, first.string()));
+    app.startRuntime();
+    ASSERT_TRUE(app.isRuntimeMode());
+
+    ASSERT_TRUE(AppModuleTestAccess::loadSceneKeepingRunMode(app, second.string()));
+    EXPECT_TRUE(app.isRuntimeMode());
+    ASSERT_NE(sceneManager->getActiveScene(), nullptr);
+    EXPECT_EQ(sceneManager->getActiveScene()->getName(), "Second");
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST_F(AppLifecycleTest, ScriptSceneLoadRestartsSimulation)
+{
+    const auto dir    = std::filesystem::temp_directory_path() / "ya-scene-load-mode-simulation";
+    const auto first  = writeNamedScene(dir, "First");
+    const auto second = writeNamedScene(dir, "Second");
+
+    ASSERT_TRUE(AppModuleTestAccess::loadScene(app, first.string()));
+    app.startSimulation();
+    ASSERT_TRUE(app.isSimulationMode());
+
+    ASSERT_TRUE(AppModuleTestAccess::loadSceneKeepingRunMode(app, second.string()));
+    EXPECT_TRUE(app.isSimulationMode());
+    ASSERT_NE(sceneManager->getActiveScene(), nullptr);
+    EXPECT_EQ(sceneManager->getActiveScene()->getName(), "Second");
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST_F(AppLifecycleTest, ScriptSceneLoadWhileStoppedStaysStopped)
+{
+    const auto dir  = std::filesystem::temp_directory_path() / "ya-scene-load-mode-stopped";
+    const auto path = writeNamedScene(dir, "Edited");
+
+    ASSERT_TRUE(app.isStopped());
+    ASSERT_TRUE(AppModuleTestAccess::loadSceneKeepingRunMode(app, path.string()));
+    EXPECT_TRUE(app.isStopped());
+    ASSERT_NE(sceneManager->getActiveScene(), nullptr);
+    EXPECT_EQ(sceneManager->getActiveScene()->getName(), "Edited");
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST_F(AppLifecycleTest, ScriptSceneLoadRejectsEmptyPathWithoutLeavingRuntime)
+{
+    const auto dir  = std::filesystem::temp_directory_path() / "ya-scene-load-mode-empty";
+    const auto path = writeNamedScene(dir, "Stay");
+
+    ASSERT_TRUE(AppModuleTestAccess::loadScene(app, path.string()));
+    app.startRuntime();
+    ASSERT_TRUE(app.isRuntimeMode());
+
+    EXPECT_FALSE(AppModuleTestAccess::loadSceneKeepingRunMode(app, ""));
+    EXPECT_TRUE(app.isRuntimeMode());
+    ASSERT_NE(sceneManager->getActiveScene(), nullptr);
+    EXPECT_EQ(sceneManager->getActiveScene()->getName(), "Stay");
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST_F(AppLifecycleTest, EditorOpenSceneLeavesPlayStopped)
+{
+    const auto dir    = std::filesystem::temp_directory_path() / "ya-scene-load-mode-editor";
+    const auto first  = writeNamedScene(dir, "Authoring");
+    const auto second = writeNamedScene(dir, "Opened");
+
+    ASSERT_TRUE(AppModuleTestAccess::loadScene(app, first.string()));
+    app.startRuntime();
+    ASSERT_TRUE(app.isRuntimeMode());
+
+    ASSERT_TRUE(app.getSceneServices().loadScene(second.string()));
+    EXPECT_TRUE(app.isStopped());
+    ASSERT_NE(sceneManager->getActiveScene(), nullptr);
+    EXPECT_EQ(sceneManager->getActiveScene()->getName(), "Opened");
+
+    std::filesystem::remove_all(dir);
+}
+
 } // namespace
 } // namespace ya

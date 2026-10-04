@@ -36,8 +36,8 @@ def _ya(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def start() -> None:
-    # A live instance may already be stopped out of play (scene.load does that).
-    # Always begin from a fresh process so the startup scene is in runtime.
+    # Each script begins from a fresh process, so the project default scene is
+    # already in runtime.
     stop()
     result = _ya(
         "control", "start",
@@ -116,8 +116,7 @@ def wait_until(predicate, timeout: float, what: str):
 
 
 def reset_town() -> int:
-    # The project default scene is Town, and startup already entered runtime.
-    # scene.load would stop runtime and leave scripts unticked, so don't reload.
+    # Startup already entered runtime on the project default scene (Town).
     start_pos = cell_world(*START_CELL)
 
     def ready():
