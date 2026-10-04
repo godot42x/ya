@@ -6,7 +6,7 @@
 #include "Core/Log.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
-#include "Script/Lua/LuaScriptingSystem.h"
+#include "ECS/Systems/WorldScriptRuntime.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Scene/Runtime/SceneManager.h"
 

@@ -1,5 +1,7 @@
 #include "Core/Scripting/ScriptBindings.h"
 
+#include "Core/Log.h"
+
 #include <reflects-core/lib.h>
 
 #include <algorithm>
@@ -8,6 +10,7 @@
 #include <format>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace ya::script
@@ -182,6 +185,8 @@ struct ScriptField
     /// (empty when the type declares the field itself).
     std::vector<type_index_t> ownerPath;
     bool                      bReadOnly = false;
+    std::function<ScriptValue(void*, const ScriptRef&)>              nativeRead;
+    std::function<void(void*, const ScriptRef&, const ScriptValue&)> nativeWrite;
 };
 
 /// Either a reflected method (`function` set) or a native one.
@@ -209,11 +214,14 @@ using NameMap = std::unordered_map<std::string, T, StringHash, std::equal_to<>>;
 struct TypeExport
 {
     bool                  bBuilt = false;
+    bool                  bNameLocked = false;
     std::string           name;
     NameMap<ScriptField>  fields;
     /// Reflected, native and resolver-answered methods alike.
     NameMap<ScriptMethod> methods;
     ScriptMethodResolver  resolver;
+    /// 0: no script base. Lookup continues here when this type's table misses.
+    type_index_t          base = 0;
 };
 
 struct State
@@ -289,7 +297,9 @@ TypeExport& exportOf(type_index_t type)
     if (!entry.bBuilt) {
         entry.bBuilt = true;
         if (const Class* cls = ClassRegistry::instance().getClass(type)) {
-            entry.name = cls->name;
+            if (!entry.bNameLocked) {
+                entry.name = cls->name;
+            }
             collectMembers(*cls, {}, entry);
         }
     }
@@ -319,6 +329,35 @@ std::string displayName(type_index_t type)
 {
     const std::string& name = exportOf(type).name;
     return name.empty() ? std::string("object") : name;
+}
+
+bool isMissing(const ScriptRef& ref)
+{
+    const ScriptRefKind* kind = kindOf(ref);
+    return kind && kind->missingIsNil && !tryResolve(ref);
+}
+
+void warnMissingOnce(const ScriptRef& ref)
+{
+    struct Key
+    {
+        uint32_t kind = 0;
+        uint64_t a    = 0;
+        bool     operator==(const Key&) const = default;
+    };
+    struct Hash
+    {
+        size_t operator()(const Key& key) const
+        {
+            return std::hash<uint64_t>{}(key.a) ^ (static_cast<size_t>(key.kind) << 1);
+        }
+    };
+    static std::unordered_set<Key, Hash> seen;
+    if (!seen.insert(Key{.kind = ref.kind, .a = ref.a}).second) {
+        return;
+    }
+    const ScriptRefKind* kind = kindOf(ref);
+    YA_CORE_WARN("script reference: operation on a gone {} {}; ignored", kind ? kind->name : "object", ref.a);
 }
 
 } // namespace
@@ -363,6 +402,42 @@ void addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn)
     }
 }
 
+void addNativeField(type_index_t type, std::string name, ScriptNativeField field)
+{
+    TypeExport& entry = state().types[type];
+    if (entry.fields.find(name) != entry.fields.end()) {
+        return;
+    }
+    const bool  bReadOnly = !field.write;
+    ScriptField scriptField{
+        .name        = name,
+        .property    = nullptr,
+        .ownerPath   = {},
+        .bReadOnly   = bReadOnly,
+        .nativeRead  = std::move(field.read),
+        .nativeWrite = std::move(field.write),
+    };
+    entry.fields.emplace(std::move(name), std::move(scriptField));
+}
+
+void addScriptBase(type_index_t derived, type_index_t base)
+{
+    if (derived == 0 || base == 0 || derived == base) {
+        return;
+    }
+    TypeExport& entry = state().types[derived];
+    if (entry.base == 0) {
+        entry.base = base;
+    }
+}
+
+void setScriptTypeName(type_index_t type, std::string name)
+{
+    TypeExport& entry = state().types[type];
+    entry.name        = std::move(name);
+    entry.bNameLocked = true;
+}
+
 void setMethodResolver(type_index_t type, ScriptMethodResolver resolver)
 {
     state().types[type].resolver = std::move(resolver);
@@ -375,17 +450,36 @@ std::string scriptTypeName(type_index_t type)
 
 const ScriptField* findField(type_index_t type, std::string_view name)
 {
-    const TypeExport& entry = exportOf(type);
-    const auto        it    = entry.fields.find(name);
-    return it != entry.fields.end() ? &it->second : nullptr;
+    type_index_t current = type;
+    for (int depth = 0; current != 0 && depth < 8; ++depth) {
+        TypeExport& entry = exportOf(current);
+        if (const auto it = entry.fields.find(name); it != entry.fields.end()) {
+            return &it->second;
+        }
+        const type_index_t base = entry.base;
+        if (base == 0 || base == current) {
+            break;
+        }
+        current = base;
+    }
+    return nullptr;
 }
 
 const ScriptMethod* findMethod(type_index_t type, std::string_view name)
 {
-    TypeExport& entry = exportOf(type);
-    if (const auto it = entry.methods.find(name); it != entry.methods.end()) {
-        return &it->second;
+    type_index_t current = type;
+    for (int depth = 0; current != 0 && depth < 8; ++depth) {
+        TypeExport& entry = exportOf(current);
+        if (const auto it = entry.methods.find(name); it != entry.methods.end()) {
+            return &it->second;
+        }
+        const type_index_t base = entry.base;
+        if (base == 0 || base == current) {
+            break;
+        }
+        current = base;
     }
+    TypeExport& entry = exportOf(type);
     if (!entry.resolver) {
         return nullptr;
     }
@@ -414,14 +508,36 @@ void* resolve(const ScriptRef& ref)
 
 ScriptValue readField(const ScriptRef& ref, const ScriptField& field)
 {
+    if (isMissing(ref)) {
+        warnMissingOnce(ref);
+        return {};
+    }
+    if (!field.property) {
+        if (!field.nativeRead) {
+            throw ScriptError(std::format("field '{}' cannot be read", field.name));
+        }
+        return field.nativeRead(resolve(ref), ref);
+    }
     const Property& prop = *field.property;
     return loadValue(prop.typeIndex, prop.addressGetter(toOwner(resolve(ref), ref.type, field.ownerPath)));
 }
 
 void writeField(const ScriptRef& ref, const ScriptField& field, const ScriptValue& value)
 {
+    if (isMissing(ref)) {
+        warnMissingOnce(ref);
+        return;
+    }
     if (field.bReadOnly) {
         throw ScriptError(std::format("field '{}' is read-only", field.name));
+    }
+    if (!field.property) {
+        void* object = resolve(ref);
+        field.nativeWrite(object, ref, value);
+        if (const auto& afterWrite = kindOf(ref)->afterWrite) {
+            afterWrite(ref, object);
+        }
+        return;
     }
     const Property& prop   = *field.property;
     void*           object = resolve(ref);
@@ -433,6 +549,10 @@ void writeField(const ScriptRef& ref, const ScriptField& field, const ScriptValu
 
 ScriptValue callMethod(const ScriptRef& ref, const ScriptMethod& method, ScriptArgs args)
 {
+    if (isMissing(ref)) {
+        warnMissingOnce(ref);
+        return {};
+    }
     if (!method.function) {
         return method.native(resolve(ref), ref, args);
     }
@@ -460,6 +580,10 @@ ScriptValue callMethod(const ScriptRef& ref, const ScriptMethod& method, ScriptA
 
 ScriptValue readField(const ScriptRef& ref, std::string_view field)
 {
+    if (isMissing(ref)) {
+        warnMissingOnce(ref);
+        return {};
+    }
     if (const ScriptField* found = findField(ref.type, field)) {
         return readField(ref, *found);
     }
@@ -468,6 +592,10 @@ ScriptValue readField(const ScriptRef& ref, std::string_view field)
 
 void writeField(const ScriptRef& ref, std::string_view field, const ScriptValue& value)
 {
+    if (isMissing(ref)) {
+        warnMissingOnce(ref);
+        return;
+    }
     if (const ScriptField* found = findField(ref.type, field)) {
         writeField(ref, *found, value);
         return;
@@ -477,10 +605,35 @@ void writeField(const ScriptRef& ref, std::string_view field, const ScriptValue&
 
 ScriptValue callMethod(const ScriptRef& ref, std::string_view method, ScriptArgs args)
 {
+    if (isMissing(ref)) {
+        warnMissingOnce(ref);
+        return {};
+    }
     if (const ScriptMethod* found = findMethod(ref.type, method)) {
         return callMethod(ref, *found, args);
     }
     throw ScriptError(std::format("{} has no method '{}'", displayName(ref.type), method));
+}
+
+namespace
+{
+
+IScriptCallbacks*& callbackSlot()
+{
+    static IScriptCallbacks* callbacks = nullptr;
+    return callbacks;
+}
+
+} // namespace
+
+void setScriptCallbacks(IScriptCallbacks* callbacks)
+{
+    callbackSlot() = callbacks;
+}
+
+IScriptCallbacks* scriptCallbacks()
+{
+    return callbackSlot();
 }
 
 } // namespace ya::script

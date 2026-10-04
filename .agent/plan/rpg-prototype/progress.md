@@ -713,3 +713,11 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - B2-3 的三张进程级静态表收进 `LuaScriptingSystem::_instances`（成员排在 `sol::state` 之后）；按 id 丢表没有系统指针，所以 Lua DLL 里留一张不含 sol 的 id → 系统裸指针注册表。测试入口 `Script/Lua/LuaTesting.h`。
 - `rg -n "sol/|sol::" Engine/Source --glob '!**/Script/Lua/**'` 现在只剩 `GameplayLua.cpp`、`LuaWidgetHandle.*`、`LuaWidgetScripts.*`（B2-6/B2-7）。`ya-game-runtime` 仍暂时依赖 `ya-script-lua`（B2-5 拆）；`installLuaScriptBackend` 未做。
 - 验证：脚本过滤 96 个通过；全量 ya-testing 1672 ran / 1671 passed / 1 skipped（`GUIWindowManagerTest.IsolatesPointerFocusCaptureTooltipDpiAndSnapshot` 在约 22 次运行里出现 2 次失败、其余通过，与 Lua 无关，未定位）；GreedySnake / 2DRpgPrototype 120 帧、编辑器 30 帧冒烟；2D 自动化七条通过。
+
+## 2026-10-05 — B2-5 GameRuntime 经中立接口持有脚本运行时
+
+- `App` 只持有 `IWorldScriptRuntime*`（`ECS/Systems/WorldScriptRuntime.h`），由 `createWorldScriptRuntime()` 工厂创建；工厂未安装时 `YA_CORE_ERROR` 并继续无脚本模式。`installLuaScriptBackend()`（`Script/Lua/LuaBackend.h`）登记工厂与进程级属性预览，只从 `YARuntime/Entry.cpp` 与测试 runner 调用。
+- `ScriptValue` 加三个臂：`ScriptFnHandle`、`ScriptSelfHandle`（推回活的 self 表）、`ScriptRect`；JS 的 `toJs` 对三臂抛 "not projected to JS"，`fromJs` 不产生。`ScriptBindings` 加 `addNativeField` / `addScriptBase` / `setScriptTypeName` / `ScriptRefKind::missingIsNil`（今天的控件仍走 sol，B2-7 才用上）。
+- 边界结论：`GameplayLua.cpp` / `LuaWidget*` 按文档留在 GameRuntime 并仍含 sol（它们依赖 App / gui-widgets，`ya-script-lua` 不能依赖这些），所以 `ya-game-runtime` 的 `sol2` / `lua` 包与对 `ya-script-lua` 的依赖到 B2-6/B2-7 之后才能去；`bindGameplayLua` 参数已是接口，函数体内 `dynamic_cast` 回具体类型（过渡）。`ya-render-3d` 去掉未使用的 `sol2`；`ya-runtime` 加 `ya-script-lua`。
+- 提醒 B2-7：登记控件 `valid` 时，`missingIsNil` 的短路会让所有读变 nil，而今天 `valid` 在控件已摘掉时返回 false，要保持。
+- 验证：脚本过滤 96 个通过；全量 ya-testing 1672 ran / 1671 passed / 1 skipped；GreedySnake / 2DRpgPrototype 120 帧、编辑器 30 帧冒烟；2D 自动化七条通过。

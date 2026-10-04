@@ -27,7 +27,7 @@ class AppModuleTestAccess
     static void setSceneManager(App& app, SceneManager* sceneManager) { app._sceneManager = sceneManager; }
     static void setAppState(App& app, AppState state) { app._appState = state; }
     static void setJSScriptingSystem(App& app, JSScriptingSystem* js) { app._jsScriptingSystem = js; }
-    static void setLuaScriptingSystem(App& app, LuaScriptingSystem* lua) { app._luaScriptingSystem = lua; }
+    static void setLuaScriptingSystem(App& app, IWorldScriptRuntime* lua) { app._luaScriptingSystem = lua; }
     static void addSystem(App& app, stdptr<ISystem> system, ESystemTickGroup group)
     {
         app._systems.emplace_back(std::move(system), group);

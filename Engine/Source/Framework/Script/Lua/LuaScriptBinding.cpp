@@ -29,6 +29,7 @@
 
 #include "Core/Scripting/ScriptBindings.h"
 #include "Scene/Core/SceneScriptBindings.h"
+#include "Script/Lua/LuaScriptingSystem.h"
 
 #include <glm/glm.hpp>
 
@@ -590,6 +591,28 @@ int pushLuaValue(lua_State* L, const ScriptValue& value)
             else if constexpr (std::is_same_v<T, ScriptRef>) {
                 pushObject(L, v);
             }
+            else if constexpr (std::is_same_v<T, script::ScriptFnHandle>) {
+                if (v.id == 0) {
+                    lua_pushnil(L);
+                }
+                else {
+                    LuaScriptingSystem::pushHeldFunction(L, v.id);
+                }
+            }
+            else if constexpr (std::is_same_v<T, script::ScriptSelfHandle>) {
+                LuaScriptingSystem::pushLiveSelf(L, v.runtimeId);
+            }
+            else if constexpr (std::is_same_v<T, script::ScriptRect>) {
+                lua_createtable(L, 0, 4);
+                lua_pushnumber(L, static_cast<lua_Number>(v.x));
+                lua_setfield(L, -2, "x");
+                lua_pushnumber(L, static_cast<lua_Number>(v.y));
+                lua_setfield(L, -2, "y");
+                lua_pushnumber(L, static_cast<lua_Number>(v.w));
+                lua_setfield(L, -2, "w");
+                lua_pushnumber(L, static_cast<lua_Number>(v.h));
+                lua_setfield(L, -2, "h");
+            }
             else {
                 return sol::stack::push(L, v); // Vec value types are sol usertypes
             }
@@ -616,6 +639,20 @@ ScriptValue toScriptValue(lua_State* L, int index)
         const char* text   = lua_tolstring(L, index, &length);
         return std::string(text, length);
     }
+    case LUA_TFUNCTION:
+        if (LuaScriptingSystem* system = LuaScriptingSystem::systemForState(L)) {
+            if (const uint64_t id = system->holdFunction(L, index)) {
+                return script::ScriptFnHandle{.id = id};
+            }
+        }
+        break;
+    case LUA_TTABLE:
+        if (LuaScriptingSystem* system = LuaScriptingSystem::systemForState(L)) {
+            if (const uint64_t id = system->runtimeIdOfSelf(L, index)) {
+                return script::ScriptSelfHandle{.runtimeId = id};
+            }
+        }
+        break;
     case LUA_TUSERDATA:
         if (metatableHasMarker(L, index, &kObjectMarker)) {
             return refAt(L, index);

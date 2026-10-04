@@ -44,7 +44,7 @@ struct UIDocumentStore;
 struct Entity;
 struct ICommandBuffer;
 struct IRenderSurfaceContext;
-struct LuaScriptingSystem;
+struct IWorldScriptRuntime;
 struct JSScriptingSystem;
 struct FProjectDescriptor;
 struct AppRenderState;
@@ -156,7 +156,7 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     std::vector<FModuleSlot> _modules;
     bool                     _modulesAttached = false;
 
-    LuaScriptingSystem* _luaScriptingSystem = nullptr;
+    IWorldScriptRuntime* _luaScriptingSystem = nullptr;
     JSScriptingSystem*  _jsScriptingSystem  = nullptr;
 
   public:

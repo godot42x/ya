@@ -21,7 +21,10 @@ namespace
 using Json = ScriptApiRegistry::Json;
 
 using script::ScriptError;
+using script::ScriptFnHandle;
+using script::ScriptRect;
 using script::ScriptRef;
+using script::ScriptSelfHandle;
 using script::ScriptValue;
 
 // ============================================================================
@@ -86,6 +89,10 @@ JSValue toJs(JSContext* ctx, const ScriptValue& value)
             }
             else if constexpr (std::is_same_v<T, ScriptRef>) {
                 return wrapRef(ctx, v);
+            }
+            else if constexpr (std::is_same_v<T, ScriptFnHandle> || std::is_same_v<T, ScriptSelfHandle> ||
+                               std::is_same_v<T, ScriptRect>) {
+                throw ScriptError("not projected to JS");
             }
             else {
                 return vector(&v.x, static_cast<uint32_t>(T::length()));

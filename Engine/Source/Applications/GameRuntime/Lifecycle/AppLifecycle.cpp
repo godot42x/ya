@@ -29,8 +29,7 @@
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Systems/Components/PointLightComponent.h"
-#include "Script/Lua/LuaScriptingSystem.h"
-#include "Script/Lua/ScriptPropertyPreview.h"
+#include "ECS/Systems/WorldScriptRuntime.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/Systems/JSScriptingSystem.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
@@ -383,7 +382,7 @@ void App::init(AppDesc ci)
     }
 
     // Before any script state is built: backends project module functions then.
-    // Closures capture this app the same way setRuntimeServices does.
+    // Closures capture this app the same way setServices does.
     const GameplayScriptContext scriptContext{
         .activeScene     = [&app]() -> Scene* { return app.getSceneServices().getActiveScene(); },
         .presentedPixels = [&app]() { return app.getRenderServices().getRenderResolution().toVec2(); },
@@ -399,38 +398,33 @@ void App::init(AppDesc ci)
     // is pushed.
     app._deleter.push("GameplayScriptContext", [](void*) { registerGameplayScriptFunctions({}); });
 
-    app._luaScriptingSystem = new LuaScriptingSystem();
-    app._luaScriptingSystem->setRuntimeServices({
-        .input           = &app.getInputManager(),
-        .isMouseCaptured = [&app]() { return app.getInputRouter().isMouseCaptured(); },
-        .elapsedSeconds  = [&app]() { return static_cast<double>(app.getElapsedTimeMS()) / 1000.0; },
-        .frameIndex      = [&app]() { return app.getHostTick(); },
-        .activeScene     = [&app]() -> Scene* { return app.getSceneServices().getActiveScene(); },
-    });
-    app._luaScriptingSystem->init();
-    if (GameUIHost* gameUI = app.getGameUIHost()) {
-        bindGameplayLua(*app._luaScriptingSystem, *gameUI, scriptContext);
+    app._luaScriptingSystem = createWorldScriptRuntime();
+    if (!app._luaScriptingSystem) {
+        YA_CORE_ERROR("No world script runtime installed; scripts will not run");
     }
-    app._deleter.push("LuaScriptingSystem", [&app](void*)
-                      {
-        // Widget scripts and Lua click listeners live in this Lua state; the
-        // UI host outlives it.
+    else {
+        app._luaScriptingSystem->setServices({
+            .input           = &app.getInputManager(),
+            .isMouseCaptured = [&app]() { return app.getInputRouter().isMouseCaptured(); },
+            .elapsedSeconds  = [&app]() { return static_cast<double>(app.getElapsedTimeMS()) / 1000.0; },
+            .frameIndex      = [&app]() { return app.getHostTick(); },
+            .activeScene     = [&app]() -> Scene* { return app.getSceneServices().getActiveScene(); },
+        });
+        app._luaScriptingSystem->init();
         if (GameUIHost* gameUI = app.getGameUIHost()) {
-            gameUI->setBehaviorRuntime(nullptr);
+            bindGameplayLua(*app._luaScriptingSystem, *gameUI, scriptContext);
         }
-        app._luaScriptingSystem->shutdown();
-        delete app._luaScriptingSystem;
-        app._luaScriptingSystem = nullptr; });
-
-    // Property preview is a second Lua state, not the play state. Explicit
-    // create/destroy (not a process static) so its sol objects die while we
-    // still own the state. B2-5 folds this into installLuaScriptBackend.
-    IScriptPropertyPreview* propertyPreview = createScriptPropertyPreview();
-    setScriptPropertyPreview(propertyPreview);
-    app._deleter.push("ScriptPropertyPreview", [propertyPreview](void*) {
-        setScriptPropertyPreview(nullptr);
-        destroyScriptPropertyPreview(propertyPreview);
-    });
+        app._deleter.push("LuaScriptingSystem", [&app](void*) {
+            // Widget scripts and Lua click listeners live in this Lua state; the
+            // UI host outlives it.
+            if (GameUIHost* gameUI = app.getGameUIHost()) {
+                gameUI->setBehaviorRuntime(nullptr);
+            }
+            app._luaScriptingSystem->shutdown();
+            delete app._luaScriptingSystem;
+            app._luaScriptingSystem = nullptr;
+        });
+    }
 
     RayCastMousePickingSystem::setAppStateProvider([]() {
         return App::get() ? App::get()->getAppState() : AppState::Stopped;

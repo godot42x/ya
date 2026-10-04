@@ -57,8 +57,14 @@ void destroySpriteEntity(const GameplayScriptContext& ctx, Entity* entity)
 
 } // namespace
 
-void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui, GameplayScriptContext ctx)
+void bindGameplayLua(IWorldScriptRuntime& runtime, GameUIHost& ui, GameplayScriptContext ctx)
 {
+    auto* concrete = dynamic_cast<LuaScriptingSystem*>(&runtime);
+    if (!concrete) {
+        YA_CORE_ERROR("bindGameplayLua: installed world script runtime is not the Lua backend");
+        return;
+    }
+    LuaScriptingSystem& scripting = *concrete;
     sol::state& lua = scripting.lua();
 
     sol::table inputType = lua["Input"];

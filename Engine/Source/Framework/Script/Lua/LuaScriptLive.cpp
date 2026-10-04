@@ -75,7 +75,9 @@ sol::object pushScriptValue(sol::state& lua, const script::ScriptValue& value)
     return std::visit(
         [&lua](const auto& held) -> sol::object {
             using T = std::decay_t<decltype(held)>;
-            if constexpr (std::is_same_v<T, std::monostate> || std::is_same_v<T, script::ScriptRef>) {
+            if constexpr (std::is_same_v<T, std::monostate> || std::is_same_v<T, script::ScriptRef> ||
+                          std::is_same_v<T, script::ScriptFnHandle> || std::is_same_v<T, script::ScriptSelfHandle> ||
+                          std::is_same_v<T, script::ScriptRect>) {
                 return sol::object{};
             }
             else {

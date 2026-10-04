@@ -16,7 +16,7 @@
 
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "Scene3D/TransformComponent.h"
-#include "Script/Lua/LuaScriptingSystem.h"
+#include "ECS/Systems/WorldScriptRuntime.h"
 
 #include "RHI/Backend/Vulkan//VulkanRender.h"
 #include "RHI/Core/CommandBuffer.h"
@@ -256,7 +256,7 @@ void GameRuntimeTickOrchestrator::flushStructuralChanges(App& app)
     }
     Scene* scene = app.getSceneServices().getActiveScene();
     if (scene) {
-        LuaScriptingSystem* lua = app._luaScriptingSystem;
+        IWorldScriptRuntime* lua = app._luaScriptingSystem;
         scene->flushQueuedDestroys([lua](Entity& entity) {
             if (lua) {
                 lua->onEntityDestroying(entity);

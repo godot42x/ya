@@ -2,6 +2,7 @@
 #include "App/Module/PluginDescriptor.h"
 #include "App/Module/ProjectDescriptor.h"
 #include "GameRuntime/App.h"
+#include "Script/Lua/LuaBackend.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -69,6 +70,7 @@ struct FModuleTeardownScope
 int main(int argc, char** argv)
 {
     Logger::init();
+    ya::installLuaScriptBackend();
     ya::AppDesc appDesc;
     try {
         appDesc.init(argc, argv);

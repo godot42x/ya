@@ -4,13 +4,16 @@
 
 #include <cmath>
 #include <format>
+#include <iterator>
 
 namespace ya::script
 {
 
 const char* scriptValueTypeName(const ScriptValue& value)
 {
-    static constexpr const char* names[] = {"nil", "boolean", "integer", "number", "string", "vec2", "vec3", "vec4", "object"};
+    static constexpr const char* names[] = {
+        "nil", "boolean", "integer", "number", "string", "vec2", "vec3", "vec4", "object", "function", "self", "rect"};
+    static_assert(std::size(names) == std::variant_size_v<ScriptValue>);
     return names[value.index()];
 }
 

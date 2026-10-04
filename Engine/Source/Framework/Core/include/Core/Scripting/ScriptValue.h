@@ -30,9 +30,48 @@ struct ScriptRef
     bool     operator==(const ScriptRef&) const = default;
 };
 
+/// A Lua function the backend keeps. 0 is empty. Only the Lua backend mints
+/// one, from `toScriptValue` of a `LUA_TFUNCTION`.
+struct ScriptFnHandle
+{
+    uint64_t id = 0;
+    bool     operator==(const ScriptFnHandle&) const = default;
+};
+
+/// One load's `self` table. Pushed back to Lua as that table, not userdata.
+/// Compared by `runtimeId` only.
+struct ScriptSelfHandle
+{
+    uint64_t runtimeId = 0;
+    bool     operator==(const ScriptSelfHandle&) const = default;
+};
+
+/// `{x,y,w,h}` as Lua sees a widget rect. C++ pushes that table. An arbitrary
+/// Lua table is not read back as a rect.
+struct ScriptRect
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
+    bool  operator==(const ScriptRect&) const = default;
+};
+
 /// The only values that cross between engine and script languages. Enums
-/// travel as integers; vectors keep their width.
-using ScriptValue = std::variant<std::monostate, bool, int64_t, double, std::string, glm::vec2, glm::vec3, glm::vec4, ScriptRef>;
+/// travel as integers; vectors keep their width. The last three arms are
+/// Lua-facing; JS rejects them.
+using ScriptValue = std::variant<std::monostate,
+                                  bool,
+                                  int64_t,
+                                  double,
+                                  std::string,
+                                  glm::vec2,
+                                  glm::vec3,
+                                  glm::vec4,
+                                  ScriptRef,
+                                  ScriptFnHandle,
+                                  ScriptSelfHandle,
+                                  ScriptRect>;
 using ScriptArgs  = std::span<const ScriptValue>;
 
 /// Anything a script did wrong: unknown member, wrong argument, an object that

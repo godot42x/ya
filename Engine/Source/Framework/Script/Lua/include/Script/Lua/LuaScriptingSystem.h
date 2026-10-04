@@ -1,6 +1,6 @@
 #pragma once
-#include "ECS/Systems/ScriptingSystem.h"
 #include "ECS/Systems/ScriptInstance.h"
+#include "ECS/Systems/WorldScriptRuntime.h"
 #include "Core/Input/InputManager.h"
 #include "Core/Scripting/ScriptValue.h"
 #include <cstdint>
@@ -19,19 +19,6 @@ struct Scene;
 struct Entity;
 struct LuaInstanceLive;
 struct LuaInstanceStore;
-
-/// Narrow runtime services for the Lua bindings, injected by the Host. The
-/// system never reaches Host/App types.
-struct LuaRuntimeServices
-{
-    const InputManager*         input            = nullptr;
-    std::function<bool()>       isMouseCaptured;   ///< Host input-router state
-    std::function<double()>     elapsedSeconds;    ///< Seconds since app start
-    std::function<uint64_t()>   frameIndex;        ///< App frame counter
-    std::function<Scene*()>     activeScene;
-    /// Script source by normalized path. Unset reads through the VFS.
-    std::function<bool(const std::string& path, std::string& out)> readScript;
-};
 
 /// What a script instance is attached to. The system keeps one host per live
 /// instance and never learns the host's type: an entity, a widget, anything
@@ -68,11 +55,12 @@ enum class ENamedCallError : uint8_t
 /// The one Lua state of a running game. Loads, calls, hot-reloads and
 /// destroys script instances for any host; entities of the active scene are
 /// the host it drives itself (`onUpdate`). Owns the engine bindings and the
-/// hot-reload watch.
-struct YA_SCRIPT_LUA_API LuaScriptingSystem : public ScriptingSystem
+/// hot-reload watch. `persistentState()` stays on this class: the neutral
+/// interface only resets it.
+struct YA_SCRIPT_LUA_API LuaScriptingSystem : public IWorldScriptRuntime
 {
   private:
-    LuaRuntimeServices _services;
+    WorldScriptServices _services;
     sol::state         _lua;
     /// Hosts by id. Ordered by id, i.e. load order, so reload and destroyAll
     /// are deterministic. Ids are never reused. Sol tables live in
@@ -97,7 +85,11 @@ struct YA_SCRIPT_LUA_API LuaScriptingSystem : public ScriptingSystem
     LuaScriptingSystem& operator=(const LuaScriptingSystem&) = delete;
 
     /// Injected seam (bound by the Host at startup; no App access from here).
-    void setRuntimeServices(LuaRuntimeServices services);
+    void setServices(WorldScriptServices services) override;
+    /// Same as `setServices`. Kept so existing tests keep their call.
+    void setRuntimeServices(WorldScriptServices services);
+
+    void shutdown() override;
 
     /// The shared state every host's scripts run in (bindings are added here).
     [[nodiscard]] sol::state& lua() { return _lua; }
@@ -111,17 +103,17 @@ struct YA_SCRIPT_LUA_API LuaScriptingSystem : public ScriptingSystem
     void onUpdate(float deltaTime) override;
     /// Play stopped: onDestroy every live instance, whatever hosts it, and
     /// reset the active scene's script rows for the next play.
-    void onStop();
+    void onStop() override;
     /// The gameplay persistent table, bound as the `Persist` global (rpg R3):
     /// chest flags and the like. Scene transfers never touch it; a play
     /// session exit calls resetPersistentState for a fresh one.
     [[nodiscard]] sol::table persistentState();
     /// Swap in a fresh `Persist` table. The old table object stays alive as
     /// long as scripts hold it, but the global reads the new empty one.
-    void resetPersistentState();
+    void resetPersistentState() override;
     /// `entity` is about to be destroyed: onDestroy its loaded scripts and
     /// drop their Lua handles.
-    void onEntityDestroying(Entity& entity);
+    void onEntityDestroying(Entity& entity) override;
 
     // === Instances, any host ===
     /// Run `instance.scriptPath`, bind its callbacks, let `host` fill `self`,
@@ -143,7 +135,21 @@ struct YA_SCRIPT_LUA_API LuaScriptingSystem : public ScriptingSystem
     [[nodiscard]] sol::table selfOf(uint64_t runtimeId) const;
     /// Drop the live table and unregister `runtimeId` without running onDestroy.
     /// No-op for 0 or an id this system does not own.
-    void dropInstance(uint64_t runtimeId);
+    void dropInstance(uint64_t runtimeId) override;
+
+    /// The system whose `lua_State` is `L`, or null for a state this module
+    /// did not construct (the property-preview state, for one).
+    [[nodiscard]] static LuaScriptingSystem* systemForState(lua_State* L);
+    /// Runtime id when the value at `index` is a live `self` of this system.
+    /// Any other table is 0, so property tables still cannot cross.
+    [[nodiscard]] uint64_t runtimeIdOfSelf(lua_State* L, int index) const;
+    /// Keep the function at `index` in this system's state. 0 if it is not one.
+    [[nodiscard]] uint64_t holdFunction(lua_State* L, int index);
+    static void pushLiveSelf(lua_State* L, uint64_t runtimeId);
+    static void pushHeldFunction(lua_State* L, uint64_t id);
+    static void retainFunction(uint64_t id);
+    static void releaseFunction(uint64_t id);
+    static void invokeFunction(uint64_t id, uint64_t selfRuntimeId, script::ScriptArgs args);
     /// onDestroy, drop the live table and unregister. No-op if not live.
     void destroy(ScriptInstance& instance);
     /// destroy() every live instance, in load order.

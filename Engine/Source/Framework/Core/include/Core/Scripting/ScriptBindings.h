@@ -45,6 +45,17 @@ struct ScriptRefKind
     /// Runs after a script called a non-const method on the resolved object.
     /// Const methods and native methods do not reach it.
     std::function<void(const ScriptRef&, void*)> afterCall;
+    /// True: a missing object reads as nil and ignores writes and calls,
+    /// instead of throwing ScriptError. Entity kinds leave this false.
+    bool missingIsNil = false;
+};
+
+/// A field a module supplies in code. `property == nullptr` on the found
+/// field means these run. An empty `write` is read-only.
+struct ScriptNativeField
+{
+    std::function<ScriptValue(void* self, const ScriptRef&)>                         read;
+    std::function<void(void* self, const ScriptRef&, const ScriptValue&)>            write;
 };
 
 /// A function a module offers scripts as `<module>.<name>(...)`.
@@ -67,6 +78,15 @@ struct ScriptMethod;
 YA_CORE_API uint32_t registerRefKind(ScriptRefKind kind);
 /// A reflected method of the same name wins over a native one.
 YA_CORE_API void     addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn);
+/// A reflected field of the same name wins. A second registration of `name`
+/// does not replace the first.
+YA_CORE_API void     addNativeField(type_index_t type, std::string name, ScriptNativeField field);
+/// `derived`'s lookup continues into `base` when its own table misses.
+/// The first base wins; a later call does not replace it. A member registered
+/// on `derived` hides the same name on `base`.
+YA_CORE_API void     addScriptBase(type_index_t derived, type_index_t base);
+/// `scriptTypeName` for a type with no reflected class, or an override of one.
+YA_CORE_API void     setScriptTypeName(type_index_t type, std::string name);
 YA_CORE_API void     setMethodResolver(type_index_t type, ScriptMethodResolver resolver);
 
 /// Backends project module functions when they build a script state, so a
@@ -95,5 +115,21 @@ YA_CORE_API ScriptValue               callMethod(const ScriptRef& ref, const Scr
 [[nodiscard]] YA_CORE_API ScriptValue readField(const ScriptRef& ref, std::string_view field);
 YA_CORE_API void                      writeField(const ScriptRef& ref, std::string_view field, const ScriptValue& value);
 YA_CORE_API ScriptValue               callMethod(const ScriptRef& ref, std::string_view method, ScriptArgs args);
+
+/// Language backend behind `ScriptFnHandle`. GameRuntime calls through this
+/// and does not see the language runtime. Null until the backend installs.
+struct IScriptCallbacks
+{
+    virtual ~IScriptCallbacks() = default;
+
+    virtual void retain(ScriptFnHandle fn)                                               = 0;
+    virtual void release(ScriptFnHandle fn)                                              = 0;
+    /// Call `fn` with `self` first when `self.runtimeId != 0`, then `args`.
+    /// Errors are logged. This does not throw into the language state.
+    virtual void invoke(ScriptFnHandle fn, ScriptSelfHandle self, ScriptArgs args) = 0;
+};
+
+YA_CORE_API void              setScriptCallbacks(IScriptCallbacks* callbacks);
+YA_CORE_API IScriptCallbacks* scriptCallbacks();
 
 } // namespace ya::script

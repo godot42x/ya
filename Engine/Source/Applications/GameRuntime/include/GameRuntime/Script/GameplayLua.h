@@ -7,11 +7,12 @@ namespace ya
 {
 
 struct GameUIHost;
-struct LuaScriptingSystem;
+struct IWorldScriptRuntime;
 
 /// Gameplay Lua surface for the 2D sample: sprite read/write, sprite spawn,
 /// and the mounted-document text/visibility bridge. Registered by the host
-/// after `LuaScriptingSystem::init`. GUI widgets stay free of Lua; this file
+/// after the world script runtime's `init`. The body still casts to the Lua
+/// backend (B2-6 removes that). GUI widgets stay free of Lua; this file
 /// lives in GameRuntime because that is the module that already sees both
 /// the script state and `Sprite2DComponent`.
 ///
@@ -22,6 +23,6 @@ struct LuaScriptingSystem;
 /// context leaves those calls with no scene and no key router.
 /// `world.spawnSprite(name [, texturePath])`: a missing or blank path keeps
 /// the probe texture; a path goes through `TextureSlot::fromPath`.
-YA_GAME_RUNTIME_API void bindGameplayLua(LuaScriptingSystem& scripting, GameUIHost& ui, GameplayScriptContext ctx = {});
+YA_GAME_RUNTIME_API void bindGameplayLua(IWorldScriptRuntime& runtime, GameUIHost& ui, GameplayScriptContext ctx = {});
 
 } // namespace ya

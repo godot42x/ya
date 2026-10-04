@@ -181,7 +181,10 @@ void invokeLuaCallback(const sol::function& callback, std::string_view what, std
 struct LiveOwnerRegistry
 {
     std::unordered_map<uint64_t, ya::LuaScriptingSystem*> byId;
-    uint64_t                                              nextId = 1;
+    std::unordered_map<uint64_t, ya::LuaScriptingSystem*> fnOwner;
+    std::unordered_map<lua_State*, ya::LuaScriptingSystem*> byState;
+    uint64_t                                                nextId = 1;
+    uint64_t                                                nextFn = 1;
 };
 
 LiveOwnerRegistry& liveOwners()
@@ -338,9 +341,16 @@ struct LuaInstanceLive
     std::shared_ptr<LuaListenerScope> listeners;
 };
 
+struct LuaHeldFunction
+{
+    sol::function fn;
+    int32_t       refs = 0;
+};
+
 struct LuaInstanceStore
 {
-    std::map<uint64_t, LuaInstanceLive> byId;
+    std::map<uint64_t, LuaInstanceLive>            byId;
+    std::unordered_map<uint64_t, LuaHeldFunction> functions;
 };
 
 script::ScriptValue callEntityScript(Entity& entity, const std::string& name, script::ScriptArgs args)
@@ -369,9 +379,169 @@ script::ScriptValue callEntityScript(Entity& entity, const std::string& name, sc
     return {};
 }
 
-void LuaScriptingSystem::setRuntimeServices(LuaRuntimeServices services)
+void LuaScriptingSystem::setServices(WorldScriptServices services)
 {
     _services = std::move(services);
+}
+
+void LuaScriptingSystem::setRuntimeServices(WorldScriptServices services)
+{
+    setServices(std::move(services));
+}
+
+void LuaScriptingSystem::shutdown() {}
+
+LuaScriptingSystem* LuaScriptingSystem::systemForState(lua_State* L)
+{
+    if (!L) {
+        return nullptr;
+    }
+    const auto it = liveOwners().byState.find(L);
+    return it == liveOwners().byState.end() ? nullptr : it->second;
+}
+
+uint64_t LuaScriptingSystem::runtimeIdOfSelf(lua_State* L, int index) const
+{
+    if (!L || !_instances || lua_type(L, index) != LUA_TTABLE) {
+        return 0;
+    }
+    const int abs = lua_absindex(L, index);
+    for (const auto& [id, live] : _instances->byId) {
+        if (!live.self.valid() || live.self.lua_state() != L) {
+            continue;
+        }
+        live.self.push(L);
+        const bool same = lua_rawequal(L, abs, -1) != 0;
+        lua_pop(L, 1);
+        if (same) {
+            return id;
+        }
+    }
+    return 0;
+}
+
+uint64_t LuaScriptingSystem::holdFunction(lua_State* L, int index)
+{
+    if (!L || !_instances || L != _lua.lua_state() || lua_type(L, index) != LUA_TFUNCTION) {
+        return 0;
+    }
+    sol::function fn(L, index);
+    if (!fn.valid()) {
+        return 0;
+    }
+    const uint64_t id = liveOwners().nextFn++;
+    _instances->functions.emplace(id, LuaHeldFunction{.fn = std::move(fn), .refs = 0});
+    liveOwners().fnOwner.emplace(id, this);
+    return id;
+}
+
+void LuaScriptingSystem::pushLiveSelf(lua_State* L, uint64_t runtimeId)
+{
+    if (!L) {
+        return;
+    }
+    if (runtimeId == 0) {
+        lua_pushnil(L);
+        return;
+    }
+    const auto owner = liveOwners().byId.find(runtimeId);
+    if (owner == liveOwners().byId.end() || !owner->second) {
+        lua_pushnil(L);
+        return;
+    }
+    const sol::table self = owner->second->selfOf(runtimeId);
+    if (!self.valid()) {
+        lua_pushnil(L);
+        return;
+    }
+    self.push(L);
+}
+
+void LuaScriptingSystem::pushHeldFunction(lua_State* L, uint64_t id)
+{
+    if (!L) {
+        return;
+    }
+    const auto owner = liveOwners().fnOwner.find(id);
+    if (owner == liveOwners().fnOwner.end() || !owner->second || !owner->second->_instances) {
+        lua_pushnil(L);
+        return;
+    }
+    const auto it = owner->second->_instances->functions.find(id);
+    if (it == owner->second->_instances->functions.end() || !it->second.fn.valid() || it->second.fn.lua_state() != L) {
+        lua_pushnil(L);
+        return;
+    }
+    it->second.fn.push(L);
+}
+
+void LuaScriptingSystem::retainFunction(uint64_t id)
+{
+    const auto owner = liveOwners().fnOwner.find(id);
+    if (owner == liveOwners().fnOwner.end() || !owner->second || !owner->second->_instances) {
+        return;
+    }
+    const auto it = owner->second->_instances->functions.find(id);
+    if (it == owner->second->_instances->functions.end()) {
+        return;
+    }
+    ++it->second.refs;
+}
+
+void LuaScriptingSystem::releaseFunction(uint64_t id)
+{
+    const auto owner = liveOwners().fnOwner.find(id);
+    if (owner == liveOwners().fnOwner.end() || !owner->second || !owner->second->_instances) {
+        return;
+    }
+    const auto it = owner->second->_instances->functions.find(id);
+    if (it == owner->second->_instances->functions.end() || it->second.refs <= 0) {
+        return;
+    }
+    if (--it->second.refs > 0) {
+        return;
+    }
+    owner->second->_instances->functions.erase(it);
+    liveOwners().fnOwner.erase(id);
+}
+
+void LuaScriptingSystem::invokeFunction(uint64_t id, uint64_t selfRuntimeId, script::ScriptArgs args)
+{
+    const auto owner = liveOwners().fnOwner.find(id);
+    if (owner == liveOwners().fnOwner.end() || !owner->second || !owner->second->_instances) {
+        YA_CORE_ERROR("script function {} is gone", id);
+        return;
+    }
+    LuaScriptingSystem* system = owner->second;
+    const auto          it     = system->_instances->functions.find(id);
+    if (it == system->_instances->functions.end() || !it->second.fn.valid()) {
+        YA_CORE_ERROR("script function {} is gone", id);
+        return;
+    }
+    const sol::function function = it->second.fn;
+    lua_State* const    L        = function.lua_state();
+    std::vector<sol::object> arguments;
+    arguments.reserve(args.size() + 1);
+    if (selfRuntimeId != 0) {
+        const sol::table self = system->selfOf(selfRuntimeId);
+        if (!self.valid()) {
+            YA_CORE_ERROR("script function {} self {} is gone", id, selfRuntimeId);
+            return;
+        }
+        self.push(L);
+        arguments.emplace_back(L, -1);
+        lua_pop(L, 1);
+    }
+    for (const script::ScriptValue& value : args) {
+        pushLuaValue(L, value);
+        arguments.emplace_back(L, -1);
+        lua_pop(L, 1);
+    }
+    const sol::protected_function_result result = protectedCall(function, sol::as_args(arguments));
+    if (!result.valid()) {
+        const sol::error error = result;
+        YA_CORE_ERROR("script function {} error: {}", id, error.what());
+    }
 }
 
 void LuaScriptingSystem::init()
@@ -686,6 +856,7 @@ LuaScriptingSystem::LuaScriptingSystem()
     : _instances(std::make_unique<LuaInstanceStore>())
 {
     setDropScriptInstance(&dropLuaScriptLive);
+    liveOwners().byState.insert_or_assign(_lua.lua_state(), this);
 }
 
 LuaScriptingSystem::~LuaScriptingSystem()
@@ -694,6 +865,14 @@ LuaScriptingSystem::~LuaScriptingSystem()
     // stop, entity destroy). Anything left here may point at freed storage, so
     // it is only dropped, never resolved. Sol objects are released here, while
     // `_lua` is still alive (member destructors run after this body).
+    liveOwners().byState.erase(_lua.lua_state());
+    if (_instances) {
+        for (const auto& [id, held] : _instances->functions) {
+            (void)held;
+            liveOwners().fnOwner.erase(id);
+        }
+        _instances->functions.clear();
+    }
     if (!_live.empty()) {
         YA_CORE_WARN("LuaScriptingSystem: {} script instance(s) still live at shutdown", _live.size());
     }
