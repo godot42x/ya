@@ -23,7 +23,6 @@ struct ScriptProperty
     float               min             = 0.0f;
     float               max             = 100.0f;
     std::string         tooltip         = "";
-    std::string         serializedValue = "";
 };
 
 /// One script attached to one host. The authored half (path, enabled, order

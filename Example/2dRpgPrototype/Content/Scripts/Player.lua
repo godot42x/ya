@@ -63,7 +63,7 @@ function Script:interact()
     if target then
         local s = world.scriptOf(target)
         if s ~= nil and s.onInteract ~= nil then
-            s:onInteract()
+            s:onInteract(self.entity)
         end
     end
 end

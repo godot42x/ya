@@ -27,7 +27,10 @@ YA_SCRIPT_LUA_API void registerLuaScriptBindings(sol::state_view lua);
 
 YA_SCRIPT_LUA_API int                 pushLuaValue(lua_State* L, const script::ScriptValue& value);
 /// Throws script::ScriptError for a value no engine type can take.
-[[nodiscard]] YA_SCRIPT_LUA_API script::ScriptValue toScriptValue(lua_State* L, int index);
+/// `expected == type_index_v<script::ScriptSelfHandle>` is an owner/self slot:
+/// a table that is not a live self becomes an empty handle (no owner).
+/// Every other slot throws on a table that cannot cross.
+[[nodiscard]] YA_SCRIPT_LUA_API script::ScriptValue toScriptValue(lua_State* L, int index, type_index_t expected = 0);
 
 [[nodiscard]] YA_SCRIPT_LUA_API bool isLuaScriptObject(lua_State* L, int index);
 

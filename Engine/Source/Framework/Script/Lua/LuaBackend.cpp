@@ -169,16 +169,25 @@ script::ScriptValue callHeldScriptFunction(IWorldScriptRuntime& runtime, script:
 
 void installLuaScriptBackend()
 {
+    // One preview for the process. It owns its own sol::state and outlives
+    // every App: a test process and the editor construct more than one.
+    // `uninstallLuaScriptBackend` destroys it. A function-local static would
+    // destroy that state during static teardown, after Lua is already gone.
+    YA_CORE_ASSERT(scriptPropertyPreview() == nullptr && script::scriptCallbacks() == nullptr,
+                   "installLuaScriptBackend: already installed");
     setWorldScriptRuntimeFactory(&createLuaWorldScriptRuntime);
     script::setScriptCallbacks(&callbackBridge());
-    // One preview for the process. It owns its own sol::state. App teardown
-    // does not destroy it: a test process and the editor construct more than
-    // one App, and clearing the pointer on the first quit would drop it for
-    // the next. A function-local static would destroy that state during
-    // static teardown; this heap object is intentionally not freed.
-    if (!scriptPropertyPreview()) {
-        setScriptPropertyPreview(createScriptPropertyPreview());
+    setScriptPropertyPreview(createScriptPropertyPreview());
+}
+
+void uninstallLuaScriptBackend()
+{
+    if (IScriptPropertyPreview* preview = scriptPropertyPreview()) {
+        setScriptPropertyPreview(nullptr);
+        destroyScriptPropertyPreview(preview);
     }
+    script::setScriptCallbacks(nullptr);
+    setWorldScriptRuntimeFactory(nullptr);
 }
 
 } // namespace ya

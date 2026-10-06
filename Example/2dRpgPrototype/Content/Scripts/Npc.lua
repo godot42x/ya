@@ -1,5 +1,5 @@
 -- A villager: stands on its cell and answers onInteract by turning toward
--- the player and talking through the Dialogue entry. Its cell blocks the
+-- the caller and talking through the Dialogue entry. Its cell blocks the
 -- player through map:entityAt, so it reads as a body on the map without any
 -- collision code here.
 local ScriptBase = require("ScriptBase")
@@ -29,13 +29,10 @@ function Script:onInit()
     self:face("down")
 end
 
-function Script:onInteract()
-    -- Turn toward whoever knocked: the caller passes nothing, so the player
-    -- is found the same way the camera finds the player (world.find).
-    local player = world.find("Player")
-    if player then
+function Script:onInteract(who)
+    if who then
         local mine = self.transform:getPosition()
-        local theirs = player:getTransform():getPosition()
+        local theirs = who:getTransform():getPosition()
         local dx, dy = theirs.x - mine.x, theirs.y - mine.y
         local facing = "down"
         if math.abs(dx) > math.abs(dy) then

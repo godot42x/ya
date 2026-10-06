@@ -195,21 +195,14 @@ class MethodCall
 
     [[nodiscard]] std::vector<ScriptValue> arguments() const
     {
+        const ScriptMethod&      method = this->method();
         std::vector<ScriptValue> args;
         const int                last = lua_gettop(_L);
         args.reserve(last >= kFirstArgument ? last - kFirstArgument + 1 : 0);
         for (int index = kFirstArgument; index <= last; ++index) {
-            try {
-                args.push_back(toScriptValue(_L, index));
-            }
-            catch (const ScriptError&) {
-                // A table that is not a live self cannot cross. `onClicked:add({}, fn)`
-                // treats that owner as absent and returns 0, instead of raising.
-                if (lua_type(_L, index) != LUA_TTABLE) {
-                    throw;
-                }
-                args.push_back({});
-            }
+            const size_t       argIndex = static_cast<size_t>(index - kFirstArgument);
+            const type_index_t expected = script::methodArgumentType(method, argIndex);
+            args.push_back(toScriptValue(_L, index, expected));
         }
         return args;
     }
@@ -478,9 +471,9 @@ void pushObjectMetatable(lua_State* L, type_index_t type)
 } // namespace
 
 // ============================================================================
-// sol2 bridge: the only place sol meets engine objects. Every module that
-// moves a LuaScriptObject through sol (bindSelf, world.* functions, tests)
-// funnels through these three.
+// sol2 bridge: the only place sol meets engine objects. Callers that hand a
+// LuaScriptObject to sol (`self.entity`, tests) funnel through these three.
+// Module functions are closures, not sol usertypes.
 // ============================================================================
 
 bool isLuaScriptObject(lua_State* L, int index)
@@ -631,7 +624,7 @@ int pushLuaValue(lua_State* L, const ScriptValue& value)
         value);
 }
 
-ScriptValue toScriptValue(lua_State* L, int index)
+ScriptValue toScriptValue(lua_State* L, int index, type_index_t expected)
 {
     switch (lua_type(L, index)) {
     case LUA_TNIL:
@@ -661,6 +654,10 @@ ScriptValue toScriptValue(lua_State* L, int index)
             if (const uint64_t id = system->runtimeIdOfSelf(L, index)) {
                 return script::ScriptSelfHandle{.runtimeId = id};
             }
+        }
+        // Only an owner/self slot accepts a table that is not a live self.
+        if (expected == type_index_v<script::ScriptSelfHandle>) {
+            return script::ScriptSelfHandle{};
         }
         break;
     case LUA_TUSERDATA:

@@ -38,3 +38,7 @@
 
 - 口径拍板：压测场景 = 多光源、多网格、Sponza、2D 合批（用户补充：面试高频）、GUI；开窗口固定 1920×1080、关垂直同步、去上限、预热 120 / 采样 600；进程内存 = RSS / 峰值 + profile 构建下按子系统的分配追踪；正式基线入库。见 `../perf-baseline/plan.md`。
 - 派发规则纠正：W2 与此前 B2-6 / B2-7 是**续接** Grok 4.7 派的，续接已证实变 fast；规则写进 `subagent-delegation` skill（只用 frontmatter 标定模型的 `ya-worker` / `ya-reviewer`，只新开不续接）。
+
+## 2026-10-07 — W2 收口
+
+- W2 完成（严格审查 + 一次返工）：`addNativeMethod` 先到者胜（补填签名分支删除）；组件序列化规则单一来源 `ECS/ComponentJson::assembleComponentJson`（「反射（可选）+ 追加 custom」），`SceneSerializer` / `component.get` / `component.set` 三处共用、读写对称；`installLuaScriptBackend` 断言只装一次 + `LuaScriptBackendScope` RAII；`world.spawnSprite` 无路径即无贴图；Npc 交互传交互者；`GridMoverTest.lua` 进 gtest。

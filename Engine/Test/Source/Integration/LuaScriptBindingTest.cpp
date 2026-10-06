@@ -121,6 +121,13 @@ TEST_F(LuaScriptBindingTest, ModuleFunctionsBecomeGlobalTables)
     EXPECT_NE(std::string(sol::error(failed).what()).find("probeLua.fail: boom"), std::string::npos);
 }
 
+TEST_F(LuaScriptBindingTest, PlainTableMethodArgumentRaises)
+{
+    const auto result = run("return entity:getTransform():setRotation({})");
+    ASSERT_FALSE(result.valid());
+    EXPECT_NE(std::string(sol::error(result).what()).find("cannot be passed"), std::string::npos);
+}
+
 TEST_F(LuaScriptBindingTest, MistakesRaiseLuaErrors)
 {
     for (const char* source : {

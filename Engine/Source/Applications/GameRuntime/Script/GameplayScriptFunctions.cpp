@@ -122,10 +122,9 @@ ScriptValue entityAtCell(void* self, const ScriptRef&, ScriptArgs args)
     return {};
 }
 
-constexpr const char* kSpriteTexture = "Engine:Content/TestTextures/sprite2d_probe_64.png";
-
-/// `texturePath` empty keeps the probe image. A caller-supplied path is stored
-/// through `TextureSlot::fromPath` (the same asset-path form as a scene sprite).
+/// A caller-supplied path is stored through `TextureSlot::fromPath` (the same
+/// asset-path form as a scene sprite). An empty path leaves the slot unset:
+/// the engine does not invent a texture, and Sprite2D does not draw the sprite.
 Entity* spawnSprite(const GameplayScriptContext& ctx, const std::string& name, const std::string& texturePath)
 {
     Scene* scene = ctx.activeScene ? ctx.activeScene() : nullptr;
@@ -138,7 +137,9 @@ Entity* spawnSprite(const GameplayScriptContext& ctx, const std::string& name, c
         return nullptr;
     }
     Sprite2DComponent* sprite = node->getEntity()->addComponent<Sprite2DComponent>();
-    sprite->image.fromPath(texturePath.empty() ? kSpriteTexture : texturePath);
+    if (!texturePath.empty()) {
+        sprite->image.fromPath(texturePath);
+    }
     sprite->size = {1.0f, 1.0f};
     return node->getEntity();
 }

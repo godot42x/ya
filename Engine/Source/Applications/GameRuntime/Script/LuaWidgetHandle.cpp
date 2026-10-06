@@ -349,9 +349,12 @@ void registerWidgetScriptSurface()
         cancelWidgetTimer(ref);
         return {};
     });
-    script::addNativeMethod(clicked, "add", &addClicked);
+    script::addNativeMethod(clicked,
+                            "add",
+                            &addClicked,
+                            {type_index_v<script::ScriptSelfHandle>, type_index_v<script::ScriptFnHandle>});
     script::addNativeMethod(clicked, "remove", &removeClicked);
-    script::addNativeMethod(clicked, "removeAll", &removeAllClicked);
+    script::addNativeMethod(clicked, "removeAll", &removeAllClicked, {type_index_v<script::ScriptSelfHandle>});
 }
 
 } // namespace ya

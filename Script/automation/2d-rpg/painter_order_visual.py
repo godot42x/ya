@@ -474,11 +474,11 @@ def find_overlay_pair(tilemap: dict, origin: tuple[float, float, float]) -> dict
 
 
 def hold_player_on_trunk() -> tuple[int, dict]:
-    # Player.lua writes the transform from its own cell every tick, and
-    # LuaScriptComponent keeps `scripts` out of the reflected field set, so
-    # component.set cannot disable that one script. Removing the component
-    # stops the overwrite; the scene file is untouched.
-    player = entity_by_name("Player")
+    # Player.lua writes the transform from its own cell every tick.
+    # component.set still cannot turn that one script off (the row is custom
+    # data, not a reflected field). Removing the component stops the overwrite;
+    # the scene file is untouched. The entity is the one that mounts Player.lua.
+    player = rpg.player_id()
     removed = rpg.call("component.remove", {"id": player, "type": "LuaScriptComponent"})
     if not isinstance(removed, dict) or not removed.get("removed"):
         raise SystemExit(f"could not remove Player.lua so the transform would stick: {removed!r}")

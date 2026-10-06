@@ -82,14 +82,37 @@ def _find_field(node: object, name: str) -> object | None:
     return None
 
 
+def _mounts_script(entity: dict, script_name: str) -> bool:
+    components = entity.get("components")
+    if not isinstance(components, dict):
+        return False
+    lua = components.get("LuaScriptComponent")
+    if not isinstance(lua, dict):
+        return False
+    rows = lua.get("scripts")
+    if not isinstance(rows, list):
+        return False
+    suffix = "/" + script_name
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        path = row.get("scriptPath")
+        if not isinstance(path, str):
+            continue
+        normalized = path.replace("\\", "/")
+        if normalized == script_name or normalized.endswith(suffix):
+            return True
+    return False
+
+
 def player_id() -> int:
     entities = call("entity.list")
     if not isinstance(entities, list):
         raise SystemExit(f"entity.list returned {type(entities).__name__}")
     for entity in entities:
-        if isinstance(entity, dict) and entity.get("name") == "Player":
+        if isinstance(entity, dict) and _mounts_script(entity, "Player.lua"):
             return int(entity["id"])
-    raise SystemExit("Player entity is not in the scene")
+    raise SystemExit("no entity has Player.lua mounted")
 
 
 def player_position(entity_id: int) -> tuple[float, float]:

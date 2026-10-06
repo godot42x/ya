@@ -1,5 +1,6 @@
 #include "GameRuntime/Script/GameplayLua.h"
 
+#include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "LuaWidgetScripts.h"
 
 #include "Script/Lua/LuaBackend.h"

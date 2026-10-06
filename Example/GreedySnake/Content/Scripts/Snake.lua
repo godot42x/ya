@@ -2,6 +2,7 @@ local ScriptBase = require("ScriptBase")
 local Script = ScriptBase:new()
 
 local CELL = 1.0
+local SPRITE_TEXTURE = "Engine:Content/TestTextures/sprite2d_probe_64.png"
 local HALF = 9
 local SPRITE_HALF = 0.45
 local STEP_SLOW = 0.42
@@ -38,7 +39,7 @@ local function paint(entity, r, g, b)
 end
 
 local function spawnAt(name, x, y, r, g, b)
-    local entity = world.spawnSprite(name)
+    local entity = world.spawnSprite(name, SPRITE_TEXTURE)
     if not entity then
         log:error("GreedySnake failed to spawn " .. name)
         return nil
@@ -119,7 +120,7 @@ local function spawnBorder()
         { "WallRight", outer, 0, thick, span },
     }
     for _, bar in ipairs(bars) do
-        local entity = world.spawnSprite(bar[1])
+        local entity = world.spawnSprite(bar[1], SPRITE_TEXTURE)
         if entity then
             local transform = entity:getTransform()
             if transform then

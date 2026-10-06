@@ -42,7 +42,12 @@ namespace ya::test
             if (start.empty()) {
                 continue;
             }
-            for (std::filesystem::path probe = start.parent_path(); !probe.empty(); probe = probe.parent_path()) {
+            // Probe the starting point itself, then walk up. The cap bounds
+            // the walk for pathologically deep trees.
+            constexpr int kMaxDepth = 32;
+            int           depth     = 0;
+            for (std::filesystem::path probe = start; !probe.empty() && depth < kMaxDepth;
+                 probe = probe.parent_path(), ++depth) {
                 if (hasMarker(probe)) {
                     return probe;
                 }

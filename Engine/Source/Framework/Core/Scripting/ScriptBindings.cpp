@@ -195,6 +195,9 @@ struct ScriptMethod
     std::string               name;
     const Function*           function = nullptr;
     std::vector<type_index_t> ownerPath;
+    /// Script-facing parameter types of a native method. Reflected methods
+    /// use `function->argTypeIndices` instead.
+    std::vector<type_index_t> argTypes;
     ScriptNativeFn            native;
 };
 
@@ -397,15 +400,18 @@ void forEachModuleFunction(const std::function<void(const ScriptModuleFunction&)
     }
 }
 
-void addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn)
+void addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn, std::vector<type_index_t> argTypes)
 {
     TypeExport&  entry  = state().types[type];
-    ScriptMethod method = {.name = name, .native = std::move(fn)};
+    ScriptMethod method = {.name = name, .argTypes = std::move(argTypes), .native = std::move(fn)};
     if (entry.bBuilt) {
-        entry.methods.try_emplace(std::move(name), std::move(method));
+        // Already exported: the first registration wins.
+        entry.methods.try_emplace(name, std::move(method));
     }
     else {
-        // exportOf() lets reflected methods overwrite it later.
+        // Pre-export: a later registration replaces an earlier one of the
+        // same name. At export, collectMembers keeps an already-registered
+        // native; a reflected method does not overwrite it.
         entry.methods.insert_or_assign(std::move(name), std::move(method));
     }
 }
@@ -479,6 +485,15 @@ const ScriptField* findField(type_index_t type, std::string_view name)
         current = base;
     }
     return nullptr;
+}
+
+type_index_t methodArgumentType(const ScriptMethod& method, size_t index)
+{
+    if (method.function) {
+        const auto& types = method.function->argTypeIndices;
+        return index < types.size() ? types[index] : type_index_t{0};
+    }
+    return index < method.argTypes.size() ? method.argTypes[index] : type_index_t{0};
 }
 
 const ScriptMethod* findMethod(type_index_t type, std::string_view name)

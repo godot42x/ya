@@ -62,7 +62,8 @@ struct GameplayPresentedView
 ///       `actorName` moves nobody.
 ///   world.viewAspect() -> the same presented view as viewSize, as a number
 ///   world.spawnSprite(name[, texturePath]) -> entity, or nil when there is
-///       no scene. A missing or blank path keeps the probe texture.
+///       no scene. A missing or blank path leaves the sprite with no texture
+///       (Sprite2D does not draw it). Callers that want a picture pass a path.
 ///   world.destroyEntity(entity) -> nil. Queues the entity's node.
 ///   world.scriptOf(entity[, path]) -> the live self table (ScriptSelfHandle),
 ///       or nil. `path` filters by normalized script path. The table is for

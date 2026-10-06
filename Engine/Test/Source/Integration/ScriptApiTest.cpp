@@ -1,4 +1,5 @@
 #include "Core/Scripting/ScriptApiRegistry.h"
+#include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/JSScriptingSystem.h"
@@ -240,6 +241,37 @@ TEST_F(ScriptApiFixture, JsErrorsPropagate)
 
     const auto syntax = system.evalJS("this is not valid js (");
     EXPECT_FALSE(syntax.ok);
+}
+
+TEST_F(ScriptApiFixture, EntityListShowsMountedScriptPath)
+{
+    Entity* entity = _scene->createNode3D("Hero")->getEntity();
+    ASSERT_NE(entity, nullptr);
+    auto* scripts = entity->addComponent<LuaScriptComponent>();
+    ASSERT_NE(scripts, nullptr);
+    scripts->addScript("Content/Scripts/Player.lua");
+
+    Json        result;
+    std::string error;
+    ASSERT_TRUE(ScriptApiRegistry::get().invoke("entity.list", Json::object(), result, error)) << error;
+
+    const Json* hero = nullptr;
+    for (const Json& row : result) {
+        if (row.value("name", "") == "Hero") {
+            hero = &row;
+            break;
+        }
+    }
+    ASSERT_NE(hero, nullptr) << result.dump();
+    ASSERT_TRUE(hero->contains("components")) << result.dump();
+    const Json& components = hero->at("components");
+    ASSERT_TRUE(components.contains("LuaScriptComponent")) << components.dump();
+    const Json& luaComponent = components.at("LuaScriptComponent");
+    ASSERT_TRUE(luaComponent.contains("scripts")) << luaComponent.dump();
+    const Json& mounted = luaComponent.at("scripts");
+    ASSERT_TRUE(mounted.is_array());
+    ASSERT_EQ(mounted.size(), 1u);
+    EXPECT_EQ(mounted[0]["scriptPath"], scripts->scripts[0].scriptPath);
 }
 
 TEST_F(ScriptApiFixture, SceneSaveLoadRoundTrip)

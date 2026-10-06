@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 /// The one reflection -> script export shared by every script language.
 ///
@@ -76,8 +77,16 @@ struct ScriptMethod;
 
 /// Returns the kind id put into references of this provider (never 0).
 YA_CORE_API uint32_t registerRefKind(ScriptRefKind kind);
-/// A reflected method of the same name wins over a native one.
-YA_CORE_API void     addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn);
+/// A native method registered before export keeps its name: at export,
+/// reflected methods do not overwrite it. After export, the first
+/// registration of a name wins; a later one neither replaces the function
+/// nor patches its signature.
+/// `argTypes` is the script-facing signature. Empty means every argument must
+/// convert on its own. A `ScriptSelfHandle` parameter is an owner/self slot.
+YA_CORE_API void     addNativeMethod(type_index_t type,
+                                      std::string name,
+                                      ScriptNativeFn fn,
+                                      std::vector<type_index_t> argTypes = {});
 /// A native field hides a reflected field of the same name. The existing
 /// entry is updated in place, so a handle already handed to a backend stays
 /// valid. A second native registration of `name` does not replace the first.
@@ -101,6 +110,10 @@ YA_CORE_API void forEachModuleFunction(const std::function<void(const ScriptModu
 [[nodiscard]] YA_CORE_API std::string         scriptTypeName(type_index_t type);
 [[nodiscard]] YA_CORE_API const ScriptField*  findField(type_index_t type, std::string_view name);
 [[nodiscard]] YA_CORE_API const ScriptMethod* findMethod(type_index_t type, std::string_view name);
+/// Declared parameter type at `index`, or 0 when the method does not declare
+/// one (native method registered without a signature, or past the last
+/// parameter). Reflected methods report their reflected signature.
+[[nodiscard]] YA_CORE_API type_index_t        methodArgumentType(const ScriptMethod& method, size_t index);
 
 /// Null when the object is gone or the reference is empty.
 [[nodiscard]] YA_CORE_API void* tryResolve(const ScriptRef& ref);

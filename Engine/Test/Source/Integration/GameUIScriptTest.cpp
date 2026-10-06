@@ -542,6 +542,28 @@ plainTable = go.onClicked:add({}, function() end)
     EXPECT_THAT(ui.takeTrace(), IsEmpty());
 }
 
+TEST(GameUIScriptTest, NativeMethodPlainTableOutsideOwnerSlotRaises)
+{
+    FUIScripts ui;
+    ui.addScript("Owner", R"(
+local S = {}
+function S:onInit() owner = self end
+return S
+)");
+    UIElementRef hud = FUIScripts::widget(kTypeIdCanvasPanel, "HUD");
+    hud->addDetachedChild(FUIScripts::button("Go"));
+    ui.addEntry("HUD", hud);
+    ui.host.onSceneActivated(ui.scene);
+    ui.frame();
+    ui.addWorldScript("Owner");
+
+    const auto result = ui.lua.lua().safe_script(
+        R"(ui.get("HUD"):find("Go").onClicked:add(owner, {}))",
+        sol::script_pass_on_error);
+    ASSERT_FALSE(result.valid());
+    EXPECT_NE(std::string(sol::error(result).what()).find("a Lua table cannot be passed"), std::string::npos);
+}
+
 TEST(GameUIScriptTest, SpawnedButtonCanBeListenedToBeforeItIsAttached)
 {
     FUIScripts ui;
@@ -644,7 +666,7 @@ TEST(GameUIScriptTest, SpawnSpriteTakesOptionalTexturePath)
     lua.init();
     bindGameplayLua(lua, host, ctx);
 
-    lua.lua().script("probe = world.spawnSprite('Probe')");
+    lua.lua().script("unset = world.spawnSprite('Unset')");
     lua.lua().script("blank = world.spawnSprite('Blank', '')");
     lua.lua().script("custom = world.spawnSprite('Custom', 'Content/Sprites/hero.png')");
 
@@ -653,16 +675,15 @@ TEST(GameUIScriptTest, SpawnSpriteTakesOptionalTexturePath)
         EXPECT_NE(entity, nullptr);
         return entity ? entity->getComponent<Sprite2DComponent>() : nullptr;
     };
-    Sprite2DComponent* probe  = spriteOf("Probe");
+    Sprite2DComponent* unset  = spriteOf("Unset");
     Sprite2DComponent* blank  = spriteOf("Blank");
     Sprite2DComponent* custom = spriteOf("Custom");
-    ASSERT_NE(probe, nullptr);
+    ASSERT_NE(unset, nullptr);
     ASSERT_NE(blank, nullptr);
     ASSERT_NE(custom, nullptr);
 
-    const std::string probePath = canonicalizeAssetPath("Engine:Content/TestTextures/sprite2d_probe_64.png");
-    EXPECT_EQ(probe->image.textureRef.getPath(), probePath);
-    EXPECT_EQ(blank->image.textureRef.getPath(), probePath);
+    EXPECT_FALSE(unset->image.hasPath());
+    EXPECT_FALSE(blank->image.hasPath());
     EXPECT_EQ(custom->image.textureRef.getPath(), canonicalizeAssetPath("Content/Sprites/hero.png"));
     EXPECT_FLOAT_EQ(custom->size.x, 1.0f);
     EXPECT_FLOAT_EQ(custom->size.y, 1.0f);

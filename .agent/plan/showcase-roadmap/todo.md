@@ -8,7 +8,7 @@
 
 收口与文档
 - [x] W1 文档改正：「兼容 OpenGL」、`render-arch` 过时符号（`RenderFrameCoordinator` → `RuntimeRenderContext`）
-- [~] W2 B2 遗留债（8 项，见 plan §3 W2）
+- [x] W2 B2 遗留债（8 项，见 plan §3 W2；严格审查后返工一次，序列化规则收进 `ECS/ComponentJson`）
 - [~] W3 `GUIWindowManagerTest` 间歇失败定位
 
 测量与压测

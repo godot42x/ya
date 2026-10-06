@@ -3,6 +3,7 @@
 #include "App/Control/GuiEventDriver.h"
 #include "Core/FName.h"
 #include "Core/Os/OsEvent.h"
+#include "ECS/ComponentJson.h"
 #include "ECS/ECSRegistry.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "ECS/Component.h"
@@ -97,7 +98,7 @@ Json serializeComponent(const Scene& scene, entt::entity entity, const std::stri
     if (ptr == nullptr) {
         throw Error(std::format("entity does not have component '{}'", typeName));
     }
-    return ReflectionSerializer::serializeByRuntimeReflection(ptr, *typeIndex, typeName);
+    return assembleComponentJson(ptr, *typeIndex, typeName, ecs.getComponentOps(*typeIndex));
 }
 
 Json entityToJson(const Scene& scene, const Entity& entity)
@@ -304,7 +305,7 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
 
     registry.registerFunction(
         "component.add",
-        "Adds a component to an entity. Args: {id, type}. Returns the component fields.",
+        "Adds a component to an entity. Args: {id, type}. Returns reflected fields (when the type uses reflection) and custom data.",
         Json{{"id", {{"type", "integer"}}}, {"type", {{"type", "string"}}}},
         [](const Json& args) -> Json {
             Scene& scene = requireActiveScene();
@@ -342,7 +343,7 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
 
     registry.registerFunction(
         "component.get",
-        "Returns the reflected fields of a component. Args: {id, type}.",
+        "Returns reflected fields (when the type uses reflection) and custom data. Args: {id, type}.",
         Json{{"id", {{"type", "integer"}}}, {"type", {{"type", "string"}}}},
         [](const Json& args) -> Json {
             Scene& scene = requireActiveScene();
@@ -352,7 +353,7 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
 
     registry.registerFunction(
         "component.set",
-        "Updates reflected fields of a component. Args: {id, type, fields:{name: value}}.",
+        "Merges fields into the component document (reflected fields when the type uses reflection, plus custom data) and writes it back. Args: {id, type, fields:{name: value}}.",
         Json{{"id", {{"type", "integer"}}}, {"type", {{"type", "string"}}}, {"fields", {{"type", "object"}}}},
         [](const Json& args) -> Json {
             Scene& scene = requireActiveScene();
@@ -369,13 +370,19 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
                 throw Error(std::format("entity does not have component '{}'", typeName));
             }
 
-            // Merge the requested fields into the current reflected state, so
-            // partial updates never clobber untouched fields.
-            Json merged = ReflectionSerializer::serializeByRuntimeReflection(ptr, *typeIndex, typeName);
+            // Merge into the current document, then write it the way a scene loads:
+            // reflection when the component uses it, then custom data.
+            const ECSRegistry::IComponentOps* ops = ecs.getComponentOps(*typeIndex);
+            Json merged = assembleComponentJson(ptr, *typeIndex, typeName, ops);
             for (const auto& [key, value] : args.at("fields").items()) {
                 merged[key] = value;
             }
-            ReflectionSerializer::deserializeByRuntimeReflection(ptr, *typeIndex, merged, typeName);
+            if (!ops || ops->useReflectionSerialization(ptr)) {
+                ReflectionSerializer::deserializeByRuntimeReflection(ptr, *typeIndex, merged, typeName);
+            }
+            if (ops) {
+                ops->deserializeCustom(ptr, merged);
+            }
             static_cast<IComponent*>(ptr)->onPostSerialize();
             // The write landed outside any typed setter: route it through the
             // scene edit funnel so derived-work processors pick it up.

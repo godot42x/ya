@@ -7,6 +7,7 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "Resource/AssetManager.h"
 #include "Scene3D/ManagedChildComponent.h"
+#include "ECS/ComponentJson.h"
 #include "ECS/ECSRegistry.h"
 #include "ECS/Entity.h"
 #include "Scene/Core/SceneWidgetEntry.h"
@@ -160,6 +161,13 @@ const nlohmann::json* cachedDefaultReflectionJson(ya::type_index_t typeIndex, co
 
     const auto it = cache.emplace(typeIndex, std::move(entry)).first;
     return it->second.bHasDefault ? &it->second.json : nullptr;
+}
+
+void trimReflectedDefaults(nlohmann::json& reflected, ya::type_index_t typeIndex, std::string_view typeName)
+{
+    if (const nlohmann::json* defaults = cachedDefaultReflectionJson(typeIndex, std::string(typeName))) {
+        omitFieldsEqualToDefault(reflected, *defaults);
+    }
 }
 
 } // namespace
@@ -404,25 +412,15 @@ nlohmann::json SceneSerializer::serializeEntity(Entity* entity)
             continue;
         }
 
-        nlohmann::json componentJson;
-        const auto* ops = reg.getComponentOps(typeIndex);
+        const auto*       ops      = reg.getComponentOps(typeIndex);
         const std::string typeName = name.toString();
         // Only the reflection payload is trimmed. Custom output is appended
         // afterwards and is kept even when every reflected field is default.
-        if (!ops || ops->useReflectionSerialization(componentPtr)) {
-            componentJson = ::ya::ReflectionSerializer::serializeByRuntimeReflection(componentPtr, typeIndex, typeName);
-            if (ops) {
-                if (const nlohmann::json* defaults = cachedDefaultReflectionJson(typeIndex, typeName)) {
-                    omitFieldsEqualToDefault(componentJson, *defaults);
-                }
-            }
-            if (!componentJson.is_object()) {
-                componentJson = nlohmann::json::object();
-            }
-        }
-        if (ops) {
-            ops->serializeCustom(componentPtr, componentJson);
-        }
+        nlohmann::json componentJson = assembleComponentJson(componentPtr,
+                                                             typeIndex,
+                                                             typeName,
+                                                             ops,
+                                                             ops ? &trimReflectedDefaults : nullptr);
 
         components[name.toString()] = std::move(componentJson);
     }

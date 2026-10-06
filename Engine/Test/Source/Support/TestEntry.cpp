@@ -16,7 +16,7 @@ int main(int argc, char **argv)
     // The script backends install in the runner that links the script line
     // (ya-testing declares YA_TEST_RUNNER_INSTALLS_SCRIPT_BACKENDS next to
     // ya-script-lua). The closure gates compile this main without them.
-    ya::installLuaScriptBackend();
+    const ya::LuaScriptBackendScope scriptBackend;
 #endif
 
     return RUN_ALL_TESTS();

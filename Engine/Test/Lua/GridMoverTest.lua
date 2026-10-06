@@ -1,7 +1,7 @@
--- Pure-logic cases for GridMover. The engine's Lua tests are C++ gtests that
--- host a full scripting system; this file mocks the map and the entity and
--- runs under a stock Lua interpreter. From the repo root:
+-- Pure-logic cases for GridMover. This file mocks the map and the entity.
+-- Two runners, from the repo root:
 --   luajit Engine/Test/Lua/GridMoverTest.lua
+--   gtest GridMoverLuaTest (engine Lua 5.4; os.exit is turned into a Lua error)
 --
 -- Clips are the caller's job. update returns whether this frame is a walk;
 -- Player.lua turns that flag plus facing.name into idle_<name> / walk_<name>.

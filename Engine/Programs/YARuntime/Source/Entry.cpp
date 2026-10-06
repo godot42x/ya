@@ -70,7 +70,8 @@ struct FModuleTeardownScope
 int main(int argc, char** argv)
 {
     Logger::init();
-    ya::installLuaScriptBackend();
+    // Outlives every App constructed below; destroyed while Lua is still alive.
+    const ya::LuaScriptBackendScope scriptBackend;
     ya::AppDesc appDesc;
     try {
         appDesc.init(argc, argv);
