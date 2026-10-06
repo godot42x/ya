@@ -27,3 +27,9 @@
 - 新增 R15：延迟管线不支持聚光灯（只在前向 Phong 生效），点光源上限 6、`MAX_POINT_LIGHTS_DEFERRED=32` 未被使用。
 - 抽查核实：物理形状固定尺寸常量、未注册接触监听、无 `CharacterVirtual` / 射线；`Limits.slang` 上限值。
 - G3 子计划目录待方案问答后建立。
+
+## 2026-10-07 — GA0 纯 GUI app 线盘点
+
+- 结论写进 plan §3 GA，GA 表重排为 GA0–GA6。依赖边界干净；门禁零散（无批量场景入口、无提交的像素基准、无打包路径、Windows 未跑过）。
+- 核实阻塞：`Example/Example.xmake.lua` 无条件 include 依赖 `ya-engine` 的 3D 示例，根 `xmake.lua` 注释声称的守卫不存在，gui profile 很可能配置不过。
+- 约束：gui profile 构建在独立 worktree 里做，不在共享工作区重新 `xmake f`。

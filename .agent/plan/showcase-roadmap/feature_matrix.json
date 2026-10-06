@@ -479,16 +479,19 @@
       "id": "GA0",
       "group": "GA",
       "priority": "P0",
-      "title": "gui profile audit + sub-plan",
+      "title": "audit (done) + sub-plan Q&A",
       "owner_line": "new:gui-app",
       "status": "in_progress",
-      "evidence": []
+      "evidence": [
+        "audit 2026-10-07 (ya-reviewer 87226e8e)",
+        "verified: Example/Example.xmake.lua includes ya-engine examples unconditionally; root xmake.lua comment claims a guard that does not exist"
+      ]
     },
     {
       "id": "GA1",
       "group": "GA",
       "priority": "P0",
-      "title": "gui profile build + Workbench scenarios + pixel gate green, one command",
+      "title": "gui profile configures/builds again (example include guard, ci.sh, doc drift)",
       "owner_line": "new:gui-app",
       "status": "todo",
       "evidence": []
@@ -497,7 +500,7 @@
       "id": "GA2",
       "group": "GA",
       "priority": "P0",
-      "title": "Workbench packaged + video + GUI cost numbers",
+      "title": "one-command gate: all scenarios + GPU/offscreen parity + portable baselines",
       "owner_line": "new:gui-app",
       "status": "todo",
       "evidence": []
@@ -505,8 +508,35 @@
     {
       "id": "GA3",
       "group": "GA",
+      "priority": "P0",
+      "title": "GUI frame cost, process memory, VRAM numbers",
+      "owner_line": "new:gui-app",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "GA4",
+      "group": "GA",
+      "priority": "P0",
+      "title": "package as standalone app",
+      "owner_line": "new:gui-app",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "GA5",
+      "group": "GA",
       "priority": "P1",
-      "title": "GUI framework independence proof + API docs",
+      "title": "Windows green",
+      "owner_line": "new:gui-app",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "GA6",
+      "group": "GA",
+      "priority": "P1",
+      "title": "framework independence proof + API docs; ya-rhi entt leak",
       "owner_line": "new:gui-app",
       "status": "todo",
       "evidence": []

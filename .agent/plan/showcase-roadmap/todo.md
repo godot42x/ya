@@ -47,9 +47,11 @@
 - [ ] G3.11 性能叠加层 + 打包 + 录屏
 
 纯 GUI app 线
-- [~] GA0 盘点与子计划
-- [ ] GA1 gui profile 构建 + Workbench 场景 + 像素门禁一条命令跑绿
-- [ ] GA2 Workbench 打包 + 录屏 + GUI 开销数字
+- [~] GA0 盘点（已完成）与子计划问答
+- [ ] GA1 gui profile 恢复可配置可构建（示例 include 守卫等）
+- [ ] GA2 一条命令门禁：全部场景 + GPU / 离屏一致性 + 可移植基线
+- [ ] GA3 GUI 帧开销、进程内存、显存数字
+- [ ] GA4 打包成独立应用
 
 GUI
 - [~] `ui-behavior-capabilities` C2
@@ -63,7 +65,8 @@ GUI
 ## P1
 
 - [ ] M7 显存与进程内存优化
-- [ ] GA3 GUI 框架独立性证明 + 对外 API 文档
+- [ ] GA5 Windows 跑绿
+- [ ] GA6 GUI 框架独立性证明 + 对外 API 文档
 - [ ] R4 RDG 编译缓存 + pass 剔除
 - [ ] R5 RDG transient 纹理别名
 - [ ] R6 SSAO 模糊、FXAA
