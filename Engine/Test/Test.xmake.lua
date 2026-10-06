@@ -62,6 +62,11 @@ if get_config("ya_profile") ~= "gui" then
         -- The engine tests drive the App shell directly.
         add_deps("ya-game-runtime")
         add_deps("ya-script-lua")
+        -- The shared runner (Support/TestEntry.cpp) installs the script
+        -- backends only where the script line is linked: this define names
+        -- that linkage promise, so the closure gates compile the same main
+        -- without reaching the script includes they do not have.
+        add_defines("YA_TEST_RUNNER_INSTALLS_SCRIPT_BACKENDS")
         add_packages("gtest")
         add_packages("quickjs-ng")
         add_packages("asio")
