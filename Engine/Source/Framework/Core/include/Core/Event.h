@@ -259,14 +259,23 @@ struct WindowFocusEvent : public WindowEvent
     EVENT_CLASS_TYPE(WindowFocus)
 };
 
+/// Pointer-stream boundary: the platform stops delivering this window the
+/// pointer stream it started. `heldButtons` is the physical button state the
+/// platform reported with it (`1u << EMouse::T`, zero = every button up), so a
+/// host reconciles a cached press against the event rather than against
+/// whatever the hardware happens to hold when the event is handled.
 struct WindowFocusLostEvent : public WindowEvent
 {
+    uint32_t _heldButtons = 0;
 
-    WindowFocusLostEvent(uint32_t windowID) : WindowEvent(windowID) {}
+    WindowFocusLostEvent(uint32_t windowID, uint32_t heldButtons = 0)
+        : WindowEvent(windowID), _heldButtons(heldButtons) {}
+
+    [[nodiscard]] uint32_t getHeldButtons() const { return _heldButtons; }
 
     std::string toString() const override
     {
-        return std::format("{} |WindowFocusLostEvent", WindowEvent::toString());
+        return std::format("{} |WindowFocusLostEvent: held {:#x}", WindowEvent::toString(), _heldButtons);
     }
 
   public:
@@ -329,9 +338,15 @@ struct WindowMouseEnterEvent : public WindowEvent
     EVENT_CLASS_TYPE(WindowMouseEnter)
 };
 
+/// Pointer-stream boundary; `heldButtons` as on `WindowFocusLostEvent`.
 struct WindowMouseLeaveEvent : public WindowEvent
 {
-    WindowMouseLeaveEvent(uint32_t windowID) : WindowEvent(windowID) {}
+    uint32_t _heldButtons = 0;
+
+    WindowMouseLeaveEvent(uint32_t windowID, uint32_t heldButtons = 0)
+        : WindowEvent(windowID), _heldButtons(heldButtons) {}
+
+    [[nodiscard]] uint32_t getHeldButtons() const { return _heldButtons; }
 
     EVENT_CLASS_CATEGORY(EEventCategory::Application)
     EVENT_CLASS_TYPE(WindowMouseLeave)

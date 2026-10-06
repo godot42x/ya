@@ -504,11 +504,13 @@ void GUIWindowManager::dispatchToSession(GUIWindowSession& session, const Event&
             // drag). Hover, tooltip and ordinary pointer-over must not.
             session.ownedTree->clearPointerOverState();
             // The platform stops delivering this pointer stream to a window
-            // that lost key focus. The physical button state decides whether a
-            // cached press can still be completed or is already over: a
-            // release we will never receive must not poison the next click.
-            session.ownedTree->reconcilePointerButtons(OsEventPump::queryGlobalMouse().buttonMask,
-                                                      "window lost key focus");
+            // that lost key focus. The physical button state it reported with
+            // the event decides whether a cached press can still be completed
+            // or is already over: a release we will never receive must not
+            // poison the next click.
+            session.ownedTree->reconcilePointerButtons(
+                static_cast<const WindowFocusLostEvent&>(event).getHeldButtons(),
+                "window lost key focus");
             if (session.ownedTree->isDragging() || session.ownedTree->getPointerCapture()) {
                 return;
             }

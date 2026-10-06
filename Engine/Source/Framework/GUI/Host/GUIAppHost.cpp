@@ -1128,14 +1128,17 @@ void GUIWindowHost::onEvent(const Event& event)
     case EEvent::WindowMouseLeave: {
         // Key focus loss and the pointer leaving this window both stop the
         // platform from delivering the pointer stream it started here. Compare
-        // the tree's cached press against the physical button state: a press
-        // whose button is already up can never be completed, and leaving it
-        // armed is what turns the next click into a crash.
-        const bool bFocusLost = event.getEventType() == EEvent::WindowFocusLost;
+        // the tree's cached press against the physical button state the
+        // platform reported with the event: a press whose button is already
+        // up can never be completed, and leaving it armed is what turns the
+        // next click into a crash.
+        const bool     bFocusLost  = event.getEventType() == EEvent::WindowFocusLost;
+        const uint32_t heldButtons = bFocusLost
+                                         ? static_cast<const WindowFocusLostEvent&>(event).getHeldButtons()
+                                         : static_cast<const WindowMouseLeaveEvent&>(event).getHeldButtons();
         if (_impl->tree) {
-            _impl->tree->reconcilePointerButtons(
-                OsEventPump::queryGlobalMouse().buttonMask,
-                bFocusLost ? "window lost key focus" : "pointer left the window");
+            _impl->tree->reconcilePointerButtons(heldButtons,
+                                                 bFocusLost ? "window lost key focus" : "pointer left the window");
         }
         return;
     }

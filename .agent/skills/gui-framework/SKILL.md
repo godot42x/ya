@@ -141,8 +141,11 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   仍被握住的 capture（`repairPointerSession`），控件不需要在每条路径上记得释放；没有
   press 的 `setPointerCapture` 直接拒绝。平台可能永远不投递 release（key focus 丢失、
   指针离开窗口、pane 被撕成另一个窗口、注入 press）：`WindowFocusLost` /
-  `WindowMouseLeave` 时 host 用 `FOsMouseQuery::buttonMask`（`1u << EMouse::T` 编码）调
-  `WidgetTree::reconcilePointerButtons`，同键第二次 press 时树自己
+  `WindowMouseLeave` 时 host 用**事件自带的 `getHeldButtons()`**（`1u << EMouse::T` 编码，
+  事件发生那一刻由 `SDL_GetGlobalMouseState` 采样进事件）调
+  `WidgetTree::reconcilePointerButtons`——不要在处理处现场查物理鼠标
+  （`OsEventPump::queryGlobalMouse().buttonMask`）：处理时按钮可能已再被按下/松开，
+  reconcile 会拿错事实，也让回放与测试不确定。同键第二次 press 时树自己
   `cancelPointerSession`（计数见 `getPointerSessionRecoveries()` /
   `gui.tree.pointer_recoveries`），并给 capture 控件一次 `clearTransientInputState()`；
   cancel 也必须结束 drag session（observer 收到 `EDragFinishResult::Cancelled`）。

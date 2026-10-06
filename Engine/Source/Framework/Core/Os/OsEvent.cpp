@@ -30,6 +30,13 @@ namespace
     return mask;
 }
 
+/// The physical buttons at the moment a pointer-stream boundary is translated;
+/// the event carries them so no consumer reads the hardware later.
+[[nodiscard]] uint32_t heldMouseButtons()
+{
+    return mouseButtonMask(SDL_GetGlobalMouseState(nullptr, nullptr));
+}
+
 void emitSdlEvent(const SDL_Event& event, const std::function<void(const Event&)>& emit)
 {
     switch (event.type) {
@@ -67,7 +74,7 @@ void emitSdlEvent(const SDL_Event& event, const std::function<void(const Event&)
         break;
     }
     case SDL_EVENT_WINDOW_FOCUS_LOST: {
-        emit(WindowFocusLostEvent(event.window.windowID));
+        emit(WindowFocusLostEvent(event.window.windowID, heldMouseButtons()));
         break;
     }
     case SDL_EVENT_WINDOW_MOUSE_ENTER: {
@@ -75,7 +82,7 @@ void emitSdlEvent(const SDL_Event& event, const std::function<void(const Event&)
         break;
     }
     case SDL_EVENT_WINDOW_MOUSE_LEAVE: {
-        emit(WindowMouseLeaveEvent(event.window.windowID));
+        emit(WindowMouseLeaveEvent(event.window.windowID, heldMouseButtons()));
         break;
     }
     case SDL_EVENT_KEY_DOWN: {

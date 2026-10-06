@@ -195,10 +195,10 @@ TEST(GUIWindowManagerTest, IsolatesPointerFocusCaptureTooltipDpiAndSnapshot)
     EXPECT_EQ(treeA->getFocused(), a.button.get());
     // Focus survives key-focus loss; the pointer session does not, because the
     // press was synthetic. The manager reconciles the cached button mask with
-    // the platform's authoritative state on focus loss, and the platform here
-    // reports no button held, so the stale session is cancelled instead of
-    // poisoning the next click. A real cross-window drag is kept alive by the
-    // drag path (see FocusLostClearsHoverDuringDragWithoutInjectingFarPointer).
+    // the button state the platform reported on the focus-lost event, and this
+    // event reports no button held, so the stale session is cancelled instead
+    // of poisoning the next click. A real cross-window drag is kept alive by
+    // the drag path (see FocusLostClearsHoverDuringDragWithoutInjectingFarPointer).
     EXPECT_EQ(treeA->getPointerCapture(), nullptr);
     EXPECT_EQ(treeB->getHovered(), b.button.get());
     EXPECT_EQ(manager.focusedWindowId(), idB);
@@ -211,6 +211,45 @@ TEST(GUIWindowManagerTest, IsolatesPointerFocusCaptureTooltipDpiAndSnapshot)
     manager.setFocusedWindow(0);
     EXPECT_EQ(manager.focusedWindowId(), 0u);
     EXPECT_FALSE(manager.dispatchEvent(leftoverKey));
+}
+
+/// Focus-lost reconciliation reads the button state the event carries, never
+/// the live hardware: whether a press survives must not depend on a mouse
+/// button someone happens to hold while the event is handled.
+TEST(GUIWindowManagerTest, FocusLostReconcilesAgainstTheButtonsTheEventReports)
+{
+    NamedWindowDelegate a;
+    a.name = "A";
+
+    GUIWindowManager manager;
+    ASSERT_TRUE(manager.init());
+
+    const GUIWindowId idA = manager.create(extraConfig("MW-102-held-A", 160, 120), a);
+    if (idA == 0) {
+        GTEST_SKIP() << "SDL native window create failed";
+    }
+
+    WidgetTree* treeA = manager.findTree(idA);
+    ASSERT_NE(treeA, nullptr);
+    manager.tickAll(0.0f);
+
+    MouseMoveEvent moveA(20.0f, 16.0f);
+    moveA._windowID = idA;
+    ASSERT_TRUE(manager.dispatchEvent(moveA));
+    MouseButtonPressedEvent pressA(EMouse::Left);
+    pressA._windowID = idA;
+    ASSERT_TRUE(manager.dispatchEvent(pressA));
+    ASSERT_EQ(treeA->getPointerCapture(), a.button.get());
+
+    // The platform reports the button still held: the press may still end in
+    // a release, so the session stays alive while hover is cleared.
+    ASSERT_TRUE(manager.dispatchEvent(WindowFocusLostEvent(idA, 1u << EMouse::Left)));
+    EXPECT_EQ(treeA->getHovered(), nullptr);
+    EXPECT_EQ(treeA->getPointerCapture(), a.button.get());
+
+    // The platform reports every button up: the release will never come.
+    ASSERT_TRUE(manager.dispatchEvent(WindowFocusLostEvent(idA, 0)));
+    EXPECT_EQ(treeA->getPointerCapture(), nullptr);
 }
 
 /// The clipboard is deliberately NOT tree-local: a session's tree is bound to

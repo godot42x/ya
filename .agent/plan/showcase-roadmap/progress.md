@@ -42,3 +42,9 @@
 ## 2026-10-07 — W2 收口
 
 - W2 完成（严格审查 + 一次返工）：`addNativeMethod` 先到者胜（补填签名分支删除）；组件序列化规则单一来源 `ECS/ComponentJson::assembleComponentJson`（「反射（可选）+ 追加 custom」），`SceneSerializer` / `component.get` / `component.set` 三处共用、读写对称；`installLuaScriptBackend` 断言只装一次 + `LuaScriptBackendScope` RAII；`world.spawnSprite` 无路径即无贴图；Npc 交互传交互者；`GridMoverTest.lua` 进 gtest。
+
+## 2026-10-07 — W3 收口
+
+- 根因：focus-loss / mouse-leave 的 pointer reconcile 在**处理处**读活硬件（`queryGlobalMouse().buttonMask`）；`WindowFocusLostEvent` / `WindowMouseLeaveEvent` 改为自带 `heldButtons`（事件构造时 `SDL_GetGlobalMouseState` 采样），host 两侧用 `event.getHeldButtons()`。skill 契约句与 memory `pointer_reconcile_reads_live_hardware.md` 同步。
+- 遗留（记 memory，随输入线收口）：`EditorInputNode::reconcilePointerSessionsWithPlatform` 仍读活硬件（修法涉及 `InputRouter` 注入接口）；`GUIAppCrossWindowDragTest.SourceTaggedMoveHitsForeignWindowUsingGlobalMouse` 仍 warp 真实光标、~7/60 间歇失败。
+- 提交前基线：`ya-testing` 1708/1708、`ya-gui-closure-test` 641/641、`Script/automation/2d-rpg/` 七个脚本全过（`rpg_control.py` 是库不是入口）。

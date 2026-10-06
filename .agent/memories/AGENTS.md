@@ -30,6 +30,7 @@
 - `./component_created_without_owner.md`：scene.json 载入的组件 `_owner` 为空（反序列化走的是不知道 `Entity*` 的按名字 funnel）→ 相机 `getFreeView()` 落到 orbit 默认分支，预览与视锥线框一起停在世界原点而 mesh 在 authored 位姿；含"枚举全部 emplace 路径"的排查法
 - `./widget_tick_gate_hidden_by_override.md`：tick 的"门"（`wantsTick`）曾被子类 override 接管，而执行侧仍转发 `_behaviors` → 挂在 compound 上的 tween/behavior 静默不跑且不报错；现在门归 `UIElement` 且非虚（`_bTickEnabled || 任一 behavior 想跑`）。同族第二处（`onPointerEnter` 等 input dispatch）与未做的 `tick()`→`onTick()` 拆分一并记录
 - `./stale_test_assertions_after_contract_change.md`：断言层测试过期的三类归属与修法（`engine.panel` 不再绘制、剪贴板是进程级、按下标找控件、默认参数翻转、依赖被禁用的生成器、`EXPECT_EXIT`+线程、平台最小化标志残留）；含"优先改断言而不是改框架"的约定
+- `./pointer_reconcile_reads_live_hardware.md`：focus-loss / mouse-leave 的 pointer reconcile 在处理处查活硬件（`queryGlobalMouse().buttonMask`），读到的"现在"冒充事件发生那一刻的"过去" → 测试不确定；修法是事件自带 `heldButtons`（`SDL_GetGlobalMouseState` 采样进事件）；`EditorInputNode` 同族未收口
 
 ## 边界
 
