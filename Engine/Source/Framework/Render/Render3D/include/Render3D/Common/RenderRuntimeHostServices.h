@@ -4,30 +4,23 @@
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Common/AppAutomation.h"
 #include "RHI/Core/OffscreenJob.h"
-#include "RHI/NativeWindow.h"
 
 #include <string>
 
 namespace ya
 {
 
-struct INativeWindow;
 struct ICommandBuffer;
 struct OffscreenJobState;
 
 /// Narrow host-service contract injected into framework modules. The Host
 /// implements and passes it into RenderRuntime; framework code never locates
 /// App through globals. Kept deliberately small: one responsibility per
-/// accessor.
+/// accessor. Window creation is deliberately not a render service: the host
+/// owns its windows and hands one in where a device needs a startup surface.
 struct IRenderRuntimeHostServices
 {
     virtual ~IRenderRuntimeHostServices() = default;
-
-    // Ensure a main window exists (creates one with the given info when the
-    // host has none yet, e.g. headless test bootstrap) and return it.
-    /// Takes the info by value: the host may apply its own launch-visibility
-    /// policy (editor without a project creates the shell window hidden).
-    virtual INativeWindow* getOrCreateMainNativeWindow(WindowCreateInfo ci) = 0;
 
     // Authoritative shadow configuration + automation overrides.
     virtual ShadowSettings*                      getShadowSettings() = 0;

@@ -12,6 +12,7 @@
 #include "GameRuntime/AppOptions.h"
 #include "GameRuntime/AppRenderServices.h"
 #include "Render3D/Common/RenderRuntimeHostServices.h"
+#include "RHI/NativeWindow.h"
 #include "Render3D/Common/FrameRecordExtensions.h"
 #include "GameRuntime/AppSceneServices.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
@@ -249,8 +250,13 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const;
     [[nodiscard]] TerrainProcessor*              getTerrainProcessor() const;
 
+    // Window policy helper: the app owns window creation (visibility, chrome,
+    // icon) and hands the finished window to the renderer, which binds a
+    // startup surface to it. Not part of IRenderRuntimeHostServices -- asking
+    // the host for a window is not a render service.
+    INativeWindow* getOrCreateMainNativeWindow(WindowCreateInfo ci);
+
     // === IRenderRuntimeHostServices implementation ===
-    INativeWindow* getOrCreateMainNativeWindow(WindowCreateInfo ci) override;
     ShadowSettings*                        getShadowSettings() override;
     const AppAutomationShadowOverrides*  getAutomationShadowOverrides() const override;
     OffscreenJobQueueService getOffscreenJobQueueService() override;

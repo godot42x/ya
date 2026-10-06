@@ -196,6 +196,24 @@ void App::init(AppDesc ci)
     app._nativeWindowManager = std::make_unique<NativeWindowManager>();
     YA_CORE_ASSERT(app._nativeWindowManager->init(), "Failed to initialize NativeWindowManager");
 
+    // The app names its window before the device exists: visibility, chrome and
+    // icon policy never reach the renderer, which only binds a startup surface
+    // to the window handed to it. The editor's launch flow owns window phases:
+    // without a project the editor shell stays hidden while a dedicated
+    // browser / splash window leads, and shows this window once a project is
+    // open -- the hidden policy lives in getOrCreateMainNativeWindow so every
+    // caller agrees.
+    INativeWindow* mainWindow = app.getOrCreateMainNativeWindow(WindowCreateInfo{
+        .index      = 0,
+        .renderAPI  = ERenderAPI::Vulkan,
+        .title      = app._ci.title,
+        .width      = static_cast<uint32_t>(app._ci.width),
+        .height     = static_cast<uint32_t>(app._ci.height),
+        .scale      = 1.0f,
+        .bResizable = true,
+        .bHidden    = app._ci.bEditor && !app._ci.projectPath.has_value(),
+    });
+
     app._renderState->device = std::make_unique<RenderDeviceState>();
     app._renderState->device->init(RenderDeviceState::InitDesc{
         .hostServices = &app,
@@ -215,9 +233,11 @@ void App::init(AppDesc ci)
                                     : EnvironmentLightingSceneResources{};
             },
         },
-        .windowWidth  = static_cast<uint32_t>(app._ci.width),
-        .windowHeight = static_cast<uint32_t>(app._ci.height),
-        .windowTitle  = app._ci.title,
+        .startupWindow = mainWindow,
+        .initialViewExtent = Extent2D{
+            .width  = static_cast<uint32_t>(app._ci.width),
+            .height = static_cast<uint32_t>(app._ci.height),
+        },
         .bEnableRenderDoc = app._ci.bEnableRenderDoc,
         .renderDocDllPath = app._ci.renderDocDllPath,
         .renderDocCaptureOutputDir = app._ci.renderDocCaptureOutputDir,
@@ -233,30 +253,28 @@ void App::init(AppDesc ci)
         AppAutomation::applyRuntimeOverrides(app);
     }
     if (auto* render = app.getRenderServices().getRender()) {
-        // The window exists already (the device was created for it), so this is
-        // the app naming its own window -- not a renderer default.
-        // The editor's launch flow owns window phases: without a project the
-        // editor shell stays hidden while a dedicated browser / splash window
-        // leads, and shows this window once a project is open.
-        INativeWindow* mainWindow = app.getOrCreateMainNativeWindow(WindowCreateInfo{
-            .index      = 0,
-            .renderAPI  = render->getAPI(),
-            .title      = app._ci.title,
-            .width      = static_cast<uint32_t>(app._ci.width),
-            .height     = static_cast<uint32_t>(app._ci.height),
-            .scale      = 1.0f,
-            .bResizable = true,
-            .bHidden    = app._ci.bEditor && !app._ci.projectPath.has_value(),
-        });
-        app._renderState->hostSurfaceId = mainWindow ? render->findSurfaceId(*mainWindow) : SurfaceId{};
+        if (mainWindow) {
+            app._renderState->hostSurfaceId = render->findSurfaceId(*mainWindow);
 
-        app.inputRouter.setWindow(mainWindow);
-        applyStandaloneGameWindowMinimum(app, mainWindow);
+            app.inputRouter.setWindow(mainWindow);
+            applyStandaloneGameWindowMinimum(app, mainWindow);
 
-        // Seed to the drawable so the first frame is 1:1 with the swapchain.
-        // A later resize keeps that match. An explicit resolution (automation)
-        // goes through setRenderResolution and then stretches.
-        app.adoptMainWindowDrawable();
+            // Seed to the drawable so the first frame is 1:1 with the swapchain.
+            // A later resize keeps that match. An explicit resolution (automation)
+            // goes through setRenderResolution and then stretches.
+            app.adoptMainWindowDrawable();
+
+            // Label the window with the device that actually came up, now that
+            // the backend can report it. A label is set once, where the fact
+            // exists, instead of being re-formatted every tick by the app loop
+            // through a backend downcast (see `IRender::getDeviceName`).
+            if (!app._ci.title.empty()) {
+                const std::string deviceName = render->getDeviceName();
+                mainWindow->setTitle(deviceName.empty()
+                                         ? app._ci.title
+                                         : std::format("{}({})", app._ci.title, deviceName));
+            }
+        }
     }
 
     app._sceneManager = new SceneManager();

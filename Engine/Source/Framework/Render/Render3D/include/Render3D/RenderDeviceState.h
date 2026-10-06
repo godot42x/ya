@@ -81,9 +81,17 @@ struct YA_RENDER_3D_API RenderDeviceState
         IOffscreenTaskScheduler*          offscreenScheduler = nullptr;
         const HostClockState*    clockState = nullptr;
         EnvironmentLightingResultProvider environmentLightingProvider;
-        uint32_t    windowWidth  = 0;
-        uint32_t    windowHeight = 0;
-        std::string windowTitle;
+        /// The window the host created for this device's startup surface. The
+        /// host owns it -- visibility, chrome, icon and title policy never
+        /// reach this layer; the device only binds a surface to what it is
+        /// handed. Non-null today: the backend's queue plan is chosen from the
+        /// windows the device must present to, so an offscreen-only device is
+        /// a capability change the backend does not offer yet.
+        INativeWindow*           startupWindow = nullptr;
+        /// Seed for the first pipeline build, before any View has declared a
+        /// size (see _initialViewExtent). A fact the host states, not the
+        /// window's size by definition.
+        Extent2D                 initialViewExtent{};
         bool        bEnableRenderDoc      = false;
         std::string renderDocDllPath;
         std::string renderDocCaptureOutputDir;

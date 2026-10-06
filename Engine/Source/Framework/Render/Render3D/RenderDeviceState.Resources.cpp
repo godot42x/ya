@@ -5,6 +5,7 @@
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Core/Swapchain.h"
+#include "RHI/NativeWindow.h"
 #include "Render3D/Pipelines/BasicPostprocessing.h"
 #include "Resource/AssetManager.h"
 #include "Core/Common/DeferredDeletionQueue.h"
@@ -15,7 +16,6 @@
 #include "RHI/Backend/TextureLibrary.h"
 #include "RHI/RenderDefines.h"
 
-#include <format>
 #include <string>
 
 namespace ya
@@ -62,10 +62,7 @@ void RenderDeviceState::initRuntimeState(const InitDesc& desc)
     currentRenderAPI = ERenderAPI::Vulkan;
     // A seed for the first pipeline build only: the first frame's View rect
     // replaces it. Not a "current viewport" -- see the member's declaration.
-    _initialViewExtent = Extent2D{
-        .width  = desc.windowWidth,
-        .height = desc.windowHeight,
-    };
+    _initialViewExtent = desc.initialViewExtent;
 }
 
 void RenderDeviceState::initShaderSystems()
@@ -113,27 +110,28 @@ void RenderDeviceState::initDiagnostics(const InitDesc& desc)
 
 void RenderDeviceState::initRenderBackend(const InitDesc& desc)
 {
-    YA_CORE_ASSERT(_hostServices != nullptr, "RenderDeviceState requires host services before initializing render backend");
-    auto* nativeWindow = _hostServices->getOrCreateMainNativeWindow(WindowCreateInfo{
-        .index      = 0,
-        .renderAPI  = currentRenderAPI,
-        .title      = desc.windowTitle,
-        .width      = desc.windowWidth,
-        .height     = desc.windowHeight,
-        .scale      = 1.0f,
-        .bResizable = true,
-    });
-    YA_CORE_ASSERT(nativeWindow != nullptr, "Native window must exist before initializing render backend");
-    // The device is created for this window: it is a startup surface (see
-    // RenderCreateInfo::startupSurfaces), not a privileged one. The app names
-    // its own surface through this window when it needs it.
-    _startupWindow = nativeWindow;
+    // The host hands its window in; creating one is not a render service. The
+    // backend needs the surface before device pick (present support drives the
+    // queue plan), so the window must exist by here -- not be created here.
+    YA_CORE_ASSERT(desc.startupWindow != nullptr,
+                   "RenderDeviceState requires a startup window: the backend's queue plan is chosen from present targets");
+    _startupWindow = desc.startupWindow;
+
+    int pixelW = 0;
+    int pixelH = 0;
+    desc.startupWindow->getDrawableSize(pixelW, pixelH);
+    // The backend snaps the swapchain to the surface's current extent anyway;
+    // this names the drawable so the create-info carries no stale guess.
+    const Extent2D surfaceExtent = (pixelW > 0 && pixelH > 0)
+        ? Extent2D{.width  = static_cast<uint32_t>(pixelW),
+                   .height = static_cast<uint32_t>(pixelH)}
+        : desc.initialViewExtent;
 
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .startupSurfaces = {
             StartupSurfaceDesc{
-                .window      = nativeWindow,
+                .window      = desc.startupWindow,
                 .swapchainCI = SwapchainCreateInfo{
                     .imageFormat        = EFormat::R8G8B8A8_UNORM,
                     .bVsync             = false,
@@ -142,8 +140,8 @@ void RenderDeviceState::initRenderBackend(const InitDesc& desc)
                     // is requested at runtime through the control port, not only when
                     // a startup automation screenshot path was configured.
                     .bEnableTransferSrc = true,
-                    .width              = desc.windowWidth,
-                    .height             = desc.windowHeight,
+                    .width              = surfaceExtent.width,
+                    .height             = surfaceExtent.height,
                 },
             },
         },
@@ -157,17 +155,6 @@ void RenderDeviceState::initRenderBackend(const InitDesc& desc)
     // of host-layer lookups (initShaderSystems runs before this point).
     _render->setShaderStorage(_shaderStorage);
     _render->init(renderCI);
-
-    // Label the window with the device that actually came up, now that the
-    // backend can report it. A label is set once, where the fact exists, instead
-    // of being re-formatted every tick by the app loop through a backend
-    // downcast (see `IRender::getDeviceName`).
-    if (!desc.windowTitle.empty()) {
-        const std::string deviceName = _render->getDeviceName();
-        nativeWindow->setTitle(deviceName.empty()
-                                   ? desc.windowTitle
-                                   : std::format("{}({})", desc.windowTitle, deviceName));
-    }
 }
 
 void RenderDeviceState::initResourceCaches()
