@@ -47,8 +47,8 @@
       "priority": "P0",
       "title": "windowed mean/p95/p99 in summaries",
       "owner_line": "new:perf-baseline",
-      "status": "todo",
-      "evidence": []
+      "status": "pass",
+      "evidence": ["perf-baseline PB1: bench_summary.json frame/cpu_stages window stats"]
     },
     {
       "id": "M3",
@@ -56,8 +56,8 @@
       "priority": "P0",
       "title": "benchmark mode",
       "owner_line": "new:perf-baseline",
-      "status": "todo",
-      "evidence": []
+      "status": "pass",
+      "evidence": ["perf-baseline PB1: --benchmark <config.json>"]
     },
     {
       "id": "M4",

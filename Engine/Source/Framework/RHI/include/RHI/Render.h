@@ -29,6 +29,14 @@ enum class ERenderObject : uint32_t
     // Add more as needed
 };
 
+struct RenderDeviceInfo
+{
+    std::string name;
+    /// Driver identity as the API reports it (Vulkan: `driverName driverInfo`).
+    std::string driver;
+    std::string apiVersion;
+};
+
 struct TextureFormatSupportInfo
 {
     bool sampled            = false;
@@ -192,11 +200,11 @@ struct YA_RHI_API IRender : public plat_base<IRender>
 
     [[nodiscard]] ERenderAPI::T getAPI() const { return _renderAPI; }
 
-    /// Human-readable name of the device this backend selected, or empty when
-    /// the API has none. A window/tooling label: callers that only want to
+    /// The device this backend selected, empty fields where the API has no
+    /// such fact. A window/tooling/benchmark label: callers that only want to
     /// print which GPU is running should not have to downcast to a concrete
     /// backend to read its device info.
-    [[nodiscard]] virtual std::string getDeviceName() const { return {}; }
+    [[nodiscard]] virtual RenderDeviceInfo getDeviceInfo() const { return {}; }
 
     /**
      * @brief Allocate command buffers (returns generic ICommandBuffer interface)

@@ -35,6 +35,37 @@
 
 统计来源按「源」注册到一个汇总器，各 checkpoint 只加自己的源，不改彼此的代码。
 
+### 2.1 基准运行（PB1）
+
+```bash
+<runtime> --project <x.yaproject> --benchmark <config.json> [--benchmark-output <dir>] [--scene <path>] [--cpu-profile=true]
+```
+
+只对游戏运行时生效（`--editor` 下忽略并 WARN）。采样结束写 `<outputDir>/bench_summary.json` 后 `requestQuit` 正常退出；config 不合法时启动即报错退出（exit 1）。
+
+config（JSON，严格：未知键与类型错误都报错；示例 `Example/HelloMaterial/Benchmark/HelloMaterial.bench.json`）：
+
+| 键 | 默认 | 说明 |
+| --- | --- | --- |
+| `name` | 文件名 stem | 写入 `meta.name` |
+| `scene` | 项目默认场景 | 与 `--scene` 同义；命令行显式 `--scene` 优先 |
+| `resolution` | `{"width":1920,"height":1080}` | 渲染分辨率（drawable 像素）；窗口按像素密度缩放以让 drawable 等于该值 |
+| `presentMode` | `"immediate"` | `immediate` / `mailbox` / `fifo` / `fifo_relaxed`。按「请求 → immediate → mailbox → fifo_relaxed → fifo」在 surface 支持的模式里选，落到 FIFO 时 WARN；实际值记 `meta.presentMode` |
+| `uncapFrameRate` | `true` | 关 `FPSControl` 帧率上限 |
+| `warmupFrames` / `sampleFrames` | 120 / 600 | 预热帧不进统计 |
+| `fixedDeltaSeconds` | `1/60` | 每帧逻辑步长与墙钟无关（动画、脚本按帧确定）；0 = 用真实 dt |
+| `cpuTrace` | `false` | speedscope CPU trace（其写盘是测量噪声，默认关；`--cpu-profile` 显式给出时优先） |
+| `outputDir` | `Engine/Saved/Benchmark` | `--benchmark-output` 覆盖 |
+| `cameraPath` | 无（场景主相机不动） | `{framesPerSecond=60, loop=false, keyframes:[{frame\|time, position:[x,y,z], rotation:[pitch,yaw,roll]=0}]}`；`time` 按 `framesPerSecond` 换算成帧，帧号严格递增。帧 0 是运行第一帧（含预热）。每帧在逻辑之后、渲染之前写主相机 Transform；按欧拉角分量线性插值，首帧前取首帧、末帧后保持。`loop` 时 `phase = (frame - first) % (last - first)`，末帧与首帧重合 |
+
+`bench_summary.json`：`{schemaVersion, meta, frame, cpu_stages, ...}`。每个序列是 `{count, mean, min, p50, p95, p99, max}`（全样本排序、分位数按 numpy 默认线性插值）。
+
+- `meta`：name、config、project、scene、gitCommit、gitDirty、buildMode、platform、arch、timestampUtc、graphicsApi、gpu、gpuDriver、renderResolution、swapchainExtent、requestedPresentMode、presentMode、availablePresentModes、frameRateCapped、fixedDeltaSeconds、cpuTrace、warmupFrames、sampleFrames、sampledFrames、cameraKeyframes。
+- `frame`：`frameMs`（相邻两帧结束的墙钟间隔，= 1/FPS 口径）、`cpuMs`（`Tick/Total` CPU）、`gpuMs`（整帧 timestamp，晚 flight 帧回读）是统计对象。`fps` 是窗口标量事实字段（采样帧数 / 墙钟秒），由源的 `writeFacts` 写入。PerfState 某值本帧未重写则不计入（`count` 可小于 sampledFrames）。
+- `cpu_stages`：本帧写过的每个 `PerfState` CPU 样本（`YA_PERF_SCOPE` 名）。一帧内多次运行的 scope 只记最后一次（PerfState 只留 last）。release 构建 PerfState 编译掉，只剩 `frameMs`。
+
+统计源接口（`Core/Profiling/BenchAggregator.h`）：实现 `IBenchSource::sampleFrame(BenchSeriesWriter&)`（可选 `onWindowBegin` / `writeFacts`），由数据所有者持有 `BenchSourceRegistration reg = profiling::registerBenchSource("gpu_passes", source);`。窗口外不调用源。存全样本而非直方图：600 帧 × 几十个 key 只是几十 KB，分位数精确且不需要预设桶宽。
+
 ## 3. Checkpoints
 
 | id | 内容 | 依赖 |

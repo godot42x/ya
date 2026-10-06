@@ -461,17 +461,6 @@ bool handleRenderDocAutomation(const AppAutomationOptions& automation,
     return tickContext.isRenderDocCapturePending();
 }
 
-const std::string& getAutomationCapturePathFallback()
-{
-    static const std::string emptyPath;
-    return emptyPath;
-}
-
-std::string getAutomationCapturePath(const std::function<const std::string&()>& pathProvider)
-{
-    return pathProvider ? pathProvider() : getAutomationCapturePathFallback();
-}
-
 bool hasPendingAutomationWork(const App& app, const AppAutomationTickContext* tickContext = nullptr)
 {
     auto&                       runtimeState = getAutomationRuntimeState();
@@ -806,12 +795,6 @@ void AppAutomation::onTickCompleted(App& app, const AppAutomationTickContext& ti
     }
     const bool bAutomationPending = bScreenshotPending || bRenderDocPending;
 
-    if (tickContext.getRenderDocCapturePath && tickContext.getRenderDocPassSummaryPath) {
-        YA_PROFILE_SCOPE("Automation/UpdateArtifacts");
-        profiling::setGpuCapturePath(getAutomationCapturePath(tickContext.getRenderDocCapturePath));
-        profiling::setPassSummaryPath(getAutomationCapturePath(tickContext.getRenderDocPassSummaryPath));
-        profiling::setScreenshotPath(runtimeState.screenshot.outputPath);
-    }
     if (runtimeState.bQuitDeferred && !bAutomationPending) {
         runtimeState.bQuitDeferred = false;
         YA_CORE_INFO("Continuing deferred shutdown after automation work finished");
@@ -819,10 +802,6 @@ void AppAutomation::onTickCompleted(App& app, const AppAutomationTickContext& ti
         return;
     }
 
-    {
-        YA_PROFILE_SCOPE("Automation/FlushArtifacts");
-        profiling::flushRuntimeArtifacts();
-    }
     if (bAutomationPending || !shouldRequestQuitAfterTick(app)) {
         return;
     }

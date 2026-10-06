@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <format>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
@@ -591,7 +592,6 @@ void VulkanRender::findPhysicalDevice()
     m_PhysicalDevice               = selected.device;
     _graphicsQueueFamily           = selected.graphicsQueue;
     _presentQueueFamily            = selected.presentQueue;
-    _selectedDeviceInfo.deviceName = selected.properties.deviceName;
 
     YA_CORE_INFO("Selected physical device: {}", (uintptr_t)m_PhysicalDevice);
     YA_CORE_INFO("Graphics queue idx: {} count: {}", _graphicsQueueFamily.queueFamilyIndex, _graphicsQueueFamily.queueCount);
@@ -965,6 +965,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         YA_CORE_INFO("Trying device: {}", candidate.properties.deviceName);
         VkResult ret = tryCreateForCandidate(candidate);
         if (ret == VK_SUCCESS) {
+            captureSelectedDeviceInfo();
             // Initialize VMA after device creation
             VmaAllocatorCreateInfo vmaCI{};
             vmaCI.instance         = _instance;
@@ -1247,6 +1248,31 @@ void VulkanRender::createFrameGpuTimingResources()
     _bFrameGpuTimingSupported = true;
 }
 
+void VulkanRender::captureSelectedDeviceInfo()
+{
+    const uint32_t deviceApi = _physicalDeviceProperties.apiVersion;
+    _selectedDeviceInfo.name = _physicalDeviceProperties.deviceName;
+    _selectedDeviceInfo.apiVersion =
+        std::format("Vulkan {}.{}.{}", VK_VERSION_MAJOR(deviceApi), VK_VERSION_MINOR(deviceApi), VK_VERSION_PATCH(deviceApi));
+
+    // Driver name / info are core properties from 1.2; before that only the
+    // vendor-encoded driverVersion exists.
+    if (apiVersion >= VK_API_VERSION_1_2 && deviceApi >= VK_API_VERSION_1_2) {
+        VkPhysicalDeviceDriverProperties driverProperties{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES,
+        };
+        VkPhysicalDeviceProperties2 properties2{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+            .pNext = &driverProperties,
+        };
+        vkGetPhysicalDeviceProperties2(m_PhysicalDevice, &properties2);
+        _selectedDeviceInfo.driver = std::format("{} {}", driverProperties.driverName, driverProperties.driverInfo);
+    }
+    else {
+        _selectedDeviceInfo.driver = std::format("driverVersion 0x{:08x}", _physicalDeviceProperties.driverVersion);
+    }
+}
+
 void VulkanRender::releaseFrameGpuTimingResources()
 {
     _frameGpuTimingValid.clear();
@@ -1319,7 +1345,6 @@ const VkAllocationCallbacks* VulkanRender::getAllocator()
 // MARK: Frame
 void VulkanRender::beginRecordedFrame()
 {
-    updateCompletedFrameGpuTiming();
     ++_frameIndex;
 
     // Wait the fence of the slot this frame is about to use: that is the frame
@@ -1332,6 +1357,9 @@ void VulkanRender::beginRecordedFrame()
         YA_PROFILE_SCOPE("VulkanRender::waitFrameFence");
         VK_CALL(vkWaitForFences(m_LogicalDevice, 1, &_frameFences[slot], VK_TRUE, UINT64_MAX));
     }
+    // The slot's previous frame is retired, so its timestamps are available;
+    // read before this frame's beginFrameGpuTiming resets them.
+    updateCompletedFrameGpuTiming();
     // Re-armed by this frame's first submission. A frame that submits nothing
     // leaves the fence signaled for the next frame that uses the slot.
     _bFrameFenceArmed = false;

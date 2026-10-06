@@ -267,9 +267,9 @@ void App::init(AppDesc ci)
             // Label the window with the device that actually came up, now that
             // the backend can report it. A label is set once, where the fact
             // exists, instead of being re-formatted every tick by the app loop
-            // through a backend downcast (see `IRender::getDeviceName`).
+            // through a backend downcast (see `IRender::getDeviceInfo`).
             if (!app._ci.title.empty()) {
-                const std::string deviceName = render->getDeviceName();
+                const std::string deviceName = render->getDeviceInfo().name;
                 mainWindow->setTitle(deviceName.empty()
                                          ? app._ci.title
                                          : std::format("{}({})", app._ci.title, deviceName));

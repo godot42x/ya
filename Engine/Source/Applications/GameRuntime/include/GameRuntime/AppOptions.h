@@ -7,6 +7,7 @@
 #include "Render3D/Common/AppAutomation.h"
 #include "App/Control/AutomationRun.h"
 #include "Render3D/Common/PostProcessingState.h"
+#include "GameRuntime/Benchmark/BenchmarkConfig.h"
 
 #include <array>
 #include <cstdint>
@@ -61,7 +62,10 @@ struct AppAutomationPostProcessOverrides
 
 struct AppProfilingOptions
 {
-    bool                       bCpuProfileEnabled            = profiling::isProfileBuild();
+    /// On when the CPU trace is compiled in (debug and profile). `--cpu-profile`
+    /// replaces this only when the flag is actually on the command line; a
+    /// benchmark config replaces it when the flag is absent.
+    bool                       bCpuProfileEnabled            = !profiling::isCompiledOut();
     bool                       bCpuProfileOverridden         = false;
     bool                       bCpuProfileOutputOverridden   = false;
     bool                       bProfileSessionNameOverridden = false;
@@ -112,6 +116,9 @@ struct YA_GAME_RUNTIME_API AppDesc
     bool                 fullscreen = false;
     AppProfilingOptions  profiling;
     AppAutomationOptions automation;
+    /// `--benchmark <config.json>`: run the game under the config's
+    /// conditions, write `bench_summary.json`, quit.
+    std::optional<BenchmarkConfig> benchmark;
 
     std::optional<std::string> projectPath;
     std::optional<std::string> defaultScenePath;

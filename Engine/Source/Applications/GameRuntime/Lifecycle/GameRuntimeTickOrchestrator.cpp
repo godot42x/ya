@@ -4,6 +4,7 @@
 #include "GameRuntime/HostRenderSettings.h"
 #include "GameRuntime/AppRenderState.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
+#include "GameRuntime/Benchmark/BenchmarkRun.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
 #include "GameRuntime/Lifecycle/FPSCtrl.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
@@ -72,10 +73,17 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
         dt += FPSControl::get()->update(dt);
     }
 
+    BenchmarkRun* benchmark = app.getBenchmarkRun();
+    if (benchmark) {
+        dt = benchmark->frameDelta(dt);
+    }
     {
         YA_PROFILE_SCOPE("Tick/Logic");
         YA_PERF_SCOPE(perf::sample::tickLogic(), perf::metric::cpuTimeMs(), perf::domain::game());
         tickLogic(app, dt);
+    }
+    if (benchmark) {
+        benchmark->applyCameraPath(app);
     }
     {
         YA_PROFILE_SCOPE("Tick/Render");
@@ -153,14 +161,6 @@ void GameRuntimeTickOrchestrator::reportTickToAutomation(App& app)
                                                                             ? [diagnosticsService]()
                                                                               { return diagnosticsService->isAutomationRenderDocCaptureTerminal(); }
                                                                             : std::function<bool()>{},
-                                            .getRenderDocCapturePath    = diagnosticsService
-                                            ? [diagnosticsService]() -> const std::string&
-                                            { return diagnosticsService->getAutomationRenderDocCapturePath(); }
-                                            : std::function<const std::string&()>{},
-                                            .getRenderDocPassSummaryPath = diagnosticsService
-                                            ? [diagnosticsService]() -> const std::string&
-                                            { return diagnosticsService->getAutomationRenderDocPassSummaryPath(); }
-                                            : std::function<const std::string&()>{},
                                             .hostTick = App::_hostTick,
                                         });
     }

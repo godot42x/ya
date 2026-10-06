@@ -2,6 +2,7 @@
 #include "GameRuntime/AppRenderState.h"
 #include "GameRuntime/HostRenderSettings.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
+#include "GameRuntime/Benchmark/BenchmarkRun.h"
 #include "GameRuntime/IRuntimeModule.h"
 #include "GameRuntime/Lifecycle/GameRuntimeTickOrchestrator.h"
 #include "App/Kernel/SdlEventSource.h"
@@ -79,6 +80,9 @@ class GameRuntimeLoopDelegate final : public IAppLoopDelegate
     void onTick(float dt) override
     {
         GameRuntimeTickOrchestrator::iterate(app, dt);
+        if (BenchmarkRun* benchmark = app.getBenchmarkRun()) {
+            benchmark->onFrameEnd(app);
+        }
     }
 
     void onShutdown() override {}
@@ -178,6 +182,21 @@ int App::run()
     _startTime = std::chrono::steady_clock::now();
     _lastTime  = _startTime;
 
+    if (_ci.benchmark) {
+        if (_ci.bEditor) {
+            YA_CORE_WARN("--benchmark measures the game runtime; ignored with --editor");
+        }
+        else {
+            _benchmark = std::make_unique<BenchmarkRun>(*_ci.benchmark);
+            _benchmark->begin(*this,
+                              FBenchmarkRunContext{
+                                  .project    = _ci.projectPath.value_or(""),
+                                  .scene      = resolveStartupScenePath(_ci),
+                                  .mainWindow = _nativeWindowManager ? _nativeWindowManager->getMainWindow() : nullptr,
+                              });
+        }
+    }
+
     InstrumentedEventSource eventSource;
     GameRuntimeLoopDelegate delegate(*this);
     AppKernel               kernel({.eventSource = &eventSource,
@@ -187,9 +206,16 @@ int App::run()
     // screenshots, RenderDoc), so exitAfterTick stays off here. The wall-clock
     // deadline is different: it is the one policy that has to hold even when
     // nothing else asks the app to stop.
-    return kernel.run(AppAutomationRunOptions{
+    const int exitCode = kernel.run(AppAutomationRunOptions{
         .maxLifetimeSeconds = _ci.automation.maxLifetimeSeconds,
     });
+    if (exitCode != 0) {
+        return exitCode;
+    }
+    if (_benchmark && _benchmark->didSummaryWriteFail()) {
+        return 1;
+    }
+    return 0;
 }
 
 void App::addModule(std::unique_ptr<IModule> module)

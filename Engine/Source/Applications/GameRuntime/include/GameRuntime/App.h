@@ -58,6 +58,7 @@ class GameRuntimeTickOrchestrator;
 class AppModuleTestAccess;
 class AppAutomationControlService;
 class InputRouter;
+class BenchmarkRun;
 
 /// Which part of the logic tick a host system belongs to. Game pause is a host
 /// decision, so the host states it where it registers the system; framework
@@ -112,6 +113,8 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     AppRenderServices                            _renderServices;
     AppSceneServices                             _sceneServices;
     std::unique_ptr<AppAutomationControlService> _automationControlService;
+    /// Present only for a `--benchmark` game run.
+    std::unique_ptr<BenchmarkRun> _benchmark;
     /// Game UI presentation adapter: owns the live WidgetTree of the current
     /// game presentation area and resolves scenes/input/frames to it.
     std::unique_ptr<GameUIHost> _gameUIHost;
@@ -240,6 +243,7 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     [[nodiscard]] JSScriptingSystem*                  getJSScriptingSystem() const { return _jsScriptingSystem; }
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
+    [[nodiscard]] BenchmarkRun*                  getBenchmarkRun() const { return _benchmark.get(); }
     /// Chrome policy of the App-owned main window. The framework default is
     /// standard OS decorations; the editor form of the App opts into the
     /// transparent title bar (Hybrid) so its chrome can draw the title band.

@@ -146,14 +146,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
     std::vector<PhysicalDeviceCandidate> _deviceCandidates;
 
-  public:
-    struct PhysicalDeviceInfo
-    {
-        std::string deviceName;
-
-    } _selectedDeviceInfo;
-
-  private:
+    RenderDeviceInfo _selectedDeviceInfo;
 
     VkDevice     m_LogicalDevice = VK_NULL_HANDLE;
     VmaAllocator _vmaAllocator   = VK_NULL_HANDLE;
@@ -252,10 +245,8 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     void setShaderStorage(std::shared_ptr<ShaderStorage> shaderStorage) override { _shaderStorage = std::move(shaderStorage); }
     std::shared_ptr<ShaderStorage> getShaderStorage() override { return _shaderStorage; }
 
-    /// The physical device this renderer picked. Public accessor so a host that
-    /// only wants to label a window does not have to reach into
-    /// `_selectedDeviceInfo` through a backend downcast.
-    [[nodiscard]] std::string getDeviceName() const override { return _selectedDeviceInfo.deviceName; }
+    /// The physical device the logical device was created on.
+    [[nodiscard]] RenderDeviceInfo getDeviceInfo() const override { return _selectedDeviceInfo; }
 
     void trackSampler(const std::shared_ptr<VulkanSampler>& sampler) { _trackedSamplers.emplace_back(sampler); }
     void releaseTrackedSamplers();
@@ -502,6 +493,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     bool createStartupSurfaces();
     void createFrameGpuTimingResources();
     void releaseFrameGpuTimingResources();
+    void captureSelectedDeviceInfo();
     void updateCompletedFrameGpuTiming();
 };
 

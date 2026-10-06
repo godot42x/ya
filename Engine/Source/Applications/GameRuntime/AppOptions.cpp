@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <stdexcept>
 #include <utility>
 
 namespace ya
@@ -18,6 +19,32 @@ std::string lowerCopy(std::string value)
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch)
                    { return static_cast<char>(std::tolower(ch)); });
     return value;
+}
+
+void applyBenchmarkConfig(AppDesc& desc, const std::string& configPath)
+{
+    BenchmarkConfig config;
+    std::string     error;
+    if (!loadBenchmarkConfig(configPath, config, error)) {
+        YA_CORE_ERROR("Benchmark: {}", error);
+        throw std::runtime_error("invalid --benchmark config: " + error);
+    }
+    if (std::string outputDir; desc.params.tryGet<std::string>("benchmark-output", outputDir) && !outputDir.empty()) {
+        config.outputDir = std::move(outputDir);
+    }
+
+    // The config defines the run; only an explicit command-line scene or CPU
+    // trace switch overrides it.
+    desc.width  = static_cast<int>(config.width);
+    desc.height = static_cast<int>(config.height);
+    if (config.scene && !desc.params.hasExplicit("scene")) {
+        desc.automation.scenePath = *config.scene;
+    }
+    if (!desc.params.hasExplicit("cpu-profile")) {
+        desc.profiling.bCpuProfileEnabled    = config.bCpuTrace;
+        desc.profiling.bCpuProfileOverridden = true;
+    }
+    desc.benchmark = std::move(config);
 }
 
 } // namespace
@@ -145,8 +172,7 @@ void AppDesc::init(int argc, char** argv)
         .opt<std::string>("", {"screenshot"}, "Automation screenshot output PNG path")
         .opt<std::string>("", {"screenshot-target"}, "Automation screenshot target: viewport or presentation")
         .opt<uint64_t>("", {"screenshot-frame"}, "Earliest frame index allowed to request automation screenshot", "0")
-        .opt<bool>("", {"cpu-profile"}, "Enable runtime CPU trace profiling",
-                   !profiling::isCompiledOut() ? "true" : "false")
+        .opt<bool>("", {"cpu-profile"}, "Enable runtime CPU trace profiling")
         .opt<std::string>("", {"cpu-profile-output"}, "Runtime CPU trace output path")
         .opt<std::string>("", {"profile-session"}, "Runtime profile session name")
         .opt<uint64_t>("", {"screenshot-warmup-frames"}, "Frames to wait before checking screenshot stability", "30")
@@ -161,6 +187,8 @@ void AppDesc::init(int argc, char** argv)
         .opt<std::string>("", {"renderdoc-output"}, "RenderDoc capture output directory", renderDocCaptureOutputDir)
         .opt<uint16_t>("", {"automation-control-port"}, "Automation control TCP port; 0 disables the server", "0")
         .opt<double>("", {"max-lifetime-seconds"}, "Quit gracefully after this many seconds of wall clock; 0 = unlimited", "0")
+        .opt<std::string>("", {"benchmark"}, "Run the benchmark described by this config JSON, write bench_summary.json and quit")
+        .opt<std::string>("", {"benchmark-output"}, "Benchmark output directory (overrides the config's outputDir)")
         .parse(argc, argv);
 
     title = params._opt.program();
@@ -273,6 +301,17 @@ void AppDesc::init(int argc, char** argv)
     }
     if (automation.renderDocCapture) {
         bEnableRenderDoc = true;
+    }
+    if (std::string benchmarkPath; params.tryGet<std::string>("benchmark", benchmarkPath)) {
+        // Window size, scene and CPU trace are part of the config. Applying
+        // them and then refusing to run would still leave the editor session
+        // on the benchmark's settings.
+        if (bEditor) {
+            YA_CORE_WARN("--benchmark measures the game runtime; ignored with --editor");
+        }
+        else {
+            applyBenchmarkConfig(*this, benchmarkPath);
+        }
     }
 }
 

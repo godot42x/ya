@@ -188,6 +188,43 @@ float PerfState::getDisplayValue(FName sampleKey, FName metricKey, float fallbac
     return getAverageValue(sampleKey, metricKey, getAverageWindowSize(), fallbackValue);
 }
 
+bool PerfState::tryGetReading(FName sampleKey, FName metricKey, PerfMetricReading& out) const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    auto sampleIt = _samples.find(sampleKey);
+    if (sampleIt == _samples.end()) {
+        return false;
+    }
+    auto metricIt = sampleIt->second.metrics.find(metricKey);
+    if (metricIt == sampleIt->second.metrics.end()) {
+        return false;
+    }
+    out = PerfMetricReading{
+        .sampleKey = sampleKey,
+        .metricKey = metricKey,
+        .domainKey = sampleIt->second.domainKey,
+        .value     = metricIt->second.lastValue,
+        .revision  = metricIt->second.revision,
+    };
+    return true;
+}
+
+void PerfState::visitMetrics(const std::function<void(const PerfMetricReading&)>& visitor) const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    for (const auto& [sampleKey, sample] : _samples) {
+        for (const auto& [metricKey, metric] : sample.metrics) {
+            visitor(PerfMetricReading{
+                .sampleKey = sampleKey,
+                .metricKey = metricKey,
+                .domainKey = sample.domainKey,
+                .value     = metric.lastValue,
+                .revision  = metric.revision,
+            });
+        }
+    }
+}
+
 void PerfState::setAverageWindowSize(size_t windowSize)
 {
     _averageWindowSize.store(normalizeAverageWindowSize(windowSize), std::memory_order_relaxed);

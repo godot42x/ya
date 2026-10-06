@@ -29,8 +29,6 @@ struct AppAutomationTickContext
     std::function<bool()>                   requestRenderDocCapture;
     std::function<bool()>                   isRenderDocCapturePending;
     std::function<bool()>                   isRenderDocCaptureTerminal;
-    std::function<const std::string&()>     getRenderDocCapturePath;
-    std::function<const std::string&()>     getRenderDocPassSummaryPath;
     uint64_t                                hostTick                          = 0;
 };
 

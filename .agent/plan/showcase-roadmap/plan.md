@@ -56,7 +56,7 @@
 | id | 内容 | 优先级 |
 | --- | --- | --- |
 | M1 | pass 级 GPU timestamp（RDG executor 逐 pass 打点，结果按 pass 名汇总） | P0 |
-| M2 | 统计窗口：`profile_summary.json` / `gpu_summary.json` 写窗口均值、p95、p99，而不是最后一帧 | P0 |
+| M2 | 统计窗口：`bench_summary.json` 写窗口均值、p50、p95、p99，而不是最后一帧 | P0 |
 | M3 | 基准模式：固定分辨率、关垂直同步、去帧率上限、丢弃预热帧，一条命令跑完出表 | P0 |
 | M4 | **GPU 显存**统计：VMA heap budget / usage、按资源类别（贴图、render target、transient、buffer、上传区）汇总，进 summary 与编辑器面板 | P0 |
 | M8 | **进程内存**统计：RSS / 峰值（平台计数）、堆分配按子系统归类（分配追踪），进 summary 与编辑器面板。与 M4 是两套口径，不合并；Apple Silicon 统一内存下两者共享物理内存，报告里分别列出并注明 | P0 |

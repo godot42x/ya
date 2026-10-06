@@ -1,0 +1,18 @@
+{
+    "name": "HelloMaterial",
+    "resolution": { "width": 1920, "height": 1080 },
+    "presentMode": "immediate",
+    "uncapFrameRate": true,
+    "warmupFrames": 120,
+    "sampleFrames": 600,
+    "fixedDeltaSeconds": 0.016666667,
+    "outputDir": "Engine/Saved/Benchmark/HelloMaterial",
+    "cameraPath": {
+        "loop": true,
+        "keyframes": [
+            { "frame": 0,   "position": [0.0, 2.0, 8.0], "rotation": [0.0, 180.0, 0.0] },
+            { "frame": 360, "position": [6.0, 3.0, 8.0], "rotation": [-10.0, 200.0, 0.0] },
+            { "frame": 720, "position": [0.0, 2.0, 8.0], "rotation": [0.0, 180.0, 0.0] }
+        ]
+    }
+}

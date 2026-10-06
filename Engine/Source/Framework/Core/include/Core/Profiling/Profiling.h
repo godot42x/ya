@@ -87,8 +87,6 @@ struct RuntimeSessionPaths
     std::string sessionName;
     std::string outputDir;
     std::string cpuProfilePath;
-    std::string gpuSummaryPath;
-    std::string profileSummaryPath;
 };
 
 [[nodiscard]] constexpr ECompileMode getCompileMode()
@@ -126,6 +124,19 @@ struct RuntimeSessionPaths
 #endif
 }
 
+[[nodiscard]] constexpr const char* getBuildModeLabel()
+{
+#if defined(YA_BUILD_MODE_DEBUG)
+    return "debug";
+#elif defined(YA_BUILD_MODE_RELEASEDBG)
+    return "releasedbg";
+#elif defined(YA_BUILD_MODE_PROFILE)
+    return "profile";
+#else
+    return "release";
+#endif
+}
+
 [[nodiscard]] YA_CORE_API const char* getCompileModeLabel();
 
 [[nodiscard]] YA_CORE_API RuntimeState getRuntimeState();
@@ -151,10 +162,6 @@ YA_CORE_API void endRuntimeSession();
 YA_CORE_API void applyAppOverrides(AppDesc& appDesc);
 
 [[nodiscard]] YA_CORE_API RuntimeSessionPaths getRuntimeSessionPaths();
-YA_CORE_API void                              setGpuCapturePath(std::string path);
-YA_CORE_API void                              setPassSummaryPath(std::string path);
-YA_CORE_API void                              setScreenshotPath(std::string path);
-YA_CORE_API void                              flushRuntimeArtifacts();
 
 YA_CORE_API Instrumentor& cpuTrace();
 YA_CORE_API PerfState&    metrics();

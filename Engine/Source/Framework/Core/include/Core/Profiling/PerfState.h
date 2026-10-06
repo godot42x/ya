@@ -9,6 +9,7 @@
 #include <chrono>
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <initializer_list>
 #include <mutex>
 #include <unordered_map>
@@ -36,6 +37,18 @@ struct PerfSampleState
     FName                                     sampleKey;
     FName                                     domainKey;
     std::unordered_map<FName, PerfMetricState> metrics;
+};
+
+/// One metric's latest value as a reader sees it. `revision` grows on every
+/// write across the whole PerfState, so a reader that remembers the largest
+/// revision it saw can tell "written since" from "still the old value".
+struct PerfMetricReading
+{
+    FName    sampleKey;
+    FName    metricKey;
+    FName    domainKey;
+    float    value    = 0.0f;
+    uint64_t revision = 0;
 };
 
 struct PerfSampleToken
@@ -76,6 +89,10 @@ struct YA_CORE_API PerfState
     float getLastValue(FName sampleKey, FName metricKey, float fallbackValue = 0.0f) const;
     float getAverageValue(FName sampleKey, FName metricKey, size_t windowSize, float fallbackValue = 0.0f) const;
     float getDisplayValue(FName sampleKey, FName metricKey, float fallbackValue = 0.0f) const;
+
+    [[nodiscard]] bool tryGetReading(FName sampleKey, FName metricKey, PerfMetricReading& out) const;
+    /// Every metric, under the state lock: the visitor must not write back.
+    void visitMetrics(const std::function<void(const PerfMetricReading&)>& visitor) const;
 
     void   setAverageWindowSize(size_t windowSize);
     size_t getAverageWindowSize() const;
