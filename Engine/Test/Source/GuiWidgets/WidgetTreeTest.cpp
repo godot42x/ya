@@ -247,11 +247,7 @@ struct TickHostCompound final : public UICompoundWidget
 
     void setTickEnabled(bool enabled = true) { enableTick(enabled); }
 
-    void tick(float deltaSeconds) override
-    {
-        UIElement::tick(deltaSeconds);
-        ++ticks;
-    }
+    void tick(float) override { ++ticks; }
 
   protected:
     void construct() override
@@ -283,7 +279,8 @@ struct TestBehavior final : public UIBehaviorWith<TestBehavior, IUITickable, IUI
     bool bHandlePreview = false;
     bool bHandleTarget = false;
     bool bHandleBubble = false;
-    bool bTick = false;
+
+    TestBehavior() { setTickEnabled(false); }
 
     void onAttached(UIElement& owner) override
     {
@@ -296,8 +293,6 @@ struct TestBehavior final : public UIBehaviorWith<TestBehavior, IUITickable, IUI
         ++detached;
         UIBehavior::onDetached(owner);
     }
-
-    [[nodiscard]] bool wantsTick() const override { return bTick; }
 
     void tick(UIElement& owner, float deltaSeconds) override
     {
@@ -531,7 +526,7 @@ TEST(WidgetTreeTest, BehaviorLifecycleTickAndInvalidationFollowOwner)
     auto panel = std::make_shared<UICanvasPanel>("BehaviorHost");
     FCanvasSlotArgs panelSlot; panelSlot.fixedSize = {120.0f, 60.0f};
     auto behavior = std::make_shared<TestBehavior>();
-    behavior->bTick = true;
+    behavior->setTickEnabled(true);
     panel->addBehavior(behavior);
 
     EXPECT_EQ(behavior->attached, 0);
@@ -612,26 +607,26 @@ TEST(WidgetTreeTest, BehaviorTicksOnAWidgetThatNeverOptedInItself)
     WidgetTree tree({.width = 400, .height = 300});
     auto host = std::make_shared<TickHostCompound>("TickBehaviorHost");
     auto behavior = std::make_shared<TestBehavior>();
-    behavior->bTick = true;
+    behavior->setTickEnabled(true);
     host->addBehavior(behavior);
     FCanvasSlotArgs slot;
     slot.fixedSize = {120.0f, 80.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, slot).valid());
 
-    // Nobody called enableTick(): the behaviour alone opens the gate.
+    // Nobody called enableTick(): the behaviour is its own registration.
     EXPECT_TRUE(host->wantsTick());
     tree.tick(1.0f / 60.0f);
     EXPECT_EQ(behavior->tickHits, 1);
-    // One gate per widget, not one per door: the open gate runs the class hook
-    // too. That is why an override of tick() must forward with
-    // UIElement::tick() - TickHostCompound does, so the behaviour above ran.
-    EXPECT_EQ(host->ticks, 1);
+    // One registration per door, not one gate per widget: the host's class
+    // hook is not registered, so it does not ride along, and an override of
+    // tick() never has to forward for the behaviour to run.
+    EXPECT_EQ(host->ticks, 0);
 
-    behavior->bTick = false;
+    behavior->setTickEnabled(false);
     tree.tick(1.0f / 60.0f);
     EXPECT_FALSE(host->wantsTick());
     EXPECT_EQ(behavior->tickHits, 1);
-    EXPECT_EQ(host->ticks, 1);
+    EXPECT_EQ(host->ticks, 0);
 }
 
 TEST(WidgetTreeTest, EnableTickIsAvailableToAnyWidgetNotOnlyCompounds)

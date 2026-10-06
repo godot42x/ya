@@ -24,10 +24,8 @@ namespace ya
 /// through UICompoundWidget.
 ///
 /// Frame lifecycle is UIElement's, not this type's: a compound with per-frame
-/// state calls the inherited enableTick() and overrides tick(), while
-/// behaviours attached to it are ticked through the same wantsTick(). This
-/// type used to answer wantsTick() from its own flag only, which silently
-/// dropped every behaviour (tween included) attached to a compound.
+/// state calls the inherited enableTick() and overrides tick(); behaviours
+/// attached to it are separate tree registrations and tick regardless.
 struct YA_GUI_API UICompoundWidget : public UIElement
 {
     using SlotArgs = FContentSlotArgs;

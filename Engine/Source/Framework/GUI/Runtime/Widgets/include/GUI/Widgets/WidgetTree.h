@@ -25,6 +25,7 @@
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetAttachment.h"
+#include "GUI/Widgets/WidgetTickRegistry.h"
 
 #include <array>
 #include <functional>
@@ -286,10 +287,14 @@ struct YA_GUI_API WidgetTree final
     /// Full layout pass: root fills the logical extent, layers fill in layer
     /// order, content children sort by zOrder.
     void layout();
-    /// Drive frame lifecycle for attached widgets that opt into ticking.
+    /// Drive the frame lifecycle: every registration (a widget's enableTick,
+    /// each enabled IUITickable behaviour) whose owner is visible in the tree,
+    /// in tree pre-order. Costs nothing per node; an idle tree does no work.
     /// Events are dispatched before this call; snapshot/layout/paint happen
     /// after it.
     void tick(float deltaSeconds);
+    /// Live frame registrations (diagnostics / tests).
+    [[nodiscard]] size_t getTickRegistrationCount() const { return _ticks.size(); }
     [[nodiscard]] bool isLayoutValid() const { return !_bLayoutDirty; }
 
     /// Layout (if dirty) + paint the whole tree into an immutable frame
@@ -464,7 +469,6 @@ struct YA_GUI_API WidgetTree final
     static void prepareSubtree(UIElement* widget);
     static void notifyAttachedSubtree(UIElement* widget);
     static void notifyDetachedSubtree(UIElement* widget);
-    static void tickSubtree(UIElement* widget, float deltaSeconds);
     /// Collect attached, visible, focusable widgets in stable paint order
     /// (layers bottom -> top, children zOrder ascending) for Tab traversal.
     void collectFocusables(std::vector<UIElement*>& outFocusables) const;
@@ -542,6 +546,7 @@ struct YA_GUI_API WidgetTree final
     bool          _bLayoutDirty = true;
     uint8_t       _layoutInvalidationMask = static_cast<uint8_t>(EWidgetLayoutInvalidation::Structure);
     uint64_t      _visibilityRevision = 0;
+    FWidgetTickRegistry        _ticks;
     GuiPerfStats               _perfStats;
     FGuiFrameInspectorRecord   _inspectorRecord;
     uint64_t                   _inspectorPrevPaintDirty   = 0;

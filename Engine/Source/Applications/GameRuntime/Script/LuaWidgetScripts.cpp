@@ -87,7 +87,7 @@ void fillWidgetSelf(const std::shared_ptr<LuaWidgetScriptBehavior>& behavior, Sc
     }
     out.method("setTickEnabled", [weak](script::ScriptArgs args) -> script::ScriptValue {
         if (const std::shared_ptr<LuaWidgetScriptBehavior> live = weak.lock(); live && !args.empty()) {
-            live->bTickEnabled = script::scriptToBool(args[0]);
+            live->setTickEnabled(script::scriptToBool(args[0]));
         }
         return {};
     });
@@ -142,7 +142,7 @@ LuaWidgetScriptBehavior::~LuaWidgetScriptBehavior()
 void LuaWidgetScriptBehavior::tick(UIElement& owner, float deltaSeconds)
 {
     (void)owner;
-    if (runtime) {
+    if (runtime && instance.bLoaded) {
         (void)callScriptInstance(runtime->scripting, instance, EScriptCallback::Update, deltaSeconds);
     }
 }
@@ -171,6 +171,7 @@ LuaWidgetScripts::~LuaWidgetScripts()
             behavior->runtime = nullptr;
             destroyScriptInstance(scripting, behavior->instance);
             host.cancelTimersOf(behavior.get());
+            behavior->setTickEnabled(false);
         }
     }
 }
@@ -258,6 +259,7 @@ void LuaWidgetScripts::release(LuaWidgetScriptBehavior& behavior)
     // instance gone and drops itself.
     destroyScriptInstance(scripting, behavior.instance);
     host.cancelTimersOf(&behavior);
+    behavior.setTickEnabled(false);
 }
 
 script::ScriptSelfHandle LuaWidgetScripts::scriptSelfOf(const UIElement& widget)

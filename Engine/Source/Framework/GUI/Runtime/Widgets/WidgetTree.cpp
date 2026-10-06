@@ -287,17 +287,22 @@ EWidgetRouteResult WidgetTree::dispatchCapturedPointerEvent(const Event& event,
 
 void WidgetTree::markSubtreeMembership(UIElement* widget, WidgetTree* tree)
 {
-    if (widget->_tree) {
-        ++widget->_tree->_visibilityRevision;
+    WidgetTree* const previous = widget->_tree;
+    if (previous) {
+        ++previous->_visibilityRevision;
     }
-    if (tree && tree != widget->_tree) {
+    if (tree && tree != previous) {
         ++tree->_visibilityRevision;
     }
     std::vector<UIElement*> pending{widget};
     while (!pending.empty()) {
         UIElement* node = pending.back();
         pending.pop_back();
+        const bool bJoins = node->_tree != tree;
         node->_tree = tree;
+        if (bJoins && tree) {
+            tree->_ticks.addOwner(*node);
+        }
         // A new tree/parent edge may use a different layout contract even if
         // the eventual rect happens to be identical. Never reuse the old
         // assigned-layout proof across attach/reparent boundaries.
@@ -306,6 +311,12 @@ void WidgetTree::markSubtreeMembership(UIElement* widget, WidgetTree* tree)
         for (const auto& child : node->_children) {
             pending.push_back(child.get());
         }
+    }
+    if (previous && previous != tree) {
+        previous->_ticks.removeNonMembers(*previous);
+    }
+    if (tree) {
+        tree->_ticks.markOrderDirty();
     }
 }
 
@@ -349,19 +360,6 @@ void WidgetTree::notifyDetachedSubtree(UIElement* widget)
     widget->onDetached();
     for (const auto& child : widget->_children) {
         notifyDetachedSubtree(child.get());
-    }
-}
-
-void WidgetTree::tickSubtree(UIElement* widget, float deltaSeconds)
-{
-    if (!widget || !widget->isVisibleInTree()) {
-        return;
-    }
-    if (widget->wantsTick()) {
-        widget->tick(deltaSeconds);
-    }
-    for (const auto& child : widget->getChildren()) {
-        tickSubtree(child.get(), deltaSeconds);
     }
 }
 
@@ -540,6 +538,7 @@ void WidgetTree::reparent(UIElement& newParent, const UIElementRef& widget)
         newParent._childSlots.erase(newParent._childSlots.begin() + static_cast<std::ptrdiff_t>(fromIndex));
         newParent._children.push_back(std::move(childRef));
         newParent._childSlots.push_back(std::move(slot));
+        _ticks.markOrderDirty();
         invalidateLayout();
         return;
     }
@@ -614,6 +613,7 @@ void WidgetTree::reparentRelativeTo(WidgetTree& tree, UIElement& sibling, const 
                                  std::move(childRef));
         parent->_childSlots.insert(parent->_childSlots.begin() + static_cast<std::ptrdiff_t>(clampedInsertAt),
                                    std::move(slot));
+        tree._ticks.markOrderDirty();
         tree.invalidateLayout();
         return;
     }
@@ -723,6 +723,7 @@ void WidgetTree::detach(UIElement& widget)
             pending.push_back(child.get());
         }
     }
+    _ticks.removeNonMembers(*this);
 
     clearTransientState(widget);
     std::vector<UIElement*> cachePending{&widget};
@@ -809,9 +810,7 @@ void WidgetTree::invalidateLayout(EWidgetLayoutInvalidation scope)
 void WidgetTree::tick(float deltaSeconds)
 {
     repairPointerSession("tick");
-    for (const auto& layer : _layers) {
-        tickSubtree(layer.get(), deltaSeconds);
-    }
+    _ticks.dispatch(*this, deltaSeconds);
 }
 
 void WidgetTree::layout()

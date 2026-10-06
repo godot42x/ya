@@ -231,10 +231,10 @@ enum class EUIAnimDirection : uint8_t
 };
 
 /// A single 0 -> 1 time driver (UE Slate FCurveSequence analogue): duration,
-/// direction, loop and time scale, with no knowledge of what it animates. A
-/// behaviour reports wantsTick() while the clock runs, so a finished clock
-/// costs nothing: the tree stops visiting the widget instead of rebuilding
-/// forever.
+/// direction, loop and time scale, with no knowledge of what it animates. The
+/// animator holds a tick registration only while a clock runs, so a finished
+/// clock costs nothing: the tree stops ticking the widget instead of
+/// rebuilding forever.
 class YA_GUI_API UIAnimClock
 {
   public:
@@ -450,6 +450,8 @@ class YA_GUI_API UITween
     /// before attach only records tracks and clock state).
     [[nodiscard]] UIElement* getOwner() const;
     void tick(UIElement& owner, float deltaSeconds);
+    /// Playback state changed: the animator re-derives its tick registration.
+    void notifyPlaybackChanged();
     /// The owner left the tree: stop, and drop descriptors resolved against it.
     void release();
     void applyTracks(UIElement& owner, float lerp);
@@ -476,23 +478,27 @@ class YA_GUI_API UITween
 };
 
 /// The widget's single tween driver (one per widget, like every behaviour
-/// type). It ticks its tweens in creation order, wants a frame while any of
-/// them plays, and drops a finished tween nobody else holds.
+/// type). It ticks its tweens in creation order, is registered for frames only
+/// while any of them plays, and drops a finished tween nobody else holds.
 class YA_GUI_API UIAnimatorBehavior final : public UIBehaviorWith<UIAnimatorBehavior, IUITickable>
 {
     std::vector<std::shared_ptr<UITween>> _tweens;
 
   public:
+    UIAnimatorBehavior();
     ~UIAnimatorBehavior() override;
 
     [[nodiscard]] size_t getTweenCount() const { return _tweens.size(); }
 
-    [[nodiscard]] bool wantsTick() const override;
     void tick(UIElement& owner, float deltaSeconds) override;
     void onDetached(UIElement& owner) override;
 
   private:
+    friend class UITween;
     friend std::shared_ptr<UITween> animate(UIElement& widget, float duration);
+
+    /// Tick registration follows "any tween playing".
+    void syncTickEnabled();
 };
 
 // === Authoring entry points =================================================

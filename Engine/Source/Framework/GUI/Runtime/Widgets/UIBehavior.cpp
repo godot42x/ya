@@ -8,6 +8,17 @@
 namespace ya
 {
 
+void IUITickable::setTickEnabled(bool enabled)
+{
+    if (_bTickEnabled == enabled) {
+        return;
+    }
+    _bTickEnabled = enabled;
+    if (_tickOwner) {
+        _tickOwner->onTickableSwitched(*this);
+    }
+}
+
 void UIBehavior::onAttached(UIElement& owner)
 {
     _owner = &owner;

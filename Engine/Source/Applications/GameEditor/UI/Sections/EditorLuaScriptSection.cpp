@@ -72,7 +72,6 @@ EditorLuaScriptSection::EditorLuaScriptSection(std::string name,
     , _onMutated(std::move(onMutated))
     , _picker(std::move(picker))
 {
-    enableTick();
 }
 
 void EditorLuaScriptSection::noteMutated()

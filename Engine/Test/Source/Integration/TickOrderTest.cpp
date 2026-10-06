@@ -142,7 +142,6 @@ struct CountingSystem final : ISystem
 struct TickCountingBehavior final : UIBehaviorWith<TickCountingBehavior, IUITickable>
 {
     int ticks = 0;
-    [[nodiscard]] bool wantsTick() const override { return true; }
     void tick(UIElement&, float) override { ++ticks; }
 };
 

@@ -24,10 +24,11 @@
 `enableTick`，门必须开）/ `EnableTickIsAvailableToAnyWidgetNotOnlyCompounds`（叶子控件用
 同一入口）。原来两个测试替身用 `wantsTick()` override 模拟，现在改用 `enableTick()`。
 
-**仍未做**：`tick()` 本身还是虚函数。谁 override 它又忘了转发 `UIElement::tick(dt)`，
-挂在自己类型上的 behavior 依然静默丢帧。结构性修法是非虚 `tick(float)` 包装 + 虚
-`onTick(float)`（tree 只调前者；前者先转发 behaviors 再调后者），代价是 15 个 editor
-文件 + 3 个测试替身改名。记录在 `.agent/plan/gui-editor-structure/todo.md` C4e。
+**后续（2026-10，ui-behavior-capabilities C2）**：第二个洞按另一种结构收掉了——
+tick 改为树上的登记表，登记项是 `(owner, tickable)`：behavior 自己一项、owner 的
+`enableTick()` 另一项，`WidgetTree::tick` 直接调 behavior 的 `tick(owner, dt)`，不再经
+`UIElement::tick` 转发（基类 no-op）。override `tick()` 不转发也不会吃掉 behavior；
+`wantsTick()` 降为诊断查询。没有走 `tick()`→`onTick()` 改名。
 
 ## 照这个形状继续找
 

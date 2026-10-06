@@ -200,7 +200,6 @@ struct FEditorTornTitleHitsBehavior final : UIBehaviorWith<FEditorTornTitleHitsB
 {
     std::shared_ptr<FEditorTornChromeState> state;
 
-    [[nodiscard]] bool wantsTick() const override { return state && state->native && state->tabBar; }
     void tick(UIElement&, float) override
     {
         if (state) {

@@ -55,7 +55,6 @@ struct TickCountingBehavior final : public UIBehaviorWith<TickCountingBehavior, 
 {
     int ticks = 0;
 
-    [[nodiscard]] bool wantsTick() const override { return true; }
     void tick(UIElement& owner, float deltaSeconds) override
     {
         (void)owner;
@@ -72,7 +71,6 @@ struct AdvancingBehavior final : public UIBehaviorWith<AdvancingBehavior, IUITic
 {
     float seconds = 0.0f;
 
-    [[nodiscard]] bool wantsTick() const override { return true; }
     void tick(UIElement& owner, float deltaSeconds) override
     {
         (void)owner;

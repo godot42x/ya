@@ -196,17 +196,19 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   长时结构 soak 在 `EditorLongRunSoakTest`：同 subtree attach/detach、destroy/recreate、theme 切换、
   deferred texture generation。GPU/offscreen 像素门禁：`Script/automation/gui/run_workbench_gpu_parity.py`
   （headless lastRoute + snapshot digest + windowed `--gpu-shot`/`--offscreen-diff` 零容差）。
-- 帧生命周期（**两扇门，一条协议，门归框架**）：`WidgetTree::tickSubtree` 只拜访可见子树
-  （折叠/隐藏即停），门是 `UIElement::wantsTick()` = `_bTickEnabled || 任一 IUITickable 行为想跑`。
-  两扇门覆盖不同的事：控件**自己的类**用 `enableTick()` + override `tick()`（每帧状态在自己类型里，
-  editor tab / section 是这一类）；**别人的部件**用 `addBehavior(IUITickable 行为)`（tween、对话框自刷新；
-  behavior 自己回答 `wantsTick()`）。门是**整个 widget 一扇**而不是每扇门一扇：behavior 想要帧，
-  这个 widget 的 `tick()` 就会跑；因此谁 override `tick()`，谁就必须转发 `UIElement::tick(dt)`，
-  否则挂在这个类型上的 behavior 静默不跑、也不报错。
-  `wantsTick()` **故意非虚**：让它由子类回答，就等于允许子类藏掉 behavior 那半扇门
-  （`UICompoundWidget` 曾 `return _bTickEnabled;`，`ui::animate(...)` 挂在 compound 上无效，
-  见 `memories/widget_tick_gate_hidden_by_override.md`）。要「某类控件被动加入帧」就改
-  `UIElement`，不要给每个控件造 compound 子类。
+- 帧生命周期（**树上一张 tick 登记表，行为级登记**）：`WidgetTree` 持有 `FWidgetTickRegistry`
+  （`WidgetTickRegistry.h`），`WidgetTree::tick` 只遍历登记项，不再整树递归、不再每帧轮询；
+  没人要帧时开销与节点数无关。登记项是 `(owner, tickable)`：控件**自己的类**用 `enableTick()` +
+  override `tick()`（一项，tickable 为空；editor tab / section 是这一类）；**别人的部件**用
+  `addBehavior(IUITickable 行为)`，行为用 `setTickEnabled(bool)` 开关自己那一项（tween 播放期、
+  对话框自刷新、Lua `self:setTickEnabled`）。两者**互相独立**：行为要帧不会让 owner 的 `tick()` 跑，
+  override `tick()` 也不需要转发 `UIElement::tick`（基类 no-op），所以子类无法藏掉行为那一项
+  （历史坑见 `memories/widget_tick_gate_hidden_by_override.md`）。
+  登记随成员关系：节点挂上树时按当前开关登记，脱离树时移除，开关只在已挂树时增删表项。
+  只 tick `isVisibleInTree()` 的 owner（按 `getVisibilityRevision()` 缓存，帧内可见性变化在下一项前刷新）；
+  顺序只承诺「树结构变化后按前序重排」（同一 owner 先自身、再按行为添加顺序），不承诺更多。
+  派发中增删安全：移除即刻失效（之后才压缩），新增项下一帧才跑，重入 `tick` 警告并返回。
+  `wantsTick()` 仍在，但只是诊断查询（自身开关 || 任一行为开着），不是门。
 
 ## 动画（framework 层）
 
@@ -231,8 +233,9 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
   field poke、禁止把 `_bVolatile` 当动画、禁止在 paint/layout 回调里 spawn 动画。
 - 时钟/tween：`UIAnimClock` 是 `UITween` 的内部时钟（对标 FCurveSequence），
   **不是** WidgetTree 上的第二套 tick。`UITween` 不是行为；驱动者是控件唯一的
-  `UIAnimatorBehavior`（`IUITickable`）：`WidgetTree::tick` → `UIElement::tick` → animator →
-  按创建顺序 tick 各 tween。`wantsTick()` 只在有 tween 播放时为真，结束自动回到干净、树不再拜访；
+  `UIAnimatorBehavior`（`IUITickable`）：`WidgetTree::tick` → animator 登记项 →
+  按创建顺序 tick 各 tween。animator 只在有 tween 播放时登记（tween 播放状态变化即同步开关），
+  结束自动注销、树不再拜访；
   播完且无外部句柄的 tween 由 animator 丢弃。挂上 tween 的**唯一接口**是
   `ya::ui::animate(widget, dt)`（找到或创建 animator，再加一个 tween）；同一控件可多次调用得到
   多个独立 tween（各自时钟）。onFinished 可做 ping-pong（playReverse）。
@@ -259,7 +262,7 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
   多对象 / 事件轨 / blend 仍属 Game UI clip player，不要塞进框架。
 - 默认带动画的控件：`UISwitch`（DSL `ya::ui::toggle(...)`）。它用 `animate()` 取得
   一个 `UITween` 驱动自己声明的 `progress` 通道（`kAnimSwitchProgress`）：值立即
-  翻转，knob 位移 + track 配色插值；静止时 `wantsTick()==false`，
+  翻转，knob 位移 + track 配色插值；静止时不在 tick 登记表上，
   `setTransitionSeconds(0)` 可整体关掉动画。
   哪些控件该默认携带动画、哪些应 opt-in，见 `.agent/plan/archive/gui-animation/plan.md` §8。
 - 零时长时钟语义：`duration<=0` 表示“无动画”，`getLerp()` 返回被放置的那个端点

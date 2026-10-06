@@ -41,20 +41,35 @@ struct UIBehaviorWith;
 // declaring it there does not compile, so no behaviour implements a capability
 // the framework never dispatches to.
 
-/// Per-frame work while the owner is visible in the tree.
-struct IUITickable
+/// Per-frame work while the owner is visible in the tree. Each tickable is its
+/// own registration in the owner's tree: on while attached and enabled, off
+/// otherwise. The tree never polls; a behaviour that only sometimes has work
+/// (a tween at rest) switches itself off with setTickEnabled(false).
+struct YA_GUI_API IUITickable
 {
+  private:
+    template <typename, typename...>
+    friend struct UIBehaviorWith;
+    friend struct UIElement;
+
+    /// The widget whose behaviour index holds this tickable; null otherwise.
+    UIElement* _tickOwner    = nullptr;
+    bool       _bTickEnabled = true;
+
+  public:
     static constexpr EUIBehaviorCapability kCapability = EUIBehaviorCapability::Tick;
 
-    [[nodiscard]] virtual bool wantsTick() const { return true; }
-    virtual void               tick(UIElement& owner, float deltaSeconds) = 0;
+    virtual void tick(UIElement& owner, float deltaSeconds) = 0;
+
+    /// Runtime switch; safe from inside any tick callback (takes effect for
+    /// this frame when switching off, from the next frame when switching on).
+    void               setTickEnabled(bool enabled);
+    [[nodiscard]] bool isTickEnabled() const { return _bTickEnabled; }
 
   protected:
     ~IUITickable() = default;
 
   private:
-    template <typename, typename...>
-    friend struct UIBehaviorWith;
     IUITickable() = default;
 };
 
@@ -245,8 +260,8 @@ YA_GUI_API void hoverDrop(UIElement& target, const UIDragDropOperation& operatio
 ///
 /// This is how a widget says "I need a frame" and gets it from the tree, rather
 /// than the code that created it remembering to push a refresh every frame.
-/// Attach it to the widget that owns the state and the frame loop reaches it
-/// through the normal subtree walk, so a surface that only opens/closes the
+/// Attach it to the widget that owns the state and it registers with that
+/// widget's tree while attached, so a surface that only opens/closes the
 /// widget never has to know it has per-frame work.
 ///
 /// A widget that is not visible in the tree is not ticked, so this is for state
@@ -255,8 +270,7 @@ struct YA_GUI_API UITickBehavior final : public UIBehaviorWith<UITickBehavior, I
 {
     std::function<void(UIElement& owner, float deltaSeconds)> onTick;
 
-    [[nodiscard]] bool wantsTick() const override { return static_cast<bool>(onTick); }
-    void               tick(UIElement& owner, float deltaSeconds) override
+    void tick(UIElement& owner, float deltaSeconds) override
     {
         if (onTick) {
             onTick(owner, deltaSeconds);

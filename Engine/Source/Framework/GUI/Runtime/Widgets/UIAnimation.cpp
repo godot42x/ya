@@ -547,6 +547,7 @@ void UITween::clearTracks()
     _clock.stop();
     _warnedIds.clear();
     _bFinishedFired = false;
+    notifyPlaybackChanged();
 }
 
 UIElement* UITween::getOwner() const
@@ -562,6 +563,7 @@ UITween& UITween::play()
     if (UIElement* owner = getOwner()) {
         applyTracks(*owner, 0.0f);
     }
+    notifyPlaybackChanged();
     if (_clock.hasFinished() && !_bFinishedFired) {
         _bFinishedFired = true;
         if (_onFinished) {
@@ -579,6 +581,7 @@ UITween& UITween::playReverse()
     if (UIElement* owner = getOwner()) {
         applyTracks(*owner, 1.0f);
     }
+    notifyPlaybackChanged();
     if (_clock.hasFinished() && !_bFinishedFired) {
         _bFinishedFired = true;
         if (_onFinished) {
@@ -598,6 +601,7 @@ UITween& UITween::playToward(EUIAnimDirection direction)
         // retarget is already consistent, then let the clock move it.
         applyTracks(*owner, _clock.getLerp());
     }
+    notifyPlaybackChanged();
     settleFinishedCallback();
     return *this;
 }
@@ -610,12 +614,14 @@ UITween& UITween::setLerpNow(float lerp)
         applyTracks(*owner, _clock.getLerp());
     }
     _bFinishedFired = false;
+    notifyPlaybackChanged();
     return *this;
 }
 
 UITween& UITween::stop()
 {
     _clock.stop();
+    notifyPlaybackChanged();
     return *this;
 }
 
@@ -624,6 +630,13 @@ void UITween::tick(UIElement& owner, float deltaSeconds)
     _clock.tick(deltaSeconds);
     applyTracks(owner, _clock.getLerp());
     settleFinishedCallback();
+}
+
+void UITween::notifyPlaybackChanged()
+{
+    if (_animator) {
+        _animator->syncTickEnabled();
+    }
 }
 
 void UITween::settleFinishedCallback()
@@ -704,9 +717,14 @@ UIAnimatorBehavior::~UIAnimatorBehavior()
     }
 }
 
-bool UIAnimatorBehavior::wantsTick() const
+UIAnimatorBehavior::UIAnimatorBehavior()
 {
-    return std::ranges::any_of(_tweens, [](const std::shared_ptr<UITween>& tween) { return tween->isPlaying(); });
+    setTickEnabled(false);
+}
+
+void UIAnimatorBehavior::syncTickEnabled()
+{
+    setTickEnabled(std::ranges::any_of(_tweens, [](const std::shared_ptr<UITween>& tween) { return tween->isPlaying(); }));
 }
 
 void UIAnimatorBehavior::tick(UIElement& owner, float deltaSeconds)
@@ -723,6 +741,7 @@ void UIAnimatorBehavior::tick(UIElement& owner, float deltaSeconds)
     std::erase_if(_tweens, [](const std::shared_ptr<UITween>& tween) {
         return !tween->isPlaying() && tween.use_count() == 1;
     });
+    syncTickEnabled();
 }
 
 void UIAnimatorBehavior::onDetached(UIElement& owner)
@@ -730,6 +749,7 @@ void UIAnimatorBehavior::onDetached(UIElement& owner)
     for (const std::shared_ptr<UITween>& tween : _tweens) {
         tween->release();
     }
+    syncTickEnabled();
     UIBehavior::onDetached(owner);
 }
 

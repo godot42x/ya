@@ -23,18 +23,27 @@ UIElement::UIElement(std::string name, std::string styleKey)
 
 bool UIElement::wantsTick() const
 {
-    // Two doors, one answer: the widget's own class (enableTick) and the
-    // behaviours attached to it. They are reported together so no subclass can
-    // accidentally hide the behaviour door by overriding wantsTick().
-    if (_bTickEnabled) {
-        return true;
+    return _bTickEnabled || std::ranges::any_of(behaviorsOf<IUITickable>(), [](const IUITickable* tickable) {
+               return tickable->isTickEnabled();
+           });
+}
+
+void UIElement::enableTick(bool enabled)
+{
+    if (_bTickEnabled == enabled) {
+        return;
     }
-    for (const IUITickable* tickable : behaviorsOf<IUITickable>()) {
-        if (tickable->wantsTick()) {
-            return true;
-        }
+    _bTickEnabled = enabled;
+    if (_tree) {
+        _tree->_ticks.set(*this, nullptr, enabled);
     }
-    return false;
+}
+
+void UIElement::onTickableSwitched(IUITickable& tickable)
+{
+    if (_tree) {
+        _tree->_ticks.set(*this, &tickable, tickable.isTickEnabled());
+    }
 }
 
 bool UIElement::isAutoSizeActive() const
@@ -57,6 +66,10 @@ UIElement::~UIElement()
     for (const auto& child : _children) {
         child->_tree   = nullptr;
         child->_parent = nullptr;
+    }
+    // A behaviour someone else still holds must not switch into a dead owner.
+    for (IUITickable* tickable : behaviorsOf<IUITickable>()) {
+        tickable->_tickOwner = nullptr;
     }
 
     // Sever this widget from every reactive ref it read or bound, so a later
@@ -97,6 +110,13 @@ bool UIElement::addBehavior(const UIBehaviorRef& behavior)
             (join(lists), ...);
         },
         _behaviorIndex->byCapability);
+    if (behavior->hasCapability(EUIBehaviorCapability::Tick)) {
+        auto* tickable       = static_cast<IUITickable*>(behavior->capabilityInterface(EUIBehaviorCapability::Tick));
+        tickable->_tickOwner = this;
+        if (_tree && tickable->isTickEnabled()) {
+            _tree->_ticks.add(*this, tickable);
+        }
+    }
     if (isAttached()) {
         behavior->onAttached(*this);
     }
@@ -113,6 +133,13 @@ void UIElement::removeBehavior(const UIBehavior& behavior)
     const UIBehaviorRef removed = *it;
     if (isAttached()) {
         removed->onDetached(*this);
+    }
+    if (removed->hasCapability(EUIBehaviorCapability::Tick)) {
+        auto* tickable = static_cast<IUITickable*>(removed->capabilityInterface(EUIBehaviorCapability::Tick));
+        if (_tree) {
+            _tree->_ticks.remove(*this, tickable);
+        }
+        tickable->_tickOwner = nullptr;
     }
     const auto slot = std::find(_behaviors.begin(), _behaviors.end(), removed);
     _behaviorIndex->kinds.erase(_behaviorIndex->kinds.begin() + (slot - _behaviors.begin()));
@@ -593,11 +620,7 @@ bool UIElement::bubbleInputEvent(const Event& event, const WidgetEventContext& c
 
 void UIElement::tick(float deltaSeconds)
 {
-    for (IUITickable* tickable : behaviorsOf<IUITickable>()) {
-        if (tickable->wantsTick()) {
-            tickable->tick(*this, deltaSeconds);
-        }
-    }
+    (void)deltaSeconds;
 }
 
 // === Authoring ===
@@ -736,6 +759,7 @@ void UIElement::relocateOwnedChild(UIElement& child, size_t destIndex)
     child._parent = this;
     markLayoutDirty(EUIInvalidationReason::ChildStructure);
     if (_tree) {
+        _tree->_ticks.markOrderDirty();
         _tree->invalidateLayout();
     }
 }

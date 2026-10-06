@@ -180,30 +180,27 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     virtual void onAttached() {}
     /// Lifecycle hook invoked before this widget leaves its WidgetTree.
     virtual void onDetached() {}
-    /// Optional frame-driven lifecycle. WidgetTree invokes this once per
-    /// frame for attached widgets that opt in through wantsTick().
-    /// An override MUST forward with UIElement::tick(deltaSeconds) when it
-    /// wants the behaviours attached to this widget to keep running; the
-    /// framework cannot call them for you once the class takes over the hook.
+    /// The widget's own per-frame hook, called by WidgetTree once per frame
+    /// while enableTick() is on and the widget is visible in the tree.
+    /// Behaviours are separate registrations ticked by the tree directly, so
+    /// an override never has to forward for them.
     virtual void tick(float deltaSeconds);
-    /// The single gate for the frame lifecycle, called once per frame per
-    /// visible node. Deliberately not virtual: participation is only ever
-    /// "this class said so" (enableTick) or "a behaviour wants a frame", and
-    /// a subclass override could silently hide the second half. WidgetTree
-    /// only visits VISIBLE subtrees, so opting in never keeps a collapsed or
-    /// hidden widget busy.
+    /// Whether any frame registration of this widget is on (its own tick or
+    /// an IUITickable behaviour). Diagnostics only: the tree keeps a
+    /// registration list and never asks this per frame.
     [[nodiscard]] bool wantsTick() const;
-    /// Opt this widget into the frame lifecycle. There are two doors into the
-    /// same protocol and they cover different things:
+    /// Register this widget's own tick() with its tree (now, or when it is
+    /// attached). There are two doors into the frame and each is its own
+    /// registration:
     ///   - this one, called from the widget's OWN class, which overrides
     ///     tick() because the per-frame state lives in that type;
     ///   - addBehavior(an IUITickable behaviour) for per-frame work that is not
-    ///     the widget's type (tween, a dialog refreshing itself) - the
-    ///     behaviour reports wantsTick() on its own.
-    /// A subclass that overrides wantsTick() MUST chain to
-    /// UIElement::wantsTick(), or every behaviour attached to that type is
-    /// silently never ticked.
-    void enableTick(bool enabled = true) { _bTickEnabled = enabled; }
+    ///     the widget's type (tween, a dialog refreshing itself); the
+    ///     behaviour switches itself with IUITickable::setTickEnabled.
+    /// Only visible widgets are ticked, so opting in never keeps a collapsed
+    /// or hidden subtree busy.
+    void enableTick(bool enabled = true);
+    [[nodiscard]] bool isTickEnabled() const { return _bTickEnabled; }
 
     /// Parts that are not this widget's own type (tween, drag, drop, script).
     /// Each joins the per-capability lists it declared (UIBehaviorWith<Self,
@@ -308,11 +305,6 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// model state into widget fields each frame). Costs the incremental-reuse
     /// win for this widget; keeps data/display consistency the invariant.
     bool _bVolatile = false;
-
-    /// Frame lifecycle opt-in for this widget's own class (see enableTick).
-    /// Not an invalidation input: WidgetTree polls wantsTick() every frame, so
-    /// toggling it needs no dirty mark. Behaviours opt in independently.
-    bool _bTickEnabled = false;
 
     /// Enabled state (editor-parity P6). A disabled widget (or one inside a
     /// disabled ancestor) does not receive input; paint graying is left to
@@ -750,6 +742,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     friend struct WidgetTree;
     friend class UITypeRegistry;
     friend struct UIDocument;
+    friend struct IUITickable;
 
     /// Visual parent / tree hold strong references to children; the child
     /// points back with a raw (non-owning) pointer.
@@ -761,6 +754,8 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     UIElement*                _parent = nullptr;
     UISlot*                   _slot   = nullptr;
     WidgetTree*               _tree   = nullptr;
+    /// This widget's own tick() is registered with its tree (see enableTick).
+    bool                      _bTickEnabled = false;
 
     /// Module-owner lease set by UITypeRegistry::createInstance: keeps the
     /// owning module alive and decrements its live-instance count when this
@@ -801,6 +796,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void finalizeInsertedChild(const UIElementRef& child);
     void clearLayoutDirtyRecursive();
     void noteRenderVisibilityChanged();
+    void onTickableSwitched(IUITickable& tickable);
 };
 
 /// A paint-affecting boolean flag whose only write path marks the owning

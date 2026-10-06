@@ -592,7 +592,7 @@ void EditorUICanvasTab::onDetached()
 
 void EditorUICanvasTab::tick(float deltaSeconds)
 {
-    UICompoundWidget::tick(deltaSeconds);
+    (void)deltaSeconds;
     // Next frame's canvas is sized from where this tab is laid out now.
     EditorUICanvasView& view = _designer->canvas();
     view.extent              = _image->_layoutRect.extent;

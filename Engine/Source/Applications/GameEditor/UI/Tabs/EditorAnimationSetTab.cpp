@@ -473,7 +473,6 @@ void EditorAnimationSetTab::onAttached()
 
 void EditorAnimationSetTab::tick(float deltaSeconds)
 {
-    UIElement::tick(deltaSeconds);
     applyPendingOpen();
     advancePlayback(deltaSeconds);
     refresh();

@@ -1,6 +1,6 @@
 # UIBehavior 能力化与热路径
 
-状态：决策门已确认（2026-09-28），排在 `game-ui-script-framework` S4 之前；C1、C1b、C1c、C1d 完成，下一步 C2。
+状态：决策门已确认（2026-09-28），排在 `game-ui-script-framework` S4 之前；C1、C1b、C1c、C1d、C2 完成，下一步 C3。
 来源：`game-ui-script-framework` 性能检查点时用户指出 `UIBehavior` 权责不分、实现性能低。
 
 ## 1. 现状（2026-09-28 核对）

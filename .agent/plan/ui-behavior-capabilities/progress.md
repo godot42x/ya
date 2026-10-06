@@ -80,3 +80,38 @@
 偏离：C1c 的 `fn(target, button)` 改为严格对齐委托签名 `fn(self, ...Args)`。
 
 下一步：C2 树 tick 登记表。
+
+## 2026-10-07 — C2 树 tick 登记表
+
+完成：
+- `FWidgetTickRegistry`（`WidgetTickRegistry.h`）挂在 `WidgetTree` 上，登记项 `(owner, tickable)`，
+  tickable 为空即控件自身 `enableTick`；删 `tickSubtree` 整树递归与每帧 `wantsTick()` 轮询。
+- 登记随成员关系：`markSubtreeMembership` 入树时按开关登记、离树时移除非成员；`IUITickable::setTickEnabled`
+  取代虚 `wantsTick()`，`addBehavior` / `removeBehavior` / `enableTick` 只在已挂树时增删。
+- 可见性按 `getVisibilityRevision()` 缓存，revision 变化（含帧内）在下一项前刷新；树结构变化（入树、同父重排、
+  `relocateOwnedChild`）标脏，下次派发按前序重排（自身先于行为，行为按添加顺序）。
+- 派发中增删：移除即刻失效、派发后压缩；新增追加、下一帧才跑；重入 `tick` 警告返回。
+- animator 只在有 tween 播放时登记（tween 播放状态变化即同步）；Lua UI 脚本 `self:setTickEnabled` 直接开关行为项。
+- `UIElement::tick` 基类改 no-op：行为不再经 owner 的 `tick()` 转发，override 无需转发基类（editor 两处转发、
+  `EditorLuaScriptSection` 无用的 `enableTick()`、`EditorNativeTearOff` 的 `wantsTick` 一并删）。
+- 基准（debug，空闲 tick）：1k 节点 52 → 0.008 µs/tick，10k 节点 565 → 0.008 µs/tick
+  （`WidgetTreeTickRegistryTest.IdleTickCostDoesNotGrowWithNodeCount` 断言 10k ≤ 3×1k 且登记数为 0）。
+- 验证：`ya-testing` 1687 全绿；`ya-gui-closure-test` 641 全绿；GUIWorkbench `--smoke-actions` PASS；
+  GreedySnake runtime / editor、HelloMaterial `--exit-after-frame=60` 无 Error。
+
+保留：`wantsTick()` 保留为诊断查询（测试在用），不再是门；登记表不对外承诺前序以外的顺序。
+输入侧派发中移除行为的安全性仍不在本计划内。
+反射直写 `_visibility`（inspector / undo / 文档路径）不 bump `getVisibilityRevision()`，
+tick 可见性缓存要等下一次 revision 变化才刷新（隐藏了还在 tick / 显示了不 tick）——跟进项：
+给 `_visibility` 反射字段挂 change hook（写后调 `noteRenderVisibilityChanged()`）或改为经 setter 的投影，
+先在 `WidgetTickRegistry.h` 的缓存注释写明该例外（与 memory `reflected_transform_write_bypasses_child_dirty` 同族）。
+
+偏离：行为要帧不再让 owner 的 `tick()` 跑（旧语义「一个 widget 一扇门」），
+`WidgetTreeTest.BehaviorTicksOnAWidgetThatNeverOptedInItself` 改为断言 owner 不被 tick；
+派发中新增的登记项下一帧才跑（旧递归同帧可能跑到）。
+改动了 `GameRuntime/Script/LuaWidgetScripts.{h,cpp}`（tick 开关改走 `setTickEnabled`，`release` / 析构时关闭）；
+**UI 脚本 `onUpdate` 语义随之变化：`IUITickable` 默认开，为守「idle tree 零开销」目标，UI 脚本行为改为
+`self:setTickEnabled` 显式 opt-in——不 opt-in 的 UI 脚本不再每帧跑**（仓库内唯一 UI 脚本 `Dialogue.lua`
+已适配，`GameUIScriptTest.cpp:216-232` 钉住新语义；对外部脚本静默）。顺带关闭 `gui-editor-structure/todo.md` C4e。
+
+下一步：C3 Lua `call()` 热路径。

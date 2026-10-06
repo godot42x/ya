@@ -42,14 +42,14 @@ struct LuaWidgetScriptBehavior final : UIBehaviorWith<LuaWidgetScriptBehavior, I
     std::weak_ptr<UIElement>     entryRoot;
     int32_t                      entryZOrder     = 0;
     uint64_t                     activationIndex = 0;
-    bool                         bTickEnabled    = false;
     bool                         bWasVisible     = false;
 
+    /// Registered for frames only after the script asks (self:setTickEnabled).
+    LuaWidgetScriptBehavior() { setTickEnabled(false); }
     ~LuaWidgetScriptBehavior() override;
 
-    [[nodiscard]] bool wantsTick() const override { return bTickEnabled && runtime && instance.bLoaded; }
-    void               tick(UIElement& owner, float deltaSeconds) override;
-    void               onDetached(UIElement& owner) override;
+    void tick(UIElement& owner, float deltaSeconds) override;
+    void onDetached(UIElement& owner) override;
 };
 
 struct LuaWidgetScripts final : IGameUIBehaviorRuntime
