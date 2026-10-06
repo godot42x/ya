@@ -70,6 +70,9 @@ if get_config("ya_profile") ~= "gui" then
         add_packages("gtest")
         add_packages("quickjs-ng")
         add_packages("asio")
+        -- The RHI surface suites also compile into this runner and drive
+        -- SDLNativeWindow transitions directly (see ya-rhi-vulkan-smoke).
+        add_packages("libsdl3")
 
         if is_plat("windows") then
             -- /utf-8
@@ -139,6 +142,10 @@ if get_config("ya_profile") ~= "gui" then
         set_group("test")
         ya_test_sources("Support", "RhiVulkan")
         add_deps("ya-rhi-vulkan")
+        -- The surface suite drives SDLNativeWindow transitions directly and
+        -- pumps the SDL queue while waiting for them, so it names the same
+        -- package the backend links.
+        add_packages("libsdl3")
         add_packages("gtest")
     end
 end

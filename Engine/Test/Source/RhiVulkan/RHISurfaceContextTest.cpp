@@ -5,7 +5,10 @@
 #include "RHI/NativeWindow.h"
 #include "RHI/Render.h"
 
+#include <SDL3/SDL.h>
+
 #include <gtest/gtest.h>
+#include <chrono>
 #include <memory>
 #include <span>
 #include <vector>
@@ -66,6 +69,26 @@ SwapchainCreateInfo testSurfaceDesc(uint32_t width, uint32_t height)
         .width              = width,
         .height             = height,
     };
+}
+
+/// The SDL minimized flag is set and cleared by the platform's window-manager
+/// notification, which lands on the event queue after the transition itself
+/// (macOS miniaturizes through a dock animation), so a single immediate check
+/// races the platform and skips a case that actually works. Pump the queue
+/// and give the transition a deadline; false means the platform really did
+/// not perform it -- the honest skip the minimize guards document.
+bool waitForMinimized(const SDLNativeWindow& window, bool minimized)
+{
+    constexpr uint32_t    kTransitionTimeoutMs = 2000;
+    const auto            deadline             = std::chrono::steady_clock::now() + std::chrono::milliseconds(kTransitionTimeoutMs);
+    while (window.isMinimized() != minimized) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        SDL_Delay(10);
+        SDL_PumpEvents();
+    }
+    return true;
 }
 
 /// A device created for exactly one window -- the startup surface case. The
@@ -445,7 +468,7 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockStartupWindowPresent
     if (!extraWindow.minimize()) {
         GTEST_SKIP() << "native minimize is unavailable";
     }
-    if (!extraWindow.isMinimized()) {
+    if (!waitForMinimized(extraWindow, true)) {
         GTEST_SKIP() << "platform did not mark the extra window minimized";
     }
 
@@ -470,11 +493,14 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockStartupWindowPresent
     ASSERT_TRUE(presentOneFrame(*render, *startup));
 
     ASSERT_TRUE(extraWindow.restoreFromMinimize());
-    extra->requestRecreate();
-    ASSERT_TRUE(presentOneFrame(*render, *extra));
-    if (extraWindow.isMinimized()) {
+    // The platform must be truly out of the minimized state before the surface
+    // is recreated and presented again: a stale flag here describes a window
+    // the swapchain may not legally acquire from yet, not a surface failure.
+    if (!waitForMinimized(extraWindow, false)) {
         GTEST_SKIP() << "platform kept the minimized flag after restore";
     }
+    extra->requestRecreate();
+    ASSERT_TRUE(presentOneFrame(*render, *extra));
     ASSERT_TRUE(extra->isPresentable());
     ASSERT_TRUE(presentOneFrame(*render, *startup));
 
