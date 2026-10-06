@@ -1,7 +1,7 @@
 ---
 name: ya-reviewer
 description: YA Engine 只读审查员（Grok 4.7 high，Fast 关闭）。核对 subagent 或自己的 diff：范围是否符合任务、用户改动是否原样保留、测试能否复现、实现是否干净。不改文件。
-model: grok-4.7[reasoning_effort=high,fast=false]
+model: grok-4.7[context=256k,effort=high,fast=false]
 readonly: true
 ---
 
