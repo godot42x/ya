@@ -20,3 +20,10 @@
 - 派发中：W2（B2 遗留债）、W3（`GUIWindowManagerTest` 间歇失败）、`ui-behavior-capabilities` C2、G3.0 / GA0 两份只读盘点。
 - 派发约束（用户 2026-10-07 重申）：subagent 只用 grok-4.7、fast 关闭——实现用 `ya-worker`，只读盘点 / 审查用 `ya-reviewer`；不用 `explore` 等沿用父模型的类型。
 - M 组（`perf-baseline` 子计划）待问答拍板后开工。
+
+## 2026-10-07 — G3.0 能力盘点
+
+- 只读盘点（`ya-reviewer`）结论写进 plan §3 G3：渲染侧够用，差距在物理（玩具级）、glTF 骨骼导入、动画混合、输入轴、跟随相机、prefab / 世界计时器。G3 表按引擎工作项重排为 G3.0–G3.12。
+- 新增 R15：延迟管线不支持聚光灯（只在前向 Phong 生效），点光源上限 6、`MAX_POINT_LIGHTS_DEFERRED=32` 未被使用。
+- 抽查核实：物理形状固定尺寸常量、未注册接触监听、无 `CharacterVirtual` / 射线；`Limits.slang` 上限值。
+- G3 子计划目录待方案问答后建立。

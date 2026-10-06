@@ -222,6 +222,15 @@
       "evidence": []
     },
     {
+      "id": "R15",
+      "group": "R",
+      "priority": "P0",
+      "title": "deferred spot lights + point light limit",
+      "owner_line": "new:shadow",
+      "status": "todo",
+      "evidence": []
+    },
+    {
       "id": "R14",
       "group": "R",
       "priority": "P2",
@@ -315,16 +324,18 @@
       "id": "G3.0",
       "group": "G3",
       "priority": "P0",
-      "title": "sub-plan design + capability gap audit",
+      "title": "sub-plan design (gap audit done)",
       "owner_line": "new:3d-demo",
       "status": "in_progress",
-      "evidence": []
+      "evidence": [
+        "capability audit 2026-10-07 (ya-reviewer 8da8e5dc), spot-checked: fixed box/sphere shapes, no contact listener registered, no CharacterVirtual/raycast, MAX_POINT_LIGHTS=6"
+      ]
     },
     {
       "id": "G3.1",
       "group": "G3",
       "priority": "P0",
-      "title": "character controller + camera + anim blend",
+      "title": "physics component redesign",
       "owner_line": "new:3d-demo",
       "status": "todo",
       "evidence": []
@@ -333,7 +344,7 @@
       "id": "G3.2",
       "group": "G3",
       "priority": "P0",
-      "title": "interaction + puzzles",
+      "title": "physics script API",
       "owner_line": "new:3d-demo",
       "status": "todo",
       "evidence": []
@@ -342,7 +353,7 @@
       "id": "G3.3",
       "group": "G3",
       "priority": "P0",
-      "title": "level + lighting showcase",
+      "title": "character controller (CharacterVirtual)",
       "owner_line": "new:3d-demo",
       "status": "todo",
       "evidence": []
@@ -351,13 +362,76 @@
       "id": "G3.4",
       "group": "G3",
       "priority": "P0",
-      "title": "perf overlay + package + video",
+      "title": "glTF skin/animation/node hierarchy import",
       "owner_line": "new:3d-demo",
       "status": "todo",
       "evidence": []
     },
     {
       "id": "G3.5",
+      "group": "G3",
+      "priority": "P0",
+      "title": "animation by name + crossfade",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.6",
+      "group": "G3",
+      "priority": "P0",
+      "title": "third-person camera + InputMap axes",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.7",
+      "group": "G3",
+      "priority": "P0",
+      "title": "runtime spawn model/prefab + world timers",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.8",
+      "group": "G3",
+      "priority": "P0",
+      "title": "interaction + puzzle content",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.9",
+      "group": "G3",
+      "priority": "P0",
+      "title": "level + lighting showcase",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.10",
+      "group": "G3",
+      "priority": "P1",
+      "title": "editor physics inspector + model placement",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.11",
+      "group": "G3",
+      "priority": "P0",
+      "title": "perf overlay + package + video",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.12",
       "group": "G3",
       "priority": "P2",
       "title": "light action extension",

@@ -81,6 +81,7 @@
 | R11 | `rdg-cache-dx` P3–P5（Bloom 切片、资源容器按生命周期拆分、Slang 生成 descriptor layout） | P1 | `rdg-cache-dx` |
 | R12 | `render-view-family` P2 / P3（命名收敛、`PreparedView` / ViewFamily compiler）；纯 2D View 不跑 3D stage | P1 | `render-view-family`、`rpg-prototype` 步骤 6 |
 | R13 | `render-application-boundary` 剩余项 | P2 | `render-application-boundary` |
+| R15 | 延迟管线支持聚光灯（`LightPass` 光源数据加方向 / 锥角），点光源上限按延迟路径理顺（现为 `MAX_POINT_LIGHTS=6`，`MAX_POINT_LIGHTS_DEFERRED=32` 未被使用）；G3.9 依赖 | P0 | 新子计划（可并入阴影线） |
 | R14 | OpenGL 后端恢复（或其它低端后端），基于 R8 的能力矩阵 | P2（有真实需求再开） | — |
 
 ### A — 音频
@@ -104,14 +105,23 @@
 
 ### G3 — 3D demo（新子计划）
 
-| id | 内容 | 优先级 |
-| --- | --- | --- |
-| G3.0 | 子计划设计：玩法流程、引擎能力差距盘点（角色控制器、动画混合、触发器、相机、资产管线），素材来源与许可证 | P0 |
-| G3.1 | 第三人称角色控制器（Jolt character）+ 相机（碰撞、跟随）+ 骨骼动画 idle / walk / run 混合 | P0 |
-| G3.2 | 交互与解谜：触发器、可交互物、物理物件谜题、门 / 机关，复用脚本中立层与 GUI | P0 |
-| G3.3 | 关卡与光照：昼夜或多光源区域，用来展示 CSM、点光源阴影、IBL、后处理；公开资产 + 自制 | P0 |
-| G3.4 | 性能叠加层（M 组数据实时显示）+ 打包 + 录屏 | P0 |
-| G3.5 | 轻动作扩展：战斗、敌人 AI、动画状态机、受击反馈 | P2 |
+G3.0 盘点（2026-10-07，读代码核实）：渲染侧（CSM 最多 4 级、IBL、SSAO / Bloom、glTF PBR 材质、KTX2 转码）大体够用；差距在玩法层。物理只有 Static / Dynamic + 固定尺寸 box / sphere（不读缩放、局部坐标），接触监听未注册，无传感器 / 射线 / 角色控制器 / 脚本 API；`GltfImporter` 不读 skin / animation / 节点层级（只有 assimp 格式带骨骼），动画只能单 clip，`MAX_BONE_COUNT=64`；InputMap 只有数字量动作，无鼠标轴 / 摇杆 / 手柄；无跟随相机；无 prefab、世界计时器、存档、音频。
+
+| id | 内容 | 大小 | 优先级 |
+| --- | --- | --- | --- |
+| G3.0 | 子计划设计：玩法流程、关卡与素材来源 / 许可证、下列引擎项的方案问答 | — | P0 |
+| G3.1 | 物理组件重设计：Kinematic；box / sphere / capsule 尺寸参数、convex / mesh（来自模型）；读世界变换与缩放；传感器；接触事件进 ECS | L | P0 |
+| G3.2 | 物理脚本 API：`raycast` / `shapecast`、施力 / 速度 / 传送、`onTriggerEnter/Exit` 到实体脚本 | M | P0 |
+| G3.3 | 角色控制器（`JPH::CharacterVirtual`）组件与系统，移动 / 跳跃 / 贴地 | M | P0 |
+| G3.4 | glTF skin + animation + 节点层级导入（复用 `ImportedSkeletonData`）；评估骨骼上限 | M | P0 |
+| G3.5 | 动画按名字播放 + 双 clip 交叉淡入 | M | P0 |
+| G3.6 | 第三人称相机（跟随 + 弹簧臂 + 碰撞避让）；InputMap 补鼠标轴 / 轴值 | S/M | P0 |
+| G3.7 | 运行时生成模型 / prefab（`world.spawn(path)`）、世界计时器 | S/M | P0 |
+| G3.8 | 交互与解谜内容：触发器、可交互物、物理谜题、门 / 机关 | M | P0 |
+| G3.9 | 关卡与光照：多光源区域或昼夜，展示 CSM / 点光源阴影 / 聚光灯 / IBL / 后处理；公开资产 + 自制 | M | P0 |
+| G3.10 | 编辑器：物理形状参数 inspector 与调试线、模型摆放 | S | P1 |
+| G3.11 | 性能叠加层（M 组数据实时显示）+ 打包 + 录屏 | S | P0 |
+| G3.12 | 轻动作扩展：动画状态机与 root motion、手柄、命中盒与查询过滤层、世界空间 UI（血条） | L | P2 |
 
 ### U — GUI 与编辑器活跃线（初排，开工该线时复核）
 
@@ -152,7 +162,7 @@
 W1/W2/W3 ─┐
 M1..M6 ───┼──► R1 FIF ──► R7 渲染线程
           │      │
-          │      └──► R2/R3 阴影 ──► G3.3 关卡光照
+          │      └──► R2/R3/R15 阴影与光源 ──► G3.9 关卡光照
           │
           ├──► R4/R5 RDG ──► M7 内存优化
           │
@@ -160,18 +170,20 @@ M1..M6 ───┼──► R1 FIF ──► R7 渲染线程
 
 U P0 (C2 → S4) ──► G2.3 系统 UI ──► G2.4 内容 ──► G2.5 打包
 G2.1/G2.2 ────────┘
-A1 ──► G2.5 / G3.4
-G3.0 ──► G3.1 ──► G3.2 ──► G3.3 ──► G3.4
+A1 ──► G2.5 / G3.11
+G3.0 ──► G3.1 ──► G3.2/G3.3 ──► G3.6 ┐
+G3.0 ──► G3.4 ──► G3.5 ─────────────┼──► G3.8 ──► G3.9 ──► G3.11
+G3.0 ──► G3.7 ──────────────────────┘
 各线收口 ──► D2/D3 ──► D4
 ```
 
 波次（同一波内可并行；跨波按依赖）：
 
 1. **波 1**：W1–W3；M1–M6、M8；G3.0 子计划设计（只出文档）；GA0 盘点；U 组 `ui-behavior-capabilities` C2。
-2. **波 2**：R1、R2、R3；G2.1、G2.2；`game-ui-script-framework` S4；A1。
-3. **波 3**：G2.3、G2.4；G3.1、G3.2；R4、R5、R6（P1 部分）；R11。
-4. **波 4**：G3.3、G3.4、G2.5；R7；R12；D1、D2；U 组 P1。
-5. **波 5**（P2）：R9、R10、R6-TAA、R13、M7 余项、A2、G3.5、G2.7、U 组 P2、D3。
+2. **波 2**：R1、R2、R3、R15；G2.1、G2.2；`game-ui-script-framework` S4；A1。
+3. **波 3**：G2.3、G2.4；G3.1–G3.7（引擎项，可多 worker 并行，按冲突面分配）；R4、R5、R6（P1 部分）；R11。
+4. **波 4**：G3.8、G3.9、G3.11、G2.5；R7；R12；D1、D2；U 组 P1。
+5. **波 5**（P2）：R9、R10、R6-TAA、R13、M7 余项、A2、G3.12、G2.7、U 组 P2、D3。
 6. **收尾**：D4。
 
 ## 5. 执行规则

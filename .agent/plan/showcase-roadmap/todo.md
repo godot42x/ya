@@ -24,6 +24,7 @@
 - [ ] R1 frames-in-flight 1→2（`render-view-family` M4）
 - [ ] R2 点光源阴影 GPU 剔除修稳并默认开启
 - [ ] R3 CSM 多级 cascade 修稳并默认开启
+- [ ] R15 延迟管线聚光灯 + 点光源上限理顺
 
 2D demo（`rpg-prototype`）
 - [ ] G2.1 相机 2D 字段 + 跟随组件、文本逐字显示
@@ -33,11 +34,17 @@
 - [ ] G2.5 打包 + 录屏
 
 3D demo（新子计划，待建）
-- [~] G3.0 子计划设计与能力差距盘点
-- [ ] G3.1 角色控制器 + 相机 + 动画混合
-- [ ] G3.2 交互与解谜
-- [ ] G3.3 关卡与光照
-- [ ] G3.4 性能叠加层 + 打包 + 录屏
+- [~] G3.0 子计划设计（能力盘点已完成，见 plan §3 G3；待方案问答）
+- [ ] G3.1 物理组件重设计
+- [ ] G3.2 物理脚本 API
+- [ ] G3.3 角色控制器
+- [ ] G3.4 glTF skin / animation / 节点层级导入
+- [ ] G3.5 动画按名字播放 + 交叉淡入
+- [ ] G3.6 第三人称相机 + InputMap 轴
+- [ ] G3.7 运行时生成模型 / prefab、世界计时器
+- [ ] G3.8 交互与解谜内容
+- [ ] G3.9 关卡与光照
+- [ ] G3.11 性能叠加层 + 打包 + 录屏
 
 纯 GUI app 线
 - [~] GA0 盘点与子计划
@@ -77,5 +84,6 @@ GUI
 - [ ] R14 OpenGL 或低端后端（有真实需求再开）
 - [ ] A2 自研混音器与空间化
 - [ ] G2.7 tilemap 静态实例缓冲
-- [ ] G3.5 3D 轻动作扩展
+- [ ] G3.10 编辑器物理形状 inspector 与模型摆放（P1）
+- [ ] G3.12 3D 轻动作扩展
 - [ ] GUI：`gui-framework-editor-runtime-refactor`、`gui-kernel-ux-parity`、`gui-editor-structure`、`source-layout-subtraction`、`editor-ui-grouping`、`display-compose-encoding`
