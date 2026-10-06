@@ -48,3 +48,10 @@
 - 根因：focus-loss / mouse-leave 的 pointer reconcile 在**处理处**读活硬件（`queryGlobalMouse().buttonMask`）；`WindowFocusLostEvent` / `WindowMouseLeaveEvent` 改为自带 `heldButtons`（事件构造时 `SDL_GetGlobalMouseState` 采样），host 两侧用 `event.getHeldButtons()`。skill 契约句与 memory `pointer_reconcile_reads_live_hardware.md` 同步。
 - 遗留（记 memory，随输入线收口）：`EditorInputNode::reconcilePointerSessionsWithPlatform` 仍读活硬件（修法涉及 `InputRouter` 注入接口）；`GUIAppCrossWindowDragTest.SourceTaggedMoveHitsForeignWindowUsingGlobalMouse` 仍 warp 真实光标、~7/60 间歇失败。
 - 提交前基线：`ya-testing` 1708/1708、`ya-gui-closure-test` 641/641、`Script/automation/2d-rpg/` 七个脚本全过（`rpg_control.py` 是库不是入口）。
+
+## 2026-10-07 — PB1 收口与两条新计划项
+
+- PB1 完成（严格审查 + 一次返工）：`--benchmark <config.json>` + `Core/Profiling` 聚合器（`IBenchSource` 注册接口给 PB2–PB4）；`bench_summary.json`（meta / frame 窗口统计 / cpu_stages）；旧 last-frame 汇总删除；GPU 整帧时间戳回读改到 fence 等待之后（原实现几乎恒 `VK_NOT_READY`，`gpuMs` 冻结）。返工要点：`--cpu-profile` 去 CLI 默认值，`cpuTrace: false` 真正生效（此前三次 p50 是 trace 开着测的，作废）。
+- 入库口径（HelloMaterial，profile，trace off，immediate，uncapped，600 采样）：三次 frame p50 = 8.673 / 8.355 / 8.539 ms，相对均值最大偏差 1.96%（验收 ±3%）；全量 `ya-testing` 1713/1713。
+- 已知边界（perf-baseline 记录）：固定 dt 未覆盖脚本 `elapsedSeconds` 与渲染 host clock（墙钟驱动动画不按帧对齐）；采样窗口内 `FileWatcher::poll` 仍每帧跑；summary 写失败退出码未做实机复现。
+- 新计划项：W4（profile 构建下 5 个 GUI 测试栈损坏，PB1 复核发现，P1，GUI 线排查）；S5（脚本 native 注册重构：模板签名推导 + 反射化函数库，用户 2026-10-07 拍板，P1，波 3 开头、先于 G3.2，与 C3 串行）；GA1 附带修 `Example.xmake.lua` 大小写路径（全新 checkout 链示例失败）。

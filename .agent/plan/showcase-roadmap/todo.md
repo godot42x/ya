@@ -10,6 +10,11 @@
 - [x] W1 文档改正：「兼容 OpenGL」、`render-arch` 过时符号（`RenderFrameCoordinator` → `RuntimeRenderContext`）
 - [x] W2 B2 遗留债（8 项，见 plan §3 W2；严格审查后返工一次，序列化规则收进 `ECS/ComponentJson`）
 - [x] W3 `GUIWindowManagerTest` 间歇失败定位（根因：reconcile 在处理处读活硬件；事件自带 `heldButtons` 修掉；同族 `EditorInputNode` 与跨窗拖拽 flaky 记入 memory `pointer_reconcile_reads_live_hardware.md`，后续随输入线收口）
+- [ ] W4 profile 构建下 5 个 GUI 测试栈损坏排查（PB1 复核发现，debug 全过；见 plan §3 W4）
+
+GUI 与编辑器活跃线
+- [ ] S5 脚本 native 注册重构（用户拍板：模板签名推导 + 反射化函数库；先于 G3.2，与 C3 串行；子计划方案问答后开工）
+- [ ] `ui-behavior-capabilities` C3（Lua `call()` 热路径）
 
 测量与压测
 - [ ] M1 pass 级 GPU timestamp

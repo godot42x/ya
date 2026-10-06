@@ -50,6 +50,7 @@
 | W1 | 根 `AGENTS.md`「兼容 OpenGL」等过时声明改正；`render-arch` skill 里已不存在的符号（如 `RenderFrameCoordinator`）改正 | P0 |
 | W2 | B2 遗留：`MethodCall::arguments` 吞普通表收窄为 owner 参数；`bindSelf` 旧注释；`ScriptProperty::serializedValue` 未用；属性预览只建不销；`Npc.lua` 的 `world.find("Player")`；`spawnSprite` 默认贴图写死；自动化按名字 `Player` 找实体；`GridMoverTest.lua` 未进 gtest | P0 |
 | W3 | `GUIWindowManagerTest.IsolatesPointerFocusCaptureTooltipDpiAndSnapshot` 间歇失败定位 | P0 |
+| W4 | profile 构建下 5 个 GUI 测试栈损坏崩溃（`UIFrameSnapshotTest` 4 例、`ComposeClipReplayTest.NestedBuilderClipFlattensToOneClipRun`；debug 全过）。疑似 profile-only 栈溢出 / UB——基准跑在 profile 上，这条线要干净。PB1 复核时发现，归 GUI 线单独排查 | P1 |
 
 ### M — 测量、压测与内存（P0 起步）
 
@@ -127,8 +128,9 @@ G3.0 盘点（2026-10-07，读代码核实）：渲染侧（CSM 最多 4 级、I
 
 | 线 | 优先级 | 理由 |
 | --- | --- | --- |
-| `ui-behavior-capabilities`（下一步 C2） | P0 | 排在 game-ui S4 之前，2D demo 的背包 / 商店 / 对话 UI 依赖 |
+| `ui-behavior-capabilities`（下一步 C3） | P0 | 排在 game-ui S4 之前，2D demo 的背包 / 商店 / 对话 UI 依赖 |
 | `game-ui-script-framework`（下一步 S4 条目模态与取消路由） | P0 | 2D / 3D demo 的模态界面依赖 |
+| **S5 脚本 native 注册重构**（用户 2026-10-07 拍板，子计划待问答）：`script::fn` 模板推导参数类型消灭手写 `argTypes`（owner 位由 `ScriptSelfHandle` 参数类型决定）；native 以反射函数身份进 `ClassRegistry`，`collectMembers` 与反射方法一视同仁导出——单一事实源、映射可枚举；字符串路径退到只剩 `ScriptMethodResolver` 真动态场景；迁移全仓 13 个手写注册点 | P1 | G3.2 物理脚本 API 是第一个大消费者（几十个函数），必须排在其前；与 C3 同碰绑定区文件，串行 |
 | `font-framework-convergence` | P1 | 文本逐字显示、CJK 显示质量 |
 | `editor-undo-redo` | P1 | 编辑器工具叙事 |
 | `gui-framework-editor-readiness`（Phase 8 移除 ImGui 双栈） | P1 | GUI 框架成熟度的核心证明 |
@@ -147,7 +149,7 @@ gui profile 的构建必须在独立 worktree / 构建目录里做：在共享�
 | id | 内容 | 优先级 |
 | --- | --- | --- |
 | GA0 | 盘点（已完成）；子计划方案问答 | P0 |
-| GA1 | gui profile 恢复可配置可构建：3D 示例 include 守卫、`ci.sh gui-shared` 补 headless-host-test 与 `--smoke-actions`；修文档漂移（`make test-gui`、closure-test「唯一 target」注释、「21 场景」） | P0 |
+| GA1 | gui profile 恢复可配置可构建：3D 示例 include 守卫、`ci.sh gui-shared` 补 headless-host-test 与 `--smoke-actions`；修文档漂移（`make test-gui`、closure-test「唯一 target」注释、「21 场景」）；**附带修 `Example.xmake.lua` 写 `2DRpgPrototype` 而目录是 `2dRpgPrototype` 的大小写路径**（PB1 复核发现：大小写不敏感盘上 `Entry.cpp` 被编两次，全新 checkout 链示例失败） | P0 |
 | GA2 | 一条命令门禁：headless 批量跑全部场景断言 + windowed GPU / 离屏一致性；基线脚本路径可移植；结构化 digest 作跨平台主门禁，像素基准按平台分存（MoltenVK 与原生 Vulkan 像素不保证一致） | P0 |
 | GA3 | GUI 帧开销与内存数字：windowed CPU / GPU 帧时间、进程内存（M8 口径）、显存（M4 口径） | P0 |
 | GA4 | 打包成独立应用：不依赖仓库根的资源根、预编译 shader 或带 Slang 运行时、字体、MoltenVK / SDL 动态库；macOS `.app` 与 Windows 目录布局 | P0 |
@@ -177,6 +179,7 @@ M1..M6 ───┼──► R1 FIF ──► R7 渲染线程
 
 U P0 (C2 → S4) ──► G2.3 系统 UI ──► G2.4 内容 ──► G2.5 打包
 G2.1/G2.2 ────────┘
+S5 (native 注册重构) ──► G3.2
 A1 ──► G2.5 / G3.11
 G3.0 ──► G3.1 ──► G3.2/G3.3 ──► G3.6 ┐
 G3.0 ──► G3.4 ──► G3.5 ─────────────┼──► G3.8 ──► G3.9 ──► G3.11
@@ -188,7 +191,7 @@ G3.0 ──► G3.7 ────────────────────
 
 1. **波 1**：W1–W3；M1–M6、M8；G3.0 子计划设计（只出文档）；GA0 盘点、GA1；U 组 `ui-behavior-capabilities` C2。
 2. **波 2**：R1、R2、R3、R15；G2.1、G2.2；`game-ui-script-framework` S4；A1。
-3. **波 3**：G2.3、G2.4；G3.1–G3.7（引擎项，可多 worker 并行，按冲突面分配）；R4、R5、R6（P1 部分）；R11。
+3. **波 3**：G2.3、G2.4；**S5（native 注册重构，先于 G3.2）→ C3 串行**；G3.1–G3.7（引擎项，可多 worker 并行，按冲突面分配）；R4、R5、R6（P1 部分）；R11。
 4. **波 4**：G3.8、G3.9、G3.11、G2.5；R7；R12；D1、D2；U 组 P1。
 5. **波 5**（P2）：R9、R10、R6-TAA、R13、M7 余项、A2、G3.12、G2.7、U 组 P2、D3。
 6. **收尾**：D4。
