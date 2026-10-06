@@ -13,3 +13,10 @@
 
 - GPU 显存与进程内存是两套口径：原 M4 拆为 M4（GPU 显存，VMA）与 M8（进程内存，RSS / 峰值 / 堆分配按子系统），M7 优化分别以两者为依据。
 - 漏掉的纯 GUI app 线（`ya_profile=gui` + GUIWorkbench / GUIFrameworkSmoke）单列 GA 组，GA0 盘点进波 1。
+
+## 2026-10-07 — 波 1 开工
+
+- W1 完成：根 `AGENTS.md` 与 `render-arch` skill 改为「Vulkan 是唯一参与编译的后端，OpenGL 源码只作历史参考」；skill 第 1 条的 `RenderFrameCoordinator`（代码里已无此符号）改为 `RuntimeRenderContext` 写出帧顺序（AB7）。
+- 派发中：W2（B2 遗留债）、W3（`GUIWindowManagerTest` 间歇失败）、`ui-behavior-capabilities` C2、G3.0 / GA0 两份只读盘点。
+- 派发约束（用户 2026-10-07 重申）：subagent 只用 grok-4.7、fast 关闭——实现用 `ya-worker`，只读盘点 / 审查用 `ya-reviewer`；不用 `explore` 等沿用父模型的类型。
+- M 组（`perf-baseline` 子计划）待问答拍板后开工。

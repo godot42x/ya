@@ -11,8 +11,8 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
 
 ## 当前架构要点
 
-1. `App` 不再直接编排整条渲染管线。当前产品层持有 `RenderDeviceState` + `RenderFrameCoordinator`；这是一次不完整拆分（Coordinator 经 friend 写 DeviceState），不是两个独立 owner。目标是公开 `Renderer::recordFrame(plan, surfaceTarget) -> RecordedFrame`。`IRender` / `VulkanRender` 才是 RHI backend。不要再引入名为 Coordinator 的第二套产品层概念。
-2. 渲染抽象仍以 `IRender` 为核心；Vulkan 是主后端，OpenGL 仍是兼容后端。
+1. `App` 不再直接编排整条渲染管线。`RenderDeviceState` 持有录制所用的机制、对顺序没有主张；一帧的顺序（offscreen pump → flight → declare → extract → prepare → build → acquire → record → extras → submit）由应用侧 `GameRuntime/Render/RuntimeRenderContext` 逐步写出（`render-application-boundary` AB7）。`IRender` / `VulkanRender` 才是 RHI backend。不要再引入名为 Coordinator 的第二套产品层概念。
+2. 渲染抽象仍以 `IRender` 为核心；Vulkan 是唯一参与编译的后端。`Backend/OpenGL/` 不构建（`RHI/Backend/xmake.lua`），缺 indirect / compute / buffer barrier，不要按「兼容后端」去维护它；新 GPU 能力走 RHI 能力开关并保留降级路径（`showcase-roadmap` R8），为以后可能的 GL / 低端后端留口。
 3. `IRenderPass` / `IRenderTarget` 仍然是有效抽象，不要假设项目已经完全去掉 render pass 概念。
 4. 离屏预处理（如 cylindrical -> cubemap、cubemap -> irradiance）由 `ResourceResolveSystem` + `OffscreenJobRunner` 编排，不要把这类流程重新塞回组件里。
 5. 资源时序仍是 Vulkan 改动时的第一检查项：避免在 frame recording 中途重建正在使用的 GPU 资源，必要时延迟到下一帧。
@@ -184,7 +184,7 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
 
 - `Engine/Source/Applications/GameRuntime/`：产品应用循环、生命周期与自动化
 - `Engine/Source/Framework/RHI/`：渲染硬件接口层（`Render.h` / `Core/` / `Shader/`）
-- `Engine/Source/Framework/RHI/Backend/Vulkan/` 与 `Backend/OpenGL/`：后端实现
+- `Engine/Source/Framework/RHI/Backend/Vulkan/`：后端实现；`Backend/OpenGL/` 仅历史参考，不构建
 - `Engine/Source/Framework/Render/Render3D/`：DeviceState/Coordinator、管线与渲染服务
 - `Engine/Source/Framework/Render/Graph/`：RenderGraph 编译与执行
 - `Engine/Shader/`：Slang 源与生成头

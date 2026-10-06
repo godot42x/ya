@@ -7,9 +7,9 @@
 ## P0
 
 收口与文档
-- [ ] W1 文档改正：「兼容 OpenGL」、`render-arch` 过时符号
-- [ ] W2 B2 遗留债（8 项，见 plan §3 W2）
-- [ ] W3 `GUIWindowManagerTest` 间歇失败定位
+- [x] W1 文档改正：「兼容 OpenGL」、`render-arch` 过时符号（`RenderFrameCoordinator` → `RuntimeRenderContext`）
+- [~] W2 B2 遗留债（8 项，见 plan §3 W2）
+- [~] W3 `GUIWindowManagerTest` 间歇失败定位
 
 测量与压测
 - [ ] M1 pass 级 GPU timestamp
@@ -33,19 +33,19 @@
 - [ ] G2.5 打包 + 录屏
 
 3D demo（新子计划，待建）
-- [ ] G3.0 子计划设计与能力差距盘点
+- [~] G3.0 子计划设计与能力差距盘点
 - [ ] G3.1 角色控制器 + 相机 + 动画混合
 - [ ] G3.2 交互与解谜
 - [ ] G3.3 关卡与光照
 - [ ] G3.4 性能叠加层 + 打包 + 录屏
 
 纯 GUI app 线
-- [ ] GA0 盘点与子计划
+- [~] GA0 盘点与子计划
 - [ ] GA1 gui profile 构建 + Workbench 场景 + 像素门禁一条命令跑绿
 - [ ] GA2 Workbench 打包 + 录屏 + GUI 开销数字
 
 GUI
-- [ ] `ui-behavior-capabilities` C2
+- [~] `ui-behavior-capabilities` C2
 - [ ] `game-ui-script-framework` S4
 
 文档与吸收

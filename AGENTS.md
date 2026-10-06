@@ -4,7 +4,7 @@
 
 ## Project
 
-YA Engine 是 C++20 游戏引擎，主渲染后端为 Vulkan，兼容 OpenGL；使用 EnTT ECS、ImGui 编辑器、Lua（sol2）和自定义反射系统。
+YA Engine 是 C++20 游戏引擎，渲染后端为 Vulkan（OpenGL 源码留在树里但不参与编译）；使用 EnTT ECS、ImGui 编辑器、Lua（sol2）和自定义反射系统。
 
 ## Main Commands
 
@@ -96,7 +96,7 @@ xmake project -k compile_commands
   是独立源码目录，但 `ya-gui-widgets` 一个 target 同时发布
   `Widgets/include`、`Layout/include`、`Binding/include`、`Declarative/include`
   四个 include 根，所以公开路径是 `GUI/Widgets/...`、`GUI/Layout/...` 等。
-- `Engine/Source/Framework/RHI/Backend/{Vulkan,OpenGL}/`：Vulkan / OpenGL 后端。
+- `Engine/Source/Framework/RHI/Backend/Vulkan/`：唯一参与编译的后端；`Backend/OpenGL/` 只作历史参考，不构建。
 - `Engine/Shader/`：Slang 源与生成头（`Generated/*` 只读）。
 - `Engine/Programs/`：可执行入口（YARuntime / ShaderCompiler / ya-cli）。
 - `Engine/Test/`：GoogleTest（`ya-testing`）；`test/`：零散的单文件 / 链接实验。

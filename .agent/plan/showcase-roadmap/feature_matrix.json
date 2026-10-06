@@ -8,8 +8,11 @@
       "priority": "P0",
       "title": "docs: OpenGL claim, render-arch stale symbols",
       "owner_line": "this",
-      "status": "todo",
-      "evidence": []
+      "status": "done",
+      "evidence": [
+        "AGENTS.md: Vulkan only, OpenGL sources not built",
+        "render-arch skill rules 1/2: RenderFrameCoordinator -> RuntimeRenderContext (AB7); OpenGL not a maintained backend"
+      ]
     },
     {
       "id": "W2",
@@ -17,7 +20,7 @@
       "priority": "P0",
       "title": "B2 leftover debts (8 items)",
       "owner_line": "rpg-prototype",
-      "status": "todo",
+      "status": "in_progress",
       "evidence": []
     },
     {
@@ -26,7 +29,7 @@
       "priority": "P0",
       "title": "GUIWindowManagerTest flaky",
       "owner_line": "this",
-      "status": "todo",
+      "status": "in_progress",
       "evidence": []
     },
     {
@@ -314,7 +317,7 @@
       "priority": "P0",
       "title": "sub-plan design + capability gap audit",
       "owner_line": "new:3d-demo",
-      "status": "todo",
+      "status": "in_progress",
       "evidence": []
     },
     {
@@ -368,7 +371,7 @@
       "priority": "P0",
       "title": "ui-behavior-capabilities C2",
       "owner_line": "ui-behavior-capabilities",
-      "status": "todo",
+      "status": "in_progress",
       "evidence": []
     },
     {
@@ -404,7 +407,7 @@
       "priority": "P0",
       "title": "gui profile audit + sub-plan",
       "owner_line": "new:gui-app",
-      "status": "todo",
+      "status": "in_progress",
       "evidence": []
     },
     {
