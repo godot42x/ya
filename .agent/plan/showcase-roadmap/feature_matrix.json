@@ -60,7 +60,7 @@
       "id": "M4",
       "group": "M",
       "priority": "P0",
-      "title": "GPU/CPU memory stats",
+      "title": "GPU VRAM stats (VMA budget/usage by resource category)",
       "owner_line": "new:perf-baseline",
       "status": "todo",
       "evidence": []
@@ -87,7 +87,16 @@
       "id": "M7",
       "group": "M",
       "priority": "P1",
-      "title": "memory/VRAM optimization",
+      "title": "VRAM and process memory optimization (M4 / M8 driven)",
+      "owner_line": "new:perf-baseline",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M8",
+      "group": "M",
+      "priority": "P0",
+      "title": "process memory stats (RSS/peak, heap by subsystem); separate from M4",
       "owner_line": "new:perf-baseline",
       "status": "todo",
       "evidence": []
@@ -386,6 +395,42 @@
       "priority": "P2",
       "title": "editor-runtime-refactor / kernel-ux-parity / editor-structure / source-layout / editor-ui-grouping / display-compose",
       "owner_line": "existing GUI lines",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "GA0",
+      "group": "GA",
+      "priority": "P0",
+      "title": "gui profile audit + sub-plan",
+      "owner_line": "new:gui-app",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "GA1",
+      "group": "GA",
+      "priority": "P0",
+      "title": "gui profile build + Workbench scenarios + pixel gate green, one command",
+      "owner_line": "new:gui-app",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "GA2",
+      "group": "GA",
+      "priority": "P0",
+      "title": "Workbench packaged + video + GUI cost numbers",
+      "owner_line": "new:gui-app",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "GA3",
+      "group": "GA",
+      "priority": "P1",
+      "title": "GUI framework independence proof + API docs",
+      "owner_line": "new:gui-app",
       "status": "todo",
       "evidence": []
     },

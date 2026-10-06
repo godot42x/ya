@@ -15,7 +15,8 @@
 - [ ] M1 pass 级 GPU timestamp
 - [ ] M2 窗口均值 / p95 / p99
 - [ ] M3 基准模式（固定分辨率、关垂直同步、去上限、丢预热帧）
-- [ ] M4 显存与 CPU 内存统计
+- [ ] M4 GPU 显存统计（VMA，按资源类别）
+- [ ] M8 进程内存统计（RSS / 峰值、按子系统的堆分配）
 - [ ] M5 压测场景
 - [ ] M6 前后对比报告脚本
 
@@ -38,6 +39,11 @@
 - [ ] G3.3 关卡与光照
 - [ ] G3.4 性能叠加层 + 打包 + 录屏
 
+纯 GUI app 线
+- [ ] GA0 盘点与子计划
+- [ ] GA1 gui profile 构建 + Workbench 场景 + 像素门禁一条命令跑绿
+- [ ] GA2 Workbench 打包 + 录屏 + GUI 开销数字
+
 GUI
 - [ ] `ui-behavior-capabilities` C2
 - [ ] `game-ui-script-framework` S4
@@ -49,7 +55,8 @@ GUI
 
 ## P1
 
-- [ ] M7 内存与显存优化
+- [ ] M7 显存与进程内存优化
+- [ ] GA3 GUI 框架独立性证明 + 对外 API 文档
 - [ ] R4 RDG 编译缓存 + pass 剔除
 - [ ] R5 RDG transient 纹理别名
 - [ ] R6 SSAO 模糊、FXAA

@@ -10,7 +10,8 @@
 
 1. **2D demo 可完整玩通**：RPG 系统齐（背包 / 任务 / 存档 / 商店 / 对话），数据驱动，打包后在干净机器上运行。
 2. **3D demo 可完整玩通**：第三人称探索解谜，能撑起渲染展示（多光源阴影、CSM、IBL、后处理），打包后运行。
-3. **性能有数字**：同一条基准命令在 macOS（开发机）与 Windows 独显机上产出前后对比表（帧时间均值 / p95、pass 级 GPU 时间、显存与内存占用）。
+3. **性能有数字**：同一条基准命令在 macOS（开发机）与 Windows 独显机上产出前后对比表（帧时间均值 / p95、pass 级 GPU 时间、GPU 显存、进程内存——后两者分开统计）。
+3b. **自研 GUI 框架以独立应用展示**：gui profile 构建的 GUIWorkbench 打包可运行，交互场景与像素门禁全绿。
 4. **已知半成品收口**：§3 R 组 P0 项全部完成，文档不再声称不存在的能力。
 5. **可讲清楚**：每条完成的工作流留一份吸收笔记（§5.4），面试要讲的子系统有设计文档与架构图。
 
@@ -26,6 +27,8 @@
 | 3D demo | 先做第三人称探索解谜（A）；进度允许再扩展到轻动作（B：战斗、敌人 AI、动画状态机、受击反馈）。素材用公开资产（按许可证）加自制。 |
 | 2D demo | 先还现有待办和遗留债，再做背包 / 任务 / 存档 / 商店等系统，打包成可完整玩通的 demo。 |
 | GUI 活跃线 | 纳入总计划，按优先级排（§3 U 组）。 |
+| 纯 GUI app 线 | 2026-10-07 用户补充：`ya_profile=gui` + GUIWorkbench 是自研 GUI 框架的独立产品线，单列 GA 组。 |
+| 内存口径 | 2026-10-07 用户强调：GPU 显存与进程内存是两个东西，分成 M4 / M8 两项分别统计、分别优化。 |
 | 音频 | 先定引擎自己的音频接口，后端接 miniaudio 快速出效果（P1）；自研混音器与空间化在同一接口下替换（P2）。不走 OpenCL（混音是低延迟小数据 CPU 工作）。 |
 
 ## 2. 原则
@@ -55,10 +58,11 @@
 | M1 | pass 级 GPU timestamp（RDG executor 逐 pass 打点，结果按 pass 名汇总） | P0 |
 | M2 | 统计窗口：`profile_summary.json` / `gpu_summary.json` 写窗口均值、p95、p99，而不是最后一帧 | P0 |
 | M3 | 基准模式：固定分辨率、关垂直同步、去帧率上限、丢弃预热帧，一条命令跑完出表 | P0 |
-| M4 | 显存统计（VMA budget / statistics）与 CPU 内存统计（分配追踪或平台计数），进 summary 与编辑器面板 | P0 |
+| M4 | **GPU 显存**统计：VMA heap budget / usage、按资源类别（贴图、render target、transient、buffer、上传区）汇总，进 summary 与编辑器面板 | P0 |
+| M8 | **进程内存**统计：RSS / 峰值（平台计数）、堆分配按子系统归类（分配追踪），进 summary 与编辑器面板。与 M4 是两套口径，不合并；Apple Silicon 统一内存下两者共享物理内存，报告里分别列出并注明 | P0 |
 | M5 | 压测场景：多点光源多投影体、大量网格、大 tilemap；固定相机路径，可重复 | P0 |
 | M6 | 基准报告脚本：before / after 两份 summary 生成对比表（markdown） | P0 |
-| M7 | 内存与显存优化（以 M4 数字为依据：transient 别名、上传缓冲复用、贴图压缩 / mip 策略等） | P1 |
+| M7 | 显存与进程内存优化（分别以 M4 / M8 数字为依据：transient 别名、上传缓冲复用、贴图压缩 / mip 策略等） | P1 |
 
 ### R — 渲染半成品与缺口
 
@@ -122,6 +126,17 @@
 | `gui-framework-editor-runtime-refactor`、`gui-kernel-ux-parity`、`gui-editor-structure` | P2 | 开放项多，与 demo 弱相关 |
 | `source-layout-subtraction`、`editor-ui-grouping`、`display-compose-encoding` | P2 | 结构整理 / 语义尾巴 |
 
+### GA — 纯 GUI app 线（自研 GUI 框架独立产品形态）
+
+`ya_profile=gui` 只构建 GUI 模块 + 最小 host（不带 3D、脚本、物理包）；产品是 `Example/GUIWorkbench`（Feature Gallery，`FWorkbenchSurface` 挂 GUIApp，`Scenarios/*.jsonl` 交互场景，`run_workbench_gpu_parity.py` 像素门禁）与 `Example/GUIFrameworkSmoke`。U 组各 GUI 线的能力在这里以独立应用验收。下表是初排，GA0 盘点后按子计划问答定稿。
+
+| id | 内容 | 优先级 |
+| --- | --- | --- |
+| GA0 | 盘点：gui profile 能否独立构建与运行、Workbench 场景与 GPU 像素门禁的健康度、各 GUI 活跃线中属于这条线的开放项；出子计划 | P0 |
+| GA1 | gui profile 构建 + 全部 Workbench 场景 + 像素门禁一条命令跑绿（macOS / Windows） | P0 |
+| GA2 | Workbench 作为展示品：打包成独立应用、录屏；GUI 帧开销与内存用 M 组口径出数字 | P0 |
+| GA3 | 框架独立性证明：D1 依赖图里 GUI 框架不依赖引擎上层；对外 API 文档 | P1 |
+
 ### D — 架构文档与吸收
 
 | id | 内容 | 优先级 |
@@ -152,7 +167,7 @@ G3.0 ──► G3.1 ──► G3.2 ──► G3.3 ──► G3.4
 
 波次（同一波内可并行；跨波按依赖）：
 
-1. **波 1**：W1–W3；M1–M6；G3.0 子计划设计（只出文档）；U 组 `ui-behavior-capabilities` C2。
+1. **波 1**：W1–W3；M1–M6、M8；G3.0 子计划设计（只出文档）；GA0 盘点；U 组 `ui-behavior-capabilities` C2。
 2. **波 2**：R1、R2、R3；G2.1、G2.2；`game-ui-script-framework` S4；A1。
 3. **波 3**：G2.3、G2.4；G3.1、G3.2；R4、R5、R6（P1 部分）；R11。
 4. **波 4**：G3.3、G3.4、G2.5；R7；R12；D1、D2；U 组 P1。

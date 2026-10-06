@@ -8,3 +8,8 @@
   - 测量：只有整帧 GPU timestamp；`profile_summary.json` / `gpu_summary.json` 记最后一帧；默认 FIFO + 120 FPS 上限；无 VMA 统计；无渲染压测场景。
 - 两轮问答拍板，见 `plan.md` §1。
 - 下一步：波 1（W1–W3、M1–M6、G3.0 设计、`ui-behavior-capabilities` C2）。
+
+## 2026-10-07 — 用户补充两处
+
+- GPU 显存与进程内存是两套口径：原 M4 拆为 M4（GPU 显存，VMA）与 M8（进程内存，RSS / 峰值 / 堆分配按子系统），M7 优化分别以两者为依据。
+- 漏掉的纯 GUI app 线（`ya_profile=gui` + GUIWorkbench / GUIFrameworkSmoke）单列 GA 组，GA0 盘点进波 1。
