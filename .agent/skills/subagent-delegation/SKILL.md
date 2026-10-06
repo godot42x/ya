@@ -105,7 +105,15 @@ description: 派发 subagent 的规则：新开 / 续接（resume）/ 分叉（s
 | --- | --- | --- |
 | `ya-worker` | 实现 / 返工 / 收尾，可改文件、跑构建测试 | `grok-4.7[reasoning_effort=high,fast=false]` |
 | `ya-reviewer` | 只读审查：diff 范围、用户改动保留、测试复现、实现质量 | 同上，`readonly: true` |
-| `explore`（内置） | 只读探索 | 用户已配 `fast=false` |
+| `explore`（内置） | 不用：只读探索也走 `ya-reviewer` | 不受 frontmatter 约束 |
+
+### 硬规则：只用标定模型的项目 agent，且只新开（用户 2026-10-07 重申）
+
+- 每一次 `Task`——实现、只读盘点、审查、交接、甚至一句「停止」——只能是 `.cursor/agents/` 里在 frontmatter 标好模型的类型：实现用 `ya-worker`，只读用 `ya-reviewer`。
+- 不用 `explore`、`generalPurpose` 等内置类型：它们沿用父 agent 模型或目录默认变体，不受 frontmatter 约束。
+- **不续接**（不传 `resume`）：Grok 4.7 续接已证实变 fast（见 `## 模型`）。同一条线的后续任务新开一个 `ya-worker`，在 prompt 里按 `## 新开时的交接 prompt` 交接，写清上次提交号、已完成项、本次方案与禁区。
+- 已经在跑的类型不对的 agent：让它自然结束，不续接它去叫停，它的产出不采用。
+- 已经由续接（fast）产出的改动：提交前另开 `ya-reviewer` 严格审查，或由新开的 `ya-worker` 重做，由用户决定。
 
 - 用 agent 文件里的 `model` 参数指定 `fast=false`，绕开 Task 的 `model` slug 被补成 fast 的问题。派发时不传 `model`。
 - 按**角色**分，不按模块分：模块知识在 skills 里，agent 按需读。角色少，前缀稳定，缓存可复用。
