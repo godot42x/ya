@@ -33,3 +33,8 @@
 - 结论写进 plan §3 GA，GA 表重排为 GA0–GA6。依赖边界干净；门禁零散（无批量场景入口、无提交的像素基准、无打包路径、Windows 未跑过）。
 - 核实阻塞：`Example/Example.xmake.lua` 无条件 include 依赖 `ya-engine` 的 3D 示例，根 `xmake.lua` 注释声称的守卫不存在，gui profile 很可能配置不过。
 - 约束：gui profile 构建在独立 worktree 里做，不在共享工作区重新 `xmake f`。
+
+## 2026-10-07 — M 组子计划 `perf-baseline` 立项
+
+- 口径拍板：压测场景 = 多光源、多网格、Sponza、2D 合批（用户补充：面试高频）、GUI；开窗口固定 1920×1080、关垂直同步、去上限、预热 120 / 采样 600；进程内存 = RSS / 峰值 + profile 构建下按子系统的分配追踪；正式基线入库。见 `../perf-baseline/plan.md`。
+- 派发规则纠正：W2 与此前 B2-6 / B2-7 是**续接** Grok 4.7 派的，续接已证实变 fast；规则写进 `subagent-delegation` skill（只用 frontmatter 标定模型的 `ya-worker` / `ya-reviewer`，只新开不续接）。

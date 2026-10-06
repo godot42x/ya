@@ -1,0 +1,13 @@
+{
+  "plan": "perf-baseline",
+  "status": "in_progress",
+  "features": [
+    {"id": "PB1", "roadmap": ["M2", "M3"], "title": "benchmark mode + summary aggregator + bench_summary.json", "status": "todo", "evidence": []},
+    {"id": "PB2", "roadmap": ["M1"], "title": "per-pass GPU timestamps + render counters", "status": "todo", "evidence": []},
+    {"id": "PB3", "roadmap": ["M4"], "title": "GPU VRAM stats (VMA)", "status": "todo", "evidence": []},
+    {"id": "PB4", "roadmap": ["M8"], "title": "process memory stats (RSS/peak/alloc tracking)", "status": "todo", "evidence": []},
+    {"id": "PB5", "roadmap": ["M5"], "title": "stress scenes: lights, meshes, 2D batching, Sponza", "status": "todo", "evidence": []},
+    {"id": "PB6", "roadmap": ["M6"], "title": "compare report + one-command run + macOS baseline", "status": "todo", "evidence": []},
+    {"id": "PB7", "roadmap": ["GA3"], "title": "GUI benchmark in the same summary format", "status": "todo", "evidence": []}
+  ]
+}
