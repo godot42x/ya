@@ -20,36 +20,9 @@ description: 派发 subagent 的规则：新开 / 续接（resume）/ 分叉（s
 
 默认：同一条线上的后续任务优先续接已结束的 subagent，不要每次都新开。
 
-### 派发声明（门禁）
-
-每次 `Task` 的 prompt 里必须单独写一行声明，否则 `.cursor/hooks/subagent-reuse-gate.py`
-记为违规：
-
-```text
-派发：续接 <agent-id>
-派发：新开 <新线|换模型|方案推翻|上下文过长|断线> -- <一句话说明>
-```
-
-- `续接 <id>`：hook 会核对这个 id 真的存在，并且属于**当前会话**。编造的 id、属于别的会话的 id 都记违规；后者 Cursor 自己也会拒绝（`Subagent parent mismatch for resume`）——续接必须由当初派发它的会话发起，侧聊不能续接主聊天的 subagent，要在侧聊里新开。
-- 侧聊里钩子 payload 的 `transcript_path` 是空的，所以校验不能只信它：hook 会扫描所有项目的 `~/.cursor/projects/*/agent-transcripts/*/subagents/`，再用 payload 的 `conversation_id` 比对归属。
-- 只读单次类型（`explore`、`browser-use`、`bugbot`、`security-review`、`cursor-guide`、
-  `ci-investigator`、`best-of-n-runner`）免声明。
-- 派任务前先查「线 → agent id」表。同一条线上有已结束的 subagent 却声明「新线」，等于说谎，
-  不要这样写。
-
-**能力边界（Cursor 3.23.12 实测）**：`preToolUse` 对 `Task` 不触发；`subagentStart`
-返回 `deny` 或退出码 2 都**拦不住** subagent 启动。所以这是检测门禁而不是硬阻断：违规时
-`subagentStart` 记录到 `/tmp/ya-subagent-violations/`，父 agent 结束这一轮时
-`.cursor/hooks/subagent-reuse-followup.py`（`stop` 钩子）把违规清单作为 `followup_message`
-塞回来，逼父 agent 当场说明并补救。日志在 `/tmp/ya-subagent-gate.log`。以后 Cursor 若让
-`deny` 生效，这套脚本不用改就变成硬阻断。
+续接必须由当初派发它的会话发起。侧聊续接主聊天的 subagent 时，Cursor 会拒绝（`Subagent parent mismatch for resume`），要在侧聊里新开。
 
 ## 按线复用（subagent 池）
-
-> **Grok 4.7 暂停续接（2026-10-05 用量 CSV 证实）：** 续接会变 `grok-4.7-high-fast` 且缓存失效，见 `## 模型`。用户禁止 fast 时，Grok 4.7 的线一律新开并交接；下面的复用规则对其他不回落的模型照常适用。
-
-父 agent 在会话里维护一张「线 → agent id」表，派任务前先查表，再决定续接还是新开。
-线按**上下文归属**分，不按目录：谁最近读过、改过相关代码，就续接谁。
 
 | 线 | 典型范围 |
 | --- | --- |
@@ -95,7 +68,7 @@ description: 派发 subagent 的规则：新开 / 续接（resume）/ 分叉（s
 - **Task 的 `model` 参数不接受括号语法**（传 `grok-4.7[...fast=false]` 报 `Invalid model selection`），只接受会话 `<available_subagent_models>` 里的 slug。官方说的「续接时再传一次 `model`，IDE 会尊重」，在我们这里只能传 `grok-4.7-high` 这种 slug；本地实测带与不带，composer 存档和请求构造日志完全一样，没看到差别。
 - 官方对应 issue（均为已知 bug、未给修复时间）：[续接回落到 fast](https://forum.cursor.com/t/resume-to-first-party-non-fast-models-redirects-to-fast-variants/166470)（与本问题一致，推理强度也失效）、[续接回落到父会话模型](https://forum.cursor.com/t/resuming-a-subagent-in-cursor-ide-switches-it-to-the-parent-agent-s-model-instead-of-keeping-the-subagent-s-original-model/165649)（官方绕法：续接时显式再传 `model`，或不续接直接新开）、[续接用错模型（3.5.3 修过后回归）](https://forum.cursor.com/t/subagent-resume-runs-an-incorrect-model/160590)、[模型选择不被尊重](https://forum.cursor.com/t/subagent-model-choice-not-respected/163645)、[CLI 变 fast](https://forum.cursor.com/t/cli-subagents-changing-model-to-composer-2-5-fast-mode-by-itself/162752)。文档：[Subagents 的 Model parameters](https://cursor.com/docs/subagents)。
 - **对「优先续接」的影响。** 续接已证实是 fast 且缓存失效，在 Cursor 修复前，用户禁止 fast 时**不要续接 Grok 4.7 subagent**，一律新开并在 prompt 里交接（`## 新开时的交接 prompt`）；「按线复用」对 Grok 4.7 暂时停用。只有用量页证实某个模型续接不回落时才恢复。
-- Task 工具没有 fast 参数，续接 / 新开都躲不掉。用户禁止 fast 时：不要用 Grok 4.7 派 subagent（换别的模型或自己做），或者让用户在 Cursor 设置里给该 subagent 类型配 `subagentModelOverrides`（用户已给 `explore` 配过 `fast=false`），配好后用探针确认再用。
+- Task 工具没有 fast 参数，续接 / 新开都躲不掉。（2026-10-07 拍板：不再因此停派 Grok 4.7——派发显式传 `model` slug、接受其 fast 变体，靠 `## 结果核对` 兜底，并尽量少派。若将来给 `ya-worker`/`ya-reviewer` 配好 `subagentModelOverrides` 并探针确认非 fast，可撤掉这个妥协。）
 
 ## 项目内 agent（`.cursor/agents/`）
 
@@ -113,9 +86,11 @@ description: 派发 subagent 的规则：新开 / 续接（resume）/ 分叉（s
 - 不用 `explore`、`generalPurpose` 等内置类型：它们沿用父 agent 模型或目录默认变体，不受 frontmatter 约束。
 - **不续接**（不传 `resume`）：Grok 4.7 续接已证实变 fast（见 `## 模型`）。同一条线的后续任务新开一个 `ya-worker`，在 prompt 里按 `## 新开时的交接 prompt` 交接，写清上次提交号、已完成项、本次方案与禁区。
 - 已经在跑的类型不对的 agent：让它自然结束，不续接它去叫停，它的产出不采用。
+- 已经在跑但模型不对的（未传 `model` 落到默认模型）：同样让它跑完、不续接去叫停，产出经严格结果核对后可用（用户 2026-10-07：跑完就行，后续避免）。
 - 已经由续接（fast）产出的改动：提交前另开 `ya-reviewer` 严格审查，或由新开的 `ya-worker` 重做，由用户决定。
 
-- 用 agent 文件里的 `model` 参数指定 `fast=false`，绕开 Task 的 `model` slug 被补成 fast 的问题。派发时不传 `model`。
+- **派发时必须显式传 `model: grok-4.7-high`（用户 2026-10-07 拍板）。** 旧结论「靠 agent 文件 frontmatter 的括号 `model`、派发时不传 `model`」已证伪：Task 不解析 frontmatter 的括号语法，不传 `model` 会回落到父会话默认模型（2026-10-07 实测 3 个派发全部落在 opus-5.5 上，详见 request 0bef0d03 的调查）。显式 slug 会被自愈成 fast（见 `## 模型`），用户已捏着鼻子接受；产出偏脏的风险由 `## 结果核对` 兜底，同时尽量避免不必要的派发。
+- 表中 agent 文件 frontmatter 的 `model` 只作意图记录，实际派发以 Task 的显式 `model` 参数为准。
 - 按**角色**分，不按模块分：模块知识在 skills 里，agent 按需读。角色少，前缀稳定，缓存可复用。
 - 通用规则（环境坑、提交约定、回报格式、开工前 `git status`）写在 agent 正文里，**派发 prompt 只写本任务的方案、步骤、验证基线、禁区**。
 - 不要把每天都在变的内容（用户未提交文件清单）写进 agent 正文。agent 开工前自己跑 `git status`，开工前已存在的改动一律视为不是自己的；prompt 只补「父 agent 正在并行改的文件」。
