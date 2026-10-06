@@ -1,0 +1,429 @@
+{
+  "plan": "showcase-roadmap",
+  "status": "in_progress",
+  "features": [
+    {
+      "id": "W1",
+      "group": "W",
+      "priority": "P0",
+      "title": "docs: OpenGL claim, render-arch stale symbols",
+      "owner_line": "this",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "W2",
+      "group": "W",
+      "priority": "P0",
+      "title": "B2 leftover debts (8 items)",
+      "owner_line": "rpg-prototype",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "W3",
+      "group": "W",
+      "priority": "P0",
+      "title": "GUIWindowManagerTest flaky",
+      "owner_line": "this",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M1",
+      "group": "M",
+      "priority": "P0",
+      "title": "per-pass GPU timestamps",
+      "owner_line": "new:perf-baseline",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M2",
+      "group": "M",
+      "priority": "P0",
+      "title": "windowed mean/p95/p99 in summaries",
+      "owner_line": "new:perf-baseline",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M3",
+      "group": "M",
+      "priority": "P0",
+      "title": "benchmark mode",
+      "owner_line": "new:perf-baseline",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M4",
+      "group": "M",
+      "priority": "P0",
+      "title": "GPU/CPU memory stats",
+      "owner_line": "new:perf-baseline",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M5",
+      "group": "M",
+      "priority": "P0",
+      "title": "stress scenes",
+      "owner_line": "new:perf-baseline",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M6",
+      "group": "M",
+      "priority": "P0",
+      "title": "before/after report script",
+      "owner_line": "new:perf-baseline",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M7",
+      "group": "M",
+      "priority": "P1",
+      "title": "memory/VRAM optimization",
+      "owner_line": "new:perf-baseline",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R1",
+      "group": "R",
+      "priority": "P0",
+      "title": "frames-in-flight 1->2",
+      "owner_line": "render-view-family M4",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R2",
+      "group": "R",
+      "priority": "P0",
+      "title": "point shadow GPU cull stable + default",
+      "owner_line": "new:shadow",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R3",
+      "group": "R",
+      "priority": "P0",
+      "title": "CSM multi-cascade stable + default",
+      "owner_line": "new:shadow",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R4",
+      "group": "R",
+      "priority": "P1",
+      "title": "RDG compile cache + pass culling",
+      "owner_line": "rdg-cache-dx or new",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R5",
+      "group": "R",
+      "priority": "P1",
+      "title": "RDG transient texture aliasing",
+      "owner_line": "rdg-cache-dx or new",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R6",
+      "group": "R",
+      "priority": "P1/P2",
+      "title": "SSAO blur, FXAA (P1); TAA (P2)",
+      "owner_line": "new:post",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R7",
+      "group": "R",
+      "priority": "P1",
+      "title": "dedicated render thread",
+      "owner_line": "new:render-thread",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R8",
+      "group": "R",
+      "priority": "P1",
+      "title": "RHI capability matrix + fallback",
+      "owner_line": "new:rhi-capability",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R9",
+      "group": "R",
+      "priority": "P2",
+      "title": "bindless / descriptor indexing",
+      "owner_line": "new:rhi-capability",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R10",
+      "group": "R",
+      "priority": "P2",
+      "title": "async compute",
+      "owner_line": "new:rhi-capability",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R11",
+      "group": "R",
+      "priority": "P1",
+      "title": "rdg-cache-dx P3-P5",
+      "owner_line": "rdg-cache-dx",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R12",
+      "group": "R",
+      "priority": "P1",
+      "title": "render-view-family P2/P3; pure 2D view",
+      "owner_line": "render-view-family, rpg-prototype",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R13",
+      "group": "R",
+      "priority": "P2",
+      "title": "render-application-boundary leftovers",
+      "owner_line": "render-application-boundary",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R14",
+      "group": "R",
+      "priority": "P2",
+      "title": "OpenGL / low-end backend (on demand)",
+      "owner_line": "none",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "A1",
+      "group": "A",
+      "priority": "P1",
+      "title": "audio interface + miniaudio backend + component + script API",
+      "owner_line": "new:audio",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "A2",
+      "group": "A",
+      "priority": "P2",
+      "title": "own mixer + spatialization",
+      "owner_line": "new:audio",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G2.1",
+      "group": "G2",
+      "priority": "P0",
+      "title": "camera 2D fields + follow, text reveal",
+      "owner_line": "rpg-prototype",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G2.2",
+      "group": "G2",
+      "priority": "P0",
+      "title": "save / load",
+      "owner_line": "rpg-prototype",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G2.3",
+      "group": "G2",
+      "priority": "P0",
+      "title": "inventory / quest / shop / dialogue branches",
+      "owner_line": "rpg-prototype",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G2.4",
+      "group": "G2",
+      "priority": "P0",
+      "title": "full playthrough content",
+      "owner_line": "rpg-prototype",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G2.5",
+      "group": "G2",
+      "priority": "P0",
+      "title": "package + video",
+      "owner_line": "rpg-prototype",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G2.6",
+      "group": "G2",
+      "priority": "P1",
+      "title": "pure 2D view family",
+      "owner_line": "rpg-prototype",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G2.7",
+      "group": "G2",
+      "priority": "P2",
+      "title": "tilemap static instance buffer",
+      "owner_line": "rpg-prototype",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.0",
+      "group": "G3",
+      "priority": "P0",
+      "title": "sub-plan design + capability gap audit",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.1",
+      "group": "G3",
+      "priority": "P0",
+      "title": "character controller + camera + anim blend",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.2",
+      "group": "G3",
+      "priority": "P0",
+      "title": "interaction + puzzles",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.3",
+      "group": "G3",
+      "priority": "P0",
+      "title": "level + lighting showcase",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.4",
+      "group": "G3",
+      "priority": "P0",
+      "title": "perf overlay + package + video",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.5",
+      "group": "G3",
+      "priority": "P2",
+      "title": "light action extension",
+      "owner_line": "new:3d-demo",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "U.C2",
+      "group": "U",
+      "priority": "P0",
+      "title": "ui-behavior-capabilities C2",
+      "owner_line": "ui-behavior-capabilities",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "U.S4",
+      "group": "U",
+      "priority": "P0",
+      "title": "game-ui-script-framework S4",
+      "owner_line": "game-ui-script-framework",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "U.P1",
+      "group": "U",
+      "priority": "P1",
+      "title": "font / undo-redo / editor-readiness Phase 8 / invalidation / style / anchor-to-slot",
+      "owner_line": "existing GUI lines",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "U.P2",
+      "group": "U",
+      "priority": "P2",
+      "title": "editor-runtime-refactor / kernel-ux-parity / editor-structure / source-layout / editor-ui-grouping / display-compose",
+      "owner_line": "existing GUI lines",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "D1",
+      "group": "D",
+      "priority": "P0",
+      "title": "module dependency graph (generated)",
+      "owner_line": "this",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "D2",
+      "group": "D",
+      "priority": "P0",
+      "title": "design docs: script backend, GUI framework, render graph",
+      "owner_line": "this",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "D3",
+      "group": "D",
+      "priority": "P1",
+      "title": "design docs: render thread/timeline, audio, save",
+      "owner_line": "this",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "D4",
+      "group": "D",
+      "priority": "P0",
+      "title": "README / videos / perf report / interview Q&A",
+      "owner_line": "this",
+      "status": "todo",
+      "evidence": []
+    }
+  ]
+}

@@ -60,6 +60,7 @@ completion_and_make_the_final_plan(this_plan);
 
 | 目录 | 主题 |
 | --- | --- |
+| `showcase-roadmap/` | 项目级伞形计划（2026-10-07）：渲染半成品与缺口收口、测量与压测、2D / 3D 两个可玩 demo、音频、GUI 活跃线排序、架构文档与吸收；只定优先级（P0–P2）与依赖，细节在各子计划 / 已有线 |
 | `render-view-family/` | view/frame 语义拆分、`PreparedView`、RenderRuntime 状态与逻辑分离（开放项最多） |
 | `render-application-boundary/` | Framework/Render 只放可复用管线，本帧的排布与状态归应用（AB1/AB2 已落地） |
 | `gui-framework-editor-readiness/` | retained GUI 承载完整编辑器的能力补齐，含 Phase 8 移除 ImGui 双栈 |
