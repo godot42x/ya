@@ -1,0 +1,60 @@
+{
+    "name": "Meshes_1000",
+    "scene": "Content/Scenes/Meshes_1000.scene.json",
+    "resolution": {
+        "width": 1920,
+        "height": 1080
+    },
+    "presentMode": "immediate",
+    "uncapFrameRate": true,
+    "warmupFrames": 120,
+    "sampleFrames": 600,
+    "fixedDeltaSeconds": 0.016666667,
+    "cpuTrace": false,
+    "outputDir": "Engine/Saved/Benchmark/PerfLab/Meshes_1000",
+    "cameraPath": {
+        "framesPerSecond": 60,
+        "loop": true,
+        "keyframes": [
+            {
+                "frame": 0,
+                "position": [
+                    -26.35,
+                    24.0,
+                    47.0
+                ],
+                "rotation": [
+                    -28.0,
+                    0.0,
+                    0.0
+                ]
+            },
+            {
+                "frame": 360,
+                "position": [
+                    0.0,
+                    36.0,
+                    0.0
+                ],
+                "rotation": [
+                    -55.0,
+                    0.0,
+                    0.0
+                ]
+            },
+            {
+                "frame": 720,
+                "position": [
+                    -26.35,
+                    24.0,
+                    47.0
+                ],
+                "rotation": [
+                    -28.0,
+                    0.0,
+                    0.0
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Sponza",
+  "entities": [
+    {"id":1001,"name":"Camera","components":{"TransformComponent":{"_position":[11.0,1.8,0.0],"_rotation":[-6.0,90.0,0.0]},"CameraComponent":{"bPrimary":true,"_farClip":2000.0}}},
+    {"id":1002,"name":"DirectionalLight","components":{"TransformComponent":{"_rotation":[-55.0,30.0,0.0]},"DirectionalLightComponent":{"_direction":[-0.3,-0.9,-0.2],"_color":[1.0,0.96,0.9],"intensity":1.0,"bEnable":true}}},
+    {"id":1003,"name":"Sponza","components":{"TransformComponent":{"_position":[0.0,0.0,0.0],"_rotation":[0.0,0.0,0.0],"_scale":[1.0,1.0,1.0]},"ModelComponent":{"_modelRef":{"__base__":{"AssetRefBase":{"_path":"Engine/Saved/PerfAssets/Sponza/Sponza.gltf"}}},"_materialType":"PBR","_useEmbeddedMaterials":true,"_autoCreateChildEntities":true,"_flipImportedTextureV":false}}}
+  ],
+  "nodeTree": {
+    "name": "scene_root",
+    "children": [
+      {"name":"Camera","entityRef":1001},
+      {"name":"DirectionalLight","entityRef":1002},
+      {"name":"Sponza","entityRef":1003}
+    ]
+  }
+}

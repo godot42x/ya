@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "name": "PerfLab",
+  "mainModule": "PerfLab",
+  "modules": [
+    "PerfLab.yamodule"
+  ],
+  "plugins": [],
+  "contentDir": "Content",
+  "defaultScene": "Content/Scenes/Lights_50.scene.json"
+}

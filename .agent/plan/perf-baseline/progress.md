@@ -36,3 +36,14 @@
   - HelloMaterial profile 三次 frame p50 = 8.673 / 8.355 / 8.539 ms（均值 8.522，最大偏差 1.96%，在 ±3% 内）。三次 `Engine/Saved/Profile` 文件清单与大小都没变。
   - `ya.py test --target ya --filter 'BenchAggregator*:BenchmarkConfig*'` 17/17。
   - `ya.py test --target ya` debug 1713/1713（1708 + 本轮 5 个新用例）。
+
+## 2026-10-07 — PB5 压测场景
+
+- 完成：
+  - `Example/PerfLab`：yaproject / yamodule / xmake.lua / Entry，`Example.xmake.lua` 按目录名注册（大小写与目录一致）。
+  - `Script/perf/generate_perflab.py`：确定性生成（seed 固定），幂等（两次生成 md5 一致）；只写 scene JSON 与 `*.bench.json`，不写资产。
+  - `Script/perf/fetch_sponza.py`：Khronos 旧仓 contents API `?ref=master` 404（仓库迁移），去 ref 走默认分支重定向可用——修法已固化在脚本里；先校验 Crytek / Meinl / Dabrovic 许可文本再下载到 `Engine/Saved/PerfAssets/Sponza/`（`Saved` gitignore 覆盖，不入库）。
+  - 10 个场景各一对 scene + bench config（Lights 50/200/500、Meshes 1k/5k/10k、Sprites 500/2000/5000、Sponza），全走 PB1 schema，循环相机路径，`PerfLabBenchmarkConfigTest` 契约测试锁住。
+- 验证：Lights_50 完整基准 600 帧（**debug 口径**，frameMs p50 10.276 ms，meta 与 config 一致）；其余场景 30 帧加载 exit 0；Sponza 模型实例化成功（PBR packed metallicRoughness 既有警告，不崩）；`ya.py test --target ya` **1714/1714**（1713 + 1 契约测试），主 agent 本机复跑确认。
+- 已知引擎上限（详见 todo）：`MAX_POINT_LIGHTS=6` 截断光源梯度；`MaterialDescPool` 2048 使网格梯度不挂 Phong（共享 fallback）；无逐物体 castShadow。两项设计是否重构待用户拍板。
+- 正式基线数字由 PB6 以 profile 口径连跑三次出，本次 Lights_50 仅验证链路。

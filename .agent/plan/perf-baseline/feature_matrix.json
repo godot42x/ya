@@ -2,12 +2,84 @@
   "plan": "perf-baseline",
   "status": "in_progress",
   "features": [
-    {"id": "PB1", "roadmap": ["M2", "M3"], "title": "benchmark mode + summary aggregator + bench_summary.json", "status": "pass", "evidence": ["Engine/Source/Framework/Core/include/Core/Profiling/BenchAggregator.h", "Engine/Source/Applications/GameRuntime/include/GameRuntime/Benchmark/BenchmarkRun.h", "Engine/Test/Source/Core/BenchAggregatorTest.cpp", "Engine/Test/Source/Integration/BenchmarkConfigTest.cpp", "Example/HelloMaterial/Benchmark/HelloMaterial.bench.json", "ya-testing debug 1713/1713", "HelloMaterial profile x3 cpuTrace=false: frame p50 8.673/8.355/8.539 ms (max deviation 1.96%), present immediate"]},
-    {"id": "PB2", "roadmap": ["M1"], "title": "per-pass GPU timestamps + render counters", "status": "todo", "evidence": []},
-    {"id": "PB3", "roadmap": ["M4"], "title": "GPU VRAM stats (VMA)", "status": "todo", "evidence": []},
-    {"id": "PB4", "roadmap": ["M8"], "title": "process memory stats (RSS/peak/alloc tracking)", "status": "todo", "evidence": []},
-    {"id": "PB5", "roadmap": ["M5"], "title": "stress scenes: lights, meshes, 2D batching, Sponza", "status": "todo", "evidence": []},
-    {"id": "PB6", "roadmap": ["M6"], "title": "compare report + one-command run + macOS baseline", "status": "todo", "evidence": []},
-    {"id": "PB7", "roadmap": ["GA3"], "title": "GUI benchmark in the same summary format", "status": "todo", "evidence": []}
+    {
+      "id": "PB1",
+      "roadmap": [
+        "M2",
+        "M3"
+      ],
+      "title": "benchmark mode + summary aggregator + bench_summary.json",
+      "status": "pass",
+      "evidence": [
+        "Engine/Source/Framework/Core/include/Core/Profiling/BenchAggregator.h",
+        "Engine/Source/Applications/GameRuntime/include/GameRuntime/Benchmark/BenchmarkRun.h",
+        "Engine/Test/Source/Core/BenchAggregatorTest.cpp",
+        "Engine/Test/Source/Integration/BenchmarkConfigTest.cpp",
+        "Example/HelloMaterial/Benchmark/HelloMaterial.bench.json",
+        "ya-testing debug 1713/1713",
+        "HelloMaterial profile x3 cpuTrace=false: frame p50 8.673/8.355/8.539 ms (max deviation 1.96%), present immediate"
+      ]
+    },
+    {
+      "id": "PB2",
+      "roadmap": [
+        "M1"
+      ],
+      "title": "per-pass GPU timestamps + render counters",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "PB3",
+      "roadmap": [
+        "M4"
+      ],
+      "title": "GPU VRAM stats (VMA)",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "PB4",
+      "roadmap": [
+        "M8"
+      ],
+      "title": "process memory stats (RSS/peak/alloc tracking)",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "PB5",
+      "roadmap": [
+        "M5"
+      ],
+      "title": "stress scenes: lights, meshes, 2D batching, Sponza",
+      "status": "pass",
+      "evidence": [
+        "Example/PerfLab/PerfLab.yaproject",
+        "Script/perf/generate_perflab.py",
+        "Script/perf/fetch_sponza.py",
+        "Engine/Test/Source/Integration/PerfLabBenchmarkConfigTest.cpp",
+        "ya-testing debug 1714/1714",
+        "Lights_50 full benchmark 600 frames (debug, frameMs p50 10.276 ms)"
+      ]
+    },
+    {
+      "id": "PB6",
+      "roadmap": [
+        "M6"
+      ],
+      "title": "compare report + one-command run + macOS baseline",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "PB7",
+      "roadmap": [
+        "GA3"
+      ],
+      "title": "GUI benchmark in the same summary format",
+      "status": "todo",
+      "evidence": []
+    }
   ]
 }
