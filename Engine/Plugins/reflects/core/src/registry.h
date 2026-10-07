@@ -26,6 +26,10 @@ struct ClassRegistry
     // parent -> childrens
     std::unordered_map<refl::type_index_t, std::vector<refl::type_index_t>> parentToChildren;
 
+    /// First registration of a function name wins. Later `function()` calls keep
+    /// the existing entry and, when set, notify the host (script bindings log it).
+    std::function<void(const Class &cls, const std::string &functionName)> duplicateFunctionHook;
+
     static REFLECTS_CORE_API ClassRegistry &instance();
 
     template <typename T>

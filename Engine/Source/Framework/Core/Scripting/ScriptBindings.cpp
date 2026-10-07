@@ -24,58 +24,6 @@ namespace
 // boxed in std::any (Function arguments and results).
 // ============================================================================
 
-template <typename T>
-T fromScript(const ScriptValue& value)
-{
-    if constexpr (std::is_same_v<T, bool>) {
-        return scriptToBool(value);
-    }
-    else if constexpr (std::is_integral_v<T>) {
-        return static_cast<T>(scriptToInteger(value));
-    }
-    else if constexpr (std::is_floating_point_v<T>) {
-        return static_cast<T>(scriptToNumber(value));
-    }
-    else if constexpr (std::is_same_v<T, std::string>) {
-        return scriptToString(value);
-    }
-    else if constexpr (std::is_same_v<T, ScriptRef>) {
-        if (const ScriptRef* ref = std::get_if<ScriptRef>(&value)) {
-            return *ref;
-        }
-        if (std::holds_alternative<std::monostate>(value)) {
-            return {};
-        }
-        throw ScriptError(std::string("expected an object, got ") + scriptValueTypeName(value));
-    }
-    else {
-        if (const T* v = std::get_if<T>(&value)) {
-            return *v;
-        }
-        throw ScriptError(std::string("expected a vector, got ") + scriptValueTypeName(value));
-    }
-}
-
-template <typename T>
-ScriptValue toScript(const T& value)
-{
-    if constexpr (std::is_same_v<T, bool>) {
-        return value;
-    }
-    else if constexpr (std::is_integral_v<T>) {
-        return static_cast<int64_t>(value);
-    }
-    else if constexpr (std::is_floating_point_v<T>) {
-        return static_cast<double>(value);
-    }
-    else if constexpr (std::is_same_v<T, ScriptRef>) {
-        return value ? ScriptValue{value} : ScriptValue{};
-    }
-    else {
-        return value;
-    }
-}
-
 struct ValueCodec
 {
     ScriptValue (*load)(const void* address);
@@ -88,10 +36,10 @@ template <typename T>
 ValueCodec codecOf()
 {
     return {
-        .load  = [](const void* address) { return toScript(*static_cast<const T*>(address)); },
-        .store = [](void* address, const ScriptValue& value) { *static_cast<T*>(address) = fromScript<T>(value); },
-        .box   = [](const ScriptValue& value) { return std::any(fromScript<T>(value)); },
-        .unbox = [](const std::any& boxed) { return toScript(std::any_cast<const T&>(boxed)); },
+        .load  = [](const void* address) { return detail::toScript(*static_cast<const T*>(address)); },
+        .store = [](void* address, const ScriptValue& value) { *static_cast<T*>(address) = detail::fromScript<T>(value); },
+        .box   = [](const ScriptValue& value) { return std::any(detail::fromScript<T>(value)); },
+        .unbox = [](const std::any& boxed) { return detail::toScript(std::any_cast<const T&>(boxed)); },
     };
 }
 
@@ -189,7 +137,9 @@ struct ScriptField
     std::function<void(void*, const ScriptRef&, const ScriptValue&)> nativeWrite;
 };
 
-/// Either a reflected method (`function` set) or a native one.
+/// Exported method. `function` is the ClassRegistry entry. `native`, when set,
+/// is the ScriptValue trampoline and the script call path; `function->invoker`
+/// stays available for boxed reflection calls.
 struct ScriptMethod
 {
     std::string               name;
@@ -246,17 +196,41 @@ std::string scriptNameOf(const std::string& reflectedName)
     return first == std::string::npos ? reflectedName : reflectedName.substr(first);
 }
 
+/// Script-facing types that are not field codecs: the value is already a
+/// `ScriptValue` arm, including the owner slot.
+bool acceptsScriptSignature(type_index_t type)
+{
+    return crossesToScripts(type) || type == type_index_v<ScriptValue> || type == type_index_v<ScriptSelfHandle> ||
+           type == type_index_v<ScriptFnHandle> || type == type_index_v<ScriptRect>;
+}
+
 bool signatureCrosses(const Function& function)
 {
-    if (function.isStatic() || (function.returnTypeIndex != 0 && !crossesToScripts(function.returnTypeIndex))) {
+    if (function.isStatic() || (function.returnTypeIndex != 0 && !acceptsScriptSignature(function.returnTypeIndex))) {
         return false;
     }
     for (const type_index_t arg : function.argTypeIndices) {
-        if (!crossesToScripts(arg)) {
+        if (!acceptsScriptSignature(arg)) {
             return false;
         }
     }
     return true;
+}
+
+std::unordered_map<type_index_t, NameMap<ScriptNativeFn>>& nativeTrampolines()
+{
+    static std::unordered_map<type_index_t, NameMap<ScriptNativeFn>> table;
+    return table;
+}
+
+const ScriptNativeFn* trampolineFor(type_index_t type, std::string_view name)
+{
+    const auto typeIt = nativeTrampolines().find(type);
+    if (typeIt == nativeTrampolines().end()) {
+        return nullptr;
+    }
+    const auto it = typeIt->second.find(name);
+    return it == typeIt->second.end() ? nullptr : &it->second;
 }
 
 /// Members declared further down the hierarchy win over inherited ones of the
@@ -295,10 +269,16 @@ void collectMembers(const Class& cls, const std::vector<type_index_t>& path, Typ
             continue;
         }
         std::string name = scriptNameOf(functionName);
+        // addNativeMethod still occupies the name before export. Registry
+        // natives and reflected methods share the path below.
         if (const auto existing = out.methods.find(name); existing != out.methods.end() && !existing->second.function) {
             continue;
         }
-        out.methods.insert_or_assign(name, ScriptMethod{.name = name, .function = &function, .ownerPath = path});
+        ScriptMethod exported{.name = name, .function = &function, .ownerPath = path};
+        if (const ScriptNativeFn* trampoline = trampolineFor(cls.typeIndex, name)) {
+            exported.native = *trampoline;
+        }
+        out.methods.insert_or_assign(name, std::move(exported));
     }
 }
 
@@ -398,6 +378,66 @@ void forEachModuleFunction(const std::function<void(const ScriptModuleFunction&)
     for (const ScriptModuleFunction& entry : state().moduleFunctions) {
         visit(entry);
     }
+}
+
+void warnDuplicateFunction(const Class& cls, const std::string& functionName)
+{
+    YA_CORE_WARN("script method '{}::{}' keeps the first registration", cls.name, functionName);
+}
+
+void ensureDuplicateHook()
+{
+    auto& registry = ClassRegistry::instance();
+    if (!registry.duplicateFunctionHook) {
+        registry.duplicateFunctionHook = &warnDuplicateFunction;
+    }
+}
+
+void addMethod(type_index_t type, std::string name, NativeMethod method)
+{
+    ensureDuplicateHook();
+    Class* cls = ClassRegistry::instance().getClass(type);
+    if (!cls) {
+        YA_CORE_WARN("script method '{}' has no reflected class; not registered", name);
+        return;
+    }
+    if (cls->typeIndex != type) {
+        YA_CORE_WARN("script method '{}::{}' does not match the reflected type index; not registered", cls->name, name);
+        return;
+    }
+    TypeExport& entry = state().types[type];
+    if (entry.bBuilt) {
+        YA_CORE_WARN("script method '{}::{}' registered after the type was exported; ignored", cls->name, name);
+        return;
+    }
+
+    Function function;
+    function.name            = name;
+    function.type            = FunctionType::MemberFunction;
+    function.argCount        = method.argTypes.size();
+    function.argTypeNames    = std::move(method.argTypeNames);
+    function.returnTypeName  = std::move(method.returnTypeName);
+    function.returnTypeIndex = method.returnType;
+    function.argTypeIndices  = std::move(method.argTypes);
+    function.invoker         = std::move(method.invoker);
+
+    Function&   stored = cls->insertFunction(std::move(function));
+    const auto  found  = cls->functions.find(name);
+    if (found == cls->functions.end() || &found->second != &stored) {
+        return;
+    }
+
+    const std::string scriptName = scriptNameOf(name);
+    const size_t      argCount   = found->second.argCount;
+    ScriptNativeFn    body       = std::move(method.call);
+    nativeTrampolines()[cls->typeIndex].insert_or_assign(
+        scriptName,
+        [body = std::move(body), argCount, scriptName](void* self, const ScriptRef& ref, ScriptArgs args) -> ScriptValue {
+            if (args.size() != argCount) {
+                throw ScriptError(std::format("{}() expects {} argument(s), got {}", scriptName, argCount, args.size()));
+            }
+            return body(self, ref, args);
+        });
 }
 
 void addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn, std::vector<type_index_t> argTypes)
@@ -594,8 +634,15 @@ ScriptValue callMethod(const ScriptRef& ref, const ScriptMethod& method, ScriptA
         warnMissingOnce(ref);
         return {};
     }
-    if (!method.function) {
-        return method.native(resolve(ref), ref, args);
+    // Native trampoline wins when both call conventions are present, so a
+    // script call does not box through Function::invoker. A registry native
+    // has the same ownerPath as a reflected method, so the receiver gets the
+    // same parent-offset adjustment; old-API natives registered without a
+    // Function entry keep the raw resolved object (their bodies downcast).
+    if (method.native || !method.function) {
+        void* object = resolve(ref);
+        void* self   = method.function ? toOwner(object, ref.type, method.ownerPath) : object;
+        return method.native(self, ref, args);
     }
     const Function& function = *method.function;
     if (args.size() != function.argTypeIndices.size()) {

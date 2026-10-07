@@ -391,6 +391,9 @@ struct Class : public Field
 
 
 
+    // 同名先到者胜：已有条目保持不动，重复注册走 duplicateFunctionHook。
+    REFLECTS_CORE_API Function &insertFunction(Function function);
+
     // ------------------------------------------------------------------------
     // 注册普通成员函数
     // ------------------------------------------------------------------------
@@ -411,8 +414,7 @@ struct Class : public Field
             return detail::memberFunctionWrapper(self, func, args);
         };
 
-        auto it = functions.insert_or_assign(inName, std::move(f));
-        return it.first->second;
+        return insertFunction(std::move(f));
     }
 
     // ------------------------------------------------------------------------
@@ -435,8 +437,7 @@ struct Class : public Field
             return detail::constMemberFunctionWrapper(self, func, args);
         };
 
-        auto it = functions.insert_or_assign(inName, std::move(f));
-        return it.first->second;
+        return insertFunction(std::move(f));
     }
 
     // ------------------------------------------------------------------------
@@ -458,8 +459,7 @@ struct Class : public Field
             return detail::staticFunctionWrapper(func, args);
         };
 
-        auto it = functions.insert_or_assign(inName, std::move(f));
-        return it.first->second;
+        return insertFunction(std::move(f));
     }
 
 #pragma endregion

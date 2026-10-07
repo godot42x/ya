@@ -65,11 +65,6 @@ void noteComponentEdited(const ScriptRef& ref, void* component)
     }
 }
 
-ScriptNativeFn entityMethod(ScriptValue (*body)(Entity&, ScriptArgs))
-{
-    return [body](void* self, const ScriptRef&, ScriptArgs args) { return body(*static_cast<Entity*>(self), args); };
-}
-
 /// `getTransform()` / `hasCamera()` and so on, for whichever components are
 /// registered when the script asks.
 std::optional<ScriptNativeFn> resolveComponentAccessor(std::string_view methodName)
@@ -102,27 +97,21 @@ std::optional<ScriptNativeFn> resolveComponentAccessor(std::string_view methodNa
 void registerEntityMethods()
 {
     const type_index_t entityType = type_index_v<Entity>;
-    addNativeMethod(entityType, "get", entityMethod([](Entity& entity, ScriptArgs args) -> ScriptValue {
-                        expectArgs(args, 1);
-                        const type_index_t type = componentTypeNamed(scriptToString(args[0]));
-                        return componentOn(entity, type) ? ScriptValue{componentRef(&entity, type)} : ScriptValue{};
-                    }));
-    addNativeMethod(entityType, "has", entityMethod([](Entity& entity, ScriptArgs args) -> ScriptValue {
-                        expectArgs(args, 1);
-                        return componentOn(entity, componentTypeNamed(scriptToString(args[0]))) != nullptr;
-                    }));
-    addNativeMethod(entityType, "add", entityMethod([](Entity& entity, ScriptArgs args) -> ScriptValue {
-                        expectArgs(args, 1);
-                        const std::string  typeName = scriptToString(args[0]);
-                        const type_index_t type     = componentTypeNamed(typeName);
-                        return entity.addComponentByName(typeName) ? ScriptValue{componentRef(&entity, type)} : ScriptValue{};
-                    }));
-    addNativeMethod(entityType, "remove", entityMethod([](Entity& entity, ScriptArgs args) -> ScriptValue {
-                        expectArgs(args, 1);
-                        const std::string typeName = scriptToString(args[0]);
-                        (void)componentTypeNamed(typeName);
-                        return entity.removeComponentByName(typeName);
-                    }));
+    addMethod(entityType, "get", fn([](Entity& entity, const std::string& typeName) -> ScriptValue {
+                  const type_index_t type = componentTypeNamed(typeName);
+                  return componentOn(entity, type) ? ScriptValue{componentRef(&entity, type)} : ScriptValue{};
+              }));
+    addMethod(entityType, "has", fn([](Entity& entity, const std::string& typeName) -> bool {
+                  return componentOn(entity, componentTypeNamed(typeName)) != nullptr;
+              }));
+    addMethod(entityType, "add", fn([](Entity& entity, const std::string& typeName) -> ScriptValue {
+                  const type_index_t type = componentTypeNamed(typeName);
+                  return entity.addComponentByName(typeName) ? ScriptValue{componentRef(&entity, type)} : ScriptValue{};
+              }));
+    addMethod(entityType, "remove", fn([](Entity& entity, const std::string& typeName) -> bool {
+                  (void)componentTypeNamed(typeName);
+                  return entity.removeComponentByName(typeName);
+              }));
     setMethodResolver(entityType, &resolveComponentAccessor);
 }
 
