@@ -1,0 +1,9 @@
+{
+  "plan": "script-native-registry",
+  "status": "todo",
+  "features": [
+    {"id": "S5.1", "roadmap": ["S5"], "title": "script::fn template front-end + ClassRegistry registration + dual call convention; pilot: SceneScriptBindings", "status": "todo", "evidence": []},
+    {"id": "S5.2", "roadmap": ["S5"], "title": "migrate LuaWidgetHandle (8) + GameplayScriptFunctions (1)", "status": "todo", "evidence": []},
+    {"id": "S5.3", "roadmap": ["S5"], "title": "migrate Entity:call + retire addNativeMethod + string-path audit + enumeration test", "status": "todo", "evidence": []}
+  ]
+}

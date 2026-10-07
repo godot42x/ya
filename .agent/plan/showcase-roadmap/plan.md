@@ -130,7 +130,7 @@ G3.0 盘点（2026-10-07，读代码核实）：渲染侧（CSM 最多 4 级、I
 | --- | --- | --- |
 | `ui-behavior-capabilities`（下一步 C3） | P0 | 排在 game-ui S4 之前，2D demo 的背包 / 商店 / 对话 UI 依赖 |
 | `game-ui-script-framework`（下一步 S4 条目模态与取消路由） | P0 | 2D / 3D demo 的模态界面依赖 |
-| **S5 脚本 native 注册重构**（用户 2026-10-07 拍板，子计划待问答）：`script::fn` 模板推导参数类型消灭手写 `argTypes`（owner 位由 `ScriptSelfHandle` 参数类型决定）；native 以反射函数身份进 `ClassRegistry`，`collectMembers` 与反射方法一视同仁导出——单一事实源、映射可枚举；字符串路径退到只剩 `ScriptMethodResolver` 真动态场景；迁移全仓 13 个手写注册点 | P1 | G3.2 物理脚本 API 是第一个大消费者（几十个函数），必须排在其前；与 C3 同碰绑定区文件，串行 |
+| **S5 脚本 native 注册重构**（用户 2026-10-07 拍板；子计划已建 `script-native-registry/`，方案问答闭环）：`script::fn` 模板推导参数类型消灭手写 `argTypes`（owner 位由 `ScriptSelfHandle` 参数类型决定）；native 以反射函数身份进 `ClassRegistry`，`collectMembers` 与反射方法一视同仁导出——单一事实源、映射可枚举；字符串路径退到只剩 `ScriptMethodResolver` 真动态场景；迁移全仓 13 个手写注册点 | P1 | G3.2 物理脚本 API 是第一个大消费者（几十个函数），必须排在其前；与 C3 同碰绑定区文件，串行 |
 | `font-framework-convergence` | P1 | 文本逐字显示、CJK 显示质量 |
 | `editor-undo-redo` | P1 | 编辑器工具叙事 |
 | `gui-framework-editor-readiness`（Phase 8 移除 ImGui 双栈） | P1 | GUI 框架成熟度的核心证明 |

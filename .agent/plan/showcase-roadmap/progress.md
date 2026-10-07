@@ -55,3 +55,4 @@
 - 入库口径（HelloMaterial，profile，trace off，immediate，uncapped，600 采样）：三次 frame p50 = 8.673 / 8.355 / 8.539 ms，相对均值最大偏差 1.96%（验收 ±3%）；全量 `ya-testing` 1713/1713。
 - 已知边界（perf-baseline 记录）：固定 dt 未覆盖脚本 `elapsedSeconds` 与渲染 host clock（墙钟驱动动画不按帧对齐）；采样窗口内 `FileWatcher::poll` 仍每帧跑；summary 写失败退出码未做实机复现。
 - 新计划项：W4（profile 构建下 5 个 GUI 测试栈损坏，PB1 复核发现，P1，GUI 线排查）；S5（脚本 native 注册重构：模板签名推导 + 反射化函数库，用户 2026-10-07 拍板，P1，波 3 开头、先于 G3.2，与 C3 串行）；GA1 附带修 `Example.xmake.lua` 大小写路径（全新 checkout 链示例失败）。
+- S5 方案问答闭环（2026-10-07）：路线定为「单一注册表条目 + 双调用约定」（SOTA 形态：签名进 `ClassRegistry`、调用体走 ScriptValue 跳板，热路径不过 any 装箱）；注册时序 = GameRuntime 集中清单；迁移 = 试点先行。子计划 `script-native-registry/` 已建。
