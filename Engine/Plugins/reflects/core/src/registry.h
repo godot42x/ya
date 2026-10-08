@@ -4,6 +4,7 @@
 #include "enum.h"
 #include "lib.h"
 #include "type_index.h"
+#include "type_ops.h"
 
 
 
@@ -35,25 +36,19 @@ struct ClassRegistry
     template <typename T>
     std::shared_ptr<Class> registerClass(const std::string &name, Class *classInfo)
     {
-        auto id = refl::type_index_v<T>;
+        std::unique_ptr<Class> owned(classInfo);
+        const auto             id = refl::type_index_v<T>;
+        // registerType 对 id / 名字冲突抛异常，且抛前不改注册表。owned 在抛出时仍持有 classInfo。
+        refl::TypeRegistry::instance().registerType<T>(name);
 
         if (const auto byType = typeIdMap.find(id); byType != typeIdMap.end()) {
-            if (byType->second->name != name) {
-                delete classInfo;
-                throw std::runtime_error("Reflection type id collision between " + byType->second->name + " and " + name);
-            }
-            delete classInfo;
             return byType->second;
         }
 
-        auto ptr = std::shared_ptr<Class>(classInfo);
-
-        // 设置类型索引
+        auto ptr       = std::shared_ptr<Class>(owned.release());
         ptr->typeIndex = id;
-
-        classes[name] = ptr;
-        typeIdMap[id] = ptr;
-
+        classes[name]  = ptr;
+        typeIdMap[id]  = ptr;
         return classes[name];
     }
 

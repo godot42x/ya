@@ -158,3 +158,69 @@ xmake r ya-testing -- --gtest_also_run_disabled_tests --gtest_filter=ReflectionR
 - ComponentJson 对象键按 nlohmann 的有序 map 排列，不是插入序。实测脚本对象是 `enabled, executionOrder, propertyOverrides, scriptPath`。
 - 序列化警告里的类型名是 Itanium `typeid().name()`，不是稳定的 `type_index` 拼写。
 - 本机 Clang：`int == int32_t`，`unsigned int == uint32_t`，`long != int64_t`。
+
+## 2026-10-08 — RR1 blocked（TypeOps / MetaValue 已进 reflects-core，引擎起不来）
+
+代码在 `reflects-core`，没有改消费方，没有 commit。`reflects-core-test` 60/60（基线 43 + 新增 17）。`sizeof(MetaValue)` = 64，`alignof` = 16。Inline：可平凡拷贝且 `size <= 32`、`align <= 16`、`size > 0`。
+
+`ya-testing` 在进 `main` 之前终止，退出码 255：
+
+```
+std::runtime_error: Reflection type name collision on 'CubemapSource'
+```
+
+`ClassRegistry::registerClass` 会给该类建一行 TypeOps，名字用类名。TypeRegistry 规定不同 `type` 不能共用一个名字。原先 `ClassRegistry` 对同名是后写覆盖 `classes[name]`，`typeIdMap` 里两份都留着。下面这些嵌套类型本来就共用反射名，静态初始化注册到第二个就抛：
+
+| 名字 | 类型 |
+| --- | --- |
+| `CubemapSource` | `SkyboxComponent` / `EnvironmentLightingComponent` |
+| `CylindricalSource` | 同上 |
+| `AuthoringParams` | Phong / Unlit / PBR 的嵌套结构 |
+| `SamplerConfig` | `TextureSlot.h` 与 `EditorPropertyGraphTest.cpp` |
+
+场景 JSON 里没有这些字符串。按 RR1「不改引擎」没有改名，也没有把这条抛掉。冒烟没跑：runtime 会在同一处终止。
+
+`reflects-generator-test`：1/11，通过的仍是 `ReflectorTest.GetNonExistentClass`，与 RR0 相同（生成规则休眠）。`xmake run` 退出码 1，来自那 10 个已知失败。
+
+建议（二选一，本轮没做）：
+
+1. 给这四组嵌套类型各起唯一反射名，名字唯一这条就成立。这是引擎改动。
+2. 名字唯一只约束 `registerType` / `registerTypeRaw`。`registerClass` 仍建 Object 行，类名已被另一个 type 占用时沿用旧的后写覆盖，不抛。这是对「不同 type 抢同一个名字 → 抛」在 `registerClass` 路径上的放宽。
+
+## 2026-10-08 — RR1 done_pending_windows
+
+反射名唯一是硬规则。不同 type 抢同一个名字，启动仍然抛 `Reflection type name collision`，没有放宽 `registerClass`。引擎里原有的冲突已去掉：
+
+| 原反射名 | 处理 |
+| --- | --- |
+| `CubemapSource` / `CylindricalSource` | Skybox 与 EnvironmentLighting 两份逐字相同的嵌套类型合成 `namespace ya` 顶层类型（`ECS/Component/3D/EnvironmentSource.h`）。反射名不变，`hasAllFaces` / `hasFile` 各留一份 |
+| `AuthoringParams` | 仍嵌套，C++ 名改回 `AuthoringParams`，反射名用 `YA_REFLECT_BEGIN_NAMED` 显式指定（`PhongMaterialComponent::AuthoringParams` 等）。`Example/` 与 `Engine/Content` 没有持久化这个名字 |
+| `SamplerConfig` | `EditorPropertyGraphTest` 的局部类型改为 `DeepNestedSamplerConfig`（`TextureSlot.h` 的那个保留） |
+
+全仓 `YA_REFLECT_BEGIN` 再扫，没有别的重名。
+
+验证（macOS debug）：
+
+- `ya-testing` 1735/1735，另有 4 个 `DISABLED_`。`ReflectionSceneResave` 8/8，场景重存哈希未变。
+- `reflects-core-test` 60/60。`reflects-generator-test` 1/11，通过的仍是 `ReflectorTest.GetNonExistentClass`。
+- 冒烟退出码都是 0，日志没有 `[Error]`：`walk_one_cell.py` 走过一格 `(0.5, 0.5) -> (1.5, 0.5)`；GreedySnake 与 HelloMaterial `--exit-after-frame=90` 各在 90 帧退出。
+
+Windows 验证点未跑。
+
+### RR1 返工（状态仍是 done_pending_windows）
+
+- TypeOps 生命周期只留 `MetaLife life`，并加上 `defaultConstruct`。`size` / `align` 只在 `MetaLife`。删掉顶层重复的函数指针和 `bindLife`，调用方走 `ops.life.*`。
+- `convertTo`：`out` 指向已构造对象。同类型只对可平凡拷贝类型 memcpy；非平凡同类型返回 false（调用方用 `tryGet` / `materialize`）。
+- `registerClass` 先调 `types.registerType<T>(name)`，不再自己查一遍冲突。抛异常前不改注册表，`classInfo` 仍由 `unique_ptr` 释放。
+- 冲突信息带双方编译器类型名。`TypeOps::compilerName` 只用于诊断，由 `registerType<T>` 填，`registerTypeRaw` 可空，不得持久化。
+- `-0.0` 转无符号整数视为 0（零一律非负）。
+- `MetaValue` 里对平凡联合体的析构再 placement new 改为赋值；`reset()` 两个分支的字段复位合成一处。
+- 反射名：`YA_REFLECT_BEGIN_NAMED` 把显式名下传到原来的注册路径（含 `YA_PROFILE_STATIC_INIT` 与 `___YA_REFLECT_EXTENSION`）。三个材质参数的 C++ 名回到 `AuthoringParams`。
+
+RR5a 注意：`toInt64` / `convertTo` 等每次调用都查一次 TypeRegistry 哈希表。接入脚本调用路径前用微基准确认，必要时在 MetaValue 里缓存 TypeOps 指针。
+
+验证（macOS debug，返工后）：
+
+- `ya-testing` 1737/1737，另有 4 个 `DISABLED_`。`ReflectionSceneResave` 8/8，场景重存哈希未变。新增 `ReflectionNamedType` 2 个。
+- `reflects-core-test` 61/61。`reflects-generator-test` 1/11，通过的仍是 `ReflectorTest.GetNonExistentClass`。
+- 冒烟退出码都是 0，日志没有 `[Error]`：`walk_one_cell.py` 走过一格 `(0.5, 0.5) -> (1.5, 0.5)`；GreedySnake 与 HelloMaterial `--exit-after-frame=90` 各在 90 帧退出。

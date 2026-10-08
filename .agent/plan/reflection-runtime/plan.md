@@ -27,6 +27,8 @@
 | 动态注册 | 加载后可注册 / 注销（Godot extension 式），每次变更提升版本号并发通知，消费方重建缓存 |
 | 组件级自定义序列化 | `ComponentJson::serializeCustom` 与 `trySerializeCustomType` 一起收编为 TypeOps 上类类型的 JSON facet |
 | 编辑器能力注册表 | GUI 线 10F-6 / 10F-7 并入 RR4，实现为 TypeOps 上的编辑器 facet；10F-1~5 留 GUI 线先做；10F-8 排在 RR4 之后 |
+| 反射名 | 全局唯一，是持久身份。注册时冲突即抛（任何进程启动即暴露），报错带双方编译器类型名；嵌套类型撞名时改名或用 `YA_REFLECT_BEGIN_NAMED` 显式指定。C++20 无法在编译期区分外层是类还是命名空间，不做自动推断 |
+| 反射前端 | 保持宏写法，本线不做代码生成前端 |
 | S5 | 暂停 S5.2；S5 剩余部分并入 RR8；S5.1 保留 |
 | 优先级 | P1，排在 C3 与 G3.2 之前 |
 
@@ -45,7 +47,7 @@ reflects 拥有类型身份、成员 schema、TypeOps 与 MetaValue 机制；各
 
 ### 2.3 MetaValue
 
-- **内建种类**：空、bool、整数（int64）、浮点（double）、字符串、借用引用。
+- **内建种类**：空、bool、整数、浮点、字符串、借用引用。MetaValue 保留确切类型（`int8` 就是 `int8`，不压成 int64）；reflects 自己为全部基础类型（bool、各宽度整数含 `long` 系列、float、double、`std::string`）登记 TypeOps 行与种类，提供带范围检查的数值转换（越界失败，不截断），int64 / double 只是种类的规范表示。语言后端按种类映射基础类型，取代手写的窄化 codec。
 - **三种存储形态**：
   1. **内联值**：可平凡拷贝且 ≤ 32 字节的已注册类型（vec / quat / 句柄 / 矩形），拷贝即 memcpy，热路径。
   2. **持有的盒子**：任意已注册类型，堆上存储，拷贝 / 析构经 TypeOps。覆盖按值返回结构体或容器（原 `std::any` 承担的部分）。
