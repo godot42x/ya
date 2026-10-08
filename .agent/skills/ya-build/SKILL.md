@@ -275,6 +275,35 @@ worktree 通过目录链接（macOS/Linux symlink，Windows junction）指回主
 的同一份，避免各自下载/存储。系统目录（~/Library/Caches 等）从不写入：
 删除主项目目录即整体清理，不留垃圾。
 
+### 开一个独立 worktree（换构建模式又不影响别人时用）
+
+共享工作区只有一个 xmake 配置（`xmake f -m profile` 会改掉所有人正在用的
+配置），所以 profile / gui profile 这类模式要去独立 worktree 里跑：
+
+```bash
+git worktree add /tmp/ya-profile HEAD        # 从主项目里执行，别用 --detach 以外的姿势
+cd /tmp/ya-profile && python3 Script/ya.py cfg --mode profile
+```
+
+`cfg` 会做三件事：把重型 submodule 占位目录换成指回主项目的链接、把
+Vulkan SDK 链回来、配置 xmake。**在它之前不要跑裸 `git submodule update`**，
+否则重型仓库会先被完整拉下来，脚本才把干净的 checkout 转回链接。
+跑完 `git status` 应当是干净的（重型路径带 skip-worktree 标记）。
+
+实测（2026-10-09，macOS）：`git worktree add` + `cfg --mode profile` 全程没有
+任何下载，重型 submodule 与 SDK 都是链接，配置直接可用。
+
+### 三方库复用
+
+- **xmake 包**（glm / entt / sol2 / lua / nlohmann_json / libsdl3 /
+  vulkan-headers / vulkan-memory-allocator / gtest …）装在全局
+  `~/.xmake/packages`（约 600 MB），**所有 worktree 直接复用**，不需要每个
+  worktree 重新拉。worktree 里没有独立的包目录，只有 `.xmake/macosx`
+  （xmake 自己的配置缓存）。
+- **Vulkan SDK**（约 1.3 GB，gitignore）见下：主项目真实目录，worktree
+  symlink。
+- 所以真正随 worktree 数量线性增长的只有 **`build/`**（见下）。
+
 - 主项目解析：`$YA_CACHE_ROOT` → `git config ya.cacheRoot`（独立 clone 想
   共享时设成主项目路径）→ 自动推导（git worktree 的 `--git-common-dir`
   指向主项目，所有 worktree 自动共享，零配置）。
@@ -304,6 +333,11 @@ worktree 通过目录链接（macOS/Linux symlink，Windows junction）指回主
   `Engine/ThirdParty/VulkanSDK/` 触发重新下载）；误清后重跑
   `python3 Script/ya.py vulkan-sdk-macos` 即可恢复。
 - 若链接目标异常，先跑 `python3 Script/ya.py cfg` 再看构建。
+- **每个 worktree 有自己的 `build/`**：一份 debug 构建约 11 GB，profile 同量级。
+  把 worktree 放 `/tmp` 并不省空间（macOS 上 `/tmp` 和数据盘是同一卷），
+  开第二个构建前先 `df -h` 确认有 10 GB 以上可用；构建中途写满会报
+  "cannot copy file … No space left on device"，且会连带拖垮其他 agent 的构建。
+  用完 `git worktree remove <path>`（或先删 `build/`）把空间还回去。
 
 ## 相关 skills
 

@@ -72,6 +72,14 @@
 - 范围按用户选的 A：堆分配按子系统归类（profile 构建下的全局分配钩子）挪到 PB6。
 - 详见 `../perf-baseline/progress.md`（PB4 条目），含一个值得讲的观察：Apple Silicon 上 GPU 显存 806 MiB 与进程 RSS 253 MiB 既不能相加也不能相减——MoltenVK 的 private-storage 资源占同一块物理内存但不映射进进程。
 
+## 2026-10-09 — M6 / PB6 报告脚本 + worktree 文档维护
+
+- `Script/perf/bench_run.py`（一条命令跑一组场景）+ `bench_compare.py`（两份 summary → markdown 对比表，含 meta 不一致告警）。详见 `../perf-baseline/progress.md`。
+- **首份 profile 基线未出**：机器只剩 1.2 GiB，主项目 debug `build/` 已 11 G，profile worktree 构建中途写满。不是代码问题，需先腾空间。
+- 并发构建会毁掉数字（同场景两次 frame p50 差 87%），正式基线必须单独跑。
+- 顺带维护了 worktree 相关文档（`ya-build` skill「共享缓存」段）：补了**开独立 worktree 的配方**（此前只写了共享机制、没写怎么建）、**三方库复用口径**（xmake 包在 `~/.xmake/packages` 全局共享、worktree 零重下；真正随 worktree 线性增长的只有 `build/`），以及上面这条磁盘代价。
+- 实测确认：重型 submodule（`Vulkan-Samples-Assets` ~1G、`LearnOpenGL` ~250M）与 Vulkan SDK 在 worktree 里都是指回主项目的链接 + skip-worktree，`git status` 干净，全程无下载；小 submodule（ImGui / ImGuizmo / log.cc / utility.cc）各处保持标准 git。
+
 ## 2026-10-09 — PB2 收口（M1 pass 级 GPU timestamp）
 
 - M1 完成：`RenderGraphExecutor` 逐 pass 括 `beginGpuPass/endGpuPass`，Vulkan 侧独立的 pass timestamp query pool 按 flight 延迟回读（挂在 fence 等待之后，`VK_NOT_READY` 跳过不等），`gpu_passes` 段进 `bench_summary.json`，编辑器 profiling 段有 pass 表；同 checkpoint 带 `render_counters`（draw / dispatch / 绑定 / 2D 合批）。

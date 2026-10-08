@@ -76,6 +76,19 @@
 - 一个值得记的观察（不是 bug）：同一次运行里 GPU 显存 806.58 MiB 远大于进程 RSS（p50 253、峰值 972）。Apple Silicon 是统一内存，但 MoltenVK 的 private-storage 资源不在进程的 `resident_size` 里——它们占的是同一块物理内存，却不映射进进程地址空间。所以这两列既不能相加，也不能相减，只能并列看。面试讲内存时这是个好例子。
 - 保留：堆分配按子系统归类（PB6）；Windows 的 `GetProcessMemoryInfo` 链接 `psapi` 已加进 `Core/xmake.lua`，但没在 Windows 上编译验证过。
 
+## 2026-10-09 — PB6 对比报告脚本（基线被磁盘挡住）
+
+- 完成：
+  - `Script/perf/bench_run.py`：一条命令跑一组场景。走 `ya_bundle_tool.py build-targets` 拿目标清单（项目的玩法代码是运行时 dlopen 的独立 dylib，只编 `ya-runtime` 不够——第一次就是这么踩的），构建后直接驱动运行时（`--ya-project=` / `--benchmark=` / `--benchmark-output=`），输出到 `<out>/<scene>/run<N>/bench_summary.json` + `index.json`。支持 `--repeat`（稳定性）、`--filter`、`--timeout`、`--no-build`。
+  - `Script/perf/bench_compare.py`：两份 summary → markdown。先比对 `meta`（commit / 构建模式 / GPU / 分辨率 / present mode 不同就明说不是干净的前后对比），再按段出 metric 表（p50 / p95 / p99 / mean / max 可配），超 `--threshold` 打标记；facts（`supported`、`unifiedMemory`、`heaps`）单独列，不参与百分比。
+  - 顺带修了脚本对 meta 形状的假设：JSON 里 `meta` 是**平铺**的（`gitCommit` / `buildMode` / `gpu`，不是 `host.*`），分辨率是 `renderResolution{width,height}`。
+- 验证：debug 构建下 `bench_run.py` 跑 HelloMaterial ×2 成功（含 index.json），`bench_compare.py` 对两次运行出表并正确标出所有超 3% 的行。
+- 阻塞（不是代码问题）：
+  - **首份 profile 基线没跑出来**。建了 `/tmp/ya-profile` worktree 并 `ya.py cfg --mode profile`（这一步完全按 skill 里写的走通了：重型 submodule 与 Vulkan SDK 都是链接、零下载、`git status` 干净），`ya-runtime` 也编过了，但编示例项目模块时磁盘写满（`No space left on device`）。主项目 debug `build/` 已 11 G，机器只剩 1.2 GiB。
+  - **并发构建会毁掉数字**：同场景连跑两次 frame p50 = 11.58 / 21.71 ms（差 87%），因为另一条线在并发编译。正式基线必须单独跑。
+- 已把这个代价写进 `ya-build` skill：每个 worktree 自带 `build/`（一份构建约 11 G），`/tmp` 与数据盘同卷，开第二个构建前先 `df -h`。
+- 下一步：腾出 ~10 GB 后，在 profile worktree 里 `bench_run.py` 跑 PerfLab（Sponza 需先 `fetch_sponza.py`）×3 入库 `baselines/macos/`。
+
 ## 2026-10-09 — PB2 pass 级 GPU timestamp + render_counters（M1）
 
 - 完成：

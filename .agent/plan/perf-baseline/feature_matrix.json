@@ -97,8 +97,13 @@
         "M6"
       ],
       "title": "compare report + one-command run + macOS baseline",
-      "status": "todo",
-      "evidence": []
+      "status": "partial",
+      "evidence": [
+        "Script/perf/bench_run.py",
+        "Script/perf/bench_compare.py",
+        "verified end to end on the debug build: bench_run.py ran HelloMaterial x2 into <out>/HelloMaterial/run{1,2}/bench_summary.json + index.json; bench_compare.py diffed the two into a markdown table with meta mismatch warnings"
+      ],
+      "remaining": "the first official (profile) baseline is blocked on disk: 1.2 GiB free while one build tree is ~11 GB. Also, a concurrent build on the same machine moves frame p50 by ~87%, so the baseline must be taken on an otherwise idle machine"
     },
     {
       "id": "PB7",
