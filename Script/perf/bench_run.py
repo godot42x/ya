@@ -116,6 +116,18 @@ def collect_configs(args: argparse.Namespace) -> list[Path]:
     return unique
 
 
+def rel_to_root(path: Path, root: Path) -> str:
+    """Path relative to the index that records it, so the run tree can be moved
+    or committed without rewriting it. Paths outside the root (a bench config in
+    the workspace while the suite was written to /tmp) stay absolute: a `../..`
+    chain that walks out of the tree would resolve against whatever directory the
+    reader happens to run from."""
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def run_one(binary: Path, project: Path, config: Path, out_dir: Path, timeout_s: float, env: dict[str, str]) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -144,10 +156,15 @@ def run_one(binary: Path, project: Path, config: Path, out_dir: Path, timeout_s:
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
         return {"ok": False, "error": f"unreadable summary: {error}"}
+    meta = summary.get("meta", {})
     return {
         "ok": True,
         "seconds": round(time.time() - started, 2),
-        "commit": summary.get("meta", {}).get("host", {}).get("gitCommit", ""),
+        # `meta` is flat: `buildBenchSummaryJson` merges the host facts into it
+        # rather than nesting them under `host`, so a `meta.host.gitCommit`
+        # lookup returns nothing and the index silently records an empty commit.
+        "commit": meta.get("gitCommit", ""),
+        "dirty": bool(meta.get("gitDirty", False)),
         "frameP50": summary.get("frame", {}).get("frameMs", {}).get("p50"),
     }
 
@@ -205,7 +222,18 @@ def main() -> int:
             run_dir = out_root / scene / f"run{run}"
             print(f"-- {scene} run{run}/{args.repeat}")
             record = run_one(binary, project, config, run_dir, args.timeout, env)
-            record.update({"scene": scene, "run": run, "config": str(config), "path": str(run_dir / "bench_summary.json")})
+            record.update(
+                {
+                    "scene": scene,
+                    "run": run,
+                    # Relative to the index, which is what makes the tree
+                    # movable: an index that spells out `/tmp/...` stops
+                    # resolving the moment the suite is copied into the repo
+                    # (which is where a committed baseline ends up).
+                    "config": rel_to_root(config, out_root),
+                    "path": rel_to_root(run_dir / "bench_summary.json", out_root),
+                }
+            )
             index.append(record)
             if record["ok"]:
                 print(f"   ok  {record['seconds']}s  frame p50 {record['frameP50']}")

@@ -7,9 +7,9 @@ past `--threshold` percent marked.
 
 Two things the table deliberately says out loud rather than hiding:
 
-- The two runs' `meta` are compared first. Different commit, build mode, GPU or
-  resolution means the numbers are not apples-to-apples, and that is printed at
-  the top instead of being folded into the deltas.
+- The two runs' `meta` are compared first. A different scene, commit, build
+  mode, GPU or resolution means the numbers are not apples-to-apples, and that
+  is printed at the top instead of being folded into the deltas.
 - Facts (non-series values such as `gpu_memory.supported` or
   `process_memory.unifiedMemory`) are listed separately; a percentage change
   would be meaningless for them.
@@ -45,7 +45,7 @@ def load_summary(path: Path) -> dict:
     """
     if path.is_file() and path.name == "index.json":
         data = json.loads(path.read_text(encoding="utf-8"))
-        return load_summary(Path(data["runs"][0]["path"]))
+        return load_summary(summary_from_index(path))
     if path.is_file():
         return json.loads(path.read_text(encoding="utf-8"))
     if (path / "bench_summary.json").is_file():
@@ -67,6 +67,23 @@ def load_summary(path: Path) -> dict:
             )
         return load_summary(run_dirs[0])
     raise SystemExit(f"cannot read a benchmark summary from {path}")
+
+
+def summary_from_index(index_path: Path) -> Path:
+    """The summary a run-set index points at.
+
+    Paths are resolved against the index's own directory, which is what makes a
+    committed baseline readable after the tree is moved: `bench_run.py` records
+    `Lights_50/run1/bench_summary.json`, not the `/tmp/...` it ran in, so the
+    suite still resolves once it lives in the repo.
+    """
+    data = json.loads(index_path.read_text(encoding="utf-8"))
+    runs = data.get("runs", [])
+    ok = [r for r in runs if r.get("ok")]
+    if not ok:
+        raise SystemExit(f"{index_path} records no successful run")
+    recorded = Path(ok[0]["path"])
+    return recorded if recorded.is_absolute() else (index_path.parent / recorded).resolve()
 
 
 def series_keys(section: dict) -> dict:
@@ -108,8 +125,12 @@ def meta_lines(before: dict, after: dict) -> list[str]:
     a = after.get("meta", {})
     # A differing commit / build mode / GPU means the deltas are not a clean
     # before/after; say so rather than letting the reader assume they are.
+    # `scene` leads the list because it is the one field whose mismatch makes
+    # every delta below meaningless by definition -- comparing Meshes_10000
+    # against Sprites_500 produced a clean-looking -36.85% on frame p50 with
+    # nothing in the table saying the two runs were not the same scene.
     fields = [
-        ("scene", "scene", False),
+        ("scene", "scene", True),
         ("commit", "gitCommit", True),
         ("dirty checkout", "dirty", False),
         ("build mode", "buildMode", True),

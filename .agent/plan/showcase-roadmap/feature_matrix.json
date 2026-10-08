@@ -91,8 +91,12 @@
       "priority": "P0",
       "title": "before/after report script",
       "owner_line": "new:perf-baseline",
-      "status": "todo",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "perf-baseline PB6: Script/perf/bench_compare.py + bench_run.py, baselines/macos/profile-15277c00/ (15 runs, 9 scenes)",
+        "Lights_50 three-run stability: frame p50 8.384/8.349/8.373 ms, spread 0.4% (within the plan's +-3%)",
+        "index rebuilt after review: commits backfilled, paths relative to the index, cross-scene compare warns"
+      ]
     },
     {
       "id": "M7",

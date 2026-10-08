@@ -137,3 +137,24 @@
 
 - 验证：`ya-testing` debug **1767/1767**（`RenderCounterSourceRecordsCountersAndTakesThem` 改名并改为新契约：采样只读、清零归帧边界）。修复后实跑基准：`gpu_passes` 17/17 个 pass、count 全 600 不变；八个计数器 max == p50。
 - 未变：`gpu_passes` 的 ±3% 三连跑仍未实测（debug + 并行编译，噪声压过信号），归 PB6 的 profile 口径。
+
+## 2026-10-09 — PB6 复查：让已入库的基线能被信任与复现
+
+PB6 的基线已入库，但复查发现三处问题，都在「这份基线本身可不可信、能不能被别人复现」这一件事上：
+
+1. **`index.json` 的 commit 全是空串（真缺陷）。** `bench_run.py` 读 `meta.host.gitCommit`，而 `buildBenchSummaryJson`（`Core/Profiling/BenchSummary.cpp`）是把 host 事实**扁平合并**进 `meta` 的，没有 `host` 这一层——层级对不上，`.get()` 静默返回 `""`。已入库的 15 条记录全是 `"commit": ""`。这个 bug 隐蔽：同一批的 `bench_summary.json` 里 `meta.gitCommit` 正确（`15277c00`），`bench_compare.py` 也读对了，所以 `stability_Lights_50.md` 那张表里 commit 显示正常——**只有聚合索引这一层坏了，且不报错**。改成扁平读法，顺带补上 `dirty`（原来 `gitDirty` 也没进 index，基线自称干净与否无从在索引层核对）。
+
+2. **`index.json` 的路径指向 `/tmp`，入库后即失效。** 15 条记录的 `path` / `config` 全是 `/private/tmp/pb6-baseline/...` 和 `/private/tmp/ya-profile/...`。这台机器上因为摘要已被拷进仓库所以还读得到，但 `/tmp` 会被清空，`ya-profile` 那个 worktree 也已经没了（`git worktree list` 只剩主工作区）。而 plan §5 的验收是「`baselines/macos/` 有首份基线」——一份 manifest 指向临时目录、换个机器全是死链的基线不算数。修法：`bench_run.py` 记**相对 index 自身**的路径（root 外的路径保持绝对，`../..` 走出目录树的相对路径会依赖读者 CWD），`bench_compare.py` 按 index 所在目录解析。两侧一起改，只改一半会读不出来。
+
+3. **跨场景比较不告警。** `meta_lines` 里 `("scene", "scene", False)`——`must_match=False`，于是场景不同既不打 `**DIFFERENT**` 也不进 notes。实测拿 `Meshes_10000/run1` 对 `Sprites_500/run1`，脚本输出一张格式完整、数字齐全的表，`frame p50` 那行赫然写着 **-86.82% ▼**，全表零句提示。commit / buildMode / gpu / resolution / presentMode 都设了 must_match，偏偏漏了场景——而场景是唯一一个「不同就必然无意义」的字段。后来人拿这份基线做前后对比，完全可能把换场景读成性能改善。改成 must_match。
+
+- 已入库的 `index.json` 按新格式重建（无损）：15 条 commit 从各自 summary 的 `meta.gitCommit` 回填为 `15277c00a8c2d6367db8f1d726f0c8a3865e726a`，`dirty=false`，路径改相对，`project` 从 `/private/tmp/...` 改回 `Example/PerfLab/PerfLab.yaproject`。逐条核对：15 条全部可解析、全相对、commit 长度 40、`frameP50` 与 summary 一致。
+- 验证：
+  - 移动后仍可读：`cp -r` 整棵树到 `/tmp` 再用 index 解析，成功。
+  - 跨场景告警生效（Meshes_10000 vs Sprites_500 打出 scene differs），同场景（Lights_50 run1 vs run3）不误报，frame p50 -0.14% 与原表一致。
+  - `rel_to_root` 两个分支分别验证：root 内 → `Lights_50/run1/bench_summary.json`，root 外 → 保持绝对。
+  - `run_one` 的取值口径拿真实 summary 驱动比对：新写法得 `15277c00...`，旧写法得 `''`。
+- 保留 / 未做：
+  - **没有重跑基准**。基线数字本身没动过，改的只是索引和工具；且 PB6 刚记了并发构建能让同一场景 frame p50 差 87%，这个环境下重采只会污染数据。
+  - 本轮全程未编译：并发 agent 正在做 PB4 的堆分配钩子（`Core/Memory/` 新增未入库），`Engine/Source/Source.xmake.lua:92` 引用了尚未定义的 `ya_alloc_hook`，`xmake show -t ya-runtime` 直接失败。本轮的验证全部落在脚本行为与既有 summary 上，不依赖引擎构建。
+  - PB4 的堆分配钩子换方案一事（PB6 那节已记：shared 链接下替换 `operator new` 拦不到其它 image 的分配）本轮没碰，等那条线自己收口。
