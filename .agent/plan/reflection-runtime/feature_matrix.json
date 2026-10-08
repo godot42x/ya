@@ -1,9 +1,9 @@
 {
   "plan": "reflection-runtime",
-  "status": "todo",
+  "status": "in_progress",
   "critical_path": ["RR0", "RR1", "RR2", "RR5a", "RR5b", "RR6", "RR8"],
   "features": [
-    {"id": "RR0", "title": "behavior baseline: full-repo type x system matrix, characterization tests, scene resave baseline, microbench, type_index persistence audit", "status": "todo", "evidence": []},
+    {"id": "RR0", "title": "behavior baseline: full-repo type x system matrix, characterization tests, scene resave baseline, microbench, type_index persistence audit", "status": "done", "evidence": ["Engine/Test/Source/Core/ReflectionRuntimeBaselineTest.cpp", "Engine/Test/Source/Core/ReflectionSceneResaveBaselineTest.cpp", "Engine/Test/Source/Core/ReflectionRuntimeMicrobenchTest.cpp", "ReflectionRuntimeBaseline.*", "ReflectionSceneResave.*", "ReflectionRuntimeMicrobench.DISABLED_*"]},
     {"id": "RR1", "title": "reflects-core TypeOps + facets + MetaValue (inline / boxed / borrowed reference) + hash collision assert", "status": "todo", "windows_checkpoint": true, "evidence": []},
     {"id": "RR2", "title": "engine-side value type registration (glm, ScriptRef, handles, ScriptRect)", "status": "todo", "evidence": []},
     {"id": "RR3", "title": "serializer / PropertyAccessor / copier query TypeOps; ComponentJson custom hooks become JSON facets; scene resave zero diff", "status": "todo", "evidence": []},

@@ -6,7 +6,7 @@
 
 ## 0. 现状（2026-10-08 盘点，RR0 用全仓搜索复核）
 
-- **各消费方各写一份按类型分支的 if 链**（`type_index_v<...>` 次数）：`PropertyAccessor.cpp` 35、`ReflectionSerializer.cpp` 29（另有 `.h` 5）、编辑器 `EditorAutoPropertySection.cpp` 10、`ScriptBindings.cpp` 7、`ReflectionCopier.cpp` 5（另有 `.h` 5）、`PropertyGraphBuilder.cpp` 5、`PropertyEditorMetadata.cpp` 4。加一个新值类型（如 `glm::quat`）要改七处以上。
+- **各消费方各写一份按类型分支的 if 链**（`type_index_v<...>` 次数，RR0 实测，完整矩阵见 `progress.md`）：`PropertyAccessor.cpp` 38、`ReflectionSerializer.cpp` 31（另有 `.h` 11）、`ContainerProperty.h` 16、编辑器 `EditorAutoPropertySection.cpp` 13、`ScriptBindings.cpp` 13、`ReflectionCopier.cpp` 6（另有 `.h` 6）、`AssetRef.cpp` 6、`PropertyGraphBuilder.cpp` 6、`PropertyEditorMetadata.cpp` 4。加一个新值类型（如 `glm::quat`）要改七处以上。
 - **已有的半成品扩展点**：序列化器 `trySerializeCustomType`；`ECS/ComponentJson` 的按组件 `serializeCustom`（W2）。
 - **两套动态值并存**：反射调用 ABI 是 `std::any` + `ArgumentList`；脚本是封闭 variant `ScriptValue`（glm 向量、句柄、`ScriptRect` 写死成分支）。`Function::invoker` 引擎内只有 `ScriptBindings` 调用；`ArgumentList` 另被 `reflects/core-test`、`reflects/generator-test` 使用（不在 `ya-testing` 内）。`ScriptValue` 消费方 25 个文件，含 `LuaScriptLive.cpp`、`ScriptPropertyPreview`。
 - **引用语义缺失**：`ArgumentList::get` 对 const `std::any` 做 `any_cast<T>`——非 const 引用参数 `T&` 编译不过，`const T&` 实为拷贝，`T*` 只能当裸指针值；无输出参数。脚本导出跳过全部指针成员（`property.bPointer`）。
@@ -59,7 +59,7 @@ reflects 拥有类型身份、成员 schema、TypeOps 与 MetaValue 机制；各
 
 ## 3. Checkpoints
 
-每个 checkpoint 结束时全量 `ya-testing`、`reflects-core-test`、`reflects-generator-test` 绿；旧路径在被替代的同一 checkpoint 删除，不留平行接口。
+每个 checkpoint 结束时全量 `ya-testing`、`reflects-core-test` 绿，`reflects-generator-test` 不差于 RR0 基线（生成规则自 `320fa59b` 休眠，现状 1/11，RR5a 开工前定恢复或删除）；旧路径在被替代的同一 checkpoint 删除，不留平行接口。
 
 **关键路径**（C3 / G3.2 只依赖这条）：RR0 → RR1 → RR2 → RR5a → RR5b → RR6 → RR8。RR3、RR4、RR7 在关键路径之外，RR2 之后按文件冲突面安排；RR4 还要等 GUI 线 10F-1~5。
 
@@ -92,4 +92,4 @@ reflects 拥有类型身份、成员 schema、TypeOps 与 MetaValue 机制；各
 - 非 const 引用参数、输出参数、指针成员可经反射动态调用 / 读写，写入落在原对象上（测试断言）。
 - `std::any` / `ArgumentList` 不在 reflects 外部 ABI；`ScriptValue`、`Function::payload` 删除。
 - 加载后注册一个类型的方法、按模块注销，脚本与编辑器收到通知后看到变更（测试断言）。
-- `reflects-core` 零依赖保持；三个测试 target 全绿；`Example/` 场景重存零 diff；微基准回退 ≤ 5%；2D RPG / GreedySnake 冒烟正常；Windows 三个验证点通过。
+- `reflects-core` 零依赖保持；`ya-testing` 与 `reflects-core-test` 全绿，`reflects-generator-test` 已恢复或已删除；`Example/` 场景重存零 diff；微基准回退 ≤ 5%；2D RPG / GreedySnake 冒烟正常；Windows 三个验证点通过。

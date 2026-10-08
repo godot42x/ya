@@ -16,3 +16,145 @@
 - `type_index`：实现跨 DLL、跨运行稳定，无需改；跨编译器值不同（Clang 实测 `glm::vec<3, float>` / `std::string`），边界加「永不持久化」，RR0 核查现状。
 - 新增：facet 缺失策略、注册时哈希碰撞断言、按模块注销与线程模型（主线程帧边界注册、后台读快照）、`Example/` 场景重存零 diff、微基准不进 gtest 断言、三个 Windows 验证点、RR9 文档与 skill 吸收。
 - 用户拍板：`ComponentJson::serializeCustom` 收编为 JSON facet；GUI 线 10F-6 / 10F-7 与 TypeOps 是同一件事，并入 RR4（避免编辑器另造一张平行注册表），10F-1~5 留 GUI 线先做，10F-8 排在 RR4 之后。
+
+## 2026-10-08 — RR0 行为基线
+
+生产代码未改。测试锁住的是现状，含下面「现有行为怪异」。
+
+### 类型 × 系统
+
+列：JSON 序列化 / PropertyAccessor / Copier / 脚本 crossing / 编辑器控件 / 编辑器元数据 / PropertyGraph / ComponentJson 自定义。
+
+「支持」只算真正按值类型分支的路径。PropertyGraph 对每个反射成员都会出节点；下面 Graph 列写的是叶子可编辑，不是「有没有节点」。控件列是 `EditorAutoPropertySection::buildEditor` 的私有 switch（`EditorAutoPropertySection.cpp:898-920`），`ya-testing` 不能直接构造那条路径。
+
+| 类型 | JSON | Accessor | Copier | 脚本 | 控件 | 元数据 | Graph 叶子 | ComponentJson |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| bool | 是 `ReflectionSerializer.cpp:100,170` | 是 `:88` | 是 `ReflectionCopier.cpp:242` | 是 `ScriptValue` variant | 是 `:917` | 否 | 是（叶子） | 是 `LuaScriptComponent.h:87,122` |
+| int / int32_t | 是 `:91,158`（本机哈希相同） | 是 `:23,71` | 是 `:230` | 是，codec `:72`，进 Lua 为 int64 | 是 `:913` | 否 | 是 | 写路径只认 int64；读 number 进 int64 |
+| uint32 / unsigned int | 是 `:106,178`（本机哈希相同） | 是 `:27,52,73` | 是 `:250` | 是，codec `:73` | 是 `:914` | 否 | 是 | 否 |
+| int8 / uint8 / int16 / uint16 | 否，字段变 `null` | 否（`tryGet` 模板仍能读写） | 否，JSON null 后不拷贝 | 是，codec `:68-71`；int8 写入 300 截成 44 | 否 | 否 | 节点在，非叶子 | 否 |
+| int64_t | 否，`null` | 否 | 否 | 是，`ScriptValue` 的整数臂 | 否 | 否 | 节点在 | 是 `:83,125` |
+| long | 否 | 否 | 否 | 是，codec `:78`；`__PRETTY_FUNCTION__` 拼写与 `int64_t` 不同 | 否 | 否 | 节点在 | 否 |
+| unsigned long / long long / unsigned long long | 否 | 否 | 否 | 是，codec `:79-81` | 否 | 否 | 节点在 | 否 |
+| float | 是 `:94,162` | 是 `:86` | 是 `:234` | 是，codec `:74`，进 Lua 为 double | 是 `:910` | 是 `PropertyEditorMetadata.cpp:61` | 是 | 读 double；写走 double 臂 |
+| double | 是 `:97,166` | 非叶子；`tryGet` 可读，`equals()` 无 double 分支，相等比较为 false | 是 `:238` | 是，`ScriptValue` double 臂 | 否 | 否 | 节点在，非叶子 | 是 `:85,127` |
+| std::string | 是 `:103,174` | 是 `:89` | 是 `:246` | 是 | 是 `:920` | 否 | 是 | 是 `:89,129` |
+| glm::vec2 / vec3 / vec4 | 是，`GLM.h:148-150` JSON 数组（读也接受 `{x,y,z}`） | 是 `:83-85` | 经 JSON 往返 | 是，Lua userdata `Vec2/3/4`，`.x/.y/.z` | vec2 `:901`，vec3 `:904`，vec4 `:907`；vec3/vec4 带 color 时走 `:898` | 是 `:90-96` | 是 | 是 `:91-96,131-135` |
+| glm::quat / glm::mat4 | 否，`null`，反序列化不覆盖目标默认值（mat4 保持单位阵） | 否 | 否 | 否，导出跳过 | 否 | 否 | 节点在，非叶子 | 否 |
+| 反射枚举 | 是，名字字符串 `:110-132` | 是，`getEnum` `:91` | 是 `:256` | 是，`EnumRegistry`，名字与整数都能回传 | 是 `:923` | 否 | 是 | 否 |
+| vector / set（int、float、double、string、bool、vec3） | 是，元素走标量链 `:405-421,:859-875` | 容器，不是叶子 | 经 JSON | 否，导出跳过 | 否 | 否 | Sequence / 元素行 | 否 |
+| map&lt;string,T&gt; / map&lt;int,T&gt; | 是，键只认这两种 `:262-279` | 键字符串化 `:233-239` | 经 JSON | 否 | 否 | 否 | Map + 子行 `:101-104` | 否 |
+| map&lt;uint32,T&gt; | 非空时抛 `Unsupported map key type`，属性被省略；空 map 序列化为 `{}` | `mapKeyString` 有分支 `:239`，无调用方 | 经键指针拷贝，能保住 | 否 | 否 | 否 | 只有 Map 头；`getValuePtr`（`ContainerProperty.h:308`）不解析 uint32，子行被丢 | 否 |
+| 资产引用（TextureRef 等） | 是，反射类，`{"__base__":{"AssetRefBase":{"_path":...}}}` | 是，`isAssetRefType` `:76` | 路径经 JSON | 否，导出跳过 | 是 `:926` | 否 | 是 | 否 |
+| 指针成员（非类 pointee，如 `int*`） | 非空时写出 pointee 的数；反序列化不分配，目标保持 nullptr | 否 | 否 | 否，`collectMembers` 跳过 `bPointer`；`int*` 方法也不导出 | 否 | 否 | 视成员是否被反射 | 否 |
+| ScriptRect | 否，`null` | 否 | 否 | 写出 Lua 表 `{x,y,w,h}`；任意表读不回 rect | 否 | 否 | 节点在 | 否 |
+| ScriptRef | 不走值 if 链 | 否 | 否 | 是，注册的 ref kind | 否 | 否 | 否 | 否 |
+| ScriptFnHandle / ScriptSelfHandle | 否 | 否 | 否 | 空句柄和未知 fn id 推 `nil` | 否 | 否 | 否 | 否 |
+| optional&lt;float&gt; | 模板先解开再按类查找（`ReflectionSerializer.h:125`），标量链走不到；写出 `null`，读入数字得到 0 | 否 | 否 | 否 | 否 | 否 | 否 | 否 |
+
+`mapKeyString` 的 bool 键分支（`PropertyAccessor.cpp:242`）没有调用方。PropertyGraphBuilder 的键链是 string / int / uint32（`:101-107`），没有 bool。
+
+ScriptValue 消费文件（不含测试）：`ScriptValue.h`，`ScriptBindings.cpp`，`ScriptBindingsDetail.h`，`LuaScriptBinding.cpp`（`pushLuaValue` / `toScriptValue`），`LuaScriptLive.cpp`，`ScriptPropertyPreview.cpp`，`LuaScriptingSystem.cpp`，`LuaBackend.cpp`。
+
+### `type_index_v<` 计数
+
+排除 `Generated/`、`Engine/Test/`。`Engine/Programs` 为 0。下面是值类型分发；GUI 控件头里的 `getTypeIndex()` 是类身份，不是这张表的 if 链。
+
+| 文件 | 次数 | plan §0 当时的数 |
+| --- | --- | --- |
+| `PropertyAccessor.cpp` | 38 | 35 |
+| `ReflectionSerializer.cpp` | 31 | 29 |
+| `ContainerProperty.h` | 16 | — |
+| `EditorAutoPropertySection.cpp` | 13 | 10 |
+| `ScriptBindings.cpp` | 13 | 7 |
+| `ReflectionSerializer.h` | 11 | 5 |
+| `PropertyGraphBuilder.cpp` | 6 | 5 |
+| `ReflectionCopier.cpp` | 6 | 5 |
+| `ReflectionCopier.h` | 6 | 5 |
+| `AssetRef.cpp` | 6 | — |
+| `PropertyEditorMetadata.cpp` | 4 | 4 |
+| `ScriptBindingsDetail.h` | 3 | — |
+| `PropertyAccessor.h` | 2 | — |
+
+reflects-core 的 `type_index_v` 只做类 / 函数 / 属性身份：`class.h` 4、`registry.h` 3、`function.h` 1、`property.h` 1。最大的值类型 if 链文件是 `PropertyAccessor.cpp`（38）。
+
+矩阵规模：22 行值类型 × 8 个系统。
+
+### 场景 / 资产重存
+
+哈希是对这段文本做 FNV-1a 64，取 16 位十六进制：读文件 → `SceneSerializer::deserialize` → `serialize()` → `normalizePaths` → `dumpJsonCompactLeaves`。第二轮再解析这段文本，断言幂等。不包含 `saveToFile` 私有的数字舍入。测试只读 Example，不写回。哈希字面量在 `ReflectionSceneResaveBaselineTest.cpp` 的 `kScenes` / `kHeavyScenes` / `kAnimationHashes` / `kUiHashes` / `kTilesetAtlasHashes`。
+
+场景（16 个，全部进默认套件）。单文件两轮都 &lt; 2 s，最慢 `Sprites_5000` 1773 ms，所以没有 `DISABLED_` 场景。
+
+- `Example/2dRpgPrototype/Content/Scenes/` House、PropertyOverride、Town、TownLarge
+- `Example/GreedySnake/Content/Scenes/GreedySnake.scene.json`
+- `Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json`
+- `Example/PerfLab/Content/Scenes/` Lights_50、Lights_200、Lights_500、Meshes_1000、Meshes_5000、Meshes_10000、Sponza、Sprites_500、Sprites_2000、Sprites_5000
+
+经反射重存的资产：
+
+- `.yaanim.json`：Chest、Hero、Npc（`parseSpriteAnimationSetJson` / `serializeSpriteAnimationSetJson`）
+- `.yaui.json`：2dRpg Dialogue；GreedySnake GameOver、HUD、Settings；HelloMaterial Panel1、Panel2（`UIDocument::fromJson` → instantiate → `fromWidget` → `toJson`）
+- `.yatileset.json`：只哈希 atlas `TextureSlot`（2dRpg town、PerfLab town）。tileWidth / solid 等是手写解析，没有整份 tileset 序列化器
+
+不经 ReflectionSerializer / ComponentJson：
+
+- `.yaproject`：`FProjectDescriptor::load` 手写 JSON
+- `.yamodule`：`FModuleManifest::load` 手写 JSON
+- 未跟踪的 `Example/2DRpgPrototype/Content/UI/Panel1.yaui.json` 不在列表里
+
+场景反序列化会因 VFS 找不到 `Content/Animations`、`Content/Tilesets` 打 `[Error]`。幂等仍然成立，测试不把这条日志当失败。
+
+### 微基准
+
+debug（`ya.py` 默认，日志里是 `compiling.debug`）。`DISABLED_`，100000 次，只打印。三次取中位数：
+
+| 项 | run1 | run2 | run3 | 中位数 ns/op |
+| --- | --- | --- | --- | --- |
+| `lua_native_ns` | 861.3 | 748.6 | 757.4 | 757.4 |
+| `lua_property_ns` | 568.7 | 565.6 | 564.5 | 565.6 |
+| `invoker_ns` | 207.5 | 205.2 | 206.6 | 206.6 |
+| `accessor_ns` | 30.0 | 30.6 | 31.6 | 30.6 |
+
+`lua_native_ns` 是注册的 native `FBench:bump`，不是 `Entity:call`。手动：
+
+```
+xmake r ya-testing -- --gtest_also_run_disabled_tests --gtest_filter=ReflectionRuntimeMicrobench.*
+```
+
+### type_index 持久化
+
+无。哈希不写入 JSON、缓存文件或资产元数据。`ReflectionCache` 只在内存里按 `typeIndex` 索引。场景组件键、UI `typeId`、资产 meta 的 `type` 都是字符串类名。序列化器把 `typeIndex` 当查找键，不放进 JSON。
+
+### 测试通过数
+
+`python3 Script/ya.py test --target ya`（debug）：1735/1735 通过，另有 4 个 `DISABLED_`（微基准，不计入）。上一轮基线 1717，增加的 18 个是 `ReflectionRuntimeBaseline` 10 个 + `ReflectionSceneResave` 8 个。没有旧测试失败。
+
+`reflects-core-test`：43/43 通过（第一次记基线）。
+
+`reflects-generator-test`：1/11 通过（`ReflectorTest.GetNonExistentClass`），10 失败。生成规则在 `generator-test/xmake.lua` 里被关掉（`add_files("./src/*.h", { rules = "reflects_generator" })` 注释掉），`intermediate/generates` 不存在，`Person` / `Vehicle` 没有注册。目标注释写明这些断言在规则恢复前必然失败。RR0 没改 reflects，这是现状基线，不是新回归。
+
+冒烟：`Script/automation/2d-rpg/walk_one_cell.py` 退出码 0，`(0.5, 0.5) -> (1.5, 0.5)`，自动化日志无 `[Error]`。GreedySnake `--exit-after-frame=90` 退出码 0，日志无 `[Error]`。
+
+### 偏离与现有怪异
+
+偏离（不改生产代码）：
+
+- 编辑器控件 switch 是私有的 `buildEditor`，单测覆盖到 PropertyGraph、`isLeafValueType` 和 `PropertyEditorMetadata::validationError`。vec 的 `ManipulateSpec` 不能经 `MetaBuilder::manipulate`（只接受算术类型）挂上；测试在进程内改 `Property.metadata` 才走到 vec 校验。
+- 重存哈希不含 `saveToFile` 的私有数字舍入。
+- 微基准走注册 native，不走 `Entity:call`。
+- tileset 只锁 atlas；`.yaproject` / `.yamodule` 不经反射。
+
+现有行为（测试照现状断言，不修）：
+
+- JSON 标量只有 int、float、double、bool、string、unsigned int。更窄或更宽的整数、quat、mat4、ScriptRect 变成 `null` 并在加载时丢掉。
+- 非空 uint32 map 被省略；空 map 写成 `{}`，所以往返 dump 不相等。Copier 仍能拷贝这份 map。
+- `optional<float>` 走类查找，不走标量链。
+- `null` 不写字段，目标保持默认（mat4 停在单位阵）。
+- `PropertyAccessor::equals` 不比较 double。
+- 非类指针写出 pointee，反序列化不分配。
+- 脚本导出跳过指针、mat4、quat、资产引用、容器。ScriptRect 出去是表，进来被拒。未知 `ScriptFnHandle` id 推 `nil`。
+- `ArgumentList::get<const T&>` 绑的是 `std::any` 里的副本；`get<T&>` 不能编译；`T*` 是指针值的副本。
+- ComponentJson 对象键按 nlohmann 的有序 map 排列，不是插入序。实测脚本对象是 `enabled, executionOrder, propertyOverrides, scriptPath`。
+- 序列化警告里的类型名是 Itanium `typeid().name()`，不是稳定的 `type_index` 拼写。
+- 本机 Clang：`int == int32_t`，`unsigned int == uint32_t`，`long != int64_t`。
