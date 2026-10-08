@@ -26,39 +26,39 @@ script::ScriptValue solToScriptValue(const sol::object& value, std::string_view 
 
     try {
         if (typeHint == "float") {
-            return static_cast<double>(value.as<float>());
+            return script::scriptMake(static_cast<double>(value.as<float>()));
         }
         if (typeHint == "int") {
-            return static_cast<int64_t>(value.as<int>());
+            return script::scriptMake(static_cast<int64_t>(value.as<int>()));
         }
         if (typeHint == "bool") {
-            return value.as<bool>();
+            return script::scriptMake(value.as<bool>());
         }
         if (typeHint == "string") {
-            return value.as<std::string>();
+            return script::scriptMake(value.as<std::string>());
         }
         if (typeHint == "Vec3" || typeHint == "vec3") {
             if (value.is<glm::vec3>()) {
-                return value.as<glm::vec3>();
+                return script::scriptMake(value.as<glm::vec3>());
             }
             if (value.is<sol::table>()) {
                 const sol::table table = value.as<sol::table>();
-                return glm::vec3(table.get_or("x", table.get_or(1, 0.0f)),
-                                 table.get_or("y", table.get_or(2, 0.0f)),
-                                 table.get_or("z", table.get_or(3, 0.0f)));
+                return script::scriptMake(glm::vec3(table.get_or("x", table.get_or(1, 0.0f)),
+                                                    table.get_or("y", table.get_or(2, 0.0f)),
+                                                    table.get_or("z", table.get_or(3, 0.0f))));
             }
         }
 
         switch (value.get_type()) {
         case sol::type::boolean:
-            return value.as<bool>();
+            return script::scriptMake(value.as<bool>());
         case sol::type::number:
-            return static_cast<double>(value.as<float>());
+            return script::scriptMake(static_cast<double>(value.as<float>()));
         case sol::type::string:
-            return value.as<std::string>();
+            return script::scriptMake(value.as<std::string>());
         default:
             if (value.is<glm::vec3>()) {
-                return value.as<glm::vec3>();
+                return script::scriptMake(value.as<glm::vec3>());
             }
             return {};
         }
@@ -72,19 +72,36 @@ script::ScriptValue solToScriptValue(const sol::object& value, std::string_view 
 /// cannot cross (the caller reports it).
 sol::object pushScriptValue(sol::state& lua, const script::ScriptValue& value)
 {
-    return std::visit(
-        [&lua](const auto& held) -> sol::object {
-            using T = std::decay_t<decltype(held)>;
-            if constexpr (std::is_same_v<T, std::monostate> || std::is_same_v<T, script::ScriptRef> ||
-                          std::is_same_v<T, script::ScriptFnHandle> || std::is_same_v<T, script::ScriptSelfHandle> ||
-                          std::is_same_v<T, script::ScriptRect>) {
-                return sol::object{};
-            }
-            else {
-                return sol::make_object(lua, held);
-            }
-        },
-        value);
+    if (value.isNull() || value.isRef() || value.data() == nullptr) {
+        return {};
+    }
+    if (const bool* flag = script::scriptIf<bool>(value)) {
+        return sol::make_object(lua, *flag);
+    }
+    if (const std::string* text = value.asString()) {
+        return sol::make_object(lua, *text);
+    }
+    if (const glm::vec2* vec = script::scriptIf<glm::vec2>(value)) {
+        return sol::make_object(lua, *vec);
+    }
+    if (const glm::vec3* vec = script::scriptIf<glm::vec3>(value)) {
+        return sol::make_object(lua, *vec);
+    }
+    if (const glm::vec4* vec = script::scriptIf<glm::vec4>(value)) {
+        return sol::make_object(lua, *vec);
+    }
+    if (script::scriptIf<script::ScriptRef>(value) || script::scriptIf<script::ScriptFnHandle>(value) ||
+        script::scriptIf<script::ScriptSelfHandle>(value) || script::scriptIf<script::ScriptRect>(value)) {
+        return {};
+    }
+    const refl::TypeOps* ops = refl::TypeRegistry::instance().find(value.type());
+    if (ops != nullptr && ops->kind == refl::EValueKind::Int) {
+        return sol::make_object(lua, value.toInt64().value_or(0));
+    }
+    if (ops != nullptr && ops->kind == refl::EValueKind::Float) {
+        return sol::make_object(lua, value.toDouble().value_or(0.0));
+    }
+    return {};
 }
 
 } // namespace
@@ -168,7 +185,7 @@ void applyScriptPropertyOverrides(const ScriptInstance& instance, sol::table tab
                  instance.scriptPath);
 
     for (const auto& [propName, value] : instance.propertyOverrides) {
-        if (std::holds_alternative<std::monostate>(value)) {
+        if ((value).isNull()) {
             YA_CORE_WARN("[LuaScript] Property '{}' has no value, skipping", propName);
             continue;
         }

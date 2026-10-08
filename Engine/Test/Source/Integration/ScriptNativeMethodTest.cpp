@@ -49,7 +49,7 @@ static_assert(script::nativeOwnerSlot<FNativeProbe&, const std::string&>() == sc
 static_assert(!script::nativeSignatureOk<void, FNativeProbe&, glm::mat4>());
 static_assert(!script::nativeSignatureOk<void, FNativeProbe&, glm::mat4&>());
 static_assert(!script::nativeSignatureOk<void, script::ScriptSelfHandle, script::ScriptSelfHandle>());
-// ScriptValue is not a variant arm of itself, so it still cannot be a parameter.
+// ScriptValue is the dynamic value, so it still cannot be a parameter.
 static_assert(!script::crossesToScripts<script::ScriptValue>());
 static_assert(!script::nativeSignatureOk<void, script::ScriptValue>());
 
@@ -214,8 +214,8 @@ TEST(ScriptNativeMethod, ExportsNativeAndReflectedFromTheRegistry)
     EXPECT_EQ(script::methodArgumentType(*owned, 1), type_index_v<int>);
 
     const script::ScriptRef   ref        = probeRef();
-    const script::ScriptValue echoArgs[] = {int64_t{2}};
-    EXPECT_EQ(script::callMethod(ref, "echo", echoArgs), script::ScriptValue{int64_t{3}});
+    const script::ScriptValue echoArgs[] = {script::scriptMake(int64_t{2})};
+    EXPECT_EQ(script::callMethod(ref, "echo", echoArgs), script::scriptMake(int64_t{3}));
     auto echoInvoker = cls->functions.at("echo").invoker;
     cls->functions.at("echo").invoker = [](void*, std::span<refl::MetaValue>) -> refl::MetaValue {
         throw std::runtime_error("boxed invoker");
@@ -228,12 +228,12 @@ TEST(ScriptNativeMethod, ExportsNativeAndReflectedFromTheRegistry)
     cls->functions.at("labelOf").invoker = [](void*, std::span<refl::MetaValue>) -> refl::MetaValue {
         throw std::runtime_error("boxed invoker");
     };
-    const script::ScriptValue labelArgs[] = {std::string("id"), int64_t{4}};
+    const script::ScriptValue labelArgs[] = {script::scriptMake(std::string("id")), script::scriptMake(int64_t{4})};
     EXPECT_THROW(script::callMethod(ref, "labelOf", labelArgs), std::runtime_error);
     cls->functions.at("labelOf").invoker = std::move(labelInvoker);
 
-    const script::ScriptValue ownerArgs[] = {script::ScriptSelfHandle{.runtimeId = 7}, int64_t{3}};
-    EXPECT_EQ(script::callMethod(ref, "withOwner", ownerArgs), script::ScriptValue{int64_t{10}});
+    const script::ScriptValue ownerArgs[] = {script::scriptMake(script::ScriptSelfHandle{.runtimeId = 7}), script::scriptMake(int64_t{3})};
+    EXPECT_EQ(script::callMethod(ref, "withOwner", ownerArgs), script::scriptMake(int64_t{10}));
     EXPECT_THROW(script::callMethod(ref, "labelOf", {}), script::ScriptError);
 }
 

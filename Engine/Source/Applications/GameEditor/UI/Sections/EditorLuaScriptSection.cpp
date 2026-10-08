@@ -46,17 +46,17 @@ LuaScriptComponent* scriptComponentOn(EditorLayer* layer, uint64_t uuid)
     return entity->tryGetComponent<LuaScriptComponent>();
 }
 
-void storeOverride(ScriptInstance& script,
-                   ScriptProperty& prop,
-                   script::ScriptValue value)
+template <class T>
+void storeOverride(ScriptInstance& script, ScriptProperty& prop, T&& value)
 {
-    script.propertyOverrides[prop.name] = value;
-    prop.value = std::move(value);
+    script::ScriptValue boxed = script::scriptMake(std::forward<T>(value));
+    script.propertyOverrides[prop.name] = boxed;
+    prop.value = std::move(boxed);
 }
 
 bool scriptValuePresent(const script::ScriptValue& value)
 {
-    return !std::holds_alternative<std::monostate>(value);
+    return !(value).isNull();
 }
 
 } // namespace
@@ -300,7 +300,7 @@ void EditorLuaScriptSection::rebuildRows()
                         row.child(drag, ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight}));
                     }
                     else if (prop.typeHint == "bool") {
-                        const bool checked = std::holds_alternative<bool>(prop.value) && std::get<bool>(prop.value);
+                        const bool checked = (script::scriptIf<bool>(prop.value) != nullptr) && (*script::scriptIf<bool>(prop.value));
                         auto box = ui::checkBox(std::format("{}_Prop{}Value", key, p)).setChecked(checked);
                         box.setOnChanged([this, i, p](bool value) {
                             LuaScriptComponent* target = scriptComponentOn(_layer, _entityUuid);
@@ -315,8 +315,8 @@ void EditorLuaScriptSection::rebuildRows()
                                   ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight}));
                     }
                     else if (prop.typeHint == "string") {
-                        const std::string text = std::holds_alternative<std::string>(prop.value)
-                                                      ? std::get<std::string>(prop.value)
+                        const std::string text = (script::scriptIf<std::string>(prop.value) != nullptr)
+                                                      ? (*script::scriptIf<std::string>(prop.value))
                                                       : std::string{};
                         auto field = ui::textField(std::format("{}_Prop{}Value", key, p))
                                          .setStyleKey(editorStyle(StyleKey::TextField))
@@ -334,8 +334,8 @@ void EditorLuaScriptSection::rebuildRows()
                                   ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight}));
                     }
                     else if (prop.typeHint == "Vec3") {
-                        const glm::vec3 value = std::holds_alternative<glm::vec3>(prop.value)
-                                                    ? std::get<glm::vec3>(prop.value)
+                        const glm::vec3 value = (script::scriptIf<glm::vec3>(prop.value) != nullptr)
+                                                    ? (*script::scriptIf<glm::vec3>(prop.value))
                                                     : glm::vec3{};
                         for (int axis = 0; axis < 3; ++axis) {
                             auto drag = std::make_shared<UIDragFloat>(
@@ -349,8 +349,8 @@ void EditorLuaScriptSection::rebuildRows()
                                     return;
                                 }
                                 auto& inst = target->scripts[i];
-                                glm::vec3 vec = std::holds_alternative<glm::vec3>(inst.properties[p].value)
-                                                    ? std::get<glm::vec3>(inst.properties[p].value)
+                                glm::vec3 vec = (script::scriptIf<glm::vec3>(inst.properties[p].value) != nullptr)
+                                                    ? (*script::scriptIf<glm::vec3>(inst.properties[p].value))
                                                     : glm::vec3{};
                                 vec[axis] = component;
                                 storeOverride(inst, inst.properties[p], vec);

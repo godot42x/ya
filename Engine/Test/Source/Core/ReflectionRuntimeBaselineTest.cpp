@@ -508,29 +508,29 @@ TEST(ReflectionRuntimeBaseline, ScriptCrossingAndSkippedMembers)
     prepare();
     const script::ScriptRef ref = objectRef();
 
-    EXPECT_EQ(std::get<bool>(script::readField(ref, "flag")), true);
-    EXPECT_EQ(std::get<int64_t>(script::readField(ref, "signedInt")), 7);
-    EXPECT_EQ(std::get<int64_t>(script::readField(ref, "code")), 9);
-    EXPECT_EQ(std::get<int64_t>(script::readField(ref, "tiny")), 3);
-    EXPECT_DOUBLE_EQ(std::get<double>(script::readField(ref, "scalar")), 1.5);
-    EXPECT_DOUBLE_EQ(std::get<double>(script::readField(ref, "precise")), 2.25);
-    EXPECT_EQ(std::get<std::string>(script::readField(ref, "label")), "hero");
-    EXPECT_EQ(std::get<glm::vec2>(script::readField(ref, "offset")), glm::vec2(4.0f, 5.0f));
-    EXPECT_EQ(std::get<glm::vec3>(script::readField(ref, "position")), glm::vec3(1.0f, 2.0f, 3.0f));
-    EXPECT_EQ(std::get<glm::vec4>(script::readField(ref, "tint")), sample().tint);
-    EXPECT_EQ(std::get<int64_t>(script::readField(ref, "mood")), static_cast<int64_t>(EBaselineMood::Angry));
-    EXPECT_EQ(std::get<script::ScriptRect>(script::readField(ref, "rect")), sample().rect);
+    EXPECT_EQ((*script::scriptIf<bool>(script::readField(ref, "flag"))), true);
+    EXPECT_EQ((*script::scriptIf<int64_t>(script::readField(ref, "signedInt"))), 7);
+    EXPECT_EQ((*script::scriptIf<int64_t>(script::readField(ref, "code"))), 9);
+    EXPECT_EQ((*script::scriptIf<int64_t>(script::readField(ref, "tiny"))), 3);
+    EXPECT_DOUBLE_EQ((*script::scriptIf<double>(script::readField(ref, "scalar"))), 1.5);
+    EXPECT_DOUBLE_EQ((*script::scriptIf<double>(script::readField(ref, "precise"))), 2.25);
+    EXPECT_EQ((*script::scriptIf<std::string>(script::readField(ref, "label"))), "hero");
+    EXPECT_EQ((*script::scriptIf<glm::vec2>(script::readField(ref, "offset"))), glm::vec2(4.0f, 5.0f));
+    EXPECT_EQ((*script::scriptIf<glm::vec3>(script::readField(ref, "position"))), glm::vec3(1.0f, 2.0f, 3.0f));
+    EXPECT_EQ((*script::scriptIf<glm::vec4>(script::readField(ref, "tint"))), sample().tint);
+    EXPECT_EQ((*script::scriptIf<int64_t>(script::readField(ref, "mood"))), static_cast<int64_t>(EBaselineMood::Angry));
+    EXPECT_EQ((*script::scriptIf<script::ScriptRect>(script::readField(ref, "rect"))), sample().rect);
 
     // int8 used to truncate (300 -> 44). convertTo rejects the value instead.
-    EXPECT_THROW(script::writeField(ref, "tiny", script::ScriptValue{int64_t{300}}), script::ScriptError);
+    EXPECT_THROW(script::writeField(ref, "tiny", script::scriptMake(int64_t{300})), script::ScriptError);
     EXPECT_EQ(sample().tiny, static_cast<int8_t>(3));
-    script::writeField(ref, "tiny", script::ScriptValue{int64_t{4}});
+    script::writeField(ref, "tiny", script::scriptMake(int64_t{4}));
     EXPECT_EQ(sample().tiny, static_cast<int8_t>(4));
-    script::writeField(ref, "tiny", script::ScriptValue{int64_t{3}});
+    script::writeField(ref, "tiny", script::scriptMake(int64_t{3}));
 
-    script::writeField(ref, "mood", script::ScriptValue{std::string("Calm")});
+    script::writeField(ref, "mood", script::scriptMake(std::string("Calm")));
     EXPECT_EQ(sample().mood, EBaselineMood::Calm);
-    script::writeField(ref, "mood", script::ScriptValue{int64_t{1}});
+    script::writeField(ref, "mood", script::scriptMake(int64_t{1}));
     EXPECT_EQ(sample().mood, EBaselineMood::Angry);
 
     EXPECT_EQ(script::findField(type_index_v<FBaseline>, "matrix"), nullptr);
@@ -611,23 +611,23 @@ TEST(ReflectionRuntimeBaseline, LuaVisibleForms)
     }
 
     lua_State* L = lua.lua_state();
-    pushLuaValue(L, script::ScriptValue{glm::vec3{1.0f, 2.0f, 3.0f}});
+    pushLuaValue(L, script::scriptMake(glm::vec3{1.0f, 2.0f, 3.0f}));
     const script::ScriptValue back = toScriptValue(L, -1);
-    EXPECT_EQ(std::get<glm::vec3>(back), glm::vec3(1.0f, 2.0f, 3.0f));
+    EXPECT_EQ((*script::scriptIf<glm::vec3>(back)), glm::vec3(1.0f, 2.0f, 3.0f));
     lua_pop(L, 1);
 
-    pushLuaValue(L, script::ScriptValue{script::ScriptRect{1.0f, 2.0f, 3.0f, 4.0f}});
+    pushLuaValue(L, script::scriptMake(script::ScriptRect{1.0f, 2.0f, 3.0f, 4.0f}));
     EXPECT_EQ(lua_type(L, -1), LUA_TTABLE);
     EXPECT_THROW((void)toScriptValue(L, -1), script::ScriptError);
     lua_pop(L, 1);
 
-    pushLuaValue(L, script::ScriptValue{script::ScriptFnHandle{}});
+    pushLuaValue(L, script::scriptMake(script::ScriptFnHandle{}));
     EXPECT_EQ(lua_type(L, -1), LUA_TNIL);
     lua_pop(L, 1);
-    pushLuaValue(L, script::ScriptValue{script::ScriptFnHandle{42}});
+    pushLuaValue(L, script::scriptMake(script::ScriptFnHandle{42}));
     EXPECT_EQ(lua_type(L, -1), LUA_TNIL);
     lua_pop(L, 1);
-    pushLuaValue(L, script::ScriptValue{script::ScriptSelfHandle{}});
+    pushLuaValue(L, script::scriptMake(script::ScriptSelfHandle{}));
     EXPECT_EQ(lua_type(L, -1), LUA_TNIL);
     lua_pop(L, 1);
 }
@@ -756,7 +756,7 @@ TEST(ReflectionRuntimeBaseline, ComponentJsonCustomScriptPayload)
     component.addScript("Content/Scripts/hero.lua");
     component.scripts[0].enabled = false;
     component.scripts[0].executionOrderOverride = 2;
-    component.scripts[0].propertyOverrides["tint"] = glm::vec3{1.0f, 0.0f, 0.5f};
+    component.scripts[0].propertyOverrides["tint"] = script::scriptMake(glm::vec3{1.0f, 0.0f, 0.5f});
 
     const auto* ops = ECSRegistry::get().getComponentOps(type_index_v<LuaScriptComponent>);
     ASSERT_NE(ops, nullptr);
@@ -775,7 +775,7 @@ TEST(ReflectionRuntimeBaseline, ComponentJsonCustomScriptPayload)
     EXPECT_FALSE(restored.scripts[0].enabled);
     ASSERT_TRUE(restored.scripts[0].executionOrderOverride.has_value());
     EXPECT_EQ(*restored.scripts[0].executionOrderOverride, 2);
-    EXPECT_EQ(std::get<glm::vec3>(restored.scripts[0].propertyOverrides.at("tint")), glm::vec3(1.0f, 0.0f, 0.5f));
+    EXPECT_EQ((*script::scriptIf<glm::vec3>(restored.scripts[0].propertyOverrides.at("tint"))), glm::vec3(1.0f, 0.0f, 0.5f));
 }
 
 } // namespace ya::rr0

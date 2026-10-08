@@ -76,6 +76,13 @@ struct ScriptSelfBuilder
         fields.push_back(Field{.name = std::move(name), .value = std::move(value)});
     }
 
+    template <class T>
+        requires(!std::is_same_v<std::decay_t<T>, script::ScriptValue>)
+    void field(std::string name, T&& value)
+    {
+        field(std::move(name), script::scriptMake(std::forward<T>(value)));
+    }
+
     void method(std::string name, script::ScriptFunction fn)
     {
         methods.push_back(Method{.name = std::move(name), .fn = std::move(fn)});

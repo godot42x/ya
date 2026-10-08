@@ -35,7 +35,7 @@ struct FWidgetScriptHost final : IScriptInstanceHost
 script::ScriptValue widgetRefValue(GameUIHost& host, const UIElementRef& widget)
 {
     const script::ScriptRef ref = widgetScriptRef(host, widget);
-    return ref ? script::ScriptValue{ref} : script::ScriptValue{};
+    return ref ? script::scriptMake(ref) : script::ScriptValue{};
 }
 
 script::ScriptValue addScriptTimer(const std::shared_ptr<LuaWidgetScriptBehavior>& behavior, script::ScriptArgs args, bool bRepeat)
@@ -47,7 +47,7 @@ script::ScriptValue addScriptTimer(const std::shared_ptr<LuaWidgetScriptBehavior
         YA_CORE_WARN("Lua widget timer ({}): callback is not a function", behavior->instance.scriptPath);
         return {};
     }
-    const auto* fn = std::get_if<script::ScriptFnHandle>(&args[1]);
+    const auto* fn = script::scriptIf<script::ScriptFnHandle>(args[1]);
     if (!fn || fn->id == 0 || !retainInstanceFunction(behavior->instance.runtimeId, *fn)) {
         YA_CORE_WARN("Lua widget timer ({}): callback is not a function", behavior->instance.scriptPath);
         return {};
@@ -70,7 +70,7 @@ script::ScriptValue addScriptTimer(const std::shared_ptr<LuaWidgetScriptBehavior
         }
         return true;
     });
-    return makeWidgetTimerRef(host, id);
+    return script::scriptMake(makeWidgetTimerRef(host, id));
 }
 
 void fillWidgetSelf(const std::shared_ptr<LuaWidgetScriptBehavior>& behavior, ScriptSelfBuilder& out)
@@ -110,7 +110,7 @@ void fillWidgetSelf(const std::shared_ptr<LuaWidgetScriptBehavior>& behavior, Sc
         if (!live || !live->runtime || args.size() < 2) {
             return {};
         }
-        const auto* parent = std::get_if<script::ScriptRef>(&args[1]);
+        const auto* parent = script::scriptIf<script::ScriptRef>(args[1]);
         UIElement* under = parent ? resolveWidget(parent->a) : nullptr;
         if (!under || !widgetLive(under)) {
             if (parent) {

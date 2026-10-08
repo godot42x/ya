@@ -102,7 +102,7 @@ TEST_F(ScriptApiLibraryFixture, RegistryCommandsExportAsLibraryNamespaces)
 TEST_F(ScriptApiLibraryFixture, ModuleFunctionsExportUnderYa)
 {
     script::registerModuleFunction("probeJs", "sum", [](script::ScriptArgs args) -> script::ScriptValue {
-        return script::scriptToNumber(args[0]) + script::scriptToNumber(args[1]);
+        return script::scriptMake(script::scriptToNumber(args[0]) + script::scriptToNumber(args[1]));
     });
     script::registerModuleFunction("probeJs", "fail", [](script::ScriptArgs) -> script::ScriptValue {
         throw script::ScriptError("boom");

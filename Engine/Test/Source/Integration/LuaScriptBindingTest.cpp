@@ -97,7 +97,7 @@ TEST_F(LuaScriptBindingTest, MembersAreCachedPerType)
 TEST_F(LuaScriptBindingTest, ModuleFunctionsBecomeGlobalTables)
 {
     script::registerModuleFunction("probeLua", "sum", [](script::ScriptArgs args) -> script::ScriptValue {
-        return script::scriptToNumber(args[0]) + script::scriptToNumber(args[1]);
+        return script::scriptMake(script::scriptToNumber(args[0]) + script::scriptToNumber(args[1]));
     });
     script::registerModuleFunction("probeLua", "echo", [](script::ScriptArgs args) -> script::ScriptValue { return args[0]; });
     script::registerModuleFunction("probeLua", "fail", [](script::ScriptArgs) -> script::ScriptValue {

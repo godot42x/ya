@@ -189,7 +189,7 @@ int callSelfMethod(lua_State* L)
             args.push_back(ya::toScriptValue(L, index));
         }
         const ya::script::ScriptValue result = (*fn)(args);
-        if (std::holds_alternative<std::monostate>(result)) {
+        if ((result).isNull()) {
             results = 0;
         }
         else {
@@ -308,7 +308,7 @@ struct FEntityScriptHost final : ya::IScriptInstanceHost
     {
         ya::Scene*        current = scene();
         const ya::Entity* entity  = current ? current->getEntityByEnttID(handle) : nullptr;
-        out.field("entity", entity ? ya::script::ScriptValue{ya::script::entityRef(entity)} : ya::script::ScriptValue{});
+        out.field("entity", entity ? ya::script::scriptMake(ya::script::entityRef(entity)) : ya::script::ScriptValue{});
     }
 };
 

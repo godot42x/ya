@@ -133,14 +133,14 @@ ScriptValue loadNarrow(const void* address)
         if (!widenToScript(value, stored)) {
             throw ScriptError("value is out of range");
         }
-        return stored;
+        return scriptMake(stored);
     }
     else {
         double stored = 0;
         if (!widenToScript(value, stored)) {
             throw ScriptError("value is out of range");
         }
-        return stored;
+        return scriptMake(stored);
     }
 }
 
@@ -171,27 +171,24 @@ ValueCodec narrowCodec()
     };
 }
 
-/// Identity codecs for every `ScriptValue` arm except monostate. The variant
-/// defines the crossing set; adding an arm extends the codecs automatically.
-template <size_t... I>
-void emplaceVariantCodecs(std::unordered_map<type_index_t, ValueCodec>& codecs, std::index_sequence<I...>)
-{
-    auto add = [&]<typename Alt>() {
-        if constexpr (!std::is_same_v<Alt, std::monostate>) {
-            codecs.emplace(type_index_v<Alt>, codecOf<Alt>());
-        }
-    };
-    (add.template operator()<std::variant_alternative_t<I, ScriptValue>>(), ...);
-}
-
 const std::unordered_map<type_index_t, ValueCodec>& valueCodecs()
 {
-        // Identity codecs come from ScriptValue's arms. Narrowing codecs use
-        // convertTo. Duplicate keys (int64_t aliasing long or long long) keep
-        // the first, identity, entry.
+        // Identity codecs are the types a script sees directly. Narrowing
+        // codecs use convertTo. Duplicate keys (int64_t aliasing long or
+        // long long) keep the first, identity, entry.
         static const std::unordered_map<type_index_t, ValueCodec> codecs = [] {
             std::unordered_map<type_index_t, ValueCodec> out;
-            emplaceVariantCodecs(out, std::make_index_sequence<std::variant_size_v<ScriptValue>>{});
+            out.emplace(type_index_v<bool>, codecOf<bool>());
+            out.emplace(type_index_v<int64_t>, codecOf<int64_t>());
+            out.emplace(type_index_v<double>, codecOf<double>());
+            out.emplace(type_index_v<std::string>, codecOf<std::string>());
+            out.emplace(type_index_v<glm::vec2>, codecOf<glm::vec2>());
+            out.emplace(type_index_v<glm::vec3>, codecOf<glm::vec3>());
+            out.emplace(type_index_v<glm::vec4>, codecOf<glm::vec4>());
+            out.emplace(type_index_v<ScriptRef>, codecOf<ScriptRef>());
+            out.emplace(type_index_v<ScriptFnHandle>, codecOf<ScriptFnHandle>());
+            out.emplace(type_index_v<ScriptSelfHandle>, codecOf<ScriptSelfHandle>());
+            out.emplace(type_index_v<ScriptRect>, codecOf<ScriptRect>());
             out.emplace(type_index_v<int8_t>, narrowCodec<int8_t>());
             out.emplace(type_index_v<uint8_t>, narrowCodec<uint8_t>());
             out.emplace(type_index_v<int16_t>, narrowCodec<int16_t>());
@@ -224,7 +221,7 @@ ScriptValue loadValue(type_index_t type, const void* address)
     if (const ValueCodec* codec = codecFor(type)) {
         return codec->load(address);
     }
-    return enumFor(type)->getValue(const_cast<void*>(address));
+    return scriptMake(enumFor(type)->getValue(const_cast<void*>(address)));
 }
 
 void storeValue(type_index_t type, void* address, const ScriptValue& value)
@@ -261,7 +258,7 @@ ScriptValue unboxValue(const refl::ParamDesc& ret, const refl::MetaValue& boxed)
     if (const ValueCodec* codec = codecFor(ret.type)) {
         return codec->load(boxed.data());
     }
-    return enumFor(ret.type)->getValue(const_cast<void*>(boxed.data()));
+    return scriptMake(enumFor(ret.type)->getValue(const_cast<void*>(boxed.data())));
 }
 
 } // namespace

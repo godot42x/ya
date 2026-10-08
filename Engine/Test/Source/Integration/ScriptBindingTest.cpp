@@ -120,7 +120,7 @@ class ScriptBindingTest : public ::testing::Test
 
 TEST_F(ScriptBindingTest, ModuleFunctionsReplaceInPlaceOnReRegistration)
 {
-    script::registerModuleFunction("probeModule", "answer", [](ScriptArgs) -> ScriptValue { return int64_t{1}; });
+    script::registerModuleFunction("probeModule", "answer", [](ScriptArgs) -> ScriptValue { return script::scriptMake(int64_t{1}); });
     const script::ScriptModuleFunction* first = nullptr;
     script::forEachModuleFunction([&](const script::ScriptModuleFunction& function) {
         if (function.module == "probeModule") {
@@ -129,7 +129,7 @@ TEST_F(ScriptBindingTest, ModuleFunctionsReplaceInPlaceOnReRegistration)
     });
     ASSERT_NE(first, nullptr);
 
-    script::registerModuleFunction("probeModule", "answer", [](ScriptArgs) -> ScriptValue { return int64_t{2}; });
+    script::registerModuleFunction("probeModule", "answer", [](ScriptArgs) -> ScriptValue { return script::scriptMake(int64_t{2}); });
     int entries = 0;
     script::forEachModuleFunction([&](const script::ScriptModuleFunction& function) {
         if (function.module == "probeModule") {
@@ -138,7 +138,7 @@ TEST_F(ScriptBindingTest, ModuleFunctionsReplaceInPlaceOnReRegistration)
         }
     });
     EXPECT_EQ(entries, 1);
-    EXPECT_EQ(std::get<int64_t>(first->fn({})), 2);
+    EXPECT_EQ((*script::scriptIf<int64_t>(first->fn({}))), 2);
 }
 
 TEST_F(ScriptBindingTest, ReflectedMembersThatCrossAreVisible)
@@ -164,9 +164,9 @@ TEST_F(ScriptBindingTest, FieldsReadAndWriteThroughReflection)
     const ScriptRef ref   = FProbeWorld::get().add(1);
     FProbe&         probe = FProbeWorld::get().probes.at(1);
 
-    EXPECT_EQ(script::readField(ref, "speed"), ScriptValue{2.0});
-    EXPECT_EQ(script::readField(ref, "label"), ScriptValue{std::string("probe")});
-    EXPECT_EQ(script::readField(ref, "baseValue"), ScriptValue{int64_t{1}});
+    EXPECT_EQ(script::readField(ref, "speed"), script::scriptMake(2.0));
+    EXPECT_EQ(script::readField(ref, "label"), script::scriptMake(std::string("probe")));
+    EXPECT_EQ(script::readField(ref, "baseValue"), script::scriptMake(int64_t{1}));
 
     script::writeField(ref, "speed", int64_t{3});
     script::writeField(ref, "bFlag", true);
@@ -188,7 +188,7 @@ TEST_F(ScriptBindingTest, EnumsTravelAsIntegersAndAcceptNames)
     const ScriptRef ref   = FProbeWorld::get().add(1);
     FProbe&         probe = FProbeWorld::get().probes.at(1);
 
-    EXPECT_EQ(script::readField(ref, "mood"), ScriptValue{int64_t{0}});
+    EXPECT_EQ(script::readField(ref, "mood"), script::scriptMake(int64_t{0}));
     script::writeField(ref, "mood", std::string("Angry"));
     EXPECT_EQ(probe._mood, EProbeMood::Angry);
     script::writeField(ref, "mood", int64_t{0});
@@ -203,12 +203,12 @@ TEST_F(ScriptBindingTest, MethodsCallThePluginInvoker)
     const ScriptRef ref   = FProbeWorld::get().add(1);
     FProbe&         probe = FProbeWorld::get().probes.at(1);
 
-    const ScriptValue two[] = {ScriptValue{int64_t{2}}};
-    EXPECT_EQ(script::callMethod(ref, "scaled", two), ScriptValue{4.0});
-    EXPECT_EQ(script::callMethod(ref, "getLabel", {}), ScriptValue{std::string("probe")});
+    const ScriptValue two[] = {script::scriptMake(int64_t{2})};
+    EXPECT_EQ(script::callMethod(ref, "scaled", two), script::scriptMake(4.0));
+    EXPECT_EQ(script::callMethod(ref, "getLabel", {}), script::scriptMake(std::string("probe")));
 
-    const ScriptValue angry[] = {ScriptValue{std::string("Angry")}};
-    EXPECT_EQ(script::callMethod(ref, "setMood", angry), ScriptValue{});
+    const ScriptValue angry[] = {script::scriptMake(std::string("Angry"))};
+    EXPECT_EQ(script::callMethod(ref, "setMood", angry), script::ScriptValue{});
     EXPECT_EQ(probe._mood, EProbeMood::Angry);
 
     EXPECT_THROW(script::callMethod(ref, "scaled", {}), ScriptError);
@@ -233,28 +233,28 @@ TEST_F(ScriptBindingTest, EntityRefsReachComponentsAndGoStale)
     Entity*   entity = node->getEntity();
     ScriptRef ref    = script::entityRef(entity);
 
-    EXPECT_EQ(script::callMethod(ref, "getName", {}), ScriptValue{std::string("Hero")});
+    EXPECT_EQ(script::callMethod(ref, "getName", {}), script::scriptMake(std::string("Hero")));
 
     const ScriptValue transformValue = script::callMethod(ref, "getTransform", {});
-    ASSERT_TRUE(std::holds_alternative<ScriptRef>(transformValue));
-    const ScriptRef transform = std::get<ScriptRef>(transformValue);
+    ASSERT_TRUE((script::scriptIf<ScriptRef>(transformValue) != nullptr));
+    const ScriptRef transform = (*script::scriptIf<ScriptRef>(transformValue));
     script::writeField(transform, "position", glm::vec3(1.0f, 2.0f, 3.0f));
     auto* component = entity->getComponent<TransformComponent>();
     EXPECT_EQ(component->getPosition(), glm::vec3(1.0f, 2.0f, 3.0f));
     EXPECT_TRUE(component->_localDirty);
 
-    EXPECT_EQ(script::callMethod(ref, "hasCamera", {}), ScriptValue{false});
-    EXPECT_EQ(script::callMethod(ref, "getCamera", {}), ScriptValue{});
-    const ScriptValue cameraName[] = {ScriptValue{std::string("CameraComponent")}};
+    EXPECT_EQ(script::callMethod(ref, "hasCamera", {}), script::scriptMake(false));
+    EXPECT_EQ(script::callMethod(ref, "getCamera", {}), script::ScriptValue{});
+    const ScriptValue cameraName[] = {script::scriptMake(std::string("CameraComponent"))};
     const ScriptValue camera       = script::callMethod(ref, "add", cameraName);
-    ASSERT_TRUE(std::holds_alternative<ScriptRef>(camera));
-    script::writeField(std::get<ScriptRef>(camera), "bPrimary", true);
+    ASSERT_TRUE((script::scriptIf<ScriptRef>(camera) != nullptr));
+    script::writeField((*script::scriptIf<ScriptRef>(camera)), "bPrimary", true);
     EXPECT_TRUE(entity->getComponent<CameraComponent>()->bPrimary);
-    EXPECT_EQ(script::callMethod(ref, "remove", cameraName), ScriptValue{true});
-    EXPECT_EQ(script::tryResolve(std::get<ScriptRef>(camera)), nullptr);
+    EXPECT_EQ(script::callMethod(ref, "remove", cameraName), script::scriptMake(true));
+    EXPECT_EQ(script::tryResolve((*script::scriptIf<ScriptRef>(camera))), nullptr);
 
     EXPECT_EQ(script::findMethod(ref.type, "getNoSuchThing"), nullptr);
-    const ScriptValue unknown[] = {ScriptValue{std::string("NoSuchComponent")}};
+    const ScriptValue unknown[] = {script::scriptMake(std::string("NoSuchComponent"))};
     EXPECT_THROW(script::callMethod(ref, "get", unknown), ScriptError);
 
     scene.destroyEntity(entity);
@@ -272,7 +272,7 @@ TEST_F(ScriptBindingTest, SceneRefsDieWithTheirScene)
         Scene scene("Transient");
         sceneRef  = script::sceneRef(&scene);
         entityRef = script::entityRef(scene.createNode3D("A")->getEntity());
-        EXPECT_EQ(script::callMethod(sceneRef, "getName", {}), ScriptValue{std::string("Transient")});
+        EXPECT_EQ(script::callMethod(sceneRef, "getName", {}), script::scriptMake(std::string("Transient")));
         EXPECT_EQ(script::sceneOf(sceneRef), &scene);
     }
     EXPECT_EQ(script::tryResolve(sceneRef), nullptr);

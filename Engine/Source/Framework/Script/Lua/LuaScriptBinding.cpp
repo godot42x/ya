@@ -39,6 +39,7 @@
 #include <string_view>
 #include <type_traits>
 #include <vector>
+#include <vector>
 
 namespace ya
 {
@@ -569,59 +570,136 @@ void registerLuaScriptBindings(sol::state_view lua)
 
 // ============================================================================
 // ScriptValue <-> the Lua stack
+// Builtins (nil / bool / int / float / string) map by value kind. Every other
+// crossing type is a projector registered once, looked up by type_index.
 // ============================================================================
+
+struct LuaProjector
+{
+    int (*push)(lua_State* L, const void* data)              = nullptr;
+    bool (*match)(lua_State* L, int index)                   = nullptr;
+    script::ScriptValue (*pull)(lua_State* L, int index)     = nullptr;
+};
+
+template <class T>
+int pushSol(lua_State* L, const void* data)
+{
+    return sol::stack::push(L, *static_cast<const T*>(data));
+}
+
+template <class T>
+bool matchSol(lua_State* L, int index)
+{
+    return sol::stack::check<T>(L, index, &sol::no_panic);
+}
+
+template <class T>
+script::ScriptValue pullSol(lua_State* L, int index)
+{
+    return script::scriptMake(sol::stack::get<T>(L, index));
+}
+
+int pushRect(lua_State* L, const void* data)
+{
+    const auto& rect = *static_cast<const script::ScriptRect*>(data);
+    lua_createtable(L, 0, 4);
+    lua_pushnumber(L, static_cast<lua_Number>(rect.x));
+    lua_setfield(L, -2, "x");
+    lua_pushnumber(L, static_cast<lua_Number>(rect.y));
+    lua_setfield(L, -2, "y");
+    lua_pushnumber(L, static_cast<lua_Number>(rect.w));
+    lua_setfield(L, -2, "w");
+    lua_pushnumber(L, static_cast<lua_Number>(rect.h));
+    lua_setfield(L, -2, "h");
+    return 1;
+}
+
+int pushFn(lua_State* L, const void* data)
+{
+    const auto& handle = *static_cast<const script::ScriptFnHandle*>(data);
+    if (handle.id == 0) {
+        lua_pushnil(L);
+    }
+    else {
+        LuaScriptingSystem::pushHeldFunction(L, handle.id);
+    }
+    return 1;
+}
+
+int pushSelf(lua_State* L, const void* data)
+{
+    const auto& handle = *static_cast<const script::ScriptSelfHandle*>(data);
+    LuaScriptingSystem::pushLiveSelf(L, handle.runtimeId);
+    return 1;
+}
+
+int pushRef(lua_State* L, const void* data)
+{
+    pushObject(L, *static_cast<const ScriptRef*>(data));
+    return 1;
+}
+
+const std::vector<std::pair<type_index_t, LuaProjector>>& luaProjectors()
+{
+    static const std::vector<std::pair<type_index_t, LuaProjector>> table = {
+        {type_index_v<glm::vec2>, {&pushSol<glm::vec2>, &matchSol<glm::vec2>, &pullSol<glm::vec2>}},
+        {type_index_v<glm::vec3>, {&pushSol<glm::vec3>, &matchSol<glm::vec3>, &pullSol<glm::vec3>}},
+        {type_index_v<glm::vec4>, {&pushSol<glm::vec4>, &matchSol<glm::vec4>, &pullSol<glm::vec4>}},
+        {type_index_v<ScriptRef>, {&pushRef, nullptr, nullptr}},
+        {type_index_v<script::ScriptRect>, {&pushRect, nullptr, nullptr}},
+        {type_index_v<script::ScriptFnHandle>, {&pushFn, nullptr, nullptr}},
+        {type_index_v<script::ScriptSelfHandle>, {&pushSelf, nullptr, nullptr}},
+    };
+    return table;
+}
+
+const LuaProjector* projectorFor(type_index_t type)
+{
+    for (const auto& [key, projector] : luaProjectors()) {
+        if (key == type) {
+            return &projector;
+        }
+    }
+    return nullptr;
+}
 
 int pushLuaValue(lua_State* L, const ScriptValue& value)
 {
-    return std::visit(
-        [L](const auto& v) -> int {
-            using T = std::decay_t<decltype(v)>;
-            if constexpr (std::is_same_v<T, std::monostate>) {
-                lua_pushnil(L);
-            }
-            else if constexpr (std::is_same_v<T, bool>) {
-                lua_pushboolean(L, v ? 1 : 0);
-            }
-            else if constexpr (std::is_same_v<T, int64_t>) {
-                lua_pushinteger(L, static_cast<lua_Integer>(v));
-            }
-            else if constexpr (std::is_same_v<T, double>) {
-                lua_pushnumber(L, static_cast<lua_Number>(v));
-            }
-            else if constexpr (std::is_same_v<T, std::string>) {
-                lua_pushlstring(L, v.data(), v.size());
-            }
-            else if constexpr (std::is_same_v<T, ScriptRef>) {
-                pushObject(L, v);
-            }
-            else if constexpr (std::is_same_v<T, script::ScriptFnHandle>) {
-                if (v.id == 0) {
-                    lua_pushnil(L);
-                }
-                else {
-                    LuaScriptingSystem::pushHeldFunction(L, v.id);
-                }
-            }
-            else if constexpr (std::is_same_v<T, script::ScriptSelfHandle>) {
-                LuaScriptingSystem::pushLiveSelf(L, v.runtimeId);
-            }
-            else if constexpr (std::is_same_v<T, script::ScriptRect>) {
-                lua_createtable(L, 0, 4);
-                lua_pushnumber(L, static_cast<lua_Number>(v.x));
-                lua_setfield(L, -2, "x");
-                lua_pushnumber(L, static_cast<lua_Number>(v.y));
-                lua_setfield(L, -2, "y");
-                lua_pushnumber(L, static_cast<lua_Number>(v.w));
-                lua_setfield(L, -2, "w");
-                lua_pushnumber(L, static_cast<lua_Number>(v.h));
-                lua_setfield(L, -2, "h");
-            }
-            else {
-                return sol::stack::push(L, v); // Vec value types are sol usertypes
-            }
+    if (value.isRef()) {
+        throw script::ScriptError("a borrowed reference cannot cross into a script");
+    }
+    if (value.isNull() || value.data() == nullptr) {
+        lua_pushnil(L);
+        return 1;
+    }
+    const refl::TypeOps* ops = refl::TypeRegistry::instance().find(value.type());
+    if (ops != nullptr) {
+        switch (ops->kind) {
+        case refl::EValueKind::Bool: {
+            lua_pushboolean(L, value.toBool().value_or(false) ? 1 : 0);
             return 1;
-        },
-        value);
+        }
+        case refl::EValueKind::Int: {
+            lua_pushinteger(L, static_cast<lua_Integer>(value.toInt64().value_or(0)));
+            return 1;
+        }
+        case refl::EValueKind::Float: {
+            lua_pushnumber(L, static_cast<lua_Number>(value.toDouble().value_or(0)));
+            return 1;
+        }
+        case refl::EValueKind::String: {
+            const std::string* text = value.asString();
+            lua_pushlstring(L, text ? text->data() : "", text ? text->size() : 0);
+            return 1;
+        }
+        default:
+            break;
+        }
+    }
+    if (const LuaProjector* projector = projectorFor(value.type())) {
+        return projector->push(L, value.data());
+    }
+    throw script::ScriptError(std::string("this value cannot cross into a script: ") + script::scriptValueTypeName(value));
 }
 
 ScriptValue toScriptValue(lua_State* L, int index, type_index_t expected)
@@ -631,48 +709,43 @@ ScriptValue toScriptValue(lua_State* L, int index, type_index_t expected)
     case LUA_TNONE:
         return {};
     case LUA_TBOOLEAN:
-        return lua_toboolean(L, index) != 0;
+        return script::scriptMake(lua_toboolean(L, index) != 0);
     case LUA_TNUMBER:
         if (lua_isinteger(L, index)) {
-            return static_cast<int64_t>(lua_tointeger(L, index));
+            return script::scriptMake(static_cast<int64_t>(lua_tointeger(L, index)));
         }
-        return static_cast<double>(lua_tonumber(L, index));
+        return script::scriptMake(static_cast<double>(lua_tonumber(L, index)));
     case LUA_TSTRING: {
         size_t      length = 0;
         const char* text   = lua_tolstring(L, index, &length);
-        return std::string(text, length);
+        return script::scriptMake(std::string(text, length));
     }
     case LUA_TFUNCTION:
         if (LuaScriptingSystem* system = LuaScriptingSystem::systemForState(L)) {
             if (const uint64_t id = system->holdFunction(L, index)) {
-                return script::ScriptFnHandle{.id = id};
+                return script::scriptMake(script::ScriptFnHandle{.id = id});
             }
         }
         break;
     case LUA_TTABLE:
         if (LuaScriptingSystem* system = LuaScriptingSystem::systemForState(L)) {
             if (const uint64_t id = system->runtimeIdOfSelf(L, index)) {
-                return script::ScriptSelfHandle{.runtimeId = id};
+                return script::scriptMake(script::ScriptSelfHandle{.runtimeId = id});
             }
         }
         // Only an owner/self slot accepts a table that is not a live self.
         if (expected == type_index_v<script::ScriptSelfHandle>) {
-            return script::ScriptSelfHandle{};
+            return script::scriptMake(script::ScriptSelfHandle{});
         }
         break;
     case LUA_TUSERDATA:
         if (metatableHasMarker(L, index, &kObjectMarker)) {
-            return refAt(L, index);
+            return script::scriptMake(refAt(L, index));
         }
-        // Vec value types are sol usertypes; sol recognizes its own instances.
-        if (sol::stack::check<glm::vec3>(L, index, &sol::no_panic)) {
-            return sol::stack::get<glm::vec3>(L, index);
-        }
-        if (sol::stack::check<glm::vec2>(L, index, &sol::no_panic)) {
-            return sol::stack::get<glm::vec2>(L, index);
-        }
-        if (sol::stack::check<glm::vec4>(L, index, &sol::no_panic)) {
-            return sol::stack::get<glm::vec4>(L, index);
+        for (const auto& [type, projector] : luaProjectors()) {
+            if (projector.match != nullptr && projector.match(L, index)) {
+                return projector.pull(L, index);
+            }
         }
         break;
     default:

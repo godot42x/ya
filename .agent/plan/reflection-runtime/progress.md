@@ -322,3 +322,34 @@ debug，100000 次，3 次取中位数，ns/op。`invoker_ns` 每次新建一个
 - 枚举不是 TypeOps。脚本边界用 `Enum::setValue` 写入 8 字节，再 `MetaValue::trivial`；读回用 `Enum::getValue`。
 - 脚本窄化的热路径不调用出线的 `convertTo`，规则与 int64 / double 源的 `convertTo` 相同。其它来源的算术转换仍走 `convertTo`。
 - 生成器按派发保持休眠，没有恢复。
+
+## 2026-10-09 — RR5b done on macOS, Windows pending
+
+`ScriptValue` 不再是 variant，就是 `refl::MetaValue`。脚本读写、`callMethod`、Lua / JS 边界都直接收发它。`addNativeMethod` 和 9 个手写 native 仍在（RR8）。
+
+### 边界
+
+- 内建种类按 `EValueKind` 直映：空 → nil，Bool → boolean，Int → integer，Float → number，String → string。窄整数和 float 在进出脚本时仍收成 int64 / double，越界抛 `ScriptError`。
+- 其它可跨类型走 Lua 投影器表（`type_index` 查一次）：vec2/3/4、`ScriptRef`、`ScriptRect`、函数句柄、self 句柄。JS 仍拒绝后三个，向量打成数组。
+- `pushLuaValue` / JS `toJs` 遇到借用引用（`isRef()`）直接拒绝，不把指针推进脚本。字段读取和 `const T&` 返回在边界上拷成自有值后再推。
+- 指针成员仍不导出。裸指针没有 `ScriptRef` kind，做不成安全句柄，按「转成句柄或拒绝」里的拒绝处理。`raw` 的 `findField` 仍是空。
+- `MetaValue` 增加 `operator==`（同类型、可平凡拷贝比字节，字符串比内容）。
+
+### 微基准
+
+debug，100000 次，3 次，ns/op。对照 RR0。
+
+| | RR0 | RR5b 三次 | 中位数 | 相对 RR0 |
+| --- | --- | --- | --- | --- |
+| `lua_native_ns` | 757.4 | 793.6 / 838.3 / 795.5 | 795.5 | +5.0% |
+| `lua_property_ns` | 565.6 | 577.6 / 584.7 / 588.7 | 584.7 | +3.4% |
+| `invoker_ns` | 206.6 | 63.6 / 65.1 / 65.5 | 65.1 | −68% |
+| `accessor_ns` | 30.6 | 30.1 / 33.4 / 33.6 | 33.4 | +9.2% |
+
+`lua_native` 从 RR5a 的 805.0 降到 795.5，贴着 5% 线（一次 838 把中位数抬上去）。`accessor` 不经过脚本边界，三次里有 30.1，debug 抖动，没有为它改代码。
+
+### 验证
+
+- `ya-testing` 1749/1749，4 个 `DISABLED_`。
+- `reflects-core-test` 70/70。
+- Windows 还没跑。重点：`long` 32 位、`reflects-core` 导出、`MetaValue::operator==`、designated initializer 顺序。

@@ -15,7 +15,7 @@ TEST(LuaScriptComponentLifetimeTest, CapturedPropertiesSurviveLuaStateDeath)
 {
     ScriptInstance script;
     script.scriptPath = "Content/Scripts/Spin.lua";
-    script.propertyOverrides["radius"] = 3.5;
+    script.propertyOverrides["radius"] = script::scriptMake(3.5);
 
     {
         sol::state lua;
@@ -33,13 +33,13 @@ TEST(LuaScriptComponentLifetimeTest, CapturedPropertiesSurviveLuaStateDeath)
 
         ASSERT_EQ(script.properties.size(), 1u);
         EXPECT_EQ(script.properties[0].name, "radius");
-        ASSERT_TRUE(std::holds_alternative<double>(script.properties[0].value));
-        EXPECT_DOUBLE_EQ(std::get<double>(script.properties[0].value), 3.5);
-        EXPECT_DOUBLE_EQ(std::get<double>(script.propertyOverrides["radius"]), 3.5);
+        ASSERT_TRUE((script::scriptIf<double>(script.properties[0].value) != nullptr));
+        EXPECT_DOUBLE_EQ((*script::scriptIf<double>(script.properties[0].value)), 3.5);
+        EXPECT_DOUBLE_EQ((*script::scriptIf<double>(script.propertyOverrides["radius"])), 3.5);
     }
 
     ASSERT_EQ(script.properties.size(), 1u);
-    EXPECT_DOUBLE_EQ(std::get<double>(script.properties[0].value), 3.5);
+    EXPECT_DOUBLE_EQ((*script::scriptIf<double>(script.properties[0].value)), 3.5);
 }
 
 TEST(LuaScriptComponentLifetimeTest, CapturePropertiesFromMultipleEntries)
@@ -79,10 +79,10 @@ TEST(LuaScriptComponentLifetimeTest, CapturePropertiesFromMultipleEntries)
     ASSERT_TRUE(byName.contains("lookSpeed"));
     ASSERT_TRUE(byName.contains("enabled"));
     ASSERT_TRUE(byName.contains("name"));
-    EXPECT_DOUBLE_EQ(std::get<double>(byName["moveSpeed"].value), 8.0);
-    EXPECT_DOUBLE_EQ(std::get<double>(byName["lookSpeed"].value), 45.0);
-    EXPECT_TRUE(std::get<bool>(byName["enabled"].value));
-    EXPECT_EQ(std::get<std::string>(byName["name"].value), "camera");
+    EXPECT_DOUBLE_EQ((*script::scriptIf<double>(byName["moveSpeed"].value)), 8.0);
+    EXPECT_DOUBLE_EQ((*script::scriptIf<double>(byName["lookSpeed"].value)), 45.0);
+    EXPECT_TRUE((*script::scriptIf<bool>(byName["enabled"].value)));
+    EXPECT_EQ((*script::scriptIf<std::string>(byName["name"].value)), "camera");
     EXPECT_FLOAT_EQ(byName["moveSpeed"].min, 0.1f);
     EXPECT_FLOAT_EQ(byName["lookSpeed"].max, 180.0f);
     EXPECT_EQ(table.get<std::string>("name"), "camera");
@@ -94,7 +94,7 @@ TEST(LuaScriptComponentLifetimeTest, CloneCustomDropsLuaHandlesAndKeepsOverrides
     auto* instance = src.addScript("Content/Scripts/Spin.lua");
     ASSERT_NE(instance, nullptr);
     instance->enabled = false;
-    instance->propertyOverrides["speed"] = int64_t{12};
+    instance->propertyOverrides["speed"] = script::scriptMake(int64_t{12});
     instance->bAuthoringPreviewLoaded = true;
     instance->runtimeId = 0;
 
@@ -109,7 +109,7 @@ TEST(LuaScriptComponentLifetimeTest, CloneCustomDropsLuaHandlesAndKeepsOverrides
     EXPECT_FALSE(dst.scripts[0].bAuthoringPreviewLoaded);
     EXPECT_TRUE(dst.scripts[0].properties.empty());
     ASSERT_EQ(dst.scripts[0].propertyOverrides.size(), 1u);
-    EXPECT_EQ(std::get<int64_t>(dst.scripts[0].propertyOverrides["speed"]), 12);
+    EXPECT_EQ((*script::scriptIf<int64_t>(dst.scripts[0].propertyOverrides["speed"])), 12);
 
     src.releaseLuaHandles();
 }
@@ -133,17 +133,17 @@ TEST(LuaScriptComponentLifetimeTest, PropertyOverrideJsonMatchesLegacyEncoding)
     auto* script = authored.addScript("Content/Scripts/Spin.lua");
     ASSERT_NE(script, nullptr);
     script->executionOrderOverride = 3;
-    script->propertyOverrides["speed"]     = int64_t{12};
-    script->propertyOverrides["radius"]    = static_cast<double>(3.5f);
-    script->propertyOverrides["bias"]      = static_cast<double>(0.1f);
-    script->propertyOverrides["whole"]     = static_cast<double>(8.0f);
-    script->propertyOverrides["scale"]     = 0.1;
-    script->propertyOverrides["enabled"]   = true;
-    script->propertyOverrides["name"]      = std::string{"camera"};
-    script->propertyOverrides["spawnName"] = std::string{"SpawnFromHouse"};
-    script->propertyOverrides["uv"]        = glm::vec2{0.25f, 0.5f};
-    script->propertyOverrides["offset"]    = glm::vec3{1.0f, 2.0f, 3.5f};
-    script->propertyOverrides["tint"]      = glm::vec4{1.0f, 0.0f, 0.0f, 1.0f};
+    script->propertyOverrides["speed"]     = script::scriptMake(int64_t{12});
+    script->propertyOverrides["radius"]    = script::scriptMake(static_cast<double>(3.5f));
+    script->propertyOverrides["bias"]      = script::scriptMake(static_cast<double>(0.1f));
+    script->propertyOverrides["whole"]     = script::scriptMake(static_cast<double>(8.0f));
+    script->propertyOverrides["scale"]     = script::scriptMake(0.1);
+    script->propertyOverrides["enabled"]   = script::scriptMake(true);
+    script->propertyOverrides["name"]      = script::scriptMake(std::string{"camera"});
+    script->propertyOverrides["spawnName"] = script::scriptMake(std::string{"SpawnFromHouse"});
+    script->propertyOverrides["uv"]        = script::scriptMake(glm::vec2{0.25f, 0.5f});
+    script->propertyOverrides["offset"]    = script::scriptMake(glm::vec3{1.0f, 2.0f, 3.5f});
+    script->propertyOverrides["tint"]      = script::scriptMake(glm::vec4{1.0f, 0.0f, 0.0f, 1.0f});
 
     nlohmann::json authoredJson;
     authored.serializeCustom(authoredJson);

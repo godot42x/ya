@@ -48,7 +48,7 @@ script::ScriptValue widgetValue(GameUIHost& host, const UIElementRef& widget)
     if (!ref) {
         return {};
     }
-    return ref;
+    return script::scriptMake(ref);
 }
 
 script::ScriptNativeField nameField()
@@ -59,7 +59,7 @@ script::ScriptNativeField nameField()
             if (!widget) {
                 return {};
             }
-            return widget->_name;
+            return script::scriptMake(widget->_name);
         },
     };
 }
@@ -72,7 +72,7 @@ script::ScriptNativeField visibleField()
             if (!widget) {
                 return {};
             }
-            return widget->isVisibleForRender();
+            return script::scriptMake(widget->isVisibleForRender());
         },
         .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
             UIElement* widget = requireLive(self, ref, "visible");
@@ -98,10 +98,10 @@ script::ScriptValue addClicked(void* /*self*/, const script::ScriptRef& ref, scr
 {
     UIButton* button = liveButton(ref);
     if (!button) {
-        return int64_t{0};
+        return script::scriptMake(int64_t{0});
     }
-    const auto* owner = args.size() > 0 ? std::get_if<script::ScriptSelfHandle>(&args[0]) : nullptr;
-    const auto* fn    = args.size() > 1 ? std::get_if<script::ScriptFnHandle>(&args[1]) : nullptr;
+    const auto* owner = args.size() > 0 ? script::scriptIf<script::ScriptSelfHandle>(args[0]) : nullptr;
+    const auto* fn    = args.size() > 1 ? script::scriptIf<script::ScriptFnHandle>(args[1]) : nullptr;
     if (!owner || owner->runtimeId == 0 || !fn || fn->id == 0) {
         if (!fn || fn->id == 0) {
             YA_CORE_ERROR("Lua Button.onClicked:add: callback is not a function");
@@ -109,12 +109,12 @@ script::ScriptValue addClicked(void* /*self*/, const script::ScriptRef& ref, scr
         else {
             YA_CORE_ERROR("Lua Button.onClicked:add: the owner must be a live script's self");
         }
-        return int64_t{0};
+        return script::scriptMake(int64_t{0});
     }
     const std::shared_ptr<void> kept = scriptInstanceListenerOwner(owner->runtimeId);
     if (!kept || !retainInstanceFunction(owner->runtimeId, *fn)) {
         YA_CORE_ERROR("Lua Button.onClicked:add: the owner must be a live script's self");
-        return int64_t{0};
+        return script::scriptMake(int64_t{0});
     }
     const script::ScriptFnHandle   held = *fn;
     const script::ScriptSelfHandle self = *owner;
@@ -127,34 +127,34 @@ script::ScriptValue addClicked(void* /*self*/, const script::ScriptRef& ref, scr
             callbacks->invoke(held, self, {});
         }
     });
-    return static_cast<int64_t>(handle);
+    return script::scriptMake(static_cast<int64_t>(handle));
 }
 
 script::ScriptValue removeClicked(void* /*self*/, const script::ScriptRef& ref, script::ScriptArgs args)
 {
     UIButton* button = liveButton(ref);
     if (!button || args.empty()) {
-        return false;
+        return script::scriptMake(false);
     }
     const int64_t handle = script::scriptToInteger(args[0]);
     if (handle <= 0) {
-        return false;
+        return script::scriptMake(false);
     }
-    return button->onClicked.remove(static_cast<DelegateHandle>(handle));
+    return script::scriptMake(button->onClicked.remove(static_cast<DelegateHandle>(handle)));
 }
 
 script::ScriptValue removeAllClicked(void* /*self*/, const script::ScriptRef& ref, script::ScriptArgs args)
 {
     UIButton* button = liveButton(ref);
-    const auto* owner = !args.empty() ? std::get_if<script::ScriptSelfHandle>(&args[0]) : nullptr;
+    const auto* owner = !args.empty() ? script::scriptIf<script::ScriptSelfHandle>(args[0]) : nullptr;
     if (!button || !owner || owner->runtimeId == 0) {
-        return int64_t{0};
+        return script::scriptMake(int64_t{0});
     }
     const std::shared_ptr<void> kept = scriptInstanceListenerOwner(owner->runtimeId);
     if (!kept) {
-        return int64_t{0};
+        return script::scriptMake(int64_t{0});
     }
-    return static_cast<int64_t>(button->onClicked.removeAll(kept.get()));
+    return script::scriptMake(static_cast<int64_t>(button->onClicked.removeAll(kept.get())));
 }
 
 template <typename T>
@@ -205,7 +205,7 @@ void registerWidgetScriptSurface()
 
     script::addNativeField(element, "valid", script::ScriptNativeField{
         .read = [](void* self, const script::ScriptRef&) -> script::ScriptValue {
-            return self && widgetLive(static_cast<const UIElement*>(self));
+            return script::scriptMake(self && widgetLive(static_cast<const UIElement*>(self)));
         },
     });
     script::addNativeField(element, "name", nameField());
@@ -248,12 +248,12 @@ void registerWidgetScriptSurface()
             return {};
         }
         const Rect2D& rect = widget->getLayoutRect();
-        return script::ScriptRect{
+        return script::scriptMake(script::ScriptRect{
             .x = rect.pos.x,
             .y = rect.pos.y,
             .w = rect.extent.x,
             .h = rect.extent.y,
-        };
+        });
     });
 
     script::addScriptBase(text, element);
@@ -264,7 +264,7 @@ void registerWidgetScriptSurface()
     script::addNativeField(text, "text", script::ScriptNativeField{
         .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
             auto* widget = liveAs<UIText>(self, ref, "text");
-            return widget ? script::ScriptValue{widget->getText()} : script::ScriptValue{};
+            return widget ? script::scriptMake(widget->getText()) : script::ScriptValue{};
         },
         .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
             if (auto* widget = liveAs<UIText>(self, ref, "text")) {
@@ -275,11 +275,11 @@ void registerWidgetScriptSurface()
     script::addNativeField(text, "color", script::ScriptNativeField{
         .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
             auto* widget = liveAs<UIText>(self, ref, "color");
-            return widget ? script::ScriptValue{widget->_color} : script::ScriptValue{};
+            return widget ? script::scriptMake(widget->_color) : script::ScriptValue{};
         },
         .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
             auto* widget = liveAs<UIText>(self, ref, "color");
-            const auto* color = std::get_if<glm::vec4>(&value);
+            const auto* color = script::scriptIf<glm::vec4>(value);
             if (widget && color) {
                 widget->setColor(*color);
             }
@@ -288,7 +288,7 @@ void registerWidgetScriptSurface()
     script::addNativeField(text, "fontSize", script::ScriptNativeField{
         .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
             auto* widget = liveAs<UIText>(self, ref, "fontSize");
-            return widget ? script::ScriptValue{static_cast<int64_t>(widget->_fontSize)} : script::ScriptValue{};
+            return widget ? script::scriptMake(static_cast<int64_t>(widget->_fontSize)) : script::ScriptValue{};
         },
         .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
             if (auto* widget = liveAs<UIText>(self, ref, "fontSize")) {
@@ -304,13 +304,13 @@ void registerWidgetScriptSurface()
         .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
             // A detached button still yields an event; add/remove no-op and warn once.
             (void)requireLive(self, ref, "onClicked");
-            return makeButtonClickedRef(ref.a);
+            return script::scriptMake(makeButtonClickedRef(ref.a));
         },
     });
     script::addNativeField(button, "enabled", script::ScriptNativeField{
         .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
             auto* widget = liveAs<UIButton>(self, ref, "enabled");
-            return widget ? script::ScriptValue{widget->isEnabled()} : script::ScriptValue{};
+            return widget ? script::scriptMake(widget->isEnabled()) : script::ScriptValue{};
         },
         .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
             if (auto* widget = liveAs<UIButton>(self, ref, "enabled")) {
@@ -322,7 +322,7 @@ void registerWidgetScriptSurface()
     script::addNativeField(image, "texture", script::ScriptNativeField{
         .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
             auto* widget = liveAs<UIImage>(self, ref, "texture");
-            return widget ? script::ScriptValue{widget->_assetPath} : script::ScriptValue{};
+            return widget ? script::scriptMake(widget->_assetPath) : script::ScriptValue{};
         },
         .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
             if (auto* widget = liveAs<UIImage>(self, ref, "texture")) {
@@ -334,11 +334,11 @@ void registerWidgetScriptSurface()
     script::addNativeField(border, "fill", script::ScriptNativeField{
         .read = [](void* self, const script::ScriptRef& ref) -> script::ScriptValue {
             auto* widget = liveAs<UIBorder>(self, ref, "fill");
-            return widget ? script::ScriptValue{widget->getColor()} : script::ScriptValue{};
+            return widget ? script::scriptMake(widget->getColor()) : script::ScriptValue{};
         },
         .write = [](void* self, const script::ScriptRef& ref, const script::ScriptValue& value) {
             auto* widget = liveAs<UIBorder>(self, ref, "fill");
-            const auto* color = std::get_if<glm::vec4>(&value);
+            const auto* color = script::scriptIf<glm::vec4>(value);
             if (widget && color) {
                 widget->setColor(*color);
             }

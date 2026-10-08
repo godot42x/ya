@@ -80,19 +80,19 @@ struct LuaScriptComponent : public IComponent
             if (!script.propertyOverrides.empty()) {
                 nlohmann::json overrides = nlohmann::json::object();
                 for (const auto& [propName, value] : script.propertyOverrides) {
-                    if (const auto* integer = std::get_if<int64_t>(&value))
+                    if (const auto* integer = script::scriptIf<int64_t>(value))
                         overrides[propName] = *integer;
-                    else if (const auto* number = std::get_if<double>(&value))
+                    else if (const auto* number = script::scriptIf<double>(value))
                         overrides[propName] = *number;
-                    else if (const auto* flag = std::get_if<bool>(&value))
+                    else if (const auto* flag = script::scriptIf<bool>(value))
                         overrides[propName] = *flag;
-                    else if (const auto* text = std::get_if<std::string>(&value))
+                    else if (const auto* text = script::scriptIf<std::string>(value))
                         overrides[propName] = *text;
-                    else if (const auto* vec = std::get_if<glm::vec2>(&value))
+                    else if (const auto* vec = script::scriptIf<glm::vec2>(value))
                         overrides[propName] = nlohmann::json::array({vec->x, vec->y});
-                    else if (const auto* vec = std::get_if<glm::vec3>(&value))
+                    else if (const auto* vec = script::scriptIf<glm::vec3>(value))
                         overrides[propName] = nlohmann::json::array({vec->x, vec->y, vec->z});
-                    else if (const auto* vec = std::get_if<glm::vec4>(&value))
+                    else if (const auto* vec = script::scriptIf<glm::vec4>(value))
                         overrides[propName] = nlohmann::json::array({vec->x, vec->y, vec->z, vec->w});
                 }
                 s["propertyOverrides"] = std::move(overrides);
@@ -120,19 +120,19 @@ struct LuaScriptComponent : public IComponent
 
             for (auto& [propName, valueJson] : scriptJson.at("propertyOverrides").items()) {
                 if (valueJson.is_boolean())
-                    script->propertyOverrides[propName] = valueJson.get<bool>();
+                    script->propertyOverrides[propName] = script::scriptMake(valueJson.get<bool>());
                 else if (valueJson.is_number_integer())
-                    script->propertyOverrides[propName] = valueJson.get<int64_t>();
+                    script->propertyOverrides[propName] = script::scriptMake(valueJson.get<int64_t>());
                 else if (valueJson.is_number_float())
-                    script->propertyOverrides[propName] = valueJson.get<double>();
+                    script->propertyOverrides[propName] = script::scriptMake(valueJson.get<double>());
                 else if (valueJson.is_string())
-                    script->propertyOverrides[propName] = valueJson.get<std::string>();
+                    script->propertyOverrides[propName] = script::scriptMake(valueJson.get<std::string>());
                 else if (valueJson.is_array() && valueJson.size() == 2)
-                    script->propertyOverrides[propName] = glm::vec2(valueJson[0].get<float>(), valueJson[1].get<float>());
+                    script->propertyOverrides[propName] = script::scriptMake(glm::vec2(valueJson[0].get<float>(), valueJson[1].get<float>()));
                 else if (valueJson.is_array() && valueJson.size() == 3)
-                    script->propertyOverrides[propName] = glm::vec3(valueJson[0].get<float>(), valueJson[1].get<float>(), valueJson[2].get<float>());
+                    script->propertyOverrides[propName] = script::scriptMake(glm::vec3(valueJson[0].get<float>(), valueJson[1].get<float>(), valueJson[2].get<float>()));
                 else if (valueJson.is_array() && valueJson.size() == 4)
-                    script->propertyOverrides[propName] = glm::vec4(valueJson[0].get<float>(), valueJson[1].get<float>(), valueJson[2].get<float>(), valueJson[3].get<float>());
+                    script->propertyOverrides[propName] = script::scriptMake(glm::vec4(valueJson[0].get<float>(), valueJson[1].get<float>(), valueJson[2].get<float>(), valueJson[3].get<float>()));
             }
         }
     }

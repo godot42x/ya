@@ -103,10 +103,10 @@ T fromScript(const ScriptValue& value)
         return scriptToString(value);
     }
     else if constexpr (std::is_same_v<T, ScriptRef>) {
-        if (const ScriptRef* ref = std::get_if<ScriptRef>(&value)) {
+        if (const ScriptRef* ref = scriptIf<ScriptRef>(value)) {
             return *ref;
         }
-        if (std::holds_alternative<std::monostate>(value)) {
+        if (value.isNull()) {
             return {};
         }
         throw ScriptError(std::string("expected an object, got ") + scriptValueTypeName(value));
@@ -115,13 +115,13 @@ T fromScript(const ScriptValue& value)
         return static_cast<T>(scriptToEnum(type_index_v<T>, value));
     }
     else if constexpr (std::is_same_v<T, ScriptSelfHandle> || std::is_same_v<T, ScriptFnHandle> || std::is_same_v<T, ScriptRect>) {
-        if (const T* held = std::get_if<T>(&value)) {
+        if (const T* held = scriptIf<T>(value)) {
             return *held;
         }
-        throw ScriptError(std::string("expected ") + scriptValueTypeName(T{}) + ", got " + scriptValueTypeName(value));
+        throw ScriptError(std::string("expected a script handle, got ") + scriptValueTypeName(value));
     }
     else {
-        if (const T* held = std::get_if<T>(&value)) {
+        if (const T* held = scriptIf<T>(value)) {
             return *held;
         }
         throw ScriptError(std::string("expected a vector, got ") + scriptValueTypeName(value));
@@ -132,22 +132,22 @@ template <typename T>
 ScriptValue toScript(const T& value)
 {
     if constexpr (std::is_same_v<T, bool>) {
-        return value;
+        return scriptMake(value);
     }
     else if constexpr (std::is_integral_v<T>) {
-        return static_cast<int64_t>(value);
+        return scriptMake(static_cast<int64_t>(value));
     }
     else if constexpr (std::is_floating_point_v<T>) {
-        return static_cast<double>(value);
+        return scriptMake(static_cast<double>(value));
     }
     else if constexpr (std::is_same_v<T, ScriptRef>) {
-        return value ? ScriptValue{value} : ScriptValue{};
+        return value ? scriptMake(value) : ScriptValue{};
     }
     else if constexpr (std::is_enum_v<T>) {
-        return static_cast<int64_t>(value);
+        return scriptMake(static_cast<int64_t>(value));
     }
     else {
-        return value;
+        return scriptMake(value);
     }
 }
 

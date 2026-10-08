@@ -69,36 +69,42 @@ JSValue toJs(JSContext* ctx, const ScriptValue& value)
         }
         return array;
     };
-    return std::visit(
-        [&](const auto& v) -> JSValue {
-            using T = std::decay_t<decltype(v)>;
-            if constexpr (std::is_same_v<T, std::monostate>) {
-                return JS_NULL;
-            }
-            else if constexpr (std::is_same_v<T, bool>) {
-                return JS_NewBool(ctx, v);
-            }
-            else if constexpr (std::is_same_v<T, int64_t>) {
-                return JS_NewInt64(ctx, v);
-            }
-            else if constexpr (std::is_same_v<T, double>) {
-                return JS_NewFloat64(ctx, v);
-            }
-            else if constexpr (std::is_same_v<T, std::string>) {
-                return JS_NewStringLen(ctx, v.data(), v.size());
-            }
-            else if constexpr (std::is_same_v<T, ScriptRef>) {
-                return wrapRef(ctx, v);
-            }
-            else if constexpr (std::is_same_v<T, ScriptFnHandle> || std::is_same_v<T, ScriptSelfHandle> ||
-                               std::is_same_v<T, ScriptRect>) {
-                throw ScriptError("not projected to JS");
-            }
-            else {
-                return vector(&v.x, static_cast<uint32_t>(T::length()));
-            }
-        },
-        value);
+    if (value.isRef()) {
+        throw ScriptError("a borrowed reference cannot cross into a script");
+    }
+    if (value.isNull() || value.data() == nullptr) {
+        return JS_NULL;
+    }
+    if (const bool* flag = script::scriptIf<bool>(value)) {
+        return JS_NewBool(ctx, *flag);
+    }
+    if (const std::string* text = value.asString()) {
+        return JS_NewStringLen(ctx, text->data(), text->size());
+    }
+    if (const ScriptRef* ref = script::scriptIf<ScriptRef>(value)) {
+        return wrapRef(ctx, *ref);
+    }
+    if (script::scriptIf<ScriptFnHandle>(value) || script::scriptIf<ScriptSelfHandle>(value) ||
+        script::scriptIf<ScriptRect>(value)) {
+        throw ScriptError("not projected to JS");
+    }
+    if (const glm::vec2* v = script::scriptIf<glm::vec2>(value)) {
+        return vector(&v->x, 2);
+    }
+    if (const glm::vec3* v = script::scriptIf<glm::vec3>(value)) {
+        return vector(&v->x, 3);
+    }
+    if (const glm::vec4* v = script::scriptIf<glm::vec4>(value)) {
+        return vector(&v->x, 4);
+    }
+    const refl::TypeOps* ops = refl::TypeRegistry::instance().find(value.type());
+    if (ops != nullptr && ops->kind == refl::EValueKind::Int) {
+        return JS_NewInt64(ctx, value.toInt64().value_or(0));
+    }
+    if (ops != nullptr && ops->kind == refl::EValueKind::Float) {
+        return JS_NewFloat64(ctx, value.toDouble().value_or(0));
+    }
+    throw ScriptError("this value cannot cross into JS");
 }
 
 ScriptValue vectorFromJs(JSContext* ctx, JSValueConst array)
@@ -120,11 +126,11 @@ ScriptValue vectorFromJs(JSContext* ctx, JSValueConst array)
     }
     switch (length) {
     case 2:
-        return glm::vec2(components[0], components[1]);
+        return script::scriptMake(glm::vec2(components[0], components[1]));
     case 3:
-        return glm::vec3(components[0], components[1], components[2]);
+        return script::scriptMake(glm::vec3(components[0], components[1], components[2]));
     default:
-        return glm::vec4(components[0], components[1], components[2], components[3]);
+        return script::scriptMake(glm::vec4(components[0], components[1], components[2], components[3]));
     }
 }
 
@@ -134,25 +140,25 @@ ScriptValue fromJs(JSContext* ctx, JSValueConst value)
         return {};
     }
     if (JS_IsBool(value)) {
-        return JS_ToBool(ctx, value) != 0;
+        return script::scriptMake(JS_ToBool(ctx, value) != 0);
     }
     if (JS_VALUE_GET_TAG(value) == JS_TAG_INT) {
-        return static_cast<int64_t>(JS_VALUE_GET_INT(value));
+        return script::scriptMake(static_cast<int64_t>(JS_VALUE_GET_INT(value)));
     }
     if (JS_IsNumber(value)) {
         double number = 0.0;
         JS_ToFloat64(ctx, &number, value);
-        return number;
+        return script::scriptMake(number);
     }
     if (JS_IsString(value)) {
         size_t      length = 0;
         const char* text   = JS_ToCStringLen(ctx, &length, value);
         std::string out(text ? text : "", text ? length : 0);
         JS_FreeCString(ctx, text);
-        return out;
+        return script::scriptMake(std::move(out));
     }
     if (const ScriptRef* ref = refOf(value)) {
-        return *ref;
+        return script::scriptMake(*ref);
     }
     if (JS_IsArray(value)) {
         return vectorFromJs(ctx, value);

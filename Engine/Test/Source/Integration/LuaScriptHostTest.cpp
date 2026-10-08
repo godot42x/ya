@@ -218,18 +218,18 @@ TEST(LuaScriptHostTest, NamedCallReturnsValue)
     ScriptInstance& instance = rt.make(path);
     ASSERT_TRUE(rt.load(instance, "EchoHost"));
 
-    const std::vector<script::ScriptValue> twoArgs = {script::ScriptValue{std::string("ab")}, script::ScriptValue{std::string("cd")}};
+    const std::vector<script::ScriptValue> twoArgs = {script::scriptMake(std::string("ab")), script::scriptMake(std::string("cd"))};
     const script::ScriptValue              joined  = rt.runtime.callNamed(instance, "concat", twoArgs, ENamedCallError::Throw);
-    ASSERT_TRUE(std::holds_alternative<std::string>(joined));
-    EXPECT_EQ(std::get<std::string>(joined), "abcd");
+    ASSERT_TRUE((script::scriptIf<std::string>(joined) != nullptr));
+    EXPECT_EQ((*script::scriptIf<std::string>(joined)), "abcd");
 
-    const std::vector<script::ScriptValue> oneArg = {script::ScriptValue{int64_t{7}}};
+    const std::vector<script::ScriptValue> oneArg = {script::scriptMake(int64_t{7})};
     const script::ScriptValue              half   = rt.runtime.callNamed(instance, "half", oneArg, ENamedCallError::Throw);
-    ASSERT_TRUE(std::holds_alternative<double>(half));
-    EXPECT_DOUBLE_EQ(std::get<double>(half), 3.5);
+    ASSERT_TRUE((script::scriptIf<double>(half) != nullptr));
+    EXPECT_DOUBLE_EQ((*script::scriptIf<double>(half)), 3.5);
 
     const script::ScriptValue nothing = rt.runtime.callNamed(instance, "none", {}, ENamedCallError::Throw);
-    EXPECT_TRUE(std::holds_alternative<std::monostate>(nothing));
+    EXPECT_TRUE((nothing).isNull());
     // The host's binding ran before the call, like every lifecycle callback.
     EXPECT_EQ(rt.runtime.selfOf(instance.runtimeId).get<std::string>("hostName"), "EchoHost");
 }
@@ -241,14 +241,14 @@ TEST(LuaScriptHostTest, NamedCallOnMissingFunctionIsNil)
     ScriptInstance& instance = rt.make(path);
     ASSERT_TRUE(rt.load(instance, "QuietHost"));
 
-    const std::vector<script::ScriptValue> oneArg = {script::ScriptValue{int64_t{1}}};
+    const std::vector<script::ScriptValue> oneArg = {script::scriptMake(int64_t{1})};
     const script::ScriptValue              answer = rt.runtime.callNamed(instance, "onInteract", oneArg, ENamedCallError::Throw);
-    EXPECT_TRUE(std::holds_alternative<std::monostate>(answer));
+    EXPECT_TRUE((answer).isNull());
 
     // A host that no longer resolves (destroyed instance) answers nil too.
     rt.runtime.destroy(instance);
     const script::ScriptValue gone = rt.runtime.callNamed(instance, "onInit", {}, ENamedCallError::Throw);
-    EXPECT_TRUE(std::holds_alternative<std::monostate>(gone));
+    EXPECT_TRUE((gone).isNull());
 }
 
 TEST(LuaScriptHostTest, NamedCallPropagatesTargetErrors)
@@ -285,7 +285,7 @@ TEST(LuaScriptHostTest, NamedCallSwallowContainsTargetErrors)
 
     script::ScriptValue value;
     EXPECT_NO_THROW(value = rt.runtime.callNamed(instance, "boom", {}, ENamedCallError::Swallow));
-    EXPECT_TRUE(std::holds_alternative<std::monostate>(value));
+    EXPECT_TRUE((value).isNull());
 }
 
 } // namespace ya

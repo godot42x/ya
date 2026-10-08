@@ -7,9 +7,10 @@
 
 #include <cstdint>
 #include <span>
+#include <type_traits>
 #include <stdexcept>
 #include <string>
-#include <variant>
+#include <utility>
 
 namespace ya::script
 {
@@ -57,22 +58,31 @@ struct ScriptRect
     bool  operator==(const ScriptRect&) const = default;
 };
 
-/// The only values that cross between engine and script languages. Enums
-/// travel as integers; vectors keep their width. The last three arms are
-/// Lua-facing; JS rejects them.
-using ScriptValue = std::variant<std::monostate,
-                                  bool,
-                                  int64_t,
-                                  double,
-                                  std::string,
-                                  glm::vec2,
-                                  glm::vec3,
-                                  glm::vec4,
-                                  ScriptRef,
-                                  ScriptFnHandle,
-                                  ScriptSelfHandle,
-                                  ScriptRect>;
+/// Values that cross between the engine and a script language. This is the
+/// reflection value (`refl::MetaValue`): builtins keep their kind, and every
+/// other crossing type is a registered value. Enums travel as integers.
+/// `ScriptFnHandle`, `ScriptSelfHandle` and `ScriptRect` are Lua-facing; JS
+/// rejects them. A borrowed reference must not be handed to a language.
+using ScriptValue = refl::MetaValue;
 using ScriptArgs  = std::span<const ScriptValue>;
+
+template <class T>
+[[nodiscard]] const T* scriptIf(const ScriptValue& value)
+{
+    return value.tryGet<T>();
+}
+
+template <class T>
+[[nodiscard]] ScriptValue scriptMake(T&& value)
+{
+    using U = std::decay_t<T>;
+    if constexpr (std::is_same_v<U, ScriptValue>) {
+        return std::forward<T>(value);
+    }
+    else {
+        return refl::MetaValue::make(std::forward<T>(value));
+    }
+}
 
 /// Anything a script did wrong: unknown member, wrong argument, an object that
 /// no longer exists. Backends turn it into their language's error.

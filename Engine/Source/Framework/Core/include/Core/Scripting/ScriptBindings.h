@@ -193,6 +193,13 @@ YA_CORE_API ScriptValue               callMethod(const ScriptRef& ref, const Scr
 /// Find-then-use in one call; an unknown name throws ScriptError.
 [[nodiscard]] YA_CORE_API ScriptValue readField(const ScriptRef& ref, std::string_view field);
 YA_CORE_API void                      writeField(const ScriptRef& ref, std::string_view field, const ScriptValue& value);
+
+template <class T>
+    requires(!std::is_same_v<std::decay_t<T>, ScriptValue>)
+void writeField(const ScriptRef& ref, std::string_view field, T&& value)
+{
+    writeField(ref, field, scriptMake(std::forward<T>(value)));
+}
 YA_CORE_API ScriptValue               callMethod(const ScriptRef& ref, std::string_view method, ScriptArgs args);
 
 /// Language backend behind `ScriptFnHandle`. GameRuntime calls through this
@@ -211,31 +218,16 @@ struct IScriptCallbacks
 YA_CORE_API void              setScriptCallbacks(IScriptCallbacks* callbacks);
 YA_CORE_API IScriptCallbacks* scriptCallbacks();
 
-namespace detail
-{
-
-template <typename T, typename Variant>
-struct is_variant_alternative : std::false_type
-{
-};
-
-template <typename T, typename... Alts>
-struct is_variant_alternative<T, std::variant<Alts...>> : std::bool_constant<(std::is_same_v<T, Alts> || ...)>
-{
-};
-
-template <typename T, typename Variant>
-inline constexpr bool is_variant_alternative_v = is_variant_alternative<T, Variant>::value;
-
-} // namespace detail
-
 template <typename T>
 constexpr bool crossesToScripts()
 {
     using D = std::decay_t<T>;
-    // Arms of ScriptValue, plus arithmetic types and enums (scriptToEnum).
-    // ScriptValue is not an arm of itself, so it cannot be a parameter.
-    return detail::is_variant_alternative_v<D, ScriptValue> || std::is_arithmetic_v<D> || std::is_enum_v<D>;
+    // Types a script argument may be. ScriptValue itself is the dynamic value,
+    // so it cannot be a parameter.
+    return std::is_arithmetic_v<D> || std::is_enum_v<D> || std::is_same_v<D, std::string> ||
+           std::is_same_v<D, glm::vec2> || std::is_same_v<D, glm::vec3> || std::is_same_v<D, glm::vec4> ||
+           std::is_same_v<D, ScriptRef> || std::is_same_v<D, ScriptFnHandle> ||
+           std::is_same_v<D, ScriptSelfHandle> || std::is_same_v<D, ScriptRect>;
 }
 
 } // namespace ya::script

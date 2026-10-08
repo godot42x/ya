@@ -88,9 +88,9 @@ std::optional<ScriptNativeFn> resolveComponentAccessor(std::string_view methodNa
         auto&       entity  = *static_cast<Entity*>(self);
         const void* present = componentOn(entity, componentType);
         if (!bGet) {
-            return present != nullptr;
+            return script::scriptMake(present != nullptr);
         }
-        return present ? ScriptValue{componentRef(&entity, componentType)} : ScriptValue{};
+        return present ? script::scriptMake(componentRef(&entity, componentType)) : script::ScriptValue{};
     }};
 }
 
@@ -99,14 +99,14 @@ void registerEntityMethods()
     const type_index_t entityType = type_index_v<Entity>;
     addMethod(entityType, "get", fn([](Entity& entity, const std::string& typeName) -> ScriptValue {
                   const type_index_t type = componentTypeNamed(typeName);
-                  return componentOn(entity, type) ? ScriptValue{componentRef(&entity, type)} : ScriptValue{};
+                  return componentOn(entity, type) ? script::scriptMake(componentRef(&entity, type)) : script::ScriptValue{};
               }));
     addMethod(entityType, "has", fn([](Entity& entity, const std::string& typeName) -> bool {
                   return componentOn(entity, componentTypeNamed(typeName)) != nullptr;
               }));
     addMethod(entityType, "add", fn([](Entity& entity, const std::string& typeName) -> ScriptValue {
                   const type_index_t type = componentTypeNamed(typeName);
-                  return entity.addComponentByName(typeName) ? ScriptValue{componentRef(&entity, type)} : ScriptValue{};
+                  return entity.addComponentByName(typeName) ? script::scriptMake(componentRef(&entity, type)) : script::ScriptValue{};
               }));
     addMethod(entityType, "remove", fn([](Entity& entity, const std::string& typeName) -> bool {
                   (void)componentTypeNamed(typeName);

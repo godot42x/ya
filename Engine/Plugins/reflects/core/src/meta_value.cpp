@@ -527,6 +527,35 @@ std::optional<bool> MetaValue::toBool() const
     return value;
 }
 
+bool MetaValue::operator==(const MetaValue &other) const
+{
+    if (isNull() || other.isNull()) {
+        return isNull() && other.isNull();
+    }
+    if (_type != other._type || _storage != other._storage || _bConst != other._bConst) {
+        return false;
+    }
+    if (_storage == EMetaStorage::Ref) {
+        return _store.ref == other._store.ref;
+    }
+    const void *left  = data();
+    const void *right = other.data();
+    if (left == right) {
+        return true;
+    }
+    if (left == nullptr || right == nullptr) {
+        return false;
+    }
+    if (const std::string *text = asString()) {
+        return *text == *other.asString();
+    }
+    const TypeOps *ops = TypeRegistry::instance().find(_type);
+    if (ops == nullptr || !ops->bTriviallyCopyable) {
+        return false;
+    }
+    return std::memcmp(left, right, ops->life.size) == 0;
+}
+
 const std::string *MetaValue::asString() const
 {
     if (isNull() || data() == nullptr) {

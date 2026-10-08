@@ -100,6 +100,7 @@ class REFLECTS_CORE_API MetaValue
     void       *data();
     const void *data() const;
     bool         isNull() const { return _type == 0; }
+    bool         operator==(const MetaValue& other) const;
     bool         isRef() const { return _type != 0 && _storage == EMetaStorage::Ref; }
     bool         isConst() const { return _bConst; }
     EMetaStorage storage() const { return _storage; }

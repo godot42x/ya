@@ -68,14 +68,14 @@ ScriptValue find(const GameplayScriptContext& ctx, ScriptArgs args)
     if (!entity) {
         return {};
     }
-    return script::entityRef(entity);
+    return script::scriptMake(script::entityRef(entity));
 }
 
 ScriptValue viewSize(const GameplayScriptContext& ctx, ScriptArgs args)
 {
     expectArgCount(args, 0);
     const GameplayPresentedView presented = gameplayPresentedView(ctx);
-    return scriptViewSize(presented.camera, presented.pixelExtent);
+    return script::scriptMake(scriptViewSize(presented.camera, presented.pixelExtent));
 }
 
 /// `map:entityAt(x, y[, except])` — the first actor in the cell (rpg-prototype
@@ -100,8 +100,8 @@ ScriptValue entityAtCell(void* self, const ScriptRef&, ScriptArgs args)
     }
     const int32_t x = static_cast<int32_t>(script::scriptToInteger(args[0]));
     const int32_t y = static_cast<int32_t>(script::scriptToInteger(args[1]));
-    const ScriptRef exceptRef = args.size() == 3 && std::holds_alternative<ScriptRef>(args[2])
-                                    ? std::get<ScriptRef>(args[2])
+    const ScriptRef exceptRef = args.size() == 3 && (script::scriptIf<ScriptRef>(args[2]) != nullptr)
+                                    ? (*script::scriptIf<ScriptRef>(args[2]))
                                     : ScriptRef{};
     Entity* const except = script::entityOf(exceptRef);
 
@@ -116,7 +116,7 @@ ScriptValue entityAtCell(void* self, const ScriptRef&, ScriptArgs args)
         TransformSystem::computeWorldMatrix(&transform);
         const glm::vec2 cell = map.worldToCell(glm::vec2(transform.getTransform()[3]));
         if (static_cast<int32_t>(std::lround(cell.x)) == x && static_cast<int32_t>(std::lround(cell.y)) == y) {
-            return ScriptValue{script::entityRef(candidate)};
+            return script::scriptMake(script::entityRef(candidate));
         }
     }
     return {};
@@ -157,7 +157,7 @@ void destroySpriteEntity(const GameplayScriptContext& ctx, Entity* entity)
 
 std::string optionalString(const ScriptValue& value)
 {
-    if (std::holds_alternative<std::monostate>(value)) {
+    if ((value).isNull()) {
         return {};
     }
     return script::scriptToString(value);
@@ -174,16 +174,16 @@ ScriptValue spawnSpriteFn(const GameplayScriptContext& ctx, ScriptArgs args)
     if (!entity) {
         return {};
     }
-    return script::entityRef(entity);
+    return script::scriptMake(script::entityRef(entity));
 }
 
 ScriptValue destroyEntityFn(const GameplayScriptContext& ctx, ScriptArgs args)
 {
     expectArgCount(args, 1);
-    if (!std::holds_alternative<ScriptRef>(args[0])) {
+    if (!(script::scriptIf<ScriptRef>(args[0]) != nullptr)) {
         throw ScriptError("expected an entity");
     }
-    destroySpriteEntity(ctx, script::entityOf(std::get<ScriptRef>(args[0])));
+    destroySpriteEntity(ctx, script::entityOf((*script::scriptIf<ScriptRef>(args[0]))));
     return {};
 }
 
@@ -191,7 +191,7 @@ ScriptValue viewAspect(const GameplayScriptContext& ctx, ScriptArgs args)
 {
     expectArgCount(args, 0);
     const GameplayPresentedView presented = gameplayPresentedView(ctx);
-    return static_cast<double>(scriptViewAspect(presented.camera, presented.pixelExtent));
+    return script::scriptMake(static_cast<double>(scriptViewAspect(presented.camera, presented.pixelExtent)));
 }
 
 ScriptValue scriptOf(const GameplayScriptContext& ctx, ScriptArgs args)
@@ -199,10 +199,10 @@ ScriptValue scriptOf(const GameplayScriptContext& ctx, ScriptArgs args)
     if (args.empty() || args.size() > 2) {
         throw ScriptError("expects scriptOf(entity) or scriptOf(entity, path)");
     }
-    if (!std::holds_alternative<ScriptRef>(args[0])) {
+    if (!(script::scriptIf<ScriptRef>(args[0]) != nullptr)) {
         throw ScriptError("expected an entity");
     }
-    Entity* entity = script::entityOf(std::get<ScriptRef>(args[0]));
+    Entity* entity = script::entityOf((*script::scriptIf<ScriptRef>(args[0])));
     if (!entity) {
         return {};
     }
@@ -218,7 +218,7 @@ ScriptValue scriptOf(const GameplayScriptContext& ctx, ScriptArgs args)
     if (self.runtimeId == 0) {
         return {};
     }
-    return self;
+    return script::scriptMake(self);
 }
 
 /// One process-wide slot: re-registering replaces the function in place, and
@@ -231,8 +231,8 @@ ScriptValue setKeyHandler(const GameplayScriptContext& ctx, const std::shared_pt
         return {};
     }
     script::ScriptFnHandle next;
-    if (!args.empty() && std::holds_alternative<script::ScriptFnHandle>(args[0])) {
-        next = std::get<script::ScriptFnHandle>(args[0]);
+    if (!args.empty() && (script::scriptIf<script::ScriptFnHandle>(args[0]) != nullptr)) {
+        next = (*script::scriptIf<script::ScriptFnHandle>(args[0]));
     }
     if (script::IScriptCallbacks* callbacks = script::scriptCallbacks()) {
         if (held->id != 0 && held->id != next.id) {
@@ -264,12 +264,12 @@ ScriptValue setKeyHandler(const GameplayScriptContext& ctx, const std::shared_pt
             key = static_cast<const KeyReleasedEvent&>(event).getKeyCode();
         }
         const script::ScriptValue callArgs[] = {
-            static_cast<int64_t>(key),
-            pressed,
-            repeat,
+            script::scriptMake(static_cast<int64_t>(key)),
+            script::scriptMake(pressed),
+            script::scriptMake(repeat),
         };
         const script::ScriptValue result = callHeldScriptFunction(*scripts, *held, callArgs);
-        return std::holds_alternative<bool>(result) && std::get<bool>(result);
+        return (script::scriptIf<bool>(result) != nullptr) && (*script::scriptIf<bool>(result));
     });
     return {};
 }
@@ -290,33 +290,33 @@ ScriptValue uiGet(const GameplayScriptContext& ctx, ScriptArgs args)
     // widget handle, so `.name` still works on an entry that has no script.
     const script::ScriptSelfHandle self = LuaWidgetScripts::scriptSelfOf(*root);
     if (self.runtimeId != 0) {
-        return self;
+        return script::scriptMake(self);
     }
     const script::ScriptRef handle = widgetScriptRef(*ctx.gameUI, root);
     if (!handle) {
         return {};
     }
-    return handle;
+    return script::scriptMake(handle);
 }
 
 ScriptValue setText(const GameplayScriptContext& ctx, ScriptArgs args)
 {
     expectArgCount(args, 3);
     if (!ctx.gameUI) {
-        return false;
+        return script::scriptMake(false);
     }
-    return ctx.gameUI->setMountedText(script::scriptToString(args[0]), script::scriptToString(args[1]), script::scriptToString(args[2]));
+    return script::scriptMake(ctx.gameUI->setMountedText(script::scriptToString(args[0]), script::scriptToString(args[1]), script::scriptToString(args[2])));
 }
 
 ScriptValue setVisible(const GameplayScriptContext& ctx, ScriptArgs args)
 {
     expectArgCount(args, 3);
     if (!ctx.gameUI) {
-        return false;
+        return script::scriptMake(false);
     }
-    return ctx.gameUI->setMountedVisible(script::scriptToString(args[0]),
-                                         script::scriptToString(args[1]),
-                                         script::scriptToBool(args[2]));
+    return script::scriptMake(ctx.gameUI->setMountedVisible(script::scriptToString(args[0]),
+                                                            script::scriptToString(args[1]),
+                                                            script::scriptToBool(args[2])));
 }
 
 } // namespace
