@@ -66,16 +66,11 @@ struct ECSRegistry
                             entt::registry& dstRegistry, entt::entity dstEntity,
                             EClonePolicy policy) = 0;
 
-        virtual bool useReflectionSerialization(const void* component) const = 0;
-
         /// Type-erased `T{}` so scene serialization can drop reflected fields
         /// that still equal the default. Null when T is not default-constructible;
         /// the caller then writes every reflected field. `_owner` is null, which
         /// is fine: serialization only reads reflected fields.
         virtual std::shared_ptr<void> createDefaultInstance() const { return nullptr; }
-
-        virtual void serializeCustom(const void* component, nlohmann::json& out) const { (void)component; (void)out; }
-        virtual void deserializeCustom(void* component, const nlohmann::json& in) const { (void)component; (void)in; }
 
         /// Type-erased edit notification: funnels a completed write into
         /// registry.patch<T> (the entt on_update signal) plus the SceneBus
@@ -105,9 +100,6 @@ struct ECSRegistry
                      entt::registry& dstRegistry, entt::entity dstEntity,
                      EClonePolicy policy) override;
 
-        bool useReflectionSerialization(const void* component) const override {
-            return static_cast<const T*>(component)->useReflectionSerialization();
-        }
         std::shared_ptr<void> createDefaultInstance() const override
         {
             if constexpr (std::default_initializable<T>) {
@@ -116,12 +108,6 @@ struct ECSRegistry
             else {
                 return nullptr;
             }
-        }
-        void serializeCustom(const void* component, nlohmann::json& out) const override {
-            static_cast<const T*>(component)->serializeCustom(out);
-        }
-        void deserializeCustom(void* component, const nlohmann::json& in) const override {
-            static_cast<T*>(component)->deserializeCustom(in);
         }
         void notifyEdited(entt::registry& registry, entt::entity entity) override
         {

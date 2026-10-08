@@ -1,6 +1,7 @@
 #include "Core/Common/SamplerEnums.h"
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Core/Reflection/ReflectionSerializer.h"
+#include "ECS/ComponentJson.h"
 #include "ECS/ECSRegistry.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
@@ -476,7 +477,7 @@ TEST(SceneSerializerDefaultsTest, RegisteredComponentsCreatedMatchTheirDefaultIn
             ADD_FAILURE() << typeName << " addComponent returned null";
             continue;
         }
-        if (!ops->useReflectionSerialization(created)) {
+        if (!componentUsesReflection(typeIndex)) {
             continue;
         }
 

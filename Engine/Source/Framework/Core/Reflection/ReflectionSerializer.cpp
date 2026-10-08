@@ -2,6 +2,7 @@
 #include "Core/Common/AssetRef.h"
 #include "Core/Log.h"
 #include "Core/Reflection/PropertyExtensions.h"
+#include "Core/Reflection/ValueFacets.h"
 
 namespace ya
 {
@@ -9,12 +10,29 @@ namespace ya
 namespace
 {
 
-using CustomTypeHookMap = std::unordered_map<type_index_t, ReflectionSerializer::CustomTypeHook>;
-
-CustomTypeHookMap &getCustomTypeHooks()
+const reflection::FJsonFacet *jsonFacet(type_index_t typeIndex)
 {
-    static CustomTypeHookMap hooks;
-    return hooks;
+    return refl::TypeRegistry::instance().facet<reflection::FJsonFacet>(typeIndex);
+}
+
+bool writeJsonFacet(const void *valuePtr, type_index_t typeIndex, nlohmann::json &outJson)
+{
+    const reflection::FJsonFacet *facet = jsonFacet(typeIndex);
+    if (facet == nullptr || facet->serialize == nullptr) {
+        return false;
+    }
+    outJson = facet->serialize(valuePtr);
+    return true;
+}
+
+bool readJsonFacet(void *valuePtr, type_index_t typeIndex, const nlohmann::json &jsonValue)
+{
+    const reflection::FJsonFacet *facet = jsonFacet(typeIndex);
+    if (facet == nullptr || facet->deserialize == nullptr) {
+        return false;
+    }
+    facet->deserialize(valuePtr, jsonValue);
+    return true;
 }
 
 const nlohmann::json *findBaseClassJson(const nlohmann::json &baseJson, const std::string &className)
@@ -34,43 +52,23 @@ const nlohmann::json *findBaseClassJson(const nlohmann::json &baseJson, const st
 
 } // namespace
 
-void ReflectionSerializer::registerCustomTypeHook(type_index_t typeIndex, CustomTypeHook hook)
+bool ReflectionSerializer::is_base_type(type_index_t typeIdx)
 {
-    getCustomTypeHooks()[typeIndex] = std::move(hook);
-}
-
-bool ReflectionSerializer::hasCustomTypeHook(type_index_t typeIndex)
-{
-    return findCustomTypeHook(typeIndex) != nullptr;
-}
-
-const ReflectionSerializer::CustomTypeHook *ReflectionSerializer::findCustomTypeHook(type_index_t typeIndex)
-{
-    auto &hooks = getCustomTypeHooks();
-    auto  it    = hooks.find(typeIndex);
-    return it != hooks.end() ? &it->second : nullptr;
-}
-
-bool ReflectionSerializer::trySerializeCustomType(const void *valuePtr, type_index_t typeIndex, nlohmann::json &outJson)
-{
-    auto *hook = findCustomTypeHook(typeIndex);
-    if (!hook || !hook->serialize) {
+    const refl::TypeOps *ops = refl::TypeRegistry::instance().find(typeIdx);
+    if (ops == nullptr) {
         return false;
     }
-
-    outJson = hook->serialize(valuePtr);
-    return true;
-}
-
-bool ReflectionSerializer::tryDeserializeCustomType(void *valuePtr, type_index_t typeIndex, const nlohmann::json &jsonValue)
-{
-    auto *hook = findCustomTypeHook(typeIndex);
-    if (!hook || !hook->deserialize) {
+    switch (ops->kind) {
+    case refl::EValueKind::Bool:
+    case refl::EValueKind::Int:
+    case refl::EValueKind::Float:
+    case refl::EValueKind::String:
+        break;
+    default:
         return false;
     }
-
-    hook->deserialize(valuePtr, jsonValue);
-    return true;
+    const reflection::FJsonFacet *facet = jsonFacet(typeIdx);
+    return facet != nullptr && facet->serialize != nullptr;
 }
 
 // ========================================================================
@@ -83,28 +81,8 @@ bool ReflectionSerializer::tryDeserializeCustomType(void *valuePtr, type_index_t
 nlohmann::json ReflectionSerializer::serializeAnyValue(void *valuePtr, type_index_t typeIndex)
 {
     nlohmann::json customJson;
-    if (trySerializeCustomType(valuePtr, typeIndex, customJson)) {
+    if (writeJsonFacet(valuePtr, typeIndex, customJson)) {
         return customJson;
-    }
-
-    // Handle basic types first for performance
-    if (typeIndex == ya::type_index_v<int>) {
-        return *static_cast<int *>(valuePtr);
-    }
-    if (typeIndex == ya::type_index_v<float>) {
-        return *static_cast<float *>(valuePtr);
-    }
-    if (typeIndex == ya::type_index_v<double>) {
-        return *static_cast<double *>(valuePtr);
-    }
-    if (typeIndex == ya::type_index_v<bool>) {
-        return *static_cast<bool *>(valuePtr);
-    }
-    if (typeIndex == ya::type_index_v<std::string>) {
-        return *static_cast<std::string *>(valuePtr);
-    }
-    if (typeIndex == ya::type_index_v<unsigned int>) {
-        return *static_cast<unsigned int *>(valuePtr);
     }
 
     // Handle enums
@@ -141,7 +119,7 @@ nlohmann::json ReflectionSerializer::serializeAnyValue(void *valuePtr, type_inde
         return serializeByRuntimeReflection(valuePtr, typeIndex, classPtr->name);
     }
 
-    YA_CORE_WARN("ReflectionSerializer: Unknown type for serialization (typeIndex: {})", typeIndex);
+    YA_CORE_ERROR("ReflectionSerializer: Unknown type for serialization (typeIndex: {})", typeIndex);
     return nullptr;
 }
 
@@ -150,51 +128,9 @@ nlohmann::json ReflectionSerializer::serializeAnyValue(void *valuePtr, type_inde
  */
 void ReflectionSerializer::deserializeAnyValue(void *valuePtr, type_index_t typeIndex, const nlohmann::json &jsonValue)
 {
-    if (tryDeserializeCustomType(valuePtr, typeIndex, jsonValue)) {
+    if (readJsonFacet(valuePtr, typeIndex, jsonValue)) {
         return;
     }
-
-    // Handle basic types first for performance
-    if (typeIndex == ya::type_index_v<int>) {
-        *static_cast<int *>(valuePtr) = jsonValue.get<int>();
-        return;
-    }
-    if (typeIndex == ya::type_index_v<float>) {
-        *static_cast<float *>(valuePtr) = jsonValue.get<float>();
-        return;
-    }
-    if (typeIndex == ya::type_index_v<double>) {
-        *static_cast<double *>(valuePtr) = jsonValue.get<double>();
-        return;
-    }
-    if (typeIndex == ya::type_index_v<bool>) {
-        *static_cast<bool *>(valuePtr) = jsonValue.get<bool>();
-        return;
-    }
-    if (typeIndex == ya::type_index_v<std::string>) {
-        *static_cast<std::string *>(valuePtr) = jsonValue.get<std::string>();
-        return;
-    }
-    if (typeIndex == ya::type_index_v<unsigned int>) {
-        *static_cast<unsigned int *>(valuePtr) = jsonValue.get<unsigned int>();
-        return;
-    }
-
-    // static const std::unordered_map<type_index_t, std::function<void(void *, const nlohmann::json &)>> mapping = {
-    //     {
-    //         ya::type_index_v<int>,
-    //         [](void *ptr, const nlohmann::json &jsonValue) {
-    //             *static_cast<int *>(ptr) = jsonValue.get<int>();
-    //         },
-    //     },
-    // };
-    // if (auto it = mapping.find(typeIndex); it != mapping.end())
-    // {
-    //     it->second(valuePtr, jsonValue);
-    //     return;
-    // }
-
-
 
     // Handle enums
     if (is_enum_type(typeIndex)) {
@@ -251,7 +187,7 @@ void ReflectionSerializer::deserializeAnyValue(void *valuePtr, type_index_t type
         return;
     }
 
-    YA_CORE_WARN("ReflectionSerializer: Unknown type for deserialization (typeIndex: {})", typeIndex);
+    YA_CORE_ERROR("ReflectionSerializer: Unknown type for deserialization (typeIndex: {})", typeIndex);
 }
 
 /**
@@ -526,7 +462,10 @@ void ReflectionSerializer::deserializeBaseClasses(const Class *classPtr, void *o
 nlohmann::json ReflectionSerializer::serializeByRuntimeReflection(const void *obj, type_index_t typeIndex, const std::string &typeName)
 {
     nlohmann::json customJson;
-    if (trySerializeCustomType(obj, typeIndex, customJson)) {
+    // Scalar facets are applied from serializeAnyValue. This entry stays the
+    // class walk, plus value facets such as vec arrays. A bare float therefore
+    // still comes back null, matching the RR0 optional baseline.
+    if (!is_base_type(typeIndex) && writeJsonFacet(obj, typeIndex, customJson)) {
         return customJson;
     }
 
@@ -601,7 +540,7 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
         return j;
     }
 
-    if (trySerializeCustomType(valuePtr, prop.typeIndex, j)) {
+    if (writeJsonFacet(valuePtr, prop.typeIndex, j)) {
         return j;
     }
 
@@ -692,7 +631,7 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
 
 void ReflectionSerializer::deserializeByRuntimeReflection(void *obj, type_index_t typeIndex, const nlohmann::json &j, const std::string &className)
 {
-    if (tryDeserializeCustomType(obj, typeIndex, j)) {
+    if (!is_base_type(typeIndex) && readJsonFacet(obj, typeIndex, j)) {
         return;
     }
 
@@ -801,7 +740,7 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
     }
 
     void *directValuePtr = prop.getMutableAddress(obj);
-    if (directValuePtr && tryDeserializeCustomType(directValuePtr, prop.typeIndex, j)) {
+    if (directValuePtr && readJsonFacet(directValuePtr, prop.typeIndex, j)) {
         return;
     }
 

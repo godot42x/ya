@@ -125,7 +125,7 @@ struct YA_SCENE_2D_API TilemapComponent : public IComponent
     void onPostSerialize() override;
     // The layers array is omitted as a whole, so a default bYSort / layerOffset
     // inside a saved layer would otherwise be written. Drop just those two.
-    void serializeCustom(nlohmann::json& out) const override;
+    void serializeCustom(nlohmann::json& out) const;
     // Resize keeping the overlapping cells at the same origin; new cells
     // are empty. Non-positive sizes are ignored.
     void resize(int32_t newWidth, int32_t newHeight);

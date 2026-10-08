@@ -2,6 +2,7 @@
 
 #include "Core/Common/AssetRef.h"
 #include "Core/Reflection/PropertyExtensions.h"
+#include "Core/Reflection/ValueFacets.h"
 #include "reflects-core/lib.h"
 
 #include <format>
@@ -15,28 +16,32 @@ namespace ya::reflection
 namespace
 {
 
+const FIntegerFacet* integerFacet(type_index_t typeIndex)
+{
+    return refl::TypeRegistry::instance().facet<FIntegerFacet>(typeIndex);
+}
+
 bool readIntegerFromAddress(type_index_t typeIndex, const void* address, int64_t& value)
 {
-    if (!address) {
+    const FIntegerFacet* facet = integerFacet(typeIndex);
+    if (!address || facet == nullptr) {
         return false;
     }
-    if (typeIndex == refl::type_index_v<int> || typeIndex == refl::type_index_v<int32_t>) {
+    if (facet->bSigned) {
         value = *static_cast<const int32_t*>(address);
         return true;
     }
-    if (typeIndex == refl::type_index_v<uint32_t>) {
-        value = *static_cast<const uint32_t*>(address);
-        return true;
-    }
-    return false;
+    value = *static_cast<const uint32_t*>(address);
+    return true;
 }
 
 bool writeIntegerToAddress(type_index_t typeIndex, void* address, int64_t value)
 {
-    if (!address) {
+    const FIntegerFacet* facet = integerFacet(typeIndex);
+    if (!address || facet == nullptr) {
         return false;
     }
-    if (typeIndex == refl::type_index_v<int> || typeIndex == refl::type_index_v<int32_t>) {
+    if (facet->bSigned) {
         if (value < static_cast<int64_t>(std::numeric_limits<int32_t>::min()) ||
             value > static_cast<int64_t>(std::numeric_limits<int32_t>::max())) {
             return false;
@@ -49,28 +54,23 @@ bool writeIntegerToAddress(type_index_t typeIndex, void* address, int64_t value)
         current = next;
         return true;
     }
-    if (typeIndex == refl::type_index_v<uint32_t>) {
-        if (value < 0 || value > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
-            return false;
-        }
-        uint32_t& current = *static_cast<uint32_t*>(address);
-        const uint32_t next = static_cast<uint32_t>(value);
-        if (current == next) {
-            return false;
-        }
-        current = next;
-        return true;
+    if (value < 0 || value > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
+        return false;
     }
-    return false;
+    uint32_t& current = *static_cast<uint32_t*>(address);
+    const uint32_t next = static_cast<uint32_t>(value);
+    if (current == next) {
+        return false;
+    }
+    current = next;
+    return true;
 }
 
 } // namespace
 
 bool PropertyAccessor::isIntegerType(type_index_t typeIndex)
 {
-    return typeIndex == refl::type_index_v<int> ||
-           typeIndex == refl::type_index_v<int32_t> ||
-           typeIndex == refl::type_index_v<uint32_t>;
+    return refl::TypeRegistry::instance().facet<FIntegerFacet>(typeIndex) != nullptr;
 }
 
 bool PropertyAccessor::isAssetRefType(type_index_t typeIndex)
@@ -428,30 +428,8 @@ bool PropertyAccessor::equals(const FPropertySlot& slot, const void* a, const vo
     if (const Enum* enumInfo = EnumRegistry::instance().getEnum(type)) {
         return enumInfo->getValue(const_cast<void*>(a)) == enumInfo->getValue(const_cast<void*>(b));
     }
-    if (type == refl::type_index_v<glm::vec2>) {
-        return *static_cast<const glm::vec2*>(a) == *static_cast<const glm::vec2*>(b);
-    }
-    if (type == refl::type_index_v<glm::vec3>) {
-        return *static_cast<const glm::vec3*>(a) == *static_cast<const glm::vec3*>(b);
-    }
-    if (type == refl::type_index_v<glm::vec4>) {
-        return *static_cast<const glm::vec4*>(a) == *static_cast<const glm::vec4*>(b);
-    }
-    if (type == refl::type_index_v<float>) {
-        return *static_cast<const float*>(a) == *static_cast<const float*>(b);
-    }
-    if (isIntegerType(type)) {
-        int64_t left = 0;
-        int64_t right = 0;
-        return readIntegerFromAddress(type, a, left) &&
-               readIntegerFromAddress(type, b, right) &&
-               left == right;
-    }
-    if (type == refl::type_index_v<bool>) {
-        return *static_cast<const bool*>(a) == *static_cast<const bool*>(b);
-    }
-    if (type == refl::type_index_v<std::string>) {
-        return *static_cast<const std::string*>(a) == *static_cast<const std::string*>(b);
+    if (const FEqualFacet* equal = refl::TypeRegistry::instance().facet<FEqualFacet>(type)) {
+        return equal->equals != nullptr && equal->equals(a, b);
     }
     if (isAssetRefType(type)) {
         return static_cast<const AssetRefBase*>(a)->getPath() == static_cast<const AssetRefBase*>(b)->getPath();

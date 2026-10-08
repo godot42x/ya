@@ -1,5 +1,6 @@
 #include "Core/Math/GLM.h"
 #include "Core/Reflection/CoreValueTypes.h"
+#include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/Reflection/ValueFacets.h"
 #include "Core/Scripting/ScriptValue.h"
 
@@ -359,4 +360,61 @@ TEST(CoreValueTypes, ClassFirstAndTypeFirstShareOneRow)
     EXPECT_EQ(clsAfter->name, "RR2TypeFirst");
     EXPECT_EQ(&opsFirst, refl::TypeRegistry::instance().find(ya::type_index_v<TypeFirst>));
     EXPECT_EQ(refl::TypeRegistry::instance().findByName("RR2TypeFirst"), &opsFirst);
+}
+
+TEST(CoreValueTypes, JsonFacetRoundTripsWithoutATypeSwitch)
+{
+    struct JsonOnly
+    {
+        int n = 0;
+    };
+
+    ya::reflection::registerCoreValueTypes();
+    refl::TypeRegistry& registry = refl::TypeRegistry::instance();
+    registry.registerType<JsonOnly>("RR3JsonOnly");
+    registry.setFacet<ya::reflection::FJsonFacet>(
+        ya::type_index_v<JsonOnly>,
+        ya::reflection::FJsonFacet{
+            .serialize = [](const void* value) {
+                return nlohmann::json{{"n", static_cast<const JsonOnly*>(value)->n}};
+            },
+            .deserialize = [](void* value, const nlohmann::json& json) {
+                static_cast<JsonOnly*>(value)->n = json.at("n").get<int>();
+            },
+        });
+
+    JsonOnly value{.n = 7};
+    const nlohmann::json json = ya::ReflectionSerializer::serializeByRuntimeReflection(
+        &value, ya::type_index_v<JsonOnly>, "RR3JsonOnly");
+    EXPECT_EQ(json.dump(), R"({"n":7})");
+
+    JsonOnly restored;
+    ya::ReflectionSerializer::deserializeByRuntimeReflection(
+        &restored, ya::type_index_v<JsonOnly>, json, "RR3JsonOnly");
+    EXPECT_EQ(restored.n, 7);
+
+    const glm::vec3 vec{1.0f, 2.0f, 3.0f};
+    const nlohmann::json vecJson = ya::ReflectionSerializer::serializeByRuntimeReflection(
+        &vec, ya::type_index_v<glm::vec3>, "glm::vec3");
+    ASSERT_TRUE(vecJson.is_array());
+    ASSERT_EQ(vecJson.size(), 3u);
+    EXPECT_FLOAT_EQ(vecJson[0].get<float>(), 1.0f);
+    EXPECT_FLOAT_EQ(vecJson[1].get<float>(), 2.0f);
+    EXPECT_FLOAT_EQ(vecJson[2].get<float>(), 3.0f);
+
+    glm::vec3 vecRestored{};
+    ya::ReflectionSerializer::deserializeByRuntimeReflection(
+        &vecRestored, ya::type_index_v<glm::vec3>, nlohmann::json{{"x", 4.0f}, {"y", 5.0f}, {"z", 6.0f}}, "glm::vec3");
+    EXPECT_FLOAT_EQ(vecRestored.x, 4.0f);
+    EXPECT_FLOAT_EQ(vecRestored.y, 5.0f);
+    EXPECT_FLOAT_EQ(vecRestored.z, 6.0f);
+
+    const auto* equal = registry.facet<ya::reflection::FEqualFacet>(ya::type_index_v<int>);
+    ASSERT_NE(equal, nullptr);
+    ASSERT_NE(equal->equals, nullptr);
+    const int left = 3;
+    const int right = 3;
+    const int other = 4;
+    EXPECT_TRUE(equal->equals(&left, &right));
+    EXPECT_FALSE(equal->equals(&left, &other));
 }

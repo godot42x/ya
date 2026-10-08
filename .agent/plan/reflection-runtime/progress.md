@@ -424,3 +424,19 @@ debug，100000 次，1 次，ns/op。对照 RR5b 中位数。这条路径测的�
 - `RegistryNotify.ScriptAndEditorSeeModuleUnregister`：注销后 `findMethod` 看不到方法，同一份编辑器缓存的属性数回到注销前。
 - `ScriptNativeMethod.*` 3、`ScriptRuntimeNative.RegistryListsMigratedMethods`、`PropertyAccessorTest.*` 8、`ModuleManagerTest.*` 4（含动态模块加载后卸载）。
 - RR5b 和 RR8 的 Windows 验证都还没跑。RR7 不是 Windows 验证点。
+
+## 2026-10-09 — RR3 序列化、拷贝、比较改查类型 facet
+
+标量 JSON、vec2/3/4 的数组写法、相等和 32 位整数读写都挂在类型上。`YA_REGISTER_SERIALIZER_HOOK` 和 hook 表删掉。`serializeAnyValue` 先问 `FJsonFacet`，再枚举，再类。vec 是 `Object` 且带 facet，所以仍写成 `[x,y,z]`，不会走字段对象。`int64` / `int8` 这些没有 facet 的宽度仍不进 JSON，也不被拷贝，RR0 基线保持。
+
+`serializeByRuntimeReflection` 只对非标量使用 facet。裸 `float` 仍返回 null，optional 基线不变。属性路径上的标量走 `serializeAnyValue`。
+
+组件文档改问 `FComponentJsonFacet`。没有 facet 就是反射。Tilemap 仍是反射之后的后处理（去掉默认 `bYSort` / `layerOffset`）。Lua 脚本组件 `bUseReflection = false`，只写 `scripts`。`IComponentOps` 上的 `useReflectionSerialization` / `serializeCustom` / `deserializeCustom` 删掉。类型自己的方法还在，测试直接调用的路径不变。
+
+`PropertyAccessor::equals` 在枚举之后问 `FEqualFacet`，资产引用的路径比较留着。`isLeafValueType`、轴比较和颜色仍是按类型分支，归 RR4。
+
+### 验证
+
+- `ya-testing` 1768/1768，4 个 `DISABLED_`。新增 `CoreValueTypes.JsonFacetRoundTripsWithoutATypeSwitch`。通过数含工作区里与本 checkpoint 无关的未提交测试。
+- `ReflectionSceneResave` 8/8，场景重存哈希未变。`ReflectionRuntimeBaseline.*` 原样通过。
+- RR5b 和 RR8 的 Windows 验证都还没跑。RR3 不是 Windows 验证点。RR4 仍等 GUI 10F-1~5。

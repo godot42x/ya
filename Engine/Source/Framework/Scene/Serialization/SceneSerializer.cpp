@@ -419,7 +419,6 @@ nlohmann::json SceneSerializer::serializeEntity(Entity* entity)
         nlohmann::json componentJson = assembleComponentJson(componentPtr,
                                                              typeIndex,
                                                              typeName,
-                                                             ops,
                                                              ops ? &trimReflectedDefaults : nullptr);
 
         components[name.toString()] = std::move(componentJson);
@@ -470,16 +469,8 @@ Entity* SceneSerializer::deserializeEntity(const nlohmann::json& j)
                 void* componentPtr =
                     reg.addComponent(FName(typeName), _scene->getRegistry(), entity->getHandle(), entity);
                 ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
-                auto* ops = reg.getComponentOps(id);
-                auto  cls = ClassRegistry::instance().getClass(id);
-                if (!ops || ops->useReflectionSerialization(componentPtr)) {
-                    if (cls) {
-                        ::ya::ReflectionSerializer::deserializeByRuntimeReflection(componentPtr, id, componentJ, cls->name);
-                    }
-                }
-                if (ops) {
-                    ops->deserializeCustom(componentPtr, componentJ);
-                }
+                auto cls = ClassRegistry::instance().getClass(id);
+                readComponentJson(componentPtr, id, componentJ, cls ? std::string_view(cls->name) : std::string_view(typeName));
                 if (auto* component = static_cast<IComponent*>(componentPtr)) {
                     component->onPostSerialize();
                 }

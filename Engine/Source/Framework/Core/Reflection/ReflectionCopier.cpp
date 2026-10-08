@@ -3,6 +3,7 @@
 #include "Core/Log.h"
 #include "Core/Reflection/PropertyExtensions.h"
 #include "Core/Reflection/ReflectionSerializer.h"
+#include "Core/Reflection/ValueFacets.h"
 
 namespace ya
 {
@@ -10,6 +11,27 @@ namespace ya
 bool ReflectionCopier::isEnumType(type_index_t typeIndex)
 {
     return EnumRegistry::instance().hasEnum(typeIndex);
+}
+
+bool ReflectionCopier::isBaseType(type_index_t typeIdx)
+{
+    // Same gate as the serializer: a scalar kind with a JSON facet. Other
+    // integer widths stay untouched, which is what the RR0 baseline records.
+    const refl::TypeOps* ops = refl::TypeRegistry::instance().find(typeIdx);
+    if (ops == nullptr) {
+        return false;
+    }
+    switch (ops->kind) {
+    case refl::EValueKind::Bool:
+    case refl::EValueKind::Int:
+    case refl::EValueKind::Float:
+    case refl::EValueKind::String:
+        break;
+    default:
+        return false;
+    }
+    const reflection::FJsonFacet* facet = refl::TypeRegistry::instance().facet<reflection::FJsonFacet>(typeIdx);
+    return facet != nullptr && facet->serialize != nullptr;
 }
 
 bool ReflectionCopier::copyByRuntimeReflection(void* dstObj, const void* srcObj, type_index_t typeIndex, const std::string& className)
@@ -227,29 +249,14 @@ bool ReflectionCopier::copyContainerValue(const Property& prop, void* dstContain
 
 bool ReflectionCopier::copyScalarValue(void* dstValuePtr, const void* srcValuePtr, type_index_t typeIndex)
 {
-    if (typeIndex == ya::type_index_v<int>) {
-        *static_cast<int*>(dstValuePtr) = *static_cast<const int*>(srcValuePtr);
-        return true;
-    }
-    if (typeIndex == ya::type_index_v<float>) {
-        *static_cast<float*>(dstValuePtr) = *static_cast<const float*>(srcValuePtr);
-        return true;
-    }
-    if (typeIndex == ya::type_index_v<double>) {
-        *static_cast<double*>(dstValuePtr) = *static_cast<const double*>(srcValuePtr);
-        return true;
-    }
-    if (typeIndex == ya::type_index_v<bool>) {
-        *static_cast<bool*>(dstValuePtr) = *static_cast<const bool*>(srcValuePtr);
-        return true;
-    }
-    if (typeIndex == ya::type_index_v<std::string>) {
-        *static_cast<std::string*>(dstValuePtr) = *static_cast<const std::string*>(srcValuePtr);
-        return true;
-    }
-    if (typeIndex == ya::type_index_v<unsigned int>) {
-        *static_cast<unsigned int*>(dstValuePtr) = *static_cast<const unsigned int*>(srcValuePtr);
-        return true;
+    if (const refl::TypeOps* ops = refl::TypeRegistry::instance().find(typeIndex)) {
+        if (isBaseType(typeIndex) && ops->life.copyConstruct != nullptr) {
+            if (ops->life.destroy != nullptr) {
+                ops->life.destroy(dstValuePtr);
+            }
+            ops->life.copyConstruct(dstValuePtr, srcValuePtr);
+            return true;
+        }
     }
 
     if (isEnumType(typeIndex)) {

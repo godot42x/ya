@@ -3,16 +3,11 @@
 
 #include "Core/Api.h"
 #include "Core/Reflection/ContainerProperty.h"
-#include "Core/Macro/VariadicMacros.h"
-#include "Core/Reflection/DeferredInitializer.h"
 #include "Core/TypeIndex.h"
 #include "reflects-core/lib.h"
-#include <functional>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <type_traits>
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 
 
@@ -37,51 +32,7 @@ inline constexpr bool is_optional_v = is_optional<std::remove_cvref_t<T>>::value
 
 struct YA_CORE_API ReflectionSerializer
 {
-    struct CustomTypeHook
-    {
-        std::function<nlohmann::json(const void*)>        serialize;
-        std::function<void(void*, const nlohmann::json&)> deserialize;
-    };
-
     // MARK: Serialization
-
-    template <typename T, typename SerializeFn, typename DeserializeFn>
-    static void registerCustomTypeHook(SerializeFn&& serializeFn, DeserializeFn&& deserializeFn)
-    {
-        CustomTypeHook hook;
-        hook.serialize = [serialize = std::forward<SerializeFn>(serializeFn)](const void* obj) {
-            return serialize(*static_cast<const T*>(obj));
-        };
-        hook.deserialize = [deserialize = std::forward<DeserializeFn>(deserializeFn)](void* obj, const nlohmann::json& j) {
-            deserialize(*static_cast<T*>(obj), j);
-        };
-
-        registerCustomTypeHook(ya::type_index_v<T>, std::move(hook));
-    }
-
-    template <typename T>
-    static bool hasCustomTypeHook()
-    {
-        return hasCustomTypeHook(ya::type_index_v<T>);
-    }
-
-    static bool hasCustomTypeHook(type_index_t typeIndex);
-
-    template <typename T, typename SerializeFn, typename DeserializeFn>
-    static void deferCustomTypeHookRegistration(SerializeFn&& serializeFn, DeserializeFn&& deserializeFn)
-    {
-        using SerializeTypedFn   = std::function<nlohmann::json(const T&)>;
-        using DeserializeTypedFn = std::function<void(T&, const nlohmann::json&)>;
-
-        SerializeTypedFn   serialize   = std::forward<SerializeFn>(serializeFn);
-        DeserializeTypedFn deserialize = std::forward<DeserializeFn>(deserializeFn);
-
-        ::ya::reflection::deferStaticInit(
-            [serialize = std::move(serialize), deserialize = std::move(deserialize)]() mutable {
-                registerCustomTypeHook<T>(std::move(serialize), std::move(deserialize));
-            });
-    }
-
 
     template <typename T>
     static nlohmann::json serializeByRuntimeReflection(const T& obj, std::string className)
@@ -142,11 +93,6 @@ struct YA_CORE_API ReflectionSerializer
     static void deserializeProperty(const Property& prop, void* obj, const nlohmann::json& j);
 
   private:
-    static void                  registerCustomTypeHook(type_index_t typeIndex, CustomTypeHook hook);
-    static const CustomTypeHook* findCustomTypeHook(type_index_t typeIndex);
-    static bool                  trySerializeCustomType(const void* valuePtr, type_index_t typeIndex, nlohmann::json& outJson);
-    static bool                  tryDeserializeCustomType(void* valuePtr, type_index_t typeIndex, const nlohmann::json& jsonValue);
-
     // MARK: helper
     // ========================================================================
     // Helper functions for scalar value serialization/deserialization
@@ -258,20 +204,7 @@ struct YA_CORE_API ReflectionSerializer
         return is_base_type(prop.typeIndex) || is_enum_type(prop.typeIndex);
     }
 
-    static bool is_base_type(type_index_t typeIdx)
-    {
-        static std::unordered_set<type_index_t> baseTypes = {
-            ya::type_index_v<int>,
-            ya::type_index_v<float>,
-            ya::type_index_v<double>,
-            ya::type_index_v<bool>,
-            ya::type_index_v<unsigned int>,
-            ya::type_index_v<std::string>,
-        };
-
-
-        return baseTypes.contains(typeIdx);
-    }
+    static bool is_base_type(type_index_t typeIdx);
 
     /**
      * Check if a type is an enum by typeIndex
@@ -283,19 +216,3 @@ struct YA_CORE_API ReflectionSerializer
 };
 
 } // namespace ya
-
-#define YA_REGISTER_SERIALIZER_HOOK(TypeName, SerializeFn, DeserializeFn) \
-    YA_REGISTER_SERIALIZER_HOOK_IMPL(__LINE__, TypeName, SerializeFn, DeserializeFn)
-
-#define YA_REGISTER_SERIALIZER_HOOK_IMPL(Line, TypeName, SerializeFn, DeserializeFn)                                          \
-    namespace ya::reflection::detail                                                                                          \
-    {                                                                                                                         \
-    struct YA_CONCAT(_ya_serializer_hook_registrar_, Line)                                                                    \
-    {                                                                                                                         \
-        YA_CONCAT(_ya_serializer_hook_registrar_, Line)()                                                                     \
-        {                                                                                                                     \
-            ::ya::ReflectionSerializer::deferCustomTypeHookRegistration<TypeName>(SerializeFn, DeserializeFn);                \
-        }                                                                                                                     \
-    };                                                                                                                        \
-    static inline YA_CONCAT(_ya_serializer_hook_registrar_, Line) YA_CONCAT(_ya_serializer_hook_registrar_instance_, Line){}; \
-    }

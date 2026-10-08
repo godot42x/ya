@@ -4,7 +4,9 @@
 #include "Core/Reflection/ValueFacets.h"
 #include "Core/Scripting/ScriptValue.h"
 
+#include <cstdint>
 #include <format>
+#include <stdexcept>
 #include <string>
 
 namespace ya::reflection
@@ -103,6 +105,106 @@ void registerValueType(const char* name, std::string (*print)(const T&))
     registerPrintFacet<T>(print);
 }
 
+void registerScalarFacets()
+{
+    static bool bRegistered = false;
+    if (bRegistered) {
+        return;
+    }
+    registerJsonFacet<int>();
+    registerJsonFacet<float>();
+    registerJsonFacet<double>();
+    registerJsonFacet<bool>();
+    registerJsonFacet<std::string>();
+    registerJsonFacet<unsigned int>();
+    registerEqualFacet<int>();
+    registerEqualFacet<std::uint32_t>();
+    registerEqualFacet<float>();
+    registerEqualFacet<bool>();
+    registerEqualFacet<std::string>();
+    registerIntegerFacet<int>(true);
+    registerIntegerFacet<std::int32_t>(true);
+    registerIntegerFacet<std::uint32_t>(false);
+    bRegistered = true;
+}
+
+const bool kScalarFacets = [] {
+    registerScalarFacets();
+    return true;
+}();
+
+nlohmann::json serializeVec2(const void* value)
+{
+    const glm::vec2& vec = *static_cast<const glm::vec2*>(value);
+    return nlohmann::json::array({vec.x, vec.y});
+}
+
+void deserializeVec2(void* value, const nlohmann::json& json)
+{
+    glm::vec2& vec = *static_cast<glm::vec2*>(value);
+    if (json.is_array() && json.size() == 2) {
+        vec.x = json[0].get<float>();
+        vec.y = json[1].get<float>();
+        return;
+    }
+    if (json.is_object()) {
+        vec.x = json.at("x").get<float>();
+        vec.y = json.at("y").get<float>();
+        return;
+    }
+    throw std::runtime_error("glm::vec2 expects [x, y] or {x, y}");
+}
+
+nlohmann::json serializeVec3(const void* value)
+{
+    const glm::vec3& vec = *static_cast<const glm::vec3*>(value);
+    return nlohmann::json::array({vec.x, vec.y, vec.z});
+}
+
+void deserializeVec3(void* value, const nlohmann::json& json)
+{
+    glm::vec3& vec = *static_cast<glm::vec3*>(value);
+    if (json.is_array() && json.size() == 3) {
+        vec.x = json[0].get<float>();
+        vec.y = json[1].get<float>();
+        vec.z = json[2].get<float>();
+        return;
+    }
+    if (json.is_object()) {
+        vec.x = json.at("x").get<float>();
+        vec.y = json.at("y").get<float>();
+        vec.z = json.at("z").get<float>();
+        return;
+    }
+    throw std::runtime_error("glm::vec3 expects [x, y, z] or {x, y, z}");
+}
+
+nlohmann::json serializeVec4(const void* value)
+{
+    const glm::vec4& vec = *static_cast<const glm::vec4*>(value);
+    return nlohmann::json::array({vec.x, vec.y, vec.z, vec.w});
+}
+
+void deserializeVec4(void* value, const nlohmann::json& json)
+{
+    glm::vec4& vec = *static_cast<glm::vec4*>(value);
+    if (json.is_array() && json.size() == 4) {
+        vec.x = json[0].get<float>();
+        vec.y = json[1].get<float>();
+        vec.z = json[2].get<float>();
+        vec.w = json[3].get<float>();
+        return;
+    }
+    if (json.is_object()) {
+        vec.x = json.at("x").get<float>();
+        vec.y = json.at("y").get<float>();
+        vec.z = json.at("z").get<float>();
+        vec.w = json.at("w").get<float>();
+        return;
+    }
+    throw std::runtime_error("glm::vec4 expects [x, y, z, w] or {x, y, z, w}");
+}
+
 } // namespace
 
 const FPrintFacet& FPrintFacet::fallback()
@@ -118,9 +220,13 @@ void registerCoreValueTypes()
         return;
     }
 
+    registerScalarFacets();
     registerValueType<glm::vec2>("glm::vec2", &printVec2);
+    registerJsonFacet<glm::vec2>(&serializeVec2, &deserializeVec2);
     registerValueType<glm::vec3>("glm::vec3", &printVec3);
+    registerJsonFacet<glm::vec3>(&serializeVec3, &deserializeVec3);
     registerValueType<glm::vec4>("glm::vec4", &printVec4);
+    registerJsonFacet<glm::vec4>(&serializeVec4, &deserializeVec4);
     registerValueType<glm::quat>("glm::quat", &printQuat);
     registerValueType<glm::mat3>("glm::mat3", &printMat3);
     registerValueType<glm::mat4>("glm::mat4", &printMat4);

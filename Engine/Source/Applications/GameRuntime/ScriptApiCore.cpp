@@ -98,7 +98,7 @@ Json serializeComponent(const Scene& scene, entt::entity entity, const std::stri
     if (ptr == nullptr) {
         throw Error(std::format("entity does not have component '{}'", typeName));
     }
-    return assembleComponentJson(ptr, *typeIndex, typeName, ecs.getComponentOps(*typeIndex));
+    return assembleComponentJson(ptr, *typeIndex, typeName);
 }
 
 Json entityToJson(const Scene& scene, const Entity& entity)
@@ -351,17 +351,11 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
 
             // Merge into the current document, then write it the way a scene loads:
             // reflection when the component uses it, then custom data.
-            const ECSRegistry::IComponentOps* ops = ecs.getComponentOps(*typeIndex);
-            Json merged = assembleComponentJson(ptr, *typeIndex, typeName, ops);
+            Json merged = assembleComponentJson(ptr, *typeIndex, typeName);
             for (const auto& [key, value] : args.at("fields").items()) {
                 merged[key] = value;
             }
-            if (!ops || ops->useReflectionSerialization(ptr)) {
-                ReflectionSerializer::deserializeByRuntimeReflection(ptr, *typeIndex, merged, typeName);
-            }
-            if (ops) {
-                ops->deserializeCustom(ptr, merged);
-            }
+            readComponentJson(ptr, *typeIndex, merged, typeName);
             static_cast<IComponent*>(ptr)->onPostSerialize();
             // The write landed outside any typed setter: route it through the
             // scene edit funnel so derived-work processors pick it up.

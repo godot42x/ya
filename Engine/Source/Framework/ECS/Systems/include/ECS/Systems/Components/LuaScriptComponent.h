@@ -3,6 +3,7 @@
 
 #include "Core/Base.h"
 #include "Core/Reflection/Reflection.h"
+#include "Core/Reflection/ValueFacets.h"
 
 #include "Core/Api.h"
 #include "ECS/Component.h"
@@ -64,9 +65,7 @@ struct LuaScriptComponent : public IComponent
 
     // Scripts own their complete serialized representation because the runtime
     // Lua handles are intentionally excluded from scene data.
-    bool useReflectionSerialization() const override { return false; }
-
-    void serializeCustom(nlohmann::json& out) const override
+    void serializeCustom(nlohmann::json& out) const
     {
         auto scriptsJson = nlohmann::json::array();
         for (const auto& script : scripts) {
@@ -102,7 +101,7 @@ struct LuaScriptComponent : public IComponent
         out["scripts"] = std::move(scriptsJson);
     }
 
-    void deserializeCustom(const nlohmann::json& in) override
+    void deserializeCustom(const nlohmann::json& in)
     {
         scripts.clear();
         if (!in.contains("scripts") || !in.at("scripts").is_array()) return;
@@ -152,6 +151,31 @@ struct LuaScriptComponent : public IComponent
     }
 };
 
+namespace {
 
+struct LuaComponentJsonRegistrar
+{
+    LuaComponentJsonRegistrar()
+    {
+        LuaScriptComponent::__ensure_reflection_registered();
+        reflection::deferStaticInit([] {
+            refl::TypeRegistry::instance().setFacet<reflection::FComponentJsonFacet>(
+                type_index_v<LuaScriptComponent>,
+                reflection::FComponentJsonFacet{
+                    .bUseReflection = false,
+                    .serialize = [](const void* component, nlohmann::json& out) {
+                        static_cast<const LuaScriptComponent*>(component)->serializeCustom(out);
+                    },
+                    .deserialize = [](void* component, const nlohmann::json& in) {
+                        static_cast<LuaScriptComponent*>(component)->deserializeCustom(in);
+                    },
+                });
+        });
+    }
+};
+
+const LuaComponentJsonRegistrar kLuaComponentJsonRegistrar{};
+
+} // namespace
 
 } // namespace ya

@@ -4,6 +4,7 @@
 
 #include <reflects-core/lib.h>
 
+#include <nlohmann/json.hpp>
 #include <string>
 
 namespace ya::reflection
@@ -31,6 +32,37 @@ struct FPrintFacet
     static constexpr refl::EFacetMissing missing = refl::EFacetMissing::Fallback;
 
     static YA_CORE_API const FPrintFacet& fallback();
+};
+
+/// Value JSON. The serializer asks with `facet` and, when this is absent and
+/// the value is neither an enum nor a class, logs and skips the field.
+struct FJsonFacet
+{
+    nlohmann::json (*serialize)(const void* value) = nullptr;
+    void (*deserialize)(void* value, const nlohmann::json& json) = nullptr;
+
+    static constexpr refl::EFacetMissing missing = refl::EFacetMissing::Skip;
+};
+
+/// Component document. Missing means reflection only. `serialize` runs after
+/// the reflection object (or instead of it when `bUseReflection` is false)
+/// and appends into the same object.
+struct FComponentJsonFacet
+{
+    bool bUseReflection = true;
+    void (*serialize)(const void* component, nlohmann::json& out) = nullptr;
+    void (*deserialize)(void* component, const nlohmann::json& in) = nullptr;
+
+    static constexpr refl::EFacetMissing missing = refl::EFacetMissing::Skip;
+};
+
+/// 32-bit integer read/write used by the inspector. Only types that register
+/// this facet are integers; a 32-bit `long` on Windows is not one of them.
+struct FIntegerFacet
+{
+    bool bSigned = true;
+
+    static constexpr refl::EFacetMissing missing = refl::EFacetMissing::Skip;
 };
 
 namespace detail
@@ -76,6 +108,50 @@ void registerPrintFacet(std::string (*print)(const T&))
     refl::TypeRegistry::instance().setFacet<FPrintFacet>(
         refl::type_index_v<T>,
         FPrintFacet{.print = &detail::ValuePrintBinder<T>::call});
+}
+
+namespace detail
+{
+
+template <class T>
+nlohmann::json writeJsonValue(const void* value)
+{
+    return *static_cast<const T*>(value);
+}
+
+template <class T>
+void readJsonValue(void* value, const nlohmann::json& json)
+{
+    *static_cast<T*>(value) = json.get<T>();
+}
+
+} // namespace detail
+
+template <class T>
+void registerJsonFacet()
+{
+    refl::TypeRegistry::instance().setFacet<FJsonFacet>(
+        refl::type_index_v<T>,
+        FJsonFacet{
+            .serialize   = &detail::writeJsonValue<T>,
+            .deserialize = &detail::readJsonValue<T>,
+        });
+}
+
+template <class T>
+void registerJsonFacet(nlohmann::json (*serialize)(const void*), void (*deserialize)(void*, const nlohmann::json&))
+{
+    refl::TypeRegistry::instance().setFacet<FJsonFacet>(
+        refl::type_index_v<T>,
+        FJsonFacet{.serialize = serialize, .deserialize = deserialize});
+}
+
+template <class T>
+void registerIntegerFacet(bool bSigned)
+{
+    refl::TypeRegistry::instance().setFacet<FIntegerFacet>(
+        refl::type_index_v<T>,
+        FIntegerFacet{.bSigned = bSigned});
 }
 
 } // namespace ya::reflection

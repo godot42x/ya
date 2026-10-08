@@ -762,18 +762,14 @@ TEST(ReflectionRuntimeBaseline, ComponentJsonCustomScriptPayload)
     component.scripts[0].executionOrderOverride = 2;
     component.scripts[0].propertyOverrides["tint"] = script::scriptMake(glm::vec3{1.0f, 0.0f, 0.5f});
 
-    const auto* ops = ECSRegistry::get().getComponentOps(type_index_v<LuaScriptComponent>);
-    ASSERT_NE(ops, nullptr);
     const nlohmann::json json = assembleComponentJson(&component,
                                                       type_index_v<LuaScriptComponent>,
-                                                      "LuaScriptComponent",
-                                                      ops,
-                                                      nullptr);
+                                                      "LuaScriptComponent");
     EXPECT_EQ(json.dump(),
               R"({"scripts":[{"enabled":false,"executionOrder":2,"propertyOverrides":{"tint":[1.0,0.0,0.5]},"scriptPath":"Content/Scripts/hero.lua"}]})");
 
     LuaScriptComponent restored;
-    ops->deserializeCustom(&restored, json);
+    readComponentJson(&restored, type_index_v<LuaScriptComponent>, json, "LuaScriptComponent");
     ASSERT_EQ(restored.scripts.size(), 1u);
     EXPECT_EQ(restored.scripts[0].scriptPath, "Content/Scripts/hero.lua");
     EXPECT_FALSE(restored.scripts[0].enabled);

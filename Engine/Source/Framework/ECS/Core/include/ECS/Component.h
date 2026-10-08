@@ -3,9 +3,6 @@
 #include "Core/Base.h"
 #include "ECS/ECSRegistry.h"
 
-
-#include <nlohmann/json.hpp>
-
 #include "Core/UUID.h"
 
 
@@ -44,10 +41,6 @@ struct IComponent
     /// drop runtime caches; do not assume the writer called a typed setter.
     virtual void onEdit() {}
 
-    // Return false when the component owns its complete serialized representation.
-    virtual bool useReflectionSerialization() const { return true; }
-    virtual void serializeCustom(nlohmann::json& out) const { (void)out; }
-    virtual void deserializeCustom(const nlohmann::json& in) { (void)in; }
     virtual void cloneCustom(const IComponent& src) { (void)src; }
 };
 

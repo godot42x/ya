@@ -1,5 +1,7 @@
 #include "Scene2D/TilemapComponent.h"
 
+#include "Core/Reflection/ValueFacets.h"
+
 #include <algorithm>
 
 namespace ya
@@ -139,5 +141,28 @@ void TilemapComponent::serializeCustom(nlohmann::json& out) const
         }
     }
 }
+
+namespace {
+
+struct TilemapJsonRegistrar
+{
+    TilemapJsonRegistrar()
+    {
+        TilemapComponent::__ensure_reflection_registered();
+        reflection::deferStaticInit([] {
+            refl::TypeRegistry::instance().setFacet<reflection::FComponentJsonFacet>(
+                type_index_v<TilemapComponent>,
+                reflection::FComponentJsonFacet{
+                    .serialize = [](const void* component, nlohmann::json& out) {
+                        static_cast<const TilemapComponent*>(component)->serializeCustom(out);
+                    },
+                });
+        });
+    }
+};
+
+const TilemapJsonRegistrar kTilemapJsonRegistrar{};
+
+} // namespace
 
 } // namespace ya
