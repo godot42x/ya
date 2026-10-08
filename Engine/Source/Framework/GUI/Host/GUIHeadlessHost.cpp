@@ -1,6 +1,7 @@
 #include "GUI/Host/GUIHeadlessHost.h"
 
 #include "Core/Log.h"
+#include "Core/Reflection/DeferredInitializer.h"
 #include "GUI/Binding/Reactive.h"
 
 namespace ya
@@ -66,6 +67,12 @@ bool GUIHeadlessHost::init()
     if (_impl->bInitialized) {
         return true;
     }
+
+    // Windowed hosts flush this from AppBootstrap::initializeProcessCore.
+    // Headless has no window, but reflected classes and core value types
+    // still have to be registered before the tree is built.
+    reflection::DeferredInitializerQueue::instance().executeAll();
+
     if (_impl->config.logicalExtent.width == 0 || _impl->config.logicalExtent.height == 0) {
         YA_CORE_ERROR("GUIHeadlessHost: logical extent must be non-zero");
         return false;

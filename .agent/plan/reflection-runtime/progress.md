@@ -228,3 +228,47 @@ RR5a 注意：`toInt64` / `convertTo` 等每次调用都查一次 TypeRegistry �
 ## 2026-10-08 — RR1 Windows 验证
 
 用户在 Windows 上跑构建、`ya-testing`、`reflects-core-test`，均通过。RR1 done。
+
+## 2026-10-08 — RR2 done
+
+`ya::reflection::registerCoreValueTypes()`（`Core/Reflection/CoreValueTypes.h`）在 `DeferredInitializerQueue::executeAll()` 开头调用，幂等。测试也可直接调。消费方（序列化、PropertyAccessor、脚本、编辑器）没改。
+
+登记名（kind 都是 `Object`）：
+
+| 类型 | 名字 | sizeof | MetaValue |
+| --- | --- | --- | --- |
+| `glm::vec2` | `glm::vec2` | 8 | Inline |
+| `glm::vec3` | `glm::vec3` | 12 | Inline |
+| `glm::vec4` | `glm::vec4` | 16 | Inline |
+| `glm::quat` | `glm::quat` | 16 | Inline |
+| `script::ScriptRect` | `script::ScriptRect` | 16 | Inline |
+| `script::ScriptRef` | `script::ScriptRef` | 32 | Inline |
+| `script::ScriptFnHandle` | `script::ScriptFnHandle` | 8 | Inline |
+| `script::ScriptSelfHandle` | `script::ScriptSelfHandle` | 8 | Inline |
+| `glm::mat3` | `glm::mat3` | 36 | Boxed |
+| `glm::mat4` | `glm::mat4` | 64 | Boxed |
+
+`ScriptRef` 不是 24 字节：`type_index_t` 是 `uint64`，`kind`（`uint32`）后面补齐到下一个 `uint64`，一共 32。仍 ≤ 32 且可平凡拷贝，所以是 Inline。
+
+facet（`Core/Reflection/ValueFacets.h`，没有 JSON / 编辑器 / 脚本投影）：
+
+- `FEqualFacet`：`equals(const void*, const void*)`，`missing = Skip`。上面每个类型都登记，直接 `operator==`（含 NaN 不相等，不加误差）。
+- `FPrintFacet`：`print(const TypeOps&, const void*)`，`missing = Fallback`。`fallback()` 用 `ops.name` 打出 `<TypeName>`。vec / quat / mat / ScriptRect 是括号分量（quat 按 `x,y,z,w`，mat 按列）；句柄是 `ref(kind, a, b)`、`fn(id)`、`self(runtimeId)`。
+
+`glm::vec2/3/4` 与 `YA_REFLECT_BEGIN_EXTERNAL` 同名。`executeAll` 先登记值类型，再跑延迟的类注册；`registerType` 同类型同名返回已有行，类字段还在。quat / mat3 / mat4 没有类反射，名字用以后宏会展开的 `glm::quat` / `glm::mat3` / `glm::mat4`。
+
+启动路径：`ya-runtime` 的 `App::init`、窗口 GUI 的 `GUIWindowHost::init` 都走 `AppBootstrap::initializeProcessCore()` → `executeAll`。`ya-testing` 和各 closure 测试的 `TestEntry` 也走 `executeAll`，测试文件不用额外 include。原先 `GUIHeadlessHost::init` 不刷新队列，现已补上同一次 `executeAll`（不设 Vulkan ICD）。`ShaderCompiler`、`reflects-*-test`、`ya-gui-workbench-workspace-test` 不链 Core 或不做反射。`test/*.cpp` 草稿程序自带 `main`、链 `ya-engine`，本来也不调用 `executeAll`（类反射同样不保证）；没有用静态初始化去绕。
+
+验证（macOS debug）：
+
+- `ya-testing` 1749/1749，另有 4 个 `DISABLED_`。基线 1737，多出的 12 个是 `CoreValueTypes.*`。`ReflectionRuntimeBaseline`、`ReflectionNamedType`、`ReflectionSceneResave` 8/8 原样通过，场景重存哈希未变。
+- `reflects-core-test` 61/61。`reflects-generator-test` 1/11，通过的仍是 `ReflectorTest.GetNonExistentClass`。`reflects-core/src` 的 include 仍只有标准库和 reflects 自己的头。
+- 冒烟退出码都是 0，日志没有 `[Error]`：`walk_one_cell.py` 走过一格 `(0.5, 0.5) -> (1.5, 0.5)`；GreedySnake 与 HelloMaterial `--exit-after-frame=90` 各在 90 帧退出。HelloMaterial 加载 `PlayerCamera.lua` 时 stdout 有两行既有的 sol2 panic（不是 `[Error]`，脚本随后打印 initialized）；本 checkpoint 没改脚本。
+
+偏离：
+
+- 派发里 ScriptRef 写成 24B，实测 32B，存储形态仍是 Inline。
+- `plan.md` RR2 括号写句柄由脚本层注册；本任务指定在 Core 登记，句柄在 Core。
+- MetaValue 互转没有单独 facet，走 `MetaValue::make` / `tryGet`。
+- `ya-testing` 的 `main` 在用例前就 `executeAll`，真实 `glm::vec3` 的类注册发生在值类型登记之后。终态断言一行、名字 `glm::vec3`、类字段 `x/y/z` 还在。先类后 TypeOps / 先 TypeOps 后类用局部类型 `RR2ClassFirst` / `RR2TypeFirst` 覆盖同一条 `registerType` 契约。
+- `registerCoreValueTypes` 第一次做完后直接返回，避免序列化路径上反复 `executeAll` 时重造 facet。
