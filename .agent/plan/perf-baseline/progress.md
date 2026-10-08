@@ -65,6 +65,17 @@
   - 编辑器面板放进新段而不是 profiling 段：本轮 `RuntimeProfilingSection.*` 属 PB2 线，避免同文件并发改。
   - GPU 显存与进程内存仍然是两套口径，M8 / PB4 未开工。
 
+## 2026-10-09 — PB4 进程内存统计（M8，RSS / 峰值部分）
+
+- 用户选定范围 A：本轮只交付 RSS / 峰值 + 汇总源（debug 可验）；「堆分配按子系统归类」的全局分配钩子只在 profile 构建开，挪到 PB6 —— 它本来就要开 `/tmp` profile worktree 出基线，顺手一起验。
+- 完成：
+  - `Core/Os/OsMemory.{h,cpp}`：`ya::Os::sampleProcessMemory()`（macOS `task_info(MACH_TASK_BASIC_INFO)`、Windows `GetProcessMemoryInfo`、Linux `/proc/self/statm` + `VmHWM`）与 `ya::Os::hasUnifiedMemory()`。平台头（mach / windows.h / psapi）只进这一个 TU，不污染被广泛包含的 `Os.h`。
+  - `ProcessMemoryBenchSource` 进 `Core/Profiling/PerfBenchSources`（与其他源同处），`BenchmarkRun` 注册 `process_memory` 段。序列 `rssMiB` / `peakRssMiB`（MiB，同 `gpu_memory` 的口径）；facts：`supported`、`unifiedMemory`。
+  - 编辑器：上一条的 `RuntimeGpuMemorySection` 泛化为 `RuntimeMemorySection`，显存与进程内存上下两行并列，并附一句「统一内存下不要相加」的说明——直接落 plan §1 的「分别列出并注明」。
+- 验证：`ya-testing` debug 1767/1767（新增 3 个：平台探针自洽、重复采样峰值不回退、源的序列与 facts）；HelloMaterial 实跑出 `process_memory`：rssMiB p50 253.06 / max 682.67，peakRssMiB 972.88（单调，与预期一致），`unifiedMemory=true`。
+- 一个值得记的观察（不是 bug）：同一次运行里 GPU 显存 806.58 MiB 远大于进程 RSS（p50 253、峰值 972）。Apple Silicon 是统一内存，但 MoltenVK 的 private-storage 资源不在进程的 `resident_size` 里——它们占的是同一块物理内存，却不映射进进程地址空间。所以这两列既不能相加，也不能相减，只能并列看。面试讲内存时这是个好例子。
+- 保留：堆分配按子系统归类（PB6）；Windows 的 `GetProcessMemoryInfo` 链接 `psapi` 已加进 `Core/xmake.lua`，但没在 Windows 上编译验证过。
+
 ## 2026-10-09 — PB2 pass 级 GPU timestamp + render_counters（M1）
 
 - 完成：

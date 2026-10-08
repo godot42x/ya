@@ -1,5 +1,6 @@
 #include "Core/Profiling/PerfBenchSources.h"
 
+#include "Core/Os/OsMemory.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/RenderCounters.h"
@@ -142,6 +143,25 @@ void RenderCounterBenchSource::sampleFrame(BenchSeriesWriter& out)
     if (snapshot.textureTableSwitch2DCount != 0) {
         out.record("textureTableSwitch2DCount", static_cast<float>(snapshot.textureTableSwitch2DCount));
     }
+}
+
+void ProcessMemoryBenchSource::sampleFrame(BenchSeriesWriter& out)
+{
+    const Os::FProcessMemoryStats stats = Os::sampleProcessMemory();
+    if (!stats.bSupported) {
+        // No counter to read. Recording zeros would turn "unknown" into a
+        // measurement in the summary; the fact below says so instead.
+        return;
+    }
+    constexpr double kBytesPerMiB = 1024.0 * 1024.0;
+    out.record("rssMiB", static_cast<float>(static_cast<double>(stats.residentBytes) / kBytesPerMiB));
+    out.record("peakRssMiB", static_cast<float>(static_cast<double>(stats.peakResidentBytes) / kBytesPerMiB));
+}
+
+void ProcessMemoryBenchSource::writeFacts(nlohmann::json& section) const
+{
+    section["supported"]     = Os::sampleProcessMemory().bSupported;
+    section["unifiedMemory"] = Os::hasUnifiedMemory();
 }
 
 } // namespace ya::profiling

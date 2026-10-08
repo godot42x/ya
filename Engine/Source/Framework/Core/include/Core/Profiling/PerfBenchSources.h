@@ -85,4 +85,22 @@ class YA_CORE_API RenderCounterBenchSource final : public IBenchSource
     void sampleFrame(BenchSeriesWriter& out) override;
 };
 
+/// `process_memory` section: what the OS charged this process, one sample per
+/// frame. MiB, for the same reason the GPU memory section uses MiB -- the
+/// windowed statistics hold `float`.
+///
+/// This is the process half of the memory report; `gpu_memory` is the device
+/// half. They are two different questions and their answers must not be added:
+/// on unified-memory machines (Apple Silicon) the same physical pages can be
+/// counted by both, which is what the `unifiedMemory` fact flags.
+class YA_CORE_API ProcessMemoryBenchSource final : public IBenchSource
+{
+  public:
+    ProcessMemoryBenchSource() = default;
+
+    void sampleFrame(BenchSeriesWriter& out) override;
+    /// `unifiedMemory`: whether the CPU and GPU share physical memory here.
+    void writeFacts(nlohmann::json& section) const override;
+};
+
 } // namespace ya::profiling

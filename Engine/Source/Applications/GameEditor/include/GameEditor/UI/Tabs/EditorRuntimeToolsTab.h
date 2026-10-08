@@ -33,7 +33,7 @@ class EditorRuntimeToolsTab : public UICompoundWidget
     std::shared_ptr<struct UIButton> _stopButton;
     std::shared_ptr<class RuntimeDiagnosticsSection> _diagnostics;
     std::shared_ptr<class RuntimeProfilingSection> _profiling;
-    std::shared_ptr<class RuntimeGpuMemorySection> _gpuMemory;
+    std::shared_ptr<class RuntimeMemorySection> _memory;
     std::shared_ptr<class RuntimeRenderGraphSection> _renderGraph;
     std::shared_ptr<class RuntimeRenderTargetSection> _renderTargets;
     std::shared_ptr<class RuntimeDebugPrimitivesSection> _debugPrimitives;

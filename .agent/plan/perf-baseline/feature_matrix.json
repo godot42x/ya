@@ -62,9 +62,17 @@
       "roadmap": [
         "M8"
       ],
-      "title": "process memory stats (RSS/peak/alloc tracking)",
-      "status": "todo",
-      "evidence": []
+      "title": "process memory stats (RSS/peak; subsystem alloc tracking deferred)",
+      "status": "partial",
+      "evidence": [
+        "Engine/Source/Framework/Core/include/Core/Os/OsMemory.h",
+        "Engine/Source/Framework/Core/Os/OsMemory.cpp",
+        "Engine/Source/Framework/Core/include/Core/Profiling/PerfBenchSources.h",
+        "Engine/Test/Source/Core/ProcessMemoryBenchSourceTest.cpp",
+        "ya-testing debug 1767/1767 (3 new)",
+        "HelloMaterial debug benchmark: process_memory rssMiB p50 253.06, peakRssMiB 972.88, unifiedMemory true"
+      ],
+      "remaining": "heap allocation tracking by subsystem (global alloc hook, profile builds only) moves to PB6, which already needs a /tmp profile worktree for the baseline"
     },
     {
       "id": "PB5",

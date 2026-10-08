@@ -51,10 +51,14 @@ class YA_GAME_RUNTIME_API BenchmarkRun
     std::function<void(std::unordered_map<std::string, float>&)> _passTimeProvider;
     profiling::PassGpuTimeBenchSource   _passSource;
     profiling::RenderCounterBenchSource _counterSource;
+    /// Process memory is the OS's, not the device's: it is sampled straight
+    /// from the platform, with no provider to inject.
+    profiling::ProcessMemoryBenchSource _processMemorySource;
     profiling::BenchSourceRegistration  _frameRegistration;
     profiling::BenchSourceRegistration  _stageRegistration;
     profiling::BenchSourceRegistration  _passRegistration;
     profiling::BenchSourceRegistration  _counterRegistration;
+    profiling::BenchSourceRegistration  _processMemoryRegistration;
     /// The pass-timing toggle found on begin, restored on finish: the timestamp
     /// brackets cost query pool memory, so only the sampling owns them.
     bool                               _bSavedPassGpuTiming = false;

@@ -8,3 +8,8 @@ target("ya-foundation-core")
     add_deps("utility.cc", "log.cc", "reflects-core", { public = true })
     add_packages("asio", "cxxopts", "glm", "nlohmann_json", { public = true })
     add_packages("libsdl3")
+    if is_plat("windows") then
+        -- GetProcessMemoryInfo (Core/Os/OsMemory.cpp). Modern SDKs export it
+        -- from kernel32, older ones only from psapi; linking both is harmless.
+        add_syslinks("psapi")
+    end

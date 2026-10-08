@@ -98,10 +98,11 @@ void BenchmarkRun::begin(App& app, FBenchmarkRunContext context)
     profiling::setPassGpuTimingEnabled(true);
     _renderWeak = app.getRenderServices().getRender();
 
-    _frameRegistration   = profiling::registerBenchSource("frame", _frameSource);
-    _stageRegistration   = profiling::registerBenchSource("cpu_stages", _stageSource);
-    _passRegistration    = profiling::registerBenchSource("gpu_passes", _passSource);
-    _counterRegistration = profiling::registerBenchSource("render_counters", _counterSource);
+    _frameRegistration          = profiling::registerBenchSource("frame", _frameSource);
+    _stageRegistration          = profiling::registerBenchSource("cpu_stages", _stageSource);
+    _passRegistration           = profiling::registerBenchSource("gpu_passes", _passSource);
+    _counterRegistration        = profiling::registerBenchSource("render_counters", _counterSource);
+    _processMemoryRegistration  = profiling::registerBenchSource("process_memory", _processMemorySource);
 
     _summaryPath = (std::filesystem::path(_config.outputDir) / "bench_summary.json").string();
     YA_CORE_INFO("Benchmark '{}' started: {}x{}, present {} (requested {}), warmup {} + sample {} frames, fixed dt {}, camera keyframes {}",
@@ -230,6 +231,7 @@ void BenchmarkRun::finish(App& app)
     _stageRegistration.reset();
     _passRegistration.reset();
     _counterRegistration.reset();
+    _processMemoryRegistration.reset();
     profiling::setPassGpuTimingEnabled(_bSavedPassGpuTiming);
     _renderWeak = nullptr;
     app.requestQuit();

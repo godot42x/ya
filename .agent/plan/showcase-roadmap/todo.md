@@ -21,7 +21,7 @@ GUI 与编辑器活跃线
 - [x] M2 窗口均值 / p95 / p99（perf-baseline PB1）
 - [x] M3 基准模式（固定分辨率、关垂直同步、去上限、丢预热帧）（perf-baseline PB1）
 - [x] M4 GPU 显存统计（VMA，按资源类别；`perf-baseline` PB3）
-- [ ] M8 进程内存统计（RSS / 峰值、按子系统的堆分配）
+- [~] M8 进程内存统计：RSS / 峰值已交付（`perf-baseline` PB4）；按子系统的堆分配追踪待 PB6 随 profile worktree 一起验
 - [x] M5 压测场景（`perf-baseline` PB5，`Example/PerfLab`）
 - [ ] M6 前后对比报告脚本
 

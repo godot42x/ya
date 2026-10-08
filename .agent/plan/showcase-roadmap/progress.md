@@ -65,6 +65,13 @@
 - 一处偏离计划 §3 M4 的措辞：面板没有并进 profiling 面板，而是 Runtime Tools 里独立一段——那段本轮被 PB2 线占用，等它收口后可以合并。
 - HelloMaterial 实跑（debug）出数：总 806.58 MiB，VMA 自报 allocationBytes 与分类求和一致；MoltenVK 无 `VK_EXT_memory_budget`，budget 降级为 heap size（已在类型注释里写明）。
 
+## 2026-10-09 — M8 / PB4 进程内存统计（RSS / 峰值）
+
+- 紧接 M4 领的另一半：两者是用户 2026-10-07 明确要求分开的两套口径，M4 只完成了其一。
+- `Core/Os/OsMemory`（`sampleProcessMemory` / `hasUnifiedMemory`）+ `ProcessMemoryBenchSource`（`process_memory` 段，由 `BenchmarkRun` 注册，与 PB2 的源同处 `Core/Profiling`）；编辑器 `RuntimeGpuMemorySection` 泛化为 `RuntimeMemorySection`，显存与进程内存并列并注明统一内存下不可相加。
+- 范围按用户选的 A：堆分配按子系统归类（profile 构建下的全局分配钩子）挪到 PB6。
+- 详见 `../perf-baseline/progress.md`（PB4 条目），含一个值得讲的观察：Apple Silicon 上 GPU 显存 806 MiB 与进程 RSS 253 MiB 既不能相加也不能相减——MoltenVK 的 private-storage 资源占同一块物理内存但不映射进进程。
+
 ## 2026-10-09 — PB2 收口（M1 pass 级 GPU timestamp）
 
 - M1 完成：`RenderGraphExecutor` 逐 pass 括 `beginGpuPass/endGpuPass`，Vulkan 侧独立的 pass timestamp query pool 按 flight 延迟回读（挂在 fence 等待之后，`VK_NOT_READY` 跳过不等），`gpu_passes` 段进 `bench_summary.json`，编辑器 profiling 段有 pass 表；同 checkpoint 带 `render_counters`（draw / dispatch / 绑定 / 2D 合批）。

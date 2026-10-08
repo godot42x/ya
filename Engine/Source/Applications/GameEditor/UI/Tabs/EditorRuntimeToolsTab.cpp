@@ -8,7 +8,7 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/UI/Sections/RuntimeDebugPrimitivesSection.h"
 #include "GameEditor/UI/Sections/RuntimeDiagnosticsSection.h"
-#include "GameEditor/UI/Sections/RuntimeGpuMemorySection.h"
+#include "GameEditor/UI/Sections/RuntimeMemorySection.h"
 #include "GameEditor/UI/Sections/RuntimeProfilingSection.h"
 #include "GameEditor/UI/Sections/RuntimeRenderGraphSection.h"
 #include "GameEditor/UI/Sections/RuntimeRenderTargetSection.h"
@@ -58,7 +58,7 @@ void EditorRuntimeToolsTab::construct()
     auto stop = stopBuilder.share();
     auto diagnostics = std::make_shared<RuntimeDiagnosticsSection>();
     auto profiling = std::make_shared<RuntimeProfilingSection>();
-    auto gpuMemory = std::make_shared<RuntimeGpuMemorySection>();
+    auto memory = std::make_shared<RuntimeMemorySection>();
     auto renderGraph = std::make_shared<RuntimeRenderGraphSection>();
     auto renderTargets = std::make_shared<RuntimeRenderTargetSection>();
     auto debugPrimitives = std::make_shared<RuntimeDebugPrimitivesSection>();
@@ -70,7 +70,7 @@ void EditorRuntimeToolsTab::construct()
     _stopButton = stop;
     _diagnostics = diagnostics;
     _profiling = profiling;
-    _gpuMemory = gpuMemory;
+    _memory = memory;
     _renderGraph = renderGraph;
     _renderTargets = renderTargets;
     _debugPrimitives = debugPrimitives;
@@ -88,7 +88,7 @@ void EditorRuntimeToolsTab::construct()
                                     .child(stop, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
                                     .child(diagnostics)
                                     .child(profiling)
-                                    .child(gpuMemory)
+                                    .child(memory)
                                     .child(renderGraph)
                                     .child(renderTargets)
                                     .child(debugPrimitives)
@@ -119,7 +119,7 @@ void EditorRuntimeToolsTab::refresh()
     _frameText->setText(std::format("Frame {}", _app->getHostTick()));
     _diagnostics->sync(_app);
     _profiling->sync(_app);
-    _gpuMemory->sync(_app);
+    _memory->sync(_app);
     _renderGraph->sync(_app);
     _renderTargets->sync(_app);
     _debugPrimitives->sync(_app);
