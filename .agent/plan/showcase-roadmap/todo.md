@@ -23,7 +23,7 @@ GUI 与编辑器活跃线
 - [x] M4 GPU 显存统计（VMA，按资源类别；`perf-baseline` PB3）
 - [~] M8 进程内存统计：RSS / 峰值已交付（`perf-baseline` PB4）；按子系统的堆分配追踪待 PB6 随 profile worktree 一起验
 - [x] M5 压测场景（`perf-baseline` PB5，`Example/PerfLab`）
-- [~] M6 前后对比报告脚本（已交付并验过）；首份 macOS profile 基线被磁盘挡住，需先腾 ~10 GB
+- [x] M6 前后对比报告脚本 + 首份 macOS profile 基线（`perf-baseline/baselines/macos/profile-15277c00/`）
 
 渲染
 - [ ] R1 frames-in-flight 1→2（`render-view-family` M4）

@@ -337,7 +337,10 @@ Vulkan SDK 链回来、配置 xmake。**在它之前不要跑裸 `git submodule 
   把 worktree 放 `/tmp` 并不省空间（macOS 上 `/tmp` 和数据盘是同一卷），
   开第二个构建前先 `df -h` 确认有 10 GB 以上可用；构建中途写满会报
   "cannot copy file … No space left on device"，且会连带拖垮其他 agent 的构建。
-  用完 `git worktree remove <path>`（或先删 `build/`）把空间还回去。
+- **删 worktree 前要先 `chmod -R u+w <path>`**：`setup_3rd_party.py` 把三方目录
+  设成只读（`0o555`），否则 `git worktree remove` / `rm -rf` 会一路
+  `Permission denied` 留下半个目录，还要手动 `git worktree prune`。
+  删完记得 `df -h` 确认空间回来了。
 
 ## 相关 skills
 

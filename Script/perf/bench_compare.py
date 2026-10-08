@@ -35,16 +35,37 @@ SECTION_ORDER = ["frame", "cpu_stages", "gpu_passes", "render_counters", "gpu_me
 
 
 def load_summary(path: Path) -> dict:
-    """Accept a summary file, a run directory, or a run-set root (index.json)."""
-    if path.is_file() and path.suffix == ".json" and path.name != "index.json":
-        return json.loads(path.read_text(encoding="utf-8"))
+    """Accept a summary file, a run directory, a scene directory holding
+    `run<N>/`, or a run-set root (index.json).
+
+    A scene directory is ambiguous when it holds more than one run, so it
+    resolves to the lowest run number and says so -- comparing run2 against
+    run3 by accident is the kind of mistake that produces a plausible-looking
+    delta.
+    """
     if path.is_file() and path.name == "index.json":
         data = json.loads(path.read_text(encoding="utf-8"))
         return load_summary(Path(data["runs"][0]["path"]))
+    if path.is_file():
+        return json.loads(path.read_text(encoding="utf-8"))
     if (path / "bench_summary.json").is_file():
         return json.loads((path / "bench_summary.json").read_text(encoding="utf-8"))
     if (path / "index.json").is_file():
         return load_summary(path / "index.json")
+
+    def run_sort_key(run_dir: Path) -> tuple[int, str]:
+        digits = "".join(c for c in run_dir.name if c.isdigit())
+        return (int(digits) if digits else 0, run_dir.name)
+
+    run_dirs = sorted((d for d in path.glob("run*") if d.is_dir()), key=run_sort_key)
+    if run_dirs:
+        if len(run_dirs) > 1:
+            print(
+                f"-- {path} holds {len(run_dirs)} runs; using {run_dirs[0].name}. "
+                "Pass <scene>/<run> to pick another.",
+                file=sys.stderr,
+            )
+        return load_summary(run_dirs[0])
     raise SystemExit(f"cannot read a benchmark summary from {path}")
 
 

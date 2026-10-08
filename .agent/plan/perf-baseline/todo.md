@@ -5,13 +5,16 @@
 - [x] PB3 GPU 显存统计（VMA，按资源类别）；面板是编辑器 Runtime Tools 里独立的 GPU Memory 段（未并入 profiling 段——那段本轮由 PB2 线占用）
 - [~] PB4 进程内存统计：RSS / 峰值已交付；堆分配按子系统归类（profile 构建下的全局分配钩子）待 PB6 在 /tmp profile worktree 里一起验（用户 2026-10-09 选 A 方案）
 - [x] PB5 压测场景：多光源、多网格、2D 合批、Sponza（`Example/PerfLab` + 生成脚本 + 10 组 scene/config；正式数字留给 PB6）
-- [~] PB6 对比报告脚本 + 一条命令跑一组已交付并验过；**macOS 首份 profile 基线未出**：构建磁盘只剩 1.2 GiB（主项目 debug 构建已 11 G），profile worktree 构建中途写满。需先腾 ~10 GB 再跑
+- [~] PB6 对比报告脚本 + 一条命令跑一组 + 首份 macOS profile 基线（`baselines/macos/profile-15277c00/`，15 次运行 / 9 场景，干净 checkout；Sponza 未含，资产未拉）
 - [ ] PB7 GUI 基准（与 GA3 共用）
 
-## PB6 记下的阻塞
+## PB6 记下的边界
 
-- 首份正式基线（profile 口径）**被磁盘挡住**，不是代码问题。见 progress 的 PB6 一节与 `ya-build` skill 的「共享缓存」段（每个 worktree 自带 `build/`，一份构建约 11 GB）。
-- 同一次基准在别的 agent 并发编译时噪声极大（实测同一场景连跑两次 frame p50 11.58 / 21.71 ms，差 87%）。正式基线必须在没有其他构建的机器上采。
+- 基线必须在**没有其他构建**的机器上采：并发编译时同一场景两次 frame p50 差 87%（11.58 / 21.71 ms）。
+- `Lights_200` run1 是异常低值（6.023 vs 8.29 / 8.32），首次运行的预热效应；引用该场景用 run2 / run3。
+- `Sponza` 场景要先 `Script/perf/fetch_sponza.py` 拉资产（不入库），本轮未采。
+- `Lights_*` 三档全在 8.3 ms：`MAX_POINT_LIGHTS=6` 截断（见 PB5），光源梯度在 R15 / R3 解决前测不出真实曲线。
+- 这批场景的显存稳在 270.7–273.0 MiB：压的是 CPU 与提交，不是显存容量；要压显存得换场景。
 
 ## 已知边界（PB1 返工记下，本轮不修）
 

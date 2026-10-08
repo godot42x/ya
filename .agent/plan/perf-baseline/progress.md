@@ -89,6 +89,20 @@
 - 已把这个代价写进 `ya-build` skill：每个 worktree 自带 `build/`（一份构建约 11 G），`/tmp` 与数据盘同卷，开第二个构建前先 `df -h`。
 - 下一步：腾出 ~10 GB 后，在 profile worktree 里 `bench_run.py` 跑 PerfLab（Sponza 需先 `fetch_sponza.py`）×3 入库 `baselines/macos/`。
 
+## 2026-10-09 — PB6 收口：首份 macOS profile 基线入库
+
+- 阻塞解除：清掉 worktree 的构建目录后磁盘回到 106 GiB 可用，重开 `/tmp/ya-profile` 跑完整 profile 构建（`ya-runtime` 249 s + PerfLab 模块）。
+- 基线：`baselines/macos/profile-15277c00/`，15 次运行 / 9 个场景（`Lights_50/200/500` ×3、`Meshes_*`、`Sprites_*`），干净 checkout（所有 summary `gitDirty=false`），1920×1080 / immediate / 600 采样帧。含 `README.md`（数字表 + 复现命令 + 三条结论）、`stability_Lights_50.md`、`batching_Sprites_500_vs_5000.md` 与全部 summary JSON（272 KB）。
+- 脚本修正（单独一个提交）：`--filter` 从子串改成 glob（`Lights_50` 原本会连 `Lights_500` 一起跑）；`index.json` 改成累加（分批跑同一 `--out` 时原本会丢掉前一批）；`bench_compare.py` 能解析 `<scene>/` 多 run 目录（取最小 run 号并提示）。
+- 三条结论：
+  1. **2D 合批有效**：`Sprites_500` → `Sprites_5000`（10 倍）frame p50 8.365 → 8.344 ms，基本不变。
+  2. **3D 网格梯度是提交瓶颈**：`Meshes_1000/5000/10000` = 8.33 / 32.56 / 63.45 ms，而 gpu 时间只有 2.94 / 8.57 / 14.75 ms——CPU 侧先到顶。
+  3. **点光源梯度测不出来**：`Lights_*` 三档全在 8.3 ms，`MAX_POINT_LIGHTS=6` 截断（PB5 已记，要等 R15 / R3）。
+- 稳定性：Lights_50 三次 frame p50 = 8.384 / 8.349 / 8.373 ms，极差 0.4%，远在 ±3% 内。
+- 数据卫生：`Lights_200` run1 的 6.023 ms 是异常低值（另两次 8.29 / 8.32），首次运行的预热效应，README 注明引用该场景用 run2/run3。这批场景显存稳在 270.7–273.0 MiB，压的是 CPU 与提交而非显存容量。
+- 又补进 `ya-build` skill 的坑：删 worktree 前必须 `chmod -R u+w`，否则 `setup_3rd_party.py` 设的只读三方目录会让 `git worktree remove` / `rm -rf` 一路 Permission denied。
+- 未做：PB4 余项（堆分配按子系统归类）。计划里写的「profile 构建下全局分配钩子」与本工程链接形态不匹配：默认 `ya_linkage=shared`，每个模块一个 dylib，macOS 两级命名空间下在一个 dylib 里替换 `operator new` 拦不到其它 image 的分配。需要换方案（按 owner 自报字节，或接受 linker / dyld 级 interpose 的代价）再开工。
+
 ## 2026-10-09 — PB2 pass 级 GPU timestamp + render_counters（M1）
 
 - 完成：

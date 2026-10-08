@@ -75,9 +75,10 @@
 ## 2026-10-09 — M6 / PB6 报告脚本 + worktree 文档维护
 
 - `Script/perf/bench_run.py`（一条命令跑一组场景）+ `bench_compare.py`（两份 summary → markdown 对比表，含 meta 不一致告警）。详见 `../perf-baseline/progress.md`。
-- **首份 profile 基线未出**：机器只剩 1.2 GiB，主项目 debug `build/` 已 11 G，profile worktree 构建中途写满。不是代码问题，需先腾空间。
+- **首份 macOS profile 基线已入库**：`perf-baseline/baselines/macos/profile-15277c00/`（15 次运行 / 9 场景，干净 checkout）。三条结论：2D 合批 10 倍精灵帧时间不变（8.365 → 8.344 ms）；3D 网格梯度是提交瓶颈（1k/5k/10k = 8.33 / 32.56 / 63.45 ms，gpu 只有 2.94 / 8.57 / 14.75 ms）；点光源梯度被 `MAX_POINT_LIGHTS=6` 截断，测不出真实曲线。
 - 并发构建会毁掉数字（同场景两次 frame p50 差 87%），正式基线必须单独跑。
-- 顺带维护了 worktree 相关文档（`ya-build` skill「共享缓存」段）：补了**开独立 worktree 的配方**（此前只写了共享机制、没写怎么建）、**三方库复用口径**（xmake 包在 `~/.xmake/packages` 全局共享、worktree 零重下；真正随 worktree 线性增长的只有 `build/`），以及上面这条磁盘代价。
+- 顺带维护了 worktree 相关文档（`ya-build` skill「共享缓存」段）：补了**开独立 worktree 的配方**（此前只写了共享机制、没写怎么建）、**三方库复用口径**（xmake 包在 `~/.xmake/packages` 全局共享、worktree 零重下；真正随 worktree 线性增长的只有 `build/`，一份约 11 G），以及两条实测坑：构建前先 `df -h`、删 worktree 前先 `chmod -R u+w`（三方目录是只读的）。
+- PB4 余项（堆分配按子系统归类）**未做**：计划里的「全局分配钩子」与本工程链接形态不匹配（每模块一个 dylib，macOS 两级命名空间下替换 `operator new` 拦不到别的 image），要换方案再开工。
 - 实测确认：重型 submodule（`Vulkan-Samples-Assets` ~1G、`LearnOpenGL` ~250M）与 Vulkan SDK 在 worktree 里都是指回主项目的链接 + skip-worktree，`git status` 干净，全程无下载；小 submodule（ImGui / ImGuizmo / log.cc / utility.cc）各处保持标准 git。
 
 ## 2026-10-09 — PB2 收口（M1 pass 级 GPU timestamp）

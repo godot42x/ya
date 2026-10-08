@@ -1,0 +1,156 @@
+{
+  "project": "/private/tmp/ya-profile/Example/PerfLab/PerfLab.yaproject",
+  "repeat": 1,
+  "runs": [
+    {
+      "ok": true,
+      "seconds": 6.05,
+      "commit": "",
+      "frameP50": 6.023229360580444,
+      "scene": "Lights_200",
+      "run": 1,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Lights_200.bench.json",
+      "path": "/private/tmp/pb6-baseline/Lights_200/run1/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.94,
+      "commit": "",
+      "frameP50": 8.288021087646484,
+      "scene": "Lights_200",
+      "run": 2,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Lights_200.bench.json",
+      "path": "/private/tmp/pb6-baseline/Lights_200/run2/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.77,
+      "commit": "",
+      "frameP50": 8.320541381835938,
+      "scene": "Lights_200",
+      "run": 3,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Lights_200.bench.json",
+      "path": "/private/tmp/pb6-baseline/Lights_200/run3/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.87,
+      "commit": "",
+      "frameP50": 8.384207725524902,
+      "scene": "Lights_50",
+      "run": 1,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Lights_50.bench.json",
+      "path": "/private/tmp/pb6-baseline/Lights_50/run1/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.78,
+      "commit": "",
+      "frameP50": 8.348791599273682,
+      "scene": "Lights_50",
+      "run": 2,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Lights_50.bench.json",
+      "path": "/private/tmp/pb6-baseline/Lights_50/run2/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.8,
+      "commit": "",
+      "frameP50": 8.372854232788086,
+      "scene": "Lights_50",
+      "run": 3,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Lights_50.bench.json",
+      "path": "/private/tmp/pb6-baseline/Lights_50/run3/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.8,
+      "commit": "",
+      "frameP50": 8.311895847320557,
+      "scene": "Lights_500",
+      "run": 1,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Lights_500.bench.json",
+      "path": "/private/tmp/pb6-baseline/Lights_500/run1/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.75,
+      "commit": "",
+      "frameP50": 8.301687717437744,
+      "scene": "Lights_500",
+      "run": 2,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Lights_500.bench.json",
+      "path": "/private/tmp/pb6-baseline/Lights_500/run2/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.77,
+      "commit": "",
+      "frameP50": 8.279479026794434,
+      "scene": "Lights_500",
+      "run": 3,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Lights_500.bench.json",
+      "path": "/private/tmp/pb6-baseline/Lights_500/run3/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 7.0,
+      "commit": "",
+      "frameP50": 8.330542087554932,
+      "scene": "Meshes_1000",
+      "run": 1,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Meshes_1000.bench.json",
+      "path": "/private/tmp/pb6-baseline/Meshes_1000/run1/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 45.98,
+      "commit": "",
+      "frameP50": 63.449501037597656,
+      "scene": "Meshes_10000",
+      "run": 1,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Meshes_10000.bench.json",
+      "path": "/private/tmp/pb6-baseline/Meshes_10000/run1/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 24.47,
+      "commit": "",
+      "frameP50": 32.56291580200195,
+      "scene": "Meshes_5000",
+      "run": 1,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Meshes_5000.bench.json",
+      "path": "/private/tmp/pb6-baseline/Meshes_5000/run1/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.77,
+      "commit": "",
+      "frameP50": 8.367854118347168,
+      "scene": "Sprites_2000",
+      "run": 1,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Sprites_2000.bench.json",
+      "path": "/private/tmp/pb6-baseline/Sprites_2000/run1/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.74,
+      "commit": "",
+      "frameP50": 8.364708185195923,
+      "scene": "Sprites_500",
+      "run": 1,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Sprites_500.bench.json",
+      "path": "/private/tmp/pb6-baseline/Sprites_500/run1/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.82,
+      "commit": "",
+      "frameP50": 8.34445858001709,
+      "scene": "Sprites_5000",
+      "run": 1,
+      "config": "/private/tmp/ya-profile/Example/PerfLab/Benchmark/Sprites_5000.bench.json",
+      "path": "/private/tmp/pb6-baseline/Sprites_5000/run1/bench_summary.json"
+    }
+  ]
+}

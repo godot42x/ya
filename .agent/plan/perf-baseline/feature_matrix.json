@@ -97,13 +97,17 @@
         "M6"
       ],
       "title": "compare report + one-command run + macOS baseline",
-      "status": "partial",
+      "status": "pass",
       "evidence": [
         "Script/perf/bench_run.py",
         "Script/perf/bench_compare.py",
-        "verified end to end on the debug build: bench_run.py ran HelloMaterial x2 into <out>/HelloMaterial/run{1,2}/bench_summary.json + index.json; bench_compare.py diffed the two into a markdown table with meta mismatch warnings"
+        ".agent/plan/perf-baseline/baselines/macos/profile-15277c00/README.md",
+        "15 runs over 9 PerfLab scenes, profile build, clean checkout 15277c00, 1920x1080 immediate, 600 sampled frames",
+        "stability Lights_50 run1 vs run3: frame p50 8.384 -> 8.373 ms (-0.13%), three-run spread 0.4%",
+        "2D batching holds: Sprites_500 -> Sprites_5000 frame p50 8.365 -> 8.344 ms",
+        "3D mesh gradient is submission-bound: Meshes_1000/5000/10000 = 8.33 / 32.56 / 63.45 ms while gpu time is only 2.94 / 8.57 / 14.75 ms"
       ],
-      "remaining": "the first official (profile) baseline is blocked on disk: 1.2 GiB free while one build tree is ~11 GB. Also, a concurrent build on the same machine moves frame p50 by ~87%, so the baseline must be taken on an otherwise idle machine"
+      "remaining": "Sponza needs Script/perf/fetch_sponza.py first; the Lights_* gradient is flat because MAX_POINT_LIGHTS=6 truncates it (R15/R3)"
     },
     {
       "id": "PB7",
