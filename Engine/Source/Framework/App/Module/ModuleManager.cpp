@@ -27,9 +27,15 @@ struct ModuleManager::LoadedModule
     const FYaModuleApi*         api    = nullptr;
     IModule*                    instance = nullptr;
     std::unique_ptr<Context>    context;
+    uint32_t                    reflectionModule = 0;
 };
 
 ModuleManager::ModuleManager() = default;
+
+void ModuleManager::setReflectionBridge(FReflectionModuleBridge bridge)
+{
+    _bridge = bridge;
+}
 
 ModuleManager::~ModuleManager()
 {
@@ -182,14 +188,29 @@ bool ModuleManager::loadAll()
     for (const auto& name : _resolvedOrder) {
         const auto& manifest  = _manifests.at(name);
         const auto  binaryPath = resolveBinaryPath(manifest);
+        uint32_t    moduleId   = 0;
+        if (_bridge.allocate && _bridge.bind) {
+            moduleId = _bridge.allocate();
+            _bridge.bind(moduleId);
+        }
+        auto releaseModule = [&](bool bKeep) {
+            if (_bridge.unbind) {
+                _bridge.unbind();
+            }
+            if (!bKeep && moduleId != 0 && _bridge.unregister) {
+                _bridge.unregister(moduleId);
+            }
+        };
         Os::SharedLibrary handle = Os::loadLibrary(binaryPath);
         if (!handle.isValid()) {
+            releaseModule(false);
             unloadAll();
             return fail(std::format("Failed to load module {} from {}: {}", name, binaryPath.string(), Os::lastError()));
         }
 
         auto getApi = reinterpret_cast<FGetModuleApi>(Os::loadSymbol(handle, "yaGetModuleApi"));
         if (!getApi) {
+            releaseModule(false);
             unloadAll();
             return fail("Module " + name + " does not export yaGetModuleApi");
         }
@@ -201,6 +222,7 @@ bool ModuleManager::loadAll()
             api->buildFingerprint != YA_MODULE_BUILD_FINGERPRINT ||
             !api->name || manifest.name != api->name || manifest.kind != api->kind ||
             !api->createModule || !api->destroyModule) {
+            releaseModule(false);
             unloadAll();
             return fail("Module ABI or manifest mismatch: " + name);
         }
@@ -214,9 +236,12 @@ bool ModuleManager::loadAll()
             if (loaded->instance) {
                 loaded->api->destroyModule(loaded->instance);
             }
+            releaseModule(false);
             unloadAll();
             return fail("Module onLoad failed: " + name);
         }
+        loaded->reflectionModule = moduleId;
+        releaseModule(true);
         _loaded.emplace(name, std::move(loaded));
     }
     return true;
@@ -257,8 +282,12 @@ void ModuleManager::unloadAll()
         }
         auto& loaded = *loadedIt->second;
         loaded.instance->onUnload();
+        if (loaded.reflectionModule != 0 && _bridge.unregister) {
+            _bridge.unregister(loaded.reflectionModule);
+        }
         loaded.api->destroyModule(loaded.instance);
-        // ponytail: keep module images resident until process exit; add owner-based registry cleanup before dlclose.
+        // ponytail: keep module images resident until process exit. Reflection records
+        // for this module are dropped above, while the image is still mapped.
         _loaded.erase(loadedIt);
     }
 }

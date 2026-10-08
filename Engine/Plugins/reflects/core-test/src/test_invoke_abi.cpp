@@ -97,7 +97,7 @@ TEST(InvokeAbi, ConstReferenceDoesNotCopy)
     EXPECT_EQ(probe.seen, &original);
 
     refl::MetaValue boxed = refl::MetaValue::make(original);
-    probeClass()->functions.at("observe").invoker(&probe, std::span<refl::MetaValue>(&boxed, 1));
+    probeClass()->functions().at("observe").invoker(&probe, std::span<refl::MetaValue>(&boxed, 1));
     EXPECT_EQ(probe.seen, boxed.tryGet<int>());
     EXPECT_NE(probe.seen, &original);
 }
@@ -141,7 +141,7 @@ TEST(InvokeAbi, ReturnedReferenceAndPointerAliasTheObject)
     EXPECT_EQ(held, 6);
 
     probe.slot = nullptr;
-    refl::MetaValue result = probeClass()->functions.at("ptrMember").invoker(&probe, {});
+    refl::MetaValue result = probeClass()->functions().at("ptrMember").invoker(&probe, {});
     EXPECT_TRUE(result.isRef());
     EXPECT_EQ(result.data(), nullptr);
 }
@@ -153,7 +153,7 @@ TEST(InvokeAbi, NumericConversionAndArity)
     EXPECT_EQ(probe.narrow, 20);
 
     refl::MetaValue wide = refl::MetaValue::make(int64_t{300});
-    EXPECT_THROW(probeClass()->functions.at("takeNarrow").invoker(&probe, std::span<refl::MetaValue>(&wide, 1)),
+    EXPECT_THROW(probeClass()->functions().at("takeNarrow").invoker(&probe, std::span<refl::MetaValue>(&wide, 1)),
                  std::runtime_error);
 
     refl::MetaValue extra[] = {refl::MetaValue::make(int64_t{1}), refl::MetaValue::make(int64_t{2})};
@@ -190,7 +190,7 @@ TEST(InvokeAbi, PointerMemberPointeeReadWriteAndNull)
     CallProbe probe;
     int       held = 8;
     probe.slot     = &held;
-    Property &prop = probeClass()->properties.at("slot");
+    Property &prop = *probeClass()->getProperty("slot");
 
     refl::MetaValue through = prop.pointee(&probe);
     ASSERT_TRUE(through.isRef());

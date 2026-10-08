@@ -412,10 +412,27 @@ bool signatureCrosses(const Function& function)
     return true;
 }
 
-/// TypeExport is a once-per-type, once-per-process projection (`exportOf`'s
-/// `bBuilt` guard). Inheritance, override, and owner path come from
-/// `Class::resolveMembers`. This pass only trims the script name and drops
-/// members that cannot cross.
+/// Drop reflected projections so the next lookup rebuilds them. Resolver
+/// answers and native fields have no reflected pointer and stay.
+void invalidateExports()
+{
+    for (auto& [type, entry] : state().types) {
+        (void)type;
+        std::erase_if(entry.methods, [](const auto& item) { return item.second.function != nullptr; });
+        std::erase_if(entry.fields, [](const auto& item) { return item.second.property != nullptr; });
+        entry.bBuilt = false;
+    }
+}
+
+void watchRegistry()
+{
+    static const uint64_t listener = ClassRegistry::instance().addListener([](uint64_t) { invalidateExports(); });
+    (void)listener;
+}
+
+/// Inheritance, override, and owner path come from `Class::resolveMembers`.
+/// This pass only trims the script name and drops members that cannot cross.
+/// A registry change clears `bBuilt` so the next lookup rebuilds.
 void collectMembers(const Class& cls, TypeExport& out)
 {
     const ResolvedMembers resolved = cls.resolveMembers();
@@ -457,6 +474,7 @@ void collectMembers(const Class& cls, TypeExport& out)
 
 TypeExport& exportOf(type_index_t type)
 {
+    watchRegistry();
     TypeExport& entry = state().types[type];
     if (!entry.bBuilt) {
         entry.bBuilt = true;
@@ -568,6 +586,7 @@ void ensureDuplicateHook()
 
 void addMethod(type_index_t type, std::string name, NativeMethod method)
 {
+    watchRegistry();
     ensureDuplicateHook();
     Class* cls = ClassRegistry::instance().getClass(type);
     if (!cls) {
@@ -579,7 +598,7 @@ void addMethod(type_index_t type, std::string name, NativeMethod method)
         return;
     }
     TypeExport& entry = state().types[type];
-    if (cls->functions.contains(name)) {
+    if (cls->functions().contains(name)) {
         Function rejected;
         rejected.name = name;
         cls->insertFunction(std::move(rejected));
@@ -598,7 +617,7 @@ void addMethod(type_index_t type, std::string name, NativeMethod method)
     function.invoker        = std::move(method.invoker);
     cls->insertFunction(std::move(function));
     if (entry.bBuilt) {
-        const Function* stored = &cls->functions.at(name);
+        const Function* stored = &cls->functions().at(name);
         entry.methods.try_emplace(name, ScriptMethod{.name = name, .function = stored});
     }
 }

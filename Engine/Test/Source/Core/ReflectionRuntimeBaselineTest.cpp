@@ -232,7 +232,7 @@ const Property& field(const char* name)
 {
     Class* cls = ClassRegistry::instance().getClass(type_index_v<FBaseline>);
     EXPECT_NE(cls, nullptr);
-    return cls->properties.at(name);
+    return cls->properties().at(name);
 }
 
 reflection::FPropertySlot slotOf(const char* name)
@@ -664,7 +664,7 @@ TEST(ReflectionRuntimeBaseline, ReferenceArgumentsWriteThrough)
     EXPECT_THROW(cls->invoke<void>("writeBack", &obj, frozen), std::runtime_error);
 
     refl::MetaValue factor = refl::MetaValue::make(2.0f);
-    const refl::MetaValue scaled = cls->functions.at("scaled").invoker(&obj, std::span<refl::MetaValue>(&factor, 1));
+    const refl::MetaValue scaled = cls->functions().at("scaled").invoker(&obj, std::span<refl::MetaValue>(&factor, 1));
     ASSERT_NE(scaled.tryGet<float>(), nullptr);
     EXPECT_FLOAT_EQ(*scaled.tryGet<float>(), obj.scalar * 2.0f);
 }
@@ -737,7 +737,7 @@ TEST(ReflectionRuntimeBaseline, EditorGraphAndMetadata)
     EXPECT_FALSE(scalarError.empty());
 
     Class* cls = ClassRegistry::instance().getClass(type_index_v<FBaseline>);
-    cls->properties.at("position").metadata.set(
+    cls->getProperty("position")->metadata.set(
         reflection::Meta::ManipulateSpec::name,
         reflection::Meta::ManipulateSpec{
             .type = reflection::Meta::ManipulateSpec::Slider,

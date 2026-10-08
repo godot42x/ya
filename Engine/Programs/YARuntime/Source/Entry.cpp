@@ -4,6 +4,8 @@
 #include "GameRuntime/App.h"
 #include "Script/Lua/LuaBackend.h"
 
+#include <reflects-core/lib.h>
+
 #include <algorithm>
 #include <cstdio>
 #include <exception>
@@ -117,6 +119,12 @@ int main(int argc, char** argv)
         }
 
         if (!roots.empty()) {
+            moduleManager.setReflectionBridge({
+                .allocate   = []() -> uint32_t { return ClassRegistry::instance().allocateModule(); },
+                .bind       = [](uint32_t id) { ClassRegistry::instance().setRegistrationModule(id); },
+                .unbind     = []() { ClassRegistry::instance().setRegistrationModule(0); },
+                .unregister = [](uint32_t id) { ClassRegistry::instance().unregisterModule(id); },
+            });
             if (!moduleManager.resolve(roots) || !moduleManager.loadAll()) {
                 std::fprintf(stderr, "%s\n", moduleManager.getLastError().c_str());
                 return 3;

@@ -9,26 +9,71 @@
 
 
 #include <algorithm>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 
 // namespace refl
 
+using ModuleId = uint32_t;
+inline constexpr ModuleId kBuiltinModule = 0;
+
+struct RegistryListener
+{
+    uint64_t                         id = 0;
+    std::function<void(uint64_t)>    fn;
+};
+
 // MARK: ClassRegistry
 struct ClassRegistry
 {
-    std::unordered_map<std::string, std::shared_ptr<Class>> classes;
-    std::unordered_map<refl::type_index_t, std::shared_ptr<Class>> typeIdMap;
-
-    // parent -> childrens
-    std::unordered_map<refl::type_index_t, std::vector<refl::type_index_t>> parentToChildren;
-
     /// First registration of a function name wins. Later `function()` calls keep
     /// the existing entry and, when set, notify the host (script bindings log it).
     std::function<void(const Class &cls, const std::string &functionName)> duplicateFunctionHook;
+
+    [[nodiscard]] uint64_t version() const { return _version; }
+    [[nodiscard]] ModuleId registrationModule() const { return _registrationModule; }
+
+    void setRegistrationModule(ModuleId moduleId) { _registrationModule = moduleId; }
+
+    ModuleId allocateModule()
+    {
+        if (_nextModule == 0) {
+            _nextModule = 1;
+        }
+        return _nextModule++;
+    }
+
+    /// Process-lifetime records (module 0) stay. Anything else is removed, then listeners run.
+    REFLECTS_CORE_API void unregisterModule(ModuleId moduleId);
+
+    uint64_t addListener(std::function<void(uint64_t)> listener)
+    {
+        const uint64_t id = ++_nextListener;
+        _listeners.push_back(RegistryListener{id, std::move(listener)});
+        return id;
+    }
+
+    void removeListener(uint64_t id)
+    {
+        std::erase_if(_listeners, [id](const RegistryListener &listener) { return listener.id == id; });
+    }
+
+    void noteChanged()
+    {
+        ++_version;
+        const std::vector<RegistryListener> listeners = _listeners;
+        for (const RegistryListener &listener : listeners) {
+            if (listener.fn) {
+                listener.fn(_version);
+            }
+        }
+    }
 
     static REFLECTS_CORE_API ClassRegistry &instance();
 
@@ -46,8 +91,10 @@ struct ClassRegistry
 
         auto ptr       = std::shared_ptr<Class>(owned.release());
         ptr->typeIndex = id;
+        ptr->moduleId  = _registrationModule;
         classes[name]  = ptr;
         typeIdMap[id]  = ptr;
+        noteChanged();
         return classes[name];
     }
 
@@ -90,6 +137,8 @@ struct ClassRegistry
         auto& children = parentToChildren[parentTypeId];
         if (std::ranges::find(children, childTypeId) == children.end()) {
             children.push_back(childTypeId);
+            _parentLinks.push_back(ParentLink{childTypeId, parentTypeId, _registrationModule});
+            noteChanged();
         }
     }
 
@@ -113,6 +162,25 @@ struct ClassRegistry
     {
         return typeIdMap.find(typeId) != typeIdMap.end();
     }
+
+  private:
+    struct ParentLink
+    {
+        refl::type_index_t child    = 0;
+        refl::type_index_t parent   = 0;
+        ModuleId           moduleId = kBuiltinModule;
+    };
+
+    std::unordered_map<std::string, std::shared_ptr<Class>> classes;
+    std::unordered_map<refl::type_index_t, std::shared_ptr<Class>> typeIdMap;
+    // parent -> childrens
+    std::unordered_map<refl::type_index_t, std::vector<refl::type_index_t>> parentToChildren;
+    std::vector<ParentLink>        _parentLinks;
+    std::vector<RegistryListener>  _listeners;
+    uint64_t                       _version             = 1;
+    uint64_t                       _nextListener        = 0;
+    ModuleId                       _registrationModule  = kBuiltinModule;
+    ModuleId                       _nextModule          = 1;
 };
 
 // ============================================================================
@@ -241,9 +309,6 @@ struct Register
 // ============================================================================
 struct EnumRegistry
 {
-    std::unordered_map<std::string, Enum> enums;
-    std::unordered_map<refl::type_index_t, Enum *> typeIdMap; // typeIndex -> Enum*
-
     static REFLECTS_CORE_API EnumRegistry &instance();
 
     void registerEnum(const std::string &enumName, const Enum &enumInfo, refl::type_index_t typeIndex = 0)
@@ -275,6 +340,10 @@ struct EnumRegistry
     {
         return typeIdMap.find(typeIndex) != typeIdMap.end();
     }
+
+  private:
+    std::unordered_map<std::string, Enum>          enums;
+    std::unordered_map<refl::type_index_t, Enum *> typeIdMap;
 };
 
 // ============================================================================

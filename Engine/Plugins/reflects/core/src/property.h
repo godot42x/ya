@@ -96,6 +96,8 @@ struct Field
 {
     std::string name;
     Metadata    metadata;
+    /// 0 is the process-lifetime registry. A loaded module stamps its own id.
+    uint32_t moduleId = 0;
 
     // ============================================================================
     // Metadata support - shared by Property and Function

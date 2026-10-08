@@ -13,11 +13,21 @@
 namespace ya
 {
 
+struct FReflectionModuleBridge
+{
+    uint32_t (*allocate)()          = nullptr;
+    void (*bind)(uint32_t moduleId) = nullptr;
+    void (*unbind)()                = nullptr;
+    void (*unregister)(uint32_t moduleId) = nullptr;
+};
+
 class ModuleManager
 {
   private:
     struct LoadedModule;
     struct Context;
+
+    FReflectionModuleBridge                                        _bridge;
 
     std::unordered_map<std::string, FModuleManifest>               _manifests;
     std::unordered_map<std::string, std::unique_ptr<LoadedModule>> _loaded;
@@ -31,6 +41,8 @@ class ModuleManager
 
     ModuleManager(const ModuleManager&)            = delete;
     ModuleManager& operator=(const ModuleManager&) = delete;
+
+    YA_MODULE_MANAGER_API void setReflectionBridge(FReflectionModuleBridge bridge);
 
     YA_MODULE_MANAGER_API bool addManifest(const std::filesystem::path& path);
     YA_MODULE_MANAGER_API bool addManifest(FModuleManifest manifest);

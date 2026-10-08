@@ -28,16 +28,16 @@ void collectLeavesImpl(type_index_t currentType,
         return;
     }
     ancestry.push_back(currentType);
-    std::vector<std::string> names = cls->propertyOrder;
-    for (const auto& [name, property] : cls->properties) {
+    std::vector<std::string> names = cls->propertyOrder();
+    for (const auto& [name, property] : cls->properties()) {
         if (std::find(names.begin(), names.end(), name) == names.end()) {
             names.push_back(name);
         }
     }
 
     for (const std::string& name : names) {
-        auto it = cls->properties.find(name);
-        if (it == cls->properties.end()) {
+        auto it = cls->properties().find(name);
+        if (it == cls->properties().end()) {
             continue;
         }
         const Property& property = it->second;

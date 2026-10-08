@@ -533,8 +533,8 @@ PropertyHandle PropertyHandleFactory::make(type_index_t ownerType, std::vector<v
     if (!cls) {
         return {};
     }
-    auto it = cls->properties.find(std::string(propertyName));
-    if (it == cls->properties.end()) {
+    auto it = cls->properties().find(std::string(propertyName));
+    if (it == cls->properties().end()) {
         return {};
     }
     PropertyHandle handle{std::move(instances), it->second};

@@ -128,7 +128,7 @@ TEST(ReflectionRuntimeMicrobench, DISABLED_FunctionInvoker)
     prepareBench();
     Class*    cls = ClassRegistry::instance().getClass(type_index_v<FBench>);
     ASSERT_NE(cls, nullptr);
-    Function& function = cls->functions.at("scaled");
+    const Function& function = cls->functions().at("scaled");
     FBench&   object   = benchObject();
     for (int i = 0; i < kWarmup; ++i) {
         std::array<refl::MetaValue, 1> args{refl::MetaValue::make(2.0f)};
@@ -149,7 +149,7 @@ TEST(ReflectionRuntimeMicrobench, DISABLED_PropertyAccessor)
     prepareBench();
     Class* cls = ClassRegistry::instance().getClass(type_index_v<FBench>);
     ASSERT_NE(cls, nullptr);
-    const reflection::FPropertySlot slot(cls->properties.at("scalar"));
+    const reflection::FPropertySlot slot(cls->properties().at("scalar"));
     FBench&                         object = benchObject();
     for (int i = 0; i < kWarmup; ++i) {
         float value = 0.0f;

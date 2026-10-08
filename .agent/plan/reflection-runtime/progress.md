@@ -409,3 +409,18 @@ debug，100000 次，1 次，ns/op。对照 RR5b 中位数。这条路径测的�
 - `reflects-generator-test` 1/11，通过的仍是 `ReflectorTest.GetNonExistentClass`。
 - 冒烟退出码都是 0，日志没有 `[Error]`：`walk_one_cell.py` 走过一格 `(0.5, 0.5) -> (1.5, 0.5)`；GreedySnake `--exit-after-frame=90` 在 90 帧退出。
 - RR5b 和 RR8 的 Windows 验证都还没跑。RR8 不能算 Windows 完成。
+
+## 2026-10-09 — RR7 动态注册：模块注销、版本、通知、只读查询
+
+每条 `Field` / `Constructor` 带 `moduleId`。0 是进程生命周期，`unregisterModule(0)` 什么都不拆。加载模块时 `ModuleManager` 在 `loadLibrary` 之前 `bind` 一个新 id，静态注册和 `onLoad` 都盖上这个 id；卸载时先 `unregisterModule`，镜像仍不 `dlclose`。`YARuntime` 把这套桥接到 `ClassRegistry`。没设桥的调用方行为不变。
+
+写入仍走 `registerClass` / `insertFunction` / `insertProperty`。重复函数名不升版本。真正的增删才 `noteChanged`：版本 +1，监听者在调用线程上跑。类表、枚举表、成员 map 收成私有，外面用 `functions()` / `properties()` / `propertyOrder()` / `getClass` / `getEnum`。
+
+脚本导出表收到通知后丢掉带反射指针的方法和字段，下次查找重建。resolver 答案和 native field 没有反射指针，留着。编辑器 `ReflectionCache` 收到通知后原地重填，已经拿出去的缓存指针还指着同一格。序列化器没有一份独立缓存，每次直接查注册表，没有可失效的副本。
+
+### 验证
+
+- `reflects-core-test` 75/75。新增 `RegistryModule.UnregisterDropsOwnedClassAndKeepsBuiltin`：模块自己的类和类型名被拆掉，加在 `CallProbe` 上的方法被拆掉，`observe` 还在，模块 0 注销不升版本。
+- `RegistryNotify.ScriptAndEditorSeeModuleUnregister`：注销后 `findMethod` 看不到方法，同一份编辑器缓存的属性数回到注销前。
+- `ScriptNativeMethod.*` 3、`ScriptRuntimeNative.RegistryListsMigratedMethods`、`PropertyAccessorTest.*` 8、`ModuleManagerTest.*` 4（含动态模块加载后卸载）。
+- RR5b 和 RR8 的 Windows 验证都还没跑。RR7 不是 Windows 验证点。

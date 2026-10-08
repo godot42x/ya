@@ -39,7 +39,7 @@ TEST(PropertyAccessorTest, ReadsWritesAndValidatesSingleInstance)
     NestedOwner owner;
     const Class* cls = ClassRegistry::instance().getClass(type_index_v<NestedOwner>);
     ASSERT_NE(cls, nullptr);
-    const Property& enabled = cls->properties.at("enabled");
+    const Property& enabled = cls->properties().at("enabled");
 
     bool value = false;
     ASSERT_TRUE(reflection::PropertyAccessor::tryGet(enabled, &owner, value));
@@ -54,7 +54,7 @@ TEST(PropertyAccessorTest, TypedMutationResultPreservesFailureReason)
     NestedOwner owner;
     const Class* cls = ClassRegistry::instance().getClass(type_index_v<NestedOwner>);
     ASSERT_NE(cls, nullptr);
-    const reflection::FPropertySlot enabled = reflection::FPropertySlot::field(cls->properties.at("enabled"));
+    const reflection::FPropertySlot enabled = reflection::FPropertySlot::field(cls->properties().at("enabled"));
     const auto unchanged = reflection::PropertyAccessor::setResult(enabled, &owner, true);
     EXPECT_EQ(unchanged.status, reflection::EPropertyMutationStatus::Unchanged);
     const auto mismatch = reflection::PropertyAccessor::setResult(enabled, &owner, 1.0f);
@@ -212,7 +212,7 @@ TEST(PropertyAccessorTest, EmptyStringMapKeyIsRepresentedAsMapSlot)
 
     const Class* cls = ClassRegistry::instance().getClass(type_index_v<MapOwner>);
     ASSERT_NE(cls, nullptr);
-    const Property& slots = cls->properties.at("slots");
+    const Property& slots = cls->properties().at("slots");
     const reflection::FPropertySlot slot = reflection::FPropertySlot::at(slots, std::string{});
 
     EXPECT_TRUE(slot.isMapValue());
@@ -232,10 +232,10 @@ TEST(PropertyAccessorTest, DynamicSequenceAppendRemoveAndClear)
     SequenceOwner owner;
     const Class* cls = ClassRegistry::instance().getClass(type_index_v<SequenceOwner>);
     ASSERT_NE(cls, nullptr);
-    const Property& weights = cls->properties.at("weights");
+    const Property& weights = cls->properties().at("weights");
 
     EXPECT_TRUE(reflection::PropertyAccessor::isDynamicSequence(weights));
-    EXPECT_FALSE(reflection::PropertyAccessor::isDynamicSequence(cls->properties.at("files")));
+    EXPECT_FALSE(reflection::PropertyAccessor::isDynamicSequence(cls->properties().at("files")));
     EXPECT_EQ(reflection::PropertyAccessor::containerSize(weights, &owner), 2u);
     EXPECT_EQ(reflection::PropertyAccessor::appendEmptyResult(weights, &owner).status,
               reflection::EPropertyMutationStatus::Changed);

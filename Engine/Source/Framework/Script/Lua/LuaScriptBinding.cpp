@@ -630,8 +630,8 @@ int pushValueStruct(lua_State* L, const script::ScriptValue& value)
     if (cls == nullptr) {
         throw script::ScriptError("reflected struct has no class");
     }
-    lua_createtable(L, 0, static_cast<int>(cls->propertyOrder.size()));
-    for (const std::string& name : cls->propertyOrder) {
+    lua_createtable(L, 0, static_cast<int>(cls->propertyOrder().size()));
+    for (const std::string& name : cls->propertyOrder()) {
         const Property* prop = cls->getProperty(name);
         pushLuaValue(L, prop->ref(const_cast<void*>(value.data())).materialize());
         lua_setfield(L, -2, name.c_str());

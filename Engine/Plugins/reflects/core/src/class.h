@@ -3,6 +3,16 @@
 #include "function.h"
 #include "lib.h"
 #include "reflects-core/api.h"
+
+namespace refl
+{
+
+/// Module currently stamping new records. 0 is the process-lifetime registry.
+REFLECTS_CORE_API uint32_t registrationModule();
+/// Bump the registry version and tell listeners. Registration calls this after the write.
+REFLECTS_CORE_API void notifyRegistryChanged();
+
+} // namespace refl
 #include <array>
 #include <memory>
 #include <span>
@@ -14,6 +24,8 @@
 // ============================================================================
 struct Constructor
 {
+    /// 0 is the process-lifetime registry. A loaded module stamps its own id.
+    uint32_t                                    moduleId = 0;
     size_t                                      argCount = 0;
     std::vector<std::string>                    argTypeNames; // 参数类型名称列表
     std::string                                 signature;    // 完整签名用于唯一标识（如 "int,float,string"）
@@ -86,14 +98,9 @@ struct Class : public Field
 
     // TODO: 使用一个field 来存所有-> 省内存
     // std::unordered_map<std::string, std::shared_ptr<Field>> fields;
-    // 属性和函数存储
-    std::unordered_map<std::string, Property> properties;
-    std::vector<std::string>                  propertyOrder;
-    std::unordered_map<std::string, Function> functions;
-
+    // 属性和函数只通过下面的注册函数写入。外部用 const 查询。
     // 构造函数工厂 - 支持多个重载
     // key: 类型签名字符串（如 "int,float,string"），value: 构造函数描述符
-    std::unordered_map<std::string, Constructor> constructors;
 
     std::vector<refl::type_index_t>                   parents;
     std::unordered_map<refl::type_index_t, ptrdiff_t> parentOffsets; // 父类指针偏移量（支持负偏移）
@@ -111,6 +118,23 @@ struct Class : public Field
     // 拷贝构造维护的派生状态（共享且已绑定的资产句柄）随整体赋值存活，
     // 逐字段拷贝无法表达它。
     bool (*copyAssign)(void *dst, const void *src) = nullptr;
+
+    /// Drop members and constructors stamped with `moduleId`.
+    /// Does not publish a registry change; the registry notifies once.
+    REFLECTS_CORE_API bool dropOwnedBy(uint32_t moduleId);
+    REFLECTS_CORE_API void removeParent(refl::type_index_t parentTypeId);
+
+    const std::unordered_map<std::string, Property> &properties() const { return _properties; }
+    const std::vector<std::string>                  &propertyOrder() const { return _propertyOrder; }
+    const std::unordered_map<std::string, Function> &functions() const { return _functions; }
+
+  private:
+    std::unordered_map<std::string, Property>    _properties;
+    std::vector<std::string>                     _propertyOrder;
+    std::unordered_map<std::string, Function>    _functions;
+    std::unordered_map<std::string, Constructor> _constructors;
+
+  public:
 
     Class() = default;
     explicit Class(const std::string &inName)
@@ -341,21 +365,25 @@ struct Class : public Field
     // 共用逻辑：插入或更新 property 并返回引用
     Property &insertProperty(const std::string &inName, Property &&prop)
     {
-        const bool bExists = properties.find(inName) != properties.end();
-        auto       it      = properties.insert_or_assign(inName, std::move(prop));
+        if (prop.moduleId == 0) {
+            prop.moduleId = refl::registrationModule();
+        }
+        const bool bExists = _properties.find(inName) != _properties.end();
+        auto       it      = _properties.insert_or_assign(inName, std::move(prop));
         if (!bExists) {
             // TODO: optimize the visitor
-            propertyOrder.push_back(inName);
+            _propertyOrder.push_back(inName);
         }
+        refl::notifyRegistryChanged();
         return it.first->second;
     }
 
     template <typename VisitorFunc>
     void visitOwnProperties(VisitorFunc &&visitor) const
     {
-        for (const auto &name : propertyOrder) {
-            auto it = properties.find(name);
-            if (it != properties.end()) {
+        for (const auto &name : _propertyOrder) {
+            auto it = _properties.find(name);
+            if (it != _properties.end()) {
                 std::forward<VisitorFunc>(visitor)(name, it->second);
             }
         }
@@ -364,9 +392,9 @@ struct Class : public Field
     template <typename VisitorFunc>
     void visitOwnProperties(VisitorFunc &&visitor)
     {
-        for (const auto &name : propertyOrder) {
-            auto it = properties.find(name);
-            if (it != properties.end()) {
+        for (const auto &name : _propertyOrder) {
+            auto it = _properties.find(name);
+            if (it != _properties.end()) {
                 std::forward<VisitorFunc>(visitor)(name, it->second);
             }
         }
@@ -516,8 +544,8 @@ struct Class : public Field
     // ------------------------------------------------------------------------
     refl::MetaValue invoke(const std::string &inName, void *obj, std::span<refl::MetaValue> args)
     {
-        auto it = functions.find(inName);
-        if (it == functions.end()) {
+        auto it = _functions.find(inName);
+        if (it == _functions.end()) {
             throw std::runtime_error("Function not found: " + inName);
         }
 
@@ -544,8 +572,8 @@ struct Class : public Field
     // ------------------------------------------------------------------------
     refl::MetaValue invokeStatic(const std::string &inName, std::span<refl::MetaValue> args)
     {
-        auto it = functions.find(inName);
-        if (it == functions.end()) {
+        auto it = _functions.find(inName);
+        if (it == _functions.end()) {
             throw std::runtime_error("Function not found: " + inName);
         }
 
@@ -616,13 +644,19 @@ struct Class : public Field
 
     bool hasFunction(const std::string &inName) const
     {
-        return functions.find(inName) != functions.end();
+        return _functions.find(inName) != _functions.end();
     }
 
     const Function *getFunction(const std::string &inName) const
     {
-        auto it = functions.find(inName);
-        return it != functions.end() ? &it->second : nullptr;
+        auto it = _functions.find(inName);
+        return it != _functions.end() ? &it->second : nullptr;
+    }
+
+    Function *getFunction(const std::string &inName)
+    {
+        auto it = _functions.find(inName);
+        return it != _functions.end() ? &it->second : nullptr;
     }
 
     // ------------------------------------------------------------------------
@@ -630,27 +664,27 @@ struct Class : public Field
     // ------------------------------------------------------------------------
     bool hasProperty(const std::string &inName) const
     {
-        return properties.find(inName) != properties.end();
+        return _properties.find(inName) != _properties.end();
     }
 
     const Property *getProperty(const std::string &inName) const
     {
-        auto it = properties.find(inName);
-        return it != properties.end() ? &it->second : nullptr;
+        auto it = _properties.find(inName);
+        return it != _properties.end() ? &it->second : nullptr;
     }
 
     Property *getProperty(const std::string &inName)
     {
-        auto it = properties.find(inName);
-        return it != properties.end() ? &it->second : nullptr;
+        auto it = _properties.find(inName);
+        return it != _properties.end() ? &it->second : nullptr;
     }
 
     // 递归查找属性（包括父类属性）
     const Property *findPropertyRecursive(const std::string &inName) const
     {
         // 1. 先查找当前类的属性
-        auto it = properties.find(inName);
-        if (it != properties.end()) {
+        auto it = _properties.find(inName);
+        if (it != _properties.end()) {
             return &it->second;
         }
 
@@ -681,8 +715,8 @@ struct Class : public Field
     std::tuple<const Property *, const Class *, refl::type_index_t> findPropertyWithOwner(const std::string &inName, refl::type_index_t currentTypeId = 0) const
     {
         // 1. 先查找当前类的属性
-        auto it = properties.find(inName);
-        if (it != properties.end()) {
+        auto it = _properties.find(inName);
+        if (it != _properties.end()) {
             return {&it->second, this, currentTypeId};
         }
 
@@ -717,8 +751,8 @@ struct Class : public Field
     template <typename T, typename Self>
     T getPropertyValue(const std::string &inName, Self *obj)
     {
-        auto it = properties.find(inName);
-        if (it == properties.end()) {
+        auto it = _properties.find(inName);
+        if (it == _properties.end()) {
             throw std::runtime_error("Property not found: " + inName);
         }
 
@@ -740,8 +774,8 @@ struct Class : public Field
     template <typename T, typename Self>
     void setPropertyValue(const std::string &inName, Self *obj, const T &value)
     {
-        auto it = properties.find(inName);
-        if (it == properties.end()) {
+        auto it = _properties.find(inName);
+        if (it == _properties.end()) {
             throw std::runtime_error("Property not found: " + inName);
         }
 
@@ -767,8 +801,8 @@ struct Class : public Field
     template <typename T>
     T getStaticPropertyValue(const std::string &inName)
     {
-        auto it = properties.find(inName);
-        if (it == properties.end()) {
+        auto it = _properties.find(inName);
+        if (it == _properties.end()) {
             throw std::runtime_error("Property not found: " + inName);
         }
 
@@ -785,8 +819,8 @@ struct Class : public Field
     template <typename T>
     void setStaticPropertyValue(const std::string &name, const T &value)
     {
-        auto it = properties.find(name);
-        if (it == properties.end()) {
+        auto it = _properties.find(name);
+        if (it == _properties.end()) {
             throw std::runtime_error("Property not found: " + name);
         }
 
@@ -820,6 +854,7 @@ struct Class : public Field
             ctor.argTypeNames = {typeid(Args).name()...};
         }
         ctor.signature = sig;
+        ctor.moduleId  = refl::registrationModule();
         ctor.factory   = [](std::span<refl::MetaValue> args) -> void * {
             if (args.size() != sizeof...(Args)) {
                 throw std::runtime_error("Constructor argument count mismatch: expected " +
@@ -839,7 +874,8 @@ struct Class : public Field
             }
         };
 
-        constructors[sig] = ctor;
+        _constructors[sig] = ctor;
+        refl::notifyRegistryChanged();
 
         // 只设置一次析构函数
         if (!destructor) {
@@ -856,8 +892,8 @@ struct Class : public Field
     void *createInstance() const
     {
         std::string sig = detail::makeSignature<>();
-        auto        it  = constructors.find(sig);
-        if (it == constructors.end()) {
+        auto        it  = _constructors.find(sig);
+        if (it == _constructors.end()) {
             throw std::runtime_error("No default constructor registered for class: " + name);
         }
         return it->second.factory({});
@@ -868,8 +904,8 @@ struct Class : public Field
     void *createInstance(Args &&...args) const
     {
         std::string sig = detail::makeSignature<std::decay_t<Args>...>();
-        auto        it  = constructors.find(sig);
-        if (it == constructors.end()) {
+        auto        it  = _constructors.find(sig);
+        if (it == _constructors.end()) {
             throw std::runtime_error("No matching constructor for signature '" + sig +
                                      "' registered for class: " + name);
         }
@@ -885,7 +921,7 @@ struct Class : public Field
     // 检查是否可以创建实例（是否有任何构造函数）
     bool canCreateInstance() const
     {
-        return !constructors.empty();
+        return !_constructors.empty();
     }
 
     // 检查是否有特定签名的构造函数
@@ -893,7 +929,7 @@ struct Class : public Field
     bool hasConstructor() const
     {
         std::string sig = detail::makeSignature<Args...>();
-        return constructors.find(sig) != constructors.end();
+        return _constructors.find(sig) != _constructors.end();
     }
 
   public:
@@ -913,8 +949,8 @@ struct Class : public Field
     std::vector<size_t> getConstructorArgCounts() const
     {
         std::vector<size_t> counts;
-        counts.reserve(constructors.size());
-        for (const auto &[sig, ctor] : constructors) {
+        counts.reserve(_constructors.size());
+        for (const auto &[sig, ctor] : _constructors) {
             counts.push_back(ctor.argCount);
         }
         return counts;
@@ -924,8 +960,8 @@ struct Class : public Field
     std::vector<std::string> getConstructorSignatures() const
     {
         std::vector<std::string> sigs;
-        sigs.reserve(constructors.size());
-        for (const auto &[sig, _] : constructors) {
+        sigs.reserve(_constructors.size());
+        for (const auto &[sig, _] : _constructors) {
             sigs.push_back(sig);
         }
         return sigs;

@@ -13,27 +13,15 @@ namespace ya
 // 全局反射缓存（按 typeIndex 索引）
 static std::unordered_map<size_t, ReflectionCache> _reflectionCache;
 
-// ============================================================================
-// ReflectionCache Management
-// ============================================================================
-
-ReflectionCache* getOrCreateReflectionCache(type_index_t typeIndex)
+void refill(ReflectionCache& cache)
 {
-    YA_PROFILE_FUNCTION();
-    auto it = _reflectionCache.find(typeIndex);
-
-    if (it != _reflectionCache.end()) {
-        if (auto& cache = it->second; cache.isValid(typeIndex)) {
-            // TODO: check type properties changed
-            return &it->second;
-        }
-    }
-    ReflectionCache cache;
-    cache.typeIndex = typeIndex;
+    const type_index_t typeIndex = cache.typeIndex;
+    cache                        = ReflectionCache{};
+    cache.typeIndex              = typeIndex;
 
     if (Class* cls = ClassRegistry::instance().getClass(typeIndex)) {
         cache.classPtr      = cls;
-        cache.propertyCount = cls->properties.size();
+        cache.propertyCount = cls->properties().size();
     }
     else if (Enum* e = EnumRegistry::instance().getEnum(typeIndex)) {
         cache.bEnum = true;
@@ -64,17 +52,40 @@ ReflectionCache* getOrCreateReflectionCache(type_index_t typeIndex)
         };
     }
 
-    _reflectionCache[typeIndex] = cache;
-    auto ret                    = &_reflectionCache[typeIndex];
-
-    // cache properties
-    if (ret->classPtr) {
-        ret->classPtr->visitOwnProperties([&](const std::string& propName, const Property& prop) {
-            ret->propertyContexts[propName] = PropertyRenderContext::createFrom(ret, prop, propName);
+    if (cache.classPtr) {
+        cache.classPtr->visitOwnProperties([&](const std::string& propName, const Property& prop) {
+            cache.propertyContexts[propName] = PropertyRenderContext::createFrom(&cache, prop, propName);
         });
     }
+}
 
-    return ret;
+void watchRegistry()
+{
+    static const uint64_t listener = ClassRegistry::instance().addListener([](uint64_t) {
+        for (auto& [typeIndex, cache] : _reflectionCache) {
+            (void)typeIndex;
+            refill(cache);
+        }
+    });
+    (void)listener;
+}
+
+// ============================================================================
+// ReflectionCache Management
+// ============================================================================
+
+ReflectionCache* getOrCreateReflectionCache(type_index_t typeIndex)
+{
+    YA_PROFILE_FUNCTION();
+    watchRegistry();
+    auto it = _reflectionCache.find(typeIndex);
+    if (it != _reflectionCache.end() && it->second.isValid(typeIndex)) {
+        return &it->second;
+    }
+    ReflectionCache& cache = _reflectionCache[typeIndex];
+    cache.typeIndex        = typeIndex;
+    refill(cache);
+    return &cache;
 }
 
 

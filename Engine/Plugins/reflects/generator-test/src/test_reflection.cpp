@@ -92,11 +92,11 @@ TEST(ReflectorTest, IterateProperties)
     ASSERT_NE(personClass, nullptr);
 
     // 遍历所有属性
-    EXPECT_EQ(personClass->properties.size(), 3);
+    EXPECT_EQ(personClass->properties().size(), 3);
 
-    EXPECT_TRUE(personClass->properties.find("name") != personClass->properties.end());
-    EXPECT_TRUE(personClass->properties.find("age") != personClass->properties.end());
-    EXPECT_TRUE(personClass->properties.find("height") != personClass->properties.end());
+    EXPECT_TRUE(personClass->properties().find("name") != personClass->properties().end());
+    EXPECT_TRUE(personClass->properties().find("age") != personClass->properties().end());
+    EXPECT_TRUE(personClass->properties().find("height") != personClass->properties().end());
 }
 
 // ============================================================================

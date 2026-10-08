@@ -141,6 +141,7 @@ class TypeRegistry
 
     REFLECTS_CORE_API const TypeOps *find(type_index_t type) const;
     REFLECTS_CORE_API const TypeOps *findByName(std::string_view name) const;
+    REFLECTS_CORE_API void           unregisterType(type_index_t type);
 
     template <class F>
     void setFacet(type_index_t type, F facet);

@@ -144,7 +144,7 @@ TEST(ScriptNativeMethod, FirstRegistrationWins)
     ASSERT_NE(cls, nullptr);
 
     script::addMethod(type, "kept", script::fn([](FOrderProbe&, int value) { return value; }));
-    const std::vector<refl::ParamDesc> params = cls->functions.at("kept").args;
+    const std::vector<refl::ParamDesc> params = cls->functions().at("kept").args;
     ASSERT_EQ(params.size(), 1u);
     EXPECT_EQ(params[0].type, type_index_v<int>);
     EXPECT_FALSE(params[0].bRef);
@@ -155,15 +155,15 @@ TEST(ScriptNativeMethod, FirstRegistrationWins)
         cls->function("kept", &FOrderProbe::wider);
         EXPECT_GE(warns.count, 1);
     }
-    EXPECT_EQ(cls->functions.at("kept").args.size(), 1u);
-    EXPECT_EQ(cls->functions.at("kept").args[0].type, type_index_v<int>);
+    EXPECT_EQ(cls->functions().at("kept").args.size(), 1u);
+    EXPECT_EQ(cls->functions().at("kept").args[0].type, type_index_v<int>);
 
     // Reflection registered `echo` at startup. The later native injection keeps it.
     EXPECT_GE(probeSetup().rejectedEcho, 1);
     Class* probeClass = ClassRegistry::instance().getClass(type_index_v<FNativeProbe>);
     ASSERT_NE(probeClass, nullptr);
-    ASSERT_EQ(probeClass->functions.at("echo").args.size(), 1u);
-    EXPECT_EQ(probeClass->functions.at("echo").args[0].type, type_index_v<int>);
+    ASSERT_EQ(probeClass->functions().at("echo").args.size(), 1u);
+    EXPECT_EQ(probeClass->functions().at("echo").args[0].type, type_index_v<int>);
 }
 
 TEST(ScriptNativeMethod, ExportsNativeAndReflectedFromTheRegistry)
@@ -176,7 +176,7 @@ TEST(ScriptNativeMethod, ExportsNativeAndReflectedFromTheRegistry)
     bool sawEcho  = false;
     bool sawLabel = false;
     bool sawOwner = false;
-    for (const auto& [name, function] : cls->functions) {
+    for (const auto& [name, function] : cls->functions()) {
         if (name == "echo") {
             sawEcho = function.args.size() == 1 && function.args[0].type == type_index_v<int>;
         }
@@ -193,7 +193,7 @@ TEST(ScriptNativeMethod, ExportsNativeAndReflectedFromTheRegistry)
     EXPECT_TRUE(sawLabel);
     EXPECT_TRUE(sawOwner);
 
-    const Function& label = cls->functions.at("labelOf");
+    const Function& label = cls->functions().at("labelOf");
     refl::MetaValue boxed[] = {refl::MetaValue::make(std::string("id")), refl::MetaValue::make(4)};
     const refl::MetaValue labeledValue = label.invoker(&probeObject(), boxed);
     ASSERT_NE(labeledValue.tryGet<std::string>(), nullptr);
@@ -216,21 +216,21 @@ TEST(ScriptNativeMethod, ExportsNativeAndReflectedFromTheRegistry)
     const script::ScriptRef   ref        = probeRef();
     const script::ScriptValue echoArgs[] = {script::scriptMake(int64_t{2})};
     EXPECT_EQ(script::callMethod(ref, "echo", echoArgs), script::scriptMake(int64_t{3}));
-    auto echoInvoker = cls->functions.at("echo").invoker;
-    cls->functions.at("echo").invoker = [](void*, std::span<refl::MetaValue>) -> refl::MetaValue {
+    auto echoInvoker = cls->getFunction("echo")->invoker;
+    cls->getFunction("echo")->invoker = [](void*, std::span<refl::MetaValue>) -> refl::MetaValue {
         throw std::runtime_error("boxed invoker");
     };
     EXPECT_THROW(script::callMethod(ref, "echo", echoArgs), std::runtime_error);
-    cls->functions.at("echo").invoker = std::move(echoInvoker);
+    cls->getFunction("echo")->invoker = std::move(echoInvoker);
 
     // script::fn is an ordinary Function: callMethod goes through invoker.
-    auto labelInvoker = cls->functions.at("labelOf").invoker;
-    cls->functions.at("labelOf").invoker = [](void*, std::span<refl::MetaValue>) -> refl::MetaValue {
+    auto labelInvoker = cls->getFunction("labelOf")->invoker;
+    cls->getFunction("labelOf")->invoker = [](void*, std::span<refl::MetaValue>) -> refl::MetaValue {
         throw std::runtime_error("boxed invoker");
     };
     const script::ScriptValue labelArgs[] = {script::scriptMake(std::string("id")), script::scriptMake(int64_t{4})};
     EXPECT_THROW(script::callMethod(ref, "labelOf", labelArgs), std::runtime_error);
-    cls->functions.at("labelOf").invoker = std::move(labelInvoker);
+    cls->getFunction("labelOf")->invoker = std::move(labelInvoker);
 
     const script::ScriptValue ownerArgs[] = {script::scriptMake(script::ScriptSelfHandle{.runtimeId = 7}), script::scriptMake(int64_t{3})};
     EXPECT_EQ(script::callMethod(ref, "withOwner", ownerArgs), script::scriptMake(int64_t{10}));

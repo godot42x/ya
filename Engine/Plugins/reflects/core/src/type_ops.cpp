@@ -70,6 +70,16 @@ TypeOps &TypeRegistry::registerTypeRaw(TypeOps ops)
     }
 }
 
+void TypeRegistry::unregisterType(type_index_t type)
+{
+    const auto it = _byType.find(type);
+    if (it == _byType.end()) {
+        return;
+    }
+    _byName.erase(it->second->name);
+    _byType.erase(it);
+}
+
 const TypeOps *TypeRegistry::find(type_index_t type) const
 {
     const auto it = _byType.find(type);

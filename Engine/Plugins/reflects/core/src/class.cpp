@@ -1,6 +1,8 @@
 #include "class.h"
 #include "registry.h"
 
+#include <algorithm>
+
 namespace detail
 
 {
@@ -42,10 +44,10 @@ void accumulateMembers(const Class &cls, const std::vector<refl::type_index_t> &
         parentPath.push_back(parent);
         accumulateMembers(*parentClass, parentPath, out);
     }
-    for (const auto &[name, property] : cls.properties) {
+    for (const auto &[name, property] : cls.properties()) {
         assignMember(out.properties, out.propertyOrder, name, ResolvedProperty{&property, path});
     }
-    for (const auto &[name, function] : cls.functions) {
+    for (const auto &[name, function] : cls.functions()) {
         assignMember(out.functions, out.functionOrder, name, ResolvedFunction{&function, path});
     }
 }
@@ -59,11 +61,61 @@ ResolvedMembers Class::resolveMembers() const
     return out;
 }
 
+bool Class::dropOwnedBy(uint32_t moduleId)
+{
+    if (moduleId == 0) {
+        return false;
+    }
+    bool changed = false;
+    for (auto it = _functions.begin(); it != _functions.end();) {
+        if (it->second.moduleId == moduleId) {
+            it      = _functions.erase(it);
+            changed = true;
+        }
+        else {
+            ++it;
+        }
+    }
+    for (auto it = _properties.begin(); it != _properties.end();) {
+        if (it->second.moduleId == moduleId) {
+            it      = _properties.erase(it);
+            changed = true;
+        }
+        else {
+            ++it;
+        }
+    }
+    if (changed) {
+        std::erase_if(_propertyOrder, [&](const std::string &name) { return !_properties.contains(name); });
+    }
+    for (auto it = _constructors.begin(); it != _constructors.end();) {
+        if (it->second.moduleId == moduleId) {
+            it      = _constructors.erase(it);
+            changed = true;
+        }
+        else {
+            ++it;
+        }
+    }
+    return changed;
+}
+
+void Class::removeParent(refl::type_index_t parentTypeId)
+{
+    std::erase(parents, parentTypeId);
+    parentOffsets.erase(parentTypeId);
+    virtualParentConverters.erase(parentTypeId);
+}
+
 Function &Class::insertFunction(Function function)
 {
+    if (function.moduleId == 0) {
+        function.moduleId = refl::registrationModule();
+    }
     const std::string functionName = function.name;
-    const auto [it, inserted]      = functions.try_emplace(functionName, std::move(function));
+    const auto [it, inserted]      = _functions.try_emplace(functionName, std::move(function));
     if (inserted) {
+        refl::notifyRegistryChanged();
         return it->second;
     }
     if (const auto hook = ClassRegistry::instance().duplicateFunctionHook) {
