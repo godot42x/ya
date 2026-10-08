@@ -160,6 +160,22 @@ TEST(InvokeAbi, NumericConversionAndArity)
     EXPECT_THROW(probeClass()->invoke("takeNarrow", &probe, extra), std::runtime_error);
 }
 
+TEST(InvokeAbi, VariadicDoesNotEnforceArgCount)
+{
+    Function function;
+    function.name      = "takeRest";
+    function.type      = FunctionType::MemberFunction;
+    function.argCount  = 1;
+    function.bVariadic = true;
+    function.invoker   = [](void *, std::span<refl::MetaValue>) -> refl::MetaValue { return {}; };
+    probeClass()->insertFunction(std::move(function));
+
+    CallProbe       probe;
+    refl::MetaValue extra[] = {refl::MetaValue::make(int64_t{1}), refl::MetaValue::make(int64_t{2})};
+    EXPECT_NO_THROW(probeClass()->invoke("takeRest", &probe, extra));
+    EXPECT_NO_THROW(probeClass()->invoke("takeRest", &probe, std::span<refl::MetaValue>{}));
+}
+
 TEST(InvokeAbi, ConstructorWithArguments)
 {
     void *raw = probeClass()->createInstance(42);

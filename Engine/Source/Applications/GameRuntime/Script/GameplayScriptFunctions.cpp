@@ -20,6 +20,7 @@
 #include "Scene3D/Node3D.h"
 #include "Scene3D/TransformComponent.h"
 #include "Script/Lua/LuaBackend.h"
+#include "WidgetScriptRefs.h"
 
 #include <cmath>
 #include <format>
@@ -87,12 +88,11 @@ ScriptValue viewSize(const GameplayScriptContext& ctx, ScriptArgs args)
 /// linearly until a real map needs an index (D-T4), and each candidate asks
 /// the map's own worldToCell, so actor and movement share one cell
 /// definition.
-ScriptValue entityAtCell(void* self, const ScriptRef&, ScriptArgs args)
+ScriptValue entityAtCell(const TilemapComponent& map, ScriptArgs args)
 {
     if (args.size() != 2 && args.size() != 3) {
         throw ScriptError("expects entityAt(x, y) or entityAt(x, y, except)");
     }
-    auto&   map   = *static_cast<TilemapComponent*>(self);
     Entity* owner = map.getOwner();
     Scene*  scene = owner ? owner->getScene() : nullptr;
     if (!scene || !map.isValid()) {
@@ -349,15 +349,27 @@ void placePlayerAtSpawn(Scene& scene, const std::string& spawnName, const std::s
     actorTransform->setPosition({spawn.x, spawn.y, current.z});
 }
 
+void registerRuntimeScriptNatives()
+{
+    static bool once = false;
+    if (once) {
+        return;
+    }
+    once = true;
+
+    registerWidgetNativeMethods();
+    TilemapComponent::__ensure_reflection_registered();
+    script::addMethod(type_index_v<TilemapComponent>,
+                      "entityAt",
+                      script::fnVariadic<const TilemapComponent&, int64_t, int64_t, script::ScriptRef>(&entityAtCell));
+    registerEntityScriptCall();
+}
+
 void registerGameplayScriptFunctions(GameplayScriptContext ctx)
 {
+    registerRuntimeScriptNatives();
     script::registerModuleFunction("world", "find", [ctx](ScriptArgs args) { return find(ctx, args); });
     script::registerModuleFunction("world", "viewSize", [ctx](ScriptArgs args) { return viewSize(ctx, args); });
-    // A native method on the map component rather than a world function: the
-    // cell questions (worldToCell / isSolid / bounds) all live on the map, so
-    // "who is in this cell" is asked of the map too. It does not close over
-    // `ctx`; the first registration wins once the type export is built.
-    script::addNativeMethod(type_index_v<TilemapComponent>, "entityAt", &entityAtCell);
     script::registerModuleFunction("world", "loadScene", [ctx](ScriptArgs args) -> ScriptValue {
         if (args.empty() || args.size() > 3) {
             throw ScriptError("expects loadScene(path), loadScene(path, spawnName), or loadScene(path, spawnName, actorName)");

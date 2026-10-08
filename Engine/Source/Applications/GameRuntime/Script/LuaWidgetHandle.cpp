@@ -1,6 +1,7 @@
 #include "LuaWidgetHandle.h"
 
 #include "WidgetScriptRefs.h"
+#include "GameRuntime/Script/GameplayScriptFunctions.h"
 
 #include "Core/Delegate.h"
 #include "Core/Log.h"
@@ -39,6 +40,15 @@ UIElement* requireLive(void* self, const script::ScriptRef& ref, const char* ope
         return widget;
     }
     warnWidgetGone(ref.a != 0 ? ref.a : (widget ? widget->getRuntimeId() : 0), operation);
+    return nullptr;
+}
+
+UIElement* requireLive(UIElement& widget, const char* operation)
+{
+    if (widgetLive(&widget)) {
+        return &widget;
+    }
+    warnWidgetGone(widget.getRuntimeId(), operation);
     return nullptr;
 }
 
@@ -84,19 +94,19 @@ script::ScriptNativeField visibleField()
     };
 }
 
-UIButton* liveButton(const script::ScriptRef& ref)
+UIButton* liveButton(uint64_t runtimeId)
 {
-    auto* button = dynamic_cast<UIButton*>(resolveWidget(ref.a));
+    auto* button = dynamic_cast<UIButton*>(resolveWidget(runtimeId));
     if (!button || !widgetLive(button)) {
-        warnWidgetGone(ref.a, "onClicked");
+        warnWidgetGone(runtimeId, "onClicked");
         return nullptr;
     }
     return button;
 }
 
-script::ScriptValue addClicked(void* /*self*/, const script::ScriptRef& ref, script::ScriptArgs args)
+script::ScriptValue addClicked(WidgetScriptButtonClicked& event, script::ScriptArgs args)
 {
-    UIButton* button = liveButton(ref);
+    UIButton* button = liveButton(event.widgetRuntimeId);
     if (!button) {
         return script::scriptMake(int64_t{0});
     }
@@ -130,9 +140,9 @@ script::ScriptValue addClicked(void* /*self*/, const script::ScriptRef& ref, scr
     return script::scriptMake(static_cast<int64_t>(handle));
 }
 
-script::ScriptValue removeClicked(void* /*self*/, const script::ScriptRef& ref, script::ScriptArgs args)
+script::ScriptValue removeClicked(WidgetScriptButtonClicked& event, script::ScriptArgs args)
 {
-    UIButton* button = liveButton(ref);
+    UIButton* button = liveButton(event.widgetRuntimeId);
     if (!button || args.empty()) {
         return script::scriptMake(false);
     }
@@ -143,9 +153,9 @@ script::ScriptValue removeClicked(void* /*self*/, const script::ScriptRef& ref, 
     return script::scriptMake(button->onClicked.remove(static_cast<DelegateHandle>(handle)));
 }
 
-script::ScriptValue removeAllClicked(void* /*self*/, const script::ScriptRef& ref, script::ScriptArgs args)
+script::ScriptValue removeAllClicked(WidgetScriptButtonClicked& event, script::ScriptArgs args)
 {
-    UIButton* button = liveButton(ref);
+    UIButton* button = liveButton(event.widgetRuntimeId);
     const auto* owner = !args.empty() ? script::scriptIf<script::ScriptSelfHandle>(args[0]) : nullptr;
     if (!button || !owner || owner->runtimeId == 0) {
         return script::scriptMake(int64_t{0});
@@ -185,23 +195,83 @@ script::ScriptRef widgetScriptRef(GameUIHost& host, const UIElementRef& widget)
     };
 }
 
+void registerWidgetNativeMethods()
+{
+    UIElement::__ensure_reflection_registered();
+    ensureWidgetScriptObjectsReflected();
+
+    const type_index_t element = type_index_v<UIElement>;
+    const type_index_t timer   = type_index_v<WidgetScriptTimer>;
+    const type_index_t clicked = type_index_v<WidgetScriptButtonClicked>;
+
+    script::setScriptTypeName(element, "Widget");
+    script::setScriptTypeName(timer, "UITimer");
+    script::setScriptTypeName(clicked, "Event");
+
+    script::addMethod(element, "find", script::fnVariadic<UIElement&, std::string>([](UIElement& widget, script::ScriptArgs args) -> script::ScriptValue {
+        UIElement* live = requireLive(widget, "find");
+        GameUIHost* host = live ? widgetHost(live->getRuntimeId()) : nullptr;
+        if (!live || !host || args.empty()) {
+            return {};
+        }
+        const std::string name = script::scriptToString(args[0]);
+        UIElement* found = nullptr;
+        if (!live->isAttached()) {
+            found = findInSubtree(*live, name);
+        }
+        else if (UIElement* root = host->entryRootOf(*live)) {
+            found = host->findInEntry(*root, name).get();
+        }
+        return found ? widgetValue(*host, found->shared_from_this()) : script::ScriptValue{};
+    }));
+    script::addMethod(element, "destroy", script::fn([](UIElement& widget) {
+        if (UIElement* live = requireLive(widget, "destroy")) {
+            if (GameUIHost* host = widgetHost(live->getRuntimeId())) {
+                host->queueDestroy(*live);
+            }
+        }
+    }));
+    script::addMethod(element, "layout", script::fn([](UIElement& widget) {
+        if (UIElement* live = requireLive(widget, "layout")) {
+            if (GameUIHost* host = widgetHost(live->getRuntimeId())) {
+                host->layoutNow();
+            }
+        }
+    }));
+    script::addMethod(element, "rect", script::fn([](UIElement& widget) -> script::ScriptValue {
+        UIElement* live = requireLive(widget, "rect");
+        if (!live) {
+            return {};
+        }
+        const Rect2D& rect = live->getLayoutRect();
+        return script::scriptMake(script::ScriptRect{
+            .x = rect.pos.x,
+            .y = rect.pos.y,
+            .w = rect.extent.x,
+            .h = rect.extent.y,
+        });
+    }));
+    script::addMethod(timer, "cancel", script::fn([](WidgetScriptTimer& timer) { cancelWidgetTimer(timer); }));
+    script::addMethod(clicked, "add", script::fnVariadic<WidgetScriptButtonClicked&, script::ScriptSelfHandle, script::ScriptFnHandle>(&addClicked));
+    script::addMethod(clicked, "remove", script::fnVariadic<WidgetScriptButtonClicked&, int64_t>(&removeClicked));
+    script::addMethod(clicked, "removeAll", script::fnVariadic<WidgetScriptButtonClicked&, script::ScriptSelfHandle>(&removeAllClicked));
+}
+
 void registerWidgetScriptSurface()
 {
+    registerRuntimeScriptNatives();
+
     const type_index_t element = type_index_v<UIElement>;
     const type_index_t text    = type_index_v<UIText>;
     const type_index_t button  = type_index_v<UIButton>;
     const type_index_t image   = type_index_v<UIImage>;
     const type_index_t border  = type_index_v<UIBorder>;
-    const type_index_t timer   = type_index_v<WidgetScriptTimerTag>;
-    const type_index_t clicked = type_index_v<WidgetScriptButtonClickedTag>;
 
     script::setScriptTypeName(element, "Widget");
     script::setScriptTypeName(text, "Text");
     script::setScriptTypeName(button, "Button");
     script::setScriptTypeName(image, "Image");
     script::setScriptTypeName(border, "Border");
-    script::setScriptTypeName(timer, "UITimer");
-    script::setScriptTypeName(clicked, "Event");
 
     script::addNativeField(element, "valid", script::ScriptNativeField{
         .read = [](void* self, const script::ScriptRef&) -> script::ScriptValue {
@@ -210,51 +280,6 @@ void registerWidgetScriptSurface()
     });
     script::addNativeField(element, "name", nameField());
     script::addNativeField(element, "visible", visibleField());
-    script::addNativeMethod(element, "find", [](void* self, const script::ScriptRef& ref, script::ScriptArgs args) -> script::ScriptValue {
-        UIElement* widget = requireLive(self, ref, "find");
-        GameUIHost* host = widget ? widgetHost(widget->getRuntimeId()) : nullptr;
-        if (!widget || !host || args.empty()) {
-            return {};
-        }
-        const std::string name = script::scriptToString(args[0]);
-        UIElement* found = nullptr;
-        if (!widget->isAttached()) {
-            found = findInSubtree(*widget, name);
-        }
-        else if (UIElement* root = host->entryRootOf(*widget)) {
-            found = host->findInEntry(*root, name).get();
-        }
-        return found ? widgetValue(*host, found->shared_from_this()) : script::ScriptValue{};
-    });
-    script::addNativeMethod(element, "destroy", [](void* self, const script::ScriptRef& ref, script::ScriptArgs) -> script::ScriptValue {
-        if (UIElement* widget = requireLive(self, ref, "destroy")) {
-            if (GameUIHost* host = widgetHost(widget->getRuntimeId())) {
-                host->queueDestroy(*widget);
-            }
-        }
-        return {};
-    });
-    script::addNativeMethod(element, "layout", [](void* self, const script::ScriptRef& ref, script::ScriptArgs) -> script::ScriptValue {
-        if (UIElement* widget = requireLive(self, ref, "layout")) {
-            if (GameUIHost* host = widgetHost(widget->getRuntimeId())) {
-                host->layoutNow();
-            }
-        }
-        return {};
-    });
-    script::addNativeMethod(element, "rect", [](void* self, const script::ScriptRef& ref, script::ScriptArgs) -> script::ScriptValue {
-        UIElement* widget = requireLive(self, ref, "rect");
-        if (!widget) {
-            return {};
-        }
-        const Rect2D& rect = widget->getLayoutRect();
-        return script::scriptMake(script::ScriptRect{
-            .x = rect.pos.x,
-            .y = rect.pos.y,
-            .w = rect.extent.x,
-            .h = rect.extent.y,
-        });
-    });
 
     script::addScriptBase(text, element);
     script::addScriptBase(button, element);
@@ -344,17 +369,6 @@ void registerWidgetScriptSurface()
             }
         },
     });
-
-    script::addNativeMethod(timer, "cancel", [](void*, const script::ScriptRef& ref, script::ScriptArgs) -> script::ScriptValue {
-        cancelWidgetTimer(ref);
-        return {};
-    });
-    script::addNativeMethod(clicked,
-                            "add",
-                            &addClicked,
-                            {type_index_v<script::ScriptSelfHandle>, type_index_v<script::ScriptFnHandle>});
-    script::addNativeMethod(clicked, "remove", &removeClicked);
-    script::addNativeMethod(clicked, "removeAll", &removeAllClicked, {type_index_v<script::ScriptSelfHandle>});
 }
 
 } // namespace ya

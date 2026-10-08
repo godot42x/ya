@@ -79,6 +79,12 @@ struct GameplayPresentedView
 /// from its owning scene.
 YA_GAME_RUNTIME_API void registerGameplayScriptFunctions(GameplayScriptContext ctx = {});
 
+/// Widget methods, `TilemapComponent::entityAt`, and `Entity::call`.
+/// Idempotent. `registerGameplayScriptFunctions` calls this first; the widget
+/// surface and Lua init call the pieces they can see so a test that never
+/// builds an App still exports them before the type's first use.
+YA_GAME_RUNTIME_API void registerRuntimeScriptNatives();
+
 /// Places the entity named `actorName` on the spawn marker named `spawnName`
 /// (a Node3D at scene root; only its position is taken). z stays the actor's.
 /// A missing marker, an empty `actorName`, or a missing entity logs a warning

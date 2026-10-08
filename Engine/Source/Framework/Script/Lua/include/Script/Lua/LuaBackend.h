@@ -50,6 +50,10 @@ YA_SCRIPT_LUA_API void attachInputSetKeyHandler(IWorldScriptRuntime& runtime);
                                                                           Entity&              entity,
                                                                           std::string_view     path);
 
+/// `entity:call(name, ...)`. Idempotent: the first registration wins, a later
+/// call does not warn. The body is `callEntityScript`.
+YA_SCRIPT_LUA_API void registerEntityScriptCall();
+
 /// Call a held function with no `self` and return its first value. Errors are
 /// logged and come back empty. `IScriptCallbacks::invoke` drops the return;
 /// the key handler needs the bool.

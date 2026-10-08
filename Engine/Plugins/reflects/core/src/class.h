@@ -523,7 +523,7 @@ struct Class : public Field
 
         Function &f = it->second;
 
-        if (args.size() != f.argCount) {
+        if (!f.bVariadic && args.size() != f.argCount) {
             throw std::runtime_error("Argument count mismatch for function: " + inName);
         }
 
@@ -555,7 +555,7 @@ struct Class : public Field
             throw std::runtime_error("Function is not static: " + inName);
         }
 
-        if (args.size() != f.argCount) {
+        if (!f.bVariadic && args.size() != f.argCount) {
             throw std::runtime_error("Argument count mismatch for function: " + inName);
         }
 

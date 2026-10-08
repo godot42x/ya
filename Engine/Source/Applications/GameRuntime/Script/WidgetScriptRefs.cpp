@@ -1,6 +1,7 @@
 #include "WidgetScriptRefs.h"
 
 #include "Core/Log.h"
+#include "Core/Reflection/Reflection.h"
 #include "Core/Scripting/ScriptBindings.h"
 #include "Core/TypeIndex.h"
 #include "GUI/Widgets/UIElement.h"
@@ -8,6 +9,12 @@
 
 #include <unordered_map>
 #include <unordered_set>
+
+YA_REFLECT_BEGIN_EXTERNAL(ya::WidgetScriptTimer)
+YA_REFLECT_END_EXTERNAL()
+
+YA_REFLECT_BEGIN_EXTERNAL(ya::WidgetScriptButtonClicked)
+YA_REFLECT_END_EXTERNAL()
 
 namespace ya
 {
@@ -28,10 +35,10 @@ struct TimerSlot
 
 std::unordered_map<uint64_t, WidgetSlot> gWidgets;
 std::unordered_map<uint64_t, TimerSlot>  gTimers;
+std::unordered_map<uint64_t, std::unique_ptr<WidgetScriptTimer>>          gTimerObjects;
+std::unordered_map<uint64_t, std::unique_ptr<WidgetScriptButtonClicked>>  gClickedObjects;
 std::unordered_set<uint64_t>             gWarned;
 uint64_t                                 gNextTimer = 1;
-char                                     gTimerSentinel = 0;
-char                                     gEventSentinel = 0;
 
 struct WidgetRefIds
 {
@@ -52,14 +59,16 @@ const WidgetRefIds& ids()
         out.timer = script::registerRefKind(script::ScriptRefKind{
             .name         = "timer",
             .resolve      = [](const script::ScriptRef& ref) -> void* {
-                return gTimers.contains(ref.a) ? &gTimerSentinel : nullptr;
+                const auto it = gTimerObjects.find(ref.a);
+                return it == gTimerObjects.end() ? nullptr : it->second.get();
             },
             .missingIsNil = true,
         });
         out.clicked = script::registerRefKind(script::ScriptRefKind{
             .name    = "event",
             .resolve = [](const script::ScriptRef& ref) -> void* {
-                return ref.a != 0 ? &gEventSentinel : nullptr;
+                const auto it = gClickedObjects.find(ref.a);
+                return it == gClickedObjects.end() ? nullptr : it->second.get();
             },
         });
         registerWidgetScriptSurface();
@@ -69,6 +78,12 @@ const WidgetRefIds& ids()
 }
 
 } // namespace
+
+void ensureWidgetScriptObjectsReflected()
+{
+    ya::reflection::detail::ExternalReflect<WidgetScriptTimer>::__ensure_reflection_registered();
+    ya::reflection::detail::ExternalReflect<WidgetScriptButtonClicked>::__ensure_reflection_registered();
+}
 
 void trackWidget(GameUIHost& host, const std::shared_ptr<UIElement>& widget)
 {
@@ -123,9 +138,12 @@ uint32_t widgetRefKind()
 script::ScriptRef makeWidgetTimerRef(GameUIHost& host, uint64_t timerId)
 {
     const uint64_t token = gNextTimer++;
+    auto           object = std::make_unique<WidgetScriptTimer>();
+    object->token         = token;
+    gTimerObjects.insert_or_assign(token, std::move(object));
     gTimers.insert_or_assign(token, TimerSlot{.host = &host, .hostTimerId = timerId});
     return script::ScriptRef{
-        .type = type_index_v<WidgetScriptTimerTag>,
+        .type = type_index_v<WidgetScriptTimer>,
         .kind = ids().timer,
         .a    = token,
         .b    = 0,
@@ -134,24 +152,30 @@ script::ScriptRef makeWidgetTimerRef(GameUIHost& host, uint64_t timerId)
 
 script::ScriptRef makeButtonClickedRef(uint64_t widgetRuntimeId)
 {
+    if (widgetRuntimeId != 0 && !gClickedObjects.contains(widgetRuntimeId)) {
+        auto object               = std::make_unique<WidgetScriptButtonClicked>();
+        object->widgetRuntimeId  = widgetRuntimeId;
+        gClickedObjects.emplace(widgetRuntimeId, std::move(object));
+    }
     return script::ScriptRef{
-        .type = type_index_v<WidgetScriptButtonClickedTag>,
+        .type = type_index_v<WidgetScriptButtonClicked>,
         .kind = ids().clicked,
         .a    = widgetRuntimeId,
         .b    = 0,
     };
 }
 
-void cancelWidgetTimer(const script::ScriptRef& ref)
+void cancelWidgetTimer(const WidgetScriptTimer& timer)
 {
-    const auto it = gTimers.find(ref.a);
-    if (it == gTimers.end()) {
-        return;
+    const uint64_t token = timer.token;
+    const auto     it    = gTimers.find(token);
+    if (it != gTimers.end()) {
+        if (it->second.host) {
+            it->second.host->cancelTimer(it->second.hostTimerId);
+        }
+        gTimers.erase(it);
     }
-    if (it->second.host) {
-        it->second.host->cancelTimer(it->second.hostTimerId);
-    }
-    gTimers.erase(it);
+    gTimerObjects.erase(token);
 }
 
 } // namespace ya

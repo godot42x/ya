@@ -377,3 +377,35 @@ debug，100000 次，3 次，ns/op。对照 RR0。
 - `reflects-generator-test` 1/11，通过的仍是 `ReflectorTest.GetNonExistentClass`。
 - 冒烟退出码都是 0，日志没有 `[Error]`：`walk_one_cell.py` 走过一格 `(0.5, 0.5) -> (1.5, 0.5)`；GreedySnake `--exit-after-frame=90` 在 90 帧退出。
 - RR5b 的 Windows 验证仍未跑。RR6 本身不是 Windows 验证点。
+
+## 2026-10-09 — RR8 脚本 native 迁到 Function，删除 addNativeMethod
+
+9 个 `addNativeMethod`（Widget `find` / `destroy` / `layout` / `rect`、timer `cancel`、clicked `add` / `remove` / `removeAll`、`TilemapComponent::entityAt`、`Entity::call`）改走 `script::addMethod`。固定签名用 `script::fn`，变参（空参软失败、可选第三参、`call` 的剩余实参）用 `script::fnVariadic`：声明的前缀仍是 Lua 的 `methodArgumentType`，多出来的实参按已经建成的 MetaValue 原样转发，不再二次 `boxValue`，所以 `add(nil, fn)` 仍返回 0。`Function::bVariadic` 让 `Class::invoke` 不再卡实参个数。
+
+`entityAt` 的接收者是 `const TilemapComponent&`，查询不会走组件的 `afterCall`。timer / clicked 不再用哨兵指针：`unique_ptr` 槽里的对象地址稳定，id 在对象上，`script::fn` 只拿到 `void* self`。`YA_REFLECT_BEGIN_EXTERNAL` 给这两个类型一个 Class，`addMethod` 才能登记。
+
+`registerRuntimeScriptNatives()` 是 GameRuntime 的集中清单，`registerGameplayScriptFunctions` 开头调用。Widget surface 和 Lua `init` 再保证各自那一段，测试不建 App 也能在首次导出前登记。字符串注册只剩 `ScriptMethodResolver`（实体 `getX` / `hasX`）。`ScriptNativeFn` 留着给这条路径。
+
+没改序列化，没重存场景。生成器仍休眠。
+
+### 微基准
+
+debug，100000 次，1 次，ns/op。对照 RR5b 中位数。这条路径测的是已有的 `FBench:bump`，不是 `Entity:call`。`callMethod` 只在 `bVariadic` 时改了装箱。
+
+| | RR5b 中位数 | RR8 |
+| --- | --- | --- |
+| `lua_native_ns` | 795.5 | 777.0 |
+| `lua_property_ns` | 584.7 | 576.9 |
+| `invoker_ns` | 65.1 | 63.5 |
+| `accessor_ns` | 33.4 | 31.4 |
+
+相对 RR0 的 `lua_native` 757.4，这一次是 +2.6%，在 5% 以内。
+
+### 验证
+
+- `ya-testing` 1759/1759，4 个 `DISABLED_`。新增 `ScriptRuntimeNative.RegistryListsMigratedMethods`。同一次进程里还链进了工作区里与本 checkpoint 无关的未提交测试，通过数含它们。
+- 滤镜：`ScriptRuntimeNative.*`、`ScriptNativeMethod.*`、`GameUIScript*`、`TilemapEntityQuery*`、`LuaEntityScriptCall*`，31/31。
+- `reflects-core-test` 74/74（基线 73，新增 `InvokeAbi.VariadicDoesNotEnforceArgCount`）。
+- `reflects-generator-test` 1/11，通过的仍是 `ReflectorTest.GetNonExistentClass`。
+- 冒烟退出码都是 0，日志没有 `[Error]`：`walk_one_cell.py` 走过一格 `(0.5, 0.5) -> (1.5, 0.5)`；GreedySnake `--exit-after-frame=90` 在 90 帧退出。
+- RR5b 和 RR8 的 Windows 验证都还没跑。RR8 不能算 Windows 完成。

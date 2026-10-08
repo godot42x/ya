@@ -50,7 +50,7 @@ struct ScriptRefKind
     /// Runs after a script wrote a field of the resolved object.
     std::function<void(const ScriptRef&, void*)> afterWrite;
     /// Runs after a script called a non-const method on the resolved object.
-    /// Const methods and native methods do not reach it.
+    /// Const methods and resolver natives do not reach it.
     std::function<void(const ScriptRef&, void*)> afterCall;
     /// True: a missing object reads as nil and ignores writes and calls,
     /// instead of throwing ScriptError. Entity kinds leave this false.
@@ -83,19 +83,6 @@ struct ScriptMethod;
 
 /// Returns the kind id put into references of this provider (never 0).
 YA_CORE_API uint32_t registerRefKind(ScriptRefKind kind);
-/// A native method registered before export keeps its name: at export,
-/// reflected methods do not overwrite it. After export, the first
-/// registration of a name wins; a later one neither replaces the function
-/// nor patches its signature.
-/// `argTypes` is the script-facing signature. Empty means every argument must
-/// convert on its own. A `ScriptSelfHandle` parameter is an owner/self slot.
-/// Prefer `addMethod` + `fn` for new registrations. This entry stays until the
-/// remaining call sites move.
-YA_CORE_API void     addNativeMethod(type_index_t type,
-                                      std::string name,
-                                      ScriptNativeFn fn,
-                                      std::vector<type_index_t> argTypes = {});
-
 /// No `ScriptSelfHandle` parameter.
 inline constexpr std::size_t kNoOwnerSlot = static_cast<std::size_t>(-1);
 
@@ -132,7 +119,11 @@ struct NativeMethod
     refl::ParamDesc                                                      ret;
     std::string                                                          returnTypeName;
     std::size_t                                                          ownerSlot = kNoOwnerSlot;
-    bool                                                                 bConst = false;
+    bool                                                                 bConst    = false;
+    /// Declared `args` are a prefix. Further arguments are forwarded as
+    /// already-built MetaValues; `callMethod` does not box them again and
+    /// does not enforce `args.size()`.
+    bool                                                                 bVariadic = false;
     std::function<refl::MetaValue(void*, std::span<refl::MetaValue>)>    invoker;
 };
 
@@ -148,9 +139,18 @@ template <typename F>
     requires requires { &std::remove_cvref_t<F>::operator(); }
 [[nodiscard]] NativeMethod fn(F&& functor);
 
+/// Variadic native. `Prefix` is the declared signature Lua converts against;
+/// the body sees every argument, including ones past that prefix, as the
+/// MetaValues the language backend already built. `Receiver` is the C++
+/// object (`const TilemapComponent&`, `Entity&`).
+template <typename Receiver, typename... Prefix, typename F>
+[[nodiscard]] NativeMethod fnVariadic(F&& functor);
+
 /// Inject `method` into `ClassRegistry::functions` (first name wins; a later
 /// reflected registration does not replace it). The method is an ordinary
-/// Function whose invoker speaks MetaValue. Must run before the type's first export.
+/// Function whose invoker speaks MetaValue. Before the type's first export,
+/// `collectMembers` publishes it. After export, a free name is published
+/// immediately; a taken name keeps the first registration.
 YA_CORE_API void addMethod(type_index_t type, std::string name, NativeMethod method);
 /// A native field hides a reflected field of the same name. The existing
 /// entry is updated in place, so a handle already handed to a backend stays
@@ -176,8 +176,9 @@ YA_CORE_API void forEachModuleFunction(const std::function<void(const ScriptModu
 [[nodiscard]] YA_CORE_API const ScriptField*  findField(type_index_t type, std::string_view name);
 [[nodiscard]] YA_CORE_API const ScriptMethod* findMethod(type_index_t type, std::string_view name);
 /// Declared parameter type at `index`, or 0 when the method does not declare
-/// one (native method registered without a signature, or past the last
-/// parameter). Reflected methods report their reflected signature.
+/// one (a resolver answer, or past the last declared parameter). Reflected
+/// methods and `script::fn` report their reflected signature. A variadic
+/// method's declared prefix stops here; further arguments convert on their own.
 [[nodiscard]] YA_CORE_API type_index_t        methodArgumentType(const ScriptMethod& method, size_t index);
 
 /// Null when the object is gone or the reference is empty.
@@ -280,6 +281,12 @@ template <typename F>
 NativeMethod fn(F&& functor)
 {
     return detail::bindFunctor(std::forward<F>(functor), &std::remove_cvref_t<F>::operator());
+}
+
+template <typename Receiver, typename... Prefix, typename F>
+NativeMethod fnVariadic(F&& functor)
+{
+    return detail::bindVariadic<Receiver, Prefix...>(std::forward<F>(functor));
 }
 
 } // namespace ya::script

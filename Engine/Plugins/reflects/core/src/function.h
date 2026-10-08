@@ -318,6 +318,9 @@ struct Function : public Field
     std::function<refl::MetaValue(void *, std::span<refl::MetaValue>)> invoker;
 
     size_t                   argCount = 0;
+    /// Declared `args` are the required prefix. Further arguments are forwarded
+    /// as already-built MetaValues; `invoke` does not enforce `argCount`.
+    bool                     bVariadic = false;
     std::vector<std::string> argTypeNames;
     std::string              returnTypeName;
     // 与 invoker 的 args 一一对应。void 返回的 ret.type 为 0。

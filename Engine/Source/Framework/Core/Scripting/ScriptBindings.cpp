@@ -327,16 +327,13 @@ struct ScriptField
 };
 
 /// Exported method. `function` is the ClassRegistry entry; script calls go
-/// through its MetaValue invoker. `native` is only the string-registered
-/// addNativeMethod path, which has no Function entry.
+/// through its MetaValue invoker. `native` is only a `ScriptMethodResolver`
+/// answer, which has no Function entry.
 struct ScriptMethod
 {
     std::string               name;
     const Function*           function = nullptr;
     std::vector<type_index_t> ownerPath;
-    /// Script-facing parameter types of an addNativeMethod registration.
-    /// Reflected methods and script::fn use `function->args` instead.
-    std::vector<type_index_t> argTypes;
     ScriptNativeFn            native;
 };
 
@@ -450,8 +447,7 @@ void collectMembers(const Class& cls, TypeExport& out)
             continue;
         }
         std::string name = scriptNameOf(functionName);
-        // addNativeMethod still occupies the name before export. Registry
-        // natives and reflected methods share the path below.
+        // A resolver answer stored on this name has no Function. Keep it.
         if (const auto existing = out.methods.find(name); existing != out.methods.end() && !existing->second.function) {
             continue;
         }
@@ -583,8 +579,10 @@ void addMethod(type_index_t type, std::string name, NativeMethod method)
         return;
     }
     TypeExport& entry = state().types[type];
-    if (entry.bBuilt) {
-        YA_CORE_WARN("script method '{}::{}' registered after the type was exported; ignored", cls->name, name);
+    if (cls->functions.contains(name)) {
+        Function rejected;
+        rejected.name = name;
+        cls->insertFunction(std::move(rejected));
         return;
     }
 
@@ -592,27 +590,16 @@ void addMethod(type_index_t type, std::string name, NativeMethod method)
     function.name           = name;
     function.type           = method.bConst ? FunctionType::ConstMemberFunction : FunctionType::MemberFunction;
     function.argCount       = method.args.size();
+    function.bVariadic      = method.bVariadic;
     function.argTypeNames   = std::move(method.argTypeNames);
     function.returnTypeName = std::move(method.returnTypeName);
     function.ret            = method.ret;
     function.args           = std::move(method.args);
     function.invoker        = std::move(method.invoker);
     cls->insertFunction(std::move(function));
-}
-
-void addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn, std::vector<type_index_t> argTypes)
-{
-    TypeExport&  entry  = state().types[type];
-    ScriptMethod method = {.name = name, .argTypes = std::move(argTypes), .native = std::move(fn)};
     if (entry.bBuilt) {
-        // Already exported: the first registration wins.
-        entry.methods.try_emplace(name, std::move(method));
-    }
-    else {
-        // Pre-export: a later registration replaces an earlier one of the
-        // same name. At export, collectMembers keeps an already-registered
-        // native; a reflected method does not overwrite it.
-        entry.methods.insert_or_assign(std::move(name), std::move(method));
+        const Function* stored = &cls->functions.at(name);
+        entry.methods.try_emplace(name, ScriptMethod{.name = name, .function = stored});
     }
 }
 
@@ -689,11 +676,11 @@ const ScriptField* findField(type_index_t type, std::string_view name)
 
 type_index_t methodArgumentType(const ScriptMethod& method, size_t index)
 {
-    if (method.function) {
-        const auto& types = method.function->args;
-        return index < types.size() ? types[index].type : type_index_t{0};
+    if (!method.function) {
+        return {};
     }
-    return index < method.argTypes.size() ? method.argTypes[index] : type_index_t{0};
+    const auto& types = method.function->args;
+    return index < types.size() ? types[index].type : type_index_t{0};
 }
 
 const ScriptMethod* findMethod(type_index_t type, std::string_view name)
@@ -794,18 +781,15 @@ ScriptValue callMethod(const ScriptRef& ref, const ScriptMethod& method, ScriptA
         warnMissingOnce(ref);
         return {};
     }
-    // Native trampoline wins when both call conventions are present, so a
-    // script call does not box through Function::invoker. A registry native
-    // has the same ownerPath as a reflected method, so the receiver gets the
-    // same parent-offset adjustment; old-API natives registered without a
-    // Function entry keep the raw resolved object (their bodies downcast).
+    // Resolver answers have no Function. They keep the raw resolved object
+    // and do not run afterCall.
     if (method.native || !method.function) {
         void* object = resolve(ref);
         void* self   = method.function ? toOwner(object, ref.type, method.ownerPath) : object;
         return method.native(self, ref, args);
     }
     const Function& function = *method.function;
-    if (args.size() != function.args.size()) {
+    if (!function.bVariadic && args.size() != function.args.size()) {
         throw ScriptError(std::format("{}() expects {} argument(s), got {}", method.name, function.args.size(), args.size()));
     }
     // Construct only the arguments this call uses. A fixed 8-slot array
@@ -824,14 +808,18 @@ ScriptValue callMethod(const ScriptRef& ref, const ScriptMethod& method, ScriptA
         if (args.size() > kInlineArgs) {
             heapArgs.reserve(args.size());
             for (size_t index = 0; index < args.size(); ++index) {
-                heapArgs.push_back(boxValue(function.args[index].type, args[index]));
+                // Variadic arguments are already MetaValues from the language
+                // backend. Boxing again would reject a nil owner slot.
+                heapArgs.push_back(function.bVariadic ? refl::MetaValue(args[index])
+                                                      : boxValue(function.args[index].type, args[index]));
             }
             slots = heapArgs.data();
         }
         else if (!args.empty()) {
             slots = reinterpret_cast<refl::MetaValue*>(inlineStorage);
             for (size_t index = 0; index < args.size(); ++index) {
-                new (slots + index) refl::MetaValue(boxValue(function.args[index].type, args[index]));
+                new (slots + index) refl::MetaValue(function.bVariadic ? refl::MetaValue(args[index])
+                                                                       : boxValue(function.args[index].type, args[index]));
                 built = index + 1;
             }
         }
@@ -859,7 +847,7 @@ ScriptValue callMethod(const ScriptRef& ref, const ScriptMethod& method, ScriptA
         destroyInline();
     }
     // Const is the reflected member-pointer kind (Function::isConst).
-    // addNativeMethod stays on `method.native` and does not reach here.
+    // Resolver natives return above and do not reach here.
     if (!function.isConst()) {
         if (const auto& afterCall = kindOf(ref)->afterCall) {
             afterCall(ref, object);

@@ -465,6 +465,27 @@ script::ScriptValue callEntityScript(Entity& entity, const std::string& name, sc
     return {};
 }
 
+void registerEntityScriptCall()
+{
+    static bool once = false;
+    if (once) {
+        return;
+    }
+    Entity::__ensure_reflection_registered();
+    if (ClassRegistry::instance().getClass(type_index_v<Entity>) == nullptr) {
+        return;
+    }
+    once = true;
+    script::addMethod(type_index_v<Entity>, "call", script::fnVariadic<Entity&, std::string>(
+        [](Entity& entity, script::ScriptArgs args) -> script::ScriptValue {
+            if (args.empty()) {
+                throw script::ScriptError("call: expects the function name as its first argument");
+            }
+            const std::string name = script::scriptToString(args[0]);
+            return callEntityScript(entity, name, args.subspan(1));
+        }));
+}
+
 void LuaScriptingSystem::setServices(WorldScriptServices services)
 {
     _services = std::move(services);
@@ -679,19 +700,7 @@ void LuaScriptingSystem::init()
     )");
 
     registerLuaScriptBindings(lua);
-
-    // Script-to-script interaction (rpg-prototype R2a): `entity:call(name, ...)`
-    // on the shared export. The first registration wins for the process and the
-    // body captures nothing, so a second init (tests) never rebinds a dangling
-    // system.
-    script::addNativeMethod(type_index_v<Entity>, "call",
-                            [](void* self, const script::ScriptRef&, script::ScriptArgs args) -> ScriptValue {
-                                if (args.empty()) {
-                                    throw script::ScriptError("call: expects the function name as its first argument");
-                                }
-                                const std::string name = script::scriptToString(args[0]);
-                                return callEntityScript(*static_cast<Entity*>(self), name, args.subspan(1));
-                            });
+    registerEntityScriptCall();
 
     lua.new_usertype<LuaInputApi>(
         "Input",

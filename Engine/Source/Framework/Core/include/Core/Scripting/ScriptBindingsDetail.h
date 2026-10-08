@@ -287,4 +287,32 @@ NativeMethod bindFunctor(F&& functor, Ret (Class::*)(Params...))
     return bindNative<Ret, Params...>(std::forward<F>(functor));
 }
 
+/// `Prefix` is metadata for the language backend. The body receives the
+/// argument span unchanged, so a nil slot stays null instead of failing a
+/// typed bind.
+template <typename Receiver, typename... Prefix, typename F>
+NativeMethod bindVariadic(F&& functor)
+{
+    static_assert(isObjectReceiver<Receiver>(), "script::fnVariadic: the receiver must be a class reference or pointer");
+    static_assert((crossesToScripts<std::decay_t<Prefix>>() && ... && true),
+                  "script::fnVariadic: a declared argument does not cross to scripts");
+
+    NativeMethod method;
+    method.bVariadic      = true;
+    method.bConst         = receiverIsConst<Receiver>();
+    method.ret            = refl::describeReturn<ScriptValue>();
+    method.returnTypeName = "ScriptValue";
+    if constexpr (sizeof...(Prefix) > 0) {
+        method.args = {refl::describeParam<Prefix>()...};
+        (method.argTypeNames.push_back(typeid(std::decay_t<Prefix>).name()), ...);
+    }
+
+    method.invoker = [body = std::forward<F>(functor)](void* self, std::span<refl::MetaValue> args) -> refl::MetaValue {
+        using Object = std::remove_reference_t<Receiver>;
+        const ScriptArgs view(args.data(), args.size());
+        return refl::boxReturn<ScriptValue>(body(*static_cast<Object*>(self), view));
+    };
+    return method;
+}
+
 } // namespace ya::script::detail
