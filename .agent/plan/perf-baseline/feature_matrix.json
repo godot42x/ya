@@ -63,17 +63,20 @@
       "roadmap": [
         "M8"
       ],
-      "title": "process memory stats (RSS/peak; subsystem alloc tracking deferred)",
+      "title": "process memory stats (RSS/peak) + engine allocator layer with per-owner heap counters",
       "status": "partial",
       "evidence": [
         "Engine/Source/Framework/Core/include/Core/Os/OsMemory.h",
         "Engine/Source/Framework/Core/Os/OsMemory.cpp",
-        "Engine/Source/Framework/Core/include/Core/Profiling/PerfBenchSources.h",
-        "Engine/Test/Source/Core/ProcessMemoryBenchSourceTest.cpp",
-        "ya-testing debug 1767/1767 (3 new)",
+        "Engine/Source/Framework/Core/include/Core/Memory/Allocator.h",
+        "Engine/Source/Framework/Core/include/Core/Memory/AllocatorStats.h",
+        "Engine/Source/Framework/Core/Memory/ProcessAllocatorInstall.cpp",
+        "Engine/Test/Source/Core/AllocatorTest.cpp",
+        "ya-testing debug 1776/1779 (11 new allocator cases; the 3 failures are the reflection line's CoreValueTypes)",
+        "profile build: every module defines its own operator new (nm: libya-render-3d has T __Znwm), counting symbols exist only in libya-foundation-core",
         "HelloMaterial debug benchmark: process_memory rssMiB p50 253.06, peakRssMiB 972.88, unifiedMemory true"
       ],
-      "remaining": "heap allocation tracking by subsystem (global alloc hook, profile builds only) moves to PB6, which already needs a /tmp profile worktree for the baseline"
+      "remaining": "runtime heap numbers (heap.* series, editor Heap row) not captured yet: the full profile build is blocked by an unrelated compile error at HEAD (RenderCompanionSpecs.cpp). The layer also compiles into the global allocation functions in profile builds only; enabling it everywhere is one xmake predicate"
     },
     {
       "id": "PB5",

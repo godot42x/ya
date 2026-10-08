@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Memory/Allocator.h"
 #include "Core/Profiling/BenchAggregator.h"
 
 #include <chrono>
@@ -93,11 +94,18 @@ class YA_CORE_API RenderCounterBenchSource final : public IBenchSource
 /// half. They are two different questions and their answers must not be added:
 /// on unified-memory machines (Apple Silicon) the same physical pages can be
 /// counted by both, which is what the `unifiedMemory` fact flags.
+///
+/// The heap series (bytes allocated and freed per frame, live bytes per owner)
+/// come from the engine's allocator layer and are absent in builds that do not
+/// count -- see `Core/Memory/Allocator.h`.
 class YA_CORE_API ProcessMemoryBenchSource final : public IBenchSource
 {
+    memory::FAllocatorStats _previousAllocator;
+
   public:
     ProcessMemoryBenchSource() = default;
 
+    void onWindowBegin() override;
     void sampleFrame(BenchSeriesWriter& out) override;
     /// `unifiedMemory`: whether the CPU and GPU share physical memory here.
     void writeFacts(nlohmann::json& section) const override;

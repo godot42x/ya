@@ -47,6 +47,31 @@ end
 --- YA_API_EXPORT resolve to empty on every platform (Windows static libs
 --- must not see dllexport/dllimport on their own declarations).
 --- @param api_macro string e.g. "YA_CORE_API"
+--- Routes the target's global C++ allocations through the engine's allocator
+--- layer (see Core/Memory/Allocator.h): compiles the target's own copy of the
+--- replaced `operator new` / `operator delete` and selects the counting
+--- process allocator.
+---
+--- Every C++ module needs its own copy of the replacement: Mach-O binds an
+--- image's undefined `operator new` to that same image, and MSVC gives every
+--- DLL its own CRT, so one copy anywhere else would only ever route one
+--- module's allocations. All copies forward to the same Core entry points.
+---
+--- Profile builds only, for now: that is the mode that measures, and routing
+--- every allocation is a change worth validating where it is observed first.
+--- Turning it on for every build (and swapping in another backend) is this
+--- function plus the alias at the bottom of Allocator.h.
+function ya_process_allocator()
+    -- is_mode(), not get_config("mode"): while the project description is
+    -- being evaluated the config table does not carry the build mode yet, so
+    -- get_config("mode") reads nil and any comparison silently passes.
+    if not is_mode("profile") then
+        return
+    end
+    add_files(path.join(YA_SOURCE_ROOT, "Framework/Core/Memory/ProcessAllocatorInstall.cpp"))
+    add_defines("YA_ALLOCATOR_COUNTING=1")
+end
+
 function ya_std_module(api_macro)
     local monolith = (get_config("ya_linkage") or "shared") == "monolith"
     if monolith then
@@ -67,6 +92,7 @@ function ya_std_module(api_macro)
         add_cxxflags("/bigobj")
     end
 
+    ya_process_allocator()
 end
 
 --- Injects every module export macro into the aggregate (ya-engine) so its

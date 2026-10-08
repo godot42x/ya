@@ -158,3 +158,23 @@ PB6 的基线已入库，但复查发现三处问题，都在「这份基线本�
   - **没有重跑基准**。基线数字本身没动过，改的只是索引和工具；且 PB6 刚记了并发构建能让同一场景 frame p50 差 87%，这个环境下重采只会污染数据。
   - 本轮全程未编译：并发 agent 正在做 PB4 的堆分配钩子（`Core/Memory/` 新增未入库），`Engine/Source/Source.xmake.lua:92` 引用了尚未定义的 `ya_alloc_hook`，`xmake show -t ya-runtime` 直接失败。本轮的验证全部落在脚本行为与既有 summary 上，不依赖引擎构建。
   - PB4 的堆分配钩子换方案一事（PB6 那节已记：shared 链接下替换 `operator new` 拦不到其它 image 的分配）本轮没碰，等那条线自己收口。
+
+## 2026-10-09 — PB4 余项：引擎自己的 allocator 层
+
+方案换了两次，最后落到「引擎抽象出 allocator 这一层」：
+
+1. 先按「hook 全部分配」做，撞上 Mach-O 两级命名空间：实测 `libya-render-3d.dylib` 的 `_Znwm` 是未定义符号、`libya-foundation-core` 并不导出它，全进程都绑到 libc++abi —— **一个 dylib 里定义 `operator new` 拦不到其它模块。**
+2. 用户指出两层问题：语义上不该叫 hook（那是偷看），架构上应该是一层 allocator；而且每次分配走虚函数不划算。
+3. 最终形态（`Core/Memory/`）：
+   - **静态多态**：后端满足 `AllocatorBackend` concept（`allocate` / `deallocate` / `name` / `stats`），`CountingAllocator<Backend>` 模板组合计数与分桶，`using ProcessAllocator = ...` 在头文件底部按宏选型。热路径全内联、无虚表。进程级 allocator 本来就是构建期决策 —— 运行期换是**错的**（旧 allocator 的指针会被新 allocator 释放），不只是慢。
+   - `stats()` 是 concept 的一部分：backend 不能计数就**说**不支持（`MallocAllocator` 返回 `bSupported=false`），而不是报 0 让报告看起来像「测到 0」。
+   - 分桶靠 `MemoryOwnerScope` / `YA_MEMORY_OWNER`（thread-local 住在 Core），`Untagged` 桶永远存在、不隐藏未标注的分配。
+   - 每模块各自编一份 `ProcessAllocatorInstall.cpp`（`ya_process_allocator()`，由 `ya_std_module()` 自动带上）：Mach-O 把镜像未定义的 `_Znwm` 绑回本镜像、MSVC 每 DLL 一份 CRT，所以必须每模块一份；全部转发到 Core 的 `processAllocate`，跨模块 new/delete 仍然配对。
+   - 只在 **profile** 构建编进全局分配函数（`is_mode("profile")`）；换成 mimalloc / jemalloc 就是「换 backend + 一行选型」。
+- 验证：
+  - `ya-testing` debug **1776/1779**（新增 11 个 allocator 用例：concept 静态断言、malloc 后端的零尺寸 / 过对齐 / 空指针释放、`CountingAllocator` 的分桶与嵌套 scope 还原、live 字节回落、超额释放截断不回绕、失败分配不计数、`deltaSince` 的 level+差值语义、未计数构建报不支持）。3 个失败是 `CoreValueTypes.*`，属反射线在改的 `reflects-core`。
+  - profile 构建：`nm` 确认**每个模块都自己定义 `_Znwm`**（`libya-render-3d` 有 `T __Znwm`），而计数符号**只在 `libya-foundation-core` 一处** —— 全进程一套计数，不会每个 dylib 各数一份。
+  - debug 构建确认**没有**编入 install TU（平台 allocator 原样保留）。
+- 踩到的两个坑（已记进 todo）：xmake 求值项目描述时 `get_config("mode")` 是 **nil**，判模式必须用 `is_mode()`；改了源文件列表后 xmake 的 unity 文件不会自动重生成，要清 `build/.gens` 或 `xmake c`（我删了 `.gens` 导致共享 build 状态与磁盘不一致，最后用 `xmake c` + 全量重建修好，期间共享 build 缓存被清空了一次）。
+- **给并行 agent 的提示**：上一条记录里提到 `Source.xmake.lua:92` 引用了未定义的 `ya_alloc_hook` 导致 `xmake show -t ya-runtime` 失败 —— 该函数已改名为 `ya_process_allocator()` 并有定义，这个阻塞解除。
+- **未取运行期数字**：`heap.*` 序列与编辑器 Heap 行本轮没跑出数值 —— profile worktree 落在别人一个编译不过的提交上（`RenderCompanionSpecs.cpp` 用了不存在的 `renderFeatureMaskOf`），全引擎 profile 构建被挡。编译与单测层面已验；等那条线修好再补一次基准即可。

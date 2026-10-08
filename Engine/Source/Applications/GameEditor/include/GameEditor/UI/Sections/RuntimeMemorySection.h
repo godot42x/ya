@@ -32,6 +32,7 @@ class RuntimeMemorySection final : public UICompoundWidget
     std::shared_ptr<UIText> _gpuClasses;
     std::shared_ptr<UIText> _gpuHeaps;
     std::shared_ptr<UIText> _process;
+    std::shared_ptr<UIText> _heap;
     std::shared_ptr<UIText> _caveat;
 };
 } // namespace ya

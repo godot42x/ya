@@ -3,6 +3,9 @@ do
     set_kind("binary")
     add_files("Source/*.cpp")
     add_deps("ya-engine")
+    -- The executable allocates too; without its own copy of the replacement
+    -- its allocations are the one place the allocator layer would not see.
+    ya_process_allocator()
     -- This executable *is* the game app form, so it names the runtime shell
     -- rather than inheriting it from the engine aggregate.
     add_deps("ya-game-runtime")

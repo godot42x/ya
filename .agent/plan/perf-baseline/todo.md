@@ -3,7 +3,7 @@
 - [x] PB1 基准模式 + 汇总器 + `bench_summary.json`（meta / frame / cpu_stages）
 - [x] PB2 pass 级 GPU timestamp + render_counters（编辑器 profiling 段的 pass 表；计数清零在帧边界，max 不再被预热帧撑大——见 progress 的复查返工一节）
 - [x] PB3 GPU 显存统计（VMA，按资源类别）；面板是编辑器 Runtime Tools 里独立的 GPU Memory 段（未并入 profiling 段——那段本轮由 PB2 线占用）
-- [~] PB4 进程内存统计：RSS / 峰值已交付；堆分配按子系统归类（profile 构建下的全局分配钩子）待 PB6 在 /tmp profile worktree 里一起验（用户 2026-10-09 选 A 方案）
+- [~] PB4 进程内存统计：RSS / 峰值 + **堆分配按子系统归类**（`Core/Memory` allocator 层，静态多态 + `CountingAllocator` 模板，profile 构建下按 `YA_MEMORY_OWNER` 分桶）均已落地并编译验证；**运行期数字未取**——全引擎 profile 构建被 HEAD 上别人的编译错误挡住
 - [x] PB5 压测场景：多光源、多网格、2D 合批、Sponza（`Example/PerfLab` + 生成脚本 + 10 组 scene/config；正式数字留给 PB6）
 - [~] PB6 对比报告脚本 + 一条命令跑一组 + 首份 macOS profile 基线（`baselines/macos/profile-15277c00/`，15 次运行 / 9 场景，干净 checkout；Sponza 未含，资产未拉。索引已按复查结论重建：commit 回填、路径相对化）
 - [ ] PB7 GUI 基准（与 GA3 共用）
@@ -17,6 +17,12 @@
 - `Sponza` 场景要先 `Script/perf/fetch_sponza.py` 拉资产（不入库），本轮未采。
 - `Lights_*` 三档全在 8.3 ms：`MAX_POINT_LIGHTS=6` 截断（见 PB5），三个场景的 `drawIndexedCount` p50 都是 586、descriptorBind 都是 78，提交量完全相同，光源梯度在 R15 / R3 解决前测不出真实曲线。
 - 这批场景的显存稳在 270.7–273.0 MiB：压的是 CPU 与提交，不是显存容量；要压显存得换场景。
+
+## PB4 余项（allocator 层）记下的边界
+
+- allocator 层只在 **profile** 构建编进全局 `operator new`（`ya_process_allocator()`，用 `is_mode("profile")` 门控）。xmake 在求值项目描述时 `get_config("mode")` 是 nil，不能用；改了源文件列表后要清 `build/.gens` 或 `xmake c`，否则 unity 文件残留旧内容（本次踩过）。
+- 每模块各自编一份 `ProcessAllocatorInstall.cpp`：Mach-O 把镜像未定义的 `_Znwm` 绑回本镜像、MSVC 每个 DLL 一份 CRT，只在 Core 里定义一份拦不到其它模块。计数符号只在 Core 一处（`nm` 已验），因此全进程一套计数。
+- 运行期数字（`heap.*` 序列、编辑器 Heap 行）本轮未取：profile worktree 落在别人一个编译不过的提交上（`RenderCompanionSpecs.cpp`）。编译与单测层面已验。
 
 ## 已知边界（PB1 返工记下，本轮不修）
 

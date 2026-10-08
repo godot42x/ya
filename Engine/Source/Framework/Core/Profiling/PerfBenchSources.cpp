@@ -147,6 +147,13 @@ void RenderCounterBenchSource::sampleFrame(BenchSeriesWriter& out)
     }
 }
 
+void ProcessMemoryBenchSource::onWindowBegin()
+{
+    // Baseline for the per-frame deltas. Starting from zero instead would fold
+    // every allocation made during warmup into the first sampled frame.
+    _previousAllocator = memory::allocatorStatsSnapshot();
+}
+
 void ProcessMemoryBenchSource::sampleFrame(BenchSeriesWriter& out)
 {
     const Os::FProcessMemoryStats stats = Os::sampleProcessMemory();
@@ -158,12 +165,37 @@ void ProcessMemoryBenchSource::sampleFrame(BenchSeriesWriter& out)
     constexpr double kBytesPerMiB = 1024.0 * 1024.0;
     out.record("rssMiB", static_cast<float>(static_cast<double>(stats.residentBytes) / kBytesPerMiB));
     out.record("peakRssMiB", static_cast<float>(static_cast<double>(stats.peakResidentBytes) / kBytesPerMiB));
+
+    // Allocator activity. Deltas of monotonic counters, so nothing has to be
+    // reset at a frame boundary that may not be where the allocations
+    // happened.
+    const memory::FAllocatorStats allocator = memory::allocatorStatsSnapshot();
+    if (allocator.bSupported) {
+        const memory::FAllocatorStats frame = allocator.deltaSince(_previousAllocator);
+        out.record("heap.allocCount", static_cast<float>(frame.getTotalAllocCount()));
+        out.record("heap.allocMiB", static_cast<float>(static_cast<double>(frame.getTotalAllocBytes()) / kBytesPerMiB));
+        out.record("heap.freeCount", static_cast<float>(frame.getTotalFreeCount()));
+        out.record("heap.freeMiB", static_cast<float>(static_cast<double>(frame.getTotalFreeBytes()) / kBytesPerMiB));
+        out.record("heap.liveMiB", static_cast<float>(static_cast<double>(allocator.getLiveBytes()) / kBytesPerMiB));
+        for (uint32_t owner = 0; owner < memory::kMemoryOwnerCount; ++owner) {
+            const std::string key = std::string("heap.live.") +
+                                    std::string(memory::toMemoryOwnerLabel(static_cast<memory::EMemoryOwner>(owner))) + "MiB";
+            out.record(key, static_cast<float>(static_cast<double>(allocator.buckets[owner].liveBytes) / kBytesPerMiB));
+        }
+    }
+    _previousAllocator = allocator;
 }
 
 void ProcessMemoryBenchSource::writeFacts(nlohmann::json& section) const
 {
     section["supported"]     = Os::sampleProcessMemory().bSupported;
     section["unifiedMemory"] = Os::hasUnifiedMemory();
+    section["heapCounting"]  = memory::processAllocatorCounts();
+    const memory::FAllocatorStats allocator = memory::allocatorStatsSnapshot();
+    if (allocator.bSupported) {
+        section["heap.liveAllocations"] = allocator.getLiveAllocations();
+        section["heap.totalAllocMiB"]   = static_cast<double>(allocator.getTotalAllocBytes()) / (1024.0 * 1024.0);
+    }
 }
 
 } // namespace ya::profiling

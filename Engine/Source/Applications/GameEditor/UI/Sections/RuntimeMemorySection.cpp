@@ -1,5 +1,6 @@
 #include "GameEditor/UI/Sections/RuntimeMemorySection.h"
 
+#include "Core/Memory/Allocator.h"
 #include "Core/Os/OsMemory.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -48,6 +49,7 @@ void RuntimeMemorySection::construct()
     _gpuClasses = ui::text("RuntimeMemoryGpuClasses").share();
     _gpuHeaps   = ui::text("RuntimeMemoryGpuHeaps").share();
     _process    = ui::text("RuntimeMemoryProcess").share();
+    _heap       = ui::text("RuntimeMemoryHeap").share();
     _caveat     = ui::text("RuntimeMemoryCaveat").setStyleKey("text.muted").share();
 
     addDetachedChild(ui::column("RuntimeMemoryRows")
@@ -57,13 +59,14 @@ void RuntimeMemorySection::construct()
                          .child(_gpuClasses)
                          .child(_gpuHeaps)
                          .child(_process)
+                         .child(_heap)
                          .child(_caveat)
                          .release());
 }
 
 void RuntimeMemorySection::sync(const App* app)
 {
-    if (!_gpuTotal || !_gpuClasses || !_gpuHeaps || !_process || !_caveat) {
+    if (!_gpuTotal || !_gpuClasses || !_gpuHeaps || !_process || !_heap || !_caveat) {
         return;
     }
 
@@ -114,6 +117,26 @@ void RuntimeMemorySection::sync(const App* app)
         _process->setText(std::format("Process memory: RSS {}, peak {}",
                                       formatMiB(processStats.residentBytes),
                                       formatMiB(processStats.peakResidentBytes)));
+    }
+
+    // Allocator layer, when this build counts. "not counted" rather than zeros:
+    // a debug or release build has no counting allocator compiled in.
+    const memory::FAllocatorStats allocator = memory::allocatorStatsSnapshot();
+    if (!allocator.bSupported) {
+        _heap->setText("Heap: not counted in this build");
+    }
+    else {
+        std::string row = std::format("Heap: {} live in {} allocations",
+                                      formatMiB(allocator.getLiveBytes()),
+                                      allocator.getLiveAllocations());
+        for (uint32_t owner = 0; owner < memory::kMemoryOwnerCount; ++owner) {
+            const memory::FAllocatorBucketStats& bucket = allocator.buckets[owner];
+            if (bucket.liveBytes == 0) {
+                continue;
+            }
+            row += std::format("  {} {}", memory::toMemoryOwnerLabel(static_cast<memory::EMemoryOwner>(owner)), formatMiB(bucket.liveBytes));
+        }
+        _heap->setText(row);
     }
 
     // The one line that keeps the two rows from being read as one total.
