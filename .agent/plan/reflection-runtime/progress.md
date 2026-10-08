@@ -353,3 +353,9 @@ debug，100000 次，3 次，ns/op。对照 RR0。
 - `ya-testing` 1749/1749，4 个 `DISABLED_`。
 - `reflects-core-test` 70/70。
 - Windows 还没跑。重点：`long` 32 位、`reflects-core` 导出、`MetaValue::operator==`、designated initializer 顺序。
+
+## 2026-10-09 — ScriptRect 改为反射 struct
+
+`script::ScriptRect` 不再是脚本层写死的一种值。它用 `YA_REFLECT_BEGIN_NAMED(..., "script::ScriptRect")` 登记字段 `x/y/w/h`，并用 `YA_REFLECT_VALUE_STRUCT()` 打上 `FValueStruct` facet。脚本层只认这个 facet：整值拷贝进出，Lua 按反射字段推出表，任意表仍读不回来。JS 没有投影器，仍拒绝。
+
+序列化和拷贝因此能看见这四个 float。基线里 `rect` 不再是 JSON `null`，反序列化和 copier 都会把它带回来。`ya-testing` 1749/1749。

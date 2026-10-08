@@ -16,6 +16,14 @@ struct FEqualFacet
     static constexpr refl::EFacetMissing missing = refl::EFacetMissing::Skip;
 };
 
+/// A reflected value struct whose fields cross to scripts. The script layer
+/// copies the whole value and lets each language backend project the fields.
+/// It does not name the struct.
+struct FValueStruct
+{
+    static constexpr refl::EFacetMissing missing = refl::EFacetMissing::Skip;
+};
+
 struct FPrintFacet
 {
     std::string (*print)(const refl::TypeOps& ops, const void* value) = nullptr;
@@ -53,6 +61,12 @@ void registerEqualFacet()
     refl::TypeRegistry::instance().setFacet<FEqualFacet>(
         refl::type_index_v<T>,
         FEqualFacet{.equals = &detail::equalValue<T>});
+}
+
+template <class T>
+void markValueStruct()
+{
+    refl::TypeRegistry::instance().setFacet<FValueStruct>(refl::type_index_v<T>, FValueStruct{});
 }
 
 template <class T>

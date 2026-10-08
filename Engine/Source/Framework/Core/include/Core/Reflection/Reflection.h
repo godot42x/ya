@@ -11,6 +11,7 @@
 
 #include "Core/Macro/VariadicMacros.h"
 #include "Core/Reflection/PropertyExtensions.h"
+#include "Core/Reflection/ValueFacets.h"
 
 namespace ya
 {
@@ -58,6 +59,15 @@ struct ValueCopyTrait : std::false_type
 {};
 template <typename T>
 struct ValueCopyTrait<T, std::void_t<typename T::_reflectCopiesAsValue>> : std::true_type
+{};
+
+// Value struct projected to scripts by its reflected fields
+// (YA_REFLECT_VALUE_STRUCT). The script layer does not name the type.
+template <typename T, typename = void>
+struct ValueStructTrait : std::false_type
+{};
+template <typename T>
+struct ValueStructTrait<T, std::void_t<typename T::_reflectValueStruct>> : std::true_type
 {};
 
 } // namespace ya::reflection::detail
@@ -236,6 +246,9 @@ struct Visitor<void>
             if constexpr (::ya::reflection::detail::ValueCopyTrait<class_t>::value) {                                                              \
                 reg->copiesAsValue();                                                                                                              \
             }                                                                                                                                      \
+            if constexpr (::ya::reflection::detail::ValueStructTrait<class_t>::value) {                                                            \
+                ::ya::reflection::markValueStruct<class_t>();                                                                                      \
+            }                                                                                                                                      \
                                                                                                                                                   \
             ___YA_REFLECT_EXTENSION(ClassName, real_name)                                                                                         \
         }                                                                                                                                         \
@@ -367,6 +380,10 @@ struct Visitor<void>
 // recursing over reflected fields. Place INSIDE the class body, after
 // YA_REFLECT_END.
 #define YA_REFLECT_COPIES_AS_VALUE() public: using _reflectCopiesAsValue = void;
+
+// This reflected struct crosses to scripts as its fields. Place INSIDE the
+// class body, after YA_REFLECT_END. The script layer never lists the type.
+#define YA_REFLECT_VALUE_STRUCT() public: using _reflectValueStruct = void;
 
 // clang-format off
 #define YA_REFLECT_END()                                                                               \

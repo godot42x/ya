@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/Reflection/Reflection.h"
 #include "Core/TypeIndex.h"
 
 #include <glm/glm.hpp>
@@ -47,8 +48,9 @@ struct ScriptSelfHandle
     bool     operator==(const ScriptSelfHandle&) const = default;
 };
 
-/// `{x,y,w,h}` as Lua sees a widget rect. C++ pushes that table. An arbitrary
-/// Lua table is not read back as a rect.
+/// `{x,y,w,h}` widget rect. It is an ordinary reflected struct: the script
+/// layer copies it and projects whatever fields reflection registered. An
+/// arbitrary Lua table is not read back as this struct.
 struct ScriptRect
 {
     float x = 0.0f;
@@ -56,12 +58,20 @@ struct ScriptRect
     float w = 0.0f;
     float h = 0.0f;
     bool  operator==(const ScriptRect&) const = default;
+
+    YA_REFLECT_BEGIN_NAMED(ScriptRect, "script::ScriptRect")
+    YA_REFLECT_FIELD(x)
+    YA_REFLECT_FIELD(y)
+    YA_REFLECT_FIELD(w)
+    YA_REFLECT_FIELD(h)
+    YA_REFLECT_END()
+    YA_REFLECT_VALUE_STRUCT()
 };
 
 /// Values that cross between the engine and a script language. This is the
 /// reflection value (`refl::MetaValue`): builtins keep their kind, and every
 /// other crossing type is a registered value. Enums travel as integers.
-/// `ScriptFnHandle`, `ScriptSelfHandle` and `ScriptRect` are Lua-facing; JS
+/// `ScriptFnHandle` and `ScriptSelfHandle` are Lua-facing; JS
 /// rejects them. A borrowed reference must not be handed to a language.
 using ScriptValue = refl::MetaValue;
 using ScriptArgs  = std::span<const ScriptValue>;

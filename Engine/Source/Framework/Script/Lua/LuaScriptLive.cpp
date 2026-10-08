@@ -91,7 +91,10 @@ sol::object pushScriptValue(sol::state& lua, const script::ScriptValue& value)
         return sol::make_object(lua, *vec);
     }
     if (script::scriptIf<script::ScriptRef>(value) || script::scriptIf<script::ScriptFnHandle>(value) ||
-        script::scriptIf<script::ScriptSelfHandle>(value) || script::scriptIf<script::ScriptRect>(value)) {
+        script::scriptIf<script::ScriptSelfHandle>(value)) {
+        return {};
+    }
+    if (refl::TypeRegistry::instance().facet<ya::reflection::FValueStruct>(value.type()) != nullptr) {
         return {};
     }
     const refl::TypeOps* ops = refl::TypeRegistry::instance().find(value.type());

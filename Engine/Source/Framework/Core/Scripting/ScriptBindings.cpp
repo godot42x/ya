@@ -1,10 +1,12 @@
 #include "Core/Scripting/ScriptBindings.h"
 
 #include "Core/Log.h"
+#include "Core/Reflection/ValueFacets.h"
 
 #include <reflects-core/lib.h>
 
 #include <algorithm>
+#include <cstring>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -188,7 +190,6 @@ const std::unordered_map<type_index_t, ValueCodec>& valueCodecs()
             out.emplace(type_index_v<ScriptRef>, codecOf<ScriptRef>());
             out.emplace(type_index_v<ScriptFnHandle>, codecOf<ScriptFnHandle>());
             out.emplace(type_index_v<ScriptSelfHandle>, codecOf<ScriptSelfHandle>());
-            out.emplace(type_index_v<ScriptRect>, codecOf<ScriptRect>());
             out.emplace(type_index_v<int8_t>, narrowCodec<int8_t>());
             out.emplace(type_index_v<uint8_t>, narrowCodec<uint8_t>());
             out.emplace(type_index_v<int16_t>, narrowCodec<int16_t>());
@@ -216,10 +217,35 @@ const Enum* enumFor(type_index_t type)
     return EnumRegistry::instance().getEnum(type);
 }
 
+bool isValueStruct(type_index_t type)
+{
+    return refl::TypeRegistry::instance().facet<reflection::FValueStruct>(type) != nullptr;
+}
+
+ScriptValue loadValueStruct(type_index_t type, const void* address)
+{
+    return refl::MetaValue::ref(type, const_cast<void*>(address), true).materialize();
+}
+
+void storeValueStruct(type_index_t type, void* address, const ScriptValue& value)
+{
+    if (value.type() != type || value.data() == nullptr) {
+        throw ScriptError(std::string("expected a reflected struct, got ") + scriptValueTypeName(value));
+    }
+    const refl::TypeOps* ops = refl::TypeRegistry::instance().find(type);
+    if (ops == nullptr || !ops->bTriviallyCopyable) {
+        throw ScriptError("reflected struct cannot be copied into a field");
+    }
+    std::memcpy(address, value.data(), ops->life.size);
+}
+
 ScriptValue loadValue(type_index_t type, const void* address)
 {
     if (const ValueCodec* codec = codecFor(type)) {
         return codec->load(address);
+    }
+    if (isValueStruct(type)) {
+        return loadValueStruct(type, address);
     }
     return scriptMake(enumFor(type)->getValue(const_cast<void*>(address)));
 }
@@ -230,6 +256,10 @@ void storeValue(type_index_t type, void* address, const ScriptValue& value)
         codec->store(address, value);
         return;
     }
+    if (isValueStruct(type)) {
+        storeValueStruct(type, address, value);
+        return;
+    }
     enumFor(type)->setValue(address, scriptToEnum(type, value));
 }
 
@@ -237,6 +267,15 @@ refl::MetaValue boxValue(type_index_t type, const ScriptValue& value)
 {
     if (const ValueCodec* codec = codecFor(type)) {
         return codec->box(value);
+    }
+    if (isValueStruct(type)) {
+        if (value.isRef()) {
+            return value.materialize();
+        }
+        if (value.type() != type) {
+            throw ScriptError(std::string("expected a reflected struct, got ") + scriptValueTypeName(value));
+        }
+        return value;
     }
     const Enum* reflected = enumFor(type);
     alignas(8) unsigned char bytes[8] = {};
@@ -258,6 +297,9 @@ ScriptValue unboxValue(const refl::ParamDesc& ret, const refl::MetaValue& boxed)
     if (const ValueCodec* codec = codecFor(ret.type)) {
         return codec->load(boxed.data());
     }
+    if (isValueStruct(ret.type)) {
+        return boxed.type() == ret.type ? boxed : loadValueStruct(ret.type, boxed.data());
+    }
     return scriptMake(enumFor(ret.type)->getValue(const_cast<void*>(boxed.data())));
 }
 
@@ -265,7 +307,7 @@ ScriptValue unboxValue(const refl::ParamDesc& ret, const refl::MetaValue& boxed)
 
 bool crossesToScripts(type_index_t type)
 {
-    return codecFor(type) || enumFor(type);
+    return codecFor(type) || enumFor(type) || isValueStruct(type);
 }
 
 // ============================================================================
@@ -343,8 +385,8 @@ std::string scriptNameOf(const std::string& reflectedName)
     return first == std::string::npos ? reflectedName : reflectedName.substr(first);
 }
 
-/// `ScriptValue` is the dynamic return marker, not a codec. Handle types and
-/// `ScriptRect` cross through the codecs registered above.
+/// `ScriptValue` is the dynamic return marker, not a codec. Handle types cross
+/// through the codecs above. A reflected value struct crosses through its fields.
 bool acceptsScriptSignature(type_index_t type)
 {
     return crossesToScripts(type) || type == type_index_v<ScriptValue>;

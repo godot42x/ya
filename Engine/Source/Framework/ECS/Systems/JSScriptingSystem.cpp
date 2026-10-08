@@ -22,7 +22,6 @@ using Json = ScriptApiRegistry::Json;
 
 using script::ScriptError;
 using script::ScriptFnHandle;
-using script::ScriptRect;
 using script::ScriptRef;
 using script::ScriptSelfHandle;
 using script::ScriptValue;
@@ -84,8 +83,10 @@ JSValue toJs(JSContext* ctx, const ScriptValue& value)
     if (const ScriptRef* ref = script::scriptIf<ScriptRef>(value)) {
         return wrapRef(ctx, *ref);
     }
-    if (script::scriptIf<ScriptFnHandle>(value) || script::scriptIf<ScriptSelfHandle>(value) ||
-        script::scriptIf<ScriptRect>(value)) {
+    if (script::scriptIf<ScriptFnHandle>(value) || script::scriptIf<ScriptSelfHandle>(value)) {
+        throw ScriptError("not projected to JS");
+    }
+    if (refl::TypeRegistry::instance().facet<reflection::FValueStruct>(value.type()) != nullptr) {
         throw ScriptError("not projected to JS");
     }
     if (const glm::vec2* v = script::scriptIf<glm::vec2>(value)) {

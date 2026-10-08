@@ -114,7 +114,7 @@ T fromScript(const ScriptValue& value)
     else if constexpr (std::is_enum_v<T>) {
         return static_cast<T>(scriptToEnum(type_index_v<T>, value));
     }
-    else if constexpr (std::is_same_v<T, ScriptSelfHandle> || std::is_same_v<T, ScriptFnHandle> || std::is_same_v<T, ScriptRect>) {
+    else if constexpr (std::is_same_v<T, ScriptSelfHandle> || std::is_same_v<T, ScriptFnHandle>) {
         if (const T* held = scriptIf<T>(value)) {
             return *held;
         }

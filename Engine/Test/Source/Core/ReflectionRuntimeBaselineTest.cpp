@@ -287,9 +287,13 @@ TEST(ReflectionRuntimeBaseline, JsonExactShapeAndRoundTrip)
 
     // Widths the scalar if-chain does not name become JSON null. uint32 map
     // keys throw inside the serializer and the property is dropped.
-    for (const char* name : {"wide", "tiny", "half", "ubyte", "ushort", "span", "ulong", "longlong", "orientation", "matrix", "rect"}) {
+    for (const char* name : {"wide", "tiny", "half", "ubyte", "ushort", "span", "ulong", "longlong", "orientation", "matrix"}) {
         EXPECT_EQ(json[name].dump(), "null") << name;
     }
+    EXPECT_FLOAT_EQ(json["rect"]["x"].get<float>(), 1.0f);
+    EXPECT_FLOAT_EQ(json["rect"]["y"].get<float>(), 2.0f);
+    EXPECT_FLOAT_EQ(json["rect"]["w"].get<float>(), 3.0f);
+    EXPECT_FLOAT_EQ(json["rect"]["h"].get<float>(), 4.0f);
     EXPECT_FALSE(json.contains("byUnsigned"));
     EXPECT_EQ(json["raw"].dump(), "null");
 
@@ -329,7 +333,7 @@ TEST(ReflectionRuntimeBaseline, JsonExactShapeAndRoundTrip)
     // (identity), not the source's mat4(2).
     EXPECT_EQ(restored.matrix, glm::mat4(1.0f));
     EXPECT_NE(restored.matrix, src.matrix);
-    EXPECT_EQ(restored.rect, script::ScriptRect{});
+    EXPECT_EQ(restored.rect, src.rect);
     EXPECT_TRUE(restored.byUnsigned.empty());
     EXPECT_EQ(restored.raw, nullptr);
 
@@ -499,7 +503,7 @@ TEST(ReflectionRuntimeBaseline, CopierCopiesScalarsVectorsAndAssetPaths)
     EXPECT_EQ(dst.tiny, 0);
     EXPECT_EQ(dst.orientation, glm::quat{});
     EXPECT_EQ(dst.matrix, glm::mat4(1.0f));
-    EXPECT_EQ(dst.rect, script::ScriptRect{});
+    EXPECT_EQ(dst.rect, src.rect);
     EXPECT_EQ(dst.raw, nullptr);
 }
 

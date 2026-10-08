@@ -40,9 +40,6 @@ const char* scriptValueTypeName(const ScriptValue& value)
     if (scriptIf<ScriptSelfHandle>(value)) {
         return "self";
     }
-    if (scriptIf<ScriptRect>(value)) {
-        return "rect";
-    }
     if (scriptIf<glm::vec2>(value)) {
         return "vec2";
     }

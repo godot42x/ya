@@ -227,7 +227,8 @@ constexpr bool crossesToScripts()
     return std::is_arithmetic_v<D> || std::is_enum_v<D> || std::is_same_v<D, std::string> ||
            std::is_same_v<D, glm::vec2> || std::is_same_v<D, glm::vec3> || std::is_same_v<D, glm::vec4> ||
            std::is_same_v<D, ScriptRef> || std::is_same_v<D, ScriptFnHandle> ||
-           std::is_same_v<D, ScriptSelfHandle> || std::is_same_v<D, ScriptRect>;
+           std::is_same_v<D, ScriptSelfHandle> ||
+           ::ya::reflection::detail::ValueStructTrait<D>::value;
 }
 
 } // namespace ya::script
