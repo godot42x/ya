@@ -440,3 +440,13 @@ debug，100000 次，1 次，ns/op。对照 RR5b 中位数。这条路径测的�
 - `ya-testing` 1768/1768，4 个 `DISABLED_`。新增 `CoreValueTypes.JsonFacetRoundTripsWithoutATypeSwitch`。通过数含工作区里与本 checkpoint 无关的未提交测试。
 - `ReflectionSceneResave` 8/8，场景重存哈希未变。`ReflectionRuntimeBaseline.*` 原样通过。
 - RR5b 和 RR8 的 Windows 验证都还没跑。RR3 不是 Windows 验证点。RR4 仍等 GUI 10F-1~5。
+
+## 2026-10-09 — RR9 重写反射 README，规则收入 skill
+
+`Core/Reflection/README.md` 按现在的 `YA_REFLECT_BEGIN` / `YA_REFLECT_FIELD` / `YA_REFLECT_BEGIN_EXTERNAL` 重写。旧文里的 `YA_REFLECT(... PROP ...)` 和 `UnifiedReflection.h` 已不存在。
+
+层次、MetaValue 三种存储、facet 缺失策略、`type_index` 不落盘写进 `.agent/skills/reflection/SKILL.md`。根 `AGENTS.md` 的路由加上这一条。
+
+这条线不归档。RR4 仍等 GUI 10F-1~5。RR5b 和 RR8 的 Windows 验证都还没跑。编辑器的颜色、轴比较、叶子分类还在按类型分支，skill 里写明了，不把它们说成已经收进 facet。
+
+没有改引擎代码，没有重跑 `ya-testing`。上一轮 RR3 的 1768/1768 仍是行为基线。

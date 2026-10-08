@@ -1,202 +1,71 @@
-# 统一反射系统
+# 反射
 
-## 🎯 只需要一个宏
+给一个 C++ 类型登记成员，使序列化、拷贝、脚本和编辑器能按名字访问它。运行时规则（层次、MetaValue、facet、`type_index` 不落盘）在 `.agent/skills/reflection/SKILL.md`。
 
-现在反射系统已简化为**两个宏**：
-- `YA_REFLECT` - 侵入式反射（类内部）
-- `YA_REFLECT_EXTERNAL` - 非侵入式反射（类外部，适用于第三方库）
+头文件：`Core/Reflection/Reflection.h`。
 
-## 使用方式
+## 自己的类型
 
-### 侵入式反射（自定义类）
+宏放在类体内，字段声明之前。
 
 ```cpp
-#include "Core/Reflection/UnifiedReflection.h"
+struct HealthComponent : public IComponent
+{
+    YA_REFLECT_BEGIN(HealthComponent, IComponent)
+    YA_REFLECT_FIELD(health, .manipulate(0.0f, 100.0f))
+    YA_REFLECT_FIELD(cache, .notSerialized())
+    YA_REFLECT_METHOD(heal, .tooltip("Add health, clamped to the max"))
+    YA_REFLECT_END()
 
-struct PlayerComponent {
-    YA_REFLECT(PlayerComponent,
-        PROP(health, .EditAnywhere().Range(0, 100).Tooltip("Health").Category("Stats")),
-        PROP(speed, .EditAnywhere().Range(0, 10).Category("Movement")),
-        PROP(cache, .NotSerialized().Transient())
-    )
-    
     float health = 100.0f;
-    float speed = 5.0f;
-    float cache = 0.0f;
+    float cache  = 0.0f;
 };
-
-// 使用反射
-PlayerComponent player;
-player.__visit_properties([](const char* name, const auto& value) {
-    // 访问每个属性
-    std::cout << name << " = " << value << std::endl;
-});
 ```
 
-### 非侵入式反射（第三方库）
+- `YA_REFLECT_BEGIN(Type)` 或 `YA_REFLECT_BEGIN(Type, Base)`。基类要已经反射。
+- `YA_REFLECT_BEGIN_NAMED(Type, "PersistentName")`，或再加基类。反射名是文件里的身份，嵌套类型用它避开重名。
+- `YA_REFLECT_FIELD(name)` 收集成员指针。可选的第二段是 `MetaBuilder`：`.color()`、`.tooltip("...")`、`.category("...")`、`.notSerialized()`、`.transient()`、`.manipulate(min, max)`、`.instanceEditable()`。
+- `YA_REFLECT_METHOD(name)` 收集成员函数，元数据同上。
+- `YA_REFLECT_END()` 之后可以用 `YA_REFLECT_VALUE_STRUCT()`（按字段进脚本）或 `YA_REFLECT_COPIES_AS_VALUE()`（拷贝走 C++ 赋值，不逐字段）。
+
+真正的注册推迟到 `DeferredInitializerQueue::executeAll()`。需要提前触达时调用 `Type::__ensure_reflection_registered()`。
+
+## 改不了的类型
+
+glm 向量、脚本句柄这类类型用外部宏，放在全局作用域：
 
 ```cpp
-// 第三方库的类（无法修改源码）
-namespace ThirdParty {
-    struct Vector3 {
-        float x, y, z;
-    };
-}
-
-// 在全局作用域注册反射
-YA_REFLECT_EXTERNAL(ThirdParty::Vector3,
-    PROP(x, .EditAnywhere().Tooltip("X coordinate")),
-    PROP(y, .EditAnywhere().Tooltip("Y coordinate")),
-    PROP(z, .EditAnywhere().Tooltip("Z coordinate"))
-)
-
-// 使用外部反射
-ThirdParty::Vector3 vec{1.0f, 2.0f, 3.0f};
-ya::reflection::detail::ExternalReflect<ThirdParty::Vector3>::visit_properties(
-    vec, [](const char* name, const auto& value) {
-        std::cout << name << " = " << value << std::endl;
-    }
-);
+YA_REFLECT_BEGIN_EXTERNAL(glm::vec3)
+YA_REFLECT_FIELD(x)
+YA_REFLECT_FIELD(y)
+YA_REFLECT_FIELD(z)
+YA_REFLECT_END_EXTERNAL()
 ```
 
-## 元数据标记
-
-两种方式共享相同的元数据系统：
-
-| 标记 | 说明 | 示例 |
-|------|------|------|
-| `.EditAnywhere()` | 可在编辑器中编辑 | `PROP(health, .EditAnywhere())` |
-| `.EditReadOnly()` | 只读显示 | `PROP(maxHealth, .EditReadOnly())` |
-| `.Range(min, max)` | 值范围限制 | `PROP(health, .Range(0, 100))` |
-| `.Tooltip("text")` | 提示信息 | `PROP(speed, .Tooltip("移动速度"))` |
-| `.Category("name")` | 分类 | `PROP(health, .Category("Stats"))` |
-| `.NotSerialized()` | 不序列化 | `PROP(cache, .NotSerialized())` |
-| `.Transient()` | 临时数据 | `PROP(temp, .Transient())` |
-
-## 查询元数据
+枚举：
 
 ```cpp
-using namespace ya::reflection;
+YA_REFLECT_ENUM_BEGIN(EMood)
+YA_REFLECT_ENUM_VALUE(Calm)
+YA_REFLECT_ENUM_VALUE_NAMED(Angry, "Angry")
+YA_REFLECT_ENUM_END()
+```
 
-// 使用 reflects-core 的 ClassRegistry 直接访问元数据
-auto* cls = ClassRegistry::instance().getClass("PlayerComponent");
-if (cls) {
-    auto* healthProp = cls->getProperty("health");
-    if (healthProp) {
-        bool editable = healthProp->flags & PropertyFlags::EditAnywhere;
-        float min = healthProp->getMeta<float>("range_min");
-        float max = healthProp->getMeta<float>("range_max");
-        std::string tooltip = healthProp->getMeta<std::string>("tooltip");
-        std::string category = healthProp->getMeta<std::string>("category");
-    }
-}
+## 查询
 
-// 获取所有可编辑属性
-if (cls) {
-    for (const auto& [name, prop] : cls->properties) {
-        if (prop.flags & PropertyFlags::EditAnywhere) {
-            // 处理可编辑属性
-        }
-    }
-}
-for (const auto& cat : categories) {
-    auto props = registry.getPropertiesByCategory("PlayerComponent", cat);
-    // 处理该类别下的属性
+```cpp
+Class* cls = ClassRegistry::instance().getClass("HealthComponent");
+const Property* tint = cls->getProperty("tint");
+for (const auto& [name, prop] : cls->properties()) {
+    (void)name;
+    (void)prop;
 }
 ```
 
-## 文件说明
+成员表没有公开的可变 map。写入走注册 API。按反射名查找，不把 `type_index` 写进文件。
 
-| 文件 | 说明 | 状态 |
-|------|------|------|
-| `UnifiedReflection.h` | **统一反射宏** | ✅ **推荐使用** |
-| `MetadataSupport.h` | 元数据系统基础设施 | ✅ 核心组件 |
-| `UnifiedReflectionTest.cpp` | 完整测试示例 | ✅ 参考代码 |
-| `AutoReflect.h` | 旧的纯反射宏 | ⚠️ 已废弃 |
-| `ReflectWithMetadata.h` | 旧的分离式宏 | ⚠️ 已废弃 |
+## 值类型和组件 JSON
 
-## 优势
+新的值类型在 `registerCoreValueTypes` 里 `registerType`，再挂它需要的 facet（相等、打印、JSON）。vec2/3/4 的 JSON 是数组，由 `FJsonFacet` 写出。
 
-### vs 旧的分离式宏
-❌ **旧方式（两步）**：
-```cpp
-struct Component {
-    YA_REFLECT(Component, health, speed)
-    float health, speed;
-};
-
-YA_REGISTER_META_BEGIN(Component)
-    YA_PROP_META(health, .EditAnywhere())
-    YA_PROP_META(speed, .EditAnywhere())
-YA_REGISTER_META_END(Component)
-```
-
-✅ **新方式（一步）**：
-```cpp
-struct Component {
-    YA_REFLECT(Component,
-        PROP(health, .EditAnywhere()),
-        PROP(speed, .EditAnywhere())
-    )
-    float health, speed;
-};
-```
-
-### 支持非侵入式
-```cpp
-// 可以为任何第三方库的类添加反射
-YA_REFLECT_EXTERNAL(glm::vec3,
-    PROP(x, .EditAnywhere()),
-    PROP(y, .EditAnywhere()),
-    PROP(z, .EditAnywhere())
-)
-```
-
-## 迁移指南
-
-从旧系统迁移非常简单：
-
-### 从 YA_REFLECT_TYPE 迁移
-```cpp
-// 旧
-struct Component {
-    YA_REFLECT_TYPE(Component)
-    float health;
-};
-
-// 新
-struct Component {
-    YA_REFLECT(Component,
-        PROP(health, )  // 元数据可以为空
-    )
-    float health;
-};
-```
-
-### 从分离式宏迁移
-```cpp
-// 旧
-struct Component {
-    YA_REFLECT(Component, health, speed)
-    float health, speed;
-};
-YA_REGISTER_META_BEGIN(Component)
-    YA_PROP_META(health, .EditAnywhere())
-YA_REGISTER_META_END(Component)
-
-// 新
-struct Component {
-    YA_REFLECT(Component,
-        PROP(health, .EditAnywhere()),
-        PROP(speed, )  // 可选元数据
-    )
-    float health, speed;
-};
-```
-
-## 最佳实践
-
-1. **侵入式优先**：自己的类优先使用 `YA_REFLECT`
-2. **非侵入式补充**：第三方库使用 `YA_REFLECT_EXTERNAL`
-3. **元数据按需**：不需要元数据的属性可以留空 `PROP(name, )`
-4. **统一命名空间**：外部反射时使用完整类型名（包含命名空间）
+组件若要改自己的文档，登记 `FComponentJsonFacet`，不要在 `IComponent` 上加序列化虚函数。没有这份 facet 就是普通反射。Tilemap 在反射之后再改文档；Lua 脚本组件关掉反射，自己写 `scripts`。
