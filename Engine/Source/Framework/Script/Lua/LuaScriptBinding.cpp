@@ -576,15 +576,15 @@ void registerLuaScriptBindings(sol::state_view lua)
 
 struct LuaProjector
 {
-    int (*push)(lua_State* L, const void* data)              = nullptr;
-    bool (*match)(lua_State* L, int index)                   = nullptr;
-    script::ScriptValue (*pull)(lua_State* L, int index)     = nullptr;
+    int (*push)(lua_State* L, const script::ScriptValue& value) = nullptr;
+    bool (*match)(lua_State* L, int index)                      = nullptr;
+    script::ScriptValue (*pull)(lua_State* L, int index)        = nullptr;
 };
 
 template <class T>
-int pushSol(lua_State* L, const void* data)
+int pushSol(lua_State* L, const script::ScriptValue& value)
 {
-    return sol::stack::push(L, *static_cast<const T*>(data));
+    return sol::stack::push(L, *static_cast<const T*>(value.data()));
 }
 
 template <class T>
@@ -599,9 +599,9 @@ script::ScriptValue pullSol(lua_State* L, int index)
     return script::scriptMake(sol::stack::get<T>(L, index));
 }
 
-int pushFn(lua_State* L, const void* data)
+int pushFn(lua_State* L, const script::ScriptValue& value)
 {
-    const auto& handle = *static_cast<const script::ScriptFnHandle*>(data);
+    const auto& handle = *static_cast<const script::ScriptFnHandle*>(value.data());
     if (handle.id == 0) {
         lua_pushnil(L);
     }
@@ -611,17 +611,38 @@ int pushFn(lua_State* L, const void* data)
     return 1;
 }
 
-int pushSelf(lua_State* L, const void* data)
+int pushSelf(lua_State* L, const script::ScriptValue& value)
 {
-    const auto& handle = *static_cast<const script::ScriptSelfHandle*>(data);
+    const auto& handle = *static_cast<const script::ScriptSelfHandle*>(value.data());
     LuaScriptingSystem::pushLiveSelf(L, handle.runtimeId);
     return 1;
 }
 
-int pushRef(lua_State* L, const void* data)
+int pushRef(lua_State* L, const script::ScriptValue& value)
 {
-    pushObject(L, *static_cast<const ScriptRef*>(data));
+    pushObject(L, *static_cast<const ScriptRef*>(value.data()));
     return 1;
+}
+
+int pushValueStruct(lua_State* L, const script::ScriptValue& value)
+{
+    Class* cls = ClassRegistry::instance().getClass(value.type());
+    if (cls == nullptr) {
+        throw script::ScriptError("reflected struct has no class");
+    }
+    lua_createtable(L, 0, static_cast<int>(cls->propertyOrder.size()));
+    for (const std::string& name : cls->propertyOrder) {
+        const Property* prop = cls->getProperty(name);
+        pushLuaValue(L, prop->ref(const_cast<void*>(value.data())).materialize());
+        lua_setfield(L, -2, name.c_str());
+    }
+    return 1;
+}
+
+const LuaProjector& valueStructProjector()
+{
+    static const LuaProjector projector{.push = &pushValueStruct};
+    return projector;
 }
 
 const std::vector<std::pair<type_index_t, LuaProjector>>& luaProjectors()
@@ -637,12 +658,15 @@ const std::vector<std::pair<type_index_t, LuaProjector>>& luaProjectors()
     return table;
 }
 
-const LuaProjector* projectorFor(type_index_t type)
+const LuaProjector* projectorFor(const script::ScriptValue& value)
 {
     for (const auto& [key, projector] : luaProjectors()) {
-        if (key == type) {
+        if (key == value.type()) {
             return &projector;
         }
+    }
+    if (refl::TypeRegistry::instance().facet<reflection::FValueStruct>(value.type()) != nullptr) {
+        return &valueStructProjector();
     }
     return nullptr;
 }
@@ -680,21 +704,8 @@ int pushLuaValue(lua_State* L, const ScriptValue& value)
             break;
         }
     }
-    if (const LuaProjector* projector = projectorFor(value.type())) {
-        return projector->push(L, value.data());
-    }
-    if (refl::TypeRegistry::instance().facet<reflection::FValueStruct>(value.type()) != nullptr) {
-        Class* cls = ClassRegistry::instance().getClass(value.type());
-        if (cls == nullptr) {
-            throw script::ScriptError("reflected struct has no class");
-        }
-        lua_createtable(L, 0, static_cast<int>(cls->propertyOrder.size()));
-        for (const std::string& name : cls->propertyOrder) {
-            const Property* prop = cls->getProperty(name);
-            pushLuaValue(L, prop->ref(const_cast<void*>(value.data())).materialize());
-            lua_setfield(L, -2, name.c_str());
-        }
-        return 1;
+    if (const LuaProjector* projector = projectorFor(value)) {
+        return projector->push(L, value);
     }
     throw script::ScriptError(std::string("this value cannot cross into a script: ") + script::scriptValueTypeName(value));
 }
