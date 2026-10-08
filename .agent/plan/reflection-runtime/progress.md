@@ -359,3 +359,21 @@ debug，100000 次，3 次，ns/op。对照 RR0。
 `script::ScriptRect` 不再是脚本层写死的一种值。它用 `YA_REFLECT_BEGIN_NAMED(..., "script::ScriptRect")` 登记字段 `x/y/w/h`，并用 `YA_REFLECT_VALUE_STRUCT()` 打上 `FValueStruct` facet。脚本层只认这个 facet：整值拷贝进出，Lua 按反射字段推出表，任意表仍读不回来。JS 没有投影器，仍拒绝。
 
 序列化和拷贝因此能看见这四个 float。基线里 `rect` 不再是 JSON `null`，反序列化和 copier 都会把它带回来。`ya-testing` 1749/1749。
+
+## 2026-10-09 — RR6 最终成员视图下沉 reflects
+
+继承展开、覆盖和 owner path 改由 `Class::resolveMembers()` 提供。父类先进入，子类同名成员覆盖；多个父类里后登记的那个赢得同名成员。`ownerPath` 是从被查询对象走到声明该成员的子对象的类型链，本类自己声明的成员路径为空。没有 visited set，菱形会重复经过，后一次覆盖前一次，和原来脚本层的走法一样。
+
+`propertyOrder` / `functionOrder` 记下这次展开的顺序。同名再次声明会从原位置挪到末尾。脚本层按这个顺序 `insert_or_assign`，所以去掉前导 `_` 之后，派生类的脚本名仍然盖住基类的。
+
+`collectMembers` 不再递归 `Class::parents`。它只跳过 static、指针和不可跨的属性，跳过 static 以及带 `bRef` / `bPointer` 的函数，裁剪脚本名，并且不覆盖已经占住名字的 native field / method。`addScriptBase` 仍是脚本自己的链，不进 `resolveMembers`。
+
+调用路径没变，导出表仍是每个类型一次，微基准没重跑。序列化没动。
+
+### 验证
+
+- `reflects-core-test` 73/73（基线 70，新增 `ResolvedMembers` 3 个）。
+- `ya-testing` 1750/1750，4 个 `DISABLED_`（新增 `ScriptBindingTest.DerivedScriptNameReplacesInherited`：派生类的 `text` 盖住中间层的 `_text` 和基类的 `text`，写入落在派生成员上）。
+- `reflects-generator-test` 1/11，通过的仍是 `ReflectorTest.GetNonExistentClass`。
+- 冒烟退出码都是 0，日志没有 `[Error]`：`walk_one_cell.py` 走过一格 `(0.5, 0.5) -> (1.5, 0.5)`；GreedySnake `--exit-after-frame=90` 在 90 帧退出。
+- RR5b 的 Windows 验证仍未跑。RR6 本身不是 Windows 验证点。

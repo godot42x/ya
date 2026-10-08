@@ -415,24 +415,16 @@ bool signatureCrosses(const Function& function)
     return true;
 }
 
-/// Members declared further down the hierarchy win over inherited ones of the
-/// same script name.
-///
 /// TypeExport is a once-per-type, once-per-process projection (`exportOf`'s
-/// `bBuilt` guard), not a per-frame pass and not a repeated registration.
-/// The source is ClassRegistry. Backends cache handles into this derived
-/// view for the life of the process.
-void collectMembers(const Class& cls, const std::vector<type_index_t>& path, TypeExport& out)
+/// `bBuilt` guard). Inheritance, override, and owner path come from
+/// `Class::resolveMembers`. This pass only trims the script name and drops
+/// members that cannot cross.
+void collectMembers(const Class& cls, TypeExport& out)
 {
-    for (const type_index_t parent : cls.parents) {
-        if (const Class* parentClass = ClassRegistry::instance().getClass(parent)) {
-            std::vector<type_index_t> parentPath = path;
-            parentPath.push_back(parent);
-            collectMembers(*parentClass, parentPath, out);
-        }
-    }
-
-    for (const auto& [propertyName, property] : cls.properties) {
+    const ResolvedMembers resolved = cls.resolveMembers();
+    for (const std::string& propertyName : resolved.propertyOrder) {
+        const ResolvedProperty& resolvedProperty = resolved.properties.at(propertyName);
+        const Property&         property         = *resolvedProperty.property;
         if (property.bStatic || property.bPointer || !crossesToScripts(property.typeIndex)) {
             continue;
         }
@@ -446,12 +438,14 @@ void collectMembers(const Class& cls, const std::vector<type_index_t>& path, Typ
                                     ScriptField{
                                         .name      = name,
                                         .property  = &property,
-                                        .ownerPath = path,
+                                        .ownerPath = resolvedProperty.ownerPath,
                                         .bReadOnly = property.bConst || !property.addressGetterMutable,
                                     });
     }
 
-    for (const auto& [functionName, function] : cls.functions) {
+    for (const std::string& functionName : resolved.functionOrder) {
+        const ResolvedFunction& resolvedFunction = resolved.functions.at(functionName);
+        const Function&         function         = *resolvedFunction.function;
         if (!signatureCrosses(function)) {
             continue;
         }
@@ -461,7 +455,7 @@ void collectMembers(const Class& cls, const std::vector<type_index_t>& path, Typ
         if (const auto existing = out.methods.find(name); existing != out.methods.end() && !existing->second.function) {
             continue;
         }
-        out.methods.insert_or_assign(name, ScriptMethod{.name = name, .function = &function, .ownerPath = path});
+        out.methods.insert_or_assign(name, ScriptMethod{.name = name, .function = &function, .ownerPath = resolvedFunction.ownerPath});
     }
 }
 
@@ -474,7 +468,7 @@ TypeExport& exportOf(type_index_t type)
             if (!entry.bNameLocked) {
                 entry.name = cls->name;
             }
-            collectMembers(*cls, {}, entry);
+            collectMembers(*cls, entry);
         }
     }
     return entry;

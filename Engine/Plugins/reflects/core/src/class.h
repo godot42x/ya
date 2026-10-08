@@ -6,6 +6,7 @@
 #include <array>
 #include <memory>
 #include <span>
+#include <unordered_map>
 #include <vector>
 #include <ranges>
 
@@ -49,6 +50,35 @@ std::shared_ptr<T> makePtr(Args &&...args)
 {
     return std::make_shared<T>(std::forward<Args>(args)...);
 }
+
+/// One property on the final member view of a class. `ownerPath` is the cast
+/// chain from the queried object to the subobject that declares `property`:
+/// empty when the queried class declares it. A name declared again further
+/// down the hierarchy replaces the inherited one.
+struct ResolvedProperty
+{
+    const Property *property = nullptr;
+    std::vector<refl::type_index_t> ownerPath;
+};
+
+/// One function on the final member view. Same override and owner-path rules
+/// as `ResolvedProperty`.
+struct ResolvedFunction
+{
+    const Function *function = nullptr;
+    std::vector<refl::type_index_t> ownerPath;
+};
+
+struct ResolvedMembers
+{
+    std::unordered_map<std::string, ResolvedProperty> properties;
+    std::unordered_map<std::string, ResolvedFunction> functions;
+    // Parent-first. A reflected name declared again is moved to the end, so a
+    // consumer that collapses names (script names strip a leading '_') still
+    // sees the later declaration last.
+    std::vector<std::string> propertyOrder;
+    std::vector<std::string> functionOrder;
+};
 
 struct Class : public Field
 {
@@ -153,6 +183,9 @@ struct Class : public Field
     }
 
   public:
+
+    /// Inheritance expanded, derived names winning. Does not filter by language.
+    REFLECTS_CORE_API ResolvedMembers resolveMembers() const;
 
     // 获取父类子对象指针（自动处理虚继承和非虚继承）
     void *getParentPointer(void *childPtr, refl::type_index_t parentTypeId) const

@@ -9,7 +9,7 @@
 - [ ] RR4 编辑器 facet，并入 GUI 10F-6 / 10F-7（关键路径外；等 GUI 10F-1~5）
 - [x] RR5a invoker 收发 MetaValue；引用 / 输出参数；ArgumentList 退出外部 ABI；payload 删除
 - [x] RR5b ScriptValue → MetaValue；Lua 投影器；借用引用不泄漏（macOS 通过；Windows 待验证）
-- [ ] RR6 最终成员视图下沉 reflects
+- [x] RR6 最终成员视图下沉 reflects
 - [ ] RR8 脚本 native 迁移（原 S5.2 / S5.3），删除 addNativeMethod（Windows 验证点）
 - [ ] RR7 动态注册：按模块注销 + 版本号 + 通知 + 只读查询（关键路径外）
 - [ ] RR9 README 重写 + skill 吸收

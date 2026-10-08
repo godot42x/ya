@@ -57,6 +57,33 @@ struct FProbe : FProbeBase
     [[nodiscard]] const glm::mat4&   getMatrix() const { return _matrix; }
 };
 
+struct FNameBase
+{
+    YA_REFLECT_BEGIN(FNameBase)
+    YA_REFLECT_FIELD(text)
+    YA_REFLECT_END()
+
+    int text = 1;
+};
+
+struct FNameMid : FNameBase
+{
+    YA_REFLECT_BEGIN(FNameMid, FNameBase)
+    YA_REFLECT_FIELD(_text)
+    YA_REFLECT_END()
+
+    int _text = 2;
+};
+
+struct FNameLeaf : FNameMid
+{
+    YA_REFLECT_BEGIN(FNameLeaf, FNameMid)
+    YA_REFLECT_FIELD(text)
+    YA_REFLECT_END()
+
+    int text = 3;
+};
+
 } // namespace ya::script_binding_test
 
 YA_REFLECT_ENUM_BEGIN(ya::script_binding_test::EProbeMood)
@@ -157,6 +184,23 @@ TEST_F(ScriptBindingTest, ReflectedMembersThatCrossAreVisible)
     EXPECT_EQ(script::findMethod(type, "speed"), nullptr);
 
     EXPECT_EQ(script::findField(type, "speed"), script::findField(type, "speed"));
+}
+
+TEST_F(ScriptBindingTest, DerivedScriptNameReplacesInherited)
+{
+    static FNameLeaf object;
+    object = FNameLeaf{};
+    static const uint32_t kind = script::registerRefKind(script::ScriptRefKind{
+        .name    = "name-probe",
+        .resolve = [](const ScriptRef&) -> void* { return &object; },
+    });
+    const ScriptRef ref{.type = type_index_v<FNameLeaf>, .kind = kind};
+
+    EXPECT_EQ(script::readField(ref, "text"), script::scriptMake(int64_t{3}));
+    script::writeField(ref, "text", int64_t{8});
+    EXPECT_EQ(object.text, 8);
+    EXPECT_EQ(object.FNameBase::text, 1);
+    EXPECT_EQ(object._text, 2);
 }
 
 TEST_F(ScriptBindingTest, FieldsReadAndWriteThroughReflection)
