@@ -1,0 +1,15 @@
+{
+  "plan": "reflection-runtime",
+  "status": "todo",
+  "features": [
+    {"id": "RR0", "title": "behavior baseline: type x system matrix, characterization tests, script call microbench", "status": "todo", "evidence": []},
+    {"id": "RR1", "title": "reflects-core TypeOps + facets + open MetaValue", "status": "todo", "evidence": []},
+    {"id": "RR2", "title": "engine-side value type registration (glm, handles, ScriptRef, ScriptRect)", "status": "todo", "evidence": []},
+    {"id": "RR3", "title": "serializer / PropertyAccessor / copier query TypeOps", "status": "todo", "evidence": []},
+    {"id": "RR4", "title": "editor inspector queries editor facet", "status": "todo", "evidence": []},
+    {"id": "RR5", "title": "invoker speaks MetaValue; ScriptValue, external ArgumentList ABI, Function::payload removed", "status": "todo", "evidence": []},
+    {"id": "RR6", "title": "resolved member view moves into reflects", "status": "todo", "evidence": []},
+    {"id": "RR7", "title": "dynamic registration: version, change notification, unregister, read-only queries", "status": "todo", "evidence": []},
+    {"id": "RR8", "roadmap": ["S5"], "title": "script native migration (former S5.2/S5.3), addNativeMethod removed", "status": "todo", "evidence": []}
+  ]
+}

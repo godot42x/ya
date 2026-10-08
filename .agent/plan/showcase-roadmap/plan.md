@@ -130,7 +130,7 @@ G3.0 盘点（2026-10-07，读代码核实）：渲染侧（CSM 最多 4 级、I
 | --- | --- | --- |
 | `ui-behavior-capabilities`（下一步 C3） | P0 | 排在 game-ui S4 之前，2D demo 的背包 / 商店 / 对话 UI 依赖 |
 | `game-ui-script-framework`（下一步 S4 条目模态与取消路由） | P0 | 2D / 3D demo 的模态界面依赖 |
-| **S5 脚本 native 注册重构**（用户 2026-10-07 拍板；子计划已建 `script-native-registry/`，方案问答闭环）：`script::fn` 模板推导参数类型消灭手写 `argTypes`（owner 位由 `ScriptSelfHandle` 参数类型决定）；native 以反射函数身份进 `ClassRegistry`，`collectMembers` 与反射方法一视同仁导出——单一事实源、映射可枚举；字符串路径退到只剩 `ScriptMethodResolver` 真动态场景；迁移全仓 13 个手写注册点 | P1 | G3.2 物理脚本 API 是第一个大消费者（几十个函数），必须排在其前；与 C3 同碰绑定区文件，串行 |
+| **S5 反射 + 脚本层整体规范化**（2026-10-08 用户拍板升级；子计划 `reflection-runtime/`，吸收原 `script-native-registry/`，S5.1 已入库）：开放 MetaValue + TypeOps 每类型行为表放 `reflects-core`（零依赖），五处消费方（序列化 / PropertyAccessor / 拷贝 / 编辑器检查器 / 脚本）的按类型 if 链收进 TypeOps；`Function::invoker` 收发 MetaValue，`ScriptValue` 与 `std::any` 外部 ABI 退场；最终成员视图下沉 reflects；动态注册带版本号与变更通知；脚本 native 剩余 9 个注册点在新 ABI 上迁移 | P1 | C3（Lua 调用热路径）与 G3.2（物理脚本 API，几十个函数）都建在脚本绑定上，必须排在两者之前 |
 | `font-framework-convergence` | P1 | 文本逐字显示、CJK 显示质量 |
 | `editor-undo-redo` | P1 | 编辑器工具叙事 |
 | `gui-framework-editor-readiness`（Phase 8 移除 ImGui 双栈） | P1 | GUI 框架成熟度的核心证明 |
@@ -179,7 +179,7 @@ M1..M6 ───┼──► R1 FIF ──► R7 渲染线程
 
 U P0 (C2 → S4) ──► G2.3 系统 UI ──► G2.4 内容 ──► G2.5 打包
 G2.1/G2.2 ────────┘
-S5 (native 注册重构) ──► G3.2
+S5 (反射 + 脚本规范化) ──► C3 / G3.2
 A1 ──► G2.5 / G3.11
 G3.0 ──► G3.1 ──► G3.2/G3.3 ──► G3.6 ┐
 G3.0 ──► G3.4 ──► G3.5 ─────────────┼──► G3.8 ──► G3.9 ──► G3.11
@@ -191,7 +191,7 @@ G3.0 ──► G3.7 ────────────────────
 
 1. **波 1**：W1–W3；M1–M6、M8；G3.0 子计划设计（只出文档）；GA0 盘点、GA1；U 组 `ui-behavior-capabilities` C2。
 2. **波 2**：R1、R2、R3、R15；G2.1、G2.2；`game-ui-script-framework` S4；A1。
-3. **波 3**：G2.3、G2.4；**S5（native 注册重构，先于 G3.2）→ C3 串行**；G3.1–G3.7（引擎项，可多 worker 并行，按冲突面分配）；R4、R5、R6（P1 部分）；R11。
+3. **波 3**：G2.3、G2.4；**S5（反射 + 脚本规范化，`reflection-runtime/`）→ C3 串行，均先于 G3.2**；G3.1–G3.7（引擎项，可多 worker 并行，按冲突面分配）；R4、R5、R6（P1 部分）；R11。
 4. **波 4**：G3.8、G3.9、G3.11、G2.5；R7；R12；D1、D2；U 组 P1。
 5. **波 5**（P2）：R9、R10、R6-TAA、R13、M7 余项、A2、G3.12、G2.7、U 组 P2、D3。
 6. **收尾**：D4。

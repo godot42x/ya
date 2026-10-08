@@ -13,7 +13,7 @@
 - [ ] W4 profile 构建下 5 个 GUI 测试栈损坏排查（PB1 复核发现，debug 全过；见 plan §3 W4）
 
 GUI 与编辑器活跃线
-- [ ] S5 脚本 native 注册重构（用户拍板：模板签名推导 + 反射化函数库；先于 G3.2，与 C3 串行；子计划方案问答后开工）
+- [ ] S5 反射 + 脚本层整体规范化（`reflection-runtime/` RR0–RR8；吸收原 native 注册重构，S5.1 已入库；先于 C3 / G3.2）
 - [ ] `ui-behavior-capabilities` C3（Lua `call()` 热路径）
 
 测量与压测

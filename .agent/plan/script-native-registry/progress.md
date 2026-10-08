@@ -31,3 +31,9 @@
 - 主 agent 追加两处：修 `ScriptBindingsDetail.h:275` 搬家手滑（`type_index_v<T>()` 多余调用括号，编译失败根因）；`valueCodecs()` 改为从 variant 逐臂机械生成恒等 codec（monostate 除外），手写只留真转换——算术窄化与平台相关宽度（long/long long 在 LP64 与 LLP64 下与 int64_t 的同构性不同，四个条目保留防跨平台回归）。
 - 验证（主 agent 本机）：`*Script*` 99/99（98 + 1 句柄谓词新用例）；全量 `ya-testing` 1717/1717（1716 + 1）；`walk_one_cell` 三次 exit 0（1.5/1.4375/1.4375 为真实 dt 帧时序采样差异，脚本容差断言，非行为变化）；GreedySnake 90 帧退出码 0 无 ERROR。
 - 新增契约断言：`ScriptValue` 不可做参数（`!crossesToScripts<ScriptValue>()`、`!nativeSignatureOk<void, ScriptValue>`）；三个句柄类型运行时谓词为真。
+
+## 2026-10-08 — 暂停，并入 reflection-runtime
+
+- S5.1 审查与用户复核暴露的问题根在反射层（两套动态值、五处类型 if 链、无扩展机制、无最终成员视图、无版本通知），不在脚本层。用户决定反射 + 脚本整体重构，新线 `reflection-runtime/`。
+- S5.1（`b9a30ef9` + `83829bc0`）保留；S5.2 / S5.3 并入 `reflection-runtime` RR8，在新值模型与调用 ABI 落地后迁移，避免把 9 个注册点迁到即将变更的 API 上再返工。
+- 本目录不再追加进度；后续见 `reflection-runtime/progress.md`。
