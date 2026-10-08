@@ -164,7 +164,7 @@ void ForwardViewUnlitPass::initUnlit(const InitDesc& desc)
 
     constexpr uint32_t unlitTextureCount = 2;
     _unlitMatPool.init(
-        _render, _unlitParamDSL, _unlitResourceDSL, [unlitTextureCount](uint32_t n) -> std::vector<DescriptorPoolSize>
+        _render, _unlitParamDSL, _unlitResourceDSL, [](uint32_t n) -> std::vector<DescriptorPoolSize>
         { return {
               {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
               {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * unlitTextureCount},

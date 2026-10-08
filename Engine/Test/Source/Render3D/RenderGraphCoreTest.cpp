@@ -34,7 +34,7 @@ class TestBuffer final : public IBuffer
     uint32_t getSize() const override { return _size; }
     bool isHostVisible() const override { return true; }
     const std::string& getName() const override { return _name; }
-    EBufferUsage getUsage() const { return _usage; }
+    EBufferUsage getUsage() const override { return _usage; }
 
   protected:
     void mapInternal(void** ptr) override { *ptr = nullptr; }
@@ -668,7 +668,7 @@ TEST(RenderGraphCoreTest, CompileRejectsReadBeforeWriteForTransientTexture)
          .usage  = EImageUsage::Sampled | EImageUsage::ColorAttachment,
     });
 
-    graph.addPass("consumer", [&](RGPassBuilder& pass) {
+   (void)graph.addPass("consumer", [&](RGPassBuilder& pass) {
         pass.read(texture);
     });
 
@@ -732,7 +732,7 @@ TEST(RenderGraphCoreTest, CompileRejectsTextureUsageMismatch)
          .usage  = EImageUsage::ColorAttachment,
     });
 
-    graph.addPass("reader", [&](RGPassBuilder& pass) {
+   (void)graph.addPass("reader", [&](RGPassBuilder& pass) {
         pass.read(texture);
     });
 
@@ -752,7 +752,7 @@ TEST(RenderGraphCoreTest, DebugDumpIncludesPassOrderDependenciesAndIssues)
          .usage  = EImageUsage::ColorAttachment,
     });
 
-    graph.addPass("consumer", [&](RGPassBuilder& pass) {
+   (void)graph.addPass("consumer", [&](RGPassBuilder& pass) {
         pass.read(texture);
     });
 
@@ -796,7 +796,7 @@ TEST(RenderGraphCoreTest, CompileInfersCopyPassKindForTransferOnlyPass)
         .buffer = dstBacking.get(),
     });
 
-    graph.addPass("copy", [&](RGPassBuilder& pass) {
+   (void)graph.addPass("copy", [&](RGPassBuilder& pass) {
         pass.transferSrc(src);
         pass.transferDst(dst);
     });
@@ -817,7 +817,7 @@ TEST(RenderGraphCoreTest, CompileRejectsCopyPassWithNonTransferUsage)
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     });
 
-    graph.addPass("bad-copy", [&](RGPassBuilder& pass) {
+   (void)graph.addPass("bad-copy", [&](RGPassBuilder& pass) {
         pass.declareCopy();
         pass.read(texture);
     });
@@ -848,7 +848,7 @@ TEST(RenderGraphCoreTest, CompileStoresDeclaredRasterPlanInCompiledPassPlan)
         .usage  = EImageUsage::DepthStencilAttachment,
     });
 
-    graph.addPass("declared-raster", [&](RGPassBuilder& pass) {
+   (void)graph.addPass("declared-raster", [&](RGPassBuilder& pass) {
         pass.declareRaster({
             .renderArea = Rect2D{.pos = {4, 8}, .extent = {160, 90}},
             .layerCount = 3,
@@ -984,13 +984,13 @@ TEST(RenderGraphCoreTest, CompileOrdersTransientBufferLifetimesByTopologicalUse)
         .size  = 48,
     });
 
-    graph.addPass("write-early", [&](RGPassBuilder& pass) {
+   (void)graph.addPass("write-early", [&](RGPassBuilder& pass) {
         pass.transferDst(lateCreatedButEarlyUsed);
     });
-    graph.addPass("write-middle", [&](RGPassBuilder& pass) {
+   (void)graph.addPass("write-middle", [&](RGPassBuilder& pass) {
         pass.storageWrite(middleUsed);
     });
-    graph.addPass("write-late", [&](RGPassBuilder& pass) {
+   (void)graph.addPass("write-late", [&](RGPassBuilder& pass) {
         pass.storageWrite(earlyCreatedButLateUsed);
     });
 
@@ -1118,13 +1118,13 @@ TEST(RenderGraphCoreTest, CompileAllocatesDeterministicTransientBufferSlots)
         .alignment   = 32,
     });
 
-    graph.addPass("write-first", [&](RGPassBuilder& pass) {
+   (void)graph.addPass("write-first", [&](RGPassBuilder& pass) {
         pass.transferDst(first);
     });
-    graph.addPass("write-second", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("write-second", [&](RGPassBuilder& pass) {
         pass.transferDst(second);
     });
-    graph.addPass("write-third", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("write-third", [&](RGPassBuilder& pass) {
         pass.storageWrite(third);
     });
 
@@ -1203,17 +1203,17 @@ TEST(RenderGraphCoreTest, CompileDoesNotAliasOverlappingOrIncompatibleTransientB
         },
     });
 
-    graph.addPass("write-a", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("write-a", [&](RGPassBuilder& pass) {
         pass.storageWrite(overlapA);
     });
-    graph.addPass("write-b", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("write-b", [&](RGPassBuilder& pass) {
         pass.storageRead(overlapA);
         pass.storageWrite(overlapB);
     });
-    graph.addPass("read-b", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("read-b", [&](RGPassBuilder& pass) {
         pass.storageRead(overlapB);
     });
-    graph.addPass("write-incompatible", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("write-incompatible", [&](RGPassBuilder& pass) {
         pass.storageWrite(incompatible);
         pass.storageRead(imported);
     });
@@ -1304,7 +1304,7 @@ TEST(RenderGraphCoreTest, CompileBuildsImportedFinalizePlans)
         },
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "copy-to-imported",
         [&](RGPassBuilder& pass) {
             pass.transferDst(importedTexture);
@@ -1338,7 +1338,7 @@ TEST(RenderGraphCoreTest, CompileBuildsBufferAndDepthStatePlans)
         .size  = 256,
     });
 
-    graph.addPass("depth-prepass", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("depth-prepass", [&](RGPassBuilder& pass) {
         pass.useDepthAttachment(depth);
         pass.storageWrite(storage);
     });
@@ -1420,7 +1420,7 @@ TEST(RenderGraphCoreTest, CompileTracksExplicitUniformAndStorageBufferStates)
         .size  = 512,
     });
 
-    graph.addPass("buffer-users", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("buffer-users", [&](RGPassBuilder& pass) {
         pass.uniformRead(uniformBuffer, {.offset = 32, .size = 64});
         pass.storageWrite(storageBuffer, {.offset = 128, .size = 96});
     });
@@ -1469,7 +1469,7 @@ TEST(RenderGraphCoreTest, CompileUsesImportedViewRangeForTextureStatePlan)
             .layerCount     = 1,
         }));
 
-    graph.addPass("face-writer", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("face-writer", [&](RGPassBuilder& pass) {
         pass.useColorAttachment(importedFace);
     });
 
@@ -1579,7 +1579,7 @@ TEST(RenderGraphCoreTest, CompileRejectsIndirectReadWithoutIndirectUsage)
         },
         .buffer = commandsBacking.get(),
     });
-    graph.addPass("draw", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("draw", [&](RGPassBuilder& pass) {
         pass.indirectRead(commands);
     });
 
@@ -1619,7 +1619,7 @@ TEST(RenderGraphCoreTest, ImportedSubresourceHelperKeepsProvidedViewAndCompileRa
         "shadow.directional",
         EImageLayout::ShaderReadOnlyOptimal));
 
-    graph.addPass("shadow-consumer", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("shadow-consumer", [&](RGPassBuilder& pass) {
         pass.read(shadowDepth);
     });
 
@@ -1748,10 +1748,10 @@ TEST(RenderGraphCoreTest, ResourceRegistryMaterializesOneBufferPerCompiledTransi
         .usage = EBufferUsage::StorageBuffer,
         .size  = 128,
     });
-    graph.addPass("write-first", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("write-first", [&](RGPassBuilder& pass) {
         pass.storageWrite(first);
     });
-    graph.addPass("write-second", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("write-second", [&](RGPassBuilder& pass) {
         pass.storageWrite(second);
     });
 
@@ -1783,7 +1783,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesTransientBufferPoolAcrossFramesA
         .size        = 64,
         .memoryUsage = EMemoryUsage::GpuOnly,
     });
-    graphA.addPass("write-a", [&](RGPassBuilder& pass) {
+    (void)graphA.addPass("write-a", [&](RGPassBuilder& pass) {
         pass.storageWrite(bufferA);
     });
     const auto compiledA = graphA.compile();
@@ -1802,7 +1802,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesTransientBufferPoolAcrossFramesA
         .size        = 32,
         .memoryUsage = EMemoryUsage::GpuOnly,
     });
-    graphB.addPass("write-b", [&](RGPassBuilder& pass) {
+    (void)graphB.addPass("write-b", [&](RGPassBuilder& pass) {
         pass.storageWrite(bufferB);
     });
     const auto compiledB = graphB.compile();
@@ -1820,7 +1820,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesTransientBufferPoolAcrossFramesA
         .size        = 128,
         .memoryUsage = EMemoryUsage::GpuOnly,
     });
-    graphC.addPass("write-c", [&](RGPassBuilder& pass) {
+    (void)graphC.addPass("write-c", [&](RGPassBuilder& pass) {
         pass.storageWrite(bufferC);
     });
     const auto compiledC = graphC.compile();
@@ -1840,7 +1840,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesTransientBufferPoolAcrossFramesA
         .size        = 32,
         .memoryUsage = EMemoryUsage::CpuToGpu,
     });
-    graphD.addPass("write-d", [&](RGPassBuilder& pass) {
+    (void)graphD.addPass("write-d", [&](RGPassBuilder& pass) {
         pass.storageWrite(bufferD);
     });
     const auto compiledD = graphD.compile();
@@ -1865,10 +1865,10 @@ TEST(RenderGraphCoreTest, ResourceRegistryLegacySyncKeepsLogicalTransientBuffers
         .usage = EBufferUsage::StorageBuffer,
         .size  = 64,
     });
-    graph.addPass("write-first", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("write-first", [&](RGPassBuilder& pass) {
         pass.storageWrite(first);
     });
-    graph.addPass("write-second", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("write-second", [&](RGPassBuilder& pass) {
         pass.storageWrite(second);
     });
 
@@ -1896,10 +1896,10 @@ TEST(RenderGraphCoreTest, ExecutorForcesBarrierAtTransientAliasBoundary)
         .usage = EBufferUsage::StorageBuffer,
         .size  = 128,
     });
-    graph.addPass("write-first", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("write-first", [&](RGPassBuilder& pass) {
         pass.storageWrite(first);
     });
-    graph.addPass("write-second", [&](RGPassBuilder& pass) {
+    (void)graph.addPass("write-second", [&](RGPassBuilder& pass) {
         pass.storageWrite(second);
     });
 
@@ -2015,7 +2015,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedKeepAliveWithoutRecre
         RenderGraph graphA;
         auto ownerA = std::make_shared<int>(1);
         ownerAWeak = ownerA;
-        graphA.importTexture(RGImportedTextureDesc{
+        (void)graphA.importTexture(RGImportedTextureDesc{
             .desc = RGTextureDesc{
                 .label  = "persistent.imported",
                 .format = EFormat::R16G16B16A16_SFLOAT,
@@ -2043,7 +2043,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedKeepAliveWithoutRecre
         RenderGraph graphB;
         auto ownerB = std::make_shared<int>(2);
         ownerBWeak = ownerB;
-        graphB.importTexture(RGImportedTextureDesc{
+        (void)graphB.importTexture(RGImportedTextureDesc{
             .desc = RGTextureDesc{
                 .label  = "persistent.imported",
                 .format = EFormat::R16G16B16A16_SFLOAT,
@@ -2104,7 +2104,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryDestructorDefersImportedKeepAliveRelea
         RenderGraph graph;
         auto owner = std::make_shared<int>(42);
         retainedOwner = owner;
-        graph.importTexture(RGImportedTextureDesc{
+        (void)graph.importTexture(RGImportedTextureDesc{
             .desc = RGTextureDesc{
                 .label  = "deferred.imported",
                 .format = EFormat::R16G16B16A16_SFLOAT,
@@ -2178,7 +2178,7 @@ TEST(RenderGraphCoreTest, ExecutorClearDefersImportedTextureKeepAliveReleaseThro
             .resource = makeTestImageResource(existingImage, existingView),
             .retainedResources = {owner},
         });
-        graph.addPass(
+        (void)graph.addPass(
             "presentation-reader",
             [=](RGPassBuilder& pass) { pass.read(imported); },
             [](RGRenderContext&) {});
@@ -2207,7 +2207,7 @@ TEST(RenderGraphCoreTest, PrepareCapturesExplicitExportedTexturesOnly)
         .extent = Extent3D{640, 360, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     });
-    graph.createTexture(RGTextureDesc{
+    (void)graph.createTexture(RGTextureDesc{
         .label  = "hidden",
         .format = EFormat::R8G8B8A8_UNORM,
         .extent = Extent3D{64, 64, 1},
@@ -2661,7 +2661,7 @@ TEST(RenderGraphCoreTest, DebugDumpListsImportedResourcesWithBackingIdentity)
          .desc   = RGBufferDesc{.label = "dump.ssbo", .usage = EBufferUsage::StorageBuffer, .size = 128},
          .buffer = buffer.get(),
     });
-    (void)graph.addPass("dump.pass", [texture, ssbo](RGPassBuilder& pass) {
+   (void)graph.addPass("dump.pass", [texture, ssbo](RGPassBuilder& pass) {
         pass.read(texture);
         pass.storageRead(ssbo);
     });
@@ -2719,7 +2719,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryKeepsSharedImportedTextureWhenOnlyLayo
     EXPECT_EQ(factory.createdViews, 0u);
 
     RenderGraph graphB;
-    graphB.importTexture(RGImportedTextureDesc{
+    (void)graphB.importTexture(RGImportedTextureDesc{
         .desc = RGTextureDesc{
             .label  = "shared.imported.layout.test",
             .format = EFormat::B8G8R8A8_UNORM,
@@ -2929,7 +2929,7 @@ TEST(RenderGraphCoreTest, ExecutorRunsPassesInCompiledOrderAndResolvesResources)
         .size  = 512,
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "writer",
         [&](RGPassBuilder& pass) {
             pass.useColorAttachment(texture);
@@ -2943,7 +2943,7 @@ TEST(RenderGraphCoreTest, ExecutorRunsPassesInCompiledOrderAndResolvesResources)
             EXPECT_EQ(ctx.getTextureDesc(texture).label, "hdr");
         });
 
-    graph.addPass(
+    (void)graph.addPass(
         "reader",
         [&](RGPassBuilder& pass) {
             pass.read(texture);
@@ -3027,7 +3027,7 @@ TEST(RenderGraphCoreTest, RenderContextReportsDeclaredTextureAndBufferUsage)
         .buffer = &dstBacking,
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "reader",
         [&](RGPassBuilder& pass) {
             pass.read(declared);
@@ -3080,7 +3080,7 @@ TEST(RenderGraphCoreTest, RenderContextReportsTransferAccessRequirements)
         .buffer = &dstBacking,
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "copy",
         [&](RGPassBuilder& pass) {
             pass.transferSrc(src);
@@ -3115,7 +3115,7 @@ TEST(RenderGraphCoreTest, ExecutorCanBeginDeclaredRasterRenderingFromCompiledPas
         .usage  = EImageUsage::DepthStencilAttachment,
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "declared-raster",
         [&](RGPassBuilder& pass) {
             pass.declareRaster({
@@ -3171,7 +3171,7 @@ TEST(RenderGraphCoreTest, ExecutorExposesTypedRasterExecutionParamsFromCompiledP
 
     bool seenParams = false;
 
-    graph.addPass(
+    (void)graph.addPass(
         "typed-raster-params",
         [&](RGPassBuilder& pass) {
             pass.declareRaster({
@@ -3224,7 +3224,7 @@ TEST(RenderGraphCoreTest, ExecutorRejectsInvalidGraphWithoutRunningPasses)
         .usage  = EImageUsage::Sampled | EImageUsage::ColorAttachment,
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "consumer",
         [&](RGPassBuilder& pass) {
             pass.read(texture);
@@ -3266,7 +3266,7 @@ TEST(RenderGraphCoreTest, ExecutorSeedsImportedBufferBarrierFromDeclaredInitialS
             .size   = 256,
         },
     });
-    graph.addPass(
+    (void)graph.addPass(
         "uniform-reader",
         [=](RGPassBuilder& pass) { pass.uniformRead(imported); },
         [](RGRenderContext&) {});
@@ -3321,7 +3321,7 @@ TEST(RenderGraphCoreTest, ExecutorTracksInitialStatesForNonOverlappingSharedBuff
         },
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "shared-upload-reader",
         [=](RGPassBuilder& pass) {
             pass.uniformRead(frameSlice, RGBufferRange{.offset = 0, .size = 128});
@@ -3366,7 +3366,7 @@ TEST(RenderGraphCoreTest, ExecutorRetainsImportedBufferKeepAliveResources)
         },
         .retainedResources = {owner},
     });
-    graph.addPass(
+    (void)graph.addPass(
         "storage-reader",
         [=](RGPassBuilder& pass) { pass.storageRead(imported); },
         [](RGRenderContext&) {});
@@ -3401,7 +3401,7 @@ TEST(RenderGraphCoreTest, ExecutorRestoresImportedBufferFinalStateAfterTransferP
             .size   = 512,
         },
     });
-    graph.addPass(
+    (void)graph.addPass(
         "copy-readback",
         [=](RGPassBuilder& pass) { pass.transferDst(imported); },
         [](RGRenderContext&) {});
@@ -3442,7 +3442,7 @@ TEST(RenderGraphCoreTest, ExecuteCompiledRestoresImportedBufferFinalStateAfterTr
             .size   = 512,
         },
     });
-    graph.addPass(
+    (void)graph.addPass(
         "copy-readback",
         [=](RGPassBuilder& pass) { pass.transferDst(imported); },
         [](RGRenderContext&) {});
@@ -3500,7 +3500,7 @@ TEST(RenderGraphCoreTest, ResolveTextureRetainsImportedTextureKeepAliveResources
         .resource = makeTestImageResource(existingImage, existingView),
         .retainedResources = {owner},
     });
-    graph.addPass(
+    (void)graph.addPass(
         "sample-reader",
         [=](RGPassBuilder& pass) { pass.read(imported); },
         [=](RGRenderContext& ctx) {
@@ -3559,7 +3559,7 @@ TEST(RenderGraphCoreTest, PassBindingContextResolvesTextureDescriptorAndRetainsO
     });
 
     std::optional<DescriptorImageInfo> resolved;
-    graph.addPass(
+    (void)graph.addPass(
         "binding-reader",
         [=](RGPassBuilder& pass) { pass.read(imported); },
         [&](RGRenderContext& ctx) {
@@ -3602,7 +3602,7 @@ TEST(RenderGraphCoreTest, PassBindingContextResolvesBufferDescriptorWithDeclared
     });
 
     std::optional<DescriptorBufferInfo> resolved;
-    graph.addPass(
+    (void)graph.addPass(
         "binding-ubo",
         [=](RGPassBuilder& pass) { pass.uniformRead(imported, RGBufferRange{.offset = 64, .size = 128}); },
         [&](RGRenderContext& ctx) {
@@ -3660,7 +3660,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedBufferKeepAliveWithou
         RenderGraph graphB;
         auto ownerB = std::make_shared<int>(2);
         ownerBWeak = ownerB;
-        graphB.importBuffer(RGImportedBufferDesc{
+        (void)graphB.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
                 .label = "external.visible",
                 .usage = EBufferUsage::StorageBuffer,
@@ -3705,7 +3705,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryDoesNotRetireImportedBufferKeepAliveWh
 
     {
         RenderGraph graphA;
-        graphA.importBuffer(RGImportedBufferDesc{
+        (void)graphA.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
                 .label = "external.stable.visible",
                 .usage = EBufferUsage::StorageBuffer,
@@ -3718,7 +3718,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryDoesNotRetireImportedBufferKeepAliveWh
         EXPECT_EQ(deletionQueue.pendingCount(), 0u);
 
         RenderGraph graphB;
-        graphB.importBuffer(RGImportedBufferDesc{
+        (void)graphB.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
                 .label = "external.stable.visible",
                 .usage = EBufferUsage::StorageBuffer,
@@ -3758,7 +3758,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryPrunesImportedBufferKeepAliveWhenBuffe
         RenderGraph graph;
         auto owner = std::make_shared<int>(7);
         ownerWeak = owner;
-        graph.importBuffer(RGImportedBufferDesc{
+        (void)graph.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
                 .label = "external.cull.instances",
                 .usage = EBufferUsage::StorageBuffer,
@@ -3801,7 +3801,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryPruneDefersImportedBufferKeepAliveRele
         RenderGraph graph;
         auto owner = std::make_shared<int>(11);
         ownerWeak = owner;
-        graph.importBuffer(RGImportedBufferDesc{
+        (void)graph.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
                 .label = "external.async.instances",
                 .usage = EBufferUsage::StorageBuffer,
@@ -3852,7 +3852,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryDoesNotRetireImportedTextureKeepAliveW
 
     {
         RenderGraph graphA;
-        graphA.importTexture(RGImportedTextureDesc{
+        (void)graphA.importTexture(RGImportedTextureDesc{
             .desc = RGTextureDesc{
                 .label  = "existing.stable.color.import",
                 .format = EFormat::R8G8B8A8_UNORM,
@@ -3873,7 +3873,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryDoesNotRetireImportedTextureKeepAliveW
         EXPECT_EQ(deletionQueue.pendingCount(), 0u);
 
         RenderGraph graphB;
-        graphB.importTexture(RGImportedTextureDesc{
+        (void)graphB.importTexture(RGImportedTextureDesc{
             .desc = RGTextureDesc{
                 .label  = "existing.stable.color.import",
                 .format = EFormat::R8G8B8A8_UNORM,
@@ -3922,7 +3922,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryClearDefersImportedBufferKeepAliveRele
         RenderGraph graph;
         auto owner = std::make_shared<int>(29);
         ownerWeak = owner;
-        graph.importBuffer(RGImportedBufferDesc{
+        (void)graph.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
                 .label = "external.deferred.visible",
                 .usage = EBufferUsage::StorageBuffer,
@@ -3978,7 +3978,7 @@ TEST(RenderGraphCoreTest, ExecutorSmokeRunsClearAndCopyCallbacks)
         .size  = 256,
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "clear",
         [&](RGPassBuilder& pass) {
             pass.useColorAttachment(colorTarget);
@@ -3996,7 +3996,7 @@ TEST(RenderGraphCoreTest, ExecutorSmokeRunsClearAndCopyCallbacks)
             ctx.endRendering();
         });
 
-    graph.addPass(
+    (void)graph.addPass(
         "copy",
         [&](RGPassBuilder& pass) {
             pass.transferSrc(srcBuffer);
@@ -4157,7 +4157,7 @@ TEST(RenderGraphCoreTest, ExecutorRestoresImportedTextureFinalLayoutAfterTransfe
         .resource = makeTestImageResource(sharedImage, sharedView),
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "copy-to-swapchain",
         [&](RGPassBuilder& pass) {
             pass.transferDst(imported);
@@ -4194,7 +4194,7 @@ TEST(RenderGraphCoreTest, DebugDumpIncludesImportedFinalizePlans)
         .size  = 512,
     });
 
-    graph.importTexture(RGImportedTextureDesc{
+    (void)graph.importTexture(RGImportedTextureDesc{
         .desc = RGTextureDesc{
             .label  = "swapchain",
             .format = EFormat::B8G8R8A8_UNORM,
@@ -4212,7 +4212,7 @@ TEST(RenderGraphCoreTest, DebugDumpIncludesImportedFinalizePlans)
         },
         .resource = makeTestImageResource(sharedImage, sharedView),
     });
-    graph.importBuffer(RGImportedBufferDesc{
+    (void)graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
             .label = "readback.dst",
             .usage = EBufferUsage::TransferDst,
@@ -4273,7 +4273,7 @@ TEST(RenderGraphCoreTest, ExecuteCompiledRestoresImportedTextureFinalLayoutAfter
         .resource = makeTestImageResource(sharedImage, sharedView),
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "copy-to-swapchain",
         [&](RGPassBuilder& pass) {
             pass.transferDst(imported);
@@ -4292,7 +4292,7 @@ TEST(RenderGraphCoreTest, ExecuteCompiledRestoresImportedTextureFinalLayoutAfter
 
 TEST(RenderGraphCoreTest, ExecuteWrapperMatchesPrepareAndExecuteCompiledForImportedFinalizeContract)
 {
-    auto buildGraph = [](TestResourceFactory& factory, TestBuffer& readbackBuffer) {
+    auto buildGraph = [](TestResourceFactory&, TestBuffer& readbackBuffer) {
         RenderGraph graph;
 
         auto sharedImage = std::make_shared<TestImage>(ImageCreateInfo{
@@ -4341,7 +4341,7 @@ TEST(RenderGraphCoreTest, ExecuteWrapperMatchesPrepareAndExecuteCompiledForImpor
             },
         });
 
-        graph.addPass(
+        (void)graph.addPass(
             "copy-to-imported",
             [&](RGPassBuilder& pass) {
                 pass.transferDst(importedTexture);
@@ -4449,7 +4449,7 @@ TEST(RenderGraphCoreTest, RenderContextCanCopyTextureToBuffer)
         .buffer = &importedDst,
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "readback-copy",
         [&](RGPassBuilder& pass) {
             pass.transferSrc(srcTexture);
@@ -4517,7 +4517,7 @@ TEST(RenderGraphCoreTest, RenderContextHelpersDriveRenderingAndCopyCommands)
         .size  = 32,
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "helper-pass",
         [&](RGPassBuilder& pass) {
             pass.useColorAttachment(colorTarget);
@@ -4565,7 +4565,7 @@ TEST(RenderGraphCoreTest, RasterRenderingHelperSupportsOptionalDepthAttachment)
         .usage  = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "helper-raster-pass",
         [&](RGPassBuilder& pass) {
             pass.useColorAttachment(colorTarget);
@@ -4618,7 +4618,7 @@ TEST(RenderGraphCoreTest, RasterRenderingHelperSupportsResolveAttachment)
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "helper-resolve-pass",
         [&](RGPassBuilder& pass) {
             pass.useColorAttachment(colorTarget);
@@ -4661,7 +4661,7 @@ TEST(RenderGraphCoreTest, RasterRenderingHelperSupportsDepthOnlyPass)
         .usage  = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
     });
 
-    graph.addPass(
+    (void)graph.addPass(
         "shadow-depth-only",
         [&](RGPassBuilder& pass) {
             pass.useDepthAttachment(depthTarget);

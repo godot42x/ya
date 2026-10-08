@@ -42,7 +42,7 @@ struct NamedWindowDelegate final : IGUIAppDelegate
         FCanvasSlotArgs slot;
         slot.offset    = {4.0f, 4.0f};
         slot.fixedSize = {80.0f, 24.0f};
-        tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, slot);
+       (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, slot);
     }
 
     void updateUI() override { ++updates; }
@@ -494,7 +494,7 @@ struct CrossWindowSourceDelegate final : IGUIAppDelegate
         FCanvasSlotArgs slot;
         slot.offset    = {4.0f, 4.0f};
         slot.fixedSize = {80.0f, 24.0f};
-        tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, slot);
+       (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, slot);
     }
 };
 
@@ -508,7 +508,7 @@ struct CrossWindowTargetDelegate final : IGUIAppDelegate
         FCanvasSlotArgs slot;
         slot.offset    = {4.0f, 4.0f};
         slot.fixedSize = {140.0f, 100.0f};
-        tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, slot);
+       (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, slot);
     }
 };
 
@@ -921,7 +921,7 @@ struct DockWindowDelegate final : IGUIAppDelegate
         FCanvasSlotArgs fill;
         fill.anchorMin = {0.0f, 0.0f};
         fill.anchorMax = {1.0f, 1.0f};
-        tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), space, fill);
+       (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), space, fill);
         space->setContext(dock);
         dock->addPanel("keep", "Keep", std::make_shared<UICanvasPanel>("Keep"));
         if (extraPanel) {
@@ -1066,8 +1066,8 @@ TEST(GUIWindowManagerTest, DragDropTileCaptureStartsSessionAndDrops)
     FCanvasSlotArgs targetSlot;
     targetSlot.offset    = {200.0f, 0.0f};
     targetSlot.fixedSize = {120.0f, 30.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
     tree.layout();
 
     WidgetEventContext pressCtx;
@@ -1100,7 +1100,7 @@ TEST(GUIDragRouterTest, AdoptSourceFromPrimaryTreeWithoutSdl)
     FCanvasSlotArgs slot;
     slot.offset = {4.0f, 4.0f};
     slot.fixedSize = {40.0f, 20.0f};
-    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, slot);
 
     GUIDragRouter router;
     router.bindPrimary(7, &tree);
@@ -1123,8 +1123,8 @@ TEST(GUIDragRouterTest, RoutesDropOntoBoundForeignTreeWithoutSdl)
     FCanvasSlotArgs slot;
     slot.offset = {4.0f, 4.0f};
     slot.fixedSize = {140.0f, 100.0f};
-    (void)sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), source, slot);
-    (void)targetTree.attach(*targetTree.getLayer(WidgetTree::ELayer::Content), target, slot);
+   (void)sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), source, slot);
+   (void)targetTree.attach(*targetTree.getLayer(WidgetTree::ELayer::Content), target, slot);
     sourceTree.layout();
     targetTree.layout();
 
@@ -1160,12 +1160,12 @@ TEST(GUIDragRouterTest, RoutesCapturedMoveFromForeignTreeWithoutSdl)
     FCanvasSlotArgs slot;
     slot.offset = {4.0f, 4.0f};
     slot.fixedSize = {140.0f, 100.0f};
-    (void)sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), probe, slot);
+   (void)sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), probe, slot);
     sourceTree.layout();
 
     WidgetEventContext pressCtx;
     pressCtx.logicalPoint = {20.0f, 20.0f};
-    (void)sourceTree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pressCtx);
+   (void)sourceTree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pressCtx);
     ASSERT_EQ(sourceTree.getPointerCapture(), probe.get());
 
     GUIDragRouter router;
@@ -1203,13 +1203,13 @@ TEST(GUIDragRouterTest, TreeDestructionDropsCachedBindings)
         FCanvasSlotArgs slot;
         slot.offset = {4.0f, 4.0f};
         slot.fixedSize = {40.0f, 20.0f};
-        (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe, slot);
+       (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe, slot);
         tree.layout();
         router.bindPrimary(7, &tree);
 
         WidgetEventContext pressCtx;
         pressCtx.logicalPoint = {20.0f, 20.0f};
-        (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pressCtx);
+       (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pressCtx);
         ASSERT_EQ(tree.getPointerCapture(), probe.get());
         router.adoptCapture();
         ASSERT_TRUE(router.isCaptureActive());
@@ -1256,7 +1256,7 @@ TEST(GUIDragRouterTest, TextInputWindowFollowsFocusedFieldWithoutSdl)
     FCanvasSlotArgs slot;
     slot.offset = {4.0f, 4.0f};
     slot.fixedSize = {120.0f, 24.0f};
-    (void)extra.attach(*extra.getLayer(WidgetTree::ELayer::Content), field, slot);
+   (void)extra.attach(*extra.getLayer(WidgetTree::ELayer::Content), field, slot);
     extra.setFocus(field.get());
     ASSERT_TRUE(extra.wantsTextInput());
     EXPECT_FALSE(primary.wantsTextInput());
@@ -1274,12 +1274,12 @@ TEST(GUIDragRouterTest, CursorReadsCaptureWidgetWithoutSdl)
     FCanvasSlotArgs slot;
     slot.offset = {4.0f, 4.0f};
     slot.fixedSize = {120.0f, 24.0f};
-    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe, slot);
     tree.layout();
 
     WidgetEventContext pressCtx;
     pressCtx.logicalPoint = {10.0f, 10.0f};
-    (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pressCtx);
+   (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pressCtx);
 
     GUIDragRouter router;
     router.bindPrimary(3, &tree);
@@ -1294,7 +1294,7 @@ TEST(GUIDragRouterTest, WantsDesktopOverlayWhenPointerLeavesTreeExtent)
     FCanvasSlotArgs slot;
     slot.offset = {4.0f, 4.0f};
     slot.fixedSize = {40.0f, 20.0f};
-    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, slot);
 
     GUIDragRouter router;
     router.bindPrimary(1, &tree);
@@ -1457,8 +1457,8 @@ TEST(GUIDragRouterTest, ForeignHoverShowsExternalGhostWithoutPickup)
     FCanvasSlotArgs slot;
     slot.offset    = {4.0f, 4.0f};
     slot.fixedSize = {120.0f, 80.0f};
-    (void)sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), source, slot);
-    (void)hoverTree.attach(*hoverTree.getLayer(WidgetTree::ELayer::Content), target, slot);
+   (void)sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), source, slot);
+   (void)hoverTree.attach(*hoverTree.getLayer(WidgetTree::ELayer::Content), target, slot);
     sourceTree.layout();
     hoverTree.layout();
 

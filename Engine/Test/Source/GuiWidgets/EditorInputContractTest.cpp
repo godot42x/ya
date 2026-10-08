@@ -89,7 +89,7 @@ TEST(EditorInputContractTest, DpiScaleFoldsIntoSnapshotLikeUiScale)
     FCanvasSlotArgs slot;
     slot.offset    = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
     const UIFrameSnapshot unscaled = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_EQ(unscaled.items.size(), 1u);
@@ -117,7 +117,7 @@ TEST(EditorInputContractTest, TextFieldImeCommitEditsByCodePoint)
     auto       field = std::make_shared<UITextField>("Ime");
     FCanvasSlotArgs slot;
     slot.fixedSize = {240.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, slot);
     tree.layout();
     tree.setFocus(field.get());
     EXPECT_TRUE(tree.wantsTextInput());
@@ -146,7 +146,7 @@ TEST(EditorInputContractTest, TextFieldClipboardCopyCutPasteStripsNewlines)
     auto       field = std::make_shared<UITextField>("Clip");
     FCanvasSlotArgs slot;
     slot.fixedSize = {240.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, slot);
     tree.layout();
     tree.setFocus(field.get());
 
@@ -181,7 +181,7 @@ TEST(EditorInputContractTest, ClipboardHooksReplaceInMemoryBuffer)
     auto field = std::make_shared<UITextField>("Hook");
     FCanvasSlotArgs slot;
     slot.fixedSize = {160.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, slot);
     tree.layout();
     tree.setFocus(field.get());
 

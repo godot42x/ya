@@ -31,7 +31,7 @@ void attachDock(WidgetTree& tree, const std::shared_ptr<FDockContext>& dock)
     FCanvasSlotArgs fill;
     fill.anchorMin = {0.0f, 0.0f};
     fill.anchorMax = {1.0f, 1.0f};
-    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), space, fill);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), space, fill);
     space->setContext(dock);
 }
 
@@ -110,7 +110,7 @@ TEST(EditorNativeTearOffTest, HostEditorDockOnTreeDrawsTitleTabBar)
     chrome.contentInsets.top  = 28.0f;
     chrome.dragRegion         = FWindowChromeRect{704.0f, 0.0f, 96.0f, 28.0f};
     hostEditorDockOnTree(tree, dock, chrome, nullptr);
-    (void)tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     UIElement* layer = tree.getLayer(WidgetTree::ELayer::Content);
     ASSERT_NE(layer, nullptr);
@@ -172,7 +172,7 @@ TEST(EditorNativeTearOffTest, RootEditorMovesToNativeWindowWithoutDualMount)
     const DockPanelId panelId = sourceDock->addPanel("material-editor", "Material", widget);
     ASSERT_NE(panelId, kInvalidDockPanelId);
     ASSERT_TRUE(sourceDock->setPanelIdentity(panelId, kMaterialEditorRootId, "M.mat"));
-    (void)sourceTree.buildSnapshot(UIFrameBuildContext{});
+   (void)sourceTree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_TRUE(sourceTree.contains(*widget));
 
     GUIWindowManager manager;
@@ -249,7 +249,7 @@ TEST(EditorNativeTearOffTest, OwnedToolKeepsOwnerAndDocumentOnNativeWindow)
     const DockPanelId panelId = sourceDock->addPanel("hierarchy", "Hierarchy", widget);
     ASSERT_NE(panelId, kInvalidDockPanelId);
     ASSERT_TRUE(sourceDock->setPanelIdentity(panelId, kLevelEditorRootId, "scene.yascene"));
-    (void)sourceTree.buildSnapshot(UIFrameBuildContext{});
+   (void)sourceTree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_TRUE(sourceTree.contains(*widget));
 
     GUIWindowManager manager;
@@ -321,7 +321,7 @@ TEST(EditorNativeTearOffTest, OwnedToolRedocksHomeAndReclaimsEmptyWindow)
     const DockPanelId panelId = homeDock->addPanel("hierarchy", "Hierarchy", widget);
     ASSERT_NE(panelId, kInvalidDockPanelId);
     ASSERT_TRUE(homeDock->setPanelIdentity(panelId, kLevelEditorRootId, "scene.yascene"));
-    (void)homeTree.buildSnapshot(UIFrameBuildContext{});
+   (void)homeTree.buildSnapshot(UIFrameBuildContext{});
 
     GUIWindowManager manager;
     ASSERT_TRUE(manager.init());
@@ -384,7 +384,7 @@ TEST(EditorNativeTearOffTest, CloseExtraWindowRedocksRootEditorHome)
     const DockPanelId panelId = homeDock->addPanel("material-editor", "Material", widget);
     ASSERT_NE(panelId, kInvalidDockPanelId);
     ASSERT_TRUE(homeDock->setPanelIdentity(panelId, kMaterialEditorRootId, "M.mat"));
-    (void)homeTree.buildSnapshot(UIFrameBuildContext{});
+   (void)homeTree.buildSnapshot(UIFrameBuildContext{});
 
     GUIWindowManager manager;
     ASSERT_TRUE(manager.init());
@@ -475,7 +475,7 @@ TEST(EditorNativeTearOffTest, ExtraTickTreesResizeCloseSoakMatchesProductPath)
     const DockPanelId panelId = homeDock->addPanel("material-editor", "Material", widget);
     ASSERT_NE(panelId, kInvalidDockPanelId);
     ASSERT_TRUE(homeDock->setPanelIdentity(panelId, kMaterialEditorRootId, "M.mat"));
-    (void)homeTree.buildSnapshot(UIFrameBuildContext{});
+   (void)homeTree.buildSnapshot(UIFrameBuildContext{});
 
     GUIWindowManager manager;
     ASSERT_TRUE(manager.init());
@@ -575,13 +575,13 @@ TEST(EditorNativeTearOffTest, DockSpaceNoTargetCreatesNativeWindowWithoutOverlay
     FCanvasSlotArgs dockArgs;
     dockArgs.offset = {0.0f, 0.0f};
     dockArgs.fixedSize = {400.0f, 300.0f};
-    (void)sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), spaceWidget, dockArgs);
+   (void)sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), spaceWidget, dockArgs);
     spaceWidget->setContext(sourceDock);
     auto widget = std::make_shared<UICanvasPanel>("M");
     const DockPanelId panelId = sourceDock->addPanel("material-editor", "Material", widget);
     ASSERT_NE(panelId, kInvalidDockPanelId);
     ASSERT_TRUE(sourceDock->setPanelIdentity(panelId, kMaterialEditorRootId, "M.mat"));
-    (void)sourceTree.buildSnapshot(UIFrameBuildContext{});
+   (void)sourceTree.buildSnapshot(UIFrameBuildContext{});
 
     GUIWindowManager manager;
     ASSERT_TRUE(manager.init());
@@ -654,13 +654,13 @@ TEST(EditorNativeTearOffTest, DockSpaceNoTargetLockedStaysPutWithoutOverlay)
     FCanvasSlotArgs dockArgs;
     dockArgs.offset = {0.0f, 0.0f};
     dockArgs.fixedSize = {400.0f, 300.0f};
-    (void)sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), spaceWidget, dockArgs);
+   (void)sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), spaceWidget, dockArgs);
     spaceWidget->setContext(sourceDock);
     auto widget = std::make_shared<UICanvasPanel>("L");
     const DockPanelId panelId = sourceDock->addPanel("level-editor", "Level", widget);
     ASSERT_NE(panelId, kInvalidDockPanelId);
     ASSERT_TRUE(sourceDock->setPanelIdentity(panelId, kLevelEditorRootId, "scene.yascene"));
-    (void)sourceTree.buildSnapshot(UIFrameBuildContext{});
+   (void)sourceTree.buildSnapshot(UIFrameBuildContext{});
 
     GUIWindowManager manager;
     ASSERT_TRUE(manager.init());

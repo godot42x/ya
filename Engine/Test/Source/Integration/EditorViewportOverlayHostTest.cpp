@@ -37,7 +37,7 @@ TEST(EditorViewportOverlayHostTest, SyncsHostToInstalledOverlay)
     host.setOverlay(overlay);
 
     FEditorViewportHostState state{};
-    state.widgetRect  = Rect2D{glm::vec2{10.0f, 20.0f}, glm::vec2{800.0f, 600.0f}};
+        state.widgetRect  = Rect2D{{glm::vec2{10.0f, 20.0f}}, glm::vec2{800.0f, 600.0f}};
     state.extent      = {800.0f, 600.0f};
     state.bHovered    = true;
     state.bFocused    = true;

@@ -35,7 +35,7 @@ TEST_F(SimpleReflectionTest, PropertyIteration)
 {
     TestComponent p;
     int propCount = 0;
-    p.__visit_properties([&](const char *name, auto &value) {
+    p.__visit_properties([&](const char*, auto&) {
         propCount++;
     });
 

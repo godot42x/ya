@@ -225,34 +225,6 @@ void* containerPtr(const Property& property, void* instance)
     return container;
 }
 
-std::string mapKeyString(void* keyPtr, type_index_t keyType)
-{
-    if (!keyPtr) {
-        return {};
-    }
-    if (keyType == refl::type_index_v<std::string>) {
-        return *static_cast<const std::string*>(keyPtr);
-    }
-    if (keyType == refl::type_index_v<int> || keyType == refl::type_index_v<int32_t>) {
-        return std::to_string(*static_cast<const int32_t*>(keyPtr));
-    }
-    if (keyType == refl::type_index_v<uint32_t>) {
-        return std::to_string(*static_cast<const uint32_t*>(keyPtr));
-    }
-    if (keyType == refl::type_index_v<bool>) {
-        return *static_cast<const bool*>(keyPtr) ? "true" : "false";
-    }
-    return {};
-}
-
-std::string mapLeafPath(std::string_view prefix, std::string_view key, type_index_t keyType)
-{
-    if (keyType == refl::type_index_v<std::string>) {
-        return std::string(prefix) + "[\"" + std::string(key) + "\"]";
-    }
-    return std::string(prefix) + "[" + std::string(key) + "]";
-}
-
 } // namespace
 
 size_t PropertyAccessor::containerSize(const Property& property, const void* instance)

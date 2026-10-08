@@ -45,7 +45,7 @@ TEST(GameInputNodeTest, ForwardsEventsAndCancelsInputState)
     pressed._keyCode = EKey::K_W;
     pressed._mod     = 0;
 
-    root.route(context, pressed);
+    (void)root.route(context, pressed);
     EXPECT_TRUE(inputManager.isKeyPressed(EKey::K_W));
 
     root.cancelInput(context, EInputCancelReason::WindowFocusLost);
@@ -62,8 +62,8 @@ TEST(GameInputNodeTest, ForwardsMouseDeltaFromRoutedEvents)
     FInputRouteContext context{.app = app, .router = router};
 
     inputManager.preUpdate();
-    root.route(context, MouseMoveEvent(100.0f, 200.0f, 7.0f, -3.0f));
-    root.route(context, MouseMoveEvent(107.0f, 197.0f, 2.0f, 5.0f));
+    (void)root.route(context, MouseMoveEvent(100.0f, 200.0f, 7.0f, -3.0f));
+    (void)root.route(context, MouseMoveEvent(107.0f, 197.0f, 2.0f, 5.0f));
 
     const glm::vec2 delta = inputManager.getMouseDelta();
     EXPECT_FLOAT_EQ(delta.x, 9.0f);
@@ -84,7 +84,7 @@ TEST(GameInputNodeTest, UIOnlyBlocksGameInput)
     pressed._keyCode = EKey::K_W;
     pressed._mod     = 0;
 
-    root.route(context, pressed);
+    (void)root.route(context, pressed);
     EXPECT_FALSE(inputManager.isKeyPressed(EKey::K_W));
 }
 
@@ -102,7 +102,7 @@ TEST(GameInputNodeTest, GameOnlyStillFeedsGame)
     pressed._keyCode = EKey::K_W;
     pressed._mod     = 0;
 
-    root.route(context, pressed);
+    (void)root.route(context, pressed);
     EXPECT_TRUE(inputManager.isKeyPressed(EKey::K_W));
 }
 

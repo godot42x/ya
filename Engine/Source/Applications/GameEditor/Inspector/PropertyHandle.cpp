@@ -22,8 +22,8 @@ bool anyChanged(bool lhs, bool rhs)
 
 } // namespace
 
-PropertyHandle::PropertyHandle(type_index_t ownerType, std::vector<void*> instances, reflection::FPropertySlot slot)
-    : _ownerType(ownerType), _instances(std::move(instances)), _slot(std::move(slot))
+PropertyHandle::PropertyHandle(std::vector<void*> instances, reflection::FPropertySlot slot)
+    : _instances(std::move(instances)), _slot(std::move(slot))
 {
 }
 
@@ -537,7 +537,7 @@ PropertyHandle PropertyHandleFactory::make(type_index_t ownerType, std::vector<v
     if (it == cls->properties.end()) {
         return {};
     }
-    PropertyHandle handle{ownerType, std::move(instances), it->second};
+    PropertyHandle handle{std::move(instances), it->second};
     handle.setVec3Setter(std::move(setter));
     return handle;
 }

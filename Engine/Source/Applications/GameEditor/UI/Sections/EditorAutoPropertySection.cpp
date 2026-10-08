@@ -958,7 +958,7 @@ void EditorAutoPropertySection::construct()
         if (!buildEditor(node, row, slot)) {
             continue; // no editor for this value type: no row, as before
         }
-        groups.attach(std::move(row));
+        (void)groups.attach(std::move(row));
     }
     addDetachedChild(rows.release());
 }

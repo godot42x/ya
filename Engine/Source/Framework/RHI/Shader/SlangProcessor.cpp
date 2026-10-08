@@ -19,7 +19,7 @@ namespace ya
 namespace
 {
 
-struct SlangStringBlob : public ISlangBlob
+struct SlangStringBlob final : public ISlangBlob
 {
     std::string           data;
     std::atomic<uint32_t> rc{1};

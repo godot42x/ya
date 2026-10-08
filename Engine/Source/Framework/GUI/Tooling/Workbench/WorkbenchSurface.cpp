@@ -275,7 +275,7 @@ void FWorkbenchSurface::buildPageList(ya::WidgetTree& tree, ya::UIBorder& parent
     _pageRailList->setDirection(ya::EWidgetBoxLayout::Vertical);
     _pageRailList->setSpacing(2.0f);
     _pageRailList->setPadding({6.0f, 6.0f});
-    tree.attach(*_pageRailScroll, _pageRailList);
+    (void)tree.attach(*_pageRailScroll, _pageRailList);
 
     _pageRows.clear();
     std::string lastGroup;
@@ -287,7 +287,7 @@ void FWorkbenchSurface::buildPageList(ya::WidgetTree& tree, ya::UIBorder& parent
             header->_fontSize = 10;
             header->setStyleKey("text.eyebrow");
             header->setText(page.group);
-            tree.attach(*_pageRailList, header);
+            (void)tree.attach(*_pageRailList, header);
             if (auto* slot = dynamic_cast<ya::UIBoxSlot*>(_pageRailList->getSlotForChild(*header))) {
                 slot->setPreferredSize({0.0f, 18.0f});
             }
@@ -301,12 +301,12 @@ void FWorkbenchSurface::buildPageList(ya::WidgetTree& tree, ya::UIBorder& parent
         label->setStyleKey("text");
         label->setText(page.name);
         label->_vAlign = ya::EWidgetAlignV::Center;
-        tree.attach(*_pageRailList, row);
+        (void)tree.attach(*_pageRailList, row);
         if (auto* slot = dynamic_cast<ya::UIBoxSlot*>(_pageRailList->getSlotForChild(*row))) {
             slot->setPreferredSize({0.0f, 22.0f});
         }
         row->setContentPadding(ya::FMargin{8.0f, 0.0f, 4.0f, 0.0f});
-        tree.attach(*row, label);
+        (void)tree.attach(*row, label);
         _pageRows.push_back(row);
     }
 }
@@ -653,7 +653,7 @@ void FWorkbenchSurface::rebuildItemRows()
     _rowList->setPadding({8.0f, 8.0f});
     _rowList->setDirection(ya::EWidgetBoxLayout::Vertical);
     _rowList->setSpacing(2.0f);
-    _tree->attach(*_rowScroll, _rowList);
+    (void)_tree->attach(*_rowScroll, _rowList);
     _rows.clear();
 
     for (const FWorkbenchItem* itemPtr : workspace.orderedItems()) {
@@ -686,13 +686,13 @@ void FWorkbenchSurface::rebuildItemRows()
         label->setStyleKey("text");
         label->_vAlign   = ya::EWidgetAlignV::Center;
 
-        _tree->attach(*_rowList, row);
+        (void)_tree->attach(*_rowList, row);
         if (auto* slot = dynamic_cast<ya::UIBoxSlot*>(_rowList->getSlotForChild(*row))) {
             slot->setPreferredSize({240.0f, 22.0f});
         }
         row->getContentLayout().setPadding(
             ya::FMargin{static_cast<float>(workspace.getDepth(item.id)) * 14.0f, 0.0f, 0.0f, 0.0f});
-        _tree->attach(*row, label);
+        (void)_tree->attach(*row, label);
         _rows.push_back(row);
     }
     _bRowsDirty = false;
@@ -838,7 +838,7 @@ void FWorkbenchSurface::dispatchPointer(const ya::Event& event, const glm::vec2&
 {
     ya::WidgetEventContext ctx;
     ctx.logicalPoint = point;
-    _tree->dispatchEvent(event, ctx);
+    (void)_tree->dispatchEvent(event, ctx);
 }
 
 void FWorkbenchSurface::dispatchKey(const ya::Event& event)

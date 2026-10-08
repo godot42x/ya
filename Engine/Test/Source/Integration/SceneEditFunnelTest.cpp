@@ -85,7 +85,7 @@ TEST(SceneEditFunnelTest, NotifyComponentEditedTriggersPatchAndBroadcast)
             void onUpdate(entt::registry&, entt::entity) { ++*count; }
         };
         UpdateCounter counter{&enttUpdates};
-        entt::connection updateConnection =
+        [[maybe_unused]] entt::connection updateConnection =
             registry.on_update<TransformComponent>().connect<&UpdateCounter::onUpdate>(&counter);
 
         EXPECT_EQ(edits, 0);

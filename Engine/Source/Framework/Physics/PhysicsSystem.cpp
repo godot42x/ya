@@ -26,6 +26,7 @@
 // pulling the whole JPH::literals namespace into this translation unit.
 using JPH::literals::operator""_r;
 
+JPH_SUPPRESS_WARNING_PUSH
 JPH_SUPPRESS_WARNINGS
 
 namespace

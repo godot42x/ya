@@ -430,7 +430,7 @@ void hostEditorDockOnTree(WidgetTree& tree,
     titleArgs.widthSizeMode  = EWidgetSizeMode::Fixed;
     titleArgs.heightSizeMode = EWidgetSizeMode::Fixed;
     titleArgs.fixedSize      = {0.0f, titleH};
-    (void)tree.attach(*layer, titleBar, titleArgs);
+   (void)tree.attach(*layer, titleBar, titleArgs);
     (void)ui::attach(tree,
                      *titleBar,
                      ui::border("TornTitleBarFill")
@@ -522,7 +522,7 @@ void hostEditorDockOnTree(WidgetTree& tree,
     tabArgs.heightSizeMode = EWidgetSizeMode::Fixed;
     tabArgs.fixedSize      = {0.0f, titleH};
     tabArgs.offsets        = FMargin{chrome.contentInsets.left, 0.0f, chrome.dragRegion.width, 0.0f};
-    (void)tree.attach(*layer, tabBar, tabArgs);
+   (void)tree.attach(*layer, tabBar, tabArgs);
 
     auto space = std::make_shared<UIDockSpace>(kTornDockName);
     FCanvasSlotArgs fill;
@@ -531,7 +531,7 @@ void hostEditorDockOnTree(WidgetTree& tree,
     fill.widthSizeMode  = EWidgetSizeMode::Fixed;
     fill.heightSizeMode = EWidgetSizeMode::Fixed;
     fill.offsets        = FMargin{0.0f, titleH, 0.0f, 0.0f};
-    (void)tree.attach(*layer, space, fill);
+   (void)tree.attach(*layer, space, fill);
     space->setContext(dock);
 
     dock->appendOnDockUpdated([weak = std::weak_ptr<FEditorTornChromeState>(state)]() {

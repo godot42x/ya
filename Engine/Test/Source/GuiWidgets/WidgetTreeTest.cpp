@@ -379,7 +379,7 @@ TEST(WidgetTreeTest, DumpTreeCapturesRectAndTransientState)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       button = makeButton("B", {100.0f, 80.0f}, {80.0f, 32.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 80.0f}, {80.0f, 32.0f}));
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 80.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     const nlohmann::json dump = dumpWidgetTree(tree);
@@ -393,8 +393,8 @@ TEST(WidgetTreeTest, DumpTreeCapturesRectAndTransientState)
     EXPECT_FALSE((*node)["focused"]);
 
     // Hover then press: the dump reflects live transient state from the tree.
-    tree.dispatchEvent(MouseMoveEvent(120.0f, 96.0f), pointAt(120.0f, 96.0f));
-    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 96.0f));
+   (void)tree.dispatchEvent(MouseMoveEvent(120.0f, 96.0f), pointAt(120.0f, 96.0f));
+   (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 96.0f));
     const nlohmann::json pressed = dumpWidgetTree(tree);
     const nlohmann::json* pressedNode = findWidgetNode(pressed, "B");
     ASSERT_NE(pressedNode, nullptr);
@@ -419,11 +419,11 @@ TEST(WidgetTreeTest, DumpUsesPerControlRuntimeDiagnosticsHooks)
     auto split = std::make_shared<UISplitPane>("Split");
     split->setSplitRatio(0.35f);
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), checkBox);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), slider);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), combo);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), scroll);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), checkBox);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), slider);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), combo);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), scroll);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
     tree.layout();
 
     const nlohmann::json dump = dumpWidgetTree(tree);
@@ -462,7 +462,7 @@ TEST(WidgetTreeTest, DragOperationReachesTypedDropTarget)
     WidgetTree tree({.width = 400, .height = 300});
     auto target = std::make_shared<OperationDropTarget>("Target");
     FCanvasSlotArgs targetSlot; targetSlot.offset = {40.0f, 40.0f}; targetSlot.fixedSize = {160.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
     tree.layout();
 
     auto operation = std::make_shared<FAssetTestDragDropOp>();
@@ -481,11 +481,11 @@ TEST(WidgetTreeTest, DragDetectionInvokesWidgetCallbackWithoutDragSourceControl)
     WidgetTree tree({.width = 400, .height = 300});
     auto source = std::make_shared<DragDetectWidget>("Source");
     FCanvasSlotArgs sourceSlot; sourceSlot.offset = {20.0f, 20.0f}; sourceSlot.fixedSize = {120.0f, 80.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
     tree.layout();
 
-    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f));
-    tree.dispatchEvent(MouseMoveEvent(60.0f, 40.0f), pointAt(60.0f, 40.0f));
+   (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f));
+   (void)tree.dispatchEvent(MouseMoveEvent(60.0f, 40.0f), pointAt(60.0f, 40.0f));
 
     EXPECT_TRUE(source->detected);
     ASSERT_TRUE(tree.isDragging());
@@ -505,7 +505,7 @@ TEST(WidgetTreeTest, DragGhostLabelUsesContentSlotInsteadOfChildZeroSize)
     operation->assetId = 42;
     operation->ghostLabel = "Ghost";
     tree.beginDrag(source.get(), operation, {}, true);
-    (void)tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     const nlohmann::json dump = dumpWidgetTree(tree);
     const auto* ghostNode = findWidgetNode(dump, "DragGhost");
@@ -534,10 +534,10 @@ TEST(WidgetTreeTest, BehaviorLifecycleTickAndInvalidationFollowOwner)
     EXPECT_EQ(behavior->attached, 1);
     EXPECT_TRUE(panel->hasBehavior(*behavior));
 
-    (void)tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
     const GuiPerfStats before = tree.getPerfStats();
     behavior->requestPaint();
-    (void)tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
     EXPECT_GT(tree.getPerfStats().paintDirtyTransitions, before.paintDirtyTransitions);
 
     tree.tick(1.0f / 60.0f);
@@ -710,12 +710,12 @@ TEST(WidgetTreeTest, BehaviorCanActAsDragSourceAndDropTargetWithoutDedicatedWidg
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot).valid());
     tree.layout();
 
-    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f));
-    tree.dispatchEvent(MouseMoveEvent(80.0f, 40.0f), pointAt(80.0f, 40.0f));
+   (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f));
+   (void)tree.dispatchEvent(MouseMoveEvent(80.0f, 40.0f), pointAt(80.0f, 40.0f));
     EXPECT_TRUE(sourceBehavior->detected);
     ASSERT_TRUE(tree.isDragging());
-    tree.dispatchEvent(MouseMoveEvent(260.0f, 40.0f), pointAt(260.0f, 40.0f));
-    tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(260.0f, 40.0f));
+   (void)tree.dispatchEvent(MouseMoveEvent(260.0f, 40.0f), pointAt(260.0f, 40.0f));
+   (void)tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(260.0f, 40.0f));
 
     EXPECT_TRUE(targetBehavior->dropped);
     EXPECT_GT(targetBehavior->highlightChanges, 0);
@@ -728,7 +728,7 @@ TEST(WidgetTreeTest, RouteStateTracksPointerCaptureAndFocusPaths)
     auto panel = std::make_shared<UICanvasPanel>("Panel");
     FCanvasSlotArgs panelSlot; panelSlot.offset = {100.0f, 80.0f}; panelSlot.fixedSize = {160.0f, 80.0f};
     auto button = makeButton("Button", {20.0f, 10.0f}, {80.0f, 32.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     panel->addDetachedChild(button, [](UIElement&, UISlot& slot) {
         if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
             FCanvasSlotArgs args;
@@ -739,7 +739,7 @@ TEST(WidgetTreeTest, RouteStateTracksPointerCaptureAndFocusPaths)
     });
     tree.layout();
 
-    tree.dispatchEvent(MouseMoveEvent(130.0f, 100.0f), pointAt(130.0f, 100.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(130.0f, 100.0f), pointAt(130.0f, 100.0f));
     EXPECT_TRUE(tree.getPointerState().bKnown);
     EXPECT_EQ(tree.getPointerState().logicalPoint, glm::vec2(130.0f, 100.0f));
     const auto& pointerPath = tree.getPointerPath();
@@ -753,7 +753,7 @@ TEST(WidgetTreeTest, RouteStateTracksPointerCaptureAndFocusPaths)
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(130.0f, 100.0f)),
               EWidgetRouteResult::HandledExclusive);
-    tree.dispatchEvent(MouseMoveEvent(700.0f, 500.0f), pointAt(700.0f, 500.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(700.0f, 500.0f), pointAt(700.0f, 500.0f));
     EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::PointerCapture);
     EXPECT_EQ(tree.getLastRouteTrace().target, "Button");
     EXPECT_EQ(tree.getPointerPath().back(), button.get());
@@ -779,7 +779,7 @@ TEST(WidgetTreeTest, ChildAddedToAttachedParentJoinsItsTree)
     WidgetTree tree({.width = 400, .height = 300});
     auto parent = std::make_shared<UICanvasPanel>("Parent");
     FCanvasSlotArgs parentSlot; parentSlot.offset = {40.0f, 40.0f}; parentSlot.fixedSize = {200.0f, 120.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent, parentSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent, parentSlot);
 
     auto child = makeButton("LateChild", {20.0f, 20.0f}, {80.0f, 32.0f});
     parent->addDetachedChild(child, [](UIElement&, UISlot& slot) {
@@ -908,8 +908,8 @@ TEST(WidgetTreeTest, PointerRouteDeliversPreviewTargetThenBubble)
     child->_hitFilter = EWidgetHitFilter::Pass;
     child->bHandleTarget = true;
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent, parentSlot);
-    tree.attach(*parent, child, [](UIElement&, UISlot& edge) {
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent, parentSlot);
+    (void)tree.attach(*parent, child, [](UIElement&, UISlot& edge) {
         if (auto* canvas = edge.as<UICanvasSlot>()) {
             canvas->setOffset({20.0f, 20.0f});
             canvas->setFixedSize({60.0f, 30.0f});
@@ -974,7 +974,7 @@ TEST(WidgetTreeTest, ModalOverlayConsumesDismissClickBeforeUnderlyingContent)
     auto       button = makeButton("Content", {150.0f, 120.0f}, {80.0f, 32.0f});
     int        clicks = 0;
     button->onClicked.addLambda([&] { ++clicks; });
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({150.0f, 120.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({150.0f, 120.0f}, {80.0f, 32.0f}));
 
     auto overlay = std::make_shared<UIPopupOverlay>("ModalOverlay");
     overlay->_bModal = true;
@@ -1201,9 +1201,9 @@ TEST(WidgetTreeTest, ExplicitReparentMovesWidget)
     auto       parentA = std::make_shared<UICanvasPanel>("A");
     auto       parentB = std::make_shared<UICanvasPanel>("B");
     auto       child   = std::make_shared<UIButton>("Child");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parentA);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parentB);
-    tree.attach(*parentA, child);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parentA);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parentB);
+    (void)tree.attach(*parentA, child);
 
     tree.reparent(*parentB, child);
 
@@ -1221,9 +1221,9 @@ TEST(WidgetTreeTest, VisibilityRevisionMovesOnlyWhenEffectiveVisibilityMayChange
     auto       child   = std::make_shared<UIButton>("Child");
     auto       offTree = std::make_shared<UIButton>("OffTree");
     hidden->setVisibility(EWidgetVisibility::Hidden);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), hidden);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), shown);
-    tree.attach(*hidden, child);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), hidden);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), shown);
+    (void)tree.attach(*hidden, child);
 
     uint64_t last  = tree.getVisibilityRevision();
     auto     moved = [&] {
@@ -1244,7 +1244,7 @@ TEST(WidgetTreeTest, VisibilityRevisionMovesOnlyWhenEffectiveVisibilityMayChange
     EXPECT_TRUE(moved()) << "leaving a hidden parent";
     tree.detach(*child);
     EXPECT_TRUE(moved());
-    tree.attach(*hidden, child);
+    (void)tree.attach(*hidden, child);
     EXPECT_TRUE(moved());
 
     offTree->setVisibility(EWidgetVisibility::Hidden);
@@ -1257,8 +1257,8 @@ TEST(WidgetTreeTest, CrossTreeReparentMovesExplicitly)
     WidgetTree treeB({.width = 800, .height = 600});
     auto       parentB = std::make_shared<UICanvasPanel>("B");
     auto       child   = std::make_shared<UIButton>("Child");
-    treeB.attach(*treeB.getLayer(WidgetTree::ELayer::Content), parentB);
-    treeA.attach(*treeA.getLayer(WidgetTree::ELayer::Content), child);
+    (void)treeB.attach(*treeB.getLayer(WidgetTree::ELayer::Content), parentB);
+    (void)treeA.attach(*treeA.getLayer(WidgetTree::ELayer::Content), child);
 
     treeB.reparent(*parentB, child);
 
@@ -1277,10 +1277,10 @@ TEST(WidgetTreeTest, ReparentAfterMovesSiblingForward)
     auto       a      = std::make_shared<UIButton>("A");
     auto       b      = std::make_shared<UIButton>("B");
     auto       c      = std::make_shared<UIButton>("C");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
-    tree.attach(*parent, a);
-    tree.attach(*parent, b);
-    tree.attach(*parent, c);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
+    (void)tree.attach(*parent, a);
+    (void)tree.attach(*parent, b);
+    (void)tree.attach(*parent, c);
 
     tree.reparentAfter(*a, c); // C after A -> A, C, B
 
@@ -1296,10 +1296,10 @@ TEST(WidgetTreeTest, ReparentBeforeMovesSiblingBackward)
     auto       a      = std::make_shared<UIButton>("A");
     auto       b      = std::make_shared<UIButton>("B");
     auto       c      = std::make_shared<UIButton>("C");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
-    tree.attach(*parent, a);
-    tree.attach(*parent, b);
-    tree.attach(*parent, c);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
+    (void)tree.attach(*parent, a);
+    (void)tree.attach(*parent, b);
+    (void)tree.attach(*parent, c);
 
     tree.reparentBefore(*a, c); // C before A -> C, A, B
 
@@ -1315,13 +1315,13 @@ TEST(WidgetTreeTest, ReparentAfterMovesIntoAnotherParentAtSiblingPosition)
     auto       other   = std::make_shared<UICanvasPanel>("Other");
     auto       first   = std::make_shared<UIButton>("First");
     auto       second  = std::make_shared<UIButton>("Second");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), root);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), other);
-    tree.attach(*other, first);
-    tree.attach(*other, second);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), root);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), other);
+    (void)tree.attach(*other, first);
+    (void)tree.attach(*other, second);
 
     auto moved = std::make_shared<UIButton>("Moved");
-    tree.attach(*root, moved);
+    (void)tree.attach(*root, moved);
 
     // Move `moved` from root into other, after `first`.
     tree.reparentAfter(*first, moved);
@@ -1339,8 +1339,8 @@ TEST(WidgetTreeTest, ReparentSelfIsNoOp)
     WidgetTree tree({.width = 800, .height = 600});
     auto       parent = std::make_shared<UICanvasPanel>("Root");
     auto       a      = std::make_shared<UIButton>("A");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
-    tree.attach(*parent, a);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
+    (void)tree.attach(*parent, a);
 
     tree.reparentAfter(*a, a);
     tree.reparentBefore(*a, a);
@@ -1355,9 +1355,9 @@ TEST(WidgetTreeTest, ReparentUnderOwnDescendantFails)
     auto       rootPanel = std::make_shared<UICanvasPanel>("Root");
     auto       inner     = std::make_shared<UICanvasPanel>("Inner");
     auto       leaf      = std::make_shared<UIButton>("Leaf");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), rootPanel);
-    tree.attach(*rootPanel, inner);
-    tree.attach(*inner, leaf);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), rootPanel);
+    (void)tree.attach(*rootPanel, inner);
+    (void)tree.attach(*inner, leaf);
 
     // Moving "Root" under its own descendant "Leaf" would create a cycle.
     tree.reparent(*leaf, rootPanel);
@@ -1390,9 +1390,9 @@ TEST(WidgetTreeTest, DetachRecursivelyClearsSubtreeMembership)
     auto       panel = std::make_shared<UICanvasPanel>("P");
     auto       child = std::make_shared<UIButton>("C");
     auto       grand = std::make_shared<UIText>("G");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
-    tree.attach(*panel, child);
-    tree.attach(*child, grand);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    (void)tree.attach(*panel, child);
+    (void)tree.attach(*child, grand);
 
     tree.detach(*panel);
 
@@ -1409,7 +1409,7 @@ TEST(WidgetTreeTest, DetachClearsFocusCaptureAndHover)
     WidgetTree tree({.width = 800, .height = 600});
     auto       button = std::make_shared<UIButton>("B");
     FCanvasSlotArgs buttonSlot; buttonSlot.offset = {100.0f, 100.0f}; buttonSlot.fixedSize = {80.0f, 32.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     tree.setFocus(button.get());
     tree.layout();
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
@@ -1430,7 +1430,7 @@ TEST(WidgetTreeTest, WeakPointerPathsSurviveDetachWithoutDangling)
     auto       panel = std::make_shared<UICanvasPanel>("Panel");
     FCanvasSlotArgs panelSlot; panelSlot.offset = {100.0f, 80.0f}; panelSlot.fixedSize = {160.0f, 80.0f};
     auto       button = makeButton("Button", {20.0f, 10.0f}, {80.0f, 32.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     panel->addDetachedChild(button, [](UIElement&, UISlot& slot) {
         if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
             FCanvasSlotArgs args;
@@ -1441,7 +1441,7 @@ TEST(WidgetTreeTest, WeakPointerPathsSurviveDetachWithoutDangling)
     });
     tree.setFocus(button.get());
     tree.layout();
-    tree.dispatchEvent(MouseMoveEvent(130.0f, 100.0f), pointAt(130.0f, 100.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(130.0f, 100.0f), pointAt(130.0f, 100.0f));
 
     // Paths are live snapshots of the weak-reference path (UE FWeakWidgetPath
     // semantics): root -> content layer -> panel -> button.
@@ -1474,16 +1474,16 @@ TEST(WidgetTreeTest, ButtonTextChildDoesNotStealHoverOwner)
     label->setText("Render Probe");
     button->addDetachedChild(label);
     FCanvasSlotArgs buttonSlot; buttonSlot.offset = {100.0f, 100.0f}; buttonSlot.fixedSize = {120.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     tree.layout();
 
     // Hovering the button (its text child is the raw hit) must resolve hover
     // to the button itself, not the text, so leaving clears the button hover.
-    tree.dispatchEvent(MouseMoveEvent(160.0f, 120.0f), pointAt(160.0f, 120.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(160.0f, 120.0f), pointAt(160.0f, 120.0f));
     EXPECT_EQ(tree.getHovered(), button.get());
     EXPECT_TRUE(button->_bHovered);
 
-    tree.dispatchEvent(MouseMoveEvent(400.0f, 120.0f), pointAt(400.0f, 120.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(400.0f, 120.0f), pointAt(400.0f, 120.0f));
     EXPECT_EQ(tree.getHovered(), nullptr);
     EXPECT_FALSE(button->_bHovered);
 }
@@ -1493,18 +1493,18 @@ TEST(WidgetTreeTest, PopupShieldDoesNotStealHoverOwner)
     WidgetTree tree({.width = 800, .height = 600});
     auto       button = std::make_shared<UIButton>("B");
     FCanvasSlotArgs buttonSlot; buttonSlot.offset = {100.0f, 100.0f}; buttonSlot.fixedSize = {80.0f, 32.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     auto overlay = std::make_shared<UIPopupOverlay>("Overlay");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), overlay);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), overlay);
     tree.layout();
 
     // A full-screen popup shield is not hoverable: hover under it must still
     // resolve to the interactive button (menu-bar hover-switch relies on this).
-    tree.dispatchEvent(MouseMoveEvent(120.0f, 110.0f), pointAt(120.0f, 110.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(120.0f, 110.0f), pointAt(120.0f, 110.0f));
     EXPECT_EQ(tree.getHovered(), button.get());
     EXPECT_TRUE(button->_bHovered);
 
-    tree.dispatchEvent(MouseMoveEvent(400.0f, 300.0f), pointAt(400.0f, 300.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(400.0f, 300.0f), pointAt(400.0f, 300.0f));
     EXPECT_EQ(tree.getHovered(), nullptr);
     EXPECT_FALSE(button->_bHovered);
 }
@@ -1515,9 +1515,9 @@ TEST(WidgetTreeTest, TreeDestructionReleasesMembershipSafely)
     auto  panel  = std::make_shared<UICanvasPanel>("P");
     {
         WidgetTree tree({.width = 800, .height = 600});
-        tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+        (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
         FCanvasSlotArgs buttonSlot; buttonSlot.fixedSize = {80.0f, 32.0f};
-        tree.attach(*panel, button, buttonSlot);
+        (void)tree.attach(*panel, button, buttonSlot);
         EXPECT_TRUE(panel->isAttached());
         EXPECT_TRUE(button->isAttached());
     }
@@ -1552,8 +1552,8 @@ TEST(WidgetTreeTest, ZOrderDefinesHitOrderWithinLayer)
     front->_zOrder    = 10;
     FCanvasSlotArgs behindSlot; behindSlot.offset = {100.0f, 100.0f}; behindSlot.fixedSize = {80.0f, 32.0f};
     FCanvasSlotArgs frontSlot; frontSlot.offset = {100.0f, 100.0f}; frontSlot.fixedSize = {80.0f, 32.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), behind, behindSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), front, frontSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), behind, behindSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), front, frontSlot);
     tree.layout();
 
     int behindClicks = 0;
@@ -1582,10 +1582,10 @@ TEST(WidgetTreeTest, SystemLayersStackAboveProjectContent)
     auto       tooltip  = std::make_shared<UIButton>("Tooltip");
     auto       dragIme  = std::make_shared<UIButton>("DragIme");
     FCanvasSlotArgs layerSlot; layerSlot.offset = {100.0f, 100.0f}; layerSlot.fixedSize = {80.0f, 32.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), content, layerSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), popup, layerSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Tooltip), tooltip, layerSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::DragIme), dragIme, layerSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), content, layerSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), popup, layerSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Tooltip), tooltip, layerSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::DragIme), dragIme, layerSlot);
     tree.layout();
 
     int clicks = 0;
@@ -1595,23 +1595,23 @@ TEST(WidgetTreeTest, SystemLayersStackAboveProjectContent)
     dragIme->onClicked.addLambda([&] { clicks = 4; });
 
     // Topmost layer consumes first (drag/ime > tooltip > popup > content).
-    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
-    tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
+    (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
+    (void)tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
     EXPECT_EQ(clicks, 4);
 
     tree.detach(*dragIme);
-    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
-    tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
+    (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
+    (void)tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
     EXPECT_EQ(clicks, 3);
 
     tree.detach(*tooltip);
-    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
-    tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
+    (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
+    (void)tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
     EXPECT_EQ(clicks, 2);
 
     tree.detach(*popup);
-    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
-    tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
+    (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
+    (void)tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
     EXPECT_EQ(clicks, 1);
 }
 
@@ -1623,10 +1623,10 @@ TEST(WidgetTreeTest, SystemLayersOwnHoverBeforeLowerLayers)
     auto       tooltip  = std::make_shared<UIButton>("Tooltip");
     auto       dragIme  = std::make_shared<UIButton>("DragIme");
     FCanvasSlotArgs layerSlot; layerSlot.offset = {100.0f, 100.0f}; layerSlot.fixedSize = {80.0f, 32.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), content, layerSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), popup, layerSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Tooltip), tooltip, layerSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::DragIme), dragIme, layerSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), content, layerSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), popup, layerSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Tooltip), tooltip, layerSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::DragIme), dragIme, layerSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(120.0f, 110.0f), pointAt(120.0f, 110.0f)),
@@ -1681,8 +1681,8 @@ TEST(WidgetTreeTest, PassWidgetsRespondButDoNotBlock)
     top->_zOrder       = 10;
     FCanvasSlotArgs topSlot; topSlot.offset = {100.0f, 100.0f}; topSlot.fixedSize = {80.0f, 32.0f};
     FCanvasSlotArgs bottomSlot = topSlot;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), top, topSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bottom, bottomSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), top, topSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bottom, bottomSlot);
     tree.layout();
 
     // Single topmost hit: only the Pass overlay responds and it reports
@@ -1702,7 +1702,7 @@ TEST(WidgetTreeTest, HiddenSubtreeCullsHits)
     auto       button = std::make_shared<UIButton>("B");
     button->setVisibility(EWidgetVisibility::Hidden);
     FCanvasSlotArgs buttonSlot; buttonSlot.offset = {100.0f, 100.0f}; buttonSlot.fixedSize = {80.0f, 32.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
@@ -1716,7 +1716,7 @@ TEST(WidgetTreeTest, KeyboardEventsRouteToFocusedWidget)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       keyWidget = std::make_shared<TestKeyWidget>("Key");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), keyWidget);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), keyWidget);
     tree.layout();
 
     KeyPressedEvent keyEvent{};
@@ -1738,8 +1738,8 @@ TEST(WidgetTreeTest, PointerCaptureOverridesHitWalk)
     auto       other    = std::make_shared<UIButton>("Other");
     FCanvasSlotArgs capturedSlot; capturedSlot.offset = {100.0f, 100.0f}; capturedSlot.fixedSize = {80.0f, 32.0f};
     FCanvasSlotArgs otherSlot; otherSlot.offset = {300.0f, 300.0f}; otherSlot.fixedSize = {80.0f, 32.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), captured, capturedSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), other, otherSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), captured, capturedSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), other, otherSlot);
     tree.layout();
 
     int capturedClicks = 0;
@@ -1835,7 +1835,7 @@ TEST(WidgetTreeTest, LostReleaseIsRecoveredInsteadOfEatingTheNextPress)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       widget = std::make_shared<TestPointerSessionWidget>("Session");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     ASSERT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
@@ -1870,7 +1870,7 @@ TEST(WidgetTreeTest, PlatformButtonStateReconcilesAStalePress)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       widget = std::make_shared<TestPointerSessionWidget>("Session");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     ASSERT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
@@ -1900,7 +1900,7 @@ TEST(WidgetTreeTest, CaptureCannotOutliveItsPress)
     WidgetTree tree({.width = 800, .height = 600});
     auto       widget = std::make_shared<TestPointerSessionWidget>("Leaky");
     widget->bReleaseOnRelease = false;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     ASSERT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
@@ -1925,7 +1925,7 @@ TEST(WidgetTreeTest, CaptureWithoutAPressIsRefused)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       widget = std::make_shared<TestPointerSessionWidget>("Idle");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     tree.setPointerCapture(widget.get());
@@ -1941,7 +1941,7 @@ TEST(WidgetTreeTest, DetachedCaptureAndStaleSessionAreRepairedNotFatal)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       widget = std::make_shared<TestPointerSessionWidget>("Gone");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     ASSERT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
@@ -1964,7 +1964,7 @@ TEST(WidgetTreeTest, CancelPointerSessionEndsALiveDragSession)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       source = std::make_shared<TestPointerSessionWidget>("Source");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     int                              finishedCount = 0;
@@ -2008,9 +2008,9 @@ TEST(WidgetTreeTest, TabTraversalFollowsStablePaintOrderWithWrapAround)
     a->_zOrder   = 10;
     b->_zOrder   = 5; // paint order: B, A, C
     c->_zOrder   = 20;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), a);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), b);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), c);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), a);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), b);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), c);
     tree.layout();
 
     const KeyPressedEvent tab      = makeKeyPress(EKey::Tab);
@@ -2051,9 +2051,9 @@ TEST(WidgetTreeTest, TabSkipsNonFocusableAndHiddenWidgets)
     auto       hidden  = makeButton("Hidden", {0.0f, 0.0f}, {40.0f, 20.0f});
     auto       visible = makeButton("Visible", {0.0f, 0.0f}, {40.0f, 20.0f});
     hidden->setVisibility(EWidgetVisibility::Hidden); // focusable but not visible
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), plain);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), hidden, makeButtonSlot({0.0f, 0.0f}, {40.0f, 20.0f}));
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), visible, makeButtonSlot({0.0f, 0.0f}, {40.0f, 20.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), plain);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), hidden, makeButtonSlot({0.0f, 0.0f}, {40.0f, 20.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), visible, makeButtonSlot({0.0f, 0.0f}, {40.0f, 20.0f}));
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Tab), pointAt(0.0f, 0.0f)),
@@ -2065,7 +2065,7 @@ TEST(WidgetTreeTest, TabWithoutFocusablesIsNotHandled)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UICanvasPanel>("P");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Tab), pointAt(0.0f, 0.0f)),
@@ -2077,7 +2077,7 @@ TEST(WidgetTreeTest, ButtonPressRequestsFocusAndCapture)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     int clicks = 0;
@@ -2104,8 +2104,8 @@ TEST(WidgetTreeTest, ButtonDragOutReleaseFiresClickViaCapture)
     WidgetTree tree({.width = 800, .height = 600});
     auto       button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
     auto       other  = makeButton("Other", {250.0f, 250.0f}, {80.0f, 32.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), other, makeButtonSlot({250.0f, 250.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), other, makeButtonSlot({250.0f, 250.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     int buttonClicks = 0;
@@ -2135,8 +2135,8 @@ TEST(WidgetTreeTest, PressRetiresStaleHoverAndReArmsPressedButton)
     WidgetTree tree({.width = 800, .height = 600});
     auto       first  = makeButton("First", {100.0f, 100.0f}, {80.0f, 32.0f});
     auto       second = makeButton("Second", {250.0f, 100.0f}, {80.0f, 32.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), first, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), second, makeButtonSlot({250.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), first, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), second, makeButtonSlot({250.0f, 100.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     // Hover then click the first button: it stays hovered (pointer is over
@@ -2175,7 +2175,7 @@ TEST(WidgetTreeTest, FocusedButtonActivatesOnEnterAndSpace)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     int clicks = 0;
@@ -2203,7 +2203,7 @@ TEST(WidgetTreeTest, ButtonClickReachesEveryListenerWhileListenersChange)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     std::vector<std::string> log;
@@ -2216,17 +2216,17 @@ TEST(WidgetTreeTest, ButtonClickReachesEveryListenerWhileListenersChange)
     button->onClicked.addLambda([&log] { log.push_back("always"); });
 
     tree.setFocus(button.get());
-    (void)tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f));
+   (void)tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f));
     EXPECT_EQ(log, (std::vector<std::string>{"once", "always"})) << "a listener added mid-click waits for the next one";
 
     log.clear();
-    (void)tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f));
+   (void)tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f));
     EXPECT_EQ(log, (std::vector<std::string>{"always", "late"}));
 
     log.clear();
     button->onClicked.addLambda([&] { tree.detach(*button); });
     const std::weak_ptr<UIButton> alive = button;
-    (void)tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f));
+   (void)tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f));
     EXPECT_EQ(log, (std::vector<std::string>{"always", "late"}));
     EXPECT_FALSE(button->isAttached());
     EXPECT_FALSE(alive.expired());
@@ -2236,7 +2236,7 @@ TEST(WidgetTreeTest, DetachWhilePressedClearsButtonTransientState)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, makeButtonSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
     tree.layout();
 
     int clicks = 0;
@@ -2258,7 +2258,7 @@ TEST(WidgetTreeTest, DetachWhilePressedClearsButtonTransientState)
 
     // Re-attached button starts clean: a release without a press does not
     // fire the click.
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button);
     tree.layout();
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::NotHandled);
@@ -2282,17 +2282,17 @@ TEST(WidgetTreeTest, DragOverDockSetsPointSensitiveDropPreview)
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs).valid());
 
     auto panel = std::make_shared<UICanvasPanel>("P"); // dock panel content
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel); // keep alive
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel); // keep alive
     const DockPanelId id = ws->addPanel("Scene", panel);
     ws->tearOffPanel(id, {120.0f, 120.0f}, {320.0f, 240.0f}); // float it
     ASSERT_TRUE(ws->isPanelFloating(id));
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold layout
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold layout
 
     // Drag the dock-panel payload over the dock's center (merge band).
     auto source = std::make_shared<UICanvasPanel>("Source");
     FCanvasSlotArgs sourceSlot; sourceSlot.offset = {10.0f, 10.0f}; sourceSlot.fixedSize = {30.0f, 30.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     tree.beginDrag(source.get(), FDockPanelDragDropOp::make(id, "Scene"),
                    {}, /*bShowGhost=*/true, /*bSkipSourceInHitTest=*/true);
     tree.updateDrag({400.0f, 300.0f}); // center -> merge preview on the leaf
@@ -2317,7 +2317,7 @@ TEST(WidgetTreeTest, DragOverDockSetsPointSensitiveDropPreview)
     if (auto* slot = tree.getLayer(WidgetTree::ELayer::Content)->getSlotForChild(*source)) {
         if (auto* canvas = slot->as<UICanvasSlot>()) canvas->setOffset({390.0f, 290.0f});
     }
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     tree.updateDrag({400.0f, 300.0f}); // pointer over BOTH the source and the dock
     EXPECT_TRUE(dock->hasDropPreview());
     EXPECT_TRUE(dock->isDropPreviewMerge());
@@ -2338,7 +2338,7 @@ TEST(WidgetTreeTest, DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTa
     auto dock = std::make_shared<UIDockSpace>("Dock");
     FCanvasSlotArgs dockArgs; dockArgs.anchorMin = {0.0f, 0.0f}; dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panelA = std::make_shared<UICanvasPanel>("PanelA");
     auto panelB = std::make_shared<UICanvasPanel>("PanelB");
@@ -2348,13 +2348,13 @@ TEST(WidgetTreeTest, DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTa
     const FDockFloatingWindowId floatingId = ws->tearOffPanel(panelAId, {120.0f, 120.0f}, {320.0f, 240.0f});
     ASSERT_NE(floatingId, kInvalidFloatingWindowId);
     auto floating = std::make_shared<UIDockFloatingWindow>("Floating", floatingId, ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), floating);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), floating);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     auto source = std::make_shared<UICanvasPanel>("Source");
     FCanvasSlotArgs sourceSlot; sourceSlot.offset = {20.0f, 20.0f}; sourceSlot.fixedSize = {30.0f, 30.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     tree.beginDrag(source.get(), FDockPanelDragDropOp::make(panelBId, "SceneB"),
                    {}, /*bShowGhost=*/true, /*bSkipSourceInHitTest=*/true);
@@ -2382,11 +2382,11 @@ TEST(WidgetTreeTest, DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget)
     dockArgs.offset = {0.0f, 0.0f};
     dockArgs.fixedSize = {400.0f, 300.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UICanvasPanel>("Panel");
     const DockPanelId panelId = ws->addPanel("Scene", panel);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     UITabBar* tabBar = findDescendantOfType<UITabBar>(*dock);
     ASSERT_NE(tabBar, nullptr);
@@ -2421,11 +2421,11 @@ TEST(WidgetTreeTest, DockSpaceNoTargetCallbackCanSkipOverlayTearOff)
     dockArgs.offset = {0.0f, 0.0f};
     dockArgs.fixedSize = {400.0f, 300.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UICanvasPanel>("Panel");
     const DockPanelId panelId = ws->addPanel("Scene", panel);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     UITabBar* tabBar = findDescendantOfType<UITabBar>(*dock);
     ASSERT_NE(tabBar, nullptr);
@@ -2459,11 +2459,11 @@ TEST(WidgetTreeTest, DockSpaceNoTargetCallbackFalseFallsBackToOverlay)
     dockArgs.offset = {0.0f, 0.0f};
     dockArgs.fixedSize = {400.0f, 300.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UICanvasPanel>("Panel");
     const DockPanelId panelId = ws->addPanel("Scene", panel);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     UITabBar* tabBar = findDescendantOfType<UITabBar>(*dock);
     ASSERT_NE(tabBar, nullptr);
@@ -2494,7 +2494,7 @@ TEST(WidgetTreeTest, DockSpaceTabCloseRemovesClosablePanel)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto keep  = std::make_shared<UICanvasPanel>("KeepBody");
     auto close = std::make_shared<UICanvasPanel>("CloseBody");
@@ -2527,7 +2527,7 @@ TEST(WidgetTreeTest, DockSpaceInWellMoveReordersWithoutDragSession)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panelA = std::make_shared<UICanvasPanel>("ABody");
     auto panelB = std::make_shared<UICanvasPanel>("BBody");
@@ -2588,7 +2588,7 @@ TEST(WidgetTreeTest, TabBarInColumnContainerPaintsAllTabs)
     topBar->setPadding({0.0f, 0.0f});
     FCanvasSlotArgs topArgs;
     topArgs.offset = {0.0f, 0.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), topBar, topArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), topBar, topArgs);
 
     auto bar = std::make_shared<UITabBar>("Pages");
     bar->_bDraggableTabs = true;
@@ -2630,7 +2630,7 @@ TEST(WidgetTreeTest, LockedTabPressDoesNotArmGhost)
     FCanvasSlotArgs args;
     args.offset    = {0.0f, 0.0f};
     args.fixedSize = {400.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, args);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, args);
     UITabButton* locked = bar->addTab("Level");
     ASSERT_NE(locked, nullptr);
     locked->_bDraggable = false;
@@ -2663,7 +2663,7 @@ TEST(WidgetTreeTest, DockSpaceSameLeafTabDropReorders)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panelA = std::make_shared<UICanvasPanel>("ABody");
     auto panelB = std::make_shared<UICanvasPanel>("BBody");
@@ -2699,7 +2699,7 @@ TEST(WidgetTreeTest, DockSpaceSameLeafContentDropWithoutChooserFloats)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panelA = std::make_shared<UICanvasPanel>("ABody");
     auto panelB = std::make_shared<UICanvasPanel>("BBody");
@@ -2750,7 +2750,7 @@ TEST(WidgetTreeTest, DockSpaceSameLeafChooserSplitApplies)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panelA = std::make_shared<UICanvasPanel>("ABody");
     auto panelB = std::make_shared<UICanvasPanel>("BBody");
@@ -2799,7 +2799,7 @@ TEST(WidgetTreeTest, DockSpaceCrossLeafEdgeDropStillSplits)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panelA = std::make_shared<UICanvasPanel>("ABody");
     auto panelB = std::make_shared<UICanvasPanel>("BBody");
@@ -2846,17 +2846,17 @@ TEST(WidgetTreeTest, FloatingWindowTabDragBehaviorStartsDockPanelSession)
     auto dock = std::make_shared<UIDockSpace>("Dock");
     FCanvasSlotArgs dockArgs; dockArgs.anchorMin = {0.0f, 0.0f}; dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UICanvasPanel>("Panel");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
     const DockPanelId panelId = ws->addPanel("Scene", panel);
     const FDockFloatingWindowId floatingId = ws->tearOffPanel(panelId, {120.0f, 120.0f}, {320.0f, 240.0f});
     ASSERT_NE(floatingId, kInvalidFloatingWindowId);
 
     auto floating = std::make_shared<UIDockFloatingWindow>("Floating", floatingId, ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), floating);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), floating);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     UITabBar* tabBar = findDescendantOfType<UITabBar>(*floating);
     ASSERT_NE(tabBar, nullptr);
@@ -2890,14 +2890,14 @@ TEST(WidgetTreeTest, FloatingWindowCardinalDockGraftsPanelIntoNewLeaf)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto host = std::make_shared<UIDockFloatingHost>("Host");
     host->bindContext(ws);
     FCanvasSlotArgs hostFill;
     hostFill.anchorMin = {0.0f, 0.0f};
     hostFill.anchorMax = {1.0f, 1.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), host, hostFill);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), host, hostFill);
 
     auto anchored = std::make_shared<UICanvasPanel>("ViewportBody");
     auto floatingPanel = std::make_shared<UICanvasPanel>("FrameStatsPanel");
@@ -2946,9 +2946,9 @@ TEST(WidgetTreeTest, DragObserverReceivesEveryMoveAndTargetChanges)
     FCanvasSlotArgs targetASlot; targetASlot.offset = {150.0f, 40.0f}; targetASlot.fixedSize = {100.0f, 80.0f};
     auto targetB = std::make_shared<TestDropTarget>("TargetB");
     FCanvasSlotArgs targetBSlot; targetBSlot.offset = {300.0f, 40.0f}; targetBSlot.fixedSize = {100.0f, 80.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, makeButtonSlot({20.0f, 20.0f}, {80.0f, 30.0f}));
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), targetA, targetASlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), targetB, targetBSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, makeButtonSlot({20.0f, 20.0f}, {80.0f, 30.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), targetA, targetASlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), targetB, targetBSlot);
     tree.layout();
 
     std::vector<glm::vec2> moves;
@@ -2987,8 +2987,8 @@ TEST(WidgetTreeTest, DragObserverDistinguishesDropNoTargetAndCancel)
     auto source = makeButton("Source", {20.0f, 20.0f}, {80.0f, 30.0f});
     auto target = std::make_shared<TestDropTarget>("Target");
     FCanvasSlotArgs targetSlot; targetSlot.offset = {150.0f, 40.0f}; targetSlot.fixedSize = {100.0f, 80.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, makeButtonSlot({20.0f, 20.0f}, {80.0f, 30.0f}));
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, makeButtonSlot({20.0f, 20.0f}, {80.0f, 30.0f}));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
     tree.layout();
 
     std::vector<EDragFinishResult> results;
@@ -3036,9 +3036,9 @@ TEST(WidgetTreeTest, ExternalDropHoverDoesNotStartLocalDrag)
     FCanvasSlotArgs targetSlot;
     targetSlot.offset    = {8.0f, 8.0f};
     targetSlot.fixedSize = {160.0f, 80.0f};
-    sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), source,
+    (void)sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), source,
                       makeButtonSlot({8.0f, 8.0f}, {60.0f, 24.0f}));
-    targetTree.attach(*targetTree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
+    (void)targetTree.attach(*targetTree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
     sourceTree.layout();
     targetTree.layout();
 
@@ -3149,7 +3149,7 @@ TEST(WidgetTreeTest, WantsTextInputUsesFocusedWidgetCapability)
     auto button = std::make_shared<UIButton>("NoIme");
     FCanvasSlotArgs buttonSlot;
     buttonSlot.fixedSize = {80.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     tree.setFocus(button.get());
     EXPECT_FALSE(tree.wantsTextInput());
 
@@ -3157,7 +3157,7 @@ TEST(WidgetTreeTest, WantsTextInputUsesFocusedWidgetCapability)
     FCanvasSlotArgs fieldSlot;
     fieldSlot.offset    = {0.0f, 32.0f};
     fieldSlot.fixedSize = {160.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
     tree.setFocus(field.get());
     EXPECT_TRUE(tree.wantsTextInput());
 
@@ -3171,10 +3171,10 @@ TEST(WidgetTreeTest, WantsTextInputWalksFocusPath)
     auto host = std::make_shared<TestImeHostPanel>("ImeHost");
     FCanvasSlotArgs hostSlot;
     hostSlot.fixedSize = {200.0f, 80.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, hostSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, hostSlot);
 
     auto child = std::make_shared<UIButton>("Child");
-    tree.attach(*host, child, [](UIElement&, UISlot& edge) {
+    (void)tree.attach(*host, child, [](UIElement&, UISlot& edge) {
         if (auto* slot = edge.as<UICanvasSlot>()) {
             slot->setOffset({8.0f, 8.0f});
             slot->setFixedSize({80.0f, 24.0f});

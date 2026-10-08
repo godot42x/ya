@@ -82,11 +82,6 @@ ViewOverlayStage::FrameInputs::DirectionGizmoInput buildDirectionGizmoInput(cons
     };
 }
 
-DeferredAttachmentFormats buildDeferredGBufferFormats(EFormat::T signedLinearFormat,
-                                                      EFormat::T linearFormat,
-                                                      EFormat::T shadingModelFormat,
-                                                      EFormat::T depthFormat);
-DeferredAttachmentFormats buildDeferredViewFormats(EFormat::T colorFormat, EFormat::T depthFormat);
 RenderTargetCreateInfo buildDeferredGBufferRenderTargetSpec(Extent2D extent,
                                                             EFormat::T signedLinearFormat,
                                                             EFormat::T linearFormat,
@@ -94,46 +89,6 @@ RenderTargetCreateInfo buildDeferredGBufferRenderTargetSpec(Extent2D extent,
                                                             EFormat::T depthFormat);
 RenderTargetCreateInfo buildDeferredViewRenderTargetSpec(Extent2D extent, EFormat::T colorFormat);
 DeferredAttachmentFormats buildDeferredFormatsFromSpec(const RenderTargetCreateInfo& spec);
-
-RGTextureDesc makeGraphAttachmentDesc(const RenderTargetCreateInfo& spec,
-                                      const AttachmentDescription&  attachment,
-                                      std::string                    label)
-{
-    return RGTextureDesc{
-        .label       = std::move(label),
-        .format      = attachment.format,
-        .extent      = Extent3D{spec.extent.width, spec.extent.height, 1},
-        .mipLevels   = 1,
-        .arrayLayers = spec.layerCount,
-        .samples     = attachment.samples,
-        .usage       = attachment.usage,
-        .flags       = attachment.imageCreateFlags,
-    };
-}
-
-DeferredAttachmentFormats buildDeferredGBufferFormats(EFormat::T signedLinearFormat,
-                                                      EFormat::T linearFormat,
-                                                      EFormat::T shadingModelFormat,
-                                                      EFormat::T depthFormat)
-{
-    DeferredAttachmentFormats formats{};
-    formats.colorFormats = {
-        signedLinearFormat,
-        signedLinearFormat,
-        linearFormat,
-        shadingModelFormat,
-    };
-    formats.depthFormat = depthFormat;
-    return formats;
-}
-
-DeferredAttachmentFormats buildDeferredViewFormats(EFormat::T colorFormat, EFormat::T depthFormat)
-{
-    DeferredAttachmentFormats formats{};
-    formats.colorFormats = {colorFormat};
-    formats.depthFormat  = depthFormat;
-    return formats;
-}
 
 RenderTargetCreateInfo buildDeferredGBufferRenderTargetSpec(Extent2D extent,
                                                             EFormat::T signedLinearFormat,
@@ -413,6 +368,8 @@ RenderPipelineSettings DeferredRenderPipeline::buildSettingsSnapshot() const
 {
     return {
         .kind              = ERenderPipelineKind::Deferred,
+        .shadow            = currentShadowSettings(),
+        .postProcessing    = _postProcessStage.getState(),
         .bReverseViewportY = _bReverseViewportY,
         .bSSAOEnabled      = _bEnableSSAO,
         .ssaoRadius        = _ssaoStage ? _ssaoStage->getRadius() : _ssaoRadius,
@@ -421,8 +378,6 @@ RenderPipelineSettings DeferredRenderPipeline::buildSettingsSnapshot() const
         .ssaoIntensity     = _ssaoStage ? _ssaoStage->getIntensity() : _ssaoIntensity,
         .bPBRDiffuseIBL    = _lightStage ? _lightStage->isPBRDiffuseIBLEnabled() : _bEnablePBRDiffuseIBL,
         .bPBRSpecularIBL   = _lightStage ? _lightStage->isPBRSpecularIBLEnabled() : _bEnablePBRSpecularIBL,
-        .shadow            = currentShadowSettings(),
-        .postProcessing    = _postProcessStage.getState(),
     };
 }
 
@@ -1315,7 +1270,7 @@ void DeferredRenderPipeline::refreshViewStageState()
     }
 }
 
-void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
+void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&)
 {
     if (_ssaoStage) {
         _ssaoStage->setSettings(_ssaoStage->getRadius(),

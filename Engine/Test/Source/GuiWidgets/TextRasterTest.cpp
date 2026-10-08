@@ -110,7 +110,7 @@ TEST(TextRasterTest, DesignerZoomRerasterizesAndLayoutStaysLogical)
     FCanvasSlotArgs slot;
     slot.widthSizeMode  = EWidgetSizeMode::Auto;
     slot.heightSizeMode = EWidgetSizeMode::Auto;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
 
     const UIFrameSnapshot atOne = tree.buildSnapshot(UIFrameBuildContext{});
     const glm::vec2       layoutAtOne = text->_layoutRect.extent;
@@ -152,7 +152,7 @@ TEST(TextRasterTest, TreeDpiRerasterizesWithoutChangingLayout)
     FCanvasSlotArgs slot;
     slot.widthSizeMode  = EWidgetSizeMode::Auto;
     slot.heightSizeMode = EWidgetSizeMode::Auto;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
 
     const UIFrameSnapshot atOne = tree.buildSnapshot(UIFrameBuildContext{});
     const glm::vec2       layoutAtOne = text->_layoutRect.extent;
@@ -183,7 +183,7 @@ TEST(TextRasterTest, BitmapFloorClampsRasterAndKeepsLogicalLayout)
     FCanvasSlotArgs slot;
     slot.widthSizeMode  = EWidgetSizeMode::Auto;
     slot.heightSizeMode = EWidgetSizeMode::Auto;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
 
     UIFrameBuildContext ctx{};
     ctx.uiScale = {0.2f, 0.2f};

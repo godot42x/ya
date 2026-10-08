@@ -35,8 +35,9 @@ struct DirectionalLightComponent : public IComponent
     float _farPlane        = 100.0f;
     float _lightDistance   = 20.0f;
 
-    DirectionalLightComponent()                                 = default;
-    DirectionalLightComponent(const DirectionalLightComponent&) = default;
+    DirectionalLightComponent()                                      = default;
+    DirectionalLightComponent(const DirectionalLightComponent&)      = default;
+    DirectionalLightComponent& operator=(const DirectionalLightComponent&) = default;
 };
 
 } // namespace ya

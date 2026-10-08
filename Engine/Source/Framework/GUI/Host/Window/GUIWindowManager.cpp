@@ -518,7 +518,7 @@ void GUIWindowManager::dispatchToSession(GUIWindowSession& session, const Event&
             leave._windowID = session.windowId;
             WidgetEventContext ctx;
             ctx.logicalPoint = {leave.getX(), leave.getY()};
-            (void)session.ownedTree->dispatchEvent(leave, ctx);
+           (void)session.ownedTree->dispatchEvent(leave, ctx);
             session.lastMouseX = leave.getX();
             session.lastMouseY = leave.getY();
         }

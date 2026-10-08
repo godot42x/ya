@@ -59,8 +59,8 @@ TEST(UIFrameSnapshotTest, BuildResolvesItemsToRenderPixelsInPaintOrder)
     FCanvasSlotArgs frontSlot;
     frontSlot.offset    = {200.0f, 100.0f};
     frontSlot.fixedSize = {80.0f, 32.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), behind, behindSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), front, frontSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), behind, behindSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), front, frontSlot);
 
     const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{
         .uiScale = {2.0f, 2.0f},
@@ -89,7 +89,7 @@ TEST(UIFrameSnapshotTest, ContainerClipResolvesOnChildren)
     auto child = std::make_shared<UIBorder>("Child");
     FCanvasSlotArgs clipSlot;
     clipSlot.fixedSize = {200.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), clip, clipSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), clip, clipSlot);
     clip->addDetachedChild(child, [](UIElement&, UISlot& slot) {
         if (auto* box = dynamic_cast<UIBoxSlot*>(&slot)) {
             box->setPreferredSize({300.0f, 100.0f});
@@ -116,7 +116,7 @@ TEST(UIFrameSnapshotTest, SnapshotSurvivesImmediateDetach)
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
     UIFrameSnapshot snapshot = tree.buildSnapshot({});
     ASSERT_EQ(snapshot.items.size(), 1u);
@@ -138,7 +138,7 @@ TEST(UIFrameSnapshotTest, TextItemsCarryFontAndText)
     slot.offset = {30.0f, 40.0f};
     slot.fixedSize = {200.0f, 20.0f};
     text->setText("Hello Snapshot");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
 
     // Drop any font cached by earlier suites (the FontManager is process-
     // global): with no RuntimeDefault font the text item is skipped, not
@@ -155,7 +155,7 @@ TEST(UIFrameSnapshotTest, LayoutRunsWhenDirtyDuringSnapshot)
     FCanvasSlotArgs slot;
     slot.offset = {5.0f, 5.0f};
     slot.fixedSize = {50.0f, 25.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
     // No explicit layout() call: buildSnapshot performs it.
     const UIFrameSnapshot snapshot = tree.buildSnapshot({});
@@ -173,7 +173,7 @@ TEST(UIFrameSnapshotTest, PanelCornerRadiusScalesIntoDrawItem)
     slot.fixedSize = {100.0f, 50.0f};
     panel->setColor({1.0f, 0.0f, 0.0f, 1.0f});
     panel->setCornerRadius(8.0f);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
     const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{
         .uiScale = {2.0f, 2.0f},
@@ -250,8 +250,8 @@ TEST(UIFrameSnapshotTest, PerfStatsCountPaintWalkAndDrawItems)
     behindSlot.fixedSize = {100.0f, 50.0f};
     FCanvasSlotArgs frontSlot;
     frontSlot.fixedSize = {80.0f, 32.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), behind, behindSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), front, frontSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), behind, behindSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), front, frontSlot);
 
     const UIFrameSnapshot first = tree.buildSnapshot(UIFrameBuildContext{});
 
@@ -264,7 +264,7 @@ TEST(UIFrameSnapshotTest, PerfStatsCountPaintWalkAndDrawItems)
 
     // Second build reuses the clean layout: layoutMS resets to 0 and the
     // paint-walk count stays identical.
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().layoutMS, 0.0f);
     EXPECT_EQ(tree.getPerfStats().paintedWidgets, 7u);
 }
@@ -274,24 +274,24 @@ TEST(UIFrameSnapshotTest, ReactiveTextRebuildsOnlyDependentWidget)
     WidgetTree tree({.width = 800, .height = 600});
     auto       bound = std::make_shared<UIText>("Bound");
     auto       plain = std::make_shared<UIText>("Plain");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bound);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), plain);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bound);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), plain);
 
     auto textRef = std::make_shared<Reactive<std::string>>("hello");
     bound->bindText(textRef);
 
     // Cold start: root + 4 system layers + the 2 leaf texts all re-run (no
     // cache yet), so rebuilt == painted == 7.
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 7u);
 
     // No change: every widget reuses the previous-frame segment.
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     // Mutate the ref: only the bound text is dirty and re-runs its paintSelf.
     textRef->set("world");
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     // Reattaching invalidates the detached subtree and may also rebuild its
     // layout host; the contract is a fresh rebuild, not an exact widget count.
     EXPECT_GE(tree.getPerfStats().rebuiltWidgets, 1u);
@@ -304,8 +304,8 @@ TEST(UIFrameSnapshotTest, DestroyedDependentDoesNotDangle)
     {
         auto text = std::make_shared<UIText>("Temp");
         text->bindText(ref);
-        tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
-        tree.buildSnapshot(UIFrameBuildContext{}); // text reads ref, becomes a dependent
+        (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
+        (void)tree.buildSnapshot(UIFrameBuildContext{}); // text reads ref, becomes a dependent
         tree.detach(*text);                        // release the tree's strong ref
         // text is destroyed at scope end; ~UIElement severs the dependency.
     }
@@ -367,7 +367,7 @@ TEST(UIFrameSnapshotTest, ConditionalDependencySwitchRecollects)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       probe = std::make_shared<ReactiveProbeWidget>("Probe");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe);
 
     auto refA = std::make_shared<Reactive<int>>(1);
     auto refB = std::make_shared<Reactive<int>>(2);
@@ -376,23 +376,23 @@ TEST(UIFrameSnapshotTest, ConditionalDependencySwitchRecollects)
     probe->useA = true;
 
     // First paint reads refA and records the dependency.
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(probe->lastRead, 1);
 
     // Switch to refB: re-run the probe (it re-collects from scratch).
     probe->useA = false;
     probe->markPaintDirty();
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(probe->lastRead, 2);
 
     // refA no longer triggers a rebuild (its dependency was dropped).
     refA->set(10);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     // refB still triggers a rebuild.
     refB->set(20);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
     EXPECT_EQ(probe->lastRead, 20);
 }
@@ -402,19 +402,19 @@ TEST(UIFrameSnapshotTest, ReactiveButtonEnabledOnlyRepaintsButton)
     WidgetTree tree({.width = 800, .height = 600});
     auto       btn   = std::make_shared<UIButton>("Btn");
     auto       plain = std::make_shared<UICanvasPanel>("Plain");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), btn);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), plain);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), btn);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), plain);
 
     auto enabled = std::make_shared<Reactive<bool>>(true);
     btn->bindEnabled(enabled);
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     // Disable: only the button re-runs its paintSelf.
     enabled->set(false);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_GE(tree.getPerfStats().rebuiltWidgets, 1u);
 }
 
@@ -422,18 +422,18 @@ TEST(UIFrameSnapshotTest, ReactiveSplitRatioInvalidatesLayout)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       split = std::make_shared<UISplitPane>("Split");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
 
     auto ratio = std::make_shared<Reactive<float>>(0.5f);
     split->bindSplitRatio(ratio);
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lays out)
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean layout: no re-layout
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lays out)
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean layout: no re-layout
     EXPECT_EQ(tree.getPerfStats().layoutMS, 0.0f);
 
     // Write a new ratio: the layout is invalidated and re-run.
     ratio->set(0.3f);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_GT(tree.getPerfStats().layoutMS, 0.0f);
 }
 
@@ -441,25 +441,25 @@ TEST(UIFrameSnapshotTest, ReactiveListPushNotifiesDependents)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       probe = std::make_shared<ReactiveListProbeWidget>("ListProbe");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe);
 
     auto list = std::make_shared<ReactiveList<int>>();
     probe->list = list.get();
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(probe->lastCount, 0);
 
     list->push(1);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(probe->lastCount, 1);
 
     list->push(2);
     list->push(3);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(probe->lastCount, 3);
 
     list->clear();
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(probe->lastCount, 0);
 }
 
@@ -469,9 +469,9 @@ TEST(UIFrameSnapshotTest, PerfStateBridgeRecordsTreeMetrics)
     auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     using namespace ya::literals;
     auto& perf = profiling::metrics();
@@ -486,8 +486,8 @@ TEST(UIFrameSnapshotTest, StyleEditRepaintsThemedTexts)
     WidgetTree tree({.width = 800, .height = 600});
     auto       t1 = std::make_shared<UIText>("T1");
     auto       t2 = std::make_shared<UIText>("T2");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), t1);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), t2);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), t1);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), t2);
 
     // Unified binding path (Phase 3 cleanup): un-authored texts resolve the
     // "text" style from the tree theme; editing THAT style marks every
@@ -499,15 +499,15 @@ TEST(UIFrameSnapshotTest, StyleEditRepaintsThemedTexts)
     auto titleStyle  = theme->define<FTextStyle>("text", title);
     tree.setTheme(theme.get());
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     // Edit the shared style: both themed texts are dirty and re-run.
     FTextStyle edited = titleStyle->value();
     edited.textColor  = {0.0f, 1.0f, 0.0f, 1.0f};
     titleStyle->set(edited);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 2u);
     EXPECT_EQ(t1->resolvedStyle().textColor, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
 }
@@ -519,7 +519,7 @@ TEST(UIFrameSnapshotTest, PanelResolvesThemeStyleAndRepaintsOnThemeSwitch)
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
     // Two tree-level themes define the same "panel" key differently
     // (style-system Phase 3): the panel resolves FPanelStyle through the tree
@@ -534,8 +534,8 @@ TEST(UIFrameSnapshotTest, PanelResolvesThemeStyleAndRepaintsOnThemeSwitch)
     light->define<FPanelStyle>("panel", lightStyle);
 
     tree.setTheme(dark.get());
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     const auto findPanelSprite = [&](const UIFrameSnapshot& s) -> const UIFrameDrawItem*
@@ -558,7 +558,7 @@ TEST(UIFrameSnapshotTest, PanelResolvesThemeStyleAndRepaintsOnThemeSwitch)
     // style Reactive value changed, so only the theme-switch edge can mark it
     // dirty).
     tree.setTheme(light.get());
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
     const UIFrameSnapshot lightSnap = tree.buildSnapshot(UIFrameBuildContext{});
     const UIFrameDrawItem* lightItem = findPanelSprite(lightSnap);
@@ -570,21 +570,21 @@ TEST(UIFrameSnapshotTest, TreeViewExpandCollapseChangesVisibleRows)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       tv = std::make_shared<UITreeView>("Tree");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), tv);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), tv);
 
     auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
     roots->push({"root", "Root", {{"c1", "Child 1", {}}, {"c2", "Child 2", {}}}});
     tv->bindData(roots);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tv->computeDesiredSize().y, tv->_rowHeight * 1.0f); // root only
 
     tv->setExpanded("root", true);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tv->computeDesiredSize().y, tv->_rowHeight * 3.0f); // root + 2 children
 
     tv->setExpanded("root", false);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tv->computeDesiredSize().y, tv->_rowHeight * 1.0f); // collapsed again
 }
 
@@ -592,20 +592,20 @@ TEST(UIFrameSnapshotTest, TreeViewSelectionRepaintsOnlyTreeView)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       tv = std::make_shared<UITreeView>("Tree");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), tv);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), tv);
 
     auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
     roots->push({"a", "A", {}});
     roots->push({"b", "B", {}});
     tv->bindData(roots);
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     // Select "a": only the tree view re-runs its paintSelf.
     tv->getSelection()->set("a");
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
     EXPECT_EQ(tv->getSelection()->value(), "a");
 }
@@ -614,16 +614,16 @@ TEST(UIFrameSnapshotTest, TreeViewDataSourcePushInvalidatesLayout)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       tv = std::make_shared<UITreeView>("Tree");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), tv);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), tv);
 
     auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
     tv->bindData(roots);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tv->computeDesiredSize().y, 0.0f); // empty
 
     roots->push({"a", "A", {}});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tv->computeDesiredSize().y, tv->_rowHeight * 1.0f); // one row
 }
 
@@ -634,10 +634,10 @@ TEST(UIFrameSnapshotTest, LayoutChangeRebuildsMovedWidgetDrawItems)
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {50.0f, 25.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean: panel reuses its cached items
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean: panel reuses its cached items
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     // Move the panel and invalidate layout: the widget's rect changes, so its
@@ -660,8 +660,8 @@ TEST(UIFrameSnapshotTest, DetachAndReattachForcesFreshPaintCacheSegment)
     args.fixedSize = {80.0f, 24.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, args).valid());
 
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     tree.detach(*panel);
@@ -684,8 +684,8 @@ TEST(UIFrameSnapshotTest, CrossTreeReparentDoesNotReuseOldTreeCache)
     sourceArgs.fixedSize = {80.0f, 24.0f};
     ASSERT_TRUE(source.attach(*source.getLayer(WidgetTree::ELayer::Content), panel, sourceArgs).valid());
 
-    source.buildSnapshot(UIFrameBuildContext{});
-    source.buildSnapshot(UIFrameBuildContext{});
+    (void)source.buildSnapshot(UIFrameBuildContext{});
+    (void)source.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(source.getPerfStats().rebuiltWidgets, 0u);
 
     destination.reparent(*destination.getLayer(WidgetTree::ELayer::Content), panel);
@@ -716,7 +716,7 @@ TEST(UIFrameSnapshotTest, DestroyAndReallocateWidgetGetsNewRuntimeIdentity)
         FCanvasSlotArgs args;
         args.fixedSize = {64.0f, 20.0f};
         ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), oldPanel, args).valid());
-        tree.buildSnapshot(UIFrameBuildContext{});
+        (void)tree.buildSnapshot(UIFrameBuildContext{});
         tree.detach(*oldPanel);
     }
 
@@ -743,8 +743,8 @@ TEST(UIFrameSnapshotTest, TransientHoverAndFocusRepaintButton)
     // color fields, so the test compares against the typed style defaults.
     const FButtonStyle fallback;
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean: all reuse
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean: all reuse
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     // Hover state change re-paints with the hovered color (VisualFlag marks
@@ -772,13 +772,13 @@ TEST(UIFrameSnapshotTest, ReactivePaintMutationRecordsReasonAndTransition)
     auto       bound = std::make_shared<UIText>("Bound");
     FCanvasSlotArgs boundSlot;
     boundSlot.fixedSize = {160.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bound, boundSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bound, boundSlot);
 
     auto textRef = std::make_shared<Reactive<std::string>>("hello");
     bound->bindText(textRef);
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lays out)
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lays out)
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
     const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
     const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
 
@@ -787,7 +787,7 @@ TEST(UIFrameSnapshotTest, ReactivePaintMutationRecordsReasonAndTransition)
     EXPECT_EQ(tree.getLastInvalidationReason(), EUIInvalidationReason::ReactivePaint);
     EXPECT_EQ(bound->getLastInvalidationReason(), EUIInvalidationReason::ReactivePaint);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore);
 }
@@ -796,7 +796,7 @@ TEST(UIFrameSnapshotTest, ReactiveLayoutMutationRecordsReasonAndTransition)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       probe = std::make_shared<ReactiveListProbeWidget>("ListProbe");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe);
 
     // Layout-granularity reactive: a write invalidates the tree's layout.
     // (SplitPane would also be Layout-level, but it overrides paint() and so
@@ -806,15 +806,15 @@ TEST(UIFrameSnapshotTest, ReactiveLayoutMutationRecordsReasonAndTransition)
     probe->list      = list.get();
     probe->listLevel = ReactiveBase::EDirtyLevel::Layout;
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lays out)
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lays out)
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
     const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
 
     list->push(1); // Layout-level invalidation
 
     EXPECT_EQ(tree.getLastInvalidationReason(), EUIInvalidationReason::ReactiveLayout);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
 }
 
@@ -825,20 +825,20 @@ TEST(UIFrameSnapshotTest, LayoutInvalidationScopesAccumulateAcrossSnapshots)
     FCanvasSlotArgs args;
     args.fixedSize = {80.0f, 24.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, args).valid());
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     auto* slot = panel->getSlot()->as<UICanvasSlot>();
     ASSERT_NE(slot, nullptr);
     slot->setOffset({10.0f, 12.0f});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_GE(tree.getPerfStats().arrangeInvalidations, 1u);
 
     slot->setWidthSizeMode(EWidgetSizeMode::Auto);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_GE(tree.getPerfStats().measureInvalidations, 1u);
 
     tree.detach(*panel);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_GE(tree.getPerfStats().structureInvalidations, 1u);
 }
 
@@ -846,18 +846,18 @@ TEST(UIFrameSnapshotTest, SameValueReactiveSetSkipsInvalidation)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       bound = std::make_shared<UIText>("Bound");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bound);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bound);
 
     auto textRef = std::make_shared<Reactive<std::string>>("hello");
     bound->bindText(textRef);
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
     const uint64_t paintBefore = tree.getPerfStats().paintDirtyTransitions;
 
     textRef->set("hello"); // same value: no notify, no transition
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore);
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 }
@@ -869,11 +869,11 @@ TEST(UIFrameSnapshotTest, CleanTreeOffsetChangeRebuildsResolvedItems)
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
     // Cold start + clean frame under context A (identity mapping).
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     // Same clean tree, changed offset: the cached segment holds the old
@@ -894,10 +894,10 @@ TEST(UIFrameSnapshotTest, CleanTreeUiScaleChangeRebuildsResolvedItems)
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{
@@ -916,10 +916,10 @@ TEST(UIFrameSnapshotTest, CleanTreeGenerationChangeDropsCache)
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
-    tree.buildSnapshot(UIFrameBuildContext{.generation = 0});
-    tree.buildSnapshot(UIFrameBuildContext{.generation = 0});
+    (void)tree.buildSnapshot(UIFrameBuildContext{.generation = 0});
+    (void)tree.buildSnapshot(UIFrameBuildContext{.generation = 0});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     // Host bumps generation (e.g. texture/asset reload) while the mapping is
@@ -935,7 +935,7 @@ TEST(UIFrameSnapshotTest, ReactiveDestroyedBeforeWidgetSeveresBackReference)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       probe = std::make_shared<ReactiveProbeWidget>("Probe");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe);
 
     auto refB = std::make_shared<Reactive<int>>(2);
     probe->refB = refB.get();
@@ -944,7 +944,7 @@ TEST(UIFrameSnapshotTest, ReactiveDestroyedBeforeWidgetSeveresBackReference)
         auto refA = std::make_shared<Reactive<int>>(1);
         probe->refA = refA.get();
         probe->useA = true;
-        tree.buildSnapshot(UIFrameBuildContext{}); // probe reads refA -> dependent
+        (void)tree.buildSnapshot(UIFrameBuildContext{}); // probe reads refA -> dependent
         // refA destroyed here: ~ReactiveBase must sever the probe's back-ref.
     }
 
@@ -953,7 +953,7 @@ TEST(UIFrameSnapshotTest, ReactiveDestroyedBeforeWidgetSeveresBackReference)
     // destroyed refA, or the walk hits a dangling pointer.
     probe->useA = false;
     probe->markPaintDirty();
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(probe->lastRead, 2);
 }
 
@@ -963,8 +963,8 @@ TEST(UIFrameSnapshotTest, DetachedWidgetSurvivesReactiveSet)
     auto       bound    = std::make_shared<UIText>("Bound");
     auto       textRef  = std::make_shared<Reactive<std::string>>("hello");
     bound->bindText(textRef);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bound);
-    tree.buildSnapshot(UIFrameBuildContext{}); // bound reads ref -> dependent
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bound);
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // bound reads ref -> dependent
 
     tree.detach(*bound); // detached but still alive (_tree == nullptr)
 
@@ -978,21 +978,21 @@ TEST(UIFrameSnapshotTest, RebindSplitRatioKeepsLatestBindingActive)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       split = std::make_shared<UISplitPane>("Split");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
 
     auto ratioA = std::make_shared<Reactive<float>>(0.5f);
     split->bindSplitRatio(ratioA);
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
 
     auto ratioB = std::make_shared<Reactive<float>>(0.3f);
     split->bindSplitRatio(ratioB);
-    tree.buildSnapshot(UIFrameBuildContext{}); // re-layout pulling ratioB
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // re-layout pulling ratioB
 
     // The latest binding drives layout on write.
     const uint64_t before = tree.getPerfStats().layoutDirtyTransitions;
     ratioB->set(0.6f);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_GT(tree.getPerfStats().layoutDirtyTransitions, before);
 }
 
@@ -1000,7 +1000,7 @@ TEST(UIFrameSnapshotTest, SplitRatioBindingPersistsAcrossRepaints)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       split = std::make_shared<UISplitPane>("Split");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
 
     auto ratio = std::make_shared<Reactive<float>>(0.5f);
     split->bindSplitRatio(ratio);
@@ -1009,13 +1009,13 @@ TEST(UIFrameSnapshotTest, SplitRatioBindingPersistsAcrossRepaints)
     // persistent: it must stay registered (independent of per-paint dependency
     // re-collection) so a later write still re-runs layout. This is the
     // regression guard for GI-102's persistent-edge separation.
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     const uint64_t before = tree.getPerfStats().layoutDirtyTransitions;
     ratio->set(0.4f);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_GT(tree.getPerfStats().layoutDirtyTransitions, before);
 }
 
@@ -1028,15 +1028,15 @@ TEST(UIFrameSnapshotTest, ReactiveMixedLevelConsumersGetCorrectInvalidation)
     paintProbe->listLevel = ReactiveBase::EDirtyLevel::Paint;
     auto layoutProbe      = std::make_shared<ReactiveListProbeWidget>("LayoutProbe");
     layoutProbe->listLevel = ReactiveBase::EDirtyLevel::Layout;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), paintProbe);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), layoutProbe);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), paintProbe);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), layoutProbe);
 
     auto list = std::make_shared<ReactiveList<int>>();
     paintProbe->list  = list.get();
     layoutProbe->list = list.get();
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
     const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
     const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
 
@@ -1044,7 +1044,7 @@ TEST(UIFrameSnapshotTest, ReactiveMixedLevelConsumersGetCorrectInvalidation)
     // transition, the Layout consumer gets a layout transition (which also
     // implies paint, so paint total +2).
     list->push(1);
-    tree.buildSnapshot(UIFrameBuildContext{}); // refresh the perf snapshot
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // refresh the perf snapshot
 
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 2);
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
@@ -1054,20 +1054,20 @@ TEST(UIFrameSnapshotTest, SameWidgetTwoLevelConsumeBothEdges)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       probe = std::make_shared<MixedLevelProbeWidget>("Mixed");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe);
 
     auto ref = std::make_shared<Reactive<int>>(0);
     probe->ref = ref.get();
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start (reads at both levels)
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start (reads at both levels)
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
     const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
     const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
 
     // The same widget consumed the ref at Paint and Layout: both edges must
     // survive (not be deduplicated away by widget identity) and fire.
     ref->set(1);
-    tree.buildSnapshot(UIFrameBuildContext{}); // refresh the perf snapshot
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // refresh the perf snapshot
 
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
@@ -1077,7 +1077,7 @@ TEST(UIFrameSnapshotTest, PaintRebuildReCollectsStyleEdgeAfterForcedRebuild)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIBorder>("P");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
 
     // Un-authored panel resolves the "panel" style from the tree theme
     // (unified binding path; the old persistent FWidgetStyle bindTo edge is
@@ -1086,20 +1086,20 @@ TEST(UIFrameSnapshotTest, PaintRebuildReCollectsStyleEdgeAfterForcedRebuild)
     auto style = theme->define<FPanelStyle>("panel", FPanelStyle{});
     tree.setTheme(theme.get());
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
 
     // Force a paint rebuild: the base paint runs clearDependencies(), then
     // paintSelf re-reads the themed style and re-collects the dependency, so
     // a later style edit still repaints the panel.
     panel->markPaintDirty();
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     const uint64_t paintBefore = tree.getPerfStats().paintDirtyTransitions;
     FPanelStyle    changed;
     changed.fillColor = FBrush::solid({1.0f, 0.0f, 0.0f, 1.0f});
     style->set(changed);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);
 }
 
@@ -1107,24 +1107,24 @@ TEST(UIFrameSnapshotTest, RebindSplitRatioClearsOldBinding)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       split = std::make_shared<UISplitPane>("Split");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
 
     auto ratioA = std::make_shared<Reactive<float>>(0.5f);
     auto ratioB = std::make_shared<Reactive<float>>(0.3f);
     split->bindSplitRatio(ratioA);
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
 
     split->bindSplitRatio(ratioB); // rebind must sever ratioA's persistent edge
 
     const uint64_t before = tree.getPerfStats().layoutDirtyTransitions;
     ratioA->set(0.9f); // no longer bound: must not invalidate layout
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, before);
 
     ratioB->set(0.6f); // still bound: invalidates layout
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, before + 1);
 }
 
@@ -1134,14 +1134,14 @@ TEST(UIFrameSnapshotTest, PropertyImpactPaintDoesNotInvalidateLayout)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIBorder>("P");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
 
     const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
     const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
     panel->invalidateProperty(EUIPropertyImpact::Paint);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore);
@@ -1151,14 +1151,14 @@ TEST(UIFrameSnapshotTest, PropertyImpactLayoutInvalidatesMeasure)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIBorder>("P");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
     const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
     panel->invalidateProperty(EUIPropertyImpact::Layout);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     // Layout implies repaint: both a layout transition and a paint transition.
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
@@ -1170,15 +1170,15 @@ TEST(UIFrameSnapshotTest, SubtreePaintContextInvalidatesWholeSubtree)
     WidgetTree tree({.width = 800, .height = 600});
     auto       parent = std::make_shared<UICanvasPanel>("Parent");
     auto       child  = std::make_shared<UICanvasPanel>("Child");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
-    tree.attach(*parent, child);
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
+    (void)tree.attach(*parent, child);
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
 
     const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
     const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
     parent->invalidateProperty(EUIPropertyImpact::SubtreePaintContext);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     // Parent and child repaint (subtree), but no re-measure.
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 2);
@@ -1189,13 +1189,13 @@ TEST(UIFrameSnapshotTest, SetClipChildrenIsSubtreePaintNotLayout)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       clip = std::make_shared<UIContainer>("Clip");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), clip);
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), clip);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
     clip->setClipChildren(true); // SubtreePaintContext, not Layout
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore);
 }
@@ -1225,12 +1225,12 @@ TEST(UIFrameSnapshotTest, PaintWalkRestoresReactiveStack)
     WidgetTree tree({.width = 800, .height = 600});
     auto       parent = std::make_shared<UIContainer>("Parent");
     auto       child  = std::make_shared<UICanvasPanel>("Child");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
-    tree.attach(*parent, child);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
+    (void)tree.attach(*parent, child);
 
     EXPECT_EQ(currentPaintWidget(), nullptr);
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame: reuse path
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame: reuse path
     EXPECT_EQ(currentPaintWidget(), nullptr);
 }
 
@@ -1244,7 +1244,7 @@ TEST(UIFrameSnapshotTest, ScrollViewportClipsContentToViewportRect)
     viewportSlot.fixedSize = {200.0f, 60.0f};
     viewport->_bShowScrollbar = false;
     auto content = std::make_shared<UIBorder>("Content");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
     viewport->addDetachedChild(content, [](UIElement&, UISlot& slot) {
         if (auto* single = dynamic_cast<UIContentSlot*>(&slot)) {
             single->setPreferredSize({200.0f, 100.0f});
@@ -1270,9 +1270,9 @@ TEST(UIFrameSnapshotTest, SplitPaneClipsChildrenToOwnPaneRect)
     split->setSplitRatio(0.5f);
     auto paneA = std::make_shared<UIBorder>("A");
     auto paneB = std::make_shared<UIBorder>("B");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
-    tree.attach(*split, paneA);
-    tree.attach(*split, paneB);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
+    (void)tree.attach(*split, paneA);
+    (void)tree.attach(*split, paneB);
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
 
@@ -1299,8 +1299,8 @@ TEST(UIFrameSnapshotTest, LayoutHostsReuseSelfSegmentWhenClean)
     auto       container = std::make_shared<UIContainer>("C");
     container->setClipChildren(true);
     auto child = std::make_shared<UICanvasPanel>("A");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), container);
-    tree.attach(*container, child, [](UIElement&, UISlot& slot) {
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), container);
+    (void)tree.attach(*container, child, [](UIElement&, UISlot& slot) {
         if (auto* box = slot.as<UIBoxSlot>()) {
             box->setPreferredSize({40.0f, 20.0f});
         }
@@ -1309,12 +1309,12 @@ TEST(UIFrameSnapshotTest, LayoutHostsReuseSelfSegmentWhenClean)
     auto split = std::make_shared<UISplitPane>("Split");
     auto paneA = std::make_shared<UICanvasPanel>("PA");
     auto paneB = std::make_shared<UICanvasPanel>("PB");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
-    tree.attach(*split, paneA);
-    tree.attach(*split, paneB);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
+    (void)tree.attach(*split, paneA);
+    (void)tree.attach(*split, paneB);
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start: all re-run
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean: layout hosts reuse self segments
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start: all re-run
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean: layout hosts reuse self segments
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 }
 
@@ -1328,15 +1328,15 @@ TEST(UIFrameSnapshotTest, ContainerClipResizeInvalidatesChildSegments)
     FCanvasSlotArgs clipSlot;
     clipSlot.fixedSize = {200.0f, 100.0f};
     auto child = std::make_shared<UIBorder>("Child");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), clip, clipSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), clip, clipSlot);
     clip->addDetachedChild(child, [](UIElement&, UISlot& slot) {
         if (auto* box = dynamic_cast<UIBoxSlot*>(&slot)) {
             box->setPreferredSize({50.0f, 25.0f});
         }
     });
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean: child reuses its segment
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean: child reuses its segment
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     // Widen the clip container. The child keeps its own 50x25 rect, but its
@@ -1362,7 +1362,7 @@ TEST(UIFrameSnapshotTest, AuthoredButtonStyleWinsOverThemeAndIgnoresThemeSwitch)
     FButtonStyle authored;
     authored.normalFill = FBrush::solid({0.9f, 0.2f, 0.1f, 1.0f});
     button->setStyle(authored);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
 
     auto theme = std::make_shared<UITheme>();
     FButtonStyle themed;
@@ -1374,7 +1374,7 @@ TEST(UIFrameSnapshotTest, AuthoredButtonStyleWinsOverThemeAndIgnoresThemeSwitch)
     ASSERT_FALSE(snap.items.empty());
     EXPECT_EQ(snap.items.front().color, glm::vec4(0.9f, 0.2f, 0.1f, 1.0f));
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     auto other = std::make_shared<UITheme>();
@@ -1382,7 +1382,7 @@ TEST(UIFrameSnapshotTest, AuthoredButtonStyleWinsOverThemeAndIgnoresThemeSwitch)
     themed2.normalFill = FBrush::solid({0.0f, 1.0f, 0.0f, 1.0f});
     other->define<FButtonStyle>("button", themed2);
     tree.setTheme(other.get());
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
     const UIFrameSnapshot after = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_FALSE(after.items.empty());
@@ -1396,7 +1396,7 @@ TEST(UIFrameSnapshotTest, ThemeAttachAfterUnthemedBuildRepaintsKeyedButton)
     FCanvasSlotArgs buttonSlot;
     buttonSlot.offset = {10.0f, 10.0f};
     buttonSlot.fixedSize = {80.0f, 32.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
 
     const UIFrameSnapshot before = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_FALSE(before.items.empty());
@@ -1408,7 +1408,7 @@ TEST(UIFrameSnapshotTest, ThemeAttachAfterUnthemedBuildRepaintsKeyedButton)
     theme->define<FButtonStyle>("button", themed);
     tree.setTheme(theme.get());
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_GT(tree.getPerfStats().rebuiltWidgets, 0u);
     const UIFrameSnapshot after = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_FALSE(after.items.empty());
@@ -1432,11 +1432,11 @@ TEST(UIFrameSnapshotTest, SetColorWritesAuthoredStyleAndBeatsTheme)
     panelSlot.offset = {10.0f, 10.0f};
     panelSlot.fixedSize = {100.0f, 50.0f};
     panel->setColor({0.9f, 0.2f, 0.1f, 1.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
 
     auto text = std::make_shared<UIText>("T");
     text->setColor({0.2f, 0.3f, 0.8f, 1.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
 
     EXPECT_TRUE(panel->hasAuthoredStyle());
     EXPECT_TRUE(text->hasAuthoredStyle());
@@ -1454,7 +1454,7 @@ TEST(UIFrameSnapshotTest, SetColorWritesAuthoredStyleAndBeatsTheme)
     textThemed2.textColor = {1.0f, 1.0f, 0.0f, 1.0f};
     other->define<FTextStyle>("text", textThemed2);
     tree.setTheme(other.get());
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(text->resolvedStyle().textColor, glm::vec4(0.2f, 0.3f, 0.8f, 1.0f));
     const UIFrameSnapshot after = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_FALSE(after.items.empty());
@@ -1471,13 +1471,13 @@ TEST(UIFrameSnapshotTest, SameAuthoredStyleDoesNotDirty)
     FButtonStyle style;
     style.normalFill = FBrush::solid({0.2f, 0.3f, 0.4f, 1.0f});
     button->setStyle(style);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     const GuiPerfStats before = tree.getPerfStats();
 
     button->setStyle(style);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, before.layoutDirtyTransitions);
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, before.paintDirtyTransitions);
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
@@ -1491,7 +1491,7 @@ TEST(UIFrameSnapshotTest, SparseStyleFieldInheritsUnpatchedFieldsOnThemeSwitch)
     buttonSlot.offset = {10.0f, 10.0f};
     buttonSlot.fixedSize = {80.0f, 32.0f};
     button->setStyleField("normalFill", FBrush::solid({0.9f, 0.2f, 0.1f, 1.0f}));
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
 
     auto         theme = std::make_shared<UITheme>();
     FButtonStyle themed;
@@ -1509,7 +1509,7 @@ TEST(UIFrameSnapshotTest, SparseStyleFieldInheritsUnpatchedFieldsOnThemeSwitch)
         EXPECT_EQ(resolved.hoveredFill, FBrush::solid({0.2f, 0.9f, 0.2f, 1.0f}));
     }
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     auto         other = std::make_shared<UITheme>();
@@ -1518,7 +1518,7 @@ TEST(UIFrameSnapshotTest, SparseStyleFieldInheritsUnpatchedFieldsOnThemeSwitch)
     themed2.hoveredFill = FBrush::solid({0.1f, 0.1f, 0.8f, 1.0f});
     other->define<FButtonStyle>("button", themed2);
     tree.setTheme(other.get());
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_GT(tree.getPerfStats().rebuiltWidgets, 0u);
 
     const UIFrameSnapshot after = tree.buildSnapshot(UIFrameBuildContext{});
@@ -1541,13 +1541,13 @@ TEST(UIFrameSnapshotTest, SetColorOverlaysColorAndInheritsThemeFontSize)
 
     auto text = std::make_shared<UIText>("T");
     text->setColor({0.2f, 0.3f, 0.8f, 1.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(text->resolvedStyle().textColor, glm::vec4(0.2f, 0.3f, 0.8f, 1.0f));
     EXPECT_EQ(text->resolvedStyle().fontSize, 14u);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     auto       other = std::make_shared<UITheme>();
@@ -1556,7 +1556,7 @@ TEST(UIFrameSnapshotTest, SetColorOverlaysColorAndInheritsThemeFontSize)
     textThemed2.fontSize  = 24;
     other->define<FTextStyle>("text", textThemed2);
     tree.setTheme(other.get());
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_GT(tree.getPerfStats().rebuiltWidgets, 0u);
     EXPECT_EQ(text->resolvedStyle().textColor, glm::vec4(0.2f, 0.3f, 0.8f, 1.0f));
     EXPECT_EQ(text->resolvedStyle().fontSize, 24u);
@@ -1576,7 +1576,7 @@ TEST(UIFrameSnapshotTest, ImagePlaceholderFollowsThemeWithoutModalChrome)
     FCanvasSlotArgs imageSlot;
     imageSlot.offset = {10.0f, 10.0f};
     imageSlot.fixedSize = {40.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
 
     auto overlay = std::make_shared<UIPopupOverlay>("Modal");
     overlay->_bModal = true;
@@ -1613,7 +1613,7 @@ TEST(UIFrameSnapshotTest, TreeViewSelectionFollowsTheme)
     auto tv = std::make_shared<UITreeView>("Tree");
     FCanvasSlotArgs treeSlot;
     treeSlot.fixedSize = {200.0f, 80.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), tv, treeSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), tv, treeSlot);
     auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
     roots->push({"a", "A", {}});
     tv->bindData(roots);
@@ -1650,12 +1650,12 @@ TEST(UIFrameSnapshotTest, DragDropTilesFollowTheme)
     FCanvasSlotArgs sourceSlot;
     sourceSlot.offset = {10.0f, 10.0f};
     sourceSlot.fixedSize = {80.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
     auto target = std::make_shared<UIDragDropTile>("Dst", UIDragDropTile::EKind::Target);
     FCanvasSlotArgs targetSlot;
     targetSlot.offset = {10.0f, 40.0f};
     targetSlot.fixedSize = {80.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
 
     const auto spriteColors = [](const UIFrameSnapshot& snap)
     {
@@ -1909,9 +1909,9 @@ TEST(UIFrameSnapshotTest, SetStyleFieldUsesCatalogImpact)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       text = std::make_shared<UIText>("T");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(text->isPaintDirty());
     EXPECT_FALSE(text->isMeasureDirty());
 
@@ -1919,7 +1919,7 @@ TEST(UIFrameSnapshotTest, SetStyleFieldUsesCatalogImpact)
     EXPECT_TRUE(text->isPaintDirty());
     EXPECT_FALSE(text->isMeasureDirty());
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(text->isPaintDirty());
     EXPECT_FALSE(text->isMeasureDirty());
 
@@ -1934,9 +1934,9 @@ TEST(UIFrameSnapshotTest, SetStyleUsesPatchUnionImpact)
     FCanvasSlotArgs panelSlot;
     panelSlot.offset    = {10.0f, 10.0f};
     panelSlot.fixedSize = {100.0f, 50.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     FPanelStyle style;
     style.fillColor = FBrush::solid({0.9f, 0.2f, 0.1f, 1.0f});
@@ -1948,15 +1948,15 @@ TEST(UIFrameSnapshotTest, SetStyleUsesPatchUnionImpact)
     FCanvasSlotArgs buttonSlot;
     buttonSlot.offset    = {10.0f, 10.0f};
     buttonSlot.fixedSize = {80.0f, 32.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     button->setStyleField("normalFill", FBrush::solid({0.1f, 0.2f, 0.9f, 1.0f}));
     EXPECT_TRUE(button->isPaintDirty());
     EXPECT_FALSE(button->isMeasureDirty());
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     button->setStyleField("padding", glm::vec2{20.0f, 8.0f});
     EXPECT_TRUE(button->isMeasureDirty());
 }
@@ -1980,7 +1980,7 @@ TEST(UIFrameSnapshotTest, StyleCatalogDiagnosesUnknownAndMismatchedKeys)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       text = std::make_shared<UIText>("T");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
 
     const StyleCatalogDiagnostics before = getStyleCatalogDiagnostics();
     text->setStyleKey("not.a.style");
@@ -2082,7 +2082,7 @@ TEST(UIFrameSnapshotTest, BuilderFontLookupUsesLogicalSize)
     text->setText("AB");
     FCanvasSlotArgs slot;
     slot.fixedSize = {100.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
     const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{});
     const UIFrameDrawItem* drawn = nullptr;
     for (const UIFrameDrawItem& item : snapshot.items) {
@@ -2110,7 +2110,7 @@ TEST(UIFrameSnapshotTest, TextOriginsSnapToWholeDevicePixels)
     FCanvasSlotArgs slot;
     slot.offset    = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, slot);
 
     UIFrameBuildContext ctx{};
     ctx.offset = {10.5f, 20.25f}; // fractional target-space origin
@@ -2137,23 +2137,23 @@ TEST(UIFrameSnapshotTest, FontResourceReadyRelayoutsNestedText)
     FCanvasSlotArgs fillSlot;
     fillSlot.anchorMin = {0.0f, 0.0f};
     fillSlot.anchorMax = {1.0f, 1.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, fillSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, fillSlot);
 
     auto text = std::make_shared<UIText>("Label");
     text->setText("AB");
     text->setFontSize(16);
-    tree.attach(*column, text);
+    (void)tree.attach(*column, text);
     if (UIBoxSlot* slot = column->getBoxSlot(*text)) {
         slot->setCrossAlignment(EUIBoxSlotCrossAlignment::Start);
     }
 
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     const float widthBefore = text->getLayoutRect().extent.x;
     EXPECT_FLOAT_EQ(widthBefore, 16.0f);
 
     FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 16, makeSnapshotTestFont(16.0f, 20.0f));
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getLastInvalidationReason(), EUIInvalidationReason::ResourceReady);
     EXPECT_FLOAT_EQ(text->getLayoutRect().extent.x, 40.0f);
     EXPECT_GT(tree.getPerfStats().rebuiltWidgets, 0u);
@@ -2167,7 +2167,7 @@ TEST(UIFrameSnapshotTest, ImageResolverReadyAfterGenerationBumpPaintsTexture)
     FCanvasSlotArgs slot;
     slot.offset    = {10.0f, 10.0f};
     slot.fixedSize = {64.0f, 64.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, slot);
 
     UIFrameBuildContext missCtx;
     missCtx.generation = 1;
@@ -2216,9 +2216,9 @@ TEST(UIFrameSnapshotTest, ImageUnresolvedPathUsesPlaceholderUntilMissingFlag)
     FCanvasSlotArgs failedSlot;
     failedSlot.offset    = {170.0f, 10.0f};
     failedSlot.fixedSize = {64.0f, 64.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), empty, emptySlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), pending, pendingSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), failed, failedSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), empty, emptySlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), pending, pendingSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), failed, failedSlot);
 
     UIFrameBuildContext ctx;
     ctx.generation = 1;
@@ -2262,8 +2262,8 @@ TEST(UIFrameSnapshotTest, GuiTextureCatalogNotifyDirtiesOnlySubscribers)
     FCanvasSlotArgs panelSlot;
     panelSlot.offset    = {90.0f, 10.0f};
     panelSlot.fixedSize = {64.0f, 64.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
 
     UIFrameBuildContext ctx;
     const UIFrameSnapshot missSnap = tree.buildSnapshot(ctx);
@@ -2282,7 +2282,7 @@ TEST(UIFrameSnapshotTest, GuiTextureCatalogNotifyDirtiesOnlySubscribers)
     EXPECT_FALSE(bMissHasTexture);
     EXPECT_EQ(missImage->color, FImageStyle{}.placeholderFill.tintColor);
 
-    tree.buildSnapshot(ctx);
+    (void)tree.buildSnapshot(ctx);
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
     EXPECT_EQ(source.requestCount, 1);
     const uint64_t cacheInv = tree.getPerfStats().cacheInvalidations;
@@ -2320,13 +2320,13 @@ TEST(UIFrameSnapshotTest, GuiTextureCatalogSharedPathLoadsOnce)
     FCanvasSlotArgs rightSlot;
     rightSlot.offset    = {90.0f, 10.0f};
     rightSlot.fixedSize = {64.0f, 64.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), left, leftSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), right, rightSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), left, leftSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), right, rightSlot);
 
     UIFrameBuildContext ctx;
-    tree.buildSnapshot(ctx);
+    (void)tree.buildSnapshot(ctx);
     EXPECT_EQ(source.requestCount, 1);
-    tree.buildSnapshot(ctx);
+    (void)tree.buildSnapshot(ctx);
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     auto ready = makeFakeTexture();
@@ -2356,12 +2356,12 @@ TEST(UIFrameSnapshotTest, GuiTextureCatalogFailedPaintsErrorWithoutRetry)
     FCanvasSlotArgs slot;
     slot.offset    = {10.0f, 10.0f};
     slot.fixedSize = {64.0f, 64.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, slot);
 
     UIFrameBuildContext ctx;
-    tree.buildSnapshot(ctx);
+    (void)tree.buildSnapshot(ctx);
     EXPECT_EQ(source.requestCount, 1);
-    tree.buildSnapshot(ctx);
+    (void)tree.buildSnapshot(ctx);
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
     source.store["tex:broken"] = {nullptr, EGuiTextureState::Failed};
@@ -2378,10 +2378,10 @@ TEST(UIFrameSnapshotTest, GuiTextureCatalogFailedPaintsErrorWithoutRetry)
     EXPECT_EQ(failItem->texture, nullptr);
     EXPECT_EQ(failItem->color, FImageStyle{}.errorFill.tintColor);
 
-    tree.buildSnapshot(ctx);
+    (void)tree.buildSnapshot(ctx);
     EXPECT_EQ(source.requestCount, 1);
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
-    tree.buildSnapshot(ctx);
+    (void)tree.buildSnapshot(ctx);
     EXPECT_EQ(source.requestCount, 1);
 }
 
@@ -2444,7 +2444,7 @@ TEST(UIFrameSnapshotTest, DisabledButtonIgnoresHoverFill)
     auto       btn = std::make_shared<UIButton>("Btn");
     FCanvasSlotArgs buttonArgs;
     buttonArgs.fixedSize = {100.0f, 50.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), btn, buttonArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), btn, buttonArgs);
 
     auto enabled = std::make_shared<Reactive<bool>>(false);
     btn->bindEnabled(enabled);
@@ -2462,7 +2462,7 @@ TEST(UIFrameSnapshotTest, SelectableRowDropTargetWinsOverSelection)
     row->setSelected(true);
     FCanvasSlotArgs rowSlot;
     rowSlot.fixedSize = {240.0f, 22.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
 
     highlightDrop(*row, true);
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
@@ -2491,12 +2491,12 @@ TEST(UIFrameSnapshotTest, CheckedCheckBoxIgnoresHoverFill)
     FCanvasSlotArgs slot;
     slot.offset    = {0.0f, 0.0f};
     slot.fixedSize = {120.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, slot);
     tree.layout();
 
     WidgetEventContext hover;
     hover.logicalPoint = {8.0f, 12.0f};
-    tree.dispatchEvent(MouseMoveEvent(8.0f, 12.0f), hover);
+    (void)tree.dispatchEvent(MouseMoveEvent(8.0f, 12.0f), hover);
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_FALSE(snap.items.empty());
@@ -2512,12 +2512,12 @@ TEST(UIFrameSnapshotTest, SelectedTabIgnoresHoverFill)
     FCanvasSlotArgs slot;
     slot.offset    = {0.0f, 0.0f};
     slot.fixedSize = {80.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), tab, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), tab, slot);
     tree.layout();
 
     WidgetEventContext hover;
     hover.logicalPoint = {40.0f, 14.0f};
-    tree.dispatchEvent(MouseMoveEvent(40.0f, 14.0f), hover);
+    (void)tree.dispatchEvent(MouseMoveEvent(40.0f, 14.0f), hover);
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_FALSE(snap.items.empty());
@@ -2531,7 +2531,7 @@ TEST(UIFrameSnapshotTest, UnthemedPanelPaintsFromResolvedStyleNotNakedSprite)
     FCanvasSlotArgs slot;
     slot.offset    = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_EQ(snap.items.size(), 1u);
@@ -2555,7 +2555,7 @@ TEST(UIFrameSnapshotTest, ThemedPanelIgnoresUnsyncedColorField)
     FCanvasSlotArgs slot;
     slot.offset    = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
     auto theme = std::make_shared<UITheme>();
     FPanelStyle themed;
@@ -2581,8 +2581,8 @@ TEST(UIFrameSnapshotTest, FallbackThemeSwitchAndDeferredTextureReady)
     FCanvasSlotArgs imageSlot;
     imageSlot.offset    = {100.0f, 10.0f};
     imageSlot.fixedSize = {40.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
 
     const auto findSprite = [](const UIFrameSnapshot& snap, const glm::vec2& pos) -> const UIFrameDrawItem* {
         for (const UIFrameDrawItem& item : snap.items) {

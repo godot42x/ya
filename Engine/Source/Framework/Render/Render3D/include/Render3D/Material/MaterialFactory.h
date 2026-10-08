@@ -96,7 +96,7 @@ struct MaterialFactoryInternal
     template <typename T>
     [[nodiscard]] static constexpr uint32_t getTypeID()
     {
-        return HashFunctor<T>::value();
+        return static_cast<uint32_t>(HashFunctor<T>::value());
     }
 
     void destroyMaterial(Material *material) { destroyMaterialImpl(material); }

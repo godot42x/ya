@@ -118,7 +118,7 @@ DockPanelId FDockContext::addPanel(const std::string& stableKey, const std::stri
         !_layout.addPanel(id, leafId)) {
         return kInvalidDockPanelId;
     }
-    _tabs.panels.emplace(id, FPanel{id, title, std::move(widget)});
+    _tabs.panels.emplace(id, FPanel{.id = id, .name = title, .widget = std::move(widget)});
     if (const FDockNode* leaf = _layout.findLeafForPanel(id)) {
         _lastFocusedStackId = leaf->id;
         if (_dockSpace) {

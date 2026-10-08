@@ -123,7 +123,8 @@ do
     -- 包含目录
     -- ========================================================================
     add_includedirs("src", { public = true })                      -- 源代码目录
-    add_includedirs("./intermediate/generates", { public = true }) -- 生成的反射代码目录
+    -- 生成器恢复后再打开。目录现在不存在，xmake 会警告。
+    -- add_includedirs("./intermediate/generates", { public = true })
     add_includedirs("../core/src", { public = true })              -- 反射核心库源码
     add_includedirs("../core/includes", { public = true })         -- 反射核心库头文件
 

@@ -38,7 +38,7 @@ struct HeadlessDelegate final : IGUIAppDelegate
         FCanvasSlotArgs slot;
         slot.offset = {8.0f, 12.0f};
         slot.fixedSize = {96.0f, 48.0f};
-        tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+       (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
     }
 
     void updateUI() override
@@ -108,8 +108,8 @@ TEST(GUIHeadlessHostTest, MenuBarItemHoverRepaintsWithHoveredColor)
             slot.anchorMin = {0.0f, 0.0f};
             slot.anchorMax = {1.0f, 0.0f};
             slot.fixedSize = {0.0f, 30.0f};
-            tree.attach(*tree.getLayer(ya::WidgetTree::ELayer::Content), barOwned, slot);
-            barOwned->addItem("File", [] { return ya::UIMenu::create({{"New", nullptr}}); });
+           (void)tree.attach(*tree.getLayer(ya::WidgetTree::ELayer::Content), barOwned, slot);
+                barOwned->addItem("File", [] { return ya::UIMenu::create({{.label = "New", .action = nullptr}}); });
 
             // Mirror the workbench theme: lift both stops above the window
             // background (0.075) and widen the gap so hover is visible.
@@ -196,13 +196,13 @@ TEST(GUIHeadlessHostTest, UnthemedFallbackThenThemeSwitchRepaintsSnapshot)
             FCanvasSlotArgs panelSlot;
             panelSlot.offset    = {8.0f, 8.0f};
             panelSlot.fixedSize = {64.0f, 32.0f};
-            inTree.attach(*inTree.getLayer(WidgetTree::ELayer::Content), border, panelSlot);
+           (void)inTree.attach(*inTree.getLayer(WidgetTree::ELayer::Content), border, panelSlot);
 
             auto image = std::make_shared<UIImage>("Img");
             FCanvasSlotArgs imageSlot;
             imageSlot.offset    = {80.0f, 8.0f};
             imageSlot.fixedSize = {32.0f, 32.0f};
-            inTree.attach(*inTree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
+           (void)inTree.attach(*inTree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
         }
 
         void updateUI() override

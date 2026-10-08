@@ -344,7 +344,7 @@ void appendForwardOpaque(DeferredFrameGraphPassContext& context)
         .layerCount = 1,
     };
 
-    context.graph.addPass(
+    (void)context.graph.addPass(
         makeViewGraphName(kTopologyPassForwardOpaque, context.viewId),
         [&params](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
@@ -441,7 +441,7 @@ void appendSprite2D(DeferredFrameGraphPassContext& context)
         .bindings   = context.viewResources ? context.viewResources->sprite : Sprite2DPassBindings{},
     };
 
-    context.graph.addPass(
+    (void)context.graph.addPass(
         makeViewGraphName(kTopologyPassSprites, context.viewId),
         [&params](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
@@ -564,7 +564,7 @@ void appendEntityId(DeferredFrameGraphPassContext& context)
         }
     }
 
-    context.graph.addPass(
+    (void)context.graph.addPass(
         makeViewGraphName("Deferred EntityId", context.viewId),
         [entityId, depth, extent](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({

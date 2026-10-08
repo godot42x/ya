@@ -221,7 +221,7 @@ void WidgetTree::updateTooltip()
     FCanvasSlotArgs hostArgs;
     hostArgs.offset    = {target.pos.x, target.pos.y + target.extent.y + 4.0f};
     hostArgs.fixedSize = hostSize;
-    attachToLayer(ELayer::Tooltip, host, hostArgs);
+    (void)attachToLayer(ELayer::Tooltip, host, hostArgs);
     _tooltipHost = host;
     _bTooltipShown = true;
 }
@@ -1745,7 +1745,7 @@ UIElementRef WidgetTree::attachDragGhost(const std::string& label)
     text->_hAlign    = EWidgetAlignH::Center;
     text->_vAlign    = EWidgetAlignV::Center;
     ghost->addDetachedChild(text);
-    attachToLayer(ELayer::DragIme, ghost, ghostArgs);
+    (void)attachToLayer(ELayer::DragIme, ghost, ghostArgs);
     return ghost;
 }
 

@@ -196,7 +196,7 @@ TEST(ToolControlsTest, StackLaysOutChildrenWithGapAndPadding)
     FCanvasSlotArgs stackSlot;
     stackSlot.offset = {20.0f, 20.0f};
     stackSlot.fixedSize = {200.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), stack, stackSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), stack, stackSlot);
     attachPreferredSize(*stack, a, {100.0f, 20.0f});
     attachPreferredSize(*stack, b, {120.0f, 30.0f});
     tree.layout();
@@ -223,7 +223,7 @@ TEST(ToolControlsTest, StackCollapsedSkipsSpaceHiddenKeepsSpace)
     FCanvasSlotArgs stackSlot;
     stackSlot.fixedSize = {200.0f, 200.0f};
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), stack, stackSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), stack, stackSlot);
     attachPreferredSize(*stack, collapsed, {100.0f, 20.0f});
     attachPreferredSize(*stack, hidden, {100.0f, 20.0f});
     attachPreferredSize(*stack, visible, {100.0f, 20.0f});
@@ -247,7 +247,7 @@ TEST(ToolControlsTest, StackMainAxisAlignmentOffsetsThePack)
         auto b = std::make_shared<UICanvasPanel>("B");
         FCanvasSlotArgs stackSlot;
         stackSlot.fixedSize = {300.0f, 50.0f};
-        tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), stack, stackSlot);
+       (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), stack, stackSlot);
         attachPreferredSize(*stack, a, {100.0f, 20.0f});
         attachPreferredSize(*stack, b, {100.0f, 20.0f});
         return std::make_pair(stack, a);
@@ -300,7 +300,7 @@ TEST(ToolControlsTest, ContainerStretchLastChildFillsRemainingSpace)
     box->setStretchLastChild(true);
     FCanvasSlotArgs boxSlot;
     boxSlot.fixedSize = {200.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
 
     auto header = std::make_shared<UICanvasPanel>("Header");
     auto content = std::make_shared<UICanvasPanel>("Content");
@@ -325,9 +325,9 @@ TEST(ToolControlsTest, SplitPaneLaysOutTwoPanesAroundDivider)
     auto right = std::make_shared<UICanvasPanel>("Right");
     FCanvasSlotArgs splitSlot;
     splitSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
-    tree.attach(*split, left);
-    tree.attach(*split, right);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
+    (void)tree.attach(*split, left);
+    (void)tree.attach(*split, right);
     tree.layout();
 
     EXPECT_EQ(left->_layoutRect.pos, glm::vec2(0.0f, 0.0f));
@@ -355,9 +355,9 @@ TEST(ToolControlsTest, SplitPaneDividerDragChangesRatioAndEndsSession)
     auto right = std::make_shared<UICanvasPanel>("Right");
     FCanvasSlotArgs splitSlot;
     splitSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
-    tree.attach(*split, left);
-    tree.attach(*split, right);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
+    (void)tree.attach(*split, left);
+    (void)tree.attach(*split, right);
     tree.layout();
 
     // Press on the divider center: drag session owns focus + capture.
@@ -397,9 +397,9 @@ TEST(ToolControlsTest, SplitPaneDoubleClickResetsRatio)
     auto right = std::make_shared<UICanvasPanel>("Right");
     FCanvasSlotArgs splitSlot;
     splitSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
-    tree.attach(*split, left);
-    tree.attach(*split, right);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
+    (void)tree.attach(*split, left);
+    (void)tree.attach(*split, right);
     tree.layout();
 
     const Rect2D divider = split->getDividerRect();
@@ -430,9 +430,9 @@ TEST(ToolControlsTest, SplitPanePressOnPaneFallsThroughToChild)
     auto left = std::make_shared<UIContainer>("Left");
     auto button = std::make_shared<UIButton>("Button");
     auto right = std::make_shared<UICanvasPanel>("Right");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
-    tree.attach(*split, left);
-    tree.attach(*split, right);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
+    (void)tree.attach(*split, left);
+    (void)tree.attach(*split, right);
     left->addDetachedChild(button, [](UIElement&, UISlot& edge) {
         if (auto* slot = edge.as<UIBoxSlot>()) slot->setPreferredSize({60.0f, 24.0f});
     });
@@ -459,9 +459,9 @@ TEST(ToolControlsTest, SplitPaneDividerHoverRequestsResizeCursor)
     split->setSplitRatio(0.5f);
     FCanvasSlotArgs splitSlot;
     splitSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
-    tree.attach(*split, std::make_shared<UICanvasPanel>("Left"));
-    tree.attach(*split, std::make_shared<UICanvasPanel>("Right"));
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
+    (void)tree.attach(*split, std::make_shared<UICanvasPanel>("Left"));
+    (void)tree.attach(*split, std::make_shared<UICanvasPanel>("Right"));
     tree.layout();
 
     // Away from the divider: no resize cursor requested.
@@ -490,7 +490,7 @@ TEST(ToolControlsTest, ButtonHoverClearsOnPointerLeave)
     FCanvasSlotArgs buttonSlot;
     buttonSlot.offset = {10.0f, 10.0f};
     buttonSlot.fixedSize = {60.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     tree.layout();
 
     // Hover in: button becomes the hover owner (Stop hit filter).
@@ -515,11 +515,11 @@ TEST(ToolControlsTest, ButtonSelectedPaintsSelectedFill)
     FCanvasSlotArgs slotA;
     slotA.offset    = {10.0f, 10.0f};
     slotA.fixedSize = {60.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), plain, slotA);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), plain, slotA);
     FCanvasSlotArgs slotB;
     slotB.offset    = {90.0f, 10.0f};
     slotB.fixedSize = {60.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), active, slotB);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), active, slotB);
     tree.layout();
 
     // The selection rides the runtime diagnostics like hover/pressed/focused.
@@ -563,24 +563,24 @@ TEST(ToolControlsTest, ToolbarSiblingHoverSwitchesAndClears)
     toolbarSlot.offset = {10.0f, 10.0f};
     toolbarSlot.fixedSize = {300.0f, 32.0f};
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), toolbar, toolbarSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), toolbar, toolbarSlot);
     attachPreferredSize(*toolbar, add, {44.0f, 24.0f});
     attachPreferredSize(*toolbar, remove, {60.0f, 24.0f});
     tree.layout();
 
     // Hover Add (content origin 18,14; Add spans x[18,62]).
-    tree.dispatchEvent(MouseMoveEvent(40.0f, 26.0f), pointAt(40.0f, 26.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(40.0f, 26.0f), pointAt(40.0f, 26.0f));
     EXPECT_TRUE(add->_bHovered);
     EXPECT_EQ(tree.getHovered(), add.get());
 
     // Move to Remove (Remove spans x[70,130]): Add must clear, Remove highlight.
-    tree.dispatchEvent(MouseMoveEvent(100.0f, 26.0f), pointAt(100.0f, 26.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(100.0f, 26.0f), pointAt(100.0f, 26.0f));
     EXPECT_FALSE(add->_bHovered);
     EXPECT_TRUE(remove->_bHovered);
     EXPECT_EQ(tree.getHovered(), remove.get());
 
     // Move to empty space (between/after buttons): no hover owner remains.
-    tree.dispatchEvent(MouseMoveEvent(200.0f, 26.0f), pointAt(200.0f, 26.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(200.0f, 26.0f), pointAt(200.0f, 26.0f));
     EXPECT_FALSE(remove->_bHovered);
     EXPECT_EQ(tree.getHovered(), nullptr);
 }
@@ -618,9 +618,9 @@ TEST(ToolControlsTest, ToolbarAutoSizeButtonWithLabelHoverClears)
     toolbarSlot.anchorMax = {1.0f, 0.0f};
     toolbarSlot.offset = {0.0f, 6.0f};
     toolbarSlot.fixedSize = {0.0f, 32.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), toolbar, toolbarSlot);
-    tree.attach(*toolbar, add);
-    tree.attach(*toolbar, remove);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), toolbar, toolbarSlot);
+    (void)tree.attach(*toolbar, add);
+    (void)tree.attach(*toolbar, remove);
     tree.layout();
 
     const auto center = [](const UIElement* e) {
@@ -630,13 +630,13 @@ TEST(ToolControlsTest, ToolbarAutoSizeButtonWithLabelHoverClears)
     // Hover Add (over its label child: hover resolves through the text to the
     // button).
     const glm::vec2 addCenter = center(add.get());
-    tree.dispatchEvent(MouseMoveEvent(addCenter.x, addCenter.y), pointAt(addCenter.x, addCenter.y));
+    (void)tree.dispatchEvent(MouseMoveEvent(addCenter.x, addCenter.y), pointAt(addCenter.x, addCenter.y));
     EXPECT_TRUE(add->_bHovered);
     EXPECT_EQ(tree.getHovered(), add.get());
 
     // Move to Remove: Add clears, Remove highlights.
     const glm::vec2 removeCenter = center(remove.get());
-    tree.dispatchEvent(MouseMoveEvent(removeCenter.x, removeCenter.y), pointAt(removeCenter.x, removeCenter.y));
+    (void)tree.dispatchEvent(MouseMoveEvent(removeCenter.x, removeCenter.y), pointAt(removeCenter.x, removeCenter.y));
     EXPECT_FALSE(add->_bHovered);
     EXPECT_TRUE(remove->_bHovered);
     EXPECT_EQ(tree.getHovered(), remove.get());
@@ -644,7 +644,7 @@ TEST(ToolControlsTest, ToolbarAutoSizeButtonWithLabelHoverClears)
     // Move to the toolbar's empty stretch (past the last button): no hover.
     const glm::vec2 empty = {toolbar->_layoutRect.pos.x + toolbar->_layoutRect.extent.x - 20.0f,
                              center(toolbar.get()).y};
-    tree.dispatchEvent(MouseMoveEvent(empty.x, empty.y), pointAt(empty.x, empty.y));
+    (void)tree.dispatchEvent(MouseMoveEvent(empty.x, empty.y), pointAt(empty.x, empty.y));
     EXPECT_FALSE(remove->_bHovered);
     EXPECT_EQ(tree.getHovered(), nullptr);
 }
@@ -676,10 +676,10 @@ TEST(ToolControlsTest, SplitPaneDoesNotStealHoverFromOverlappingButton)
     auto split = std::make_shared<UISplitPane>("Split");
     split->setPadding({0.0f, 42.0f}); // top padding overlaps the toolbar strip
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
-    tree.attach(*panel, toolbar);
-    tree.attach(*toolbar, add);
-    tree.attach(*panel, split);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*panel, toolbar);
+    (void)tree.attach(*toolbar, add);
+    (void)tree.attach(*panel, split);
     if (auto* slot = panel->getSlotForChild(*toolbar)) {
         if (auto* box = slot->as<UIBoxSlot>()) {
             box->setPreferredSize({0.0f, 32.0f});
@@ -693,7 +693,7 @@ TEST(ToolControlsTest, SplitPaneDoesNotStealHoverFromOverlappingButton)
     tree.layout();
 
     const glm::vec2 addCenter = add->_layoutRect.pos + add->_layoutRect.extent * 0.5f;
-    tree.dispatchEvent(MouseMoveEvent(addCenter.x, addCenter.y), pointAt(addCenter.x, addCenter.y));
+    (void)tree.dispatchEvent(MouseMoveEvent(addCenter.x, addCenter.y), pointAt(addCenter.x, addCenter.y));
 
     EXPECT_TRUE(add->_bHovered);
     EXPECT_EQ(tree.getHovered(), add.get());
@@ -701,7 +701,7 @@ TEST(ToolControlsTest, SplitPaneDoesNotStealHoverFromOverlappingButton)
     // Over the split's divider (not the button): the split owns hover for its
     // resize cursor as before.
     const glm::vec2 dividerCenter = split->getDividerRect().pos + split->getDividerRect().extent * 0.5f;
-    tree.dispatchEvent(MouseMoveEvent(dividerCenter.x, dividerCenter.y), pointAt(dividerCenter.x, dividerCenter.y));
+    (void)tree.dispatchEvent(MouseMoveEvent(dividerCenter.x, dividerCenter.y), pointAt(dividerCenter.x, dividerCenter.y));
     EXPECT_FALSE(add->_bHovered);
     EXPECT_TRUE(split->_bHoveredDivider);
     EXPECT_EQ(tree.getHovered(), split.get());
@@ -717,7 +717,7 @@ TEST(ToolControlsTest, ScrollViewportShiftsContentByOffset)
     auto content = std::make_shared<UICanvasPanel>("Content");
     FCanvasSlotArgs viewportSlot;
     viewportSlot.fixedSize = {200.0f, 60.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
     attachPreferredSize(*viewport, content, {200.0f, 100.0f});
     tree.layout();
 
@@ -735,7 +735,7 @@ TEST(ToolControlsTest, ScrollViewportWheelConsumesWhenScrollableBubblesAtLimit)
     auto content = std::make_shared<UICanvasPanel>("Content");
     FCanvasSlotArgs viewportSlot;
     viewportSlot.fixedSize = {200.0f, 60.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
     attachPreferredSize(*viewport, content, {200.0f, 100.0f});
     tree.layout();
 
@@ -760,7 +760,7 @@ TEST(ToolControlsTest, ScrollViewportCullsChildHitsOutsideViewport)
     auto content = std::make_shared<UICanvasPanel>("Content");
     FCanvasSlotArgs viewportSlot;
     viewportSlot.fixedSize = {200.0f, 60.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
     attachPreferredSize(*viewport, content, {200.0f, 100.0f});
     tree.layout();
 
@@ -781,7 +781,7 @@ TEST(ToolControlsTest, ScrollViewportCullsChildHitsInScrollbarGutter)
     auto content = std::make_shared<UICanvasPanel>("Content");
     FCanvasSlotArgs viewportSlot;
     viewportSlot.fixedSize = {200.0f, 60.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
     attachPreferredSize(*viewport, content, {200.0f, 200.0f});
     tree.layout();
 
@@ -802,9 +802,9 @@ TEST(ToolControlsTest, ScrollViewportNestedInsideSplitKeepsCustomLayout)
     auto content = std::make_shared<UICanvasPanel>("Content");
     FCanvasSlotArgs splitSlot;
     splitSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
-    tree.attach(*split, scroll);
-    tree.attach(*scroll, content);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
+    (void)tree.attach(*split, scroll);
+    (void)tree.attach(*scroll, content);
     tree.layout();
 
     // The split assigns the scroll its pane rect; the scroll still applies
@@ -826,10 +826,10 @@ TEST(ToolControlsTest, SpecializedLayoutsAppearInTreeDump)
     auto button = std::make_shared<UIButton>("Button");
     button->setContentPadding({7.0f, 3.0f});
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
-    tree.attach(*split, scroll);
-    tree.attach(*scroll, content);
-    tree.attach(*split, button);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
+    (void)tree.attach(*split, scroll);
+    (void)tree.attach(*scroll, content);
+    (void)tree.attach(*split, button);
     if (auto* slot = scroll->getSlotForChild(*content)) {
         if (auto* canvas = slot->as<UICanvasSlot>()) {
             canvas->setFixedSize({100.0f, 300.0f});
@@ -861,7 +861,7 @@ TEST(ToolControlsTest, SelectableRowPressSelectsReleaseActivates)
     row->_itemId = "item.1";
     FCanvasSlotArgs rowSlot;
     rowSlot.fixedSize = {200.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
     tree.layout();
 
     std::vector<std::string> selected;
@@ -891,7 +891,7 @@ TEST(ToolControlsTest, SelectableRowReportsTheDoubleClickGestureAsItsOwnSignal)
     row->_itemId = "asset.1";
     FCanvasSlotArgs rowSlot;
     rowSlot.fixedSize = {200.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
     tree.layout();
 
     std::vector<std::string> selected;
@@ -925,7 +925,7 @@ TEST(ToolControlsTest, SelectableRowSingleClickStillActivatesByDefault)
     row->_itemId = "menu.1";
     FCanvasSlotArgs rowSlot;
     rowSlot.fixedSize = {200.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
     tree.layout();
 
     int activated = 0;
@@ -951,12 +951,12 @@ TEST(ToolControlsTest, SelectableRowRebindDropsInheritedHover)
     row->_itemId = "old";
     FCanvasSlotArgs rowSlot;
     rowSlot.fixedSize = {200.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
     tree.layout();
 
     // Hover the row, then detach/rebind it to another item (what the keyed
     // reconciler does when the visible window slides).
-    tree.dispatchEvent(MouseMoveEvent(50.0f, 12.0f), pointAt(50.0f, 12.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(50.0f, 12.0f), pointAt(50.0f, 12.0f));
     EXPECT_TRUE(row->isHovered());
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(50.0f, 12.0f)),
@@ -972,7 +972,7 @@ TEST(ToolControlsTest, SelectableRowEnterActivatesFocusedRow)
     row->_itemId = "item.2";
     FCanvasSlotArgs rowSlot;
     rowSlot.fixedSize = {200.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
     tree.layout();
 
     std::vector<std::string> selected;
@@ -999,8 +999,8 @@ TEST(ToolControlsTest, SelectableRowParticipatesInTabTraversal)
     FCanvasSlotArgs secondSlot;
     secondSlot.offset = {0.0f, 24.0f};
     secondSlot.fixedSize = {200.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), first, firstSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), second, secondSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), first, firstSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), second, secondSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Tab), pointAt(0.0f, 0.0f)),
@@ -1029,8 +1029,8 @@ TEST(ToolControlsTest, SelectableRowDraggableRowsUseBehaviorBackedDragDrop)
     targetSlot.fixedSize = {180.0f, 24.0f};
     std::string droppedPayload;
     target->_onDropped = [&](const std::string& payload) { droppedPayload = payload; };
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 12.0f)),
@@ -1080,8 +1080,8 @@ TEST(ToolControlsTest, DragDropTileCaptureStartsSessionAndDrops)
     FCanvasSlotArgs targetSlot;
     targetSlot.offset    = {200.0f, 0.0f};
     targetSlot.fixedSize = {120.0f, 30.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 15.0f)),
@@ -1123,7 +1123,7 @@ TEST(ToolControlsTest, TreeViewReorderUsesBehaviorBackedDragDrop)
         mode   = dropMode;
     });
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(80.0f, 32.0f)),
@@ -1178,7 +1178,7 @@ TEST(ToolControlsTest, TreeViewRowToggleIsItsOwnGestureAndDoesNotSelect)
     std::string selected;
     view->_onSelectionChanged = [&](const std::string& id) { selected = id; };
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
     tree.layout();
 
     // The tree spans x 20..240; the toggle band is the rightmost 26px of the
@@ -1219,7 +1219,7 @@ TEST(ToolControlsTest, TreeViewRowToggleGlyphPaintsOnEveryRow)
     view->bindData(roots);
     view->setRowToggleSpec({.bEnabled = true, .width = 26.0f, .isOn = {}, .onToggled = {}});
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
     tree.layout();
 
     const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{});
@@ -1276,7 +1276,7 @@ TEST(ToolControlsTest, TreeViewRightClickSelectsRowAndFiresContextMenu)
         menuAt = point;
     });
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Right), pointAt(80.0f, 32.0f)),
@@ -1300,7 +1300,7 @@ TEST(ToolControlsTest, TreeViewRightClickEmptySpaceFiresContextMenuWithEmptyId)
     std::string menuId = "unset";
     view->setOnContextMenu([&](const std::string& id, const glm::vec2&) { menuId = id; });
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Right), pointAt(80.0f, 90.0f)),
@@ -1326,10 +1326,10 @@ TEST(ToolControlsTest, TreeViewVirtualizesPaintInsideScrollViewport)
 
     FCanvasSlotArgs viewportSlot;
     viewportSlot.fixedSize = {200.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
-    tree.attach(*viewport, view);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
+    (void)tree.attach(*viewport, view);
     tree.layout();
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     EXPECT_EQ(view->getVisibleRowCount(), 50);
     EXPECT_LT(view->getPaintedRowCount(), 50u);
@@ -1347,7 +1347,7 @@ TEST(ToolControlsTest, TreeViewReservesDisclosureGutterForLeaves)
     roots->push({.id = "branch", .label = "Branch", .children = {{.id = "child", .label = "Child"}}});
     roots->push({.id = "leaf", .label = "Leaf"});
     view->bindData(roots);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
     tree.layout();
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
@@ -1376,7 +1376,7 @@ TEST(ToolControlsTest, TextFieldTypedTextAppendsAndFiresChanged)
     auto       field = std::make_shared<UITextField>("Name");
     FCanvasSlotArgs fieldSlot;
     fieldSlot.fixedSize = {200.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
     tree.layout();
 
     std::vector<std::string> changes;
@@ -1397,7 +1397,7 @@ TEST(ToolControlsTest, TextFieldBackspaceAndCursorNavigation)
     auto       field = std::make_shared<UITextField>("Name");
     FCanvasSlotArgs fieldSlot;
     fieldSlot.fixedSize = {200.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
     tree.layout();
     tree.setFocus(field.get());
 
@@ -1434,7 +1434,7 @@ TEST(ToolControlsTest, TextFieldEnterAndFocusLossCommit)
     auto       field = std::make_shared<UITextField>("Name");
     FCanvasSlotArgs fieldSlot;
     fieldSlot.fixedSize = {200.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
     tree.layout();
 
     std::vector<std::string> commits;
@@ -1459,7 +1459,7 @@ TEST(ToolControlsTest, TextFieldPressRequestsFocusAndPlacesCaret)
     auto       field = std::make_shared<UITextField>("Name");
     FCanvasSlotArgs fieldSlot;
     fieldSlot.fixedSize = {200.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(150.0f, 14.0f)),
@@ -1475,7 +1475,7 @@ TEST(ToolControlsTest, TextFieldDoesNotConsumeForeignKeys)
     auto       field = std::make_shared<UITextField>("Name");
     FCanvasSlotArgs fieldSlot;
     fieldSlot.fixedSize = {200.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
     tree.layout();
     tree.setFocus(field.get());
 
@@ -1497,7 +1497,7 @@ TEST(ToolControlsTest, TextFieldSelectionShiftArrowsCopyCutPaste)
     auto       field = std::make_shared<UITextField>("Name");
     FCanvasSlotArgs fieldSlot;
     fieldSlot.fixedSize = {200.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
     tree.layout();
     tree.setFocus(field.get());
 
@@ -1540,7 +1540,7 @@ TEST(ToolControlsTest, DragFloatEditReusesTextSelection)
     drag->setValue(3.50f);
     FCanvasSlotArgs slot;
     slot.fixedSize = {160.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), drag, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), drag, slot);
     tree.layout();
 
     const auto at = pointAt(80.0f, 12.0f);
@@ -1569,7 +1569,7 @@ TEST(ToolControlsTest, SpinBoxEditReusesTextSelection)
     spin->setValue(8.0f);
     FCanvasSlotArgs slot;
     slot.fixedSize = {180.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), spin, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), spin, slot);
     tree.layout();
 
     const auto at = pointAt(90.0f, 12.0f);
@@ -1590,7 +1590,7 @@ TEST(ToolControlsTest, ColorEditSwatchOpensSvHuePicker)
     edit->setColor({1.0f, 1.0f, 1.0f, 1.0f});
     FCanvasSlotArgs slot;
     slot.fixedSize = {180.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
     tree.layout();
 
     EXPECT_FALSE(edit->isPickerOpen());
@@ -1633,7 +1633,7 @@ TEST(ToolControlsTest, ColorEditPickerPaintsVertexColorQuads)
     edit->setColor({1.0f, 0.0f, 0.0f, 1.0f});
     FCanvasSlotArgs slot;
     slot.fixedSize = {180.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
     tree.layout();
 
     UIElement* swatch = colorEditSwatch(*edit);
@@ -1659,7 +1659,7 @@ TEST(ToolControlsTest, ColorEditChannelDragEditsOnlyThatComponent)
     edit->setColor({0.50f, 0.50f, 0.50f, 1.0f});
     FCanvasSlotArgs slot;
     slot.fixedSize = {180.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
     tree.layout();
 
     UIDragFloat* channelB = colorEditChannel(*edit, 2);
@@ -1684,13 +1684,13 @@ TEST(ToolControlsTest, ColorEditChannelHoverPaintsHoveredFill)
     edit->setColor({0.50f, 0.50f, 0.50f, 1.0f});
     FCanvasSlotArgs slot;
     slot.fixedSize = {180.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
     tree.layout();
 
     UIDragFloat* channelB = colorEditChannel(*edit, 2);
     ASSERT_NE(channelB, nullptr);
     const glm::vec2 at = layoutCenter(*channelB);
-    tree.dispatchEvent(MouseMoveEvent(at.x, at.y), pointAt(at.x, at.y));
+    (void)tree.dispatchEvent(MouseMoveEvent(at.x, at.y), pointAt(at.x, at.y));
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
     bool bFoundHover = false;
@@ -1711,7 +1711,7 @@ TEST(ToolControlsTest, ColorEditRgbStaysSingleRowWhenTall)
     edit->setColor({0.50f, 0.50f, 0.50f, 1.0f});
     FCanvasSlotArgs slot;
     slot.fixedSize = {200.0f, 46.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
     tree.layout();
 
     UIDragFloat* channelA = colorEditChannel(*edit, 3);
@@ -1843,7 +1843,7 @@ TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
     barSlot.anchorMin = {0.0f, 0.0f};
     barSlot.anchorMax = {1.0f, 0.0f};
     barSlot.fixedSize = {0.0f, 30.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, barSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, barSlot);
 
     bar->addItem("File", [] { return UIMenu::create({{"New Document", [] {}}, {"Save", [] {}}}); });
     bar->addItem("Edit", [] { return UIMenu::create({{"Undo", [] {}}, {"Redo", [] {}}}); });
@@ -1917,7 +1917,7 @@ TEST(ToolControlsTest, MenuBarPaintsBottomSeparator)
     FCanvasSlotArgs barSlot;
     barSlot.offset = {12.0f, 8.0f};
     barSlot.fixedSize = {100.0f, 26.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, barSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, barSlot);
 
     auto* item = bar->addItem("File", nullptr);
     if (auto* slot = dynamic_cast<UIBoxSlot*>(bar->getSlotForChild(*item))) {
@@ -2119,8 +2119,8 @@ TEST(ToolControlsTest, MenuReservesColumnsForCheckmarkIconAndShortcut)
             .label = "Recent",
             .icon = "~",
             .shortcut = "Cmd+R",
-            .bChecked = true,
             .submenuFactory = []() { return UIMenu::create({UIMenu::FItem{.label = "Nested", .action = [] {}}}); },
+            .bChecked = true,
         },
         UIMenu::FItem{.label = "Save", .action = [] {}},
     });
@@ -2172,19 +2172,19 @@ TEST(ToolControlsTest, SelectableRowHoverRepaintsWithHoveredColor)
     auto       row = std::make_shared<UISelectableRow>("Row");
     FCanvasSlotArgs rowSlot;
     rowSlot.fixedSize = {240.0f, 22.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
     tree.layout();
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start: normal color (alpha 0)
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start: normal color (alpha 0)
 
     // Hover the row: the MouseMoved route flips the row's hover flag.
-    tree.dispatchEvent(MouseMoveEvent(120.0f, 11.0f), pointAt(120.0f, 11.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(120.0f, 11.0f), pointAt(120.0f, 11.0f));
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_EQ(snap.items.size(), 1u);
     EXPECT_EQ(snap.items[0].color, FSelectableRowStyle{}.hoveredFill.tintColor);
 
     // Leave: the tree hover lifecycle clears the flag, back to transparent.
-    tree.dispatchEvent(MouseMoveEvent(300.0f, 200.0f), pointAt(300.0f, 200.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(300.0f, 200.0f), pointAt(300.0f, 200.0f));
     const UIFrameSnapshot snapAfterLeave = tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_TRUE(snapAfterLeave.items.empty());
 }
@@ -2198,7 +2198,7 @@ TEST(ToolControlsTest, SelectableRowWithLabelChildHoverStillHighlightsRow)
     auto       row = std::make_shared<UISelectableRow>("Row");
     FCanvasSlotArgs rowSlot;
     rowSlot.fixedSize = {240.0f, 22.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
 
     auto label = std::make_shared<UIText>("Label");
     label->_fontSize = 13;
@@ -2210,9 +2210,9 @@ TEST(ToolControlsTest, SelectableRowWithLabelChildHoverStillHighlightsRow)
         }
     });
     tree.layout();
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
-    tree.dispatchEvent(MouseMoveEvent(120.0f, 11.0f), pointAt(120.0f, 11.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(120.0f, 11.0f), pointAt(120.0f, 11.0f));
     EXPECT_EQ(tree.getHovered(), row.get());
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
@@ -2234,10 +2234,10 @@ TEST(ToolControlsTest, SelectableRowHoverUsesThemeFill)
     auto row = std::make_shared<UISelectableRow>("Row");
     FCanvasSlotArgs rowSlot;
     rowSlot.fixedSize = {240.0f, 22.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
     tree.layout();
 
-    tree.dispatchEvent(MouseMoveEvent(120.0f, 11.0f), pointAt(120.0f, 11.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(120.0f, 11.0f), pointAt(120.0f, 11.0f));
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_EQ(snap.items.size(), 1u);
     EXPECT_EQ(snap.items[0].color, glm::vec4(1.0f, 0.2f, 0.1f, 1.0f));
@@ -2250,7 +2250,7 @@ TEST(ToolControlsTest, ImageDumpReportsAssetPath)
     image->_assetPath = "Engine/Content/TestTextures/editor/play.png";
     FCanvasSlotArgs slot;
     slot.fixedSize = {16.0f, 16.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, slot);
     tree.layout();
 
     const nlohmann::json dump = dumpWidgetTree(tree);
@@ -2279,7 +2279,7 @@ TEST(ToolControlsTest, ExpanderCollapsedMeasureIsHeaderHeight)
     slot.fixedSize       = {200.0f, 0.0f};
     slot.widthSizeMode   = EWidgetSizeMode::Fixed;
     slot.heightSizeMode  = EWidgetSizeMode::Auto;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
     tree.layout();
 
     const float expandedHeight = expander->getLayoutRect().extent.y;
@@ -2310,7 +2310,7 @@ TEST(ToolControlsTest, ExpanderClickHeaderTogglesAndHidesChildren)
 
     FCanvasSlotArgs slot;
     slot.fixedSize = {200.0f, 80.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
     tree.layout();
 
     EXPECT_TRUE(expander->isExpanded());
@@ -2342,7 +2342,7 @@ TEST(ToolControlsTest, ExpanderSpaceTogglesWhenFocused)
     expander->setExpanded(true);
     FCanvasSlotArgs slot;
     slot.fixedSize = {200.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
     tree.layout();
     tree.setFocus(expander.get());
 
@@ -2370,16 +2370,16 @@ TEST(ToolControlsTest, ExpanderBodyLabelDoesNotHoverHeader)
 
     FCanvasSlotArgs slot;
     slot.fixedSize = {220.0f, 90.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
     tree.layout();
 
-    tree.dispatchEvent(MouseMoveEvent(40.0f, 8.0f), pointAt(40.0f, 8.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(40.0f, 8.0f), pointAt(40.0f, 8.0f));
     EXPECT_EQ(tree.getHovered(), expander.get());
     EXPECT_TRUE(expander->_bHovered);
 
     const glm::vec2 labelCenter = label->getLayoutRect().pos + label->getLayoutRect().extent * 0.5f;
     ASSERT_GT(label->getLayoutRect().extent.y, 0.0f);
-    tree.dispatchEvent(MouseMoveEvent(labelCenter.x, labelCenter.y),
+    (void)tree.dispatchEvent(MouseMoveEvent(labelCenter.x, labelCenter.y),
                        pointAt(labelCenter.x, labelCenter.y));
     EXPECT_NE(tree.getHovered(), expander.get());
     EXPECT_FALSE(expander->_bHovered);
@@ -2410,12 +2410,12 @@ TEST(ToolControlsTest, NestedExpanderBodyDoesNotHoverFramedAncestor)
 
     FCanvasSlotArgs slot;
     slot.fixedSize = {240.0f, 140.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), outer, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), outer, slot);
     tree.layout();
 
     const glm::vec2 labelCenter = label->getLayoutRect().pos + label->getLayoutRect().extent * 0.5f;
     ASSERT_GT(label->getLayoutRect().extent.y, 0.0f);
-    tree.dispatchEvent(MouseMoveEvent(labelCenter.x, labelCenter.y),
+    (void)tree.dispatchEvent(MouseMoveEvent(labelCenter.x, labelCenter.y),
                        pointAt(labelCenter.x, labelCenter.y));
     EXPECT_NE(tree.getHovered(), outer.get());
     EXPECT_NE(tree.getHovered(), inner.get());
@@ -2431,7 +2431,7 @@ TEST(ToolControlsTest, ExpanderPaintsBoxedDisclosureNotGlyphArrows)
     expander->setExpanded(true);
     FCanvasSlotArgs slot;
     slot.fixedSize = {200.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
     tree.layout();
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
@@ -2458,7 +2458,7 @@ TEST(ToolControlsTest, ExpanderChevronDoesNotPaintAsciiGlyphs)
     expander->setDisclosureKind(EDisclosureKind::Chevron);
     FCanvasSlotArgs slot;
     slot.fixedSize = {200.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
     tree.layout();
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
@@ -2491,7 +2491,7 @@ TEST(ToolControlsTest, ExpanderGlyphModePaintsConfiguredPair)
     expander->setDisclosureGlyphs(">", "v");
     FCanvasSlotArgs slot;
     slot.fixedSize = {200.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
     tree.layout();
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
@@ -2513,7 +2513,7 @@ TEST(ToolControlsTest, ExpanderHiddenDisclosureKeepsIconOnly)
     expander->setDisclosureKind(EDisclosureKind::Hidden);
     FCanvasSlotArgs slot;
     slot.fixedSize = {200.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
     tree.layout();
 
     EXPECT_EQ(expander->getDisclosure().kind, EDisclosureKind::Hidden);
@@ -2533,21 +2533,21 @@ TEST(ToolControlsTest, ExpanderArrowHoverLightsOnlyOverTheArrow)
     expander->setExpanded(true);
     FCanvasSlotArgs slot;
     slot.fixedSize = {200.0f, 60.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
     tree.layout();
 
     // Over the title: the header row is hovered, the arrow is not.
-    tree.dispatchEvent(MouseMoveEvent(100.0f, 8.0f), pointAt(100.0f, 8.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(100.0f, 8.0f), pointAt(100.0f, 8.0f));
     EXPECT_EQ(tree.getHovered(), expander.get());
     EXPECT_TRUE(expander->_bHovered);
     EXPECT_FALSE(expander->_bArrowHovered);
 
     // Over the disclosure box: only now does the arrow light.
-    tree.dispatchEvent(MouseMoveEvent(10.0f, 8.0f), pointAt(10.0f, 8.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(10.0f, 8.0f), pointAt(10.0f, 8.0f));
     EXPECT_TRUE(expander->_bArrowHovered);
 
     // Back off the arrow (still on the header): arrow hover clears.
-    tree.dispatchEvent(MouseMoveEvent(100.0f, 8.0f), pointAt(100.0f, 8.0f));
+    (void)tree.dispatchEvent(MouseMoveEvent(100.0f, 8.0f), pointAt(100.0f, 8.0f));
     EXPECT_FALSE(expander->_bArrowHovered);
     EXPECT_TRUE(expander->_bHovered);
 }
@@ -2585,7 +2585,7 @@ TEST(ToolControlsTest, ExpanderHeaderActionClicksButDoesNotToggle)
 
     FCanvasSlotArgs slot;
     slot.fixedSize = {200.0f, 80.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
     tree.layout();
 
     const Rect2D removeRect = remove->getLayoutRect();
@@ -2639,7 +2639,7 @@ TEST(ToolControlsTest, ExpanderHeaderActionsSurviveCollapse)
     slot.fixedSize      = {200.0f, 0.0f};
     slot.widthSizeMode  = EWidgetSizeMode::Fixed;
     slot.heightSizeMode = EWidgetSizeMode::Auto;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
     tree.layout();
 
     expander->setExpanded(false);
@@ -2684,7 +2684,7 @@ TEST(ToolControlsTest, ExpanderHeaderActionsRoundTripThroughDocument)
     WidgetTree tree({.width = 400, .height = 300});
     FCanvasSlotArgs slot;
     slot.fixedSize = {200.0f, 60.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), restored, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), restored, slot);
     tree.layout();
     const UISlot* headerSlot = restored->getSlotForChild(*actions);    ASSERT_NE(headerSlot, nullptr);
     if (const auto* box = headerSlot->as<UIBoxSlot>()) {
@@ -2703,7 +2703,7 @@ TEST(ToolControlsTest, DragFloatOutlineSitsInsideLayoutRect)
     FCanvasSlotArgs slot;
     slot.offset    = {10.0f, 10.0f};
     slot.fixedSize = {120.0f, 22.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), drag, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), drag, slot);
     tree.layout();
 
     const Rect2D rect = drag->getLayoutRect();
@@ -2727,7 +2727,7 @@ TEST(ToolControlsTest, TextFieldOutlineSitsInsideLayoutRect)
     FCanvasSlotArgs slot;
     slot.offset    = {10.0f, 10.0f};
     slot.fixedSize = {180.0f, 22.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, slot);
     tree.layout();
 
     const Rect2D rect = field->getLayoutRect();
@@ -2756,7 +2756,7 @@ TEST(ToolControlsTest, SplitPaneOffDividerPressReleasesCaptureForMenuBar)
     FCanvasSlotArgs barSlot;
     barSlot.offset    = {0.0f, 0.0f};
     barSlot.fixedSize = {400.0f, 28.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, barSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, barSlot);
 
     auto split = std::make_shared<UISplitPane>("Split");
     split->setOrientation(ESplitOrientation::Horizontal);
@@ -2764,9 +2764,9 @@ TEST(ToolControlsTest, SplitPaneOffDividerPressReleasesCaptureForMenuBar)
     FCanvasSlotArgs splitSlot;
     splitSlot.offset    = {0.0f, 28.0f};
     splitSlot.fixedSize = {400.0f, 272.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
-    tree.attach(*split, std::make_shared<UICanvasPanel>("First"));
-    tree.attach(*split, std::make_shared<UICanvasPanel>("Second"));
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
+    (void)tree.attach(*split, std::make_shared<UICanvasPanel>("First"));
+    (void)tree.attach(*split, std::make_shared<UICanvasPanel>("Second"));
     tree.layout();
 
     const Rect2D divider = split->getDividerRect();

@@ -167,7 +167,7 @@ void EditorLuaScriptSection::rebuildRows()
         auto pathField = ui::textField(key + "_Path")
                              .setStyleKey(editorStyle(StyleKey::TextField))
                              .setText(script.scriptPath);
-        pathField.setOnCommit([this, i](const std::string& text) {
+       (void)pathField.setOnCommit([this, i](const std::string& text) {
             LuaScriptComponent* target = scriptComponentOn(_layer, _entityUuid);
             if (!target || i >= target->scripts.size()) {
                 return;
@@ -213,7 +213,7 @@ void EditorLuaScriptSection::rebuildRows()
         });
 
         auto enabled = ui::checkBox(key + "_Enabled").setText("Enabled").setChecked(script.enabled);
-        enabled.setOnChanged([this, i](bool checked) {
+       (void)enabled.setOnChanged([this, i](bool checked) {
             LuaScriptComponent* target = scriptComponentOn(_layer, _entityUuid);
             if (!target || i >= target->scripts.size()) {
                 return;
@@ -302,7 +302,7 @@ void EditorLuaScriptSection::rebuildRows()
                     else if (prop.typeHint == "bool") {
                         const bool checked = (script::scriptIf<bool>(prop.value) != nullptr) && (*script::scriptIf<bool>(prop.value));
                         auto box = ui::checkBox(std::format("{}_Prop{}Value", key, p)).setChecked(checked);
-                        box.setOnChanged([this, i, p](bool value) {
+                        (void)box.setOnChanged([this, i, p](bool value) {
                             LuaScriptComponent* target = scriptComponentOn(_layer, _entityUuid);
                             if (!target || i >= target->scripts.size() ||
                                 p >= target->scripts[i].properties.size()) {
@@ -321,7 +321,7 @@ void EditorLuaScriptSection::rebuildRows()
                         auto field = ui::textField(std::format("{}_Prop{}Value", key, p))
                                          .setStyleKey(editorStyle(StyleKey::TextField))
                                          .setText(text);
-                        field.setOnCommit([this, i, p](const std::string& value) {
+                        (void)field.setOnCommit([this, i, p](const std::string& value) {
                             LuaScriptComponent* target = scriptComponentOn(_layer, _entityUuid);
                             if (!target || i >= target->scripts.size() ||
                                 p >= target->scripts[i].properties.size()) {
@@ -401,7 +401,7 @@ void EditorLuaScriptSection::rebuildRows()
                             .share();
         _rowWidgets.push_back(expander);
         if (tree) {
-            (void)tree->attach(*_rows, expander);
+           (void)tree->attach(*_rows, expander);
         }
         else {
             _rows->addDetachedChild(expander);

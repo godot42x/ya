@@ -151,27 +151,6 @@ Node* requireNodeByPath(Scene& scene, const Json& args)
     return node;
 }
 
-/// Serialized reflected objects nest base-class fields under
-/// `__base__.<BaseClass>`, so a flat field name like `_position` must be
-/// resolved to its actual (possibly nested) location before writing.
-bool setFieldDeep(Json& root, const std::string& key, const Json& value)
-{
-    if (root.is_object()) {
-        if (auto it = root.find(key); it != root.end()) {
-            *it = value;
-            return true;
-        }
-        for (auto& [childKey, childValue] : root.items()) {
-            if (childKey == "__base__" || childValue.is_object()) {
-                if (setFieldDeep(childValue, key, value)) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
 } // namespace
 
 void registerCoreScriptApis(ScriptApiRegistry& registry)

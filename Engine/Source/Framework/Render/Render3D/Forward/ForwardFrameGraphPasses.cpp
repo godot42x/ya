@@ -205,7 +205,7 @@ void appendSkyboxPass(RenderGraph& graph,
 }
 
 void appendTransparentPass(RenderGraph& graph,
-                           const Dependencies& deps,
+                           [[maybe_unused]] const Dependencies& deps,
                            const BuildInputs& inputs,
                            const ViewGraphResources& resources,
                            TransparentPassParams params)
@@ -292,7 +292,7 @@ void appendEntityIdPass(RenderGraph& graph,
 ViewGraphResources createViewResources(RenderGraph&                   graph,
                                                const RenderTargetCreateInfo& viewRTSpec,
                                                std::optional<RGTextureHandle> shadowDepth,
-                                               uint64_t                       viewId,
+                                               [[maybe_unused]] uint64_t       viewId,
                                                const ViewTargetLease&         targets)
 {
     const auto colorAttachment = viewRTSpec.attachments.colorAttach[0];

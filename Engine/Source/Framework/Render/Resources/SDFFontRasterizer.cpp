@@ -3,8 +3,6 @@
 #include "Core/Log.h"
 #include "freetype/freetype.h"
 
-#include <cstdlib>
-
 namespace ya
 {
 
@@ -51,8 +49,7 @@ GlyphBitmap SDFFontRasterizer::rasterize(FT_Face face, uint32_t codepoint, uint3
     // Use bitmap.pitch as the source row stride, not bitmap.width: FreeType
     // may pad rows or return a top-down bitmap with negative pitch.
     out.pixels.resize(static_cast<size_t>(bitmap.width) * bitmap.rows * 4);
-    const int32_t srcPitch   = bitmap.pitch;
-    const uint32_t rowStride = static_cast<uint32_t>(std::abs(srcPitch));
+    const int32_t srcPitch = bitmap.pitch;
     const uint8_t* srcBase   = srcPitch >= 0 ? bitmap.buffer
                                                : bitmap.buffer + (bitmap.rows - 1) * srcPitch;
     for (uint32_t row = 0; row < bitmap.rows; ++row) {

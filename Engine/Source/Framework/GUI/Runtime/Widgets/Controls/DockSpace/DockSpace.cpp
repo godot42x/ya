@@ -32,7 +32,6 @@ bool stackHidesInnerTabWell(const FDockNode& leaf)
     return leaf.bHideTabBar || leaf.leafRole == EDockLeafRole::Page;
 }
 
-constexpr float kSplitMinExtent = 120.0f;
 constexpr float kChooserBlock = 28.0f;
 constexpr float kChooserGap = 8.0f;
 
@@ -73,7 +72,7 @@ void graftPanelIntoHost(UIElement& host, const UIElementRef& panel, WidgetTree* 
 
     unlinkWidgetFromVisualParent(*panel, hostTree);
     if (hostTree && hostTree->contains(host)) {
-        hostTree->attach(host, panel, fillDockPanelBoxSlot);
+       (void)hostTree->attach(host, panel, fillDockPanelBoxSlot);
         return;
     }
     host.addDetachedChild(panel, fillDockPanelBoxSlot);
@@ -105,29 +104,6 @@ bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 {
     return point.x >= rect.pos.x && point.x <= rect.pos.x + rect.extent.x &&
            point.y >= rect.pos.y && point.y <= rect.pos.y + rect.extent.y;
-}
-
-DockPanelId panelIdFrom(const UIDragDropOperation& operation)
-{
-    const auto* dockOp = operation.as<FDockPanelDragDropOp>();
-    return dockOp ? dockOp->panelId : kInvalidDockPanelId;
-}
-
-std::pair<bool, std::string> rejectForExtent(const Rect2D& rect, const glm::vec2& local)
-{
-    if (rect.extent.x < kSplitMinExtent * 2.0f && rect.extent.y < kSplitMinExtent * 2.0f) {
-        return {true, "cardinal split requires width or height >= 240"};
-    }
-    const bool bHorizontal = std::abs(local.x - 0.5f) > std::abs(local.y - 0.5f);
-    if (bHorizontal) {
-        if (rect.extent.x < kSplitMinExtent * 2.0f) {
-            return {true, "cardinal split requires width >= 240"};
-        }
-    }
-    else if (rect.extent.y < kSplitMinExtent * 2.0f) {
-        return {true, "cardinal split requires height >= 240"};
-    }
-    return {false, {}};
 }
 
 UIDockSpace* enclosingDockSpace(UIElement* widget)

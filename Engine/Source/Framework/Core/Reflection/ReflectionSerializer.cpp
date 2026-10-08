@@ -632,7 +632,7 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
             ::ya::reflection::PropertyContainerHelper::iterateContainer(
                 const_cast<Property &>(prop),
                 const_cast<void *>(valuePtr),
-                [&j](size_t index, void *elementPtr, type_index_t elementTypeIndex) {
+                [&j](size_t, void *elementPtr, type_index_t elementTypeIndex) {
                     // Serialize container element using unified helper
                     j.push_back(serializeAnyValue(elementPtr, elementTypeIndex));
                 });

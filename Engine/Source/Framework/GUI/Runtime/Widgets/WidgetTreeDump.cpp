@@ -63,27 +63,6 @@ nlohmann::json routeResultName(EWidgetRouteResult result)
     return "unknown";
 }
 
-nlohmann::json marginJson(const FMargin& margin)
-{
-    return {
-        {"left", margin.left},
-        {"top", margin.top},
-        {"right", margin.right},
-        {"bottom", margin.bottom},
-    };
-}
-
-const char* overlayAlignName(EUIOverlayAlignment align)
-{
-    switch (align) {
-    case EUIOverlayAlignment::Fill: return "fill";
-    case EUIOverlayAlignment::Start: return "start";
-    case EUIOverlayAlignment::Center: return "center";
-    case EUIOverlayAlignment::End: return "end";
-    }
-    return "unknown";
-}
-
 nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
 {
     nlohmann::json node;

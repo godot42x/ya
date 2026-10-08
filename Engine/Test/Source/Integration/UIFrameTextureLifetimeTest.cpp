@@ -44,7 +44,7 @@ TEST(UIFrameTextureLifetimeTest, SnapshotRetainsTextureAfterCacheClear)
     cache["Engine:Content/TestTextures/face.png"] = texture;
     image->setAssetPath("Engine:Content/TestTextures/face.png");
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
 
     UIFrameBuildContext ctx;
     ctx.textureResolver = [&](const std::string& path) {
@@ -73,7 +73,7 @@ TEST(UIFrameTextureLifetimeTest, ResolverMissAndMissingResolverFallBackToWhite)
     imageSlot.offset = {10.0f, 10.0f};
     imageSlot.fixedSize = {100.0f, 50.0f};
     image->setAssetPath("Engine:Content/TestTextures/face.png");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
 
     UIFrameBuildContext missCtx;
     missCtx.textureResolver = [](const std::string&) { return std::shared_ptr<Texture>(); };

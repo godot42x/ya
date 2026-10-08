@@ -54,7 +54,7 @@ void RuntimeDebugPrimitivesSection::construct()
     // One writer for the four switches: each reads the current settings, changes
     // its own field, and requests them back. The settings travel as values --
     // the section never holds a renderer service reference.
-    const auto bindSwitch = [this](const std::shared_ptr<UICheckBox>& control, auto&& apply)
+    const auto bindSwitch = [](const std::shared_ptr<UICheckBox>& control, auto&& apply)
     {
         control->_onChanged = [control, apply = std::forward<decltype(apply)>(apply)](bool)
         {

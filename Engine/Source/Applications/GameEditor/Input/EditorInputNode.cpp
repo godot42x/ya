@@ -111,7 +111,7 @@ FInputReply routeChromeInput(const FEditorInputSnapshot& snapshot, bool looking)
 
 FInputReply routeCapturedViewportInput(
     App& app,
-    EditorLayer& layer,
+    EditorLayer&,
     FInputRouteContext& context,
     const FInputEvent& event)
 {
@@ -206,7 +206,7 @@ FInputReply routeEscapeInput(App& app, EditorWindowSession* session, const FInpu
     return FInputReply{.handled = true};
 }
 
-FInputReply routeGameUIInput(App& app, EditorLayer& layer, const FInputEvent& event)
+FInputReply routeGameUIInput(App& app, EditorLayer&, const FInputEvent& event)
 {
     if (app.isStopped()) {
         return {};

@@ -139,7 +139,7 @@ PBRGenerateBrdfLUT::ExecuteResult PBRGenerateBrdfLUT::execute(const ExecuteConte
     RenderGraph graph;
     const auto  output = graph.importTexture(makeBrdfLutImportedTextureDesc(*ctx.output));
 
-    graph.addPass(
+   (void)graph.addPass(
         "PBRGenerateBrdfLUT",
         [&](RGPassBuilder& pass) {
             pass.declareRaster({

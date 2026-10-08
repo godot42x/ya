@@ -41,7 +41,7 @@ struct TreeSink final : public IGuiEventSink
     {
         WidgetEventContext ctx;
         ctx.logicalPoint = logicalPoint;
-        tree.dispatchEvent(event, ctx);
+       (void)tree.dispatchEvent(event, ctx);
     }
 };
 
@@ -161,8 +161,8 @@ TEST(GuiEventDriverTest, ScenarioDrivesWidgetTreeAndDumpAssertsHoverContract)
     FCanvasSlotArgs bSlot;
     bSlot.offset = {120.0f, 10.0f};
     bSlot.fixedSize = {60.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), a, aSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), b, bSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), a, aSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), b, bSlot);
     tree.layout();
 
     TreeSink sink{tree};

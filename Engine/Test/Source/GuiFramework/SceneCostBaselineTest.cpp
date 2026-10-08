@@ -124,14 +124,14 @@ TEST(SceneCostBaselineTest, ClippedLongListFlushTracksClippedItems)
     FCanvasSlotArgs scrollSlot;
     scrollSlot.fixedSize = {260.0f, 200.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), scroll, scrollSlot).valid());
-    tree.attach(*scroll, column);
+    (void)tree.attach(*scroll, column);
 
     constexpr int kRows = 80;
     for (int i = 0; i < kRows; ++i) {
         auto row = std::make_shared<UIText>("Row" + std::to_string(i));
         row->setText("row_" + std::to_string(i));
         row->_fontSize = 16;
-        tree.attach(*column, row);
+        (void)tree.attach(*column, row);
     }
 
     UILayout* layout = &scroll->getScrollLayout();
@@ -160,7 +160,7 @@ TEST(SceneCostBaselineTest, ClippedListWithoutSelfClipSharesViewportClip)
     FCanvasSlotArgs scrollSlot;
     scrollSlot.fixedSize = {260.0f, 200.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), scroll, scrollSlot).valid());
-    tree.attach(*scroll, column);
+    (void)tree.attach(*scroll, column);
 
     constexpr int kRows = 80;
     for (int i = 0; i < kRows; ++i) {
@@ -168,7 +168,7 @@ TEST(SceneCostBaselineTest, ClippedListWithoutSelfClipSharesViewportClip)
         row->setText("row_" + std::to_string(i));
         row->_fontSize = 16;
         row->_bSelfClip = false;
-        tree.attach(*column, row);
+        (void)tree.attach(*column, row);
     }
 
     UILayout* layout = &scroll->getScrollLayout();
@@ -198,7 +198,7 @@ TEST(SceneCostBaselineTest, InspectorColumnRecordsDrawAndArrange)
         auto row = std::make_shared<UIText>("Row" + std::to_string(i));
         row->setText("prop_" + std::to_string(i));
         row->_fontSize = 16;
-        tree.attach(*column, row);
+        (void)tree.attach(*column, row);
     }
 
     UILayout* layout = &column->getBoxLayout();

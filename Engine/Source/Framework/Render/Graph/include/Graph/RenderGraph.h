@@ -524,10 +524,9 @@ class RGRenderContext
     {
       public:
         RGPassBindingContext(const RenderGraphResourceRegistry& registry,
-                             const RenderGraph&                  graph,
                              const RGPass&                       pass,
                              ICommandBuffer&                    cmdBuf)
-            : _registry(registry), _graph(graph), _pass(pass), _cmdBuf(cmdBuf)
+            : _registry(registry), _pass(pass), _cmdBuf(cmdBuf)
         {}
 
         [[nodiscard]] YA_RENDER_GRAPH_API std::optional<DescriptorImageInfo> resolveTextureDescriptor(
@@ -541,7 +540,6 @@ class RGRenderContext
         [[nodiscard]] const RGBufferUsage* findDeclaredBufferUsage(RGBufferHandle handle) const;
 
         const RenderGraphResourceRegistry& _registry;
-        const RenderGraph&                  _graph;
         const RGPass&                       _pass;
         ICommandBuffer&                    _cmdBuf;
     };
@@ -550,7 +548,7 @@ class RGRenderContext
     [[nodiscard]] ICommandBuffer& getCommandBuffer() const { return _cmdBuf; }
     [[nodiscard]] RGPassBindingContext getBindingContext() const
     {
-        return RGPassBindingContext(_registry, _graph, _pass, _cmdBuf);
+        return RGPassBindingContext(_registry, _pass, _cmdBuf);
     }
     [[nodiscard]] YA_RENDER_GRAPH_API const RGTextureResource& getTexture(RGTextureHandle handle) const;
     [[nodiscard]] YA_RENDER_GRAPH_API const RGBufferResource& getBuffer(RGBufferHandle handle) const;

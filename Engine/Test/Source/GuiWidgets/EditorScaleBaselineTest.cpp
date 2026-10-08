@@ -78,10 +78,10 @@ TEST(EditorScaleBaselineTest, LargeHierarchyPaintStaysViewportBounded)
 
     FCanvasSlotArgs viewportSlot;
     viewportSlot.fixedSize = {280.0f, 220.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
-    tree.attach(*viewport, view);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
+    (void)tree.attach(*viewport, view);
     tree.layout();
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     const GuiPerfStats first = tree.getPerfStats();
 
     constexpr int kVisibleRows = kParents + kParents * kChildren;
@@ -90,7 +90,7 @@ TEST(EditorScaleBaselineTest, LargeHierarchyPaintStaysViewportBounded)
     EXPECT_GE(view->getPaintedRowCount(), 10u);
     EXPECT_LT(view->getPaintedRowCount(), static_cast<size_t>(kVisibleRows));
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
     EXPECT_EQ(tree.getPerfStats().drawItems, first.drawItems);
 }
@@ -106,14 +106,14 @@ TEST(EditorScaleBaselineTest, LargeInspectorColumnCleanSnapshotDoesNotRebuild)
 
     FCanvasSlotArgs columnSlot;
     columnSlot.fixedSize = {300.0f, 700.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
 
     constexpr int kRows = 250;
     for (int i = 0; i < kRows; ++i) {
         auto row = std::make_shared<UIText>("Row" + std::to_string(i));
         row->setText("prop_" + std::to_string(i));
         row->_fontSize = 16;
-        tree.attach(*column, row);
+        (void)tree.attach(*column, row);
     }
 
     const UIFrameSnapshot firstSnap = tree.buildSnapshot(UIFrameBuildContext{});

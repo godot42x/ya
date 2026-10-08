@@ -35,8 +35,8 @@ WidgetEventContext pointAt(float x, float y)
 std::shared_ptr<UISwitch> attachSwitch(WidgetTree& tree, FCanvasSlotArgs slot)
 {
     auto widget = std::make_shared<UISwitch>("Switch");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, slot);
-    (void)tree.buildSnapshot({});
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, slot);
+   (void)tree.buildSnapshot({});
     return widget;
 }
 
@@ -140,7 +140,7 @@ TEST(GuiAnimationTest, TweenAdvancesThenStopsDirtying)
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
 
     EXPECT_FALSE(card->wantsTick());
     tween->play();
@@ -164,13 +164,13 @@ TEST(GuiAnimationTest, TweenAdvancesThenStopsDirtying)
     EXPECT_FALSE(card->wantsTick());
     EXPECT_FALSE(tween->isPlaying());
 
-    tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
 
     // A finished tween must not keep the tree rebuilding: a later tick does
     // not dirty the widget and the next snapshot reuses its cached segment.
     tree.tick(0.5f);
     EXPECT_FALSE(card->isPaintDirty());
-    tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 }
 
@@ -180,7 +180,7 @@ TEST(GuiAnimationTest, TweenDrivesDownstreamPropertyWithoutFrameworkChange)
     auto probe  = std::make_shared<UIAnimProbeWidget>("Probe");
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe, slot);
     auto tween  = animate(*probe, 1.0f);
     // from != the property default, so "play applies t=0 immediately" is
     // actually observable instead of coinciding with the initial value.
@@ -211,7 +211,7 @@ TEST(GuiAnimationTest, RenderTransformAppliesToOwnItems)
     FCanvasSlotArgs slot;
     slot.offset    = {20.0f, 20.0f};
     slot.fixedSize = {200.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
 
     const auto findFill = [](const UIFrameSnapshot& snapshot, glm::vec2 size) {
         return std::find_if(snapshot.items.begin(), snapshot.items.end(), [size](const UIFrameDrawItem& it) {
@@ -258,7 +258,7 @@ TEST(GuiAnimationTest, RenderTransformReachesSubtreeItems)
     FCanvasSlotArgs panelSlot;
     panelSlot.offset    = {20.0f, 20.0f};
     panelSlot.fixedSize = {200.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
 
     auto child = std::make_shared<UIBorder>("Child");
     child->setColor({1.0f, 1.0f, 1.0f, 1.0f});
@@ -321,7 +321,7 @@ TEST(GuiAnimationTest, RenderTransformCostModelIsLeafVsSubtree)
     FCanvasSlotArgs rootSlot;
     rootSlot.offset    = {0.0f, 0.0f};
     rootSlot.fixedSize = {400.0f, 300.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), root, rootSlot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), root, rootSlot);
 
     std::vector<std::shared_ptr<UIBorder>> leaves;
     for (int i = 0; i < 6; ++i) {
@@ -334,17 +334,17 @@ TEST(GuiAnimationTest, RenderTransformCostModelIsLeafVsSubtree)
         });
         leaves.push_back(leaf);
     }
-    (void)tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
 
     // Leaf render transform: exactly one rebuilt widget.
     leaves[2]->setRenderOpacity(0.5f);
-    (void)tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
 
     // Subtree render transform: the whole subtree repaints (root + 6 leaves).
-    (void)tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
     root->setRenderOpacity(0.5f);
-    (void)tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 7u);
 }
 
@@ -358,7 +358,7 @@ TEST(GuiAnimationTest, UnknownTrackIsSkippedWithoutBreakingResolvedTracks)
     card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
 
     auto tween = animate(*card, 1.0f);
     tween->addFloatTrack("notAnimatable", 0.0f, 1.0f, EUIAnimEase::Linear);
@@ -379,7 +379,7 @@ TEST(GuiAnimationTest, PlayTowardRetargetsWithoutSnapping)
     card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
 
     auto tween = animate(*card, 1.0f);
     tween->fade(0.0f, 1.0f, EUIAnimEase::Linear).play();
@@ -416,7 +416,7 @@ TEST(GuiAnimationTest, SetLerpNowAppliesInitialStateWithoutAnimating)
     card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
 
     auto tween = animate(*card, 0.5f);
     tween->fade(0.0f, 1.0f, EUIAnimEase::Linear).setLerpNow(1.0f);
@@ -434,7 +434,7 @@ TEST(GuiAnimationTest, TypedHandlesAndSugarDriveTheSameTracks)
     card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
 
     auto tween = animate(*card, 1.0f);
     tween->track(ya::ui::anim::opacity, 0.25f, 0.75f, EUIAnimEase::Linear)
@@ -461,7 +461,7 @@ TEST(GuiAnimationTest, AnimateHelperAttachesTheBehaviour)
     auto       card = std::make_shared<UIBorder>("Card");
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
 
     // Fire and forget: the widget owns the behaviour, so dropping the handle
     // does not cancel the animation.
@@ -482,7 +482,7 @@ TEST(GuiAnimationTest, TweensOnOneWidgetShareItsSingleAnimator)
     auto       card = std::make_shared<UIBorder>("Card");
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
 
     auto fade = animate(*card, 1.0f);
     fade->fade(0.0f, 1.0f, EUIAnimEase::Linear);
@@ -597,7 +597,7 @@ TEST(GuiAnimationTest, SwitchBuildsOnWithoutAnimatingOnFirstFrame)
     slot.fixedSize = {120.0f, 24.0f};
     auto widget = std::make_shared<UISwitch>("Switch");
     widget->_bChecked = true;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, slot);
 
     // onAttached() settles the knob: a switch authored as "on" paints on at
     // 0,1 without ever ticking.
@@ -695,7 +695,7 @@ TEST(GuiAnimationTest, SwitchClickAndKeyboardToggle)
     tree.tick(1.0f); // let the transition settle before the next toggle
     tree.setFocus(widget.get());
     EXPECT_FALSE(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(20.0f, 20.0f)) == EWidgetRouteResult::NotHandled);
-    (void)tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(20.0f, 20.0f));
+   (void)tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(20.0f, 20.0f));
     EXPECT_FALSE(widget->isChecked());
     EXPECT_EQ(changes, 2);
 }
@@ -780,7 +780,7 @@ TEST(GuiAnimationTest, CurveTrackDrivesTheOwnerThroughEverySegment)
     card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
 
     // A toast: slide in, hold, slide out - one clock, two curved properties.
     auto tween = animate(*card, 1.0f);
@@ -820,7 +820,7 @@ TEST(GuiAnimationTest, MalformedCurveIsRejectedWithoutBreakingOtherTracks)
     card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
 
     auto tween = animate(*card, 1.0f);
     // Wrong domain for 'opacity' (declared float) - the whole track is dropped.

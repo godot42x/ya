@@ -149,7 +149,7 @@ FCanvasSlotArgs UIPopupOverlay::resolveContentSlotArgs(const UIElement& child) c
     return args;
 }
 
-bool UIPopupOverlay::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
+bool UIPopupOverlay::handleInputEvent(const Event& event, const WidgetEventContext&)
 {
     const EEvent::T eventType = event.getEventType();
 

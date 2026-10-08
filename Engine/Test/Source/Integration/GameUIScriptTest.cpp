@@ -124,7 +124,7 @@ struct FUIScripts
         host.getTree().setFocus(target);
         KeyPressedEvent enter{};
         enter._keyCode = EKey::Enter;
-        (void)host.getTree().dispatchEvent(enter, WidgetEventContext{});
+       (void)host.getTree().dispatchEvent(enter, WidgetEventContext{});
     }
 
     /// Publish `root` as a document and add an autoMount entry for it.

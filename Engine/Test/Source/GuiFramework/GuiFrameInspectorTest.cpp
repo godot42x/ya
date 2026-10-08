@@ -50,7 +50,7 @@ std::shared_ptr<UIBorder> attachProbe(WidgetTree& tree, const char* name, const 
     FCanvasSlotArgs slot;
     slot.offset    = rect.pos;
     slot.fixedSize = rect.extent;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
     return panel;
 }
 
@@ -78,8 +78,8 @@ TEST(GuiFrameInspectorTest, DisabledLeavesRebuildRectsEmpty)
     WidgetTree     tree = makeTree();
     auto           probe = attachProbe(tree, "Probe", Rect2D{.pos = {10.0f, 20.0f}, .extent = {100.0f, 40.0f}});
 
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     probe->markPaintDirty();
     const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{});
 
@@ -98,7 +98,7 @@ TEST(GuiFrameInspectorTest, DirtyLeafRecordsOneRectWithoutChangingSnapshot)
     WidgetTree     tree = makeTree();
     auto           probe = attachProbe(tree, "Probe", Rect2D{.pos = {10.0f, 20.0f}, .extent = {100.0f, 40.0f}});
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     const UIFrameSnapshot clean = tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
     EXPECT_TRUE(tree.getFrameInspectorRecord().rebuiltRects.empty());

@@ -30,8 +30,13 @@ struct uclass
 
 // ============================================================================
 // 示例类：带有反射属性标记
+// refl:: 属性是给生成器读的，编译器不认识。
 // ============================================================================
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunknown-attributes"
+#endif
 
 struct
     [[refl::uclass]] Person
@@ -74,6 +79,10 @@ struct
 
     Vehicle() : brand("Unknown"), year(2020), price(0.0f) {}
 };
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 // 包含自动生成的反射注册代码
 // 使用条件编译避免首次生成时找不到文件

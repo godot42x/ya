@@ -67,9 +67,9 @@ struct YA_GUI_API UIMenu : public UIPopupOverlay
     {
         std::string                                  label;
         std::function<void()>                        action;
-        std::string                                  icon;
-        std::string                                  shortcut;
-        std::function<std::shared_ptr<UIMenu>()>     submenuFactory;
+        std::string                                  icon{};
+        std::string                                  shortcut{};
+        std::function<std::shared_ptr<UIMenu>()>     submenuFactory{};
         bool                                         bChecked = false;
         bool                                         bCheckable = false;
         bool                                         bEnabled = true;

@@ -69,7 +69,7 @@ void EditorContentBrowserTab::construct()
     _entryViewportHeight = 0.0f;
 
     auto backButton = ui::button("ContentBack")
-                          .setOnClick([this]() { _explorer->navigateBack(); })
+                          .setOnClick([this]() { (void)_explorer->navigateBack(); })
                           .child(ui::text("ContentBack_Label")
                                      .setText("< Back")
                                      .setStyleKey(editorStyle(StyleKey::Text))
@@ -251,7 +251,7 @@ void EditorContentBrowserTab::rebuildRows(WidgetTree& tree)
     const FileExplorer::ViewMode viewMode = _explorer->getViewMode();
     if (!_entryReconciler || viewMode != _reconciledViewMode) {
         if (_entryReconciler) {
-            _entryReconciler->reconcile({});
+           (void)_entryReconciler->reconcile({});
         }
         _reconciledViewMode = viewMode;
         _entryReconciler = std::make_unique<UIKeyedChildReconciler>(
@@ -266,7 +266,7 @@ void EditorContentBrowserTab::rebuildRows(WidgetTree& tree)
     for (const auto& mp : _explorer->getMountPoints()) {
         mountKeys.push_back("ContentMount_" + mp.name);
     }
-    _mountReconciler->reconcile(
+   (void)_mountReconciler->reconcile(
         mountKeys,
         [this, active](UIElement& child, const std::string&, size_t index) {
             const auto& mp = _explorer->getMountPoints()[index];
@@ -324,15 +324,15 @@ void EditorContentBrowserTab::rebuildRows(WidgetTree& tree)
     _entryTrailing->setHeightOverride(window.trailingExtent);
     const std::vector<std::string> visibleKeys = sliceKeyedVisibleWindow(entryKeys, window);
     if (viewMode == FileExplorer::ViewMode::Icon) {
-        _entryReconciler->reconcile(
+       (void)_entryReconciler->reconcile(
             visibleKeys,
-            [this, &tree, &entries, window, selectedPath, cols, cellW, rowH, thumbnailSize](
+            [this, &tree, &entries, window, cols, cellW, rowH, thumbnailSize](
                 UIElement& child, const std::string&, size_t index) {
                 const size_t rowIndex = window.first + index;
                 const size_t begin = rowIndex * static_cast<size_t>(cols);
                 const size_t remaining = begin < entries.size() ? entries.size() - begin : 0;
                 const size_t count = std::min(remaining, static_cast<size_t>(cols));
-                syncGridRowTiles(tree, child, entries, begin, count, selectedPath, cellW, rowH, thumbnailSize);
+                syncGridRowTiles(tree, child, entries, begin, count, cellW, rowH, thumbnailSize);
             },
             [rowH](UISlot& slot, const std::string&, size_t) {
                 if (auto* box = slot.as<UIBoxSlot>()) {
@@ -341,7 +341,7 @@ void EditorContentBrowserTab::rebuildRows(WidgetTree& tree)
             });
     }
     else {
-        _entryReconciler->reconcile(
+        (void)_entryReconciler->reconcile(
             visibleKeys,
             [this, &entries, window](UIElement& child, const std::string&, size_t index) {
                 const size_t itemIndex = window.first + index;
@@ -404,7 +404,7 @@ void EditorContentBrowserTab::selectItem(const std::filesystem::path& path, bool
 void EditorContentBrowserTab::activateItem(const std::filesystem::path& path, bool bIsDirectory)
 {
     if (bIsDirectory) {
-        _explorer->navigateInto(path);
+        (void)_explorer->navigateInto(path);
         return;
     }
     selectItem(path, false);
@@ -488,7 +488,6 @@ void EditorContentBrowserTab::syncGridRowTiles(WidgetTree& tree,
                                                const std::vector<FileExplorer::FEntry>& entries,
                                                size_t begin,
                                                size_t count,
-                                               const std::filesystem::path& selectedPath,
                                                float cellW,
                                                float rowH,
                                                float thumbnailSize)
@@ -513,7 +512,7 @@ void EditorContentBrowserTab::syncGridRowTiles(WidgetTree& tree,
         const auto& entry = entries[begin + i];
         const std::string key = "ContentTile_" + entry.name;
         auto tile = contentTile(key, entry.name, entry.name, {}, {}).release();
-        tree.attach(*box, tile, tileSlot);
+        (void)tree.attach(*box, tile, tileSlot);
     }
     for (size_t i = 0; i < count; ++i) {
         const auto& entry = entries[begin + i];

@@ -42,7 +42,7 @@ void UIRadioButton::paintSelf(UIFrameBuilder& builder)
     }
 }
 
-bool UIRadioButton::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
+bool UIRadioButton::handleInputEvent(const Event& event, const WidgetEventContext&)
 {
     const EEvent::T eventType = event.getEventType();
 

@@ -80,7 +80,7 @@ int AppKernel::run(const AppAutomationRunOptions& options)
             reportInstanceConflict(instanceKey, record, ownerPid);
             return 1;
         }
-        Os::writeInstanceRecord(_config.instanceRecord);
+        (void)Os::writeInstanceRecord(_config.instanceRecord);
     }
 
     _runController.reset(options);
@@ -110,7 +110,7 @@ int AppKernel::run(const AppAutomationRunOptions& options)
 
     _instanceLock.release();
     if (!instanceKey.empty()) {
-        Os::removeInstanceRecord(instanceKey);
+        (void)Os::removeInstanceRecord(instanceKey);
     }
     return 0;
 }

@@ -74,7 +74,6 @@ struct YA_GUI_API UISpinBox : public UIElement, public UIStyledWidget<UISpinBox,
   private:
     int _hoveredZone = -1;
     VisualFlag _bHovered{*this};
-    int _pressedZone = -1;
     [[nodiscard]] int zoneFromPointer(float localX) const;
     void stepBy(float multiplier);
     void beginEdit();

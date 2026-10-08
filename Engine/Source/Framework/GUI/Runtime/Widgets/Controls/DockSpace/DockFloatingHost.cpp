@@ -77,13 +77,13 @@ void UIDockFloatingHost::syncFromContext()
         }
         auto it = _windows.find(record.id);
         if (it != _windows.end()) {
-            it->second->setWindowRect({record.pos, record.size});
+            it->second->setWindowRect({{record.pos}, record.size});
             it->second->refreshFromContext();
             continue;
         }
         auto window = std::make_shared<UIDockFloatingWindow>(
             std::format("FloatingWindow{}", record.id), record.id, _context);
-        window->setWindowRect({record.pos, record.size});
+        window->setWindowRect({{record.pos}, record.size});
         window->_onActivated = [this, floatingId = record.id]()
         {
             auto found = _windows.find(floatingId);
@@ -92,8 +92,8 @@ void UIDockFloatingHost::syncFromContext()
             }
         };
         if (tree) {
-            tree->attach(*this, window);
-            window->setWindowRect({record.pos, record.size});
+            (void)tree->attach(*this, window);
+            window->setWindowRect({{record.pos}, record.size});
         }
         _windows.emplace(record.id, window);
     }

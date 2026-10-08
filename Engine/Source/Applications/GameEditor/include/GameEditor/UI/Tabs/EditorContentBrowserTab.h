@@ -75,7 +75,6 @@ class EditorContentBrowserTab : public UICompoundWidget
                           const std::vector<FileExplorer::FEntry>& entries,
                           size_t begin,
                           size_t count,
-                          const std::filesystem::path& selectedPath,
                           float cellW,
                           float rowH,
                           float thumbnailSize);

@@ -93,7 +93,8 @@ struct RENDERDOC_API_1_6_0
 namespace ya
 {
 
-bool RenderDocCapture::init(const std::string& dllPath, const std::string& captureOutputDir)
+bool RenderDocCapture::init([[maybe_unused]] const std::string& dllPath,
+                            [[maybe_unused]] const std::string& captureOutputDir)
 {
 #if defined(_WIN32)
     if (_available) {
@@ -356,7 +357,8 @@ void RenderDocCapture::onFrameEnd()
 #endif
 }
 
-bool RenderDocCapture::launchReplayUI(bool bConnectTargetControl, const char* cmdLine)
+bool RenderDocCapture::launchReplayUI([[maybe_unused]] bool bConnectTargetControl,
+                                      [[maybe_unused]] const char* cmdLine)
 {
 #if defined(_WIN32)
     if (!_available || !_api) {

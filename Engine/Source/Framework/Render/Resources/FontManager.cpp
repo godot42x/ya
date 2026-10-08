@@ -10,8 +10,6 @@
 
 #include <algorithm>
 #include <array>
-#include <charconv>
-#include <cmath>
 #include <filesystem>
 #include <format>
 #include <string_view>
@@ -33,38 +31,6 @@ constexpr std::array<uint32_t, 95> BASE_GLYPH_CODEPOINTS = [] {
 namespace
 {
 
-float parseFloatView(std::string_view text, float fallback)
-{
-    if (text.empty()) {
-        return fallback;
-    }
-    float value = fallback;
-    const std::from_chars_result parsed =
-        std::from_chars(text.data(), text.data() + text.size(), value);
-    return parsed.ec == std::errc{} ? value : fallback;
-}
-
-/// `_baseFontCache` keys are `name:rasterPx`. A legacy `name:size:dpi` key still parses.
-void splitFontCacheKey(std::string_view key, std::string& stackName, float& logicalSize, float& dpi)
-{
-    dpi          = 1.0f;
-    logicalSize  = 0.0f;
-    const auto last = key.rfind(':');
-    if (last == std::string_view::npos) {
-        stackName = std::string(key);
-        return;
-    }
-    const auto prev = last == 0 ? std::string_view::npos : key.rfind(':', last - 1);
-    if (prev == std::string_view::npos) {
-        stackName   = std::string(key.substr(0, last));
-        logicalSize = parseFloatView(key.substr(last + 1), 0.0f);
-        return;
-    }
-    stackName   = std::string(key.substr(0, prev));
-    logicalSize = parseFloatView(key.substr(prev + 1, last - prev - 1), 0.0f);
-    dpi         = parseFloatView(key.substr(last + 1), 1.0f);
-}
-
 std::string atlasDebugFaceName(std::string_view facePath, std::string_view stackName)
 {
     if (!facePath.empty()) {
@@ -75,28 +41,6 @@ std::string atlasDebugFaceName(std::string_view facePath, std::string_view stack
         }
     }
     return std::string(stackName);
-}
-
-std::string makeFontAtlasDebugLabel(std::string_view face,
-                                    float            logicalSize,
-                                    EFontRenderMode  mode,
-                                    std::string_view faceRole,
-                                    uint32_t         pageIndex,
-                                    uint32_t         pageCount,
-                                    float            dpi)
-{
-    std::string label = std::format("{}  {:.0f}px  {}", face, logicalSize, fontRenderModeName(mode));
-    if (faceRole != "primary") {
-        label += "  ";
-        label += faceRole;
-    }
-    if (pageCount > 1) {
-        label += std::format("  p{}/{}", pageIndex + 1, pageCount);
-    }
-    if (std::abs(dpi - 1.0f) > 0.01f) {
-        label += std::format("  @{:g}x", dpi);
-    }
-    return label;
 }
 
 std::shared_ptr<IFontRasterizer> makeRasterizer(EFontRenderMode mode)
@@ -1126,7 +1070,7 @@ bool FontManager::consumeNewGlyphCapture()
     return b;
 }
 
-void FontManager::flushPendingGlyphs(IRender& render)
+void FontManager::flushPendingGlyphs(IRender&)
 {
     ++_atlasTick;
     if (_pendingGlyphs.empty()) {

@@ -325,8 +325,8 @@ TEST(DeclarativeContractTest, SameValuePropertyMutationDoesNotDirtyTree)
     FCanvasSlotArgs panelSlot; panelSlot.fixedSize = {120.0f, 60.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot).valid());
 
-    (void)tree.buildSnapshot({});
-    (void)tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
     const GuiPerfStats before = tree.getPerfStats();
 
     auto* content = tree.getLayer(WidgetTree::ELayer::Content);
@@ -335,7 +335,7 @@ TEST(DeclarativeContractTest, SameValuePropertyMutationDoesNotDirtyTree)
     const glm::vec2 authoredSize = slot->getFixedSize();
     slot->setFixedSize(authoredSize);
     panel->setColor(panel->getColor());
-    (void)tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
 
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, before.layoutDirtyTransitions);
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, before.paintDirtyTransitions);
@@ -744,7 +744,7 @@ TEST(DeclarativeContractTest, DirectConstructContainerLayoutHonorsAuthoredSizeAn
     EXPECT_FLOAT_EQ(container->getBoxLayout().getSpacing(), 4.0f);
     EXPECT_EQ(container->getBoxLayout().getPadding(), glm::vec2(2.0f, 3.0f));
 
-    (void)treeA.buildSnapshot({});
+   (void)treeA.buildSnapshot({});
     auto* left = dynamic_cast<UICanvasPanel*>(first->getChildren()[0].get());
     auto* right = dynamic_cast<UICanvasPanel*>(first->getChildren()[1].get());
     ASSERT_NE(left, nullptr);
@@ -758,7 +758,7 @@ TEST(DeclarativeContractTest, DirectConstructContainerLayoutHonorsAuthoredSizeAn
     container->setClipChildren(true);
     container->setStretchLastChild(true);
     EXPECT_EQ(first.get(), container);
-    (void)treeA.buildSnapshot({});
+   (void)treeA.buildSnapshot({});
     EXPECT_FLOAT_EQ(left->_layoutRect.pos.x, 8.0f);
     EXPECT_FLOAT_EQ(right->_layoutRect.pos.x, 40.0f);
     EXPECT_EQ(right->_layoutRect.extent.x, 52.0f);

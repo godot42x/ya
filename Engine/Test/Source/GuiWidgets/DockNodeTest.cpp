@@ -621,10 +621,10 @@ TEST(DockNodeTest, ActivatePanelGraftsSelectedTabAndDetachedStopsTick)
     fill.anchorMin = {0.0f, 0.0f};
     fill.anchorMax = {1.0f, 1.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, fill).valid());
-    (void)tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     ASSERT_TRUE(context->activatePanel("visible"));
-    (void)tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     visible->ticks = 0;
     hidden->ticks = 0;
     tree.tick(1.0f / 60.0f);
@@ -632,7 +632,7 @@ TEST(DockNodeTest, ActivatePanelGraftsSelectedTabAndDetachedStopsTick)
     EXPECT_EQ(hidden->ticks, 0);
 
     ASSERT_TRUE(context->activatePanel("hidden"));
-    (void)tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     visible->ticks = 0;
     hidden->ticks = 0;
     tree.tick(1.0f / 60.0f);
@@ -755,7 +755,7 @@ TEST(DockNodeTest, AddPanelAfterProjectionSyncsFocusedStackWithoutRematerialize)
         context->addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("Inspector"));
     ASSERT_NE(sceneId, kInvalidDockPanelId);
     ASSERT_NE(inspectorId, kInvalidDockPanelId);
-    (void)tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     ASSERT_TRUE(context->dockModel().splitLeaf(context->dockModel().getRootNode()->id,
                                                EDockCardinalSide::East,
@@ -1084,8 +1084,8 @@ TEST(DockNodeTest, TransferPanelMovesWidgetWithoutDualMount)
     fill.anchorMax = {1.0f, 1.0f};
     ASSERT_TRUE(treeA.attach(*treeA.getLayer(WidgetTree::ELayer::Content), dockA, fill).valid());
     ASSERT_TRUE(treeB.attach(*treeB.getLayer(WidgetTree::ELayer::Content), dockB, fill).valid());
-    (void)treeA.buildSnapshot(UIFrameBuildContext{});
-    (void)treeB.buildSnapshot(UIFrameBuildContext{});
+   (void)treeA.buildSnapshot(UIFrameBuildContext{});
+   (void)treeB.buildSnapshot(UIFrameBuildContext{});
     EXPECT_TRUE(treeA.contains(*widget));
     EXPECT_FALSE(treeB.contains(*widget));
 
@@ -1134,8 +1134,8 @@ TEST(DockNodeTest, TransferNativePlacementMovesTornPanel)
     fill.anchorMax = {1.0f, 1.0f};
     ASSERT_TRUE(treeA.attach(*treeA.getLayer(WidgetTree::ELayer::Content), dockA, fill).valid());
     ASSERT_TRUE(treeB.attach(*treeB.getLayer(WidgetTree::ELayer::Content), dockB, fill).valid());
-    (void)treeA.buildSnapshot(UIFrameBuildContext{});
-    (void)treeB.buildSnapshot(UIFrameBuildContext{});
+   (void)treeA.buildSnapshot(UIFrameBuildContext{});
+   (void)treeB.buildSnapshot(UIFrameBuildContext{});
 
     const FDockFloatingWindowId placementId =
         contextA->tearOffPanel(panelId, {8.0f, 8.0f}, {180.0f, 120.0f}, EDockFloatingProjection::NativeWindow);
@@ -1171,8 +1171,8 @@ TEST(DockNodeTest, ForeignDockDropTransfersPanelWithoutDualMount)
     fill.anchorMax = {1.0f, 1.0f};
     ASSERT_TRUE(treeA.attach(*treeA.getLayer(WidgetTree::ELayer::Content), dockA, fill).valid());
     ASSERT_TRUE(treeB.attach(*treeB.getLayer(WidgetTree::ELayer::Content), dockB, fill).valid());
-    (void)treeA.buildSnapshot(UIFrameBuildContext{});
-    (void)treeB.buildSnapshot(UIFrameBuildContext{});
+   (void)treeA.buildSnapshot(UIFrameBuildContext{});
+   (void)treeB.buildSnapshot(UIFrameBuildContext{});
     ASSERT_TRUE(treeA.contains(*widget));
 
     const UIDragDropOperationRef operation =
@@ -1204,8 +1204,8 @@ TEST(DockNodeTest, ForeignDockChooserHoverShowsPreviewWithoutDropping)
     fill.anchorMax = {1.0f, 1.0f};
     ASSERT_TRUE(treeA.attach(*treeA.getLayer(WidgetTree::ELayer::Content), dockA, fill).valid());
     ASSERT_TRUE(treeB.attach(*treeB.getLayer(WidgetTree::ELayer::Content), dockB, fill).valid());
-    (void)treeA.buildSnapshot(UIFrameBuildContext{});
-    (void)treeB.buildSnapshot(UIFrameBuildContext{});
+   (void)treeA.buildSnapshot(UIFrameBuildContext{});
+   (void)treeB.buildSnapshot(UIFrameBuildContext{});
 
     const UIDragDropOperationRef operation =
         FDockPanelDragDropOp::make(idA, "Moved", contextA.get());
@@ -1270,7 +1270,7 @@ TEST(DockNodeTest, DropTargetKindDistinguishesWellStackSplitAndNoTarget)
     ASSERT_TRUE(context->dockModel().splitLeaf(context->dockModel().getRootNode()->id,
                                                EDockCardinalSide::East,
                                                inspectorId));
-    (void)tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     const FDockNode* sceneLeaf = context->dockModel().findLeafForPanel(sceneId);
     const FDockNode* inspectorLeaf = context->dockModel().findLeafForPanel(inspectorId);
@@ -1494,7 +1494,7 @@ TEST(DockNodeTest, SameStackContentShowsChooserNotSilentCenter)
         context->addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("Inspector"));
     ASSERT_NE(sceneId, kInvalidDockPanelId);
     ASSERT_NE(inspectorId, kInvalidDockPanelId);
-    (void)tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     const FDockNode* stack = context->dockModel().findStackForPanel(sceneId);
     ASSERT_NE(stack, nullptr);
@@ -1553,7 +1553,7 @@ TEST(DockNodeTest, FloatingWindowProducesDropTargetWithoutDockSpace)
         context->tearOffPanel(inspectorId, {40.0f, 40.0f}, {240.0f, 180.0f});
     ASSERT_NE(floatingId, kInvalidFloatingWindowId);
     host->syncFromContext();
-    (void)tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     auto* floating = dynamic_cast<UIDockFloatingWindow*>(
         findNamedDescendant(*host, std::format("FloatingWindow{}", floatingId)));
@@ -1602,7 +1602,7 @@ TEST(DockNodeTest, NestedDockChooserWinsOverHostPageLeaf)
     fill.anchorMin = {0.0f, 0.0f};
     fill.anchorMax = {1.0f, 1.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), outerDock, fill).valid());
-    (void)tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     auto* nestedStack = dynamic_cast<UIDockTabStack*>(
         findNamedDescendant(*nestedDock, std::format("DockStack{}", nested->layout().getRootNode()->id)));

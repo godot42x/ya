@@ -643,14 +643,14 @@ TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)
     auto target = registry.createInstance("test.doc_panel");
     WidgetTree tree({.width = 800, .height = 600});
     EXPECT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target).valid());
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+   (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+   (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
     const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
 
     // Bulk field restore on a live widget: reflection writes bypass setters,
     // so the transaction must aggregate one Layout invalidation at its end.
     target->deserializeFields(doc->fields);
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
 }

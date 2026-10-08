@@ -243,7 +243,6 @@ struct TestT
         static void real_init()
         {
             ya ::profiling ::StaticInitTimer __static_init_timer___LINE__("TestT<Ty>");
-            auto                             realTypeName = typeid(TestT<Ty>).name();
             constexpr std::string_view       name         = "TestT<Ty>";
 
             std::unique_ptr<::Register<class_t>> reg = nullptr;

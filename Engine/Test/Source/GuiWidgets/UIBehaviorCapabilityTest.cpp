@@ -52,7 +52,7 @@ std::shared_ptr<UIBorder> attachCard(WidgetTree& tree)
     auto            card = std::make_shared<UIBorder>("Card");
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
     return card;
 }
 

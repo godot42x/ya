@@ -4,27 +4,6 @@
 namespace ya
 {
 
-namespace
-{
-
-bool isEnvironmentLightingSourceStateLoading(EEnvironmentLightingSourceResolveState state)
-{
-    return state == EEnvironmentLightingSourceResolveState::ResolvingSource ||
-           state == EEnvironmentLightingSourceResolveState::BuildingEnvironmentCubemap;
-}
-
-bool isEnvironmentLightingIrradianceStateLoading(EEnvironmentLightingIrradianceResolveState state)
-{
-    return state == EEnvironmentLightingIrradianceResolveState::Building;
-}
-
-bool isEnvironmentLightingPrefilterStateLoading(EEnvironmentLightingPrefilterResolveState state)
-{
-    return state == EEnvironmentLightingPrefilterResolveState::Building;
-}
-
-} // namespace
-
 void EnvironmentLightingComponent::setFace(ECubeFace face, const std::string& path)
 {
     if (face < CubeFace_PosX || face >= CubeFace_Count) {

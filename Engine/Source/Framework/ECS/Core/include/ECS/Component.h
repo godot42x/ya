@@ -56,8 +56,9 @@ struct IDComponent : public IComponent
 {
     UUID _id = UUID(0);
 
-    IDComponent()                   = default;
-    IDComponent(const IDComponent&) = default;
+    IDComponent()                                = default;
+    IDComponent(const IDComponent&)                  = default;
+    IDComponent& operator=(const IDComponent&)       = default;
     IDComponent(UUID id) : _id(id) {}
     IDComponent(uint64_t id) : _id(id) {}
 };
@@ -73,8 +74,9 @@ struct AudioSourceComponent : public IComponent
     float    _pitch        = 1.0f;
     float    _spatialBlend = 0.0f; // 0 = 2D, 1 = 3D
 
-    AudioSourceComponent()                            = default;
-    AudioSourceComponent(const AudioSourceComponent&) = default;
+    AudioSourceComponent()                                 = default;
+    AudioSourceComponent(const AudioSourceComponent&)           = default;
+    AudioSourceComponent& operator=(const AudioSourceComponent&) = default;
     AudioSourceComponent(uint32_t clipId) : _audioClipID(clipId) {}
 };
 

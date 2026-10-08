@@ -49,7 +49,8 @@ struct PointLightComponent : public IComponent
     float nearPlane       = 0.1f;
     float farPlane        = 100.0f;
 
-    PointLightComponent()                           = default;
-    PointLightComponent(const PointLightComponent&) = default;
+    PointLightComponent()                                = default;
+    PointLightComponent(const PointLightComponent&)      = default;
+    PointLightComponent& operator=(const PointLightComponent&) = default;
 };
 } // namespace ya

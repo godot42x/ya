@@ -35,7 +35,7 @@ UIElement* buildIdleForest(WidgetTree& tree, size_t count)
         UIElement* parent = layer;
         for (size_t depth = 0; depth < kChainDepth && built < count; ++depth, ++built) {
             auto node = std::make_shared<UICanvasPanel>("Idle");
-            (void)tree.attach(*parent, node);
+           (void)tree.attach(*parent, node);
             parent = node.get();
         }
         deepest = parent;

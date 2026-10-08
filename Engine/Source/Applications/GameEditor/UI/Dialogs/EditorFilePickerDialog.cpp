@@ -342,7 +342,7 @@ void EditorFilePickerDialog::rebuildRows(WidgetTree& tree)
     for (const auto& mp : _explorer->getMountPoints()) {
         mountKeys.push_back("FilePickerMount_" + mp.name);
     }
-    _mountReconciler->reconcile(
+   (void)_mountReconciler->reconcile(
         mountKeys,
         [this, active](UIElement& child, const std::string&, size_t index) {
             const auto& mp = _explorer->getMountPoints()[index];
@@ -361,7 +361,7 @@ void EditorFilePickerDialog::rebuildRows(WidgetTree& tree)
     for (const auto& entry : entries) {
         entryKeys.push_back("FilePickerEntry_" + entry.name);
     }
-    _entryReconciler->reconcile(
+   (void)_entryReconciler->reconcile(
         entryKeys,
         [this, &entries, selectedPath](UIElement& child, const std::string&, size_t index) {
             const auto& entry = entries[index];

@@ -64,9 +64,9 @@ void UITabButton::paintSelf(UIFrameBuilder& builder)
         const bool vertical = dynamic_cast<const UIContainer*>(getParent()) &&
                               dynamic_cast<const UIContainer*>(getParent())->getDirection() == EWidgetBoxLayout::Vertical;
         const Rect2D accent = vertical
-                                  ? Rect2D{glm::vec2{_layoutRect.pos.x, _layoutRect.pos.y},
+                                  ? Rect2D{{glm::vec2{_layoutRect.pos.x, _layoutRect.pos.y}},
                                            glm::vec2{2.0f, _layoutRect.extent.y}}
-                                  : Rect2D{glm::vec2{_layoutRect.pos.x, _layoutRect.pos.y},
+                                  : Rect2D{{glm::vec2{_layoutRect.pos.x, _layoutRect.pos.y}},
                                            glm::vec2{_layoutRect.extent.x, 2.0f}};
         builder.addBrush(accent, FBrush::solid(style.accentColor));
     }

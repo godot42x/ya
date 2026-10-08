@@ -81,8 +81,8 @@ TEST(BindingContractTest, ReactiveTransactionCoalescesWritesAndSupportsReentrant
     auto text = std::make_shared<UIText>("Text");
     auto value = std::make_shared<Reactive<std::string>>("a");
     text->bindText(value);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
-    tree.buildSnapshot({});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
+   (void)tree.buildSnapshot({});
 
     const auto before = getReactiveDiagnostics();
     {
@@ -93,7 +93,7 @@ TEST(BindingContractTest, ReactiveTransactionCoalescesWritesAndSupportsReentrant
     }
     const auto after = getReactiveDiagnostics();
     EXPECT_EQ(after.notifyCalls - before.notifyCalls, 1u);
-    tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
     EXPECT_EQ(text->resolvedText(), "c");
 }
 
@@ -263,12 +263,12 @@ TEST(BindingContractTest, TreeViewKeyedReplacePrunesRemovedExpansionState)
     FCanvasSlotArgs slot;
     slot.fixedSize = {240.0f, 160.0f};
     treeView->bindData(roots);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView, slot);
-    tree.buildSnapshot({});
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView, slot);
+   (void)tree.buildSnapshot({});
 
     treeView->setExpanded("keep", true);
     treeView->setExpanded("drop", true);
-    tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
     EXPECT_EQ(treeView->getVisibleRowCount(), 4);
 
     ASSERT_TRUE(roots->replaceKeyed(
@@ -276,7 +276,7 @@ TEST(BindingContractTest, TreeViewKeyedReplacePrunesRemovedExpansionState)
             {.id = "keep", .label = "Keep", .children = {{.id = "keep.child", .label = "Keep Child"}}},
         },
         [](const UITreeView::FNode& node) { return node.id; }));
-    tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
     EXPECT_TRUE(treeView->isExpanded("keep"));
     EXPECT_EQ(treeView->getVisibleRowCount(), 2);
 
@@ -286,7 +286,7 @@ TEST(BindingContractTest, TreeViewKeyedReplacePrunesRemovedExpansionState)
             {.id = "keep", .label = "Keep", .children = {{.id = "keep.child", .label = "Keep Child"}}},
         },
         [](const UITreeView::FNode& node) { return node.id; }));
-    tree.buildSnapshot({});
+   (void)tree.buildSnapshot({});
     EXPECT_FALSE(treeView->isExpanded("drop"));
     EXPECT_TRUE(treeView->isExpanded("keep"));
     EXPECT_EQ(treeView->getVisibleRowCount(), 3);
@@ -298,15 +298,15 @@ TEST(BindingContractTest, PersistentLayoutBindingOnDetachedWidgetDoesNotInvalida
     auto       split = std::make_shared<UISplitPane>("Split");
     auto       ratio = std::make_shared<Reactive<float>>(0.5f);
     split->bindSplitRatio(ratio);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     const uint64_t before = tree.getPerfStats().layoutDirtyTransitions;
 
     tree.detach(*split);
     ratio->set(0.8f);
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, before);
 }
@@ -317,17 +317,17 @@ TEST(BindingContractTest, PersistentLayoutBindingSurvivesDetachAndReattach)
     auto       split = std::make_shared<UISplitPane>("Split");
     auto       ratio = std::make_shared<Reactive<float>>(0.5f);
     split->bindSplitRatio(ratio);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     tree.detach(*split);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
-    tree.buildSnapshot(UIFrameBuildContext{});
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     const uint64_t before = tree.getPerfStats().layoutDirtyTransitions;
     ratio->set(0.25f);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     EXPECT_GT(tree.getPerfStats().layoutDirtyTransitions, before);
 }
@@ -338,9 +338,9 @@ TEST(BindingContractTest, TextBindingSurvivesImperativeFallbackWriteUntilUnbound
     auto       text = std::make_shared<UIText>("Text");
     auto       ref  = std::make_shared<Reactive<std::string>>("bound");
     text->bindText(ref);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(text->resolvedText(), "bound");
 
     text->setText("fallback");
@@ -348,7 +348,7 @@ TEST(BindingContractTest, TextBindingSurvivesImperativeFallbackWriteUntilUnbound
     EXPECT_EQ(text->resolvedText(), "bound");
 
     ref->set("next");
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(text->resolvedText(), "next");
 
     text->bindText(nullptr);
@@ -367,7 +367,7 @@ TEST(BindingContractTest, WidgetEnabledGateRemainsAuthoritativeOverButtonDisplay
     button->setEnabled(false);
     int clicks = 0;
     button->onClicked.addLambda([&]() { ++clicks; });
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f)),
@@ -377,11 +377,11 @@ TEST(BindingContractTest, WidgetEnabledGateRemainsAuthoritativeOverButtonDisplay
     EXPECT_EQ(clicks, 0);
 
     enabled->set(false);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(button->resolvedEnabled());
 
     enabled->set(true);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(button->resolvedEnabled());
     EXPECT_FALSE(button->isEnabledInTree());
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f)),
@@ -398,7 +398,7 @@ TEST(BindingContractTest, DisablingPressedButtonStillClearsPressSessionOnRelease
     buttonSlot.offset = {20.0f, 20.0f};
     buttonSlot.fixedSize = {120.0f, 40.0f};
     button->onClicked.addLambda([&]() { ++clicks; });
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f)),
@@ -432,8 +432,8 @@ TEST(BindingContractTest, BehaviorDropHighlightDoesNotOverwritePresenterSelectio
     FCanvasSlotArgs targetSlot;
     targetSlot.offset = {220.0f, 20.0f};
     targetSlot.fixedSize = {160.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 32.0f)),
@@ -470,8 +470,8 @@ TEST(BindingContractTest, PresenterSelectionPatchDoesNotClearBehaviorDropHighlig
     FCanvasSlotArgs targetSlot;
     targetSlot.offset = {220.0f, 20.0f};
     targetSlot.fixedSize = {160.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 32.0f)),
@@ -516,33 +516,33 @@ TEST(BindingContractTest, TreeFilterBindingAndManualExpansionCoexistWithoutStick
     treeViewSlot.fixedSize = {240.0f, 120.0f};
     treeView->bindData(roots);
     treeView->bindFilter(filterRef);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView, treeViewSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView, treeViewSlot);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(treeView->isExpanded("root"));
     EXPECT_EQ(treeView->getVisibleRowCount(), 1);
 
     filterRef->set("Child");
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_TRUE(treeView->isExpanded("root"));
     EXPECT_EQ(treeView->getVisibleRowCount(), 2);
 
     treeView->toggleExpanded("root");
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(treeView->isExpanded("root"));
     EXPECT_EQ(treeView->getVisibleRowCount(), 1);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(treeView->isExpanded("root"));
     EXPECT_EQ(treeView->getVisibleRowCount(), 1);
 
     filterRef->set("");
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(treeView->isExpanded("root"));
     EXPECT_EQ(treeView->getVisibleRowCount(), 1);
 
     filterRef->set("Child");
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_TRUE(treeView->isExpanded("root"));
     EXPECT_EQ(treeView->getVisibleRowCount(), 2);
 }
@@ -562,14 +562,14 @@ TEST(BindingContractTest, TreeViewFirstPaintRegistersExpandLayoutDependent)
     slot.offset    = {20.0f, 20.0f};
     slot.fixedSize = {240.0f, 0.0f};
     treeView->bindData(roots);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView, slot);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(treeView->getVisibleRowCount(), 1);
     EXPECT_FLOAT_EQ(treeView->computeDesiredSize().y, treeView->_rowHeight);
 
     treeView->toggleExpanded("root");
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(treeView->getVisibleRowCount(), 2);
     EXPECT_FLOAT_EQ(treeView->computeDesiredSize().y, treeView->_rowHeight * 2.0f);
 }
@@ -589,10 +589,10 @@ TEST(BindingContractTest, TableSelectionBindingCoexistsWithHoverTransientState)
     tableSlot.fixedSize = {220.0f, 96.0f};
     table->bindData(rows);
     table->bindSelection(selected);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), table, tableSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), table, tableSlot);
     tree.layout();
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(table->getSelection()->value(), "row-a");
 
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(60.0f, 74.0f), pointAt(60.0f, 74.0f)),
@@ -600,7 +600,7 @@ TEST(BindingContractTest, TableSelectionBindingCoexistsWithHoverTransientState)
     EXPECT_EQ(selected->value(), "row-a");
 
     selected->set("row-b");
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(table->getSelection()->value(), "row-b");
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(60.0f, 52.0f)),
@@ -625,7 +625,7 @@ TEST(BindingContractTest, TableGridSplitterDragResizesColumnAndRow)
     FCanvasSlotArgs slot;
     slot.offset    = {20.0f, 20.0f};
     slot.fixedSize = {200.0f, 66.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), table, slot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), table, slot);
     tree.layout();
 
     const float splitX = 120.0f;
@@ -666,18 +666,18 @@ TEST(BindingContractTest, TableSelectionFollowsKeyedRowAcrossInsertMoveAndRemove
     slot.fixedSize = {240.0f, 120.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), table, slot).valid());
 
-    tree.buildSnapshot({});
+    (void)tree.buildSnapshot({});
     ASSERT_EQ(selected->value(), "b");
     ASSERT_TRUE(rows->insertAt(0, {.id = "x", .cells = {"X"}}));
-    tree.buildSnapshot({});
+    (void)tree.buildSnapshot({});
     EXPECT_EQ(selected->value(), "b");
 
     ASSERT_TRUE(rows->move(2, 3));
-    tree.buildSnapshot({});
+    (void)tree.buildSnapshot({});
     EXPECT_EQ(selected->value(), "b");
 
     ASSERT_TRUE(rows->removeAt(3));
-    tree.buildSnapshot({});
+    (void)tree.buildSnapshot({});
     EXPECT_EQ(selected->value(), "");
 }
 
@@ -919,7 +919,7 @@ TEST(BindingContractTest, MenuBarLabelBindingSurvivesOpenMenuAndHoverRouting)
     barSlot.anchorMin = {0.0f, 0.0f};
     barSlot.anchorMax = {1.0f, 0.0f};
     barSlot.fixedSize = {0.0f, 30.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, barSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, barSlot);
 
     auto label = std::make_shared<Reactive<std::string>>("File");
     auto* item = bar->addItem("Fallback", [] { return UIMenu::create({{"Open", [] {}}, {"Save", [] {}}}); });
@@ -927,7 +927,7 @@ TEST(BindingContractTest, MenuBarLabelBindingSurvivesOpenMenuAndHoverRouting)
     item->bindLabel(label);
     tree.layout();
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(item->resolvedLabel(), "File");
     EXPECT_EQ(item->_label, "Fallback");
 
@@ -940,7 +940,7 @@ TEST(BindingContractTest, MenuBarLabelBindingSurvivesOpenMenuAndHoverRouting)
     ASSERT_NE(bar->getOpenMenu(), nullptr);
 
     label->set("Project");
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(item->resolvedLabel(), "Project");
     EXPECT_EQ(item->_label, "Fallback");
     EXPECT_NE(bar->getOpenMenu(), nullptr);
@@ -1050,9 +1050,9 @@ TEST(BindingContractTest, SharedSelectionModelReplaceUpdatesBoundTreeViews)
     FCanvasSlotArgs rightSlot;
     rightSlot.offset    = {240.0f, 20.0f};
     rightSlot.fixedSize = {200.0f, 80.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), left, leftSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), right, rightSlot);
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), left, leftSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), right, rightSlot);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     model->replace({"b", "a"}, "b");
     EXPECT_EQ(left->getSelection()->value(), "b");
@@ -1083,10 +1083,10 @@ TEST(BindingContractTest, SharedSelectionModelDrivesTwoTreeViews)
     FCanvasSlotArgs rightSlot;
     rightSlot.offset    = {240.0f, 20.0f};
     rightSlot.fixedSize = {200.0f, 80.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), left, leftSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), right, rightSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), left, leftSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), right, rightSlot);
 
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 32.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(40.0f, 32.0f)),

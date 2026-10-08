@@ -565,10 +565,10 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
     floatingFill.anchorMax = {1.0f, 1.0f};
     _dockFloatingHost = std::make_shared<UIDockFloatingHost>("EditorDockFloatingHost");
     _dockFloatingHost->bindContext(_dockContext);
-    (void)_tree->attachToLayer(WidgetTree::ELayer::Popup, _dockFloatingHost, floatingFill);
+   (void)_tree->attachToLayer(WidgetTree::ELayer::Popup, _dockFloatingHost, floatingFill);
     _ownedDockFloatingHost = std::make_shared<UIDockFloatingHost>("EditorOwnedDockFloatingHost");
     _ownedDockFloatingHost->bindContext(_ownedDockContext);
-    (void)_tree->attachToLayer(WidgetTree::ELayer::Popup, _ownedDockFloatingHost, floatingFill);
+   (void)_tree->attachToLayer(WidgetTree::ELayer::Popup, _ownedDockFloatingHost, floatingFill);
 
     auto persistAll = [this]() { persistDockLayouts(); };
     auto rootFor = [this](EditorRootId id) -> EditorRootSession* { return _roots.find(id); };

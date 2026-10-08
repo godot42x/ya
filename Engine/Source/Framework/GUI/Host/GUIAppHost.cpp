@@ -554,7 +554,7 @@ bool GUIWindowHost::init()
     // in the engine/game VFS by default.
     AppBootstrap::initializeProcessCore();
     if (!config.guiFrameInspector.empty()) {
-        applyGuiFrameInspectorSpec(config.guiFrameInspector);
+        (void)applyGuiFrameInspectorSpec(config.guiFrameInspector);
     }
 
     // 1. Window provider (SDL3 + Vulkan surface).
@@ -1797,7 +1797,7 @@ void GUIApp::onEvent(const Event& event)
     const uint32_t eventId   = guiEventWindowId(event);
     const uint32_t primaryId = _primaryWindow.getWindowID();
     if (eventId != 0 && eventId != primaryId) {
-        _extraWindows->dispatchEvent(event);
+        (void)_extraWindows->dispatchEvent(event);
         adoptDragSource();
         applyPointerUniverse();
         return;

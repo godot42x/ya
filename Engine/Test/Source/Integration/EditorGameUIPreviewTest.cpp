@@ -75,7 +75,7 @@ TEST(EditorGameUIPreviewTest, EditingAMountedDocumentRebuildsThePreview)
     scene.addWidgetEntry(makeMount("HUD", path));
 
     EditorGameUIPreview preview;
-    (void)preview.buildSnapshot(scene, &documents, Extent2D{800, 600}, {1.0f, 1.0f}, {0.0f, 0.0f});
+   (void)preview.buildSnapshot(scene, &documents, Extent2D{800, 600}, {1.0f, 1.0f}, {0.0f, 0.0f});
     EXPECT_EQ(preview.rebuildCount(), 1u);
 
     // Publish an authoring edit to the document the scene mounts. The preview
@@ -84,7 +84,7 @@ TEST(EditorGameUIPreviewTest, EditingAMountedDocumentRebuildsThePreview)
     edited->typeId = kTypeIdBorder;
     documents.put(path, std::move(edited));
 
-    (void)preview.buildSnapshot(scene, &documents, Extent2D{800, 600}, {1.0f, 1.0f}, {0.0f, 0.0f});
+   (void)preview.buildSnapshot(scene, &documents, Extent2D{800, 600}, {1.0f, 1.0f}, {0.0f, 0.0f});
     EXPECT_EQ(preview.rebuildCount(), 2u);
 }
 
@@ -95,15 +95,15 @@ TEST(EditorGameUIPreviewTest, ChangingExtentOrSceneRebuilds)
     scene.addWidgetEntry(makeMount("HUD", publishDocument(documents, "HUD", kTypeIdBorder)));
 
     EditorGameUIPreview preview;
-    (void)preview.buildSnapshot(scene, &documents, Extent2D{800, 600}, {1.0f, 1.0f}, {0.0f, 0.0f});
+   (void)preview.buildSnapshot(scene, &documents, Extent2D{800, 600}, {1.0f, 1.0f}, {0.0f, 0.0f});
     EXPECT_EQ(preview.rebuildCount(), 1u);
 
-    (void)preview.buildSnapshot(scene, &documents, Extent2D{1024, 768}, {1.0f, 1.0f}, {0.0f, 0.0f});
+   (void)preview.buildSnapshot(scene, &documents, Extent2D{1024, 768}, {1.0f, 1.0f}, {0.0f, 0.0f});
     EXPECT_EQ(preview.rebuildCount(), 2u);
 
     Scene other("Other");
     other.addWidgetEntry(makeMount("HUD", publishDocument(documents, "HUD2", kTypeIdBorder)));
-    (void)preview.buildSnapshot(other, &documents, Extent2D{1024, 768}, {1.0f, 1.0f}, {0.0f, 0.0f});
+   (void)preview.buildSnapshot(other, &documents, Extent2D{1024, 768}, {1.0f, 1.0f}, {0.0f, 0.0f});
     EXPECT_EQ(preview.rebuildCount(), 3u);
 }
 
@@ -125,7 +125,7 @@ TEST(EditorGameUIPreviewTest, AuthoringModeDoesNotDispatchInputToWidgets)
     // need a tick entry point, and this type has none.
     const uint64_t rebuilds = preview.rebuildCount();
     for (int frame = 0; frame < 5; ++frame) {
-        (void)preview.buildSnapshot(scene, &documents, Extent2D{800, 600}, {1.0f, 1.0f}, {0.0f, 0.0f});
+       (void)preview.buildSnapshot(scene, &documents, Extent2D{800, 600}, {1.0f, 1.0f}, {0.0f, 0.0f});
     }
     EXPECT_EQ(preview.rebuildCount(), rebuilds);
 }

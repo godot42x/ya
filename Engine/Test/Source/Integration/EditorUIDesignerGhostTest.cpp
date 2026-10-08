@@ -90,7 +90,7 @@ TEST(EditorUIDesignerGhostTest, RuntimeBuildContextKeepsSkippingHiddenWidgets)
     FCanvasSlotArgs fillArgs;
     fillArgs.anchorMin = {0.0f, 0.0f};
     fillArgs.anchorMax = {1.0f, 1.0f};
-    tree.attachToLayer(WidgetTree::ELayer::Content, root, fillArgs);
+   (void)tree.attachToLayer(WidgetTree::ELayer::Content, root, fillArgs);
 
     UIFrameBuildContext ctx; // ghostInvisibleOpacity defaults to 0: runtime skip
     const UIFrameSnapshot snapshot = tree.buildSnapshot(ctx);

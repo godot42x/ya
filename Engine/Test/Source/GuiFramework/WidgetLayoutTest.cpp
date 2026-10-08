@@ -166,14 +166,14 @@ TEST(WidgetLayoutTest, ChildMeasureDirtyPropagatesToLayoutAncestors)
     rootArgs.widthSizeMode = EWidgetSizeMode::Auto;
     rootArgs.heightSizeMode = EWidgetSizeMode::Auto;
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, rootArgs).valid());
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(column->isMeasureDirty());
     EXPECT_FALSE(label->isMeasureDirty());
 
     label->setText("Longer");
     EXPECT_TRUE(label->isMeasureDirty());
     EXPECT_TRUE(column->isMeasureDirty());
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(column->isMeasureDirty());
     EXPECT_FALSE(label->isMeasureDirty());
 }
@@ -185,12 +185,12 @@ TEST(WidgetLayoutTest, SlotArrangeDirtyStaysOnOwningHost)
     FCanvasSlotArgs args;
     args.fixedSize = {80.0f, 24.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, args).valid());
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     auto* slot = panel->getSlot()->as<UICanvasSlot>();
     ASSERT_NE(slot, nullptr);
     slot->setOffset({20.0f, 10.0f});
     EXPECT_TRUE(tree.getLayer(WidgetTree::ELayer::Content)->isArrangeDirty());
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(tree.getLayer(WidgetTree::ELayer::Content)->isArrangeDirty());
 }
 
@@ -207,7 +207,7 @@ TEST(WidgetLayoutTest, ArrangeDirtyPropagatesAndSkipsCleanSiblingSubtree)
     auto* layer = tree.getLayer(WidgetTree::ELayer::Content);
     ASSERT_TRUE(tree.attach(*layer, first, firstArgs).valid());
     ASSERT_TRUE(tree.attach(*layer, second, secondArgs).valid());
-    tree.buildSnapshot(UIFrameBuildContext{});
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     auto* firstSlot = first->getSlot()->as<UICanvasSlot>();
     ASSERT_NE(firstSlot, nullptr);
@@ -261,12 +261,12 @@ TEST(WidgetLayoutTest, AttachedSpecializedViewsReportContentToParentSlot)
 
     auto treeView = std::make_shared<UITreeView>("Tree");
     treeView->setIntrinsicSize({240.0f, 180.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView);
     EXPECT_FLOAT_EQ(treeView->computeDesiredSize().y, 0.0f);
 
     auto table = std::make_shared<UITableGrid>("Table");
     table->setIntrinsicSize({320.0f, 120.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), table);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), table);
     EXPECT_FLOAT_EQ(table->computeDesiredSize().x, 320.0f);
     EXPECT_FLOAT_EQ(table->computeDesiredSize().y, table->_rowHeight);
 }
@@ -278,7 +278,7 @@ TEST(WidgetLayoutTest, AutoSizeActivityComesFromTheParentSlot)
     EXPECT_FALSE(label->isAutoSizeActive());
 
     auto column = std::make_shared<UIContainer>("Column");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column);
     column->addDetachedChild(label);
     EXPECT_TRUE(label->isAutoSizeActive());
 
@@ -310,7 +310,7 @@ TEST(WidgetLayoutTest, AnchorLayoutResolvesStretchOverAutoOverSize)
     FCanvasSlotArgs textArgs;
     textArgs.widthSizeMode  = EWidgetSizeMode::Auto;
     textArgs.heightSizeMode = EWidgetSizeMode::Auto;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, textArgs);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text, textArgs);
     tree.layout();
     EXPECT_FLOAT_EQ(text->_layoutRect.extent.x, 40.0f);
     EXPECT_FLOAT_EQ(text->_layoutRect.extent.y, 20.0f);
@@ -323,7 +323,7 @@ TEST(WidgetLayoutTest, AnchorLayoutResolvesStretchOverAutoOverSize)
     stretchArgs.anchorMax = {1.0f, 0.0f};
     stretchArgs.offset    = {0.0f, 60.0f};
     stretchArgs.heightSizeMode = EWidgetSizeMode::Auto;
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), stretch, stretchArgs);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), stretch, stretchArgs);
     tree.layout();
     EXPECT_FLOAT_EQ(stretch->_layoutRect.extent.x, 400.0f); // Fixed + span
 }
@@ -422,8 +422,8 @@ TEST(WidgetLayoutTest, ButtonAutoSizeInContainerPacksAndFills)
 
     auto addBtn = makeAutoButton("Add", "Add");
     auto resetBtn = makeAutoButton("Reset", "Reset Layout");
-    tree.attach(*toolbar, addBtn);
-    tree.attach(*toolbar, resetBtn);
+    (void)tree.attach(*toolbar, addBtn);
+    (void)tree.attach(*toolbar, resetBtn);
     tree.layout();
 
     // Width follows text + padding: "Add" = 3x8=24 + 20 = 44.
@@ -507,8 +507,8 @@ TEST(WidgetLayoutTest, ContainerAutoSizesToChildrenSum)
 
     auto btnA = makeAutoButton("A", "One");
     auto btnB = makeAutoButton("B", "Longer Label");
-    tree.attach(*vbox, btnA);
-    tree.attach(*vbox, btnB);
+    (void)tree.attach(*vbox, btnA);
+    (void)tree.attach(*vbox, btnB);
     tree.layout();
 
     // btnA desired height = 20 + 8 = 28; btnB same; + spacing 4 + padding 16.
@@ -545,7 +545,7 @@ TEST(WidgetLayoutTest, NestedContainersPropagateDesiredSizes)
 
     auto spacer = std::make_shared<UICanvasPanel>("Spacer");
 
-    tree.attach(*hbox, innerV);
+    (void)tree.attach(*hbox, innerV);
     hbox->addDetachedChild(spacer, [](UIElement&, UISlot& slot) {
         if (auto* box = dynamic_cast<UIBoxSlot*>(&slot)) {
             box->setPreferredSize({50.0f, 30.0f});
@@ -578,7 +578,7 @@ TEST(WidgetLayoutTest, ScrollViewportContentMainUsesAutoSizeChild)
     for (int i = 0; i < 20; ++i) {
         content->addDetachedChild(makeAutoText("line", 16));
     }
-    tree.attach(*scroll, content);
+    (void)tree.attach(*scroll, content);
     tree.layout();
 
     // Content main (y) = 20 lines x lineHeight 20 + 19 x spacing 2 = 438,
@@ -602,7 +602,7 @@ TEST(WidgetLayoutTest, ScrollCrossAxisKeepsDesiredSizeWhenAsked)
     auto frame = std::make_shared<UISizeBox>("Frame");
     frame->setWidthOverride(400.0f);
     frame->setHeightOverride(200.0f);
-    tree.attach(*scroll, frame);
+    (void)tree.attach(*scroll, frame);
     tree.layout();
 
     EXPECT_FLOAT_EQ(frame->_layoutRect.extent.x, 400.0f);
@@ -620,8 +620,8 @@ TEST(WidgetLayoutTest, SplitPaneDesiredSizeAggregatesAutoChildren)
 
     auto left = makeAutoButton("L", "Left");
     auto right = makeAutoButton("R", "Right Side");
-    tree.attach(*split, left);
-    tree.attach(*split, right);
+    (void)tree.attach(*split, left);
+    (void)tree.attach(*split, right);
     tree.layout();
 
     // Split desired sums the two children along the split axis (horizontal):
@@ -641,12 +641,12 @@ TEST(WidgetLayoutTest, SplitPaneZeroRatioUsesMinFirstExtentPixels)
     FCanvasSlotArgs fill;
     fill.anchorMin = {0.0f, 0.0f};
     fill.anchorMax = {1.0f, 1.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, fill);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, fill);
 
     auto first = std::make_shared<UICanvasPanel>("First");
     auto second = std::make_shared<UICanvasPanel>("Second");
-    tree.attach(*split, first);
-    tree.attach(*split, second);
+    (void)tree.attach(*split, first);
+    (void)tree.attach(*split, second);
     tree.layout();
 
     EXPECT_NEAR(first->_layoutRect.extent.y, 40.0f, 1.0f);
@@ -664,12 +664,12 @@ TEST(WidgetLayoutTest, SplitPaneFullRatioKeepsSecondExtentAtItsMinimum)
     FCanvasSlotArgs fill;
     fill.anchorMin = {0.0f, 0.0f};
     fill.anchorMax = {1.0f, 1.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, fill);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, fill);
 
     auto first = std::make_shared<UICanvasPanel>("First");
     auto second = std::make_shared<UICanvasPanel>("Second");
-    tree.attach(*split, first);
-    tree.attach(*split, second);
+    (void)tree.attach(*split, first);
+    (void)tree.attach(*split, second);
     tree.layout();
 
     EXPECT_NEAR(second->_layoutRect.extent.x, 180.0f, 1.0f);
@@ -683,11 +683,11 @@ TEST(WidgetLayoutTest, BoxSlotsAreParentOwnedAndRecreatedOnReparent)
     auto second = std::make_shared<UIContainer>("Second");
     FCanvasSlotArgs firstArgs; firstArgs.fixedSize = {200.0f, 100.0f};
     FCanvasSlotArgs secondArgs; secondArgs.offset = {200.0f, 0.0f}; secondArgs.fixedSize = {200.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), first, firstArgs);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), second, secondArgs);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), first, firstArgs);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), second, secondArgs);
 
     auto child = std::make_shared<UICanvasPanel>("Child");
-    tree.attach(*first, child);
+    (void)tree.attach(*first, child);
 
     auto* firstSlot = first->getBoxSlot(*child);
     ASSERT_NE(firstSlot, nullptr);
@@ -718,7 +718,7 @@ TEST(WidgetLayoutTest, BoxSlotFillMarginAndCrossAlignmentArrangeWithoutContainer
     box->setPadding({10.0f, 10.0f});
     box->setSpacing(5.0f);
     FCanvasSlotArgs boxArgs; boxArgs.fixedSize = {300.0f, 120.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxArgs);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxArgs);
 
     auto fixed = std::make_shared<UICanvasPanel>("Fixed");
     auto fill = std::make_shared<UICanvasPanel>("Fill");
@@ -793,16 +793,16 @@ TEST(WidgetLayoutTest, BoxSlotsKeepEdgeStateLocalAcrossNestedReparent)
     outer->setPadding({10.0f, 10.0f});
     outer->setSpacing(4.0f);
     FCanvasSlotArgs outerArgs; outerArgs.fixedSize = {320.0f, 180.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), outer, outerArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), outer, outerArgs);
 
     auto inner = std::make_shared<UIContainer>("Inner");
     inner->setDirection(EWidgetBoxLayout::Horizontal);
     auto sibling = std::make_shared<UICanvasPanel>("Sibling");
     auto child = std::make_shared<UICanvasPanel>("Child");
 
-    tree.attach(*outer, inner);
-    tree.attach(*outer, sibling);
-    tree.attach(*inner, child);
+    (void)tree.attach(*outer, inner);
+    (void)tree.attach(*outer, sibling);
+    (void)tree.attach(*inner, child);
 
     auto* innerSlot = outer->getBoxSlot(*inner);
     auto* childSlot = inner->getBoxSlot(*child);
@@ -844,14 +844,14 @@ TEST(WidgetLayoutTest, SameParentReorderPreservesExistingBoxSlotState)
     auto box = std::make_shared<UIContainer>("Box");
     box->setDirection(EWidgetBoxLayout::Horizontal);
     FCanvasSlotArgs boxArgs; boxArgs.fixedSize = {320.0f, 180.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxArgs);
 
     auto first  = std::make_shared<UICanvasPanel>("First");
     auto moved  = std::make_shared<UICanvasPanel>("Moved");
     auto third  = std::make_shared<UICanvasPanel>("Third");
-    tree.attach(*box, first);
-    tree.attach(*box, moved);
-    tree.attach(*box, third);
+    (void)tree.attach(*box, first);
+    (void)tree.attach(*box, moved);
+    (void)tree.attach(*box, third);
 
     auto* movedSlot = box->getBoxSlot(*moved);
     ASSERT_NE(movedSlot, nullptr);
@@ -880,13 +880,13 @@ TEST(WidgetLayoutTest, BoxSlotsControlHiddenParticipationAndFillBounds)
     box->setDirection(EWidgetBoxLayout::Vertical);
     box->setMainAxisAlignment(EWidgetMainAxisAlignment::End);
     FCanvasSlotArgs boxArgs; boxArgs.fixedSize = {200.0f, 120.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxArgs);
 
     auto hidden = std::make_shared<UICanvasPanel>("Hidden");
     hidden->setVisibility(EWidgetVisibility::Hidden);
     auto fill = std::make_shared<UICanvasPanel>("Fill");
-    tree.attach(*box, hidden);
-    tree.attach(*box, fill);
+    (void)tree.attach(*box, hidden);
+    (void)tree.attach(*box, fill);
 
     auto* hiddenSlot = box->getBoxSlot(*hidden);
     auto* fillSlot = box->getBoxSlot(*fill);
@@ -916,7 +916,7 @@ TEST(WidgetLayoutTest, BoxLayoutSpecSizeUsesTheSlotRatherThanMutatingChildGeomet
 
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs columnSlot; columnSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
     tree.layout();
 
     const UIElement* child = column->getChildrenInPaintOrder().front();
@@ -941,13 +941,13 @@ TEST(WidgetLayoutTest, AutoSizeTextBindingTriggersLayoutOnTextChange)
     label->bindText(ref);
     ASSERT_TRUE(attachAutoToLayer(tree, WidgetTree::ELayer::Content, label).valid());
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lay out + collect edge)
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lay out + collect edge)
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
     EXPECT_FLOAT_EQ(label->_layoutRect.extent.x, 16.0f);
 
     const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
     ref->set("Hello World");                       // 11x8 = 88 -> desired width changes
-    tree.buildSnapshot(UIFrameBuildContext{});     // re-layout + re-paint
+    (void)tree.buildSnapshot(UIFrameBuildContext{});     // re-layout + re-paint
 
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
     EXPECT_FLOAT_EQ(label->_layoutRect.extent.x, 88.0f);
@@ -962,15 +962,15 @@ TEST(WidgetLayoutTest, FixedSizeTextBindingTriggersPaintOnly)
     auto label = std::make_shared<UIText>("FixedBound");
     label->bindText(ref);
     FCanvasSlotArgs labelSlot; labelSlot.fixedSize = {100.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), label, labelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), label, labelSlot);
 
-    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
-    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    (void)tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
 
     const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
     const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
     ref->set("Hello World"); // content-only change: fixed size, paint-only
-    tree.buildSnapshot(UIFrameBuildContext{});
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore);
@@ -1093,7 +1093,7 @@ TEST(WidgetLayoutTest, BoxSlotFourSideMarginIsNotSymmetric)
     box->setPadding({0.0f, 0.0f});
     box->setSpacing(0.0f);
     FCanvasSlotArgs boxArgs; boxArgs.fixedSize = {200.0f, 80.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxArgs);
 
     auto left = std::make_shared<UICanvasPanel>("Left");
     auto right = std::make_shared<UICanvasPanel>("Right");
@@ -1121,7 +1121,7 @@ TEST(WidgetLayoutTest, OverlaySlotAlignsWithoutChildAnchors)
     WidgetTree tree({.width = 200, .height = 100});
     auto overlay = std::make_shared<UIOverlay>("Host");
     FCanvasSlotArgs overlayArgs; overlayArgs.fixedSize = {200.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), overlay, overlayArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), overlay, overlayArgs);
 
     auto fill = std::make_shared<UICanvasPanel>("Fill");
     auto badge = std::make_shared<UICanvasPanel>("Badge");
@@ -1207,7 +1207,7 @@ TEST(WidgetLayoutTest, EdgeLayoutSpecAppliesToTheChildNotTheParent)
     WidgetTree tree({.width = 400, .height = 200});
     FCanvasSlotArgs panelSlot;
     panelSlot.fixedSize = {400.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     tree.layout();
 
     const UIElement* child = panel->getChildrenInPaintOrder().front();
@@ -1236,7 +1236,7 @@ TEST(WidgetLayoutTest, SingleChildSlotDefaultsToFillReproducingStretch)
     WidgetTree tree({.width = 200, .height = 100});
     FCanvasSlotArgs boxSlot;
     boxSlot.fixedSize = {200.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
     tree.layout();
 
     const UIElement* child = box->getChildrenInPaintOrder().front();
@@ -1257,7 +1257,7 @@ TEST(WidgetLayoutTest, SingleChildSlotAlignKeepsDesiredSizeAndCenters)
     WidgetTree tree({.width = 200, .height = 100});
     FCanvasSlotArgs boxSlot;
     boxSlot.fixedSize = {200.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
     tree.layout();
 
     const UIElement* child = box->getChildrenInPaintOrder().front();
@@ -1281,7 +1281,7 @@ TEST(WidgetLayoutTest, UnifiedLayoutSpecInsetsSingleChildFillEdge)
     WidgetTree tree({.width = 120, .height = 60});
     FCanvasSlotArgs boxSlot;
     boxSlot.fixedSize = {120.0f, 60.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
     tree.layout();
 
     const UIElement* child = box->getChildrenInPaintOrder().front();
@@ -1306,7 +1306,7 @@ TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToSingleChildSlot)
     WidgetTree tree({.width = 200, .height = 100});
     FCanvasSlotArgs boxSlot;
     boxSlot.fixedSize = {200.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
     tree.layout();
 
     const UIElement* child = box->getChildrenInPaintOrder().front();
@@ -1335,7 +1335,7 @@ TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToScrollViewportSingleChildSlot)
     WidgetTree tree({.width = 200, .height = 100});
     FCanvasSlotArgs viewportSlot;
     viewportSlot.fixedSize = {200.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
     tree.layout();
 
     const UIElement* child = viewport->getChildrenInPaintOrder().front();
@@ -1369,7 +1369,7 @@ TEST(WidgetLayoutTest, PathAFillIsExpressedOnTheSlotNotTheChild)
 
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs columnSlot; columnSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
     tree.layout();
 
     const auto children = column->getChildrenInPaintOrder();
@@ -1395,7 +1395,7 @@ TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToOverlaySlot)
 
     WidgetTree tree({.width = 200, .height = 100});
     FCanvasSlotArgs overlaySlot; overlaySlot.fixedSize = {200.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), overlay, overlaySlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), overlay, overlaySlot);
     tree.layout();
 
     const auto children = overlay->getChildrenInPaintOrder();
@@ -1432,7 +1432,7 @@ TEST(WidgetLayoutTest, CanvasPivotCentresAChildOnItsAnchoredPosition)
 
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs panelSlot; panelSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     tree.layout();
 
     const UIElement* child = panel->getChildrenInPaintOrder().front();
@@ -1452,7 +1452,7 @@ TEST(WidgetLayoutTest, CanvasPreferredSizeDrivesAnAutoAxis)
 
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs panelSlot; panelSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     tree.layout();
 
     const UIElement* child = panel->getChildrenInPaintOrder().front();
@@ -1477,7 +1477,7 @@ TEST(WidgetLayoutTest, CanvasLayoutSpecSizeUsesTheSlotRatherThanMutatingChildGeo
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs panelSlot;
     panelSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     tree.layout();
 
     const UIElement* liveChild = panel->getChildrenInPaintOrder().front();
@@ -1642,7 +1642,7 @@ TEST(WidgetLayoutTest, CanvasHostSetSizeBridgesToTheCanvasSlotFixedSize)
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs panelSlot;
     panelSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     panel->addDetachedChild(child);
 
     if (auto* childSlot = panel->getSlotForChild(*child)) {
@@ -1670,7 +1670,7 @@ TEST(WidgetLayoutTest, CanvasHostIsNotBoundToThePanelVisuals)
     WidgetTree tree({.width = 200, .height = 100});
     FCanvasSlotArgs hostSlot;
     hostSlot.fixedSize = {200.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, hostSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, hostSlot);
     tree.layout();
 
     const UIElement* child = host->getChildrenInPaintOrder().front();
@@ -1818,8 +1818,8 @@ TEST(WidgetLayoutTest, UnspecifiedCanvasSlotKeepsContentVisible)
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs hostSlot;
     hostSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viaBare, hostSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viaBuilder, hostSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viaBare, hostSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viaBuilder, hostSlot);
     tree.layout();
 
     const UIElement* bareChild = viaBare->getChildrenInPaintOrder().front();
@@ -1861,8 +1861,8 @@ TEST(WidgetLayoutTest, BoxFillChildCollapsesWhenCanvasParentIsAutoSized)
     WidgetTree tree({.width = 200, .height = 200});
     FCanvasSlotArgs hostSlot;
     hostSlot.fixedSize = {200.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), collapsed, hostSlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), filled, hostSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), collapsed, hostSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), filled, hostSlot);
     tree.layout();
 
     const UIElement* collapsedCard = collapsed->getChildrenInPaintOrder().front()
@@ -1890,7 +1890,7 @@ TEST(WidgetLayoutTest, CanvasFillOffsetDoesNotShrinkTheChild)
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs panelSlot;
     panelSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     tree.layout();
 
     const UIElement* child = panel->getChildrenInPaintOrder().front();
@@ -1914,7 +1914,7 @@ TEST(WidgetLayoutTest, CanvasFourSideOffsetsInsetTheChildWithoutAnExplicitSize)
 
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs panelSlot; panelSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     tree.layout();
 
     const UIElement* child = panel->getChildrenInPaintOrder().front();
@@ -1936,7 +1936,7 @@ TEST(WidgetLayoutTest, SpanningCanvasAnchorsStretchWithoutCallingFill)
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs panelSlot;
     panelSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     tree.layout();
 
     const UIElement* child = panel->getChildrenInPaintOrder().front();
@@ -1959,7 +1959,7 @@ TEST(WidgetLayoutTest, FourSideInsetsStretchWithoutCallingFill)
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs panelSlot;
     panelSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     tree.layout();
 
     const UIElement* child = panel->getChildrenInPaintOrder().front();
@@ -1978,7 +1978,7 @@ TEST(WidgetLayoutTest, CanvasAutoSizeModeUsesMeasuredContentNotTheParent)
 
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs panelSlot; panelSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     tree.layout();
 
     const UIElement* child = panel->getChildrenInPaintOrder().front();
@@ -1998,7 +1998,7 @@ TEST(WidgetLayoutTest, CanvasAlignmentPlacesAFixedSizeChildInsideTheArea)
 
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs panelSlot; panelSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     tree.layout();
 
     const UIElement* child = panel->getChildrenInPaintOrder().front();
@@ -2020,7 +2020,7 @@ TEST(WidgetLayoutTest, BoxHostSetSizeBridgesToTheBoxSlotPreferredSize)
     WidgetTree tree({.width = 240, .height = 100});
     FCanvasSlotArgs columnSlot;
     columnSlot.fixedSize = {240.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
     column->addDetachedChild(child);
 
     if (auto* childSlot = column->getSlotForChild(*child)) {
@@ -2047,8 +2047,8 @@ TEST(WidgetLayoutTest, SelectableRowArrangesLabelThroughTheSingleChildSlot)
     label->_vAlign   = EWidgetAlignV::Center;
 
     WidgetTree tree({.width = 400, .height = 300});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowArgs);
-    tree.attach(*row, label);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowArgs);
+    (void)tree.attach(*row, label);
     tree.layout();
 
     const auto* slot = dynamic_cast<const UIContentSlot*>(row->getSlotForChild(*label));
@@ -2074,7 +2074,7 @@ TEST(WidgetLayoutTest, BuildWithLayoutAttachmentInitializesTheBoxSlot)
     WidgetTree tree({.width = 240, .height = 100});
     FCanvasSlotArgs columnSlot;
     columnSlot.fixedSize = {240.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
 
     (void)ui::attach(tree, *column, ui::selectableRow("Row").setItemId("a").release(), ui::boxSlot().preferredSize({0.0f, 22.0f}));
     tree.layout();
@@ -2099,7 +2099,7 @@ TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToSelectableRowSingleChildSlot)
     WidgetTree tree({.width = 200, .height = 100});
     FCanvasSlotArgs rowSlot;
     rowSlot.fixedSize = {200.0f, 40.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
     tree.layout();
 
     const UIElement* child = row->getChildrenInPaintOrder().front();
@@ -2125,8 +2125,8 @@ TEST(WidgetLayoutTest, CheckBoxArrangesLabelThroughTheSingleChildSlot)
     label->_fontSize = 13;
 
     WidgetTree tree({.width = 400, .height = 100});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxArgs);
-    tree.attach(*box, label);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxArgs);
+    (void)tree.attach(*box, label);
     tree.layout();
 
     const auto* slot = dynamic_cast<const UIContentSlot*>(box->getSlotForChild(*label));
@@ -2148,7 +2148,7 @@ TEST(WidgetLayoutTest, BoxSlotArgsPreferredSizeLivesOnTheEdge)
 
     WidgetTree tree({.width = 240, .height = 100});
     FCanvasSlotArgs columnSlot; columnSlot.fixedSize = {240.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
     tree.layout();
 
     const UIElement* child = column->getChildrenInPaintOrder().front();
@@ -2169,7 +2169,7 @@ TEST(WidgetLayoutTest, AttachSeedsAuthoredChildSizeOntoTheBoxSlot)
 
     WidgetTree tree({.width = 240, .height = 100});
     FCanvasSlotArgs columnSlot; columnSlot.fixedSize = {240.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
     tree.layout();
 
     const UIElement* child = column->getChildrenInPaintOrder().front();
@@ -2190,7 +2190,7 @@ TEST(WidgetLayoutTest, AttachDoesNotSeedDefaultChildSizeOntoTheBoxSlot)
     WidgetTree tree({.width = 240, .height = 100});
     FCanvasSlotArgs columnSlot;
     columnSlot.fixedSize = {240.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
     column->addDetachedChild(child);
 
     const auto* slot = dynamic_cast<const UIBoxSlot*>(column->getSlotForChild(*child));
@@ -2209,7 +2209,7 @@ TEST(WidgetLayoutTest, ExplicitCanvasEdgeIntentIsConsumedByTheCanvasSlot)
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs panelSlot;
     panelSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     panel->addDetachedChild(child, [](UIElement&, UISlot& edge) {
         auto* canvas = edge.as<UICanvasSlot>();
         ASSERT_NE(canvas, nullptr);
@@ -2237,7 +2237,7 @@ TEST(WidgetLayoutTest, LayoutSpecPreferredSizeWinsOverAuthoredChildSize)
 
     WidgetTree tree({.width = 240, .height = 100});
     FCanvasSlotArgs columnSlot; columnSlot.fixedSize = {240.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
     tree.layout();
 
     const UIElement* child = column->getChildrenInPaintOrder().front();
@@ -2255,7 +2255,7 @@ TEST(WidgetLayoutTest, BoxLayoutIgnoresCorruptedChildSizeAfterAttach)
 
     WidgetTree tree({.width = 240, .height = 100});
     FCanvasSlotArgs columnSlot; columnSlot.fixedSize = {240.0f, 100.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
     column->addDetachedChild(child, [](UIElement&, UISlot& slot) {
         if (auto* box = dynamic_cast<UIBoxSlot*>(&slot)) {
             box->setPreferredSize({90.0f, 28.0f});
@@ -2281,7 +2281,7 @@ TEST(WidgetLayoutTest, CanvasLayoutIgnoresCorruptedChildSizeAfterAttach)
     WidgetTree tree({.width = 300, .height = 200});
     FCanvasSlotArgs panelSlot;
     panelSlot.fixedSize = {300.0f, 200.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     panel->addDetachedChild(child, [](UIElement&, UISlot& slot) {
         if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
             canvas->setFixedSize({80.0f, 24.0f});
@@ -2306,7 +2306,7 @@ TEST(WidgetLayoutTest, OverlayLayoutIgnoresCorruptedChildSizeAfterAttach)
     auto badge = std::make_shared<UICanvasPanel>("Badge");
 
     WidgetTree tree({.width = 200, .height = 100});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), overlay, overlayArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), overlay, overlayArgs);
     overlay->addDetachedChild(badge, [](UIElement&, UISlot& slot) {
         if (auto* overlaySlot = dynamic_cast<UIOverlaySlot*>(&slot)) {
             overlaySlot->apply(FOverlaySlotArgs{
@@ -2334,7 +2334,7 @@ TEST(WidgetLayoutTest, DockSpaceArrangesProjectionThroughTheSingleChildSlot)
     auto       dock = std::make_shared<UIDockSpace>("Dock");
     FCanvasSlotArgs dockArgs; dockArgs.anchorMin = {0.0f, 0.0f}; dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UICanvasPanel>("SceneBody");
     ASSERT_NE(ws->addPanel("Scene", panel), kInvalidDockPanelId);
@@ -2363,7 +2363,7 @@ TEST(WidgetLayoutTest, FloatingWindowGeometryLivesOnTheHostCanvasSlot)
     FCanvasSlotArgs hostFill;
     hostFill.anchorMin = {0.0f, 0.0f};
     hostFill.anchorMax = {1.0f, 1.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), host, hostFill);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), host, hostFill);
 
     auto             panel     = std::make_shared<UICanvasPanel>("SceneBody");
     const DockPanelId panelId  = ws->addPanel("Scene", panel);
@@ -2396,7 +2396,7 @@ TEST(WidgetLayoutTest, FloatingWindowResizeHandlesLiveOnOverlaySlots)
     FCanvasSlotArgs hostFill;
     hostFill.anchorMin = {0.0f, 0.0f};
     hostFill.anchorMax = {1.0f, 1.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), host, hostFill);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), host, hostFill);
 
     auto              panel   = std::make_shared<UICanvasPanel>("SceneBody");
     const DockPanelId panelId = ws->addPanel("Scene", panel);
@@ -2463,7 +2463,7 @@ TEST(WidgetLayoutTest, DockLeafTabBarIsCompactAndCanHide)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UICanvasPanel>("SceneBody");
     ASSERT_NE(ws->addPanel("Scene", panel), kInvalidDockPanelId);
@@ -2515,7 +2515,7 @@ TEST(WidgetLayoutTest, PageRoleLeafNeverShowsInnerTabWell)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     ASSERT_NE(ws->addPanel("Level", std::make_shared<UICanvasPanel>("LevelBody")), kInvalidDockPanelId);
     ASSERT_NE(ws->addPanel("UI", std::make_shared<UICanvasPanel>("UIBody")), kInvalidDockPanelId);
@@ -2545,7 +2545,7 @@ TEST(WidgetLayoutTest, DockHiddenTabBarRevealTriangleShowsStrip)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UICanvasPanel>("SceneBody");
     ASSERT_NE(ws->addPanel("Scene", panel), kInvalidDockPanelId);
@@ -2604,7 +2604,7 @@ TEST(WidgetLayoutTest, DockTabBarContextMenuHidesTitleBarOnly)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UICanvasPanel>("SceneBody");
     ASSERT_NE(ws->addPanel("Scene", panel), kInvalidDockPanelId);
@@ -2656,7 +2656,7 @@ TEST(WidgetLayoutTest, DockTabBarContextMenuDoesNotHideWhenStackHasMultipleTabs)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     ASSERT_NE(ws->addPanel("Scene", std::make_shared<UICanvasPanel>("SceneBody")), kInvalidDockPanelId);
     ASSERT_NE(ws->addPanel("Inspector", std::make_shared<UICanvasPanel>("InspectorBody")),
@@ -2704,7 +2704,7 @@ TEST(WidgetLayoutTest, AddingSecondTabUnhidesStackTitleBar)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     ASSERT_NE(ws->addPanel("Scene", std::make_shared<UICanvasPanel>("SceneBody")), kInvalidDockPanelId);
     FDockNode* leaf = ws->dockModel().getRootNode();
@@ -2738,7 +2738,7 @@ TEST(WidgetLayoutTest, DockTabBarStripDoubleClickFiresHostCallback)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UICanvasPanel>("SceneBody");
     ASSERT_NE(ws->addPanel("Scene", panel), kInvalidDockPanelId);
@@ -2768,10 +2768,10 @@ TEST(WidgetLayoutTest, DockTabBarStripDoubleClickFiresHostCallback)
     const glm::vec2 tabCenter = tab->_layoutRect.pos + tab->_layoutRect.extent * 0.5f;
     MouseButtonPressedEvent tabFirst(EMouse::Left);
     tabFirst.setTimestampMs(2000);
-    (void)tree.dispatchEvent(tabFirst, pointAt(tabCenter.x, tabCenter.y));
+   (void)tree.dispatchEvent(tabFirst, pointAt(tabCenter.x, tabCenter.y));
     MouseButtonPressedEvent tabSecond(EMouse::Left);
     tabSecond.setTimestampMs(2100);
-    (void)tree.dispatchEvent(tabSecond, pointAt(tabCenter.x, tabCenter.y));
+   (void)tree.dispatchEvent(tabSecond, pointAt(tabCenter.x, tabCenter.y));
     EXPECT_EQ(zoomCount, 1);
 }
 
@@ -2785,7 +2785,7 @@ TEST(WidgetLayoutTest, DockSplitResizeKeepsPanelAttachedWithoutRematerialize)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto scene = std::make_shared<UICanvasPanel>("SceneBody");
     auto inspector = std::make_shared<UICanvasPanel>("InspectorBody");
@@ -2835,7 +2835,7 @@ TEST(WidgetLayoutTest, DockProjectionRebuildReparentsLivePanelWidgets)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto scene = std::make_shared<UICanvasPanel>("SceneBody");
     auto inspector = std::make_shared<UICanvasPanel>("InspectorBody");
@@ -2872,7 +2872,7 @@ TEST(WidgetLayoutTest, DockLeafTabSwitchShowsOnlySelectedPanel)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto first  = std::make_shared<UICanvasPanel>("FirstBody");
     auto second = std::make_shared<UICanvasPanel>("SecondBody");
@@ -2909,7 +2909,7 @@ TEST(WidgetLayoutTest, DockProjectionConstructsCompoundPanelWithoutTabSwitch)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<DockCompoundPanel>("CompoundBody");
     ASSERT_NE(ws->addPanel("Compound", panel), kInvalidDockPanelId);
@@ -2933,7 +2933,7 @@ TEST(WidgetLayoutTest, DockSplitArrangeKeepsClampedRatioAndSecondPaneHittable)
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
     dock->setContext(ws);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+    (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto play     = std::make_shared<UICanvasPanel>("PlayBody");
     auto viewport = std::make_shared<UIButton>("ViewportBody");
@@ -2967,14 +2967,14 @@ TEST(WidgetLayoutTest, DockSplitArrangeKeepsClampedRatioAndSecondPaneHittable)
 
     const Rect2D divider = splitPane->getDividerRect();
     const glm::vec2 dividerCenter = divider.pos + divider.extent * 0.5f;
-    (void)tree.dispatchEvent(MouseMoveEvent(dividerCenter.x, dividerCenter.y),
+   (void)tree.dispatchEvent(MouseMoveEvent(dividerCenter.x, dividerCenter.y),
                              pointAt(dividerCenter.x, dividerCenter.y));
     EXPECT_EQ(tree.getHovered(), splitPane);
     EXPECT_TRUE(splitPane->_bHoveredDivider);
 
     const glm::vec2 viewCenter =
         viewport->_layoutRect.pos + viewport->_layoutRect.extent * 0.5f;
-    (void)tree.dispatchEvent(MouseMoveEvent(viewCenter.x, viewCenter.y),
+   (void)tree.dispatchEvent(MouseMoveEvent(viewCenter.x, viewCenter.y),
                              pointAt(viewCenter.x, viewCenter.y));
     EXPECT_EQ(tree.getHovered(), viewport.get());
 }

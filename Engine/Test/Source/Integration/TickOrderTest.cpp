@@ -329,7 +329,7 @@ class TickOrderAppTest : public ::testing::Test
         host->onSceneActivated(*scene);
         UIElementRef widget = UITypeRegistry::instance().createInstance(kTypeIdBorder);
         widget->addBehavior(uiBehavior);
-        host->getTree().attach(*host->getTree().getLayer(WidgetTree::ELayer::Content), widget);
+        (void)host->getTree().attach(*host->getTree().getLayer(WidgetTree::ELayer::Content), widget);
         AppModuleTestAccess::setGameUIHost(app, std::move(host));
     }
 

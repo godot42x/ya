@@ -434,9 +434,9 @@ void paintRowToggleGlyph(UIFrameBuilder& builder, const Rect2D& band, bool bOn, 
     if (bOn) {
         // Lens outline + pupil: the outline primitive keeps the glyph from
         // reading as a filled pill.
-        builder.addRectOutline({glm::vec2(lensX, centerY - lensH * 0.5f), {lensW, lensH}}, color, 1.5f);
+        builder.addRectOutline({{glm::vec2(lensX, centerY - lensH * 0.5f)}, {lensW, lensH}}, color, 1.5f);
         const float pupil = 4.0f;
-        builder.addRoundedRect({glm::vec2(lensX + lensW * 0.5f - pupil * 0.5f, centerY - pupil * 0.5f),
+        builder.addRoundedRect({{glm::vec2(lensX + lensW * 0.5f - pupil * 0.5f, centerY - pupil * 0.5f)},
                                 {pupil, pupil}},
                                color,
                                pupil * 0.5f);

@@ -8,7 +8,13 @@
 
 // ============================================================================
 // 游戏对象示例类
+// refl:: 属性是给生成器读的，编译器不认识。
 // ============================================================================
+
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunknown-attributes"
+#endif
 
 struct [[refl::uclass]] GameObject
 {
@@ -62,6 +68,10 @@ struct [[refl::uclass]] Component
     void enable() { enabled = true; }
     void disable() { enabled = false; }
 };
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 // 包含自动生成的反射注册代码
 #if __has_include("game_object.generated.h")

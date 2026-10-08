@@ -406,7 +406,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             "runtime.play",
             "Enters Play (PIE) mode on the next tick. Args: none.",
             Json::object(),
-            [this](const Json&) -> Json {
+            [](const Json&) -> Json {
                 App* app = App::get();
                 if (!app) {
                     throw ScriptApiRegistry::Error("runtime.play: no app");
@@ -419,7 +419,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             "runtime.stop",
             "Leaves Play / Simulate mode on the next tick. Args: none.",
             Json::object(),
-            [this](const Json&) -> Json {
+            [](const Json&) -> Json {
                 App* app = App::get();
                 if (!app) {
                     throw ScriptApiRegistry::Error("runtime.stop: no app");
@@ -456,7 +456,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             Json{{"preset", {{"type", "string"}}},
                  {"name", {{"type", "string"}}},
                  {"parent_path", {{"type", "string"}}}},
-            [this](const Json& args) -> Json {
+            [](const Json& args) -> Json {
                 Scene* scene = ScriptApiRegistry::get().getActiveScene();
                 if (!scene) {
                     throw ScriptApiRegistry::Error("no active scene");
@@ -1100,7 +1100,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         }
         const uint32_t windowId = guiEventWindowId(event);
         if (windowId != 0 && _guiWindows.findSession(windowId)) {
-            (void)_guiWindows.dispatchEvent(event);
+           (void)_guiWindows.dispatchEvent(event);
             _dragRouter.adoptSource();
             _dragRouter.sync();
             return true;

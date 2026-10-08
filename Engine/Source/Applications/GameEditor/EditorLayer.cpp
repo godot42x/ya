@@ -193,7 +193,7 @@ void EditorLayer::createAndMountGameUI()
         {"__base__", {{"UIElement", {{"_name", std::format("Panel{}", index)}}}}},
     };
     store->put(path, document);
-    store->save(path);
+    (void)store->save(path);
 
     const std::string entryId = std::format("Panel{}", index);
     SceneWidgetEntry  entry;

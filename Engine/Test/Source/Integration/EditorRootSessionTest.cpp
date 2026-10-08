@@ -950,7 +950,7 @@ TEST(EditorDockWorkspaceTest, ToolOfAnotherRootDoesNotInheritHostDocumentKey)
     };
 
     EditorDockWorkspace workspace;
-    workspace.bind({.documentKey = "scene.yascene", .activeRootId = kUIEditorRootId});
+    workspace.bind({.activeRootId = kUIEditorRootId, .documentKey = "scene.yascene"});
     const FEditorTabSpawnContext ctx = workspace.makeSpawnContext(spawner);
     EXPECT_TRUE(ctx.documentKey.empty());
     EXPECT_EQ(*ctx.ownerEditorId, kUIEditorRootId);

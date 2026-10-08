@@ -308,6 +308,7 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
     case EGuiScenarioStepKind::SetWindowSize:
     case EGuiScenarioStepKind::Checkpoint:
     case EGuiScenarioStepKind::Assert:
+    case EGuiScenarioStepKind::AssertValidationClean:
         break;
     }
 }
@@ -342,6 +343,8 @@ bool GuiScenarioExecutor::run(const std::vector<GuiScenarioStep>& steps)
             if (_onAssert && !_onAssert(step.assertion)) {
                 return false;
             }
+            break;
+        case EGuiScenarioStepKind::AssertValidationClean:
             break;
         }
     }

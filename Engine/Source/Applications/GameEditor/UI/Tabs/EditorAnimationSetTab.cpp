@@ -577,7 +577,7 @@ void EditorAnimationSetTab::rebuildClipList(WidgetTree& tree)
                                   .setStyleKey("text.small")
                                   .setVAlign(EWidgetAlignV::Center))
                        .share();
-        tree.attach(*_clipHost, row);
+        (void)tree.attach(*_clipHost, row);
     }
 }
 
@@ -639,7 +639,7 @@ void EditorAnimationSetTab::rebuildFrameList(WidgetTree& tree)
                                    .release(),
                                ui::boxSlot().preferredSize({72.0f, 24.0f}))
                         .share();
-        tree.attach(*_frameHost, line);
+        (void)tree.attach(*_frameHost, line);
     }
 }
 

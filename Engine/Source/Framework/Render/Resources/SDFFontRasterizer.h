@@ -30,9 +30,6 @@ public:
     EFormat::T      getAtlasFormat() const override { return EFormat::R8G8B8A8_UNORM; }
 
     GlyphBitmap rasterize(FT_Face face, uint32_t codepoint, uint32_t pixelSize) override;
-
-private:
-    int _spread = 8; // FreeType SDF spread property (px)
 };
 
 } // namespace ya

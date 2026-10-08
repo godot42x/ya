@@ -39,9 +39,7 @@ class PropertyHandle final
         InstanceResolver resolver;
     };
 
-    PropertyHandle(type_index_t ownerType,
-                   std::vector<void*> instances,
-                   reflection::FPropertySlot slot);
+    PropertyHandle(std::vector<void*> instances, reflection::FPropertySlot slot);
 
     [[nodiscard]] bool isValid() const;
     [[nodiscard]] bool isEditable() const;
@@ -319,7 +317,6 @@ class PropertyHandle final
         }
     }
 
-    type_index_t _ownerType = 0;
     mutable std::vector<void*> _instances;
     std::vector<InstanceResolver> _instanceResolvers;
     std::vector<FInstanceBinding> _instanceBindings;

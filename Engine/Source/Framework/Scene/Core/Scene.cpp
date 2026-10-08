@@ -421,7 +421,7 @@ void Scene::clearWidgetEntries()
     _widgetEntries.clear();
 }
 
-void Scene::onUpdateRuntime(float deltaTime)
+void Scene::onUpdateRuntime(float)
 {
     // Update systems here
     // Example: Update transform hierarchy, physics, animations, etc.

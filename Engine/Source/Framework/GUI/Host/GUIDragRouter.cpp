@@ -61,7 +61,7 @@ struct FDragOverlayDelegate final : IGUIAppDelegate
         FCanvasSlotArgs fill;
         fill.anchorMin = {0.0f, 0.0f};
         fill.anchorMax = {1.0f, 1.0f};
-        (void)tree.attachToLayer(WidgetTree::ELayer::Content, root, fill);
+       (void)tree.attachToLayer(WidgetTree::ELayer::Content, root, fill);
         text = std::make_shared<UIText>("DragOverlayLabel");
         text->setText(label);
         text->_fontSize = 13;
@@ -602,7 +602,7 @@ bool GUIDragRouter::routeModal(const Event& event)
         }
         WidgetEventContext ctx;
         ctx.logicalPoint = pointerForEvent(event);
-        (void)modalTree->dispatchEvent(event, ctx);
+       (void)modalTree->dispatchEvent(event, ctx);
         return true;
     }
     return eventId != modalId;
@@ -636,7 +636,7 @@ bool GUIDragRouter::routeCapture(const Event& event)
 
     WidgetEventContext ctx;
     ctx.logicalPoint = toWindowLocal(eventId, point, _captureWindowId);
-    (void)_captureTree->dispatchEvent(event, ctx);
+   (void)_captureTree->dispatchEvent(event, ctx);
     return true;
 }
 

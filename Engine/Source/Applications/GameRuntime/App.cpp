@@ -74,7 +74,7 @@ class GameRuntimeLoopDelegate final : public IAppLoopDelegate
     void onInit() override {}
     void onEvent(const Event& event) override
     {
-        app.dispatchEvent(event);
+        (void)app.dispatchEvent(event);
     }
 
     void onTick(float dt) override

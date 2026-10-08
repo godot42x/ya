@@ -117,7 +117,7 @@ struct TestPersistentController : public IGameUIController
             persistent = UITypeRegistry::instance().createInstance("engine.panel");
             persistent->_name = "Persistent";
             ++mounts;
-            host.getTree().attach(*host.getTree().getLayer(WidgetTree::ELayer::Content), persistent);
+            (void)host.getTree().attach(*host.getTree().getLayer(WidgetTree::ELayer::Content), persistent);
         }
     }
 
@@ -222,13 +222,13 @@ TEST(GameUIHostTest, InputRoutesThroughPresentationMapping)
     FCanvasSlotArgs buttonSlot;
     buttonSlot.offset = {100.0f, 100.0f};
     buttonSlot.fixedSize = {80.0f, 32.0f};
-    host.addToWorld(scene, button, buttonSlot);
+    (void)host.addToWorld(scene, button, buttonSlot);
 
     int clicks = 0;
     button->onClicked.addLambda([&] { ++clicks; });
     // The frame builds the snapshot (layout) before input dispatch, matching
     // the runtime order; without it the hit test would see stale rects.
-    host.buildSnapshot();
+   (void)host.buildSnapshot();
 
     // Window point maps to logical (120,110): inside the button.
     EXPECT_EQ(host.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), {100.0f + 240.0f, 50.0f + 220.0f}),
@@ -331,11 +331,11 @@ TEST(GameUIHostTest, InputMappingFollowsTheReferenceScale)
     FCanvasSlotArgs buttonSlot;
     buttonSlot.offset    = {100.0f, 100.0f};
     buttonSlot.fixedSize = {80.0f, 32.0f};
-    host.addToWorld(scene, button, buttonSlot);
+    (void)host.addToWorld(scene, button, buttonSlot);
 
     int clicks = 0;
     button->onClicked.addLambda([&] { ++clicks; });
-    host.buildSnapshot();
+   (void)host.buildSnapshot();
 
     // Logical viewport is 200x150 against a 1000 reference, so the fit is
     // 0.15. The button centre, logical (140,116), lands at
@@ -447,7 +447,7 @@ TEST(GameUIHostTest, PieRestartDoesNotAccumulateWidgets)
     host.onSceneActivated(scene);
 
     auto dynamic = UITypeRegistry::instance().createInstance("engine.button");
-    host.addToWorld(scene, dynamic);
+    (void)host.addToWorld(scene, dynamic);
     ASSERT_EQ(host.getTree().getLayer(WidgetTree::ELayer::Content)->getChildren().size(), 2u);
 
     // PIE exit: deactivate unmounts entries AND world-scoped dynamic widgets.
@@ -506,7 +506,7 @@ TEST(GameUIHostTest, UpdateAdvancesMountedTreeBehaviors)
     // Mounting alone never ticks: the frame driver owns that, and a snapshot is
     // not a frame.
     EXPECT_EQ(behavior->ticks, 0);
-    (void)host.buildSnapshot();
+   (void)host.buildSnapshot();
     EXPECT_EQ(behavior->ticks, 0);
 
     host.update(FUIFrameClock{.gameDelta = 1.0f / 60.0f, .realDelta = 1.0f / 60.0f});
@@ -687,7 +687,7 @@ TEST(GameUIHostTest, MountedTextVisibilityAndButtonClick)
     host.getTree().setFocus(restart);
     KeyPressedEvent enter{};
     enter._keyCode = EKey::Enter;
-    (void)host.getTree().dispatchEvent(enter, WidgetEventContext{});
+   (void)host.getTree().dispatchEvent(enter, WidgetEventContext{});
     EXPECT_EQ(clicks, 1);
 
     EXPECT_FALSE(host.setMountedText("Missing", "Score", "nope"));
@@ -797,10 +797,10 @@ TEST(GameUIHostTest, ReferenceResolutionScalesLayoutAndPointer)
     FCanvasSlotArgs buttonSlot;
     buttonSlot.offset    = {100.0f, 100.0f};
     buttonSlot.fixedSize = {80.0f, 32.0f};
-    host.addToWorld(scene, button, buttonSlot);
+    (void)host.addToWorld(scene, button, buttonSlot);
     int clicks = 0;
     button->onClicked.addLambda([&] { ++clicks; });
-    host.buildSnapshot();
+   (void)host.buildSnapshot();
 
     // Layout (120, 110) * framebufferScale * referenceScale + viewport origin.
     const glm::vec2 hit = glm::vec2{10.0f, 20.0f} + glm::vec2{120.0f, 110.0f} * (2.0f * 0.5f);

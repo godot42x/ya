@@ -798,7 +798,7 @@ void LuaScriptingSystem::init()
 
     // The `Persist` global exists from state build, so scripts can read it
     // before their first write (rpg R3).
-    persistentState();
+    (void)persistentState();
 
     // 启用脚本热重载
     enableHotReload();

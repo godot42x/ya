@@ -167,7 +167,7 @@ PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> in
             : leaf.role == PropertyGraphBuilder::ELeafRole::Map
                 ? PropertyNode::Kind::Map
                 : PropertyNode::Kind::Value;
-        node.binding = PropertyHandle(leaf.ownerType, std::move(leaf.ownerInstances), leaf.slot);
+        node.binding = PropertyHandle(std::move(leaf.ownerInstances), leaf.slot);
         node.binding.setOwnerPath(std::move(leaf.ownerPath));
         node.bEditable = node.binding.isEditable();
         node.bVisible = true;

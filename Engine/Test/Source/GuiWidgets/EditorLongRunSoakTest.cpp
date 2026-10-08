@@ -76,7 +76,7 @@ TEST(EditorLongRunSoakTest, RepeatedAttachDetachSameSubtreeDoesNotLeakDrawItems)
         }
         EXPECT_EQ(attached.items.size(), attachedItems);
 
-        tree.buildSnapshot(UIFrameBuildContext{});
+       (void)tree.buildSnapshot(UIFrameBuildContext{});
         EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
         EXPECT_EQ(tree.getPerfStats().drawItems, attachedItems);
 
@@ -127,7 +127,7 @@ TEST(EditorLongRunSoakTest, RepeatedThemeSwitchSettlesWithoutRebuild)
     auto       panel = std::make_shared<UIBorder>("Themed");
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 24.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
     const glm::vec4 fillA{0.15f, 0.16f, 0.20f, 1.0f};
     const glm::vec4 fillB{0.94f, 0.95f, 0.97f, 1.0f};
@@ -143,7 +143,7 @@ TEST(EditorLongRunSoakTest, RepeatedThemeSwitchSettlesWithoutRebuild)
         EXPECT_GT(tree.getPerfStats().rebuiltWidgets, 0u);
         EXPECT_EQ(dirty.items.front().color, useA ? fillA : fillB);
 
-        tree.buildSnapshot(UIFrameBuildContext{});
+       (void)tree.buildSnapshot(UIFrameBuildContext{});
         EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
         EXPECT_EQ(tree.getPerfStats().drawItems, dirty.items.size());
     }
@@ -156,7 +156,7 @@ TEST(EditorLongRunSoakTest, RepeatedDeferredTextureGenerationSettles)
     image->_assetPath = "tex:soak";
     FCanvasSlotArgs slot;
     slot.fixedSize = {64.0f, 64.0f};
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, slot);
+   (void)tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, slot);
 
     auto ready = makeFakeTexture();
 
@@ -189,7 +189,7 @@ TEST(EditorLongRunSoakTest, RepeatedDeferredTextureGenerationSettles)
         }
         EXPECT_TRUE(bHitHasTexture);
 
-        tree.buildSnapshot(hitCtx);
+       (void)tree.buildSnapshot(hitCtx);
         EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
     }
 }

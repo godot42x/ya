@@ -415,7 +415,7 @@ void ShaderStorage::preloadAsync(std::vector<ShaderDesc> shaders)
         YA_PROFILE_SCOPE_LOG("ShaderStorage::preloadAsync");
         for (const auto& desc : shaders) {
             try {
-                load(desc);
+                (void)load(desc);
             }
             catch (const std::exception& e) {
                 YA_CORE_ERROR("Preload failed for shader '{}': {}", desc.cacheKey(), e.what());

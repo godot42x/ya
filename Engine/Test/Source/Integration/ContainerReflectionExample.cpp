@@ -82,8 +82,7 @@ TEST_F(ContainerReflectionTest, ContainerIteration)
     PropertyContainerHelper::iterateContainer(
         *itemsProp,
         containerPtr,
-        [&itemCount](size_t index, void *elementPtr, uint32_t elementTypeIndex) {
-            auto *item = static_cast<Item *>(elementPtr);
+        [&itemCount](size_t, void*, uint32_t) {
             itemCount++;
         });
 
@@ -98,7 +97,7 @@ TEST_F(ContainerReflectionTest, ContainerIteration)
     PropertyContainerHelper::iterateMapContainer(
         *slotsProp,
         containerPtr,
-        [&slotCount](void *keyPtr, uint32_t keyTypeIndex, void *valuePtr, uint32_t valueTypeIndex) {
+        [&slotCount](void*, uint32_t, void*, uint32_t) {
             slotCount++;
         });
 

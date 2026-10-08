@@ -38,7 +38,7 @@ std::shared_ptr<UICheckBox> makeLabeledCheckBox(const std::string& id, const cha
 
 void attachChild(WidgetTree& tree, UIContainer& parent, const UIElementRef& child, glm::vec2 preferred = {})
 {
-    (void)tree.attach(parent, child);
+   (void)tree.attach(parent, child);
     if ((preferred.x > 0.0f || preferred.y > 0.0f) && child) {
         if (auto* slot = parent.getBoxSlot(*child)) {
             slot->setPreferredSize(preferred);
@@ -48,7 +48,7 @@ void attachChild(WidgetTree& tree, UIContainer& parent, const UIElementRef& chil
 
 void attachFill(WidgetTree& tree, UIContainer& parent, const UIElementRef& child, glm::vec2 preferred = {})
 {
-    (void)tree.attach(parent, child);
+   (void)tree.attach(parent, child);
     if (!child) {
         return;
     }

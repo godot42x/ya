@@ -561,10 +561,10 @@ bool EditorUIDesignerSession::addPaletteWidget(const std::string& typeId)
         return false;
     }
     if (target->getLayout()) {
-        _previewTree->attach(*target, widget);
+        (void)_previewTree->attach(*target, widget);
     }
     else if (target != _previewRoot.get() && target->getParent()) {
-        _previewTree->attach(*target->getParent(), widget);
+        (void)_previewTree->attach(*target->getParent(), widget);
         _previewTree->reparentAfter(*target, widget);
     }
     else {
@@ -595,7 +595,7 @@ UIElement* EditorUIDesignerSession::duplicateWidget(UIElement* widget)
     nlohmann::json slotState;
     slot->serialize(slotState);
     copy->_name = widget->_name + "_copy";
-    _previewTree->attach(*parent, copy);
+    (void)_previewTree->attach(*parent, copy);
     // Same parent, so the reorder keeps the copied slot.
     parent->getSlotForChild(*copy)->deserialize(slotState);
     _previewTree->reparentAfter(*widget, copy);

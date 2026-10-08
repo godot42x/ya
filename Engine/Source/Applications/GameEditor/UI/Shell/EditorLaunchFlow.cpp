@@ -52,7 +52,7 @@ void EditorLaunchFlow::BrowserDelegate::buildUI(WidgetTree& tree)
     page.build(*flow->_layer, tree);
     page.onOpenRequested = [this](const std::string& projectPath) {
         if (flow) {
-            flow->requestOpenProject(projectPath);
+            (void)flow->requestOpenProject(projectPath);
         }
     };
 }

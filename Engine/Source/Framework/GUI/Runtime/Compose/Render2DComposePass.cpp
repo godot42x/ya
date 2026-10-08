@@ -231,7 +231,7 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
     if (extraContent) {
         extraContent(list);
     }
-    recorder.record(list, ScreenDrawTarget{
+    (void)recorder.record(list, ScreenDrawTarget{
         .cmd         = cmdBuf,
         .width       = rtExtent.width,
         .height      = rtExtent.height,
@@ -271,7 +271,7 @@ void replayUIFrameSnapshot(ICommandBuffer*          cmdBuf,
     if (extraContent) {
         extraContent(list);
     }
-    recorder.record(list, ScreenDrawTarget{
+    (void)recorder.record(list, ScreenDrawTarget{
         .cmd         = cmdBuf,
         .width       = targetExtent.width,
         .height      = targetExtent.height,

@@ -212,31 +212,31 @@ struct FResizeHandle final : UIElement
         }
         switch (_edge) {
         case UIDockFloatingWindow::EResizeEdge::Left:
-            builder.addSprite({_layoutRect.pos, {1.0f, _layoutRect.extent.y}}, edgeColor, nullptr);
+            builder.addSprite({{_layoutRect.pos}, {1.0f, _layoutRect.extent.y}}, edgeColor, nullptr);
             break;
         case UIDockFloatingWindow::EResizeEdge::Right:
-            builder.addSprite({glm::vec2{_layoutRect.pos.x + _layoutRect.extent.x - 1.0f,
-                                         _layoutRect.pos.y},
+            builder.addSprite({{glm::vec2{_layoutRect.pos.x + _layoutRect.extent.x - 1.0f,
+                                          _layoutRect.pos.y}},
                                glm::vec2{1.0f, _layoutRect.extent.y}},
                               edgeColor, nullptr);
             break;
         case UIDockFloatingWindow::EResizeEdge::Top:
-            builder.addSprite({_layoutRect.pos, {_layoutRect.extent.x, 1.0f}}, edgeColor, nullptr);
+            builder.addSprite({{_layoutRect.pos}, {_layoutRect.extent.x, 1.0f}}, edgeColor, nullptr);
             break;
         case UIDockFloatingWindow::EResizeEdge::Bottom:
-            builder.addSprite({glm::vec2{_layoutRect.pos.x,
-                                         _layoutRect.pos.y + _layoutRect.extent.y - 1.0f},
+            builder.addSprite({{glm::vec2{_layoutRect.pos.x,
+                                          _layoutRect.pos.y + _layoutRect.extent.y - 1.0f}},
                                glm::vec2{_layoutRect.extent.x, 1.0f}},
                               edgeColor, nullptr);
             break;
         case UIDockFloatingWindow::EResizeEdge::BottomRight: {
             const glm::vec2 p = _layoutRect.pos;
             const glm::vec2 e = _layoutRect.extent;
-            builder.addSprite({glm::vec2{p.x + e.x - 8.0f, p.y + e.y - 2.0f}, glm::vec2{6.0f, 1.0f}},
+            builder.addSprite({{glm::vec2{p.x + e.x - 8.0f, p.y + e.y - 2.0f}}, glm::vec2{6.0f, 1.0f}},
                               edgeColor, nullptr);
-            builder.addSprite({glm::vec2{p.x + e.x - 6.0f, p.y + e.y - 4.0f}, glm::vec2{4.0f, 1.0f}},
+            builder.addSprite({{glm::vec2{p.x + e.x - 6.0f, p.y + e.y - 4.0f}}, glm::vec2{4.0f, 1.0f}},
                               edgeColor, nullptr);
-            builder.addSprite({glm::vec2{p.x + e.x - 4.0f, p.y + e.y - 6.0f}, glm::vec2{2.0f, 1.0f}},
+            builder.addSprite({{glm::vec2{p.x + e.x - 4.0f, p.y + e.y - 6.0f}}, glm::vec2{2.0f, 1.0f}},
                               edgeColor, nullptr);
             break;
         }
@@ -287,7 +287,7 @@ struct FResizeHandle final : UIElement
     UIDockFloatingWindow::EResizeEdge _edge = UIDockFloatingWindow::EResizeEdge::BottomRight;
     bool _bResizing = false;
     glm::vec2 _resizeStartPoint{0.0f, 0.0f};
-    Rect2D _resizeStartRect{glm::vec2{0.0f, 0.0f}, glm::vec2{0.0f, 0.0f}};
+    Rect2D _resizeStartRect{{glm::vec2{0.0f, 0.0f}}, glm::vec2{0.0f, 0.0f}};
 };
 } // namespace
 
@@ -434,7 +434,7 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
     addHandle(EResizeEdge::BottomRight, EUIOverlayAlignment::End, EUIOverlayAlignment::End,
               {kCornerGripSize, kCornerGripSize});
 
-    _windowRect = {glm::vec2{120.0f, 120.0f}, glm::vec2{360.0f, 260.0f}};
+    _windowRect = {{glm::vec2{120.0f, 120.0f}}, glm::vec2{360.0f, 260.0f}};
     setWindowRect(_windowRect);
 }
 
@@ -559,7 +559,7 @@ void UIDockFloatingWindow::rebuildContent()
                     tree->reparent(*_content, panel->widget);
                 }
                 else {
-                    tree->attach(*_content, panel->widget);
+                    (void)tree->attach(*_content, panel->widget);
                 }
             }
             else if (!panel->widget->getParent()) {
