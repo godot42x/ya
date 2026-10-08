@@ -31,6 +31,7 @@ import re
 import subprocess
 import sys
 import time
+from fnmatch import fnmatch
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -98,7 +99,11 @@ def collect_configs(args: argparse.Namespace) -> list[Path]:
             raise SystemExit(f"bench dir not found: {bench_dir}")
         configs.extend(sorted(bench_dir.glob("*.bench.json")))
     if args.filter:
-        configs = [c for c in configs if args.filter in c.name]
+        # fnmatch on the config stem, so `Lights_50` selects exactly that
+        # scene and `Lights*` selects the family. A plain substring would pull
+        # `Lights_500` in with `Lights_50`, which is a silent extra hour of
+        # benchmarking.
+        configs = [c for c in configs if fnmatch(c.stem, args.filter)]
     # De-duplicate while keeping order: --bench and --bench-dir may overlap.
     seen: set[Path] = set()
     unique: list[Path] = []
@@ -152,7 +157,7 @@ def main() -> int:
     parser.add_argument("--project", required=True, help="Path to the .yaproject the bench configs belong to.")
     parser.add_argument("--bench", action="append", default=[], help="A single bench config (repeatable).")
     parser.add_argument("--bench-dir", help="Directory of *.bench.json configs.")
-    parser.add_argument("--filter", help="Substring filter on the config file name.")
+    parser.add_argument("--filter", help="Glob on the config stem, e.g. `Lights_50` or `Lights*`.")
     parser.add_argument("--out", required=True, help="Output root for the summary tree.")
     parser.add_argument("--repeat", type=int, default=1, help="Runs per config (stability check).")
     parser.add_argument("--timeout", type=float, default=900.0, help="Per-run timeout in seconds.")
@@ -209,11 +214,21 @@ def main() -> int:
                 print(f"   FAIL {record['error'].splitlines()[0]}")
 
     out_root.mkdir(parents=True, exist_ok=True)
-    (out_root / "index.json").write_text(
-        json.dumps({"project": str(project), "repeat": args.repeat, "runs": index}, indent=2) + "\n",
+    index_path = out_root / "index.json"
+    # A suite is often run in batches (`--filter Lights*` then `--filter
+    # Meshes*`), so the index accumulates instead of being overwritten: a lost
+    # index silently turns a partial suite into a complete-looking one.
+    runs = list(index)
+    if index_path.is_file():
+        try:
+            runs = json.loads(index_path.read_text(encoding="utf-8")).get("runs", []) + runs
+        except json.JSONDecodeError:
+            print(f"   warn: {index_path} is unreadable; rewriting it with this run only")
+    index_path.write_text(
+        json.dumps({"project": str(project), "repeat": args.repeat, "runs": runs}, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(f"-- wrote {out_root / 'index.json'} ({len(index)} runs)")
+    print(f"-- wrote {index_path} ({len(runs)} runs)")
 
     if failures:
         print("\n".join(failures), file=sys.stderr)
