@@ -90,6 +90,21 @@ sol::function functionField(sol::state_view lua, const sol::table& table, const 
     return function;
 }
 
+/// Same lookup as `functionField`, stored so a later call does not build a
+/// fresh protected function (and its error handler) on every callback.
+sol::protected_function protectedFunctionField(sol::state_view lua, const sol::table& table, const char* key)
+{
+    lua_State* L = lua.lua_state();
+    table.push(L);
+    lua_getfield(L, -1, key);
+    sol::protected_function function;
+    if (lua_isfunction(L, -1)) {
+        function = sol::protected_function(L, -1);
+    }
+    lua_pop(L, 2);
+    return function;
+}
+
 /// Calls a Lua function behind sol::protected_function: a script error comes
 /// back as a failed result instead of unwinding through sol's call frames.
 template <typename... Args>
@@ -156,19 +171,21 @@ ya::script::ScriptValue callDefinedFunction(ya::ScriptInstance& script, sol::tab
     return ya::toScriptValue(L, result.stack_index());
 }
 
-/// Runs `callback` if the script defines it; a failed call is logged with
-/// `what` / `scriptPath` and contained to this instance.
+/// Runs `callback` if the script defines it. Empty when the call succeeded
+/// or the script has no such function; otherwise the Lua error text. The
+/// caller logs the script path only in that case.
 template <typename... Args>
-void invokeLuaCallback(const sol::function& callback, std::string_view what, std::string_view scriptPath, Args&&... args)
+std::optional<std::string> invokeLuaCallback(const sol::protected_function& callback, Args&&... args)
 {
     if (!callback.valid()) {
-        return;
+        return std::nullopt;
     }
-    const sol::protected_function_result result = protectedCall(callback, std::forward<Args>(args)...);
+    const sol::protected_function_result result = callback(std::forward<Args>(args)...);
     if (!result.valid()) {
         const sol::error error = result;
-        YA_CORE_ERROR("Lua {} error ({}): {}", what, scriptPath, error.what());
+        return std::string(error.what());
     }
+    return std::nullopt;
 }
 
 int destroySelfMethod(lua_State* L)
@@ -417,14 +434,35 @@ struct ListenerOwner
 struct LuaInstanceLive
 {
     sol::table                     self;
-    sol::function                  onInit;
-    sol::function                  onStart;
-    sol::function                  onUpdate;
-    sol::function                  onDestroy;
+    /// Path at bind time. Read only when a lifecycle callback fails, so a
+    /// frame of empty onUpdate does not copy it.
+    std::string                    scriptPath;
+    sol::protected_function        onInit;
+    sol::protected_function        onStart;
+    sol::protected_function        onUpdate;
+    sol::protected_function        onDestroy;
     sol::function                  onEnable;
     sol::function                  onDisable;
     std::shared_ptr<ListenerOwner> listeners;
+    /// Host last written onto `self`. Equal to the current host means
+    /// `contributeSelf` is skipped.
+    ya::IScriptInstanceHost*       boundHost = nullptr;
+    /// Lifecycle callbacks in progress on this record. `eraseLive` waits
+    /// until this returns to zero so the function object outlives the call.
+    int                            callDepth = 0;
+    bool                           bPendingErase = false;
 };
+
+/// Writes the host onto `self` the first time, and again when a different
+/// host object is bound. Named calls do not use this; they reapply every time.
+void bindHostSelf(LuaInstanceLive& live, ya::IScriptInstanceHost& host)
+{
+    if (live.boundHost == &host) {
+        return;
+    }
+    applyHostSelf(live.self, host);
+    live.boundHost = &host;
+}
 
 struct LuaHeldFunction
 {
@@ -1000,6 +1038,11 @@ const LuaInstanceLive* LuaScriptingSystem::findLive(uint64_t runtimeId) const
 void LuaScriptingSystem::eraseLive(uint64_t runtimeId)
 {
     if (_instances) {
+        const auto it = _instances->byId.find(runtimeId);
+        if (it != _instances->byId.end() && it->second.callDepth > 0) {
+            it->second.bPendingErase = true;
+            return;
+        }
         _instances->byId.erase(runtimeId);
     }
     liveOwners().byId.erase(runtimeId);
@@ -1023,14 +1066,15 @@ bool LuaScriptingSystem::bindChunk(ScriptInstance& instance, const std::string& 
         // work; a script returns a local table to avoid polluting globals.
         sol::table scriptTable = _lua.script(source);
         LuaInstanceLive bound;
-        bound.self      = std::move(scriptTable);
-        bound.listeners = std::make_shared<ListenerOwner>();
-        bound.onInit    = functionField(_lua, bound.self, "onInit");
-        bound.onStart   = functionField(_lua, bound.self, "onStart");
-        bound.onUpdate  = functionField(_lua, bound.self, "onUpdate");
-        bound.onDestroy = functionField(_lua, bound.self, "onDestroy");
-        bound.onEnable  = functionField(_lua, bound.self, "onEnable");
-        bound.onDisable = functionField(_lua, bound.self, "onDisable");
+        bound.self       = std::move(scriptTable);
+        bound.scriptPath = instance.scriptPath;
+        bound.listeners  = std::make_shared<ListenerOwner>();
+        bound.onInit     = protectedFunctionField(_lua, bound.self, "onInit");
+        bound.onStart    = protectedFunctionField(_lua, bound.self, "onStart");
+        bound.onUpdate   = protectedFunctionField(_lua, bound.self, "onUpdate");
+        bound.onDestroy  = protectedFunctionField(_lua, bound.self, "onDestroy");
+        bound.onEnable   = functionField(_lua, bound.self, "onEnable");
+        bound.onDisable  = functionField(_lua, bound.self, "onDisable");
         const int order = bound.self.get<sol::optional<int>>("executionOrder").value_or(0);
 
         const uint64_t id = bFirst ? liveOwners().nextId++ : keptId;
@@ -1138,7 +1182,7 @@ bool LuaScriptingSystem::load(ScriptInstance& instance, std::unique_ptr<IScriptI
         dropInstance(instance.runtimeId);
         return false;
     }
-    applyHostSelf(live->self, *host);
+    bindHostSelf(*live, *host);
     captureScriptProperties(instance, live->self);
     applyScriptPropertyOverrides(instance, live->self, _lua);
     instance.bLoaded = true;
@@ -1149,45 +1193,55 @@ bool LuaScriptingSystem::load(ScriptInstance& instance, std::unique_ptr<IScriptI
 
 bool LuaScriptingSystem::call(ScriptInstance& instance, ELuaScriptCallback which, float deltaTime)
 {
-    IScriptInstanceHost*  host = hostOf(instance);
-    LuaInstanceLive* live = findLive(instance.runtimeId);
+    IScriptInstanceHost* host = hostOf(instance);
+    const uint64_t       id   = instance.runtimeId;
+    LuaInstanceLive*     live = findLive(id);
     if (!host || !instance.bLoaded || !live) {
         return false;
     }
-    applyHostSelf(live->self, *host);
-    // Copied out of the side table: the callback may destroy this instance and
-    // drop the entry. Nothing below reads `instance` (its storage may move).
-    const std::string path = instance.scriptPath;
-    sol::function     callback;
-    const char*       what = "";
+    bindHostSelf(*live, *host);
+    // `self` is copied out of the side table: the callback may destroy this
+    // instance. The function object stays put until `callDepth` hits zero.
+    // Nothing below reads `instance` (its storage may move). The path is
+    // read only when the call fails.
+    const sol::protected_function* callback = nullptr;
+    const char*                    what     = "";
     switch (which) {
     case ELuaScriptCallback::Init:
     {
-        callback = live->onInit;
+        callback = &live->onInit;
         what     = "onInit";
     } break;
     case ELuaScriptCallback::Start:
     {
-        callback = live->onStart;
+        callback = &live->onStart;
         what     = "onStart";
     } break;
     case ELuaScriptCallback::Update:
     {
-        callback = live->onUpdate;
+        callback = &live->onUpdate;
         what     = "onUpdate";
     } break;
     case ELuaScriptCallback::Destroy:
     {
-        callback = live->onDestroy;
+        callback = &live->onDestroy;
         what     = "onDestroy";
     } break;
     }
-    const sol::table self = live->self;
-    if (which == ELuaScriptCallback::Update) {
-        invokeLuaCallback(callback, what, path, self, deltaTime);
+    if (!callback) {
+        return false;
     }
-    else {
-        invokeLuaCallback(callback, what, path, self);
+    const sol::table self = live->self;
+    ++live->callDepth;
+    const std::optional<std::string> error = which == ELuaScriptCallback::Update
+                                                  ? invokeLuaCallback(*callback, self, deltaTime)
+                                                  : invokeLuaCallback(*callback, self);
+    if (error) {
+        YA_CORE_ERROR("Lua {} error ({}): {}", what, live->scriptPath, *error);
+    }
+    --live->callDepth;
+    if (live->bPendingErase) {
+        eraseLive(id);
     }
     return true;
 }
@@ -1220,11 +1274,14 @@ void LuaScriptingSystem::destroy(ScriptInstance& instance)
     std::unique_ptr<IScriptInstanceHost> host = std::move(node.mapped());
     if (instance.bLoaded) {
         if (LuaInstanceLive* live = findLive(id)) {
-            applyHostSelf(live->self, *host);
-            const std::string   path      = instance.scriptPath;
-            const sol::function onDestroy = live->onDestroy;
-            const sol::table    self      = live->self;
-            invokeLuaCallback(onDestroy, "onDestroy", path, self);
+            bindHostSelf(*live, *host);
+            const sol::table self = live->self;
+            ++live->callDepth;
+            const std::optional<std::string> error = invokeLuaCallback(live->onDestroy, self);
+            if (error) {
+                YA_CORE_ERROR("Lua {} error ({}): {}", "onDestroy", live->scriptPath, *error);
+            }
+            --live->callDepth;
         }
     }
     eraseLive(id);
@@ -1277,7 +1334,7 @@ bool LuaScriptingSystem::reloadInstance(IScriptInstanceHost* host, uint64_t id, 
     if (!live) {
         return false;
     }
-    applyHostSelf(live->self, *host);
+    bindHostSelf(*live, *host);
     captureScriptProperties(*instance, live->self);
     for (const auto& [name, value] : savedProperties) {
         if (value.valid()) {

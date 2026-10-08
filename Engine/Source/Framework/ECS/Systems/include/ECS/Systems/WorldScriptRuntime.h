@@ -99,8 +99,9 @@ struct IScriptInstanceHost
     /// the host or the instance is gone. Called on every operation, so an
     /// instance stored in movable storage may be looked up afresh.
     [[nodiscard]] virtual ScriptInstance* resolve(uint64_t instanceId) = 0;
-    /// Fields and methods the backend rawsets onto `self`. Runs after the
-    /// chunk loads and before every callback.
+    /// Fields and methods the backend rawsets onto `self`. Lifecycle callbacks
+    /// run this when the chunk is first bound and when the host object
+    /// changes. Named calls still run it on every call.
     virtual void contributeSelf(ScriptSelfBuilder& out) = 0;
 };
 

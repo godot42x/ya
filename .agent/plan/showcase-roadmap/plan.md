@@ -128,7 +128,7 @@ G3.0 盘点（2026-10-07，读代码核实）：渲染侧（CSM 最多 4 级、I
 
 | 线 | 优先级 | 理由 |
 | --- | --- | --- |
-| `ui-behavior-capabilities`（下一步 C3） | P0 | 排在 game-ui S4 之前，2D demo 的背包 / 商店 / 对话 UI 依赖 |
+| `ui-behavior-capabilities`（C1–C3 完成） | P0 | 排在 game-ui S4 之前，2D demo 的背包 / 商店 / 对话 UI 依赖 |
 | `game-ui-script-framework`（下一步 S4 条目模态与取消路由） | P0 | 2D / 3D demo 的模态界面依赖 |
 | **S5 反射 + 脚本层整体规范化**（2026-10-08 用户拍板升级；子计划 `reflection-runtime/`，吸收原 `script-native-registry/`，S5.1 已入库）：开放 MetaValue + TypeOps 每类型行为表放 `reflects-core`（零依赖），五处消费方（序列化 / PropertyAccessor / 拷贝 / 编辑器检查器 / 脚本）的按类型 if 链收进 TypeOps；`Function::invoker` 收发 MetaValue，`ScriptValue` 与 `std::any` 外部 ABI 退场；最终成员视图下沉 reflects；动态注册带版本号与变更通知；脚本 native 剩余 9 个注册点在新 ABI 上迁移 | P1 | C3（Lua 调用热路径）与 G3.2（物理脚本 API，几十个函数）都建在脚本绑定上，必须排在两者之前 |
 | `font-framework-convergence` | P1 | 文本逐字显示、CJK 显示质量 |

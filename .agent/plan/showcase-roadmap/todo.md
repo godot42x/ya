@@ -14,7 +14,7 @@
 
 GUI 与编辑器活跃线
 - [ ] S5 反射 + 脚本层整体规范化（`reflection-runtime/` RR0–RR8；吸收原 native 注册重构，S5.1 已入库；先于 C3 / G3.2）
-- [ ] `ui-behavior-capabilities` C3（Lua `call()` 热路径）
+- [x] `ui-behavior-capabilities` C3（Lua `call()` 热路径）
 
 测量与压测
 - [x] M1 pass 级 GPU timestamp（`perf-baseline` PB2，含 render_counters 与编辑器 pass 表）

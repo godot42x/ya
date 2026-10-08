@@ -115,3 +115,19 @@ tick 可见性缓存要等下一次 revision 变化才刷新（隐藏了还在 t
 已适配，`GameUIScriptTest.cpp:216-232` 钉住新语义；对外部脚本静默）。顺带关闭 `gui-editor-structure/todo.md` C4e。
 
 下一步：C3 Lua `call()` 热路径。
+
+## 2026-10-09 — C3 Lua `call()` 热路径
+
+完成：
+- `bindChunk` 把 onInit / onStart / onUpdate / onDestroy 存成 `sol::protected_function`，调用不再每帧包一层、也不再装错误处理函数。
+- 脚本路径记在 live 记录上，只在回调失败时读。
+- `bindHostSelf`：`contributeSelf` 只在这块 `self` 第一次绑定、以及宿主对象换了的时候跑。具名调用仍每次重绑，本节没动它。
+- 回调进行中 `eraseLive` 推迟到 `callDepth` 归零，函数对象活过这次调用（销毁自己、更新中销毁别的实例）。
+
+基准（debug，400 个世界脚本空 onUpdate，同构建前后）：534 µs/帧 → 117 µs/帧。
+
+验证：`LuaScriptHostTest.*`、`LuaEntityScriptCallTest.*`、`TickOrderTest.*`、`GameUIScriptTest.*` 共 43 通过。
+
+保留：具名调用（脚本互调、`onShow` / `onHide`）不在本节。本线 checkpoint 已齐，归档要等结论进 skill。RR5b / RR8 的 Windows 验证仍未跑。
+
+偏离：无。

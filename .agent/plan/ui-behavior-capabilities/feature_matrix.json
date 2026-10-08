@@ -1,6 +1,6 @@
 {
   "plan": "ui-behavior-capabilities",
-  "status": "in_progress",
+  "status": "done",
   "created": "2026-09-28",
   "features": [
     {"id":"behavior_capability_registration","phase":"C1","status":"done","reference":"UIBehavior, UIBehaviorWith, UIElement::behaviorsOf, drag/drop free functions","verification":"UIBehaviorCapabilityTest.*; existing GUI behavior tests green"},
@@ -9,6 +9,6 @@
     {"id":"control_delegates_replace_actions","phase":"C1c","status":"done","reference":"MulticastDelegate::broadcast snapshot, UIButton::onClicked, Lua listener (superseded by C1d)","verification":"WidgetTreeTest.ButtonClickReachesEveryListenerWhileListenersChange"},
     {"id":"lua_listeners_owned_by_script_instance","phase":"C1d","status":"done","reference":"MulticastDelegate::addWeakLambda, ECS/Systems/LuaEvent.h (LuaListenerScope, FLuaListenerToken, TLuaEvent), LuaScriptInstance::listeners, Button.onClicked","verification":"DelegateTest.*; GameUIScriptTest.ScriptsListenToButtonsDirectly, ListenersEndWithTheirScriptInstance, SpawnedButtonCanBeListenedToBeforeItIsAttached"},
     {"id":"tree_tick_registry","phase":"C2","status":"done","reference":"FWidgetTickRegistry (WidgetTickRegistry.h), WidgetTree::tick, IUITickable::setTickEnabled, UIElement::enableTick","verification":"WidgetTreeTickRegistryTest.* (idle 1k/10k: ~0.008 us/tick vs 52/565 us before); GuiAnimationTest.*, TickOrderTest.*, GameUIScriptTest.* green"},
-    {"id":"lua_call_hot_path","phase":"C3","status":"not_started","reference":"LuaScriptingSystem::call/invoke, invokeLuaCallback, ILuaScriptHost::bindSelf","verification":"TickOrderTest.* and GameUIScriptTest.* green; benchmark before/after"}
+    {"id":"lua_call_hot_path","phase":"C3","status":"done","reference":"LuaScriptingSystem::call, bindHostSelf, protected_function callbacks","verification":"debug, 400 empty onUpdate: 534 -> 117 us/frame; LuaScriptHostTest.*, TickOrderTest.*, GameUIScriptTest.*, LuaEntityScriptCallTest.* (43) green"}
   ]
 }
