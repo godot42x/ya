@@ -9,8 +9,11 @@
 // which is also what keeps a pointer allocated in one module and freed in
 // another going through the same allocator.
 //
-// Not compiled outside profile builds: `ya_process_allocator()` is a no-op
-// there, so debug and release keep the platform's allocator untouched.
+// Every build routes through the layer, not just the measuring ones: one
+// allocator that only exists in some builds is not one layer, and having the
+// debug gates and the whole test suite walk this path is worth more than the
+// nanoseconds it costs. Which backend they route to is a C++ choice
+// (`ProcessAllocator`), and only the counting one is profile-specific.
 
 #include "Core/Memory/Allocator.h"
 

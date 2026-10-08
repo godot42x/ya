@@ -178,3 +178,14 @@ PB6 的基线已入库，但复查发现三处问题，都在「这份基线本�
 - 踩到的两个坑（已记进 todo）：xmake 求值项目描述时 `get_config("mode")` 是 **nil**，判模式必须用 `is_mode()`；改了源文件列表后 xmake 的 unity 文件不会自动重生成，要清 `build/.gens` 或 `xmake c`（我删了 `.gens` 导致共享 build 状态与磁盘不一致，最后用 `xmake c` + 全量重建修好，期间共享 build 缓存被清空了一次）。
 - **给并行 agent 的提示**：上一条记录里提到 `Source.xmake.lua:92` 引用了未定义的 `ya_alloc_hook` 导致 `xmake show -t ya-runtime` 失败 —— 该函数已改名为 `ya_process_allocator()` 并有定义，这个阻塞解除。
 - **未取运行期数字**：`heap.*` 序列与编辑器 Heap 行本轮没跑出数值 —— profile worktree 落在别人一个编译不过的提交上（`RenderCompanionSpecs.cpp` 用了不存在的 `renderFeatureMaskOf`），全引擎 profile 构建被挡。编译与单测层面已验；等那条线修好再补一次基准即可。
+## 2026-10-09 — allocator 层回归（报告：regression-allocator-2026-10-09.md）
+
+- 全量构建 + 全部门禁 + profile worktree 实跑，三处编译错误、两个实现缺陷、一个构建门控问题，全部定位到根因并修掉；每个结论都做了「改前 / 改后」对照。
+- **编译错误 1（HEAD 上就有，非本次引入）**：`RenderCompanionSpecs.cpp:46` 用了未声明的 `renderFeatureMaskOf` —— 该函数声明在 `CompanionManager.h`，cpp 没 include。补一行 include。此前一直被增量构建掩盖，直到 `xmake c` + 全量重建才暴露；它也是上一轮拿不到 profile 运行期数字的原因。
+- **缺陷 A（本次引入）**：`CoreValueTypes` 三个用例 `std::bad_alloc`。在本次改动之前的提交（`e56d5d9f`）建 worktree 跑同一组用例 13/13 通过，所以是自己的问题。根因：`MetaValue` 的 boxed 存储走 `::operator new(size, align_val_t(alignof(T)))`，而 `alignof(glm::mat4) == 4`，macOS 的 `aligned_alloc` **拒绝小于 `sizeof(void*)` 的对齐并返回 null**（libc++ 自己回退到普通 new），我的 `MallocAllocator` 把它当错误对齐直接丢过去，于是每次 boxed 分配都失败。修法：只有真超对齐才走 `aligned_alloc`，其余回退 `malloc`。
+- **缺陷 B（本次引入）**：profile 基准里 `heap.liveMiB` = 4429 MiB 而 `rssMiB` 只有 360 MiB。绝大多数全局 `operator delete` 不传 size，`liveBytes` 只加不减 —— 那个「level」其实是累计量。修法：每个 block 前置 size 头部（过对齐时记录指针偏移，两条路径共用一条还原规则）。修后同一场景 `heap.liveMiB` 99.85 MiB / `freeMiB` 1.58 MiB/帧 / RSS 301 MiB，量级吻合。
+- **构建门控不可靠**：`ya_process_allocator()` 原来用 `is_mode("profile")` 决定是否接管全局分配，实测 `[probe] is_mode(profile)=false is_mode(debug)=false get_config(mode)=nil` —— xmake 求值项目描述时还没加载 mode，两个查询都拿不到答案，门控时灵时不灵（同一份 debug 配置下 core 确实接管了 `_Znwm`）。改法：这一层在**所有构建**都接管（只在部分构建里存在的 allocator 不是一层，而且这样全部门禁都走这条路等于持续验证它），「路由到哪个 backend」搬到 C++ 由 `YA_BUILD_MODE_PROFILE` 决定。
+- 顺带修 `bench_run.py --filter`：`Lights_50.bench.json` 的 stem 是 `Lights_50.bench`，改成 fnmatch 后精确名选不出任何东西；改为对去掉 `.bench.json` 的场景名匹配。
+- 验证：全量构建通过；`xmake r -g test` **3369/3369 通过 0 失败**（`ya-testing` 1784，新增 17 个 allocator 用例）；profile worktree 全量构建通过 + PerfLab Lights_50 基准实跑出 `heap.*` 全套。
+- 帧时间 8.758 ms vs 已入库基线 8.384 ms：不同提交、且当时机器有并发构建（本项目实测并发构建能让同一场景 frame p50 差 87%），**不作为性能回归判断**，只作「能跑通、数量级合理」的证据；要比必须在同一提交、机器空闲时重采。
+- 剩余：三个子系统桶恒为 0（机制已测但还没在任何子系统入口打 `YA_MEMORY_OWNER`，所以没有真实归属数据）；Windows 未编译；这层在 profile 下的开销未量化。

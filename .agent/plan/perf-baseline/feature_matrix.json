@@ -73,10 +73,12 @@
         "Engine/Source/Framework/Core/Memory/ProcessAllocatorInstall.cpp",
         "Engine/Test/Source/Core/AllocatorTest.cpp",
         "ya-testing debug 1776/1779 (11 new allocator cases; the 3 failures are the reflection line's CoreValueTypes)",
-        "profile build: every module defines its own operator new (nm: libya-render-3d has T __Znwm), counting symbols exist only in libya-foundation-core",
+        "profile build: every module defines its own operator new (nm: libya-render-3d has T _Znwm), counting symbols exist only in libya-foundation-core",
+        "regression 2026-09: 3369/3369 across all gates; report at .agent/plan/perf-baseline/regression-allocator-2026-10-09.md",
+        "profile benchmark Lights_50: heap.liveMiB p50 99.85, heap.freeMiB p50 1.58, heap.allocCount p50 5748, rssMiB p50 301.4",
         "HelloMaterial debug benchmark: process_memory rssMiB p50 253.06, peakRssMiB 972.88, unifiedMemory true"
       ],
-      "remaining": "runtime heap numbers (heap.* series, editor Heap row) not captured yet: the full profile build is blocked by an unrelated compile error at HEAD (RenderCompanionSpecs.cpp). The layer also compiles into the global allocation functions in profile builds only; enabling it everywhere is one xmake predicate"
+      "remaining": "subsystem buckets (resource/render/script) are all zero: the mechanism is tested but nothing is tagged yet, so there is no real attribution data yet. Windows path not compiled. Overhead of the layer not quantified"
     },
     {
       "id": "PB5",

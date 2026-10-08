@@ -99,11 +99,13 @@ def collect_configs(args: argparse.Namespace) -> list[Path]:
             raise SystemExit(f"bench dir not found: {bench_dir}")
         configs.extend(sorted(bench_dir.glob("*.bench.json")))
     if args.filter:
-        # fnmatch on the config stem, so `Lights_50` selects exactly that
-        # scene and `Lights*` selects the family. A plain substring would pull
+        # fnmatch on the scene name, so `Lights_50` selects exactly that scene
+        # and `Lights*` selects the family. A plain substring would pull
         # `Lights_500` in with `Lights_50`, which is a silent extra hour of
-        # benchmarking.
-        configs = [c for c in configs if fnmatch(c.stem, args.filter)]
+        # benchmarking. The name is the file name without its `.bench.json`
+        # suffix -- matching the raw stem would make the exact form match
+        # nothing at all.
+        configs = [c for c in configs if fnmatch(scene_name(c), args.filter)]
     # De-duplicate while keeping order: --bench and --bench-dir may overlap.
     seen: set[Path] = set()
     unique: list[Path] = []

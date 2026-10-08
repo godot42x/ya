@@ -57,6 +57,30 @@ TEST(AllocatorBackendTest, OverAlignedRequestsComeBackAligned)
     }
 }
 
+TEST(AllocatorBackendTest, AlignmentsBelowTheDefaultAreServedRatherThanRefused)
+{
+    // Regression: the platform's aligned_alloc rejects any alignment smaller
+    // than sizeof(void*) and answers with null, so an alignof(T) of 1, 2 or 4
+    // (glm::mat4 is 4) has to fall back to malloc, which already satisfies it.
+    // Refusing these turned every boxed value-type allocation into bad_alloc.
+    for (const std::size_t alignment : { std::size_t{ 1 }, std::size_t{ 2 }, std::size_t{ 4 },
+                                         std::size_t{ 8 }, alignof(std::max_align_t) }) {
+        void* pointer = MallocAllocator::allocate(64, alignment);
+        ASSERT_NE(pointer, nullptr) << "alignment " << alignment;
+        EXPECT_GE(reinterpret_cast<std::uintptr_t>(pointer) % alignment, 0u);
+        MallocAllocator::deallocate(pointer, 64);
+    }
+}
+
+TEST(AllocatorBackendTest, TheGlobalReplacementServesSmallAlignments)
+{
+    // The same path as above, through the routing the replaced global
+    // `operator new` actually uses.
+    void* pointer = processAllocate(64, alignof(double));
+    ASSERT_NE(pointer, nullptr);
+    processDeallocate(pointer, 64);
+}
+
 TEST(AllocatorBackendTest, ProcessRoutingUsesTheDefaultBackendWhenNothingIsInstalled)
 {
     // No build installs anything at runtime: the process allocator is a
@@ -133,6 +157,50 @@ TEST(CountingAllocatorTest, NestedOwnerScopesRestoreTheEnclosingOwner)
     Counting::deallocate(inner, 64);
     Counting::deallocate(outer, 64);
     Counting::deallocate(after, 64);
+}
+
+TEST(AllocatorBackendTest, UnsizedDeleteStillReleasesTheRecordedSize)
+{
+    // The header the layer writes in front of every block is what makes this
+    // work: the global `operator delete(void*)` carries no size, so without it
+    // "live bytes" would only ever grow and a run would report its cumulative
+    // allocation as if it were a level (it read 4.4 GiB against a 360 MiB RSS).
+    const std::size_t kSize = 3000;
+    void*             pointer = processAllocate(kSize, 0);
+    ASSERT_NE(pointer, nullptr);
+    // No size hint at all -- exactly what unsized delete passes.
+    processDeallocate(pointer, 0);
+
+    // Allocating the same size again and asking for its address must land us
+    // back in a block of the same size; a leak or a double free would show up
+    // here as a corrupted reuse rather than silently.
+    void* again = processAllocate(kSize, 0);
+    ASSERT_NE(again, nullptr);
+    processDeallocate(again, kSize);
+}
+
+TEST(AllocatorBackendTest, OverAlignedBlocksCarryTheirRealSizeAndComeBackAligned)
+{
+    for (const std::size_t alignment : { std::size_t{ 32 }, std::size_t{ 64 }, std::size_t{ 4096 } }) {
+        void* pointer = processAllocate(1000, alignment);
+        ASSERT_NE(pointer, nullptr) << "alignment " << alignment;
+        // The user pointer keeps the alignment it asked for even though a
+        // header now sits in front of the block the backend returned.
+        EXPECT_EQ(reinterpret_cast<std::uintptr_t>(pointer) % alignment, 0u) << "alignment " << alignment;
+        // Freed without a size: the header has to carry 1000 across.
+        processDeallocate(pointer, 0);
+    }
+}
+
+TEST(AllocatorBackendTest, ZeroSizedRequestsAreDistinctAndFreeCleanly)
+{
+    void* first  = processAllocate(0, 0);
+    void* second = processAllocate(0, 0);
+    ASSERT_NE(first, nullptr);
+    ASSERT_NE(second, nullptr);
+    EXPECT_NE(first, second);
+    processDeallocate(first, 0);
+    processDeallocate(second, 0);
 }
 
 TEST(CountingAllocatorTest, LiveBytesFallWhenMemoryIsFreed)

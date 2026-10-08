@@ -9,6 +9,7 @@
 #include "ECS/Systems/Components/PointLightComponent.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "Hierarchy/Node.h"
+#include "Render/Adapters/Companion/CompanionManager.h"
 #include "Scene/Core/Scene.h"
 #include "Scene3D/TransformComponent.h"
 

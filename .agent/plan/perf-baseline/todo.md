@@ -3,7 +3,7 @@
 - [x] PB1 基准模式 + 汇总器 + `bench_summary.json`（meta / frame / cpu_stages）
 - [x] PB2 pass 级 GPU timestamp + render_counters（编辑器 profiling 段的 pass 表；计数清零在帧边界，max 不再被预热帧撑大——见 progress 的复查返工一节）
 - [x] PB3 GPU 显存统计（VMA，按资源类别）；面板是编辑器 Runtime Tools 里独立的 GPU Memory 段（未并入 profiling 段——那段本轮由 PB2 线占用）
-- [~] PB4 进程内存统计：RSS / 峰值 + **堆分配按子系统归类**（`Core/Memory` allocator 层，静态多态 + `CountingAllocator` 模板，profile 构建下按 `YA_MEMORY_OWNER` 分桶）均已落地并编译验证；**运行期数字未取**——全引擎 profile 构建被 HEAD 上别人的编译错误挡住
+- [~] PB4 进程内存统计：RSS / 峰值 + **堆分配按子系统归类**（`Core/Memory` allocator 层）已落地并回归通过（`regression-allocator-2026-10-09.md`）；运行期数字已取。**剩余：三个子系统桶仍是 0** —— 还没在任何子系统入口打 `YA_MEMORY_OWNER`
 - [x] PB5 压测场景：多光源、多网格、2D 合批、Sponza（`Example/PerfLab` + 生成脚本 + 10 组 scene/config；正式数字留给 PB6）
 - [~] PB6 对比报告脚本 + 一条命令跑一组 + 首份 macOS profile 基线（`baselines/macos/profile-15277c00/`，15 次运行 / 9 场景，干净 checkout；Sponza 未含，资产未拉。索引已按复查结论重建：commit 回填、路径相对化）
 - [ ] PB7 GUI 基准（与 GA3 共用）
@@ -20,10 +20,13 @@
 
 ## PB4 余项（allocator 层）记下的边界
 
-- allocator 层只在 **profile** 构建编进全局 `operator new`（`ya_process_allocator()`，用 `is_mode("profile")` 门控）。xmake 在求值项目描述时 `get_config("mode")` 是 nil，不能用；改了源文件列表后要清 `build/.gens` 或 `xmake c`，否则 unity 文件残留旧内容（本次踩过）。
+- allocator 层在**所有构建**都接管全局 `operator new`（`ya_process_allocator()` 无条件加源文件）；「路由到哪个 backend」由 C++ 侧的 `YA_BUILD_MODE_PROFILE` 决定。**不要在 xmake 里问构建模式**：求值项目描述时 `get_config("mode")` 是 nil、`is_mode("profile")` 也是 false（两种查询实测都拿不到 mode），门控会时灵时不灵——回归时同一份 debug 配置下 core 确实接管了 `_Znwm`。
+- 改了源文件列表后 xmake 不会自动重生成 unity 文件：清 `build/.gens` 或 `xmake c`。只删生成目录而不清构建状态会让 `xmake b` 报 `unity_N.cpp: no such file`。
 - 每模块各自编一份 `ProcessAllocatorInstall.cpp`：Mach-O 把镜像未定义的 `_Znwm` 绑回本镜像、MSVC 每个 DLL 一份 CRT，只在 Core 里定义一份拦不到其它模块。计数符号只在 Core 一处（`nm` 已验），因此全进程一套计数。
-- 运行期数字（`heap.*` 序列、编辑器 Heap 行）本轮未取：profile worktree 落在别人一个编译不过的提交上（`RenderCompanionSpecs.cpp`）。编译与单测层面已验。
-
+- `aligned_alloc` 在 macOS 上拒绝小于 `sizeof(void*)` 的对齐（`alignof(glm::mat4)==4` 就中招），必须回退到 `malloc`；否则每次 boxed 分配都是 `bad_alloc`。
+- 每个 block 前置 size 头部：不带 size 提示的 `operator delete` 占绝大多数，没有头部的话 `liveBytes` 只是累计量（实测报 4429 MiB 而 RSS 只有 360 MiB）。修后 live 99.9 MiB / RSS 301 MiB。
+- 三个子系统桶（resource / render / script）目前恒为 0：机制已测但**没有真实归属数据**，要在子系统入口打 `YA_MEMORY_OWNER` 才有。
+- 回归报告见 `regression-allocator-2026-10-09.md`（3 处编译错误、2 个实现缺陷、门控问题与全部验证数据）。
 ## 已知边界（PB1 返工记下，本轮不修）
 
 - PB1 确定性边界：相机/逻辑固定，脚本 elapsed 与 host clock 仍墙钟

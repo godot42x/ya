@@ -139,11 +139,15 @@ struct CountingAllocator
 
 /// Which allocator the process's global functions route through.
 ///
-/// `YA_ALLOCATOR_COUNTING` is set by the build in profile mode: measurement
-/// belongs to the build that measures, and a counting allocator shipped in
-/// every build is a tax nobody asked for. Switching the backend (mimalloc,
-/// jemalloc, ...) is one line here plus a dependency.
-#ifdef YA_ALLOCATOR_COUNTING
+/// Chosen here, in C++, from the build mode rather than from the build script:
+/// xmake evaluates the project description before the mode option is loaded, so
+/// a query there answers for whichever mode was configured, not the one being
+/// compiled. Only the counting backend is mode-dependent -- it is a measurement,
+/// and a measurement belongs to the build that measures. Everything else, in
+/// every build, routes through this one layer.
+///
+/// Switching backend (mimalloc, jemalloc, ...) is this alias plus a dependency.
+#ifdef YA_BUILD_MODE_PROFILE
 using ProcessAllocator = CountingAllocator<MallocAllocator>;
 #else
 using ProcessAllocator = MallocAllocator;
@@ -157,6 +161,11 @@ using ProcessAllocator = MallocAllocator;
 [[nodiscard]] YA_CORE_API void* processAllocate(std::size_t size, std::size_t alignment = 0);
 
 /// The matching deallocation. `noexcept`: a destructor path may not throw.
+///
+/// `size` is the sized-delete hint and is treated as a hint: the layer keeps the
+/// real size in a header written at allocation time, because most calls through
+/// the global `operator delete` carry no size at all, and a level that only ever
+/// grows is not a level. The header is what makes "live bytes" mean anything.
 YA_CORE_API void processDeallocate(void* pointer, std::size_t size) noexcept;
 
 /// True when the process allocator is one that counts. Compile-time: the
@@ -164,7 +173,7 @@ YA_CORE_API void processDeallocate(void* pointer, std::size_t size) noexcept;
 /// instead of a row of zeros.
 [[nodiscard]] constexpr bool processAllocatorCounts()
 {
-#ifdef YA_ALLOCATOR_COUNTING
+#ifdef YA_BUILD_MODE_PROFILE
     return true;
 #else
     return false;
