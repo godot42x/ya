@@ -163,6 +163,9 @@ FInputReply routeGameplayViewportInput(
     }
 
     if (snapshot.pointerEvent && snapshot.pointerInViewport) {
+        if (app.blocksGameplayInput(event)) {
+            return FInputReply{.handled = true};
+        }
         app.getInputManager().processEvent(event);
 
         std::optional<FPointerCaptureRequest> pointerCapture;
@@ -183,6 +186,9 @@ FInputReply routeGameplayViewportInput(
     }
 
     if (snapshot.keyboardEvent && snapshot.viewportFocused && !snapshot.textInput) {
+        if (app.blocksGameplayInput(event)) {
+            return FInputReply{.handled = true};
+        }
         app.getInputManager().processEvent(event);
         // The same game key step as a standalone run; an Escape the game
         // leaves goes on to the editor's Escape policy.

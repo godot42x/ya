@@ -71,6 +71,17 @@ void FWidgetTickRegistry::removeNonMembers(const WidgetTree& tree)
 
 void FWidgetTickRegistry::dispatch(const WidgetTree& tree, float deltaSeconds)
 {
+    dispatchEntries(tree, nullptr, deltaSeconds);
+}
+
+void FWidgetTickRegistry::dispatch(const WidgetTree& tree, const std::function<float(const UIElement&)>& deltaForOwner)
+{
+    dispatchEntries(tree, &deltaForOwner, 0.0f);
+}
+
+void FWidgetTickRegistry::dispatchEntries(const WidgetTree& tree, const std::function<float(const UIElement&)>* deltaForOwner,
+                                          float deltaSeconds)
+{
     if (_bDispatching) {
         YA_CORE_WARN("WidgetTree::tick: re-entrant tick ignored");
         return;
@@ -95,11 +106,12 @@ void FWidgetTickRegistry::dispatch(const WidgetTree& tree, float deltaSeconds)
         if (!entry.bLive || !entry.bVisible) {
             continue;
         }
+        const float delta = deltaForOwner ? (*deltaForOwner)(*entry.owner) : deltaSeconds;
         if (entry.tickable) {
-            entry.tickable->tick(*entry.owner, deltaSeconds);
+            entry.tickable->tick(*entry.owner, delta);
         }
         else {
-            entry.owner->tick(deltaSeconds);
+            entry.owner->tick(delta);
         }
     }
     _bDispatching = false;

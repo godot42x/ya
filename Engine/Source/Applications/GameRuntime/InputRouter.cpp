@@ -46,6 +46,9 @@ FInputReply GameInputNode::route(FInputRouteContext& context, const FInputEvent&
     if (uiResult == EWidgetRouteResult::HandledExclusive) {
         return FInputReply{.handled = true};
     }
+    if (context.app.blocksGameplayInput(event)) {
+        return FInputReply{.handled = true};
+    }
 
     if (_inputManager) {
         _inputManager->processEvent(event);

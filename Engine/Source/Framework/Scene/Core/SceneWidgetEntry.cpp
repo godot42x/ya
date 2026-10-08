@@ -179,6 +179,15 @@ nlohmann::json SceneWidgetEntry::toJson() const
     j["entryId"]   = entryId;
     j["zOrder"]    = zOrder;
     j["autoMount"] = autoMount;
+    if (bModal) {
+        j["modal"] = true;
+    }
+    if (bPausesGame) {
+        j["pausesGame"] = true;
+    }
+    if (clock == ESceneWidgetClock::Game) {
+        j["clock"] = "game";
+    }
     if (!documentPath.empty()) {
         j["document"] = documentPath;
     }
@@ -204,6 +213,25 @@ SceneWidgetEntry SceneWidgetEntry::fromJson(const nlohmann::json& json)
     }
     if (json.contains("autoMount")) {
         entry.autoMount = json["autoMount"].get<bool>();
+    }
+    if (json.contains("modal")) {
+        entry.bModal = json["modal"].get<bool>();
+    }
+    if (json.contains("pausesGame")) {
+        entry.bPausesGame = json["pausesGame"].get<bool>();
+    }
+    if (json.contains("clock")) {
+        const std::string clock = json["clock"].get<std::string>();
+        if (clock == "game") {
+            entry.clock = ESceneWidgetClock::Game;
+        }
+        else if (clock == "real") {
+            entry.clock = ESceneWidgetClock::Real;
+        }
+        else {
+            YA_CORE_ERROR("SceneWidgetEntry::fromJson: entry '{}' clock '{}' is not 'game' or 'real'",
+                          entry.entryId, clock);
+        }
     }
     if (json.contains("document")) {
         entry.documentPath = json["document"].get<std::string>();

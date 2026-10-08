@@ -813,6 +813,12 @@ void WidgetTree::tick(float deltaSeconds)
     _ticks.dispatch(*this, deltaSeconds);
 }
 
+void WidgetTree::tick(const std::function<float(const UIElement&)>& deltaForOwner)
+{
+    repairPointerSession("tick");
+    _ticks.dispatch(*this, deltaForOwner);
+}
+
 void WidgetTree::layout()
 {
     const float width  = std::max(static_cast<float>(_logicalExtent.width), kCanvasMinSize);

@@ -96,7 +96,11 @@ GameUIHost::GameUIHost() : _controller(std::make_unique<DefaultGameUIController>
     _tree.setTextureSource(&gameUITextureSource());
 }
 
-GameUIHost::~GameUIHost() = default;
+GameUIHost::~GameUIHost()
+{
+    _entries.clear();
+    syncGamePause();
+}
 
 void GameUIHost::setReferenceResolution(glm::uvec2 resolution)
 {
@@ -255,12 +259,98 @@ UIFrameSnapshot GameUIHost::buildSnapshot()
 
 void GameUIHost::update(const FUIFrameClock& clock)
 {
-    const float deltaSeconds = clock.forClock(_updateClock);
     if (_behaviorRuntime) {
         _behaviorRuntime->update();
     }
-    advanceTimers(deltaSeconds);
-    _tree.tick(deltaSeconds);
+    advanceTimers(clock);
+    _tree.tick([this, &clock](const UIElement& widget) { return clock.forClock(clockOf(widget)); });
+}
+
+int GameUIHost::clockIndex(EUIUpdateClock clock)
+{
+    return clock == EUIUpdateClock::GameTime ? 1 : 0;
+}
+
+bool GameUIHost::entryVisible(const FMountedEntry& entry) const
+{
+    const UIElementRef root = entry.root.lock();
+    return root && root->isVisibleInTree();
+}
+
+const GameUIHost::FMountedEntry* GameUIHost::topmostVisibleEntry() const
+{
+    const FMountedEntry* best  = nullptr;
+    int32_t              bestZ = 0;
+    for (const FMountedEntry& entry : _entries) {
+        if (!entryVisible(entry)) {
+            continue;
+        }
+        const int32_t z = entry.root.lock()->_zOrder;
+        if (!best || z >= bestZ) {
+            best  = &entry;
+            bestZ = z;
+        }
+    }
+    return best;
+}
+
+EUIUpdateClock GameUIHost::clockOf(const UIElement& widget) const
+{
+    for (const UIElement* node = &widget; node; node = node->getParent()) {
+        for (const FMountedEntry& entry : _entries) {
+            if (entry.root.lock().get() == node) {
+                return entry.clock;
+            }
+        }
+    }
+    return EUIUpdateClock::RealTime;
+}
+
+EUIUpdateClock GameUIHost::clockForEntry(std::string_view entryId) const
+{
+    for (const FMountedEntry& entry : _entries) {
+        if (entry.entryId == entryId) {
+            return entry.clock;
+        }
+    }
+    return EUIUpdateClock::RealTime;
+}
+
+bool GameUIHost::blocksWorldInput() const
+{
+    for (const FMountedEntry& entry : _entries) {
+        if (entry.bModal && entryVisible(entry)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool GameUIHost::dispatchEntryCancel()
+{
+    const FMountedEntry* top = topmostVisibleEntry();
+    if (!top || !_behaviorRuntime) {
+        return false;
+    }
+    return _behaviorRuntime->callNamed(top->entryId, "onCancel");
+}
+
+void GameUIHost::syncGamePause()
+{
+    if (!_pauseHook) {
+        return;
+    }
+    int want = 0;
+    for (const FMountedEntry& entry : _entries) {
+        if (entry.bPausesGame && entryVisible(entry)) {
+            ++want;
+        }
+    }
+    const int delta = want - _pauseHolds;
+    _pauseHolds     = want;
+    if (delta != 0) {
+        _pauseHook(delta);
+    }
 }
 
 void GameUIHost::layoutNow()
@@ -270,20 +360,23 @@ void GameUIHost::layoutNow()
     }
 }
 
-uint64_t GameUIHost::addTimer(const void* owner, float delaySeconds, float intervalSeconds, std::function<bool()> fire)
+uint64_t GameUIHost::addTimer(const void* owner, float delaySeconds, float intervalSeconds, std::function<bool()> fire,
+                             EUIUpdateClock clock)
 {
     if (!fire) {
         return 0;
     }
-    const uint64_t id  = _nextTimerId++;
-    const double   due = _clockSeconds + std::max(delaySeconds, 0.0f);
+    const int      index = clockIndex(clock);
+    const uint64_t id    = _nextTimerId++;
+    const double   due   = _clockSeconds[index] + std::max(delaySeconds, 0.0f);
     _timers.emplace(id, FTimer{
                             .owner    = owner,
                             .due      = due,
                             .interval = std::max(intervalSeconds, 0.0f),
+                            .clock    = clock,
                             .fire     = std::move(fire),
                         });
-    scheduleTimer(id, due);
+    scheduleTimer(id, due, clock);
     return id;
 }
 
@@ -301,38 +394,50 @@ void GameUIHost::cancelTimersOf(const void* owner)
     }
 }
 
-void GameUIHost::scheduleTimer(uint64_t id, double due)
+void GameUIHost::scheduleTimer(uint64_t id, double due, EUIUpdateClock clock)
 {
-    _timerQueue.push_back(FTimerDue{.due = due, .id = id});
-    std::push_heap(_timerQueue.begin(), _timerQueue.end(), FTimerDue::firesAfter);
+    std::vector<FTimerDue>& queue = _timerQueues[clockIndex(clock)];
+    queue.push_back(FTimerDue{.due = due, .id = id});
+    std::push_heap(queue.begin(), queue.end(), FTimerDue::firesAfter);
 }
 
 void GameUIHost::compactTimerQueue()
 {
-    if (_timerQueue.size() <= 2 * _timers.size() + 32) {
-        return;
+    for (std::vector<FTimerDue>& queue : _timerQueues) {
+        if (queue.size() <= 2 * _timers.size() + 32) {
+            continue;
+        }
+        std::erase_if(queue, [this](const FTimerDue& entry) { return !_timers.contains(entry.id); });
+        std::make_heap(queue.begin(), queue.end(), FTimerDue::firesAfter);
     }
-    std::erase_if(_timerQueue, [this](const FTimerDue& entry) { return !_timers.contains(entry.id); });
-    std::make_heap(_timerQueue.begin(), _timerQueue.end(), FTimerDue::firesAfter);
 }
 
-void GameUIHost::advanceTimers(float deltaSeconds)
+void GameUIHost::advanceTimers(const FUIFrameClock& clock)
 {
-    _clockSeconds += deltaSeconds;
+    advanceClock(EUIUpdateClock::RealTime, clock.realDelta);
+    advanceClock(EUIUpdateClock::GameTime, clock.gameDelta);
+}
+
+void GameUIHost::advanceClock(EUIUpdateClock clock, float deltaSeconds)
+{
+    const int index = clockIndex(clock);
+    _clockSeconds[index] += deltaSeconds;
+    const double now = _clockSeconds[index];
+    std::vector<FTimerDue>& queue = _timerQueues[index];
     // Take every due id first: a timer a callback adds or reschedules fires
     // next update at the earliest.
     std::vector<uint64_t> due;
-    while (!_timerQueue.empty() && _timerQueue.front().due <= _clockSeconds) {
-        std::pop_heap(_timerQueue.begin(), _timerQueue.end(), FTimerDue::firesAfter);
-        const uint64_t id = _timerQueue.back().id;
-        _timerQueue.pop_back();
+    while (!queue.empty() && queue.front().due <= now) {
+        std::pop_heap(queue.begin(), queue.end(), FTimerDue::firesAfter);
+        const uint64_t id = queue.back().id;
+        queue.pop_back();
         if (_timers.contains(id)) {
             due.push_back(id);
         }
     }
     for (const uint64_t id : due) {
         auto it = _timers.find(id);
-        if (it == _timers.end()) {
+        if (it == _timers.end() || it->second.clock != clock) {
             continue;
         }
         const std::function<bool()> fire = it->second.fire;
@@ -345,8 +450,8 @@ void GameUIHost::advanceTimers(float deltaSeconds)
             _timers.erase(it);
             continue;
         }
-        it->second.due = std::max(it->second.due + it->second.interval, _clockSeconds + 1e-6);
-        scheduleTimer(id, it->second.due);
+        it->second.due = std::max(it->second.due + it->second.interval, _clockSeconds[clockIndex(it->second.clock)] + 1e-6);
+        scheduleTimer(id, it->second.due, it->second.clock);
     }
 }
 
@@ -464,6 +569,7 @@ void GameUIHost::setMountedRoots(std::vector<std::pair<std::string, std::weak_pt
     for (auto& [entryId, weakRoot] : roots) {
         addEntry(std::move(entryId), weakRoot.lock());
     }
+    syncGamePause();
 }
 
 void GameUIHost::clearMountedRoots()
@@ -472,6 +578,7 @@ void GameUIHost::clearMountedRoots()
     _entries.clear();
     _pendingSpawns.clear();
     _pendingDestroys.clear();
+    syncGamePause();
 }
 
 void GameUIHost::addEntry(std::string entryId, const UIElementRef& root)
@@ -479,6 +586,18 @@ void GameUIHost::addEntry(std::string entryId, const UIElementRef& root)
     FMountedEntry& entry = _entries.emplace_back(FMountedEntry{.entryId = std::move(entryId), .root = root});
     if (root) {
         indexNamedWidgets(*root, entry.names, entry.ambiguous);
+    }
+    if (_mountedScene) {
+        for (const SceneWidgetEntry& authored : _mountedScene->getWidgetEntries()) {
+            if (authored.entryId != entry.entryId) {
+                continue;
+            }
+            entry.bModal      = authored.bModal;
+            entry.bPausesGame = authored.bPausesGame;
+            entry.clock       = authored.clock == ESceneWidgetClock::Game ? EUIUpdateClock::GameTime
+                                                                          : EUIUpdateClock::RealTime;
+            break;
+        }
     }
 }
 

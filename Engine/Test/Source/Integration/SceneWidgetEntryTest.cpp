@@ -101,6 +101,36 @@ TEST(SceneWidgetEntryTest, NonInstanceEditableFieldIsRejected)
     EXPECT_FALSE(overrides.applyTo(*panel));
 }
 
+TEST(SceneWidgetEntryTest, ModalPauseAndClockRoundtripAndDefaultsAreOmitted)
+{
+    SceneWidgetEntry defaults;
+    defaults.entryId      = "HUD";
+    defaults.documentPath = "UI/HUD.yaui";
+    const nlohmann::json plain = defaults.toJson();
+    EXPECT_FALSE(plain.contains("modal"));
+    EXPECT_FALSE(plain.contains("pausesGame"));
+    EXPECT_FALSE(plain.contains("clock"));
 
+    SceneWidgetEntry entry;
+    entry.entryId      = "Menu";
+    entry.documentPath = "UI/Menu.yaui";
+    entry.bModal       = true;
+    entry.bPausesGame  = true;
+    entry.clock        = ESceneWidgetClock::Game;
+    const nlohmann::json json = entry.toJson();
+    EXPECT_TRUE(json["modal"].get<bool>());
+    EXPECT_TRUE(json["pausesGame"].get<bool>());
+    EXPECT_EQ(json["clock"], "game");
+
+    const SceneWidgetEntry loaded = SceneWidgetEntry::fromJson(json);
+    EXPECT_TRUE(loaded.bModal);
+    EXPECT_TRUE(loaded.bPausesGame);
+    EXPECT_EQ(loaded.clock, ESceneWidgetClock::Game);
+
+    nlohmann::json unknown = json;
+    unknown["clock"]       = "wall";
+    const SceneWidgetEntry kept = SceneWidgetEntry::fromJson(unknown);
+    EXPECT_EQ(kept.clock, ESceneWidgetClock::Real);
+}
 
 } // namespace ya

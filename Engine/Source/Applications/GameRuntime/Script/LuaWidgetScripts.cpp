@@ -10,6 +10,7 @@
 #include "Script/Lua/ScriptInstanceOps.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 
 namespace ya
@@ -60,6 +61,7 @@ script::ScriptValue addScriptTimer(const std::shared_ptr<LuaWidgetScriptBehavior
     const std::weak_ptr<LuaWidgetScriptBehavior> weak = behavior;
     // The function is retained on this instance. Replacing or destroying the
     // self releases it, and the timer stops instead of calling into the new table.
+    const EUIUpdateClock clock = host.clockForEntry(behavior->entryId);
     const uint64_t id = host.addTimer(behavior.get(), delay, interval, [weak, held, self]() -> bool {
         const std::shared_ptr<LuaWidgetScriptBehavior> live = weak.lock();
         if (!live || !live->runtime || !live->instance.bLoaded || !scriptFunctionAlive(held)) {
@@ -69,7 +71,7 @@ script::ScriptValue addScriptTimer(const std::shared_ptr<LuaWidgetScriptBehavior
             callbacks->invoke(held, self, {});
         }
         return true;
-    });
+    }, clock);
     return script::scriptMake(makeWidgetTimerRef(host, id));
 }
 
@@ -251,6 +253,24 @@ void LuaWidgetScripts::update()
             (void)callScriptInstanceNamed(scripting, behavior->instance, bVisible ? "onShow" : "onHide", {}, true);
         }
     }
+}
+
+bool LuaWidgetScripts::callNamed(std::string_view entryId, const std::string& name)
+{
+    std::vector<std::shared_ptr<LuaWidgetScriptBehavior>> scripts;
+    for (const auto& weak : _started) {
+        if (auto behavior = weak.lock();
+            behavior && behavior->entryId == entryId && behavior->instance.bLoaded) {
+            scripts.push_back(std::move(behavior));
+        }
+    }
+    for (const auto& behavior : scripts) {
+        const script::ScriptValue result = callScriptInstanceNamed(scripting, behavior->instance, name, {}, true);
+        if (const std::optional<bool> flag = result.toBool(); flag && *flag) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void LuaWidgetScripts::release(LuaWidgetScriptBehavior& behavior)

@@ -13,6 +13,9 @@
 
 #include "GUI/Widgets/UIBehaviorSpec.h"
 
+#include <string>
+#include <string_view>
+
 namespace ya
 {
 
@@ -20,6 +23,13 @@ struct IGameUIBehaviorRuntime : IUIBehaviorActivator
 {
     /// Start what was activated since the last step; report visibility changes.
     virtual void update() = 0;
+    /// Named call on the loaded scripts of one entry, in start order. True when
+    /// one of them returns true. Missing function is not a consumer.
+    virtual bool callNamed(std::string_view entryId, const std::string& name) {
+        (void)entryId;
+        (void)name;
+        return false;
+    }
 };
 
 } // namespace ya

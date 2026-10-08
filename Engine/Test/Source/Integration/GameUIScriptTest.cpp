@@ -7,6 +7,8 @@
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "GameRuntime/Script/GameplayLua.h"
 
+#include "AppModuleTestAccess.h"
+
 #include "Core/Event.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "Script/Lua/LuaTesting.h"
@@ -128,7 +130,8 @@ struct FUIScripts
     }
 
     /// Publish `root` as a document and add an autoMount entry for it.
-    void addEntry(const std::string& entryId, const UIElementRef& root, int32_t zOrder = 0)
+    void addEntry(const std::string& entryId, const UIElementRef& root, int32_t zOrder = 0,
+                  ESceneWidgetClock clock = ESceneWidgetClock::Real)
     {
         const std::string path = "Test/UI/" + entryId + ".yaui";
         documents.put(path, UIDocument::fromWidget(*root));
@@ -137,6 +140,7 @@ struct FUIScripts
         entry.documentPath = path;
         entry.zOrder       = zOrder;
         entry.autoMount    = true;
+        entry.clock        = clock;
         scene.addWidgetEntry(entry);
     }
 
@@ -280,8 +284,7 @@ local S = {}
 function S:onInit() fired = false; self:after(0.25, function() fired = true end) end
 return S
 )");
-    ui.addEntry("HUD", FUIScripts::widget(kTypeIdBorder, "HUD", "Delay"));
-    ui.host.setUpdateClock(EUIUpdateClock::GameTime);
+    ui.addEntry("HUD", FUIScripts::widget(kTypeIdBorder, "HUD", "Delay"), 0, ESceneWidgetClock::Game);
     ui.host.onSceneActivated(ui.scene);
 
     for (int i = 0; i < 3; ++i) {
@@ -708,6 +711,125 @@ TEST(GameUIScriptTest, AddToWorldWidgetRunsScriptsAndFinds)
     auto* message = dynamic_cast<UIText*>(ui.mounted("Toast", "Message"));
     ASSERT_NE(message, nullptr);
     EXPECT_EQ(message->getText(), "saved");
+}
+
+TEST(GameUIHostTest, CancelGoesToTopmostVisibleEntryFirst)
+{
+    App                app;
+    LuaScriptingSystem lua;
+    Scene              scene("World");
+    std::map<std::string, std::string> sources;
+    UIDocumentStore    documents;
+
+    GameUIHost* host = app.getGameUIHost();
+    GameplayScriptContext ctx;
+    ctx.activeScene = [&scene]() -> Scene* { return &scene; };
+    ctx.gameUI      = host;
+    registerGameplayScriptFunctions(ctx);
+    lua.setRuntimeServices({
+        .activeScene = [&scene]() -> Scene* { return &scene; },
+        .readScript  = [&sources](const std::string& path, std::string& out) {
+            auto it = sources.find(path);
+            if (it == sources.end()) {
+                return false;
+            }
+            out = it->second;
+            return true;
+        },
+    });
+    lua.init();
+    bindGameplayLua(lua, *host, ctx);
+    AppModuleTestAccess::setLuaScriptingSystem(app, &lua);
+    host->setDocumentStore(&documents);
+    host->setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
+
+    lua.lua()["highHits"]    = 0;
+    lua.lua()["lowHits"]     = 0;
+    lua.lua()["worldHits"]   = 0;
+    lua.lua()["consumeHigh"] = true;
+    lua.lua()["consumeLow"]  = false;
+    lua.lua()["consumeWorld"] = false;
+
+    const auto addScript = [&](const std::string& name, const char* source) {
+        sources[ScriptInstance::normalizeScriptPath("Test/UI/" + name + ".lua")] = source;
+    };
+    addScript("High", R"(
+local S = {}
+function S:onCancel() highHits = highHits + 1; return consumeHigh end
+return S
+)");
+    addScript("Low", R"(
+local S = {}
+function S:onCancel() lowHits = lowHits + 1; return consumeLow end
+return S
+)");
+    addScript("World", R"(
+local S = {}
+function S:onCancel() worldHits = worldHits + 1; return consumeWorld end
+return S
+)");
+
+    const auto addEntry = [&](const std::string& entryId, const std::string& script, int32_t zOrder) {
+        const std::string path = "Test/UI/" + entryId + ".yaui";
+        documents.put(path, UIDocument::fromWidget(*FUIScripts::widget(kTypeIdBorder, entryId, script)));
+        SceneWidgetEntry entry;
+        entry.entryId      = entryId;
+        entry.documentPath = path;
+        entry.zOrder       = zOrder;
+        entry.autoMount    = true;
+        scene.addWidgetEntry(entry);
+    };
+    addEntry("Low", "Low", 0);
+    addEntry("High", "High", 10);
+    scene.createNode3D("World")->getEntity()->addComponent<LuaScriptComponent>()->addScript("Test/UI/World.lua");
+    host->onSceneActivated(scene);
+    host->update(FUIFrameClock{.gameDelta = 0.016f, .realDelta = 0.016f});
+    lua.onUpdate(0.0f);
+
+    InputManager       inputManager;
+    GameInputNode      node(inputManager);
+    InputRouter        router;
+    router.setApp(app);
+    FInputRouteContext context{.app = app, .router = router};
+    const auto pressEscape = [&]() {
+        KeyPressedEvent escape;
+        escape._keyCode = EKey::Escape;
+        return node.route(context, escape);
+    };
+
+    EXPECT_TRUE(pressEscape().handled);
+    EXPECT_EQ(lua.lua().get<int>("highHits"), 1);
+    EXPECT_EQ(lua.lua().get<int>("lowHits"), 0);
+    EXPECT_EQ(lua.lua().get<int>("worldHits"), 0);
+    EXPECT_FALSE(inputManager.isKeyPressed(EKey::Escape));
+
+    lua.lua()["consumeHigh"] = false;
+    EXPECT_FALSE(pressEscape().handled);
+    EXPECT_EQ(lua.lua().get<int>("highHits"), 2);
+    EXPECT_EQ(lua.lua().get<int>("lowHits"), 0);
+    EXPECT_EQ(lua.lua().get<int>("worldHits"), 1);
+    EXPECT_TRUE(inputManager.isKeyPressed(EKey::Escape));
+
+    UIElement* content = host->getTree().getLayer(WidgetTree::ELayer::Content);
+    UIElement* high    = nullptr;
+    for (const UIElementRef& child : content->getChildren()) {
+        if (child && child->_zOrder == 10) {
+            high = child.get();
+        }
+    }
+    ASSERT_NE(high, nullptr);
+    high->setVisibility(EWidgetVisibility::Hidden);
+    lua.lua()["consumeLow"] = true;
+    EXPECT_TRUE(pressEscape().handled);
+    EXPECT_EQ(lua.lua().get<int>("highHits"), 2);
+    EXPECT_EQ(lua.lua().get<int>("lowHits"), 1);
+    EXPECT_EQ(lua.lua().get<int>("worldHits"), 1);
+
+    host->onSceneDeactivated(scene);
+    host->setBehaviorRuntime(nullptr);
+    AppModuleTestAccess::setLuaScriptingSystem(app, nullptr);
+    lua.destroyAll();
+    registerGameplayScriptFunctions({});
 }
 
 } // namespace ya

@@ -43,6 +43,14 @@ struct YA_SCENE_CORE_API UIInstanceOverrideSet
     static UIInstanceOverrideSet fromJson(const nlohmann::json& json);
 };
 
+/// Which clock an entry's scripts and timers read. `Real` keeps running while
+/// the game is paused; `Game` holds still with it.
+enum class ESceneWidgetClock : uint8_t
+{
+    Real = 0,
+    Game,
+};
+
 /// One top-level Game UI authoring entry inside a Scene.
 struct YA_SCENE_CORE_API SceneWidgetEntry
 {
@@ -55,6 +63,13 @@ struct YA_SCENE_CORE_API SceneWidgetEntry
     FCanvasSlotArgs rootSlot{.anchorMin = {0.0f, 0.0f}, .anchorMax = {1.0f, 1.0f}};
     /// Paint/hit order among entries in the content layer.
     int32_t zOrder = 0;
+    /// While this entry's root is visible, gameplay input is not delivered.
+    bool bModal = false;
+    /// While this entry's root is visible, the game pause count is one higher.
+    bool bPausesGame = false;
+    /// Clock for this entry's tick and timers. Default matches a tree that
+    /// keeps animating on a paused frame.
+    ESceneWidgetClock clock = ESceneWidgetClock::Real;
     /// Whether the default controller auto-instantiates on scene activation.
     bool autoMount = true;
     /// InstanceEditable field overrides (empty in the authoring phase).

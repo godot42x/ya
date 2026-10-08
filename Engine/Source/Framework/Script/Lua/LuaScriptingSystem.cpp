@@ -892,6 +892,26 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
     }
 }
 
+bool LuaScriptingSystem::callEachLoaded(const std::string& name)
+{
+    Scene* scene = _services.activeScene ? _services.activeScene() : nullptr;
+    if (!scene) {
+        return false;
+    }
+    const std::vector<FScriptSlot> slots = collectWorldSlots(*scene, treeRanks(*scene), {});
+    for (const FScriptSlot& slot : slots) {
+        ScriptInstance* script = findScript(*scene, slot.handle, slot.id);
+        if (!script || !script->enabled) {
+            continue;
+        }
+        const script::ScriptValue result = callNamed(*script, name, {}, ENamedCallError::Swallow);
+        if (const std::optional<bool> flag = result.toBool(); flag && *flag) {
+            return true;
+        }
+    }
+    return false;
+}
+
 const std::vector<uint32_t>& LuaScriptingSystem::treeRanks(Scene& scene)
 {
     const Node* root = scene.getRootNode();
@@ -1491,6 +1511,12 @@ void destroyScriptInstance(IWorldScriptRuntime& runtime, ScriptInstance& instanc
     if (LuaScriptingSystem* system = asLuaRuntime(runtime)) {
         system->destroy(instance);
     }
+}
+
+bool callLoadedWorldScripts(IWorldScriptRuntime& runtime, const std::string& name)
+{
+    LuaScriptingSystem* system = asLuaRuntime(runtime);
+    return system ? system->callEachLoaded(name) : false;
 }
 
 std::shared_ptr<void> scriptInstanceListenerOwner(uint64_t runtimeId)

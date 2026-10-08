@@ -23,6 +23,9 @@
 #include "RHI/NativeWindow.h"
 #include "Scene/Core/GameMounts.h"
 #include "Scene/Core/Scene.h"
+#include "Script/Lua/ScriptInstanceOps.h"
+#include "Core/Event.h"
+#include "Core/KeyCode.h"
 #include "Render3D/Services/DebugRenderSystem.h"
 
 #include <format>
@@ -160,10 +163,17 @@ App::App()
     inputRouter.setApp(*this);
     inputRouter.setDefaultNode(gameInputNode);
     _gameUIHost->setDocumentStore(_uiDocuments.get());
+    bindGameUIPause(*_gameUIHost);
 }
 
 App::~App()
 {
+    // Drop pause holds while this App is still alive. Member teardown destroys
+    // the pause depth before the host, so the host must not call back then.
+    if (_gameUIHost) {
+        _gameUIHost->clearMountedRoots();
+        _gameUIHost->setPauseHook({});
+    }
     // Only an App that entered init() owns a teardown: unit tests (and tooling)
     // build App for its services and never init it. `_instance` is assigned at
     // the top of init and cleared by quit(), so it reads exactly as "init ran and
@@ -391,6 +401,40 @@ void App::popInputMode()
     _inputMode = _inputModeStack.back();
     _inputModeStack.pop_back();
     inputRouter.applyInputMode(_inputMode);
+}
+
+void App::bindGameUIPause(GameUIHost& host)
+{
+    host.setPauseHook([this](int delta) {
+        if (delta > 0) {
+            for (int i = 0; i < delta; ++i) {
+                pushGamePause();
+            }
+        }
+        else {
+            for (int i = 0; i < -delta; ++i) {
+                popGamePause();
+            }
+        }
+    });
+}
+
+bool App::blocksGameplayInput(const Event& event)
+{
+    GameUIHost* host = getGameUIHost();
+    if (event.getEventType() == EEvent::KeyPressed &&
+        static_cast<const KeyPressedEvent&>(event).getKeyCode() == EKey::Escape) {
+        _bEscapeCancelLatched = (host && host->dispatchEntryCancel()) ||
+                                (_luaScriptingSystem && callLoadedWorldScripts(*_luaScriptingSystem, "onCancel"));
+        return _bEscapeCancelLatched;
+    }
+    if (event.getEventType() == EEvent::KeyReleased &&
+        static_cast<const KeyReleasedEvent&>(event).getKeyCode() == EKey::Escape) {
+        const bool bConsumed  = _bEscapeCancelLatched;
+        _bEscapeCancelLatched = false;
+        return bConsumed;
+    }
+    return host && host->blocksWorldInput();
 }
 
 void App::pushGamePause()

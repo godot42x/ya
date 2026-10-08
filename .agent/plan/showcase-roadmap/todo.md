@@ -60,7 +60,7 @@ GUI 与编辑器活跃线
 
 GUI
 - [~] `ui-behavior-capabilities` C2
-- [ ] `game-ui-script-framework` S4
+- [x] `game-ui-script-framework` S4
 
 文档与吸收
 - [ ] D1 模块依赖图（自动生成）

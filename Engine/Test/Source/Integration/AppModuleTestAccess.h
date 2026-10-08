@@ -33,7 +33,13 @@ class AppModuleTestAccess
         app._systems.emplace_back(std::move(system), group);
     }
     static void clearSystems(App& app) { app._systems.clear(); }
-    static void setGameUIHost(App& app, std::unique_ptr<GameUIHost> host) { app._gameUIHost = std::move(host); }
+    static void setGameUIHost(App& app, std::unique_ptr<GameUIHost> host)
+    {
+        app._gameUIHost = std::move(host);
+        if (app._gameUIHost) {
+            app.bindGameUIPause(*app._gameUIHost);
+        }
+    }
     static void tickLogic(App& app, float dt) { GameRuntimeTickOrchestrator::tickLogic(app, dt); }
     static AppAutomationControlService* getAutomationControlService(App& app) { return app.getAutomationControlService(); }
     static bool dispatchEvent(App& app, const Event& event) { return app.dispatchModuleEvent(event); }

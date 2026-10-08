@@ -293,6 +293,9 @@ struct YA_GUI_API WidgetTree final
     /// Events are dispatched before this call; snapshot/layout/paint happen
     /// after it.
     void tick(float deltaSeconds);
+    /// One frame where each owner may advance by a different delta (an entry
+    /// clock). `deltaForOwner` is called only for registrations that run.
+    void tick(const std::function<float(const UIElement&)>& deltaForOwner);
     /// Live frame registrations (diagnostics / tests).
     [[nodiscard]] size_t getTickRegistrationCount() const { return _ticks.size(); }
     [[nodiscard]] bool isLayoutValid() const { return !_bLayoutDirty; }

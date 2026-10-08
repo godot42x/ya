@@ -133,6 +133,9 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     static uint32_t _hostTick;
     /// Outstanding game-pause requests (pushGamePause / popGamePause).
     uint32_t        _gamePauseDepth = 0;
+    /// The Escape press was consumed by onCancel, so its release does not
+    /// fall through to quit / stop-play.
+    bool            _bEscapeCancelLatched = false;
     /// Main present surface unpresentable (minimize). Not a process pause:
     /// logic still ticks; coordinator skips GPU when `begin` returns -1.
     bool            _bMinimized = false;
@@ -290,6 +293,10 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     /// the game resumes when every push has been popped.
     void                   pushGamePause();
     void                   popGamePause();
+    /// Escape goes to the topmost visible entry's `onCancel`, then world
+    /// scripts. A true return consumed it. Any other event is consumed while
+    /// a visible modal entry exists, so gameplay does not see it.
+    [[nodiscard]] bool blocksGameplayInput(const Event& event);
 
     // === Input mode (game / UI routing + cursor baseline) ===
     [[nodiscard]] EInputMode getInputMode() const { return _inputMode; }
@@ -369,6 +376,7 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     void applyProjectDescriptor(const FProjectDescriptor& descriptor);
     [[nodiscard]] bool dispatchModuleEvent(const Event& event);
     [[nodiscard]] bool dispatchInputFallbackEvent(const Event& event);
+    void bindGameUIPause(GameUIHost& host);
     void tickModules(float dt);
     void prepareModulesForRender(float dt);
     /// IFrameRecordExtensions: the host's contribution to the renderer's record

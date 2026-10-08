@@ -179,6 +179,9 @@ void GameRuntimeTickOrchestrator::reportTickToAutomation(App& app)
 void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
 {
     YA_PROFILE_FUNCTION()
+    if (GameUIHost* gameUIHost = app.getGameUIHost()) {
+        gameUIHost->syncGamePause();
+    }
     const bool bGamePaused = app.isPaused();
     const bool bPlaying    = app.isRuntimeMode() || app.isSimulationMode();
     {

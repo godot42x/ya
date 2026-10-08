@@ -380,9 +380,13 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
   任一可见 `pausesGame` 条目 → 游戏暂停计数 +1，隐藏即 -1（暂停 API 来自 F0）。
 - 取消动作：Esc 在 EventPump 先交给最上层可见条目脚本 `onCancel`，再世界脚本 `onCancel`，
   都没消费才走兜底。
-- 复用 `ya::ui::EInputBlocking` 语义；是否让条目直接成为 `UIScreen` 由 D3 决定。
+- 复用 `ya::ui::EInputBlocking` 语义；条目不进 `ScreenStack`（D3）。
 - 测试：`GameUIHostTest.ModalEntryBlocksWorldInput`、`PausingEntryStopsGameLogicWhileVisible`、
   `CancelGoesToTopmostVisibleEntryFirst`、`EntryClockGameFreezesWhilePaused`。
+- S4 已落地（2026-10-09）：`modal` / `pausesGame` / `clock` 写在条目上，缺省省略（非模态、不暂停、`real`）。
+  整树 `updateClock` 删除。可见 `pausesGame` 条目各占一次 `pushGamePause`，在 `tickLogic` 采样暂停之前对齐。
+  Esc 按下先给最上层可见条目 `onCancel`，再给已加载的世界脚本；返回 true 才消费，松开不重复调用。
+  没人消费的 Esc 仍走原来的退出 / 停止 Play。GreedSnake 迁移留在 S7。
 - 验收：GreedSnake 设置面板改为 `modal + pausesGame + real`，`Snake.lua` 删除 `settingsOpen`
   与 Esc 逻辑后行为不变（放在 S7 一起验收）。
 
@@ -448,14 +452,14 @@ S6 依赖 S2/S3/S4 的数据形态，可与 S7 并行
 
 ## 6. 决策门（开工前需确认）
 
-状态：D1、D2、D5、D4 已于 2026-09-28 确认；D8 按建议采纳（用户可推翻）；其余仍为建议（S4 差 D3）。
+状态：D1、D2、D3、D4、D5 已确认；D8 按建议采纳（用户可推翻）；D6、D7、D9 仍为建议。S4 已落地。
 
 | # | 问题 | 结论 / 建议 |
 | --- | --- | --- |
 | D1 | UI 更新从渲染侧移到逻辑 tick 之后，推翻 `game-ui-authoring` P0 的放置理由 | **已确认**：移动；暂停不再跳过 UILogic，原理由不再成立。接受 UI 脚本读到上一帧布局（需要时显式请求立即布局）；`setPresentation` 在 UILogic 之前确定 |
 | D2 | 暂停门控范围 | **已确认**：系统按「玩法模拟 / 引擎维护」分组，由系统自己声明：物理、骨骼动画受暂停控制；模型实例化、Transform、LinkageFramework、TaskManager、自动化、文件监视、输入状态更新不受控。模块 onLogic 不受控，需要时自己读 `isPaused()`。`TimerManager` 先审计调用方，玩法与引擎共用则拆成两个时钟。暂停 API 单一写入口、计数语义 |
 | D3 | 模态条目是否直接做成 `UIScreen` 进 `ScreenStack` | 不做；条目是持久挂载 + 显隐切换，只复用 `EInputBlocking` 语义。若以后要 push/pop 临时界面，再接 `ScreenStack` |
-| D4 | UI 脚本是否每帧 onUpdate、隐藏时是否继续 | **已确认**（参照 UMG / Godot）：默认不 tick，事件驱动；需要时 `self:setTickEnabled(true)` 开启，走现有 `UIBehavior::wantsTick` 协议，只在可见时、按树顺序调用；定时逻辑用 `self:after` / `self:every` 计时器，按 host 时钟推进、隐藏不停、随实例销毁取消 |
+| D4 | UI 脚本是否每帧 onUpdate、隐藏时是否继续 | **已确认**（参照 UMG / Godot）：默认不 tick，事件驱动；需要时 `self:setTickEnabled(true)` 开启，走现有 `UIBehavior::wantsTick` 协议，只在可见时、按树顺序调用；定时逻辑用 `self:after` / `self:every` 计时器，按该条目的 `clock` 推进、隐藏不停、随实例销毁取消 |
 | D5 | 世界脚本顺序键与初始化 | **已确认**：`(executionOrder, 场景树前序, 实体内脚本下标)`；脚本声明默认 `executionOrder`，实例可覆盖（仅显式设置时序列化）；排序缓存、结构变化时重排。增加 `onStart`（同批全部 onInit 之后、首次 onUpdate 之前），世界与 UI 一致 |
 | D6 | 精灵是否在本计划支持预制体实例化 | 不做；只做参数化 `spawnSprite`，预制体另起计划 |
 | D7 | 点锚点语义 | 点锚点轴：以锚点为基准点，`pos = 锚点 + offset − pivot × size`，alignment 只在拉伸轴生效；需与 `gui-anchor-to-slot` 确认后再改 |

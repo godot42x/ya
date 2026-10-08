@@ -40,11 +40,10 @@ namespace ya
 struct Scene;
 struct UIDocumentStore;
 
-/// Which clock a hosted UI tree reads. A single `dt` parameter could not say
-/// this: a game HUD should freeze with the game, while a pause menu has to keep
-/// animating on the frame the game stopped. The app owns the pause decision and
-/// the caller knows which kind of UI this tree is, so the choice is an argument
-/// at the update site rather than a default baked into the host.
+/// Which clock one entry reads. A single `dt` parameter could not say this:
+/// a game HUD should freeze with the game, while a pause menu has to keep
+/// animating on the frame the game stopped. The app owns the pause decision;
+/// each mounted entry names the clock it follows.
 enum class EUIUpdateClock : uint8_t
 {
     /// Game time. Zero while the game is paused, so gameplay UI holds still.
@@ -55,7 +54,7 @@ enum class EUIUpdateClock : uint8_t
 };
 
 /// Both clocks for one frame. Carrying them together keeps the pause decision in
-/// one place: the caller computes them once and each tree reads the one it
+/// one place: the caller computes them once and each entry reads the one it
 /// asked for.
 struct FUIFrameClock
 {
@@ -166,8 +165,16 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// per-subtree clock would be machinery with no second user. When a pause
     /// menu and a HUD must run on different clocks at the same time, that is the
     /// point to split the tree (or add a per-widget clock), not to guess here.
-    [[nodiscard]] EUIUpdateClock updateClock() const { return _updateClock; }
-    void setUpdateClock(EUIUpdateClock clock) { _updateClock = clock; }
+    /// Bring the game pause count in line with visible `pausesGame` entries.
+    /// No-op until `setPauseHook` is installed. Scene mount and unmount call it.
+    void syncGamePause();
+    void setPauseHook(std::function<void(int delta)> hook) { _pauseHook = std::move(hook); }
+
+    /// A visible modal entry is up: gameplay input stays with the UI.
+    [[nodiscard]] bool blocksWorldInput() const;
+    /// `onCancel` on the topmost visible entry. True when a script returns true.
+    [[nodiscard]] bool dispatchEntryCancel();
+    [[nodiscard]] EUIUpdateClock clockForEntry(std::string_view entryId) const;
     /// Layout + paint into an immutable snapshot for this frame's compose.
     [[nodiscard]] UIFrameSnapshot buildSnapshot();
     /// Lay the tree out now if it is dirty. UILogic runs before this frame's
@@ -179,7 +186,8 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// every `intervalSeconds` while it returns true (0 = once). Timers run in
     /// update() before the tree tick, whether or not anything is visible; a
     /// timer that falls behind fires once per update, not in a burst.
-    uint64_t addTimer(const void* owner, float delaySeconds, float intervalSeconds, std::function<bool()> fire);
+    uint64_t addTimer(const void* owner, float delaySeconds, float intervalSeconds, std::function<bool()> fire,
+                      EUIUpdateClock clock = EUIUpdateClock::RealTime);
     void     cancelTimer(uint64_t timerId);
     void     cancelTimersOf(const void* owner);
 
@@ -227,12 +235,16 @@ struct YA_GAME_RUNTIME_API GameUIHost
         std::unordered_map<std::string, std::weak_ptr<UIElement>> names;
         std::unordered_map<std::string, bool>                   ambiguous; ///< name -> already warned
         bool                                                    bIndexDirty = false;
+        bool                                                    bModal      = false;
+        bool                                                    bPausesGame = false;
+        EUIUpdateClock                                          clock       = EUIUpdateClock::RealTime;
     };
     struct FTimer
     {
         const void*           owner;
         double                due;
         float                 interval;
+        EUIUpdateClock        clock = EUIUpdateClock::RealTime;
         std::function<bool()> fire;
     };
     struct FTimerDue
@@ -252,8 +264,13 @@ struct YA_GAME_RUNTIME_API GameUIHost
         std::weak_ptr<UIElement> parent;
     };
 
-    void advanceTimers(float deltaSeconds);
-    void scheduleTimer(uint64_t id, double due);
+    void advanceTimers(const FUIFrameClock& clock);
+    void advanceClock(EUIUpdateClock clock, float deltaSeconds);
+    void scheduleTimer(uint64_t id, double due, EUIUpdateClock clock);
+    [[nodiscard]] bool entryVisible(const FMountedEntry& entry) const;
+    [[nodiscard]] const FMountedEntry* topmostVisibleEntry() const;
+    [[nodiscard]] EUIUpdateClock clockOf(const UIElement& widget) const;
+    [[nodiscard]] static int clockIndex(EUIUpdateClock clock);
     void compactTimerQueue();
     void addEntry(std::string entryId, const UIElementRef& root);
     void mountWorldWidget(const UIElementRef& widget);
@@ -270,16 +287,18 @@ struct YA_GAME_RUNTIME_API GameUIHost
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};
     glm::uvec2                     _referenceResolution{0, 0};
     float                          _referenceScale = 1.0f;
-    EUIUpdateClock                 _updateClock = EUIUpdateClock::RealTime;
+    std::function<void(int delta)> _pauseHook;
+    /// How many pause counts this host currently holds.
+    int                            _pauseHolds = 0;
     std::vector<FMountedEntry>     _entries;
     std::vector<FPendingSpawn>     _pendingSpawns;
     std::vector<std::weak_ptr<UIElement>> _pendingDestroys;
     std::unordered_map<uint64_t, FTimer> _timers;
-    /// Min-heap on (due, id): due timers fire earliest first, ties in creation
-    /// order. A cancelled timer's entry stays until it surfaces and is skipped.
-    std::vector<FTimerDue>         _timerQueue;
+    /// One min-heap per clock, on (due, id). Dues on different clocks are not
+    /// comparable. A cancelled timer's entry stays until it surfaces and is skipped.
+    std::vector<FTimerDue>         _timerQueues[2];
     uint64_t                       _nextTimerId = 1;
-    double                         _clockSeconds = 0.0;
+    double                         _clockSeconds[2] = {};
 };
 
 /// One auto-mounted scene entry: the authoring id plus the content-layer attachment.

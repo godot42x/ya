@@ -10,7 +10,9 @@
 #include "GameRuntime/HostRenderSettings.h"
 #include "GUI/Widgets/TextRaster.h"
 
+#include "AppModuleTestAccess.h"
 #include "Core/Event.h"
+#include "Core/System/System.h"
 
 #include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Button.h"
@@ -514,11 +516,11 @@ TEST(GameUIHostTest, UpdateAdvancesMountedTreeBehaviors)
     EXPECT_EQ(behavior->ticks, 2);
 }
 
-TEST(GameUIHostTest, ClockPolicyDecidesWhetherPausedFramesAdvanceTheTree)
+TEST(GameUIHostTest, EntryClockGameFreezesWhilePaused)
 {
-    // A paused frame carries no game time but real wall time. Which one drives
-    // the tree is the host's declared policy, so a pause menu can keep animating
-    // while a gameplay HUD holds still -- from the same two deltas.
+    // A paused frame carries no game time but real wall time. Each entry names
+    // its own clock, so a pause menu keeps animating while a gameplay HUD
+    // holds still -- from the same two deltas.
     const FUIFrameClock pausedFrame{.gameDelta = 0.0f, .realDelta = 1.0f / 60.0f};
 
     GameUIHost host;
@@ -526,29 +528,34 @@ TEST(GameUIHostTest, ClockPolicyDecidesWhetherPausedFramesAdvanceTheTree)
     host.setDocumentStore(&documents);
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
     Scene scene("World");
-    scene.addWidgetEntry(makeEntry("HUD", publishDocument(documents, "HUD", kTypeIdBorder), 0));
+    scene.addWidgetEntry(makeEntry("Menu", publishDocument(documents, "Menu", kTypeIdBorder), 0));
+    SceneWidgetEntry hud = makeEntry("HUD", publishDocument(documents, "HUD", kTypeIdBorder), 1);
+    hud.clock            = ESceneWidgetClock::Game;
+    scene.addWidgetEntry(hud);
     host.onSceneActivated(scene);
 
     UIElement* content = host.getTree().getLayer(WidgetTree::ELayer::Content);
-    ASSERT_EQ(content->getChildren().size(), 1u);
-    auto behavior = std::make_shared<AdvancingBehavior>();
-    content->getChildren()[0]->addBehavior(behavior);
+    ASSERT_EQ(content->getChildren().size(), 2u);
+    auto menuClock = std::make_shared<AdvancingBehavior>();
+    auto hudClock  = std::make_shared<AdvancingBehavior>();
+    for (const UIElementRef& child : content->getChildren()) {
+        ASSERT_TRUE(child);
+        if (child->_zOrder == 0) {
+            child->addBehavior(menuClock);
+        }
+        else {
+            child->addBehavior(hudClock);
+        }
+    }
 
     constexpr float kFrame = 1.0f / 60.0f;
-
-    // Default is RealTime: paused frames still advance (pause menus animate).
-    EXPECT_EQ(host.updateClock(), EUIUpdateClock::RealTime);
     host.update(pausedFrame);
-    EXPECT_FLOAT_EQ(behavior->seconds, kFrame);
+    EXPECT_FLOAT_EQ(menuClock->seconds, kFrame);
+    EXPECT_FLOAT_EQ(hudClock->seconds, 0.0f);
 
-    // Declared as gameplay UI, the same paused frame advances it by nothing.
-    host.setUpdateClock(EUIUpdateClock::GameTime);
-    host.update(pausedFrame);
-    EXPECT_FLOAT_EQ(behavior->seconds, kFrame);
-
-    // A running frame advances it again. Only pause was holding it back.
     host.update(FUIFrameClock{.gameDelta = kFrame, .realDelta = kFrame});
-    EXPECT_FLOAT_EQ(behavior->seconds, 2.0f * kFrame);
+    EXPECT_FLOAT_EQ(menuClock->seconds, 2.0f * kFrame);
+    EXPECT_FLOAT_EQ(hudClock->seconds, kFrame);
 }
 
 nlohmann::json testCanvasSlot(float x, float y, float w, float h)
@@ -867,6 +874,107 @@ TEST(GameUIHostTest, DialogueDocumentStaysInsideNarrowAndWideCanvases)
 
     expectInside(document, Extent2D{.width = 1280, .height = 720}, 880.0f, 200.0f);
     expectInside(roundTrip, Extent2D{.width = 700, .height = 500}, 636.0f, 32.0f);
+}
+
+namespace
+{
+
+struct CountingSystem final : ISystem
+{
+    int updates = 0;
+    void onUpdate(float) override { ++updates; }
+};
+
+UIElement* childWithZ(UIElement& content, int32_t zOrder)
+{
+    for (const UIElementRef& child : content.getChildren()) {
+        if (child && child->_zOrder == zOrder) {
+            return child.get();
+        }
+    }
+    return nullptr;
+}
+
+} // namespace
+
+TEST(GameUIHostTest, ModalEntryBlocksWorldInput)
+{
+    UIDocumentStore documents;
+    App             app;
+    GameUIHost*     host = app.getGameUIHost();
+    host->setDocumentStore(&documents);
+    host->setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
+
+    Scene scene("World");
+    SceneWidgetEntry entry = makeEntry("Menu", publishDocument(documents, "Menu", kTypeIdBorder), 1);
+    entry.bModal           = true;
+    scene.addWidgetEntry(entry);
+    host->onSceneActivated(scene);
+
+    InputManager         inputManager;
+    GameInputNode        node(inputManager);
+    InputRouter          router;
+    router.setApp(app);
+    FInputRouteContext context{.app = app, .router = router};
+
+    KeyPressedEvent escape;
+    escape._keyCode = EKey::Escape;
+    (void)node.route(context, escape);
+    EXPECT_TRUE(inputManager.isKeyPressed(EKey::Escape));
+
+    KeyPressedEvent key;
+    key._keyCode = EKey::K_W;
+    (void)node.route(context, key);
+    EXPECT_FALSE(inputManager.isKeyPressed(EKey::K_W));
+
+    UIElement* menu = childWithZ(*host->getTree().getLayer(WidgetTree::ELayer::Content), 1);
+    ASSERT_NE(menu, nullptr);
+    menu->setVisibility(EWidgetVisibility::Hidden);
+
+    (void)node.route(context, key);
+    EXPECT_TRUE(inputManager.isKeyPressed(EKey::K_W));
+}
+
+TEST(GameUIHostTest, PausingEntryStopsGameLogicWhileVisible)
+{
+    UIDocumentStore documents;
+    Scene           scene("Play");
+    App             app;
+    auto            simulation = std::make_shared<CountingSystem>();
+    AppModuleTestAccess::addSystem(app, simulation, ESystemTickGroup::Simulation);
+    AppModuleTestAccess::setAppState(app, AppState::Runtime);
+
+    GameUIHost* host = app.getGameUIHost();
+    host->setDocumentStore(&documents);
+    host->setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
+
+    SceneWidgetEntry first = makeEntry("First", publishDocument(documents, "First", kTypeIdBorder), 1);
+    first.bPausesGame      = true;
+    SceneWidgetEntry second = makeEntry("Second", publishDocument(documents, "Second", kTypeIdBorder), 2);
+    second.bPausesGame      = true;
+    scene.addWidgetEntry(first);
+    scene.addWidgetEntry(second);
+    host->onSceneActivated(scene);
+    EXPECT_TRUE(app.isPaused());
+
+    AppModuleTestAccess::tickLogic(app, 0.016f);
+    EXPECT_EQ(simulation->updates, 0);
+
+    UIElement* content = host->getTree().getLayer(WidgetTree::ELayer::Content);
+    UIElement* lower   = childWithZ(*content, 1);
+    UIElement* upper   = childWithZ(*content, 2);
+    ASSERT_NE(lower, nullptr);
+    ASSERT_NE(upper, nullptr);
+    lower->setVisibility(EWidgetVisibility::Hidden);
+
+    AppModuleTestAccess::tickLogic(app, 0.016f);
+    EXPECT_TRUE(app.isPaused());
+    EXPECT_EQ(simulation->updates, 0);
+
+    upper->setVisibility(EWidgetVisibility::Hidden);
+    AppModuleTestAccess::tickLogic(app, 0.016f);
+    EXPECT_FALSE(app.isPaused());
+    EXPECT_EQ(simulation->updates, 1);
 }
 
 } // namespace ya

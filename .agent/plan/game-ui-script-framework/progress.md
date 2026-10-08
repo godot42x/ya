@@ -254,3 +254,19 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 - 编辑器 PIE 面板与独立游戏窗口都按窗口 drawable 出图，面板逻辑尺寸不变。
 
 验证：`GameUIHostTest.DensityDoublesRasterAndKeepsTheLogicalCanvas`、`WindowPointMapsIntoTheLogicalViewport`。
+
+## 2026-10-09 — S4 条目模态、暂停与取消
+
+完成：
+
+- `SceneWidgetEntry` 增加 `modal`、`pausesGame`、`clock`（`game` / `real`）。缺省不写进 JSON。
+- 去掉 `GameUIHost` 整树时钟。每个条目用自己的时钟；计时器按时钟分堆。
+- 每个可见的 `pausesGame` 条目占一次暂停计数。`tickLogic` 在采样暂停之前对齐。
+- Esc 按下先交给最上层可见条目的 `onCancel`，再交给已经加载的世界脚本。返回 true 才消费，松开不重复调用。没人消费的 Esc 仍走退出 / 停止 Play。模态不吞掉这种 Esc。
+- 条目不进 `ScreenStack`（D3）。
+
+未做：GreedSnake 设置面板迁移（S7）。S5、S6 未开始。
+
+验证：`GameUIHostTest.*`、`GameUIScriptTest.*`、`SceneWidgetEntryTest.*`、`TickOrderAppTest.*`、`GameInputNodeTest.*` 共 56 通过。GreedySnake runtime、HelloMaterial runtime、GreedySnake editor `--exit-after-frame=60` 均在 60 帧退出，日志无 Error。GUIWorkbench `--smoke-actions` PASS。
+
+下一步：S5（世界脚本输入与硬编码清理），或与之并行的 S6（编辑器 authoring）。

@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace ya
@@ -52,11 +53,14 @@ class YA_GUI_API FWidgetTickRegistry
     void markOrderDirty() { _bOrderDirty = true; }
 
     void dispatch(const WidgetTree& tree, float deltaSeconds);
+    /// Same dispatch; each owner reads its own delta. One frame, several clocks.
+    void dispatch(const WidgetTree& tree, const std::function<float(const UIElement&)>& deltaForOwner);
 
     [[nodiscard]] size_t size() const { return _liveCount; }
 
   private:
     void kill(size_t index);
+    void dispatchEntries(const WidgetTree& tree, const std::function<float(const UIElement&)>* deltaForOwner, float deltaSeconds);
     void compact();
     void sortPreorder();
     void refreshVisibility(uint64_t revision);

@@ -74,6 +74,7 @@ struct LuaWidgetScripts final : IGameUIBehaviorRuntime
 
     void activate(UIElement& widget, const FUIBehaviorSpec& spec, const FUIBehaviorActivation& context) override;
     void update() override;
+    bool callNamed(std::string_view entryId, const std::string& name) override;
 
     /// Cancel `behavior`'s timers and destroy its instance (onDestroy).
     void release(LuaWidgetScriptBehavior& behavior);
