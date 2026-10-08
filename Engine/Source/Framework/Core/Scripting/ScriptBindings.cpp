@@ -43,30 +43,44 @@ ValueCodec codecOf()
     };
 }
 
+/// Identity codecs for every `ScriptValue` arm except monostate. The variant
+/// defines the crossing set; adding an arm extends the codecs automatically.
+template <size_t... I>
+void emplaceVariantCodecs(std::unordered_map<type_index_t, ValueCodec>& codecs, std::index_sequence<I...>)
+{
+    auto add = [&]<typename Alt>() {
+        if constexpr (!std::is_same_v<Alt, std::monostate>) {
+            codecs.emplace(type_index_v<Alt>, codecOf<Alt>());
+        }
+    };
+    (add.template operator()<std::variant_alternative_t<I, ScriptValue>>(), ...);
+}
+
 const std::unordered_map<type_index_t, ValueCodec>& valueCodecs()
 {
-    // Duplicate keys (int64_t is long or long long depending on the platform)
-    // keep the first entry, which converts identically.
-    static const std::unordered_map<type_index_t, ValueCodec> codecs = {
-        {type_index_v<bool>, codecOf<bool>()},
-        {type_index_v<int8_t>, codecOf<int8_t>()},
-        {type_index_v<uint8_t>, codecOf<uint8_t>()},
-        {type_index_v<int16_t>, codecOf<int16_t>()},
-        {type_index_v<uint16_t>, codecOf<uint16_t>()},
-        {type_index_v<int32_t>, codecOf<int32_t>()},
-        {type_index_v<uint32_t>, codecOf<uint32_t>()},
-        {type_index_v<long>, codecOf<long>()},
-        {type_index_v<unsigned long>, codecOf<unsigned long>()},
-        {type_index_v<long long>, codecOf<long long>()},
-        {type_index_v<unsigned long long>, codecOf<unsigned long long>()},
-        {type_index_v<float>, codecOf<float>()},
-        {type_index_v<double>, codecOf<double>()},
-        {type_index_v<std::string>, codecOf<std::string>()},
-        {type_index_v<glm::vec2>, codecOf<glm::vec2>()},
-        {type_index_v<glm::vec3>, codecOf<glm::vec3>()},
-        {type_index_v<glm::vec4>, codecOf<glm::vec4>()},
-        {type_index_v<ScriptRef>, codecOf<ScriptRef>()},
-    };
+    // Only genuinely converting codecs are hand-written: arithmetic narrowing
+    // into the int64_t / double arms. Enums live in EnumRegistry. Duplicate
+    // keys (int64_t is long or long long depending on the platform) keep the
+    // first entry, which converts identically.
+    static const std::unordered_map<type_index_t, ValueCodec> codecs = [] {
+        std::unordered_map<type_index_t, ValueCodec> out;
+        emplaceVariantCodecs(out, std::make_index_sequence<std::variant_size_v<ScriptValue>>{});
+        out.emplace(type_index_v<int8_t>, codecOf<int8_t>());
+        out.emplace(type_index_v<uint8_t>, codecOf<uint8_t>());
+        out.emplace(type_index_v<int16_t>, codecOf<int16_t>());
+        out.emplace(type_index_v<uint16_t>, codecOf<uint16_t>());
+        out.emplace(type_index_v<int32_t>, codecOf<int32_t>());
+        out.emplace(type_index_v<uint32_t>, codecOf<uint32_t>());
+        out.emplace(type_index_v<float>, codecOf<float>());
+        // Platform-dependent integer widths: `long` and `long long` only alias
+        // the int64_t arm on some platforms (LP64 vs LLP64); on others these
+        // are genuine narrowings, so they always get an explicit entry.
+        out.emplace(type_index_v<long>, codecOf<long>());
+        out.emplace(type_index_v<unsigned long>, codecOf<unsigned long>());
+        out.emplace(type_index_v<long long>, codecOf<long long>());
+        out.emplace(type_index_v<unsigned long long>, codecOf<unsigned long long>());
+        return out;
+    }();
     return codecs;
 }
 
@@ -79,11 +93,6 @@ const ValueCodec* codecFor(type_index_t type)
 const Enum* enumFor(type_index_t type)
 {
     return EnumRegistry::instance().getEnum(type);
-}
-
-bool crossesToScripts(type_index_t type)
-{
-    return codecFor(type) || enumFor(type);
 }
 
 ScriptValue loadValue(type_index_t type, const void* address)
@@ -120,6 +129,11 @@ ScriptValue unboxValue(type_index_t type, const std::any& boxed)
 }
 
 } // namespace
+
+bool crossesToScripts(type_index_t type)
+{
+    return codecFor(type) || enumFor(type);
+}
 
 // ============================================================================
 // Per-type export, built from reflection on first use.
@@ -196,12 +210,11 @@ std::string scriptNameOf(const std::string& reflectedName)
     return first == std::string::npos ? reflectedName : reflectedName.substr(first);
 }
 
-/// Script-facing types that are not field codecs: the value is already a
-/// `ScriptValue` arm, including the owner slot.
+/// `ScriptValue` is the dynamic return marker, not a codec. Handle types and
+/// `ScriptRect` cross through the codecs registered above.
 bool acceptsScriptSignature(type_index_t type)
 {
-    return crossesToScripts(type) || type == type_index_v<ScriptValue> || type == type_index_v<ScriptSelfHandle> ||
-           type == type_index_v<ScriptFnHandle> || type == type_index_v<ScriptRect>;
+    return crossesToScripts(type) || type == type_index_v<ScriptValue>;
 }
 
 bool signatureCrosses(const Function& function)
@@ -217,24 +230,13 @@ bool signatureCrosses(const Function& function)
     return true;
 }
 
-std::unordered_map<type_index_t, NameMap<ScriptNativeFn>>& nativeTrampolines()
-{
-    static std::unordered_map<type_index_t, NameMap<ScriptNativeFn>> table;
-    return table;
-}
-
-const ScriptNativeFn* trampolineFor(type_index_t type, std::string_view name)
-{
-    const auto typeIt = nativeTrampolines().find(type);
-    if (typeIt == nativeTrampolines().end()) {
-        return nullptr;
-    }
-    const auto it = typeIt->second.find(name);
-    return it == typeIt->second.end() ? nullptr : &it->second;
-}
-
 /// Members declared further down the hierarchy win over inherited ones of the
 /// same script name.
+///
+/// TypeExport is a once-per-type, once-per-process projection (`exportOf`'s
+/// `bBuilt` guard), not a per-frame pass and not a repeated registration.
+/// The source is ClassRegistry. Backends cache handles into this derived
+/// view for the life of the process.
 void collectMembers(const Class& cls, const std::vector<type_index_t>& path, TypeExport& out)
 {
     for (const type_index_t parent : cls.parents) {
@@ -275,8 +277,8 @@ void collectMembers(const Class& cls, const std::vector<type_index_t>& path, Typ
             continue;
         }
         ScriptMethod exported{.name = name, .function = &function, .ownerPath = path};
-        if (const ScriptNativeFn* trampoline = trampolineFor(cls.typeIndex, name)) {
-            exported.native = *trampoline;
+        if (const auto* native = std::any_cast<ScriptNativeFn>(&function.payload)) {
+            exported.native = *native;
         }
         out.methods.insert_or_assign(name, std::move(exported));
     }
@@ -411,33 +413,31 @@ void addMethod(type_index_t type, std::string name, NativeMethod method)
         return;
     }
 
+    const std::string scriptName = scriptNameOf(name);
+    const size_t      argCount   = method.argTypes.size();
+    ScriptNativeFn    body       = std::move(method.call);
+
     Function function;
     function.name            = name;
     function.type            = FunctionType::MemberFunction;
-    function.argCount        = method.argTypes.size();
+    function.argCount        = argCount;
     function.argTypeNames    = std::move(method.argTypeNames);
     function.returnTypeName  = std::move(method.returnTypeName);
     function.returnTypeIndex = method.returnType;
     function.argTypeIndices  = std::move(method.argTypes);
     function.invoker         = std::move(method.invoker);
-
-    Function&   stored = cls->insertFunction(std::move(function));
-    const auto  found  = cls->functions.find(name);
-    if (found == cls->functions.end() || &found->second != &stored) {
-        return;
-    }
-
-    const std::string scriptName = scriptNameOf(name);
-    const size_t      argCount   = found->second.argCount;
-    ScriptNativeFn    body       = std::move(method.call);
-    nativeTrampolines()[cls->typeIndex].insert_or_assign(
-        scriptName,
+    // Store as ScriptNativeFn, not the lambda type, so collectMembers can any_cast it.
+    // A later registration loses the whole Function, payload included.
+    function.payload = ScriptNativeFn{
         [body = std::move(body), argCount, scriptName](void* self, const ScriptRef& ref, ScriptArgs args) -> ScriptValue {
             if (args.size() != argCount) {
                 throw ScriptError(std::format("{}() expects {} argument(s), got {}", scriptName, argCount, args.size()));
             }
             return body(self, ref, args);
-        });
+        },
+    };
+
+    cls->insertFunction(std::move(function));
 }
 
 void addNativeMethod(type_index_t type, std::string name, ScriptNativeFn fn, std::vector<type_index_t> argTypes)

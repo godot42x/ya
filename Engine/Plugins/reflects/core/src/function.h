@@ -36,6 +36,9 @@ struct Function : public Field
     // 对于静态/全局函数：第一个参数为 nullptr
     std::function<std::any(void *, const ArgumentList &)> invoker;
 
+    // runtime-owned，reflection 只存不解释（std::any 与 invoker 返回值同构）。
+    std::any payload;
+
     // 元数据
     size_t                   argCount = 0;
     std::vector<std::string> argTypeNames;

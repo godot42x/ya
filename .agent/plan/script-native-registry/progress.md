@@ -20,3 +20,14 @@
 - 语义变化记录：`Class` 反射注册从 `insert_or_assign`（后到者胜）改为 `insertFunction`（先到者胜 + hook WARN）——这是全反射链的语义翻转，不止 native；全仓无重注册覆盖用法，hook 提供可观测性。
 - S5.2 前置约束：`addMethod` 在目标类型没有反射 `Class` 时 WARN 并丢弃（不注册）。迁 LuaWidgetHandle 8 点前先核对 UIElement / timer / clicked 各类型都有反射类；缺的要么补反射注册，要么给 addMethod 加合成 Class 支持——届时定。
 - 复验：`ScriptNativeMethod.*` 2 过、`*Script*` 98/98、全量 1716 exit 0、`walk_one_cell` 正常、GreedySnake 无 ERROR。
+
+## 2026-10-08 — S5.1 返工（用户复核四项，worker 中断后主 agent 收尾入库）
+
+- 背景：用户复核 S5.1 指出四个问题，派 worker 返工；worker 因连接反复失败中断（实现与文档已基本落地，缺验证），剩余收尾由主 agent 完成。
+- 问题 1（类型白名单三处打架）：`ScriptSelfHandle`/`ScriptFnHandle`/`ScriptRect` 注册 ValueCodec，运行时 `crossesToScripts(type_index_t)` 自动覆盖；`acceptsScriptSignature` 塌缩为 `crossesToScripts(type) || type_index_v<ScriptValue>`；编译期 `crossesToScripts<T>()` 改为从 ScriptValue variant 推导（`is_variant_alternative` + 算术 + enum）。真相源收敛为 variant 定义（编译期）+ codec 注册（运行时）两处同源。
+- 问题 2（`nativeTrampolines` 第二张 DB）：`Function` 加 `std::any payload` 槽（reflects 只存不解释）；`addMethod` 把 trampoline 连同元数据整体注入，先到者胜时整体丢弃——旁表、两步窗口、指针比较检测全部删除；`collectMembers` 直接 `any_cast` 取 payload。
+- 问题 3（`collectMembers` 语义）：投影注释写明 once-per-type/per-process（bBuilt 守卫），非每帧非重复注册；trampoline join 随问题 2 消亡。plan §5 补边界原则：reflects 拥有类型身份与 any 调用，script 层拥有值语义与调用约定，签名推导不上移。
+- 问题 4（公共头瘦身）：机器模板移至 `Core/Scripting/ScriptBindingsDetail.h`（公开路径、文件头标注 internal）；公共头保留谓词 / `NativeMethod` / `fn` / `addMethod`。
+- 主 agent 追加两处：修 `ScriptBindingsDetail.h:275` 搬家手滑（`type_index_v<T>()` 多余调用括号，编译失败根因）；`valueCodecs()` 改为从 variant 逐臂机械生成恒等 codec（monostate 除外），手写只留真转换——算术窄化与平台相关宽度（long/long long 在 LP64 与 LLP64 下与 int64_t 的同构性不同，四个条目保留防跨平台回归）。
+- 验证（主 agent 本机）：`*Script*` 99/99（98 + 1 句柄谓词新用例）；全量 `ya-testing` 1717/1717（1716 + 1）；`walk_one_cell` 三次 exit 0（1.5/1.4375/1.4375 为真实 dt 帧时序采样差异，脚本容差断言，非行为变化）；GreedySnake 90 帧退出码 0 无 ERROR。
+- 新增契约断言：`ScriptValue` 不可做参数（`!crossesToScripts<ScriptValue>()`、`!nativeSignatureOk<void, ScriptValue>`）；三个句柄类型运行时谓词为真。

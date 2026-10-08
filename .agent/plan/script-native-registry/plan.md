@@ -52,6 +52,7 @@ script::addMethod(clicked, "removeAll", script::fn(&removeAllClicked));
 
 - 不动 backend 调用路径（`LuaScriptingSystem` 的 Lua 侧优化属 C3）。
 - `reflects` 插件不引入 `ScriptValue` / Core 依赖。
+- reflects 拥有类型身份与 any 调用；script 层拥有值语义与调用约定（ScriptValue 转换、receiver 约定、owner 槽）。签名推导不上移 reflects。
 - 不做宏、不做代码生成、不平行造 UE 式 UFunction 系统（Rule 5）。
 - `Generated/*` 只读。
 

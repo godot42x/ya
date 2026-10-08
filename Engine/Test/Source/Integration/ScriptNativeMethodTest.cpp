@@ -49,6 +49,9 @@ static_assert(script::nativeOwnerSlot<FNativeProbe&, const std::string&>() == sc
 static_assert(!script::nativeSignatureOk<void, FNativeProbe&, glm::mat4>());
 static_assert(!script::nativeSignatureOk<void, FNativeProbe&, glm::mat4&>());
 static_assert(!script::nativeSignatureOk<void, script::ScriptSelfHandle, script::ScriptSelfHandle>());
+// ScriptValue is not a variant arm of itself, so it still cannot be a parameter.
+static_assert(!script::crossesToScripts<script::ScriptValue>());
+static_assert(!script::nativeSignatureOk<void, script::ScriptValue>());
 
 std::string labelOf(FNativeProbe&, const std::string& prefix, int n)
 {
@@ -123,6 +126,14 @@ uint32_t probeKind()
 script::ScriptRef probeRef()
 {
     return script::ScriptRef{.type = type_index_v<FNativeProbe>, .kind = probeKind(), .a = 1};
+}
+
+TEST(ScriptNativeMethod, HandleCodecsCrossAtRuntime)
+{
+    EXPECT_TRUE(script::crossesToScripts(type_index_v<script::ScriptSelfHandle>));
+    EXPECT_TRUE(script::crossesToScripts(type_index_v<script::ScriptFnHandle>));
+    EXPECT_TRUE(script::crossesToScripts(type_index_v<script::ScriptRect>));
+    EXPECT_FALSE(script::crossesToScripts(type_index_v<script::ScriptValue>));
 }
 
 TEST(ScriptNativeMethod, FirstRegistrationWins)
