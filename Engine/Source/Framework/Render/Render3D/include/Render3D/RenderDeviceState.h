@@ -314,6 +314,10 @@ struct YA_RENDER_3D_API RenderDeviceState
     void recordViewFamilies(const RenderFramePlan& plan);
     /// Close the flight's command buffer and publish the frame's GPU timing.
     void endFrameCommandBuffer(ICommandBuffer* cmdBuf);
+    /// Publish the just-completed frame's per-pass GPU times into PerfState,
+    /// one metric per pass name. The readback is the backend's; this only
+    /// copies what it produced.
+    void publishPassGpuTimes();
     /// Seal the flight's submission and report the recording's identity: the
     /// command buffer to submit, the fence slot, and the serial. An invalid
     /// result means the recording must not be submitted -- its resources and

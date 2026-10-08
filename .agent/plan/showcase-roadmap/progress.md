@@ -64,3 +64,11 @@
 - 实现要点与验证见 `../perf-baseline/progress.md`（PB3 条目）：RHI 公开 `EGpuMemoryClass` / `FGpuMemoryStats` / `GpuMemoryBenchSource`，Vulkan 按 allocation 记账 + `vmaGetHeapBudgets`，`gpu_memory` 段由设备自注册，编辑器新增 `RuntimeGpuMemorySection`。
 - 一处偏离计划 §3 M4 的措辞：面板没有并进 profiling 面板，而是 Runtime Tools 里独立一段——那段本轮被 PB2 线占用，等它收口后可以合并。
 - HelloMaterial 实跑（debug）出数：总 806.58 MiB，VMA 自报 allocationBytes 与分类求和一致；MoltenVK 无 `VK_EXT_memory_budget`，budget 降级为 heap size（已在类型注释里写明）。
+
+## 2026-10-09 — PB2 收口（M1 pass 级 GPU timestamp）
+
+- M1 完成：`RenderGraphExecutor` 逐 pass 括 `beginGpuPass/endGpuPass`，Vulkan 侧独立的 pass timestamp query pool 按 flight 延迟回读（挂在 fence 等待之后，`VK_NOT_READY` 跳过不等），`gpu_passes` 段进 `bench_summary.json`，编辑器 profiling 段有 pass 表；同 checkpoint 带 `render_counters`（draw / dispatch / 绑定 / 2D 合批）。
+- 测量默认关：`RuntimeState.passGpuTimingEnabled` 默认 false，只有基准采样窗口内才开（结束还原），编辑器对应 `profile.runtime.passGpuTiming` 配置键。
+- 两个真 bug 由实跑数据抓出来（单测抓不到）：`endGpuPass` 把结束时间戳写回开始那个 query index 导致整帧 `VK_NOT_READY`；回读失败时 pass 名字不清，几帧就撞上限。详见 `../perf-baseline/progress.md` 本节。
+- 验证：`ya-testing` debug 1764/1764（新增 4 例）；HelloMaterial 完整基准 17/17 个 pass 有数（count 全 600），pass p50 求和 4.04 ms 对整帧 gpuMs p50 4.51 ms。
+- 未达成：M 组验收的三次 p50 ±3% 本轮没实测——本机 debug 构建且有并行编译，噪声大于信号；正式数字按 M6 / PB6 在 profile 口径下出。

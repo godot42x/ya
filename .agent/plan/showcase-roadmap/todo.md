@@ -17,12 +17,12 @@ GUI 与编辑器活跃线
 - [ ] `ui-behavior-capabilities` C3（Lua `call()` 热路径）
 
 测量与压测
-- [ ] M1 pass 级 GPU timestamp
+- [x] M1 pass 级 GPU timestamp（`perf-baseline` PB2，含 render_counters 与编辑器 pass 表）
 - [x] M2 窗口均值 / p95 / p99（perf-baseline PB1）
 - [x] M3 基准模式（固定分辨率、关垂直同步、去上限、丢预热帧）（perf-baseline PB1）
 - [x] M4 GPU 显存统计（VMA，按资源类别；`perf-baseline` PB3）
 - [ ] M8 进程内存统计（RSS / 峰值、按子系统的堆分配）
-- [ ] M5 压测场景
+- [x] M5 压测场景（`perf-baseline` PB5，`Example/PerfLab`）
 - [ ] M6 前后对比报告脚本
 
 渲染

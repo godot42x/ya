@@ -10,7 +10,11 @@
 #include "GUI/Declarative/Build.h"
 #include "GameEditor/UI/Shell/EditorTheme.h"
 
+#include <algorithm>
 #include <format>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace ya
 {
@@ -38,6 +42,7 @@ void RuntimeProfilingSection::construct()
     _traceState = ui::text("RuntimeProfilingTraceState").share();
     _frameCpu = ui::text("RuntimeProfilingFrameCpu").share();
     _frameGpu = ui::text("RuntimeProfilingFrameGpu").share();
+    _passTable = ui::text("RuntimeProfilingPassTable").share();
     _cpuTrace = makeCheckBox("RuntimeProfilingCpuTrace", "CPU Trace");
     _perfMetrics = makeCheckBox("RuntimeProfilingPerfMetrics", "Perf Metrics");
     _staticInit = makeCheckBox("RuntimeProfilingStaticInit", "Static Init");
@@ -63,13 +68,14 @@ void RuntimeProfilingSection::construct()
                     .child(_staticInit)
                     .child(_averageWindow, FBoxSlotArgs{.preferredSize = {180.0f, 26.0f}})
                     .child(_frameCpu)
-                    .child(_frameGpu);
+                    .child(_frameGpu)
+                    .child(_passTable, FBoxSlotArgs{.preferredSize = {260.0f, 200.0f}});
     addDetachedChild(rows.release());
 }
 
 void RuntimeProfilingSection::sync(const App*)
 {
-    if (!_compileMode || !_traceState || !_frameCpu || !_frameGpu ||
+    if (!_compileMode || !_traceState || !_frameCpu || !_frameGpu || !_passTable ||
         !_cpuTrace || !_perfMetrics || !_staticInit || !_averageWindow) {
         return;
     }
@@ -87,5 +93,23 @@ void RuntimeProfilingSection::sync(const App*)
     const auto& metrics = profiling::metrics();
     _frameCpu->setText(std::format("Frame CPU: {:.3f} ms", metrics.getDisplayValue(perf::sample::hostTick(), perf::metric::cpuTimeMs())));
     _frameGpu->setText(std::format("Frame GPU: {:.3f} ms", metrics.getDisplayValue(perf::sample::hostTick(), perf::metric::gpuTimeMs())));
+
+    // Pass table: every pass the render graph timed in its last completed
+    // frame, keyed by pass name. Empty until pass GPU timing produces results.
+    std::vector<std::pair<std::string, float>> passes;
+    if (state.passGpuTimingEnabled) {
+        metrics.visitMetrics([&](const PerfMetricReading& reading) {
+            if (reading.metricKey != perf::metric::gpuTimeMs() || reading.domainKey != perf::domain::render()) {
+                return;
+            }
+            passes.emplace_back(std::string(reading.sampleKey.view()), reading.value);
+        });
+    }
+    std::sort(passes.begin(), passes.end(), [](const auto& lhs, const auto& rhs) { return lhs.second > rhs.second; });
+    std::string table;
+    for (const auto& [name, timeMs] : passes) {
+        table += std::format("{}  {:.3f} ms\n", name, timeMs);
+    }
+    _passTable->setText(table.empty() ? std::string("Pass GPU: (no data)") : std::format("Pass GPU:\n{}", table));
 }
 }

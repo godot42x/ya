@@ -4,6 +4,8 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
+#include <unordered_map>
 
 namespace ya
 {
@@ -50,6 +52,36 @@ class YA_CORE_API PerfStageBenchSource final : public IBenchSource
     explicit PerfStageBenchSource(const PerfState& perf);
 
     void onWindowBegin() override;
+    void sampleFrame(BenchSeriesWriter& out) override;
+};
+
+/// `gpu_passes` section: the render graph's per-pass GPU times of the frame
+/// just completed. The backend owns the readback (its timestamp query pool);
+/// this source only republishes what the owner's `provider` produced, keyed by
+/// pass name. The provider callback keeps Core free of an RHI dependency
+/// (ya-rhi already depends on Core); the frame owner supplies it.
+class YA_CORE_API PassGpuTimeBenchSource final : public IBenchSource
+{
+public:
+    using Provider = std::function<void(std::unordered_map<std::string, float>& outPassTimesMs)>;
+
+    explicit PassGpuTimeBenchSource(Provider provider);
+
+    void sampleFrame(BenchSeriesWriter& out) override;
+
+private:
+    Provider _provider;
+};
+
+/// `render_counters` section: the frame's GPU command counts (draws, dispatch,
+/// binds, 2D batches) snapshotted and reset at frame end. Keys are the
+/// counter struct's fields; only counters with a nonzero value appear, so a
+/// section stays readable.
+class YA_CORE_API RenderCounterBenchSource final : public IBenchSource
+{
+  public:
+    RenderCounterBenchSource() = default;
+
     void sampleFrame(BenchSeriesWriter& out) override;
 };
 

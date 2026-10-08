@@ -8,6 +8,7 @@
 #include "Render3D/RenderFrameData.h"
 
 #include <limits>
+#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -251,6 +252,20 @@ void RenderDeviceState::endFrameCommandBuffer(ICommandBuffer* cmdBuf)
             perf::metric::gpuTimeMs(),
             _render->getLastCompletedFrameGpuTimeMs(),
             perf::domain::gpu());
+        publishPassGpuTimes();
+    }
+}
+
+void RenderDeviceState::publishPassGpuTimes()
+{
+    if (!_render || !profiling::isPassGpuTimingEnabled()) {
+        return;
+    }
+    std::unordered_map<std::string, float> passTimesMs;
+    _render->getCompletedPassGpuTimesMs(passTimesMs);
+    PerfState& perf = PerfState::get();
+    for (const auto& [passName, timeMs] : passTimesMs) {
+        perf.setValue(FName(passName), perf::metric::gpuTimeMs(), timeMs, perf::domain::render());
     }
 }
 

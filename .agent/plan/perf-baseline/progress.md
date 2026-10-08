@@ -64,3 +64,27 @@
   - 只量不优化：transient 帧内别名（R5）、上传缓冲复用等留给 M7，按 M4 数字排。
   - 编辑器面板放进新段而不是 profiling 段：本轮 `RuntimeProfilingSection.*` 属 PB2 线，避免同文件并发改。
   - GPU 显存与进程内存仍然是两套口径，M8 / PB4 未开工。
+
+## 2026-10-09 — PB2 pass 级 GPU timestamp + render_counters（M1）
+
+- 完成：
+  - `ICommandBuffer` 加 `beginGpuPass(name)` / `endGpuPass()`（带默认空实现，不动既有 mock）；`RenderGraphExecutor::executeCompiled` 只给**有名字且有 execute 体**的 pass 括一次。
+  - Vulkan：独立的 pass query pool（`kMaxGpuPassesPerFrame * 2` = 512），与整帧那对 frame timestamp 完全分开，frame 池的既有回读路径未被触碰。回读挂在 `beginRecordedFrame()` 的 fence 等待之后（和整帧 GPU 时间同一处），`VK_NOT_READY` 直接跳过、不等。
+  - `RuntimeState.passGpuTimingEnabled` 开关，默认关；`BenchmarkRun::begin/finish` 只在采样窗口内开，结束还原，所以非基准运行没有 query 写入开销。编辑器侧对应 `profile.runtime.passGpuTiming` 配置键。
+  - `Core/Profiling/RenderCounters.h`：9 个 relaxed 原子计数（draw / drawIndexed / indirectDraw / dispatch / dispatchIndirect / pipelineBind / descriptorBind / batch2D / textureTableSwitch2D）。递增在 `VulkanCommandBuffer` 的记录路径与 `ScreenDraw` 的合批 flush 上；递增本身就是已经在热的路径上的 relaxed 加，不带分支与查询。
+  - `PassGpuTimeBenchSource` 收一个 `std::function` provider 而不是 `IRender*`——`ya-rhi` 依赖 `ya-foundation-core`，反向包含会成环；设备访问由 `BenchmarkRun`（已依赖 RHI）接上。
+  - 编辑器 `RuntimeProfilingSection` 加 pass 表（按耗时降序），开关关时整段不显示。
+- 两个真 bug（都是先写错、后被实跑数据抓出来的，单测抓不到）：
+  - `endGpuPass` 把结束时间戳写到了和开始同一个 query index，于是配对的第二个 query 永远是 0；回读时那个 query 不可用，`vkGetQueryPoolResults` 整段返回 `VK_NOT_READY`，`gpu_passes` 全空。
+  - 回读失败时 pass 名字一直不清，几帧就撞上 256 的上限，之后整帧都不再计时。改成窗口只有一帧的量，读回或读不回都清簿记。
+  - 顺带：`WITH_AVAILABILITY` 在 MoltenVK 上对**已完成**的 query 也回 0，可用性位不能当判据；改用「没写过的 query 读回 0」。回读一律带 `PARTIAL`，单个 pass 丢一个时间戳不再作废整帧。
+- 验证：
+  - `ya-testing` debug **1764/1764**（新增 4 例：`PassGpuTimeSourceRecordsProviderKeys` / `PassGpuTimeSourceWithoutProviderRecordsNothing` / `RenderCounterSourceRecordsCountersAndTakesThem` / `ExecutorBracketsEveryNamedPassThatRuns`）。
+  - HelloMaterial 完整基准（debug，600 采样）出 `gpu_passes`：**17/17 个 pass 全部 count=600**，最大项 SSAO Pass p50 1.70 ms，其次 Deferred Light 0.65、GBuffer 0.35、BloomBlurH 0.27；**pass p50 求和 4.04 ms 对整帧 gpuMs p50 4.51 ms**，说明计时确实盖住了帧内真实工作、且没有重复计。
+  - `render_counters` 同时出数（drawIndexed p50 828、indirectDraw 696、descriptorBind 304、pipelineBind 36、dispatch 1、batch2D 4、textureTableSwitch2D 2），与 HelloMaterial 的物体量级吻合。
+  - 编辑器 smoke（`--exit-after-frame=40`）无 ERROR。
+- 保留 / 偏离：
+  - **验收的三次 p50 ±3% 没做成实测**：本机是 debug 构建，且同时有另一个 agent 在编译，frame p50 三次分别 10.28 / 19.28 / 13.09 ms，噪声远大于信号，这个数字不能当基线。pass 表本身的稳定性看得出是稳的（三次都是 17 个 pass、count 全 600、pass 求和与整帧 GPU 时间同量级）。正式数字按 PB6 的口径在 profile 构建下重跑。
+  - pass 名带 view 后缀（`Deferred GBuffer.view4294967297`），同名的多个 view 合并成一个 key；要拆开得改 graph 的 pass 命名，不在本轮。
+  - 计时只覆盖 pass 自己的命令，不含它前后的 barrier——barrier 是图的事。
+  - 与 PB3 的分工：两者都改 `VulkanRender.*` / `VulkanCommandBuffer.*`，本轮已把 PB3 在 `VulkanRender.cpp` 里那个 `GpuMemoryBenchProbe` 定义挪到析构函数之前（定义晚于使用会报 incomplete type），其余各自文件、不动对方逻辑。

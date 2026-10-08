@@ -52,7 +52,12 @@ void matchDrawableToResolution(INativeWindow& window, uint32_t width, uint32_t h
 BenchmarkRun::BenchmarkRun(BenchmarkConfig config)
     : _config(std::move(config)),
       _frameSource(PerfState::get()),
-      _stageSource(PerfState::get())
+      _stageSource(PerfState::get()),
+      _passSource([this](std::unordered_map<std::string, float>& out) {
+          if (IRender* render = _renderWeak) {
+              render->getCompletedPassGpuTimesMs(out);
+          }
+      })
 {
 }
 
@@ -86,8 +91,17 @@ void BenchmarkRun::begin(App& app, FBenchmarkRunContext context)
     }
     app.getRenderServices().setRenderResolution(Extent2D{.width = _config.width, .height = _config.height});
 
-    _frameRegistration = profiling::registerBenchSource("frame", _frameSource);
-    _stageRegistration = profiling::registerBenchSource("cpu_stages", _stageSource);
+    // Pass timestamps and counters belong to the sampling window only: the
+    // brackets cost query-pool memory and two timestamp writes per pass, so
+    // warmup runs without them.
+    _bSavedPassGpuTiming = profiling::isPassGpuTimingEnabled();
+    profiling::setPassGpuTimingEnabled(true);
+    _renderWeak = app.getRenderServices().getRender();
+
+    _frameRegistration   = profiling::registerBenchSource("frame", _frameSource);
+    _stageRegistration   = profiling::registerBenchSource("cpu_stages", _stageSource);
+    _passRegistration    = profiling::registerBenchSource("gpu_passes", _passSource);
+    _counterRegistration = profiling::registerBenchSource("render_counters", _counterSource);
 
     _summaryPath = (std::filesystem::path(_config.outputDir) / "bench_summary.json").string();
     YA_CORE_INFO("Benchmark '{}' started: {}x{}, present {} (requested {}), warmup {} + sample {} frames, fixed dt {}, camera keyframes {}",
@@ -214,6 +228,10 @@ void BenchmarkRun::finish(App& app)
 
     _frameRegistration.reset();
     _stageRegistration.reset();
+    _passRegistration.reset();
+    _counterRegistration.reset();
+    profiling::setPassGpuTimingEnabled(_bSavedPassGpuTiming);
+    _renderWeak = nullptr;
     app.requestQuit();
 }
 

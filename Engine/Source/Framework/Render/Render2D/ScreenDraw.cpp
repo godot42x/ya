@@ -3,6 +3,7 @@
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "Core/Log.h"
 #include "Core/Math/GLM.h"
+#include "Core/Profiling/RenderCounters.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderResourceFactory.h"
@@ -432,8 +433,9 @@ void ScreenDrawRecorder::flush(ICommandBuffer* cmdBuf, uint32_t width, uint32_t 
     if (stats) {
         ++stats->screenFlushCount;
         stats->screenVertexCount += _vertexCount;
-        stats->screenIndexCount += _indexCount;
+        stats->screenIndexCount  += _indexCount;
     }
+    incrementRenderCounterBatch2D();
     _batchStartVertex = static_cast<uint32_t>(_vertexPtr - _vertexPtrHead);
     _batchStartIndex += _indexCount;
     _vertexCount = 0;
@@ -546,6 +548,7 @@ ScreenDrawFrameStats ScreenDrawRecorder::record(ScreenDrawList& list, const Scre
             _resourceVersion         = std::max<uint64_t>(_resourceVersion + 1, 1);
             _uploadedResourceVersion = 0;
             uploadedSlots            = batch.catalogSlots;
+            incrementRenderCounterTextureTableSwitch2D();
         }
         flush(target.cmd, target.width, target.height, batch.bClipped, batch.clip, &stats);
     }

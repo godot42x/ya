@@ -322,6 +322,11 @@ class TestCommandBuffer final : public ICommandBuffer
     EImageLayout::T lastDepthFinalLayout = EImageLayout::Undefined;
     bool lastBeginRenderingHadResolve = false;
     EResolveMode::T lastResolveMode = EResolveMode::None;
+    /// Pass names bracketed by `beginGpuPass`, in execution order, plus the
+    /// number of `endGpuPass` calls (an unbalanced bracket shows up as a
+    /// trailing begin with no end).
+    std::vector<std::string> gpuPasses;
+    uint32_t                 gpuPassEnds = 0;
 
   private:
     ResourceStateTracker _imageStateTracker;
@@ -411,6 +416,8 @@ class TestCommandBuffer final : public ICommandBuffer
     }
     void debugBeginLabel(const char*, const float* = nullptr) override {}
     void debugEndLabel() override {}
+    void beginGpuPass(const char* passName) override { gpuPasses.emplace_back(passName); }
+    void endGpuPass() override { ++gpuPassEnds; }
 };
 
 std::vector<RGTextureStatePlan> collectTextureStatePlans(const RGCompiledGraph& compiled)
@@ -4543,6 +4550,50 @@ TEST(RenderGraphCoreTest, RenderContextHelpersDriveRenderingAndCopyCommands)
     EXPECT_EQ(cmdBuf.copyBuffers[0].size, 32u);
     EXPECT_EQ(cmdBuf.copyBuffers[0].srcOffset, 4u);
     EXPECT_EQ(cmdBuf.copyBuffers[0].dstOffset, 8u);
+}
+
+TEST(RenderGraphCoreTest, ExecutorBracketsEveryNamedPassThatRuns)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+
+    const auto colorTarget = graph.createTexture(RGTextureDesc{
+        .label  = "passes.target",
+        .format = EFormat::R8G8B8A8_UNORM,
+        .extent = Extent3D{64, 64, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+
+    auto draw = [&](RGRenderContext& ctx) {
+        ctx.beginColorRendering({
+            .color     = colorTarget,
+            .renderArea = Rect2D{.offset = glm::vec2{0.0f, 0.0f}, .extent = glm::vec2{64.0f, 64.0f}},
+        });
+        ctx.endRendering();
+    };
+
+    (void)graph.addPass(
+        "shadow-pass",
+        [&](RGPassBuilder& pass) { pass.useColorAttachment(colorTarget); },
+        draw);
+    // An unnamed pass gets no bracket: a pass with no name has no key to report
+    // its time under.
+    (void)graph.addPass(
+        "",
+        [&](RGPassBuilder& pass) { pass.useColorAttachment(colorTarget); },
+        draw);
+    // A pass with no execute body is never run, so it is never bracketed.
+    (void)graph.addPass(
+        "declared-only",
+        [&](RGPassBuilder& pass) { pass.useColorAttachment(colorTarget); });
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+
+    ASSERT_EQ(cmdBuf.gpuPasses.size(), 1u);
+    EXPECT_EQ(cmdBuf.gpuPasses.front(), "shadow-pass");
+    EXPECT_EQ(cmdBuf.gpuPassEnds, cmdBuf.gpuPasses.size());
 }
 
 TEST(RenderGraphCoreTest, RasterRenderingHelperSupportsOptionalDepthAttachment)

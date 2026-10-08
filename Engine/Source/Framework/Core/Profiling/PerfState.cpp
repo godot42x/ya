@@ -319,6 +319,7 @@ RuntimeState& runtimeStateStorage()
         .staticInitEnabled         = true,
         .guiFrameInspectorEnabled  = true,
         .guiFrameInspectorChannels = 0,
+        .passGpuTimingEnabled      = true,
     };
 #else
     static RuntimeState state{
@@ -327,6 +328,7 @@ RuntimeState& runtimeStateStorage()
         .staticInitEnabled         = true,
         .guiFrameInspectorEnabled  = false,
         .guiFrameInspectorChannels = 0,
+        .passGpuTimingEnabled      = false,
     };
 #endif
     return state;
@@ -349,6 +351,7 @@ void applyRuntimeState(RuntimeState& state)
     state.perfMetricsEnabled       = normalizeRuntimeToggle(state.perfMetricsEnabled);
     state.staticInitEnabled        = normalizeRuntimeToggle(state.staticInitEnabled);
     state.guiFrameInspectorEnabled = normalizeRuntimeToggle(state.guiFrameInspectorEnabled);
+    state.passGpuTimingEnabled     = normalizeRuntimeToggle(state.passGpuTimingEnabled);
 }
 
 RuntimeState getRuntimeState()
@@ -423,6 +426,18 @@ void setGuiFrameInspectorChannels(uint8_t channels)
 {
     auto state                      = getRuntimeState();
     state.guiFrameInspectorChannels = channels;
+    setRuntimeState(state);
+}
+
+bool isPassGpuTimingEnabled()
+{
+    return getRuntimeState().passGpuTimingEnabled;
+}
+
+void setPassGpuTimingEnabled(bool enabled)
+{
+    auto state                   = getRuntimeState();
+    state.passGpuTimingEnabled   = enabled;
     setRuntimeState(state);
 }
 

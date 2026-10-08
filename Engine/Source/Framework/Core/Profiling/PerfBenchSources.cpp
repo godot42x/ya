@@ -2,8 +2,11 @@
 
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
+#include "Core/Profiling/RenderCounters.h"
 
 #include <algorithm>
+#include <string>
+#include <unordered_map>
 
 namespace ya::profiling
 {
@@ -86,6 +89,59 @@ void PerfStageBenchSource::sampleFrame(BenchSeriesWriter& out)
         latest = std::max(latest, reading.revision);
     });
     _lastRevision = latest;
+}
+
+PassGpuTimeBenchSource::PassGpuTimeBenchSource(Provider provider)
+    : _provider(std::move(provider))
+{
+}
+
+void PassGpuTimeBenchSource::sampleFrame(BenchSeriesWriter& out)
+{
+    if (!_provider) {
+        return;
+    }
+    std::unordered_map<std::string, float> passTimesMs;
+    _provider(passTimesMs);
+    for (const auto& [passName, timeMs] : passTimesMs) {
+        out.record(passName, timeMs);
+    }
+}
+
+void RenderCounterBenchSource::sampleFrame(BenchSeriesWriter& out)
+{
+    // Frame end is where the counters mean exactly one frame's work; the next
+    // frame starts from zero.
+    const RenderCounters snapshot = renderCountersSnapshot();
+    resetRenderCounters();
+
+    if (snapshot.drawCount != 0) {
+        out.record("drawCount", static_cast<float>(snapshot.drawCount));
+    }
+    if (snapshot.drawIndexedCount != 0) {
+        out.record("drawIndexedCount", static_cast<float>(snapshot.drawIndexedCount));
+    }
+    if (snapshot.indirectDrawCount != 0) {
+        out.record("indirectDrawCount", static_cast<float>(snapshot.indirectDrawCount));
+    }
+    if (snapshot.dispatchCount != 0) {
+        out.record("dispatchCount", static_cast<float>(snapshot.dispatchCount));
+    }
+    if (snapshot.dispatchIndirectCount != 0) {
+        out.record("dispatchIndirectCount", static_cast<float>(snapshot.dispatchIndirectCount));
+    }
+    if (snapshot.pipelineBindCount != 0) {
+        out.record("pipelineBindCount", static_cast<float>(snapshot.pipelineBindCount));
+    }
+    if (snapshot.descriptorBindCount != 0) {
+        out.record("descriptorBindCount", static_cast<float>(snapshot.descriptorBindCount));
+    }
+    if (snapshot.batch2DCount != 0) {
+        out.record("batch2DCount", static_cast<float>(snapshot.batch2DCount));
+    }
+    if (snapshot.textureTableSwitch2DCount != 0) {
+        out.record("textureTableSwitch2DCount", static_cast<float>(snapshot.textureTableSwitch2DCount));
+    }
 }
 
 } // namespace ya::profiling

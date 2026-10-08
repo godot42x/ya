@@ -28,6 +28,9 @@ class YA_RHI_BACKEND_API VulkanCommandBuffer : public ICommandBuffer
     uint32_t        _debugLabelDepth = 0;
     std::string     _debugName;
     ResourceStateTracker _resourceStateTracker;
+    /// Query-pair base of the currently open pass-timing bracket, or the
+    /// invalid index when no bracket is open (VulkanRender::kInvalidPassQueryIndex).
+    uint32_t        _openPassQueryBase = ~0u;
 
     // Track current rendering mode for proper endRendering() call
     ERenderingMode::T _currentRenderingMode = ERenderingMode::None;
@@ -203,6 +206,8 @@ class YA_RHI_BACKEND_API VulkanCommandBuffer : public ICommandBuffer
     void transitionImageLayoutAuto(IImage* image, EImageLayout::T newLayout, const ImageSubresourceRange* subresourceRange = nullptr) override;
     void debugBeginLabel(const char* labelName, const float* colorRGBA = nullptr) override;
     void debugEndLabel() override;
+    void beginGpuPass(const char* passName) override;
+    void endGpuPass() override;
 
 };
 

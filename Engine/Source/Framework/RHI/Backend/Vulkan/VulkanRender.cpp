@@ -199,6 +199,24 @@ VkObjectType toVk(ERenderObject type)
     return VK_OBJECT_TYPE_MAX_ENUM;
 }
 
+/// The `gpu_memory` benchmark section of one device: the source that shapes
+/// the report plus its registration, both living exactly as long as the
+/// device. Defined here and only here -- `VulkanRender.h` forward-declares the
+/// probe, so no consumer of the backend pulls in the benchmark headers.
+struct GpuMemoryBenchProbe
+{
+    GpuMemoryBenchSource               source;
+    profiling::BenchSourceRegistration registration;
+
+    explicit GpuMemoryBenchProbe(const VulkanRender& render)
+        : source([&render] { return render.getGpuMemoryStats(); }),
+          registration(profiling::registerBenchSource("gpu_memory", source))
+    {
+    }
+};
+
+VulkanRender::VulkanRender() = default;
+
 // Destructor needs to be defined in .cpp where VulkanDescriptor is complete
 VulkanRender::~VulkanRender()
 {
@@ -235,6 +253,7 @@ void VulkanRender::destroyInternal()
     }
     _frameFences.clear();
     releaseFrameGpuTimingResources();
+    releasePassGpuTimingResources();
     VK_DESTROY(PipelineCache, m_LogicalDevice, _pipelineCache);
 
     _graphicsCommandPool->cleanup();
@@ -1279,22 +1298,6 @@ void VulkanRender::captureSelectedDeviceInfo()
     }
 }
 
-/// The `gpu_memory` benchmark section of one device: the source that shapes
-/// the report plus its registration, both living exactly as long as the
-/// device. Defined here and only here -- `VulkanRender.h` forward-declares the
-/// probe, so no consumer of the backend pulls in the benchmark headers.
-struct GpuMemoryBenchProbe
-{
-    GpuMemoryBenchSource               source;
-    profiling::BenchSourceRegistration registration;
-
-    explicit GpuMemoryBenchProbe(const VulkanRender& render)
-        : source([&render] { return render.getGpuMemoryStats(); }),
-          registration(profiling::registerBenchSource("gpu_memory", source))
-    {
-    }
-};
-
 void VulkanRender::createGpuMemoryBenchProbe()
 {
     _gpuMemoryBenchProbe = std::make_unique<GpuMemoryBenchProbe>(*this);
@@ -1373,6 +1376,137 @@ void VulkanRender::updateCompletedFrameGpuTiming()
     _lastCompletedFrameGpuTimeMs = static_cast<float>((deltaTimestamp * static_cast<double>(_gpuTimestampPeriodNs)) / 1000000.0);
 }
 
+void VulkanRender::createPassGpuTimingResources()
+{
+    _passGpuTimingQueryCount = 0;
+    _bPassGpuTimingFrameOpen = false;
+    _passGpuTimingNames.clear();
+    _completedPassGpuTimesMs.clear();
+
+    if (getDevice() == VK_NULL_HANDLE || !_pfnCmdResetQueryPool) {
+        return;
+    }
+    if (!_bFrameGpuTimingSupported) {
+        // Same device limits govern both rings; without timestamps there is
+        // nothing to time per pass either.
+        return;
+    }
+
+    VkQueryPoolCreateInfo queryPoolCI{
+        .sType              = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+        .pNext              = nullptr,
+        .flags              = 0,
+        .queryType          = VK_QUERY_TYPE_TIMESTAMP,
+        .queryCount         = kMaxGpuPassesPerFrame * 2,
+        .pipelineStatistics = 0,
+    };
+
+    const VkResult ret = vkCreateQueryPool(getDevice(), &queryPoolCI, getAllocator(), &_passGpuTimestampQueryPool);
+    if (ret != VK_SUCCESS) {
+        YA_CORE_WARN("Failed to create pass GPU timestamp query pool: {}", static_cast<int32_t>(ret));
+        return;
+    }
+}
+
+void VulkanRender::releasePassGpuTimingResources()
+{
+    _passGpuTimingQueryCount = 0;
+    _bPassGpuTimingFrameOpen = false;
+    _passGpuTimingNames.clear();
+    _completedPassGpuTimesMs.clear();
+
+    if (_passGpuTimestampQueryPool != VK_NULL_HANDLE && getDevice() != VK_NULL_HANDLE) {
+        vkDestroyQueryPool(getDevice(), _passGpuTimestampQueryPool, getAllocator());
+        _passGpuTimestampQueryPool = VK_NULL_HANDLE;
+    }
+}
+
+uint32_t VulkanRender::beginPassGpuTimingQuery(ICommandBuffer* commandBuffer, const char* passName)
+{
+    if (_passGpuTimestampQueryPool == VK_NULL_HANDLE || !passName || !commandBuffer) {
+        return kInvalidPassQueryIndex;
+    }
+
+    const bool bFirstBracketOfFrame = _passGpuTimingQueryCount == 0;
+    if (_passGpuTimingQueryCount >= kMaxGpuPassesPerFrame * 2) {
+        static bool bWarned = false;
+        if (!bWarned) {
+            bWarned = true;
+            YA_CORE_WARN("Pass GPU timing cap ({}) reached; further passes are untimed", kMaxGpuPassesPerFrame);
+        }
+        return kInvalidPassQueryIndex;
+    }
+
+    if (bFirstBracketOfFrame) {
+        // The pool holds exactly one frame's queries: the previous frame's
+        // were read back (or deliberately dropped) by
+        // `updateCompletedPassGpuTiming` before this frame records, so the
+        // whole pool resets inside the first command buffer that uses it.
+        _pfnCmdResetQueryPool(commandBuffer->getHandleAs<VkCommandBuffer>(),
+                              _passGpuTimestampQueryPool,
+                              0,
+                              kMaxGpuPassesPerFrame * 2);
+        _bPassGpuTimingFrameOpen = true;
+    }
+
+    const uint32_t queryBase = _passGpuTimingQueryCount;
+    _passGpuTimingQueryCount += 2;
+    _passGpuTimingNames.emplace(queryBase, passName);
+    return queryBase;
+}
+
+void VulkanRender::updateCompletedPassGpuTiming()
+{
+    // Called after this frame's fence wait, so the previous frame's bracket
+    // queries (the ring keeps exactly one frame's worth) have completed. The
+    // bookkeeping is dropped either way: the pool holds one frame's worth of
+    // queries, so a window that could not be read is finished, not pending.
+    const uint32_t queryCount = _passGpuTimingQueryCount;
+    if (_passGpuTimestampQueryPool == VK_NULL_HANDLE || queryCount == 0) {
+        _bPassGpuTimingFrameOpen = false;
+        _passGpuTimingQueryCount = 0;
+        _passGpuTimingNames.clear();
+        return;
+    }
+
+    // PARTIAL so one pass whose timestamp never landed costs only that pass
+    // instead of voiding the whole frame's readback. A query nothing wrote
+    // reads back as 0, which is the availability signal here: MoltenVK fills the
+    // WITH_AVAILABILITY array with zeros for queries that did complete, so the
+    // flags cannot be the gate.
+    std::vector<uint64_t> timestamps(queryCount);
+    const VkResult       ret = vkGetQueryPoolResults(
+        getDevice(),
+        _passGpuTimestampQueryPool,
+        0,
+        queryCount,
+        timestamps.size() * sizeof(uint64_t),
+        timestamps.data(),
+        sizeof(uint64_t),
+        VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_PARTIAL_BIT);
+
+    if (ret == VK_SUCCESS || ret == VK_NOT_READY) {
+        _completedPassGpuTimesMs.clear();
+        for (const auto& [queryBase, name] : _passGpuTimingNames) {
+            if (queryBase + 1 >= queryCount) {
+                continue;
+            }
+            const uint64_t startTimestamp = timestamps[queryBase];
+            const uint64_t endTimestamp   = timestamps[queryBase + 1];
+            if (startTimestamp == 0 || endTimestamp == 0 || endTimestamp < startTimestamp) {
+                continue;
+            }
+            const double deltaTimestamp = static_cast<double>(endTimestamp - startTimestamp);
+            _completedPassGpuTimesMs[name] =
+                static_cast<float>((deltaTimestamp * static_cast<double>(_gpuTimestampPeriodNs)) / 1000000.0);
+        }
+    }
+
+    _bPassGpuTimingFrameOpen = false;
+    _passGpuTimingQueryCount = 0;
+    _passGpuTimingNames.clear();
+}
+
 
 
 const VkAllocationCallbacks* VulkanRender::getAllocator()
@@ -1417,6 +1551,7 @@ void VulkanRender::beginRecordedFrame()
     // The slot's previous frame is retired, so its timestamps are available;
     // read before this frame's beginFrameGpuTiming resets them.
     updateCompletedFrameGpuTiming();
+    updateCompletedPassGpuTiming();
     // Re-armed by this frame's first submission. A frame that submits nothing
     // leaves the fence signaled for the next frame that uses the slot.
     _bFrameFenceArmed = false;

@@ -7,6 +7,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <unordered_map>
+
 #include <vulkan/vulkan.h>
 
 
@@ -71,6 +73,9 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     friend struct VulkanUtils;
     friend struct VulkanRenderPass;
     friend struct VulkanRenderSurfaceContext;
+    /// Records the pass-timing query pairs; reads the device's private pool and
+    /// cap while doing so.
+    friend class VulkanCommandBuffer;
 
     const std::vector<ya::DeviceFeature> _instanceLayers           = {};
     const std::vector<ya::DeviceFeature> _instanceValidationLayers = {
@@ -225,6 +230,20 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     bool                      _bFrameGpuTimingSupported    = false;
     std::vector<uint8_t>      _frameGpuTimingValid;
 
+    /// Pass-level GPU timing, independent of the whole-frame pool so its query
+    /// count can grow with a graph without disturbing the 2-query frame ring.
+    /// `kMaxGpuPassesPerFrame` bounds one frame's pass brackets; a frame with
+    /// more passes than the cap records draws without timing them (WARN once).
+    static constexpr uint32_t kMaxGpuPassesPerFrame  = 256;
+    static constexpr uint32_t kInvalidPassQueryIndex = ~0u;
+    VkQueryPool               _passGpuTimestampQueryPool = VK_NULL_HANDLE;
+    /// Passes bracketed so far this frame, as query-pair bases (`base`, then
+    /// `base + 1`). Doubles as "this frame has pass work to read back".
+    std::unordered_map<uint32_t, std::string> _passGpuTimingNames;
+    uint32_t                  _passGpuTimingQueryCount   = 0;
+    bool                      _bPassGpuTimingFrameOpen   = false;
+    std::unordered_map<std::string, float>    _completedPassGpuTimesMs;
+
     /// Which slot of the GPU-timing query ring the current frame owns. Indexed
     /// by the recorded-frame generation, so the readback at the start of frame
     /// N+1 reads what frame N wrote without asking any window which frame it is
@@ -326,6 +345,11 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     void beginFrameGpuTiming(ICommandBuffer* commandBuffer) override;
     void endFrameGpuTiming(ICommandBuffer* commandBuffer) override;
 
+    void getCompletedPassGpuTimesMs(std::unordered_map<std::string, float>& outPassTimesMs) const override
+    {
+        outPassTimesMs = _completedPassGpuTimesMs;
+    }
+
     void* createSemaphore(const char* debugName = nullptr) override;
     void  destroySemaphore(void* semaphore) override;
     void  queueBeginLabel(const char* labelName, const float* colorRGBA = nullptr) override;
@@ -392,6 +416,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
             terminate();
         }
         createFrameGpuTimingResources();
+        createPassGpuTimingResources();
         createGpuMemoryBenchProbe();
         return true;
     }
@@ -535,6 +560,20 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     void releaseFrameGpuTimingResources();
     void captureSelectedDeviceInfo();
     void updateCompletedFrameGpuTiming();
+    void createPassGpuTimingResources();
+    void releasePassGpuTimingResources();
+    void updateCompletedPassGpuTiming();
+
+    /// The frame's pass-timing window: opened by the first
+    /// `beginPassGpuTimingQuery` after readback reset the bookkeeping, closed
+    /// by the next readback.
+    [[nodiscard]] VkQueryPool getPassGpuTimestampQueryPool() const { return _passGpuTimestampQueryPool; }
+
+    /// Reserves a timestamp pair for `passName` and returns the query-pair base,
+    /// or `kInvalidPassQueryIndex` when the frame's cap is exhausted (the pass
+    /// then goes untimed; WARN fires once). The first bracket of a frame also
+    /// resets the pool inside the given command buffer.
+    uint32_t beginPassGpuTimingQuery(ICommandBuffer* commandBuffer, const char* passName);
 };
 
 

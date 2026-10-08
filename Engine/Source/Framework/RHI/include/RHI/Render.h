@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 namespace ya
 {
@@ -341,6 +342,15 @@ struct YA_RHI_API IRender : public plat_base<IRender>
     virtual float getLastCompletedFrameGpuTimeMs() const
     {
         return 0.0f;
+    }
+
+    /// The last completed frame's per-pass GPU times keyed by pass name (the
+    /// pass brackets the render graph recorded). Empty unless the backend
+    /// supports pass timestamps and pass GPU timing produced a result. The
+    /// reference is only valid until the next frame's readback.
+    virtual void getCompletedPassGpuTimesMs(std::unordered_map<std::string, float>& outPassTimesMs) const
+    {
+        (void)outPassTimesMs;
     }
 
     /**

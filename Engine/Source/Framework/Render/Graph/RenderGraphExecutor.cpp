@@ -181,8 +181,17 @@ bool RenderGraphExecutor::executeCompiled(
             continue;
         }
 
+        // Pass-level GPU timing brackets the pass's own commands only: the
+        // barriers above are graph plumbing, not the pass's work. The command
+        // buffer ignores the bracket unless its backend opted in.
+        if (!pass->name.empty()) {
+            cmdBuf.beginGpuPass(pass->name.c_str());
+        }
         RGRenderContext ctx(graph, *pass, _registry, &passPlan, cmdBuf);
         pass->execute(ctx);
+        if (!pass->name.empty()) {
+            cmdBuf.endGpuPass();
+        }
     }
 
     finalizeImportedBufferStates(compiled, cmdBuf);

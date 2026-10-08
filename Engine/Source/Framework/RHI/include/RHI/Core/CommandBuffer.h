@@ -631,6 +631,20 @@ struct ICommandBuffer
     virtual void debugBeginLabel(const char* labelName, const float* colorRGBA = nullptr) = 0;
     virtual void debugEndLabel()                                                          = 0;
 
+    /// Pass-level GPU timing brackets. The backend records a timestamp pair
+    /// around the commands issued between the two calls and publishes the
+    /// elapsed time keyed by `passName` (see the backend's readback); recording
+    /// code only brackets, the backend owns the query pool. Both calls are
+    /// no-ops unless the backend opted in (pass GPU timing enabled), and the
+    /// default is a no-op for backends without timestamp support.
+    virtual void beginGpuPass(const char* passName)
+    {
+        (void)passName;
+    }
+    virtual void endGpuPass()
+    {
+    }
+
     #if YA_CMDBUF_RECORD_MODE
     // No-op in virtual mode - commands are executed immediately
     virtual void executeAll() { recordedCommands.clear(); }

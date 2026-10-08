@@ -26,8 +26,18 @@
         "M1"
       ],
       "title": "per-pass GPU timestamps + render counters",
-      "status": "todo",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "Engine/Source/Framework/Core/include/Core/Profiling/RenderCounters.h",
+        "Engine/Source/Framework/Core/include/Core/Profiling/PerfBenchSources.h",
+        "Engine/Source/Framework/RHI/Backend/Vulkan/VulkanCommandBuffer.cpp",
+        "Engine/Source/Framework/Render/Graph/RenderGraphExecutor.cpp",
+        "Engine/Source/Applications/GameEditor/UI/Sections/RuntimeProfilingSection.cpp",
+        "Engine/Test/Source/Core/BenchAggregatorTest.cpp",
+        "Engine/Test/Source/Render3D/RenderGraphCoreTest.cpp",
+        "ya-testing debug 1764/1764 (4 new: pass gpu source, counter source, executor brackets)",
+        "HelloMaterial debug benchmark: gpu_passes 17/17 passes at count=600, sum of pass p50 4.03 ms vs whole-frame gpuMs p50 4.51 ms; render_counters drawIndexed p50 828, indirectDraw p50 696"
+      ]
     },
     {
       "id": "PB3",
@@ -43,7 +53,7 @@
         "Engine/Source/Applications/GameEditor/UI/Sections/RuntimeGpuMemorySection.cpp",
         "Engine/Test/Source/RhiVulkan/GpuMemoryStatsTest.cpp",
         "ya-rhi-vulkan-smoke debug 18/18 (8 new)",
-        "ya-testing debug 1762/1763 (1 failure is PB2's in-flight PassGpuTimeSourceWithoutProviderRecordsNothing)",
+        "ya-testing debug 1764/1764 (supersedes the 1762/1763 note: PB2 landed and fixed its PassGpuTimeSourceWithoutProviderRecordsNothing)",
         "HelloMaterial debug benchmark: gpu_memory totalMiB p50 806.58 = texture 567.86 + renderTarget 177.89 + buffer 28.19 + upload 16.58 + transient 16.06; VMA allocationBytes 806.58 matches the per-class sum"
       ]
     },

@@ -7,6 +7,7 @@
 #include "Core/Profiling/PerfBenchSources.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
+#include "Core/Profiling/RenderCounters.h"
 
 #include <gtest/gtest.h>
 
@@ -287,6 +288,72 @@ TEST(PerfBenchSourcesTest, FrameSourceSkipsStaleHostTickValues)
     EXPECT_DOUBLE_EQ(frame["cpuMs"]["p50"].get<double>(), 4.0);
     EXPECT_EQ(frame["gpuMs"]["count"].get<size_t>(), 1u);
     EXPECT_TRUE(frame.contains("fps"));
+}
+
+TEST(PerfBenchSourcesTest, PassGpuTimeSourceRecordsProviderKeys)
+{
+    PassGpuTimeBenchSource source([](std::unordered_map<std::string, float>& out) {
+        out["Shadow"]  = 1.5f;
+        out["GBuffer"] = 4.25f;
+    });
+    BenchAggregator           aggregator;
+    BenchSourceRegistration registration(aggregator, "gpu_passes", source);
+
+    aggregator.beginWindow(1);
+    aggregator.sampleFrame();
+    aggregator.endWindow();
+
+    const nlohmann::json passes = aggregator.buildSections()["gpu_passes"];
+    ASSERT_TRUE(passes.contains("Shadow"));
+    EXPECT_DOUBLE_EQ(passes["Shadow"]["p50"].get<double>(), 1.5);
+    ASSERT_TRUE(passes.contains("GBuffer"));
+    EXPECT_DOUBLE_EQ(passes["GBuffer"]["p50"].get<double>(), 4.25);
+}
+
+TEST(PerfBenchSourcesTest, PassGpuTimeSourceWithoutProviderRecordsNothing)
+{
+    PassGpuTimeBenchSource  source(PassGpuTimeBenchSource::Provider{});
+    BenchAggregator         aggregator;
+    BenchSourceRegistration registration(aggregator, "gpu_passes", source);
+
+    aggregator.beginWindow(1);
+    aggregator.sampleFrame();
+    aggregator.endWindow();
+
+    // The device is gone, so the frame has no pass times; the section exists
+    // but must not claim a zero-valued series for any pass.
+    const nlohmann::json sections = aggregator.buildSections();
+    ASSERT_TRUE(sections.contains("gpu_passes"));
+    EXPECT_TRUE(sections["gpu_passes"].empty());
+}
+
+TEST(PerfBenchSourcesTest, RenderCounterSourceRecordsCountersAndTakesThem)
+{
+    resetRenderCounters();
+    RenderCounterBenchSource source;
+    BenchAggregator          aggregator;
+    BenchSourceRegistration registration(aggregator, "render_counters", source);
+
+    incrementRenderCounterDraw();
+    incrementRenderCounterDraw();
+    incrementRenderCounterIndirectDraw(64);
+    incrementRenderCounterBatch2D();
+
+    aggregator.beginWindow(1);
+    aggregator.sampleFrame();
+    aggregator.endWindow();
+
+    const nlohmann::json counters = aggregator.buildSections()["render_counters"];
+    EXPECT_DOUBLE_EQ(counters["drawCount"]["p50"].get<double>(), 2.0);
+    EXPECT_DOUBLE_EQ(counters["indirectDrawCount"]["p50"].get<double>(), 64.0);
+    EXPECT_DOUBLE_EQ(counters["batch2DCount"]["p50"].get<double>(), 1.0);
+    // Untouched counters stay out of the section.
+    EXPECT_FALSE(counters.contains("dispatchCount"));
+
+    // Sampling takes the counters with it: the next frame starts from zero.
+    const RenderCounters after = renderCountersSnapshot();
+    EXPECT_EQ(after.drawCount, 0u);
+    EXPECT_EQ(after.batch2DCount, 0u);
 }
 
 TEST(BenchSummaryTest, SummaryCarriesMetaAndEverySection)

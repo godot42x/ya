@@ -6,6 +6,10 @@
 #include "RHI/Backend/Vulkan/VulkanImageView.h"
 #include "RHI/Backend/Vulkan/VulkanQueue.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "Core/Profiling/Profiling.h"
+#include "Core/Profiling/RenderCounters.h"
+
+#include <algorithm>
 
 
 
@@ -306,6 +310,7 @@ void VulkanCommandBuffer::reset()
     vkResetCommandBuffer(_commandBuffer, 0);
     _isRecording = false;
     _debugLabelDepth = 0;
+    _openPassQueryBase = VulkanRender::kInvalidPassQueryIndex;
     _resourceStateTracker.reset();
     clearRetiredResources();
 #if YA_CMDBUF_RECORD_MODE
@@ -943,11 +948,13 @@ void VulkanCommandBuffer::executeAll()
 
 void VulkanCommandBuffer::bindPipeline(IGraphicsPipeline* pipeline)
 {
+    incrementRenderCounterPipelineBind();
     executeBindPipeline(pipeline);
 }
 
 void VulkanCommandBuffer::bindComputePipeline(IComputePipeline* pipeline)
 {
+    incrementRenderCounterPipelineBind();
     executeBindComputePipeline(pipeline);
 }
 
@@ -964,23 +971,27 @@ void VulkanCommandBuffer::bindIndexBuffer(IBuffer* buffer, uint64_t offset, bool
 void VulkanCommandBuffer::draw(uint32_t vertexCount, uint32_t instanceCount,
                                uint32_t firstVertex, uint32_t firstInstance)
 {
+    incrementRenderCounterDraw();
     executeDraw(vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
 void VulkanCommandBuffer::drawIndexed(uint32_t indexCount, uint32_t instanceCount,
-                                      uint32_t firstIndex, int32_t vertexOffset,
-                                      uint32_t firstInstance)
+                               uint32_t firstIndex, int32_t vertexOffset,
+                               uint32_t firstInstance)
 {
+    incrementRenderCounterDrawIndexed();
     executeDrawIndexed(indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 }
 
 void VulkanCommandBuffer::drawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride)
 {
+    incrementRenderCounterIndirectDraw(std::max(1u, drawCount));
     executeDrawIndirect(buffer, offset, drawCount, stride);
 }
 
 void VulkanCommandBuffer::drawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride)
 {
+    incrementRenderCounterIndirectDraw(std::max(1u, drawCount));
     executeDrawIndexedIndirect(buffer, offset, drawCount, stride);
 }
 
@@ -988,6 +999,7 @@ void VulkanCommandBuffer::drawIndexedIndirectCount(IBuffer* drawBuffer, uint64_t
                                                     IBuffer* countBuffer, uint64_t countOffset,
                                                     uint32_t maxDrawCount, uint32_t stride)
 {
+    incrementRenderCounterIndirectDraw(std::max(1u, maxDrawCount));
     executeDrawIndexedIndirectCount(drawBuffer, drawOffset, countBuffer, countOffset, maxDrawCount, stride);
 }
 
@@ -1223,6 +1235,7 @@ void VulkanCommandBuffer::bindDescriptorSets(
     const std::vector<DescriptorSetHandle>& descriptorSets,
     const std::vector<uint32_t>&            dynamicOffsets)
 {
+    incrementRenderCounterDescriptorBind();
     executeBindDescriptorSets(pipelineLayout, firstSet, descriptorSets, dynamicOffsets, VK_PIPELINE_BIND_POINT_GRAPHICS);
 }
 
@@ -1232,6 +1245,7 @@ void VulkanCommandBuffer::bindComputeDescriptorSets(
     const std::vector<DescriptorSetHandle>& descriptorSets,
     const std::vector<uint32_t>&            dynamicOffsets)
 {
+    incrementRenderCounterDescriptorBind();
     executeBindDescriptorSets(pipelineLayout, firstSet, descriptorSets, dynamicOffsets, VK_PIPELINE_BIND_POINT_COMPUTE);
 }
 
@@ -1252,11 +1266,13 @@ void VulkanCommandBuffer::copyBuffer(IBuffer* src, IBuffer* dst, uint64_t size, 
 
 void VulkanCommandBuffer::dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
+    incrementRenderCounterDispatch();
     executeDispatch(groupCountX, groupCountY, groupCountZ);
 }
 
 void VulkanCommandBuffer::dispatchIndirect(IBuffer* buffer, uint64_t offset)
 {
+    incrementRenderCounterDispatchIndirect();
     executeDispatchIndirect(buffer, offset);
 }
 
@@ -1310,6 +1326,44 @@ void VulkanCommandBuffer::debugEndLabel()
 
     s_vkCmdEndDebugUtilsLabelEXT(_commandBuffer);
     --_debugLabelDepth;
+}
+
+void VulkanCommandBuffer::beginGpuPass(const char* passName)
+{
+    VulkanRender* render = _render;
+    if (!render || !passName || !profiling::isPassGpuTimingEnabled()) {
+        return;
+    }
+    const uint32_t queryBase = render->beginPassGpuTimingQuery(this, passName);
+    if (queryBase == VulkanRender::kInvalidPassQueryIndex) {
+        _openPassQueryBase = VulkanRender::kInvalidPassQueryIndex;
+        return;
+    }
+    _openPassQueryBase = queryBase;
+    vkCmdWriteTimestamp(_commandBuffer,
+                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                        render->getPassGpuTimestampQueryPool(),
+                        queryBase);
+}
+
+void VulkanCommandBuffer::endGpuPass()
+{
+    VulkanRender* render = _render;
+    if (!render || _openPassQueryBase == VulkanRender::kInvalidPassQueryIndex) {
+        return;
+    }
+    const uint32_t queryBase = _openPassQueryBase;
+    _openPassQueryBase       = VulkanRender::kInvalidPassQueryIndex;
+    if (!profiling::isPassGpuTimingEnabled()) {
+        return;
+    }
+    // The end timestamp is the pair's second query: writing it over the first
+    // would leave the pair with one value forever, and the readback would wait
+    // on a query nothing ever writes.
+    vkCmdWriteTimestamp(_commandBuffer,
+                        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                        render->getPassGpuTimestampQueryPool(),
+                        queryBase + 1);
 }
 
 } // namespace ya

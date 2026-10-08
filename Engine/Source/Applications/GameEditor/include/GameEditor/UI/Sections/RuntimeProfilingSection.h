@@ -25,6 +25,7 @@ class RuntimeProfilingSection final : public UICompoundWidget
     std::shared_ptr<UIText> _traceState;
     std::shared_ptr<UIText> _frameCpu;
     std::shared_ptr<UIText> _frameGpu;
+    std::shared_ptr<UIText> _passTable;
     std::shared_ptr<UICheckBox> _cpuTrace;
     std::shared_ptr<UICheckBox> _perfMetrics;
     std::shared_ptr<UICheckBox> _staticInit;

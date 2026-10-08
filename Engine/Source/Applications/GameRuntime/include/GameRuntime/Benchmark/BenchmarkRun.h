@@ -6,7 +6,9 @@
 #include "GameRuntime/Benchmark/BenchmarkConfig.h"
 
 #include <cstdint>
+#include <functional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -14,6 +16,7 @@ namespace ya
 
 struct App;
 struct INativeWindow;
+struct IRender;
 
 /// What the app knows about the run that the benchmark cannot look up itself.
 struct FBenchmarkRunContext
@@ -43,8 +46,21 @@ class YA_GAME_RUNTIME_API BenchmarkRun
     FBenchmarkRunContext               _context;
     profiling::FrameBenchSource        _frameSource;
     profiling::PerfStageBenchSource    _stageSource;
-    profiling::BenchSourceRegistration _frameRegistration;
-    profiling::BenchSourceRegistration _stageRegistration;
+    /// Pass times come from the render device's readback, behind GameRuntime's
+    /// RHI dependency (the Core source cannot reach IRender itself).
+    std::function<void(std::unordered_map<std::string, float>&)> _passTimeProvider;
+    profiling::PassGpuTimeBenchSource   _passSource;
+    profiling::RenderCounterBenchSource _counterSource;
+    profiling::BenchSourceRegistration  _frameRegistration;
+    profiling::BenchSourceRegistration  _stageRegistration;
+    profiling::BenchSourceRegistration  _passRegistration;
+    profiling::BenchSourceRegistration  _counterRegistration;
+    /// The pass-timing toggle found on begin, restored on finish: the timestamp
+    /// brackets cost query pool memory, so only the sampling owns them.
+    bool                               _bSavedPassGpuTiming = false;
+    /// The render device, resolved on begin; the pass-time provider reads
+    /// through it. Raw pointer: the device outlives the run (App owns both).
+    IRender*                           _renderWeak = nullptr;
     EPhase                             _phase      = EPhase::Warmup;
     uint64_t                           _frameIndex = 0;
     std::vector<EPresentMode::T>       _availablePresentModes;

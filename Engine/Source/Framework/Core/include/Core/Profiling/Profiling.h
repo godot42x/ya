@@ -79,6 +79,11 @@ struct RuntimeState
     bool    staticInitEnabled           = false;
     bool    guiFrameInspectorEnabled    = false;
     uint8_t guiFrameInspectorChannels   = 0;
+    /// Per-pass GPU timestamp pairs in command recording (the backend's query
+    /// pool and readback follow this). Off by default because it costs query
+    /// pool memory and two timestamp writes per pass; the benchmark run turns
+    /// it on for its sampling window.
+    bool    passGpuTimingEnabled        = false;
 };
 
 struct RuntimeSessionPaths
@@ -155,6 +160,9 @@ YA_CORE_API void               setStaticInitEnabled(bool enabled);
 YA_CORE_API void               setGuiFrameInspectorEnabled(bool enabled);
 [[nodiscard]] YA_CORE_API uint8_t getGuiFrameInspectorChannels();
 YA_CORE_API void                  setGuiFrameInspectorChannels(uint8_t channels);
+
+[[nodiscard]] YA_CORE_API bool isPassGpuTimingEnabled();
+YA_CORE_API void               setPassGpuTimingEnabled(bool enabled);
 
 YA_CORE_API void beginRuntimeSession(const AppDesc& appDesc);
 YA_CORE_API void endRuntimeSession();

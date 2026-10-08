@@ -38,8 +38,15 @@
       "priority": "P0",
       "title": "per-pass GPU timestamps",
       "owner_line": "new:perf-baseline",
-      "status": "todo",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "Engine/Source/Framework/Render/Graph/RenderGraphExecutor.cpp",
+        "Engine/Source/Framework/RHI/Backend/Vulkan/VulkanCommandBuffer.cpp",
+        "Engine/Source/Framework/RHI/Backend/Vulkan/VulkanRender.cpp",
+        "Engine/Source/Applications/GameEditor/UI/Sections/RuntimeProfilingSection.cpp",
+        "ya-testing debug 1764/1764",
+        "HelloMaterial debug benchmark: gpu_passes 17/17 passes at count=600, sum of pass p50 4.03 ms vs whole-frame gpuMs p50 4.51 ms"
+      ]
     },
     {
       "id": "M2",
