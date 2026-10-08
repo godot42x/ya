@@ -4,9 +4,9 @@
 
 #include <reflects-core/lib.h>
 
-#include <any>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -123,18 +123,17 @@ constexpr std::size_t nativeOwnerSlot();
 template <typename Ret, typename... Params>
 constexpr bool nativeSignatureOk();
 
-/// Typed native method. `argTypes` is the script-facing signature (no object
-/// receiver). `call` is the ScriptValue trampoline; `invoker` is the boxed
-/// `Function` path.
+/// Typed native method. `args` is the script-facing signature (no object
+/// receiver). `invoker` is the MetaValue `Function` path installed by addMethod.
 struct NativeMethod
 {
-    std::vector<type_index_t>                              argTypes;
-    std::vector<std::string>                               argTypeNames;
-    type_index_t                                           returnType = 0;
-    std::string                                            returnTypeName;
-    std::size_t                                            ownerSlot = kNoOwnerSlot;
-    ScriptNativeFn                                         call;
-    std::function<std::any(void*, const ArgumentList&)>    invoker;
+    std::vector<refl::ParamDesc>                                         args;
+    std::vector<std::string>                                             argTypeNames;
+    refl::ParamDesc                                                      ret;
+    std::string                                                          returnTypeName;
+    std::size_t                                                          ownerSlot = kNoOwnerSlot;
+    bool                                                                 bConst = false;
+    std::function<refl::MetaValue(void*, std::span<refl::MetaValue>)>    invoker;
 };
 
 /// Deduce a free function. A reference or pointer to a class that does not
@@ -150,9 +149,8 @@ template <typename F>
 [[nodiscard]] NativeMethod fn(F&& functor);
 
 /// Inject `method` into `ClassRegistry::functions` (first name wins; a later
-/// reflected registration does not replace it). The ScriptValue trampoline,
-/// including its arity check, is stored in `Function::payload` and projected
-/// onto `ScriptMethod.native` at export. Must run before the type's first export.
+/// reflected registration does not replace it). The method is an ordinary
+/// Function whose invoker speaks MetaValue. Must run before the type's first export.
 YA_CORE_API void addMethod(type_index_t type, std::string name, NativeMethod method);
 /// A native field hides a reflected field of the same name. The existing
 /// entry is updated in place, so a handle already handed to a backend stays

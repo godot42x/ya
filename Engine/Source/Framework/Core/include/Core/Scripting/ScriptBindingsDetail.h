@@ -8,8 +8,8 @@
 
 #include <reflects-core/lib.h>
 
-#include <any>
 #include <functional>
+#include <span>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -152,9 +152,6 @@ ScriptValue toScript(const T& value)
 }
 
 template <typename Param>
-using Stored = std::conditional_t<isObjectReceiver<Param>(), Param, std::decay_t<Param>>;
-
-template <typename Param>
 decltype(auto) bindReceiver(void* self)
 {
     using NoRef = std::remove_reference_t<Param>;
@@ -169,88 +166,85 @@ decltype(auto) bindReceiver(void* self)
 }
 
 template <typename Param>
-decltype(auto) takeScript(void* self, ScriptArgs args, std::size_t& cursor)
+decltype(auto) takeMeta(void* self, std::span<refl::MetaValue> args, std::size_t& cursor)
 {
     if constexpr (isObjectReceiver<Param>()) {
         return bindReceiver<Param>(self);
     }
     else {
-        const ScriptValue& value = args[cursor++];
-        return fromScript<std::decay_t<Param>>(value);
+        return refl::bindArg<Param>(args[cursor++]);
     }
 }
 
 template <typename Param>
-decltype(auto) takeAny(void* self, const ArgumentList& args, std::size_t& cursor)
+constexpr bool receiverIsConst()
 {
-    if constexpr (isObjectReceiver<Param>()) {
-        return bindReceiver<Param>(self);
+    if constexpr (!isObjectReceiver<Param>()) {
+        return false;
     }
     else {
-        const std::size_t index = cursor++;
-        return args.get<std::decay_t<Param>>(index);
+        using NoRef = std::remove_reference_t<Param>;
+        if constexpr (std::is_pointer_v<NoRef>) {
+            return std::is_const_v<std::remove_pointer_t<NoRef>>;
+        }
+        else {
+            return std::is_const_v<NoRef>;
+        }
     }
 }
 
-template <typename Ret, typename Fn, typename Tuple>
-ScriptValue applyScript(Fn& body, Tuple&& bound)
+template <typename Param>
+using MetaStored = std::conditional_t<isObjectReceiver<Param>(), Param, refl::BoundArg<Param>>;
+
+template <typename Param, typename Stored>
+decltype(auto) unwrap(Stored&& stored)
 {
-    return std::apply(
-        [&](auto&&... params) -> ScriptValue {
-            if constexpr (std::is_void_v<Ret>) {
-                body(std::forward<decltype(params)>(params)...);
-                return {};
-            }
-            else if constexpr (std::is_same_v<std::decay_t<Ret>, ScriptValue>) {
-                return body(std::forward<decltype(params)>(params)...);
-            }
-            else {
-                return toScript(body(std::forward<decltype(params)>(params)...));
-            }
-        },
-        std::forward<Tuple>(bound));
+    if constexpr (isObjectReceiver<Param>()) {
+        return std::forward<Stored>(stored);
+    }
+    else {
+        return stored.get();
+    }
 }
 
-template <typename Ret, typename Fn, typename Tuple>
-std::any applyAny(Fn& body, Tuple&& bound)
+template <typename Ret, typename... Params>
+struct CallSig
+{
+};
+
+template <typename Ret, typename... Params, typename Fn, typename Tuple, std::size_t... I>
+refl::MetaValue applyMeta(CallSig<Ret, Params...>, Fn& body, Tuple& bound, std::index_sequence<I...>)
 {
     if constexpr (std::is_void_v<Ret>) {
-        std::apply([&](auto&&... params) { body(std::forward<decltype(params)>(params)...); }, std::forward<Tuple>(bound));
+        body(unwrap<Params>(std::get<I>(bound))...);
         return {};
     }
     else {
-        return std::any(std::apply(
-            [&](auto&&... params) -> std::decay_t<Ret> { return body(std::forward<decltype(params)>(params)...); },
-            std::forward<Tuple>(bound)));
+        return refl::boxReturn<Ret>(body(unwrap<Params>(std::get<I>(bound))...));
     }
 }
 
 template <typename Ret, typename... Params, typename Fn>
-ScriptValue invokeScript(Fn& body, void* self, ScriptArgs args)
+refl::MetaValue invokeMeta(Fn& body, void* self, std::span<refl::MetaValue> args)
 {
-    std::size_t cursor = 0;
+    constexpr std::size_t kScriptArgs = ((isObjectReceiver<Params>() ? std::size_t{0} : std::size_t{1}) + ... + std::size_t{0});
+    if (args.size() != kScriptArgs) {
+        throw std::runtime_error("Argument count mismatch");
+    }
     if constexpr (sizeof...(Params) == 0) {
-        return applyScript<Ret>(body, std::tuple<>{});
+        if constexpr (std::is_void_v<Ret>) {
+            body();
+            return {};
+        }
+        else {
+            return refl::boxReturn<Ret>(body());
+        }
     }
     else {
-        // Braced-init-list evaluates left to right, so `cursor` follows parameter order.
-        std::tuple<Stored<Params>...> bound{takeScript<Params>(self, args, cursor)...};
+        std::size_t cursor = 0;
+        std::tuple<MetaStored<Params>...> bound{takeMeta<Params>(self, args, cursor)...};
         (void)cursor;
-        return applyScript<Ret>(body, std::move(bound));
-    }
-}
-
-template <typename Ret, typename... Params, typename Fn>
-std::any invokeAny(Fn& body, void* self, const ArgumentList& args)
-{
-    std::size_t cursor = 0;
-    if constexpr (sizeof...(Params) == 0) {
-        return applyAny<Ret>(body, std::tuple<>{});
-    }
-    else {
-        std::tuple<Stored<Params>...> bound{takeAny<Params>(self, args, cursor)...};
-        (void)cursor;
-        return applyAny<Ret>(body, std::move(bound));
+        return applyMeta(CallSig<Ret, Params...>{}, body, bound, std::index_sequence_for<Params...>{});
     }
 }
 
@@ -261,29 +255,22 @@ NativeMethod bindNative(Fn body)
                   "script::fn: a parameter does not cross to scripts, or the method has more than one ScriptSelfHandle or object receiver");
 
     NativeMethod method;
-    if constexpr (std::is_void_v<Ret>) {
-        method.returnTypeName = "void";
-    }
-    else {
-        method.returnType     = type_index_v<std::decay_t<Ret>>;
-        method.returnTypeName = typeid(std::decay_t<Ret>).name();
-    }
-    method.ownerSlot = nativeOwnerSlot<Params...>();
+    method.ret            = refl::describeReturn<Ret>();
+    method.returnTypeName = std::is_void_v<Ret> ? "void" : typeid(std::decay_t<Ret>).name();
+    method.ownerSlot      = nativeOwnerSlot<Params...>();
     if constexpr (sizeof...(Params) > 0) {
+        method.bConst = (receiverIsConst<Params>() || ...);
         auto add = [&]<typename Param>() {
             if constexpr (!isObjectReceiver<Param>()) {
-                method.argTypes.push_back(type_index_v<std::decay_t<Param>>);
+                method.args.push_back(refl::describeParam<Param>());
                 method.argTypeNames.push_back(typeid(std::decay_t<Param>).name());
             }
         };
         (add.template operator()<Params>(), ...);
     }
 
-    method.call = [body](void* self, const ScriptRef&, ScriptArgs args) mutable -> ScriptValue {
-        return invokeScript<Ret, Params...>(body, self, args);
-    };
-    method.invoker = [body](void* self, const ArgumentList& args) mutable -> std::any {
-        return invokeAny<Ret, Params...>(body, self, args);
+    method.invoker = [body](void* self, std::span<refl::MetaValue> args) mutable -> refl::MetaValue {
+        return invokeMeta<Ret, Params...>(body, self, args);
     };
     return method;
 }

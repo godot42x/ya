@@ -76,6 +76,7 @@ struct FBaseline
     YA_REFLECT_FIELD(raw)
     YA_REFLECT_METHOD(observe)
     YA_REFLECT_METHOD(poke)
+    YA_REFLECT_METHOD(writeBack)
     YA_REFLECT_METHOD(scaled)
     YA_REFLECT_END()
 
@@ -127,6 +128,8 @@ struct FBaseline
             *pointer = 9;
         }
     }
+
+    void writeBack(int& slot) { slot = signedInt; }
 
     [[nodiscard]] float scaled(float factor) const { return scalar * factor; }
 };
@@ -518,8 +521,11 @@ TEST(ReflectionRuntimeBaseline, ScriptCrossingAndSkippedMembers)
     EXPECT_EQ(std::get<int64_t>(script::readField(ref, "mood")), static_cast<int64_t>(EBaselineMood::Angry));
     EXPECT_EQ(std::get<script::ScriptRect>(script::readField(ref, "rect")), sample().rect);
 
-    script::writeField(ref, "tiny", script::ScriptValue{int64_t{300}});
-    EXPECT_EQ(sample().tiny, static_cast<int8_t>(300));
+    // int8 used to truncate (300 -> 44). convertTo rejects the value instead.
+    EXPECT_THROW(script::writeField(ref, "tiny", script::ScriptValue{int64_t{300}}), script::ScriptError);
+    EXPECT_EQ(sample().tiny, static_cast<int8_t>(3));
+    script::writeField(ref, "tiny", script::ScriptValue{int64_t{4}});
+    EXPECT_EQ(sample().tiny, static_cast<int8_t>(4));
     script::writeField(ref, "tiny", script::ScriptValue{int64_t{3}});
 
     script::writeField(ref, "mood", script::ScriptValue{std::string("Calm")});
@@ -626,34 +632,37 @@ TEST(ReflectionRuntimeBaseline, LuaVisibleForms)
     lua_pop(L, 1);
 }
 
-TEST(ReflectionRuntimeBaseline, ArgumentListReferencesCopyAndPointersStayValues)
+TEST(ReflectionRuntimeBaseline, ReferenceArgumentsWriteThrough)
 {
     prepare();
     FBaseline& obj = sample();
     Class*     cls = ClassRegistry::instance().getClass(type_index_v<FBaseline>);
     ASSERT_NE(cls, nullptr);
 
-    int original = obj.signedInt;
-    ArgumentList args = ArgumentList::make(original);
-    const int& seen   = args.get<const int&>(0);
-    EXPECT_EQ(seen, original);
-    EXPECT_NE(&seen, &original);
+    int written = 0;
+    cls->invoke<void>("writeBack", &obj, written);
+    EXPECT_EQ(written, obj.signedInt);
 
-    cls->invoke("observe", &obj, ArgumentList::make(obj.signedInt));
-    EXPECT_TRUE(obj.boundCopy);
+    cls->invoke<void>("observe", &obj, obj.signedInt);
+    EXPECT_FALSE(obj.boundCopy);
     EXPECT_EQ(obj.lastSeen, obj.signedInt);
 
+    const int other = 11;
+    cls->invoke<void>("observe", &obj, other);
+    EXPECT_TRUE(obj.boundCopy);
+    EXPECT_EQ(obj.lastSeen, other);
+
     int storage = 3;
-    int* pointer = &storage;
-    cls->invoke("poke", &obj, ArgumentList::make(pointer));
+    cls->invoke<void>("poke", &obj, &storage);
     EXPECT_EQ(storage, 9);
-    EXPECT_EQ(pointer, &storage);
 
-    const std::any scaled = cls->functions.at("scaled").invoker(&obj, ArgumentList::make(2.0f));
-    EXPECT_FLOAT_EQ(std::any_cast<float>(scaled), obj.scalar * 2.0f);
+    const int frozen = 1;
+    EXPECT_THROW(cls->invoke<void>("writeBack", &obj, frozen), std::runtime_error);
 
-    // `args.get<int&>(0)` does not compile: ArgumentList::get is const, and
-    // std::any_cast<int&> has no overload for a const std::any.
+    refl::MetaValue factor = refl::MetaValue::make(2.0f);
+    const refl::MetaValue scaled = cls->functions.at("scaled").invoker(&obj, std::span<refl::MetaValue>(&factor, 1));
+    ASSERT_NE(scaled.tryGet<float>(), nullptr);
+    EXPECT_FLOAT_EQ(*scaled.tryGet<float>(), obj.scalar * 2.0f);
 }
 
 TEST(ReflectionRuntimeBaseline, EditorGraphAndMetadata)

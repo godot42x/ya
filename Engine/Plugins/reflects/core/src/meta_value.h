@@ -88,6 +88,9 @@ class REFLECTS_CORE_API MetaValue
     template <class T>
     static MetaValue cref(const T &obj);
     static MetaValue ref(type_index_t type, void *ptr, bool bConst);
+    // Copies `size` bytes of a trivially copyable value. No registry lookup.
+    // `size` must be in (0, kMetaInlineSize].
+    static MetaValue trivial(type_index_t type, const void *bytes, size_t size);
 
     template <class T>
     T *tryGet();
@@ -98,6 +101,7 @@ class REFLECTS_CORE_API MetaValue
     const void *data() const;
     bool         isNull() const { return _type == 0; }
     bool         isRef() const { return _type != 0 && _storage == EMetaStorage::Ref; }
+    bool         isConst() const { return _bConst; }
     EMetaStorage storage() const { return _storage; }
     type_index_t type() const { return _type; }
 
@@ -115,6 +119,8 @@ class REFLECTS_CORE_API MetaValue
     // out 指向目标类型的已构造对象。同类型只对可平凡拷贝类型 memcpy；
     // 非平凡同类型返回 false，调用方用 tryGet / materialize。
     bool convertTo(type_index_t target, void *out) const;
+    // `src` 必须就是这个值的 TypeOps（src.type == type()）。跳过注册表查找。
+    bool convertTo(const TypeOps &src, const TypeOps &dst, void *out) const;
 
   private:
     void reset() noexcept;

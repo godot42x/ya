@@ -26,7 +26,7 @@ TEST(DynamicCreationTest, CreateInstanceByClassName)
     Class* vehicleClass = ClassRegistry::instance().getClass("Vehicle");
     ASSERT_NE(vehicleClass, nullptr);
     
-    std::string info = vehicleClass->call<std::string>("getInfo", vehicle);
+    std::string info = vehicleClass->invoke<std::string>("getInfo", vehicle);
     EXPECT_FALSE(info.empty());
     
     // 销毁实例
@@ -139,7 +139,7 @@ TEST(DynamicCreationTest, FullWorkflow)
     EXPECT_EQ(vehicle->year, 2023);
     
     // 5. 通过反射调用方法
-    std::string info = cls->call<std::string>("getInfo", vehicle);
+    std::string info = cls->invoke<std::string>("getInfo", vehicle);
     EXPECT_FALSE(info.empty());
     
     // 6. 销毁实例

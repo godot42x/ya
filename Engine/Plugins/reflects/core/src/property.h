@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <variant>
 
+#include "meta_value.h"
 #include "reflects-core/api.h"
 #include "type_index.h"
 
@@ -136,6 +137,9 @@ struct Property : public Field
     // Only valid for non-const members; nullptr for static/const members
     std::function<void *(void *)> addressGetterMutable;
 
+    // bPointer 成员：从成员地址读出 pointee。空指针返回 data()==nullptr 的 Ref。
+    refl::MetaValue (*pointeeOf)(void *member) = nullptr;
+
     // Get type name (for debugging only)
     std::string getTypeName() const
     {
@@ -189,5 +193,41 @@ struct Property : public Field
     bool isType() const
     {
         return typeIndex == refl::type_index_v<T>;
+    }
+
+    // 成员存储的借用引用。const 成员是 const Ref。
+    refl::MetaValue ref(void *obj) const
+    {
+        const bool readOnly = bConst || !addressGetterMutable;
+        void      *addr     = nullptr;
+        if (!readOnly) {
+            addr = addressGetterMutable(obj);
+        }
+        else if (addressGetter) {
+            addr = const_cast<void *>(addressGetter(obj));
+        }
+        if (!addr) {
+            throw std::runtime_error("property address is null: " + name);
+        }
+        return refl::MetaValue::ref(typeIndex, addr, readOnly);
+    }
+
+    // bPointer 成员指向的对象。写入落在 pointee 上；指针为空时 data()==nullptr。
+    refl::MetaValue pointee(void *obj) const
+    {
+        if (!bPointer || pointeeOf == nullptr) {
+            throw std::runtime_error("property is not a pointer: " + name);
+        }
+        void *slot = nullptr;
+        if (addressGetterMutable) {
+            slot = addressGetterMutable(obj);
+        }
+        else if (addressGetter) {
+            slot = const_cast<void *>(addressGetter(obj));
+        }
+        if (!slot) {
+            throw std::runtime_error("property address is null: " + name);
+        }
+        return pointeeOf(slot);
     }
 };

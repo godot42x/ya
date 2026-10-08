@@ -272,3 +272,53 @@ facet（`Core/Reflection/ValueFacets.h`，没有 JSON / 编辑器 / 脚本投影
 - MetaValue 互转没有单独 facet，走 `MetaValue::make` / `tryGet`。
 - `ya-testing` 的 `main` 在用例前就 `executeAll`，真实 `glm::vec3` 的类注册发生在值类型登记之后。终态断言一行、名字 `glm::vec3`、类字段 `x/y/z` 还在。先类后 TypeOps / 先 TypeOps 后类用局部类型 `RR2ClassFirst` / `RR2TypeFirst` 覆盖同一条 `registerType` 契约。
 - `registerCoreValueTypes` 第一次做完后直接返回，避免序列化路径上反复 `executeAll` 时重造 facet。
+
+## 2026-10-08 — RR5a done
+
+调用 ABI 收发 `MetaValue`。`ArgumentList` / `argument_list.h` 删除。`Function::payload` 删除。`script::fn` 是普通 `Function`，`callMethod` 走 `invoker`。`addNativeMethod` 和 9 个手写 native 仍走 `ScriptMethod.native`，没迁（RR8）。生成器保持休眠，没改 `generator/`。
+
+### ABI
+
+- `Function::invoker`：`std::function<MetaValue(void* self, std::span<MetaValue> args)>`。span 指向调用方栈上的数组，可写。值返回 `MetaValue::make`；`T&` / `T*` 返回借用引用（const 保留）；void 返回空。
+- 形参描述 `ParamDesc`（`args`）取代 `argTypeIndices`。每项：`type`（decay，指针取 pointee）、`bRef`（只表示非 const 引用）、`bPointer`、`bConst`。返回值同样，void 的 `ret.type` 为 0。`const T&` 与按值 const 都是 `bConst`，不设 `bRef`。
+- 绑定：按值 / `const T&` 确切类型直接读（`const T&` 不拷贝）；算术类型不匹配走 `convertTo`，越界抛异常。非 const `T&` 要求非 const 的确切值或非 const Ref，const Ref 抛异常。`T*` / `const T*` 接受 Ref（`data()==nullptr` 为空）或空 MetaValue；const 正确传播。个数不匹配抛 `Argument count mismatch`。
+- `Class::invoke` / `invokeStatic` 返回 MetaValue。类型化 `invoke<R>` / `invokeStatic<R>` 返回 R（原先的 `call` / `callStatic` 换名，不留平行接口）。装箱：右值 / 按值 → `make`；非 const 左值 → `ref`；const 左值 → `cref`；`T*` → 指向 T 的 Ref。
+- 构造：`ctor.factory` 收 `span<MetaValue>`。`createInstance` 内部装箱。
+- `Property::ref(void*)` 是成员存储的借用引用。`bPointer` 的 `pointee(void*)` 指向 pointee（空指针 → `data()==nullptr`），写入落在目标对象上。`pointeeTypeIndex` 没改。
+- `TypeRegistry` 的 TypeOps 改成 `unique_ptr` 持有，注册表 rehash 不会让缓存的 `TypeOps*` 悬空。
+
+脚本导出：含 `bRef` 或 `bPointer` 形参、或返回非 const 引用 / 指针的方法继续跳过。`const T&` 参数和 `const T&` 返回仍导出，边界上按 `data()` 拷进 `ScriptValue`。`poke` 仍跳过，`observe` / `getPosition` / `getName` 仍导出。
+
+### 行为变更
+
+- 窄化写入越界改为抛 `ScriptError("value is out of range")`，不再截断。基线 `tiny`（int8）写入 300 以前变成 44，现在抛异常且值保持 3。`scriptToInteger` / `scriptToNumber` / `scriptToBool` 仍先跑，类型错误文案不变。
+- `const T&` 不再拷贝。非 const `T&`、`T*`、返回引用 / 指针的写入落在原对象上。
+- `script::fn` 的脚本调用不再绕过 invoker。替换 `labelOf.invoker` 后 `callMethod` 会抛（以前 payload 跳板仍返回原结果）。非 const 的 `script::fn` 会触发 `afterCall`。生产代码没有 `script::fn`，`addNativeMethod` 的 afterCall 行为不变。
+
+### 微基准
+
+debug，100000 次，3 次取中位数，ns/op。`invoker_ns` 每次新建一个 `MetaValue`。
+
+| | RR0 | RR5a 三次 | 中位数 | 相对 RR0 |
+| --- | --- | --- | --- | --- |
+| `lua_native_ns` | 757.4 | 801.4 / 805.0 / 813.4 | 805.0 | +6.3% |
+| `lua_property_ns` | 565.6 | 580.8 / 586.5 / 586.7 | 586.5 | +3.7% |
+| `invoker_ns` | 206.6 | 63.3 / 63.4 / 63.9 | 63.4 | −69% |
+| `accessor_ns` | 30.6 | 29.7 / 30.9 / 31.3 | 30.9 | +1.0% |
+
+第一次测量 `lua_native_ns` 中位数 948.1（+25%）。热路径默认构造了 8 个用不到的 MetaValue，并且 int64→int 的窄化每次调用出线 `convertTo`。改成只构造实际参数，窄化在 ScriptBindings 里按 `convertTo` 的 int64 / double 规则内联（越界仍抛，不查 TypeRegistry）。重测后回到 +6.3%，没有再改。
+
+### 验证
+
+- `ya-testing` 1749/1749，另有 4 个 `DISABLED_`。`ReflectionSceneResave` 8/8，场景重存哈希未变。
+- `reflects-core-test` 70/70（基线 61，新增 `InvokeAbi` 9 个）。
+- `reflects-generator-test` 1/11，通过的仍是 `ReflectorTest.GetNonExistentClass`。只改了 `CallMethod` 的测试源让它能编过。
+- `ArgumentList`、`Function::payload` 在 `reflects/core` 和 `Engine/Source` 已删除（剩下的 `.payload` 是纹理 / drag-drop，与反射无关）。`argument_list.h` 不存在。`reflects/core/src` 的 include 仍只有标准库和 reflects 自己的头。
+- 冒烟退出码都是 0，日志没有 `[Error]`：`walk_one_cell.py` 走过一格 `(0.5, 0.5) -> (1.5, 0.5)`；GreedySnake 与 HelloMaterial `--exit-after-frame=90` 各在 90 帧退出。HelloMaterial 仍有两行既有的 sol2 panic（不是 `[Error]`）。第一次 `walk_one_cell` 在重建 `ya-runtime` 之前挂了 120 秒（日志为空）；`ya.py run` 重建 runtime 后重跑通过。
+
+偏离：
+
+- `bRef` 只标记非 const 引用。若连 `const T&` 返回也跳过，`getPosition` / `getName` / `getLabel` 会掉出导出集合，RR0 的 findMethod 和 Lua 冒烟会变。const 引用在脚本边界拷贝，借用引用不进脚本。
+- 枚举不是 TypeOps。脚本边界用 `Enum::setValue` 写入 8 字节，再 `MetaValue::trivial`；读回用 `Enum::getValue`。
+- 脚本窄化的热路径不调用出线的 `convertTo`，规则与 int64 / double 源的 `convertTo` 相同。其它来源的算术转换仍走 `convertTo`。
+- 生成器按派发保持休眠，没有恢复。

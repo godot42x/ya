@@ -40,16 +40,16 @@ TypeOps &TypeRegistry::registerTypeRaw(TypeOps ops)
     }
 
     if (const auto it = _byType.find(ops.type); it != _byType.end()) {
-        if (it->second.name != ops.name) {
-            throw std::runtime_error("Reflection type id collision between " + it->second.name + " and " + ops.name + ": " +
-                                     std::string(it->second.compilerName) + " vs " + std::string(ops.compilerName));
+        if (it->second->name != ops.name) {
+            throw std::runtime_error("Reflection type id collision between " + it->second->name + " and " + ops.name + ": " +
+                                     std::string(it->second->compilerName) + " vs " + std::string(ops.compilerName));
         }
-        return it->second;
+        return *it->second;
     }
     if (const auto it = _byName.find(ops.name); it != _byName.end()) {
         std::string existingCompiler;
         if (const auto existing = _byType.find(it->second); existing != _byType.end()) {
-            existingCompiler = std::string(existing->second.compilerName);
+            existingCompiler = std::string(existing->second->compilerName);
         }
         throw std::runtime_error("Reflection type name collision on '" + ops.name + "': " + existingCompiler + " vs " +
                                  std::string(ops.compilerName));
@@ -59,9 +59,10 @@ TypeOps &TypeRegistry::registerTypeRaw(TypeOps ops)
     const std::string  name = ops.name;
     _byName.emplace(name, type);
     try {
-        auto [it, inserted] = _byType.emplace(type, std::move(ops));
-        (void)inserted;
-        return it->second;
+        auto owned = std::make_unique<TypeOps>(std::move(ops));
+        TypeOps &ref = *owned;
+        _byType.emplace(type, std::move(owned));
+        return ref;
     }
     catch (...) {
         _byName.erase(name);
@@ -75,7 +76,7 @@ const TypeOps *TypeRegistry::find(type_index_t type) const
     if (it == _byType.end()) {
         return nullptr;
     }
-    return &it->second;
+    return it->second.get();
 }
 
 const TypeOps *TypeRegistry::findByName(std::string_view name) const
@@ -102,13 +103,13 @@ void TypeRegistry::setFacetErased(type_index_t type, type_index_t facetType, voi
     entry.data      = data;
     entry.destroy   = destroy;
 
-    for (auto &slot : it->second.facets) {
+    for (auto &slot : it->second->facets) {
         if (slot.facetType == facetType) {
             slot = std::move(entry);
             return;
         }
     }
-    it->second.facets.push_back(std::move(entry));
+    it->second->facets.push_back(std::move(entry));
 }
 
 const void *TypeRegistry::findFacet(type_index_t type, type_index_t facetType) const
@@ -117,7 +118,7 @@ const void *TypeRegistry::findFacet(type_index_t type, type_index_t facetType) c
     if (it == _byType.end()) {
         return nullptr;
     }
-    for (const auto &slot : it->second.facets) {
+    for (const auto &slot : it->second->facets) {
         if (slot.facetType == facetType) {
             return slot.data;
         }

@@ -3,7 +3,9 @@
 #include "function.h"
 #include "lib.h"
 #include "reflects-core/api.h"
+#include <array>
 #include <memory>
+#include <span>
 #include <vector>
 #include <ranges>
 
@@ -14,7 +16,7 @@ struct Constructor
     size_t                                      argCount = 0;
     std::vector<std::string>                    argTypeNames; // 参数类型名称列表
     std::string                                 signature;    // 完整签名用于唯一标识（如 "int,float,string"）
-    std::function<void *(const ArgumentList &)> factory;
+    std::function<void *(std::span<refl::MetaValue>)> factory;
 
     Constructor() = default;
 };
@@ -275,17 +277,31 @@ struct Class : public Field
         if constexpr (std::is_pointer_v<T>) {
             prop.bPointer         = true;
             using PointeeType     = std::remove_pointer_t<T>;
+            using Bare            = std::remove_cv_t<PointeeType>;
             prop.pointeeTypeIndex = refl::type_index_v<PointeeType>;
+            prop.pointeeOf        = [](void *member) -> refl::MetaValue {
+                auto *slot = static_cast<T *>(member);
+                PointeeType *target = *slot;
+                return refl::MetaValue::ref(refl::type_index_v<Bare>, const_cast<Bare *>(target), std::is_const_v<PointeeType>);
+            };
         }
         // is std::shared_ptr
         else if constexpr (requires(T t) { std::remove_cvref_t<T>::element_type; }) {
             prop.bPointer         = true;
-            using PointeeType     = typename std::remove_cvref_t<T>::element_type;
+            using Held            = std::remove_cv_t<T>;
+            using PointeeType     = typename Held::element_type;
+            using Bare            = std::remove_cv_t<PointeeType>;
             prop.pointeeTypeIndex = refl::type_index_v<PointeeType>;
+            prop.pointeeOf        = [](void *member) -> refl::MetaValue {
+                auto *slot = static_cast<Held *>(member);
+                PointeeType *target = slot->get();
+                return refl::MetaValue::ref(refl::type_index_v<Bare>, const_cast<Bare *>(target), std::is_const_v<PointeeType>);
+            };
         }
         else {
             prop.bPointer         = false;
             prop.pointeeTypeIndex = 0;
+            prop.pointeeOf        = nullptr;
         }
     }
 
@@ -397,19 +413,27 @@ struct Class : public Field
     // ------------------------------------------------------------------------
     // 注册普通成员函数
     // ------------------------------------------------------------------------
+    template <typename Ret, typename... Args>
+    static void fillSignature(Function &f, const std::string &inName, FunctionType kind)
+    {
+        f.name           = inName;
+        f.type           = kind;
+        f.argCount       = sizeof...(Args);
+        f.returnTypeName = detail::getTypeName<Ret>();
+        if constexpr (sizeof...(Args) > 0) {
+            (f.argTypeNames.push_back(detail::getTypeName<Args>()), ...);
+            f.args = {refl::describeParam<Args>()...};
+        }
+        f.ret = refl::describeReturn<Ret>();
+    }
+
     template <typename Ret, typename ClassType, typename... Args>
     Function &function(const std::string &inName, Ret (ClassType::*func)(Args...))
     {
         Function f;
-        f.name           = inName;
-        f.type           = FunctionType::MemberFunction;
-        f.argCount       = sizeof...(Args);
-        f.returnTypeName = detail::getTypeName<Ret>();
-        (f.argTypeNames.push_back(detail::getTypeName<Args>()), ...);
-        f.returnTypeIndex = detail::valueTypeIndex<Ret>();
-        f.argTypeIndices  = {detail::valueTypeIndex<Args>()...};
+        fillSignature<Ret, Args...>(f, inName, FunctionType::MemberFunction);
 
-        f.invoker = [func](void *obj, const ArgumentList &args) -> std::any {
+        f.invoker = [func](void *obj, std::span<refl::MetaValue> args) -> refl::MetaValue {
             ClassType *self = static_cast<ClassType *>(obj);
             return detail::memberFunctionWrapper(self, func, args);
         };
@@ -424,15 +448,9 @@ struct Class : public Field
     Function &function(const std::string &inName, Ret (ClassType::*func)(Args...) const)
     {
         Function f;
-        f.name           = inName;
-        f.type           = FunctionType::ConstMemberFunction;
-        f.argCount       = sizeof...(Args);
-        f.returnTypeName = detail::getTypeName<Ret>();
-        (f.argTypeNames.push_back(detail::getTypeName<Args>()), ...);
-        f.returnTypeIndex = detail::valueTypeIndex<Ret>();
-        f.argTypeIndices  = {detail::valueTypeIndex<Args>()...};
+        fillSignature<Ret, Args...>(f, inName, FunctionType::ConstMemberFunction);
 
-        f.invoker = [func](void *obj, const ArgumentList &args) -> std::any {
+        f.invoker = [func](void *obj, std::span<refl::MetaValue> args) -> refl::MetaValue {
             const ClassType *self = static_cast<const ClassType *>(obj);
             return detail::constMemberFunctionWrapper(self, func, args);
         };
@@ -447,15 +465,9 @@ struct Class : public Field
     Function &staticFunction(const std::string &inName, Ret (*func)(Args...))
     {
         Function f;
-        f.name           = inName;
-        f.type           = FunctionType::StaticMemberFunction;
-        f.argCount       = sizeof...(Args);
-        f.returnTypeName = detail::getTypeName<Ret>();
-        (f.argTypeNames.push_back(detail::getTypeName<Args>()), ...);
-        f.returnTypeIndex = detail::valueTypeIndex<Ret>();
-        f.argTypeIndices  = {detail::valueTypeIndex<Args>()...};
+        fillSignature<Ret, Args...>(f, inName, FunctionType::StaticMemberFunction);
 
-        f.invoker = [func](void * /*obj*/, const ArgumentList &args) -> std::any {
+        f.invoker = [func](void * /*obj*/, std::span<refl::MetaValue> args) -> refl::MetaValue {
             return detail::staticFunctionWrapper(func, args);
         };
 
@@ -467,9 +479,9 @@ struct Class : public Field
 
 #pragma region Invocation
     // ------------------------------------------------------------------------
-    // 底层调用接口：使用 ArgumentList
+    // 底层调用。args 可写，输出参数的结果留在调用方的 MetaValue 里。
     // ------------------------------------------------------------------------
-    std::any invoke(const std::string &inName, void *obj, const ArgumentList &args)
+    refl::MetaValue invoke(const std::string &inName, void *obj, std::span<refl::MetaValue> args)
     {
         auto it = functions.find(inName);
         if (it == functions.end()) {
@@ -497,7 +509,7 @@ struct Class : public Field
     // ------------------------------------------------------------------------
     // 调用静态函数（不需要对象实例）
     // ------------------------------------------------------------------------
-    std::any invokeStatic(const std::string &inName, const ArgumentList &args)
+    refl::MetaValue invokeStatic(const std::string &inName, std::span<refl::MetaValue> args)
     {
         auto it = functions.find(inName);
         if (it == functions.end()) {
@@ -517,37 +529,53 @@ struct Class : public Field
         return f.invoker(nullptr, args);
     }
 
-    // ------------------------------------------------------------------------
-    // 高层调用接口：类型安全的模板方法
-    // ------------------------------------------------------------------------
+    // 实参装箱见 refl::boxCallArg：右值 / 按值 → make；非 const 左值 → ref
+    // （写入落在调用方对象上）；const 左值 → cref；指针 → 指向 pointee 的 Ref。
     template <typename Ret, typename Self, typename... Args>
-    Ret call(const std::string &inName, Self *obj, Args &&...args)
+    Ret invoke(const std::string &inName, Self *obj, Args &&...args)
     {
-        ArgumentList argList = ArgumentList::make(std::forward<Args>(args)...);
-        std::any     result  = invoke(inName, obj, argList);
-
-        if constexpr (std::is_void_v<Ret>) {
-            return;
+        if constexpr (sizeof...(Args) == 0) {
+            refl::MetaValue result = invoke(inName, obj, {});
+            if constexpr (std::is_void_v<Ret>) {
+                return;
+            }
+            else {
+                return refl::takeResult<Ret>(std::move(result));
+            }
         }
         else {
-            return std::any_cast<Ret>(result);
+            std::array<refl::MetaValue, sizeof...(Args)> boxed{refl::boxCallArg(std::forward<Args>(args))...};
+            refl::MetaValue result = invoke(inName, obj, boxed);
+            if constexpr (std::is_void_v<Ret>) {
+                return;
+            }
+            else {
+                return refl::takeResult<Ret>(std::move(result));
+            }
         }
     }
 
-    // ------------------------------------------------------------------------
-    // 高层调用接口：静态函数调用
-    // ------------------------------------------------------------------------
     template <typename Ret, typename... Args>
-    Ret callStatic(const std::string &inName, Args &&...args)
+    Ret invokeStatic(const std::string &inName, Args &&...args)
     {
-        ArgumentList argList = ArgumentList::make(std::forward<Args>(args)...);
-        std::any     result  = invokeStatic(inName, argList);
-
-        if constexpr (std::is_void_v<Ret>) {
-            return;
+        if constexpr (sizeof...(Args) == 0) {
+            refl::MetaValue result = invokeStatic(inName, {});
+            if constexpr (std::is_void_v<Ret>) {
+                return;
+            }
+            else {
+                return refl::takeResult<Ret>(std::move(result));
+            }
         }
         else {
-            return std::any_cast<Ret>(result);
+            std::array<refl::MetaValue, sizeof...(Args)> boxed{refl::boxCallArg(std::forward<Args>(args))...};
+            refl::MetaValue result = invokeStatic(inName, boxed);
+            if constexpr (std::is_void_v<Ret>) {
+                return;
+            }
+            else {
+                return refl::takeResult<Ret>(std::move(result));
+            }
         }
     }
 
@@ -759,7 +787,7 @@ struct Class : public Field
             ctor.argTypeNames = {typeid(Args).name()...};
         }
         ctor.signature = sig;
-        ctor.factory   = [](const ArgumentList &args) -> void   *{
+        ctor.factory   = [](std::span<refl::MetaValue> args) -> void * {
             if (args.size() != sizeof...(Args)) {
                 throw std::runtime_error("Constructor argument count mismatch: expected " +
                                          std::to_string(sizeof...(Args)) + ", got " +
@@ -770,8 +798,9 @@ struct Class : public Field
                 return static_cast<void *>(new T());
             }
             else {
-                auto construct = [&args]<size_t... I>(std::index_sequence<I...>) -> T   *{
-                    return new T(args.get<Args>(I)...);
+                auto construct = [&args]<size_t... I>(std::index_sequence<I...>) -> T * {
+                    std::tuple<refl::BoundArg<Args>...> bound{refl::bindArg<Args>(args[I])...};
+                    return new T(std::get<I>(bound).get()...);
                 };
                 return static_cast<void *>(construct(std::index_sequence_for<Args...>{}));
             }
@@ -798,30 +827,26 @@ struct Class : public Field
         if (it == constructors.end()) {
             throw std::runtime_error("No default constructor registered for class: " + name);
         }
-        ArgumentList emptyArgs;
-        return it->second.factory(emptyArgs);
+        return it->second.factory({});
     }
 
-    void *createInstance(const ArgumentList &&args) const = delete;
-    void *createInstance(const ArgumentList &args) const  = delete;
-    void *createInstance(const ArgumentList args) const   = delete;
-    // 创建实例（带参数）- 根据参数类型签名选择构造函数
+    // 创建实例（带参数）。装箱约定与 Class::invoke 相同，见 refl::boxCallArg。
     template <typename... Args>
     void *createInstance(Args &&...args) const
     {
-        if constexpr (sizeof...(Args) > 0) {
-            static_assert(!std::is_same_v<std::tuple_element_t<0, std::tuple<Args...>>, ArgumentList>,
-                          "Use ArgumentList to pass arguments directly.");
-        }
-
         std::string sig = detail::makeSignature<std::decay_t<Args>...>();
         auto        it  = constructors.find(sig);
         if (it == constructors.end()) {
             throw std::runtime_error("No matching constructor for signature '" + sig +
                                      "' registered for class: " + name);
         }
-        auto argList = ArgumentList::make(std::forward<Args>(args)...);
-        return it->second.factory(argList);
+        if constexpr (sizeof...(Args) == 0) {
+            return it->second.factory({});
+        }
+        else {
+            std::array<refl::MetaValue, sizeof...(Args)> boxed{refl::boxCallArg(std::forward<Args>(args))...};
+            return it->second.factory(boxed);
+        }
     }
 
     // 检查是否可以创建实例（是否有任何构造函数）

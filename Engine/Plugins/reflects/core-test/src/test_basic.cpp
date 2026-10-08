@@ -27,14 +27,14 @@ class BasicReflectionTest : public ::testing::Test
 TEST_F(BasicReflectionTest, CallMemberFunction)
 {
     // 调用成员函数
-    int result = personClass->call<int>("addToAge", &testPerson, 5);
+    int result = personClass->invoke<int>("addToAge", &testPerson, 5);
     EXPECT_EQ(result, 35); // 30 + 5
 }
 
 TEST_F(BasicReflectionTest, CallVoidFunction)
 {
     // 调用void返回值的函数
-    personClass->call<void>("setInfo", &testPerson, std::string("Bob"), 25);
+    personClass->invoke<void>("setInfo", &testPerson, std::string("Bob"), 25);
 
     EXPECT_EQ(testPerson.name, "Bob");
     EXPECT_EQ(testPerson.age, 25);
@@ -43,8 +43,8 @@ TEST_F(BasicReflectionTest, CallVoidFunction)
 TEST_F(BasicReflectionTest, CallConstMemberFunction)
 {
     // 调用const成员函数
-    std::string name = personClass->call<std::string>("getName", &testPerson);
-    int         age  = personClass->call<int>("getAge", &testPerson);
+    std::string name = personClass->invoke<std::string>("getName", &testPerson);
+    int         age  = personClass->invoke<int>("getAge", &testPerson);
 
     EXPECT_EQ(name, "Alice");
     EXPECT_EQ(age, 30);
@@ -53,18 +53,18 @@ TEST_F(BasicReflectionTest, CallConstMemberFunction)
 TEST_F(BasicReflectionTest, CallStaticFunction)
 {
     // 调用静态函数
-    int product = personClass->callStatic<int>("multiply", 6, 7);
+    int product = personClass->invokeStatic<int>("multiply", 6, 7);
     EXPECT_EQ(product, 42);
 }
 
-TEST_F(BasicReflectionTest, InvokeWithArgumentList)
+TEST_F(BasicReflectionTest, InvokeWithMetaValue)
 {
-    // 使用ArgumentList调用
-    auto args   = ArgumentList::make(10);
-    auto result = personClass->invoke("addToAge", &testPerson, args);
+    refl::MetaValue args[] = {refl::MetaValue::make(10)};
+    refl::MetaValue result = personClass->invoke("addToAge", &testPerson, args);
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(std::any_cast<int>(result), 40); // 30 + 10
+    ASSERT_FALSE(result.isNull());
+    ASSERT_NE(result.tryGet<int>(), nullptr);
+    EXPECT_EQ(*result.tryGet<int>(), 40); // 30 + 10
 }
 
 // ============================================================================
@@ -155,7 +155,7 @@ TEST_F(BasicReflectionTest, GetPropertyInfo)
 TEST_F(BasicReflectionTest, ErrorOnNonexistentFunction)
 {
     EXPECT_THROW(
-        personClass->call<int>("nonexistent", &testPerson, 42),
+        personClass->invoke<int>("nonexistent", &testPerson, 42),
         std::runtime_error);
 }
 
@@ -177,7 +177,7 @@ TEST_F(BasicReflectionTest, ErrorOnNonexistentProperty)
 
 TEST_F(BasicReflectionTest, ErrorOnArgumentCountMismatch)
 {
-    auto args = ArgumentList::make(1, 2, 3); // addToAge只需要1个参数
+    refl::MetaValue args[] = {refl::MetaValue::make(1), refl::MetaValue::make(2), refl::MetaValue::make(3)};
     EXPECT_THROW(
         personClass->invoke("addToAge", &testPerson, args),
         std::runtime_error);

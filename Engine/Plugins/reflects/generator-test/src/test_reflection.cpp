@@ -114,11 +114,12 @@ TEST(ReflectorTest, CallMethod)
     const Function *serializeFunc = personClass->getFunction("serialize");
     ASSERT_NE(serializeFunc, nullptr);
 
-    ArgumentList args;
-    std::any     result     = serializeFunc->invoker(&person, args);
-    std::string  serialized = std::any_cast<std::string>(result);
+    std::span<refl::MetaValue> args;
+    refl::MetaValue            result     = serializeFunc->invoker(&person, args);
+    const std::string*         serialized = result.tryGet<std::string>();
+    ASSERT_NE(serialized, nullptr);
 
-    EXPECT_EQ(serialized, "Eve,28,170.000000");
+    EXPECT_EQ(*serialized, "Eve,28,170.000000");
 }
 
 // ============================================================================

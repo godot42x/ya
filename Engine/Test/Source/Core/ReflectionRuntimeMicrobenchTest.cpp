@@ -12,8 +12,10 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <chrono>
 #include <cstdint>
+#include <span>
 #include <string>
 
 namespace ya::rr0
@@ -129,12 +131,14 @@ TEST(ReflectionRuntimeMicrobench, DISABLED_FunctionInvoker)
     Function& function = cls->functions.at("scaled");
     FBench&   object   = benchObject();
     for (int i = 0; i < kWarmup; ++i) {
-        (void)function.invoker(&object, ArgumentList::make(2.0f));
+        std::array<refl::MetaValue, 1> args{refl::MetaValue::make(2.0f)};
+        (void)function.invoker(&object, args);
     }
     const auto start = std::chrono::steady_clock::now();
     volatile float sink = 0.0f;
     for (int i = 0; i < kIterations; ++i) {
-        sink = std::any_cast<float>(function.invoker(&object, ArgumentList::make(2.0f)));
+        std::array<refl::MetaValue, 1> args{refl::MetaValue::make(2.0f)};
+        sink = *function.invoker(&object, args).tryGet<float>();
     }
     report("invoker_ns", nanosecondsPerOp(std::chrono::steady_clock::now() - start));
     (void)sink;

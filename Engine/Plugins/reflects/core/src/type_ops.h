@@ -122,7 +122,8 @@ struct TypeOps
 // 注册只在主线程进行，注册表不加锁。
 class TypeRegistry
 {
-    std::unordered_map<type_index_t, TypeOps> _byType;
+    // unique_ptr：rehash 不搬动 TypeOps，缓存的 TypeOps* 在进程内保持有效。
+    std::unordered_map<type_index_t, std::unique_ptr<TypeOps>> _byType;
     std::unordered_map<std::string, type_index_t> _byName;
 
   public:

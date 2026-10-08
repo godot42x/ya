@@ -9,7 +9,6 @@
 
 
 #include <algorithm>
-#include <any>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -293,8 +292,6 @@ struct RegisterEnum
         enumInfo.name              = enumName;
         enumInfo.underlyingSize    = sizeof(std::underlying_type_t<EnumType>);
         enumInfo.bUnderlyingSigned = std::is_signed_v<std::underlying_type_t<EnumType>>;
-        enumInfo.boxValue          = [](int64_t val) { return std::any(static_cast<EnumType>(val)); };
-        enumInfo.unboxValue        = [](const std::any &boxed) { return static_cast<int64_t>(std::any_cast<EnumType>(boxed)); };
         typeIndex                  = inTypeIndex;
     }
 

@@ -144,21 +144,26 @@ TEST(ScriptNativeMethod, FirstRegistrationWins)
     ASSERT_NE(cls, nullptr);
 
     script::addMethod(type, "kept", script::fn([](FOrderProbe&, int value) { return value; }));
-    const std::vector<type_index_t> indices = cls->functions.at("kept").argTypeIndices;
-    EXPECT_EQ(indices, (std::vector<type_index_t>{type_index_v<int>}));
+    const std::vector<refl::ParamDesc> params = cls->functions.at("kept").args;
+    ASSERT_EQ(params.size(), 1u);
+    EXPECT_EQ(params[0].type, type_index_v<int>);
+    EXPECT_FALSE(params[0].bRef);
+    EXPECT_FALSE(params[0].bPointer);
 
     {
         WarnCounter warns("keeps the first registration");
         cls->function("kept", &FOrderProbe::wider);
         EXPECT_GE(warns.count, 1);
     }
-    EXPECT_EQ(cls->functions.at("kept").argTypeIndices, indices);
+    EXPECT_EQ(cls->functions.at("kept").args.size(), 1u);
+    EXPECT_EQ(cls->functions.at("kept").args[0].type, type_index_v<int>);
 
     // Reflection registered `echo` at startup. The later native injection keeps it.
     EXPECT_GE(probeSetup().rejectedEcho, 1);
     Class* probeClass = ClassRegistry::instance().getClass(type_index_v<FNativeProbe>);
     ASSERT_NE(probeClass, nullptr);
-    EXPECT_EQ(probeClass->functions.at("echo").argTypeIndices, (std::vector<type_index_t>{type_index_v<int>}));
+    ASSERT_EQ(probeClass->functions.at("echo").args.size(), 1u);
+    EXPECT_EQ(probeClass->functions.at("echo").args[0].type, type_index_v<int>);
 }
 
 TEST(ScriptNativeMethod, ExportsNativeAndReflectedFromTheRegistry)
@@ -173,15 +178,15 @@ TEST(ScriptNativeMethod, ExportsNativeAndReflectedFromTheRegistry)
     bool sawOwner = false;
     for (const auto& [name, function] : cls->functions) {
         if (name == "echo") {
-            sawEcho = function.argTypeIndices.size() == 1 && function.argTypeIndices[0] == type_index_v<int>;
+            sawEcho = function.args.size() == 1 && function.args[0].type == type_index_v<int>;
         }
         else if (name == "labelOf") {
-            sawLabel = function.argTypeIndices.size() == 2 && function.argTypeIndices[0] == type_index_v<std::string> &&
-                       function.argTypeIndices[1] == type_index_v<int> && function.returnTypeIndex == type_index_v<std::string>;
+            sawLabel = function.args.size() == 2 && function.args[0].type == type_index_v<std::string> &&
+                       function.args[1].type == type_index_v<int> && function.ret.type == type_index_v<std::string>;
         }
         else if (name == "withOwner") {
-            sawOwner = function.argTypeIndices.size() == 2 && function.argTypeIndices[0] == type_index_v<script::ScriptSelfHandle> &&
-                       function.argTypeIndices[1] == type_index_v<int>;
+            sawOwner = function.args.size() == 2 && function.args[0].type == type_index_v<script::ScriptSelfHandle> &&
+                       function.args[1].type == type_index_v<int>;
         }
     }
     EXPECT_TRUE(sawEcho);
@@ -189,10 +194,10 @@ TEST(ScriptNativeMethod, ExportsNativeAndReflectedFromTheRegistry)
     EXPECT_TRUE(sawOwner);
 
     const Function& label = cls->functions.at("labelOf");
-    ArgumentList    boxed;
-    boxed.args.push_back(std::any(std::string("id")));
-    boxed.args.push_back(std::any(4));
-    EXPECT_EQ(std::any_cast<std::string>(label.invoker(&probeObject(), boxed)), "id4");
+    refl::MetaValue boxed[] = {refl::MetaValue::make(std::string("id")), refl::MetaValue::make(4)};
+    const refl::MetaValue labeledValue = label.invoker(&probeObject(), boxed);
+    ASSERT_NE(labeledValue.tryGet<std::string>(), nullptr);
+    EXPECT_EQ(*labeledValue.tryGet<std::string>(), "id4");
 
     const script::ScriptMethod* labeled = script::findMethod(type, "labelOf");
     const script::ScriptMethod* echoed  = script::findMethod(type, "echo");
@@ -200,7 +205,7 @@ TEST(ScriptNativeMethod, ExportsNativeAndReflectedFromTheRegistry)
     ASSERT_NE(labeled, nullptr);
     ASSERT_NE(echoed, nullptr);
     ASSERT_NE(owned, nullptr);
-    // methodArgumentType reads Function::argTypeIndices, so both kinds were exported
+    // methodArgumentType reads Function::args, so both kinds were exported
     // from the registry rather than from a native-only side table.
     EXPECT_EQ(script::methodArgumentType(*labeled, 0), type_index_v<std::string>);
     EXPECT_EQ(script::methodArgumentType(*labeled, 1), type_index_v<int>);
@@ -212,18 +217,19 @@ TEST(ScriptNativeMethod, ExportsNativeAndReflectedFromTheRegistry)
     const script::ScriptValue echoArgs[] = {int64_t{2}};
     EXPECT_EQ(script::callMethod(ref, "echo", echoArgs), script::ScriptValue{int64_t{3}});
     auto echoInvoker = cls->functions.at("echo").invoker;
-    cls->functions.at("echo").invoker = [](void*, const ArgumentList&) -> std::any {
+    cls->functions.at("echo").invoker = [](void*, std::span<refl::MetaValue>) -> refl::MetaValue {
         throw std::runtime_error("boxed invoker");
     };
     EXPECT_THROW(script::callMethod(ref, "echo", echoArgs), std::runtime_error);
     cls->functions.at("echo").invoker = std::move(echoInvoker);
 
+    // script::fn is an ordinary Function: callMethod goes through invoker.
     auto labelInvoker = cls->functions.at("labelOf").invoker;
-    cls->functions.at("labelOf").invoker = [](void*, const ArgumentList&) -> std::any {
+    cls->functions.at("labelOf").invoker = [](void*, std::span<refl::MetaValue>) -> refl::MetaValue {
         throw std::runtime_error("boxed invoker");
     };
     const script::ScriptValue labelArgs[] = {std::string("id"), int64_t{4}};
-    EXPECT_EQ(script::callMethod(ref, "labelOf", labelArgs), script::ScriptValue{std::string("id4")});
+    EXPECT_THROW(script::callMethod(ref, "labelOf", labelArgs), std::runtime_error);
     cls->functions.at("labelOf").invoker = std::move(labelInvoker);
 
     const script::ScriptValue ownerArgs[] = {script::ScriptSelfHandle{.runtimeId = 7}, int64_t{3}};

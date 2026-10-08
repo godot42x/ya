@@ -389,6 +389,16 @@ MetaValue MetaValue::ref(type_index_t type, void *ptr, bool bConst)
     return out;
 }
 
+MetaValue MetaValue::trivial(type_index_t type, const void *bytes, size_t size)
+{
+    if (type == 0 || bytes == nullptr || size == 0 || size > kMetaInlineSize) {
+        throw std::runtime_error("MetaValue::trivial requires an inline value");
+    }
+    MetaValue out;
+    out.adoptInline(type, bytes, size);
+    return out;
+}
+
 void *MetaValue::data()
 {
     if (_type == 0) {
@@ -529,6 +539,55 @@ const std::string *MetaValue::asString() const
     return static_cast<const std::string *>(data());
 }
 
+static bool convertChecked(const TypeOps &src, const TypeOps &dst, const void *in, void *out)
+{
+    if (src.type == dst.type) {
+        if (src.bTriviallyCopyable) {
+            std::memcpy(out, in, src.life.size);
+            return true;
+        }
+        return false;
+    }
+    if (src.kind == EValueKind::Bool || dst.kind == EValueKind::Bool) {
+        return false;
+    }
+    if (src.kind == EValueKind::Int && dst.kind == EValueKind::Int) {
+        WideInt wide;
+        if (!readInt(src, in, wide) || !intFits(dst, wide)) {
+            return false;
+        }
+        writeInt(dst, out, wide);
+        return true;
+    }
+    if (src.kind == EValueKind::Int && dst.kind == EValueKind::Float) {
+        WideInt wide;
+        if (!readInt(src, in, wide)) {
+            return false;
+        }
+        return writeFloat(dst, out, wideToDouble(wide));
+    }
+    if (src.kind == EValueKind::Float && dst.kind == EValueKind::Float) {
+        double value = 0;
+        if (!readDouble(src, in, value)) {
+            return false;
+        }
+        return writeFloat(dst, out, value);
+    }
+    if (src.kind == EValueKind::Float && dst.kind == EValueKind::Int) {
+        double value = 0;
+        if (!readDouble(src, in, value)) {
+            return false;
+        }
+        WideInt wide;
+        if (!doubleToWide(value, wide) || !intFits(dst, wide)) {
+            return false;
+        }
+        writeInt(dst, out, wide);
+        return true;
+    }
+    return false;
+}
+
 bool MetaValue::convertTo(type_index_t target, void *out) const
 {
     if (out == nullptr || isNull() || data() == nullptr) {
@@ -539,51 +598,15 @@ bool MetaValue::convertTo(type_index_t target, void *out) const
     if (src == nullptr || dst == nullptr) {
         return false;
     }
-    if (src->type == dst->type) {
-        if (src->bTriviallyCopyable) {
-            std::memcpy(out, data(), src->life.size);
-            return true;
-        }
+    return convertChecked(*src, *dst, data(), out);
+}
+
+bool MetaValue::convertTo(const TypeOps &src, const TypeOps &dst, void *out) const
+{
+    if (out == nullptr || isNull() || data() == nullptr || src.type != _type) {
         return false;
     }
-    if (src->kind == EValueKind::Bool || dst->kind == EValueKind::Bool) {
-        return false;
-    }
-    if (src->kind == EValueKind::Int && dst->kind == EValueKind::Int) {
-        WideInt wide;
-        if (!readInt(*src, data(), wide) || !intFits(*dst, wide)) {
-            return false;
-        }
-        writeInt(*dst, out, wide);
-        return true;
-    }
-    if (src->kind == EValueKind::Int && dst->kind == EValueKind::Float) {
-        WideInt wide;
-        if (!readInt(*src, data(), wide)) {
-            return false;
-        }
-        return writeFloat(*dst, out, wideToDouble(wide));
-    }
-    if (src->kind == EValueKind::Float && dst->kind == EValueKind::Float) {
-        double value = 0;
-        if (!readDouble(*src, data(), value)) {
-            return false;
-        }
-        return writeFloat(*dst, out, value);
-    }
-    if (src->kind == EValueKind::Float && dst->kind == EValueKind::Int) {
-        double value = 0;
-        if (!readDouble(*src, data(), value)) {
-            return false;
-        }
-        WideInt wide;
-        if (!doubleToWide(value, wide) || !intFits(*dst, wide)) {
-            return false;
-        }
-        writeInt(*dst, out, wide);
-        return true;
-    }
-    return false;
+    return convertChecked(src, dst, data(), out);
 }
 
 void MetaValue::reset() noexcept

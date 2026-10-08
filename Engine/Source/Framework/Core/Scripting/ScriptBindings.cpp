@@ -5,9 +5,15 @@
 #include <reflects-core/lib.h>
 
 #include <algorithm>
-#include <any>
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <format>
+#include <limits>
+#include <new>
+#include <span>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -20,17 +26,130 @@ namespace
 {
 
 // ============================================================================
-// Value codecs: ScriptValue <-> a C++ value of one type, in place (fields) or
-// boxed in std::any (Function arguments and results).
+// Value codecs: ScriptValue <-> a C++ value of one type. Narrow integers and
+// float go through MetaValue::convertTo (out of range throws, no truncation).
+// Identity arms keep the existing scriptTo* error text.
 // ============================================================================
 
 struct ValueCodec
 {
     ScriptValue (*load)(const void* address);
     void (*store)(void* address, const ScriptValue& value);
-    std::any (*box)(const ScriptValue& value);
-    ScriptValue (*unbox)(const std::any& boxed);
+    refl::MetaValue (*box)(const ScriptValue& value);
 };
+
+template <typename T>
+refl::MetaValue boxIdentity(const ScriptValue& value)
+{
+    return refl::MetaValue::make(detail::fromScript<T>(value));
+}
+
+// Same acceptance rules as MetaValue::convertTo for an int64 / double source,
+// inlined so the script boundary does not cross into reflects-core or look up
+// TypeOps on every call. scriptToInteger / scriptToNumber already produced
+// that source, so there is no other source type here.
+template <typename T>
+bool narrowFromWide(int64_t value, T& out)
+{
+    if constexpr (std::is_signed_v<T>) {
+        if (value < static_cast<int64_t>(std::numeric_limits<T>::min()) ||
+            value > static_cast<int64_t>(std::numeric_limits<T>::max())) {
+            return false;
+        }
+    }
+    else if (value < 0 || static_cast<uint64_t>(value) > static_cast<uint64_t>(std::numeric_limits<T>::max())) {
+        return false;
+    }
+    out = static_cast<T>(value);
+    return true;
+}
+
+template <typename T>
+bool narrowFromWide(double value, T& out)
+{
+    if (!std::isfinite(value)) {
+        return false;
+    }
+    if constexpr (std::is_same_v<T, double>) {
+        out = value;
+        return true;
+    }
+    else {
+        const double limit = static_cast<double>(std::numeric_limits<float>::max());
+        if (value > limit || value < -limit) {
+            return false;
+        }
+        out = static_cast<T>(value);
+        return std::isfinite(out);
+    }
+}
+
+template <typename T>
+bool widenToScript(T value, int64_t& out)
+{
+    if constexpr (std::is_signed_v<T> || sizeof(T) < sizeof(int64_t)) {
+        out = static_cast<int64_t>(value);
+        return true;
+    }
+    else if (static_cast<uint64_t>(value) > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+        return false;
+    }
+    else {
+        out = static_cast<int64_t>(value);
+        return true;
+    }
+}
+
+template <typename T>
+bool widenToScript(T value, double& out)
+{
+    out = static_cast<double>(value);
+    return std::isfinite(out);
+}
+
+template <typename T>
+refl::MetaValue boxNarrow(const ScriptValue& value)
+{
+    T stored{};
+    bool ok = false;
+    if constexpr (std::is_integral_v<T>) {
+        ok = narrowFromWide(scriptToInteger(value), stored);
+    }
+    else {
+        ok = narrowFromWide(scriptToNumber(value), stored);
+    }
+    if (!ok) {
+        throw ScriptError("value is out of range");
+    }
+    return refl::MetaValue::make(stored);
+}
+
+template <typename T>
+ScriptValue loadNarrow(const void* address)
+{
+    const T value = *static_cast<const T*>(address);
+    if constexpr (std::is_integral_v<T>) {
+        int64_t stored = 0;
+        if (!widenToScript(value, stored)) {
+            throw ScriptError("value is out of range");
+        }
+        return stored;
+    }
+    else {
+        double stored = 0;
+        if (!widenToScript(value, stored)) {
+            throw ScriptError("value is out of range");
+        }
+        return stored;
+    }
+}
+
+template <typename T>
+void storeNarrow(void* address, const ScriptValue& value)
+{
+    const refl::MetaValue boxed = boxNarrow<T>(value);
+    *static_cast<T*>(address) = *boxed.tryGet<T>();
+}
 
 template <typename T>
 ValueCodec codecOf()
@@ -38,8 +157,17 @@ ValueCodec codecOf()
     return {
         .load  = [](const void* address) { return detail::toScript(*static_cast<const T*>(address)); },
         .store = [](void* address, const ScriptValue& value) { *static_cast<T*>(address) = detail::fromScript<T>(value); },
-        .box   = [](const ScriptValue& value) { return std::any(detail::fromScript<T>(value)); },
-        .unbox = [](const std::any& boxed) { return detail::toScript(std::any_cast<const T&>(boxed)); },
+        .box   = &boxIdentity<T>,
+    };
+}
+
+template <typename T>
+ValueCodec narrowCodec()
+{
+    return {
+        .load  = &loadNarrow<T>,
+        .store = &storeNarrow<T>,
+        .box   = &boxNarrow<T>,
     };
 }
 
@@ -58,29 +186,25 @@ void emplaceVariantCodecs(std::unordered_map<type_index_t, ValueCodec>& codecs, 
 
 const std::unordered_map<type_index_t, ValueCodec>& valueCodecs()
 {
-    // Only genuinely converting codecs are hand-written: arithmetic narrowing
-    // into the int64_t / double arms. Enums live in EnumRegistry. Duplicate
-    // keys (int64_t is long or long long depending on the platform) keep the
-    // first entry, which converts identically.
-    static const std::unordered_map<type_index_t, ValueCodec> codecs = [] {
-        std::unordered_map<type_index_t, ValueCodec> out;
-        emplaceVariantCodecs(out, std::make_index_sequence<std::variant_size_v<ScriptValue>>{});
-        out.emplace(type_index_v<int8_t>, codecOf<int8_t>());
-        out.emplace(type_index_v<uint8_t>, codecOf<uint8_t>());
-        out.emplace(type_index_v<int16_t>, codecOf<int16_t>());
-        out.emplace(type_index_v<uint16_t>, codecOf<uint16_t>());
-        out.emplace(type_index_v<int32_t>, codecOf<int32_t>());
-        out.emplace(type_index_v<uint32_t>, codecOf<uint32_t>());
-        out.emplace(type_index_v<float>, codecOf<float>());
-        // Platform-dependent integer widths: `long` and `long long` only alias
-        // the int64_t arm on some platforms (LP64 vs LLP64); on others these
-        // are genuine narrowings, so they always get an explicit entry.
-        out.emplace(type_index_v<long>, codecOf<long>());
-        out.emplace(type_index_v<unsigned long>, codecOf<unsigned long>());
-        out.emplace(type_index_v<long long>, codecOf<long long>());
-        out.emplace(type_index_v<unsigned long long>, codecOf<unsigned long long>());
-        return out;
-    }();
+        // Identity codecs come from ScriptValue's arms. Narrowing codecs use
+        // convertTo. Duplicate keys (int64_t aliasing long or long long) keep
+        // the first, identity, entry.
+        static const std::unordered_map<type_index_t, ValueCodec> codecs = [] {
+            std::unordered_map<type_index_t, ValueCodec> out;
+            emplaceVariantCodecs(out, std::make_index_sequence<std::variant_size_v<ScriptValue>>{});
+            out.emplace(type_index_v<int8_t>, narrowCodec<int8_t>());
+            out.emplace(type_index_v<uint8_t>, narrowCodec<uint8_t>());
+            out.emplace(type_index_v<int16_t>, narrowCodec<int16_t>());
+            out.emplace(type_index_v<uint16_t>, narrowCodec<uint16_t>());
+            out.emplace(type_index_v<int32_t>, narrowCodec<int32_t>());
+            out.emplace(type_index_v<uint32_t>, narrowCodec<uint32_t>());
+            out.emplace(type_index_v<float>, narrowCodec<float>());
+            out.emplace(type_index_v<long>, narrowCodec<long>());
+            out.emplace(type_index_v<unsigned long>, narrowCodec<unsigned long>());
+            out.emplace(type_index_v<long long>, narrowCodec<long long>());
+            out.emplace(type_index_v<unsigned long long>, narrowCodec<unsigned long long>());
+            return out;
+        }();
     return codecs;
 }
 
@@ -112,20 +236,32 @@ void storeValue(type_index_t type, void* address, const ScriptValue& value)
     enumFor(type)->setValue(address, scriptToEnum(type, value));
 }
 
-std::any boxValue(type_index_t type, const ScriptValue& value)
+refl::MetaValue boxValue(type_index_t type, const ScriptValue& value)
 {
     if (const ValueCodec* codec = codecFor(type)) {
         return codec->box(value);
     }
-    return enumFor(type)->boxValue(scriptToEnum(type, value));
+    const Enum* reflected = enumFor(type);
+    alignas(8) unsigned char bytes[8] = {};
+    reflected->setValue(bytes, scriptToEnum(type, value));
+    return refl::MetaValue::trivial(type, bytes, reflected->underlyingSize);
 }
 
-ScriptValue unboxValue(type_index_t type, const std::any& boxed)
+ScriptValue unboxValue(const refl::ParamDesc& ret, const refl::MetaValue& boxed)
 {
-    if (const ValueCodec* codec = codecFor(type)) {
-        return codec->unbox(boxed);
+    if (ret.type == 0 || boxed.isNull() || boxed.data() == nullptr) {
+        return {};
     }
-    return enumFor(type)->unboxValue(boxed);
+    if (ret.type == type_index_v<ScriptValue>) {
+        if (const ScriptValue* held = boxed.tryGet<ScriptValue>()) {
+            return *held;
+        }
+        throw ScriptError("expected a script value");
+    }
+    if (const ValueCodec* codec = codecFor(ret.type)) {
+        return codec->load(boxed.data());
+    }
+    return enumFor(ret.type)->getValue(const_cast<void*>(boxed.data()));
 }
 
 } // namespace
@@ -151,16 +287,16 @@ struct ScriptField
     std::function<void(void*, const ScriptRef&, const ScriptValue&)> nativeWrite;
 };
 
-/// Exported method. `function` is the ClassRegistry entry. `native`, when set,
-/// is the ScriptValue trampoline and the script call path; `function->invoker`
-/// stays available for boxed reflection calls.
+/// Exported method. `function` is the ClassRegistry entry; script calls go
+/// through its MetaValue invoker. `native` is only the string-registered
+/// addNativeMethod path, which has no Function entry.
 struct ScriptMethod
 {
     std::string               name;
     const Function*           function = nullptr;
     std::vector<type_index_t> ownerPath;
-    /// Script-facing parameter types of a native method. Reflected methods
-    /// use `function->argTypeIndices` instead.
+    /// Script-facing parameter types of an addNativeMethod registration.
+    /// Reflected methods and script::fn use `function->args` instead.
     std::vector<type_index_t> argTypes;
     ScriptNativeFn            native;
 };
@@ -219,11 +355,21 @@ bool acceptsScriptSignature(type_index_t type)
 
 bool signatureCrosses(const Function& function)
 {
-    if (function.isStatic() || (function.returnTypeIndex != 0 && !acceptsScriptSignature(function.returnTypeIndex))) {
+    if (function.isStatic()) {
         return false;
     }
-    for (const type_index_t arg : function.argTypeIndices) {
-        if (!acceptsScriptSignature(arg)) {
+    // bRef is a non-const reference. const T& stays exportable and is copied
+    // into a ScriptValue at this boundary. Pointers and non-const references
+    // stay out of scripts (poke is the baseline case).
+    const refl::ParamDesc& ret = function.ret;
+    if (ret.bRef || ret.bPointer) {
+        return false;
+    }
+    if (ret.type != 0 && !acceptsScriptSignature(ret.type)) {
+        return false;
+    }
+    for (const refl::ParamDesc& arg : function.args) {
+        if (arg.bRef || arg.bPointer || !acceptsScriptSignature(arg.type)) {
             return false;
         }
     }
@@ -276,11 +422,7 @@ void collectMembers(const Class& cls, const std::vector<type_index_t>& path, Typ
         if (const auto existing = out.methods.find(name); existing != out.methods.end() && !existing->second.function) {
             continue;
         }
-        ScriptMethod exported{.name = name, .function = &function, .ownerPath = path};
-        if (const auto* native = std::any_cast<ScriptNativeFn>(&function.payload)) {
-            exported.native = *native;
-        }
-        out.methods.insert_or_assign(name, std::move(exported));
+        out.methods.insert_or_assign(name, ScriptMethod{.name = name, .function = &function, .ownerPath = path});
     }
 }
 
@@ -413,30 +555,15 @@ void addMethod(type_index_t type, std::string name, NativeMethod method)
         return;
     }
 
-    const std::string scriptName = scriptNameOf(name);
-    const size_t      argCount   = method.argTypes.size();
-    ScriptNativeFn    body       = std::move(method.call);
-
     Function function;
-    function.name            = name;
-    function.type            = FunctionType::MemberFunction;
-    function.argCount        = argCount;
-    function.argTypeNames    = std::move(method.argTypeNames);
-    function.returnTypeName  = std::move(method.returnTypeName);
-    function.returnTypeIndex = method.returnType;
-    function.argTypeIndices  = std::move(method.argTypes);
-    function.invoker         = std::move(method.invoker);
-    // Store as ScriptNativeFn, not the lambda type, so collectMembers can any_cast it.
-    // A later registration loses the whole Function, payload included.
-    function.payload = ScriptNativeFn{
-        [body = std::move(body), argCount, scriptName](void* self, const ScriptRef& ref, ScriptArgs args) -> ScriptValue {
-            if (args.size() != argCount) {
-                throw ScriptError(std::format("{}() expects {} argument(s), got {}", scriptName, argCount, args.size()));
-            }
-            return body(self, ref, args);
-        },
-    };
-
+    function.name           = name;
+    function.type           = method.bConst ? FunctionType::ConstMemberFunction : FunctionType::MemberFunction;
+    function.argCount       = method.args.size();
+    function.argTypeNames   = std::move(method.argTypeNames);
+    function.returnTypeName = std::move(method.returnTypeName);
+    function.ret            = method.ret;
+    function.args           = std::move(method.args);
+    function.invoker        = std::move(method.invoker);
     cls->insertFunction(std::move(function));
 }
 
@@ -530,8 +657,8 @@ const ScriptField* findField(type_index_t type, std::string_view name)
 type_index_t methodArgumentType(const ScriptMethod& method, size_t index)
 {
     if (method.function) {
-        const auto& types = method.function->argTypeIndices;
-        return index < types.size() ? types[index] : type_index_t{0};
+        const auto& types = method.function->args;
+        return index < types.size() ? types[index].type : type_index_t{0};
     }
     return index < method.argTypes.size() ? method.argTypes[index] : type_index_t{0};
 }
@@ -645,25 +772,67 @@ ScriptValue callMethod(const ScriptRef& ref, const ScriptMethod& method, ScriptA
         return method.native(self, ref, args);
     }
     const Function& function = *method.function;
-    if (args.size() != function.argTypeIndices.size()) {
-        throw ScriptError(std::format("{}() expects {} argument(s), got {}", method.name, function.argTypeIndices.size(), args.size()));
+    if (args.size() != function.args.size()) {
+        throw ScriptError(std::format("{}() expects {} argument(s), got {}", method.name, function.args.size(), args.size()));
     }
-    ArgumentList boxed;
-    boxed.args.reserve(args.size());
-    for (size_t index = 0; index < args.size(); ++index) {
-        boxed.args.push_back(boxValue(function.argTypeIndices[index], args[index]));
+    // Construct only the arguments this call uses. A fixed 8-slot array
+    // default-constructs MetaValues that the hot path never reads.
+    constexpr size_t kInlineArgs = 8;
+    alignas(refl::MetaValue) std::byte inlineStorage[sizeof(refl::MetaValue) * kInlineArgs];
+    std::vector<refl::MetaValue> heapArgs;
+    refl::MetaValue* slots = nullptr;
+    size_t built = 0;
+    const auto destroyInline = [&]() {
+        for (size_t index = built; index > 0; --index) {
+            slots[index - 1].~MetaValue();
+        }
+    };
+    try {
+        if (args.size() > kInlineArgs) {
+            heapArgs.reserve(args.size());
+            for (size_t index = 0; index < args.size(); ++index) {
+                heapArgs.push_back(boxValue(function.args[index].type, args[index]));
+            }
+            slots = heapArgs.data();
+        }
+        else if (!args.empty()) {
+            slots = reinterpret_cast<refl::MetaValue*>(inlineStorage);
+            for (size_t index = 0; index < args.size(); ++index) {
+                new (slots + index) refl::MetaValue(boxValue(function.args[index].type, args[index]));
+                built = index + 1;
+            }
+        }
     }
-    void*          object = resolve(ref);
-    void*          self   = toOwner(object, ref.type, method.ownerPath);
-    const std::any result = function.invoker(self, boxed);
-    // Const is the reflected member-pointer kind (Function::isConst), not a
-    // hand flag. Native methods have no such record and stay quiet.
+    catch (...) {
+        if (built != 0) {
+            destroyInline();
+        }
+        throw;
+    }
+    void* object = resolve(ref);
+    void* self   = toOwner(object, ref.type, method.ownerPath);
+    refl::MetaValue result = [&]() -> refl::MetaValue {
+        try {
+            return function.invoker(self, std::span<refl::MetaValue>(slots, args.size()));
+        }
+        catch (...) {
+            if (built != 0) {
+                destroyInline();
+            }
+            throw;
+        }
+    }();
+    if (built != 0) {
+        destroyInline();
+    }
+    // Const is the reflected member-pointer kind (Function::isConst).
+    // addNativeMethod stays on `method.native` and does not reach here.
     if (!function.isConst()) {
         if (const auto& afterCall = kindOf(ref)->afterCall) {
             afterCall(ref, object);
         }
     }
-    return function.returnTypeIndex != 0 ? unboxValue(function.returnTypeIndex, result) : ScriptValue{};
+    return unboxValue(function.ret, result);
 }
 
 ScriptValue readField(const ScriptRef& ref, std::string_view field)
