@@ -5,6 +5,7 @@
 #include <vulkan/vulkan.h>
 
 #include "Core/Base.h"
+#include "RHI/Core/GpuMemoryClass.h"
 #include "RHI/Core/Image.h"
 #include "RHI/Render.h"
 
@@ -30,6 +31,11 @@ struct VulkanImage : public IImage
     VmaAllocation     _allocation  = VK_NULL_HANDLE;
     VkFormat          _format      = VK_FORMAT_UNDEFINED;
     VkImageUsageFlags _usageFlags  = 0;
+    /// What this image is charged to in the device's memory account, and how
+    /// much it was charged. Recorded at allocation so the destructor can
+    /// release the exact same amount without asking the allocator back.
+    EGpuMemoryClass::T _memoryClass = EGpuMemoryClass::Texture;
+    uint64_t           _memoryBytes = 0;
     bool              bOwned              = false;
     VkImageLayout     _compatibilityLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     struct SubresourceLayoutKey

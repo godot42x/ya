@@ -2,7 +2,7 @@
 
 - [x] PB1 基准模式 + 汇总器 + `bench_summary.json`（meta / frame / cpu_stages）
 - [ ] PB2 pass 级 GPU timestamp + render_counters
-- [ ] PB3 GPU 显存统计（VMA）
+- [x] PB3 GPU 显存统计（VMA，按资源类别）；面板是编辑器 Runtime Tools 里独立的 GPU Memory 段（未并入 profiling 段——那段本轮由 PB2 线占用）
 - [ ] PB4 进程内存统计（RSS / 峰值 / 分配追踪）
 - [ ] PB5 压测场景：多光源、多网格、2D 合批、Sponza
 - [ ] PB6 对比报告脚本 + 一条命令跑一组 + macOS 首份基线

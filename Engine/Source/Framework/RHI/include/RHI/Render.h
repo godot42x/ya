@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "RHI/RenderDefines.h"
+#include "RHI/Core/GpuMemoryStats.h"
 #include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/Core/SurfaceId.h"
 
@@ -205,6 +206,16 @@ struct YA_RHI_API IRender : public plat_base<IRender>
     /// print which GPU is running should not have to downcast to a concrete
     /// backend to read its device info.
     [[nodiscard]] virtual RenderDeviceInfo getDeviceInfo() const { return {}; }
+
+    /// What this device's GPU memory looks like right now: bytes per resource
+    /// class plus each memory heap's budget and usage. `bSupported` is false
+    /// where the API has no such fact, which is the answer a caller shows as
+    /// "n/a" -- not an empty breakdown.
+    ///
+    /// Cheap enough to call once a frame (the allocator keeps running totals
+    /// and the heap budgets are a read), but not free: call it where the number
+    /// is consumed, not on a hot path that ignores it.
+    [[nodiscard]] virtual FGpuMemoryStats getGpuMemoryStats() const { return {}; }
 
     /**
      * @brief Allocate command buffers (returns generic ICommandBuffer interface)

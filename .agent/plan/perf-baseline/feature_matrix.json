@@ -34,9 +34,18 @@
       "roadmap": [
         "M4"
       ],
-      "title": "GPU VRAM stats (VMA)",
-      "status": "todo",
-      "evidence": []
+      "title": "GPU VRAM stats (VMA), per resource class",
+      "status": "pass",
+      "evidence": [
+        "Engine/Source/Framework/RHI/include/RHI/Core/GpuMemoryClass.h",
+        "Engine/Source/Framework/RHI/include/RHI/Core/GpuMemoryStats.h",
+        "Engine/Source/Framework/RHI/include/RHI/Core/GpuMemoryBenchSource.h",
+        "Engine/Source/Applications/GameEditor/UI/Sections/RuntimeGpuMemorySection.cpp",
+        "Engine/Test/Source/RhiVulkan/GpuMemoryStatsTest.cpp",
+        "ya-rhi-vulkan-smoke debug 18/18 (8 new)",
+        "ya-testing debug 1762/1763 (1 failure is PB2's in-flight PassGpuTimeSourceWithoutProviderRecordsNothing)",
+        "HelloMaterial debug benchmark: gpu_memory totalMiB p50 806.58 = texture 567.86 + renderTarget 177.89 + buffer 28.19 + upload 16.58 + transient 16.06; VMA allocationBytes 806.58 matches the per-class sum"
+      ]
     },
     {
       "id": "PB4",

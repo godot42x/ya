@@ -20,6 +20,7 @@
 
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "RHI/Backend/Vulkan/VulkanUtils.h"
+#include "RHI/Core/GpuMemoryBenchSource.h"
 
 
 #ifdef _WIN32
@@ -209,6 +210,11 @@ VulkanRender::~VulkanRender()
 
 void VulkanRender::destroyInternal()
 {
+    // Stop reporting before anything is destroyed: the source reads the
+    // allocator, and a sample taken while the device is coming apart would
+    // publish half-torn-down totals as if they were a measurement.
+    _gpuMemoryBenchProbe.reset();
+
     if (m_LogicalDevice) {
         vkDeviceWaitIdle(m_LogicalDevice);
     }
@@ -1271,6 +1277,57 @@ void VulkanRender::captureSelectedDeviceInfo()
     else {
         _selectedDeviceInfo.driver = std::format("driverVersion 0x{:08x}", _physicalDeviceProperties.driverVersion);
     }
+}
+
+/// The `gpu_memory` benchmark section of one device: the source that shapes
+/// the report plus its registration, both living exactly as long as the
+/// device. Defined here and only here -- `VulkanRender.h` forward-declares the
+/// probe, so no consumer of the backend pulls in the benchmark headers.
+struct GpuMemoryBenchProbe
+{
+    GpuMemoryBenchSource               source;
+    profiling::BenchSourceRegistration registration;
+
+    explicit GpuMemoryBenchProbe(const VulkanRender& render)
+        : source([&render] { return render.getGpuMemoryStats(); }),
+          registration(profiling::registerBenchSource("gpu_memory", source))
+    {
+    }
+};
+
+void VulkanRender::createGpuMemoryBenchProbe()
+{
+    _gpuMemoryBenchProbe = std::make_unique<GpuMemoryBenchProbe>(*this);
+}
+
+FGpuMemoryStats VulkanRender::getGpuMemoryStats() const
+{
+    FGpuMemoryStats stats;
+    if (_vmaAllocator == VK_NULL_HANDLE) {
+        // No allocator: not "zero memory", but "cannot answer".
+        return stats;
+    }
+
+    stats.bSupported = true;
+    _gpuMemory.fillByClass(stats.byClass);
+
+    // `vmaGetHeapBudgets` wants room for every heap of the physical device.
+    VmaBudget heapBudgets[VK_MAX_MEMORY_HEAPS]{};
+    vmaGetHeapBudgets(_vmaAllocator, heapBudgets);
+
+    const uint32_t heapCount = _physicalMemoryProperties.memoryHeapCount;
+    stats.heaps.reserve(heapCount);
+    for (uint32_t heapIndex = 0; heapIndex < heapCount; ++heapIndex) {
+        const VmaBudget& budget = heapBudgets[heapIndex];
+        stats.heaps.push_back(FGpuMemoryHeapBudget{
+            .heapIndex       = heapIndex,
+            .budgetBytes     = budget.budget,
+            .usageBytes      = budget.usage,
+            .allocationBytes = budget.statistics.allocationBytes,
+            .blockBytes      = budget.statistics.blockBytes,
+        });
+    }
+    return stats;
 }
 
 void VulkanRender::releaseFrameGpuTimingResources()

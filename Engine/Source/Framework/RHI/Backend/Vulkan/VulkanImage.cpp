@@ -166,6 +166,10 @@ VulkanImage::~VulkanImage()
 {
     if (bOwned) {
         if (_handle != VK_NULL_HANDLE && _allocation != VK_NULL_HANDLE) {
+            if (_memoryBytes != 0) {
+                _render->releaseGpuMemory(_memoryClass, _memoryBytes);
+                _memoryBytes = 0;
+            }
             vmaDestroyImage(_render->getVmaAllocator(), _handle, _allocation);
             _handle     = VK_NULL_HANDLE;
             _allocation = VK_NULL_HANDLE;
@@ -512,6 +516,12 @@ bool VulkanImage::allocate()
     // physical Vulkan image is still created in UNDEFINED and transitions are
     // recorded by the command-buffer state tracker at first use.
     bOwned = true;
+
+    VmaAllocationInfo allocationInfo{};
+    vmaGetAllocationInfo(_render->getVmaAllocator(), _allocation, &allocationInfo);
+    _memoryBytes = allocationInfo.size;
+    _memoryClass = resolveGpuMemoryClass(_ci.memoryClass, _ci.usage);
+    _render->trackGpuMemory(_memoryClass, _memoryBytes);
     return true;
 }
 

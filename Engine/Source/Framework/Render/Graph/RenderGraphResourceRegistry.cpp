@@ -472,6 +472,11 @@ RenderGraphResourceRegistry::~RenderGraphResourceRegistry()
 
 ImageResourceDesc RenderGraphResourceRegistry::makeImageResourceDesc(const RGTextureDesc& desc)
 {
+    // A texture the graph creates carries `ERGResourceLifetime::Transient`:
+    // its content only has to survive the passes that use it, so its backing
+    // memory is what a future alias pass may share. Its usage flags look like
+    // any other render target, so the class is stated here rather than left to
+    // the backend's heuristic.
     return ImageResourceDesc{
         .image = ImageCreateInfo{
             .label       = desc.label,
@@ -482,6 +487,7 @@ ImageResourceDesc RenderGraphResourceRegistry::makeImageResourceDesc(const RGTex
             .samples     = desc.samples,
             .usage       = desc.usage,
             .flags       = desc.flags,
+            .memoryClass = EGpuMemoryClass::Transient,
         },
         .defaultView = makeDefaultViewDesc(desc),
     };

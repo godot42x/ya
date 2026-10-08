@@ -57,3 +57,10 @@
 - 新计划项：W4（profile 构建下 5 个 GUI 测试栈损坏，PB1 复核发现，P1，GUI 线排查）；S5（脚本 native 注册重构：模板签名推导 + 反射化函数库，用户 2026-10-07 拍板，P1，波 3 开头、先于 G3.2，与 C3 串行）；GA1 附带修 `Example.xmake.lua` 大小写路径（全新 checkout 链示例失败）。
 - S5 方案问答闭环（2026-10-07）：路线定为「单一注册表条目 + 双调用约定」（SOTA 形态：签名进 `ClassRegistry`、调用体走 ScriptValue 跳板，热路径不过 any 装箱）；注册时序 = GameRuntime 集中清单；迁移 = 试点先行。子计划 `script-native-registry/` 已建。
 - S5 升级（2026-10-08）：S5.1 审查暴露反射层结构问题，用户决定反射 + 脚本整体规范化，新子计划 `reflection-runtime/`（RR0–RR8），原 `script-native-registry/` 暂停并入 RR8；仍为 P1、先于 C3 / G3.2。
+
+## 2026-10-09 — M4 / PB3 GPU 显存统计收口
+
+- 领任务时核对冲突面：`reflection-runtime` 线在改 Script / 反射 / PropertyAccessor / 一批编辑器文件，PB2 线在改 `BenchmarkRun.*` / `PerfBenchSources.*` / `RuntimeProfilingSection.*` / `Profiling.h`。M4 落在 `Vulkan*` 后端 + `RHI/include` + `Core/Profiling` 汇总器，与两者零文件重叠。
+- 实现要点与验证见 `../perf-baseline/progress.md`（PB3 条目）：RHI 公开 `EGpuMemoryClass` / `FGpuMemoryStats` / `GpuMemoryBenchSource`，Vulkan 按 allocation 记账 + `vmaGetHeapBudgets`，`gpu_memory` 段由设备自注册，编辑器新增 `RuntimeGpuMemorySection`。
+- 一处偏离计划 §3 M4 的措辞：面板没有并进 profiling 面板，而是 Runtime Tools 里独立一段——那段本轮被 PB2 线占用，等它收口后可以合并。
+- HelloMaterial 实跑（debug）出数：总 806.58 MiB，VMA 自报 allocationBytes 与分类求和一致；MoltenVK 无 `VK_EXT_memory_budget`，budget 降级为 heap size（已在类型注释里写明）。

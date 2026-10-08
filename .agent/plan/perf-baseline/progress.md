@@ -47,3 +47,20 @@
 - 验证：Lights_50 完整基准 600 帧（**debug 口径**，frameMs p50 10.276 ms，meta 与 config 一致）；其余场景 30 帧加载 exit 0；Sponza 模型实例化成功（PBR packed metallicRoughness 既有警告，不崩）；`ya.py test --target ya` **1714/1714**（1713 + 1 契约测试），主 agent 本机复跑确认。
 - 已知引擎上限（详见 todo）：`MAX_POINT_LIGHTS=6` 截断光源梯度；`MaterialDescPool` 2048 使网格梯度不挂 Phong（共享 fallback）；无逐物体 castShadow。两项设计是否重构待用户拍板。
 - 正式基线数字由 PB6 以 profile 口径连跑三次出，本次 Lights_50 仅验证链路。
+
+## 2026-10-09 — PB3 GPU 显存统计（M4）
+
+- 完成：
+  - RHI 新公开类型：`RHI/Core/GpuMemoryClass.h`（`EGpuMemoryClass`：texture / renderTarget / transient / buffer / upload，外加 `Auto`「创建者没说」）、`RHI/Core/GpuMemoryStats.h`（`resolveGpuMemoryClass` 两条推导、`FGpuMemoryStats`、`GpuMemoryAccount`）、`RHI/Core/GpuMemoryBenchSource.h`（`gpu_memory` 段）。
+  - `ImageCreateInfo` / `BufferCreateInfo` 加 `memoryClass`，`Auto` 时后端按 usage / memoryUsage 推导；显式值优先（RenderGraph 建出来的贴图显式标 `Transient`——它们的 usage 跟普通 render target 一样，启发式分不出来）。两个字段都不进 `isSame*CreateInfo`：它们是记账标签，不是资源规格。
+  - Vulkan：`VmaAllocationInfo::size` 在创建时记进 `_memoryBytes` / `_memoryClass`，析构时按原值释放；`GpuMemoryAccount`（原子计数，release 在 0 处截断，不回绕）跟在 allocator 旁边；`VulkanRender::getGpuMemoryStats()` 取 VMA `vmaGetHeapBudgets`。可选开 `VK_EXT_MEMORY_BUDGET_EXTENSION_NAME`——没有它 VMA 只回退到「本 allocator 拿了多少」，拿不到进程口径。
+  - `gpu_memory` 段由**设备自己**注册（`VulkanRender` 建/毁时挂卸 probe），不经过 `BenchmarkRun`：数字是设备的，注册放在数据所有者那里，任何 host 开窗就都有这一段，也不用去碰本轮被 PB2 线占用的 `BenchmarkRun.*` / `PerfBenchSources.*`。序列是每类 + `totalMiB`（MiB，float 存得下），facts 是每类峰值 + 每 heap 的 budget / usage / allocation / block。
+  - 编辑器：新增 `RuntimeGpuMemorySection`（Runtime Tools 页，独立一段）。没并进 `RuntimeProfilingSection`——那个文件本轮 PB2 线在改。
+- 验证：
+  - `ya-rhi-vulkan-smoke` debug 18/18（新增 8 个：分类 / account 截断 / 汇总 / 源的序列与 facts / 不支持时报 `supported=false` / 峰值随窗口重置）。
+  - `ya-testing` debug 1762/1763；唯一红灯 `PerfBenchSourcesTest.PassGpuTimeSourceWithoutProviderRecordsNothing` 是 PB2 线在改的文件，与本次无关。
+  - HelloMaterial 实跑基准（debug）出 `gpu_memory`：totalMiB p50 806.58 = texture 567.86 + renderTarget 177.89 + buffer 28.19 + upload 16.58 + transient 16.06；VMA 自己的 `allocationBytes` 806.58 与分类求和一致（两套口径互相印证）。heap 0：budget 13107 MiB / usage = block = 833.95 MiB——MoltenVK 没有 `VK_EXT_memory_budget`，budget 落回 heap size、usage 落回 blockBytes，与 `FGpuMemoryHeapBudget` 注释里写的降级行为一致。
+- 保留 / 偏离：
+  - 只量不优化：transient 帧内别名（R5）、上传缓冲复用等留给 M7，按 M4 数字排。
+  - 编辑器面板放进新段而不是 profiling 段：本轮 `RuntimeProfilingSection.*` 属 PB2 线，避免同文件并发改。
+  - GPU 显存与进程内存仍然是两套口径，M8 / PB4 未开工。

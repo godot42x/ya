@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "RHI/Core/GpuMemoryClass.h"
 #include "RHI/Core/Handle.h"
 #include <cstdint>
 #include <memory>
@@ -52,6 +53,10 @@ struct BufferCreateInfo
     std::optional<void *> data = std::nullopt;
     uint32_t              size;
     EMemoryUsage          memoryUsage = EMemoryUsage::Auto;
+    /// Which memory report bucket this buffer is charged to. `Auto` lets the
+    /// backend derive it from `memoryUsage` (see `resolveGpuMemoryClass`).
+    /// Accounting only, so `isSameBufferCreateInfo` ignores it.
+    EGpuMemoryClass::T    memoryClass = EGpuMemoryClass::Auto;
 };
 
 /// Immutable buffer creation spec.

@@ -40,6 +40,12 @@ namespace ya
 
 struct VulkanSampler;
 
+/// Publishes this device's GPU memory facts to the `gpu_memory` benchmark
+/// section for as long as the device exists. Defined in VulkanRender.cpp so
+/// the benchmark headers stay out of this one: the device owns the numbers,
+/// but no consumer of `VulkanRender` needs to know how they are reported.
+struct GpuMemoryBenchProbe;
+
 // Forward declarations
 
 extern VkObjectType toVk(ERenderObject type);
@@ -85,6 +91,10 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
         {.name = VK_KHR_SWAPCHAIN_EXTENSION_NAME, .bRequired = true},                 // "VK_KHR_swapchain"
         {.name = VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME, .bRequired = false},   // "VK_EXT_extended_dynamic_state" for cull mode (pre-1.3 devices)
         {.name = VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, .bRequired = false}, // "VK_EXT_extended_dynamic_state3" for polygon mode
+        // Process-wide memory budget / usage per heap. Without it the allocator
+        // can only report its own block bytes, so GPU memory reporting degrades
+        // from "what the process holds" to "what this allocator took".
+        {.name = VK_EXT_MEMORY_BUDGET_EXTENSION_NAME, .bRequired = false},
 #ifdef VK_EXT_MESH_SHADER_EXTENSION_NAME
         {.name = VK_EXT_MESH_SHADER_EXTENSION_NAME, .bRequired = false},
 #endif
@@ -150,6 +160,18 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
     VkDevice     m_LogicalDevice = VK_NULL_HANDLE;
     VmaAllocator _vmaAllocator   = VK_NULL_HANDLE;
+
+    /// Running per-class totals of every allocation the allocator handed out
+    /// and has not taken back. Lives next to the allocator because that is the
+    /// only place that knows both halves of the fact: images and buffers report
+    /// their size here on create and release it on destroy.
+    GpuMemoryAccount _gpuMemory;
+
+    /// The device publishes those totals to the benchmark aggregator itself:
+    /// the numbers are the device's, so the device registers the source that
+    /// reports them and every host running a benchmark gets them. Outside a
+    /// sampling window the aggregator never calls it.
+    std::unique_ptr<GpuMemoryBenchProbe> _gpuMemoryBenchProbe;
 
 
 
@@ -221,7 +243,10 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
   public:
 
-    VulkanRender() = default;
+    // Both out of line: the class owns members whose types are private to the
+    // .cpp (the benchmark probe), so their destructor must not be instantiated
+    // from a header every consumer includes.
+    VulkanRender();
     ~VulkanRender(); // Need definition in .cpp to properly destroy unique_ptr<VulkanDescriptor>
 
     bool init(const ya::RenderCreateInfo& ci) override
@@ -247,6 +272,16 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
     /// The physical device the logical device was created on.
     [[nodiscard]] RenderDeviceInfo getDeviceInfo() const override { return _selectedDeviceInfo; }
+
+    /// Per-class bytes of every live allocation of this device, plus each
+    /// memory heap's budget and usage as the allocator reports them.
+    [[nodiscard]] FGpuMemoryStats getGpuMemoryStats() const override;
+
+    /// Charge / release one allocation to this device's per-class account.
+    /// Images and buffers call these as they come and go; the account is what
+    /// `getGpuMemoryStats` reads, so no report ever walks the resource set.
+    void trackGpuMemory(EGpuMemoryClass::T memoryClass, uint64_t bytes) { _gpuMemory.track(memoryClass, bytes); }
+    void releaseGpuMemory(EGpuMemoryClass::T memoryClass, uint64_t bytes) { _gpuMemory.release(memoryClass, bytes); }
 
     void trackSampler(const std::shared_ptr<VulkanSampler>& sampler) { _trackedSamplers.emplace_back(sampler); }
     void releaseTrackedSamplers();
@@ -357,6 +392,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
             terminate();
         }
         createFrameGpuTimingResources();
+        createGpuMemoryBenchProbe();
         return true;
     }
 
@@ -364,6 +400,10 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     // vmaDestroyAllocator, and an inline body here would make every TU that
     // includes VulkanRender.h reference the VMA symbol (LNK2001 across DLLs).
     void destroyInternal();
+
+    /// Register this device's memory report with the benchmark aggregator.
+    /// Defined in the .cpp because the probe's type is private to it.
+    void createGpuMemoryBenchProbe();
 
 
   public:

@@ -29,6 +29,12 @@ struct VulkanBuffer : public ya::IBuffer
     bool               bHostVisible   = false; // CPU can access the memory directly
     bool               bHostCoherent  = false; // CPU writes are automatically visible to the device
     bool               bMemoryMapped  = false;
+    /// What this buffer is charged to in the device's memory account, and how
+    /// much it was charged (see VulkanImage's members of the same name). Only
+    /// the buffer the object owns is charged: the staging buffer a data upload
+    /// goes through comes and goes inside construction.
+    EGpuMemoryClass::T _memoryClass = EGpuMemoryClass::Buffer;
+    uint64_t           _memoryBytes = 0;
 
 
 
@@ -53,6 +59,8 @@ struct VulkanBuffer : public ya::IBuffer
         else {
             createDefaultInternal(static_cast<uint32_t>(ci.size), memUsage);
         }
+
+        chargeMemoryAccount(ci.memoryClass, memUsage);
 
         // YA_CORE_TRACE("Created VulkanBuffer [{}]: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
         setupDebugName(name);
@@ -92,6 +100,10 @@ struct VulkanBuffer : public ya::IBuffer
   private:
     void createWithDataInternal(const void *data, uint32_t size, EMemoryUsage memUsage);
     void createDefaultInternal(uint32_t size, EMemoryUsage memUsage);
+    /// Charge this buffer to the device's memory account. Defined in the .cpp
+    /// because reading the allocation's size means calling VMA, whose full
+    /// definition this header deliberately does not carry.
+    void chargeMemoryAccount(EGpuMemoryClass::T requestedClass, EMemoryUsage memUsage);
     void setupDebugName(const std::string &inName);
 };
 

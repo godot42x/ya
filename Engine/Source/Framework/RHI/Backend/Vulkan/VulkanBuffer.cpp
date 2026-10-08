@@ -15,6 +15,10 @@ VulkanBuffer::~VulkanBuffer()
         if (bMemoryMapped) {
             vmaUnmapMemory(_render->getVmaAllocator(), _allocation);
         }
+        if (_memoryBytes != 0) {
+            _render->releaseGpuMemory(_memoryClass, _memoryBytes);
+            _memoryBytes = 0;
+        }
         vmaDestroyBuffer(_render->getVmaAllocator(), _handle, _allocation);
         _handle     = VK_NULL_HANDLE;
         _allocation = VK_NULL_HANDLE;
@@ -49,6 +53,18 @@ void VulkanBuffer::createWithDataInternal(const void* data, uint32_t size, EMemo
     VulkanBuffer::transfer(_render, stageBuffer, _handle, size, "fromRowData");
 
     vmaDestroyBuffer(_render->getVmaAllocator(), stageBuffer, stageAllocation);
+}
+
+void VulkanBuffer::chargeMemoryAccount(EGpuMemoryClass::T requestedClass, EMemoryUsage memUsage)
+{
+    if (_allocation == VK_NULL_HANDLE) {
+        return;
+    }
+    VmaAllocationInfo allocationInfo{};
+    vmaGetAllocationInfo(_render->getVmaAllocator(), _allocation, &allocationInfo);
+    _memoryBytes = allocationInfo.size;
+    _memoryClass = resolveGpuMemoryClass(requestedClass, memUsage);
+    _render->trackGpuMemory(_memoryClass, _memoryBytes);
 }
 
 void VulkanBuffer::createDefaultInternal(uint32_t size, EMemoryUsage memUsage)

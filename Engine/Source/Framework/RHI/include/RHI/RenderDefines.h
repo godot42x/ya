@@ -5,6 +5,7 @@
 #include "Core/Common/SamplerEnums.h"
 
 
+#include "RHI/Core/GpuMemoryClass.h"
 #include "RHI/Core/Handle.h"
 #include "reflects-core/enum.h"
 
@@ -1501,6 +1502,13 @@ struct ImageCreateInfo
     const uint32_t*     pQueueFamilyIndices   = nullptr;
     EImageLayout::T     initialLayout         = EImageLayout::Undefined;
     EImageCreateFlag::T flags                 = EImageCreateFlag::None;
+    /// Which memory report bucket this image is charged to. `Auto` lets the
+    /// backend derive it from `usage` (see `resolveGpuMemoryClass`); state it
+    /// when the usage does not say -- a graph attachment that only lives for
+    /// the frame, for instance. Accounting only: it changes which row of the
+    /// memory report the image lands in, never what is allocated, which is
+    /// why `isSameImageCreateInfo` ignores it.
+    EGpuMemoryClass::T memoryClass            = EGpuMemoryClass::Auto;
     // TODO: manual conversion
     // EImageLayout::T finalLayout           = EImageLayout::ShaderReadOnlyOptimal;
 };
