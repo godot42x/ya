@@ -224,3 +224,7 @@ RR5a 注意：`toInt64` / `convertTo` 等每次调用都查一次 TypeRegistry �
 - `ya-testing` 1737/1737，另有 4 个 `DISABLED_`。`ReflectionSceneResave` 8/8，场景重存哈希未变。新增 `ReflectionNamedType` 2 个。
 - `reflects-core-test` 61/61。`reflects-generator-test` 1/11，通过的仍是 `ReflectorTest.GetNonExistentClass`。
 - 冒烟退出码都是 0，日志没有 `[Error]`：`walk_one_cell.py` 走过一格 `(0.5, 0.5) -> (1.5, 0.5)`；GreedySnake 与 HelloMaterial `--exit-after-frame=90` 各在 90 帧退出。
+
+## 2026-10-08 — RR1 Windows 验证
+
+用户在 Windows 上跑构建、`ya-testing`、`reflects-core-test`，均通过。RR1 done。
