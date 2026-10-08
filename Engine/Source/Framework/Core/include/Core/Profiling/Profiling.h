@@ -83,6 +83,11 @@ struct RuntimeState
     /// pool and readback follow this). Off by default because it costs query
     /// pool memory and two timestamp writes per pass; the benchmark run turns
     /// it on for its sampling window.
+    ///
+    /// "Off by default" is the default of the *conditional* profiling builds.
+    /// Like every other toggle here this goes through `normalizeRuntimeToggle`,
+    /// so a build that compiles profiling in unconditionally reports it on
+    /// whatever this field says.
     bool    passGpuTimingEnabled        = false;
 };
 

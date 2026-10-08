@@ -11,11 +11,13 @@ namespace ya
 /// Per-frame GPU command counters, incremented by the backend's command
 /// recording (`draw` / `dispatch` / pipeline and descriptor binds) and by the
 /// 2D batch recorder (`flush` per batch, texture-table switches). The frame
-/// owner resets the set at frame end; readers snapshot between frames.
+/// boundary resets the set (`VulkanRender::beginRecordedFrame`, the one place
+/// every host already runs once per frame), so a snapshot is always exactly one
+/// frame's work and the counters cannot run away while nothing is reading them.
 ///
-/// Counters are the `render_counters` bench section's source of truth and the
-/// editor profiling panel's quick counts. They always exist (the increments
-/// are relaxed atomics on already-hot paths); only reading them is opt-in.
+/// Counters are the `render_counters` bench section's source of truth. They
+/// always exist (the increments are relaxed atomics on already-hot paths); only
+/// reading them is opt-in.
 struct YA_CORE_API RenderCounters
 {
     uint32_t drawCount              = 0;
@@ -43,6 +45,7 @@ YA_CORE_API void incrementRenderCounterBatch2D();
 YA_CORE_API void incrementRenderCounterTextureTableSwitch2D();
 
 [[nodiscard]] YA_CORE_API RenderCounters renderCountersSnapshot();
-YA_CORE_API void                         resetRenderCounters();
+/// Called by the frame boundary, not by readers.
+YA_CORE_API void resetRenderCounters();
 
 } // namespace ya

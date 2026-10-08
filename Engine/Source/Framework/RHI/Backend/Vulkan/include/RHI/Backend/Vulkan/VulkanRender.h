@@ -241,7 +241,6 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     /// `base + 1`). Doubles as "this frame has pass work to read back".
     std::unordered_map<uint32_t, std::string> _passGpuTimingNames;
     uint32_t                  _passGpuTimingQueryCount   = 0;
-    bool                      _bPassGpuTimingFrameOpen   = false;
     std::unordered_map<std::string, float>    _completedPassGpuTimesMs;
 
     /// Which slot of the GPU-timing query ring the current frame owns. Indexed

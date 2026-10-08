@@ -8,6 +8,7 @@
 #include <Core/Base.h>
 #include <Core/Profiling/PerfKeys.h>
 #include <Core/Profiling/PerfState.h>
+#include <Core/Profiling/RenderCounters.h>
 #include <Core/Log.h>
 
 #include <algorithm>
@@ -1379,7 +1380,6 @@ void VulkanRender::updateCompletedFrameGpuTiming()
 void VulkanRender::createPassGpuTimingResources()
 {
     _passGpuTimingQueryCount = 0;
-    _bPassGpuTimingFrameOpen = false;
     _passGpuTimingNames.clear();
     _completedPassGpuTimesMs.clear();
 
@@ -1411,7 +1411,6 @@ void VulkanRender::createPassGpuTimingResources()
 void VulkanRender::releasePassGpuTimingResources()
 {
     _passGpuTimingQueryCount = 0;
-    _bPassGpuTimingFrameOpen = false;
     _passGpuTimingNames.clear();
     _completedPassGpuTimesMs.clear();
 
@@ -1446,7 +1445,6 @@ uint32_t VulkanRender::beginPassGpuTimingQuery(ICommandBuffer* commandBuffer, co
                               _passGpuTimestampQueryPool,
                               0,
                               kMaxGpuPassesPerFrame * 2);
-        _bPassGpuTimingFrameOpen = true;
     }
 
     const uint32_t queryBase = _passGpuTimingQueryCount;
@@ -1463,7 +1461,6 @@ void VulkanRender::updateCompletedPassGpuTiming()
     // queries, so a window that could not be read is finished, not pending.
     const uint32_t queryCount = _passGpuTimingQueryCount;
     if (_passGpuTimestampQueryPool == VK_NULL_HANDLE || queryCount == 0) {
-        _bPassGpuTimingFrameOpen = false;
         _passGpuTimingQueryCount = 0;
         _passGpuTimingNames.clear();
         return;
@@ -1502,7 +1499,6 @@ void VulkanRender::updateCompletedPassGpuTiming()
         }
     }
 
-    _bPassGpuTimingFrameOpen = false;
     _passGpuTimingQueryCount = 0;
     _passGpuTimingNames.clear();
 }
@@ -1537,6 +1533,14 @@ const VkAllocationCallbacks* VulkanRender::getAllocator()
 void VulkanRender::beginRecordedFrame()
 {
     ++_frameIndex;
+
+    // Per-frame counters: whatever was recorded since the previous frame is
+    // about to be read by whoever samples them, so this frame starts from zero.
+    // The reset lives here rather than in the sampler because this is the one
+    // frame boundary every host already runs -- game runtime and both GUI host
+    // shapes -- so the counters never accumulate unboundedly when nothing is
+    // sampling, and a reader sees exactly the frame it just recorded.
+    resetRenderCounters();
 
     // Wait the fence of the slot this frame is about to use: that is the frame
     // whose transient GPU resources, command buffer and per-surface semaphores

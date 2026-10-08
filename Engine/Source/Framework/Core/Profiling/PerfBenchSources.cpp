@@ -111,10 +111,12 @@ void PassGpuTimeBenchSource::sampleFrame(BenchSeriesWriter& out)
 
 void RenderCounterBenchSource::sampleFrame(BenchSeriesWriter& out)
 {
-    // Frame end is where the counters mean exactly one frame's work; the next
-    // frame starts from zero.
+    // Read only. The frame boundary owns the reset (see
+    // `VulkanRender::beginRecordedFrame`), so the counters mean exactly the
+    // frame that just ended whether or not anything is sampling them; resetting
+    // here instead would let everything recorded before the first sample pile
+    // into one frame's numbers.
     const RenderCounters snapshot = renderCountersSnapshot();
-    resetRenderCounters();
 
     if (snapshot.drawCount != 0) {
         out.record("drawCount", static_cast<float>(snapshot.drawCount));

@@ -78,4 +78,5 @@
 - 测量默认关：`RuntimeState.passGpuTimingEnabled` 默认 false，只有基准采样窗口内才开（结束还原），编辑器对应 `profile.runtime.passGpuTiming` 配置键。
 - 两个真 bug 由实跑数据抓出来（单测抓不到）：`endGpuPass` 把结束时间戳写回开始那个 query index 导致整帧 `VK_NOT_READY`；回读失败时 pass 名字不清，几帧就撞上限。详见 `../perf-baseline/progress.md` 本节。
 - 验证：`ya-testing` debug 1764/1764（新增 4 例）；HelloMaterial 完整基准 17/17 个 pass 有数（count 全 600），pass p50 求和 4.04 ms 对整帧 gpuMs p50 4.51 ms。
+- 复查返工（同一提交序列的后续提交）：`render_counters` 的清零原先挂在采样点，预热帧累积量被第一帧吞下，max 被撑大 120 倍（max/p50 精确等于 `warmupFrames`）；清零改到帧边界 `VulkanRender::beginRecordedFrame`，实测比值降到 1.0x。另删掉一个零读取的死状态 `_bPassGpuTimingFrameOpen`，并把 `passGpuTimingEnabled` 的「默认关」写成有编译期条件的契约（它在 `ECompileMode::Enabled` 下会被 `normalizeRuntimeToggle` 压成常开）。`ya-testing` 1767/1767。
 - 未达成：M 组验收的三次 p50 ±3% 本轮没实测——本机 debug 构建且有并行编译，噪声大于信号；正式数字按 M6 / PB6 在 profile 口径下出。

@@ -45,7 +45,8 @@
         "Engine/Source/Framework/RHI/Backend/Vulkan/VulkanRender.cpp",
         "Engine/Source/Applications/GameEditor/UI/Sections/RuntimeProfilingSection.cpp",
         "ya-testing debug 1764/1764",
-        "HelloMaterial debug benchmark: gpu_passes 17/17 passes at count=600, sum of pass p50 4.03 ms vs whole-frame gpuMs p50 4.51 ms"
+        "ya-testing debug 1767/1767 (after the review rework)",
+        "HelloMaterial debug benchmark: gpu_passes 17/17 passes at count=600, sum of pass p50 4.60 ms vs whole-frame gpuMs p50 5.01 ms"
       ]
     },
     {

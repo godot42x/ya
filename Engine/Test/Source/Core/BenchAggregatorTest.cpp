@@ -327,7 +327,7 @@ TEST(PerfBenchSourcesTest, PassGpuTimeSourceWithoutProviderRecordsNothing)
     EXPECT_TRUE(sections["gpu_passes"].empty());
 }
 
-TEST(PerfBenchSourcesTest, RenderCounterSourceRecordsCountersAndTakesThem)
+TEST(PerfBenchSourcesTest, RenderCounterSourceReadsCountersAndLeavesTheResetToTheFrame)
 {
     resetRenderCounters();
     RenderCounterBenchSource source;
@@ -350,10 +350,15 @@ TEST(PerfBenchSourcesTest, RenderCounterSourceRecordsCountersAndTakesThem)
     // Untouched counters stay out of the section.
     EXPECT_FALSE(counters.contains("dispatchCount"));
 
-    // Sampling takes the counters with it: the next frame starts from zero.
-    const RenderCounters after = renderCountersSnapshot();
-    EXPECT_EQ(after.drawCount, 0u);
-    EXPECT_EQ(after.batch2DCount, 0u);
+    // Sampling only reads. The reset belongs to the frame boundary
+    // (`VulkanRender::beginRecordedFrame`); if it lived here, everything
+    // recorded before the first sample would land in one frame's numbers.
+    const RenderCounters afterSampling = renderCountersSnapshot();
+    EXPECT_EQ(afterSampling.drawCount, 2u);
+    EXPECT_EQ(afterSampling.batch2DCount, 1u);
+
+    resetRenderCounters();
+    EXPECT_EQ(renderCountersSnapshot().drawCount, 0u);
 }
 
 TEST(BenchSummaryTest, SummaryCarriesMetaAndEverySection)

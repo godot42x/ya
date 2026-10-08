@@ -99,3 +99,14 @@
   - pass 名带 view 后缀（`Deferred GBuffer.view4294967297`），同名的多个 view 合并成一个 key；要拆开得改 graph 的 pass 命名，不在本轮。
   - 计时只覆盖 pass 自己的命令，不含它前后的 barrier——barrier 是图的事。
   - 与 PB3 的分工：两者都改 `VulkanRender.*` / `VulkanCommandBuffer.*`，本轮已把 PB3 在 `VulkanRender.cpp` 里那个 `GpuMemoryBenchProbe` 定义挪到析构函数之前（定义晚于使用会报 incomplete type），其余各自文件、不动对方逻辑。
+
+## 2026-10-09 — PB2 复查返工
+
+复查 PB2 自己的产出，抓到三处问题并修掉：
+
+1. **render_counters 的 max 被预热帧撑大 120 倍（真缺陷）。** 清零原先在 `RenderCounterBenchSource::sampleFrame` 里，而源只在采样窗口内被调用，于是 `warmupFrames` 帧的累积量被第一帧采样整个吞下。八个计数器的 max/p50 比值精确等于 120（`drawIndexed` 828 / 99194），p50 正确、**max 错**——而 PB5 的网格压测正是要看峰值的场景。修法：清零移到 `VulkanRender::beginRecordedFrame`（game runtime、GUI 单窗、GUI 多窗三种 host 每帧都恰好跑一次的帧边界），源退化为只读。实测比值 120x → 1.0x。
+2. **`_bPassGpuTimingFrameOpen` 是死状态**：写了五处、零处读，实际由 `_passGpuTimingQueryCount != 0` 承担。删除。
+3. **`passGpuTimingEnabled` 的「默认关」说法不严谨**：它和别的开关一样过 `normalizeRuntimeToggle`，在把 profiling 无条件编进去的构建（`ECompileMode::Enabled`）下会被压成常开。当前 xmake 只有 CONDITIONAL / DISABLED 两种，所以行为无碍，但注释里的契约该写明条件。
+
+- 验证：`ya-testing` debug **1767/1767**（`RenderCounterSourceRecordsCountersAndTakesThem` 改名并改为新契约：采样只读、清零归帧边界）。修复后实跑基准：`gpu_passes` 17/17 个 pass、count 全 600 不变；八个计数器 max == p50。
+- 未变：`gpu_passes` 的 ±3% 三连跑仍未实测（debug + 并行编译，噪声压过信号），归 PB6 的 profile 口径。
