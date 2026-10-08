@@ -62,7 +62,7 @@ struct YA_RENDER_3D_API PBRMaterialComponent : public MaterialComponent<PBRMater
 
     struct AuthoringParams
     {
-        YA_REFLECT_BEGIN(AuthoringParams)
+        YA_REFLECT_BEGIN_NAMED(AuthoringParams, "PBRMaterialComponent::AuthoringParams")
         YA_REFLECT_FIELD(albedo, .color())
         YA_REFLECT_FIELD(metallic, .manipulate(0.0f, 1.0f))
         YA_REFLECT_FIELD(roughness, .manipulate(0.0f, 1.0f))

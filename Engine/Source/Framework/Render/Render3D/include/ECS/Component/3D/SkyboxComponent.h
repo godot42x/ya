@@ -2,10 +2,8 @@
 
 #include "Core/Common/StateTransition.h"
 #include "Core/Reflection/Reflection.h"
-
-#include <array>
-
 #include "ECS/Component.h"
+#include "ECS/Component/3D/EnvironmentSource.h"
 #include "RHI/Core/Texture.h"
 
 namespace ya
@@ -45,32 +43,6 @@ struct StateTraits<ESkyboxResolveState>
 
 struct YA_RENDER_3D_API SkyboxComponent : public IComponent
 {
-    struct CubemapSource
-    {
-        YA_REFLECT_BEGIN(CubemapSource)
-        YA_REFLECT_FIELD(files)
-        YA_REFLECT_FIELD(flipVertical)
-        YA_REFLECT_END()
-
-        std::array<std::string, CubeFace_Count> files{};
-        bool                                    flipVertical = false;
-
-        bool hasAllFaces() const;
-    };
-
-    struct CylindricalSource
-    {
-        YA_REFLECT_BEGIN(CylindricalSource)
-        YA_REFLECT_FIELD(filepath)
-        YA_REFLECT_FIELD(flipVertical)
-        YA_REFLECT_END()
-
-        std::string filepath;
-        bool        flipVertical = false;
-
-        bool hasFile() const;
-    };
-
     YA_REFLECT_BEGIN(SkyboxComponent, IComponent)
     YA_REFLECT_FIELD(sourceType)
     YA_REFLECT_FIELD(cubemapSource)

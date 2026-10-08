@@ -288,11 +288,11 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionInsertsGroupHeaderForNestedFiel
 
 struct DeepNestedInspectorComponent
 {
-    struct SamplerConfig
+    struct DeepNestedSamplerConfig
     {
         int filterMode = 0;
 
-        YA_REFLECT_BEGIN(SamplerConfig)
+        YA_REFLECT_BEGIN(DeepNestedSamplerConfig)
         YA_REFLECT_FIELD(filterMode)
         YA_REFLECT_END()
     };
@@ -300,7 +300,7 @@ struct DeepNestedInspectorComponent
     struct Slot
     {
         float uvScale = 1.0f;
-        SamplerConfig samplerConfig;
+        DeepNestedSamplerConfig samplerConfig;
 
         YA_REFLECT_BEGIN(Slot)
         YA_REFLECT_FIELD(uvScale)

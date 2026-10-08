@@ -25,21 +25,6 @@ bool isEnvironmentLightingPrefilterStateLoading(EEnvironmentLightingPrefilterRes
 
 } // namespace
 
-bool EnvironmentLightingComponent::CubemapSource::hasAllFaces() const
-{
-    for (const auto& file : files) {
-        if (file.empty()) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool EnvironmentLightingComponent::CylindricalSource::hasFile() const
-{
-    return !filepath.empty();
-}
-
 void EnvironmentLightingComponent::setFace(ECubeFace face, const std::string& path)
 {
     if (face < CubeFace_PosX || face >= CubeFace_Count) {

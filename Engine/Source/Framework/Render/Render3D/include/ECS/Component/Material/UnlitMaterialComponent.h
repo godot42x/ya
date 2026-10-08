@@ -61,7 +61,7 @@ struct YA_RENDER_3D_API UnlitMaterialComponent : public MaterialComponent<UnlitM
 
     struct AuthoringParams
     {
-        YA_REFLECT_BEGIN(AuthoringParams)
+        YA_REFLECT_BEGIN_NAMED(AuthoringParams, "UnlitMaterialComponent::AuthoringParams")
         YA_REFLECT_FIELD(baseColor0, .color())
         YA_REFLECT_FIELD(baseColor1, .color())
         YA_REFLECT_FIELD(mixValue, .manipulate(0.0f, 1.0f))

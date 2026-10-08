@@ -19,8 +19,8 @@ namespace ya
 #ifdef ___YA_REFLECT_EXTENSION
     #undef ___YA_REFLECT_EXTENSION
 #endif
-#define ___YA_REFLECT_EXTENSION(type_name) \
-    ::ya::ECSRegistry::get().registerComponent<type_name>(#type_name);
+#define ___YA_REFLECT_EXTENSION(type_name, reflected_name) \
+    ::ya::ECSRegistry::get().registerComponent<type_name>(reflected_name);
 
 
 struct Entity;

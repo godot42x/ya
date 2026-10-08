@@ -4,21 +4,6 @@
 namespace ya
 {
 
-bool SkyboxComponent::CubemapSource::hasAllFaces() const
-{
-    for (const auto& file : files) {
-        if (file.empty()) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool SkyboxComponent::CylindricalSource::hasFile() const
-{
-    return !filepath.empty();
-}
-
 void SkyboxComponent::setFace(ECubeFace face, const std::string& path)
 {
     if (face < CubeFace_PosX || face >= CubeFace_Count) {

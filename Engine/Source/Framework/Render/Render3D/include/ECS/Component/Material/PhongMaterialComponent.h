@@ -60,7 +60,7 @@ struct YA_RENDER_3D_API PhongMaterialComponent : public MaterialComponent<PhongM
 
     struct AuthoringParams
     {
-        YA_REFLECT_BEGIN(AuthoringParams)
+        YA_REFLECT_BEGIN_NAMED(AuthoringParams, "PhongMaterialComponent::AuthoringParams")
         YA_REFLECT_FIELD(ambient, .color())
         YA_REFLECT_FIELD(diffuse, .color())
         YA_REFLECT_FIELD(specular, .color())

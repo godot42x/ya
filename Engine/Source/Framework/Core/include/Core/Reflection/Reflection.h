@@ -148,14 +148,16 @@ struct Visitor<void>
 
 
 // Notes:
-// - Invoked inside a scope where `class_t` and `type_name` exist.
+// - Invoked inside real_init, where `class_t` and `real_name` exist.
+// - Arguments: the C++ type token, then the reflected name (std::string).
+//   Both the class registry and this extension must use that same name.
 // - The default extension is a no-op. Consumers may override it by redefining
 //   ___YA_REFLECT_EXTENSION AFTER including this header and BEFORE their
 //   reflected type definitions (the ECS layer does exactly that for
 //   IComponent registration, see ECS/Component.h). This keeps core reflection
 //   free of any ECS / game-layer dependency.
 #ifndef ___YA_REFLECT_EXTENSION
-    #define ___YA_REFLECT_EXTENSION(type_name) ((void)0);
+    #define ___YA_REFLECT_EXTENSION(type_name, reflected_name) ((void)0);
 #endif
 
 // #define ___YA_CREATE_REGISTER(ClassName)                   \
@@ -165,21 +167,27 @@ struct Visitor<void>
 //     YA_PROFILE_STATIC_INIT(name.c_str());                  \
 //     std::unique_ptr<::Register<class_t>> reg = std::make_unique<::Register<class_t>>(name);
 
-#define ___YA_CREATE_REGISTER_2(ClassName)                         \
-    constexpr std::string_view           macroName = #ClassName;   \
-    std::string                           real_name;               \
-    if constexpr (macroName.find('<') != std::string_view::npos) { \
-        real_name = ::ya::canonical_type_name<class_t>();          \
-    }                                                              \
-    else {                                                         \
-        real_name = #ClassName;                                    \
-    }                                                              \
-    YA_PROFILE_STATIC_INIT(real_name);                             \
-    std::unique_ptr<::Register<class_t>> reg       = nullptr;      \
+// Default reflected name: the macro token, or the canonical compiler spelling
+// when that token is a template (it contains '<'). Expanded inside real_init.
+#define ___YA_REFLECT_DEFAULT_NAME(ClassName)                              \
+    []() -> std::string {                                                  \
+        constexpr std::string_view macroName = #ClassName;                \
+        if constexpr (macroName.find('<') != std::string_view::npos) {    \
+            return ::ya::canonical_type_name<class_t>();                   \
+        }                                                                  \
+        else {                                                             \
+            return std::string(macroName);                                 \
+        }                                                                  \
+    }()
+
+#define ___YA_CREATE_REGISTER_2(ReflectedNameExpr)             \
+    std::string                           real_name = (ReflectedNameExpr); \
+    YA_PROFILE_STATIC_INIT(real_name);                        \
+    std::unique_ptr<::Register<class_t>> reg = nullptr;       \
     reg = std::make_unique<::Register<class_t>>(real_name);
 
 
-#define ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass)                                                                                            \
+#define ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass, ReflectedNameExpr)                                                                         \
     using Super = BaseClass;                                                                                                                      \
                                                                                                                                                   \
   private:                                                                                                                                        \
@@ -197,7 +205,7 @@ struct Visitor<void>
         }                                                                                                                                         \
         static void real_init()                                                                                                                   \
         {                                                                                                                                         \
-            ___YA_CREATE_REGISTER_2(ClassName)                                                                                                    \
+            ___YA_CREATE_REGISTER_2(ReflectedNameExpr)                                                                                            \
                                                                                                                                                   \
             /* Register base class relationship if applicable */                                                                                  \
             if constexpr (has_base_class) {                                                                                                       \
@@ -229,7 +237,7 @@ struct Visitor<void>
                 reg->copiesAsValue();                                                                                                              \
             }                                                                                                                                      \
                                                                                                                                                   \
-            ___YA_REFLECT_EXTENSION(ClassName)                                                                                                    \
+            ___YA_REFLECT_EXTENSION(ClassName, real_name)                                                                                         \
         }                                                                                                                                         \
         template <typename Visitor>                                                                                                               \
         static void visit_fields(void* obj, Visitor&& visitor)                                                                                    \
@@ -284,10 +292,24 @@ struct Visitor<void>
     YA_EXPAND(YA_CALL_MACRO_N(___YA_REFLECT_BEGIN_, __VA_ARGS__)(__VA_ARGS__))
 
 #define ___YA_REFLECT_BEGIN_1(ClassName) \
-    ___YA_REFLECT_BEGIN_IMPL(ClassName, void)
+    ___YA_REFLECT_BEGIN_IMPL(ClassName, void, ___YA_REFLECT_DEFAULT_NAME(ClassName))
 
 #define ___YA_REFLECT_BEGIN_2(ClassName, BaseClass) \
-    ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass)
+    ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass, ___YA_REFLECT_DEFAULT_NAME(ClassName))
+
+// Explicit reflected name. The string is the persistent identity; the C++
+// type token is unchanged. Use this when nested types would otherwise share
+// a reflected name.
+//   YA_REFLECT_BEGIN_NAMED(AuthoringParams, "PhongMaterialComponent::AuthoringParams")
+//   YA_REFLECT_BEGIN_NAMED(Derived, "Owner::Derived", Base)
+#define YA_REFLECT_BEGIN_NAMED(...) \
+    YA_EXPAND(YA_CALL_MACRO_N(___YA_REFLECT_BEGIN_NAMED_, __VA_ARGS__)(__VA_ARGS__))
+
+#define ___YA_REFLECT_BEGIN_NAMED_2(ClassName, ReflectedName) \
+    ___YA_REFLECT_BEGIN_IMPL(ClassName, void, ReflectedName)
+
+#define ___YA_REFLECT_BEGIN_NAMED_3(ClassName, ReflectedName, BaseClass) \
+    ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass, ReflectedName)
 
 // YA_REFLECT_FIELD: collect compile-time field list (+ metadata)
 #define YA_REFLECT_FIELD(FieldName, ...) \
@@ -417,7 +439,7 @@ struct Visitor<void>
     struct ExternalReflect<ClassName>                         \
     {                                                         \
         static constexpr bool has_external_reflection = true; \
-        ___YA_REFLECT_BEGIN_IMPL(ClassName, void)
+        ___YA_REFLECT_BEGIN_IMPL(ClassName, void, ___YA_REFLECT_DEFAULT_NAME(ClassName))
 
 
 // clang-format off
