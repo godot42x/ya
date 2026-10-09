@@ -388,7 +388,15 @@ class YA_GUI_API UIFrameBuilder
 
     [[nodiscard]] glm::vec2 toPx(const glm::vec2& logical) const { return _ctx.offset + logical * _ctx.uiScale; }
 
-    const UIFrameBuildContext& _ctx;
+    // Owned by value, not by reference. A reference member binds happily to a
+    // temporary: `UIFrameBuilder(UIFrameBuildContext{})` is well-formed C++ and
+    // compiles clean at every warning level, but the builder then reads freed
+    // stack for the rest of the scope. The context is a handful of scalars
+    // plus two std::functions that are empty unless a host mounted them, so
+    // owning it is close to free -- and `build()` already had to copy this
+    // context into the snapshot by value, so nothing on the render path
+    // allocates less than it did before.
+    UIFrameBuildContext            _ctx;
     std::vector<Rect2D>        _clipStack;
     std::vector<FUIResolvedRenderTransform> _renderTransformStack;
     std::vector<UIFrameDrawItem> _items;

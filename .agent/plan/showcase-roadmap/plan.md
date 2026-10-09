@@ -50,7 +50,7 @@
 | W1 | 根 `AGENTS.md`「兼容 OpenGL」等过时声明改正；`render-arch` skill 里已不存在的符号（如 `RenderFrameCoordinator`）改正 | P0 |
 | W2 | B2 遗留：`MethodCall::arguments` 吞普通表收窄为 owner 参数；`bindSelf` 旧注释；`ScriptProperty::serializedValue` 未用；属性预览只建不销；`Npc.lua` 的 `world.find("Player")`；`spawnSprite` 默认贴图写死；自动化按名字 `Player` 找实体；`GridMoverTest.lua` 未进 gtest | P0 |
 | W3 | `GUIWindowManagerTest.IsolatesPointerFocusCaptureTooltipDpiAndSnapshot` 间歇失败定位 | P0 |
-| W4 | profile 构建下 5 个 GUI 测试栈损坏崩溃（`UIFrameSnapshotTest` 4 例、`ComposeClipReplayTest.NestedBuilderClipFlattensToOneClipRun`；debug 全过）。疑似 profile-only 栈溢出 / UB——基准跑在 profile 上，这条线要干净。PB1 复核时发现，归 GUI 线单独排查 | P1 |
+| W4 | ~~profile 构建下 5 个 GUI 测试栈损坏崩溃~~ **已结（`4e95276d`）**：不是 profile-only 栈溢出，是 `UIFrameBuilder` 的 `_ctx` 为 `const UIFrameBuildContext&`，`UIFrameBuilder(UIFrameBuildContext{})` 把引用绑到临时对象上，随后 `build()` 拷贝已释放的栈。5 例全部把 ctx 绑到临时；debug 全过是因为 profile 的计数分配器改变了分配行为而暴露出来。改为按值持有 | ~~P1~~ 完成 |
 
 ### M — 测量、压测与内存（P0 起步）
 
