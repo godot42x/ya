@@ -3,6 +3,7 @@
 #include "Resource/Texture/AssetTextureInternal.h"
 
 #include "Core/Log.h"
+#include "Core/Memory/AllocatorStats.h"
 
 #include <array>
 #include <atomic>
@@ -246,6 +247,10 @@ AssetManager::TextureBatchMemoryHandle AssetTextureManager::loadTextureBatchInto
     auto handle = TaskQueue::get().submitWithCallback(
         [settingsList = std::move(settingsList)]() -> AssetManager::TextureBatchMemory
         {
+            // Same reason as the single-texture worker: this runs on a
+            // TaskQueue thread, and a batch decode holds every texture's raw
+            // pixels at once -- the largest live allocation in the pipeline.
+            YA_MEMORY_OWNER(Resource);
             AssetManager::TextureBatchMemory batchMemory;
             batchMemory.textures.reserve(settingsList.size());
 
@@ -319,7 +324,12 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
     }
 
     std::shared_ptr<Texture> texture;
-    auto                     decoded = decodeTextureToMemory(_owner.resolveTextureImportSettings(path, colorSpace));
+    // The sync path decodes on the calling thread, so the tag opens here
+    // rather than at some caller in the editor. Same decode cost as the async
+    // worker, and it has to be tagged in both or the answer depends on whether
+    // the caller happened to be async.
+    YA_MEMORY_OWNER(Resource);
+    auto decoded = decodeTextureToMemory(_owner.resolveTextureImportSettings(path, colorSpace));
     if (decoded.isValid()) {
         texture = uploadTexture(decoded, name.empty() ? decoded.filepath : name);
     }
@@ -373,6 +383,13 @@ void AssetTextureManager::submitTextureLoad(const std::string&               key
     TaskQueue::get().submitWithCallback(
         [settings]() -> AssetManager::TextureMemoryBlock
         {
+            // Inside the worker, not around the submit: the owner tag is
+            // thread-local, and decoding a texture is the single largest
+            // allocation in the whole content pipeline (raw pixel bytes for
+            // every mip). Tagging the submitting thread would leave the worker
+            // untagged and charge megabytes per texture to `untagged` -- which
+            // is the case this subsystem bucket exists to rule out.
+            YA_MEMORY_OWNER(Resource);
             return decodeTextureToMemory(settings);
         },
         [this, key, serial](AssetManager::TextureMemoryBlock decoded)
@@ -385,6 +402,9 @@ void AssetTextureManager::completeTextureLoad(const std::string&               k
                                               uint64_t                         serial,
                                               AssetManager::TextureMemoryBlock decoded)
 {
+    // The upload half of an async load: staging buffers and the upload command
+    // record are allocated here, after the decode worker has already returned.
+    YA_MEMORY_OWNER(Resource);
     std::string label;
     {
         std::lock_guard lock(_mutex);

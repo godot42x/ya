@@ -1,6 +1,7 @@
 #include "Resource/Manager/AssetModelManager.h"
 
 #include "Core/Log.h"
+#include "Core/Memory/AllocatorStats.h"
 #include "Resource/Core/Model/ImportedModelData.h"
 
 #include "Core/Common/DeferredDeletionQueue.h"
@@ -145,6 +146,11 @@ bool AssetModelManager::isModelLoaded(const std::string& filepath) const
 std::shared_ptr<Model> AssetModelManager::loadModelImpl(const std::string& filepath, const std::string& name)
 {
     (void)name;
+
+    // One tag covers both sync entry points and the async request path: model
+    // decode and GPU mesh creation allocate vertex/index buffers for the whole
+    // mesh, which is the heaviest single allocation a content load performs.
+    YA_MEMORY_OWNER(Resource);
 
     const auto path = AssetManager::normalizeAssetPath(filepath);
 

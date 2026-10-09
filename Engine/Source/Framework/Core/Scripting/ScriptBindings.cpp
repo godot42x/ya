@@ -1,6 +1,7 @@
 #include "Core/Scripting/ScriptBindings.h"
 
 #include "Core/Log.h"
+#include "Core/Memory/AllocatorStats.h"
 #include "Core/Reflection/ValueFacets.h"
 
 #include <reflects-core/lib.h>
@@ -802,6 +803,13 @@ void writeField(const ScriptRef& ref, const ScriptField& field, const ScriptValu
 
 ScriptValue callMethod(const ScriptRef& ref, const ScriptMethod& method, ScriptArgs args)
 {
+    // This is the single funnel every script call passes through -- the Lua
+    // metamethod, the QuickJS binding and the automation RPC all land here --
+    // so it is where a script's own allocations (boxed arguments, the return
+    // value, whatever the script body allocates) stop landing in `untagged`.
+    // Placed before the missing-ref early return so a call that fails to
+    // resolve is still attributed to the subsystem that asked for it.
+    YA_MEMORY_OWNER(Script);
     if (isMissing(ref)) {
         warnMissingOnce(ref);
         return {};

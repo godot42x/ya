@@ -1,5 +1,7 @@
 #include "Graph/RenderGraphExecutor.h"
 
+#include "Core/Memory/AllocatorStats.h"
+
 #include <algorithm>
 #include <unordered_set>
 
@@ -72,6 +74,11 @@ bool RenderGraphExecutor::prepare(
     RGCompiledGraph&   outCompiled,
     RenderGraphExecutionResult* outResult)
 {
+    // Graph compilation and registry sync allocate every frame (compiled pass
+    // plans, resolved resource records, state vectors). Tagging here rather
+    // than at a call site is what makes the render bucket answer "what does
+    // the graph cost per frame" instead of "whoever happened to call us".
+    YA_MEMORY_OWNER(Render);
     _bufferStates.clear();
 
     outCompiled = graph.compile();
@@ -107,6 +114,10 @@ bool RenderGraphExecutor::executeCompiled(
     const RGCompiledGraph& compiled,
     ICommandBuffer&       cmdBuf)
 {
+    // Barrier and pass-plan emission allocate per pass, per frame. Tagged here
+    // rather than in `execute` because the deferred path calls this directly
+    // (DeferredRenderPipeline), and tagging the wrapper would miss it.
+    YA_MEMORY_OWNER(Render);
     for (const auto& passPlan : compiled.passPlans) {
         const auto* pass = graph.getPass(passPlan.pass);
         YA_CORE_ASSERT(pass != nullptr, "RenderGraphExecutor encountered invalid pass handle {}", passPlan.pass.index);
