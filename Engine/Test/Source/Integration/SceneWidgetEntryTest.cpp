@@ -26,8 +26,7 @@ TEST(SceneWidgetEntryTest, EntryJsonRoundtripWithDocumentReferenceAndOverrides)
     EXPECT_EQ(json["zOrder"].get<int32_t>(), 7);
     EXPECT_FALSE(json["autoMount"].get<bool>());
     EXPECT_EQ(json["document"], "Example/Game/Content/UI/HUD.yaui");
-    ASSERT_TRUE(json["rootSlot"].is_object());
-    EXPECT_EQ(json["rootSlot"]["anchorMax"][0], 1.0f);
+    EXPECT_FALSE(json.contains("rootSlot"));
     EXPECT_FALSE(json.contains("inline"));
 
     const SceneWidgetEntry reloaded = SceneWidgetEntry::fromJson(json);
@@ -131,6 +130,30 @@ TEST(SceneWidgetEntryTest, ModalPauseAndClockRoundtripAndDefaultsAreOmitted)
     unknown["clock"]       = "wall";
     const SceneWidgetEntry kept = SceneWidgetEntry::fromJson(unknown);
     EXPECT_EQ(kept.clock, ESceneWidgetClock::Real);
+}
+
+TEST(SceneWidgetEntryTest, MissingRootSlotDefaultsToFill)
+{
+    nlohmann::json json = {
+        {"entryId", "HUD"},
+        {"document", "UI/HUD.yaui"},
+        {"zOrder", 0},
+        {"autoMount", true},
+    };
+    const SceneWidgetEntry loaded = SceneWidgetEntry::fromJson(json);
+    EXPECT_EQ(loaded.rootSlot.anchorMin, glm::vec2(0.0f, 0.0f));
+    EXPECT_EQ(loaded.rootSlot.anchorMax, glm::vec2(1.0f, 1.0f));
+    EXPECT_FALSE(loaded.toJson().contains("rootSlot"));
+
+    json["rootSlot"] = {{"type", "canvas"}, {"anchorMin", {0.0, 0.0}}, {"anchorMax", {0.0, 0.0}},
+                        {"offset", {4.0, 8.0}}, {"minSize", {0.0, 0.0}},
+                        {"maxSize", {1000000.0, 1000000.0}},
+                        {"offsets", {{"left", 0.0}, {"top", 0.0}, {"right", 0.0}, {"bottom", 0.0}}},
+                        {"alignmentH", 0}, {"alignmentV", 0}, {"widthSizeMode", 0}, {"heightSizeMode", 0},
+                        {"pivot", {0.0, 0.0}}, {"preferredSize", {0.0, 0.0}}, {"fixedSize", {0.0, 0.0}}};
+    const SceneWidgetEntry shifted = SceneWidgetEntry::fromJson(json);
+    EXPECT_EQ(shifted.rootSlot.offset, glm::vec2(4.0f, 8.0f));
+    EXPECT_TRUE(shifted.toJson().contains("rootSlot"));
 }
 
 } // namespace ya

@@ -198,7 +198,8 @@ struct FButtonStyle
     FBrush     selectedFill = FBrush::solid({0.26f, 0.52f, 0.90f, 1.0f});
     FBrush     errorFill    = FBrush::solid({0.72f, 0.24f, 0.24f, 1.0f});
     FBrush     dropTargetFill = FBrush::solid({0.26f, 0.52f, 0.90f, 1.0f});
-    glm::vec4  textColor    = {1.0f, 1.0f, 1.0f, 1.0f};
+    /// Dark on the light-gray fills above. White on 0.8 gray does not read.
+    glm::vec4  textColor    = {0.10f, 0.11f, 0.13f, 1.0f};
     glm::vec2  padding      = {12.0f, 4.0f};
 
     bool operator==(const FButtonStyle&) const = default;

@@ -39,7 +39,7 @@ local function paint(entity, r, g, b)
 end
 
 local function spawnAt(name, x, y, r, g, b)
-    local entity = world.spawnSprite(name, SPRITE_TEXTURE)
+    local entity = world.spawnSprite(name, { texture = SPRITE_TEXTURE })
     if not entity then
         log:error("GreedySnake failed to spawn " .. name)
         return nil
@@ -120,7 +120,7 @@ local function spawnBorder()
         { "WallRight", outer, 0, thick, span },
     }
     for _, bar in ipairs(bars) do
-        local entity = world.spawnSprite(bar[1], SPRITE_TEXTURE)
+        local entity = world.spawnSprite(bar[1], { texture = SPRITE_TEXTURE })
         if entity then
             local transform = entity:getTransform()
             if transform then
@@ -239,21 +239,18 @@ function Script:onInit()
     settings:find("Slow").onClicked:add(self, function() setSpeed("Slow", STEP_SLOW) end)
     settings:find("Normal").onClicked:add(self, function() setSpeed("Normal", STEP_NORMAL) end)
     settings:find("Fast").onClicked:add(self, function() setSpeed("Fast", STEP_FAST) end)
-    input:setKeyHandler(function(key, pressed, repeated)
-        if key ~= EKey.Escape then
-            return false
-        end
-        if pressed and not repeated then
-            showSettings(not settingsOpen)
-        end
-        return true
-    end)
     spawnBorder()
     restart()
 end
 
-function Script:onDestroy()
-    input:setKeyHandler(nil)
+function Script:onKey(key, pressed, repeated)
+    if key ~= EKey.Escape then
+        return false
+    end
+    if pressed and not repeated then
+        showSettings(not settingsOpen)
+    end
+    return true
 end
 
 function Script:onUpdate(dt)

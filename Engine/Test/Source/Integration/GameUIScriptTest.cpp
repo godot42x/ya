@@ -670,8 +670,9 @@ TEST(GameUIScriptTest, SpawnSpriteTakesOptionalTexturePath)
     bindGameplayLua(lua, host, ctx);
 
     lua.lua().script("unset = world.spawnSprite('Unset')");
-    lua.lua().script("blank = world.spawnSprite('Blank', '')");
-    lua.lua().script("custom = world.spawnSprite('Custom', 'Content/Sprites/hero.png')");
+    lua.lua().script("blank = world.spawnSprite('Blank', { texture = '' })");
+    lua.lua().script(
+        "custom = world.spawnSprite('Custom', { texture = 'Content/Sprites/hero.png', size = Vec2.new(2, 3), tint = Vec4.new(0.2, 0.4, 0.6, 1) })");
 
     auto spriteOf = [&scene](const char* name) -> Sprite2DComponent* {
         Entity* entity = scene.getEntityByName(name);
@@ -688,8 +689,12 @@ TEST(GameUIScriptTest, SpawnSpriteTakesOptionalTexturePath)
     EXPECT_FALSE(unset->image.hasPath());
     EXPECT_FALSE(blank->image.hasPath());
     EXPECT_EQ(custom->image.textureRef.getPath(), canonicalizeAssetPath("Content/Sprites/hero.png"));
-    EXPECT_FLOAT_EQ(custom->size.x, 1.0f);
-    EXPECT_FLOAT_EQ(custom->size.y, 1.0f);
+    EXPECT_FLOAT_EQ(custom->size.x, 2.0f);
+    EXPECT_FLOAT_EQ(custom->size.y, 3.0f);
+    EXPECT_FLOAT_EQ(custom->tint.r, 0.2f);
+    EXPECT_FLOAT_EQ(custom->tint.g, 0.4f);
+    EXPECT_FLOAT_EQ(custom->tint.b, 0.6f);
+    EXPECT_FLOAT_EQ(custom->tint.a, 1.0f);
 
     host.setBehaviorRuntime(nullptr);
     lua.onStop();
@@ -827,6 +832,82 @@ return S
 
     host->onSceneDeactivated(scene);
     host->setBehaviorRuntime(nullptr);
+    AppModuleTestAccess::setLuaScriptingSystem(app, nullptr);
+    lua.destroyAll();
+    registerGameplayScriptFunctions({});
+}
+
+TEST(GameplayLuaTest, OnKeyConsumedStopsFallback)
+{
+    App                app;
+    LuaScriptingSystem lua;
+    Scene              scene("World");
+    std::map<std::string, std::string> sources;
+
+    GameplayScriptContext ctx;
+    ctx.activeScene = [&scene]() -> Scene* { return &scene; };
+    registerGameplayScriptFunctions(ctx);
+    lua.setRuntimeServices({
+        .activeScene = [&scene]() -> Scene* { return &scene; },
+        .readScript  = [&sources](const std::string& path, std::string& out) {
+            auto it = sources.find(path);
+            if (it == sources.end()) {
+                return false;
+            }
+            out = it->second;
+            return true;
+        },
+    });
+    lua.init();
+    AppModuleTestAccess::setLuaScriptingSystem(app, &lua);
+
+    lua.lua()["firstHits"]     = 0;
+    lua.lua()["secondHits"]    = 0;
+    lua.lua()["consumeFirst"]  = true;
+    lua.lua()["consumeSecond"] = false;
+
+    sources[ScriptInstance::normalizeScriptPath("Test/First.lua")] = R"(
+local S = {}
+function S:onKey(key, pressed, repeated)
+    firstHits = firstHits + 1
+    return consumeFirst
+end
+return S
+)";
+    sources[ScriptInstance::normalizeScriptPath("Test/Second.lua")] = R"(
+local S = {}
+function S:onKey(key, pressed, repeated)
+    secondHits = secondHits + 1
+    return consumeSecond
+end
+return S
+)";
+    scene.createNode3D("First")->getEntity()->addComponent<LuaScriptComponent>()->addScript("Test/First.lua");
+    scene.createNode3D("Second")->getEntity()->addComponent<LuaScriptComponent>()->addScript("Test/Second.lua");
+    lua.onUpdate(0.0f);
+
+    InputManager  inputManager;
+    GameInputNode node(inputManager);
+    InputRouter   router;
+    router.setApp(app);
+    FInputRouteContext context{.app = app, .router = router};
+
+    KeyPressedEvent press;
+    press._keyCode = EKey::Escape;
+    EXPECT_TRUE(node.route(context, press).handled);
+    EXPECT_EQ(lua.lua().get<int>("firstHits"), 1);
+    EXPECT_EQ(lua.lua().get<int>("secondHits"), 0);
+    EXPECT_TRUE(app.isRunning());
+
+    lua.lua()["consumeFirst"]  = false;
+    lua.lua()["consumeSecond"] = false;
+    KeyReleasedEvent release;
+    release._keyCode = EKey::Escape;
+    EXPECT_TRUE(node.route(context, release).handled);
+    EXPECT_EQ(lua.lua().get<int>("firstHits"), 2);
+    EXPECT_EQ(lua.lua().get<int>("secondHits"), 1);
+    EXPECT_FALSE(app.isRunning());
+
     AppModuleTestAccess::setLuaScriptingSystem(app, nullptr);
     lua.destroyAll();
     registerGameplayScriptFunctions({});

@@ -70,9 +70,13 @@ using ScriptFunction = std::function<ScriptValue(ScriptArgs args)>;
 
 struct ScriptModuleFunction
 {
-    std::string    module;
-    std::string    name;
-    ScriptFunction fn;
+    std::string               module;
+    std::string               name;
+    ScriptFunction            fn;
+    /// Parallel to the script arguments. 0 means "no expected type". A plain
+    /// Lua table is read into a value struct only when that argument's type
+    /// carries `FValueStruct`.
+    std::vector<type_index_t> argumentTypes;
 };
 
 /// A member found by name once. Handles stay valid for the whole process, so
@@ -167,7 +171,8 @@ YA_CORE_API void     setMethodResolver(type_index_t type, ScriptMethodResolver r
 /// Backends project module functions when they build a script state, so a
 /// module registers before the states it serves are created. Registering
 /// the same module and name again replaces the function.
-YA_CORE_API void registerModuleFunction(std::string module, std::string name, ScriptFunction fn);
+YA_CORE_API void registerModuleFunction(std::string module, std::string name, ScriptFunction fn,
+                                        std::vector<type_index_t> argumentTypes = {});
 /// In registration order. Entries never move, so backends may keep pointers.
 YA_CORE_API void forEachModuleFunction(const std::function<void(const ScriptModuleFunction&)>& visit);
 

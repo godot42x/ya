@@ -27,6 +27,8 @@
 
 #include "Script/Lua/LuaScriptBinding.h"
 
+#include "Core/Reflection/Reflection.h"
+#include "Core/Reflection/ValueFacets.h"
 #include "Core/Scripting/ScriptBindings.h"
 #include "Scene/Core/SceneScriptBindings.h"
 #include "Script/Lua/LuaScriptingSystem.h"
@@ -38,7 +40,6 @@
 #include <optional>
 #include <string_view>
 #include <type_traits>
-#include <vector>
 #include <vector>
 
 namespace ya
@@ -232,8 +233,11 @@ class ModuleFunctionCall
         std::vector<ScriptValue> args;
         const int                last = lua_gettop(_L);
         args.reserve(last >= kFirstArgument ? last - kFirstArgument + 1 : 0);
+        const std::vector<type_index_t>& types = function().argumentTypes;
         for (int index = kFirstArgument; index <= last; ++index) {
-            args.push_back(toScriptValue(_L, index));
+            const size_t       argIndex = static_cast<size_t>(index - kFirstArgument);
+            const type_index_t expected = argIndex < types.size() ? types[argIndex] : 0;
+            args.push_back(toScriptValue(_L, index, expected));
         }
         return args;
     }
@@ -624,6 +628,66 @@ int pushRef(lua_State* L, const script::ScriptValue& value)
     return 1;
 }
 
+bool assignReflectedField(const Property& prop, void* object, const ScriptValue& field)
+{
+    void* addr = prop.getMutableAddress(object);
+    if (addr == nullptr) {
+        return false;
+    }
+    if (prop.typeIndex == type_index_v<std::string>) {
+        if (field.isNull()) {
+            static_cast<std::string*>(addr)->clear();
+            return true;
+        }
+        if (const std::string* text = field.asString()) {
+            *static_cast<std::string*>(addr) = *text;
+            return true;
+        }
+        return false;
+    }
+    return field.convertTo(prop.typeIndex, addr);
+}
+
+/// A plain table becomes the value struct `type` (default-constructed, then
+/// each named field). Unknown names and wrong field types are errors. This is
+/// how `world.spawnSprite(name, { texture, size, tint })` crosses the boundary.
+ScriptValue pullValueStruct(lua_State* L, int index, type_index_t type)
+{
+    const int table = lua_absindex(L, index);
+    Class*    cls   = ClassRegistry::instance().getClass(type);
+    if (cls == nullptr) {
+        throw ScriptError("reflected struct has no class");
+    }
+    ScriptValue value = ScriptValue::construct(type);
+    lua_pushnil(L);
+    while (lua_next(L, table) != 0) {
+        if (lua_type(L, -2) != LUA_TSTRING) {
+            lua_pop(L, 1);
+            throw ScriptError("a value struct table uses string field names");
+        }
+        const char* key  = lua_tostring(L, -2);
+        Property*   prop = cls->getProperty(key);
+        if (prop == nullptr) {
+            lua_pop(L, 1);
+            throw ScriptError(std::format("unknown field '{}'", key));
+        }
+        ScriptValue field;
+        try {
+            field = toScriptValue(L, -1, prop->typeIndex);
+        }
+        catch (...) {
+            lua_pop(L, 1);
+            throw;
+        }
+        if (!assignReflectedField(*prop, value.data(), field)) {
+            lua_pop(L, 1);
+            throw ScriptError(std::format("field '{}' has the wrong type", key));
+        }
+        lua_pop(L, 1);
+    }
+    return value;
+}
+
 int pushValueStruct(lua_State* L, const script::ScriptValue& value)
 {
     Class* cls = ClassRegistry::instance().getClass(value.type());
@@ -744,6 +808,10 @@ ScriptValue toScriptValue(lua_State* L, int index, type_index_t expected)
         // Only an owner/self slot accepts a table that is not a live self.
         if (expected == type_index_v<script::ScriptSelfHandle>) {
             return script::scriptMake(script::ScriptSelfHandle{});
+        }
+        if (expected != 0 &&
+            refl::TypeRegistry::instance().facet<reflection::FValueStruct>(expected) != nullptr) {
+            return pullValueStruct(L, index, expected);
         }
         break;
     case LUA_TUSERDATA:

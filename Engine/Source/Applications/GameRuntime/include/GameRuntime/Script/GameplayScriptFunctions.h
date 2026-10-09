@@ -14,7 +14,6 @@ struct Scene;
 struct CameraComponent;
 struct GameUIHost;
 struct IWorldScriptRuntime;
-class InputRouter;
 
 /// Injected by the host when gameplay module functions are registered.
 /// The functions close over this; they do not look up `App::get()`.
@@ -27,9 +26,7 @@ struct GameplayScriptContext
     /// `spawn` is the destination marker; `actor` is the entity to move onto it.
     /// An empty actor moves nobody — the caller supplies the name.
     std::function<void(std::string path, std::string spawn, std::string actor)> requestSceneTransfer;
-    /// `Input.setKeyHandler` captures this at registration. Null ignores the call.
-    InputRouter*                                             inputRouter = nullptr;
-    /// Read when a script calls `world.scriptOf` or the key handler runs.
+    /// Read when a script calls `world.scriptOf`.
     /// Null until the host has created the runtime; an empty function means
     /// those calls have no Lua state.
     std::function<IWorldScriptRuntime*()>                    worldRuntime;
@@ -61,15 +58,14 @@ struct GameplayPresentedView
 ///       named `actorName` on that marker (rpg R3). An omitted or empty
 ///       `actorName` moves nobody.
 ///   world.viewAspect() -> the same presented view as viewSize, as a number
-///   world.spawnSprite(name[, texturePath]) -> entity, or nil when there is
-///       no scene. A missing or blank path leaves the sprite with no texture
-///       (Sprite2D does not draw it). Callers that want a picture pass a path.
+///   world.spawnSprite(name[, { texture, size, tint }]) -> entity, or nil when
+///       there is no scene. A missing or blank texture leaves the sprite with
+///       no image (Sprite2D does not draw it). `size` defaults to 1×1 and
+///       `tint` to white. There is no probe-texture fallback.
 ///   world.destroyEntity(entity) -> nil. Queues the entity's node.
 ///   world.scriptOf(entity[, path]) -> the live self table (ScriptSelfHandle),
 ///       or nil. `path` filters by normalized script path. The table is for
 ///       this call only: a hot reload replaces it.
-///   Input.setKeyHandler(fn | nil) -> one global key callback,
-///       (key, pressed, repeat) -> bool. A non-function clears it.
 ///   ui.get(entryId) -> the entry script's self table, else the root widget
 ///       handle, else nil
 ///   ui.setText(entryId, widgetName, text) -> bool

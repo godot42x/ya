@@ -36,12 +36,6 @@ struct LuaScriptBackendScope
     LuaScriptBackendScope& operator=(const LuaScriptBackendScope&) = delete;
 };
 
-/// The `Input` usertype is built after module functions are projected, so it
-/// replaces the `Input` table. Put the registered `Input.setKeyHandler` back
-/// on that type. Colon calls pass the userdata first; the closure drops it.
-/// No-op when the function was never registered or this runtime is not Lua.
-YA_SCRIPT_LUA_API void attachInputSetKeyHandler(IWorldScriptRuntime& runtime);
-
 /// First loaded script on `entity` (optionally the one whose path normalizes
 /// to `path`). Rebinds `self.entity` the same way `entity:call` does, then
 /// returns that live table's id. `runtimeId == 0` when nothing matches.
@@ -53,12 +47,5 @@ YA_SCRIPT_LUA_API void attachInputSetKeyHandler(IWorldScriptRuntime& runtime);
 /// `entity:call(name, ...)`. Idempotent: the first registration wins, a later
 /// call does not warn. The body is `callEntityScript`.
 YA_SCRIPT_LUA_API void registerEntityScriptCall();
-
-/// Call a held function with no `self` and return its first value. Errors are
-/// logged and come back empty. `IScriptCallbacks::invoke` drops the return;
-/// the key handler needs the bool.
-[[nodiscard]] YA_SCRIPT_LUA_API script::ScriptValue callHeldScriptFunction(IWorldScriptRuntime&     runtime,
-                                                                           script::ScriptFnHandle   fn,
-                                                                           script::ScriptArgs       args);
 
 } // namespace ya

@@ -297,6 +297,9 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     /// scripts. A true return consumed it. Any other event is consumed while
     /// a visible modal entry exists, so gameplay does not see it.
     [[nodiscard]] bool blocksGameplayInput(const Event& event);
+    /// `onKey(key, pressed, repeat)` on loaded world scripts, in execution
+    /// order. True when one returns true. Missing function is not a consumer.
+    [[nodiscard]] bool dispatchWorldKey(const Event& event);
 
     // === Input mode (game / UI routing + cursor baseline) ===
     [[nodiscard]] EInputMode getInputMode() const { return _inputMode; }

@@ -730,6 +730,15 @@ TEST(UIFrameSnapshotTest, DestroyAndReallocateWidgetGetsNewRuntimeIdentity)
     EXPECT_EQ(snapshot.items[0].size, glm::vec2(96.0f, 20.0f));
 }
 
+TEST(UIFrameSnapshotTest, UnthemedButtonLabelContrastsWithFill)
+{
+    const FButtonStyle style;
+    EXPECT_GT(style.normalFill.tintColor.r, 0.5f);
+    EXPECT_LT(style.textColor.r, 0.35f);
+    EXPECT_LT(style.textColor.g, 0.35f);
+    EXPECT_LT(style.textColor.b, 0.35f);
+}
+
 TEST(UIFrameSnapshotTest, TransientHoverAndFocusRepaintButton)
 {
     WidgetTree tree({.width = 800, .height = 600});

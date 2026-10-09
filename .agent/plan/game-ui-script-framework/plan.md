@@ -402,10 +402,11 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
   `InputRouter::setGameKeyHandler` 与 `input:setKeyHandler`（H3）。命名输入动作（InputMap）
   不在本计划，只保留「取消」一个内置动作。
 - `world.spawnSprite(name, { texture, size, tint })`；无 texture 时不设图（不再回落探针图，H1）。
-  预制体实例化是否在本计划由 D6 决定。
-- `SceneWidgetEntry.rootSlot` 缺省 = 全屏铺满；序列化时等于缺省值则省略（H8）。
+  预制体不做（D6）。
+- `SceneWidgetEntry.rootSlot` 缺省 = 全屏铺满；序列化时等于缺省值则省略（H8）。已落地。
 - 点锚点布局（H9）：按 D7 结论修正 `UICanvasLayout::resolveChildRect`，把 GreedSnake 文档改回
   「锚点 0.5 + pivot 0.5」的直观写法；与 `gui-anchor-to-slot` 计划对齐，补 `WidgetLayoutTest`。
+  仍 `blocked_on_D7`，本节其余项已落地。
 - 按钮默认文字颜色与底色有足够对比（H10），在默认主题里改，不在内容里补。
 - 测试：`SceneWidgetEntryTest.MissingRootSlotDefaultsToFill`、`WidgetLayoutTest.PointAnchorCentersOnAnchor`、
   `GameplayLuaTest.OnKeyConsumedStopsFallback`。
@@ -452,7 +453,7 @@ S6 依赖 S2/S3/S4 的数据形态，可与 S7 并行
 
 ## 6. 决策门（开工前需确认）
 
-状态：D1、D2、D3、D4、D5 已确认；D8 按建议采纳（用户可推翻）；D6、D7、D9 仍为建议。S4 已落地。
+状态：D1、D2、D3、D4、D5 已确认；D8 按建议采纳（用户可推翻）；D6 结论为不做预制体并已按此落地；D7、D9 仍为建议（D9 的取消路由已在 S4 落地）。S5 除 H9 外已落地。
 
 | # | 问题 | 结论 / 建议 |
 | --- | --- | --- |

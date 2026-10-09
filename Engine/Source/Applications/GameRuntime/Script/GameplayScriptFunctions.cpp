@@ -1,7 +1,7 @@
 #include "GameRuntime/Script/GameplayScriptFunctions.h"
 
-#include "Core/Event.h"
 #include "Core/Log.h"
+#include "Core/Reflection/Reflection.h"
 #include "Core/Scripting/ScriptBindings.h"
 #include "Scene2D/Sprite2DComponent.h"
 #include "Scene2D/TilemapComponent.h"
@@ -11,20 +11,20 @@
 #include "ECS/Systems/TransformSystem.h"
 #include "ECS/Systems/WorldScriptRuntime.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
-#include "GameRuntime/InputRouter.h"
 #include "LuaWidgetHandle.h"
 #include "LuaWidgetScripts.h"
 #include "GameRuntime/Render/SceneCameraQuery.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Core/SceneScriptBindings.h"
+#include "Script/Lua/LuaBackend.h"
 #include "Scene3D/Node3D.h"
 #include "Scene3D/TransformComponent.h"
-#include "Script/Lua/LuaBackend.h"
 #include "WidgetScriptRefs.h"
+
+#include <glm/glm.hpp>
 
 #include <cmath>
 #include <format>
-#include <memory>
 
 namespace ya
 {
@@ -122,10 +122,32 @@ ScriptValue entityAtCell(const TilemapComponent& map, ScriptArgs args)
     return {};
 }
 
+/// Options table for `world.spawnSprite`. A missing or empty `texture` leaves
+/// the sprite with no image. `size` defaults to 1×1, `tint` to white.
+struct FSpriteSpawnOptions
+{
+    std::string texture;
+    glm::vec2   size{1.0f, 1.0f};
+    glm::vec4   tint{1.0f, 1.0f, 1.0f, 1.0f};
+
+    YA_REFLECT_BEGIN_NAMED(FSpriteSpawnOptions, "FSpriteSpawnOptions")
+    YA_REFLECT_FIELD(texture)
+    YA_REFLECT_FIELD(size)
+    YA_REFLECT_FIELD(tint)
+    YA_REFLECT_END()
+    YA_REFLECT_VALUE_STRUCT()
+};
+
+type_index_t spriteSpawnOptionsType()
+{
+    FSpriteSpawnOptions::__ensure_reflection_registered();
+    return type_index_v<FSpriteSpawnOptions>;
+}
+
 /// A caller-supplied path is stored through `TextureSlot::fromPath` (the same
 /// asset-path form as a scene sprite). An empty path leaves the slot unset:
 /// the engine does not invent a texture, and Sprite2D does not draw the sprite.
-Entity* spawnSprite(const GameplayScriptContext& ctx, const std::string& name, const std::string& texturePath)
+Entity* spawnSprite(const GameplayScriptContext& ctx, const std::string& name, const FSpriteSpawnOptions& options)
 {
     Scene* scene = ctx.activeScene ? ctx.activeScene() : nullptr;
     if (!scene) {
@@ -137,10 +159,11 @@ Entity* spawnSprite(const GameplayScriptContext& ctx, const std::string& name, c
         return nullptr;
     }
     Sprite2DComponent* sprite = node->getEntity()->addComponent<Sprite2DComponent>();
-    if (!texturePath.empty()) {
-        sprite->image.fromPath(texturePath);
+    if (!options.texture.empty()) {
+        sprite->image.fromPath(options.texture);
     }
-    sprite->size = {1.0f, 1.0f};
+    sprite->size = options.size;
+    sprite->tint = options.tint;
     return node->getEntity();
 }
 
@@ -166,11 +189,18 @@ std::string optionalString(const ScriptValue& value)
 ScriptValue spawnSpriteFn(const GameplayScriptContext& ctx, ScriptArgs args)
 {
     if (args.empty() || args.size() > 2) {
-        throw ScriptError("expects spawnSprite(name) or spawnSprite(name, texturePath)");
+        throw ScriptError("expects spawnSprite(name) or spawnSprite(name, { texture, size, tint })");
     }
     const std::string name = script::scriptToString(args[0]);
-    const std::string path = args.size() > 1 ? optionalString(args[1]) : std::string{};
-    Entity*           entity = spawnSprite(ctx, name, path);
+    FSpriteSpawnOptions options;
+    if (args.size() > 1) {
+        const FSpriteSpawnOptions* table = script::scriptIf<FSpriteSpawnOptions>(args[1]);
+        if (table == nullptr) {
+            throw ScriptError("expects spawnSprite(name, { texture, size, tint })");
+        }
+        options = *table;
+    }
+    Entity* entity = spawnSprite(ctx, name, options);
     if (!entity) {
         return {};
     }
@@ -219,59 +249,6 @@ ScriptValue scriptOf(const GameplayScriptContext& ctx, ScriptArgs args)
         return {};
     }
     return script::scriptMake(self);
-}
-
-/// One process-wide slot: re-registering replaces the function in place, and
-/// the router callback reads the handle through this pointer. Retain keeps the
-/// Lua function alive until the next set or a clear. Releasing after the Lua
-/// state is already gone is a no-op (the owner map drops the id on destruction).
-ScriptValue setKeyHandler(const GameplayScriptContext& ctx, const std::shared_ptr<script::ScriptFnHandle>& held, ScriptArgs args)
-{
-    if (!ctx.inputRouter) {
-        return {};
-    }
-    script::ScriptFnHandle next;
-    if (!args.empty() && (script::scriptIf<script::ScriptFnHandle>(args[0]) != nullptr)) {
-        next = (*script::scriptIf<script::ScriptFnHandle>(args[0]));
-    }
-    if (script::IScriptCallbacks* callbacks = script::scriptCallbacks()) {
-        if (held->id != 0 && held->id != next.id) {
-            callbacks->release(*held);
-        }
-        if (next.id != 0 && next.id != held->id) {
-            callbacks->retain(next);
-        }
-    }
-    *held = next;
-    if (next.id == 0) {
-        ctx.inputRouter->setGameKeyHandler(nullptr);
-        return {};
-    }
-    ctx.inputRouter->setGameKeyHandler([held, runtime = ctx.worldRuntime](const Event& event) {
-        IWorldScriptRuntime* scripts = runtime ? runtime() : nullptr;
-        if (!scripts || held->id == 0) {
-            return false;
-        }
-        const bool pressed = event.getEventType() == EEvent::KeyPressed;
-        EKey::T    key     = EKey::NONE;
-        bool       repeat  = false;
-        if (pressed) {
-            const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
-            key                  = keyEvent.getKeyCode();
-            repeat               = keyEvent.isRepeat();
-        }
-        else {
-            key = static_cast<const KeyReleasedEvent&>(event).getKeyCode();
-        }
-        const script::ScriptValue callArgs[] = {
-            script::scriptMake(static_cast<int64_t>(key)),
-            script::scriptMake(pressed),
-            script::scriptMake(repeat),
-        };
-        const script::ScriptValue result = callHeldScriptFunction(*scripts, *held, callArgs);
-        return (script::scriptIf<bool>(result) != nullptr) && (*script::scriptIf<bool>(result));
-    });
-    return {};
 }
 
 ScriptValue uiGet(const GameplayScriptContext& ctx, ScriptArgs args)
@@ -383,26 +360,10 @@ void registerGameplayScriptFunctions(GameplayScriptContext ctx)
         return {};
     });
     script::registerModuleFunction("world", "viewAspect", [ctx](ScriptArgs args) { return viewAspect(ctx, args); });
-    script::registerModuleFunction("world", "spawnSprite", [ctx](ScriptArgs args) { return spawnSpriteFn(ctx, args); });
+    script::registerModuleFunction("world", "spawnSprite", [ctx](ScriptArgs args) { return spawnSpriteFn(ctx, args); },
+                                   {0, spriteSpawnOptionsType()});
     script::registerModuleFunction("world", "destroyEntity", [ctx](ScriptArgs args) { return destroyEntityFn(ctx, args); });
     script::registerModuleFunction("world", "scriptOf", [ctx](ScriptArgs args) { return scriptOf(ctx, args); });
-    // The closure installed on the Input usertype keeps a pointer to this
-    // entry. Re-registration replaces `fn` in place, so one shared slot is
-    // enough for the retain/release pair.
-    // Dropping the slot releases whatever handler is still installed. That runs
-    // after a later registration replaces this function, or at app shutdown
-    // (the Lua state has already erased the id, and release is then a no-op).
-    auto heldKeyHandler = std::shared_ptr<script::ScriptFnHandle>(new script::ScriptFnHandle{}, [](script::ScriptFnHandle* handle) {
-        if (handle->id != 0) {
-            if (script::IScriptCallbacks* callbacks = script::scriptCallbacks()) {
-                callbacks->release(*handle);
-            }
-        }
-        delete handle;
-    });
-    script::registerModuleFunction("Input", "setKeyHandler", [ctx, heldKeyHandler](ScriptArgs args) {
-        return setKeyHandler(ctx, heldKeyHandler, args);
-    });
     script::registerModuleFunction("ui", "get", [ctx](ScriptArgs args) { return uiGet(ctx, args); });
     script::registerModuleFunction("ui", "setText", [ctx](ScriptArgs args) { return setText(ctx, args); });
     script::registerModuleFunction("ui", "setVisible", [ctx](ScriptArgs args) { return setVisible(ctx, args); });

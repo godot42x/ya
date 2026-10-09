@@ -86,9 +86,9 @@ struct YA_SCRIPT_LUA_API LuaScriptingSystem : public IWorldScriptRuntime
     /// then every loaded instance gets onUpdate. Instances that appear while
     /// this runs join next frame.
     void onUpdate(float deltaTime) override;
-    /// `name()` on each loaded world script, in execution order. True when one
-    /// returns true. Does not load scripts that are not already live.
-    bool callEachLoaded(const std::string& name);
+    /// `name(args)` on each loaded world script, in execution order. True when
+    /// one returns true. Does not load scripts that are not already live.
+    bool callEachLoaded(const std::string& name, script::ScriptArgs args = {});
     /// Play stopped: onDestroy every live instance, whatever hosts it, and
     /// reset the active scene's script rows for the next play.
     void onStop() override;

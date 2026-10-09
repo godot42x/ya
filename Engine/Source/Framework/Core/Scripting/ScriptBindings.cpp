@@ -551,17 +551,23 @@ uint32_t registerRefKind(ScriptRefKind kind)
     return static_cast<uint32_t>(kinds.size());
 }
 
-void registerModuleFunction(std::string module, std::string name, ScriptFunction fn)
+void registerModuleFunction(std::string module, std::string name, ScriptFunction fn, std::vector<type_index_t> argumentTypes)
 {
     auto&      functions = state().moduleFunctions;
     const auto existing  = std::ranges::find_if(functions, [&](const ScriptModuleFunction& entry) {
         return entry.module == module && entry.name == name;
     });
     if (existing != functions.end()) {
-        existing->fn = std::move(fn);
+        existing->fn            = std::move(fn);
+        existing->argumentTypes = std::move(argumentTypes);
         return;
     }
-    functions.push_back(ScriptModuleFunction{.module = std::move(module), .name = std::move(name), .fn = std::move(fn)});
+    functions.push_back(ScriptModuleFunction{
+        .module        = std::move(module),
+        .name          = std::move(name),
+        .fn            = std::move(fn),
+        .argumentTypes = std::move(argumentTypes),
+    });
 }
 
 void forEachModuleFunction(const std::function<void(const ScriptModuleFunction&)>& visit)

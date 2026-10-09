@@ -7,7 +7,6 @@
 #include "Core/Input/InputMode.h"
 
 #include <cstdint>
-#include <functional>
 #include <optional>
 #include <vector>
 
@@ -134,10 +133,6 @@ class YA_GAME_RUNTIME_API InputRouter
     std::vector<FNodeEntry> _nodeStack;
     FPointerCaptureState                  _pointerCapture;
     uint64_t                              _nextNodeId = 1;
-    /// Gameplay sees the key before the unhandled fallback. Escape quit lives
-    /// in that fallback, so a game that opens its own menu must consume both
-    /// the press and the release.
-    std::function<bool(const Event&)>     _gameKeyHandler;
 
   public:
     InputRouter() = default;
@@ -158,10 +153,6 @@ class YA_GAME_RUNTIME_API InputRouter
     void applyInputMode(EInputMode mode);
 
     [[nodiscard]] bool isMouseCaptured() const { return _pointerCapture.isCaptured(); }
-
-    void setGameKeyHandler(std::function<bool(const Event&)> handler);
-    /// True when gameplay consumed this key. Other events return false.
-    [[nodiscard]] bool dispatchGameKey(const Event& event) const;
 
   private:
     friend class FNodeRegistration;

@@ -194,7 +194,10 @@ nlohmann::json SceneWidgetEntry::toJson() const
     else {
         YA_CORE_ERROR("SceneWidgetEntry::toJson: entry '{}' has no document path", entryId);
     }
-    j["rootSlot"] = canvasSlotToJson(rootSlot);
+    const FCanvasSlotArgs defaultRoot{.anchorMin = {0.0f, 0.0f}, .anchorMax = {1.0f, 1.0f}};
+    if (canvasSlotToJson(rootSlot) != canvasSlotToJson(defaultRoot)) {
+        j["rootSlot"] = canvasSlotToJson(rootSlot);
+    }
     // Missing overrides and an empty object both load as no field overrides.
     if (!overrides.empty()) {
         j["overrides"] = overrides.toJson();
@@ -239,7 +242,7 @@ SceneWidgetEntry SceneWidgetEntry::fromJson(const nlohmann::json& json)
     else {
         YA_CORE_ERROR("SceneWidgetEntry::fromJson: entry '{}' has no document path", entry.entryId);
     }
-    if (!json.contains("rootSlot") || !canvasSlotFromJson(json["rootSlot"], entry.rootSlot)) {
+    if (json.contains("rootSlot") && !canvasSlotFromJson(json["rootSlot"], entry.rootSlot)) {
         YA_CORE_ERROR("SceneWidgetEntry::fromJson: entry '{}' has no valid rootSlot", entry.entryId);
         entry.documentPath.clear();
         return entry;

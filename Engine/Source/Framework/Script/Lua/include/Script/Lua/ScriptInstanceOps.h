@@ -32,8 +32,9 @@ YA_SCRIPT_LUA_API script::ScriptValue callScriptInstanceNamed(IWorldScriptRuntim
                                                               const std::string& name, script::ScriptArgs args,
                                                               bool bSwallowErrors);
 YA_SCRIPT_LUA_API void destroyScriptInstance(IWorldScriptRuntime& runtime, ScriptInstance& instance);
-/// `name()` on each loaded world script, in execution order. True when one returns true.
-YA_SCRIPT_LUA_API bool callLoadedWorldScripts(IWorldScriptRuntime& runtime, const std::string& name);
+/// `name(args)` on each loaded world script, in execution order. True when one returns true.
+YA_SCRIPT_LUA_API bool callLoadedWorldScripts(IWorldScriptRuntime& runtime, const std::string& name,
+                                              script::ScriptArgs args = {});
 
 /// Shared owner of the listeners a live instance added. Empty when the id is not live.
 /// Delegates hold it weakly, so dropping the instance ends those listeners.

@@ -269,4 +269,17 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 
 验证：`GameUIHostTest.*`、`GameUIScriptTest.*`、`SceneWidgetEntryTest.*`、`TickOrderAppTest.*`、`GameInputNodeTest.*` 共 56 通过。GreedySnake runtime、HelloMaterial runtime、GreedySnake editor `--exit-after-frame=60` 均在 60 帧退出，日志无 Error。GUIWorkbench `--smoke-actions` PASS。
 
-下一步：S5（世界脚本输入与硬编码清理），或与之并行的 S6（编辑器 authoring）。
+## 2026-10-09 — S5 世界脚本输入与硬编码清理（H9 除外）
+
+完成：
+
+- 世界脚本 `onKey(key, pressed, repeat)` 按执行顺序调用，第一个返回 true 的脚本消费事件。删掉 `InputRouter::setGameKeyHandler`、`Input.setKeyHandler`。没人消费的 Esc 松开仍退出 / 停止 Play。GreedySnake 的设置开关改走 `Script:onKey`。
+- `world.spawnSprite(name [, { texture, size, tint }])`。缺省或空 texture 不设图。`size` 缺省 1×1，`tint` 缺省白。选项表走反射 value struct，登记在中立层，没有新的 sol2。预制体不做（D6）。
+- `SceneWidgetEntry.rootSlot` 缺省为全屏铺满；等于缺省则不写 JSON。写出的非法 `rootSlot` 仍然报错。
+- `FButtonStyle::textColor` 缺省改为深色，衬在浅灰底上。主题路径本来就会写 `button.textColor`，内容里已有的字色不动。
+
+未做：点锚点（H9）仍 `blocked_on_D7`，要等 `gui-anchor-to-slot` 确认后再改 `UICanvasLayout::resolveChildRect`。S6、S7 未开始。
+
+验证：`GameplayLuaTest.OnKeyConsumedStopsFallback`、`GameUIScriptTest.SpawnSpriteTakesOptionalTexturePath`、`SceneWidgetEntryTest.*`（含 `MissingRootSlotDefaultsToFill`）、`GameUIHostTest.CancelGoesToTopmostVisibleEntryFirst`、`GameInputNodeTest.*`、`TickOrderAppTest.*`、`SceneSerializerTest.*` 共 27 通过。`UIFrameSnapshotTest.UnthemedButtonLabelContrastsWithFill`。GreedySnake runtime、HelloMaterial runtime、GreedySnake editor `--exit-after-frame=60` 均在 60 帧退出。GUIWorkbench `--smoke-actions` PASS。
+
+下一步：S6（编辑器 authoring），或与之并行的 S7。H9 仍等 D7。

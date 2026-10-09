@@ -437,6 +437,35 @@ bool App::blocksGameplayInput(const Event& event)
     return host && host->blocksWorldInput();
 }
 
+bool App::dispatchWorldKey(const Event& event)
+{
+    if (!_luaScriptingSystem) {
+        return false;
+    }
+    const EEvent::T type = event.getEventType();
+    if (type != EEvent::KeyPressed && type != EEvent::KeyReleased) {
+        return false;
+    }
+    EKey::T  key     = EKey::NONE;
+    bool     pressed = false;
+    bool     repeat  = false;
+    if (type == EEvent::KeyPressed) {
+        const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
+        key                  = keyEvent.getKeyCode();
+        pressed              = true;
+        repeat               = keyEvent.isRepeat();
+    }
+    else {
+        key = static_cast<const KeyReleasedEvent&>(event).getKeyCode();
+    }
+    const script::ScriptValue args[] = {
+        script::scriptMake(static_cast<int64_t>(key)),
+        script::scriptMake(pressed),
+        script::scriptMake(repeat),
+    };
+    return callLoadedWorldScripts(*_luaScriptingSystem, "onKey", args);
+}
+
 void App::pushGamePause()
 {
     ++_gamePauseDepth;

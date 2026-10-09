@@ -192,7 +192,7 @@ FInputReply routeGameplayViewportInput(
         app.getInputManager().processEvent(event);
         // The same game key step as a standalone run; an Escape the game
         // leaves goes on to the editor's Escape policy.
-        const bool bConsumed = context.router.dispatchGameKey(event);
+        const bool bConsumed = app.dispatchWorldKey(event);
         return FInputReply{.handled = bConsumed || !isEscapeKey(event)};
     }
 
