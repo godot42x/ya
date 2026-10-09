@@ -113,8 +113,8 @@
       "priority": "P0",
       "title": "process memory stats (RSS/peak, heap by subsystem); separate from M4",
       "owner_line": "new:perf-baseline",
-      "status": "todo",
-      "evidence": []
+      "status": "pass",
+      "evidence": ["perf-baseline PB4: RSS/peak via Os::sampleProcessMemory, per-owner heap counters via the Core/Memory allocator layer", "subsystem attribution landed in 1dcab812: Resource at loadModelImpl + 4 texture decode sites, Render at RenderGraphExecutor::prepare/::executeCompiled, Script at the script::callMethod funnel", "measured on PerfLab Lights_50: render 17.5 MiB fluctuating per frame, resource flat 0.054 MiB after load, untagged 29.5 MiB, sizeTableComplete true", "GreedySnake (runs scripts) reads script 0.0012 MiB; PerfLab has no script entities and correctly reads 0"]
     },
     {
       "id": "R1",
