@@ -11,10 +11,12 @@
 #include "GameEditor/FilePicker.h"
 #include "GameEditor/UI/Dialogs/EditorAssetPicker.h"
 #include "GameEditor/UI/Dialogs/EditorFilePicker.h"
+#include "GameEditor/UI/Dialogs/EditorNamePrompt.h"
 #include "GameEditor/UI/Viewport/EditorViewportGizmoController.h"
 #include "GameEditor/UI/Viewport/EditorTileBrushController.h"
 #include "GameEditor/EditorSelection.h"
 #include "GameEditor/EditorUIDesignerSession.h"
+#include "Scene/Core/SceneWidgetEntry.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 #include "RHI/Core/Image.h"
 #include "RHI/Core/RenderTexture.h"
@@ -163,6 +165,7 @@ struct EditorLayer
     std::function<void()> _saveSceneAsHandler;
     EditorAssetPickerCallback _assetPickerHandler;
     EditorFilePickerCallback  _filePickerHandler;
+    std::function<void(FEditorNamePrompt)> _namePromptHandler;
     std::function<void()>     _showContentBrowser;
     std::function<void()>     _showUIDesignerCanvas;
     std::function<void()>     _showAnimationSetEditor;
@@ -333,9 +336,21 @@ struct EditorLayer
     /// Snap the editor camera onto the XY plane when enabling. Sprites face
     /// local +Z, so this is the view that shows them.
     void                           setEditorOrthoXY(bool enabled);
-    /// Write a new canvas document under Content:UI and mount it on the
-    /// editable scene, then open it in the designer.
+    /// Ask for a name, then create the document under `Content:UI`.
     void                           createAndMountGameUI();
+    /// Write `directory/name.yaui.json` (a panel), mount it, and open the
+    /// designer. `zOrder` is one step of 10 above the highest entry, or 10
+    /// when the scene has none. False when the name is empty or already used.
+    bool                           createAndMountGameUIAt(std::string vfsDirectory, std::string name);
+    /// Write `directory/name.lua` from the UI script template. False when the
+    /// name is empty or the file already exists.
+    bool                           createUiScript(std::string vfsDirectory, std::string name);
+    /// The skeleton new UI scripts are created from.
+    [[nodiscard]] static const char* uiScriptTemplate();
+    void setSelectedWidgetEntryModal(bool value);
+    void setSelectedWidgetEntryPausesGame(bool value);
+    void setSelectedWidgetEntryClock(ESceneWidgetClock clock);
+    void setSelectedWidgetEntryZOrder(int32_t zOrder);
     /// Mount the document currently open in the designer, if it is not already.
     void                           mountOpenGameUI();
     /// A designer document is open and the editable scene does not mount it yet.
@@ -471,6 +486,8 @@ struct EditorLayer
     void setAssetPickerHandler(EditorAssetPickerCallback handler) { _assetPickerHandler = std::move(handler); }
     void clearAssetPickerHandler() { _assetPickerHandler = nullptr; }
     void setFilePickerHandler(EditorFilePickerCallback handler) { _filePickerHandler = std::move(handler); }
+    void setNamePromptHandler(std::function<void(FEditorNamePrompt)> handler) { _namePromptHandler = std::move(handler); }
+    void requestName(FEditorNamePrompt request);
     void clearFilePickerHandler() { _filePickerHandler = nullptr; }
     void setShowContentBrowserHandler(std::function<void()> handler) { _showContentBrowser = std::move(handler); }
     void clearShowContentBrowserHandler() { _showContentBrowser = nullptr; }

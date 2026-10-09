@@ -7,6 +7,7 @@
 #include "GameEditor/UI/Dock/EditorDockWorkspace.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 #include "GameEditor/UI/Dialogs/EditorFilePicker.h"
+#include "GameEditor/UI/Dialogs/EditorNamePrompt.h"
 #include "GameEditor/UI/Shell/EditorRootSession.h"
 #include "GameEditor/UI/Shell/EditorSurfaceContext.h"
 #include "GameEditor/UI/Viewport/EditorViewportHost.h"
@@ -38,6 +39,7 @@ struct Texture;
 class EditorFilePickerDialog;
 class EditorSettingsDialog;
 class EditorConfirmDialog;
+class EditorNamePrompt;
 struct UIDockSpace;
 struct FDockContext;
 struct UIDockFloatingHost;
@@ -109,6 +111,7 @@ struct EditorSurface : IEditorViewportHostSink
     std::unique_ptr<EditorFilePickerDialog> _filePicker;
     std::unique_ptr<EditorSettingsDialog> _settings;
     std::unique_ptr<EditorConfirmDialog> _confirm;
+    std::unique_ptr<EditorNamePrompt> _namePrompt;
     std::string _windowTitle;
 
     std::shared_ptr<Texture>    _viewportTexture;
@@ -173,6 +176,7 @@ struct EditorSurface : IEditorViewportHostSink
     void openSceneSaveDialog(std::function<void()> onSaved = {});
     void promptUnsavedChanges(std::function<void()> proceed);
     void openFilePickerDialog(FEditorFilePickerRequest request);
+    void openNamePrompt(FEditorNamePrompt request);
     void openAssetPickerDialog(type_index_t refType,
                                std::string currentPath,
                                std::function<void(std::string)> onPicked);

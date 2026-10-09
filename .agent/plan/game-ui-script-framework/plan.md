@@ -44,7 +44,7 @@
 | H4 | `GameUIHost::setMountedText/Visible` | 只能改文字/显隐；每次按名字 DFS 整棵树，同名取第一个 | S3 |
 | H5 | `GameUIHost::bindButtonActions` | 只在 `setMountedRoots` 时绑定一次；之后生成的按钮、或挂载后才设置的回调都不生效 | S3 |
 | H6 | `DefaultGameUIController::addToWorld` | 动态挂上的控件不进 `_mountedRoots`，脚本查不到 | S3 |
-| H7 | `EditorLayer::createAndMountGameUI` | 写死 `Content:UI/PanelN.yaui.json`、根类型 `engine.panel`、`zOrder = 条目数` | S6 |
+| H7 | `EditorLayer::createAndMountGameUI` | 写死 `Content:UI/PanelN.yaui.json`、根类型 `engine.panel`、`zOrder = 条目数` | S6（已落地） |
 | H8 | `SceneWidgetEntry::fromJson` | `rootSlot` 必填，全屏铺满也要写十几个字段 | S5 |
 | H9 | `UICanvasLayout::resolveChildRect` | 点锚点轴上 `area` 从锚点出发却取整个父尺寸，锚点 0.5 + 居中会落到右下；内容里只好写「锚点 0 + 居中对齐」绕开 | S5（决策门 D7） |
 | H10 | `FButtonStyle` 默认 | 浅灰底 + 白字，内容里每个按钮手动改深色字 | S5 |
@@ -423,6 +423,8 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 - 验收：编辑器 smoke exit 0；`EditorUIDesignerSessionTest` 扩展「给按钮挂脚本 → 保存 → 重开仍在」；
   预览不运行脚本的既有测试保持绿。
 
+已落地（2026-10-10）：设计器行为列表增删 `script.lua`、改路径（文本框与脚本文件选择器）；属性行经 `IScriptPropertyPreview` 只读发现，不把覆盖写进 `spec.data`，设计器不调用 `onInit`/`onUpdate`。层级检查器编辑选中条目的 `modal` / `pausesGame` / `clock` / `zOrder`。新建 Game UI 询问名称并拒绝重名；内容浏览器在当前目录创建，层级菜单仍用 `Content:UI`；`zOrder` 为现有最大值 + 10（没有条目时为 10），根类型仍是 `engine.panel`。内容浏览器「New Script」写入带 `onInit` / `onUpdate` / `onCancel` 的模板，`onInit` 示范 `self:find("Button").onClicked:add(self, fn)`。重开验收走 `commitEdit` 发布到文档存储；无 VFS 时磁盘 `save` 仍只记错误，不阻断创建。
+
 ### S7 — GreedSnake 迁移与端到端验收
 
 目标：§0 的验收用例成立，并可无人值守验证。
@@ -453,7 +455,7 @@ S6 依赖 S2/S3/S4 的数据形态，可与 S7 并行
 
 ## 6. 决策门（开工前需确认）
 
-状态：D1、D2、D3、D4、D5 已确认；D8 按建议采纳（用户可推翻）；D6 结论为不做预制体并已按此落地；D7、D9 仍为建议（D9 的取消路由已在 S4 落地）。S5 除 H9 外已落地。
+状态：D1、D2、D3、D4、D5 已确认；D8 按建议采纳（用户可推翻）；D6 结论为不做预制体并已按此落地；D7、D9 仍为建议（D9 的取消路由已在 S4 落地）。S5 除 H9 外已落地。S6 已落地。下一步 S7。H9 仍 `blocked_on_D7`。
 
 | # | 问题 | 结论 / 建议 |
 | --- | --- | --- |

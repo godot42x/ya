@@ -28,7 +28,7 @@ SceneWidgetEntry* EditorLayer::getSelectedWidgetEntry()
     if (_selectedWidgetEntryId.empty()) {
         return nullptr;
     }
-    Scene* scene = getViewportInteractionScene();
+    Scene* scene = getHierarchyScene();
     if (!scene) {
         return nullptr;
     }

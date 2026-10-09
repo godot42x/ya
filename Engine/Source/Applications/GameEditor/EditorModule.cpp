@@ -929,6 +929,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                 session->surface().openFilePickerDialog(std::move(request));
             }
         });
+        _layer->setNamePromptHandler([this](FEditorNamePrompt request) {
+            if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
+                session->surface().openNamePrompt(std::move(request));
+            }
+        });
         _inputNode.bind(app, *_layer, _windows, window->windowId(), &_guiWindows, &_dragRouter);
         _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);
         gEditorLayer           = _layer.get();

@@ -5,8 +5,12 @@
 #include "ECS/Component.h"
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "Core/Log.h"
+#include "Core/System/VirtualFileSystem.h"
+#include "Scene/Core/Scene.h"
 
+#include <algorithm>
 #include <cmath>
+#include <format>
 
 namespace ya
 {
@@ -161,51 +165,216 @@ void EditorLayer::setEditorOrthoXY(bool enabled)
     camera.setPositionAndRotation(position, {0.0f, 0.0f, 0.0f});
 }
 
+namespace
+{
+
+std::string joinVfsPath(std::string directory, const std::string& file)
+{
+    if (directory.empty()) {
+        directory = "Content:UI";
+    }
+    if (directory.back() != '/') {
+        directory.push_back('/');
+    }
+    return directory + file;
+}
+
+bool assetNameOk(const std::string& name)
+{
+    return !name.empty() && name.find_first_of("/\\:") == std::string::npos;
+}
+
+std::string suggestGameUIName(UIDocumentStore* store, Scene* scene, const std::string& directory)
+{
+    VirtualFileSystem* vfs = VirtualFileSystem::get();
+    for (int index = 1; index < 1000; ++index) {
+        const std::string name = index == 1 ? std::string("Panel") : std::format("Panel{}", index);
+        const std::string path = joinVfsPath(directory, name + ".yaui.json");
+        if (store && store->find(path)) {
+            continue;
+        }
+        if (vfs && vfs->isFileExists(path)) {
+            continue;
+        }
+        bool mounted = false;
+        if (scene) {
+            for (const SceneWidgetEntry& entry : scene->getWidgetEntries()) {
+                if (entry.entryId == name || entry.documentPath == path) {
+                    mounted = true;
+                    break;
+                }
+            }
+        }
+        if (!mounted) {
+            return name;
+        }
+    }
+    return "Panel";
+}
+
+int32_t nextGameUIZOrder(const Scene& scene)
+{
+    bool    any = false;
+    int32_t max = 0;
+    for (const SceneWidgetEntry& entry : scene.getWidgetEntries()) {
+        if (!any || entry.zOrder > max) {
+            max = entry.zOrder;
+        }
+        any = true;
+    }
+    return any ? max + 10 : 10;
+}
+
+} // namespace
+
+const char* EditorLayer::uiScriptTemplate()
+{
+    return R"(local S = {}
+
+function S:onInit()
+    local button = self:find("Button")
+    if button then
+        button.onClicked:add(self, function() end)
+    end
+end
+
+function S:onUpdate(dt)
+end
+
+function S:onCancel()
+    return false
+end
+
+return S
+)";
+}
+
+void EditorLayer::requestName(FEditorNamePrompt request)
+{
+    if (!_namePromptHandler) {
+        YA_CORE_WARN("EditorLayer::requestName: no name prompt for '{}'", request.title);
+        return;
+    }
+    _namePromptHandler(std::move(request));
+}
+
 void EditorLayer::createAndMountGameUI()
+{
+    const std::string directory = "Content:UI";
+    requestName({
+        .title   = "New Game UI",
+        .label   = "Name",
+        .initial = suggestGameUIName(uiDocumentStore(), getEditableScene(), directory),
+        .onConfirm = [this, directory](std::string name) {
+            (void)createAndMountGameUIAt(directory, std::move(name));
+        },
+    });
+}
+
+bool EditorLayer::createAndMountGameUIAt(std::string vfsDirectory, std::string name)
 {
     Scene*           scene = getEditableScene();
     UIDocumentStore* store = uiDocumentStore();
-    if (!scene || !store) {
-        return;
+    if (!scene || !store || !assetNameOk(name)) {
+        YA_CORE_WARN("createAndMountGameUIAt: need a scene, a document store, and a name");
+        return false;
     }
-
+    const std::string path = joinVfsPath(std::move(vfsDirectory), name + ".yaui.json");
     VirtualFileSystem* vfs = VirtualFileSystem::get();
-    std::string        path;
-    int                index = 1;
-    for (; index < 1000; ++index) {
-        path              = std::format("Content:UI/Panel{}.yaui.json", index);
-        const bool onDisk = vfs && vfs->isFileExists(path);
-        bool       mounted = false;
-        for (const SceneWidgetEntry& entry : scene->getWidgetEntries()) {
-            if (entry.documentPath == path) {
-                mounted = true;
-                break;
-            }
-        }
-        if (!onDisk && !mounted) {
-            break;
+    if ((vfs && vfs->isFileExists(path)) || store->find(path)) {
+        YA_CORE_WARN("createAndMountGameUIAt: '{}' already exists", path);
+        return false;
+    }
+    for (const SceneWidgetEntry& entry : scene->getWidgetEntries()) {
+        if (entry.entryId == name || entry.documentPath == path) {
+            YA_CORE_WARN("createAndMountGameUIAt: '{}' is already mounted", name);
+            return false;
         }
     }
 
-    auto document     = std::make_shared<UIDocument>();
-    document->typeId  = "engine.panel";
-    document->fields  = nlohmann::json{
-        {"__base__", {{"UIElement", {{"_name", std::format("Panel{}", index)}}}}},
+    auto document    = std::make_shared<UIDocument>();
+    document->typeId = "engine.panel";
+    document->fields = nlohmann::json{
+        {"__base__", {{"UIElement", {{"_name", name}}}}},
     };
     store->put(path, document);
     (void)store->save(path);
 
-    const std::string entryId = std::format("Panel{}", index);
-    SceneWidgetEntry  entry;
-    entry.entryId      = entryId;
+    SceneWidgetEntry entry;
+    entry.entryId      = name;
     entry.documentPath = path;
-    entry.zOrder       = static_cast<int32_t>(scene->getWidgetEntries().size());
+    entry.zOrder       = nextGameUIZOrder(*scene);
     entry.autoMount    = true;
     scene->addWidgetEntry(std::move(entry));
     markSceneDirty();
     notifyHierarchyChanged();
-    setSelectedWidgetEntryId(entryId);
+    setSelectedWidgetEntryId(name);
     (void)openDocumentEditor(EEditorDocumentKind::UI, path);
+    return true;
+}
+
+bool EditorLayer::createUiScript(std::string vfsDirectory, std::string name)
+{
+    if (!assetNameOk(name)) {
+        YA_CORE_WARN("createUiScript: empty or illegal name");
+        return false;
+    }
+    if (!name.ends_with(".lua")) {
+        name += ".lua";
+    }
+    const std::string path = joinVfsPath(std::move(vfsDirectory), name);
+    VirtualFileSystem* vfs = VirtualFileSystem::get();
+    if (!vfs) {
+        YA_CORE_ERROR("createUiScript: no virtual file system for '{}'", path);
+        return false;
+    }
+    if (vfs->isFileExists(path)) {
+        YA_CORE_WARN("createUiScript: '{}' already exists", path);
+        return false;
+    }
+    vfs->saveToFile(path, uiScriptTemplate());
+    return vfs->isFileExists(path);
+}
+
+void EditorLayer::setSelectedWidgetEntryModal(bool value)
+{
+    SceneWidgetEntry* entry = getSelectedWidgetEntry();
+    if (!entry || entry->bModal == value) {
+        return;
+    }
+    entry->bModal = value;
+    markSceneDirty();
+}
+
+void EditorLayer::setSelectedWidgetEntryPausesGame(bool value)
+{
+    SceneWidgetEntry* entry = getSelectedWidgetEntry();
+    if (!entry || entry->bPausesGame == value) {
+        return;
+    }
+    entry->bPausesGame = value;
+    markSceneDirty();
+}
+
+void EditorLayer::setSelectedWidgetEntryClock(ESceneWidgetClock clock)
+{
+    SceneWidgetEntry* entry = getSelectedWidgetEntry();
+    if (!entry || entry->clock == clock) {
+        return;
+    }
+    entry->clock = clock;
+    markSceneDirty();
+}
+
+void EditorLayer::setSelectedWidgetEntryZOrder(int32_t zOrder)
+{
+    SceneWidgetEntry* entry = getSelectedWidgetEntry();
+    if (!entry || entry->zOrder == zOrder) {
+        return;
+    }
+    entry->zOrder = zOrder;
+    markSceneDirty();
+    notifyHierarchyChanged();
 }
 
 void EditorLayer::mountOpenGameUI()

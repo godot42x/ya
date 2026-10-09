@@ -12,6 +12,7 @@
 
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 
+#include "ECS/Systems/ScriptInstance.h"
 #include "Scene/Core/SceneWidgetEntry.h"
 
 #include "GameRuntime/App.h"
@@ -633,6 +634,50 @@ bool EditorUIDesignerSession::deleteWidget(UIElement* widget)
     }
     _designerHidden.clear();
     commitEdit(label);
+    return true;
+}
+
+namespace
+{
+
+bool previewWidget(const EditorUIDesignerSession& session, UIElement* widget)
+{
+    return widget && widget->isAttached() && session.childPathOf(widget).has_value();
+}
+
+} // namespace
+
+bool EditorUIDesignerSession::addLuaScript(UIElement* widget)
+{
+    if (!previewWidget(*this, widget)) {
+        return false;
+    }
+    widget->_behaviorSpecs.push_back(FUIBehaviorSpec{.type = "script.lua", .data = {{"script", ""}}});
+    commitEdit("Add Script");
+    return true;
+}
+
+bool EditorUIDesignerSession::removeBehavior(UIElement* widget, size_t index)
+{
+    if (!previewWidget(*this, widget) || index >= widget->_behaviorSpecs.size()) {
+        return false;
+    }
+    widget->_behaviorSpecs.erase(widget->_behaviorSpecs.begin() + static_cast<std::ptrdiff_t>(index));
+    commitEdit("Remove Behavior");
+    return true;
+}
+
+bool EditorUIDesignerSession::setBehaviorScript(UIElement* widget, size_t index, std::string path)
+{
+    if (!previewWidget(*this, widget) || index >= widget->_behaviorSpecs.size()) {
+        return false;
+    }
+    FUIBehaviorSpec& spec = widget->_behaviorSpecs[index];
+    if (spec.type != "script.lua") {
+        return false;
+    }
+    spec.data["script"] = ScriptInstance::normalizeScriptPath(path);
+    commitEdit("Set Script");
     return true;
 }
 

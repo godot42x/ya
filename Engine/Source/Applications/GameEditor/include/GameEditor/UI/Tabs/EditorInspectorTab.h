@@ -52,6 +52,11 @@ class EditorInspectorTab : public UICompoundWidget
     std::shared_ptr<UIText> _widgetEntryIdText;
     std::shared_ptr<UIText> _widgetEntryTypeText;
     std::shared_ptr<UIButton> _openDesignerButton;
+    std::shared_ptr<struct UICheckBox> _entryModal;
+    std::shared_ptr<struct UICheckBox> _entryPausesGame;
+    std::shared_ptr<struct UIComboBox> _entryClock;
+    std::shared_ptr<struct UISpinBox> _entryZOrder;
+    bool _bPushingEntryFields = false;
     std::shared_ptr<UIContainer> _instanceHost;
     std::shared_ptr<UIText> _instanceBodyText;
     std::shared_ptr<UIContainer> _projectedHost;

@@ -4,6 +4,7 @@
 #include "Core/Os/Os.h"
 #include "Core/System/PathUtils.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "GameEditor/UI/Dialogs/EditorNamePrompt.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
@@ -112,9 +113,53 @@ void EditorContentBrowserTab::construct()
                                  ui::contentSlot().fill());
     _gridModeToggle = gridToggle.share();
 
+    EditorLayer* layer = _layer;
+    auto newUI = labeledButton("ContentNewGameUI", "New UI").setOnClick([this, layer]() {
+        if (!layer) {
+            return;
+        }
+        std::string directory = "Content:UI";
+        if (VirtualFileSystem* vfs = VirtualFileSystem::get()) {
+            const std::string mapped = vfs->toVfsPath(_explorer->getCurrentDirectory().generic_string());
+            if (!mapped.empty()) {
+                directory = mapped;
+            }
+        }
+        layer->requestName({
+            .title   = "New Game UI",
+            .label   = "Name",
+            .initial = "Panel",
+            .onConfirm = [layer, directory](std::string name) {
+                (void)layer->createAndMountGameUIAt(directory, std::move(name));
+            },
+        });
+    });
+    auto newScript = labeledButton("ContentNewUIScript", "New Script").setOnClick([this, layer]() {
+        if (!layer) {
+            return;
+        }
+        std::string directory = "Content:UI";
+        if (VirtualFileSystem* vfs = VirtualFileSystem::get()) {
+            const std::string mapped = vfs->toVfsPath(_explorer->getCurrentDirectory().generic_string());
+            if (!mapped.empty()) {
+                directory = mapped;
+            }
+        }
+        layer->requestName({
+            .title   = "New UI Script",
+            .label   = "Name",
+            .initial = "Widget",
+            .onConfirm = [layer, directory](std::string name) {
+                (void)layer->createUiScript(directory, std::move(name));
+            },
+        });
+    });
+
     auto header = ui::row("ContentBrowser.ContainerHeader", "Header")
                       .setSpacing(6.0f)
                       .child(std::move(backButton), ui::boxSlot().preferredSize({52.0f, 22.0f}))
+                      .child(std::move(newUI), ui::boxSlot().preferredSize({64.0f, 22.0f}))
+                      .child(std::move(newScript), ui::boxSlot().preferredSize({80.0f, 22.0f}))
                       .child(std::move(pathText))
                       .child(std::move(listToggle), ui::boxSlot().preferredSize({44.0f, 22.0f}))
                       .child(std::move(gridToggle), ui::boxSlot().preferredSize({44.0f, 22.0f}))

@@ -5,7 +5,13 @@
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
 #include "Core/Event.h"
+#include "Core/Scripting/ScriptValue.h"
+#include "ECS/Systems/ScriptInstance.h"
+#include "ECS/Systems/ScriptPropertyPreview.h"
 #include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Widgets/UIBehaviorSpec.h"
+#include "GameEditor/UI/Dialogs/EditorFilePicker.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/SpinBox.h"
 #include "GUI/Widgets/Controls/Container.h"
@@ -56,6 +62,107 @@ void collectDesignerTreeFingerprint(const UIElement& widget, std::string& out, c
     for (size_t index = 0; index < children.size(); ++index) {
         collectDesignerTreeFingerprint(*children[index], out, path + "/" + std::to_string(index));
     }
+}
+
+std::string scriptPropertyText(const ScriptProperty& prop)
+{
+    if (const auto* flag = script::scriptIf<bool>(prop.value)) {
+        return *flag ? "true" : "false";
+    }
+    if (const auto* integer = script::scriptIf<int64_t>(prop.value)) {
+        return std::to_string(*integer);
+    }
+    if (const auto* number = script::scriptIf<double>(prop.value)) {
+        return std::format("{}", *number);
+    }
+    if (const auto* text = script::scriptIf<std::string>(prop.value)) {
+        return *text;
+    }
+    return prop.typeHint.empty() ? std::string("—") : prop.typeHint;
+}
+
+std::string behaviorFingerprint(const UIElement& widget)
+{
+    std::string out;
+    for (const FUIBehaviorSpec& spec : widget._behaviorSpecs) {
+        out += '|';
+        out += spec.type;
+        if (spec.data.contains("script") && spec.data["script"].is_string()) {
+            out += '=';
+            out += spec.data["script"].get<std::string>();
+        }
+    }
+    return out;
+}
+
+UIElementRef makeBehaviorGroup(EditorLayer& layer, EditorUIDesignerSession& designer, UIElement& selected)
+{
+    auto column = ui::column("UIDesignerBehaviors").setSpacing(4.0f);
+    column = column.child(ui::text("UIDesignerBehaviorsTitle").setText("Behaviors").setStyleKey("text.eyebrow"));
+    column = column.child(labeledButton("UIDesignerBehaviorAdd", "Add Script").setOnClick([&designer, &selected]() {
+                               (void)designer.addLuaScript(&selected);
+                           }),
+                           ui::boxSlot().preferredSize({0.0f, 24.0f}));
+
+    for (size_t index = 0; index < selected._behaviorSpecs.size(); ++index) {
+        const FUIBehaviorSpec& spec = selected._behaviorSpecs[index];
+        const std::string      key  = std::format("UIDesignerBehavior_{}", index);
+        auto row = ui::row(key).setSpacing(4.0f);
+        row = row.child(ui::text(key + "_Type").setText(spec.type).setStyleKey("text.muted").setVAlign(EWidgetAlignV::Center),
+                        ui::boxSlot().preferredSize({88.0f, 24.0f}));
+        if (spec.type == "script.lua") {
+            const std::string path = spec.data.contains("script") && spec.data["script"].is_string()
+                                         ? spec.data["script"].get<std::string>()
+                                         : std::string{};
+            auto field = ui::textField(key + "_Path").setStyleKey(editorStyle(StyleKey::TextField)).setText(path);
+            (void)field.setOnCommit([&designer, &selected, index](const std::string& text) {
+                (void)designer.setBehaviorScript(&selected, index, text);
+            });
+            row = row.child(std::move(field), ui::boxSlot().fillWidth().preferredSize({0.0f, 24.0f}));
+            row = row.child(labeledButton(key + "_Browse", "Browse").setOnClick([&layer, &designer, &selected, index, path]() {
+                                if (!layer._filePickerHandler) {
+                                    return;
+                                }
+                                layer._filePickerHandler(makeScriptFilePickerRequest(path, [&designer, &selected, index](std::string picked) {
+                                    (void)designer.setBehaviorScript(&selected, index, std::move(picked));
+                                }));
+                            }),
+                            ui::boxSlot().preferredSize({64.0f, 24.0f}));
+        }
+        row = row.child(labeledButton(key + "_Remove", "Remove").setOnClick([&designer, &selected, index]() {
+                            (void)designer.removeBehavior(&selected, index);
+                        }),
+                        ui::boxSlot().preferredSize({64.0f, 24.0f}));
+        column = column.child(std::move(row), ui::boxSlot().preferredSize({0.0f, 24.0f}));
+
+        if (spec.type == "script.lua" && spec.data.contains("script") && spec.data["script"].is_string() &&
+            !spec.data["script"].get<std::string>().empty()) {
+            ScriptInstance preview;
+            preview.scriptPath = spec.data["script"].get<std::string>();
+            if (IScriptPropertyPreview* loader = scriptPropertyPreview()) {
+                (void)loader->load(preview);
+            }
+            if (preview.bAuthoringPreviewLoaded && preview.properties.empty()) {
+                column = column.child(ui::text(key + "_NoProps")
+                                          .setText("No _PROPERTIES table on this script")
+                                          .setStyleKey("text.muted")
+                                          .setWrap(true));
+            }
+            for (size_t property = 0; property < preview.properties.size(); ++property) {
+                const ScriptProperty& prop = preview.properties[property];
+                column = column.child(ui::text(std::format("{}_Prop{}", key, property))
+                                          .setText(prop.name + ": " + scriptPropertyText(prop))
+                                          .setStyleKey("text.small")
+                                          .setWrap(true));
+            }
+            if (!preview.scriptPath.empty() && preview.bAuthoringPreviewAttempted && !preview.bAuthoringPreviewLoaded) {
+                column = column.child(ui::text(key + "_Failed")
+                                          .setText("Status: Failed to load")
+                                          .setStyleKey("text.error"));
+            }
+        }
+    }
+    return column.share();
 }
 
 std::optional<std::vector<size_t>> parseDesignerChildPath(const std::string& id)
@@ -376,10 +483,14 @@ void EditorUIInspectorTab::clearInspector(WidgetTree& tree)
     if (_slotGroup && _slotGroup->isAttached()) {
         tree.detach(*_slotGroup);
     }
+    if (_behaviorGroup && _behaviorGroup->isAttached()) {
+        tree.detach(*_behaviorGroup);
+    }
     _inspectorSection.reset();
     _slotSection.reset();
     _slotGroup.reset();
     _slotEdit.reset();
+    _behaviorGroup.reset();
 }
 
 void EditorUIInspectorTab::rebuildInspector(WidgetTree& tree, UIElement* selected)
@@ -390,11 +501,12 @@ void EditorUIInspectorTab::rebuildInspector(WidgetTree& tree, UIElement* selecte
     std::string fingerprint = "none";
     if (selected) {
         const UIElement* parent = selected->getParent();
-        fingerprint = std::format("{}:{}:{}:{}",
+        fingerprint = std::format("{}:{}:{}:{}{}",
                                   designer.previewGeneration(),
                                   selected->_typeId,
                                   reinterpret_cast<uintptr_t>(selected),
-                                  reinterpret_cast<uintptr_t>(parent ? parent->getSlotForChild(*selected) : nullptr));
+                                  reinterpret_cast<uintptr_t>(parent ? parent->getSlotForChild(*selected) : nullptr),
+                                  behaviorFingerprint(*selected));
     }
     if (fingerprint == _inspectorFingerprint) {
         return;
@@ -433,6 +545,11 @@ void EditorUIInspectorTab::rebuildInspector(WidgetTree& tree, UIElement* selecte
         section->setEditCommitSink(sink);
         _inspectorHost->addDetachedChild(section);
         _inspectorSection = std::move(section);
+    }
+
+    if (_layer) {
+        _behaviorGroup = makeBehaviorGroup(*_layer, designer, *selected);
+        _inspectorHost->addDetachedChild(_behaviorGroup);
     }
 
     std::unique_ptr<EditorUISlotEdit> slotEdit = designer.editSlot(selected);

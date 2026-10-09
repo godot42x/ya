@@ -41,6 +41,7 @@ struct YA_GUI_API UISpinBox : public UIElement, public UIStyledWidget<UISpinBox,
     std::function<void(float value)> _onValueChanged;
 
     void setValue(float value);
+    [[nodiscard]] bool isEditing() const { return static_cast<bool>(_bEditing); }
 
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {

@@ -167,6 +167,13 @@ struct EditorUIDesignerSession
     /// deleted (a UIDocument always has exactly one root). Returns true when
     /// the widget was removed.
     bool deleteWidget(UIElement* widget);
+    /// Append a `script.lua` behaviour and commit one edit. The designer
+    /// preview does not activate it.
+    bool addLuaScript(UIElement* widget);
+    /// Drop one authored behaviour and commit. False when the index is out of range.
+    bool removeBehavior(UIElement* widget, size_t index);
+    /// Set `data.script` on a `script.lua` behaviour and commit.
+    bool setBehaviorScript(UIElement* widget, size_t index, std::string path);
     /// The document slot of a preview widget. nullptr for the document root:
     /// its parent edge belongs to the designer host, not to the document.
     [[nodiscard]] std::unique_ptr<EditorUISlotEdit> editSlot(UIElement* widget) const;

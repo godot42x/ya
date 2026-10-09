@@ -17,6 +17,7 @@
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Layout/UILayout.h"
+#include "ECS/Systems/ScriptInstance.h"
 #include "Scene/Core/SceneWidgetEntry.h"
 
 #include <gtest/gtest.h>
@@ -861,6 +862,36 @@ TEST(EditorUIDesignerSessionTest, FitCentresTheDesignFrameInsideTheMargin)
     EXPECT_FLOAT_EQ(lo.x, 24.0f);
     EXPECT_FLOAT_EQ(hi.x, 976.0f);
     EXPECT_FLOAT_EQ(lo.y + hi.y, 600.0f) << "centred vertically";
+}
+
+TEST(EditorUIDesignerSessionTest, ScriptOnAButtonSurvivesReopen)
+{
+    FDesignerFixture fixture;
+    auto             button = UITypeRegistry::instance().createInstance(kTypeIdButton);
+    button->_name           = "Go";
+    fixture.publish(*button);
+
+    EditorUIDesignerSession& designer = fixture.layer.getEditorUIDesignerSession();
+    ASSERT_TRUE(designer.openDocument(FDesignerFixture::kDocumentPath));
+    UIElement* go = designer.getPreviewRoot();
+    ASSERT_NE(go, nullptr);
+    ASSERT_EQ(go->_name, "Go");
+
+    expectOneUndoableStep(designer, [&]() { ASSERT_TRUE(designer.addLuaScript(go)); });
+    go = designer.getPreviewRoot();
+    ASSERT_NE(go, nullptr);
+    ASSERT_EQ(go->_behaviorSpecs.size(), 1u);
+
+    const std::string path = ScriptInstance::normalizeScriptPath("UI/Go.lua");
+    ASSERT_TRUE(designer.setBehaviorScript(go, 0, "UI/Go.lua"));
+    designer.clearDocument();
+    ASSERT_TRUE(designer.openDocument(FDesignerFixture::kDocumentPath));
+    UIElement* again = designer.getPreviewRoot();
+    ASSERT_NE(again, nullptr);
+    ASSERT_EQ(again->_behaviorSpecs.size(), 1u);
+    EXPECT_EQ(again->_behaviorSpecs[0].type, "script.lua");
+    EXPECT_EQ(again->_behaviorSpecs[0].data.at("script").get<std::string>(), path);
+    EXPECT_TRUE(again->getBehaviors().empty());
 }
 
 } // namespace ya

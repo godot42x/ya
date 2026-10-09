@@ -15,6 +15,9 @@
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/CheckBox.h"
+#include "GUI/Widgets/Controls/ComboBox.h"
+#include "GUI/Widgets/Controls/SpinBox.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Expander.h"
 #include "GUI/Widgets/Controls/Menu.h"
@@ -33,6 +36,7 @@
 #include "Scene/Core/SceneWidgetEntry.h"
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <string_view>
 
@@ -260,6 +264,41 @@ void EditorInspectorTab::construct()
     _widgetEntryIdText = widgetEntryId.share();
     auto widgetEntryType = ui::text("InspectorWidgetEntryType").setStyleKey("text.small").setVAlign(EWidgetAlignV::Center);
     _widgetEntryTypeText = widgetEntryType.share();
+    auto entryModal = ui::checkBox("InspectorEntryModal").setText("Modal");
+    _entryModal = entryModal.share();
+    _entryModal->_onChanged = [this](bool value) {
+        if (!_bPushingEntryFields && _layer) {
+            _layer->setSelectedWidgetEntryModal(value);
+        }
+    };
+    auto entryPause = ui::checkBox("InspectorEntryPauses").setText("Pauses Game");
+    _entryPausesGame = entryPause.share();
+    _entryPausesGame->_onChanged = [this](bool value) {
+        if (!_bPushingEntryFields && _layer) {
+            _layer->setSelectedWidgetEntryPausesGame(value);
+        }
+    };
+    auto entryClock = ui::comboBox("InspectorEntryClock")
+                          .setItems({"Real", "Game"})
+                          .setOnSelectionChanged([this](int index) {
+                              if (_bPushingEntryFields || !_layer || index < 0) {
+                                  return;
+                              }
+                              _layer->setSelectedWidgetEntryClock(index == 0 ? ESceneWidgetClock::Real
+                                                                            : ESceneWidgetClock::Game);
+                          });
+    _entryClock = entryClock.share();
+    _entryZOrder = std::make_shared<UISpinBox>("InspectorEntryZOrder");
+    _entryZOrder->_min = -100000.0f;
+    _entryZOrder->_max = 100000.0f;
+    _entryZOrder->_step = 1.0f;
+    _entryZOrder->_onValueChanged = [this](float value) {
+        if (_bPushingEntryFields || !_layer) {
+            return;
+        }
+        _layer->setSelectedWidgetEntryZOrder(static_cast<int32_t>(std::lround(value)));
+    };
+
     auto openDesigner = ui::button("InspectorOpenDesigner")
                             .child(ui::text("InspectorOpenDesignerLabel").setText("Open in UI Designer"));
     _openDesignerButton = openDesigner.share();
@@ -296,6 +335,28 @@ void EditorInspectorTab::construct()
                                                      .setVAlign(EWidgetAlignV::Center),
                                                  labelSlot)
                                           .child(std::move(widgetEntryType),
+                                                 ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight})))
+                               .child(std::move(entryModal),
+                                      FBoxSlotArgs{.preferredSize = {0.0f, editor_density::kRowHeight}})
+                               .child(std::move(entryPause),
+                                      FBoxSlotArgs{.preferredSize = {0.0f, editor_density::kRowHeight}})
+                               .child(ui::row("InspectorEntryClockRow")
+                                          .setSpacing(editor_density::kControlSpacing)
+                                          .child(ui::text("InspectorEntryClockLabel")
+                                                     .setText("Clock")
+                                                     .setStyleKey("text.muted")
+                                                     .setVAlign(EWidgetAlignV::Center),
+                                                 labelSlot)
+                                          .child(std::move(entryClock),
+                                                 ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight})))
+                               .child(ui::row("InspectorEntryZOrderRow")
+                                          .setSpacing(editor_density::kControlSpacing)
+                                          .child(ui::text("InspectorEntryZOrderLabel")
+                                                     .setText("Z Order")
+                                                     .setStyleKey("text.muted")
+                                                     .setVAlign(EWidgetAlignV::Center),
+                                                 labelSlot)
+                                          .child(_entryZOrder,
                                                  ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight})))
                                .child(std::move(openDesigner),
                                       FBoxSlotArgs{.preferredSize = {0.0f, editor_density::kToolbarHeight}})
@@ -678,6 +739,24 @@ void EditorInspectorTab::refreshFromTree(WidgetTree& tree)
         if (_openDesignerButton) {
             _openDesignerButton->setEnabled(!widgetEntry->documentPath.empty());
         }
+        _bPushingEntryFields = true;
+        if (_entryModal) {
+            _entryModal->setChecked(widgetEntry->bModal);
+        }
+        if (_entryPausesGame) {
+            _entryPausesGame->setChecked(widgetEntry->bPausesGame);
+        }
+        if (_entryClock) {
+            _entryClock->setSelectedIndex(widgetEntry->clock == ESceneWidgetClock::Game ? 1 : 0, false);
+        }
+        if (_entryZOrder && !_entryZOrder->isEditing()) {
+            const float shown = static_cast<float>(widgetEntry->zOrder);
+            if (_entryZOrder->_value != shown) {
+                _entryZOrder->_value = shown;
+                _entryZOrder->invalidateProperty(EUIPropertyImpact::Paint);
+            }
+        }
+        _bPushingEntryFields = false;
         if (!_projectedFingerprint.empty()) {
             _projectedFingerprint.clear();
             rebuildProjected(tree, {});

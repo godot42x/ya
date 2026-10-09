@@ -7,6 +7,7 @@
 #include "GameEditor/UI/Dialogs/EditorFilePickerDialog.h"
 #include "GameEditor/UI/Dialogs/EditorSettingsDialog.h"
 #include "GameEditor/UI/Dialogs/EditorConfirmDialog.h"
+#include "GameEditor/UI/Dialogs/EditorNamePrompt.h"
 #include "GameEditor/UI/Ops/EditorCreateMenu.h"
 #include "GameEditor/UI/Shell/EditorContentOpenerRegistry.h"
 #include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
@@ -1078,6 +1079,17 @@ bool EditorSurface::openDocumentEditor(EEditorDocumentKind kind, std::string key
     (void)_documents->claimPreview(session->id());
     const char* tabId = editorRootTabId(rootId);
     return tabId && invokeTab(tabId);
+}
+
+void EditorSurface::openNamePrompt(FEditorNamePrompt request)
+{
+    if (!_tree || !_root) {
+        return;
+    }
+    if (!_namePrompt) {
+        _namePrompt = std::make_unique<EditorNamePrompt>();
+    }
+    _namePrompt->open(*_tree, std::move(request));
 }
 
 void EditorSurface::openFilePickerDialog(FEditorFilePickerRequest request)
