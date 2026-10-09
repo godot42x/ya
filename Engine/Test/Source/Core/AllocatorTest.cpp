@@ -161,10 +161,10 @@ TEST(CountingAllocatorTest, NestedOwnerScopesRestoreTheEnclosingOwner)
 
 TEST(AllocatorBackendTest, UnsizedDeleteStillReleasesTheRecordedSize)
 {
-    // The header the layer writes in front of every block is what makes this
-    // work: the global `operator delete(void*)` carries no size, so without it
-    // "live bytes" would only ever grow and a run would report its cumulative
-    // allocation as if it were a level (it read 4.4 GiB against a 360 MiB RSS).
+    // The recorded size is what makes this work: the global `operator delete(void*)`
+    // carries no size, so without it "live bytes" would only ever grow and a run
+    // would report its cumulative allocation as if it were a level (it read 4.4 GiB
+    // against a 360 MiB RSS).
     const std::size_t kSize = 3000;
     void*             pointer = processAllocate(kSize, 0);
     ASSERT_NE(pointer, nullptr);
@@ -184,10 +184,10 @@ TEST(AllocatorBackendTest, OverAlignedBlocksCarryTheirRealSizeAndComeBackAligned
     for (const std::size_t alignment : { std::size_t{ 32 }, std::size_t{ 64 }, std::size_t{ 4096 } }) {
         void* pointer = processAllocate(1000, alignment);
         ASSERT_NE(pointer, nullptr) << "alignment " << alignment;
-        // The user pointer keeps the alignment it asked for even though a
-        // header now sits in front of the block the backend returned.
+        // The user pointer keeps the alignment it asked for, and is the exact
+        // pointer the backend returned (nothing sits in front of it).
         EXPECT_EQ(reinterpret_cast<std::uintptr_t>(pointer) % alignment, 0u) << "alignment " << alignment;
-        // Freed without a size: the header has to carry 1000 across.
+        // Freed without a size: the recorded size has to carry 1000 across.
         processDeallocate(pointer, 0);
     }
 }
@@ -201,6 +201,31 @@ TEST(AllocatorBackendTest, ZeroSizedRequestsAreDistinctAndFreeCleanly)
     EXPECT_NE(first, second);
     processDeallocate(first, 0);
     processDeallocate(second, 0);
+}
+
+TEST(AllocatorBackendTest, TheReturnedPointerIsTheBlockTheBackendReturned)
+{
+    // The contract the size side table exists to keep: our pointers *are*
+    // malloc pointers. A header in front of the block would make every
+    // cross-boundary free -- another image, or a library that allocates with
+    // its own allocator and frees through ours -- hand `free` an address it
+    // was never given. Comparing against the backend directly is the only way
+    // to say that without depending on the addresses malloc happens to pick.
+    void* throughLayer   = processAllocate(777, 0);
+    void* straightMalloc = MallocAllocator::allocate(777, 0);
+    ASSERT_NE(throughLayer, nullptr);
+    ASSERT_NE(straightMalloc, nullptr);
+
+    // Both requests are live at once, so the addresses must differ -- if they
+    // matched, the layer had allocated nothing of its own and the test below
+    // would be comparing a value with itself.
+    EXPECT_NE(throughLayer, straightMalloc);
+
+    // Freeing the raw malloc block through the layer must not crash and must
+    // not offset the pointer: `lookupAllocationSize` finds no entry, falls back
+    // to the sized-delete hint, and `free` gets back exactly what it gave out.
+    processDeallocate(straightMalloc, 777);
+    processDeallocate(throughLayer, 0);
 }
 
 TEST(CountingAllocatorTest, LiveBytesFallWhenMemoryIsFreed)
@@ -226,12 +251,32 @@ TEST(CountingAllocatorTest, FreeingMoreThanWasAllocatedClampsInsteadOfWrapping)
     // A pointer allocated before counting started shows up as a free with no
     // allocation. It must not turn the live counter into a near-UINT64_MAX
     // number that then poisons every later report.
+    //
+    // "Free 32 bytes and expect the level to be unchanged" only holds where the
+    // bucket is empty. In a counting build the process is holding megabytes, so
+    // that assertion measured the harness, not the clamp -- and it failed there
+    // while passing in debug, which is the worst possible shape for a test
+    // about arithmetic. Release far more than any bucket holds instead, and
+    // require the level to fall to zero rather than wrap.
+    //
+    // Asserting an exact zero rather than a delta is deliberate: draining
+    // Untagged to zero is this test's job now, and the surrounding cases take
+    // their own `before` snapshot, so none of them can observe it.
     const FAllocatorStats before = Counting::stats();
     void*                   raw    = std::malloc(32);
     ASSERT_NE(raw, nullptr);
 
-    Counting::deallocate(raw, 32);
-    EXPECT_EQ(Counting::stats().getLiveBytes(), before.getLiveBytes());
+    // Comfortably past anything the process can be holding, so the bucket is
+    // driven to its clamp rather than merely decremented.
+    const uint64_t absurd = before.getLiveBytes() + (1ull << 40);
+    Counting::deallocate(raw, absurd);
+
+    // The clamp is per bucket: `deallocate` charges the free to the owner in
+    // scope, so only Untagged is guaranteed to reach zero here. What matters is
+    // that it stopped there instead of wrapping to a near-2^64 number -- which
+    // is exactly what an unsigned subtraction does without the clamp.
+    EXPECT_EQ(Counting::stats().buckets[kUntagged].liveBytes, 0u);
+    EXPECT_LE(Counting::stats().getLiveBytes(), before.getLiveBytes());
 }
 
 TEST(CountingAllocatorTest, FailedAllocationsAreNotCounted)
@@ -273,4 +318,17 @@ TEST(AllocatorStatsTest, OwnersAreLabelledAndCounted)
     EXPECT_EQ(toMemoryOwnerLabel(EMemoryOwner::Resource), "resource");
     EXPECT_EQ(toMemoryOwnerLabel(EMemoryOwner::Render), "render");
     EXPECT_EQ(toMemoryOwnerLabel(EMemoryOwner::Script), "script");
+}
+
+TEST(AllocatorStatsTest, DeltaCarriesSizeTableCompletenessOver)
+{
+    // It is a level, not a monotonic total: a delta computed from a truncated
+    // table is still reading a truncated table, and defaulting it to true in
+    // `deltaSince` would report a full table over a full one.
+    FAllocatorStats current;
+    current.bSupported        = true;
+    current.sizeTableComplete = false;
+
+    FAllocatorStats delta = current.deltaSince(FAllocatorStats{});
+    EXPECT_FALSE(delta.sizeTableComplete);
 }

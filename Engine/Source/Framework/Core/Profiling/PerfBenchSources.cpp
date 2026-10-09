@@ -195,6 +195,9 @@ void ProcessMemoryBenchSource::writeFacts(nlohmann::json& section) const
     if (allocator.bSupported) {
         section["heap.liveAllocations"] = allocator.getLiveAllocations();
         section["heap.totalAllocMiB"]   = static_cast<double>(allocator.getTotalAllocBytes()) / (1024.0 * 1024.0);
+        // A false here means the live byte level below is a floor, not a
+        // measurement, and a comparison between two such runs is meaningless.
+        section["heap.sizeTableComplete"] = allocator.sizeTableComplete;
     }
 }
 

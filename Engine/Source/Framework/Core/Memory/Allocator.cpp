@@ -1,5 +1,6 @@
 #include "Core/Memory/Allocator.h"
 
+#include <atomic>
 #include <cstdint>
 #include <cstdlib>
 
@@ -19,30 +20,143 @@ thread_local EMemoryOwner t_owner = EMemoryOwner::Untagged;
     return (size + alignment - 1) & ~(alignment - 1);
 }
 
-/// What every block this layer hands out carries in front of it: how many
-/// bytes the caller asked for, and how far the *header* sits above the block
-/// the backend returned (zero unless the request was over-aligned). One rule
-/// recovers the base for both cases:
-/// `base = pointer - kAllocationHeaderSize - baseOffset`.
-struct FAllocationHeader
+// ---------------------------------------------------------------------------
+// Size side table
+//
+// Every allocation records the size the caller asked for, because almost every
+// call through the global `operator delete` carries none and without a record
+// "live bytes" is really a running total.
+//
+// It is a table rather than a header in front of the block on purpose. A header
+// makes our pointers *not* malloc pointers: the block the platform (or another
+// image that never went through this layer) has to free is offset from what we
+// returned, and any cross-boundary free -- a third-party dylib releasing
+// something we allocated, or one of our images freeing a block another image
+// allocated -- would hand `free` a pointer it never saw. Keeping the pointer
+// pristine costs one hash and one probe per allocation and makes the layer
+// invisible at the boundary in both directions.
+// ---------------------------------------------------------------------------
+
+#ifdef YA_BUILD_MODE_PROFILE
+
+/// Open addressing with linear probing, insert-only: an entry is never removed,
+/// because a freed address is reused rather than abandoned, so re-recording the
+/// same key overwrites it. Tombstones and rehash are what deletion would cost,
+/// and neither buys anything here.
+struct FSizeSlot
 {
-    std::size_t size;
-    std::size_t baseOffset;
+    uintptr_t key = 0; // 0 means empty
+    uint64_t  size = 0;
 };
 
-/// Sized to keep the user pointer at least `alignof(std::max_align_t)` when it
-/// sits immediately after the header.
-constexpr std::size_t kAllocationHeaderSize = alignof(std::max_align_t) > sizeof(FAllocationHeader)
-                                                  ? alignof(std::max_align_t)
-                                                  : sizeof(FAllocationHeader);
+/// Sized to the peak number of *distinct addresses* a run holds at once, not to
+/// the number of allocations it makes: an address that is freed and handed out
+/// again is one entry for the whole run. The measured peak for the 2D/3D
+/// PerfLab scenes is about 300k live blocks; this leaves headroom without
+/// spending real memory (untouched pages of a zero-filled array cost nothing).
+constexpr uint32_t kSizeTableBits  = 19;
+constexpr uint32_t kSizeTableSlots = 1u << kSizeTableBits;
+constexpr uint64_t kSizeTableMask  = kSizeTableSlots - 1;
 
-/// The header in front of `pointer`, or null when the pointer cannot be one of
-/// ours. A null here means the caller freed something this layer did not hand
-/// out; deallocate falls back to the sized-delete hint.
-[[nodiscard]] const FAllocationHeader* headerOf(void* pointer)
+FSizeSlot g_sizeTable[kSizeTableSlots];
+std::atomic_flag g_sizeTableLock = ATOMIC_FLAG_INIT;
+/// Set once the table is full: accounting degrades to the sized-delete hint
+/// instead of lying, and the report says so.
+std::atomic<bool> g_sizeTableFull{false};
+
+[[nodiscard]] uint64_t sizeSlotOf(const void* pointer)
 {
-    return reinterpret_cast<const FAllocationHeader*>(static_cast<char*>(pointer) - kAllocationHeaderSize);
+    const uint64_t key = reinterpret_cast<uintptr_t>(pointer);
+    // malloc hands out 16-byte-aligned blocks; skipping those low bits keeps
+    // the low bits of the hash from being constant.
+    return (key >> 4) * 0x9E3779B97F4A7C15ull;
 }
+
+void lockSizeTable() noexcept
+{
+    while (g_sizeTableLock.test_and_set(std::memory_order_acquire)) {
+#if defined(__x86_64__) || defined(_M_X64)
+        __builtin_ia32_pause();
+#endif
+    }
+}
+
+void unlockSizeTable() noexcept
+{
+    g_sizeTableLock.clear(std::memory_order_release);
+}
+
+void recordAllocationSize(void* pointer, std::size_t size) noexcept
+{
+    const uintptr_t key = reinterpret_cast<uintptr_t>(pointer);
+    if (key == 0) {
+        return;
+    }
+    lockSizeTable();
+    uint64_t index = sizeSlotOf(pointer) & kSizeTableMask;
+    for (uint32_t probe = 0; probe < kSizeTableSlots; ++probe) {
+        FSizeSlot& slot = g_sizeTable[index];
+        if (slot.key == 0) {
+            slot.key  = key;
+            slot.size = size;
+            unlockSizeTable();
+            return;
+        }
+        if (slot.key == key) {
+            // Same address handed out again: the old entry is stale by
+            // definition, so overwriting is the whole update.
+            slot.size = size;
+            unlockSizeTable();
+            return;
+        }
+        index = (index + 1) & kSizeTableMask;
+    }
+    g_sizeTableFull.store(true, std::memory_order_relaxed);
+    unlockSizeTable();
+}
+
+/// The size recorded for `pointer`, or false when the table has no entry for
+/// it (a pointer this layer never handed out, or one recorded before the table
+/// was full).
+[[nodiscard]] bool lookupAllocationSize(const void* pointer, std::size_t& outSize) noexcept
+{
+    const uintptr_t key = reinterpret_cast<uintptr_t>(pointer);
+    if (key == 0) {
+        return false;
+    }
+    lockSizeTable();
+    uint64_t index = sizeSlotOf(pointer) & kSizeTableMask;
+    bool     found = false;
+    for (uint32_t probe = 0; probe < kSizeTableSlots; ++probe) {
+        const FSizeSlot& slot = g_sizeTable[index];
+        if (slot.key == key) {
+            outSize = static_cast<std::size_t>(slot.size);
+            found   = true;
+            break;
+        }
+        if (slot.key == 0) {
+            break;
+        }
+        index = (index + 1) & kSizeTableMask;
+    }
+    unlockSizeTable();
+    return found;
+}
+
+[[nodiscard]] bool sizeTableFull() noexcept
+{
+    return g_sizeTableFull.load(std::memory_order_relaxed);
+}
+
+#else
+
+// Not counting: no sizes to keep, and nothing between the caller and malloc.
+
+void  recordAllocationSize(void*, std::size_t) noexcept {}
+bool  lookupAllocationSize(const void*, std::size_t&) noexcept { return false; }
+bool  sizeTableFull() noexcept { return false; }
+
+#endif // YA_BUILD_MODE_PROFILE
 
 } // namespace
 
@@ -125,45 +239,15 @@ template struct CountingAllocator<MallocAllocator>;
 
 void* processAllocate(std::size_t size, std::size_t alignment)
 {
-    // A size header in front of every block, so `deallocate` knows how many
-    // bytes to give back without the caller telling it. Without it the live
-    // level only ever grows, because most calls through the global
-    // `operator delete` carry no size -- a "level" that is really a running
-    // total is worse than no number at all.
-    //
-    // This is what every real allocator does, and it is why the accounting can
-    // answer "how much is live per subsystem" instead of "how much was ever
-    // allocated per subsystem".
-    if (alignment <= alignof(std::max_align_t)) {
-        // malloc already meets max_align_t, so the header can sit immediately
-        // in front of the block and the base is the pointer minus the header.
-        void* base = ProcessAllocator::allocate(kAllocationHeaderSize + size, 0);
-        if (base == nullptr) {
-            return nullptr;
-        }
-        FAllocationHeader* header = static_cast<FAllocationHeader*>(base);
-        header->size              = size;
-        header->baseOffset        = 0;
-        return static_cast<char*>(base) + kAllocationHeaderSize;
+    // The pointer handed back is exactly the block the backend returned: no
+    // header, no offset. Whoever frees it -- this layer, another of our images,
+    // or a third-party library that owns it -- is handing `free` a pointer it
+    // really was given.
+    void* pointer = ProcessAllocator::allocate(size, alignment);
+    if (pointer != nullptr) {
+        recordAllocationSize(pointer, size);
     }
-
-    // Over-aligned: reserve extra room and place the user pointer at an aligned
-    // address inside it, recording how far it moved so deallocate can find the
-    // base again.
-    void* base = ProcessAllocator::allocate(kAllocationHeaderSize + size + alignment, alignment);
-    if (base == nullptr) {
-        return nullptr;
-    }
-    const auto baseAddress = reinterpret_cast<std::uintptr_t>(base);
-    const auto userAddress = alignUp(baseAddress + kAllocationHeaderSize, alignment);
-    auto*      aligned     = reinterpret_cast<char*>(userAddress);
-    auto*      header      = reinterpret_cast<FAllocationHeader*>(aligned - kAllocationHeaderSize);
-    header->size           = size;
-    // Measured from the header, not from the base, so both paths share one
-    // recovery rule: base = pointer - kAllocationHeaderSize - baseOffset.
-    // Measured from the base it would be off by the header on every block.
-    header->baseOffset = static_cast<std::size_t>(userAddress - baseAddress) - kAllocationHeaderSize;
-    return aligned;
+    return pointer;
 }
 
 void processDeallocate(void* pointer, std::size_t size) noexcept
@@ -172,19 +256,21 @@ void processDeallocate(void* pointer, std::size_t size) noexcept
         return;
     }
 
-    // Read the header this layer wrote. A pointer it did not hand out has no
-    // header, which is outside the contract; the hint is the best available
-    // answer for it and nothing here may crash trying.
-    const FAllocationHeader* header = headerOf(pointer);
-    const std::size_t live         = header != nullptr ? header->size : size;
-    const std::size_t baseOffset   = header != nullptr ? header->baseOffset : 0;
+    // The recorded size is the one to give back; the hint covers a pointer this
+    // layer never handed out, and must not crash trying.
+    std::size_t live = size;
+    (void)lookupAllocationSize(pointer, live);
 
-    ProcessAllocator::deallocate(static_cast<char*>(pointer) - kAllocationHeaderSize - baseOffset, live);
+    ProcessAllocator::deallocate(pointer, live);
 }
 
 FAllocatorStats allocatorStatsSnapshot()
 {
-    return ProcessAllocator::stats();
+    FAllocatorStats stats = ProcessAllocator::stats();
+    // False means some allocations could not be recorded and their live bytes
+    // are only as good as the sized-delete hints. Reported rather than hidden.
+    stats.sizeTableComplete = !sizeTableFull();
+    return stats;
 }
 
 } // namespace ya::memory

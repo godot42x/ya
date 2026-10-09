@@ -54,6 +54,15 @@ struct FAllocatorStats
     /// in as the process allocator. Callers print "n/a" rather than a row of
     /// zeros that would read as a measurement.
     bool                                                 bSupported = false;
+    /// False once the size side table ran out of slots. The counters still
+    /// count, but the *size* of anything allocated after that point comes
+    /// from the sized-delete hint alone (which is usually absent), so the live
+    /// byte level is a floor rather than a measurement. Reported instead of
+    /// hidden: a truncated table that reads as a level is the exact failure
+    /// the table exists to prevent.
+    ///
+    /// Always true in a build that does not count -- there is no table to fill.
+    bool                                                 sizeTableComplete = true;
     std::array<FAllocatorBucketStats, kMemoryOwnerCount> buckets{};
 
     [[nodiscard]] uint64_t getLiveBytes() const
@@ -116,7 +125,11 @@ struct FAllocatorStats
     [[nodiscard]] FAllocatorStats deltaSince(const FAllocatorStats& previous) const
     {
         FAllocatorStats delta;
-        delta.bSupported = bSupported && previous.bSupported;
+        delta.bSupported        = bSupported && previous.bSupported;
+        // A level, like the `live*` fields: it describes *now*, so it carries
+        // over rather than being differenced. Defaulting it to true here would
+        // report a full table over a truncated one.
+        delta.sizeTableComplete = sizeTableComplete;
         for (uint32_t owner = 0; owner < kMemoryOwnerCount; ++owner) {
             const FAllocatorBucketStats& now   = buckets[owner];
             const FAllocatorBucketStats& then  = previous.buckets[owner];

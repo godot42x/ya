@@ -126,8 +126,11 @@ void RuntimeMemorySection::sync(const App* app)
         _heap->setText("Heap: not counted in this build");
     }
     else {
-        std::string row = std::format("Heap: {} live in {} allocations",
+        // A full size table means the byte level below is real; a full one means
+        // it is a floor, and saying so beats printing a confident wrong number.
+        std::string row = std::format("Heap: {}{} live in {} allocations",
                                       formatMiB(allocator.getLiveBytes()),
+                                      allocator.sizeTableComplete ? "" : "+ (size table full)",
                                       allocator.getLiveAllocations());
         for (uint32_t owner = 0; owner < memory::kMemoryOwnerCount; ++owner) {
             const memory::FAllocatorBucketStats& bucket = allocator.buckets[owner];

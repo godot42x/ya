@@ -162,10 +162,13 @@ using ProcessAllocator = MallocAllocator;
 
 /// The matching deallocation. `noexcept`: a destructor path may not throw.
 ///
-/// `size` is the sized-delete hint and is treated as a hint: the layer keeps the
-/// real size in a header written at allocation time, because most calls through
-/// the global `operator delete` carry no size at all, and a level that only ever
-/// grows is not a level. The header is what makes "live bytes" mean anything.
+/// `size` is the sized-delete hint and is treated as a hint: most calls through
+/// the global `operator delete` carry no size at all, and a live level that
+/// only ever grows is not a level. So counting builds keep the real size in a
+/// side table keyed by the returned pointer -- the pointer itself stays exactly
+/// the block the backend returned, so a free crossing an image boundary (or
+/// arriving from a library that never saw this layer) hands `free` a pointer
+/// it really was given. See the table in Core/Memory/Allocator.cpp.
 YA_CORE_API void processDeallocate(void* pointer, std::size_t size) noexcept;
 
 /// True when the process allocator is one that counts. Compile-time: the
