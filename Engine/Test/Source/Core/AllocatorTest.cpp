@@ -11,8 +11,10 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <cstdint>
 #include <cstdlib>
+#include <thread>
 
 namespace
 {
@@ -157,6 +159,49 @@ TEST(CountingAllocatorTest, NestedOwnerScopesRestoreTheEnclosingOwner)
     Counting::deallocate(inner, 64);
     Counting::deallocate(outer, 64);
     Counting::deallocate(after, 64);
+}
+
+TEST(CountingAllocatorTest, AnOwnerScopeDoesNotFollowWorkToAnotherThread)
+{
+    using namespace ya::memory;
+
+    // The owner tag is thread-local, and that is a feature rather than a
+    // limitation: subsystem entry points hand work to worker threads (texture
+    // decode is the case that matters -- megabytes of raw pixels per texture),
+    // and tagging the submitting thread would leave every worker untagged. So
+    // the scope has to open *inside* the worker, which only works if a scope
+    // opened on one thread is genuinely invisible to another.
+    //
+    // Asserted through `currentOwner()` rather than through the counters. The
+    // counters are process-wide by design, so "this thread allocated exactly
+    // one block" is not observable from inside a busy process -- an unrelated
+    // thread allocating under the same owner moves the number, and a delta
+    // taken across a thread boundary reads whatever every other thread did in
+    // between. The tag itself is per-thread, so that is the honest thing to
+    // read.
+    std::atomic<int> ownerInsideSpawnedScope{static_cast<int>(EMemoryOwner::Resource)};
+    std::atomic<int> ownerAfterOwnScope{static_cast<int>(EMemoryOwner::Untagged)};
+
+    {
+        const MemoryOwnerScope scope(EMemoryOwner::Resource);
+        ASSERT_EQ(static_cast<int>(Counting::currentOwner()), static_cast<int>(EMemoryOwner::Resource));
+
+        std::thread worker([&] {
+            // Spawned from inside a Resource scope, but a thread starts Untagged:
+            // inheriting here would silently charge a worker's work to whichever
+            // subsystem happened to submit it.
+            ownerInsideSpawnedScope = static_cast<int>(Counting::currentOwner());
+
+            const MemoryOwnerScope workerScope(EMemoryOwner::Resource);
+            ownerAfterOwnScope = static_cast<int>(Counting::currentOwner());
+        });
+        worker.join();
+    }
+
+    EXPECT_EQ(ownerInsideSpawnedScope.load(), static_cast<int>(EMemoryOwner::Untagged))
+        << "a worker must not inherit the spawning thread's owner tag";
+    EXPECT_EQ(ownerAfterOwnScope.load(), static_cast<int>(EMemoryOwner::Resource))
+        << "a scope opened on the worker itself must take effect there";
 }
 
 TEST(AllocatorBackendTest, UnsizedDeleteStillReleasesTheRecordedSize)
