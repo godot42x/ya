@@ -143,7 +143,7 @@ TEST(EditorGameUIPreviewTest, PreviewDoesNotActivateBehaviors)
     UIDocumentStore documents;
     auto document       = std::make_shared<UIDocument>();
     document->typeId = kTypeIdBorder;
-    document->logic  = FUIBehaviorSpec{.type = "script.lua", .data = {{"script", "UI/HUD.lua"}}};
+    document->behaviors = {FUIBehaviorSpec{.type = "script.lua", .data = {{"script", "UI/HUD.lua"}}}};
     documents.put("Test/UI/PreviewScripted.yaui", document);
     Scene scene("World");
     scene.addWidgetEntry(makeMount("HUD", "Test/UI/PreviewScripted.yaui"));

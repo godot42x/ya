@@ -187,9 +187,8 @@ void LuaWidgetScripts::activate(UIElement& widget, const FUIBehaviorSpec& spec, 
         }
         return;
     }
-    const bool bDocumentLogic = widget._logic.has_value() && &spec == &*widget._logic;
-    if (!bDocumentLogic && &widget != &context.entryRoot) {
-        YA_CORE_WARN("Game UI: script.lua on '{}' in entry '{}' is not the document logic class; ignored",
+    if (context.documentRoot != &widget) {
+        YA_CORE_WARN("Game UI: script.lua on '{}' in entry '{}' is not the document root; ignored",
                      widget._name, context.entryId);
         return;
     }

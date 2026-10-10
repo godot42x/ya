@@ -9,12 +9,14 @@
       }
     }
   },
-  "logic": {
-    "type": "script.lua",
-    "data": {
-      "script": "Content/UI/Dialogue.lua"
+  "behaviors": [
+    {
+      "type": "script.lua",
+      "data": {
+        "script": "Content/UI/Dialogue.lua"
+      }
     }
-  },
+  ],
   "children": [
     {
       "version": 2,

@@ -105,7 +105,8 @@ struct FUIScripts
         UIElementRef w = UITypeRegistry::instance().createInstance(typeId);
         w->_name       = name;
         if (!script.empty()) {
-            w->_logic = FUIBehaviorSpec{.type = "script.lua", .data = {{"script", scriptPath(script)}}};
+            w->_behaviorSpecs.push_back(
+                FUIBehaviorSpec{.type = "script.lua", .data = {{"script", scriptPath(script)}}});
         }
         return w;
     }

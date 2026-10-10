@@ -642,21 +642,36 @@ bool EditorUIDesignerSession::setDocumentLogic(FUIBehaviorSpec spec)
     if (!root || spec.type.empty()) {
         return false;
     }
-    if (root->_logic && *root->_logic == spec) {
-        return false;
+    for (FUIBehaviorSpec& existing : root->_behaviorSpecs) {
+        if (existing.type != spec.type) {
+            continue;
+        }
+        if (existing == spec) {
+            return false;
+        }
+        existing = std::move(spec);
+        commitEdit("Set Logic");
+        return true;
     }
-    root->_logic = std::move(spec);
+    root->_behaviorSpecs.push_back(std::move(spec));
     commitEdit("Set Logic");
     return true;
 }
 
-bool EditorUIDesignerSession::clearDocumentLogic()
+bool EditorUIDesignerSession::clearDocumentLogic(std::string_view type)
 {
     UIElement* root = getPreviewRoot();
-    if (!root || !root->_logic) {
+    if (!root || type.empty()) {
         return false;
     }
-    root->_logic.reset();
+    auto&      specs = root->_behaviorSpecs;
+    const auto end   = std::remove_if(specs.begin(), specs.end(), [type](const FUIBehaviorSpec& spec) {
+        return spec.type == type;
+    });
+    if (end == specs.end()) {
+        return false;
+    }
+    specs.erase(end, specs.end());
     commitEdit("Clear Logic");
     return true;
 }

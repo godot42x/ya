@@ -473,7 +473,7 @@ TEST(UIDocumentTest, BehaviorSpecsRoundtripOnEveryNode)
     EXPECT_EQ(json["children"][0]["children"][0]["behaviors"].size(), 2u);
 }
 
-TEST(UIDocumentTest, LogicRoundtripIsRootOnly)
+TEST(UIDocumentTest, StrayLogicKeyIsIgnoredAndBehaviorsRoundtrip)
 {
     ensureTestTypesRegistered();
     auto& registry = UITypeRegistry::instance();
@@ -481,41 +481,42 @@ TEST(UIDocumentTest, LogicRoundtripIsRootOnly)
     auto  leaf     = registry.createInstance("test.doc_button");
     ASSERT_NE(root, nullptr);
     ASSERT_NE(leaf, nullptr);
-    const FUIBehaviorSpec logic{.type = "vendor.logic", .data = {{"id", "UI/HUD.lua"}}};
-    root->_logic = logic;
-    leaf->_logic = FUIBehaviorSpec{.type = "vendor.logic", .data = {{"id", "UI/Child.lua"}}};
-    leaf->_behaviorSpecs = {{.type = "anim.pulse", .data = {{"period", 0.5}}}};
+    const FUIBehaviorSpec rootSpec{.type = "vendor.class", .data = {{"id", "UI/HUD.lua"}}};
+    const FUIBehaviorSpec leafSpec{.type = "anim.pulse", .data = {{"period", 0.5}}};
+    root->_behaviorSpecs = {rootSpec};
+    leaf->_behaviorSpecs = {leafSpec};
     root->addDetachedChild(leaf);
 
     const nlohmann::json json = UIDocument::fromWidget(*root)->toJson();
-    EXPECT_TRUE(json.contains("logic"));
-    EXPECT_FALSE(json["children"][0].contains("logic"));
+    EXPECT_FALSE(json.contains("logic"));
+    EXPECT_EQ(json["behaviors"].size(), 1u);
     EXPECT_EQ(json["children"][0]["behaviors"].size(), 1u);
 
     auto reloaded = UIDocument::fromJson(json);
     ASSERT_NE(reloaded, nullptr);
-    ASSERT_TRUE(reloaded->logic.has_value());
-    EXPECT_EQ(*reloaded->logic, logic);
+    ASSERT_EQ(reloaded->behaviors.size(), 1u);
+    EXPECT_EQ(reloaded->behaviors[0], rootSpec);
     ASSERT_EQ(reloaded->children.size(), 1u);
-    EXPECT_FALSE(reloaded->children[0]->logic.has_value());
+    ASSERT_EQ(reloaded->children[0]->behaviors.size(), 1u);
+    EXPECT_EQ(reloaded->children[0]->behaviors[0], leafSpec);
 
     UIElementRef instance = reloaded->instantiate();
     ASSERT_NE(instance, nullptr);
-    ASSERT_TRUE(instance->_logic.has_value());
-    EXPECT_EQ(*instance->_logic, logic);
+    EXPECT_EQ(instance->_behaviorSpecs, (std::vector<FUIBehaviorSpec>{rootSpec}));
     ASSERT_EQ(instance->getChildren().size(), 1u);
-    EXPECT_FALSE(instance->getChildren()[0]->_logic.has_value());
+    EXPECT_EQ(instance->getChildren()[0]->_behaviorSpecs, (std::vector<FUIBehaviorSpec>{leafSpec}));
     EXPECT_TRUE(instance->getBehaviors().empty());
 
-    nlohmann::json nested = json;
-    nested["children"][0]["logic"] = {{"type", "vendor.logic"}, {"data", {{"id", "dropped"}}}};
-    auto dropped = UIDocument::fromJson(nested);
-    ASSERT_NE(dropped, nullptr);
-    EXPECT_FALSE(dropped->children[0]->logic.has_value());
-
-    nlohmann::json bad = json;
-    bad["logic"] = 3;
-    EXPECT_EQ(UIDocument::fromJson(bad), nullptr);
+    nlohmann::json stray = json;
+    stray["logic"]                       = 3;
+    stray["children"][0]["logic"]        = {{"type", "vendor.class"}, {"data", {{"id", "dropped"}}}};
+    auto ignored = UIDocument::fromJson(stray);
+    ASSERT_NE(ignored, nullptr);
+    EXPECT_EQ(ignored->behaviors, reloaded->behaviors);
+    EXPECT_EQ(ignored->children[0]->behaviors, reloaded->children[0]->behaviors);
+    const nlohmann::json rewritten = ignored->toJson();
+    EXPECT_FALSE(rewritten.contains("logic"));
+    EXPECT_FALSE(rewritten["children"][0].contains("logic"));
 }
 
 TEST(UIDocumentTest, UnknownBehaviorTypeIsKeptOpaque)

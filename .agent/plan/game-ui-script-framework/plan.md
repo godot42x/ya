@@ -415,16 +415,16 @@ F0 已落地（2026-09-28）：上图除 UI 脚本回调与 StructuralFlush 中�
 
 目标：脚本、条目模态/时钟都能在编辑器里编辑，不手改 JSON（按钮不再有可编辑的动作字段，C1c）。
 
-- UI 设计器检查面板：只在文档根上编辑一份逻辑类（Widget Blueprint 的类）。类型和数据由脚本后端的 `IUILogicAuthoring` 提供，设计器不写 `script.lua`。属性行只读发现，设计器不运行 `onInit/onUpdate`。子控件不再挂脚本。
+- UI 设计器检查面板：只在文档根上编辑一份逻辑类（Widget Blueprint 的类）。类型和数据由脚本后端的 `IUILogicAuthoring` 提供，写成根上的一条 `behaviors` 记录；设计器不写 `script.lua`，文档格式也不出现 `logic`。属性行只读发现，设计器不运行 `onInit/onUpdate`。子控件不再挂脚本。
 - 层级面板 Game UI 条目：检查面板编辑 `modal` / `pausesGame` / `clock` / `zOrder`。
 - 新建 Game UI（H7）：在内容浏览器当前目录创建、询问名称，`zOrder` 取现有最大值 + 10。
 - 内容浏览器：新建 UI 脚本模板（`onInit/onUpdate/onCancel` 骨架，`onInit` 内示范 `self:find(...).onClicked:add(self, fn)`）。
 - 验收：编辑器 smoke exit 0；`EditorUIDesignerSessionTest` 扩展「给按钮挂脚本 → 保存 → 重开仍在」；
   预览不运行脚本的既有测试保持绿。
 
-已落地（2026-10-10）：逻辑类是文档根上的一份不透明 `logic`，不是每个控件的 `script.lua`。设计器只在预览根上显示 Logic 行，spec 由 `IUILogicAuthoring` 生成；后端没登记则不显示。属性行只读，不调用 `onInit`/`onUpdate`。子控件上的 `script.lua` 行为描述在运行时告警并忽略；文档自己的 `logic` 挂在该文档的根上，`self` 是根，生成出来的子文档（spawn）仍用自己的根。层级检查器编辑选中条目的 `modal` / `pausesGame` / `clock` / `zOrder`。新建 Game UI 询问名称并拒绝重名；内容浏览器在当前目录创建，层级菜单仍用 `Content:UI`；`zOrder` 为现有最大值 + 10（没有条目时为 10），根类型仍是 `engine.panel`。内容浏览器「New Script」写入带 `onInit` / `onUpdate` / `onCancel` 的模板。重开验收走 `commitEdit` 发布到文档存储；无 VFS 时磁盘 `save` 仍只记错误，不阻断创建。原生 UserWidget 以后走同一个 `logic` 槽，这次不建类系统。
+已落地（2026-10-10）：逻辑类是文档根上由宿主认领的一条 `behaviors` 记录，不是 GUI 的 `logic` 字段，也不是每个控件的 `script.lua`。设计器只在预览根上显示 Logic 行，spec 由 `IUILogicAuthoring` 生成并替换同类型的那一条；其它 behavior 留在原处。后端没登记则不显示。属性行只读，不调用 `onInit`/`onUpdate`。运行时只激活遍历起点（实例化出来的文档根）上的 `script.lua`；子控件上的同类型描述告警并忽略。spawn 出来的子文档以自己的根为遍历起点，`self.root` 仍是父条目。层级检查器编辑选中条目的 `modal` / `pausesGame` / `clock` / `zOrder`。新建 Game UI 询问名称并拒绝重名；内容浏览器在当前目录创建，层级菜单仍用 `Content:UI`；`zOrder` 为现有最大值 + 10（没有条目时为 10），根类型仍是 `engine.panel`。内容浏览器「New Script」写入带 `onInit` / `onUpdate` / `onCancel` 的模板。重开验收走 `commitEdit` 发布到文档存储；无 VFS 时磁盘 `save` 仍只记错误，不阻断创建。原生 UserWidget 以后仍是根上的一条 behavior，这次不建类系统。
 
-S3 曾允许任意控件挂 `script.lua`。作者模型改为文档一份逻辑类；每节点 `behaviors` 仍是不透明扩展槽。
+S3 曾允许任意控件挂 `script.lua`。作者模型改为文档根上的一条宿主认领 behavior。
 
 ### S7 — GreedSnake 迁移与端到端验收
 

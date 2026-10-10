@@ -36,6 +36,9 @@ struct FUIBehaviorActivation
 {
     std::string_view entryId;
     UIElement&       entryRoot;
+    /// Widget the activation walk started at: the instantiated document root.
+    /// Set by activateBehaviorSpecs and left unchanged for descendants.
+    UIElement* documentRoot = nullptr;
 };
 
 struct IUIBehaviorActivator
@@ -48,7 +51,8 @@ struct IUIBehaviorActivator
 };
 
 /// Call `activator` once per spec, visiting `root`'s subtree in preorder and a
-/// node's specs in authored order.
+/// node's specs in authored order. Sets `context.documentRoot` to `root` for
+/// the whole walk; descendants do not become their own document root.
 YA_GUI_API void activateBehaviorSpecs(UIElement& root, IUIBehaviorActivator& activator, const FUIBehaviorActivation& context);
 
 } // namespace ya

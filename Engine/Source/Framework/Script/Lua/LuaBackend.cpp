@@ -36,6 +36,8 @@ struct LuaLogicAuthoring final : IUILogicAuthoring
         data = nlohmann::json{{"script", ScriptInstance::normalizeScriptPath(std::move(path))}};
     }
 
+    bool claims(std::string_view type) const override { return type == "script.lua"; }
+
     std::string pathOf(std::string_view type, const nlohmann::json& data) const override
     {
         if (type != "script.lua" || !data.is_object()) {

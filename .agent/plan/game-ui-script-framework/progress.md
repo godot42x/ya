@@ -288,14 +288,14 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 
 完成：
 
-- 一份 UI 文档只有一个逻辑类，存在根上的 `logic`，不是每个控件一份 `script.lua`。设计器只在预览根上编辑它，spec 来自 `IUILogicAuthoring`（Lua 后端登记；没登记就不显示）。路径用文本框或脚本文件选择器修改。属性行只读发现 `_PROPERTIES`，不把覆盖写进 `spec.data`，也不调用 `onInit` / `onUpdate`。子控件上的 `script.lua` 行为描述运行时忽略。`self` 是该文档的根。
+- 一份 UI 文档只有一个逻辑类：宿主认领的一条 behavior，写在文档根的 `behaviors` 里，不是 GUI 的 `logic` 字段，也不是每个控件一份 `script.lua`。设计器只在预览根上编辑它，spec 来自 `IUILogicAuthoring`（Lua 后端登记；没登记就不显示）。路径用文本框或脚本文件选择器修改。属性行只读发现 `_PROPERTIES`，不把覆盖写进 `spec.data`，也不调用 `onInit` / `onUpdate`。子控件上的 `script.lua` 行为描述运行时忽略。`self` 是该文档的根。
 - 层级检查器在选中 Game UI 条目时编辑 `modal`、`pausesGame`、`clock`（Real / Game）和 `zOrder`。
 - 新建 Game UI 弹出名称框。重名（文件、存储、已挂载条目）拒绝并警告，不自动改成 PanelN。建议名只作为对话框初值。内容浏览器在当前目录创建；层级菜单「New Game UI」仍创建在 `Content:UI`。`zOrder` 取现有最大值 + 10，没有条目时为 10。根类型仍是 `engine.panel`。
 - 内容浏览器「New Script」在当前目录写入 `name.lua`。模板含 `onInit`（示范 `self:find("Button").onClicked:add(self, fn)`）、`onUpdate`、`onCancel`。
 
 未做：点锚点（H9）仍 `blocked_on_D7`。控件脚本的属性覆盖不进文档、运行时也不应用。S7（GreedySnake 迁移与自动化）未开始。
 
-验证：`UIDocumentTest.LogicRoundtripIsRootOnly`、`EditorUIDesignerSessionTest.LogicOnTheDocumentRootSurvivesReopen`、`GameUIScriptTest.ChildScriptSpecIsIgnored`、`EditorGameUIAuthoringTest.ChosenNameStepsZOrderAndEntryFields`、`EditorGameUIAuthoringTest.UiScriptTemplateShowsClickAndCancel`、`EditorGameUIPreviewTest.PreviewDoesNotActivateBehaviors` 通过。重开走文档存储里 `commitEdit` 发布的副本；无 VFS 时 `UIDocumentStore::save` 仍打错误日志，创建不因此失败。GreedySnake editor `--exit-after-frame=60` 在 60 帧退出，日志无 `[Error]`。
+验证：`UIDocumentTest.StrayLogicKeyIsIgnoredAndBehaviorsRoundtrip`、`EditorUIDesignerSessionTest.LogicOnTheDocumentRootSurvivesReopen`、`GameUIScriptTest.ChildScriptSpecIsIgnored`、`EditorGameUIAuthoringTest.ChosenNameStepsZOrderAndEntryFields`、`EditorGameUIAuthoringTest.UiScriptTemplateShowsClickAndCancel`、`EditorGameUIPreviewTest.PreviewDoesNotActivateBehaviors` 通过。重开走文档存储里 `commitEdit` 发布的副本；无 VFS 时 `UIDocumentStore::save` 仍打错误日志，创建不因此失败。GreedySnake editor `--exit-after-frame=60` 在 60 帧退出，日志无 `[Error]`。
 
 下一步：S7。H9 仍等 D7。
 
@@ -311,3 +311,14 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 未做：点锚点（H9）仍 `blocked_on_D7`。控件脚本的属性覆盖不进文档。`UIBase`、声明式绑定、spawn 查找域不在本步。
 
 验证：`GameUIHostTest.MountedTextVisibilityAndButtonClick` 通过。`rg` 审计 `Snake.lua` 无控件名 / `settingsOpen` / `setKeyHandler` / `setText` / `setVisible`。`Script/automation/greedy-snake/play.py` exit 0（撞墙、presentation 截图、重开后分数 0、Esc 期间蛇头不动、Fast 后恢复移动，头从 0 到 3）。日志无 Lua error。
+
+## 2026-10-10 — 文档类回到 behaviors
+
+完成：
+
+- GUI 去掉 `UIDocument::logic` / `UIElement::_logic` 和 JSON `logic`。文档类是根上由 `IUILogicAuthoring::claims` 认领的一条 `behaviors` 记录。`activateBehaviorSpecs` 把遍历起点记成 `documentRoot`，宿主只在这个起点上激活 `script.lua`。spawn 的子文档以自己的根为起点。
+- Dialogue 从 `logic` 迁到根上的 `behaviors`。设计器 Logic 行仍只出现在预览根上，替换同类型的那一条，其它 behavior 不动。
+
+未做：点锚点（H9）仍 `blocked_on_D7`。`UIBase`、声明式绑定、spawn 查找域不在本步。
+
+验证：`UIDocumentTest.*`、`EditorUIDesignerSessionTest.LogicOnTheDocumentRootSurvivesReopen`、`EditorGameUIPreviewTest.PreviewDoesNotActivateBehaviors`、`GameUIScriptTest.*` 共 42 通过。`Script/automation/greedy-snake/play.py` exit 0（撞墙、截图、重开后分数 0、Esc 暂停、Fast 后头从 0 到 3）。

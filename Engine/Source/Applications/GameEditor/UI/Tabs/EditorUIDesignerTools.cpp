@@ -81,12 +81,24 @@ std::string scriptPropertyText(const ScriptProperty& prop)
     return prop.typeHint.empty() ? std::string("—") : prop.typeHint;
 }
 
+const FUIBehaviorSpec* claimedBehavior(const UIElement& widget, const IUILogicAuthoring& authoring)
+{
+    for (const FUIBehaviorSpec& spec : widget._behaviorSpecs) {
+        if (authoring.claims(spec.type)) {
+            return &spec;
+        }
+    }
+    return nullptr;
+}
+
 std::string logicFingerprint(const UIElement& widget)
 {
-    if (!widget._logic) {
+    IUILogicAuthoring* authoring = uiLogicAuthoring();
+    if (!authoring) {
         return {};
     }
-    return widget._logic->type + widget._logic->data.dump();
+    const FUIBehaviorSpec* spec = claimedBehavior(widget, *authoring);
+    return spec ? spec->type + spec->data.dump() : std::string{};
 }
 
 UIElementRef makeLogicGroup(EditorLayer& layer, EditorUIDesignerSession& designer, const UIElement& root)
@@ -95,13 +107,15 @@ UIElementRef makeLogicGroup(EditorLayer& layer, EditorUIDesignerSession& designe
     if (!authoring) {
         return nullptr;
     }
-    const std::string path = root._logic ? authoring->pathOf(root._logic->type, root._logic->data) : std::string{};
+    const FUIBehaviorSpec* claimed = claimedBehavior(root, *authoring);
+    const std::string path = claimed ? authoring->pathOf(claimed->type, claimed->data) : std::string{};
+    const std::string claimedType = claimed ? claimed->type : std::string{};
     auto column = ui::column("UIDesignerLogic").setSpacing(4.0f);
     column = column.child(ui::text("UIDesignerLogicTitle").setText("Logic").setStyleKey("text.eyebrow"));
     auto field = ui::textField("UIDesignerLogicPath").setStyleKey(editorStyle(StyleKey::TextField)).setText(path);
-    (void)field.setOnCommit([&designer, authoring](const std::string& text) {
+    (void)field.setOnCommit([&designer, authoring, claimedType](const std::string& text) {
         if (text.empty()) {
-            (void)designer.clearDocumentLogic();
+            (void)designer.clearDocumentLogic(claimedType);
             return;
         }
         std::string    type;
@@ -123,9 +137,9 @@ UIElementRef makeLogicGroup(EditorLayer& layer, EditorUIDesignerSession& designe
                         }));
                     }),
                     ui::boxSlot().preferredSize({64.0f, 24.0f}));
-    if (root._logic) {
-        row = row.child(labeledButton("UIDesignerLogicClear", "Clear").setOnClick([&designer]() {
-                            (void)designer.clearDocumentLogic();
+    if (!claimedType.empty()) {
+        row = row.child(labeledButton("UIDesignerLogicClear", "Clear").setOnClick([&designer, claimedType]() {
+                            (void)designer.clearDocumentLogic(claimedType);
                         }),
                         ui::boxSlot().preferredSize({64.0f, 24.0f}));
     }

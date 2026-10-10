@@ -870,6 +870,8 @@ TEST(EditorUIDesignerSessionTest, LogicOnTheDocumentRootSurvivesReopen)
     auto             child = UITypeRegistry::instance().createInstance(kTypeIdButton);
     root->_name           = "HUD";
     child->_name          = "Go";
+    const FUIBehaviorSpec pulse{.type = "anim.pulse", .data = {{"period", 0.5}}};
+    root->_behaviorSpecs = {pulse};
     root->addDetachedChild(child);
     fixture.publish(*root);
 
@@ -883,9 +885,10 @@ TEST(EditorUIDesignerSessionTest, LogicOnTheDocumentRootSurvivesReopen)
     expectOneUndoableStep(designer, [&]() { ASSERT_TRUE(designer.setDocumentLogic(spec)); });
     hud = designer.getPreviewRoot();
     ASSERT_NE(hud, nullptr);
-    ASSERT_TRUE(hud->_logic.has_value());
-    EXPECT_EQ(*hud->_logic, spec);
-    EXPECT_FALSE(hud->getChildren()[0]->_logic.has_value());
+    ASSERT_EQ(hud->_behaviorSpecs.size(), 2u);
+    EXPECT_EQ(hud->_behaviorSpecs[0], pulse);
+    EXPECT_EQ(hud->_behaviorSpecs[1], spec);
+    EXPECT_TRUE(hud->getChildren()[0]->_behaviorSpecs.empty());
     const size_t steps = designer.undoStack().undoCount();
     EXPECT_FALSE(designer.setDocumentLogic(spec));
     EXPECT_EQ(designer.undoStack().undoCount(), steps);
@@ -894,10 +897,11 @@ TEST(EditorUIDesignerSessionTest, LogicOnTheDocumentRootSurvivesReopen)
     ASSERT_TRUE(designer.openDocument(FDesignerFixture::kDocumentPath));
     UIElement* again = designer.getPreviewRoot();
     ASSERT_NE(again, nullptr);
-    ASSERT_TRUE(again->_logic.has_value());
-    EXPECT_EQ(*again->_logic, spec);
+    ASSERT_EQ(again->_behaviorSpecs.size(), 2u);
+    EXPECT_EQ(again->_behaviorSpecs[0], pulse);
+    EXPECT_EQ(again->_behaviorSpecs[1], spec);
     ASSERT_EQ(again->getChildren().size(), 1u);
-    EXPECT_FALSE(again->getChildren()[0]->_logic.has_value());
+    EXPECT_TRUE(again->getChildren()[0]->_behaviorSpecs.empty());
     EXPECT_TRUE(again->getBehaviors().empty());
     EXPECT_TRUE(again->getChildren()[0]->getBehaviors().empty());
 }

@@ -41,6 +41,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <set>
 #include <vector>
 
@@ -167,13 +168,14 @@ struct EditorUIDesignerSession
     /// deleted (a UIDocument always has exactly one root). Returns true when
     /// the widget was removed.
     bool deleteWidget(UIElement* widget);
-    /// Replace the open document's one logic class and commit. The spec is
-    /// opaque; the designer preview does not activate it. False when no
-    /// document is open or `type` is empty.
+    /// Replace or append one behavior spec of `spec.type` on the preview root
+    /// and commit. The spec is opaque; the designer preview does not activate
+    /// it. False when no document is open, `type` is empty, or that exact spec
+    /// is already on the root.
     bool setDocumentLogic(FUIBehaviorSpec spec);
-    /// Drop the open document's logic class and commit. False when it was
-    /// already empty.
-    bool clearDocumentLogic();
+    /// Remove every behavior spec of `type` from the preview root and commit.
+    /// False when none were present.
+    bool clearDocumentLogic(std::string_view type);
     /// The document slot of a preview widget. nullptr for the document root:
     /// its parent edge belongs to the designer host, not to the document.
     [[nodiscard]] std::unique_ptr<EditorUISlotEdit> editSlot(UIElement* widget) const;

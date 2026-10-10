@@ -101,31 +101,12 @@ bool parseBehaviors(const nlohmann::json& j, std::vector<FUIBehaviorSpec>& out)
     }
     return true;
 }
-
-bool parseLogicSpec(const nlohmann::json& item, FUIBehaviorSpec& spec)
-{
-    if (!item.is_object()) {
-        return false;
-    }
-    auto typeIt = item.find("type");
-    if (typeIt == item.end() || !typeIt->is_string() || typeIt->get_ref<const std::string&>().empty()) {
-        return false;
-    }
-    spec.type = typeIt->get<std::string>();
-    if (auto dataIt = item.find("data"); dataIt != item.end()) {
-        if (!dataIt->is_object()) {
-            return false;
-        }
-        spec.data = *dataIt;
-    }
-    return true;
-}
 }
 
 namespace ya
 {
 
-std::shared_ptr<UIDocument> captureWidget(const UIElement& widget, bool bRoot)
+std::shared_ptr<UIDocument> captureWidget(const UIElement& widget)
 {
     if (widget._typeId.empty()) {
         YA_CORE_ERROR("UIDocument::fromWidget: widget '{}' has no registry type ID "
@@ -134,16 +115,13 @@ std::shared_ptr<UIDocument> captureWidget(const UIElement& widget, bool bRoot)
         return nullptr;
     }
 
-    auto document     = std::make_shared<UIDocument>();
-    document->typeId  = widget._typeId;
-    document->fields  = widget.serializeFields();
+    auto document       = std::make_shared<UIDocument>();
+    document->typeId    = widget._typeId;
+    document->fields    = widget.serializeFields();
     stripUIElementGeometry(document->fields);
-    if (bRoot) {
-        document->logic = widget._logic;
-    }
     document->behaviors = widget._behaviorSpecs;
     for (const auto& child : widget.getChildren()) {
-        if (auto childDoc = captureWidget(*child, false)) {
+        if (auto childDoc = captureWidget(*child)) {
             document->children.push_back(std::move(childDoc));
             document->childSlots.push_back(widget.getSlotForChild(*child) ? slotToJson(*widget.getSlotForChild(*child)) : nlohmann::json{{"type", "base"}});
         }
@@ -157,7 +135,7 @@ namespace ya
 
 std::shared_ptr<UIDocument> UIDocument::fromWidget(const UIElement& widget)
 {
-    return captureWidget(widget, true);
+    return captureWidget(widget);
 }
 
 UIElementRef UIDocument::instantiate() const
@@ -169,7 +147,6 @@ UIElementRef UIDocument::instantiate() const
     }
 
     root->deserializeFields(fields);
-    root->_logic         = logic;
     root->_behaviorSpecs = behaviors;
 
     for (size_t i = 0; i < children.size(); ++i) {
@@ -195,9 +172,6 @@ nlohmann::json UIDocument::toJson() const
     j["typeId"]  = typeId;
     j["fields"]  = fields;
     stripUIElementGeometry(j["fields"]);
-    if (logic) {
-        j["logic"] = {{"type", logic->type}, {"data", logic->data}};
-    }
     if (!behaviors.empty()) {
         j["behaviors"] = behaviorsToJson(behaviors);
     }
@@ -209,7 +183,7 @@ nlohmann::json UIDocument::toJson() const
     return j;
 }
 
-std::shared_ptr<UIDocument> parseDocument(const nlohmann::json& json, bool bRoot)
+std::shared_ptr<UIDocument> parseDocument(const nlohmann::json& json)
 {
     if (!json.is_object() || !json.contains("version") || !json.contains("typeId")) {
         YA_CORE_ERROR("UIDocument::fromJson: malformed document (missing version/typeId)");
@@ -230,17 +204,6 @@ std::shared_ptr<UIDocument> parseDocument(const nlohmann::json& json, bool bRoot
             return nullptr;
         }
     }
-    if (bRoot) {
-        if (auto it = json.find("logic"); it != json.end()) {
-            FUIBehaviorSpec spec;
-            if (!parseLogicSpec(*it, spec)) {
-                YA_CORE_ERROR("UIDocument::fromJson: '{}' logic must be {{\"type\": non-empty string, \"data\": object}}",
-                              document->typeId);
-                return nullptr;
-            }
-            document->logic = std::move(spec);
-        }
-    }
     if (auto it = json.find("behaviors"); it != json.end() && !parseBehaviors(*it, document->behaviors)) {
         YA_CORE_ERROR("UIDocument::fromJson: '{}' behaviors must be [{{\"type\": non-empty string, \"data\": object}}]",
                       document->typeId);
@@ -248,7 +211,7 @@ std::shared_ptr<UIDocument> parseDocument(const nlohmann::json& json, bool bRoot
     }
     if (json.contains("children") && json["children"].is_array()) {
         for (const auto& childJson : json["children"]) {
-            if (auto child = parseDocument(childJson, false)) {
+            if (auto child = parseDocument(childJson)) {
                 document->children.push_back(std::move(child));
             }
             else {
@@ -268,7 +231,7 @@ std::shared_ptr<UIDocument> parseDocument(const nlohmann::json& json, bool bRoot
 
 std::shared_ptr<UIDocument> UIDocument::fromJson(const nlohmann::json& json)
 {
-    return parseDocument(json, true);
+    return parseDocument(json);
 }
 
 } // namespace ya

@@ -174,6 +174,7 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   **一个控件每种行为至多一个**：`addBehavior` 按种类键拒绝同类第二个（返回 false + ERROR），
   所以 `findBehavior<T>()`（扫连续种类键，返回 `T*`，无 RTTI）结果唯一。需要多份工作的行为自己在内部持有多份
   （`UIAnimatorBehavior` 持有多个 `UITween`；一个控件至多一个 `script.lua`）。
+  文档节点上的 `behaviors` 只往返 `type` / `data`，GUI 不解释。`activateBehaviorSpecs` 从调用方给出的根开始遍历，并把这个根记成 `documentRoot`，子节点不会变成自己的根。哪一种 spec 只在这个根上生效，由宿主决定；GUI 没有 logic 字段，也不知道 Lua。
   文本焦点：`UITextField` 消费 `KeyTyped`（IME 提交）、按码点 Backspace/Delete，选区
   （anchor/caret、Shift+方向、拖选、primary+A），以及
   primary+C/X/V（Cmd macOS / Ctrl 别处）经 `WidgetTree` clipboard（作用在选区上；
