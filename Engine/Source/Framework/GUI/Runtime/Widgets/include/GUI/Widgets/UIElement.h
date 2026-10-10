@@ -28,6 +28,7 @@
 #include <glm/glm.hpp>
 
 #include <concepts>
+#include <optional>
 #include <functional>
 #include <memory>
 #include <span>
@@ -255,6 +256,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// by the GUI (see IUIBehaviorActivator). Kept on the widget so a document
     /// survives instantiate -> fromWidget.
     std::vector<FUIBehaviorSpec> _behaviorSpecs;
+    /// Document logic class (UIDocument `logic`). Only the root widget of a
+    /// document carries one. Opaque here, same rules as `_behaviorSpecs`.
+    std::optional<FUIBehaviorSpec> _logic;
 
     /// Runtime type identity for reflection-based field serialization
     /// (UIDocument). Registry owns the authoring type ID; this is the C++

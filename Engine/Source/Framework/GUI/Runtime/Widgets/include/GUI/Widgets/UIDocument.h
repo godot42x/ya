@@ -8,6 +8,7 @@
 //     "version": 1,
 //     "typeId":  "engine.panel",
 //     "fields":  { ...reflected field values... },
+//     "logic":   { "type": "...", "data": { ... } },          (optional, root only)
 //     "behaviors": [ { "type": "...", "data": { ... } } ],   (optional)
 //     "children": [ ...nested UIDocument... ]
 //   }
@@ -25,6 +26,7 @@
 #include "GUI/Widgets/UIElement.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -39,6 +41,10 @@ struct YA_GUI_API UIDocument
     std::string typeId;
     /// Reflected field values of the root widget (base + own).
     nlohmann::json fields;
+    /// One opaque logic class for this document. Only the outermost document
+    /// of a file carries it; a nested child that repeats the field is dropped.
+    /// The GUI does not interpret `type` or `data`.
+    std::optional<FUIBehaviorSpec> logic;
     /// Opaque behaviour descriptions of the root widget, in authored order.
     std::vector<FUIBehaviorSpec> behaviors;
     /// Child documents, attached as children of the instantiated root.

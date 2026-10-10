@@ -2,6 +2,7 @@
 
 #include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "ECS/Systems/ScriptPropertyPreview.h"
+#include "ECS/Systems/UILogicAuthoring.h"
 #include "Resource/AssetManager.h"
 
 namespace ya
@@ -12,6 +13,7 @@ namespace
 void (*gDropScriptInstance)(uint64_t) = nullptr;
 
 IScriptPropertyPreview* gScriptPropertyPreview = nullptr;
+IUILogicAuthoring*      gUILogicAuthoring      = nullptr;
 
 } // namespace
 
@@ -36,6 +38,16 @@ void setScriptPropertyPreview(IScriptPropertyPreview* preview)
 IScriptPropertyPreview* scriptPropertyPreview()
 {
     return gScriptPropertyPreview;
+}
+
+void setUILogicAuthoring(IUILogicAuthoring* authoring)
+{
+    gUILogicAuthoring = authoring;
+}
+
+IUILogicAuthoring* uiLogicAuthoring()
+{
+    return gUILogicAuthoring;
 }
 
 std::string ScriptInstance::normalizeScriptPath(std::string_view path)

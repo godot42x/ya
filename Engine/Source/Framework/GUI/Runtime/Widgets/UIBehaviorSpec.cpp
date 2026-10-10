@@ -7,6 +7,9 @@ namespace ya
 
 void activateBehaviorSpecs(UIElement& root, IUIBehaviorActivator& activator, const FUIBehaviorActivation& context)
 {
+    if (root._logic) {
+        activator.activate(root, *root._logic, context);
+    }
     for (const FUIBehaviorSpec& spec : root._behaviorSpecs) {
         activator.activate(root, spec, context);
     }

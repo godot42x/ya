@@ -473,6 +473,51 @@ TEST(UIDocumentTest, BehaviorSpecsRoundtripOnEveryNode)
     EXPECT_EQ(json["children"][0]["children"][0]["behaviors"].size(), 2u);
 }
 
+TEST(UIDocumentTest, LogicRoundtripIsRootOnly)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+    auto  root     = registry.createInstance("test.doc_container");
+    auto  leaf     = registry.createInstance("test.doc_button");
+    ASSERT_NE(root, nullptr);
+    ASSERT_NE(leaf, nullptr);
+    const FUIBehaviorSpec logic{.type = "vendor.logic", .data = {{"id", "UI/HUD.lua"}}};
+    root->_logic = logic;
+    leaf->_logic = FUIBehaviorSpec{.type = "vendor.logic", .data = {{"id", "UI/Child.lua"}}};
+    leaf->_behaviorSpecs = {{.type = "anim.pulse", .data = {{"period", 0.5}}}};
+    root->addDetachedChild(leaf);
+
+    const nlohmann::json json = UIDocument::fromWidget(*root)->toJson();
+    EXPECT_TRUE(json.contains("logic"));
+    EXPECT_FALSE(json["children"][0].contains("logic"));
+    EXPECT_EQ(json["children"][0]["behaviors"].size(), 1u);
+
+    auto reloaded = UIDocument::fromJson(json);
+    ASSERT_NE(reloaded, nullptr);
+    ASSERT_TRUE(reloaded->logic.has_value());
+    EXPECT_EQ(*reloaded->logic, logic);
+    ASSERT_EQ(reloaded->children.size(), 1u);
+    EXPECT_FALSE(reloaded->children[0]->logic.has_value());
+
+    UIElementRef instance = reloaded->instantiate();
+    ASSERT_NE(instance, nullptr);
+    ASSERT_TRUE(instance->_logic.has_value());
+    EXPECT_EQ(*instance->_logic, logic);
+    ASSERT_EQ(instance->getChildren().size(), 1u);
+    EXPECT_FALSE(instance->getChildren()[0]->_logic.has_value());
+    EXPECT_TRUE(instance->getBehaviors().empty());
+
+    nlohmann::json nested = json;
+    nested["children"][0]["logic"] = {{"type", "vendor.logic"}, {"data", {{"id", "dropped"}}}};
+    auto dropped = UIDocument::fromJson(nested);
+    ASSERT_NE(dropped, nullptr);
+    EXPECT_FALSE(dropped->children[0]->logic.has_value());
+
+    nlohmann::json bad = json;
+    bad["logic"] = 3;
+    EXPECT_EQ(UIDocument::fromJson(bad), nullptr);
+}
+
 TEST(UIDocumentTest, UnknownBehaviorTypeIsKeptOpaque)
 {
     ensureTestTypesRegistered();

@@ -7,7 +7,7 @@
 #include "Core/Event.h"
 #include "Core/Scripting/ScriptValue.h"
 #include "ECS/Systems/ScriptInstance.h"
-#include "ECS/Systems/ScriptPropertyPreview.h"
+#include "ECS/Systems/UILogicAuthoring.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/UIBehaviorSpec.h"
@@ -81,85 +81,75 @@ std::string scriptPropertyText(const ScriptProperty& prop)
     return prop.typeHint.empty() ? std::string("—") : prop.typeHint;
 }
 
-std::string behaviorFingerprint(const UIElement& widget)
+std::string logicFingerprint(const UIElement& widget)
 {
-    std::string out;
-    for (const FUIBehaviorSpec& spec : widget._behaviorSpecs) {
-        out += '|';
-        out += spec.type;
-        if (spec.data.contains("script") && spec.data["script"].is_string()) {
-            out += '=';
-            out += spec.data["script"].get<std::string>();
-        }
+    if (!widget._logic) {
+        return {};
     }
-    return out;
+    return widget._logic->type + widget._logic->data.dump();
 }
 
-UIElementRef makeBehaviorGroup(EditorLayer& layer, EditorUIDesignerSession& designer, UIElement& selected)
+UIElementRef makeLogicGroup(EditorLayer& layer, EditorUIDesignerSession& designer, const UIElement& root)
 {
-    auto column = ui::column("UIDesignerBehaviors").setSpacing(4.0f);
-    column = column.child(ui::text("UIDesignerBehaviorsTitle").setText("Behaviors").setStyleKey("text.eyebrow"));
-    column = column.child(labeledButton("UIDesignerBehaviorAdd", "Add Script").setOnClick([&designer, &selected]() {
-                               (void)designer.addLuaScript(&selected);
-                           }),
-                           ui::boxSlot().preferredSize({0.0f, 24.0f}));
-
-    for (size_t index = 0; index < selected._behaviorSpecs.size(); ++index) {
-        const FUIBehaviorSpec& spec = selected._behaviorSpecs[index];
-        const std::string      key  = std::format("UIDesignerBehavior_{}", index);
-        auto row = ui::row(key).setSpacing(4.0f);
-        row = row.child(ui::text(key + "_Type").setText(spec.type).setStyleKey("text.muted").setVAlign(EWidgetAlignV::Center),
-                        ui::boxSlot().preferredSize({88.0f, 24.0f}));
-        if (spec.type == "script.lua") {
-            const std::string path = spec.data.contains("script") && spec.data["script"].is_string()
-                                         ? spec.data["script"].get<std::string>()
-                                         : std::string{};
-            auto field = ui::textField(key + "_Path").setStyleKey(editorStyle(StyleKey::TextField)).setText(path);
-            (void)field.setOnCommit([&designer, &selected, index](const std::string& text) {
-                (void)designer.setBehaviorScript(&selected, index, text);
-            });
-            row = row.child(std::move(field), ui::boxSlot().fillWidth().preferredSize({0.0f, 24.0f}));
-            row = row.child(labeledButton(key + "_Browse", "Browse").setOnClick([&layer, &designer, &selected, index, path]() {
-                                if (!layer._filePickerHandler) {
-                                    return;
-                                }
-                                layer._filePickerHandler(makeScriptFilePickerRequest(path, [&designer, &selected, index](std::string picked) {
-                                    (void)designer.setBehaviorScript(&selected, index, std::move(picked));
-                                }));
-                            }),
-                            ui::boxSlot().preferredSize({64.0f, 24.0f}));
+    IUILogicAuthoring* authoring = uiLogicAuthoring();
+    if (!authoring) {
+        return nullptr;
+    }
+    const std::string path = root._logic ? authoring->pathOf(root._logic->type, root._logic->data) : std::string{};
+    auto column = ui::column("UIDesignerLogic").setSpacing(4.0f);
+    column = column.child(ui::text("UIDesignerLogicTitle").setText("Logic").setStyleKey("text.eyebrow"));
+    auto field = ui::textField("UIDesignerLogicPath").setStyleKey(editorStyle(StyleKey::TextField)).setText(path);
+    (void)field.setOnCommit([&designer, authoring](const std::string& text) {
+        if (text.empty()) {
+            (void)designer.clearDocumentLogic();
+            return;
         }
-        row = row.child(labeledButton(key + "_Remove", "Remove").setOnClick([&designer, &selected, index]() {
-                            (void)designer.removeBehavior(&selected, index);
+        std::string    type;
+        nlohmann::json data;
+        authoring->describe(text, type, data);
+        (void)designer.setDocumentLogic(FUIBehaviorSpec{.type = std::move(type), .data = std::move(data)});
+    });
+    auto row = ui::row("UIDesignerLogicRow").setSpacing(4.0f);
+    row = row.child(std::move(field), ui::boxSlot().fillWidth().preferredSize({0.0f, 24.0f}));
+    row = row.child(labeledButton("UIDesignerLogicBrowse", "Browse").setOnClick([&layer, &designer, authoring, path]() {
+                        if (!layer._filePickerHandler) {
+                            return;
+                        }
+                        layer._filePickerHandler(makeScriptFilePickerRequest(path, [&designer, authoring](std::string picked) {
+                            std::string    type;
+                            nlohmann::json data;
+                            authoring->describe(std::move(picked), type, data);
+                            (void)designer.setDocumentLogic(FUIBehaviorSpec{.type = std::move(type), .data = std::move(data)});
+                        }));
+                    }),
+                    ui::boxSlot().preferredSize({64.0f, 24.0f}));
+    if (root._logic) {
+        row = row.child(labeledButton("UIDesignerLogicClear", "Clear").setOnClick([&designer]() {
+                            (void)designer.clearDocumentLogic();
                         }),
                         ui::boxSlot().preferredSize({64.0f, 24.0f}));
-        column = column.child(std::move(row), ui::boxSlot().preferredSize({0.0f, 24.0f}));
-
-        if (spec.type == "script.lua" && spec.data.contains("script") && spec.data["script"].is_string() &&
-            !spec.data["script"].get<std::string>().empty()) {
-            ScriptInstance preview;
-            preview.scriptPath = spec.data["script"].get<std::string>();
-            if (IScriptPropertyPreview* loader = scriptPropertyPreview()) {
-                (void)loader->load(preview);
-            }
-            if (preview.bAuthoringPreviewLoaded && preview.properties.empty()) {
-                column = column.child(ui::text(key + "_NoProps")
-                                          .setText("No _PROPERTIES table on this script")
-                                          .setStyleKey("text.muted")
-                                          .setWrap(true));
-            }
-            for (size_t property = 0; property < preview.properties.size(); ++property) {
-                const ScriptProperty& prop = preview.properties[property];
-                column = column.child(ui::text(std::format("{}_Prop{}", key, property))
-                                          .setText(prop.name + ": " + scriptPropertyText(prop))
-                                          .setStyleKey("text.small")
-                                          .setWrap(true));
-            }
-            if (!preview.scriptPath.empty() && preview.bAuthoringPreviewAttempted && !preview.bAuthoringPreviewLoaded) {
-                column = column.child(ui::text(key + "_Failed")
-                                          .setText("Status: Failed to load")
-                                          .setStyleKey("text.error"));
-            }
+    }
+    column = column.child(std::move(row), ui::boxSlot().preferredSize({0.0f, 24.0f}));
+    if (!path.empty()) {
+        ScriptInstance preview;
+        (void)authoring->loadPreview(path, preview);
+        if (preview.bAuthoringPreviewLoaded && preview.properties.empty()) {
+            column = column.child(ui::text("UIDesignerLogicNoProps")
+                                      .setText("No _PROPERTIES table on this script")
+                                      .setStyleKey("text.muted")
+                                      .setWrap(true));
+        }
+        for (size_t property = 0; property < preview.properties.size(); ++property) {
+            const ScriptProperty& prop = preview.properties[property];
+            column = column.child(ui::text(std::format("UIDesignerLogicProp{}", property))
+                                      .setText(prop.name + ": " + scriptPropertyText(prop))
+                                      .setStyleKey("text.small")
+                                      .setWrap(true));
+        }
+        if (preview.bAuthoringPreviewAttempted && !preview.bAuthoringPreviewLoaded) {
+            column = column.child(ui::text("UIDesignerLogicFailed")
+                                      .setText("Status: Failed to load")
+                                      .setStyleKey("text.error"));
         }
     }
     return column.share();
@@ -483,14 +473,14 @@ void EditorUIInspectorTab::clearInspector(WidgetTree& tree)
     if (_slotGroup && _slotGroup->isAttached()) {
         tree.detach(*_slotGroup);
     }
-    if (_behaviorGroup && _behaviorGroup->isAttached()) {
-        tree.detach(*_behaviorGroup);
+    if (_logicGroup && _logicGroup->isAttached()) {
+        tree.detach(*_logicGroup);
     }
     _inspectorSection.reset();
     _slotSection.reset();
     _slotGroup.reset();
     _slotEdit.reset();
-    _behaviorGroup.reset();
+    _logicGroup.reset();
 }
 
 void EditorUIInspectorTab::rebuildInspector(WidgetTree& tree, UIElement* selected)
@@ -506,7 +496,7 @@ void EditorUIInspectorTab::rebuildInspector(WidgetTree& tree, UIElement* selecte
                                   selected->_typeId,
                                   reinterpret_cast<uintptr_t>(selected),
                                   reinterpret_cast<uintptr_t>(parent ? parent->getSlotForChild(*selected) : nullptr),
-                                  behaviorFingerprint(*selected));
+                                  logicFingerprint(*selected));
     }
     if (fingerprint == _inspectorFingerprint) {
         return;
@@ -547,9 +537,11 @@ void EditorUIInspectorTab::rebuildInspector(WidgetTree& tree, UIElement* selecte
         _inspectorSection = std::move(section);
     }
 
-    if (_layer) {
-        _behaviorGroup = makeBehaviorGroup(*_layer, designer, *selected);
-        _inspectorHost->addDetachedChild(_behaviorGroup);
+    if (_layer && selected == designer.getPreviewRoot()) {
+        _logicGroup = makeLogicGroup(*_layer, designer, *selected);
+        if (_logicGroup) {
+            _inspectorHost->addDetachedChild(_logicGroup);
+        }
     }
 
     std::unique_ptr<EditorUISlotEdit> slotEdit = designer.editSlot(selected);

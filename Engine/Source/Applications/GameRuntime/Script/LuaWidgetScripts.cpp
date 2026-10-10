@@ -187,6 +187,12 @@ void LuaWidgetScripts::activate(UIElement& widget, const FUIBehaviorSpec& spec, 
         }
         return;
     }
+    const bool bDocumentLogic = widget._logic.has_value() && &spec == &*widget._logic;
+    if (!bDocumentLogic && &widget != &context.entryRoot) {
+        YA_CORE_WARN("Game UI: script.lua on '{}' in entry '{}' is not the document logic class; ignored",
+                     widget._name, context.entryId);
+        return;
+    }
     const auto script = spec.data.find("script");
     if (script == spec.data.end() || !script->is_string() || script->get_ref<const std::string&>().empty()) {
         YA_CORE_WARN("Game UI: script.lua on '{}' in entry '{}' has no \"script\" path", widget._name, context.entryId);

@@ -17,7 +17,6 @@
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Layout/UILayout.h"
-#include "ECS/Systems/ScriptInstance.h"
 #include "Scene/Core/SceneWidgetEntry.h"
 
 #include <gtest/gtest.h>
@@ -864,34 +863,43 @@ TEST(EditorUIDesignerSessionTest, FitCentresTheDesignFrameInsideTheMargin)
     EXPECT_FLOAT_EQ(lo.y + hi.y, 600.0f) << "centred vertically";
 }
 
-TEST(EditorUIDesignerSessionTest, ScriptOnAButtonSurvivesReopen)
+TEST(EditorUIDesignerSessionTest, LogicOnTheDocumentRootSurvivesReopen)
 {
     FDesignerFixture fixture;
-    auto             button = UITypeRegistry::instance().createInstance(kTypeIdButton);
-    button->_name           = "Go";
-    fixture.publish(*button);
+    auto             root  = UITypeRegistry::instance().createInstance(kTypeIdCanvasPanel);
+    auto             child = UITypeRegistry::instance().createInstance(kTypeIdButton);
+    root->_name           = "HUD";
+    child->_name          = "Go";
+    root->addDetachedChild(child);
+    fixture.publish(*root);
 
     EditorUIDesignerSession& designer = fixture.layer.getEditorUIDesignerSession();
     ASSERT_TRUE(designer.openDocument(FDesignerFixture::kDocumentPath));
-    UIElement* go = designer.getPreviewRoot();
-    ASSERT_NE(go, nullptr);
-    ASSERT_EQ(go->_name, "Go");
+    UIElement* hud = designer.getPreviewRoot();
+    ASSERT_NE(hud, nullptr);
+    ASSERT_EQ(hud->getChildren().size(), 1u);
 
-    expectOneUndoableStep(designer, [&]() { ASSERT_TRUE(designer.addLuaScript(go)); });
-    go = designer.getPreviewRoot();
-    ASSERT_NE(go, nullptr);
-    ASSERT_EQ(go->_behaviorSpecs.size(), 1u);
+    const FUIBehaviorSpec spec{.type = "vendor.logic", .data = {{"id", "UI/Go.lua"}}};
+    expectOneUndoableStep(designer, [&]() { ASSERT_TRUE(designer.setDocumentLogic(spec)); });
+    hud = designer.getPreviewRoot();
+    ASSERT_NE(hud, nullptr);
+    ASSERT_TRUE(hud->_logic.has_value());
+    EXPECT_EQ(*hud->_logic, spec);
+    EXPECT_FALSE(hud->getChildren()[0]->_logic.has_value());
+    const size_t steps = designer.undoStack().undoCount();
+    EXPECT_FALSE(designer.setDocumentLogic(spec));
+    EXPECT_EQ(designer.undoStack().undoCount(), steps);
 
-    const std::string path = ScriptInstance::normalizeScriptPath("UI/Go.lua");
-    ASSERT_TRUE(designer.setBehaviorScript(go, 0, "UI/Go.lua"));
     designer.clearDocument();
     ASSERT_TRUE(designer.openDocument(FDesignerFixture::kDocumentPath));
     UIElement* again = designer.getPreviewRoot();
     ASSERT_NE(again, nullptr);
-    ASSERT_EQ(again->_behaviorSpecs.size(), 1u);
-    EXPECT_EQ(again->_behaviorSpecs[0].type, "script.lua");
-    EXPECT_EQ(again->_behaviorSpecs[0].data.at("script").get<std::string>(), path);
+    ASSERT_TRUE(again->_logic.has_value());
+    EXPECT_EQ(*again->_logic, spec);
+    ASSERT_EQ(again->getChildren().size(), 1u);
+    EXPECT_FALSE(again->getChildren()[0]->_logic.has_value());
     EXPECT_TRUE(again->getBehaviors().empty());
+    EXPECT_TRUE(again->getChildren()[0]->getBehaviors().empty());
 }
 
 } // namespace ya

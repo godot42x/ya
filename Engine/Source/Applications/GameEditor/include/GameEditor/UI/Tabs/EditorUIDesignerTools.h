@@ -67,7 +67,7 @@ class EditorUIInspectorTab : public UICompoundWidget
     /// The selected widget's parent-owned slot: its own group below the
     /// widget's properties, edited through `_slotEdit`'s args copy.
     UIElementRef _slotGroup;
-    UIElementRef _behaviorGroup;
+    UIElementRef _logicGroup;
     std::shared_ptr<class EditorAutoPropertySection> _slotSection;
     std::unique_ptr<EditorUISlotEdit> _slotEdit;
     std::string _inspectorFingerprint;

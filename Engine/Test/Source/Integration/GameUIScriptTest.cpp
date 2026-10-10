@@ -1,6 +1,6 @@
-// `script.lua` widget behaviours (game-ui-script-framework S3): lifecycle,
-// opt-in tick, host-clock timers, visibility callbacks, entry-scoped handles,
-// scripts listening to buttons directly, deferred spawn / destroy.
+// Document logic class (`script.lua` on the widget that owns the document):
+// lifecycle, opt-in tick, host-clock timers, visibility callbacks, entry-scoped
+// handles, scripts listening to buttons directly, deferred spawn / destroy.
 // Each test runs a real Lua state with injected script sources; widgets are
 // mounted through the scene-entry path like a running game.
 
@@ -105,7 +105,7 @@ struct FUIScripts
         UIElementRef w = UITypeRegistry::instance().createInstance(typeId);
         w->_name       = name;
         if (!script.empty()) {
-            w->_behaviorSpecs = {{.type = "script.lua", .data = {{"script", scriptPath(script)}}}};
+            w->_logic = FUIBehaviorSpec{.type = "script.lua", .data = {{"script", scriptPath(script)}}};
         }
         return w;
     }
@@ -179,7 +179,7 @@ TEST(GameUIScriptTest, WidgetScriptReceivesLifecycleInOrder)
     FUIScripts ui;
     ui.addScript("Probe", kProbe);
     UIElementRef menu = FUIScripts::widget(kTypeIdCanvasPanel, "Menu", "Probe");
-    menu->addDetachedChild(FUIScripts::widget(kTypeIdButton, "Start", "Probe"));
+    menu->addDetachedChild(FUIScripts::widget(kTypeIdButton, "Start"));
     ui.addEntry("Menu", menu, 10);
     ui.addEntry("HUD", FUIScripts::widget(kTypeIdText, "Score", "Probe"), 0);
 
@@ -188,8 +188,7 @@ TEST(GameUIScriptTest, WidgetScriptReceivesLifecycleInOrder)
 
     // One batch: every onInit before any onStart; entries by zOrder, then tree order.
     ui.frame();
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("Score.init", "Menu.init", "Start.init",
-                                            "Score.start", "Menu.start", "Start.start"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Score.init", "Menu.init", "Score.start", "Menu.start"));
 
     // Event-driven: no onUpdate unless a script asks for ticks.
     for (int i = 0; i < 3; ++i) {
@@ -198,7 +197,7 @@ TEST(GameUIScriptTest, WidgetScriptReceivesLifecycleInOrder)
     EXPECT_THAT(ui.takeTrace(), IsEmpty());
 
     ui.host.onSceneDeactivated(ui.scene);
-    EXPECT_THAT(ui.takeTrace(), UnorderedElementsAre("Score.destroy", "Menu.destroy", "Start.destroy"));
+    EXPECT_THAT(ui.takeTrace(), UnorderedElementsAre("Score.destroy", "Menu.destroy"));
 }
 
 TEST(GameUIScriptTest, WidgetScriptTicksOnlyAfterEnablingAndWhileVisible)
@@ -301,7 +300,7 @@ TEST(GameUIScriptTest, WidgetScriptSeesShowAndHide)
     FUIScripts ui;
     ui.addScript("Probe", kProbe);
     UIElementRef pause = FUIScripts::widget(kTypeIdCanvasPanel, "Pause", "Probe");
-    pause->addDetachedChild(FUIScripts::widget(kTypeIdButton, "Resume", "Probe"));
+    pause->addDetachedChild(FUIScripts::widget(kTypeIdButton, "Resume"));
     pause->setVisibility(EWidgetVisibility::Hidden);
     ui.addEntry("Pause", pause);
     ui.host.onSceneActivated(ui.scene);
@@ -310,35 +309,29 @@ TEST(GameUIScriptTest, WidgetScriptSeesShowAndHide)
 
     ui.host.findEntryRoot("Pause")->setVisibility(EWidgetVisibility::Visible);
     ui.frame();
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("Pause.show", "Resume.show"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Pause.show"));
 
     ui.frame();
     EXPECT_THAT(ui.takeTrace(), IsEmpty());
 
     ui.host.findEntryRoot("Pause")->setVisibility(EWidgetVisibility::Collapsed);
     ui.frame();
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("Pause.hide", "Resume.hide"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Pause.hide"));
 }
 
-TEST(GameUIScriptTest, WidgetScriptSeesShowWhenMovedOutOfHiddenParent)
+TEST(GameUIScriptTest, ChildScriptSpecIsIgnored)
 {
-    FUIScripts   ui;
+    FUIScripts ui;
     ui.addScript("Probe", kProbe);
-    UIElementRef root   = FUIScripts::widget(kTypeIdCanvasPanel, "Root");
-    UIElementRef drawer = FUIScripts::widget(kTypeIdCanvasPanel, "Drawer");
-    drawer->setVisibility(EWidgetVisibility::Hidden);
-    drawer->addDetachedChild(FUIScripts::widget(kTypeIdButton, "Item", "Probe"));
-    root->addDetachedChild(drawer);
+    UIElementRef root = FUIScripts::widget(kTypeIdCanvasPanel, "Root", "Probe");
+    UIElementRef item = FUIScripts::widget(kTypeIdButton, "Item");
+    item->_behaviorSpecs = {{.type = "script.lua",
+                             .data = {{"script", ScriptInstance::normalizeScriptPath("Test/UI/Probe.lua")}}}};
+    root->addDetachedChild(item);
     ui.addEntry("Inventory", root);
     ui.host.onSceneActivated(ui.scene);
     ui.frame();
-    (void)ui.takeTrace();
-
-    UIElement* item = ui.mounted("Inventory", "Item");
-    ASSERT_NE(item, nullptr);
-    ui.host.getTree().reparent(*ui.host.findEntryRoot("Inventory"), item->shared_from_this());
-    ui.frame();
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("Item.show"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("Root.init", "Root.start"));
 }
 
 TEST(GameUIScriptTest, FindIsScopedToOwningEntry)
@@ -508,9 +501,9 @@ local S = {}
 function S:onInit() ui.get("HUD"):find("Go").onClicked:add(self, function() table.insert(trace, "world") end) end
 return S
 )");
-    UIElementRef hud = FUIScripts::widget(kTypeIdCanvasPanel, "HUD");
+    UIElementRef hud = FUIScripts::widget(kTypeIdCanvasPanel, "HUD", "Listener");
     hud->addDetachedChild(FUIScripts::button("Go"));
-    hud->addDetachedChild(FUIScripts::widget(kTypeIdBorder, "Ear", "Listener"));
+    hud->addDetachedChild(FUIScripts::widget(kTypeIdBorder, "Ear"));
     ui.addEntry("HUD", hud);
     ui.host.onSceneActivated(ui.scene);
     ui.frame();
@@ -532,15 +525,16 @@ plainTable = go.onClicked:add({}, function() end)
     ui.run(R"(ui.get("HUD"):find("Ear"):destroy())");
     ui.host.flushStructuralChanges();
     ui.press(go);
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("world")) << "a destroyed widget script's listeners end with it";
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("listener", "world"))
+        << "destroying a child does not end the document logic class";
 
     ui.lua.reloadScript(FUIScripts::scriptPath("World"));
-    EXPECT_EQ(go->onClicked.size(), 1u) << "a hot reload ends the old self's listeners; the new onInit adds one";
+    EXPECT_EQ(go->onClicked.size(), 2u) << "a hot reload ends the old world self; the document script stays";
     ui.press(go);
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("world"));
+    EXPECT_THAT(ui.takeTrace(), ElementsAre("listener", "world"));
 
     ui.lua.destroyAll();
-    EXPECT_EQ(go->onClicked.size(), 0u) << "a world script's listeners end with the script, not the button";
+    EXPECT_EQ(go->onClicked.size(), 0u) << "destroyAll ends the document script and the world script; the button stays";
     ui.press(go);
     EXPECT_THAT(ui.takeTrace(), IsEmpty());
 }
@@ -608,14 +602,13 @@ return S
 TEST(GameUIScriptTest, DestroyWaitsForStructuralFlushAndDropsSpawnsUnderIt)
 {
     FUIScripts ui;
-    ui.addScript("Probe", kProbe);
     ui.addScript("Spawner", R"(
 local S = {}
 function S:onInit() spawner = self end
 return S
 )");
     UIElementRef hud = FUIScripts::widget(kTypeIdCanvasPanel, "HUD", "Spawner");
-    hud->addDetachedChild(FUIScripts::widget(kTypeIdBorder, "Toast", "Probe"));
+    hud->addDetachedChild(FUIScripts::widget(kTypeIdBorder, "Toast"));
     hud->addDetachedChild(FUIScripts::widget(kTypeIdCanvasPanel, "Slot"));
     ui.documents.put("Test/UI/Box.yaui", UIDocument::fromWidget(*FUIScripts::widget(kTypeIdBorder, "Box")));
     UIElementRef crate = FUIScripts::widget(kTypeIdCanvasPanel, "Crate");
@@ -638,7 +631,7 @@ crate:find("Lid"):destroy()
     EXPECT_THAT(ui.takeTrace(), IsEmpty());
 
     ui.host.flushStructuralChanges();
-    EXPECT_THAT(ui.takeTrace(), ElementsAre("Toast.destroy"));
+    EXPECT_THAT(ui.takeTrace(), IsEmpty());
     EXPECT_EQ(ui.mounted("HUD", "Toast"), nullptr);
     EXPECT_EQ(ui.mounted("HUD", "Slot"), nullptr);
     EXPECT_EQ(ui.mounted("HUD", "Box"), nullptr);

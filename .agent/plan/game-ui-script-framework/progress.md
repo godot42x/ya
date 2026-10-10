@@ -288,13 +288,13 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 
 完成：
 
-- UI 设计器检查器列出选中控件的行为。可以增删 `script.lua`，用文本框或脚本文件选择器改路径。路径经 `ScriptInstance::normalizeScriptPath` 后随 `commitEdit` 写进文档。属性行调用 `scriptPropertyPreview()->load`，只显示发现到的 `_PROPERTIES`，不把覆盖写进 `spec.data`，也不调用 `onInit` / `onUpdate`。
+- 一份 UI 文档只有一个逻辑类，存在根上的 `logic`，不是每个控件一份 `script.lua`。设计器只在预览根上编辑它，spec 来自 `IUILogicAuthoring`（Lua 后端登记；没登记就不显示）。路径用文本框或脚本文件选择器修改。属性行只读发现 `_PROPERTIES`，不把覆盖写进 `spec.data`，也不调用 `onInit` / `onUpdate`。子控件上的 `script.lua` 行为描述运行时忽略。`self` 是该文档的根。
 - 层级检查器在选中 Game UI 条目时编辑 `modal`、`pausesGame`、`clock`（Real / Game）和 `zOrder`。
 - 新建 Game UI 弹出名称框。重名（文件、存储、已挂载条目）拒绝并警告，不自动改成 PanelN。建议名只作为对话框初值。内容浏览器在当前目录创建；层级菜单「New Game UI」仍创建在 `Content:UI`。`zOrder` 取现有最大值 + 10，没有条目时为 10。根类型仍是 `engine.panel`。
 - 内容浏览器「New Script」在当前目录写入 `name.lua`。模板含 `onInit`（示范 `self:find("Button").onClicked:add(self, fn)`）、`onUpdate`、`onCancel`。
 
 未做：点锚点（H9）仍 `blocked_on_D7`。控件脚本的属性覆盖不进文档、运行时也不应用。S7（GreedySnake 迁移与自动化）未开始。
 
-验证：`EditorUIDesignerSessionTest.ScriptOnAButtonSurvivesReopen`、`EditorGameUIAuthoringTest.ChosenNameStepsZOrderAndEntryFields`、`EditorGameUIAuthoringTest.UiScriptTemplateShowsClickAndCancel`、`EditorGameUIPreviewTest.PreviewDoesNotActivateBehaviors` 通过。重开走文档存储里 `commitEdit` 发布的副本；无 VFS 时 `UIDocumentStore::save` 仍打错误日志，创建不因此失败。GreedySnake editor `--exit-after-frame=60` 在 60 帧退出，日志无 `[Error]`。
+验证：`UIDocumentTest.LogicRoundtripIsRootOnly`、`EditorUIDesignerSessionTest.LogicOnTheDocumentRootSurvivesReopen`、`GameUIScriptTest.ChildScriptSpecIsIgnored`、`EditorGameUIAuthoringTest.ChosenNameStepsZOrderAndEntryFields`、`EditorGameUIAuthoringTest.UiScriptTemplateShowsClickAndCancel`、`EditorGameUIPreviewTest.PreviewDoesNotActivateBehaviors` 通过。重开走文档存储里 `commitEdit` 发布的副本；无 VFS 时 `UIDocumentStore::save` 仍打错误日志，创建不因此失败。GreedySnake editor `--exit-after-frame=60` 在 60 帧退出，日志无 `[Error]`。
 
 下一步：S7。H9 仍等 D7。
