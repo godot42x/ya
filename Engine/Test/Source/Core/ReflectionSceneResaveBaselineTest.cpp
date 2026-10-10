@@ -110,7 +110,7 @@ constexpr SceneBaseline kScenes[] = {
     {"Example/2dRpgPrototype/Content/Scenes/PropertyOverride.scene.json", "78cd79bee9c492ac"},
     {"Example/2dRpgPrototype/Content/Scenes/Town.scene.json", "eb5b809a5adf0c5a"},
     {"Example/2dRpgPrototype/Content/Scenes/TownLarge.scene.json", "135679ba934a6c3a"},
-    {"Example/GreedySnake/Content/Scenes/GreedySnake.scene.json", "a47ef4c683f38988"},
+    {"Example/GreedySnake/Content/Scenes/GreedySnake.scene.json", "c194b557a64c9566"},
     {"Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json", "94cafe06d86b9d46"},
     {"Example/PerfLab/Content/Scenes/Lights_50.scene.json", "5562c4d3845e6583"},
     {"Example/PerfLab/Content/Scenes/Lights_200.scene.json", "a7c6895c5ff0c3e9"},
