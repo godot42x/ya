@@ -813,7 +813,7 @@ TEST(GameUIHostTest, ReferenceResolutionScalesLayoutAndPointer)
 
 TEST(GameUIHostTest, DialogueDocumentStaysInsideNarrowAndWideCanvases)
 {
-    std::ifstream stream("Example/2DRpgPrototype/Content/UI/Dialogue.yaui.json");
+    std::ifstream stream("Example/2dRpgPrototype/Content/UI/Dialogue.yaui.json");
     ASSERT_TRUE(stream.is_open());
     const auto document = UIDocument::fromJson(nlohmann::json::parse(stream));
     ASSERT_NE(document, nullptr);

@@ -78,7 +78,7 @@ add_rules("ya.macos.compile_jobs")
 -- $YA_CACHE_ROOT / git config ya.cacheRoot / $YA_VULKAN_SDK_ROOT override the
 -- main project); linked worktrees expose it as a symlink at
 -- Engine/ThirdParty/VulkanSDK/<version>/macOS, auto-discovered by
--- Xmake/package/vulkan/xmake.lua so multiple worktrees / parallel agents
+-- xmake/package/vulkan/xmake.lua so multiple worktrees / parallel agents
 -- share one SDK copy. Deleting the main project removes everything; nothing
 -- is written to system directories. No setup-env.sh sync step is required.
 
@@ -156,13 +156,13 @@ else
 end
 
 
-includes("./Xmake/Rule.lua")
-includes("./Xmake/package/xmake.lua")
+includes("./xmake/rule.lua")
+includes("./xmake/package/xmake.lua")
 includes("./Engine/YA.xmake.lua")
 -- Legacy standalone test targets (Test/*.cpp) depend on the full engine
 -- aggregate; they are engine-profile only.
 if get_config("ya_profile") ~= "gui" then
-    includes("./Test/Test.xmake.lua")
+    includes("./test/Test.xmake.lua")
 end
 
 -- add_rules("SourceFiles")

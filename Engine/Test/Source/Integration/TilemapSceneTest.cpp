@@ -47,7 +47,7 @@ TEST(TilemapSceneTest, HandwrittenTownTilemapDeserializes)
     ensureReflectionReady();
 
     const std::string sceneText =
-        readRepoFile("Example/2DRpgPrototype/Content/Scenes/Town.scene.json");
+        readRepoFile("Example/2dRpgPrototype/Content/Scenes/Town.scene.json");
     ASSERT_FALSE(sceneText.empty());
     const nlohmann::json sceneJson = nlohmann::json::parse(sceneText);
 
@@ -92,7 +92,7 @@ TEST(TilemapSceneTest, HandwrittenTownTilemapDeserializes)
     // Trees live in the map now: the canopy sits on the overlay so the player
     // walks behind it, and both canopy (4) and trunk (16) are tileset solids.
     const nlohmann::json& tilesetJson = nlohmann::json::parse(
-        readRepoFile("Example/2DRpgPrototype/Content/Tilesets/town.yatileset.json"));
+        readRepoFile("Example/2dRpgPrototype/Content/Tilesets/town.yatileset.json"));
     std::vector<int32_t> solidTiles;
     for (const auto& entry : tilesetJson["solid"]) {
         solidTiles.push_back(entry.get<int32_t>() + 1); // cell value is tile + 1
@@ -135,7 +135,7 @@ TEST(TilemapSceneTest, HandwrittenTownTilemapDeserializes)
 TEST(TilemapSceneTest, TownTilesetDocumentIsWellFormed)
 {
     const std::string tilesetText =
-        readRepoFile("Example/2DRpgPrototype/Content/Tilesets/town.yatileset.json");
+        readRepoFile("Example/2dRpgPrototype/Content/Tilesets/town.yatileset.json");
     ASSERT_FALSE(tilesetText.empty());
     const nlohmann::json tilesetJson = nlohmann::json::parse(tilesetText);
 

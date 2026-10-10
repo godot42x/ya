@@ -22,7 +22,7 @@ namespace ya::test
 {
 
 /// Repo root, found by walking up from this header until the marker pair that
-/// only the root carries (`Engine/Source` + `Xmake`) shows up. Two candidate
+/// only the root carries (`Engine/Source` + `xmake`) shows up. Two candidate
 /// starting points: where this header was compiled from, and the process
 /// working directory (the build pins it to the project dir via set_rundir).
 [[nodiscard]] inline const std::filesystem::path& repoRoot()
@@ -31,7 +31,7 @@ namespace ya::test
         const auto hasMarker = [](const std::filesystem::path& dir) {
             std::error_code existsError;
             return std::filesystem::exists(dir / "Engine" / "Source", existsError) &&
-                   std::filesystem::exists(dir / "Xmake", existsError);
+                   std::filesystem::exists(dir / "xmake", existsError);
         };
 
         std::error_code error;

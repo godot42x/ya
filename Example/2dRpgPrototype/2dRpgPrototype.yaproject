@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "name": "2DRpgPrototype",
   "mainModule": "2DRpgPrototype",
-  "modules": ["2DRpgPrototype.yamodule"],
+  "modules": ["2dRpgPrototype.yamodule"],
   "plugins": [],
   "contentDir": "Content",
   "defaultScene": "Content/Scenes/Town.scene.json",

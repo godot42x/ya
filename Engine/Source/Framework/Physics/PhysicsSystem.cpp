@@ -182,7 +182,7 @@ PhysicsSystem::PhysicsSystem() = default;
 // Callback for traces, connect this to your own trace function if you have one
 static void TraceImpl(const char* inFMT, ...)
 {
-    va_list list = nullptr;
+    va_list list;
     va_start(list, inFMT);
     char buffer[1024];
     vsnprintf(buffer, sizeof(buffer), inFMT, list);
