@@ -91,6 +91,9 @@
       "entryId": "Settings",
       "zOrder": 20,
       "autoMount": true,
+      "modal": true,
+      "pausesGame": true,
+      "clock": "real",
       "document": "Content:UI/Settings.yaui.json",
       "rootSlot": {
         "type": "canvas",

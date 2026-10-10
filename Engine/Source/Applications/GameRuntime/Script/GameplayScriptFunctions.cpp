@@ -276,26 +276,6 @@ ScriptValue uiGet(const GameplayScriptContext& ctx, ScriptArgs args)
     return script::scriptMake(handle);
 }
 
-ScriptValue setText(const GameplayScriptContext& ctx, ScriptArgs args)
-{
-    expectArgCount(args, 3);
-    if (!ctx.gameUI) {
-        return script::scriptMake(false);
-    }
-    return script::scriptMake(ctx.gameUI->setMountedText(script::scriptToString(args[0]), script::scriptToString(args[1]), script::scriptToString(args[2])));
-}
-
-ScriptValue setVisible(const GameplayScriptContext& ctx, ScriptArgs args)
-{
-    expectArgCount(args, 3);
-    if (!ctx.gameUI) {
-        return script::scriptMake(false);
-    }
-    return script::scriptMake(ctx.gameUI->setMountedVisible(script::scriptToString(args[0]),
-                                                            script::scriptToString(args[1]),
-                                                            script::scriptToBool(args[2])));
-}
-
 } // namespace
 
 void placePlayerAtSpawn(Scene& scene, const std::string& spawnName, const std::string& actorName)
@@ -365,8 +345,6 @@ void registerGameplayScriptFunctions(GameplayScriptContext ctx)
     script::registerModuleFunction("world", "destroyEntity", [ctx](ScriptArgs args) { return destroyEntityFn(ctx, args); });
     script::registerModuleFunction("world", "scriptOf", [ctx](ScriptArgs args) { return scriptOf(ctx, args); });
     script::registerModuleFunction("ui", "get", [ctx](ScriptArgs args) { return uiGet(ctx, args); });
-    script::registerModuleFunction("ui", "setText", [ctx](ScriptArgs args) { return setText(ctx, args); });
-    script::registerModuleFunction("ui", "setVisible", [ctx](ScriptArgs args) { return setVisible(ctx, args); });
 }
 
 } // namespace ya

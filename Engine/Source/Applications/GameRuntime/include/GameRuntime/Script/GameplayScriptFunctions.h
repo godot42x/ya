@@ -30,7 +30,7 @@ struct GameplayScriptContext
     /// Null until the host has created the runtime; an empty function means
     /// those calls have no Lua state.
     std::function<IWorldScriptRuntime*()>                    worldRuntime;
-    /// `ui.setText` / `ui.setVisible`. Null returns false.
+    /// `ui.get`. Null returns nil.
     GameUIHost*                                              gameUI = nullptr;
 };
 
@@ -68,8 +68,6 @@ struct GameplayPresentedView
 ///       this call only: a hot reload replaces it.
 ///   ui.get(entryId) -> the entry script's self table, else the root widget
 ///       handle, else nil
-///   ui.setText(entryId, widgetName, text) -> bool
-///   ui.setVisible(entryId, widgetName, visible) -> bool
 ///
 /// `entityAt` is registered here too. It does not use `ctx`: the map answers
 /// from its owning scene.

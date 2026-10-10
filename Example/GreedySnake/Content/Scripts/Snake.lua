@@ -5,9 +5,7 @@ local CELL = 1.0
 local SPRITE_TEXTURE = "Engine:Content/TestTextures/sprite2d_probe_64.png"
 local HALF = 9
 local SPRITE_HALF = 0.45
-local STEP_SLOW = 0.42
 local STEP_NORMAL = 0.28
-local STEP_FAST = 0.16
 
 local segments = {}
 local food = nil
@@ -19,7 +17,6 @@ local accumulator = 0
 local stepSeconds = STEP_NORMAL
 local score = 0
 local alive = true
-local settingsOpen = false
 
 local function place(entity, x, y)
     local transform = entity:getTransform()
@@ -62,23 +59,22 @@ local function hitsBody(x, y, ignoreTail)
     return false
 end
 
-local function setScoreText(value)
-    score = value
-    ui.setText("HUD", "Score", "Score: " .. tostring(score))
+-- UI scripts load after this world's onInit. Until then ui.get returns the
+-- root widget, and indexing a missing method on it is an error. A loaded
+-- entry script is a table.
+local function callEntry(entryId, method, ...)
+    local entry = ui.get(entryId)
+    if type(entry) ~= "table" then
+        return
+    end
+    local fn = entry[method]
+    if fn then
+        fn(entry, ...)
+    end
 end
 
-local function showGameOver(show)
-    ui.setVisible("GameOver", "GameOver", show)
-end
-
-local function showSettings(show)
-    settingsOpen = show
-    ui.setVisible("Settings", "Settings", show)
-end
-
-local function setSpeed(label, seconds)
-    stepSeconds = seconds
-    ui.setText("Settings", "SpeedValue", "Speed: " .. label)
+local function pushScore()
+    callEntry("HUD", "setScore", score)
 end
 
 local function clearBodies()
@@ -154,15 +150,19 @@ local function placeFood()
     end
 end
 
-local function restart()
+function Script:setStep(seconds)
+    stepSeconds = seconds
+end
+
+function Script:restart()
     clearBodies()
     dir = { x = 1, y = 0 }
     queued = { x = 1, y = 0 }
     accumulator = 0
     alive = true
-    setScoreText(0)
-    showGameOver(false)
-    showSettings(false)
+    score = 0
+    pushScore()
+    callEntry("GameOver", "hide")
     local head = spawnAt("SnakeHead", 0, 0, 0.95, 0.95, 0.95)
     local bodyA = spawnAt("SnakeBody", -1, 0, 0.25, 0.75, 0.35)
     local bodyB = spawnAt("SnakeBody", -2, 0, 0.25, 0.75, 0.35)
@@ -196,7 +196,7 @@ local function step()
     local ny = head.y + dir.y
     if nx < -HALF or nx > HALF or ny < -HALF or ny > HALF or hitsBody(nx, ny, true) then
         alive = false
-        showGameOver(true)
+        callEntry("GameOver", "show", score)
         log:info("GreedySnake over, score=" .. tostring(score))
         return
     end
@@ -208,7 +208,8 @@ local function step()
         if born then
             table.insert(segments, 1, born)
         end
-        setScoreText(score + 1)
+        score = score + 1
+        pushScore()
         placeFood()
     else
         local tail = table.remove(segments)
@@ -233,29 +234,18 @@ function Script:onInit()
         transform:setPosition(Vec3.new(0, 0, 24))
         transform:setRotation(Vec3.new(0, 0, 0))
     end
-    ui.get("GameOver"):find("Restart").onClicked:add(self, restart)
-    local settings = ui.get("Settings")
-    settings:find("Resume").onClicked:add(self, function() showSettings(false) end)
-    settings:find("Slow").onClicked:add(self, function() setSpeed("Slow", STEP_SLOW) end)
-    settings:find("Normal").onClicked:add(self, function() setSpeed("Normal", STEP_NORMAL) end)
-    settings:find("Fast").onClicked:add(self, function() setSpeed("Fast", STEP_FAST) end)
     spawnBorder()
-    restart()
+    self:restart()
 end
 
-function Script:onKey(key, pressed, repeated)
-    if key ~= EKey.Escape then
-        return false
-    end
-    if pressed and not repeated then
-        showSettings(not settingsOpen)
-    end
+function Script:onCancel()
+    callEntry("Settings", "open")
     return true
 end
 
 function Script:onUpdate(dt)
     frameCamera()
-    if not alive or settingsOpen then
+    if not alive then
         return
     end
     queueDirection()

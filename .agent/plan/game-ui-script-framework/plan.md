@@ -430,7 +430,7 @@ S3 曾允许任意控件挂 `script.lua`。作者模型改为文档一份逻辑�
 
 目标：§0 的验收用例成立，并可无人值守验证。
 
-- 新增 `Content/UI/HUD.lua`、`GameOver.lua`、`Settings.lua`，挂在各自文档根上；
+- 新增 `Content/UI/HUD.lua`、`GameOver.lua`、`Settings.lua`，作为各自文档根上的一条 `behaviors` 记录；
   `Settings` 条目 `modal + pausesGame + clock=real`。
 - `Snake.lua` 删除全部 UI 字符串、`settingsOpen`、`setKeyHandler`（`onUiAction` 全局 C1c 已删）；
   通过 `ui.get("HUD"):setScore(n)`、`ui.get("GameOver"):show(score)` 驱动界面，
@@ -440,7 +440,11 @@ S3 曾允许任意控件挂 `script.lua`。作者模型改为文档一份逻辑�
   已由 `rpg-prototype` 评审步骤 2 提供，本节直接复用。
 - 端到端脚本：开局 → 注入方向键 → 撞墙 → 截图确认 Game Over → 点击 Restart → 确认分数归零 →
   注入 Esc → 确认设置可见且蛇不动 → 点击 Fast → 关闭 → 确认恢复移动。
-- 验收：端到端脚本 exit 0；`rg -n '"HUD"|"Score"|"SpeedValue"|settingsOpen|setKeyHandler' Example/GreedSnake/Content/Scripts/Snake.lua` 无结果。
+- 验收：端到端脚本 exit 0。`Snake.lua` 仍用条目 id 调 `ui.get("HUD")` / `ui.get("GameOver")` /
+  `ui.get("Settings")`（这是调用面，不是控件名）。控件名、`settingsOpen`、`setKeyHandler`、
+  `setText` / `setVisible` 不得出现：
+  `rg -n '"Score"|"SpeedValue"|settingsOpen|setKeyHandler|setText|setVisible' Example/GreedySnake/Content/Scripts/Snake.lua`
+  无结果。目录名是 `Example/GreedySnake`。
 
 ## 5. 依赖与顺序
 
@@ -456,7 +460,7 @@ S6 依赖 S2/S3/S4 的数据形态，可与 S7 并行
 
 ## 6. 决策门（开工前需确认）
 
-状态：D1、D2、D3、D4、D5 已确认；D8 按建议采纳（用户可推翻）；D6 结论为不做预制体并已按此落地；D7、D9 仍为建议（D9 的取消路由已在 S4 落地）。S5 除 H9 外已落地。S6 已落地。下一步 S7。H9 仍 `blocked_on_D7`。
+状态：D1、D2、D3、D4、D5 已确认；D8 按建议采纳（用户可推翻）；D6 结论为不做预制体并已按此落地；D7、D9 仍为建议（D9 的取消路由已在 S4 落地）。S5 除 H9 外已落地。S6、S7 已落地。H9 仍 `blocked_on_D7`。
 
 | # | 问题 | 结论 / 建议 |
 | --- | --- | --- |

@@ -9,6 +9,14 @@
       }
     }
   },
+  "behaviors": [
+    {
+      "type": "script.lua",
+      "data": {
+        "script": "Content/UI/Settings.lua"
+      }
+    }
+  ],
   "children": [
     {
       "version": 2,

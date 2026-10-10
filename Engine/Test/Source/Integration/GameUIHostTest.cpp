@@ -674,16 +674,16 @@ TEST(GameUIHostTest, MountedTextVisibilityAndButtonClick)
     scene.addWidgetEntry(makeEntry("GameOver", path, 0));
     host.onSceneActivated(scene);
 
-    EXPECT_TRUE(host.setMountedText("GameOver", "Score", "Score: 4"));
     UIElement* content = host.getTree().getLayer(WidgetTree::ELayer::Content);
     auto* text = dynamic_cast<UIText*>(findNamed(content, "Score"));
     ASSERT_NE(text, nullptr);
+    text->setText("Score: 4");
     EXPECT_EQ(text->getText(), "Score: 4");
 
     UIElement* root = findNamed(content, "GameOver");
     ASSERT_NE(root, nullptr);
     EXPECT_EQ(root->getVisibility(), EWidgetVisibility::Hidden);
-    EXPECT_TRUE(host.setMountedVisible("GameOver", "GameOver", true));
+    root->setVisibility(EWidgetVisibility::Visible);
     EXPECT_EQ(root->getVisibility(), EWidgetVisibility::Visible);
 
     auto* restart = dynamic_cast<UIButton*>(findNamed(content, "Restart"));
@@ -694,11 +694,8 @@ TEST(GameUIHostTest, MountedTextVisibilityAndButtonClick)
     host.getTree().setFocus(restart);
     KeyPressedEvent enter{};
     enter._keyCode = EKey::Enter;
-   (void)host.getTree().dispatchEvent(enter, WidgetEventContext{});
+    (void)host.getTree().dispatchEvent(enter, WidgetEventContext{});
     EXPECT_EQ(clicks, 1);
-
-    EXPECT_FALSE(host.setMountedText("Missing", "Score", "nope"));
-    EXPECT_FALSE(host.setMountedVisible("GameOver", "Missing", false));
 }
 
 namespace

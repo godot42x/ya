@@ -9,6 +9,14 @@
       }
     }
   },
+  "behaviors": [
+    {
+      "type": "script.lua",
+      "data": {
+        "script": "Content/UI/GameOver.lua"
+      }
+    }
+  ],
   "children": [
     {
       "version": 2,

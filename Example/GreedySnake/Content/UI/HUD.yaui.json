@@ -8,6 +8,14 @@
       }
     }
   },
+  "behaviors": [
+    {
+      "type": "script.lua",
+      "data": {
+        "script": "Content/UI/HUD.lua"
+      }
+    }
+  ],
   "children": [
     {
       "version": 2,

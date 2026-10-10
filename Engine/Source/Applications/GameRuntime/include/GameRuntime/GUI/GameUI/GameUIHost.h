@@ -222,11 +222,6 @@ struct YA_GAME_RUNTIME_API GameUIHost
 
     void clearMountedRoots();
 
-    /// `widgetName` matches `UIElement::_name` on the entry root or a descendant.
-    /// Returns false when the entry or the widget is not in the mounted tree.
-    bool setMountedText(std::string_view entryId, std::string_view widgetName, const std::string& text);
-    bool setMountedVisible(std::string_view entryId, std::string_view widgetName, bool visible);
-
   private:
     struct FMountedEntry
     {
@@ -274,7 +269,6 @@ struct YA_GAME_RUNTIME_API GameUIHost
     void compactTimerQueue();
     void addEntry(std::string entryId, const UIElementRef& root);
     void mountWorldWidget(const UIElementRef& widget);
-    [[nodiscard]] UIElement* findMountedWidget(std::string_view entryId, std::string_view widgetName) const;
     [[nodiscard]] FMountedEntry* entryFor(const UIElement& entryRoot);
     /// Declared before `_tree`: behaviours it created live on tree widgets and
     /// must be torn down before it.

@@ -298,3 +298,16 @@ decisions 与 S3 features（`widget_script_tick_opt_in`、`widget_script_timers`
 验证：`UIDocumentTest.LogicRoundtripIsRootOnly`、`EditorUIDesignerSessionTest.LogicOnTheDocumentRootSurvivesReopen`、`GameUIScriptTest.ChildScriptSpecIsIgnored`、`EditorGameUIAuthoringTest.ChosenNameStepsZOrderAndEntryFields`、`EditorGameUIAuthoringTest.UiScriptTemplateShowsClickAndCancel`、`EditorGameUIPreviewTest.PreviewDoesNotActivateBehaviors` 通过。重开走文档存储里 `commitEdit` 发布的副本；无 VFS 时 `UIDocumentStore::save` 仍打错误日志，创建不因此失败。GreedySnake editor `--exit-after-frame=60` 在 60 帧退出，日志无 `[Error]`。
 
 下一步：S7。H9 仍等 D7。
+
+## 2026-10-10 — S7 GreedySnake 迁移
+
+完成：
+
+- `HUD.lua` / `GameOver.lua` / `Settings.lua` 是各自文档根上的一条 `behaviors` 记录。`Snake.lua` 用 `ui.get("HUD"):setScore`、`ui.get("GameOver"):show` / `hide` 驱动界面，`onCancel` 打开设置。设置脚本自己改速度文案并调用 `setStep`；重开按钮调用世界脚本的 `restart`。`Snake.lua` 不再出现控件名、`settingsOpen`、`setKeyHandler`、`setText` / `setVisible`。条目 id 留着，那是调用面。
+- Settings 条目 `modal + pausesGame + clock=real`。暂停由框架拦住世界 `onUpdate`，蛇脚本不再自己停。
+- 删除 `ui.setText` / `ui.setVisible` 和 `GameUIHost::setMountedText` / `setMountedVisible`。
+- 自动化 `ui.click({entry, widget})` 走按钮的焦点 + Enter。`Script/automation/greedy-snake/play.py` 跑开局、撞墙、截图、重开、Esc、Fast、恢复移动。
+
+未做：点锚点（H9）仍 `blocked_on_D7`。控件脚本的属性覆盖不进文档。`UIBase`、声明式绑定、spawn 查找域不在本步。
+
+验证：`GameUIHostTest.MountedTextVisibilityAndButtonClick` 通过。`rg` 审计 `Snake.lua` 无控件名 / `settingsOpen` / `setKeyHandler` / `setText` / `setVisible`。`Script/automation/greedy-snake/play.py` exit 0（撞墙、presentation 截图、重开后分数 0、Esc 期间蛇头不动、Fast 后恢复移动，头从 0 到 3）。日志无 Lua error。

@@ -62,7 +62,7 @@ GUI
 - [~] `ui-behavior-capabilities` C2
 - [x] `game-ui-script-framework` S4
 - [x] `game-ui-script-framework` S5（H9 点锚点仍 blocked_on_D7）
-- [x] `game-ui-script-framework` S6（下一步 S7；H9 仍 blocked_on_D7）
+- [x] `game-ui-script-framework` S6、S7（H9 仍 blocked_on_D7）
 
 文档与吸收
 - [ ] D1 模块依赖图（自动生成）

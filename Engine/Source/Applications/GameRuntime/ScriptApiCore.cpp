@@ -8,6 +8,7 @@
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
+#include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GameRuntime/App.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
@@ -637,6 +638,42 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
                 out["text"] = text->getText();
             }
             return out;
+        });
+
+    registry.registerFunction(
+        "ui.click",
+        "Activates a mounted button the way a focused Enter does. "
+        "Args: {entry, widget}.",
+        Json{{"entry", {{"type", "string"}}}, {"widget", {{"type", "string"}}}},
+        [](const Json& args) -> Json {
+            App* const app = App::get();
+            GameUIHost* const host = app ? app->getGameUIHost() : nullptr;
+            if (!host) {
+                throw Error("ui.click: no game UI host");
+            }
+            const std::string entryId = args.at("entry").get<std::string>();
+            const std::string widgetName = args.at("widget").get<std::string>();
+            UIElementRef root = host->findEntryRoot(entryId);
+            if (!root) {
+                throw Error(std::format("ui.click: entry '{}' is not mounted", entryId));
+            }
+            UIElementRef found = host->findInEntry(*root, widgetName);
+            if (!found) {
+                throw Error(std::format("ui.click: widget '{}' not found in '{}'", widgetName, entryId));
+            }
+            auto* button = dynamic_cast<UIButton*>(found.get());
+            if (!button) {
+                throw Error(std::format("ui.click: '{}' in '{}' is not a button", widgetName, entryId));
+            }
+            WidgetTree* tree = button->getTree();
+            if (!tree) {
+                throw Error(std::format("ui.click: '{}' in '{}' is not in a tree", widgetName, entryId));
+            }
+            tree->setFocus(button);
+            KeyPressedEvent enter{};
+            enter._keyCode = EKey::Enter;
+            (void)tree->dispatchEvent(enter, WidgetEventContext{});
+            return Json{{"clicked", true}, {"entry", entryId}, {"widget", widgetName}};
         });
 
     // ========================================================================

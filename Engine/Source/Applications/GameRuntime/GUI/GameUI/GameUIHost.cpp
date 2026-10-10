@@ -8,7 +8,6 @@
 #include "RHI/Core/Texture.h"
 
 #include "GUI/Layout/UILayout.h"
-#include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/UIDocumentStore.h"
 
@@ -463,22 +462,6 @@ std::shared_ptr<Texture> resolveGameUITexture(const std::string& assetPath)
 namespace
 {
 
-UIElement* findNamedWidget(UIElement* node, std::string_view name)
-{
-    if (!node) {
-        return nullptr;
-    }
-    if (node->_name == name) {
-        return node;
-    }
-    for (const UIElementRef& child : node->getChildren()) {
-        if (UIElement* found = findNamedWidget(child.get(), name)) {
-            return found;
-        }
-    }
-    return nullptr;
-}
-
 /// Name -> first widget with it, in tree pre-order. Names seen again are
 /// recorded as ambiguous (not yet warned) instead of replacing the first.
 void indexNamedWidgets(UIElement&                                                  root,
@@ -683,12 +666,6 @@ void GameUIHost::flushStructuralChanges()
     }
 }
 
-UIElement* GameUIHost::findMountedWidget(std::string_view entryId, std::string_view widgetName) const
-{
-    UIElementRef root = findEntryRoot(entryId);
-    return findNamedWidget(root.get(), widgetName);
-}
-
 UIElementRef GameUIHost::findEntryRoot(std::string_view entryId) const
 {
     for (const FMountedEntry& entry : _entries) {
@@ -751,26 +728,6 @@ UIElementRef GameUIHost::findInEntry(const UIElement& entryRoot, std::string_vie
                      entry->entryId, key);
     }
     return it->second.lock();
-}
-
-bool GameUIHost::setMountedText(std::string_view entryId, std::string_view widgetName, const std::string& text)
-{
-    auto* textWidget = dynamic_cast<UIText*>(findMountedWidget(entryId, widgetName));
-    if (!textWidget) {
-        return false;
-    }
-    textWidget->setText(text);
-    return true;
-}
-
-bool GameUIHost::setMountedVisible(std::string_view entryId, std::string_view widgetName, bool visible)
-{
-    UIElement* widget = findMountedWidget(entryId, widgetName);
-    if (!widget) {
-        return false;
-    }
-    widget->setVisibility(visible ? EWidgetVisibility::Visible : EWidgetVisibility::Hidden);
-    return true;
 }
 
 } // namespace ya
