@@ -731,3 +731,14 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - `ya-game-runtime` 的 xmake 去掉 `lua` / `sol2` 包，保留对 `ya-script-lua` 的依赖（只用无 sol 的 `LuaBackend.h` / `ScriptInstanceOps.h`）。`rg -n "sol/|sol::" Engine/Source --glob '!**/Script/Lua/**'` 无命中。
 - 遗留：`LuaScriptBinding.cpp` 的 `MethodCall::arguments` 把无法跨界的普通表参数吞成 nil（为保住 `ListenersEndWithTheirScriptInstance` 里 `add({}, fn)` 返回 0 的契约），语义偏宽，之后应改成只针对 owner 参数；`LuaScriptBinding.cpp` 有一行旧注释仍提 `bindSelf`。
 - 验证：全量 ya-testing 1677 ran / 1676 passed / 1 skipped（5 个 `ScriptOf*` 新增）；`luajit Engine/Test/Lua/GridMoverTest.lua` 47 个断言；GreedySnake / 2DRpgPrototype 120 帧、编辑器 30 帧冒烟；2D 自动化七条通过（`walk_one_cell` worker 侧首跑超时一次，我这边一次通过）。
+
+## 2026-10-10 — 对话逐字留在脚本
+
+- 文本控件不长 reveal，也不单做打字机控件。`Dialogue.lua` 把当前页按 UTF-8 码点截成前缀，写进 `Body.text`。正文左对齐、槽位尺寸固定，贪心折行时已经排满的行保持不动。
+- 脚本状态没有 `utf8` 库，码点边界在 Lua 里按首字节走。确认键直接写上整页。
+
+## 2026-10-10 — 相机跟随留在脚本
+
+- 指数平滑和地图夹取继续由 `FollowCamera.lua` 做。像素缩放、吸附仍在 `CameraComponent`。不单做跟随组件或系统。
+- Town / House / TownLarge 的相机挂这份脚本，默认目标 `Player`、地图 `TilemapGround`。PropertyOverride 用脚本属性把目标和地图改成 `Hero` / `WalkMap`。
+- 验证：四张 RPG 场景回到脚本挂载后，`ReflectionSceneResave.TrackedScenesMatchBaseline` 通过。

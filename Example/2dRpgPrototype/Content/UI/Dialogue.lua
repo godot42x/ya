@@ -3,16 +3,56 @@
 --
 --   ui.get("Dialogue"):say(lines, onDone)
 --
--- `lines` is an array of pages. The typewriter reveals the current page one
--- character at a time (self:every); the confirm action first reveals the
--- rest of the page, then advances, then closes and calls onDone. The frame
--- that opened the box ignores confirm, so the press that started the talk
--- never skips the first page. string.sub slices bytes: keep the pages ASCII
--- until a utf8-aware reveal is needed.
+-- `lines` is an array of pages. The typewriter writes a code-point prefix of
+-- the current page into Body.text (self:every). Confirm first shows the rest
+-- of the page, then advances, then closes and calls onDone. The frame that
+-- opened the box ignores confirm, so the press that started the talk never
+-- skips the first page.
 local ScriptBase = require("ScriptBase")
 local Script = ScriptBase:new()
 
 local REVEAL_SECONDS = 0.02
+
+-- The script state does not publish the utf8 library. Walk lead bytes.
+local function codePointEnd(text, count)
+    local i = 1
+    local n = #text
+    local seen = 0
+    while i <= n and seen < count do
+        local b = string.byte(text, i)
+        if b < 0x80 then
+            i = i + 1
+        elseif b < 0xE0 then
+            i = i + 2
+        elseif b < 0xF0 then
+            i = i + 3
+        else
+            i = i + 4
+        end
+        seen = seen + 1
+    end
+    return i - 1
+end
+
+local function codePointCount(text)
+    local count = 0
+    local i = 1
+    local n = #text
+    while i <= n do
+        local b = string.byte(text, i)
+        if b < 0x80 then
+            i = i + 1
+        elseif b < 0xE0 then
+            i = i + 2
+        elseif b < 0xF0 then
+            i = i + 3
+        else
+            i = i + 4
+        end
+        count = count + 1
+    end
+    return count
+end
 
 local function confirmPressed()
     -- isActionPressed is the down edge (isActionDown is the held state).
@@ -40,6 +80,7 @@ end
 
 function Script:startReveal(text)
     self.pageText = text
+    self.pageCount = codePointCount(text)
     self.shown = 0
     self.body.text = ""
     if self.revealTimer then
@@ -47,8 +88,8 @@ function Script:startReveal(text)
     end
     self.revealTimer = self:every(REVEAL_SECONDS, function()
         self.shown = self.shown + 1
-        self.body.text = string.sub(self.pageText, 1, self.shown)
-        if self.shown >= #self.pageText then
+        self.body.text = string.sub(self.pageText, 1, codePointEnd(self.pageText, self.shown))
+        if self.shown >= self.pageCount then
             self.revealTimer:cancel()
             self.revealTimer = nil
         end
@@ -76,6 +117,7 @@ function Script:onInit()
     self.lines = nil
     self.lineIndex = 0
     self.shown = 0
+    self.pageCount = 0
     self.pageText = nil
     self.revealTimer = nil
     self.onDone = nil
@@ -91,9 +133,9 @@ function Script:onUpdate(dt)
     if time:getFrameIndex() == self.openedFrame or not confirmPressed() then
         return
     end
-    if self.shown < #self.pageText then
+    if self.shown < self.pageCount then
         -- First press: reveal the rest of the page at once.
-        self.shown = #self.pageText
+        self.shown = self.pageCount
         self.body.text = self.pageText
         self.revealTimer:cancel()
         self.revealTimer = nil

@@ -55,9 +55,9 @@
 步骤 7 能力进引擎（前置：步骤 2、4）
 - [ ] B2 脚本对外接口收口（含 `viewAspect` / `viewSize` 去重、脚本函数不经 `App::get()`）
   - 设计：`B2-lua-backend-split.md`（7 个 checkpoint）。B2-1 属性值 `std::any`→`ScriptValue`、B2-2 注入上下文、B2-3 侧表、B2-4 `ya-script-lua` 拆 target、B2-5 中立运行时接口、B2-6 `GameplayLua` 中立注册 + `world.scriptOf`、B2-7 控件句柄/self API 已完成；`Engine/Source` 在 `Script/Lua/` 之外已无 sol
-- [ ] 相机 2D 字段（每单位像素数、像素吸附、整数缩放）+ 相机跟随组件
+- [x] 相机 2D 字段（每单位像素数、像素吸附、整数缩放）已在 `CameraComponent`；跟随留在 `FollowCamera.lua`（指数平滑 + 地图夹取）
 - [x] InputMap（命名动作）
-- [ ] GUI 文本 reveal（逐字显示）
+- [x] 对话逐字显示：留在 `Dialogue.lua`，按 UTF-8 码点把前缀写进 `Body.text`。文本控件不提供 reveal
 - [x] 按格移动做成引擎 Lua 库
 - [x] 去硬编码：`"Player"`、`kSpriteTexture`、`TilemapGround` / `"Dialogue"` 命名约定（C++ 侧：`loadScene` 带 `actorName`、`spawnSprite` 可传贴图；剩 `Npc.lua` 的 `world.find("Player")`、`kSpriteTexture` 缺省、自动化按名找）
 
