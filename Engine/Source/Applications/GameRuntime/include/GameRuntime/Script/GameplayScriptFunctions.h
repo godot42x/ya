@@ -26,6 +26,8 @@ struct GameplayScriptContext
     /// `spawn` is the destination marker; `actor` is the entity to move onto it.
     /// An empty actor moves nobody — the caller supplies the name.
     std::function<void(std::string path, std::string spawn, std::string actor)> requestSceneTransfer;
+    std::function<bool(std::string path)>                                       saveWorld;
+    std::function<bool(std::string path)>                                       loadWorld;
     /// Read when a script calls `world.scriptOf`.
     /// Null until the host has created the runtime; an empty function means
     /// those calls have no Lua state.
@@ -57,6 +59,12 @@ struct GameplayPresentedView
 ///       frame-end structural flush. When `spawnName` is set, place the entity
 ///       named `actorName` on that marker (rpg R3). An omitted or empty
 ///       `actorName` moves nobody.
+///   world.save(path) -> call `onSave` on loaded world scripts, then write the
+///       scene path and `Persist`. `path` is project-relative or absolute.
+///   world.load(path) -> queue a restore for the frame-end flush. The saved
+///       scene is loaded with no spawn placement, then `Persist` is replaced.
+///       The next world-script init sees `world.saveRestored()` as true.
+///   world.saveRestored() -> true during the init pass that follows a load.
 ///   world.viewAspect() -> the same presented view as viewSize, as a number
 ///   world.spawnSprite(name[, { texture, size, tint }]) -> entity, or nil when
 ///       there is no scene. A missing or blank texture leaves the sprite with

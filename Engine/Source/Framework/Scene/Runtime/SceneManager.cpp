@@ -73,6 +73,7 @@ Scene* SceneManager::getSceneByRegistry(entt::registry* reg)
 bool SceneManager::loadScene(const std::string& path)
 {
     unloadScene();
+    _activeScenePath.clear();
 
     auto nextScene = makeShared<Scene>();
     SceneSerializer serializer(nextScene.get());
@@ -82,11 +83,13 @@ bool SceneManager::loadScene(const std::string& path)
         return activateScene(nextScene);
     }
 
+    _activeScenePath = path;
     return activateScene(nextScene);
 }
 
 bool SceneManager::unloadScene()
 {
+    _activeScenePath.clear();
     return destroyScene(_activeScene);
 }
 

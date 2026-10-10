@@ -282,9 +282,9 @@
       "id": "G2.2",
       "group": "G2",
       "priority": "P0",
-      "title": "save / load",
+      "title": "save / load: scene path and Persist written by onSave",
       "owner_line": "rpg-prototype",
-      "status": "todo",
+      "status": "done",
       "evidence": []
     },
     {

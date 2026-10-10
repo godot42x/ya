@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -45,6 +46,18 @@ struct YA_ECS_SYSTEMS_API IWorldScriptRuntime
     virtual void onStop()                                   = 0;
     virtual void onEntityDestroying(Entity& entity)         = 0;
     virtual void resetPersistentState()                     = 0;
+    /// JSON object text of the `Persist` table. Unsupported Lua values are
+    /// dropped. An empty table is `{}`.
+    [[nodiscard]] virtual std::string exportPersistentState() = 0;
+    /// Replace `Persist` from a JSON object. False leaves the current table.
+    virtual bool importPersistentState(std::string_view jsonText) = 0;
+    /// Call `onSave` on each loaded world script so it can write into `Persist`.
+    /// A script with no `onSave` is skipped.
+    virtual void flushPersistentScripts() = 0;
+    /// The next world-script init pass follows a save load. Scene transfer does
+    /// not set this. Cleared when that pass finishes, and when play stops.
+    virtual void markSaveRestored() = 0;
+    [[nodiscard]] virtual bool saveRestored() const = 0;
     virtual void dropInstance(uint64_t runtimeId)           = 0;
 };
 

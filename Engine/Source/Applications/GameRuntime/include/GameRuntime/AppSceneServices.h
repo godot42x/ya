@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "GameRuntime/WorldSave.h"
 
 #include <optional>
 #include <string>
@@ -30,6 +31,7 @@ class YA_GAME_RUNTIME_API AppSceneServices
         std::string actorName;
     };
     std::optional<FPendingTransfer> _pendingTransfer;
+    std::optional<FWorldSave>       _pendingLoad;
 
   public:
     AppSceneServices() = default;
@@ -65,6 +67,18 @@ class YA_GAME_RUNTIME_API AppSceneServices
     /// UI host and the persistent script state are untouched; the old scene's
     /// scripts stop, the scene swaps, the spawn places the player.
     void runPendingSceneTransfer();
+
+    /// Write the save to `path` (project-relative or absolute): scene path and
+    /// `Persist`, after `onSave`. False when there is no scene file, the
+    /// directory cannot be created, or the file cannot be opened.
+    bool saveWorld(const std::string& path);
+    /// Queue a restore for the frame-end flush. A queued scene transfer in the
+    /// same frame is dropped. False when the file cannot be read.
+    bool requestWorldLoad(const std::string& path);
+    /// Run the queued restore, if any. True when one was pending. Loads the
+    /// saved scene without a spawn placement, then replaces `Persist`. The
+    /// next world-script init sees `saveRestored()`.
+    bool runPendingWorldLoad();
 };
 
 } // namespace ya

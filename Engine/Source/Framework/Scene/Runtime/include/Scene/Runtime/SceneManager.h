@@ -37,6 +37,7 @@ struct YA_SCENE_RUNTIME_API SceneManager : public ISceneLifecycleHost
     };
 
     stdptr<Scene>                                   _activeScene = nullptr;
+    std::string                                     _activeScenePath;
     std::unordered_map<entt::registry*, FInitializedScene> _reg2scene;
     std::unordered_set<const Scene*>                _knownScenes;
     /// Scenes whose onSceneDestroy broadcast is on the stack. Re-entry from
@@ -72,6 +73,10 @@ struct YA_SCENE_RUNTIME_API SceneManager : public ISceneLifecycleHost
     bool loadScene(const std::string& path);
 
     bool unloadScene();
+
+    /// Path of the file `loadScene` last read. Empty when the active scene
+    /// was not loaded from a file.
+    [[nodiscard]] const std::string& getActiveScenePath() const { return _activeScenePath; }
 
     bool                 activateScene(stdptr<Scene> scene);
     bool                 destroyScene(stdptr<Scene>& scene);

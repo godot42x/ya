@@ -75,6 +75,7 @@ Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色�
   仍是「退出 play、留在编辑态」，走 `AppSceneServices::loadScene`，不走 `scene.load`。
 - 跨场景状态只进 `Persist` 全局表（按实体名等做键）；退出 play（stopRuntime /
   stopSimulation）换新表，转移不碰它。不要依赖「全局变量碰巧没被清」。
+- 存档是 `world.save(path)` / `world.load(path)`。文件只记场景路径和 `Persist`。保存前每个已加载的世界脚本若有 `onSave`，就在那里把要留下的状态写进 `Persist`；引擎不扫描实体。`load` 在帧尾换上那张场景，不走出生点，再换上 `Persist`。下一帧 `onInit` 里 `world.saveRestored()` 为真，脚本据此套回自己的状态。场景转移不置这个标志。路径相对项目根，也可以是绝对路径。同一帧里后到的 `loadScene` 或 `load` 覆盖先到的。
 - 出生点：场景根上一个命名 Node3D。有 `spawnName` 时，引擎把目的地场景里名为
   `actorName` 的实体放到标记的 x/y 上，z 归角色自己。名字由调用方传入：Door 的
   脚本属性 `actorName` 默认 `"Player"`，场景 `propertyOverrides` 可改。省略或空

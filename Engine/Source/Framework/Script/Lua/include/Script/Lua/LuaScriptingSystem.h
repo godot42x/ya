@@ -59,6 +59,9 @@ struct YA_SCRIPT_LUA_API LuaScriptingSystem : public IWorldScriptRuntime
     /// The `Persist` global's table; created on first use, replaced on a play
     /// session exit. A plain table so scripts store any Lua value.
     sol::table _persistent;
+    /// True from a successful save load until the following world-script pass
+    /// has run its inits. Scene transfer leaves it false.
+    bool _bSaveRestored = false;
     /// Sol tables for this system's state. Declared after `_lua` so it is
     /// destroyed first, while the state is still alive. Defined in the cpp.
     std::unique_ptr<LuaInstanceStore> _instances;
@@ -99,6 +102,11 @@ struct YA_SCRIPT_LUA_API LuaScriptingSystem : public IWorldScriptRuntime
     /// Swap in a fresh `Persist` table. The old table object stays alive as
     /// long as scripts hold it, but the global reads the new empty one.
     void resetPersistentState() override;
+    [[nodiscard]] std::string exportPersistentState() override;
+    bool importPersistentState(std::string_view jsonText) override;
+    void flushPersistentScripts() override;
+    void markSaveRestored() override;
+    [[nodiscard]] bool saveRestored() const override;
     /// `entity` is about to be destroyed: onDestroy its loaded scripts and
     /// drop their Lua handles.
     void onEntityDestroying(Entity& entity) override;

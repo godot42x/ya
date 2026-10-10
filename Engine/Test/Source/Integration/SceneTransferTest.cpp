@@ -16,6 +16,8 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 
@@ -198,6 +200,49 @@ TEST_F(SceneTransferTest, TransferPlacesTheNamedActor)
     EXPECT_FLOAT_EQ(position.x, 5.5f);
     EXPECT_FLOAT_EQ(position.y, 1.5f);
     EXPECT_FLOAT_EQ(position.z, 0.1f);
+}
+
+TEST_F(SceneTransferTest, SaveRestoresPersistOnly)
+{
+    sol::table opened = lua->lua().create_table();
+    opened["Pot"] = true;
+    lua->persistentState()["opened"] = opened;
+    sol::table playerState = lua->lua().create_table();
+    playerState["x"] = 4;
+    playerState["y"] = 2;
+    lua->persistentState()["player"] = playerState;
+
+    Entity* player = sceneManager->getActiveScene()->getEntityByName("Player");
+    ASSERT_NE(player, nullptr);
+    player->getComponent<TransformComponent>()->setPosition({9.0f, 9.0f, 0.1f});
+
+    const std::filesystem::path file = dir / "slot.yasave.json";
+    ASSERT_TRUE(app.getSceneServices().saveWorld(file.string()));
+    {
+        std::ifstream in(file);
+        std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        EXPECT_EQ(text.find("positions"), std::string::npos);
+        EXPECT_NE(text.find("\"player\""), std::string::npos);
+    }
+
+    lua->resetPersistentState();
+    EXPECT_FALSE(lua->lua()["Persist"]["opened"].valid());
+
+    ASSERT_TRUE(app.getSceneServices().requestWorldLoad(file.string()));
+    ASSERT_TRUE(app.getSceneServices().runPendingWorldLoad());
+    EXPECT_TRUE(lua->saveRestored());
+
+    Scene* restoredScene = sceneManager->getActiveScene();
+    ASSERT_NE(restoredScene, nullptr);
+    Entity* restored = restoredScene->getEntityByName("Player");
+    ASSERT_NE(restored, nullptr);
+    const glm::vec3 position = restored->getComponent<TransformComponent>()->getPosition();
+    EXPECT_FLOAT_EQ(position.x, 1.0f);
+    EXPECT_FLOAT_EQ(position.y, 1.0f);
+    EXPECT_FLOAT_EQ(position.z, 0.1f);
+    EXPECT_TRUE(lua->lua()["Persist"]["opened"]["Pot"].get<bool>());
+    EXPECT_EQ(lua->lua()["Persist"]["player"]["x"].get<int64_t>(), 4);
+    EXPECT_EQ(lua->lua()["Persist"]["player"]["y"].get<int64_t>(), 2);
 }
 
 } // namespace

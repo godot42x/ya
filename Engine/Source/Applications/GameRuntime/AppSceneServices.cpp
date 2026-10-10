@@ -3,6 +3,7 @@
 #include "GameRuntime/App.h"
 #include "GameRuntime/Render/SceneCameraQuery.h"
 #include "GameRuntime/Script/GameplayScriptFunctions.h"
+#include "GameRuntime/WorldSave.h"
 #include "Core/Log.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
@@ -34,6 +35,29 @@ std::string resolveProjectScenePath(const App& app, const std::string& requested
     }
 
     return requestedPath;
+}
+
+std::string scenePathForSave(const App& app, const std::string& loadedPath)
+{
+    if (!app.getDesc().projectRoot || loadedPath.empty()) {
+        return loadedPath;
+    }
+    std::error_code error;
+    const std::filesystem::path relative =
+        std::filesystem::relative(loadedPath, *app.getDesc().projectRoot, error);
+    if (error || relative.empty() || relative.native().starts_with("..")) {
+        return loadedPath;
+    }
+    return relative.generic_string();
+}
+
+std::string resolveProjectWritePath(const App& app, const std::string& requestedPath)
+{
+    const std::filesystem::path input(requestedPath);
+    if (input.is_absolute() || !app.getDesc().projectRoot) {
+        return input.lexically_normal().string();
+    }
+    return (std::filesystem::path(*app.getDesc().projectRoot) / input).lexically_normal().string();
 }
 
 SceneManager* AppSceneServices::getSceneManager() const
@@ -127,7 +151,8 @@ void AppSceneServices::requestSceneTransfer(const std::string& path, const std::
         YA_CORE_WARN("world.loadScene: empty path");
         return;
     }
-    // A frame's last request wins: one slot, no queue to drain.
+    // A frame's last scene request wins, including over a queued world.load.
+    _pendingLoad.reset();
     _pendingTransfer = FPendingTransfer{.path = path, .spawnName = spawnName, .actorName = actorName};
 }
 
@@ -172,6 +197,89 @@ void AppSceneServices::runPendingSceneTransfer()
         }
     }
     YA_CORE_INFO("Scene transferred to '{}' (spawn '{}')", transfer.path, transfer.spawnName);
+}
+
+bool AppSceneServices::saveWorld(const std::string& path)
+{
+    if (!_app || path.empty()) {
+        YA_CORE_WARN("world.save: empty path");
+        return false;
+    }
+    SceneManager* manager = getSceneManager();
+    Scene*        scene   = getActiveScene();
+    if (!manager || !scene || manager->getActiveScenePath().empty()) {
+        YA_CORE_WARN("world.save: the active scene was not loaded from a file");
+        return false;
+    }
+    std::string persist = "{}";
+    if (_app->_luaScriptingSystem) {
+        _app->_luaScriptingSystem->flushPersistentScripts();
+        persist = _app->_luaScriptingSystem->exportPersistentState();
+    }
+    const FWorldSave save = captureWorldSave(scenePathForSave(*_app, manager->getActiveScenePath()), std::move(persist));
+    const std::string out = resolveProjectWritePath(*_app, path);
+    if (!writeWorldSave(out, save)) {
+        return false;
+    }
+    YA_CORE_INFO("Saved world to '{}'", out);
+    return true;
+}
+
+bool AppSceneServices::requestWorldLoad(const std::string& path)
+{
+    if (!_app || path.empty()) {
+        YA_CORE_WARN("world.load: empty path");
+        return false;
+    }
+    const std::string resolved = resolveProjectScenePath(*_app, path);
+    std::optional<FWorldSave> save = readWorldSave(resolved);
+    if (!save && resolved != path) {
+        save = readWorldSave(path);
+    }
+    if (!save) {
+        return false;
+    }
+    _pendingTransfer.reset();
+    _pendingLoad = std::move(save);
+    return true;
+}
+
+bool AppSceneServices::runPendingWorldLoad()
+{
+    if (!_app || !_pendingLoad) {
+        return false;
+    }
+    const FWorldSave save = *_pendingLoad;
+    _pendingLoad.reset();
+
+    App&          app     = *_app;
+    SceneManager* manager = getSceneManager();
+    if (!manager) {
+        YA_CORE_WARN("world.load: no scene manager");
+        return true;
+    }
+    if (!app.isRuntimeMode() && !app.isSimulationMode()) {
+        YA_CORE_WARN("world.load: dropped, play is not running");
+        return true;
+    }
+    if (auto* render = app.getRenderServices().getRender()) {
+        render->waitIdle();
+    }
+    if (app._luaScriptingSystem) {
+        app._luaScriptingSystem->onStop();
+    }
+    if (!manager->loadScene(resolveProjectScenePath(app, save.scene))) {
+        YA_CORE_ERROR("world.load: failed to load scene '{}'", save.scene);
+        return true;
+    }
+    if (app._luaScriptingSystem && !app._luaScriptingSystem->importPersistentState(save.persist)) {
+        YA_CORE_WARN("world.load: Persist was not restored");
+    }
+    else if (app._luaScriptingSystem) {
+        app._luaScriptingSystem->markSaveRestored();
+    }
+    YA_CORE_INFO("Loaded world from scene '{}'", save.scene);
+    return true;
 }
 
 } // namespace ya

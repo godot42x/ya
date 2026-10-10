@@ -269,6 +269,7 @@ void GameRuntimeTickOrchestrator::flushStructuralChanges(App& app)
     // Last: a queued `world.loadScene` (rpg R3) stops every script, so it
     // waits for this point — no script, module or UI callback runs after it
     // in the frame, and the next frame's Lua update loads the new scene.
+    app.getSceneServices().runPendingWorldLoad();
     app.getSceneServices().runPendingSceneTransfer();
 }
 

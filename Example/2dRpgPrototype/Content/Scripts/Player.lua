@@ -68,16 +68,40 @@ function Script:interact()
     end
 end
 
+function Script:onSave()
+    -- The cell being stepped toward, or the cell we stand on. Facing is the
+    -- last direction this mover turned. Nothing else on the actor is saved.
+    local cell = self.mover.to or self.mover.cell
+    Persist.player = {
+        x = cell.x,
+        y = cell.y,
+        facing = self.mover.facing.name,
+    }
+end
+
 function Script:onInit()
     self.anim = self.entity:getSpriteAnimation()
     self.map = world.find(self.mapName):getTilemap()
     self.talking = false
     self.bConfirmArmed = true
+    local facing = DIRECTIONS[2]
+    local saved = world.saveRestored() and Persist.player or nil
+    if type(saved) == "table" then
+        local worldPos = self.map:cellToWorld(saved.x, saved.y)
+        local z = self.entity:getTransform():getPosition().z
+        self.entity:getTransform():setPosition(Vec3.new(worldPos.x, worldPos.y, z))
+        for _, direction in ipairs(DIRECTIONS) do
+            if direction.name == saved.facing then
+                facing = direction
+                break
+            end
+        end
+    end
     self.mover = GridMover:new(self.entity, {
         map = self.map,
         stepSeconds = 0.2,
         texelsPerUnit = 16,
-        facing = DIRECTIONS[2],
+        facing = facing,
     })
     self:showPose(false)
 end

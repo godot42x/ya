@@ -33,7 +33,7 @@ GUI 与编辑器活跃线
 
 2D demo（`rpg-prototype`）
 - [x] G2.1 相机 2D 字段在 `CameraComponent`；跟随留在 `FollowCamera.lua`。对话逐字在 `Dialogue.lua`
-- [ ] G2.2 存档 / 读档
+- [x] G2.2 存档 / 读档（`world.save` / `world.load`：场景路径 + `Persist`；脚本 `onSave` 决定写什么）
 - [ ] G2.3 背包 / 任务 / 商店 / 对话分支（数据驱动）
 - [ ] G2.4 完整流程内容
 - [ ] G2.5 打包 + 录屏

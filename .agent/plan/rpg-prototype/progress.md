@@ -742,3 +742,10 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 指数平滑和地图夹取继续由 `FollowCamera.lua` 做。像素缩放、吸附仍在 `CameraComponent`。不单做跟随组件或系统。
 - Town / House / TownLarge 的相机挂这份脚本，默认目标 `Player`、地图 `TilemapGround`。PropertyOverride 用脚本属性把目标和地图改成 `Hero` / `WalkMap`。
 - 验证：四张 RPG 场景回到脚本挂载后，`ReflectionSceneResave.TrackedScenesMatchBaseline` 通过。
+
+## 2026-10-10 — 存档 / 读档
+
+- 目标与边界：一局能写到磁盘再读回来。文件只记场景路径和 `Persist`。要留下的状态由脚本在 `onSave` 里写进 `Persist`。引擎不扫描实体位置。不存整份场景副本，也不做背包或存档界面。
+- `world.save(path)` 先对已加载的世界脚本调 `onSave`，再立刻写文件。`world.load(path)` 排到帧尾：停脚本、按存档里的场景路径加载（不放出生点）、换上 `Persist`。下一帧 `onInit` 时 `world.saveRestored()` 为真。场景转移不置这个标志，出生点仍然有效。同一帧后到的 `loadScene` 或 `load` 覆盖先到的。退出 play 仍然清空内存里的 `Persist`，文件还在。
+- `Player.lua` 的 `onSave` 记下当前格子和朝向；`onInit` 只在读档后的那一帧把人放回去。宝箱仍是交互时写 `Persist.opened`，`onInit` 套外观。
+- 验证：`SceneTransferTest.SaveRestoresPersistOnly` 通过。玩家被挪到 `(9, 9)` 不会进文件；`Persist.opened.Pot` 和 `Persist.player` 读档后还在，场景里的坐标回到文件里的 `(1, 1)`。同组其余 6 个转移测试仍通过。

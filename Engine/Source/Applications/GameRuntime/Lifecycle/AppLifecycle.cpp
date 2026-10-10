@@ -407,6 +407,8 @@ void App::init(AppDesc ci)
         .requestSceneTransfer = [&app](std::string path, std::string spawn, std::string actor) {
             app.getSceneServices().requestSceneTransfer(path, spawn, actor);
         },
+        .saveWorld = [&app](std::string path) { return app.getSceneServices().saveWorld(path); },
+        .loadWorld = [&app](std::string path) { return app.getSceneServices().requestWorldLoad(path); },
         .worldRuntime = [&app]() -> IWorldScriptRuntime* { return app._luaScriptingSystem; },
         .gameUI       = app.getGameUIHost(),
     };

@@ -14,6 +14,7 @@
 #include <glm/glm.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <functional>
 #include <iterator>
@@ -24,6 +25,8 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 namespace
 {
@@ -890,6 +893,7 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
         YA_PROFILE_SCOPE("LuaScriptingSystem::scriptOnUpdate");
         call(*script, ELuaScriptCallback::Update, deltaTime);
     }
+    _bSaveRestored = false;
 }
 
 bool LuaScriptingSystem::callEachLoaded(const std::string& name, script::ScriptArgs args)
@@ -966,6 +970,7 @@ void LuaScriptingSystem::onEntityDestroying(Entity& entity)
 void LuaScriptingSystem::onStop()
 {
     YA_PROFILE_FUNCTION();
+    _bSaveRestored = false;
 
     destroyAll();
 
@@ -999,8 +1004,173 @@ sol::table LuaScriptingSystem::persistentState()
 
 void LuaScriptingSystem::resetPersistentState()
 {
+    _bSaveRestored = false;
     _persistent = _lua.create_table();
     _lua["Persist"] = _persistent;
+}
+
+void LuaScriptingSystem::flushPersistentScripts()
+{
+    callEachLoaded("onSave");
+}
+
+void LuaScriptingSystem::markSaveRestored()
+{
+    _bSaveRestored = true;
+}
+
+bool LuaScriptingSystem::saveRestored() const
+{
+    return _bSaveRestored;
+}
+
+namespace
+{
+
+nlohmann::json luaValueToJson(const sol::object& value, int depth, bool& bWarned);
+
+nlohmann::json luaTableToJson(const sol::table& table, int depth, bool& bWarned)
+{
+    bool                                   bArray   = true;
+    int64_t                                count    = 0;
+    std::vector<std::pair<int64_t, sol::object>> indexed;
+    std::vector<std::pair<std::string, sol::object>> named;
+    table.for_each([&](const sol::object& key, const sol::object& value) {
+        if (key.is<std::string>()) {
+            bArray = false;
+            named.emplace_back(key.as<std::string>(), value);
+            return;
+        }
+        if (!key.is<int64_t>() && !key.is<int>() && !key.is<double>()) {
+            bArray = false;
+            return;
+        }
+        const double asNumber = key.as<double>();
+        const auto   index    = static_cast<int64_t>(asNumber);
+        if (static_cast<double>(index) != asNumber || index < 1) {
+            bArray = false;
+            return;
+        }
+        indexed.emplace_back(index, value);
+        count = std::max(count, index);
+    });
+    if (bArray && static_cast<int64_t>(indexed.size()) == count) {
+        nlohmann::json array = nlohmann::json::array();
+        std::vector<sol::object> slots(static_cast<size_t>(count));
+        for (const auto& [index, value] : indexed) {
+            slots[static_cast<size_t>(index - 1)] = value;
+        }
+        for (const sol::object& value : slots) {
+            array.push_back(luaValueToJson(value, depth + 1, bWarned));
+        }
+        return array;
+    }
+    nlohmann::json object = nlohmann::json::object();
+    for (const auto& [index, value] : indexed) {
+        object[std::to_string(index)] = luaValueToJson(value, depth + 1, bWarned);
+    }
+    for (const auto& [key, value] : named) {
+        object[key] = luaValueToJson(value, depth + 1, bWarned);
+    }
+    return object;
+}
+
+nlohmann::json luaValueToJson(const sol::object& value, int depth, bool& bWarned)
+{
+    if (depth > 32 || !value.valid()) {
+        return nullptr;
+    }
+    if (value.get_type() == sol::type::lua_nil) {
+        return nullptr;
+    }
+    if (value.is<bool>()) {
+        return value.as<bool>();
+    }
+    if (value.is<std::string>()) {
+        return value.as<std::string>();
+    }
+    if (value.is<double>()) {
+        const double number = value.as<double>();
+        const auto   whole  = static_cast<int64_t>(number);
+        if (static_cast<double>(whole) == number) {
+            return whole;
+        }
+        return number;
+    }
+    if (value.is<sol::table>()) {
+        return luaTableToJson(value.as<sol::table>(), depth, bWarned);
+    }
+    if (!bWarned) {
+        YA_CORE_WARN("Persist export skipped a value that is not a bool, number, string, or table");
+        bWarned = true;
+    }
+    return nullptr;
+}
+
+sol::object jsonToLua(sol::state_view lua, const nlohmann::json& value, int depth)
+{
+    if (depth > 32 || value.is_null()) {
+        return sol::make_object(lua, sol::lua_nil);
+    }
+    if (value.is_boolean()) {
+        return sol::make_object(lua, value.get<bool>());
+    }
+    if (value.is_number_integer()) {
+        return sol::make_object(lua, value.get<int64_t>());
+    }
+    if (value.is_number()) {
+        return sol::make_object(lua, value.get<double>());
+    }
+    if (value.is_string()) {
+        return sol::make_object(lua, value.get<std::string>());
+    }
+    if (value.is_array()) {
+        sol::table table = lua.create_table();
+        int64_t    index = 1;
+        for (const nlohmann::json& item : value) {
+            table[index++] = jsonToLua(lua, item, depth + 1);
+        }
+        return sol::make_object(lua, table);
+    }
+    if (value.is_object()) {
+        sol::table table = lua.create_table();
+        for (auto it = value.begin(); it != value.end(); ++it) {
+            table[it.key()] = jsonToLua(lua, it.value(), depth + 1);
+        }
+        return sol::make_object(lua, table);
+    }
+    return sol::make_object(lua, sol::lua_nil);
+}
+
+} // namespace
+
+std::string LuaScriptingSystem::exportPersistentState()
+{
+    bool bWarned = false;
+    return luaTableToJson(persistentState(), 0, bWarned).dump();
+}
+
+bool LuaScriptingSystem::importPersistentState(std::string_view jsonText)
+{
+    nlohmann::json parsed;
+    try {
+        parsed = nlohmann::json::parse(jsonText);
+    }
+    catch (const nlohmann::json::exception& error) {
+        YA_CORE_WARN("Persist import is not JSON: {}", error.what());
+        return false;
+    }
+    if (!parsed.is_object() && !parsed.is_array()) {
+        YA_CORE_WARN("Persist import must be a JSON object or array");
+        return false;
+    }
+    sol::object imported = jsonToLua(_lua, parsed, 0);
+    if (!imported.is<sol::table>()) {
+        return false;
+    }
+    _persistent        = imported.as<sol::table>();
+    _lua["Persist"]    = _persistent;
+    return true;
 }
 
 LuaScriptingSystem::LuaScriptingSystem()

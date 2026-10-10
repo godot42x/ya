@@ -339,6 +339,34 @@ void registerGameplayScriptFunctions(GameplayScriptContext ctx)
                                  args.size() > 2 ? script::scriptToString(args[2]) : std::string{});
         return {};
     });
+    script::registerModuleFunction("world", "save", [ctx](ScriptArgs args) -> ScriptValue {
+        expectArgCount(args, 1);
+        if (!ctx.saveWorld) {
+            throw ScriptError("no running app");
+        }
+        if (!ctx.saveWorld(script::scriptToString(args[0]))) {
+            throw ScriptError("world.save failed");
+        }
+        return {};
+    });
+    script::registerModuleFunction("world", "load", [ctx](ScriptArgs args) -> ScriptValue {
+        expectArgCount(args, 1);
+        if (!ctx.loadWorld) {
+            throw ScriptError("no running app");
+        }
+        if (!ctx.loadWorld(script::scriptToString(args[0]))) {
+            throw ScriptError("world.load failed");
+        }
+        return {};
+    });
+    script::registerModuleFunction("world", "saveRestored", [ctx](ScriptArgs args) -> ScriptValue {
+        expectArgCount(args, 0);
+        if (!ctx.worldRuntime) {
+            throw ScriptError("no running app");
+        }
+        IWorldScriptRuntime* runtime = ctx.worldRuntime();
+        return script::scriptMake(runtime != nullptr && runtime->saveRestored());
+    });
     script::registerModuleFunction("world", "viewAspect", [ctx](ScriptArgs args) { return viewAspect(ctx, args); });
     script::registerModuleFunction("world", "spawnSprite", [ctx](ScriptArgs args) { return spawnSpriteFn(ctx, args); },
                                    {0, spriteSpawnOptionsType()});
