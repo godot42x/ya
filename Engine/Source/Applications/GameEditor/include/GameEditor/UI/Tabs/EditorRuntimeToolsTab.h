@@ -12,7 +12,14 @@ struct WidgetTree;
 class ActionMap;
 struct App;
 
-/// Retained Runtime Tools tab. Play/stop chrome plus diagnostics sections.
+/// Retained Runtime Tools tab. A pinned KPI strip (frame time, FPS, GPU time,
+/// GPU memory, process RSS/peak) sits above a scroll of collapsible detail
+/// sections -- so the handful of numbers a reader watches never scroll away
+/// and never sit in the same visual weight as the prose around them.
+///
+/// Transport (Play / Simulate / Stop) is NOT here: it lives in the Play
+/// toolbar tab, which is the one home for it, and the panel keeps only the
+/// runtime state word so the KPI strip still says what it is showing.
 /// Window session injects ActionMap and App; this tab does not call App::get().
 class EditorRuntimeToolsTab : public UICompoundWidget
 {
@@ -28,9 +35,12 @@ class EditorRuntimeToolsTab : public UICompoundWidget
   private:
     std::shared_ptr<struct UIText> _statusText;
     std::shared_ptr<struct UIText> _frameText;
-    std::shared_ptr<struct UIButton> _playButton;
-    std::shared_ptr<struct UIButton> _simulateButton;
-    std::shared_ptr<struct UIButton> _stopButton;
+    std::shared_ptr<struct UIText> _frameMs;
+    std::shared_ptr<struct UIText> _fps;
+    std::shared_ptr<struct UIText> _gpuMs;
+    std::shared_ptr<struct UIText> _gpuMem;
+    std::shared_ptr<struct UIText> _rss;
+    std::shared_ptr<struct UIText> _peak;
     std::shared_ptr<class RuntimeDiagnosticsSection> _diagnostics;
     std::shared_ptr<class RuntimeProfilingSection> _profiling;
     std::shared_ptr<class RuntimeMemorySection> _memory;
@@ -39,6 +49,7 @@ class EditorRuntimeToolsTab : public UICompoundWidget
     std::shared_ptr<class RuntimeDebugPrimitivesSection> _debugPrimitives;
     ActionMap* _actions = nullptr;
     App* _app = nullptr;
+    float _frameSeconds = 0.0f;
 
     void refresh();
 };

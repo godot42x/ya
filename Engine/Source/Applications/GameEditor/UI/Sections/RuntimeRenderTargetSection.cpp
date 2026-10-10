@@ -7,7 +7,6 @@
 
 #include <format>
 #include <utility>
-
 namespace ya
 {
 
@@ -42,34 +41,31 @@ RuntimeRenderTargetSection::RuntimeRenderTargetSection(std::string name)
 
 void RuntimeRenderTargetSection::construct()
 {
-    _summary = ui::text("RuntimeTargetsSummary").share();
-    _details = ui::text("RuntimeTargetsDetails").share();
+    _summary = makeStatRow("RuntimeTargetsSummary", "Targets");
+    _details = ui::text("RuntimeTargetsDetails").setStyleKey("text.muted").share();
 
     auto rows = ui::column("RuntimeTargetsRows")
-                    .setSpacing(3.0f)
-                    .child(ui::text("RuntimeTargetsHeader")
-                               .setText("Render Targets")
-                               .setStyleKey("text.header"))
-                    .child(_summary)
+                    .setSpacing(editor_density::kRowSpacing)
+                    .child(_summary.root)
                     .child(_details);
     addDetachedChild(rows.release());
 }
 
 void RuntimeRenderTargetSection::sync(const App* app)
 {
-    if (!_summary || !_details || !app) {
+    if (!app) {
         return;
     }
 
     const auto& renderServices = app->getRenderServices();
     if (!renderServices.hasRenderer()) {
-        _summary->setText("Render targets unavailable");
+        _summary.value->setText("<unavailable>");
         _details->setText("");
         return;
     }
 
     const auto catalog = renderServices.buildRenderTargetCatalog();
-    _summary->setText(std::format("Targets: {}", catalog.entries.size()));
+    _summary.value->setText(std::format("{}", catalog.entries.size()));
     if (catalog.entries.empty()) {
         _details->setText("No render targets are available");
         return;

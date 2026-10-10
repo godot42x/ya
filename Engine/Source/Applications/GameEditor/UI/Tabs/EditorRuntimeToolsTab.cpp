@@ -1,9 +1,10 @@
 #include "GameEditor/UI/Tabs/EditorRuntimeToolsTab.h"
 
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
-#include "GUI/Binding/ActionMap.h"
-#include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/Expander.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/UI/Sections/RuntimeDebugPrimitivesSection.h"
@@ -12,12 +13,34 @@
 #include "GameEditor/UI/Sections/RuntimeProfilingSection.h"
 #include "GameEditor/UI/Sections/RuntimeRenderGraphSection.h"
 #include "GameEditor/UI/Sections/RuntimeRenderTargetSection.h"
+#include "GameEditor/UI/Shell/EditorStatReadouts.h"
 #include "GameRuntime/App.h"
 
 #include <format>
+#include <memory>
+#include <utility>
 
 namespace ya
 {
+namespace
+{
+
+/// One KPI row: three cells sharing the width equally. Two of these stack into
+/// the strip, so the six headline numbers stay put at a dock-tab width where a
+/// single six-across row would overflow.
+ui::UIContainerWidgetBuilder kpiRow(const char* key,
+                                    const FStatReadout& first,
+                                    const FStatReadout& second,
+                                    const FStatReadout& third)
+{
+    return ui::row(key)
+        .setSpacing(12.0f)
+        .child(first.root, ui::boxSlot().fillWidth())
+        .child(second.root, ui::boxSlot().fillWidth())
+        .child(third.root, ui::boxSlot().fillWidth());
+}
+
+} // namespace
 
 EditorRuntimeToolsTab::EditorRuntimeToolsTab(ActionMap* actions, App* app)
     : UICompoundWidget("RuntimeToolsBody", "panel.canvas")
@@ -29,33 +52,34 @@ EditorRuntimeToolsTab::EditorRuntimeToolsTab(ActionMap* actions, App* app)
 
 void EditorRuntimeToolsTab::construct()
 {
-    auto status = ui::text("RuntimeToolsStatus").setText("Stopped").setStyleKey("text.header").share();
-    auto frame = ui::text("RuntimeToolsFrame").setText("Frame 0").setStyleKey("text.muted").share();
+    // State word + frame counter: a compact header line, not the panel's point.
+    auto status = ui::text("RuntimeToolsStatus")
+                      .setText("Stopped")
+                      .setStyleKey("text.header")
+                      .setVAlign(EWidgetAlignV::Center);
+    auto frame = ui::text("RuntimeToolsFrame")
+                     .setText("Frame 0")
+                     .setStyleKey("text.muted")
+                     .setHAlign(EWidgetAlignH::Right)
+                     .setVAlign(EWidgetAlignV::Center);
+    _statusText = status.share();
+    _frameText  = frame.share();
 
-    auto playBuilder = ui::button("RuntimeToolsPlay").child(ui::text("RuntimeToolsPlayLabel").setText("Play"));
-    playBuilder.setOnClick([this]() {
-        if (_actions) {
-            (void)_actions->execute("runtime.play");
-        }
-    });
-    auto play = playBuilder.share();
+    // The strip a reader watches: the six numbers that answer "is it fast and
+    // is it holding memory", each a bright value under a muted label.
+    const FStatReadout frameCell = makeStatCell("RuntimeKpiFrame", "Frame");
+    const FStatReadout fpsCell   = makeStatCell("RuntimeKpiFps", "FPS");
+    const FStatReadout gpuCell   = makeStatCell("RuntimeKpiGpu", "GPU");
+    const FStatReadout gpuMemCell = makeStatCell("RuntimeKpiGpuMem", "GPU Mem");
+    const FStatReadout rssCell   = makeStatCell("RuntimeKpiRss", "RSS");
+    const FStatReadout peakCell  = makeStatCell("RuntimeKpiPeak", "Peak");
+    _frameMs = frameCell.value;
+    _fps     = fpsCell.value;
+    _gpuMs   = gpuCell.value;
+    _gpuMem  = gpuMemCell.value;
+    _rss     = rssCell.value;
+    _peak    = peakCell.value;
 
-    auto simulateBuilder =
-        ui::button("RuntimeToolsSimulate").child(ui::text("RuntimeToolsSimulateLabel").setText("Simulate"));
-    simulateBuilder.setOnClick([this]() {
-        if (_actions) {
-            (void)_actions->execute("runtime.simulate");
-        }
-    });
-    auto simulate = simulateBuilder.share();
-
-    auto stopBuilder = ui::button("RuntimeToolsStop").child(ui::text("RuntimeToolsStopLabel").setText("Stop"));
-    stopBuilder.setOnClick([this]() {
-        if (_actions) {
-            (void)_actions->execute("runtime.stop");
-        }
-    });
-    auto stop = stopBuilder.share();
     auto diagnostics = std::make_shared<RuntimeDiagnosticsSection>();
     auto profiling = std::make_shared<RuntimeProfilingSection>();
     auto memory = std::make_shared<RuntimeMemorySection>();
@@ -63,11 +87,6 @@ void EditorRuntimeToolsTab::construct()
     auto renderTargets = std::make_shared<RuntimeRenderTargetSection>();
     auto debugPrimitives = std::make_shared<RuntimeDebugPrimitivesSection>();
 
-    _statusText = status;
-    _frameText = frame;
-    _playButton = play;
-    _simulateButton = simulate;
-    _stopButton = stop;
     _diagnostics = diagnostics;
     _profiling = profiling;
     _memory = memory;
@@ -75,27 +94,47 @@ void EditorRuntimeToolsTab::construct()
     _renderTargets = renderTargets;
     _debugPrimitives = debugPrimitives;
 
-    addDetachedChild(ui::scroll("RuntimeToolsScroll")
-                         .setAxis(EScrollAxis::Vertical)
-                         .child(ui::column("RuntimeToolsColumn")
+    // Each section folds into a collapsing header whose title carries the name
+    // the section used to paint itself. The live-number sections open; the
+    // reference and tool sections (render graph shape, render-target list,
+    // RenderDoc, debug toggles) start folded, so they stop pushing the numbers
+    // off the bottom of a dock tab.
+    const auto section = [](const char* key, const char* title, bool expanded, UIElementRef body) {
+        return ui::collapsingHeader(key)
+            .setTitle(title)
+            .setDisclosureKind(EDisclosureKind::Chevron)
+            .setExpanded(expanded)
+            .setSpacing(editor_density::kRowSpacing)
+            .setPadding({editor_density::kPanelPadding, editor_density::kPanelPadding})
+            .child(std::move(body));
+    };
+
+    auto sections = ui::column("RuntimeToolsColumn")
+                        .setSpacing(editor_density::kSectionSpacing)
+                        .setStretchLastChild(false)
+                        .child(section("RuntimeSectionProfiling", "Profiling", true, profiling))
+                        .child(section("RuntimeSectionMemory", "Memory", true, memory))
+                        .child(section("RuntimeSectionRenderGraph", "Render Graph", false, renderGraph))
+                        .child(section("RuntimeSectionRenderTargets", "Render Targets", false, renderTargets))
+                        .child(section("RuntimeSectionDiagnostics", "Diagnostics", false, diagnostics))
+                        .child(section("RuntimeSectionDebug", "Debug Primitives", false, debugPrimitives));
+
+    addDetachedChild(ui::column("RuntimeToolsRoot")
+                         .setSpacing(8.0f)
+                         .setPadding({editor_density::kPanelPadding, editor_density::kPanelPadding})
+                         .child(ui::row("RuntimeToolsHeader")
                                     .setSpacing(8.0f)
-                                    .setPadding({12.0f, 12.0f})
-                                    .setStretchLastChild(false)
                                     .child(status)
-                                    .child(frame)
-                                    .child(play, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                                    .child(simulate, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                                    .child(stop, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                                    .child(diagnostics)
-                                    .child(profiling)
-                                    .child(memory)
-                                    .child(renderGraph)
-                                    .child(renderTargets)
-                                    .child(debugPrimitives)
-                                    .release(),
-                                ui::contentSlot()
-                                    .hAlign(EUIOverlayAlignment::Fill)
-                                    .vAlign(EUIOverlayAlignment::Start))
+                                    .child(frame, ui::boxSlot().fillWidth()))
+                         .child(kpiRow("RuntimeKpiRow1", frameCell, fpsCell, gpuCell))
+                         .child(kpiRow("RuntimeKpiRow2", gpuMemCell, rssCell, peakCell))
+                         .child(ui::scroll("RuntimeToolsScroll")
+                                    .setAxis(EScrollAxis::Vertical)
+                                    .child(sections.release(),
+                                           ui::contentSlot()
+                                               .hAlign(EUIOverlayAlignment::Fill)
+                                               .vAlign(EUIOverlayAlignment::Start)),
+                                ui::boxSlot().fillHeight())
                          .release());
 }
 
@@ -104,8 +143,9 @@ void EditorRuntimeToolsTab::onAttached()
     refresh();
 }
 
-void EditorRuntimeToolsTab::tick(float)
+void EditorRuntimeToolsTab::tick(float deltaSeconds)
 {
+    _frameSeconds = deltaSeconds;
     refresh();
 }
 
@@ -117,15 +157,27 @@ void EditorRuntimeToolsTab::refresh()
     const char* state = _app->isRuntimeMode() ? "Playing" : (_app->isSimulationMode() ? "Simulating" : "Stopped");
     _statusText->setText(state);
     _frameText->setText(std::format("Frame {}", _app->getHostTick()));
+
+    // The strip reads the live frame delta (the same quantity the Frame Stats
+    // tab shows), the last completed frame's GPU time summed across passes, and
+    // the memory readout the section below already sampled this frame -- so the
+    // strip and the detail can never disagree.
+    _frameMs->setText(_frameSeconds > 0.0f ? formatMs(_frameSeconds * 1000.0f) : std::string("-"));
+    _fps->setText(_frameSeconds > 0.0f ? formatFps(1.0f / _frameSeconds) : std::string("-"));
+    const float gpuMs = profiling::metrics().getDisplayValue(perf::sample::hostTick(), perf::metric::gpuTimeMs());
+    _gpuMs->setText(gpuMs > 0.0f ? formatMs(gpuMs) : std::string("-"));
+
     _diagnostics->sync(_app);
     _profiling->sync(_app);
     _memory->sync(_app);
     _renderGraph->sync(_app);
     _renderTargets->sync(_app);
     _debugPrimitives->sync(_app);
-    _playButton->setEnabled(_app->isStopped());
-    _simulateButton->setEnabled(_app->isStopped());
-    _stopButton->setEnabled(!_app->isStopped());
+
+    const FRuntimeMemoryReadout& memoryReadout = _memory->readout();
+    _gpuMem->setText(memoryReadout.gpuSupported ? formatMiB(memoryReadout.gpuTotalBytes) : std::string("n/a"));
+    _rss->setText(memoryReadout.processSupported ? formatMiB(memoryReadout.rssBytes) : std::string("n/a"));
+    _peak->setText(memoryReadout.processSupported ? formatMiB(memoryReadout.peakBytes) : std::string("n/a"));
 }
 
 } // namespace ya

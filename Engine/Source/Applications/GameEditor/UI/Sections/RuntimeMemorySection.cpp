@@ -16,24 +16,22 @@ namespace ya
 namespace
 {
 
-constexpr double kBytesPerMiB = 1024.0 * 1024.0;
-
-/// A number this panel prints is a size a reader compares against another
-/// size, so it keeps one decimal place below 100 MiB and none above -- a row
-/// of "12.3 / 45.6 / 789.0 MiB" is easier to scan than one of "12.34 / ...".
-std::string formatMiB(uint64_t bytes)
+void setRow(const FStatReadout& row, std::string text)
 {
-    const double mib = static_cast<double>(bytes) / kBytesPerMiB;
-    return mib < 100.0 ? std::format("{:.1f} MiB", mib) : std::format("{:.0f} MiB", mib);
+    row.value->setText(text);
+    row.root->setVisibility(EWidgetVisibility::Visible);
 }
 
-std::string joinRow(std::string row, std::string_view part)
+void hideRow(const FStatReadout& row)
 {
-    if (!row.empty()) {
-        row += "  ";
-    }
-    row += part;
-    return row;
+    row.root->setVisibility(EWidgetVisibility::Collapsed);
+}
+
+/// "24.4 MiB (19)" -- the size a reader compares, with the allocation count
+/// that says whether it is a few big objects or many small ones.
+std::string formatSizedCount(uint64_t bytes, uint32_t count)
+{
+    return std::format("{} ({})", formatMiB(bytes), count);
 }
 
 } // namespace
@@ -45,101 +43,111 @@ RuntimeMemorySection::RuntimeMemorySection(std::string name)
 
 void RuntimeMemorySection::construct()
 {
-    _gpuTotal   = ui::text("RuntimeMemoryGpuTotal").share();
-    _gpuClasses = ui::text("RuntimeMemoryGpuClasses").share();
-    _gpuHeaps   = ui::text("RuntimeMemoryGpuHeaps").share();
-    _process    = ui::text("RuntimeMemoryProcess").share();
-    _heap       = ui::text("RuntimeMemoryHeap").share();
-    _caveat     = ui::text("RuntimeMemoryCaveat").setStyleKey("text.muted").share();
+    _gpuTotal = makeStatRow("RuntimeMemoryGpuTotal", "GPU");
+    for (uint32_t i = 0; i < _gpuClasses.size(); ++i) {
+        _gpuClasses[i] = makeStatRow(std::format("RuntimeMemoryClass{}", i),
+                                     toGpuMemoryClassLabel(kGpuMemoryClasses[i]));
+    }
+    for (uint32_t i = 0; i < _gpuHeaps.size(); ++i) {
+        _gpuHeaps[i] = makeStatRow(std::format("RuntimeMemoryHeap{}", i), std::format("heap {}", i));
+    }
+    _rss  = makeStatRow("RuntimeMemoryRss", "RSS");
+    _peak = makeStatRow("RuntimeMemoryPeak", "Peak");
+    _heap = makeStatRow("RuntimeMemoryHeapTotal", "Heap");
+    for (uint32_t i = 0; i < memory::kMemoryOwnerCount; ++i) {
+        _heapOwners[i] = makeStatRow(std::format("RuntimeMemoryOwner{}", i),
+                                     memory::toMemoryOwnerLabel(static_cast<memory::EMemoryOwner>(i)));
+    }
+    _caveat = ui::text("RuntimeMemoryCaveat").setStyleKey("text.muted").share();
 
-    addDetachedChild(ui::column("RuntimeMemoryRows")
-                         .setSpacing(4.0f)
-                         .child(ui::text("RuntimeMemoryHeader").setText("Memory").setStyleKey("text.header"))
-                         .child(_gpuTotal)
-                         .child(_gpuClasses)
-                         .child(_gpuHeaps)
-                         .child(_process)
-                         .child(_heap)
-                         .child(_caveat)
-                         .release());
+    auto rows = ui::column("RuntimeMemoryRows").setSpacing(editor_density::kRowSpacing);
+    rows.child(_gpuTotal.root);
+    for (const FStatReadout& row : _gpuClasses) {
+        rows.child(row.root);
+    }
+    for (const FStatReadout& row : _gpuHeaps) {
+        rows.child(row.root);
+    }
+    rows.child(_rss.root);
+    rows.child(_peak.root);
+    rows.child(_heap.root);
+    for (const FStatReadout& row : _heapOwners) {
+        rows.child(row.root);
+    }
+    rows.child(_caveat);
+    addDetachedChild(rows.release());
 }
 
 void RuntimeMemorySection::sync(const App* app)
 {
-    if (!_gpuTotal || !_gpuClasses || !_gpuHeaps || !_process || !_heap || !_caveat) {
-        return;
-    }
-
     // "Cannot answer", not "holds nothing": a row of zeros would read as a
     // measurement on a backend or platform that has no counter.
     const IRender* render = app ? app->getRenderServices().getRender() : nullptr;
     const FGpuMemoryStats gpuStats = render ? render->getGpuMemoryStats() : FGpuMemoryStats{};
+    _readout.gpuSupported   = gpuStats.bSupported;
+    _readout.gpuTotalBytes  = gpuStats.getTotalBytes();
+    _readout.gpuAllocations = gpuStats.getTotalAllocationCount();
     if (!gpuStats.bSupported) {
-        _gpuTotal->setText("GPU memory: n/a");
-        _gpuClasses->setText("");
-        _gpuHeaps->setText("");
+        _gpuTotal.value->setText("n/a");
+        for (const FStatReadout& row : _gpuClasses) {
+            hideRow(row);
+        }
+        for (const FStatReadout& row : _gpuHeaps) {
+            hideRow(row);
+        }
     }
     else {
-        _gpuTotal->setText(std::format("GPU memory: {} in {} allocations",
-                                       formatMiB(gpuStats.getTotalBytes()),
-                                       gpuStats.getTotalAllocationCount()));
-
-        std::string classes;
-        for (const EGpuMemoryClass::T memoryClass : kGpuMemoryClasses) {
-            const FGpuMemoryClassUsage& usage = gpuStats.byClass[gpuMemoryClassIndex(memoryClass)];
+        setRow(_gpuTotal, formatSizedCount(gpuStats.getTotalBytes(), gpuStats.getTotalAllocationCount()));
+        for (uint32_t i = 0; i < _gpuClasses.size(); ++i) {
+            const FGpuMemoryClassUsage& usage = gpuStats.byClass[i];
             if (usage.allocationCount == 0) {
+                hideRow(_gpuClasses[i]);
+            }
+            else {
+                setRow(_gpuClasses[i], formatSizedCount(usage.bytes, usage.allocationCount));
+            }
+        }
+        for (uint32_t i = 0; i < _gpuHeaps.size(); ++i) {
+            if (i >= gpuStats.heaps.size()) {
+                hideRow(_gpuHeaps[i]);
                 continue;
             }
-            classes = joinRow(std::move(classes),
-                              std::format("{} {} ({})",
-                                          toGpuMemoryClassLabel(memoryClass),
-                                          formatMiB(usage.bytes),
-                                          usage.allocationCount));
+            const FGpuMemoryHeapBudget& heap = gpuStats.heaps[i];
+            setRow(_gpuHeaps[i], std::format("{} / {}", formatMiB(heap.usageBytes), formatMiB(heap.budgetBytes)));
         }
-        _gpuClasses->setText(classes.empty() ? "no allocations" : classes);
-
-        std::string heaps;
-        for (const FGpuMemoryHeapBudget& heap : gpuStats.heaps) {
-            heaps = joinRow(std::move(heaps),
-                            std::format("heap {}: {} / {}",
-                                        heap.heapIndex,
-                                        formatMiB(heap.usageBytes),
-                                        formatMiB(heap.budgetBytes)));
-        }
-        _gpuHeaps->setText(heaps.empty() ? "no memory heaps reported" : heaps);
     }
 
     const Os::FProcessMemoryStats processStats = Os::sampleProcessMemory();
-    if (!processStats.bSupported) {
-        _process->setText("Process memory: n/a");
-    }
-    else {
-        _process->setText(std::format("Process memory: RSS {}, peak {}",
-                                      formatMiB(processStats.residentBytes),
-                                      formatMiB(processStats.peakResidentBytes)));
-    }
+    _readout.processSupported = processStats.bSupported;
+    _readout.rssBytes         = processStats.residentBytes;
+    _readout.peakBytes        = processStats.peakResidentBytes;
+    setRow(_rss, processStats.bSupported ? formatMiB(processStats.residentBytes) : std::string("n/a"));
+    setRow(_peak, processStats.bSupported ? formatMiB(processStats.peakResidentBytes) : std::string("n/a"));
 
     // Allocator layer, when this build counts. "not counted" rather than zeros:
     // a debug or release build has no counting allocator compiled in.
     const memory::FAllocatorStats allocator = memory::allocatorStatsSnapshot();
     if (!allocator.bSupported) {
-        _heap->setText("Heap: not counted in this build");
+        _heap.value->setText("not counted in this build");
+        for (const FStatReadout& row : _heapOwners) {
+            hideRow(row);
+        }
     }
     else {
-        // A full size table means the byte level below is real; a full one means
-        // it is a floor, and saying so beats printing a confident wrong number.
-        std::string row = std::format("Heap: {}{} live in {} allocations",
-                                      formatMiB(allocator.getLiveBytes()),
-                                      allocator.sizeTableComplete ? "" : "+ (size table full)",
-                                      allocator.getLiveAllocations());
+        // A full size table means the byte level is real; once it is not, the
+        // level is a floor and saying so beats printing a confident number.
+        setRow(_heap,
+               formatSizedCount(allocator.getLiveBytes(), allocator.getLiveAllocations()) +
+                   (allocator.sizeTableComplete ? "" : " (size table full)"));
         for (uint32_t owner = 0; owner < memory::kMemoryOwnerCount; ++owner) {
             const memory::FAllocatorBucketStats& bucket = allocator.buckets[owner];
             if (bucket.liveBytes == 0) {
-                continue;
+                hideRow(_heapOwners[owner]);
             }
-            row += std::format("  {} {}", memory::toMemoryOwnerLabel(static_cast<memory::EMemoryOwner>(owner)), formatMiB(bucket.liveBytes));
+            else {
+                setRow(_heapOwners[owner], formatMiB(bucket.liveBytes));
+            }
         }
-        _heap->setText(row);
     }
 
     // The one line that keeps the two rows from being read as one total.

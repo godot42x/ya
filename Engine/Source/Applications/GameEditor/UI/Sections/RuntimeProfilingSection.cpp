@@ -38,11 +38,11 @@ RuntimeProfilingSection::RuntimeProfilingSection(std::string name)
 
 void RuntimeProfilingSection::construct()
 {
-    _compileMode = ui::text("RuntimeProfilingCompileMode").share();
-    _traceState = ui::text("RuntimeProfilingTraceState").share();
-    _frameCpu = ui::text("RuntimeProfilingFrameCpu").share();
-    _frameGpu = ui::text("RuntimeProfilingFrameGpu").share();
-    _passTable = ui::text("RuntimeProfilingPassTable").share();
+    _compileMode = makeStatRow("RuntimeProfilingCompileMode", "Compile");
+    _traceState = makeStatRow("RuntimeProfilingTraceState", "CPU Trace");
+    _frameCpu = makeStatRow("RuntimeProfilingFrameCpu", "Frame CPU");
+    _frameGpu = makeStatRow("RuntimeProfilingFrameGpu", "Frame GPU");
+    _passTable = ui::text("RuntimeProfilingPassTable").setStyleKey("text.muted").share();
     _cpuTrace = makeCheckBox("RuntimeProfilingCpuTrace", "CPU Trace");
     _perfMetrics = makeCheckBox("RuntimeProfilingPerfMetrics", "Perf Metrics");
     _staticInit = makeCheckBox("RuntimeProfilingStaticInit", "Static Init");
@@ -58,30 +58,28 @@ void RuntimeProfilingSection::construct()
         if (index >= 0 && index < 4) profiling::metrics().setAverageWindowSize(windows[index]);
     };
 
+    // No section title here: the tab supplies it as the collapsing header. The
+    // rows are label -> value so the frame times line up under each other; the
+    // switches and the window picker sit below as controls, then the pass table.
     auto rows = ui::column("RuntimeProfilingRows")
-                    .setSpacing(4.0f)
-                    .child(ui::text("RuntimeProfilingHeader").setText("Profiling").setStyleKey("text.header"))
-                    .child(_compileMode)
-                    .child(_traceState)
+                    .setSpacing(editor_density::kRowSpacing)
+                    .child(_compileMode.root)
+                    .child(_traceState.root)
+                    .child(_frameCpu.root)
+                    .child(_frameGpu.root)
                     .child(_cpuTrace)
                     .child(_perfMetrics)
                     .child(_staticInit)
                     .child(_averageWindow, FBoxSlotArgs{.preferredSize = {180.0f, 26.0f}})
-                    .child(_frameCpu)
-                    .child(_frameGpu)
                     .child(_passTable, FBoxSlotArgs{.preferredSize = {260.0f, 200.0f}});
     addDetachedChild(rows.release());
 }
 
 void RuntimeProfilingSection::sync(const App*)
 {
-    if (!_compileMode || !_traceState || !_frameCpu || !_frameGpu || !_passTable ||
-        !_cpuTrace || !_perfMetrics || !_staticInit || !_averageWindow) {
-        return;
-    }
     const auto state = profiling::getRuntimeState();
-    _compileMode->setText(std::format("Compile Mode: {}", profiling::getCompileModeLabel()));
-    _traceState->setText(std::format("CPU Trace Session: {}", profiling::cpuTrace().isSessionActive() ? "Active" : "Idle"));
+    _compileMode.value->setText(profiling::getCompileModeLabel());
+    _traceState.value->setText(profiling::cpuTrace().isSessionActive() ? "Active" : "Idle");
     _cpuTrace->setChecked(state.cpuTraceEnabled);
     _perfMetrics->setChecked(state.perfMetricsEnabled);
     _staticInit->setChecked(state.staticInitEnabled);
@@ -91,8 +89,8 @@ void RuntimeProfilingSection::sync(const App*)
     for (int i = 0; i < 4; ++i) if (window == windows[i]) selected = i;
     _averageWindow->setSelectedIndex(selected, false);
     const auto& metrics = profiling::metrics();
-    _frameCpu->setText(std::format("Frame CPU: {:.3f} ms", metrics.getDisplayValue(perf::sample::hostTick(), perf::metric::cpuTimeMs())));
-    _frameGpu->setText(std::format("Frame GPU: {:.3f} ms", metrics.getDisplayValue(perf::sample::hostTick(), perf::metric::gpuTimeMs())));
+    _frameCpu.value->setText(formatMs(metrics.getDisplayValue(perf::sample::hostTick(), perf::metric::cpuTimeMs())));
+    _frameGpu.value->setText(formatMs(metrics.getDisplayValue(perf::sample::hostTick(), perf::metric::gpuTimeMs())));
 
     // Pass table: every pass the render graph timed in its last completed
     // frame, keyed by pass name. Empty until pass GPU timing produces results.

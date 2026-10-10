@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Widgets/CompoundWidget.h"
+#include "GameEditor/UI/Shell/EditorStatReadouts.h"
 
 #include <memory>
 
@@ -21,10 +22,10 @@ class RuntimeProfilingSection final : public UICompoundWidget
     void construct() override;
 
   private:
-    std::shared_ptr<UIText> _compileMode;
-    std::shared_ptr<UIText> _traceState;
-    std::shared_ptr<UIText> _frameCpu;
-    std::shared_ptr<UIText> _frameGpu;
+    FStatReadout _compileMode;
+    FStatReadout _traceState;
+    FStatReadout _frameCpu;
+    FStatReadout _frameGpu;
     std::shared_ptr<UIText> _passTable;
     std::shared_ptr<UICheckBox> _cpuTrace;
     std::shared_ptr<UICheckBox> _perfMetrics;

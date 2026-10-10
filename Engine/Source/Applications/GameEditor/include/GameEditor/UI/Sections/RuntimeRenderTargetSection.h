@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Widgets/CompoundWidget.h"
+#include "GameEditor/UI/Shell/EditorStatReadouts.h"
 
 #include <memory>
 #include <string>
@@ -23,7 +24,7 @@ class RuntimeRenderTargetSection final : public UICompoundWidget
     void construct() override;
 
   private:
-    std::shared_ptr<UIText> _summary;
+    FStatReadout _summary;
     std::shared_ptr<UIText> _details;
 };
 
