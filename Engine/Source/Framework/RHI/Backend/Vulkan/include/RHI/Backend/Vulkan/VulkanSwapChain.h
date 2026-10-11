@@ -101,6 +101,13 @@ struct YA_RHI_BACKEND_API VulkanSwapChain : public ISwapchain
     [[nodiscard]] const ya::SwapchainCreateInfo &getCreateInfo() const { return _ci; }
     void requestRecreate()
     {
+        // A resize asks to rebuild with the last applied settings. If a present
+        // mode (or any other CI) is already queued, keep it: replacing the
+        // pending CI with `_ci` would drop that change on the recreate the
+        // resize is about to flush.
+        if (_bSwapchainDirty) {
+            return;
+        }
         markRecreateDirty(_ci);
     }
     void requestRecreate(const SwapchainCreateInfo& ci)
