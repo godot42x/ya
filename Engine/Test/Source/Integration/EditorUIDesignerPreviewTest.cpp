@@ -134,6 +134,58 @@ TEST(EditorUIDesignerPreviewTest, RuntimeBuildContextKeepsSkippingHiddenWidgets)
     EXPECT_FALSE(preview.items.empty());
 }
 
+// The canvas picks what it paints: a Hidden root is selectable (visibility
+// is a runtime fact), and an eye-pruned subtree neither hits nor shadows its
+// siblings.
+TEST(EditorUIDesignerPreviewTest, AuthoringPickFollowsThePaintedCanvas)
+{
+    auto& registry = UITypeRegistry::instance();
+    auto  root     = registry.createInstance(kTypeIdCanvasPanel);
+    root->_name       = "Dialogue";
+    root->setVisibility(EWidgetVisibility::Hidden);
+    auto border = registry.createInstance(kTypeIdBorder);
+    border->_name = "Box";
+    root->addDetachedChild(border, [](UIElement&, UISlot& edge) {
+        FCanvasSlotArgs args;
+        args.offset    = {20.0f, 30.0f};
+        args.fixedSize = {80.0f, 40.0f};
+        edge.as<UICanvasSlot>()->apply(args);
+    });
+    auto sibling = registry.createInstance(kTypeIdBorder);
+    sibling->_name = "Other";
+    root->addDetachedChild(sibling, [](UIElement&, UISlot& edge) {
+        FCanvasSlotArgs args;
+        args.offset    = {100.0f, 20.0f};
+        args.fixedSize = {60.0f, 30.0f};
+        edge.as<UICanvasSlot>()->apply(args);
+    });
+
+    FDesignerFixture       fixture;
+    EditorUIDesignerSession designer(&fixture.layer);
+    fixture.publish(*root);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
+    ASSERT_TRUE(designer.hasDocument());
+    // Layout rects are refreshed by the snapshot build; pick against a laid
+    // out preview the way the live canvas does.
+    ASSERT_FALSE(designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f}).items.empty());
+
+    UIElement* picked = designer.pickAt({30.0f, 40.0f});
+    ASSERT_NE(picked, nullptr);
+    EXPECT_EQ(picked->_name, "Box");
+
+    // Eye off on Box: the point over its rect falls through to the root
+    // panel -- the pruned subtree does not shadow what is painted beneath.
+    designer.toggleDesignerHidden({0});
+    picked = designer.pickAt({30.0f, 40.0f});
+    ASSERT_NE(picked, nullptr);
+    EXPECT_EQ(picked->_name, "Dialogue");
+
+    // The sibling is untouched by the toggle.
+    picked = designer.pickAt({110.0f, 30.0f});
+    ASSERT_NE(picked, nullptr);
+    EXPECT_EQ(picked->_name, "Other");
+}
+
 // The tree's eye: presenter-owned display toggles prune whole subtrees from
 // the canvas preview only. Runtime visibility is untouched, and the toggles
 // reset when the preview is rebuilt or structurally edited (child paths are

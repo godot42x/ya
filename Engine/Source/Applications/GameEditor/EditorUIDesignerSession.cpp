@@ -452,7 +452,15 @@ UIFrameSnapshot EditorUIDesignerSession::buildPreviewSnapshot(const glm::vec2& u
 
 UIElement* EditorUIDesignerSession::pickAt(const glm::vec2& logicalPoint)
 {
-    return _previewTree ? _previewTree->pickAt(logicalPoint) : nullptr;
+    if (!_previewTree) {
+        return nullptr;
+    }
+    // What paints is what picks: the eye toggle prunes the pick with the
+    // canvas, runtime visibility does not (Hidden previews and selects).
+    return _previewTree->pickAt(logicalPoint, [this](const UIElement& widget) {
+        const std::optional<std::vector<size_t>> path = childPathOf(&widget);
+        return !path || !_designerHidden.contains(*path);
+    });
 }
 
 const Rect2D* EditorUIDesignerSession::getSelectedLayoutRect() const
