@@ -1,10 +1,11 @@
 add_requires("gtest")
 
--- `xmake test` (and `make test`): build and run the whole `test` group, so the
--- sweep lives next to the targets it sweeps instead of next to the scratch
--- prototypes. Groups resolve through set_group("test") on every test target;
+-- `xmake test` (and `make test`): build and run the windowless `test` group,
+-- the routine sweep. Groups resolve through set_group on every test target;
 -- target order is xmake's, and the sweep stops at the first red target, so a
 -- failure means "fix and re-run" rather than "here is the full report".
+-- `xmake test-windowed` is the same sweep for the `test-windowed` group --
+-- suites that create real OS windows and are run deliberately.
 task("test")
 do
     set_menu {
@@ -19,6 +20,20 @@ do
     end)
 end
 
+task("test-windowed")
+do
+    set_menu {
+        usage = "xmake test-windowed",
+        options = {
+            { nil, "rule", "v", "debug", "the rule to config build mode " }
+        }
+    }
+    on_run(function()
+        os.exec("xmake b -g test-windowed")
+        os.exec("xmake r -g test-windowed")
+    end)
+end
+
 -- Test sources are collected by DIRECTORY, one directory per gate, so a new
 -- test file joins its gate the moment it lands in the right folder -- no edit
 -- here, no per-file bookkeeping. Layout contract:
@@ -28,6 +43,12 @@ end
 --                       below, so they only ever run in `ya-testing`
 --   Source/<Gate>/      minimal-closure regression suites; the gate name is the
 --                       linkage promise the target enforces (see add_deps)
+--   Source/Windowed/    suites that create real OS windows -- the one gate
+--                       named by a runtime side effect instead of a linkage
+--                       closure. Excluded from ya-testing (`del_files`) and
+--                       compiled only into ya-windowed-test, so the routine
+--                       sweep never opens a window; run it through
+--                       `xmake test-windowed`.
 --
 -- A directory glob selects whole suites, never individual cases. Picking a
 -- single file out of a suite directory again means the file sits in the wrong
@@ -56,6 +77,10 @@ if get_config("ya_profile") ~= "gui" then
         set_kind("binary")
         set_group("test")
         add_files("./Source/**.cpp")
+        -- Windowed suites create real OS windows (dock bounce, focus grabs);
+        -- they run deliberately through the `test-windowed` group, not in the
+        -- routine windowless sweep.
+        del_files("./Source/Windowed/*.cpp")
         add_includedirs("./Source/Support")
 
         add_deps("ya-engine", "ya-module-fixture", "ya-game-editor")
@@ -70,9 +95,6 @@ if get_config("ya_profile") ~= "gui" then
         add_packages("gtest")
         add_packages("quickjs-ng")
         add_packages("asio")
-        -- The RHI surface suites also compile into this runner and drive
-        -- SDLNativeWindow transitions directly (see ya-rhi-vulkan-smoke).
-        add_packages("libsdl3")
 
         if is_plat("windows") then
             -- /utf-8
@@ -142,11 +164,32 @@ if get_config("ya_profile") ~= "gui" then
         set_group("test")
         ya_test_sources("Support", "RhiVulkan")
         add_deps("ya-rhi-vulkan")
-        -- The surface suite drives SDLNativeWindow transitions directly and
-        -- pumps the SDL queue while waiting for them, so it names the same
-        -- package the backend links.
-        add_packages("libsdl3")
         add_packages("gtest")
+    end
+
+    -- Windowed runner: suites that create real OS windows (dock bounce,
+    -- minimize/restore, focus grabs). Same closure as ya-testing plus the
+    -- Vulkan backend and SDL the surface suites drive. It runs deliberately
+    -- through the `test-windowed` group, so the routine windowless sweep
+    -- never bounces the dock or steals focus.
+    target("ya-windowed-test")
+    do
+        set_kind("binary")
+        set_group("test-windowed")
+        ya_test_sources("Support", "Windowed")
+        add_deps("ya-engine", "ya-module-fixture", "ya-game-editor")
+        add_deps("ya-game-runtime")
+        add_deps("ya-script-lua")
+        add_deps("ya-rhi-vulkan")
+        add_defines("YA_TEST_RUNNER_INSTALLS_SCRIPT_BACKENDS")
+        add_packages("gtest")
+        add_packages("quickjs-ng")
+        add_packages("asio")
+        add_packages("libsdl3")
+
+        if is_plat("windows") then
+            add_cxxflags("/utf-8")
+        end
     end
 end
 

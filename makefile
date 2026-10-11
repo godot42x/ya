@@ -20,7 +20,7 @@ t      := HelloMaterial
 ARGS   ?=
 YA     := uv run ./Script/ya.py
 
-.PHONY: help b r test run run-editor build package
+.PHONY: help b r test test-windowed run run-editor build package
 
 help: ## list targets
 	@echo "YA Engine launcher - two modes:"
@@ -50,8 +50,11 @@ r: ## run a target directly: make r t=GUIWorkbench ARGS="--smoke-actions"
 	xmake b $(t)
 	xmake r $(t) $(ARGS)
 
-test: ## build + run every target in the `test` group (Engine/Test/Test.xmake.lua)
+test: ## build + run the windowless `test` group (Engine/Test/Test.xmake.lua)
 	xmake test
+
+test-windowed: ## build + run the `test-windowed` group (opens real OS windows)
+	xmake test-windowed
 
 # ---- Mode 2: engine / project / editor (Script/ya.py) ----
 
