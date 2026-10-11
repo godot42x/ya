@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "RHI/RenderDefines.h"
+#include "Core/Profiling/BenchmarkConfig.h"
 
 #include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
@@ -50,22 +50,13 @@ struct FBenchmarkCameraPose
 
 struct BenchmarkConfig
 {
-    std::string                sourcePath;
-    std::string                name;
-    std::optional<std::string> scene;
-    uint32_t                   width  = 1920;
-    uint32_t                   height = 1080;
-    /// Requested; the run falls back to another non-vsync mode the surface
-    /// offers, FIFO only as the last resort, and records what it got.
-    EPresentMode::T presentMode       = EPresentMode::Immediate;
-    bool            bUncapFrameRate   = true;
-    uint64_t        warmupFrames      = 120;
-    uint64_t        sampleFrames      = 600;
+    profiling::FBenchmarkCommonConfig common;
+    std::optional<std::string>        scene;
+    bool                              bUncapFrameRate = true;
     /// Simulation step per frame, independent of wall time, so animated
     /// content advances identically between runs. 0 = real frame time.
-    float           fixedDeltaSeconds = 1.0f / 60.0f;
-    bool            bCpuTrace         = false;
-    std::string     outputDir         = "Engine/Saved/Benchmark";
+    float                fixedDeltaSeconds = 1.0f / 60.0f;
+    bool                 bCpuTrace         = false;
     FBenchmarkCameraPath cameraPath;
 };
 

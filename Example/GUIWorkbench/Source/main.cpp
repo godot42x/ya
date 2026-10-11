@@ -213,7 +213,7 @@ int main(int argc, char** argv)
                 return 1;
             }
             if (result.count("benchmark-output") > 0) {
-                benchmarkConfig.outputDir = result["benchmark-output"].as<std::string>();
+                benchmarkConfig.common.outputDir = result["benchmark-output"].as<std::string>();
             }
             if (app.startPageName.empty() && !benchmarkConfig.page.empty()) {
                 app.startPageName = benchmarkConfig.page;

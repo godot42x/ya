@@ -30,7 +30,7 @@ gui profile 的构建必须在独立 worktree / 构建目录里做：在共享�
 
 GA2 / GA3 的第一版实现曾留在共享工作区未提交。GA2r 已另提交入库。GA3r 已收口：
 
-- **GA3r 共享基准会话**（T2，完成）：游戏运行时和 GUI host 共用 `Core/Profiling/BenchmarkSession`（预热 / 采样 / 结束、五个数据源、`bench_summary.json`）。配置公共字段只解析一次；GUI 扩展只留 `page`，拒绝 `uncapFrameRate`。profile 构建、无其它构建、Dock 1920×1080、immediate、预热 120、采样 600：frame p50 8.356 ms / p99 9.398 ms，cpu p50 8.224 ms，gpu p50 3.007 ms，RSS p50 188.17 MiB，GPU 合计 46.66 MiB，`unifiedMemory` true。
+- **GA3r 共享基准会话**（T2，完成）：游戏运行时和 GUI host 共用 `Core/Profiling/BenchmarkSession`（预热 / 采样 / 结束、五个数据源、`bench_summary.json`）。两边的配置都内嵌 `FBenchmarkCommonConfig`，GUI 扩展只留 `page`，拒绝 `uncapFrameRate`。GUI 改分辨率走宿主的 `matchDrawablePixelSize`。profile 构建、无其它构建、Dock 1920×1080、immediate、预热 120、采样 600，swapchain 1920×1080：frame p50 3.050 ms / p99 16.593 ms，cpuMs p50 0.775 ms，gpuMs p50 2.122 ms，RSS p50 192.78 MiB，GPU 合计 46.66 MiB，`unifiedMemory` true。
 - **GA2r 场景按控件定位**（已另提交）：场景按控件定位，断言恢复严格。
 
 ## 5. 执行规则

@@ -30,13 +30,13 @@ void applyBenchmarkConfig(AppDesc& desc, const std::string& configPath)
         throw std::runtime_error("invalid --benchmark config: " + error);
     }
     if (std::string outputDir; desc.params.tryGet<std::string>("benchmark-output", outputDir) && !outputDir.empty()) {
-        config.outputDir = std::move(outputDir);
+        config.common.outputDir = std::move(outputDir);
     }
 
     // The config defines the run; only an explicit command-line scene or CPU
     // trace switch overrides it.
-    desc.width  = static_cast<int>(config.width);
-    desc.height = static_cast<int>(config.height);
+    desc.width  = static_cast<int>(config.common.width);
+    desc.height = static_cast<int>(config.common.height);
     if (config.scene && !desc.params.hasExplicit("scene")) {
         desc.automation.scenePath = *config.scene;
     }

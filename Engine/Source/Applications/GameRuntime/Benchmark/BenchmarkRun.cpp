@@ -48,7 +48,7 @@ void BenchmarkRun::begin(App& app, FBenchmarkRunContext context)
     if (_config.bUncapFrameRate) {
         FPSControl::get()->bEnable = false;
     }
-    app.getRenderServices().setRenderResolution(Extent2D{.width = _config.width, .height = _config.height});
+    app.getRenderServices().setRenderResolution(Extent2D{.width = _config.common.width, .height = _config.common.height});
 
     _facts = profiling::FBenchmarkRunFacts{
         .project            = _context.project,
@@ -59,17 +59,7 @@ void BenchmarkRun::begin(App& app, FBenchmarkRunContext context)
         .cameraKeyframes    = _config.cameraPath.keyframes.size(),
     };
 
-    profiling::FBenchmarkCommonConfig common{
-        .sourcePath   = _config.sourcePath,
-        .name         = _config.name,
-        .width        = _config.width,
-        .height       = _config.height,
-        .presentMode  = toPresentModeString(_config.presentMode),
-        .warmupFrames = _config.warmupFrames,
-        .sampleFrames = _config.sampleFrames,
-        .outputDir    = _config.outputDir,
-    };
-    (void)_session.begin(*this, common, _facts);
+    (void)_session.begin(*this, _config.common, _facts);
 }
 
 float BenchmarkRun::frameDelta(float wallDeltaSeconds) const

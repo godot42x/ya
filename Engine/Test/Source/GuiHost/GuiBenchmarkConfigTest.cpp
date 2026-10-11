@@ -23,13 +23,13 @@ TEST(GuiBenchmarkConfigTest, ParsesTheGalleryPageAndResolution)
         {"outputDir", "Engine/Saved/Benchmark/GUIWorkbench"},
     };
     ASSERT_TRUE(parseGuiBenchmarkJson(json, config, error)) << error;
-    EXPECT_EQ(config.name, "GUIWorkbench");
+    EXPECT_EQ(config.common.name, "GUIWorkbench");
     EXPECT_EQ(config.page, "Dock");
-    EXPECT_EQ(config.width, 1920u);
-    EXPECT_EQ(config.height, 1080u);
-    EXPECT_EQ(config.presentMode, EPresentMode::Immediate);
-    EXPECT_EQ(config.warmupFrames, 4u);
-    EXPECT_EQ(config.sampleFrames, 8u);
+    EXPECT_EQ(config.common.width, 1920u);
+    EXPECT_EQ(config.common.height, 1080u);
+    EXPECT_EQ(config.common.presentMode, "immediate");
+    EXPECT_EQ(config.common.warmupFrames, 4u);
+    EXPECT_EQ(config.common.sampleFrames, 8u);
 }
 
 TEST(GuiBenchmarkConfigTest, RejectsGameOnlyKeys)

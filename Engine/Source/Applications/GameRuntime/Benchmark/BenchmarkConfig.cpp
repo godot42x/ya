@@ -1,7 +1,6 @@
 #include "GameRuntime/Benchmark/BenchmarkConfig.h"
 
 #include "Core/Profiling/BenchmarkConfig.h"
-#include "RHI/PresentMode.h"
 
 #include <algorithm>
 #include <cmath>
@@ -136,26 +135,20 @@ std::optional<FBenchmarkCameraPose> sampleBenchmarkCameraPath(const FBenchmarkCa
 bool parseBenchmarkConfig(const nlohmann::json& json, BenchmarkConfig& out, std::string& error)
 {
     profiling::FBenchmarkCommonConfig common;
-    common.sourcePath = out.sourcePath;
+    common.sourcePath = out.common.sourcePath;
     if (!profiling::parseBenchmarkCommonConfig(json,
                                                {"scene", "uncapFrameRate", "fixedDeltaSeconds", "cpuTrace", "cameraPath"},
                                                common,
                                                error)) {
         return false;
     }
-
-    BenchmarkConfig config;
-    config.sourcePath     = common.sourcePath;
-    config.name           = std::move(common.name);
-    config.width          = common.width;
-    config.height         = common.height;
-    config.warmupFrames   = common.warmupFrames;
-    config.sampleFrames   = common.sampleFrames;
-    config.outputDir      = std::move(common.outputDir);
-    if (!tryParsePresentMode(common.presentMode, config.presentMode)) {
+    if (!profiling::isBenchmarkPresentModeLabel(common.presentMode)) {
         error = std::format("'presentMode' must be immediate, mailbox, fifo or fifo_relaxed (got '{}')", common.presentMode);
         return false;
     }
+
+    BenchmarkConfig config;
+    config.common = std::move(common);
 
     std::string scene;
     if (!profiling::readBenchmarkString(json, "scene", scene, error) ||
@@ -185,13 +178,14 @@ bool loadBenchmarkConfig(const std::string& path, BenchmarkConfig& out, std::str
     if (!profiling::readBenchmarkJsonFile(path, json, error)) {
         return false;
     }
-    out.sourcePath = path;
+    out                   = {};
+    out.common.sourcePath = path;
     if (!parseBenchmarkConfig(json, out, error)) {
         error = std::format("{}: {}", path, error);
         return false;
     }
-    if (out.name.empty()) {
-        out.name = std::filesystem::path(path).stem().string();
+    if (out.common.name.empty()) {
+        out.common.name = std::filesystem::path(path).stem().string();
     }
     return true;
 }

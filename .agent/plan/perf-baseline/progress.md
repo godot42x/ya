@@ -195,7 +195,8 @@ PB6 的基线已入库，但复查发现三处问题，都在「这份基线本�
 - GUIWorkbench 和 GameRuntime 走同一个 `Core/Profiling/BenchmarkSession`，写出同一份 `bench_summary.json`。命令：`GUIWorkbench --benchmark Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json`。
 - summary 段与游戏基准相同。`process_memory` 与 `gpu_memory` 分列；Apple Silicon 上 `unifiedMemory` 为 true。GUI 合成没有 render graph pass，所以 `gpu_passes` 为空，`render_counters` 记的是 2D 批次。
 - 窗口缩放不再丢掉已经排队的 present mode（单独提交 `[vulkan] resize keeps a queued present mode`）。否则 Mailbox 不可用时重建会落回 FIFO。
-- profile、机器上没有其它构建、Dock、1920×1080、immediate、预热 120、采样 600：frame p50 8.356 ms / p99 9.398 ms，cpu p50 8.224 ms，gpu p50 3.007 ms，RSS p50 188.17 MiB，GPU 合计 46.66 MiB，`unifiedMemory` true。present mode 实际为 immediate。
+- GUI 按像素改窗口走 `GUIWindowHost::matchDrawablePixelSize`，内部调私有的 `requestWindowSize`，所以 swapchain 会按基准分辨率重建。游戏和 GUI 的配置都内嵌 `FBenchmarkCommonConfig`。
+- profile、机器上没有其它构建、Dock、1920×1080、immediate、预热 120、采样 600，随后已切回 debug：`swapchainExtent` 1920×1080，present mode immediate。frame p50 3.050 ms / p99 16.593 ms，frame.cpuMs p50 0.775 ms，frame.gpuMs p50 2.122 ms，RSS p50 192.78 MiB，GPU 合计 46.66 MiB，`unifiedMemory` true。
 
 ## 2026-10-11 — R1 A/B 数字 + 两个环境发现（分配钩子 / validation）
 

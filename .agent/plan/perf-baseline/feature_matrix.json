@@ -127,7 +127,7 @@
       "evidence": [
         "Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json",
         "Core/Profiling/BenchmarkSession.h shared with GameRuntime BenchmarkRun",
-        "profile Dock 1920x1080 immediate, warmup 120 sample 600: frame p50 8.356 ms p99 9.398 ms, cpu p50 8.224 ms, gpu p50 3.007 ms, RSS p50 188.17 MiB, GPU total 46.66 MiB, unifiedMemory true"
+        "profile Dock 1920x1080 immediate, warmup 120 sample 600, swapchain 1920x1080 via GUIWindowHost: frame p50 3.050 ms p99 16.593 ms, cpuMs p50 0.775 ms, gpuMs p50 2.122 ms, RSS p50 192.78 MiB, GPU total 46.66 MiB, unifiedMemory true"
       ]
     }
   ]

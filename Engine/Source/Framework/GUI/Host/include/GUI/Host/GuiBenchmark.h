@@ -5,8 +5,8 @@
 // This adapter only selects the gallery page.
 
 #include "Core/Api.h"
+#include "Core/Profiling/BenchmarkConfig.h"
 #include "Core/Profiling/BenchmarkSession.h"
-#include "RHI/RenderDefines.h"
 
 #include <nlohmann/json.hpp>
 
@@ -19,16 +19,9 @@ class GUIWindowHost;
 
 struct FGuiBenchmarkConfig
 {
-    std::string     sourcePath;
-    std::string     name;
+    profiling::FBenchmarkCommonConfig common;
     /// Gallery page to open when the CLI did not pass `--start-page`.
-    std::string     page;
-    uint32_t        width       = 1920;
-    uint32_t        height      = 1080;
-    EPresentMode::T presentMode = EPresentMode::Immediate;
-    uint64_t        warmupFrames = 120;
-    uint64_t        sampleFrames = 600;
-    std::string     outputDir   = "Engine/Saved/Benchmark";
+    std::string page;
 };
 
 [[nodiscard]] YA_GUI_API bool parseGuiBenchmarkJson(const nlohmann::json& json, FGuiBenchmarkConfig& config, std::string& error);

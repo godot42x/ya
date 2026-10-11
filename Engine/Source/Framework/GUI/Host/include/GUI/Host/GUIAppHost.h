@@ -259,10 +259,13 @@ public:
     void onShutdown() override;
     [[nodiscard]] bool shouldClose() const override;
     void               requestQuit();
-    [[nodiscard]] bool requestWindowSize(uint32_t width, uint32_t height, std::string_view reason);
+    /// Drawable pixels. Converts by the window's pixel density, then asks the
+    /// host to resize so the swapchain is recreated at that size.
+    [[nodiscard]] bool matchDrawablePixelSize(uint32_t pixelWidth, uint32_t pixelHeight);
 
 private:
-    void dispatchToTree(const Event& event, float mouseX, float mouseY);
+    [[nodiscard]] bool requestWindowSize(uint32_t width, uint32_t height, std::string_view reason);
+    void               dispatchToTree(const Event& event, float mouseX, float mouseY);
 
     // === Automation control plane: framework-side verbs over one window ===
     /// Registers this host's methods on its registry (called by init once the

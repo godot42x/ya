@@ -6,7 +6,6 @@
 #include "Core/Profiling/BenchmarkConfig.h"
 #include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/Core/Swapchain.h"
-#include "RHI/NativeWindow.h"
 #include "RHI/PresentMode.h"
 #include "RHI/Render.h"
 
@@ -18,36 +17,14 @@ namespace ya
 
 bool parseGuiBenchmarkJson(const nlohmann::json& json, FGuiBenchmarkConfig& config, std::string& error)
 {
-    profiling::FBenchmarkCommonConfig common;
-    common.sourcePath   = config.sourcePath;
-    common.name         = config.name;
-    common.width        = config.width;
-    common.height       = config.height;
-    common.presentMode  = toPresentModeString(config.presentMode);
-    common.warmupFrames = config.warmupFrames;
-    common.sampleFrames = config.sampleFrames;
-    common.outputDir    = config.outputDir;
-    if (!profiling::parseBenchmarkCommonConfig(json, {"page"}, common, error)) {
+    if (!profiling::parseBenchmarkCommonConfig(json, {"page"}, config.common, error)) {
         return false;
     }
-
-    std::string page = config.page;
-    if (!profiling::readBenchmarkString(json, "page", page, error)) {
+    if (!profiling::isBenchmarkPresentModeLabel(config.common.presentMode)) {
+        error = std::format("'presentMode' must be immediate, mailbox, fifo or fifo_relaxed (got '{}')", config.common.presentMode);
         return false;
     }
-    if (!tryParsePresentMode(common.presentMode, config.presentMode)) {
-        error = std::format("'presentMode' must be immediate, mailbox, fifo or fifo_relaxed (got '{}')", common.presentMode);
-        return false;
-    }
-    config.sourcePath   = std::move(common.sourcePath);
-    config.name         = std::move(common.name);
-    config.page         = std::move(page);
-    config.width        = common.width;
-    config.height       = common.height;
-    config.warmupFrames = common.warmupFrames;
-    config.sampleFrames = common.sampleFrames;
-    config.outputDir    = std::move(common.outputDir);
-    return true;
+    return profiling::readBenchmarkString(json, "page", config.page, error);
 }
 
 bool loadGuiBenchmarkConfig(const std::string& path, FGuiBenchmarkConfig& config, std::string& error)
@@ -56,16 +33,13 @@ bool loadGuiBenchmarkConfig(const std::string& path, FGuiBenchmarkConfig& config
     if (!profiling::readBenchmarkJsonFile(path, json, error)) {
         return false;
     }
-    config.sourcePath = path;
-    if (config.name.empty()) {
-        config.name = std::filesystem::path(path).stem().string();
-    }
+    config.common.sourcePath = path;
     if (!parseGuiBenchmarkJson(json, config, error)) {
         error = std::format("{}: {}", path, error);
         return false;
     }
-    if (config.name.empty()) {
-        config.name = std::filesystem::path(path).stem().string();
+    if (config.common.name.empty()) {
+        config.common.name = std::filesystem::path(path).stem().string();
     }
     return true;
 }
@@ -78,21 +52,11 @@ GuiBenchmarkRun::GuiBenchmarkRun(FGuiBenchmarkConfig config)
 bool GuiBenchmarkRun::begin(GUIWindowHost& window)
 {
     _window = &window;
-    profiling::FBenchmarkCommonConfig common{
-        .sourcePath   = _config.sourcePath,
-        .name         = _config.name,
-        .width        = _config.width,
-        .height       = _config.height,
-        .presentMode  = toPresentModeString(_config.presentMode),
-        .warmupFrames = _config.warmupFrames,
-        .sampleFrames = _config.sampleFrames,
-        .outputDir    = _config.outputDir,
-    };
     const profiling::FBenchmarkRunFacts facts{
         .project = "GUIWorkbench",
         .scene   = _config.page,
     };
-    return _session.begin(*this, common, facts);
+    return _session.begin(*this, _config.common, facts);
 }
 
 void GuiBenchmarkRun::onFrameEnd(GUIWindowHost& window)
@@ -107,7 +71,7 @@ profiling::FBenchmarkPresentModeSelection GuiBenchmarkRun::selectPresentMode(std
     IRenderSurfaceContext* surface   = _window ? _window->surfaceContext() : nullptr;
     ISwapchain*            swapchain = surface ? surface->getSwapchain() : nullptr;
     if (!swapchain) {
-        YA_CORE_ERROR("GUI benchmark '{}': no host swapchain", _config.name);
+        YA_CORE_ERROR("GUI benchmark '{}': no host swapchain", _config.common.name);
         result.bOk = false;
         return result;
     }
@@ -134,9 +98,7 @@ void GuiBenchmarkRun::matchResolution(uint32_t width, uint32_t height)
     if (!_window) {
         return;
     }
-    if (INativeWindow* native = _window->getNativeWindow()) {
-        (void)native->matchDrawablePixelSize(width, height);
-    }
+    (void)_window->matchDrawablePixelSize(width, height);
 }
 
 void GuiBenchmarkRun::fillDeviceMeta(profiling::FBenchmarkDeviceMeta& meta)
