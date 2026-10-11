@@ -100,7 +100,7 @@
 | G2.2 | 存档 / 读档：`world.save` / `world.load` 写场景路径和 `Persist`。要留下的状态由脚本 `onSave` 写入。不做背包界面 | P0 |
 | G2.3 | 对话分支、背包、任务、商店：页 `choices` 跳到 `next`；物品数量在 `Persist.items`；任务状态在 `Persist.quests`；`Shop.buy` 花硬币卖护符 | P0 |
 | G2.4 | 内容：城镇摊位 → 房子里的罐子 → 回城买护符 → 井的结局。用现有城镇和房子，不另做迷宫图 | P0 |
-| G2.5 | 打包冒烟已通过：运行时 shader 从 `Framework/Render` 扫进包，`InputMap.json` 跟项目走。录屏还没有 | P0 |
+| G2.5 | 打包冒烟已通过。通关录屏：`Engine/Saved/Automation/2d-rpg-playthrough/playthrough.mp4` | P0 |
 | G2.6 | 纯 2D View 家族（随 R12） | P1 |
 | G2.7 | tilemap 静态实例缓冲（`rpg-prototype` 步骤 5c 的触发条件满足时） | P2 |
 

@@ -36,7 +36,7 @@ GUI 与编辑器活跃线
 - [x] G2.2 存档 / 读档（`world.save` / `world.load`：场景路径 + `Persist`；脚本 `onSave` 决定写什么）
 - [x] G2.3 对话分支、背包、任务、商店（`Shop.lua`：护符 3 枚硬币；商人对话框成交）
 - [x] G2.4 完整流程：城镇摊位 → 房子罐子 → 回城买护符 → 井的结局
-- [~] G2.5 打包冒烟已通过（`Package/2DRpgPrototype`，跑过一帧）。录屏还没有
+- [x] G2.5 打包冒烟已通过（`Package/2DRpgPrototype`，跑过一帧）。通关录屏在 `Engine/Saved/Automation/2d-rpg-playthrough/playthrough.mp4`（呈现帧，不进 git）
 
 3D demo（新子计划，待建）
 - [~] G3.0 子计划设计（能力盘点已完成，见 plan §3 G3；待方案问答）

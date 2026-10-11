@@ -807,3 +807,9 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 编辑器里 Esc 先前只在视口控件拥有键盘焦点时才进游戏，否则松键直接停止 Play。视口里点一下还会抓住鼠标，捕获会话把后续按键全部吃掉，Esc 既打不开设置也不会停 Play。现在 Play 中 Esc 先走游戏的 `onCancel`（捕获中也一样），游戏接住就松开鼠标；文本框正聚焦时除外。设置卡片改为固定的 320×140，停在画面正中。
 - 房子左侧 `Cabinet` 用黄铜钥匙打开一次，换成井之玻璃。井认护符或玻璃，结局句子不同。告示牌、商人和井会提到这条路。村民的差事仍只说储物罐。
 - House 重存哈希换成 `ef548321fafc473f`。
+
+## 2026-10-11 — 通关录屏
+
+- 目标与边界：G2.5 剩下的录屏。不改玩法，也不做 G2.6 / G2.7。
+- 桌面录屏抓不到游戏窗口（它不在当前 Space 的 on-screen 列表里）。改从呈现图像抓帧，和通关脚本串行：每一步走到、每一句对话出来抓一张。并行抓帧会占住游戏线程，一格移动等不到。
+- 验证：`playthrough` 仍走到「Three coins. Look in the storage pot.」和「The well answers. Tiny Town is awake again.」。38 帧合成 `Engine/Saved/Automation/2d-rpg-playthrough/playthrough.mp4`。开头是城镇，摊位一句是钱不够，结尾是井上的 Quest complete。文件在 `Saved/` 下，不进 git。
