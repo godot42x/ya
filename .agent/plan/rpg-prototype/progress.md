@@ -817,4 +817,9 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 ## 2026-10-12 — 对话框测试跟上固定卡片
 
 - `GameUIHostTest.DialogueDocumentStaysInsideNarrowAndWideCanvases` 从 `12cb87b0` 起失败。该提交把对话框改成固定的 760×168，正文改到 `Row`，提示改到 `Header`。当前布局跑改之前的文档仍然通过，所以不是布局退化。
-- 期望改为：宽画布 1280 上卡片在 x=260，仍在画布内；700 宽的画布比卡片窄，卡片保持 760×168、中心在 x=-30，不再缩进画布。`Body` 留在 `Row` 里，`Hint` 留在 `Header` 里。
+- 当时把期望改成「700 宽的画布上卡片中心在 x=-30」。这是把卡片直接摆进 700 宽的逻辑画布，不是游戏窗口的缩放路径。下一节换成参考分辨率。
+
+## 2026-10-12 — 对话框测试走参考分辨率
+
+- `GameUIHostTest.DialogueCardFitsReferenceScaledCanvas` 先设参考分辨率 1280×720，再 `setPresentation`。700×500 的逻辑画布是 1280×914（缩放 700/1280）；1280×720 缩放 1.0；2560×1080 缩放 1.5。`Extent2D` 把 2560/1.5 截成 1706，逻辑画布是 1706×720。
+- 三种窗口上卡片都是 760×168 逻辑尺寸，水平居中，并且完整落在逻辑画布内。`Body` 留在 `Row` 里，`Hint` 留在 `Header` 里。不再断言「700 宽画布、x=-30」。

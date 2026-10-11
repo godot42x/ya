@@ -27,6 +27,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <string>
 
 namespace ya
 {
@@ -813,31 +814,59 @@ TEST(GameUIHostTest, ReferenceResolutionScalesLayoutAndPointer)
     EXPECT_EQ(clicks, 1);
 }
 
-TEST(GameUIHostTest, DialogueDocumentStaysInsideNarrowAndWideCanvases)
+TEST(GameUIHostTest, DialogueCardFitsReferenceScaledCanvas)
 {
-    // 12cb87b0 replaced the shrink-to-fit 880×160 slot with a fixed 760×168 card.
-    // A canvas narrower than 760 does not shrink it; the card stays centered.
+    // The card is a fixed 760×168. A 700-wide window does not lay that card
+    // out on a 700-wide canvas: the host fits a 1280×720 reference into the
+    // window, and the logical canvas stays wide enough to hold the card.
     std::ifstream stream("Example/2DRpgPrototype/Content/UI/Dialogue.yaui.json");
     ASSERT_TRUE(stream.is_open());
     const auto document = UIDocument::fromJson(nlohmann::json::parse(stream));
     ASSERT_NE(document, nullptr);
-
     const auto roundTrip = UIDocument::fromJson(document->toJson());
     ASSERT_NE(roundTrip, nullptr);
 
-    const auto expectCard = [](const std::shared_ptr<UIDocument>& source, Extent2D canvas, float expectedBoxX) {
-        const UIElementRef root = source->instantiate();
-        ASSERT_NE(root, nullptr);
-        WidgetTree tree(canvas);
-        FCanvasSlotArgs fill;
-        fill.anchorMin = {0.0f, 0.0f};
-        fill.anchorMax = {1.0f, 1.0f};
-        ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), root, fill).valid());
-        tree.layout();
+    UIDocumentStore documents;
+    const std::string path = "Test/UI/Dialogue.yaui";
+    documents.put(path, roundTrip);
 
-        UIElement* box  = findNamed(*root, "Box");
-        UIElement* body = findNamed(*root, "Body");
-        UIElement* hint = findNamed(*root, "Hint");
+    GameUIHost host;
+    host.setDocumentStore(&documents);
+    host.setReferenceResolution({1280, 720});
+
+    Scene scene("World");
+    scene.addWidgetEntry(makeEntry("Dialogue", path, 0));
+    host.onSceneActivated(scene);
+
+    struct FWindow
+    {
+        float    width;
+        float    height;
+        float    scale;
+        Extent2D logical;
+    };
+    // Extent2D truncates. 2560/1.5 is 1706.666..., so the ultrawide canvas is
+    // 1706 wide, not the rounded 1707.
+    const FWindow windows[] = {
+        {.width = 700.0f, .height = 500.0f, .scale = 700.0f / 1280.0f, .logical = {.width = 1280, .height = 914}},
+        {.width = 1280.0f, .height = 720.0f, .scale = 1.0f, .logical = {.width = 1280, .height = 720}},
+        {.width = 2560.0f, .height = 1080.0f, .scale = 1.5f, .logical = {.width = 1706, .height = 720}},
+    };
+
+    constexpr float kCardWidth  = 760.0f;
+    constexpr float kCardHeight = 168.0f;
+    for (const FWindow& window : windows) {
+        SCOPED_TRACE(std::to_string(static_cast<int>(window.width)) + "x" +
+                     std::to_string(static_cast<int>(window.height)));
+        host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {window.width, window.height}}, {1.0f, 1.0f});
+        EXPECT_FLOAT_EQ(host.referenceScale(), window.scale);
+        EXPECT_EQ(host.getTree().getLogicalExtent(), window.logical);
+        host.layoutNow();
+
+        UIElement* content = host.getTree().getLayer(WidgetTree::ELayer::Content);
+        UIElement* box     = findNamed(*content, "Box");
+        UIElement* body    = findNamed(*content, "Body");
+        UIElement* hint    = findNamed(*content, "Hint");
         ASSERT_NE(box, nullptr);
         ASSERT_NE(body, nullptr);
         ASSERT_NE(hint, nullptr);
@@ -846,17 +875,15 @@ TEST(GameUIHostTest, DialogueDocumentStaysInsideNarrowAndWideCanvases)
         ASSERT_NE(bodyText, nullptr);
         EXPECT_TRUE(bodyText->_bWrap);
 
-        constexpr float kCardWidth  = 760.0f;
-        constexpr float kCardHeight = 168.0f;
+        const float canvasWidth  = static_cast<float>(window.logical.width);
+        const float canvasHeight = static_cast<float>(window.logical.height);
         EXPECT_FLOAT_EQ(box->_layoutRect.extent.x, kCardWidth);
         EXPECT_FLOAT_EQ(box->_layoutRect.extent.y, kCardHeight);
-        EXPECT_FLOAT_EQ(box->_layoutRect.pos.x, expectedBoxX);
+        EXPECT_FLOAT_EQ(box->_layoutRect.pos.x, (canvasWidth - kCardWidth) * 0.5f);
+        EXPECT_GE(box->_layoutRect.pos.x, 0.0f);
         EXPECT_GE(box->_layoutRect.pos.y, 0.0f);
-        EXPECT_LE(box->_layoutRect.pos.y + box->_layoutRect.extent.y, static_cast<float>(canvas.height) + 0.5f);
-        if (kCardWidth <= static_cast<float>(canvas.width)) {
-            EXPECT_GE(box->_layoutRect.pos.x, 0.0f);
-            EXPECT_LE(box->_layoutRect.pos.x + box->_layoutRect.extent.x, static_cast<float>(canvas.width) + 0.5f);
-        }
+        EXPECT_LE(box->_layoutRect.pos.x + box->_layoutRect.extent.x, canvasWidth + 0.5f);
+        EXPECT_LE(box->_layoutRect.pos.y + box->_layoutRect.extent.y, canvasHeight + 0.5f);
 
         UIElement* row = body->getParent();
         ASSERT_NE(row, nullptr);
@@ -871,8 +898,6 @@ TEST(GameUIHostTest, DialogueDocumentStaysInsideNarrowAndWideCanvases)
         EXPECT_EQ(header->_name, "Header");
         EXPECT_EQ(header->getParent(), column);
 
-        // Child rects share the parent's space (the rect carries the ancestor
-        // offset), so compare against that rect, not its extent alone.
         const auto inside = [](const Rect2D& child, const Rect2D& parent) {
             EXPECT_GE(child.pos.x, parent.pos.x - 0.5f);
             EXPECT_GE(child.pos.y, parent.pos.y - 0.5f);
@@ -882,10 +907,7 @@ TEST(GameUIHostTest, DialogueDocumentStaysInsideNarrowAndWideCanvases)
         inside(body->_layoutRect, row->_layoutRect);
         inside(hint->_layoutRect, header->_layoutRect);
         inside(column->_layoutRect, box->_layoutRect);
-    };
-
-    expectCard(document, Extent2D{.width = 1280, .height = 720}, 260.0f);
-    expectCard(roundTrip, Extent2D{.width = 700, .height = 500}, -30.0f);
+    }
 }
 
 namespace
