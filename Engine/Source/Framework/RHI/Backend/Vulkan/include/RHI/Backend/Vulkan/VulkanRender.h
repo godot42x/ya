@@ -104,7 +104,17 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
         {.name = VK_EXT_MESH_SHADER_EXTENSION_NAME, .bRequired = false},
 #endif
     };
-    const bool m_EnableValidationLayers = true; // Will be disabled automatically if OBS is detected
+    // Validation on in debug builds; off for releasedbg/profile/release --
+    // a loaded layer validates every draw and turns profile-mode numbers into
+    // noise (Meshes_10000 measured ~20x under a loaded layer). The OBS check
+    // additionally disables it wherever it would otherwise be on.
+    static constexpr bool kDefaultEnableValidationLayers =
+#if defined(YA_BUILD_MODE_DEBUG)
+        true;
+#else
+        false;
+#endif
+    const bool m_EnableValidationLayers = kDefaultEnableValidationLayers; // Will be disabled automatically if OBS is detected
 
     bool bSupportDebugUtils       = false; // Whether VK_EXT_DEBUG_UTILS_EXTENSION_NAME is supported
     bool bSupportsGeometryShader  = false;
