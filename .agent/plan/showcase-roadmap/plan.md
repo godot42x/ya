@@ -51,6 +51,7 @@
 | W2 | B2 遗留：`MethodCall::arguments` 吞普通表收窄为 owner 参数；`bindSelf` 旧注释；`ScriptProperty::serializedValue` 未用；属性预览只建不销；`Npc.lua` 的 `world.find("Player")`；`spawnSprite` 默认贴图写死；自动化按名字 `Player` 找实体；`GridMoverTest.lua` 未进 gtest | P0 |
 | W3 | `GUIWindowManagerTest.IsolatesPointerFocusCaptureTooltipDpiAndSnapshot` 间歇失败定位 | P0 |
 | W4 | ~~profile 构建下 5 个 GUI 测试栈损坏崩溃~~ **已结（`4e95276d`）**：不是 profile-only 栈溢出，是 `UIFrameBuilder` 的 `_ctx` 为 `const UIFrameBuildContext&`，`UIFrameBuilder(UIFrameBuildContext{})` 把引用绑到临时对象上，随后 `build()` 拷贝已释放的栈。5 例全部把 ctx 绑到临时；debug 全过是因为 profile 的计数分配器改变了分配行为而暴露出来。改为按值持有 | ~~P1~~ 完成 |
+| W5 | RPG 示例目录统一为 `Example/2DRpgPrototype`：索引、目录项、`.yaproject` / `.yamodule` 与代码、测试、脚本里的路径用同一种大小写 | P0 |
 
 ### M — 测量、压测与内存（P0 起步）
 
@@ -149,7 +150,7 @@ gui profile 的构建必须在独立 worktree / 构建目录里做：在共享�
 | id | 内容 | 优先级 |
 | --- | --- | --- |
 | GA0 | 盘点（已完成）；子计划方案问答 | P0 |
-| GA1 | gui profile 恢复可配置可构建：3D 示例 include 守卫、`ci.sh gui-shared` 补 headless-host-test 与 `--smoke-actions`；修文档漂移（`make test-gui`、closure-test「唯一 target」注释、「21 场景」）；**附带修 `Example.xmake.lua` 写 `2DRpgPrototype` 而目录是 `2dRpgPrototype` 的大小写路径**（PB1 复核发现：大小写不敏感盘上 `Entry.cpp` 被编两次，全新 checkout 链示例失败） | P0 |
+| GA1 | gui profile 恢复可配置可构建：3D 示例 include 守卫、`ci.sh gui-shared` 补 headless-host-test 与 `--smoke-actions`；修文档漂移（`make test-gui`、closure-test「唯一 target」注释、「21 场景」）；**附带修 include 字符串与目录名大小写不一致**（大小写不敏感盘上 `Entry.cpp` 被编两次，全新 checkout 链示例失败；W5 起目录与引用都是 `2DRpgPrototype`） | P0 |
 | GA2 | 一条命令门禁：headless 批量跑全部场景断言 + windowed GPU / 离屏一致性；基线脚本路径可移植；结构化 digest 作跨平台主门禁，像素基准按平台分存（MoltenVK 与原生 Vulkan 像素不保证一致） | P0 |
 | GA3 | GUI 帧开销与内存数字：windowed CPU / GPU 帧时间、进程内存（M8 口径）、显存（M4 口径） | P0 |
 | GA4 | 打包成独立应用：不依赖仓库根的资源根、预编译 shader 或带 Slang 运行时、字体、MoltenVK / SDL 动态库；macOS `.app` 与 Windows 目录布局 | P0 |

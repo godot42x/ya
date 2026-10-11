@@ -86,7 +86,7 @@ reflects-core 的 `type_index_v` 只做类 / 函数 / 属性身份：`class.h` 4
 
 场景（16 个，全部进默认套件）。单文件两轮都 &lt; 2 s，最慢 `Sprites_5000` 1773 ms，所以没有 `DISABLED_` 场景。
 
-- `Example/2dRpgPrototype/Content/Scenes/` House、PropertyOverride、Town、TownLarge
+- `Example/2DRpgPrototype/Content/Scenes/` House、PropertyOverride、Town、TownLarge
 - `Example/GreedySnake/Content/Scenes/GreedySnake.scene.json`
 - `Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json`
 - `Example/PerfLab/Content/Scenes/` Lights_50、Lights_200、Lights_500、Meshes_1000、Meshes_5000、Meshes_10000、Sponza、Sprites_500、Sprites_2000、Sprites_5000

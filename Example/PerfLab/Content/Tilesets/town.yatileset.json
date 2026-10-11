@@ -3,7 +3,7 @@
     "textureRef": {
       "__base__": {
         "AssetRefBase": {
-          "_path": "Example/2dRpgPrototype/Content/Textures/tiny_town.png"
+          "_path": "Example/2DRpgPrototype/Content/Textures/tiny_town.png"
         }
       }
     },

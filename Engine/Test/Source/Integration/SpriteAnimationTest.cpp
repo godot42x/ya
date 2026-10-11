@@ -496,7 +496,7 @@ TEST(SpriteAnimationTest, ExampleScenesRoundTripKeepsDerivedSpriteFields)
         VirtualFileSystem::init();
     }
     VirtualFileSystem* vfs = VirtualFileSystem::get();
-    const auto contentRoot = std::filesystem::current_path() / "Example/2dRpgPrototype/Content";
+    const auto contentRoot = std::filesystem::current_path() / "Example/2DRpgPrototype/Content";
     vfs->mount("Content", contentRoot);
     struct UnmountContent
     {

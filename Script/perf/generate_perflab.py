@@ -47,7 +47,7 @@ GRASS = 0
 BUSH, MUSHROOM = 1, 2
 TREE_CANOPY, TREE_TRUNK = 4, 16
 
-HERO_SHEET = "Example/2dRpgPrototype/Content/Textures/hero_walk.png"
+HERO_SHEET = "Example/2DRpgPrototype/Content/Textures/hero_walk.png"
 TILESET = "Content/Tilesets/town.yatileset.json"
 STAND_DOWN_UV = (1.0 / 3.0, 0.0, 2.0 / 3.0, 0.25)
 # glTF node scale is 0.008. Accessor bounds then sit near

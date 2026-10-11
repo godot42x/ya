@@ -33,6 +33,19 @@
       "evidence": []
     },
     {
+      "id": "W5",
+      "group": "W",
+      "priority": "P0",
+      "title": "one RPG example directory name: 2DRpgPrototype",
+      "owner_line": "this",
+      "status": "done",
+      "evidence": [
+        "git index and catalog name are Example/2DRpgPrototype; project files are 2DRpgPrototype.yaproject and 2DRpgPrototype.yamodule",
+        "Example/Example.xmake.lua includes ./2DRpgPrototype/xmake.lua",
+        "code, tests, and scripts reference that spelling; PerfLab sprite scenes and the resave baseline use the same path"
+      ]
+    },
+    {
       "id": "M1",
       "group": "M",
       "priority": "P0",
@@ -507,9 +520,9 @@
       "owner_line": "new:gui-app",
       "status": "done",
       "evidence": [
-        "2026-10-11: Example/Example.xmake.lua guards 3D examples; include path is 2dRpgPrototype",
+        "2026-10-11: Example/Example.xmake.lua guards 3D examples; include path is 2DRpgPrototype",
         "worktree ya_profile=gui: xmake b ya-gui-minimal-host, GUIWorkbench, ya-gui-headless-host-test ok",
-        "fresh engine configure lists one source: Example/2dRpgPrototype/Source/Entry.cpp"
+        "fresh engine configure lists one source: Example/2DRpgPrototype/Source/Entry.cpp"
       ]
     },
     {

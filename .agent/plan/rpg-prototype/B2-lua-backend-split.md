@@ -487,7 +487,7 @@ self 上的字段，同一处 `contributeSelf`：
 
 | 表面 | 原因 |
 | --- | --- |
-| `dialogue:busy()` / `:say(lines, onDone)` | `Example/2dRpgPrototype/Content/UI/Dialogue.lua` 里的 Lua 方法。`busy` 没有 C++ 绑定。`ui.get` 必须返回 self 表，这两函数才在 |
+| `dialogue:busy()` / `:say(lines, onDone)` | `Example/2DRpgPrototype/Content/UI/Dialogue.lua` 里的 Lua 方法。`busy` 没有 C++ 绑定。`ui.get` 必须返回 self 表，这两函数才在 |
 | `self.lines`、`self.talking` 等脚本字段 | Lua 表字段。`ScriptRef` 的 `__newindex` 只写已知字段，换掉 self 会拆掉 `Class.lua` |
 | `Input.isKeyDown` 等、`EKey`、`time`、`log` | 已经在 `LuaScriptingSystem.cpp`，搬进 `Script/Lua/` 即可，本轮不进中立层 |
 

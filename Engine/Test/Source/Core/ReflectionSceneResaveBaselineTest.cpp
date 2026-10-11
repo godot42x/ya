@@ -106,10 +106,10 @@ struct SceneBaseline
 };
 
 constexpr SceneBaseline kScenes[] = {
-    {"Example/2dRpgPrototype/Content/Scenes/House.scene.json", "ef548321fafc473f"},
-    {"Example/2dRpgPrototype/Content/Scenes/PropertyOverride.scene.json", "4e5a90448a2bbec4"},
-    {"Example/2dRpgPrototype/Content/Scenes/Town.scene.json", "5a8ada40098e8ade"},
-    {"Example/2dRpgPrototype/Content/Scenes/TownLarge.scene.json", "3abb4a52113cb63a"},
+    {"Example/2DRpgPrototype/Content/Scenes/House.scene.json", "ef548321fafc473f"},
+    {"Example/2DRpgPrototype/Content/Scenes/PropertyOverride.scene.json", "4e5a90448a2bbec4"},
+    {"Example/2DRpgPrototype/Content/Scenes/Town.scene.json", "5a8ada40098e8ade"},
+    {"Example/2DRpgPrototype/Content/Scenes/TownLarge.scene.json", "3abb4a52113cb63a"},
     {"Example/GreedySnake/Content/Scenes/GreedySnake.scene.json", "c194b557a64c9566"},
     {"Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json", "94cafe06d86b9d46"},
     {"Example/PerfLab/Content/Scenes/Lights_50.scene.json", "5562c4d3845e6583"},
@@ -117,26 +117,26 @@ constexpr SceneBaseline kScenes[] = {
     {"Example/PerfLab/Content/Scenes/Lights_500.scene.json", "d203d306505ee627"},
     {"Example/PerfLab/Content/Scenes/Meshes_1000.scene.json", "62537d23032655ae"},
     {"Example/PerfLab/Content/Scenes/Sponza.scene.json", "2814a9ffab5e5fee"},
-    {"Example/PerfLab/Content/Scenes/Sprites_500.scene.json", "bd5667e0f4fd32ee"},
+    {"Example/PerfLab/Content/Scenes/Sprites_500.scene.json", "a2c537feab99626e"},
 };
 
 constexpr SceneBaseline kHeavyScenes[] = {
     {"Example/PerfLab/Content/Scenes/Meshes_5000.scene.json", "e570dde7f501b1c4"},
     {"Example/PerfLab/Content/Scenes/Meshes_10000.scene.json", "d9be7bad3bd83dfc"},
-    {"Example/PerfLab/Content/Scenes/Sprites_2000.scene.json", "a86c07e61cec8de4"},
-    {"Example/PerfLab/Content/Scenes/Sprites_5000.scene.json", "884de2b7cf132ba7"},
+    {"Example/PerfLab/Content/Scenes/Sprites_2000.scene.json", "60714b6e74b2bd24"},
+    {"Example/PerfLab/Content/Scenes/Sprites_5000.scene.json", "e1dc0c132e1d2b27"},
 };
 
 constexpr const char* kAnimationSets[] = {
-    "Example/2dRpgPrototype/Content/Animations/Chest.yaanim.json",
-    "Example/2dRpgPrototype/Content/Animations/Hero.yaanim.json",
-    "Example/2dRpgPrototype/Content/Animations/Npc.yaanim.json",
+    "Example/2DRpgPrototype/Content/Animations/Chest.yaanim.json",
+    "Example/2DRpgPrototype/Content/Animations/Hero.yaanim.json",
+    "Example/2DRpgPrototype/Content/Animations/Npc.yaanim.json",
 };
 
 constexpr const char* kAnimationHashes[] = {"c5eb0233912113ec", "17ecac8fc2efcaa6", "c6882b9d89542979"};
 
 constexpr const char* kUiDocuments[] = {
-    "Example/2dRpgPrototype/Content/UI/Dialogue.yaui.json",
+    "Example/2DRpgPrototype/Content/UI/Dialogue.yaui.json",
     "Example/GreedySnake/Content/UI/GameOver.yaui.json",
     "Example/GreedySnake/Content/UI/HUD.yaui.json",
     "Example/GreedySnake/Content/UI/Settings.yaui.json",
@@ -145,20 +145,20 @@ constexpr const char* kUiDocuments[] = {
 };
 
 constexpr const char* kUiHashes[] = {
-    "38aff1e896d08f66",
-    "a2e26278553915ec",
-    "6e5d0dc6dbcfdae7",
-    "61e2906040907fbb",
+    "81690bc7d2d8840e",
+    "611160844067bf72",
+    "bf61fa5b9a38012f",
+    "76a30960d1b52e18",
     "7878cd8986966a33",
     "a50599cedebc3826",
 };
 
 constexpr const char* kTilesets[] = {
-    "Example/2dRpgPrototype/Content/Tilesets/town.yatileset.json",
+    "Example/2DRpgPrototype/Content/Tilesets/town.yatileset.json",
     "Example/PerfLab/Content/Tilesets/town.yatileset.json",
 };
 
-constexpr const char* kTilesetAtlasHashes[] = {"86f92467c7828373", "e3bf7385660954c2"};
+constexpr const char* kTilesetAtlasHashes[] = {"86f92467c7828373", "3ac82f45f1528562"};
 
 [[nodiscard]] std::string resaveAnimation(const char* relative)
 {

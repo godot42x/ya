@@ -11,6 +11,7 @@
 - [x] W2 B2 遗留债（8 项，见 plan §3 W2；严格审查后返工一次，序列化规则收进 `ECS/ComponentJson`）
 - [x] W3 `GUIWindowManagerTest` 间歇失败定位（根因：reconcile 在处理处读活硬件；事件自带 `heldButtons` 修掉；同族 `EditorInputNode` 与跨窗拖拽 flaky 记入 memory `pointer_reconcile_reads_live_hardware.md`，后续随输入线收口）
 - [x] W4 profile 构建下 5 个 GUI 测试栈损坏（`4e95276d`）：根因是 `UIFrameBuilder` 的 `_ctx` 为 `const UIFrameBuildContext&`，`UIFrameBuilder(UIFrameBuildContext{})` 把引用绑到临时对象，`build()` 再拷贝已释放的栈——不是 profile-only 栈溢出。5 例全部把 ctx 绑到临时；debug 全过只是因为 profile 计数分配器改变了分配行为才暴露。改为按值持有。顺带在 `74dab681` 修掉同为 profile-only 的 clamp 用例（"free 32 bytes 层级不变" 只在桶为空时成立）
+- [x] W5 RPG 示例目录统一为 `Example/2DRpgPrototype`（git 索引、磁盘目录项、`.yaproject` / `.yamodule`、头文件，以及代码、测试、脚本里的路径）
 
 GUI 与编辑器活跃线
 - [ ] S5 反射 + 脚本层整体规范化（`reflection-runtime/` RR0–RR8；吸收原 native 注册重构，S5.1 已入库；先于 C3 / G3.2）
@@ -53,7 +54,7 @@ GUI 与编辑器活跃线
 
 纯 GUI app 线
 - [~] GA0 盘点（已完成）与子计划问答
-- [x] GA1 gui profile 恢复可配置可构建（示例 include 守卫、`ci.sh gui-shared`、文档漂移、`2dRpgPrototype` 路径）
+- [x] GA1 gui profile 恢复可配置可构建（示例 include 守卫、`ci.sh gui-shared`、文档漂移、`2DRpgPrototype` 路径）
 - [ ] GA2 一条命令门禁：全部场景 + GPU / 离屏一致性 + 可移植基线
 - [ ] GA3 GUI 帧开销、进程内存、显存数字
 - [ ] GA4 打包成独立应用

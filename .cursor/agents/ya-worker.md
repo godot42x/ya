@@ -24,7 +24,7 @@ model: grok-4.7[context=256k,effort=high,fast=false]
 
 ## 环境坑
 
-- macOS：BSD `sed -i ''`；仓库内 Example 目录 git 路径是 `Example/2dRpgPrototype`（小写 d），文件系统显示 `2DRpgPrototype`，`git add` / `git checkout` 用 git 路径。
+- macOS：BSD `sed -i ''`；仓库内 Example 目录是 `Example/2DRpgPrototype`，git 路径与磁盘目录项一致。
 - zsh 管道后 `$?` 不可信：看工具打印的成功行 / 汇总行，不要 `| tail` 后判退出码。
 - 全量测试、编辑器 / runtime 运行、截图要在沙箱外跑（`required_permissions: ["all"]`）。跑编辑器前确认没有残留进程；不要杀不是你启动的进程，需要停就报告。
 - 同一仓库同一时间只跑一份 xmake 构建。多个 agent 并行时，构建 / 测试 / 运行命令一律包进 `Script/agent/ya_lock.sh run -- <命令>`（先 `export YA_AGENT_NAME=<你的名字>`），`Script/agent/ya_lock.sh status` 可看谁占着；规则见 `.agent/skills/ya-build/SKILL.md`「并行 agent 的独占构建锁」。不要把长驻进程放进锁。

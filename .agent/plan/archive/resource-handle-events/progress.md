@@ -152,7 +152,7 @@
   - `ya-testing`（沙箱外）：1503 例，1502 过，1 跳过（`RHISurfaceContext.ExtraWindowUnpresentableDoesNotBlockStartupWindowPresent`）。
   - IBL：两边 `--width=1024 --height=768`，`--layout-overrides` 指向空目录，走同一份出厂 `Level.json`。`imgui.ini` 本来就相同。先前 610×245 对 570×370 是主仓库 `Workspace.json`（窗口 1450×816、自定义分割）和 worktree 里 1024×768 出厂分割的差别。对齐后都是 570×370：`/tmp/ibl-head-matched.png`、`/tmp/ibl-preh5-matched.png`。平均绝对差 24.58，最大 195；超过 8 / 16 / 32 / 64 的像素占 94.6% / 69.1% / 13.6% / 6.8%。按增益 1.20 对齐后平均差 12.19。水平梯度：HEAD 均值 8.47（>30 占 4.7%），preh5 15.72（17.5%）。preh5 这张和之前的 `/tmp/ibl-preh5.png` 逐像素相同。两边都是 debug。网点在 f3d0c1a5 的画面上，不是布局缩放，也不是 debug 与 release 的差别。同尺寸下 HEAD 的球体反射连续，整体更亮。
   - TownLarge profile（600 帧，跳过 60，540 帧）：iterate 均值 10.900 ms（p50 10.882，p95 11.595）。`Render/Frame` inclusive 10.839 ms、self 0.005 ms。`VulkanRender::waitFrameFence` 2.014 ms。`prepareDerivedState` inclusive 0.0054 ms、self 0.0015 ms。`ResourceResolve/GameplayBinding` 0.0016、Terrain 0.0005、EnvironmentLighting 0.0005、Skybox 0.0004。对照 r4 §7 的 0.011 ms，资源准备没有变慢。
-- 保留 / 未完成：todo 里脚本 `callMethod`、tileset 文件监听、colorSpace、派生 LRU、frame task sink 悬空，仍不在本计划。preh5 的 TownLarge profile 没跑成：链接 `2DRpgPrototype` 时 `Entry.cpp` 按 `2dRpgPrototype` 和 `2DRpgPrototype` 两条路径各编了一次，`_yaGetModuleApi` 重复符号。
+- 保留 / 未完成：todo 里脚本 `callMethod`、tileset 文件监听、colorSpace、派生 LRU、frame task sink 悬空，仍不在本计划。preh5 的 TownLarge profile 没跑成：链接时 `Entry.cpp` 按两种大小写各编了一次，`_yaGetModuleApi` 重复符号。W5 起目录与引用都是 `2DRpgPrototype`。
 - 偏离：`consumeTextureBatchMemory` 仍在。`TerrainProcessor` 和 `EnvironmentLightingProcessor` 在批次 `onReady` 之后用它把 CPU 内存从 ready 表取走。回调交回的是句柄，不是像素。它不再被每帧轮询。删掉就没有取走批次的入口。
 
 ## 2026-10-02 收尾重构：去掉 Loading 计数，选中来源由处理器维护

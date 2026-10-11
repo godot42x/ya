@@ -92,8 +92,14 @@
 
 ## 2026-10-11 — GA1 gui profile 可配置可构建
 
-- 3D 示例（HelloMaterial / GreedySnake / 2dRpgPrototype / PerfLab）只在 `ya_profile ~= gui` 时 include。GUIFrameworkSmoke 与 GUIWorkbench 两个 profile 都在。
-- `Example.xmake.lua` 的示例路径改成目录名 `2dRpgPrototype`。另一种大小写在大小写不敏感盘上是第二个 include，`Entry.cpp` 会进链接两次。全新配置只登记这一条源文件。
+- 3D 示例（HelloMaterial / GreedySnake / 2DRpgPrototype / PerfLab）只在 `ya_profile ~= gui` 时 include。GUIFrameworkSmoke 与 GUIWorkbench 两个 profile 都在。
+- `Example.xmake.lua` 的示例路径改成目录名 `2DRpgPrototype`。另一种大小写在大小写不敏感盘上是第二个 include，`Entry.cpp` 会进链接两次。全新配置只登记这一条源文件。
 - `Script/ci.sh` 的 `gui-shared` 补上 `ya-gui-headless-host-test` 和 `GUIWorkbench --smoke-actions`。
 - 文档：`gui-framework` skill 去掉不存在的 `make test-gui`，改成 closure / widgets / headless-host / workspace 四条；`Test.xmake.lua` 不再把 closure test 写成 gui profile 里唯一的测试；场景数按目录写成 31。
 - 验证在独立 worktree（`/tmp/ya-gui-ga1`，不改共享工作区的 engine 配置）：`ya_profile=gui` 配过；`ya-gui-minimal-host`、`GUIWorkbench`、`ya-gui-headless-host-test` 链接通过。共享工作区仍是 engine profile。
+
+## 2026-10-11 — W5 目录名 2DRpgPrototype
+
+- git 索引与磁盘目录项都是 `Example/2DRpgPrototype`。`2DRpgPrototype.yaproject`、`2DRpgPrototype.yamodule`、`Source/2DRpgPrototype.h` 与之一致。
+- `Example.xmake.lua` include `./2DRpgPrototype/xmake.lua`。代码、测试、脚本、PerfLab 精灵场景里的贴图路径都是这一种大小写。场景重存基线的路径键跟着改。贴图路径写进场景正文的（Sprites_500 / 2000 / 5000、PerfLab town tileset），哈希按新正文更新。同一测试里四份 UI 文档的哈希已和当前文件对不上（文档在基线锁定之后改过），一并刷新。
+- 未跟踪的 `Content/UI/Panel*.yaui.json` 留在这个目录下，不入库。

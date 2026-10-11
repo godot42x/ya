@@ -9,9 +9,9 @@ includes("./GUIWorkbench/xmake.lua")
 if get_config("ya_profile") ~= "gui" then
     includes("./HelloMaterial/xmake.lua")
     includes("./GreedySnake/xmake.lua")
-    -- Index path is 2dRpgPrototype. The other capitalization is the same
+    -- Index path is 2DRpgPrototype. The other capitalization is the same
     -- directory on a case-insensitive volume, and xmake then compiles
     -- Entry.cpp twice (a fresh checkout fails to link the example).
-    includes("./2dRpgPrototype/xmake.lua")
+    includes("./2DRpgPrototype/xmake.lua")
     includes("./PerfLab/xmake.lua")
 end
