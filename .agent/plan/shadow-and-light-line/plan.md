@@ -14,6 +14,7 @@
 - **R15a SSBO 灯光数据（已落地，见 progress）**：LightPass 点光数据 UBO→SSBO；快照/frameData 灯列表动态化；forward 加 6 灯 cap。
 - **R15b 聚光灯**：SpotLightComponent（或 Point 扩展）+ LightPass 锥角着色 + serializer/inspector/脚本通道。
 - **R2 点光源阴影 GPU 剔除 + indirect 修稳默认开**（含历史回归复测；开工前需与用户过方案问答）。
+- **R15c 聚光灯阴影贴图**（排在 R2 之后；**G3.9 依赖它**——关卡展示需要带阴影的聚光灯）：聚光灯 2D 阴影图（view/projection 矩阵进 GPU 元素）或复用 cube 通道，与 R2 的剔除结构一起定。
 - **R3 CSM 多级修稳默认开**（可与 R2 同一条阴影技术线）。
 - 后续演进选项（用户提出，未排期）：UE 式逐灯 draw；Forward+ cluster 管线。
 

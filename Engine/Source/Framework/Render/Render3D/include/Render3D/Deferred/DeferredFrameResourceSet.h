@@ -42,19 +42,19 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
     using SSAOFrameData = slang_types::DeferredRender::SSAO::FrameData;
     using SkyboxFrameData = slang_types::Skybox::FrameUBO;
 
-    /// The deferred shader's point-light storage buffer element (see
-    /// LightPass.slang's uPointLights): tightly packed 36 bytes, layout owned
-    /// by the generated header.
-    using PointLightGpu = slang_types::DeferredRender::LightPass::PointLight;
+    /// The deferred shader's light-instance storage buffer element (see
+    /// LightPass.slang's uLightInstances): layout owned by the generated
+    /// header.
+    using LightInstanceGpu = slang_types::DeferredRender::LightPass::LightInstance;
 
     struct ViewPayloads
     {
         FrameData            frame{};
         LightData            light{};
-        /// The frame's point lights, uploaded as one count-sized storage
-        /// buffer slice. Spans the RenderFrameData vector, which outlives the
-        /// recording that consumes it.
-        std::span<const PointLightGpu> pointLights{};
+        /// The frame's point lights as the shader sees them, uploaded as one
+        /// count-sized storage buffer slice. Built by
+        /// `buildLightInstanceBuffer`, owned here through the upload.
+        std::vector<LightInstanceGpu> lightInstances;
         const SSAOFrameData* ssao   = nullptr;
         const SkyboxFrameData* skybox = nullptr;
     };
@@ -67,7 +67,7 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
         DescriptorSetHandle             skyboxFrameDescriptorSet{};
         FrameUploadArena::Allocation    frame;
         FrameUploadArena::Allocation    light;
-        FrameUploadArena::Allocation    pointLights;
+        FrameUploadArena::Allocation    lightInstances;
         FrameUploadArena::Allocation    ssaoFrame;
         FrameUploadArena::Allocation    skyboxFrame;
         stdptr<IBuffer>                  skinningBuffer;
@@ -131,6 +131,14 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
     [[nodiscard]] uint32_t getMaxShadowedPointLights() const { return _shadowState.maxShadowedPointLights; }
     [[nodiscard]] uint32_t getLastShadowedPointLights() const { return _lastShadowedPointLights; }
 
+    [[nodiscard]] LightData buildLightData(const RenderFrameData& frameData) const;
+    /// The storage-buffer image of the frame's local lights: field-mapped
+    /// (never reinterpreted -- the staging struct carries shadow matrices the
+    /// GPU element does not), omni-only shadow budget. `shadowSlotsUsed`
+    /// reports how many budget slots the list consumed (spots skip).
+    [[nodiscard]] static std::vector<LightInstanceGpu>
+    buildLightInstanceBuffer(const RenderFrameData& frameData, uint32_t shadowedPointLightBudget, uint32_t* shadowSlotsUsed = nullptr);
+
   private:
     stdptr<IDescriptorSetLayout> _frameAndLightDSL;
     stdptr<IDescriptorSetLayout> _ssaoFrameDSL;
@@ -139,7 +147,12 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
     ShadowRuntimeState _shadowState{};
     uint32_t _lastShadowedPointLights = 0;
 
-    [[nodiscard]] LightData buildLightData(const RenderFrameData& frameData) const;
+
+    /// The storage-buffer image of the frame's point lights: field-mapped
+    /// (never reinterpreted -- the staging struct carries shadow matrices the
+    /// GPU element does not), omni-only shadow budget. `shadowSlotsUsed`
+    /// reports how many budget slots the list consumed (spots skip).
+
     bool ensureViewDescriptors(RenderSubmission& submission, Binding& binding);
     void updateFrameAndLightDescriptorSet(const Binding& binding);
     void updateSSAODescriptorSet(const Binding& binding);

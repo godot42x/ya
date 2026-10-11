@@ -144,7 +144,7 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
 {
     outSnapshot.clearScene();
     outSnapshot.bHasDirectionalLight = false;
-    outSnapshot.pointLightSources.clear();
+    outSnapshot.lightInstances.clear();
 
     if (!input.scene) {
         return;
@@ -354,24 +354,24 @@ void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
         outFrame.worldSprites.order.push_back(index);
     }
 
-    outFrame.pointLights.resize(outFrame.sceneSnapshot->pointLightSources.size());
-    for (uint32_t index = 0; index < outFrame.sceneSnapshot->pointLightSources.size(); ++index) {
-        const auto& source = outFrame.sceneSnapshot->pointLightSources[index];
-        auto&       target = outFrame.pointLights[index];
+    outFrame.lightInstances.resize(outFrame.sceneSnapshot->lightInstances.size());
+    for (uint32_t index = 0; index < outFrame.sceneSnapshot->lightInstances.size(); ++index) {
+        const auto& source = outFrame.sceneSnapshot->lightInstances[index];
+        auto&       target = outFrame.lightInstances[index];
         target.position    = source.position;
-        target.type        = source.type;
+        target.kind        = source.kind;
         target.constant    = source.constant;
         target.linear      = source.linear;
         target.quadratic   = source.quadratic;
         target.color       = source.color;
         target.intensity   = source.intensity;
         target.spotDir     = source.spotDir;
-        target.innerCutOff = source.innerCutOff;
-        target.outerCutOff = source.outerCutOff;
+        target.innerCos = source.innerCos;
+        target.outerCos = source.outerCos;
         target.nearPlane   = source.nearPlane;
         target.farPlane    = source.farPlane;
     }
-    outFrame.numPointLights = static_cast<uint32_t>(outFrame.pointLights.size());
+    outFrame.numLightInstances = static_cast<uint32_t>(outFrame.lightInstances.size());
     outFrame.directionalLight.direction = outFrame.sceneSnapshot->directionalLightSource.direction;
     outFrame.directionalLight.color     = outFrame.sceneSnapshot->directionalLightSource.color;
     outFrame.directionalLight.intensity = outFrame.sceneSnapshot->directionalLightSource.intensity;
@@ -417,17 +417,17 @@ void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneSnapshot
 
     // Point lights: every light the scene has -- the deferred path uploads
     // them to a count-sized storage buffer, so there is no cap to break here.
-    out.pointLightSources.clear();
+    out.lightInstances.clear();
     for (const auto& [e, plc, tc] : reg.view<PointLightComponent, TransformComponent>().each()) {
-        auto& pl = out.pointLightSources.emplace_back();
-        pl.type        = static_cast<float>(plc._type);
+        auto& pl = out.lightInstances.emplace_back();
+        pl.kind        = static_cast<uint32_t>(plc._type);
         pl.constant    = plc._constant;
         pl.linear      = plc._linear;
         pl.quadratic   = plc._quadratic;
         pl.position    = tc._position;
         pl.spotDir     = tc.getForward();
-        pl.innerCutOff = glm::cos(glm::radians(plc._innerConeAngle));
-        pl.outerCutOff = glm::cos(glm::radians(plc._outerConeAngle));
+        pl.innerCos = glm::cos(glm::radians(plc._innerConeAngle));
+        pl.outerCos = glm::cos(glm::radians(plc._outerConeAngle));
         pl.nearPlane   = plc.nearPlane;
         pl.farPlane    = plc.farPlane;
         pl.color       = plc.color;

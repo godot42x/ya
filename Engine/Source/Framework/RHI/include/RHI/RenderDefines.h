@@ -1690,12 +1690,12 @@ struct FrameContext
     } directionalLight;
     bool bHasDirectionalLight = false;
 
-    struct PointLightData
+    struct LightInstanceData
     {
         // shadow
         glm::vec3 position;
         // visual
-        float type = 0;
+        uint32_t kind = 0;
 
         // phong spec
         float constant  = 1.0f;
@@ -1708,8 +1708,8 @@ struct FrameContext
 
         // for spot light
         glm::vec3 spotDir;
-        float     innerCutOff = 0.0f;
-        float     outerCutOff = 0.0f;
+        float     innerCos = 0.0f;
+        float     outerCos = 0.0f;
 
         float nearPlane = 0.1f;
         float farPlane  = 100.f;
@@ -1717,8 +1717,8 @@ struct FrameContext
         std::array<glm::mat4, 6> shadowView; // for point light shadow mapping (cubemap)
         glm::mat4                shadowProjection;
     };
-    uint32_t                                     numPointLights = 0;
-    std::array<PointLightData, MAX_POINT_LIGHTS> pointLights;
+    uint32_t                                     numLightInstances = 0;
+    std::array<LightInstanceData, MAX_POINT_LIGHTS> lightInstances;
 
     entt::entity viewOwner = entt::null;
     Extent2D     extent    = {.width = 640, .height = 480};

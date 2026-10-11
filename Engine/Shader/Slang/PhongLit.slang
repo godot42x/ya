@@ -9,6 +9,7 @@
 // ============================================================
 
 #include "Common/Limits.slang"
+#include "Common/LightInstance.slang"
 #include "Common/Helper.slang"
 #include "Common/Skinning.slang"
 
@@ -23,9 +24,11 @@ struct DirectionalLight
     uint cascadeCount;
 };
 
-struct PointLight
+// One light instance: omni or spot. The legacy attenuation
+// (constant/linear/quadratic) and near plane ride along for the phong path.
+struct LightInstance
 {
-    float type;       // 0 = point, 1 = spot
+    uint kind;        // LightInstanceKind
     float constant;
     float linear;
     float quadratic;
@@ -38,8 +41,8 @@ struct PointLight
     float farPlane;
 
     float3 spotDir;
-    float  innerCutOff;  // cos(innerAngle)
-    float  outerCutOff;  // cos(outerAngle)
+    float  innerCos;     // cos(innerAngle)
+    float  outerCos;     // cos(outerAngle)
 };
 
 struct FrameData
@@ -55,8 +58,8 @@ struct FrameData
 struct LightData
 {
     DirectionalLight dirLight;
-    PointLight       pointLights[MAX_POINT_LIGHTS];
-    uint             numPointLights;
+    LightInstance    lightInstances[MAX_POINT_LIGHTS];
+    uint             numLightInstances;
     uint             hasDirectionalLight;
 };
 
@@ -109,7 +112,7 @@ struct ParamUBO
 
 // set=4 : Shadow maps (combined image sampler)
 [[vk::binding(0, 4)]]  Sampler2DArray uDirectionalLightShadowMap;
-[[vk::binding(1, 4)]]  SamplerCube  uPointLightCubeArray[MAX_POINT_LIGHTS];
+[[vk::binding(1, 4)]]  SamplerCube  uLightInstanceCubeArray[MAX_POINT_LIGHTS];
 
 // Push constants
 struct PushConstants
@@ -264,48 +267,48 @@ float3 calculateDirLight(
     return ambient + (1.0 - shadow) * (diffuse + specular);
 }
 
-float3 calculatePointLight(
-    in PointLight pointLight,
+float3 calculateLightInstance(
+    in LightInstance lightInstance,
     float3 fragPos, float3 norm, float3 viewDir,
     float3 diffuseTexColor, float3 specularTexColor,
-    int pointLightIndex)
+    int instanceIndex)
 {
     const float ambientFactor = 0.03;
-    float3 lightDir = normalize(pointLight.position - fragPos);
+    float3 lightDir = normalize(lightInstance.position - fragPos);
 
     float diff = max(dot(norm, lightDir), 0.0);
     float spec = calculateSpec(norm, lightDir, viewDir, uParams.shininess);
 
-    float3 radiance = pointLight.color * pointLight.intensity;
+    float3 radiance = lightInstance.color * lightInstance.intensity;
     float3 ambient  = ambientFactor * radiance * diffuseTexColor  * uParams.ambient;
     float3 diffuse  = radiance * diff  * diffuseTexColor  * uParams.diffuse;
     float3 specular = radiance * spec  * specularTexColor * uParams.specular;
 
     // Spot light
-    if (pointLight.type == 1.0)
+    if (lightInstance.kind == uint(LightInstanceKind::Spot))
     {
-        float theta   = dot(lightDir, normalize(-pointLight.spotDir));
-        float epsilon = pointLight.innerCutOff - pointLight.outerCutOff;
-        float intensity = clamp((theta - pointLight.outerCutOff) / epsilon, 0.0, 1.0);
+        float theta   = dot(lightDir, normalize(-lightInstance.spotDir));
+        float epsilon = lightInstance.innerCos - lightInstance.outerCos;
+        float intensity = clamp((theta - lightInstance.outerCos) / epsilon, 0.0, 1.0);
         ambient  *= intensity;
         diffuse  *= intensity;
         specular *= intensity;
     }
 
     // Shadow
-    float3 sampleDir = fragPos - pointLight.position;
+    float3 sampleDir = fragPos - lightInstance.position;
     float currentDepth = length(sampleDir);
-    float closestDepth = uPointLightCubeArray[pointLightIndex].Sample(sampleDir).x;
-    closestDepth *= pointLight.farPlane;
+    float closestDepth = uLightInstanceCubeArray[instanceIndex].Sample(sampleDir).x;
+    closestDepth *= lightInstance.farPlane;
     float bias = 0.05;
     float shadow = (currentDepth - bias > closestDepth)? 1.0: 0.0;
 
     // Attenuation
     float distance = currentDepth;
     float attenuation = 1.0 / (
-        pointLight.constant +
-        pointLight.linear    * distance +
-        pointLight.quadratic * distance * distance
+        lightInstance.constant +
+        lightInstance.linear    * distance +
+        lightInstance.quadratic * distance * distance
     );
 
     return (ambient + (1-shadow) * (diffuse + specular)) * attenuation;
@@ -374,10 +377,10 @@ float4 fragMain(VSOutput input) : SV_Target
             diffuseTexColor.xyz, specularTexColor.xyz);
     }
 
-    for (uint i = 0; i < uLit.numPointLights && i < MAX_POINT_LIGHTS; ++i)
+    for (uint i = 0; i < uLit.numLightInstances && i < MAX_POINT_LIGHTS; ++i)
     {
-        lighting += calculatePointLight(
-            uLit.pointLights[i], input.worldPos, norm, viewDir,
+        lighting += calculateLightInstance(
+            uLit.lightInstances[i], input.worldPos, norm, viewDir,
             diffuseTexColor.xyz, specularTexColor.xyz, i);
     }
 

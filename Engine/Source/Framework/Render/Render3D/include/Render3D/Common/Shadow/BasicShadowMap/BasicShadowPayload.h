@@ -32,7 +32,7 @@ struct BasicShadowFramePayload
     PointShadowIndirectResources* pointShadow = nullptr;
 
     FrameUBO frameUBO{};
-    uint32_t pointLightCount = 0;
+    uint32_t lightInstanceCount = 0;
 
     // ─── Derived flags (read-only; computed from settings + frame state) ─
     [[nodiscard]] bool directionalEnabled() const
@@ -49,7 +49,7 @@ struct BasicShadowFramePayload
     }
     [[nodiscard]] bool pointEnabled() const
     {
-        return settings && settings->pointLightEnabled && pointLightCount > 0;
+        return settings && settings->pointLightEnabled && lightInstanceCount > 0;
     }
     [[nodiscard]] bool pointIndirectRequested() const
     {

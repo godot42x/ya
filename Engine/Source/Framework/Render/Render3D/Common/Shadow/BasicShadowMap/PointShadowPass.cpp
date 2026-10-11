@@ -129,7 +129,7 @@ void PointShadowPass::prepare(const BasicShadowFramePayload& payload)
         _indirectRenderer.beginFrame();
     }
 
-    if (payload.pointLightCount == 0) return;
+    if (payload.lightInstanceCount == 0) return;
 
     {
         YA_PROFILE_SCOPE("PointShadowPass::IndirectPrepare");
@@ -146,7 +146,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
     const BasicShadowFramePayload& payload,
     std::optional<RGPassHandle> dependency)
 {
-    if (!payload.frameData || payload.pointLightCount == 0 || !_shadowResource || !_shadowResource->getImage()) return std::nullopt;
+    if (!payload.frameData || payload.lightInstanceCount == 0 || !_shadowResource || !_shadowResource->getImage()) return std::nullopt;
 
     const bool useIndirect = payload.pointIndirectRequested() &&
                              _indirectRenderer.hasRenderableInstances(payload.pointShadow);
@@ -188,9 +188,9 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
         RGBufferRange          faceRange{};
     };
     auto graphFaces = std::make_shared<std::vector<GraphFace>>();
-    graphFaces->reserve(payload.pointLightCount * 6);
+    graphFaces->reserve(payload.lightInstanceCount * 6);
 
-    for (uint32_t lightIndex = 0; lightIndex < payload.pointLightCount; ++lightIndex) {
+    for (uint32_t lightIndex = 0; lightIndex < payload.lightInstanceCount; ++lightIndex) {
         for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
             PointShadowFacePayload facePayload{
                 .lightIndex      = lightIndex,

@@ -1,4 +1,5 @@
 #include "Common/Limits.slang"
+#include "Common/LightInstance.slang"
 #include "Common/Helper.slang"
 
 // Unified Light Pass — single pass with switch/case on Shading Model ID
@@ -59,11 +60,17 @@ struct DirectionalLight{
     float shadowTexelSize;
 };
 
-struct PointLight{
+// One light instance: omni or spot. Both shade through the same loop;
+// spots apply the cone factor on top.
+struct LightInstance{
     vec3 pos;
     vec3 color;
     float intensity;
     float farPlane;
+    vec3 spotDir;
+    float innerCos;
+    float outerCos;
+    uint kind;
 };
 
 // Point lights live in a storage buffer (binding 2,0): the per-frame count
@@ -73,7 +80,7 @@ struct PointLight{
 struct LightData{
     DirectionalLight dirLight;
     bool hasDirLight;
-    uint numPointLight;
+    uint numLightInstances;
 };
 
 #ifndef YA_DEFERRED_PBR_ENABLE_IBL_DIFFUSE
@@ -211,22 +218,34 @@ float calculateDirectionalShadow(vec3 worldPos, vec3 norm, vec3 lightDir)
 #endif
 }
 
-float calculatePointShadow(uint pointLightIndex, vec3 worldPos)
+float calculateLightInstanceShadow(uint lightIndex, vec3 worldPos)
 {
 #if !YA_DEFERRED_ENABLE_SHADOW_MAPPING || !YA_DEFERRED_ENABLE_POINT_LIGHT_SHADOW
     return 0.0;
 #else
-    vec3 sampleDir = worldPos - uPointLights[pointLightIndex].pos;
+    vec3 sampleDir = worldPos - uLightInstances[lightIndex].pos;
     float currentDepth = length(sampleDir);
-    if (currentDepth <= 0.0001 || uPointLights[pointLightIndex].farPlane <= 0.0) {
+    if (currentDepth <= 0.0001 || uLightInstances[lightIndex].farPlane <= 0.0) {
         return 0.0;
     }
 
-    float closestDepth = uPointLightCubeArray[pointLightIndex].Sample(sampleDir).x;
-    closestDepth *= uPointLights[pointLightIndex].farPlane;
-    float bias = clamp(uLight.dirLight.bias * uPointLights[pointLightIndex].farPlane, 0.001, 0.02);
+    float closestDepth = uLightInstanceCubeArray[lightIndex].Sample(sampleDir).x;
+    closestDepth *= uLightInstances[lightIndex].farPlane;
+    float bias = clamp(uLight.dirLight.bias * uLightInstances[lightIndex].farPlane, 0.001, 0.02);
     return (currentDepth - bias) > closestDepth ? 1.0 : 0.0;
 #endif
+}
+
+/// Cone attenuation for spot lights; omni lights pass through untouched.
+/// Spots carry farPlane == 0 this line (no shadow maps yet -- R2), so the
+/// shadow term short-circuits before sampling the cube array.
+float spotConeFactor(uint lightIndex, vec3 L)
+{
+    if (uLightInstances[lightIndex].kind == LightInstanceKind::Omni) {
+        return 1.0;
+    }
+    float theta = dot(-L, normalize(uLightInstances[lightIndex].spotDir));
+    return smoothstep(uLightInstances[lightIndex].outerCos, uLightInstances[lightIndex].innerCos, theta);
 }
 
 // MARK: PBR
@@ -256,16 +275,17 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
     }
 
     // Point lights
-    for (int i = 0; i < uLight.numPointLight; ++i)
+    for (int i = 0; i < uLight.numLightInstances; ++i)
     {
         // per-light radiance
-        vec3 L = normalize(uPointLights[i].pos - worldPos);
+        vec3 L = normalize(uLightInstances[i].pos - worldPos);
         vec3 H = normalize(V + L);
-        float dist = length(uPointLights[i].pos - worldPos);
+        float dist = length(uLightInstances[i].pos - worldPos);
         // raw light
-        vec3 radiance = uPointLights[i].color * uPointLights[i].intensity 
+        vec3 radiance = uLightInstances[i].color * uLightInstances[i].intensity 
                         / (dist * dist);
-        float shadow = calculatePointShadow(i, worldPos);
+        radiance *= spotConeFactor(i, L);
+        float shadow = calculateLightInstanceShadow(i, worldPos);
 
         // Cook-Torrance BRDF
         float NDF = D_normalDistribution_GGX(N, H, roughness);
@@ -340,16 +360,17 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
         light += ambient + (1.0 - shadow) * (diffuse + specular);
     }
 
-    for(uint i = 0; i< uLight.numPointLight; ++i)
+    for(uint i = 0; i< uLight.numLightInstances; ++i)
     {
-        vec3  lightDir   = normalize(uPointLights[i].pos - worldPos);
+        vec3  lightDir   = normalize(uLightInstances[i].pos - worldPos);
         float diff      = max(dot(lightDir, N), 0.0);
         vec3  halfwayDir = normalize(lightDir + V);
         float spec      = pow(max(dot(N, halfwayDir), 0.0),shininess);
-        float shadow    = calculatePointShadow(i, worldPos);
+        float shadow    = calculateLightInstanceShadow(i, worldPos);
 
-        float dist = length(uPointLights[i].pos - worldPos);
-        vec3 radiance = uPointLights[i].color * uPointLights[i].intensity / (dist * dist);
+        float dist = length(uLightInstances[i].pos - worldPos);
+        vec3 radiance = uLightInstances[i].color * uLightInstances[i].intensity / (dist * dist);
+        radiance *= spotConeFactor(i, lightDir);
 
         vec3 ambient  = albedo * radiance * ambientFactor * ao;
         vec3 diffuse  = diff * albedo * radiance;
@@ -366,7 +387,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
 
 [[vk::binding(0,0)]] ConstantBuffer<FrameData,Std140DataLayout> uFrame;
 [[vk::binding(1,0)]] ConstantBuffer<LightData,Std140DataLayout> uLight;
-[[vk::binding(2,0)]] StructuredBuffer<PointLight> uPointLights;
+[[vk::binding(2,0)]] StructuredBuffer<LightInstance> uLightInstances;
 
 [[vk::binding(0,1)]] Sampler2D uTexRT0; // RT0: (position.xyz, roughness/shininess)
 [[vk::binding(1,1)]] Sampler2D uTexRT1; // RT1: (normal.xyz, ao/reflectRatio)
@@ -380,7 +401,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
 [[vk::binding(3,2)]] Sampler2D   uTexPBRBrdfLUT;  
 
 [[vk::binding(0,3)]] Sampler2DArray uDirectionalLightShadowMap;
-[[vk::binding(1,3)]] SamplerCube uPointLightCubeArray[MAX_POINT_LIGHTS];
+[[vk::binding(1,3)]] SamplerCube uLightInstanceCubeArray[MAX_POINT_LIGHTS];
 
 
 

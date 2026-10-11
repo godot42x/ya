@@ -1,4 +1,5 @@
 #include "Common/Limits.slang"
+#include "Common/LightInstance.slang"
 #include "Common/Helper.slang"
 #include "Common/Skinning.slang"
 
@@ -46,20 +47,24 @@ struct DirectionalLight
     uint cascadeCount;
 };
 
-struct PointLight
+struct LightInstance
 {
     float3 pos;
     float3 color;
     float  intensity;
     float  farPlane;
+    float3 spotDir;
+    float  innerCos;
+    float  outerCos;
+    uint   kind;
 };
 
 struct LightData
 {
     DirectionalLight dirLight;
-    PointLight       pointLights[MAX_POINT_LIGHTS];
+    LightInstance    lightInstances[MAX_POINT_LIGHTS];
     bool             hasDirLight;
-    uint             numPointLight;
+    uint             numLightInstances;
 };
 
 enum ETextureSlot
@@ -106,7 +111,7 @@ struct PBRParamsData
 [[vk::binding(3,3)]] Sampler2D   uTexPBRBrdfLUT;
 
 [[vk::binding(0,4)]] Sampler2DArray uDirectionalLightShadowMap;
-[[vk::binding(1,4)]] SamplerCube uPointLightCubeArray[MAX_POINT_LIGHTS];
+[[vk::binding(1,4)]] SamplerCube uLightInstanceCubeArray[MAX_POINT_LIGHTS];
 
 #ifndef YA_DEFERRED_PBR_ENABLE_IBL_DIFFUSE
     #define YA_DEFERRED_PBR_ENABLE_IBL_DIFFUSE 0
@@ -191,19 +196,19 @@ float calculateDirectionalShadow(float3 worldPos, float3 norm, float3 lightDir)
 #endif
 }
 
-float calculatePointShadow(uint pointLightIndex, float3 worldPos)
+float calculateLightInstanceShadow(uint lightIndex, float3 worldPos)
 {
 #if !YA_DEFERRED_ENABLE_SHADOW_MAPPING || !YA_DEFERRED_ENABLE_POINT_LIGHT_SHADOW
     return 0.0;
 #else
-    float3 sampleDir = worldPos - uLight.pointLights[pointLightIndex].pos;
+    float3 sampleDir = worldPos - uLight.lightInstances[lightIndex].pos;
     float currentDepth = length(sampleDir);
-    if (currentDepth <= 0.0001 || uLight.pointLights[pointLightIndex].farPlane <= 0.0) {
+    if (currentDepth <= 0.0001 || uLight.lightInstances[lightIndex].farPlane <= 0.0) {
         return 0.0;
     }
 
-    float closestDepth = uPointLightCubeArray[pointLightIndex].Sample(sampleDir).x;
-    closestDepth *= uLight.pointLights[pointLightIndex].farPlane;
+    float closestDepth = uLightInstanceCubeArray[lightIndex].Sample(sampleDir).x;
+    closestDepth *= uLight.lightInstances[lightIndex].farPlane;
     float bias = 0.05;
     return (currentDepth - bias) > closestDepth ? 1.0 : 0.0;
 #endif
@@ -270,13 +275,18 @@ vec3 shadePBR(in vec3 worldPos, in vec3 N, in vec3 V, in vec3 albedo, float meta
         Lo += (1.0 - shadow) * (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
     }
 
-    for (uint i = 0; i < uLight.numPointLight; ++i)
+    for (uint i = 0; i < uLight.numLightInstances; ++i)
     {
-        vec3 L = normalize(uLight.pointLights[i].pos - worldPos);
+        vec3 L = normalize(uLight.lightInstances[i].pos - worldPos);
         vec3 H = normalize(V + L);
-        float dist = length(uLight.pointLights[i].pos - worldPos);
-        vec3 radiance = uLight.pointLights[i].color * uLight.pointLights[i].intensity / max(dist * dist, 0.0001);
-        float shadow = calculatePointShadow(i, worldPos);
+        float dist = length(uLight.lightInstances[i].pos - worldPos);
+        vec3 radiance = uLight.lightInstances[i].color * uLight.lightInstances[i].intensity / max(dist * dist, 0.0001);
+        if (uLight.lightInstances[i].kind == LightInstanceKind::Spot) {
+            float theta = dot(-L, normalize(uLight.lightInstances[i].spotDir));
+            float epsilon = uLight.lightInstances[i].innerCos - uLight.lightInstances[i].outerCos;
+            radiance *= clamp((theta - uLight.lightInstances[i].outerCos) / epsilon, 0.0, 1.0);
+        }
+        float shadow = calculateLightInstanceShadow(i, worldPos);
 
         float NDF = D_normalDistribution_GGX(N, H, roughness);
         float G = G_geometrySmith(N, V, L, roughness);

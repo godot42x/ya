@@ -29,7 +29,7 @@ struct IImage;
 struct ShadowPreparedView
 {
     uint32_t viewSlot        = RenderViewRecordingContext::kInvalidViewSlot;
-    uint32_t pointLightCount = 0;
+    uint32_t lightInstanceCount = 0;
 
     [[nodiscard]] bool valid() const { return viewSlot != RenderViewRecordingContext::kInvalidViewSlot; }
 };

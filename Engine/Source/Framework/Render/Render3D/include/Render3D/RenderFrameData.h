@@ -385,10 +385,10 @@ struct SceneDirectionalLightData
 
 /// Scene-owned point light data. Shadow matrices are generated for each view
 /// when the pipeline-facing RenderFrameData is prepared.
-struct ScenePointLightData
+struct SceneLightInstanceData
 {
     glm::vec3 position = glm::vec3(0.0f);
-    float     type = 0.0f;
+    uint32_t  kind = 0u;
 
     float constant  = 1.0f;
     float linear    = 0.09f;
@@ -398,8 +398,8 @@ struct ScenePointLightData
     float     intensity = 1.0f;
 
     glm::vec3 spotDir = glm::vec3(0.0f, 0.0f, -1.0f);
-    float     innerCutOff = 0.0f;
-    float     outerCutOff = 0.0f;
+    float     innerCos = 0.0f;
+    float     outerCos = 0.0f;
 
     float nearPlane = 0.1f;
     float farPlane  = 100.0f;
@@ -415,7 +415,7 @@ struct SceneSnapshot
     /// uploads them to a storage buffer sized by the actual count, so there is
     /// no compile-time cap to hit (see LightPass.slang's uPointLights). The
     /// shadow budget picks the first `maxShadowedPointLights` of these.
-    std::vector<ScenePointLightData>                         pointLightSources;
+    std::vector<SceneLightInstanceData>                        lightInstances;
 
     RenderMeshClassDrawBuckets drawBuckets;
     std::vector<RenderSkinningPalette> skinningPalettes;
@@ -427,7 +427,7 @@ struct SceneSnapshot
     {
         bHasDirectionalLight = false;
         directionalLightSource = {};
-        pointLightSources.clear();
+        lightInstances.clear();
         drawBuckets.clear();
         skinningPalettes.clear();
         worldSprites.clear();
@@ -445,11 +445,11 @@ struct RenderFrameData
     /// sprite pass reads it, so recording never walks the Scene's ECS again.
     ViewSpriteBucket                                            worldSprites;
     FrameContext::DirectionalLightData                          directionalLight;
-    /// numPointLights == pointLights.size(): kept as a field because the
-    /// shadow budget math and the forward path read the count alongside the
-    /// per-flight pool's clear().
-    uint32_t                                                   numPointLights = 0;
-    std::vector<FrameContext::PointLightData>                  pointLights;
+    /// numLightInstances == lightInstances.size(): kept as a field because
+    /// the shadow budget math and the forward path read the count alongside
+    /// the per-flight pool's clear().
+    uint32_t                                                   numLightInstances = 0;
+    std::vector<FrameContext::LightInstanceData>               lightInstances;
 
     glm::mat4    view           = glm::mat4(1.0f);
     glm::mat4    projection     = glm::mat4(1.0f);
@@ -479,8 +479,8 @@ struct RenderFrameData
         drawBuckets.clear();
         worldSprites.clear();
         directionalLight = {};
-        numPointLights = 0;
-        pointLights.clear();
+        numLightInstances = 0;
+        lightInstances.clear();
         sceneResources.clear();
     }
 

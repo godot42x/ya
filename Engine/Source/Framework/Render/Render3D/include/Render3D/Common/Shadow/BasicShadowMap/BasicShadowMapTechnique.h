@@ -50,7 +50,7 @@ class BasicShadowMapTechnique : public IShadowTechnique
   private:
     void                    rebuildLayerTextures(const std::shared_ptr<IImage>& shadowImage);
     BasicShadowFramePayload buildFramePayload(uint32_t flightIndex, const RenderFrameData& frameData) const;
-    void                    populatePointShadowMatrices(const RenderFrameData& frameData, FrameUBO& ubo, uint32_t count) const;
+    void                    populateLightInstanceShadowMatrices(const RenderFrameData& frameData, FrameUBO& ubo, uint32_t count) const;
 
     IRender* _render       = nullptr;
     Extent2D _shadowExtent = {.width = 1024, .height = 1024};

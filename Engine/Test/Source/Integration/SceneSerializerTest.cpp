@@ -7,6 +7,7 @@
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Systems/Components/CameraComponent.h"
+#include "ECS/Systems/Components/PointLightComponent.h"
 #include "GameRuntime/Render/SceneCameraQuery.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "ECS/Entity.h"
@@ -483,5 +484,54 @@ TEST(SceneSerializerTest, LoadedCameraViewAndWireframeUseItsAuthoredPose)
 }
 
 // ============================================================================
+TEST(SceneSerializerTest, SpotLightDirectionAndConeAnglesRoundtrip)
+{
+    ensureReflectionReady();
+
+    Scene scene("SpotLightRoundTripScene");
+    auto* node = scene.createNode3D("Spot", scene.getRootNode());
+    ASSERT_NE(node, nullptr);
+    Entity* entity = node->getEntity();
+    ASSERT_NE(entity, nullptr);
+    auto* light = entity->addComponent<PointLightComponent>();
+    ASSERT_NE(light, nullptr);
+    light->_type            = PointLightComponent::Type::Spot;
+    light->_innerConeAngle  = 22.5f;
+    light->_outerConeAngle  = 41.0f;
+    light->intensity        = 3.0f;
+    light->farPlane         = 42.0f;
+    auto* authoredTc = entity->getComponent<TransformComponent>();
+    ASSERT_NE(authoredTc, nullptr);
+    authoredTc->setPosition({1.0f, 5.0f, 2.0f});
+    authoredTc->setRotation({0.0f, 35.0f, 0.0f});
+    // The cone aims where the transform looks: spotDir is derived from the
+    // transform's forward, so the rotation surviving the round trip IS the
+    // direction surviving it. getForward reads the cached world matrix.
+    TransformSystem::computeWorldMatrix(authoredTc);
+    const glm::vec3 authoredForward = authoredTc->getForward();
+
+    SceneSerializer serializer(&scene);
+    const nlohmann::json saved = serializer.serialize();
+
+    Scene         loadedScene("LoadedSpotScene");
+    SceneSerializer loadedSerializer(&loadedScene);
+    loadedSerializer.deserialize(saved);
+
+    Entity* loaded = loadedScene.getEntityByName("Spot");
+    ASSERT_NE(loaded, nullptr);
+    auto* loadedLight = loaded->getComponent<PointLightComponent>();
+    ASSERT_NE(loadedLight, nullptr);
+    EXPECT_EQ(loadedLight->_type, PointLightComponent::Type::Spot);
+    EXPECT_FLOAT_EQ(loadedLight->_innerConeAngle, 22.5f);
+    EXPECT_FLOAT_EQ(loadedLight->_outerConeAngle, 41.0f);
+    EXPECT_FLOAT_EQ(loadedLight->intensity, 3.0f);
+    EXPECT_FLOAT_EQ(loadedLight->farPlane, 42.0f);
+
+    auto* loadedTc = loaded->getComponent<TransformComponent>();
+    ASSERT_NE(loadedTc, nullptr);
+    TransformSystem::computeWorldMatrix(loadedTc);
+    const glm::vec3 loadedForward = loadedTc->getForward();
+    EXPECT_NEAR(glm::length(loadedForward - authoredForward), 0.0f, 1e-4f);
+}
 
 } // namespace ya

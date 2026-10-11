@@ -100,11 +100,11 @@ void PointShadowIndirectRenderer::prepare(const BasicShadowFramePayload& payload
     packet.cullDS          = {};
 
     if (!_bSupported || !payload.pointIndirectRequested() ||
-        !payload.frameData || payload.pointLightCount == 0) {
+        !payload.frameData || payload.lightInstanceCount == 0) {
         return;
     }
     packet.useGpuCull      = payload.pointIndirectCullEnabled();
-    packet.activeFaceCount = payload.pointLightCount * ShadowConstants::FACES_PER_POINT_LIGHT;
+    packet.activeFaceCount = payload.lightInstanceCount * ShadowConstants::FACES_PER_POINT_LIGHT;
 
     std::vector<PointShadowInstanceData> instances;
     if (!collectBatches(payload, instances)) return;
@@ -239,9 +239,9 @@ void PointShadowIndirectRenderer::fillCullDataCompute(const BasicShadowFramePayl
     _cullPass.writeDrawCommandTemplate(packet, cmdTemplates.data(), static_cast<uint32_t>(cmdTemplates.size()));
 
     std::vector<PointShadowFaceFrustum> frustums(faceCount);
-    for (uint32_t light = 0; light < payload.pointLightCount; ++light) {
+    for (uint32_t light = 0; light < payload.lightInstanceCount; ++light) {
         for (uint32_t f = 0; f < ShadowConstants::FACES_PER_POINT_LIGHT; ++f) {
-            const auto planes = extractFrustumPlanes(payload.frameUBO.pointLights[light].matrix[f]);
+            const auto planes = extractFrustumPlanes(payload.frameUBO.lightInstances[light].matrix[f]);
             auto&      fr     = frustums[light * ShadowConstants::FACES_PER_POINT_LIGHT + f];
             for (uint32_t p = 0; p < 6; ++p) fr.planes[p] = planes[p];
         }

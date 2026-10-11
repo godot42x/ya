@@ -1041,7 +1041,7 @@ void DeferredRenderPipeline::beginViewRecording(const RenderPipelineFrameContext
     vpW = frame.view.viewExtent.width;
     vpH = frame.view.viewExtent.height;
 
-    _lastPointLightCount = frame.view.frameData->numPointLights;
+    _lastPointLightCount = frame.view.frameData->numLightInstances;
     _lastDrawCount       = static_cast<uint32_t>(frame.view.frameData->totalDrawCount());
 
     stageCtx = RenderStageContext{

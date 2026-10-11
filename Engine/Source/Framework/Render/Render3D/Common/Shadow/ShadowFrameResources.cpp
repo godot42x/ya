@@ -111,21 +111,21 @@ ShadowFrameResources::ViewPayloads ShadowFrameResources::buildViewPayloads(
     for (uint32_t cascadeIndex = 0; cascadeIndex < payloads.directionalCount; ++cascadeIndex) {
         payloads.directional[cascadeIndex] = DirectionalFrameData{
             .directionalLightMatrix = payload.frameData->directionalLight.cascadeViewProjections[cascadeIndex],
-            .numPointLights         = 0,
+            .numLightInstances      = 0,
             .hasDirectionalLight    = 1u,
         };
     }
 
     payloads.pointFaceCount = payload.pointEnabled()
-        ? payload.pointLightCount * ShadowConstants::FACES_PER_POINT_LIGHT
+        ? payload.lightInstanceCount * ShadowConstants::FACES_PER_POINT_LIGHT
         : 0u;
     for (uint32_t faceGlobalIndex = 0; faceGlobalIndex < payloads.pointFaceCount; ++faceGlobalIndex) {
         const uint32_t lightIndex = faceGlobalIndex / ShadowConstants::FACES_PER_POINT_LIGHT;
         const uint32_t faceIndex  = faceGlobalIndex % ShadowConstants::FACES_PER_POINT_LIGHT;
         payloads.pointFaces[faceGlobalIndex] = PointFaceData{
-            .viewProj = payload.frameUBO.pointLights[lightIndex].matrix[faceIndex],
-            .lightPos = payload.frameUBO.pointLights[lightIndex].pos,
-            .farPlane = payload.frameUBO.pointLights[lightIndex].farPlane,
+            .viewProj = payload.frameUBO.lightInstances[lightIndex].matrix[faceIndex],
+            .lightPos = payload.frameUBO.lightInstances[lightIndex].pos,
+            .farPlane = payload.frameUBO.lightInstances[lightIndex].farPlane,
         };
     }
     return payloads;

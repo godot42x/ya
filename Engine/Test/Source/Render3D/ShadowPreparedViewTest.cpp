@@ -17,10 +17,10 @@ TEST(ShadowPreparedViewTest, DefaultTokenIsInvalid)
     EXPECT_FALSE(ShadowPreparedView{}.valid());
     EXPECT_EQ(ShadowPreparedView{}.viewSlot, RenderViewRecordingContext::kInvalidViewSlot);
 
-    const ShadowPreparedView prepared{.viewSlot = 3, .pointLightCount = 2};
+    const ShadowPreparedView prepared{.viewSlot = 3, .lightInstanceCount = 2};
     EXPECT_TRUE(prepared.valid());
     EXPECT_EQ(prepared.viewSlot, 3u);
-    EXPECT_EQ(prepared.pointLightCount, 2u);
+    EXPECT_EQ(prepared.lightInstanceCount, 2u);
 }
 
 TEST(ShadowPreparedViewTest, UnpreparedViewAppendsNoShadowPasses)

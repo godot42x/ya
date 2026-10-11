@@ -10,7 +10,7 @@ struct PushConstants
 
 [[vk::push_constant]] PushConstants pc;
 
-struct PointLightData
+struct LightInstanceData
 {
     float4x4 matrix[6];
     float3   pos;
@@ -20,8 +20,8 @@ struct PointLightData
 struct FrameData
 {
     float4x4      directionalLightMatrix;
-    PointLightData pointLights[MAX_POINT_LIGHTS];
-    uint           numPointLights;
+    LightInstanceData lightInstances[MAX_POINT_LIGHTS];
+    uint           numLightInstances;
     uint           hasDirectionalLight;
 };
 
@@ -72,7 +72,7 @@ VertexOutput vertMain(VertexInput input)
         output.sv_position = mul(uFrame.directionalLightMatrix, worldPos);
     }
     else {
-        output.sv_position = mul(uFrame.pointLights[0].matrix[0], worldPos);
+        output.sv_position = mul(uFrame.lightInstances[0].matrix[0], worldPos);
     }
 #endif
     return output;
@@ -91,7 +91,7 @@ float fragMain(VertexOutput input) : SV_Depth
     }
 
     // Point shadow: linear distance normalized by far plane
-    float lightDistance = length(input.worldPos.xyz - uFrame.pointLights[0].pos);
-    return lightDistance / uFrame.pointLights[0].farPlane;
+    float lightDistance = length(input.worldPos.xyz - uFrame.lightInstances[0].pos);
+    return lightDistance / uFrame.lightInstances[0].farPlane;
 #endif
 }

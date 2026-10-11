@@ -82,8 +82,38 @@ DeferredFrameResourceSet::LightData DeferredFrameResourceSet::buildLightData(con
         lightData.hasDirLight = 1;
     }
 
-    lightData.numPointLight = frameData.numPointLights;
+    lightData.numLightInstances = frameData.numLightInstances;
     return lightData;
+}
+
+std::vector<DeferredFrameResourceSet::LightInstanceGpu> DeferredFrameResourceSet::buildLightInstanceBuffer(
+    const RenderFrameData& frameData, uint32_t shadowedPointLightBudget, uint32_t* shadowSlotsUsed)
+{
+    std::vector<LightInstanceGpu> lights;
+    lights.reserve(frameData.numLightInstances);
+    uint32_t slotsUsed = 0;
+    for (uint32_t i = 0; i < frameData.numLightInstances; ++i) {
+        const auto& src = frameData.lightInstances[i];
+        auto&       dst = lights.emplace_back();
+        dst.pos       = src.position;
+        dst.color     = src.color;
+        dst.intensity = src.intensity;
+        // Only omni lights inside the shadow budget carry a far plane: it is
+        // the shadow-sampling gate (0 = skip). Spots have no shadow maps this
+        // line (R15c), and lights past the budget shade unshadowed.
+        const bool bOmni     = src.kind == 0u;
+        const bool bShadowed = bOmni && slotsUsed < shadowedPointLightBudget;
+        dst.farPlane  = bShadowed ? src.farPlane : 0.0f;
+        dst.spotDir   = src.spotDir;
+        dst.innerCos  = src.innerCos;
+        dst.outerCos  = src.outerCos;
+        dst.kind      = src.kind;
+        slotsUsed    += bShadowed ? 1u : 0u;
+    }
+    if (shadowSlotsUsed) {
+        *shadowSlotsUsed = slotsUsed;
+    }
+    return lights;
 }
 
 bool DeferredFrameResourceSet::prepareSkinning(
@@ -139,7 +169,7 @@ void DeferredFrameResourceSet::updateFrameAndLightDescriptorSet(const Binding& b
             2,
             0,
             EPipelineDescriptorType::StorageBuffer,
-            {binding.pointLights.descriptor()}),
+            {binding.lightInstances.descriptor()}),
     });
 }
 
@@ -189,17 +219,17 @@ bool DeferredFrameResourceSet::writeViewPayloads(
 
     // The point-light storage buffer: one slice sized by the actual count.
     // Zero lights still binds one zeroed entry -- the shader statically reads
-    // uPointLights, so the binding must exist; numPointLight == 0 means the
-    // shading loop never indexes it.
-    PointLightGpu zero{};
-    const auto*   lightData  = payloads.pointLights.empty() ? &zero : payloads.pointLights.data();
-    const auto    lightCount = payloads.pointLights.empty() ? 1u : static_cast<uint32_t>(payloads.pointLights.size());
-    auto pointLights = writeUploadSlice(
-        arena, flightIndex, alignment, lightData, lightCount * static_cast<uint32_t>(sizeof(PointLightGpu)));
-    if (!pointLights) {
+    // uLightInstances, so the binding must exist; numLightInstances == 0
+    // means the shading loop never indexes it.
+    LightInstanceGpu zero{};
+    const auto*   lightData  = payloads.lightInstances.empty() ? &zero : payloads.lightInstances.data();
+    const auto    lightCount = payloads.lightInstances.empty() ? 1u : static_cast<uint32_t>(payloads.lightInstances.size());
+    auto lightInstanceSlice = writeUploadSlice(
+        arena, flightIndex, alignment, lightData, lightCount * static_cast<uint32_t>(sizeof(LightInstanceGpu)));
+    if (!lightInstanceSlice) {
         return false;
     }
-    binding.pointLights = *pointLights;
+    binding.lightInstances = *lightInstanceSlice;
 
     if (payloads.ssao) {
         auto ssaoFrame = writeUploadSlice(
@@ -239,15 +269,15 @@ bool DeferredFrameResourceSet::writeViewPayloads(
     binding.frame = *frame;
     binding.light = *light;
 
-    PointLightGpu zero{};
-    const auto*   lightData  = payloads.pointLights.empty() ? &zero : payloads.pointLights.data();
-    const auto    lightCount = payloads.pointLights.empty() ? 1u : static_cast<uint32_t>(payloads.pointLights.size());
-    auto pointLights = writeUploadSlice(
-        submission, alignment, lightData, lightCount * static_cast<uint32_t>(sizeof(PointLightGpu)));
-    if (!pointLights) {
+    LightInstanceGpu zero{};
+    const auto*   lightData  = payloads.lightInstances.empty() ? &zero : payloads.lightInstances.data();
+    const auto    lightCount = payloads.lightInstances.empty() ? 1u : static_cast<uint32_t>(payloads.lightInstances.size());
+    auto lightInstanceSlice = writeUploadSlice(
+        submission, alignment, lightData, lightCount * static_cast<uint32_t>(sizeof(LightInstanceGpu)));
+    if (!lightInstanceSlice) {
         return false;
     }
-    binding.pointLights = *pointLights;
+    binding.lightInstances = *lightInstanceSlice;
 
     if (payloads.ssao) {
         auto ssaoFrame = writeUploadSlice(submission, alignment, payloads.ssao, sizeof(*payloads.ssao));
@@ -313,12 +343,12 @@ const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
         .projMatrix = view.frameData->projection,
     };
     payloads.light  = buildLightData(*view.frameData);
-    payloads.pointLights = std::span{
-        reinterpret_cast<const DeferredFrameResourceSet::PointLightGpu*>(view.frameData->pointLights.data()),
-        view.frameData->pointLights.size()};
+    uint32_t shadowSlotsUsed = 0;
+    payloads.lightInstances = buildLightInstanceBuffer(
+        *view.frameData, _shadowState.maxShadowedPointLights, &shadowSlotsUsed);
     payloads.ssao   = ssao;
     payloads.skybox = skybox;
-    _lastShadowedPointLights = std::min(_shadowState.maxShadowedPointLights, view.frameData->numPointLights);
+    _lastShadowedPointLights = shadowSlotsUsed;
 
     const uint32_t alignment = std::max(_render->getUniformBufferOffsetAlignment(), 1u);
     if (!writeViewPayloads(submission, alignment, payloads, slot->frame)) {

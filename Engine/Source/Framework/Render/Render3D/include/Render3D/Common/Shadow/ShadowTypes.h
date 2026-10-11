@@ -46,7 +46,7 @@ using PointShadowCullPushConstant = slang_types::Shadow::PointShadowCull_comp::P
 //   • batch     — index into PointShadowIndirectRenderer::_meshBatches
 //                 (= which mesh group this draw belongs to)
 //   • face      — global face index = lightIndex * 6 + cubeFace
-//   • faceCount = pointLightCount * 6   (active faces this frame)
+//   • faceCount = lightInstanceCount * 6   (active faces this frame)
 //
 // Layout per (batch, face) bucket:
 //

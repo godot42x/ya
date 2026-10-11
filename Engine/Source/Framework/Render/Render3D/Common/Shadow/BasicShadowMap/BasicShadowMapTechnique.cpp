@@ -88,7 +88,7 @@ ShadowPreparedView BasicShadowMapTechnique::prepare(RenderSubmission&           
 
     return ShadowPreparedView{
         .viewSlot        = view.viewSlot,
-        .pointLightCount = payload.pointLightCount,
+        .lightInstanceCount = payload.lightInstanceCount,
     };
 }
 
@@ -108,7 +108,7 @@ ShadowGraphOutputs BasicShadowMapTechnique::appendGraphPasses(
     payload.viewSlot = prepared.viewSlot;
     // Already clamped when it was prepared, and it is the count the View's
     // resources were actually built for, not a recomputation.
-    payload.pointLightCount = prepared.pointLightCount;
+    payload.lightInstanceCount = prepared.lightInstanceCount;
     if (auto* binding = _frameResources.mutableViewBinding(flightIndex, prepared.viewSlot)) {
         payload.pointShadow = &binding->pointShadow;
     }
@@ -203,8 +203,8 @@ void BasicShadowMapTechnique::rebuildLayerTextures(const std::shared_ptr<IImage>
 BasicShadowFramePayload BasicShadowMapTechnique::buildFramePayload(uint32_t flightIndex, const RenderFrameData& frameData) const
 {
     YA_PROFILE_FUNCTION();
-    const uint32_t pointLightCount = std::min(
-        frameData.numPointLights,
+    const uint32_t lightInstanceCount = std::min(
+        frameData.numLightInstances,
         _settings.getEffectivePointLightCount());
 
     BasicShadowFramePayload payload{
@@ -213,22 +213,22 @@ BasicShadowFramePayload BasicShadowMapTechnique::buildFramePayload(uint32_t flig
         .settings    = &_settings,
         .frameUBO    = FrameUBO{
             .directionalLightMatrix = frameData.directionalLight.viewProjection,
-            .numPointLights         = pointLightCount,
+            .numLightInstances      = lightInstanceCount,
             .hasDirectionalLight    = frameData.sceneSnapshot && frameData.sceneSnapshot->bHasDirectionalLight ? 1u : 0u,
         },
-        .pointLightCount = pointLightCount,
+        .lightInstanceCount = lightInstanceCount,
     };
-    populatePointShadowMatrices(frameData, payload.frameUBO, pointLightCount);
+    populateLightInstanceShadowMatrices(frameData, payload.frameUBO, lightInstanceCount);
     return payload;
 }
 
-void BasicShadowMapTechnique::populatePointShadowMatrices(const RenderFrameData& frameData, FrameUBO& frameDataUBO, uint32_t pointLightCount) const
+void BasicShadowMapTechnique::populateLightInstanceShadowMatrices(const RenderFrameData& frameData, FrameUBO& frameDataUBO, uint32_t lightInstanceCount) const
 {
     YA_PROFILE_FUNCTION();
-    for (uint32_t i = 0; i < pointLightCount; ++i) {
-        const auto&      pointLight = frameData.pointLights[i];
-        const glm::vec3& pos        = pointLight.position;
-        const glm::mat4  faceProj   = FMath::perspective(glm::radians(90.0f), 1.0f, pointLight.nearPlane, pointLight.farPlane);
+    for (uint32_t i = 0; i < lightInstanceCount; ++i) {
+        const auto&      instance = frameData.lightInstances[i];
+        const glm::vec3& pos      = instance.position;
+        const glm::mat4  faceProj = FMath::perspective(glm::radians(90.0f), 1.0f, instance.nearPlane, instance.farPlane);
 
         for (int face = ECubeFace::CubeFace_PosX; face < ECubeFace::CubeFace_Count; ++face) {
             glm::mat4       view{};
@@ -247,9 +247,9 @@ void BasicShadowMapTechnique::populatePointShadowMatrices(const RenderFrameData&
                 }
             }
 
-            frameDataUBO.pointLights[i].matrix[face] = faceProj * view;
-            frameDataUBO.pointLights[i].pos          = pos;
-            frameDataUBO.pointLights[i].farPlane     = pointLight.farPlane;
+            frameDataUBO.lightInstances[i].matrix[face] = faceProj * view;
+            frameDataUBO.lightInstances[i].pos          = pos;
+            frameDataUBO.lightInstances[i].farPlane     = instance.farPlane;
         }
     }
 }

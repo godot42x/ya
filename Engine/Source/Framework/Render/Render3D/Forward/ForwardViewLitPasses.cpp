@@ -707,18 +707,22 @@ void ForwardViewLitPasses::fillPBRLightFromFrameData(const RenderFrameData& fd,
     // The forward shader's ring stays at MAX_POINT_LIGHTS: the deferred path
     // owns the unbounded storage buffer, and frameData now carries as many
     // lights as the scene has.
-    outLight.numPointLight                  = std::min<uint32_t>(fd.numPointLights, MAX_POINT_LIGHTS);
+    outLight.numLightInstances                  = std::min<uint32_t>(fd.numLightInstances, MAX_POINT_LIGHTS);
     const uint32_t shadowedPointLightBudget = _shadowState.bEnablePointLightShadow
-        ? std::min(_shadowState.maxShadowedPointLights, outLight.numPointLight)
+        ? std::min(_shadowState.maxShadowedPointLights, outLight.numLightInstances)
         : 0u;
-    for (uint32_t i = 0; i < outLight.numPointLight; ++i) {
-        const auto& src = fd.pointLights[i];
-        auto&       dst = outLight.pointLights[i];
+    for (uint32_t i = 0; i < outLight.numLightInstances; ++i) {
+        const auto& src = fd.lightInstances[i];
+        auto&       dst = outLight.lightInstances[i];
         dst             = {};
         dst.pos         = src.position;
         dst.color       = src.color;
         dst.intensity   = src.intensity;
         dst.farPlane    = i < shadowedPointLightBudget ? src.farPlane : 0.0f;
+        dst.spotDir     = src.spotDir;
+        dst.innerCos    = src.innerCos;
+        dst.outerCos    = src.outerCos;
+        dst.kind        = src.kind;
     }
 }
 
@@ -737,12 +741,12 @@ void ForwardViewLitPasses::fillPhongLightFromFrameData(const RenderFrameData& fd
         }
     }
 
-    outLight.numPointLights = std::min<uint32_t>(fd.numPointLights, MAX_POINT_LIGHTS);
-    for (uint32_t i = 0; i < outLight.numPointLights; ++i) {
-        const auto& pl  = fd.pointLights[i];
-        auto&       dst = outLight.pointLights[i];
+    outLight.numLightInstances = std::min<uint32_t>(fd.numLightInstances, MAX_POINT_LIGHTS);
+    for (uint32_t i = 0; i < outLight.numLightInstances; ++i) {
+        const auto& pl  = fd.lightInstances[i];
+        auto&       dst = outLight.lightInstances[i];
         dst             = {};
-        dst.type        = pl.type;
+        dst.kind        = pl.kind;
         dst.constant    = pl.constant;
         dst.linear      = pl.linear;
         dst.quadratic   = pl.quadratic;
@@ -752,8 +756,8 @@ void ForwardViewLitPasses::fillPhongLightFromFrameData(const RenderFrameData& fd
         dst.nearPlane   = pl.nearPlane;
         dst.farPlane    = pl.farPlane;
         dst.spotDir     = pl.spotDir;
-        dst.innerCutOff = pl.innerCutOff;
-        dst.outerCutOff = pl.outerCutOff;
+        dst.innerCos = pl.innerCos;
+        dst.outerCos = pl.outerCos;
     }
 }
 

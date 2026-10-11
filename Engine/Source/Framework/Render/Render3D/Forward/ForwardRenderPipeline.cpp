@@ -488,10 +488,10 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
             branch.postContext.directionalLight     = frameData->directionalLight;
             // FrameContext keeps the forward 6-light ring; frameData now
             // carries the scene's full (deferred-budget) light list.
-            branch.postContext.numPointLights       = std::min<uint32_t>(frameData->numPointLights, MAX_POINT_LIGHTS);
-            std::copy_n(frameData->pointLights.begin(),
-                        branch.postContext.numPointLights,
-                        branch.postContext.pointLights.begin());
+            branch.postContext.numLightInstances    = std::min<uint32_t>(frameData->numLightInstances, MAX_POINT_LIGHTS);
+            std::copy_n(frameData->lightInstances.begin(),
+                        branch.postContext.numLightInstances,
+                        branch.postContext.lightInstances.begin());
             branch.postContext.viewOwner            = frameData->viewOwner;
             branch.postContext.extent               = frameData->viewExtent;
         }

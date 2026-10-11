@@ -13,7 +13,17 @@
     },
     {
       "id": "R15b",
-      "title": "Spot light component + cone shading",
+      "title": "Spot lights shade in both pipelines; LocalLight naming; serialization round-trip",
+      "status": "pass",
+      "evidence": [
+        "LightPass.slang / PBRForward.slang / PhongLit.slang: LocalLight struct, uint kind",
+        "SceneSerializerTest.SpotLightDirectionAndConeAnglesRoundtrip",
+        "evidence/spotlights_deferred.png vs spotlights_forward.png (md5-verified pipeline switch)"
+      ]
+    },
+    {
+      "id": "R15c",
+      "title": "Spot light shadow maps (after R2; G3.9 depends on it)",
       "status": "todo",
       "evidence": []
     },
