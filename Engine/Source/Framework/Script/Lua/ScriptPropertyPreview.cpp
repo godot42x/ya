@@ -2,8 +2,11 @@
 
 #include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "Scene/Core/GameMounts.h"
 #include "Script/Lua/LuaScriptBinding.h"
 #include "Script/Lua/LuaScriptingSystem.h"
+
+#include <algorithm>
 
 namespace ya
 {
@@ -30,11 +33,28 @@ struct ScriptPropertyPreview final : IScriptPropertyPreview
         _lua["IS_EDITOR"]  = true;
         _lua["IS_RUNTIME"] = false;
 
+        // The project script root, resolved from the VFS the way the runtime
+        // world-script state does (see LuaScriptingSystem): a cwd-relative
+        // './Content/Scripts' only works for processes launched from a project
+        // directory, and the editor is not one.
+        std::string projectScriptRoot;
+        if (VirtualFileSystem* vfs = VirtualFileSystem::get()) {
+            if (const auto contentRoot = vfs->getMountPoint(game::mounts::Content); contentRoot.has_value()) {
+                projectScriptRoot = (*contentRoot / "Scripts").lexically_normal().string();
+                std::replace(projectScriptRoot.begin(), projectScriptRoot.end(), '\\', '/');
+            }
+        }
+        _lua["YA_PROJECT_SCRIPT_ROOT"] = projectScriptRoot;
+
         _lua.script(R"(
         package.path = package.path .. ';./Engine/Content/Lua/?.lua'
         package.path = package.path .. ';./Engine/Content/Lua/?/init.lua'
         package.path = package.path .. ';./Content/Scripts/?.lua'
         package.path = package.path .. ';./Content/Scripts/?/init.lua'
+        if YA_PROJECT_SCRIPT_ROOT ~= nil and YA_PROJECT_SCRIPT_ROOT ~= '' then
+            package.path = package.path .. ';' .. YA_PROJECT_SCRIPT_ROOT .. '/?.lua'
+            package.path = package.path .. ';' .. YA_PROJECT_SCRIPT_ROOT .. '/?/init.lua'
+        end
     )");
 
         registerLuaScriptBindings(_lua);
