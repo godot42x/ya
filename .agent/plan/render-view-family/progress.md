@@ -1361,3 +1361,7 @@ FIF=2 首轮基准抓到真回归：轻场景全过，`Meshes_10000` 三连 900s
 
 - 测试：`ya-testing` 全量 1772 过（同前，2 例预存内容失败除外）；surface 套件 `RHISurfaceContext*` 24/24。
 - 待办遗留：`TestSurface.h` 的 stand-in 实现同步改签名。
+
+### R1 归因修正（同日，A/B 数字收口）
+
+本条目早前写的「FIF=2 首轮基准抓到真回归」**归因错误**，三轮假象的完整链条：validation 层开销（旧编译开关常开，~20×）→ 旧实例单实例锁（bench 脚本自身的 900s 超时子进程占锁）→ **M8 分配钩子放大 MoltenVK 每-cmd 分配（~20×，与 FIF 无关，且基线 commit 早于钩子落库故不可比）**。`Meshes_10000` 在 FIF=1+钩子 下同样超时，FIF 本身无回归。per-image 信号量改 per-slot（cee44ae1）因此改为按规范正确性成立（vulkan-tutorial 标准 FIF 结构、消除 spec 级重-signal 危害），不作为观测回归的修复记录。干净 A/B 数字与口径见 `../perf-baseline/progress.md` 同日条目：可测四场景 frame p50 **-24.5%~-39.8%**。验证层模式契约见 100ae306。

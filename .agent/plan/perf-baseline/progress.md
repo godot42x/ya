@@ -189,3 +189,30 @@ PB6 的基线已入库，但复查发现三处问题，都在「这份基线本�
 - 验证：全量构建通过；`xmake r -g test` **3369/3369 通过 0 失败**（`ya-testing` 1784，新增 17 个 allocator 用例）；profile worktree 全量构建通过 + PerfLab Lights_50 基准实跑出 `heap.*` 全套。
 - 帧时间 8.758 ms vs 已入库基线 8.384 ms：不同提交、且当时机器有并发构建（本项目实测并发构建能让同一场景 frame p50 差 87%），**不作为性能回归判断**，只作「能跑通、数量级合理」的证据；要比必须在同一提交、机器空闲时重采。
 - 剩余：三个子系统桶恒为 0（机制已测但还没在任何子系统入口打 `YA_MEMORY_OWNER`，所以没有真实归属数据）；Windows 未编译；这层在 profile 下的开销未量化。
+
+## 2026-10-11 — PB7 GUI 基准
+
+- GUIWorkbench 接上 PB1 的汇总器，不经过 GameRuntime。命令：`GUIWorkbench --benchmark Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json`。
+- summary 段与游戏基准相同。`process_memory` 与 `gpu_memory` 分列；Apple Silicon 上 `unifiedMemory` 为 true。GUI 合成没有 render graph pass，所以 `gpu_passes` 为空，`render_counters` 记的是 2D 批次。
+- 窗口缩放的 `requestRecreate()` 会把已经排队的 present mode 盖回旧的 `_ci`。Mailbox 在这台机器上不可用，于是基准落成 FIFO、帧时间贴在刷新率上。已排队的 CI 现在保留。
+- 验证见 showcase-roadmap 同日 GA3 条目。短窗数字只说明管线通了，不是 profile 基线。
+## 2026-10-11 — R1 A/B 数字 + 两个环境发现（分配钩子 / validation）
+
+`render-view-family` R1（FIF 1→2，`327e9e30` + `cee44ae1` + `100ae306`）的同构建 A/B：数字与口径见
+`baselines/macos/profile-100ae306-fifAB/README.md`——可测四场景 frame p50 **-24.5%~-39.8%**
+（Lights_500 收益最大，符合"GPU 越接近 CPU，重叠收益越大"）。
+
+过程中两个影响所有后续基准的发现：
+
+1. **全局分配钩子让重 draw 场景不可基准化**：M8 的 profile 计数分配器（5fc2a91fa）把
+   MoltenVK 每次 `vkCmd*` 的内部分配也路由进记账，`Meshes_10000`（1 万 draw/帧）被放大
+   ~20×——FIF=1 与 FIF=2 双侧都在 900s 超时，纯钩子成本，与场景改动无关。旧基线
+   `profile-15277c00` 的 commit 早于钩子落库，**与其对比无效**（这也解释了 PB6 里
+   "点光源梯度截断"之后这轮复核时重场景的读数不可信）。新待办：钩子加基准开关
+   （默认关，仅内存剖析任务显式开），否则 R 线的重场景数字全部被钩子噪声淹没。
+2. **validation 层曾无条件编译开关**：`m_EnableValidationLayers` 硬编码 true，profile
+   构建在 loader 找得到层时逐 draw 校验（同样 ~20× 量级）。已改为按构建模式（`100ae306`）：
+   debug 开，releasedbg/profile/release 默认关。
+
+另：bench A/B 期间三次"挂死"假象的完整归因链（validation 开销 → 旧实例占锁 → 钩子开销）
+记在 `../render-view-family/progress.md` 的 R1 条目，避免后人重走。

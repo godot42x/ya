@@ -1,0 +1,282 @@
+{
+  "project": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/PerfLab.yaproject",
+  "repeat": 3,
+  "runs": [
+    {
+      "ok": true,
+      "seconds": 7.4,
+      "commit": "cee44ae1fc6dcd2ab24a55831b9681945f9a5e47",
+      "dirty": true,
+      "frameP50": 8.337645530700684,
+      "scene": "Lights_200",
+      "run": 1,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Lights_200.bench.json",
+      "path": "Lights_200/run1/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.99,
+      "commit": "cee44ae1fc6dcd2ab24a55831b9681945f9a5e47",
+      "dirty": true,
+      "frameP50": 7.82410454750061,
+      "scene": "Lights_200",
+      "run": 2,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Lights_200.bench.json",
+      "path": "Lights_200/run2/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.98,
+      "commit": "cee44ae1fc6dcd2ab24a55831b9681945f9a5e47",
+      "dirty": true,
+      "frameP50": 7.379270553588867,
+      "scene": "Lights_200",
+      "run": 3,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Lights_200.bench.json",
+      "path": "Lights_200/run3/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.93,
+      "commit": "cee44ae1fc6dcd2ab24a55831b9681945f9a5e47",
+      "dirty": true,
+      "frameP50": 8.816916465759277,
+      "scene": "Lights_50",
+      "run": 1,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Lights_50.bench.json",
+      "path": "Lights_50/run1/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 6.95,
+      "commit": "cee44ae1fc6dcd2ab24a55831b9681945f9a5e47",
+      "dirty": true,
+      "frameP50": 8.02443790435791,
+      "scene": "Lights_50",
+      "run": 2,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Lights_50.bench.json",
+      "path": "Lights_50/run2/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 7.01,
+      "commit": "cee44ae1fc6dcd2ab24a55831b9681945f9a5e47",
+      "dirty": true,
+      "frameP50": 8.848958492279053,
+      "scene": "Lights_50",
+      "run": 3,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Lights_50.bench.json",
+      "path": "Lights_50/run3/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 7.47,
+      "commit": "cee44ae1fc6dcd2ab24a55831b9681945f9a5e47",
+      "dirty": true,
+      "frameP50": 9.260416507720947,
+      "scene": "Lights_500",
+      "run": 1,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Lights_500.bench.json",
+      "path": "Lights_500/run1/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 7.37,
+      "commit": "cee44ae1fc6dcd2ab24a55831b9681945f9a5e47",
+      "dirty": true,
+      "frameP50": 8.513916492462158,
+      "scene": "Lights_500",
+      "run": 2,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Lights_500.bench.json",
+      "path": "Lights_500/run2/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 7.49,
+      "commit": "cee44ae1fc6dcd2ab24a55831b9681945f9a5e47",
+      "dirty": true,
+      "frameP50": 8.732541561126709,
+      "scene": "Lights_500",
+      "run": 3,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Lights_500.bench.json",
+      "path": "Lights_500/run3/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 8.38,
+      "commit": "cee44ae1fc6dcd2ab24a55831b9681945f9a5e47",
+      "dirty": true,
+      "frameP50": 10.20437479019165,
+      "scene": "Meshes_1000",
+      "run": 1,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Meshes_1000.bench.json",
+      "path": "Meshes_1000/run1/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 8.49,
+      "commit": "cee44ae1fc6dcd2ab24a55831b9681945f9a5e47",
+      "dirty": true,
+      "frameP50": 9.064812183380127,
+      "scene": "Meshes_1000",
+      "run": 2,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Meshes_1000.bench.json",
+      "path": "Meshes_1000/run2/bench_summary.json"
+    },
+    {
+      "ok": true,
+      "seconds": 10.74,
+      "commit": "cee44ae1fc6dcd2ab24a55831b9681945f9a5e47",
+      "dirty": true,
+      "frameP50": 13.847146034240723,
+      "scene": "Meshes_1000",
+      "run": 3,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Meshes_1000.bench.json",
+      "path": "Meshes_1000/run3/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "timed out after 900s",
+      "scene": "Meshes_10000",
+      "run": 1,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Meshes_10000.bench.json",
+      "path": "Meshes_10000/run1/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "timed out after 900s",
+      "scene": "Meshes_10000",
+      "run": 2,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Meshes_10000.bench.json",
+      "path": "Meshes_10000/run2/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Meshes_10000",
+      "run": 3,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Meshes_10000.bench.json",
+      "path": "Meshes_10000/run3/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Meshes_5000",
+      "run": 1,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Meshes_5000.bench.json",
+      "path": "Meshes_5000/run1/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Meshes_5000",
+      "run": 2,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Meshes_5000.bench.json",
+      "path": "Meshes_5000/run2/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Meshes_5000",
+      "run": 3,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Meshes_5000.bench.json",
+      "path": "Meshes_5000/run3/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Sponza",
+      "run": 1,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Sponza.bench.json",
+      "path": "Sponza/run1/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Sponza",
+      "run": 2,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Sponza.bench.json",
+      "path": "Sponza/run2/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Sponza",
+      "run": 3,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Sponza.bench.json",
+      "path": "Sponza/run3/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Sprites_2000",
+      "run": 1,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Sprites_2000.bench.json",
+      "path": "Sprites_2000/run1/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Sprites_2000",
+      "run": 2,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Sprites_2000.bench.json",
+      "path": "Sprites_2000/run2/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Sprites_2000",
+      "run": 3,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Sprites_2000.bench.json",
+      "path": "Sprites_2000/run3/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Sprites_500",
+      "run": 1,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Sprites_500.bench.json",
+      "path": "Sprites_500/run1/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Sprites_500",
+      "run": 2,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Sprites_500.bench.json",
+      "path": "Sprites_500/run2/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Sprites_500",
+      "run": 3,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Sprites_500.bench.json",
+      "path": "Sprites_500/run3/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Sprites_5000",
+      "run": 1,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Sprites_5000.bench.json",
+      "path": "Sprites_5000/run1/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit -9; no summary\n",
+      "scene": "Sprites_5000",
+      "run": 2,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Sprites_5000.bench.json",
+      "path": "Sprites_5000/run2/bench_summary.json"
+    },
+    {
+      "ok": false,
+      "error": "exit 1; no summary\n",
+      "scene": "Sprites_5000",
+      "run": 3,
+      "config": "/Users/mark/1/craft/ya-r1-bench/Example/PerfLab/Benchmark/Sprites_5000.bench.json",
+      "path": "Sprites_5000/run3/bench_summary.json"
+    }
+  ]
+}
