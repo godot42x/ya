@@ -73,10 +73,11 @@ struct UIFrameBuildContext
     /// Pending — this lambda cannot express Failed.
     std::function<std::shared_ptr<Texture>(const std::string& assetPath)> textureResolver;
 
-    /// Authoring-canvas ghost. When > 0, a widget whose visibility excludes it
-    /// from rendering still paints, wrapped in this opacity (designer canvas:
-    /// a Hidden root must read as a dimmed preview, not a blank frame).
-    /// Collapsed stays unpainted even then -- it has no layout rect to ghost.
+    /// Authoring-canvas opt-in. When > 0, a widget whose visibility excludes
+    /// it from rendering still paints, wrapped in this opacity. The designer
+    /// passes 1: visibility is a runtime fact there, the canvas edits the
+    /// shown state, and the per-node display toggle is the editor's own hide.
+    /// Collapsed stays unpainted even then -- it has no layout rect to paint.
     /// 0 keeps runtime semantics (skip render entirely).
     float ghostInvisibleOpacity = 0.0f;
 

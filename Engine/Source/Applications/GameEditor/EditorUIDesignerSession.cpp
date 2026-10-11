@@ -433,9 +433,11 @@ UIFrameSnapshot EditorUIDesignerSession::buildPreviewSnapshot(const glm::vec2& u
     UIFrameBuildContext ctx;
     ctx.uiScale = uiScale;
     ctx.offset  = offset;
-    // Authoring canvas: a document whose root (or any subtree) ships Hidden is
-    // shown dimmed, not blanked -- the runtime hides it, the designer edits it.
-    ctx.ghostInvisibleOpacity = kDesignerGhostOpacity;
+    // Visibility is a runtime fact: the canvas edits the shown state, so
+    // widgets the runtime would skip (a Hidden root -- a dialogue box the
+    // game's script summons, say) preview at full opacity. The tree-row eye
+    // is the editor's own hide; runtime hosts keep the opacity at 0 and skip.
+    ctx.ghostInvisibleOpacity = 1.0f;
     // The tree's eye: presenter-owned display toggles prune whole subtrees.
     ctx.subtreePaintFilter = [this](const UIElement& widget) {
         const std::optional<std::vector<size_t>> path = childPathOf(&widget);

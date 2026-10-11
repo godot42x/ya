@@ -1,6 +1,7 @@
-// Designer-preview ghost contract: widgets the runtime would not render still
-// paint in the designer's preview (dimmed), so a document that ships Hidden
-// reads as a preview instead of a blank canvas. Runtime contexts keep the skip.
+// Designer-preview visibility contract: visibility is a runtime fact, so the
+// designer's canvas edits the shown state -- widgets the runtime would skip
+// still paint, at full opacity, and the tree-row eye is the editor's own hide.
+// Runtime contexts keep the skip.
 
 #include "GameEditor/EditorUIDesignerSession.h"
 #include "GameEditor/EditorLayer.h"
@@ -26,7 +27,7 @@ struct FDesignerFixture
     UIDocumentStore        uiDocuments;
     EditorLayer            layer{nullptr};
 
-    static constexpr std::string_view kDocumentPath = "Test/UI/Ghost.yaui";
+    static constexpr std::string_view kDocumentPath = "Test/UI/Preview.yaui";
 
     FDesignerFixture() { layer.bindDocumentServices(&documents, &uiDocuments); }
 
@@ -36,7 +37,7 @@ struct FDesignerFixture
     }
 };
 
-TEST(EditorUIDesignerGhostTest, HiddenRootStillPaintsInTheDesignerPreview)
+TEST(EditorUIDesignerPreviewTest, HiddenRootStillPaintsInTheDesignerPreview)
 {
     auto& registry = UITypeRegistry::instance();
     auto  root     = registry.createInstance(kTypeIdCanvasPanel);
@@ -57,6 +58,36 @@ TEST(EditorUIDesignerGhostTest, HiddenRootStillPaintsInTheDesignerPreview)
     designer.openDocument(FDesignerFixture::kDocumentPath);
     ASSERT_TRUE(designer.hasDocument());
 
+    // Reference alpha: the same border painted out of a Visible root -- the
+    // shown state the canvas must reproduce, whatever the style's own alpha
+    // is.
+    auto visibleRoot = registry.createInstance(kTypeIdCanvasPanel);
+    visibleRoot->_name = "Visible";
+    auto visibleBorder = registry.createInstance(kTypeIdBorder);
+    visibleBorder->_name = "Box";
+    visibleRoot->addDetachedChild(visibleBorder, [](UIElement&, UISlot& edge) {
+        FCanvasSlotArgs args;
+        args.offset    = {20.0f, 30.0f};
+        args.fixedSize = {80.0f, 40.0f};
+        edge.as<UICanvasSlot>()->apply(args);
+    });
+    WidgetTree referenceTree(Extent2D{160u, 120u});
+    FCanvasSlotArgs referenceSlot;
+    referenceSlot.anchorMin = {0.0f, 0.0f};
+    referenceSlot.anchorMax = {1.0f, 1.0f};
+   (void)referenceTree.attachToLayer(WidgetTree::ELayer::Content, visibleRoot, referenceSlot);
+    UIFrameBuildContext referenceCtx;
+    referenceCtx.uiScale = {1.0f, 1.0f};
+    const UIFrameSnapshot reference = referenceTree.buildSnapshot(referenceCtx);
+    float visibleAlpha = -1.0f;
+    for (const UIFrameDrawItem& item : reference.items) {
+        if (item.kind == UIFrameDrawItem::EKind::Sprite && item.pos == glm::vec2(20.0f, 30.0f) &&
+            item.size == glm::vec2(80.0f, 40.0f)) {
+            visibleAlpha = item.color.a;
+        }
+    }
+    ASSERT_GT(visibleAlpha, 0.0f);
+
     const UIFrameSnapshot snapshot = designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
     ASSERT_FALSE(snapshot.items.empty());
     bool bFoundBorderRect = false;
@@ -64,14 +95,15 @@ TEST(EditorUIDesignerGhostTest, HiddenRootStillPaintsInTheDesignerPreview)
         if (item.kind == UIFrameDrawItem::EKind::Sprite && item.pos == glm::vec2(20.0f, 30.0f) &&
             item.size == glm::vec2(80.0f, 40.0f)) {
             bFoundBorderRect = true;
-            // Ghosted, not full opacity: the dimmed read is the point.
-            EXPECT_LT(item.color.a, 1.0f);
+            // The shown state: the Hidden root paints exactly what a Visible
+            // one paints, not a dimmed ghost.
+            EXPECT_FLOAT_EQ(item.color.a, visibleAlpha);
         }
     }
     EXPECT_TRUE(bFoundBorderRect);
 }
 
-TEST(EditorUIDesignerGhostTest, RuntimeBuildContextKeepsSkippingHiddenWidgets)
+TEST(EditorUIDesignerPreviewTest, RuntimeBuildContextKeepsSkippingHiddenWidgets)
 {
     auto& registry = UITypeRegistry::instance();
     auto  root     = registry.createInstance(kTypeIdCanvasPanel);
@@ -96,17 +128,17 @@ TEST(EditorUIDesignerGhostTest, RuntimeBuildContextKeepsSkippingHiddenWidgets)
     const UIFrameSnapshot snapshot = tree.buildSnapshot(ctx);
     EXPECT_TRUE(snapshot.items.empty());
 
-    // The designer opt-in paints the same tree.
-    ctx.ghostInvisibleOpacity = 0.35f;
-    const UIFrameSnapshot ghosted = tree.buildSnapshot(ctx);
-    EXPECT_FALSE(ghosted.items.empty());
+    // The designer opt-in paints the same tree, at the shown state.
+    ctx.ghostInvisibleOpacity = 1.0f;
+    const UIFrameSnapshot preview = tree.buildSnapshot(ctx);
+    EXPECT_FALSE(preview.items.empty());
 }
 
 // The tree's eye: presenter-owned display toggles prune whole subtrees from
 // the canvas preview only. Runtime visibility is untouched, and the toggles
 // reset when the preview is rebuilt or structurally edited (child paths are
 // positional).
-TEST(EditorUIDesignerGhostTest, DesignerDisplayTogglePrunesPreviewSubtreeOnly)
+TEST(EditorUIDesignerPreviewTest, DesignerDisplayTogglePrunesPreviewSubtreeOnly)
 {
     auto& registry = UITypeRegistry::instance();
     auto  root     = registry.createInstance(kTypeIdCanvasPanel);

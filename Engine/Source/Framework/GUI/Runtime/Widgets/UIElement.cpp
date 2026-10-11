@@ -356,11 +356,11 @@ void UIElement::paint(UIFrameBuilder& builder)
     paintContent(builder);
 }
 
-/// Authoring-canvas ghost: a Hidden widget keeps its layout rect, so the
-/// designer can show it dimmed instead of painting nothing (a Hidden document
-/// root would otherwise blank the whole preview). Collapsed has no layout
-/// space and therefore no rect worth ghosting. Runtime hosts leave the ghost
-/// opacity at 0 and keep the plain skip.
+/// Authoring-canvas opt-in: a Hidden widget keeps its layout rect, so a
+/// designer passing a non-zero opacity previews it (the canvas edits the
+/// shown state -- see EditorUIDesignerSession::buildPreviewSnapshot).
+/// Collapsed has no layout space and therefore no rect worth painting.
+/// Runtime hosts leave the opacity at 0 and keep the plain skip.
 void UIElement::paintGhost(UIFrameBuilder& builder)
 {
     const float ghostOpacity = builder.ghostInvisibleOpacity();

@@ -80,7 +80,7 @@ if get_config("ya_profile") ~= "gui" then
         -- Windowed suites create real OS windows (dock bounce, focus grabs);
         -- they run deliberately through the `test-windowed` group, not in the
         -- routine windowless sweep.
-        del_files("./Source/Windowed/*.cpp")
+        remove_files("./Source/Windowed/*.cpp")
         add_includedirs("./Source/Support")
 
         add_deps("ya-engine", "ya-module-fixture", "ya-game-editor")
