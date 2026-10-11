@@ -20,8 +20,11 @@
       "priority": "P0",
       "title": "B2 leftover debts (8 items)",
       "owner_line": "rpg-prototype",
-      "status": "in_progress",
-      "evidence": []
+      "status": "done",
+      "evidence": [
+        "cf8c9f1f [script] B2 debts: native method first-wins, shared component JSON, scoped lua backend",
+        "2026-10-07 strict review + one rework; serialization rules single-sourced in ECS/ComponentJson"
+      ]
     },
     {
       "id": "W3",
@@ -29,8 +32,11 @@
       "priority": "P0",
       "title": "GUIWindowManagerTest flaky",
       "owner_line": "this",
-      "status": "in_progress",
-      "evidence": []
+      "status": "done",
+      "evidence": [
+        "ba83a1512 [gui] focus/mouse-leave events carry heldButtons; reconcile stops reading live hardware",
+        "same-family leftovers recorded in memory pointer_reconcile_reads_live_hardware.md (EditorInputNode, cross-window drag flaky)"
+      ]
     },
     {
       "id": "W5",
@@ -40,9 +46,22 @@
       "owner_line": "this",
       "status": "done",
       "evidence": [
+        "c377e0df [rpg] one directory name: 2DRpgPrototype",
         "git index and catalog name are Example/2DRpgPrototype; project files are 2DRpgPrototype.yaproject and 2DRpgPrototype.yamodule",
         "Example/Example.xmake.lua includes ./2DRpgPrototype/xmake.lua",
         "code, tests, and scripts reference that spelling; PerfLab sprite scenes and the resave baseline use the same path"
+      ]
+    },
+    {
+      "id": "W4",
+      "group": "W",
+      "priority": "P0",
+      "title": "profile-build GUI test stack corruption (UIFrameBuilder ctx bound to temporary)",
+      "owner_line": "this",
+      "status": "done",
+      "evidence": [
+        "4e95276d [gui] own the build context instead of binding a reference to it",
+        "74dab681 fixed the same-family profile-only clamp case ('free 32 bytes leaves levels unchanged' only holds when the bucket is empty)"
       ]
     },
     {
@@ -86,8 +105,12 @@
       "priority": "P0",
       "title": "GPU VRAM stats (VMA budget/usage by resource category)",
       "owner_line": "new:perf-baseline",
-      "status": "todo",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "243cd4b7 [rhi] report GPU memory per resource class (perf-baseline PB3)",
+        "Vulkan per-allocation accounting + vmaGetHeapBudgets; gpu_memory segment self-registered by the device; editor RuntimeMemorySection",
+        "HelloMaterial debug: 806.58 MiB total, VMA allocationBytes equals the per-class sum; MoltenVK lacks VK_EXT_memory_budget, budget falls back to heap size"
+      ]
     },
     {
       "id": "M5",
@@ -95,8 +118,11 @@
       "priority": "P0",
       "title": "stress scenes",
       "owner_line": "new:perf-baseline",
-      "status": "todo",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "9da289da [perf] PerfLab stress scenes, deterministic generator + Sponza fetch (PB5)",
+        "10 scene/config pairs: lights / meshes / sprite batching / Sponza, fixed camera paths"
+      ]
     },
     {
       "id": "M6",
@@ -135,8 +161,12 @@
       "priority": "P0",
       "title": "frames-in-flight 1->2",
       "owner_line": "render-view-family M4",
-      "status": "todo",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "327e9e30 [render] frames-in-flight 1 -> 2 (knob, deletion queue init convergence)",
+        "cee44ae1 [vulkan] render-finished ring follows the surface slot, not the image",
+        "61ae5453 [perf] R1 A/B: FIF=2 frame p50 -24.5~-39.8% (profile-100ae306-fifAB, same-build A/B)"
+      ]
     },
     {
       "id": "R2",
@@ -251,9 +281,12 @@
       "group": "R",
       "priority": "P0",
       "title": "deferred spot lights + point light limit",
-      "owner_line": "new:shadow",
-      "status": "todo",
-      "evidence": []
+      "owner_line": "shadow-and-light-line",
+      "status": "in_progress",
+      "evidence": [
+        "R15a 49d70331 [render] deferred point lights move to a storage buffer -- no per-frame cap",
+        "R15b deferred spot lights (direction / cone angle in the LightPass light data) pending"
+      ]
     },
     {
       "id": "R14",
@@ -322,10 +355,14 @@
       "id": "G2.5",
       "group": "G2",
       "priority": "P0",
-      "title": "package smoke passed; recording still open",
+      "title": "package smoke passed (same machine, no audio)",
       "owner_line": "rpg-prototype",
-      "status": "todo",
-      "evidence": []
+      "status": "done",
+      "evidence": [
+        "package smoke run on the dev machine only: Package/2DRpgPrototype, one frame",
+        "caveat 2026-10-11: no audio (A1 pending); acceptance criteria for G2.5 pending user confirmation",
+        "playthrough recorded via 3f35b668; video at Engine/Saved/Automation/2d-rpg-playthrough/playthrough.mp4 (not in git)"
+      ]
     },
     {
       "id": "G2.6",
@@ -468,19 +505,49 @@
       "id": "U.C2",
       "group": "U",
       "priority": "P0",
-      "title": "ui-behavior-capabilities C2",
+      "title": "ui-behavior-capabilities C2 (tree tick registry)",
       "owner_line": "ui-behavior-capabilities",
+      "status": "done",
+      "evidence": [
+        "3ae03e7f [gui] WidgetTree tick dispatch via behavior-level registry, idle cost decoupled from node count",
+        "idle tick 1k/10k nodes: 52/565 us -> ~0.008 us per tick (WidgetTreeTickRegistryTest)"
+      ]
+    },
+    {
+      "id": "U.C3",
+      "group": "U",
+      "priority": "P0",
+      "title": "ui-behavior-capabilities C3 (Lua call() hot path)",
+      "owner_line": "ui-behavior-capabilities",
+      "status": "done",
+      "evidence": [
+        "e56d5d9f [script] lifecycle callbacks stay protected functions from bind time; self rebind skipped",
+        "400 empty onUpdate: 534 -> 117 us/frame (debug, same build)"
+      ]
+    },
+    {
+      "id": "S5",
+      "group": "U",
+      "priority": "P1",
+      "title": "reflection + script layer normalization (reflection-runtime RR0-RR9)",
+      "owner_line": "reflection-runtime",
       "status": "in_progress",
-      "evidence": []
+      "evidence": [
+        "RR0-RR9 landed except RR4 (waiting on GUI 10F-1~5); RR5b / RR8 Windows verification not run",
+        "absorbed script-native-registry (S5.1 in, rest folded into RR8)"
+      ]
     },
     {
       "id": "U.S4",
       "group": "U",
       "priority": "P0",
-      "title": "game-ui-script-framework S4",
+      "title": "game-ui-script-framework S4 (entry modal, pause, cancel)",
       "owner_line": "game-ui-script-framework",
-      "status": "todo",
-      "evidence": []
+      "status": "done",
+      "evidence": [
+        "3c63ae96 [game-ui] modal entries pause the game and take Esc first",
+        "modal / pausesGame / clock declared per entry, defaults omitted"
+      ]
     },
     {
       "id": "U.P1",
@@ -505,11 +572,12 @@
       "group": "GA",
       "priority": "P0",
       "title": "audit (done) + sub-plan Q&A",
-      "owner_line": "new:gui-app",
+      "owner_line": "gui-app",
       "status": "in_progress",
       "evidence": [
         "audit 2026-10-07 (ya-reviewer 87226e8e)",
-        "verified: Example/Example.xmake.lua includes ya-engine examples unconditionally; root xmake.lua comment claims a guard that does not exist"
+        "verified: Example/Example.xmake.lua includes ya-engine examples unconditionally; root xmake.lua comment claims a guard that does not exist",
+        "sub-plan gui-app/ created 2026-10-11 (migrated from this plan §3 GA); Q&A pending"
       ]
     },
     {
@@ -517,12 +585,13 @@
       "group": "GA",
       "priority": "P0",
       "title": "gui profile configures/builds again (example include guard, ci.sh, doc drift)",
-      "owner_line": "new:gui-app",
+      "owner_line": "gui-app",
       "status": "done",
       "evidence": [
-        "2026-10-11: Example/Example.xmake.lua guards 3D examples; include path is 2DRpgPrototype",
+        "2ee635a1 [gui] build the gui profile without the 3D examples; include written as 2dRpgPrototype (dir name at the time)",
         "worktree ya_profile=gui: xmake b ya-gui-minimal-host, GUIWorkbench, ya-gui-headless-host-test ok",
-        "fresh engine configure lists one source: Example/2DRpgPrototype/Source/Entry.cpp"
+        "fresh engine configure lists one source: Example/2dRpgPrototype/Source/Entry.cpp",
+        "case unification to 2DRpgPrototype landed via W5 (c377e0df)"
       ]
     },
     {
@@ -530,25 +599,31 @@
       "group": "GA",
       "priority": "P0",
       "title": "one-command gate: all scenarios + GPU/offscreen parity + portable baselines",
-      "owner_line": "new:gui-app",
-      "status": "todo",
-      "evidence": []
+      "owner_line": "gui-app",
+      "status": "rework",
+      "evidence": [
+        "rework reason (2026-10-11 review): scenarios replay by raw pixel coordinates and assertions were loosened to current widget geometry",
+        "implementation uncommitted in the shared workspace; rework as GA2r (locate by widget, strict assertions) in gui-app/"
+      ]
     },
     {
       "id": "GA3",
       "group": "GA",
       "priority": "P0",
       "title": "GUI frame cost, process memory, VRAM numbers",
-      "owner_line": "new:gui-app",
-      "status": "todo",
-      "evidence": []
+      "owner_line": "gui-app",
+      "status": "rework",
+      "evidence": [
+        "rework reason (2026-10-11 review): parallel benchmark implementation; only a debug short run exists, no profile numbers",
+        "implementation uncommitted in the shared workspace; rework as GA3r (shared benchmark session with perf-baseline) in gui-app/"
+      ]
     },
     {
       "id": "GA4",
       "group": "GA",
       "priority": "P0",
       "title": "package as standalone app",
-      "owner_line": "new:gui-app",
+      "owner_line": "gui-app",
       "status": "todo",
       "evidence": []
     },
@@ -557,7 +632,7 @@
       "group": "GA",
       "priority": "P1",
       "title": "Windows green",
-      "owner_line": "new:gui-app",
+      "owner_line": "gui-app",
       "status": "todo",
       "evidence": []
     },
@@ -566,7 +641,7 @@
       "group": "GA",
       "priority": "P1",
       "title": "framework independence proof + API docs; ya-rhi entt leak",
-      "owner_line": "new:gui-app",
+      "owner_line": "gui-app",
       "status": "todo",
       "evidence": []
     },
@@ -605,6 +680,17 @@
       "owner_line": "this",
       "status": "todo",
       "evidence": []
+    },
+    {
+      "id": "D5",
+      "group": "D",
+      "priority": "P0",
+      "title": "backfill absorb notes for closed lines (perf-baseline, reflection-runtime, rpg-prototype, W3/W4)",
+      "owner_line": "this",
+      "status": "todo",
+      "evidence": [
+        "2026-10-11 review: no absorb notes written by any closed line so far"
+      ]
     }
   ]
 }

@@ -15,7 +15,7 @@
 4. **已知半成品收口**：§3 R 组 P0 项全部完成，文档不再声称不存在的能力。
 5. **可讲清楚**：每条完成的工作流留一份吸收笔记（§5.4），面试要讲的子系统有设计文档与架构图。
 
-## 1. 已拍板的决策（2026-10-07）
+## 1. 已拍板的决策（2026-10-07 立项，2026-10-11 追加）
 
 | 议题 | 决定 |
 | --- | --- |
@@ -30,6 +30,12 @@
 | 纯 GUI app 线 | 2026-10-07 用户补充：`ya_profile=gui` + GUIWorkbench 是自研 GUI 框架的独立产品线，单列 GA 组。 |
 | 内存口径 | 2026-10-07 用户强调：GPU 显存与进程内存是两个东西，分成 M4 / M8 两项分别统计、分别优化。 |
 | 音频 | 先定引擎自己的音频接口，后端接 miniaudio 快速出效果（P1）；自研混音器与空间化在同一接口下替换（P2）。不走 OpenCL（混音是低延迟小数据 CPU 工作）。 |
+| 3D demo 范围（2026-10-11 方向审查） | 3D 完整 P0 维持，不因返工或文档债缩水；G3.0 方案问答还没做，是当前最大的优先级风险。 |
+| GA2 / GA3（2026-10-11 方向审查） | 第一版实现不提交：GA3 平行实现了一套基准、只有 debug 短跑没有 profile 数字；GA2 场景用像素坐标回放并放宽了断言。按 GA3r（共享基准会话）/ GA2r（场景按控件定位）返工后再提交，归 `gui-app/`。 |
+| RPG 目录名（2026-10-11） | 规范名 `2DRpgPrototype`；大小写统一归 W5。 |
+| 伞形计划边界（2026-10-11） | 本计划只定优先级、依赖与执行规则，不直接改代码；GA 线迁 `gui-app/` 子计划。 |
+
+待定（2026-10-11，不是决策）：G2.5 在 todo 与矩阵里标了完成，但 demo 没有音频，而 §4 依赖图里 A1 原定排在 demo 打包之前。G2.5 的验收口径（打包冒烟是否要求音频在场）需要用户确认。
 
 ## 2. 原则
 
@@ -51,7 +57,7 @@
 | W2 | B2 遗留：`MethodCall::arguments` 吞普通表收窄为 owner 参数；`bindSelf` 旧注释；`ScriptProperty::serializedValue` 未用；属性预览只建不销；`Npc.lua` 的 `world.find("Player")`；`spawnSprite` 默认贴图写死；自动化按名字 `Player` 找实体；`GridMoverTest.lua` 未进 gtest | P0 |
 | W3 | `GUIWindowManagerTest.IsolatesPointerFocusCaptureTooltipDpiAndSnapshot` 间歇失败定位 | P0 |
 | W4 | ~~profile 构建下 5 个 GUI 测试栈损坏崩溃~~ **已结（`4e95276d`）**：不是 profile-only 栈溢出，是 `UIFrameBuilder` 的 `_ctx` 为 `const UIFrameBuildContext&`，`UIFrameBuilder(UIFrameBuildContext{})` 把引用绑到临时对象上，随后 `build()` 拷贝已释放的栈。5 例全部把 ctx 绑到临时；debug 全过是因为 profile 的计数分配器改变了分配行为而暴露出来。改为按值持有 | ~~P1~~ 完成 |
-| W5 | RPG 示例目录统一为 `Example/2DRpgPrototype`：索引、目录项、`.yaproject` / `.yamodule` 与代码、测试、脚本里的路径用同一种大小写 | P0 |
+| W5 | **已结（`c377e0df`）**：RPG 示例目录统一为 `Example/2DRpgPrototype`——索引、目录项、`.yaproject` / `.yamodule` 与代码、测试、脚本里的路径用同一种大小写 | P0 |
 
 ### M — 测量、压测与内存（P0 起步）
 
@@ -83,7 +89,7 @@
 | R11 | `rdg-cache-dx` P3–P5（Bloom 切片、资源容器按生命周期拆分、Slang 生成 descriptor layout） | P1 | `rdg-cache-dx` |
 | R12 | `render-view-family` P2 / P3（命名收敛、`PreparedView` / ViewFamily compiler）；纯 2D View 不跑 3D stage | P1 | `render-view-family`、`rpg-prototype` 步骤 6 |
 | R13 | `render-application-boundary` 剩余项 | P2 | `render-application-boundary` |
-| R15 | 延迟管线支持聚光灯（`LightPass` 光源数据加方向 / 锥角），点光源上限按延迟路径理顺（现为 `MAX_POINT_LIGHTS=6`，`MAX_POINT_LIGHTS_DEFERRED=32` 未被使用）；G3.9 依赖 | P0 | 新子计划（可并入阴影线） |
+| R15 | R15a 已落地：延迟管线点光改走 SSBO 动态数组，取消每帧点光上限（`49d70331`，归 `shadow-and-light-line/`）；R15b 聚光灯待做（`LightPass` 光源数据加方向 / 锥角）；G3.9 依赖 | P0 | `shadow-and-light-line` |
 | R14 | OpenGL 后端恢复（或其它低端后端），基于 R8 的能力矩阵 | P2（有真实需求再开） | — |
 
 ### A — 音频
@@ -139,23 +145,9 @@ G3.0 盘点（2026-10-07，读代码核实）：渲染侧（CSM 最多 4 级、I
 | `gui-framework-editor-runtime-refactor`、`gui-kernel-ux-parity`、`gui-editor-structure` | P2 | 开放项多，与 demo 弱相关 |
 | `source-layout-subtraction`、`editor-ui-grouping`、`display-compose-encoding` | P2 | 结构整理 / 语义尾巴 |
 
-### GA — 纯 GUI app 线（自研 GUI 框架独立产品形态）
+### GA — 纯 GUI app 线（已迁出）
 
-`ya_profile=gui` 只构建 GUI 模块 + 最小 host（不带 3D、脚本、物理包）；产品是 `Example/GUIWorkbench`（Feature Gallery，`FWorkbenchSurface` 挂 GUIApp，`Scenarios/*.jsonl` 交互场景，`run_workbench_gpu_parity.py` 像素门禁）与 `Example/GUIFrameworkSmoke`。U 组各 GUI 线的能力在这里以独立应用验收。下表是初排，GA0 盘点后按子计划问答定稿。
-
-GA0 盘点（2026-10-07，`ya-reviewer`）：GUI 框架依赖边界干净（GUI / Render2D / Workbench 源码不 include Scene / ECS / Render3D / Resource / Script / Physics；残留：`ya-rhi` public 带 entt 包、`ya-gui-host` 只能走 Vulkan swapchain）。门禁是零散单点：31 个 `Scenarios/*.jsonl` 没有批量入口；`run_workbench_gpu_parity.py` 只覆盖 Widgets 一页、比的是同帧 GPU 与离屏一致性；仓库里没有提交像素基准图（`Baselines/` 只有 5 份结构化快照，`gui_style_baseline.py` 写死 `build/macosx/arm64/debug`）；`ya.py package` 只认 `.yaproject`，GUI host 按仓库相对路径加载 shader 与字体，没有打包路径；Windows 在发布检查表里是 Blocker。**已核实阻塞**：`Example/Example.xmake.lua` 无条件 include 依赖 `ya-engine` 的 3D 示例（根 `xmake.lua` 注释声称的守卫不存在），gui profile 很可能配置不过；文档最后一次记录 gui profile 跑绿是 2026-08-09。`gui-framework` skill 里的 `make test-gui` 不存在。
-
-gui profile 的构建必须在独立 worktree / 构建目录里做：在共享工作区 `xmake f --ya_profile=gui` 会改掉其他 worker 正在用的配置。
-
-| id | 内容 | 优先级 |
-| --- | --- | --- |
-| GA0 | 盘点（已完成）；子计划方案问答 | P0 |
-| GA1 | gui profile 恢复可配置可构建：3D 示例 include 守卫、`ci.sh gui-shared` 补 headless-host-test 与 `--smoke-actions`；修文档漂移（`make test-gui`、closure-test「唯一 target」注释、「21 场景」）；**附带修 include 字符串与目录名大小写不一致**（大小写不敏感盘上 `Entry.cpp` 被编两次，全新 checkout 链示例失败；W5 起目录与引用都是 `2DRpgPrototype`） | P0 |
-| GA2 | 一条命令门禁：headless 批量跑全部场景断言 + windowed GPU / 离屏一致性；基线脚本路径可移植；结构化 digest 作跨平台主门禁，像素基准按平台分存（MoltenVK 与原生 Vulkan 像素不保证一致） | P0 |
-| GA3 | GUI 帧开销与内存数字：windowed CPU / GPU 帧时间、进程内存（M8 口径）、显存（M4 口径） | P0 |
-| GA4 | 打包成独立应用：不依赖仓库根的资源根、预编译 shader 或带 Slang 运行时、字体、MoltenVK / SDL 动态库；macOS `.app` 与 Windows 目录布局 | P0 |
-| GA5 | Windows 跑绿（MSVC 构建 + 全部场景），需要用户的 Windows 机器 | P1 |
-| GA6 | 框架独立性证明：D1 依赖图、对外 API 文档；`ya-rhi` 的 entt 泄漏 | P1 |
+2026-10-11 方向审查后迁至子计划 `../gui-app/`（五件套齐全：GA0 盘点结论、GA1–GA6 工作项、独立 worktree 构建约束、GA2r / GA3r 返工 checkpoint 都在那边）。状态一眼版：GA0 盘点完成、方案问答待做；GA1 完成（`2ee635a1`；大小写随 W5 `c377e0df` 收口）；GA2 / GA3 实现未提交、返工中（GA2r 场景按控件定位、GA3r 共享基准会话）；GA4–GA6 未开工。
 
 ### D — 架构文档与吸收
 
@@ -165,6 +157,7 @@ gui profile 的构建必须在独立 worktree / 构建目录里做：在共享�
 | D2 | 设计文档：脚本后端拆分（B2）、GUI 框架（retained / 失效 / 布局契约）、render graph；写的过程中把这三处不合理的地方重构掉 | P0 |
 | D3 | 设计文档：渲染线程与帧时间轴（R1 / R7 之后）、音频、存档契约 | P1 |
 | D4 | 吸收材料汇总：README、两段 demo 视频、性能报告、面试问答清单 | P0（最后一步） |
+| D5 | 吸收笔记补写：方向审查发现已收口的线一份吸收笔记都没有——测量（`perf-baseline/`）、反射重构（`reflection-runtime/`）、2D demo（`rpg-prototype/`）、W3 / W4；按 §5.4 格式补齐，先补面试要讲的线 | P0 |
 
 ## 4. 依赖与波次
 

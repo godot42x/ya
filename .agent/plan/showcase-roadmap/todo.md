@@ -11,11 +11,11 @@
 - [x] W2 B2 遗留债（8 项，见 plan §3 W2；严格审查后返工一次，序列化规则收进 `ECS/ComponentJson`）
 - [x] W3 `GUIWindowManagerTest` 间歇失败定位（根因：reconcile 在处理处读活硬件；事件自带 `heldButtons` 修掉；同族 `EditorInputNode` 与跨窗拖拽 flaky 记入 memory `pointer_reconcile_reads_live_hardware.md`，后续随输入线收口）
 - [x] W4 profile 构建下 5 个 GUI 测试栈损坏（`4e95276d`）：根因是 `UIFrameBuilder` 的 `_ctx` 为 `const UIFrameBuildContext&`，`UIFrameBuilder(UIFrameBuildContext{})` 把引用绑到临时对象，`build()` 再拷贝已释放的栈——不是 profile-only 栈溢出。5 例全部把 ctx 绑到临时；debug 全过只是因为 profile 计数分配器改变了分配行为才暴露。改为按值持有。顺带在 `74dab681` 修掉同为 profile-only 的 clamp 用例（"free 32 bytes 层级不变" 只在桶为空时成立）
-- [x] W5 RPG 示例目录统一为 `Example/2DRpgPrototype`（git 索引、磁盘目录项、`.yaproject` / `.yamodule`、头文件，以及代码、测试、脚本里的路径）
+- [x] W5 RPG 示例目录统一为 `Example/2DRpgPrototype`（`c377e0df`；git 索引、磁盘目录项、`.yaproject` / `.yamodule`、头文件，以及代码、测试、脚本里的路径）
 
 GUI 与编辑器活跃线
-- [ ] S5 反射 + 脚本层整体规范化（`reflection-runtime/` RR0–RR8；吸收原 native 注册重构，S5.1 已入库；先于 C3 / G3.2）
-- [x] `ui-behavior-capabilities` C3（Lua `call()` 热路径）
+- [~] S5 反射 + 脚本层整体规范化（`reflection-runtime/` RR0–RR9 除 RR4 外已落地，RR5b / RR8 的 Windows 验证待跑；吸收原 native 注册重构，S5.1 已入库）
+- [x] `ui-behavior-capabilities` C3（Lua `call()` 热路径，`e56d5d9f`）
 
 测量与压测
 - [x] M1 pass 级 GPU timestamp（`perf-baseline` PB2，含 render_counters 与编辑器 pass 表）
@@ -37,7 +37,7 @@ GUI 与编辑器活跃线
 - [x] G2.2 存档 / 读档（`world.save` / `world.load`：场景路径 + `Persist`；脚本 `onSave` 决定写什么）
 - [x] G2.3 对话分支、背包、任务、商店（`Shop.lua`：护符 3 枚硬币；商人对话框成交）
 - [x] G2.4 完整流程：城镇摊位 → 房子罐子 → 回城买护符 → 井的结局
-- [x] G2.5 打包冒烟已通过（`Package/2DRpgPrototype`，跑过一帧）。通关录屏在 `Engine/Saved/Automation/2d-rpg-playthrough/playthrough.mp4`（呈现帧，不进 git）
+- [x] G2.5 打包冒烟已通过（同机打包冒烟、无音频——A1 未做，验收口径待用户确认；`Package/2DRpgPrototype`，跑过一帧）。通关录屏在 `Engine/Saved/Automation/2d-rpg-playthrough/playthrough.mp4`（呈现帧，不进 git）
 
 3D demo（新子计划，待建）
 - [~] G3.0 子计划设计（能力盘点已完成，见 plan §3 G3；待方案问答）
@@ -52,15 +52,15 @@ GUI 与编辑器活跃线
 - [ ] G3.9 关卡与光照
 - [ ] G3.11 性能叠加层 + 打包 + 录屏
 
-纯 GUI app 线
+纯 GUI app 线（2026-10-11 迁 `gui-app/` 子计划，目标、盘点、约束与进度见该目录）
 - [~] GA0 盘点（已完成）与子计划问答
-- [x] GA1 gui profile 恢复可配置可构建（示例 include 守卫、`ci.sh gui-shared`、文档漂移、`2DRpgPrototype` 路径）
-- [ ] GA2 一条命令门禁：全部场景 + GPU / 离屏一致性 + 可移植基线
-- [ ] GA3 GUI 帧开销、进程内存、显存数字
+- [x] GA1 gui profile 恢复可配置可构建（`2ee635a1`；大小写随 W5 `c377e0df` 收口）
+- [~] GA2 一条命令门禁：全部场景 + GPU / 离屏一致性 + 可移植基线（实现未提交，返工中：GA2r 场景按控件定位）
+- [~] GA3 GUI 帧开销、进程内存、显存数字（实现未提交，返工中：GA3r 共享基准会话；`GUIWorkbench --benchmark` 第一版与 PB7 同一份 `bench_summary.json`）
 - [ ] GA4 打包成独立应用
 
 GUI
-- [~] `ui-behavior-capabilities` C2
+- [x] `ui-behavior-capabilities` C2（C1–C3 全部完成：C2 `3ae03e7f`、C3 `e56d5d9f`；归档等结论进 skill）
 - [x] `game-ui-script-framework` S4
 - [x] `game-ui-script-framework` S5（H9 点锚点仍 blocked_on_D7）
 - [x] `game-ui-script-framework` S6、S7（H9 仍 blocked_on_D7）
@@ -69,6 +69,7 @@ GUI
 - [ ] D1 模块依赖图（自动生成）
 - [ ] D2 三篇设计文档：脚本后端、GUI 框架、render graph
 - [ ] D4 README / 视频 / 性能报告 / 面试问答汇总
+- [ ] D5 吸收笔记补写：测量（perf-baseline）、反射重构（reflection-runtime）、2D demo（rpg-prototype）、W3 / W4（先补面试要讲的线）
 
 ## P1
 

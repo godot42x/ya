@@ -53,8 +53,8 @@
 - [ ] 纯 2D View 不跑 GBuffer / 光照 / 天空盒 / Bloom
 
 步骤 7 能力进引擎（前置：步骤 2、4）
-- [ ] B2 脚本对外接口收口（含 `viewAspect` / `viewSize` 去重、脚本函数不经 `App::get()`）
-  - 设计：`B2-lua-backend-split.md`（7 个 checkpoint）。B2-1 属性值 `std::any`→`ScriptValue`、B2-2 注入上下文、B2-3 侧表、B2-4 `ya-script-lua` 拆 target、B2-5 中立运行时接口、B2-6 `GameplayLua` 中立注册 + `world.scriptOf`、B2-7 控件句柄/self API 已完成；`Engine/Source` 在 `Script/Lua/` 之外已无 sol
+- [x] B2 脚本对外接口收口（含 `viewAspect` / `viewSize` 去重、脚本函数不经 `App::get()`）
+  - 设计：`B2-lua-backend-split.md`（7 个 checkpoint）。B2-1 属性值 `std::any`→`ScriptValue`、B2-2 注入上下文、B2-3 侧表、B2-4 `ya-script-lua` 拆 target、B2-5 中立运行时接口、B2-6 `GameplayLua` 中立注册 + `world.scriptOf`、B2-7 控件句柄/self API 全部完成（收口提交 `c3a77218`）；`Engine/Source` 在 `Script/Lua/` 之外已无 sol
 - [x] 相机 2D 字段（每单位像素数、像素吸附、整数缩放）已在 `CameraComponent`；跟随留在 `FollowCamera.lua`（指数平滑 + 地图夹取）
 - [x] InputMap（命名动作）
 - [x] 对话逐字显示：留在 `Dialogue.lua`，按 UTF-8 码点把前缀写进 `Body.text`。文本控件不提供 reveal
@@ -62,7 +62,7 @@
 - [x] 去硬编码：`"Player"`、`kSpriteTexture`、`TilemapGround` / `"Dialogue"` 命名约定（C++ 侧：`loadScene` 带 `actorName`、`spawnSprite` 可传贴图；剩 `Npc.lua` 的 `world.find("Player")`、`kSpriteTexture` 缺省、自动化按名找）
 
 并行
-- [ ] 定 flight 深度：`kFramesInFlight` 保持 1 或真 overlap（`waitFrameFence` 约 2ms/帧；归 `../render-view-family/`，本线不做）
+- [x] 定 flight 深度：定为 2（R1 落地 `327e9e30` / `cee44ae1`，同构建 A/B p50 -24.5~-39.8%；归 `../render-view-family/`，本线不做）
 
 ## 用户报告（2026-10-02，不在评审 7 步内）
 

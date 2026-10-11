@@ -98,8 +98,32 @@
 - 文档：`gui-framework` skill 去掉不存在的 `make test-gui`，改成 closure / widgets / headless-host / workspace 四条；`Test.xmake.lua` 不再把 closure test 写成 gui profile 里唯一的测试；场景数按目录写成 31。
 - 验证在独立 worktree（`/tmp/ya-gui-ga1`，不改共享工作区的 engine 配置）：`ya_profile=gui` 配过；`ya-gui-minimal-host`、`GUIWorkbench`、`ya-gui-headless-host-test` 链接通过。共享工作区仍是 engine profile。
 
+## 2026-10-11 — GA2 GUIWorkbench 一条命令门禁
+
+- 入口是 `python3 Script/gui_workbench_gate.py`：31 个 `Scenarios/*.jsonl` 的 headless 断言，然后 `gui_style_baseline.py` 的结构化 digest，然后 `run_workbench_gpu_parity.py` 的同帧 GPU / 离屏。二进制由 `Script/automation/gui/workbench_bin.py` 在 `build/` 下查找，不再写死 `build/macosx/arm64/debug`。
+- `Script/ci.sh` 的 `gui-shared` 在 `--smoke-actions` 之后跑这条门禁（`--skip-build --skip-gpu`）。像素基准仍不是跨平台门禁。
+- 七个场景对着当前控件几何重对过：Theme 走 View → Light Theme；折行宽度用 `$gt 300` / `$lte 360`；ColorEdit 不再断言已删除的 `activeChannel`；Dialog OK、Console 合并、同叶 tab 重排与关闭、分割条拖拽都改到实测矩形上。`theme_light` 基线用同一条菜单路径，暗色底约 0.11、亮色底约 0.95，两份 semantic digest 不同。
+- 验证：`workbench gate: scenarios=31 failed=0 digest=PASS gpu=PASS`。
+
+## 2026-10-11 — GA3 / PB7 GUIWorkbench 基准
+
+- `GUIWorkbench --benchmark <config.json>` 走和游戏运行时同一份 `bench_summary.json`：`frame`（墙钟 / CPU / GPU）、`cpu_stages`、`render_counters`、`process_memory`（M8）、`gpu_memory`（M4，设备自己登记）。GUI 没有场景相机和固定步长，`gpu_passes` 为空（合成不走 render graph pass）。
+- 配置 `Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json`：Dock 页，1920×1080，immediate，预热 120、采样 600。`--start-page` 优先于配置里的 `page`。headless 拒绝这条命令。
+- 窗口缩放触发的 swapchain 重建不再丢掉已经排队的 present mode。否则 Dock 基准会落回 FIFO，帧时间被刷新率夹住。
+- 验证：`GuiBenchmarkConfigTest` 3/3。debug 短窗（Dock，1280×720，immediate，采样 24）：frame p50 6.32 ms，cpu 5.64 ms，gpu 1.25 ms，RSS 214 MiB，GPU 合计 46.7 MiB，`unifiedMemory` true。这不是 profile 基线。
+
 ## 2026-10-11 — W5 目录名 2DRpgPrototype
 
 - git 索引与磁盘目录项都是 `Example/2DRpgPrototype`。`2DRpgPrototype.yaproject`、`2DRpgPrototype.yamodule`、`Source/2DRpgPrototype.h` 与之一致。
 - `Example.xmake.lua` include `./2DRpgPrototype/xmake.lua`。代码、测试、脚本、PerfLab 精灵场景里的贴图路径都是这一种大小写。场景重存基线的路径键跟着改。贴图路径写进场景正文的（Sprites_500 / 2000 / 5000、PerfLab town tileset），哈希按新正文更新。同一测试里四份 UI 文档的哈希已和当前文件对不上（文档在基线锁定之后改过），一并刷新。
 - 未跟踪的 `Content/UI/Panel*.yaui.json` 留在这个目录下，不入库。
+
+## 2026-10-11 — 方向审查（只读，未改代码）
+
+- 优先级风险：3D demo 是剩下的最大 P0 块，G3.0 方案问答还没做；渲染收口（R2 / R3 阴影）与 3D 引擎项都压在它后面。3D 完整 P0 维持。
+- GA3 平行实现了一套基准（`GUIWorkbench --benchmark` + `GuiBenchmark*` 自成一格），且只有 debug 短跑、没有 profile 数字 → 返工 checkpoint GA3r（共享基准会话，`gui-app/` plan §4）。
+- GA2 的场景用像素坐标回放、断言对着当前控件几何放宽——布局一变门禁就失效 → 返工 checkpoint GA2r（场景按控件定位、断言恢复严格）。
+- 大小写路径当时只修了一半（`2ee635a1` 把 include 写成当时的目录名 `2dRpgPrototype`）；同日已按规范名 `2DRpgPrototype` 收口（W5，`c377e0df`）。
+- 已收口的线一份吸收笔记都没有（测量、反射重构、2D demo、W3 / W4）→ 新增 D5 补写。
+- 矩阵与 todo 漂移：M4 / M5 / R1 / R15 / G2.5 / U.S4 / U.C2 / W2 / W3 等已落地项在矩阵里还是 todo / in_progress。本轮（T1）对齐，done 项逐一补 commit 锚点；待定项（G2.5 无音频、A1 原排在打包之前）记进 plan §1，不写成决策。
+- 决策落地：GA 线迁 `gui-app/` 子计划（GA0–GA6、GA0 盘点、独立 worktree 约束随迁，GA1–GA3 进度条目移入子计划 progress）；GA2 / GA3 第一版实现不提交、按 GA2r / GA3r 返工后再提交；伞形计划此后不直接改代码。
