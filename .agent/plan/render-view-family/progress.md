@@ -1352,3 +1352,12 @@ M4 记录的三个前置件在五索引收敛后全部已在位：device fence �
 - 轮转证据（M4 要求的验证）：record→submit 边界补了永久 trace `Submit tick N: flight=F token=T`（RuntimeRenderContext，M4 当时只有临时插桩没入库）——`--log-level=trace` 实测 flight 0/1 交替、token 与 tick 对齐；per-flight 表（submission pool、view 输出表、upload arena、skinning、GPU timing 环）首次真实走上槽 1。
 - 测试：`ya-testing` 全量 1772 过（另 2 例失败为预存内容项：用户并行编辑的 Dialogue 文档几何断言 + resave 基线，与本线无关）。
 - 基准：FIF=1 对照 = `perf-baseline/baselines/macos/profile-15277c00`；FIF=2 同一命令对比数字见 `perf-baseline/progress.md` 同日条目与 `baselines/macos/` 新目录。
+
+### R1 补丁：render-finished 信号量环从 per-image 改 per-slot（同日）
+
+FIF=2 首轮基准抓到真回归：轻场景全过，`Meshes_10000` 三连 900s 超时（CPU 时间极低 = 纯等待）。根因是同步结构问题，五索引规范里被当成「合法模式」的 **per-image render-finished 信号量**在 FIF=2 下不成立：immediate present 下图被 presentation engine 快速回收，帧 N+2 对同一图重新 signal 时它的 present 可能还在队列里 pending——二元信号量未消费就重-signal，MoltenVK 队列停摆、acquire 永久阻塞。FIF=1 时帧 fence 串行掩盖了这一点。
+
+修法 = vulkan-tutorial 的标准 FIF 结构：信号量环改按 **surface 槽**（`flightFrameSize`）而非 image 数量；`getRenderFinishedSemaphore()` 去 image 参数、`present()` 等本槽信号量；同步资源不再随 image count 变化（recreate 分支删除）。正确性依据：槽复用由 device fence（帧 N 的提交全部完成）+ 单队列顺序（帧 N+2 的提交在队列上排在帧 N+1 的 present 之后，故帧 N 的 present 必已消费完毕）双重守卫。
+
+- 测试：`ya-testing` 全量 1772 过（同前，2 例预存内容失败除外）；surface 套件 `RHISurfaceContext*` 24/24。
+- 待办遗留：`TestSurface.h` 的 stand-in 实现同步改签名。

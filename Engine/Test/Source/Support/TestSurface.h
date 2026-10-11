@@ -44,7 +44,7 @@ struct StandInSurface final : IRenderSurfaceContext
     bool present(int32_t) override { return true; }
     void waitInFlight() override {}
     [[nodiscard]] void* getCurrentImageAvailableSemaphore() override { return nullptr; }
-    [[nodiscard]] void* getRenderFinishedSemaphore(uint32_t) override { return nullptr; }
+    [[nodiscard]] void* getRenderFinishedSemaphore() override { return nullptr; }
 };
 
 } // namespace ya::test

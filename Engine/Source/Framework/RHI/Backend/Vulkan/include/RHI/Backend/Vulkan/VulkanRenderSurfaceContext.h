@@ -30,10 +30,17 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
     /// Empty submit after present, so recreate/destroy can wait THIS
     /// surface's last present without `vkQueueWaitIdle` on the shared queue.
     static constexpr uint32_t presentCompleteFenceCount = 2;
-    uint32_t                  currentFrameIdx = 0;
-    uint32_t                  presentCompleteFenceIdx = 0;
+    uint32_t currentFrameIdx = 0;
+    uint32_t presentCompleteFenceIdx = 0;
     std::vector<VkSemaphore>  frameImageAvailableSemaphores;
     std::vector<VkFence>      presentCompleteFences;
+    /// Render-finished ring, one per surface slot (== `kFramesInFlight`), NOT
+    /// per swapchain image: the slot's device fence retires the frame that
+    /// signaled it, and single-queue ordering retires the present that
+    /// consumed it, before the slot's next use. An image-indexed ring would
+    /// re-signal a semaphore whose present may still be pending once the CPU
+    /// runs two frames ahead (immediate present recycles images fast) -- seen
+    /// as an acquire/present deadlock on GPU-heavy scenes at FIF=2.
     std::vector<VkSemaphore>  imageSubmittedSignalSemaphores;
     std::shared_ptr<ICommandBuffer> _scratchPresentCmd;
 
@@ -72,12 +79,12 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
     void requestRecreate() override;
 
     [[nodiscard]] void*    getCurrentImageAvailableSemaphore() override;
-    [[nodiscard]] void*    getRenderFinishedSemaphore(uint32_t imageIndex) override;
+    [[nodiscard]] void*    getRenderFinishedSemaphore() override;
 
   private:
     [[nodiscard]] bool queryPresentSupport() const;
     [[nodiscard]] bool createSwapchainAndSync(const SwapchainCreateInfo& swapchainCI, bool bRequireImages);
-    void               createSyncResources(uint32_t swapchainImageCount);
+    void               createSyncResources();
     void               releaseSyncResources();
     void               recordPresentBarrier(VkCommandBuffer commandBuffer, uint32_t imageIndex) const;
 };

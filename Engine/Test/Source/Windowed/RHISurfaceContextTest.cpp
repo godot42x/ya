@@ -235,7 +235,7 @@ TEST(RHISurfaceContext, ExtraWindowAcquireSubmitPresentIndependentOfStartupWindo
     // fence is the device's now, which is why there is no per-window one left to
     // ask for.
     EXPECT_NE(startup->getCurrentImageAvailableSemaphore(), nullptr);
-    EXPECT_NE(startup->getRenderFinishedSemaphore(0), nullptr);
+    EXPECT_NE(startup->getRenderFinishedSemaphore(), nullptr);
     EXPECT_NE(startup->getSwapchain(), nullptr);
     EXPECT_EQ(extra->getNativeWindow(), &extraWindow);
     EXPECT_EQ(startup->getNativeWindow(), &startupWindow);

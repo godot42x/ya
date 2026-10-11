@@ -83,7 +83,14 @@ struct YA_RHI_API IRenderSurfaceContext
     virtual void waitInFlight() = 0;
 
     [[nodiscard]] virtual void*    getCurrentImageAvailableSemaphore() = 0;
-    [[nodiscard]] virtual void*    getRenderFinishedSemaphore(uint32_t imageIndex) = 0;
+    /// This frame's render-finished semaphore: indexed by the surface's own
+    /// ring slot, not by the acquired image. A per-image ring would let a
+    /// re-acquired image re-signal a semaphore whose consuming present may
+    /// still be pending (immediate present recycles images fast); the slot
+    /// ring re-signals only after the device fence retired that slot's frame,
+    /// and single-queue ordering retires the consuming present before any
+    /// later one. The swapchain's `present` waits the same ring.
+    [[nodiscard]] virtual void*    getRenderFinishedSemaphore() = 0;
     // The pair above is what a window contributes to a submission, which is why
     // the surface's `submit` is deliberately absent -- submission is a queue
     // operation over command buffers, and `IRender::submitFrame` is where the

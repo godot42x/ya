@@ -53,7 +53,7 @@ struct FPresentSync
     }
     return FPresentSync{
         .waits   = {surface.getCurrentImageAvailableSemaphore()},
-        .signals = {surface.getRenderFinishedSemaphore(static_cast<uint32_t>(imageIndex))},
+        .signals = {surface.getRenderFinishedSemaphore()},
     };
 }
 

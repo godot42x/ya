@@ -147,7 +147,7 @@ bool VulkanRenderSurfaceContext::queryPresentSupport() const
     return presentSupported == VK_TRUE;
 }
 
-void VulkanRenderSurfaceContext::createSyncResources(uint32_t swapchainImageCount)
+void VulkanRenderSurfaceContext::createSyncResources()
 {
     releaseSyncResources();
 
@@ -157,13 +157,13 @@ void VulkanRenderSurfaceContext::createSyncResources(uint32_t swapchainImageCoun
         .flags = 0,
     };
 
-    imageSubmittedSignalSemaphores.resize(swapchainImageCount);
+    imageSubmittedSignalSemaphores.resize(flightFrameSize);
     frameImageAvailableSemaphores.resize(flightFrameSize);
     presentCompleteFences.resize(presentCompleteFenceCount);
     presentCompleteFenceIdx = 0;
 
-    for (uint32_t i = 0; i < swapchainImageCount; ++i) {
-        const VkResult ret = vkCreateSemaphore(_render->getDevice(), &semaphoreInfo, nullptr, &imageSubmittedSignalSemaphores[i]);
+    for (uint32_t i = 0; i < flightFrameSize; ++i) {
+        VkResult ret = vkCreateSemaphore(_render->getDevice(), &semaphoreInfo, nullptr, &imageSubmittedSignalSemaphores[i]);
         YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create {} render-finished semaphore", _debugLabel);
         _render->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
                                     imageSubmittedSignalSemaphores[i],
@@ -227,7 +227,7 @@ bool VulkanRenderSurfaceContext::createSwapchainAndSync(const SwapchainCreateInf
         return false;
     }
 
-    createSyncResources(_swapChain->getImageCount());
+    createSyncResources();
     return true;
 }
 
@@ -352,9 +352,6 @@ bool VulkanRenderSurfaceContext::prepareSwapchainForAcquire()
         return false;
     }
 
-    if (_swapChain->getImageCount() != imageSubmittedSignalSemaphores.size() && _swapChain->getImageCount() > 0) {
-        createSyncResources(_swapChain->getImageCount());
-    }
     return true;
 }
 
@@ -385,9 +382,6 @@ bool VulkanRenderSurfaceContext::acquire(int32_t* outImageIndex)
         if (_swapChain->getImageCount() == 0) {
             *outImageIndex = -1;
             return true;
-        }
-        if (_swapChain->getImageCount() != imageSubmittedSignalSemaphores.size()) {
-            createSyncResources(_swapChain->getImageCount());
         }
         {
             YA_PERF_SCOPE(perf::sample::vulkanAcquire(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -486,7 +480,7 @@ bool VulkanRenderSurfaceContext::present(int32_t imageIndex)
         YA_PERF_SCOPE(perf::sample::vulkanPresent(), perf::metric::cpuTimeMs(), perf::domain::render());
         result = _swapChain->presentImage(
             static_cast<uint32_t>(imageIndex),
-            {imageSubmittedSignalSemaphores[static_cast<uint32_t>(imageIndex)]});
+            {imageSubmittedSignalSemaphores[currentFrameIdx]});
     }
 
     if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -509,9 +503,9 @@ void* VulkanRenderSurfaceContext::getCurrentImageAvailableSemaphore()
     return frameImageAvailableSemaphores[currentFrameIdx];
 }
 
-void* VulkanRenderSurfaceContext::getRenderFinishedSemaphore(uint32_t imageIndex)
+void* VulkanRenderSurfaceContext::getRenderFinishedSemaphore()
 {
-    return imageSubmittedSignalSemaphores[imageIndex];
+    return imageSubmittedSignalSemaphores[currentFrameIdx];
 }
 
 } // namespace ya
