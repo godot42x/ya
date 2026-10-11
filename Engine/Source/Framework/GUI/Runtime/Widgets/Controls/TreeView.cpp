@@ -457,6 +457,13 @@ FDisclosureLeading UITreeView::rowLeading(const Rect2D& rowRect,
     const float indent = static_cast<float>(depth) * _indentWidth;
     header.pos.x += indent;
     header.extent.x = std::max(0.0f, header.extent.x - indent);
+    // The trailing toggle band belongs to the eye: reserve it out of the
+    // title rect so a long label truncates before the glyph instead of
+    // running underneath it.
+    if (_rowToggle.bEnabled) {
+        const float band = std::max(_rowToggle.width, 12.0f);
+        header.extent.x  = std::max(0.0f, header.extent.x - band);
+    }
     return layoutDisclosureLeading(header,
                                    _arrowWidth,
                                    showsDisclosureButton(_disclosure),
