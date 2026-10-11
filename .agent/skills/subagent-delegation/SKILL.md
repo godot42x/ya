@@ -103,6 +103,7 @@ description: 派发 subagent 的规则：新开 / 续接（resume）/ 分叉（s
   `Script/agent/ya_lock.sh run -- <命令>`，先 `export YA_AGENT_NAME=<任务名>`，用 `Script/agent/ya_lock.sh status`
   看谁占着（规则见 `ya-build` skill「并行 agent 的独占构建锁」）。长驻进程不放进锁。
 - 提交仍由父 agent 做：要求每个 worker 报告按「一个可验收目标一个提交」分好的文件清单，父 agent 按路径分别暂存。
+- 同一时刻只允许一个 worker 在共享工作区提交。并行要提交时要么串行，要么各用独立 worktree。
 - 并行 worker 同时改同一类共享文件（如示例场景）是冲突来源，派发前先拆开顺序。
 
 ## 新开时的交接 prompt

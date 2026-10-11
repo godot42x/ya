@@ -31,6 +31,7 @@
 - `./widget_tick_gate_hidden_by_override.md`：tick 的"门"（`wantsTick`）曾被子类 override 接管，而执行侧仍转发 `_behaviors` → 挂在 compound 上的 tween/behavior 静默不跑且不报错；现在 tick 是树上的行为级登记表（behavior 与 owner 自身各一项，互不转发）。同族第二处（`onPointerEnter` 等 input dispatch）一并记录
 - `./stale_test_assertions_after_contract_change.md`：断言层测试过期的三类归属与修法（`engine.panel` 不再绘制、剪贴板是进程级、按下标找控件、默认参数翻转、依赖被禁用的生成器、`EXPECT_EXIT`+线程、平台最小化标志残留）；含"优先改断言而不是改框架"的约定
 - `./pointer_reconcile_reads_live_hardware.md`：focus-loss / mouse-leave 的 pointer reconcile 在处理处查活硬件（`queryGlobalMouse().buttonMask`），读到的"现在"冒充事件发生那一刻的"过去" → 测试不确定；修法是事件自带 `heldButtons`（`SDL_GetGlobalMouseState` 采样进事件）；`EditorInputNode` 同族未收口
+- `./parallel_worker_amend_on_shared_branch.md`：两个 worker 在同一工作区同一分支并行提交时，`git commit --amend` 会打到对方刚形成的 HEAD；amend 前必须核对 HEAD hash 仍是自己的提交，并行提交要么串行要么各用独立 worktree
 
 ## 边界
 
