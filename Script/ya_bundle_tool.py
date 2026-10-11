@@ -20,8 +20,9 @@ ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 ENGINE_CONTENT_DIR = WORKSPACE_ROOT / "Engine/Content"
 ENGINE_SHADER_SLANG_DIR = WORKSPACE_ROOT / "Engine/Shader" / "Slang"
 RUNTIME_SHADER_SOURCE_DIRS = [
-    WORKSPACE_ROOT / "Engine" / "Source" / "Render",
-    WORKSPACE_ROOT / "Engine" / "Source" / "Runtime",
+    WORKSPACE_ROOT / "Engine" / "Source" / "Framework" / "Render",
+    WORKSPACE_ROOT / "Engine" / "Source" / "Framework" / "GUI",
+    WORKSPACE_ROOT / "Engine" / "Source" / "Applications",
 ]
 ENGINE_THIRDPARTY_RESOURCE_DIRS = [
     WORKSPACE_ROOT / "Engine/ThirdParty" / "LearnOpenGL" / "resources",
@@ -529,6 +530,13 @@ def _copy_project_bundle(project: ProjectDescriptor, include_editor: bool, packa
 
     if project.content_dir.exists():
         _copy_tree_to(project.content_dir, project_package_dir / "Content")
+
+    descriptor = _read_json(project.source_path)
+    input_map = descriptor.get("inputMap")
+    if isinstance(input_map, str) and input_map:
+        source = project.resolve_path(Path(input_map))
+        if source.is_file():
+            _copy_file(source, package_root, project_package_dir / Path(input_map))
 
     project_root = project.source_path.parent
     manifests = collect_enabled_module_manifests(project, include_editor)

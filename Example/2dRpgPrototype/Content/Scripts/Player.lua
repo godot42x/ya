@@ -106,6 +106,18 @@ function Script:onInit()
     self:showPose(false)
 end
 
+-- Escape is the runtime cancel key. This opens the language card. While
+-- that card is the topmost visible entry, its own onCancel closes it and
+-- this function is not called.
+function Script:onCancel()
+    local settings = ui.get("Settings")
+    if type(settings) ~= "table" or type(settings.toggle) ~= "function" then
+        return false
+    end
+    settings:toggle()
+    return true
+end
+
 function Script:onUpdate(dt)
     -- A dialogue owns the player while it is up (this hold moves to a
     -- game-ui S4 modal entry once that lands). One press must never trigger
@@ -115,7 +127,13 @@ function Script:onUpdate(dt)
     -- reference: reading a field it does not have raises, so only a table
     -- (the live self) is asked :busy().
     local dialogue = ui.get(self.dialogueName)
-    self.talking = type(dialogue) == "table" and dialogue.busy ~= nil and dialogue:busy()
+    local inventory = ui.get("Inventory")
+    local journal = ui.get("Journal")
+    local settings = ui.get("Settings")
+    local function isBusy(entry)
+        return type(entry) == "table" and entry.busy ~= nil and entry:busy()
+    end
+    self.talking = isBusy(dialogue) or isBusy(inventory) or isBusy(journal) or isBusy(settings)
     if not confirmHeld() then
         self.bConfirmArmed = true
     end

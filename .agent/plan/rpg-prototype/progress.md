@@ -749,3 +749,61 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - `world.save(path)` 先对已加载的世界脚本调 `onSave`，再立刻写文件。`world.load(path)` 排到帧尾：停脚本、按存档里的场景路径加载（不放出生点）、换上 `Persist`。下一帧 `onInit` 时 `world.saveRestored()` 为真。场景转移不置这个标志，出生点仍然有效。同一帧后到的 `loadScene` 或 `load` 覆盖先到的。退出 play 仍然清空内存里的 `Persist`，文件还在。
 - `Player.lua` 的 `onSave` 记下当前格子和朝向；`onInit` 只在读档后的那一帧把人放回去。宝箱仍是交互时写 `Persist.opened`，`onInit` 套外观。
 - 验证：`SceneTransferTest.SaveRestoresPersistOnly` 通过。玩家被挪到 `(9, 9)` 不会进文件；`Persist.opened.Pot` 和 `Persist.player` 读档后还在，场景里的坐标回到文件里的 `(1, 1)`。同组其余 6 个转移测试仍通过。
+
+## 2026-10-10 — 对话分支
+
+- 目标与边界：对话框按页数据跳转。一页可以带 `choices`，选中项的 `next` 是另一页的键。不改文本控件，也不做背包、任务、商店。
+- `say` 仍接受字符串数组。具名稿用 `start` 指出第一页。数组页没有 `next` 就顺序往后；具名页没有 `next` 就关上。选项画在正文下面，`>` 标出当前项。Up / Down 移动，确认选中。逐字还没完时，确认只补全本页。
+- 村民的第二页有「井在哪」和「再见」。前者跳到井的那一句，后者关上。
+- 验证：`dialogue_page.py` exit 0。第一页仍是 Welcome，第二页出现 `> Where is the well?`，确认后正文是 `The well is north of the square.`
+
+## 2026-10-10 — 背包
+
+- 目标与边界：只存玩家拿到的物品。名字在 `Items.lua` 的目录里，数量在 `Persist.items`。面板列出这些数量。不做任务、商店，也不做格子拖拽。
+- `I` 开关 `Inventory` 条目。面板藏着时不进控件 tick，所以用 `every` 听按键。对话框开着时不切换。箱子第一次打开给 `brass_key` 一把，并仍用 `Persist.opened` 记住盖子。
+- 验证：`inventory.py` exit 0。房子里打开罐子后，`I` 列出 `Brass Key x1`。四张 RPG 场景挂上 `Inventory` 条目后，`ReflectionSceneResave.TrackedScenesMatchBaseline` 的重存哈希已换。
+
+## 2026-10-10 — 任务
+
+- 目标与边界：只记玩家接过的任务。文案在 `Quests.lua` 的目录里，状态在 `Persist.quests`（`active` / `done`）。面板列出这些状态。不做商店，也不做多步目标链。
+- `J` 开关 `Journal` 条目。面板藏着时不进控件 tick，所以用 `every` 听按键。对话框开着时不切换。村民选「What's in the house?」时 `onShow` 接上 `pot`。罐子第一次打开把它记成 `done`，没接过也记。
+- 验证：`quest.py` exit 0。城镇里接任务后，`J` 列出进行中的 `The storage pot`。`scene.load` 清掉 `Persist` 之后，打开罐子，`J` 列出同一条的完成句。`dialogue_page.py` 仍走到井的那一句。四张 RPG 场景挂上 `Journal` 条目后，重存哈希已换。
+
+## 2026-10-10 — 面板按内容长高
+
+- 目标与边界：对话框第三个选项不再被固定高度裁掉。背包和任务日志不再是铺满视口的一条黑底文字。不改对话数据，也不做商店。
+- `UIText` 的固有高度按换行计数。三张卡片都是边框里的纵向容器，高度跟正文走。背包靠右上，日志靠左上，对话框靠底部并且限宽。
+- 验证：`WidgetLayoutTest.NewlineRaisesTextHeightByALine`。`dialogue_page.py` 在三个选项都写进正文时，正文高度至少 96。`inventory.py` 与 `quest.py` 仍通过。
+
+## 2026-10-10 — 任务提示
+
+- 目标与边界：接取和完成各出现一次短提示。不锁移动，也不做商店。
+- `Quests.start` / `complete` 只在状态真的变化时叫 `QuestNotice:show`。横幅在顶部中间，2.5 秒后隐藏。
+- 验证：`quest.py` 在接上 `pot` 时看到 `Quest accepted`，打开罐子时看到 `Quest complete`。四张 RPG 场景挂上这个条目后，重存哈希已换。
+
+## 2026-10-10 — 任务折行，选项在右侧
+
+- 目标与边界：任务长句不再被卡片裁掉。选项在这一页打开时就出现，排在对话框右侧，不写进正文下面。不做商店。
+- 日志正文按 `_maxWrapWidth` 折行，卡片跟着长高。对话框是左正文、右 `Choice1`..`Choice4`。打字机只填左侧。
+- 验证：`WidgetLayoutTest.EmptyTextTakesNoSpace`。`dialogue_page.py` 在正文还没打完时就能看到右侧三个选项，打完后再确认走进井的那一句。`quest.py` 与 `inventory.py` 仍通过。
+
+## 2026-10-11 — 商店和井的结局
+
+- 目标与边界：补上商店，并把城镇、房子、回城、结局接成一条能玩通的流程。不新做迷宫图，也不做纯 2D View（G2.6，等 render-view-family）和 tilemap 静态缓冲（G2.7，触发条件未到）。
+- 硬币和护符进 `Items` 目录。`Shop.buy` 花 3 枚硬币卖出护符，已经有的不再卖。商人对话框成交，并接上 `well`。井在身上有护符时完成这条任务。罐子同时给出钥匙和 5 枚硬币。
+- 验证：`playthrough.py` 先在摊位听到钱不够，再从房子带回硬币，买到护符，井上看到结局。`dialogue_page.py`、`quest.py`、`inventory.py` 仍通过。Town 重存哈希换成 `b72b685af319a8ed`。
+- 打包：shader 名字现在写在 `Framework/Render`，扫描目录还指着旧的 `Engine/Source/Render`，包里没有 slang，冒烟在 BRDF LUT 上断言失败。扫描改到 Framework，并把 `InputMap.json` 拷进包。`ya.py package --smoke-run` 退出码 0。录屏没有做。
+
+## 2026-10-11 — 按词折行，Esc 切换中英文
+
+- 目标与边界：商人那句不再从单词中间断开，也不在 340 像素处提前换行。Esc 打开设置，空格在英文和中文之间切。默认仍是英文，已有玩法测试对的还是英文字符串。
+- `UIText` 在空格处折行，中日韩字符各自可断；一个词比整行还宽才切开。对话框是固定的 760×168。正文长度上限是 500，文案按这个上限写，卡片不跟着某一句变大。
+- `Persist.locale` 缺省是英文。`Locale.tr` 在显示时翻译。Esc 走运行时的 `onCancel`：玩家脚本打开设置，设置自己再被 Esc 关上。空格切换后，开着的对话、背包、日志和任务提示立刻重画。
+- 验证：`WidgetLayoutTest.WrappedTextBreaksOnSpaces`。`settings_locale.py` 把「Welcome to Tiny Town!」换成「欢迎来到小镇！」。`dialogue_page.py`、`quest.py`、`inventory.py`、`playthrough.py` 仍是英文并通过。四张 RPG 场景挂上 `Settings` 后，重存哈希换成 House `f3db3e2533f81135`、PropertyOverride `4e5a90448a2bbec4`、Town `5a8ada40098e8ade`、TownLarge `3abb4a52113cb63a`。
+
+## 2026-10-11 — Esc 设置，柜子与井之玻璃
+
+- 目标与边界：Play 里按 Esc 能打开设置。主线仍是买护符唤醒井，另给一条用钥匙的岔路。不改 TownLarge，也不做新地图。
+- 编辑器里 Esc 先前只在视口控件拥有键盘焦点时才进游戏，否则松键直接停止 Play。视口里点一下还会抓住鼠标，捕获会话把后续按键全部吃掉，Esc 既打不开设置也不会停 Play。现在 Play 中 Esc 先走游戏的 `onCancel`（捕获中也一样），游戏接住就松开鼠标；文本框正聚焦时除外。设置卡片改为固定的 320×140，停在画面正中。
+- 房子左侧 `Cabinet` 用黄铜钥匙打开一次，换成井之玻璃。井认护符或玻璃，结局句子不同。告示牌、商人和井会提到这条路。村民的差事仍只说储物罐。
+- House 重存哈希换成 `ef548321fafc473f`。

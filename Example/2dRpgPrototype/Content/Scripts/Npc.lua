@@ -3,6 +3,7 @@
 -- player through map:entityAt, so it reads as a body on the map without any
 -- collision code here.
 local ScriptBase = require("ScriptBase")
+local Quests = require("Quests")
 local Script = ScriptBase:new()
 
 Script.dialogueName = "Dialogue"
@@ -13,10 +14,36 @@ Script:properties({
     }
 })
 
-local LINES = {
-    "Welcome to Tiny Town!",
-    "Mind the fences -- the map keeps the roads, not me.",
-}
+-- Pages are data, rebuilt per talk so the pot errand can follow Persist.
+-- `start` is the first key. A choice's `next` is another page; a missing
+-- `next` closes the box. Showing `errand` starts the pot quest once.
+local function lines()
+    local errand
+    if Quests.state("pot") == "done" then
+        errand = "You already looked in the pot."
+    else
+        errand = {
+            text = "A storage pot in the house. Have a look inside.",
+            onShow = function()
+                Quests.start("pot")
+            end,
+        }
+    end
+    return {
+        start = "greet",
+        greet = { text = "Welcome to Tiny Town!", next = "roads" },
+        roads = {
+            text = "Mind the fences -- the map keeps the roads, not me.",
+            choices = {
+                { text = "Where is the well?", next = "well" },
+                { text = "What's in the house?", next = "errand" },
+                { text = "Goodbye" },
+            },
+        },
+        well = "The well is north of the square.",
+        errand = errand,
+    }
+end
 
 -- The entity's SpriteAnimationComponent has one standing clip per facing.
 function Script:face(facing)
@@ -44,7 +71,7 @@ function Script:onInteract(who)
     end
     local dialogue = ui.get(self.dialogueName)
     if dialogue then
-        dialogue:say(LINES)
+        dialogue:say(lines())
     else
         log:warn("Npc: no Dialogue entry mounted")
     end

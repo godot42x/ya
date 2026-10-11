@@ -23,6 +23,7 @@ struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FText
     YA_REFLECT_FIELD(_hAlign, .instanceEditable())
     YA_REFLECT_FIELD(_vAlign, .instanceEditable())
     YA_REFLECT_FIELD(_bWrap, .instanceEditable())
+    YA_REFLECT_FIELD(_maxWrapWidth, .instanceEditable())
     YA_REFLECT_END()
 
     YA_GUI_AUTHORED_STYLE_IO(FTextStyle)

@@ -366,7 +366,7 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   DSL 跨度锚点 / insets 会把 Auto 升成 Fixed，所以 stretch 生效；不要依赖“看起来像 fill 的锚点 + Auto 轴”。
   需要在 stretch 区域里按内容测量时，在 placement 之后写回 Auto。`fill()` 是两轴 Fixed + `[0,1]`。
   child geometry 永远不是 layout 输入；`computeDesiredSize` / `computeIntrinsicSize` 只报告内容。不存在仍读取 child authored geometry 的 path-B。
-- `UIText`：desired / intrinsic = `font.measureText(text) × lineHeight`（与 AutoSize 无关）；字体经
+- `UIText`：空字符串的 desired / intrinsic 是 0。非空时宽是最长一行，高是行数 × `lineHeight`（`\n` 硬换行；`_bWrap` 再按 `_maxWrapWidth` 折行，0 则按整段宽度测量，绘制时不超过排布后的矩形）。折行落在空格上，中日韩字符各自可断；一个词比整行还宽时才从中间切开。`_maxWrapWidth` 可序列化。字体经
   FontManager 解析，closure 测试用 `registerFont` 注入合成字体。显式尺寸在 parent-owned slot 上。
 - `UIButton` / `UISelectableRow` / `UICheckBox`（Content-Slot）：单 child 容器。标签是内容槽里的 `UIText`
   子节点（DSL：`.child(ui::text(...).setText(...))`）。`UISingleChildLayout` padding + 内容子节点填入

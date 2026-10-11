@@ -291,25 +291,25 @@
       "id": "G2.3",
       "group": "G2",
       "priority": "P0",
-      "title": "inventory / quest / shop / dialogue branches",
+      "title": "dialogue, inventory, quests, and shop",
       "owner_line": "rpg-prototype",
-      "status": "todo",
+      "status": "done",
       "evidence": []
     },
     {
       "id": "G2.4",
       "group": "G2",
       "priority": "P0",
-      "title": "full playthrough content",
+      "title": "town, house, shop, and well ending",
       "owner_line": "rpg-prototype",
-      "status": "todo",
+      "status": "done",
       "evidence": []
     },
     {
       "id": "G2.5",
       "group": "G2",
       "priority": "P0",
-      "title": "package + video",
+      "title": "package smoke passed; recording still open",
       "owner_line": "rpg-prototype",
       "status": "todo",
       "evidence": []

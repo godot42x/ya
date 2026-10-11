@@ -3,5 +3,7 @@
   "move_down": ["Down", "S"],
   "move_left": ["Left", "A"],
   "move_right": ["Right", "D"],
-  "confirm": ["Space", "Enter", "E"]
+  "confirm": ["Space", "Enter", "E"],
+  "inventory": ["I"],
+  "journal": ["J"]
 }

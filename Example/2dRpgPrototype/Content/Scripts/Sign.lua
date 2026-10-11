@@ -17,6 +17,7 @@ local TINT_READ = Vec4.new(1.0, 0.85, 0.45, 1.0)
 local LINES = {
     "Tiny Town -- drawn with the tile brush, kept by the tilemap.",
     "Everything that stands still and has a name can be talked to.",
+    "Two ways to wake the well: a charm from the stall, or glass from the locked cabinet.",
 }
 
 function Script:onInit()

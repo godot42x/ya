@@ -101,8 +101,16 @@ Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色�
 
 ## 对话框（Game UI 条目）
 
-- 对话框是一个 autoMount 的 Game UI 条目（`widgetEntries`），根 panel 挂
-  `script.lua` behavior 并常驻 Hidden；脚本提供 `say(lines, onDone)` 与 `busy()`。
+- 对话框、背包、任务日志都是 autoMount 条目。卡片是 `engine.border` 里的纵向
+  `engine.container`。背包贴在右上，日志贴在左上再往下，都按正文长高。对话框是固定的
+  760×168，贴在底部居中，不跟某一页的长短变。正文长度上限是 500（18 号字）。超出就按词折行，
+  中日韩按字折。文案按这个上限来写。
+- 对话框根 panel 挂 `script.lua` behavior 并常驻 Hidden；脚本提供 `say(script, onDone)` 与 `busy()`。
+  `script` 是页数组，或带 `start` 的页表。一页是字符串，或 `{ text, next, choices, onShow }`。
+  `choices` 的每一项是 `{ text, next }`，`next` 是另一页的键。`onShow` 是函数时，这一页打开时调用一次。数组页省掉 `next` 就顺序往后；
+  具名页省掉 `next` 就关上。选项是正文右侧各自一行的 `Choice1`..`Choice4`，这一页打开就显示，不等打字机结束。
+  `>` 画在固定宽度的 `Mark` 槽里，标签文字不随高亮改变，所以换项时这一列不左右挪。
+  Up / Down 移动高亮，确认选中。确认键在正文还没打完时只把这一页补全。
 - 玩法侧（NPC / 玩家 / 箱子 / 告示牌）经 `ui.get(self.dialogueName):say(...)` 说话。
   `dialogueName` 默认 `"Dialogue"`，场景 `propertyOverrides` 可改。跟随相机的目标
   默认 `"Player"`（`FollowCamera.lua` 的 `targetName`）。**移动锁由玩法状态控制**——
@@ -114,6 +122,43 @@ Decor `zOffset` 0.03 和 Overlay 0.2 之间，3D 遮挡语义和从前的角色�
   推进对话又再次触发交互。
 - Lua 全局是小写 `time`（`LuaTimeApi` 实例）与 `input` / `log`；大写 `Time` 是
   usertype 表，不能在其上调方法。
+
+## 背包
+
+- 物品名字在 `Content/Scripts/Items.lua` 的 `catalog`。数量在 `Persist.items[id]`。
+  `Items.give(id, count)` 只接受目录里的 id。存档和场景转移都跟着 `Persist` 走。
+- 面板是 autoMount 条目 `Inventory`（`Content/UI/Inventory.yaui.json`）。`I`（动作 `inventory`）
+  开关。面板默认 Hidden，隐藏控件不进 tick，所以脚本用 `every` 听这键。对话框开着时不做切换。
+  玩家在面板开着时同样停步。
+- 箱子第一次打开调用 `Items.give("brass_key", 1)` 和 `Items.give("coin", 5)`，同时记下 `Persist.opened`。
+  `Items.count` / `Items.take` 读写同一张表。花光的一摞会从袋子里拿掉。
+
+## 任务
+
+- 任务文案在 `Content/Scripts/Quests.lua` 的 `catalog`。状态在 `Persist.quests[id]`，取值 `active` 或 `done`。
+  `start` 对已经接过或完成的任务不再改写。`complete` 把未完成的记成 `done`，没接过也记。
+- 面板是 autoMount 条目 `Journal`（`Content/UI/Journal.yaui.json`），贴在左上。`J`（动作 `journal`）
+  开关。面板默认 Hidden，隐藏控件不进 tick，所以脚本用 `every` 听这键。对话框开着时不做切换。
+  玩家在面板开着时同样停步。正文 `_bWrap` 且 `_maxWrapWidth` 落在卡片内宽里，长目标折行，卡片跟着长高。
+- 村民的「What's in the house?」打开 `errand` 页，页上的 `onShow` 调用 `Quests.start("pot")`。
+  罐子第一次打开调用 `Quests.complete("pot")`。状态真的变了才弹出 `QuestNotice`：
+  「Quest accepted」或「Quest complete」，加上任务名。几秒后自己关掉，不锁移动。
+
+## 商店和结局
+
+- 货和价格在 `Content/Scripts/Shop.lua`。`well_charm` 卖 3 个 `coin`。已经带着的货不再卖。
+  钱不够返回 `"poor"`，买成返回 `"ok"`。
+- 广场上的 `Merchant` 用对话框卖。打开柜台就 `Quests.start("well")`。买到的是护符。还可以问钥匙的用途。
+- `Well` 在广场北面。身上有护符，或有柜子里的井之玻璃，才把 `well` 记成完成。两条结局句子不同。都没有就只说井还是静的。
+- 房子左侧的 `Cabinet` 用罐子里的黄铜钥匙打开一次，钥匙花掉，换成 `well_glass`。这是不花钱唤醒井的另一条路。
+- 一条可玩通的流程：城镇摊位（没钱）→ 房子里的罐子（钥匙和硬币）→ 门口走回城镇（`Persist` 还在）→ 买护符 → 井。
+  柜子是可选的。房子是这一条里的室内。不另做迷宫图。
+
+## 设置和语言
+
+- Esc 是运行时的取消键，不进 InputMap。玩家脚本的 `onCancel` 打开 `Settings`。编辑器 Play 里，Esc 即使视口控件没有键盘焦点也会先交给游戏；游戏没接住，松键才停止 Play。文本框正聚焦时 Esc 仍留给文本框。视口里按下鼠标会抓住指针，这层捕获不再吞掉 Esc；游戏接住 Esc 时松开指针。卡片开着时它是最上面的可见条目，自己的 `onCancel` 把它关上，玩家脚本不会再被叫到，所以一次 Esc 只开关一次。卡片固定在画面正中。空格在卡片里切换语言。
+- 英文是原文。`Persist.locale` 缺省或 `"en"` 时 `Locale.tr` 原样返回，玩法测试继续对英文。`"zh"` 才查中文表。`Locale.refresh` 让对话、背包、日志、任务提示和设置各自 `applyLocale`。对话开着时切换会换掉当前页和右侧选项。
+- 设置开着时玩家停步。对话、背包、日志在这段时间里不吃确认和自己的开关键。任务提示仍然不锁移动。
 
 ## 像素完美相机
 

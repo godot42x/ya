@@ -106,10 +106,10 @@ struct SceneBaseline
 };
 
 constexpr SceneBaseline kScenes[] = {
-    {"Example/2dRpgPrototype/Content/Scenes/House.scene.json", "21aa871b08136afd"},
-    {"Example/2dRpgPrototype/Content/Scenes/PropertyOverride.scene.json", "78cd79bee9c492ac"},
-    {"Example/2dRpgPrototype/Content/Scenes/Town.scene.json", "eb5b809a5adf0c5a"},
-    {"Example/2dRpgPrototype/Content/Scenes/TownLarge.scene.json", "135679ba934a6c3a"},
+    {"Example/2dRpgPrototype/Content/Scenes/House.scene.json", "ef548321fafc473f"},
+    {"Example/2dRpgPrototype/Content/Scenes/PropertyOverride.scene.json", "4e5a90448a2bbec4"},
+    {"Example/2dRpgPrototype/Content/Scenes/Town.scene.json", "5a8ada40098e8ade"},
+    {"Example/2dRpgPrototype/Content/Scenes/TownLarge.scene.json", "3abb4a52113cb63a"},
     {"Example/GreedySnake/Content/Scenes/GreedySnake.scene.json", "c194b557a64c9566"},
     {"Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json", "94cafe06d86b9d46"},
     {"Example/PerfLab/Content/Scenes/Lights_50.scene.json", "5562c4d3845e6583"},

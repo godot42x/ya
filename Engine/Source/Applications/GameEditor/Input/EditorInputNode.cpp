@@ -119,6 +119,14 @@ FInputReply routeCapturedViewportInput(
         return {};
     }
 
+    // A click in the viewport captures the pointer for look and then this
+    // session owns every later key. Escape is the game's cancel key, and the
+    // editor's stop-play key when the game does not take it, so it has to
+    // fall through.
+    if (isEscapeKey(event)) {
+        return {};
+    }
+
     app.getInputManager().processEvent(event);
     return FInputReply{.handled = true};
 }
@@ -185,13 +193,25 @@ FInputReply routeGameplayViewportInput(
         };
     }
 
-    if (snapshot.keyboardEvent && snapshot.viewportFocused && !snapshot.textInput) {
+    // Escape reaches the game even when the viewport widget is not the focused
+    // editor control, so Play can open its own menu. A text field still wins.
+    // Any other key stays on the viewport-focus gate, and an Escape the game
+    // does not take falls through to the editor's stop-play policy.
+    if (snapshot.keyboardEvent && !snapshot.textInput &&
+        (snapshot.viewportFocused || isEscapeKey(event))) {
         if (app.blocksGameplayInput(event)) {
-            return FInputReply{.handled = true};
+            FInputReply reply{.handled = true};
+            // The menu is on screen now; a grabbed cursor would hide it from
+            // the player. Releasing here is the same empty request grave uses.
+            if (context.router.isMouseCaptured()) {
+                reply.pointerCapture = FPointerCaptureRequest{};
+            }
+            return reply;
+        }
+        if (!snapshot.viewportFocused) {
+            return {};
         }
         app.getInputManager().processEvent(event);
-        // The same game key step as a standalone run; an Escape the game
-        // leaves goes on to the editor's Escape policy.
         const bool bConsumed = app.dispatchWorldKey(event);
         return FInputReply{.handled = bConsumed || !isEscapeKey(event)};
     }

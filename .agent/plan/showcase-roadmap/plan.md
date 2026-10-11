@@ -98,9 +98,9 @@
 | --- | --- | --- |
 | G2.1 | 已落地：相机 2D 字段在 `CameraComponent`；跟随留在 `FollowCamera.lua`。对话逐字在 `Dialogue.lua`，不进文本控件 | P0 |
 | G2.2 | 存档 / 读档：`world.save` / `world.load` 写场景路径和 `Persist`。要留下的状态由脚本 `onSave` 写入。不做背包界面 | P0 |
-| G2.3 | 背包、任务、商店、对话分支，数据驱动（配置表 + UI 绑定） | P0 |
-| G2.4 | 内容：一条完整流程（城镇 → 迷宫 / 解谜 → 收尾事件 → 结局），约 10 分钟 | P0 |
-| G2.5 | 打包到干净机器可运行 + 录屏 | P0 |
+| G2.3 | 对话分支、背包、任务、商店：页 `choices` 跳到 `next`；物品数量在 `Persist.items`；任务状态在 `Persist.quests`；`Shop.buy` 花硬币卖护符 | P0 |
+| G2.4 | 内容：城镇摊位 → 房子里的罐子 → 回城买护符 → 井的结局。用现有城镇和房子，不另做迷宫图 | P0 |
+| G2.5 | 打包冒烟已通过：运行时 shader 从 `Framework/Render` 扫进包，`InputMap.json` 跟项目走。录屏还没有 | P0 |
 | G2.6 | 纯 2D View 家族（随 R12） | P1 |
 | G2.7 | tilemap 静态实例缓冲（`rpg-prototype` 步骤 5c 的触发条件满足时） | P2 |
 

@@ -3,6 +3,8 @@
 -- SpriteAnimationComponent has two one-frame clips: "closed" (the lidded pot)
 -- and "open" (the golden one).
 local ScriptBase = require("ScriptBase")
+local Items = require("Items")
+local Quests = require("Quests")
 local Script = ScriptBase:new()
 
 Script.dialogueName = "Dialogue"
@@ -13,7 +15,7 @@ Script:properties({
     }
 })
 
-local LINES_OPENED = { "You opened the storage pot." }
+local LINES_OPENED = { "You opened the storage pot. Along with some coins, a brass key was inside." }
 local LINES_EMPTY = { "The pot is empty now." }
 
 function Script:bOpened()
@@ -41,6 +43,9 @@ function Script:onInteract()
     local bWasOpened = self:bOpened()
     if not bWasOpened then
         Persist.opened[self.entity:getName()] = true
+        Items.give("brass_key", 1)
+        Items.give("coin", 5)
+        Quests.complete("pot")
         self:applyState()
     end
     local dialogue = ui.get(self.dialogueName)

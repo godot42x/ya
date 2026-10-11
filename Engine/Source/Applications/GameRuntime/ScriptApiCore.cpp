@@ -607,7 +607,7 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
     registry.registerFunction(
         "ui.query",
         "Reads a mounted Game UI entry. Args: {entry, widget?}. "
-        "Returns {name, visible}; text widgets also return {text}. "
+        "Returns {name, visible, rect}; text widgets also return {text}. "
         "visible is false when the widget or an ancestor is hidden.",
         Json{{"entry", {{"type", "string"}}}, {"widget", {{"type", "string"}}}},
         [](const Json& args) -> Json {
@@ -630,9 +630,12 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
                 }
                 widget = found.get();
             }
+            const Rect2D& rect = widget->getLayoutRect();
             Json out{
                 {"name", widget->_name},
                 {"visible", widget->isVisibleInTree()},
+                {"rect",
+                 {{"x", rect.pos.x}, {"y", rect.pos.y}, {"w", rect.extent.x}, {"h", rect.extent.y}}},
             };
             if (const auto* text = dynamic_cast<const UIText*>(widget)) {
                 out["text"] = text->getText();

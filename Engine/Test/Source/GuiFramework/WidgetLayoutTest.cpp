@@ -300,6 +300,55 @@ TEST(WidgetLayoutTest, WrappedTextWithoutExplicitWidthKeepsIntrinsicWidth)
     EXPECT_FLOAT_EQ(intrinsic.y, 20.0f);
 }
 
+TEST(WidgetLayoutTest, WrappedTextBreaksOnSpaces)
+{
+    auto font = registerSyntheticFont(16, 8.0f);
+    auto label = std::make_shared<UIText>("WrappedWords");
+    label->setText("Hello world");
+    label->_fontSize = 16;
+    label->_bWrap = true;
+    label->_maxWrapWidth = 40.0f;
+    const auto lines = label->wrapText("Hello world", font, 40.0f);
+    ASSERT_EQ(lines.size(), 2u);
+    EXPECT_EQ(lines[0], "Hello");
+    EXPECT_EQ(lines[1], "world");
+    const glm::vec2 intrinsic = label->computeIntrinsicSize();
+    EXPECT_FLOAT_EQ(intrinsic.x, 40.0f);
+    EXPECT_FLOAT_EQ(intrinsic.y, 40.0f);
+
+    // A word wider than the line may split, and only then.
+    const auto broken = label->wrapText("Hello", font, 24.0f);
+    ASSERT_EQ(broken.size(), 2u);
+    EXPECT_EQ(broken[0], "Hel");
+    EXPECT_EQ(broken[1], "lo");
+}
+
+TEST(WidgetLayoutTest, EmptyTextTakesNoSpace)
+{
+    registerSyntheticFont(16, 8.0f);
+    auto label = std::make_shared<UIText>("Empty");
+    label->setText("");
+    label->_fontSize = 16;
+    EXPECT_EQ(label->computeIntrinsicSize(), glm::vec2(0.0f, 0.0f));
+}
+
+TEST(WidgetLayoutTest, NewlineRaisesTextHeightByALine)
+{
+    registerSyntheticFont(16, 8.0f);
+    auto label = std::make_shared<UIText>("Lines");
+    label->setText("ab\nc");
+    label->_fontSize = 16;
+    const glm::vec2 intrinsic = label->computeIntrinsicSize();
+    EXPECT_FLOAT_EQ(intrinsic.x, 16.0f);
+    EXPECT_FLOAT_EQ(intrinsic.y, 40.0f);
+
+    label->_bWrap = true;
+    label->setText("Hello\nworld");
+    const glm::vec2 wrapped = label->computeIntrinsicSize();
+    EXPECT_FLOAT_EQ(wrapped.x, 40.0f);
+    EXPECT_FLOAT_EQ(wrapped.y, 40.0f);
+}
+
 TEST(WidgetLayoutTest, AnchorLayoutResolvesStretchOverAutoOverSize)
 {
     registerSyntheticFont(16, 8.0f);

@@ -201,6 +201,88 @@
     },
     {
       "components": {
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Merchant.lua"
+            }
+          ]
+        },
+        "Sprite2DComponent": {
+          "bYSort": true,
+          "image": {
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content/Textures/hero_walk.png"
+                }
+              }
+            }
+          },
+          "pivot": [0.5, 0.333333],
+          "size": [1.0, 1.5],
+          "tint": [1.0, 0.72, 0.35, 1.0],
+          "uvRect": [0.333333, 0.0, 0.666667, 0.25]
+        },
+        "SpriteAnimationComponent": {
+          "animation": {
+            "__base__": {
+              "AssetRefBase": {
+                "_path": "Content/Animations/Npc.yaanim.json"
+              }
+            }
+          },
+          "clip": "idle_down"
+        },
+        "TransformComponent": {
+          "_position": [7.5, 2.5, 0.1]
+        }
+      },
+      "id": 1026,
+      "name": "Merchant"
+    },
+    {
+      "components": {
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Well.lua"
+            }
+          ]
+        },
+        "Sprite2DComponent": {
+          "bYSort": true,
+          "image": {
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content/Textures/tiny_town.png"
+                }
+              }
+            }
+          },
+          "tint": [0.45, 0.75, 1.0, 1.0],
+          "uvRect": [0.416667, 0.0, 0.5, 0.090909]
+        },
+        "TransformComponent": {
+          "_position": [2.5, 5.5, 0.1]
+        }
+      },
+      "id": 1027,
+      "name": "Well"
+    },
+    {
+      "components": {
         "TilemapComponent": {
           "height": 20,
           "layers": [
@@ -334,6 +416,14 @@
       {
         "entityRef": 1025,
         "name": "SpawnFromHouse"
+      },
+      {
+        "entityRef": 1026,
+        "name": "Merchant"
+      },
+      {
+        "entityRef": 1027,
+        "name": "Well"
       }
     ],
     "name": "scene_root"
@@ -366,6 +456,114 @@
         "widthSizeMode": 0
       },
       "zOrder": 10
+    },
+    {
+      "autoMount": true,
+      "document": "Content:UI/Inventory.yaui.json",
+      "entryId": "Inventory",
+      "rootSlot": {
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "anchorMax": [1.0, 1.0],
+        "anchorMin": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0],
+        "heightSizeMode": 0,
+        "maxSize": [1000000.0, 1000000.0],
+        "minSize": [0.0, 0.0],
+        "offset": [0.0, 0.0],
+        "offsets": {
+          "bottom": 0.0,
+          "left": 0.0,
+          "right": 0.0,
+          "top": 0.0
+        },
+        "pivot": [0.0, 0.0],
+        "preferredSize": [0.0, 0.0],
+        "type": "canvas",
+        "widthSizeMode": 0
+      },
+      "zOrder": 20
+    },
+    {
+      "autoMount": true,
+      "document": "Content:UI/Journal.yaui.json",
+      "entryId": "Journal",
+      "rootSlot": {
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "anchorMax": [1.0, 1.0],
+        "anchorMin": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0],
+        "heightSizeMode": 0,
+        "maxSize": [1000000.0, 1000000.0],
+        "minSize": [0.0, 0.0],
+        "offset": [0.0, 0.0],
+        "offsets": {
+          "bottom": 0.0,
+          "left": 0.0,
+          "right": 0.0,
+          "top": 0.0
+        },
+        "pivot": [0.0, 0.0],
+        "preferredSize": [0.0, 0.0],
+        "type": "canvas",
+        "widthSizeMode": 0
+      },
+      "zOrder": 30
+    },
+    {
+      "autoMount": true,
+      "document": "Content:UI/QuestNotice.yaui.json",
+      "entryId": "QuestNotice",
+      "rootSlot": {
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "anchorMax": [1.0, 1.0],
+        "anchorMin": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0],
+        "heightSizeMode": 0,
+        "maxSize": [1000000.0, 1000000.0],
+        "minSize": [0.0, 0.0],
+        "offset": [0.0, 0.0],
+        "offsets": {
+          "bottom": 0.0,
+          "left": 0.0,
+          "right": 0.0,
+          "top": 0.0
+        },
+        "pivot": [0.0, 0.0],
+        "preferredSize": [0.0, 0.0],
+        "type": "canvas",
+        "widthSizeMode": 0
+      },
+      "zOrder": 40
+    },
+    {
+      "autoMount": true,
+      "document": "Content:UI/Settings.yaui.json",
+      "entryId": "Settings",
+      "rootSlot": {
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "anchorMax": [1.0, 1.0],
+        "anchorMin": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0],
+        "heightSizeMode": 0,
+        "maxSize": [1000000.0, 1000000.0],
+        "minSize": [0.0, 0.0],
+        "offset": [0.0, 0.0],
+        "offsets": {
+          "bottom": 0.0,
+          "left": 0.0,
+          "right": 0.0,
+          "top": 0.0
+        },
+        "pivot": [0.0, 0.0],
+        "preferredSize": [0.0, 0.0],
+        "type": "canvas",
+        "widthSizeMode": 0
+      },
+      "zOrder": 50
     }
   ]
 }

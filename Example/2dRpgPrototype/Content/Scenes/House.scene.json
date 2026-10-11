@@ -190,6 +190,51 @@
       },
       "id": 3003,
       "name": "Chest"
+    },
+    {
+      "components": {
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Cabinet.lua"
+            }
+          ]
+        },
+        "Sprite2DComponent": {
+          "bYSort": true,
+          "image": {
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content/Textures/tiny_town.png"
+                }
+              }
+            }
+          },
+          "tint": [0.55, 0.72, 0.95, 1.0],
+          "uvRect": [0.916667, 0.727273, 1.0, 0.818182]
+        },
+        "SpriteAnimationComponent": {
+          "animation": {
+            "__base__": {
+              "AssetRefBase": {
+                "_path": "Content/Animations/Chest.yaanim.json"
+              }
+            }
+          },
+          "clip": "closed"
+        },
+        "TransformComponent": {
+          "_position": [2.5, 4.5, 0.1]
+        }
+      },
+      "id": 3004,
+      "name": "Cabinet"
     }
   ],
   "name": "House",
@@ -218,6 +263,10 @@
       {
         "entityRef": 3003,
         "name": "Chest"
+      },
+      {
+        "entityRef": 3004,
+        "name": "Cabinet"
       }
     ],
     "name": "scene_root"
@@ -250,6 +299,114 @@
         "widthSizeMode": 0
       },
       "zOrder": 10
+    },
+    {
+      "autoMount": true,
+      "document": "Content:UI/Inventory.yaui.json",
+      "entryId": "Inventory",
+      "rootSlot": {
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "anchorMax": [1.0, 1.0],
+        "anchorMin": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0],
+        "heightSizeMode": 0,
+        "maxSize": [1000000.0, 1000000.0],
+        "minSize": [0.0, 0.0],
+        "offset": [0.0, 0.0],
+        "offsets": {
+          "bottom": 0.0,
+          "left": 0.0,
+          "right": 0.0,
+          "top": 0.0
+        },
+        "pivot": [0.0, 0.0],
+        "preferredSize": [0.0, 0.0],
+        "type": "canvas",
+        "widthSizeMode": 0
+      },
+      "zOrder": 20
+    },
+    {
+      "autoMount": true,
+      "document": "Content:UI/Journal.yaui.json",
+      "entryId": "Journal",
+      "rootSlot": {
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "anchorMax": [1.0, 1.0],
+        "anchorMin": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0],
+        "heightSizeMode": 0,
+        "maxSize": [1000000.0, 1000000.0],
+        "minSize": [0.0, 0.0],
+        "offset": [0.0, 0.0],
+        "offsets": {
+          "bottom": 0.0,
+          "left": 0.0,
+          "right": 0.0,
+          "top": 0.0
+        },
+        "pivot": [0.0, 0.0],
+        "preferredSize": [0.0, 0.0],
+        "type": "canvas",
+        "widthSizeMode": 0
+      },
+      "zOrder": 30
+    },
+    {
+      "autoMount": true,
+      "document": "Content:UI/QuestNotice.yaui.json",
+      "entryId": "QuestNotice",
+      "rootSlot": {
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "anchorMax": [1.0, 1.0],
+        "anchorMin": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0],
+        "heightSizeMode": 0,
+        "maxSize": [1000000.0, 1000000.0],
+        "minSize": [0.0, 0.0],
+        "offset": [0.0, 0.0],
+        "offsets": {
+          "bottom": 0.0,
+          "left": 0.0,
+          "right": 0.0,
+          "top": 0.0
+        },
+        "pivot": [0.0, 0.0],
+        "preferredSize": [0.0, 0.0],
+        "type": "canvas",
+        "widthSizeMode": 0
+      },
+      "zOrder": 40
+    },
+    {
+      "autoMount": true,
+      "document": "Content:UI/Settings.yaui.json",
+      "entryId": "Settings",
+      "rootSlot": {
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "anchorMax": [1.0, 1.0],
+        "anchorMin": [0.0, 0.0],
+        "fixedSize": [0.0, 0.0],
+        "heightSizeMode": 0,
+        "maxSize": [1000000.0, 1000000.0],
+        "minSize": [0.0, 0.0],
+        "offset": [0.0, 0.0],
+        "offsets": {
+          "bottom": 0.0,
+          "left": 0.0,
+          "right": 0.0,
+          "top": 0.0
+        },
+        "pivot": [0.0, 0.0],
+        "preferredSize": [0.0, 0.0],
+        "type": "canvas",
+        "widthSizeMode": 0
+      },
+      "zOrder": 50
     }
   ]
 }

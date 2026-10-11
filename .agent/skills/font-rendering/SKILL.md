@@ -79,7 +79,7 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
 - GameEditor Window 工具 tab `font-atlases`（Fonts / Font Atlases）列出 `FontManager::collectFontAtlasDebugPages()` 的共享页，不是每个字号一行。Combo 标签是 `{face stem}  {Bitmap|SDF|Color}  {primary|fallback}  {i}/{N}`；detail 是占用 glyph 数、像素尺寸、页上出现的栅格尺寸、1:1。预览是 **1:1 texel、左上角、竖向滚动**，走 atlas 自身 sampler（Bitmap = ClampNearest），RGBA 通道开关还在。不要用 Image `Contain`：会把 page letterbox 进矮窗口并非整倍缩小，Nearest 下看起来又小又糊。Bitmap/Color 按白+alpha 预览；SDF/MSDF 按不透明 R 通道预览。刷新指纹含 glyph 数，热路径（`getFont` / `makeText`）不按帧分配。
 - 加临时 CJK trace（`atlasIdx / fallback / page / scale / charSize`），而非靠截图猜。
 - `scale=1.0 + 全 Bitmap(renderMode=0) + page=0` → 排除 DPI / 分页 / SDF 因素，问题在 fallback 分散或 hinting。
-- 缺字/方块 → fallback 未命中或 `atlasIndex` 解析错。
+- 缺字/方块 → fallback 未命中或 `atlasIndex` 解析错。一直是 `?` 而图集里没有那个码位：`requestGlyphs` 只入队，要等 `flushPendingGlyphs`。`GUIAppHost` 和 `GUIWindowPresent` 会在录制前 flush；游戏帧的安全点是 `RuntimeRenderContext::buildGameRenderFrame`（`beginRecordedFrame` 之前）。录制期不能 flush。
 - 亮度不一 → 多同脚本 fallback（本 memory 回归）。
 - 边缘虚 → 小字误走 SDF / 未像素对齐 / Linear 采样了 bitmap atlas。
 - 竖笔过窄/缺笔 → bitmap 未 1:1 栅格 / 读了错误 `bitmap.pitch` 行宽 / padding 覆盖 / **native TT hint 在特定 ppem 把 stem snap 没了**（先对比 `FORCE_AUTOHINT`，不要先换字体）。

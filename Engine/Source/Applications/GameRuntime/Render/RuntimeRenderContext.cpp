@@ -17,6 +17,7 @@
 #include "RHI/Core/Texture.h"
 #include "RHI/Render.h"
 #include "GUI/Compose/Render2DComposePass.h"
+#include "Render/Resources/FontManager.h"
 #include "Render3D/Common/FrameRecordExtensions.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/RenderDeviceState.h"
@@ -443,6 +444,7 @@ RuntimeRenderContext::TickFrame RuntimeRenderContext::buildGameRenderFrame(
     // not exist.
     const Scene* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
     const SceneViewTask* displayRoot = sceneRender.displayRootTask();
+    bool bGameUiSnapshot = false;
     if ((app.isRuntimeMode() || app.isSimulationMode()) && scene && displayRoot) {
         if (auto* gameUIHost = app.getGameUIHost()) {
             const float density = displayRoot->desc.pixelDensity > 0.0f ? displayRoot->desc.pixelDensity : 1.0f;
@@ -451,6 +453,22 @@ RuntimeRenderContext::TickFrame RuntimeRenderContext::buildGameRenderFrame(
             // tick's UI step (GameRuntimeTickOrchestrator::tickUILogic), so no
             // UI logic runs while the frame is being built.
             tickFrame.uiSnapshot = gameUIHost->buildSnapshot();
+            bGameUiSnapshot = true;
+        }
+    }
+
+    // Paint only queues missing glyphs. Rasterizing them here, before
+    // beginRecordedFrame, is the same safe point GUIAppHost uses. Without
+    // it a Latin face keeps drawing CJK as '?'. A capture invalidates text
+    // metrics, so the game UI snapshot is built once more and this frame
+    // already wraps on the real advances.
+    if (IRender* render = _device->getRender()) {
+        FontManager::get()->flushPendingGlyphs(*render);
+        const bool bNewGlyphs = FontManager::get()->consumeNewGlyphCapture();
+        if (bGameUiSnapshot && bNewGlyphs) {
+            if (GameUIHost* gameUIHost = app.getGameUIHost()) {
+                tickFrame.uiSnapshot = gameUIHost->buildSnapshot();
+            }
         }
     }
     return tickFrame;

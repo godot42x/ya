@@ -22,8 +22,8 @@
       "version": 2,
       "typeId": "engine.border",
       "fields": {
-        "_color": [0.07, 0.08, 0.1, 0.9],
-        "_cornerRadius": 8.0,
+        "_color": [0.08, 0.1, 0.12, 0.94],
+        "_cornerRadius": 10.0,
         "__base__": {
           "UIElement": {
             "_name": "Box"
@@ -33,82 +33,570 @@
       "children": [
         {
           "version": 2,
-          "typeId": "engine.panel",
+          "typeId": "engine.container",
           "fields": {
+            "_boxLayout": {
+              "_direction": 1,
+              "_spacing": 8.0,
+              "_padding": [20.0, 14.0]
+            },
             "__base__": {
               "UIElement": {
-                "_name": "Frame"
+                "_name": "Column"
               }
             }
           },
           "children": [
             {
               "version": 2,
-              "typeId": "engine.text",
+              "typeId": "engine.container",
               "fields": {
-                "_text": "",
-                "_fontSize": 20,
-                "_color": [1.0, 1.0, 1.0, 1.0],
-                "_bWrap": true,
+                "_boxLayout": {
+                  "_direction": 0,
+                  "_spacing": 12.0,
+                  "_padding": [0.0, 0.0]
+                },
                 "__base__": {
                   "UIElement": {
-                    "_name": "Body"
+                    "_name": "Header"
                   }
                 }
               },
-              "children": [],
-              "childSlots": []
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "_text": "Dialogue",
+                    "_fontSize": 14,
+                    "_color": [0.95, 0.84, 0.45, 1.0],
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Title"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "_text": "Space / Enter / E",
+                    "_fontSize": 13,
+                    "_color": [0.68, 0.7, 0.76, 0.9],
+                    "_hAlign": 2,
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Hint"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                  "crossAlignment": 0,
+                  "minSize": [0.0, 0.0],
+                  "maxSize": [1000000.0, 1000000.0],
+                  "preferredSize": [0.0, 0.0],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 1,
+                  "weight": 1.0,
+                  "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                  "crossAlignment": 0,
+                  "minSize": [0.0, 0.0],
+                  "maxSize": [1000000.0, 1000000.0],
+                  "preferredSize": [0.0, 0.0],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                }
+              ]
             },
             {
               "version": 2,
-              "typeId": "engine.text",
+              "typeId": "engine.container",
               "fields": {
-                "_text": "Space / Enter / E",
-                "_fontSize": 13,
-                "_color": [0.68, 0.7, 0.76, 0.9],
-                "_hAlign": 2,
+                "_boxLayout": {
+                  "_direction": 0,
+                  "_spacing": 24.0,
+                  "_padding": [0.0, 0.0]
+                },
                 "__base__": {
                   "UIElement": {
-                    "_name": "Hint"
+                    "_name": "Row"
                   }
                 }
               },
-              "children": [],
-              "childSlots": []
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "_text": "",
+                    "_fontSize": 18,
+                    "_color": [0.96, 0.96, 0.94, 1.0],
+                    "_bWrap": true,
+                    "_maxWrapWidth": 500.0,
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Body"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.container",
+                  "fields": {
+                    "_boxLayout": {
+                      "_direction": 0,
+                      "_spacing": 0.0,
+                      "_padding": [0.0, 0.0]
+                    },
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Spacer"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.container",
+                  "fields": {
+                    "_boxLayout": {
+                      "_direction": 1,
+                      "_spacing": 6.0,
+                      "_padding": [0.0, 0.0]
+                    },
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Choices"
+                      }
+                    }
+                  },
+                  "children": [
+                    {
+                      "version": 2,
+                      "typeId": "engine.container",
+                      "fields": {
+                        "_boxLayout": {
+                          "_direction": 0,
+                          "_spacing": 6.0,
+                          "_padding": [0.0, 0.0]
+                        },
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "ChoiceRow1",
+                            "_visibility": "Hidden"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 16,
+                            "_color": [0.96, 0.96, 0.94, 1.0],
+                            "_hAlign": 2,
+                            "_bWrap": false,
+                            "__base__": { "UIElement": { "_name": "Mark1" } }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        },
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 16,
+                            "_color": [0.96, 0.96, 0.94, 1.0],
+                            "_bWrap": false,
+                            "__base__": { "UIElement": { "_name": "Choice1" } }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "box",
+                          "sizeRule": 0,
+                          "weight": 1.0,
+                          "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                          "crossAlignment": 0,
+                          "minSize": [16.0, 0.0],
+                          "maxSize": [16.0, 1000000.0],
+                          "preferredSize": [16.0, 0.0],
+                          "participatesInLayout": true,
+                          "reserveSpaceWhenHidden": true
+                        },
+                        {
+                          "type": "box",
+                          "sizeRule": 0,
+                          "weight": 1.0,
+                          "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                          "crossAlignment": 0,
+                          "minSize": [0.0, 0.0],
+                          "maxSize": [1000000.0, 1000000.0],
+                          "preferredSize": [0.0, 0.0],
+                          "participatesInLayout": true,
+                          "reserveSpaceWhenHidden": true
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.container",
+                      "fields": {
+                        "_boxLayout": {
+                          "_direction": 0,
+                          "_spacing": 6.0,
+                          "_padding": [0.0, 0.0]
+                        },
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "ChoiceRow2",
+                            "_visibility": "Hidden"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 16,
+                            "_color": [0.96, 0.96, 0.94, 1.0],
+                            "_hAlign": 2,
+                            "_bWrap": false,
+                            "__base__": { "UIElement": { "_name": "Mark2" } }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        },
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 16,
+                            "_color": [0.96, 0.96, 0.94, 1.0],
+                            "_bWrap": false,
+                            "__base__": { "UIElement": { "_name": "Choice2" } }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "box",
+                          "sizeRule": 0,
+                          "weight": 1.0,
+                          "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                          "crossAlignment": 0,
+                          "minSize": [16.0, 0.0],
+                          "maxSize": [16.0, 1000000.0],
+                          "preferredSize": [16.0, 0.0],
+                          "participatesInLayout": true,
+                          "reserveSpaceWhenHidden": true
+                        },
+                        {
+                          "type": "box",
+                          "sizeRule": 0,
+                          "weight": 1.0,
+                          "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                          "crossAlignment": 0,
+                          "minSize": [0.0, 0.0],
+                          "maxSize": [1000000.0, 1000000.0],
+                          "preferredSize": [0.0, 0.0],
+                          "participatesInLayout": true,
+                          "reserveSpaceWhenHidden": true
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.container",
+                      "fields": {
+                        "_boxLayout": {
+                          "_direction": 0,
+                          "_spacing": 6.0,
+                          "_padding": [0.0, 0.0]
+                        },
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "ChoiceRow3",
+                            "_visibility": "Hidden"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 16,
+                            "_color": [0.96, 0.96, 0.94, 1.0],
+                            "_hAlign": 2,
+                            "_bWrap": false,
+                            "__base__": { "UIElement": { "_name": "Mark3" } }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        },
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 16,
+                            "_color": [0.96, 0.96, 0.94, 1.0],
+                            "_bWrap": false,
+                            "__base__": { "UIElement": { "_name": "Choice3" } }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "box",
+                          "sizeRule": 0,
+                          "weight": 1.0,
+                          "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                          "crossAlignment": 0,
+                          "minSize": [16.0, 0.0],
+                          "maxSize": [16.0, 1000000.0],
+                          "preferredSize": [16.0, 0.0],
+                          "participatesInLayout": true,
+                          "reserveSpaceWhenHidden": true
+                        },
+                        {
+                          "type": "box",
+                          "sizeRule": 0,
+                          "weight": 1.0,
+                          "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                          "crossAlignment": 0,
+                          "minSize": [0.0, 0.0],
+                          "maxSize": [1000000.0, 1000000.0],
+                          "preferredSize": [0.0, 0.0],
+                          "participatesInLayout": true,
+                          "reserveSpaceWhenHidden": true
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.container",
+                      "fields": {
+                        "_boxLayout": {
+                          "_direction": 0,
+                          "_spacing": 6.0,
+                          "_padding": [0.0, 0.0]
+                        },
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "ChoiceRow4",
+                            "_visibility": "Hidden"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 16,
+                            "_color": [0.96, 0.96, 0.94, 1.0],
+                            "_hAlign": 2,
+                            "_bWrap": false,
+                            "__base__": { "UIElement": { "_name": "Mark4" } }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        },
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 16,
+                            "_color": [0.96, 0.96, 0.94, 1.0],
+                            "_bWrap": false,
+                            "__base__": { "UIElement": { "_name": "Choice4" } }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "box",
+                          "sizeRule": 0,
+                          "weight": 1.0,
+                          "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                          "crossAlignment": 0,
+                          "minSize": [16.0, 0.0],
+                          "maxSize": [16.0, 1000000.0],
+                          "preferredSize": [16.0, 0.0],
+                          "participatesInLayout": true,
+                          "reserveSpaceWhenHidden": true
+                        },
+                        {
+                          "type": "box",
+                          "sizeRule": 0,
+                          "weight": 1.0,
+                          "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                          "crossAlignment": 0,
+                          "minSize": [0.0, 0.0],
+                          "maxSize": [1000000.0, 1000000.0],
+                          "preferredSize": [0.0, 0.0],
+                          "participatesInLayout": true,
+                          "reserveSpaceWhenHidden": true
+                        }
+                      ]
+                    }
+                  ],
+                  "childSlots": [
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                      "crossAlignment": 0,
+                      "minSize": [0.0, 0.0],
+                      "maxSize": [1000000.0, 1000000.0],
+                      "preferredSize": [0.0, 0.0],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": false
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                      "crossAlignment": 0,
+                      "minSize": [0.0, 0.0],
+                      "maxSize": [1000000.0, 1000000.0],
+                      "preferredSize": [0.0, 0.0],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": false
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                      "crossAlignment": 0,
+                      "minSize": [0.0, 0.0],
+                      "maxSize": [1000000.0, 1000000.0],
+                      "preferredSize": [0.0, 0.0],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": false
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                      "crossAlignment": 0,
+                      "minSize": [0.0, 0.0],
+                      "maxSize": [1000000.0, 1000000.0],
+                      "preferredSize": [0.0, 0.0],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": false
+                    }
+                  ]
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                  "crossAlignment": 0,
+                  "minSize": [0.0, 0.0],
+                  "maxSize": [1000000.0, 1000000.0],
+                  "preferredSize": [500.0, 0.0],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 1,
+                  "weight": 1.0,
+                  "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                  "crossAlignment": 0,
+                  "minSize": [0.0, 0.0],
+                  "maxSize": [1000000.0, 1000000.0],
+                  "preferredSize": [0.0, 0.0],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                  "crossAlignment": 0,
+                  "minSize": [0.0, 0.0],
+                  "maxSize": [1000000.0, 1000000.0],
+                  "preferredSize": [0.0, 0.0],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                }
+              ]
             }
           ],
           "childSlots": [
             {
-              "type": "canvas",
-              "anchorMin": [0.0, 0.0],
-              "anchorMax": [1.0, 1.0],
-              "offset": [0.0, 0.0],
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+              "crossAlignment": 0,
               "minSize": [0.0, 0.0],
               "maxSize": [1000000.0, 1000000.0],
-              "offsets": { "left": 24.0, "top": 16.0, "right": 24.0, "bottom": 40.0 },
-              "alignmentH": 0,
-              "alignmentV": 0,
-              "widthSizeMode": 0,
-              "heightSizeMode": 0,
-              "pivot": [0.0, 0.0],
               "preferredSize": [0.0, 0.0],
-              "fixedSize": [0.0, 0.0]
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
             },
             {
-              "type": "canvas",
-              "anchorMin": [1.0, 1.0],
-              "anchorMax": [1.0, 1.0],
-              "offset": [-16.0, -12.0],
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+              "crossAlignment": 0,
               "minSize": [0.0, 0.0],
               "maxSize": [1000000.0, 1000000.0],
-              "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
-              "alignmentH": 0,
-              "alignmentV": 0,
-              "widthSizeMode": 0,
-              "heightSizeMode": 0,
-              "pivot": [1.0, 1.0],
               "preferredSize": [0.0, 0.0],
-              "fixedSize": [200.0, 22.0]
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
             }
           ]
         }
@@ -129,17 +617,17 @@
       "type": "canvas",
       "anchorMin": [0.0, 1.0],
       "anchorMax": [1.0, 1.0],
-      "offset": [0.0, -48.0],
-      "minSize": [0.0, 0.0],
-      "maxSize": [880.0, 1000000.0],
-      "offsets": { "left": 32.0, "top": 0.0, "right": 32.0, "bottom": 0.0 },
+      "offset": [0.0, -20.0],
+      "minSize": [760.0, 168.0],
+      "maxSize": [760.0, 168.0],
+      "offsets": { "left": 48.0, "top": 0.0, "right": 48.0, "bottom": 0.0 },
       "alignmentH": 1,
       "alignmentV": 0,
       "widthSizeMode": 0,
       "heightSizeMode": 0,
       "pivot": [0.0, 1.0],
       "preferredSize": [0.0, 0.0],
-      "fixedSize": [0.0, 160.0]
+      "fixedSize": [760.0, 168.0]
     }
   ]
 }

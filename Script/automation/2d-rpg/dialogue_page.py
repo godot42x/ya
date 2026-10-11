@@ -7,11 +7,15 @@ import time
 import rpg_control as rpg
 
 
-def query_body() -> dict:
-    result = rpg.call("ui.query", {"entry": "Dialogue", "widget": "Body"})
+def query(widget: str) -> dict:
+    result = rpg.call("ui.query", {"entry": "Dialogue", "widget": widget})
     if not isinstance(result, dict):
-        raise SystemExit(f"ui.query returned {result!r}")
+        raise SystemExit(f"ui.query {widget} returned {result!r}")
     return result
+
+
+def query_body() -> dict:
+    return query("Body")
 
 
 def main() -> None:
@@ -53,7 +57,79 @@ def main() -> None:
             return None
 
         second = rpg.wait_until(page_turned, 2.0, "dialogue page 2")
-        print(f"dialogue turned:\n  {first}\n  {second}")
+
+        def choices_shown():
+            body = query_body()
+            text = body.get("text") or ""
+            first = query("Choice1")
+            third = query("Choice3")
+            first_text = first.get("text") or ""
+            third_text = third.get("text") or ""
+            first_rect = first.get("rect") or {}
+            third_rect = third.get("rect") or {}
+            body_rect = body.get("rect") or {}
+            ready = (
+                first.get("visible")
+                and first_text == "Where is the well?"
+                and query("Mark1").get("text") == ">"
+                and third.get("visible")
+                and third_text == "Goodbye"
+                and (first_rect.get("h") or 0) >= 16
+                and (third_rect.get("h") or 0) >= 16
+                and (third_rect.get("y") or 0) > (first_rect.get("y") or 0)
+                and (first_rect.get("x") or 0) > (body_rect.get("x") or 0) + 40
+                and "Where is the well?" not in text
+            )
+            # The menu is up while the line is still typing, not after it.
+            if "fences" in text and "not me." not in text and not ready:
+                raise SystemExit("choices stayed hidden while the line was still revealing")
+            if "not me." in text and ready:
+                return first_text
+            return None
+
+        choices = rpg.wait_until(choices_shown, 3.0, "dialogue choices")
+
+        def label_x(name: str) -> float:
+            return float((query(name).get("rect") or {}).get("x") or 0)
+
+        anchored = {name: label_x(name) for name in ("Choice1", "Choice2", "Choice3")}
+
+        def wait_mark(name: str) -> None:
+            def ready():
+                if query(name).get("text") == ">":
+                    return True
+                return None
+
+            rpg.wait_until(ready, 1.0, name)
+
+        rpg.tap("Down")
+        wait_mark("Mark2")
+        rpg.tap("Down")
+        wait_mark("Mark3")
+        moved = {name: label_x(name) for name in anchored}
+        slid = {
+            name: moved[name]
+            for name, x in anchored.items()
+            if abs(moved[name] - x) > 1.0
+        }
+        if slid:
+            raise SystemExit(f"choice labels slid: {anchored} -> {moved}")
+        xs = [label_x(name) for name in ("Choice1", "Choice2", "Choice3")]
+        if max(xs) - min(xs) > 1.0:
+            raise SystemExit(f"choice labels are not one column: {xs}")
+        rpg.tap("Up")
+        rpg.tap("Up")
+        wait_mark("Mark1")
+        rpg.tap("Space")
+
+        def well_page():
+            text = query_body().get("text") or ""
+            if "north of the square" in text:
+                return text
+            return None
+
+        third = rpg.wait_until(well_page, 2.0, "dialogue choice")
+        print(f"dialogue turned:\n  {first}\n  {second}\n  {choices}\n  {third}")
     finally:
         rpg.stop()
 

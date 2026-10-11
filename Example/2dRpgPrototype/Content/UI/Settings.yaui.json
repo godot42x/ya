@@ -1,0 +1,202 @@
+{
+  "version": 2,
+  "typeId": "engine.panel",
+  "fields": {
+    "__base__": {
+      "UIElement": {
+        "_name": "Settings",
+        "_visibility": "Hidden"
+      }
+    }
+  },
+  "behaviors": [
+    {
+      "type": "script.lua",
+      "data": {
+        "script": "Content/UI/Settings.lua"
+      }
+    }
+  ],
+  "children": [
+    {
+      "version": 2,
+      "typeId": "engine.border",
+      "fields": {
+        "_color": [0.08, 0.1, 0.12, 0.94],
+        "_cornerRadius": 10.0,
+        "__base__": {
+          "UIElement": {
+            "_name": "Box"
+          }
+        }
+      },
+      "children": [
+        {
+          "version": 2,
+          "typeId": "engine.container",
+          "fields": {
+            "_boxLayout": {
+              "_direction": 1,
+              "_spacing": 8.0,
+              "_padding": [16.0, 12.0]
+            },
+            "__base__": {
+              "UIElement": {
+                "_name": "Column"
+              }
+            }
+          },
+          "children": [
+            {
+              "version": 2,
+              "typeId": "engine.container",
+              "fields": {
+                "_boxLayout": {
+                  "_direction": 0,
+                  "_spacing": 12.0,
+                  "_padding": [0.0, 0.0]
+                },
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Header"
+                  }
+                }
+              },
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "_text": "Settings",
+                    "_fontSize": 14,
+                    "_color": [0.95, 0.84, 0.45, 1.0],
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Title"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "_text": "Esc",
+                    "_fontSize": 13,
+                    "_color": [0.68, 0.7, 0.76, 0.9],
+                    "_hAlign": 2,
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Hint"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                  "crossAlignment": 0,
+                  "minSize": [0.0, 0.0],
+                  "maxSize": [1000000.0, 1000000.0],
+                  "preferredSize": [0.0, 0.0],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 1,
+                  "weight": 1.0,
+                  "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                  "crossAlignment": 0,
+                  "minSize": [0.0, 0.0],
+                  "maxSize": [1000000.0, 1000000.0],
+                  "preferredSize": [0.0, 0.0],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                }
+              ]
+            },
+            {
+              "version": 2,
+              "typeId": "engine.text",
+              "fields": {
+                "_text": "Language\nEnglish",
+                "_fontSize": 18,
+                "_color": [0.96, 0.96, 0.94, 1.0],
+                "_bWrap": false,
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Body"
+                  }
+                }
+              },
+              "children": [],
+              "childSlots": []
+            }
+          ],
+          "childSlots": [
+            {
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+              "crossAlignment": 0,
+              "minSize": [0.0, 0.0],
+              "maxSize": [1000000.0, 1000000.0],
+              "preferredSize": [0.0, 0.0],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            },
+            {
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+              "crossAlignment": 0,
+              "minSize": [0.0, 0.0],
+              "maxSize": [1000000.0, 1000000.0],
+              "preferredSize": [0.0, 0.0],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            }
+          ]
+        }
+      ],
+      "childSlots": [
+        {
+          "type": "content",
+          "hAlign": 0,
+          "vAlign": 0,
+          "padding": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+          "preferredSize": [0.0, 0.0]
+        }
+      ]
+    }
+  ],
+  "childSlots": [
+    {
+      "type": "canvas",
+      "anchorMin": [0.0, 0.0],
+      "anchorMax": [0.0, 0.0],
+      "offset": [0.0, 0.0],
+      "minSize": [320.0, 140.0],
+      "maxSize": [320.0, 140.0],
+      "offsets": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+      "alignmentH": 1,
+      "alignmentV": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [0.0, 0.0],
+      "preferredSize": [0.0, 0.0],
+      "fixedSize": [320.0, 140.0]
+    }
+  ]
+}
