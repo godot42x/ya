@@ -47,7 +47,7 @@ constexpr uint32_t MAX_FLIGHTS_IN_FLIGHT = 2;
 /// images, not frames. Raising this is the overlap decision, not a rename: it
 /// must raise every ring above together and verify that the higher slots
 /// really rotate (see `.agent/plan/render-view-family/temporal_semantics.md` M4).
-constexpr uint32_t kFramesInFlight = 1;
+constexpr uint32_t kFramesInFlight = 2;
 
 static_assert(kFramesInFlight <= MAX_FLIGHTS_IN_FLIGHT,
               "the device ring must fit inside every per-frame table's capacity");

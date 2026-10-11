@@ -26,7 +26,7 @@ GUI 与编辑器活跃线
 - [x] M6 前后对比报告脚本 + 首份 macOS profile 基线（`perf-baseline/baselines/macos/profile-15277c00/`；索引已复查重建：commit 回填、路径相对化、跨场景比较告警）
 
 渲染
-- [ ] R1 frames-in-flight 1→2（`render-view-family` M4）
+- [x] R1 frames-in-flight 1→2（`render-view-family` M4：旋钮 1→2 + deletion queue init 收敛 + 槽 1 轮转实证；基准对比见 perf-baseline）
 - [ ] R2 点光源阴影 GPU 剔除修稳并默认开启
 - [ ] R3 CSM 多级 cascade 修稳并默认开启
 - [ ] R15 延迟管线聚光灯 + 点光源上限理顺

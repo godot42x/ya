@@ -252,6 +252,14 @@ void RuntimeRenderContext::tick(App& app, float dt)
             commands.push_back(recorded.commandBuffer->getHandle());
         }
         (void)submission.add(presentFrame, std::move(commands));
+        // The record→submit boundary's one-line identity: which device ring
+        // slot this recording used. The flight rotation is invisible unless
+        // someone prints it -- M4's original finding (`flight=0` forever) came
+        // from exactly this line.
+        YA_CORE_TRACE("Submit tick {}: flight={} token={}",
+                      app.getHostTick(),
+                      recorded.flightIndex,
+                      recorded.frameToken);
     }
     else if (bAcquireAttempted) {
         (void)submission.add(presentFrame, {});

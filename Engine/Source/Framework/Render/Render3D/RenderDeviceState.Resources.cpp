@@ -304,7 +304,9 @@ void RenderDeviceState::initCommandResources()
 
 void RenderDeviceState::initFrameServices()
 {
-    DeferredDeletionQueue::get().init(/*framesInFlight=*/1);
+    // The device's overlap depth is the one ring-size source; a literal here
+    // would disagree with `kFramesInFlight` the moment the knob moves.
+    DeferredDeletionQueue::get().init(kFramesInFlight);
 
     // Owned derived-processing systems: gameplay resource binding and the
     // environment-lighting/terrain processors live with the render runtime

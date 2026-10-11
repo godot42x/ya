@@ -1337,3 +1337,18 @@ R1 第一小步已完成：SceneFrameSnapshot 显式承载当前可识别的 Sce
 
 - 与本线相关的目标全绿：`ya-render-3d-test` 175/175；`ya-testing` 滤镜组（EditorViewProducer/RuntimeGameViewProducer/HostSceneExtract/AppAutomationConfig/EditorViewportOverlayHost）25/25；runtime/editor smoke 与基线逐字节一致。
 - `ya-testing` 全量在同一 `SystemLayersCannotBeDetached` 处退出：`WidgetTree::detach` 对系统层的 `YA_CORE_ASSERT(false)` 触发 `__builtin_trap`（EXC_BREAKPOINT/133）。测试语义与断言路径相撞，属 GUI 线预存问题（R0 已登记的 GUI widget test 项；且 `ya-gui-widgets-test` 因 GuiFrameInspectorOverlay 头在 Compose、而该 target 只依赖 widgets+render-resources 编不过，同属该登记项）。不属本词汇批次，未混入提交。
+
+## 2026-10-11 — R1 frames-in-flight 1→2（M4 前置判断收口）
+
+M4 记录的三个前置件在五索引收敛后全部已在位：device fence 环按槽等待（`beginRecordedFrame` 等 `_frameIndex % kFramesInFlight`，同帧多 submit 共享槽 fence = 「帧完成 = 全部提交完成」）、surface 环全部由 `kFramesInFlight` 派生（`flightFrameSize`、image-available 环、GPU timing 环、命令缓冲 MAX_FLIGHTS 分配）、`resolveFlightIndex` 已是设备帧序纯函数。本刀只动两处：
+
+- `kFramesInFlight` 1→2（`RenderDefines.h`，注释即验收清单）。
+- `DeferredDeletionQueue::get().init(/*framesInFlight=*/1)` → `init(kFramesInFlight)`——全仓唯一的字面量残留（删除世代 = flush 收到的 device frame index，安全滞后 = `_framesInFlight + 1`）。
+
+等待点审计（FIF=2 无需再改）：`waitInFlight()` 只被 teardown/capture 路径调用（surface 析构、GUI 三处资源释放/读回完成），「等全部 present-complete」在销毁语境是正确语义；`prepareSwapchainForAcquire` 的等全部挂在 recreate 前，同理；帧路径唯一的 CPU 等待就是 `beginRecordedFrame` 的槽 fence；`signalPresentComplete` 自带两块 fence 的自节奏。`vkQueueWaitIdle` 仅存于一次性工具函数与销毁路径。
+
+- **timeline semaphore 决策修订**：2026-09-26 对齐的「timeline 直上、不做 1→2 fence 中间态」——中间态已不存在（现行 fence 环就是按槽的终态形态），且同帧多 submit 的帧完成语义用共享槽 fence 表达最直接（timeline 的每 submit 单调值无法在不知道「最后一次提交」的情况下表达帧完成）。timeline 升级（主机可查询进度、免 re-arm 状态机）降为 R7 渲染线程期的可选打磨，不再是 R1 前置。
+- 顺带更正本文件批次三的保留项：`RenderDeviceState::InitDesc.windowWidth/Height/Title` 已于 6ee0d17f 改为 `startupWindow` + `initialViewExtent`（host 建窗、device 只接窗），「创建 NativeWindow 的本体」这句话已过时。
+- 轮转证据（M4 要求的验证）：record→submit 边界补了永久 trace `Submit tick N: flight=F token=T`（RuntimeRenderContext，M4 当时只有临时插桩没入库）——`--log-level=trace` 实测 flight 0/1 交替、token 与 tick 对齐；per-flight 表（submission pool、view 输出表、upload arena、skinning、GPU timing 环）首次真实走上槽 1。
+- 测试：`ya-testing` 全量 1772 过（另 2 例失败为预存内容项：用户并行编辑的 Dialogue 文档几何断言 + resave 基线，与本线无关）。
+- 基准：FIF=1 对照 = `perf-baseline/baselines/macos/profile-15277c00`；FIF=2 同一命令对比数字见 `perf-baseline/progress.md` 同日条目与 `baselines/macos/` 新目录。
