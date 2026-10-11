@@ -1,5 +1,7 @@
+#include "Core/Input/InputManager.h"
 #include "GameEditor/EditorLayerInternal.h"
 #include "GameEditor/UI/Ops/EditorHierarchyOps.h"
+#include "Render/Adapters/Companion/CompanionManager.h"
 
 #include "Core/Os/Os.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
@@ -92,9 +94,28 @@ Entity* pickEntityFromEntityIdImage(IRender*                             render,
 
 } // namespace
 
+void EditorLayer::setRuntimeInputDetached(bool detached)
+{
+    if (_bRuntimeInputDetached == detached) {
+        return;
+    }
+    _bRuntimeInputDetached = detached;
+    if (_app) {
+        // The game producer reads this on the next collect and declines to
+        // declare, so the panel's picture becomes the editor camera.
+        // Either edge drops held keys on both sides: Play must not keep the
+        // editor's WASD, and the editor camera must not keep the player's.
+        _app->setGameplayViewportYielded(detached);
+        _app->getInputRouter().cancelInput(EInputCancelReason::CaptureReleased);
+    }
+}
+
 void EditorLayer::onEvent(const Event& event)
 {
-    if (_app && !_app->isStopped()) {
+    // Play feeds the viewport to the game. Detach keeps the session running
+    // and lets this path pick the sprite under the cursor instead.
+    const bool bGameOwnsInput = _app && _app->isRuntimeMode() && !_bRuntimeInputDetached;
+    if (bGameOwnsInput) {
         return;
     }
 
@@ -114,7 +135,7 @@ void EditorLayer::onEvent(const Event& event)
     case EEvent::MouseMoved:
     {
         // If right mouse is held and we moved significantly, mark as dragging
-        if (_app && _app->getInputManager().isMouseButtonDown(EMouse::Right) && bViewportHovered) {
+        if (_editorInput && _editorInput->isMouseButtonDown(EMouse::Right) && bViewportHovered) {
             glm::vec2 currentPos = _app->getLastMousePos();
             float     dist       = glm::length(currentPos - _rightMousePressPos);
             if (dist > 3.0f) { // Threshold to distinguish click from drag
@@ -228,6 +249,12 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
         viewportLocalY,
         _viewportSize.x,
         _viewportSize.y);
+    // The camera body is a generated gizmo. Play does not draw it, but a ray
+    // that starts inside it used to win every pixel and select the scene camera.
+    if (pickedEntity && app->isRuntimeMode() &&
+        CompanionManager::kindOf(*pickedEntity) == ECompanionKind::EditorGizmo) {
+        pickedEntity = nullptr;
+    }
     if (!pickedEntity) {
         pickedEntity = RayCastMousePickingSystem::pickEntity(
             scene,

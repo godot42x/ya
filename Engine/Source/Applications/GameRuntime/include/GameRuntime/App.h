@@ -142,6 +142,9 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
 
     AppDesc   _ci;
     AppState  _appState   = AppState::Stopped;
+    /// Play is still running, but the editor has taken the viewport back.
+    /// The game view then declares nothing; the editor camera is the picture.
+    bool      _bGameplayViewportYielded = false;
 
     InputManager inputManager;
     GameInputNode gameInputNode;
@@ -269,6 +272,9 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     OffscreenJobQueueService getOffscreenJobQueueService() override;
     [[nodiscard]] InputManager&                  getInputManager() { return inputManager; }
     [[nodiscard]] const InputManager&            getInputManager() const { return inputManager; }
+    /// Gameplay key state. The editor does not write this; it forwards an event
+    /// here only while Play owns the viewport.
+    void writeGameplayInput(const Event& event);
     [[nodiscard]] InputRouter&                   getInputRouter() { return inputRouter; }
     [[nodiscard]] const InputRouter&             getInputRouter() const { return inputRouter; }
     [[nodiscard]] TaskManager&                   getTaskManager() { return taskManager; }
@@ -283,6 +289,9 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     [[nodiscard]] bool     isStopped() const override { return _appState == AppState::Stopped; }
     [[nodiscard]] bool     isSimulationMode() const { return _appState == AppState::Simulation; }
     [[nodiscard]] bool     isRuntimeMode() const { return _appState == AppState::Runtime; }
+    /// Detach: the session keeps simulating, and the editor camera owns the panel.
+    void                   setGameplayViewportYielded(bool yielded) { _bGameplayViewportYielded = yielded; }
+    [[nodiscard]] bool     isGameplayViewportYielded() const { return _bGameplayViewportYielded; }
 
     /// Broadcast after every app mode transition (Runtime / Simulation / Stopped).
     MulticastDelegate<void(AppState)> onAppStateChanged;

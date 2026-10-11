@@ -12,8 +12,9 @@ struct EditorLayer;
 /// The editor's views.
 ///
 /// It declares the authoring viewport's primary view from the editor camera
-/// while the editor owns the viewport (not while the game is), plus the inset
-/// preview of the camera the user selected, which is the editor's to choose.
+/// while the editor owns the viewport: stopped, simulation, and Play after
+/// Detach. While Play still owns the panel the game camera is the picture.
+/// The inset preview of the camera the user selected is the editor's to choose.
 /// It declares those views only while an editor viewport is on screen, so a
 /// hidden viewport records no world graph. Everything is expressed by declaring
 /// a view or not declaring one, so the editor never asks the runtime to switch

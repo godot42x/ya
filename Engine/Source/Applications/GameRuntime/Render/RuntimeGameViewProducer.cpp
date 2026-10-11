@@ -12,7 +12,9 @@ namespace ya
 void RuntimeGameViewProducer::collectSceneViews(const SceneViewCollectContext& context,
                                                SceneViewCollector&            collector)
 {
-    if (!_app || !context.activeScene || !_app->isRuntimeMode()) {
+    // Detach yields the panel back to the editor camera. Declaring nothing
+    // here is what makes that camera the display; the scene keeps simulating.
+    if (!_app || !context.activeScene || !_app->isRuntimeMode() || _app->isGameplayViewportYielded()) {
         return;
     }
 

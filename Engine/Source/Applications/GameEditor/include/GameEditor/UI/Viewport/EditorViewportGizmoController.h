@@ -17,6 +17,7 @@ namespace ya
 
 struct App;
 struct Entity;
+struct InputManager;
 struct Scene;
 class UndoStack;
 
@@ -55,7 +56,8 @@ struct FEditorViewportGizmoSources
 /// Native viewport TRS gizmo: hit/drag math, undo capture, and Render2D overlay.
 class EditorViewportGizmoController
 {
-    App*                          _app     = nullptr;
+    App*                          _app         = nullptr;
+    InputManager*                 _editorInput = nullptr;
     UndoStack*                    _undo    = nullptr;
     FEditorViewportGizmoSources   _sources{};
     EEditorViewportGizmoOperation _operation = EEditorViewportGizmoOperation::Translate;
@@ -80,6 +82,7 @@ class EditorViewportGizmoController
 
   public:
     void bind(App* app, FEditorViewportGizmoSources sources);
+    void setEditorInput(InputManager* input) { _editorInput = input; }
     void setUndoStack(UndoStack* undo) { _undo = undo; }
 
     void syncHost(const FEditorViewportHostState& host);

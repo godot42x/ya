@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Input/InputManager.h"
 #include "GameEditor/UI/Shell/EditorRootSession.h"
 #include "GameRuntime/InputRouter.h"
 
@@ -24,14 +25,23 @@ class EditorInputNode final : public IInputNode
     GUIWindowManager*     _extraWindows = nullptr;
     GUIDragRouter*        _dragRouter = nullptr;
     EditorWindowId        _windowId = kDefaultEditorWindowId;
+    /// Editor camera and viewport tools. Gameplay keys never land here: Play
+    /// forwards those events through App::writeGameplayInput.
+    InputManager _editorInput;
     /// RMB look started over the viewport; stays true until RMB release so
-    /// mouse-move / WASD still reach InputManager after the pointer leaves.
+    /// mouse-move / WASD still reach the editor input after the pointer leaves.
     bool _bLooking = false;
-    /// Last route decided the camera owns the keyboard. Falling this to false
-    /// is the only place we cancelHeldKeys (not on every chrome mouse move).
+    /// Last route decided the editor camera owns the keyboard. Falling this to
+    /// false drops editor keys only. Gameplay keys are a different state.
     bool _bFeedingKeys = false;
+    /// Last route decided Play owns the keyboard. Falling this to false drops
+    /// gameplay keys, the same way leaving the viewport used to.
+    bool _bFeedingGameKeys = false;
 
   public:
+    [[nodiscard]] InputManager&       editorInput() { return _editorInput; }
+    [[nodiscard]] const InputManager& editorInput() const { return _editorInput; }
+
     void bind(App& app,
               EditorLayer& layer,
               EditorWindowRegistry& windows,

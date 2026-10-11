@@ -50,15 +50,20 @@ FInputReply GameInputNode::route(FInputRouteContext& context, const FInputEvent&
         return FInputReply{.handled = true};
     }
 
-    if (_inputManager) {
-        _inputManager->processEvent(event);
-    }
+    write(event);
     if (context.app.dispatchWorldKey(event)) {
         return FInputReply{.handled = true};
     }
     return FInputReply{
         .handled = context.router.routeUnhandledInput(event),
     };
+}
+
+void GameInputNode::write(const FInputEvent& event)
+{
+    if (_inputManager) {
+        _inputManager->processEvent(event);
+    }
 }
 
 void GameInputNode::cancelInput(FInputRouteContext& context, EInputCancelReason reason)

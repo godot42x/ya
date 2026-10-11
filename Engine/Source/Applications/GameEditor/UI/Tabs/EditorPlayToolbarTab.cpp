@@ -5,6 +5,8 @@
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GameEditor/EditorLayer.h"
+#include "GameEditor/EditorModule.h"
 #include "GameEditor/UI/Shell/EditorListRows.h"
 #include "GameEditor/UI/Shell/EditorTheme.h"
 #include "GameRuntime/App.h"
@@ -38,10 +40,21 @@ void EditorPlayToolbarTab::construct()
             (void)_actions->execute("runtime.stop");
         }
     });
+    auto detach = labeledButton("PlayToolbarDetach", "Detach").setOnClick([this]() {
+        EditorLayer* layer = getEditorLayer();
+        if (!layer || !_app) {
+            return;
+        }
+        if (!_app->isRuntimeMode() && !_app->isSimulationMode()) {
+            return;
+        }
+        layer->setRuntimeInputDetached(!layer->isRuntimeInputDetached());
+    });
 
     _playButton     = play.share();
     _simulateButton = simulate.share();
     _stopButton     = stop.share();
+    _detachButton   = detach.share();
 
     // The compound's content slot centers the hug-content row; the buttons
     // read as a mode group, the active one highlighted (see refresh).
@@ -51,6 +64,7 @@ void EditorPlayToolbarTab::construct()
                          .child(_playButton, ui::boxSlot().preferredSize({76.0f, 26.0f}))
                          .child(_simulateButton, ui::boxSlot().preferredSize({96.0f, 26.0f}))
                          .child(_stopButton, ui::boxSlot().preferredSize({76.0f, 26.0f}))
+                         .child(_detachButton, ui::boxSlot().preferredSize({76.0f, 26.0f}))
                          .release(),
                      [](UIElement&, UISlot& slot) {
                          if (auto* content = slot.as<UIContentSlot>()) {
@@ -91,8 +105,14 @@ void EditorPlayToolbarTab::refresh()
     if (_simulateButton) {
         _simulateButton->setSelected(bSimulating);
     }
+    const bool bRunning = bPlaying || bSimulating;
     if (_stopButton) {
-        _stopButton->setEnabled(bPlaying || bSimulating);
+        _stopButton->setEnabled(bRunning);
+    }
+    if (_detachButton) {
+        const EditorLayer* layer = getEditorLayer();
+        _detachButton->setEnabled(bRunning);
+        _detachButton->setSelected(bRunning && layer && layer->isRuntimeInputDetached());
     }
 }
 

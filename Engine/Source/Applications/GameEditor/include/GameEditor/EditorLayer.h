@@ -37,6 +37,7 @@ namespace ya
 
 struct App;
 struct Node;
+struct InputManager;
 struct EditorDocumentRegistry;
 struct UIDocumentStore;
 struct IImageView;
@@ -50,6 +51,8 @@ struct EditorLayer
 {
   private:
     App*                 _app                = nullptr;
+    /// Editor camera / gizmo keys. Gameplay input stays on App's InputManager.
+    InputManager*        _editorInput        = nullptr;
     uint64_t             _selectedEntityUUID = 0;
     uint64_t             _selectionGeneration = 0;
     std::vector<Entity*> _selections;
@@ -116,6 +119,9 @@ struct EditorLayer
     /// requests them outside authoring. One switch by design -- a per-object
     /// flag would scatter gizmo state through scene data.
     bool      _bShowEditorGizmos           = false;
+    /// Play keeps simulating, but viewport clicks and keys stay with the
+    /// editor so a sprite can be picked. Cleared when the session stops.
+    bool      _bRuntimeInputDetached       = false;
 
     EditorViewportGizmoController _gizmo;
     EditorTileBrushController   _tileBrush;
@@ -476,6 +482,12 @@ struct EditorLayer
     void cmdOpenScene();
     void cmdRequestQuit();
     [[nodiscard]] bool canViewportAuthor() const;
+    /// Editor viewport keys (camera, gizmos). Not the gameplay InputManager.
+    void bindEditorInput(InputManager& input);
+    /// While Play owns the viewport, this hands clicks and keys back to the
+    /// editor. The game keeps ticking. Turning it on releases a grabbed pointer.
+    [[nodiscard]] bool isRuntimeInputDetached() const { return _bRuntimeInputDetached; }
+    void setRuntimeInputDetached(bool detached);
     /// `parent` nullptr = scene root.
     void cmdCreateEmptyNode(Node* parent = nullptr);
     void cmdCreateNodePreset(const std::string& presetDisplayName, Node* parent = nullptr);

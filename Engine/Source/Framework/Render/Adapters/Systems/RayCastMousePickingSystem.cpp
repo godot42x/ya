@@ -8,6 +8,7 @@
 #include "ECS/Systems/TransformSystem.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "Scene3D/ManagedChildComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "Resource/Model.h"
@@ -35,6 +36,9 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
 
     std::optional<RaycastHit> closestHit;
     float                     closestDistance = std::numeric_limits<float>::max();
+    auto&                     registry        = scene->getRegistry();
+
+    const AppState appState = g_appStateProvider ? g_appStateProvider() : AppState::Stopped;
 
     // Helper lambda to test mesh component (works for MeshComponent, StaticMeshComponent, SkinnedMeshComponent)
     auto testMeshComponent = [&](entt::entity entityHandle, TransformComponent &tc, auto &meshComp) {
@@ -43,10 +47,32 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
             return;
         }
 
+        // The camera body is an editor gizmo parented to the scene camera.
+        // Play renders through that camera, so every pick ray starts inside
+        // the body and the body wins over every sprite. The running view does
+        // not draw gizmos, so they are not click targets either.
+        if (appState == AppState::Runtime && registry.all_of<ManagedChildComponent>(entityHandle)) {
+            if (Entity* entity = scene->getEntityByEnttID(entityHandle)) {
+                if (CompanionManager::kindOf(*entity) == ECompanionKind::EditorGizmo) {
+                    return;
+                }
+            }
+        }
+
         // Get world transform
         glm::mat4 worldTransform = tc.getTransform();
 
         auto worldAABB = mesh->boundingBox.transformed(worldTransform);
+
+        // A ray that starts inside a volume did not click its surface. Reporting
+        // the exit distance makes that volume the closest hit for every pixel,
+        // which is how the scene camera swallows sprite picks.
+        const glm::vec3& origin = ray.origin;
+        if (origin.x > worldAABB.min.x && origin.x < worldAABB.max.x &&
+            origin.y > worldAABB.min.y && origin.y < worldAABB.max.y &&
+            origin.z > worldAABB.min.z && origin.z < worldAABB.max.z) {
+            return;
+        }
 
         // Test ray-AABB intersection
         float distance = 0.0f;
@@ -68,7 +94,6 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
     // TODO: how to apply material's logic transform to the mesh in the world?
     //      经过材质处理，mesh的实际大小位置可能发生变化
     // Check all entities with any mesh component type
-    auto& registry = scene->getRegistry();
     registry.view<StaticMeshComponent, TransformComponent>().each(
         [&](entt::entity handle, StaticMeshComponent &mc, TransformComponent &tc) {
             testMeshComponent(handle, tc, mc);

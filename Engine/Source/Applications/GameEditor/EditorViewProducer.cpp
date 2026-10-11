@@ -91,17 +91,22 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
     const float  density       = _layer->viewportPixelDensity();
     const glm::vec2 deviceExtent = devicePixelExtent(authoringRect.extent, density);
 
-    // While the game runs, its own producer owns the world viewport: the editor
-    // camera is not what that viewport shows, so only the preview is ours.
-    if (!_app->isRuntimeMode()) {
+    // Play owns the panel until Detach. Detach keeps the session running and
+    // shows this camera again; the game producer declares nothing that frame.
+    const bool bEditorOwnsViewport = !_app->isRuntimeMode() || _layer->isRuntimeInputDetached();
+    if (bEditorOwnsViewport) {
         const FreeCamera& editorCamera = _layer->getCamera();
+        // Game UI is placed at outputRect.pos inside the view image. The game
+        // view uses the origin, so a detached Play panel does too; otherwise
+        // the dialogue card lands at the chrome offset and leaves the image.
+        const glm::vec2 outputPos = _app->isRuntimeMode() ? glm::vec2(0.0f, 0.0f) : authoringRect.pos;
         collector.declare(SceneViewDesc{
             .scene        = context.activeScene,
             .viewId       = authoringKey().viewId(),
             .view         = editorCamera.getViewMatrix(),
             .projection   = editorCamera.getProjectionMatrix(),
             .cameraPos    = editorCamera.getPosition(),
-            .outputRect = Rect2D{.pos = authoringRect.pos, .extent = deviceExtent},
+            .outputRect   = Rect2D{.pos = outputPos, .extent = deviceExtent},
             .pixelDensity = density > 0.0f ? density : 1.0f,
             .features     = baseFeatures | (bEditorGizmos ? gizmoFeature : 0u),
         });

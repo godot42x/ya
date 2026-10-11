@@ -444,14 +444,15 @@ EEditorViewportGizmoAxis hitTestRotateAxis(const FEditorViewportHostState& host,
     return bestAxis;
 }
 
-bool isViewportGizmoSnapEnabled(const App& app)
+bool isViewportGizmoSnapEnabled(const InputManager* input)
 {
+    if (!input) {
+        return false;
+    }
 #if defined(__APPLE__)
-    return app.getInputManager().isKeyPressed(EKey::LMeta) ||
-           app.getInputManager().isKeyPressed(EKey::RMeta);
+    return input->isKeyPressed(EKey::LMeta) || input->isKeyPressed(EKey::RMeta);
 #else
-    return app.getInputManager().isKeyPressed(EKey::LCtrl) ||
-           app.getInputManager().isKeyPressed(EKey::RCtrl);
+    return input->isKeyPressed(EKey::LCtrl) || input->isKeyPressed(EKey::RCtrl);
 #endif
 }
 
@@ -643,7 +644,7 @@ void EditorViewportGizmoController::updateDrag(const glm::vec2& localPoint)
         }
         planeVector = glm::normalize(planeVector);
         float angle = signedAngleAroundAxis(_dragStartPlaneVector, planeVector, _dragPlaneNormal);
-        if (isViewportGizmoSnapEnabled(*_app)) {
+        if (isViewportGizmoSnapEnabled(_editorInput)) {
             angle = glm::radians(snapScalar(glm::degrees(angle), kViewportGizmoRotateSnapDeg));
         }
         newPrimaryWorld =
@@ -656,7 +657,7 @@ void EditorViewportGizmoController::updateDrag(const glm::vec2& localPoint)
         }
         float delta = glm::dot(*hit - _dragOriginWorld, _dragAxisWorld) - _dragStartScalar;
         if (_operation == EEditorViewportGizmoOperation::Translate) {
-            if (isViewportGizmoSnapEnabled(*_app)) {
+            if (isViewportGizmoSnapEnabled(_editorInput)) {
                 delta = snapScalar(delta, kViewportGizmoTranslateSnap);
             }
             glm::vec3 position = startPosition + _dragAxisWorld * delta;
@@ -669,7 +670,7 @@ void EditorViewportGizmoController::updateDrag(const glm::vec2& localPoint)
             const float axisLengthWorld =
                 std::max(computeWorldUnitsPerPixel(_hostState, _dragOriginWorld) * kViewportGizmoAxisPixels, 0.2f);
             float scaleDelta = delta / axisLengthWorld;
-            if (isViewportGizmoSnapEnabled(*_app)) {
+            if (isViewportGizmoSnapEnabled(_editorInput)) {
                 scaleDelta = snapScalar(scaleDelta, kViewportGizmoScaleSnap);
             }
             glm::vec3    newScale  = startScale;

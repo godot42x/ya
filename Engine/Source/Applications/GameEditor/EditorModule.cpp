@@ -527,10 +527,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         // displays. Nothing here derives it from the window.
         const RenderViewOutput* displayedView = renderServices.getDisplayedViewOutput();
         const Extent2D viewExtent = displayedView ? displayedView->desc.extent : Extent2D{};
-        // Keep the editor camera controllable during simulation; only full
-        // runtime (PIE) hands viewport input over to the game.
-        if (!app.isRuntimeMode() && _layer->shouldCaptureInput()) {
-            _cameraController.update(editorCamera, app.getInputManager(), dt);
+        // Play hands the viewport to the game. Detach gives it back: the same
+        // editor camera that frames the level while stopped flies the running scene.
+        const bool bEditorCamera = !app.isRuntimeMode() || _layer->isRuntimeInputDetached();
+        if (bEditorCamera && _layer->shouldCaptureInput()) {
+            _cameraController.update(editorCamera, _inputNode.editorInput(), dt);
         }
         if (viewExtent.height > 0) {
             const float aspect = static_cast<float>(viewExtent.width) / static_cast<float>(viewExtent.height);
@@ -935,6 +936,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             }
         });
         _inputNode.bind(app, *_layer, _windows, window->windowId(), &_guiWindows, &_dragRouter);
+        _layer->bindEditorInput(_inputNode.editorInput());
         _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);
         gEditorLayer           = _layer.get();
         // The editor owns its viewport, so it declares the views in it: the
@@ -1054,6 +1056,9 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             return _playSession.begin(app, nextState);
         }
         if (previousState != AppState::Stopped && nextState == AppState::Stopped) {
+            if (_layer) {
+                _layer->setRuntimeInputDetached(false);
+            }
             app.getInputRouter().cancelInput(EInputCancelReason::AppStateChanged);
             _playSession.end(app);
         }
@@ -1128,6 +1133,9 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _layer->setSceneContext(_layer->getViewportInteractionScene());
         updateEditorCameraAndPrepareCompose(app, dt);
         _layer->onUpdate(dt);
+        // The camera has already read this frame's delta. Clear it here so the
+        // next frame does not add on top; gameplay input is reset by the app.
+        _inputNode.editorInput().preUpdate();
     }
 
     void onViewportCompose(App& app, ICommandBuffer& commandBuffer, float dt) override

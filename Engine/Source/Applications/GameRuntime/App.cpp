@@ -242,6 +242,11 @@ void App::addModule(IModule& module)
     _modules.push_back({.module = &module});
 }
 
+void App::writeGameplayInput(const Event& event)
+{
+    gameInputNode.write(event);
+}
+
 void App::addSceneViewProducer(ISceneViewProducer& producer)
 {
     if (!_renderState) {

@@ -127,20 +127,24 @@ FInputReply routeCapturedViewportInput(
         return {};
     }
 
-    app.getInputManager().processEvent(event);
+    // Captured Play is the game's pointer. The editor does not keep these keys.
+    app.writeGameplayInput(event);
     return FInputReply{.handled = true};
 }
 
 FInputReply routeViewportToolInput(
     App& app,
     EditorLayer& layer,
+    InputManager& editorInput,
     const FEditorInputSnapshot& snapshot,
     const FInputEvent& event,
     bool looking,
     bool wantPointer,
     bool wantKeys)
 {
-    if (app.isRuntimeMode()) {
+    // Play owns viewport keys until Detach. Detach uses the same path as
+    // authoring: the editor camera reads InputManager, and a click picks.
+    if (app.isRuntimeMode() && !layer.isRuntimeInputDetached()) {
         return {};
     }
 
@@ -152,7 +156,11 @@ FInputReply routeViewportToolInput(
     layer.onEvent(event);
 
     if ((snapshot.pointerEvent && wantPointer) || (snapshot.keyboardEvent && wantKeys)) {
-        app.getInputManager().processEvent(event);
+        // Escape still stops Play. The editor camera does not consume it.
+        if (app.isRuntimeMode() && isEscapeKey(event)) {
+            return {};
+        }
+        editorInput.processEvent(event);
         return FInputReply{.handled = true};
     }
 
@@ -166,7 +174,7 @@ FInputReply routeGameplayViewportInput(
     const FEditorInputSnapshot& snapshot,
     const FInputEvent& event)
 {
-    if (!app.isRuntimeMode()) {
+    if (!app.isRuntimeMode() || layer.isRuntimeInputDetached()) {
         return {};
     }
 
@@ -174,7 +182,7 @@ FInputReply routeGameplayViewportInput(
         if (app.blocksGameplayInput(event)) {
             return FInputReply{.handled = true};
         }
-        app.getInputManager().processEvent(event);
+        app.writeGameplayInput(event);
 
         std::optional<FPointerCaptureRequest> pointerCapture;
         if (event.getEventType() == EEvent::MouseButtonPressed) {
@@ -211,7 +219,7 @@ FInputReply routeGameplayViewportInput(
         if (!snapshot.viewportFocused) {
             return {};
         }
-        app.getInputManager().processEvent(event);
+        app.writeGameplayInput(event);
         const bool bConsumed = app.dispatchWorldKey(event);
         return FInputReply{.handled = bConsumed || !isEscapeKey(event)};
     }
@@ -232,9 +240,14 @@ FInputReply routeEscapeInput(App& app, EditorWindowSession* session, const FInpu
     return FInputReply{.handled = true};
 }
 
-FInputReply routeGameUIInput(App& app, EditorLayer&, const FInputEvent& event)
+FInputReply routeGameUIInput(App& app, EditorLayer& layer, const FInputEvent& event)
 {
     if (app.isStopped()) {
+        return {};
+    }
+    // Detach is for picking the world under the cursor, so a game panel must
+    // not take the click first.
+    if (layer.isRuntimeInputDetached() && app.isRuntimeMode()) {
         return {};
     }
 
@@ -257,20 +270,27 @@ bool shouldStopRouting(const FInputReply& reply)
     return reply.handled || reply.pointerCapture.has_value();
 }
 
-void deliverMatchingRelease(InputManager& inputManager, const FInputEvent& event)
+void deliverMatchingRelease(App& app, InputManager& editorInput, const FInputEvent& event)
 {
+    InputManager& gameInput = app.getInputManager();
     const EEvent::T eventType = event.getEventType();
     if (eventType == EEvent::KeyReleased) {
         const EKey::T key = static_cast<const KeyReleasedEvent&>(event).getKeyCode();
-        if (inputManager.isKeyPressed(key)) {
-            inputManager.processEvent(event);
+        if (editorInput.isKeyPressed(key)) {
+            editorInput.processEvent(event);
+        }
+        if (gameInput.isKeyPressed(key)) {
+            app.writeGameplayInput(event);
         }
         return;
     }
     if (eventType == EEvent::MouseButtonReleased) {
         const EMouse::T button = static_cast<const MouseButtonReleasedEvent&>(event).GetMouseButton();
-        if (inputManager.isMouseButtonPressed(button)) {
-            inputManager.processEvent(event);
+        if (editorInput.isMouseButtonPressed(button)) {
+            editorInput.processEvent(event);
+        }
+        if (gameInput.isMouseButtonPressed(button)) {
+            app.writeGameplayInput(event);
         }
     }
 }
@@ -315,9 +335,10 @@ void EditorInputNode::bind(App& app,
 
 void EditorInputNode::unbind()
 {
-    _bLooking     = false;
-    _bFeedingKeys = false;
-    _dragRouter   = nullptr;
+    _bLooking         = false;
+    _bFeedingKeys     = false;
+    _bFeedingGameKeys = false;
+    _dragRouter       = nullptr;
     _extraWindows = nullptr;
     _windows      = nullptr;
     _windowId     = kDefaultEditorWindowId;
@@ -354,8 +375,7 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
         _dragRouter->sync();
     }
 
-    InputManager& inputManager = _app->getInputManager();
-    deliverMatchingRelease(inputManager, event);
+    deliverMatchingRelease(*_app, _editorInput, event);
 
     const EEvent::T eventType = event.getEventType();
     if (eventType == EEvent::MouseButtonReleased &&
@@ -376,11 +396,20 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
     const bool wantPointer = _bLooking || snapshot.pointerInViewport;
     const bool wantKeys =
         !snapshot.textInput && (_bLooking || snapshot.viewportFocused || snapshot.pointerInViewport);
+    // Play owns gameplay keys until Detach. The editor camera's WASD is a
+    // separate state, so leaving the viewport must not clear the player's keys.
+    const bool bEditorOwnsKeys = !_app->isRuntimeMode() || _layer->isRuntimeInputDetached();
+    const bool feedEditorKeys  = bEditorOwnsKeys && wantKeys;
 
-    if (_bFeedingKeys && !wantKeys) {
-        inputManager.cancelHeldKeys();
+    if (_bFeedingKeys && !feedEditorKeys) {
+        _editorInput.cancelHeldKeys();
     }
-    _bFeedingKeys = wantKeys;
+    _bFeedingKeys = feedEditorKeys;
+    const bool feedGameKeys = !bEditorOwnsKeys && wantKeys;
+    if (_bFeedingGameKeys && !feedGameKeys) {
+        _app->getInputManager().cancelHeldKeys();
+    }
+    _bFeedingGameKeys = feedGameKeys;
 
     FInputReply reply = routeCommandInput(context, event);
     if (shouldStopRouting(reply)) {
@@ -403,7 +432,7 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
     }
 
     reply = routeViewportToolInput(
-        *_app, *_layer, snapshot, event, _bLooking, wantPointer, wantKeys);
+        *_app, *_layer, _editorInput, snapshot, event, _bLooking, wantPointer, wantKeys);
     if (shouldStopRouting(reply)) {
         return reply;
     }
@@ -432,8 +461,9 @@ void EditorInputNode::cancelInput(FInputRouteContext& context, EInputCancelReaso
         return;
     }
 
-    _bLooking     = false;
-    _bFeedingKeys = false;
+    _bLooking         = false;
+    _bFeedingKeys     = false;
+    _bFeedingGameKeys = false;
     // Focus leaving a window is how a unique pointer drag crosses OS windows.
     // Only tear the session down when this input universe itself is ending.
     if (_dragRouter && (reason == EInputCancelReason::ModuleDetached ||
@@ -443,6 +473,7 @@ void EditorInputNode::cancelInput(FInputRouteContext& context, EInputCancelReaso
     if (reason == EInputCancelReason::WindowFocusLost) {
         reconcilePointerSessionsWithPlatform(reason);
     }
+    _editorInput.cancelInput();
     if (_app) {
         _app->getInputManager().cancelInput();
     }

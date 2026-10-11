@@ -1,3 +1,4 @@
+#include "Core/Input/InputManager.h"
 #include "GameEditor/EditorLayerInternal.h"
 #include "GameEditor/EditorUIDesignerSession.h"
 #include "GUI/Widgets/UIDocument.h"
@@ -49,12 +50,18 @@ void EditorLayer::syncDesignResolutionFromProject()
     _uiDesignerSession.setDesignResolution(size);
 }
 
+void EditorLayer::bindEditorInput(InputManager& input)
+{
+    _editorInput = &input;
+    _gizmo.setEditorInput(&input);
+}
+
 bool EditorLayer::shouldCaptureInput() const
 {
     if (bViewportFocused || bViewportHovered) {
         return true;
     }
-    return _app && _app->getInputManager().isMouseButtonPressed(EMouse::Right);
+    return _editorInput && _editorInput->isMouseButtonPressed(EMouse::Right);
 }
 
 void EditorLayer::addViewportShown()

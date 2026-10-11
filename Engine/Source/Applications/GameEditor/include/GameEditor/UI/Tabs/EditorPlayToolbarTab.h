@@ -33,6 +33,7 @@ class EditorPlayToolbarTab : public UICompoundWidget
     std::shared_ptr<UIButton> _playButton;
     std::shared_ptr<UIButton> _simulateButton;
     std::shared_ptr<UIButton> _stopButton;
+    std::shared_ptr<UIButton> _detachButton;
 
     void refresh();
 };

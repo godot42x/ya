@@ -78,6 +78,10 @@ class YA_GAME_RUNTIME_API GameInputNode final : public IInputNode
 
     [[nodiscard]] FInputReply route(FInputRouteContext& context, const FInputEvent& event) override;
     void                     cancelInput(FInputRouteContext& context, EInputCancelReason reason) override;
+    /// Record one event into the gameplay InputManager. This is the only write.
+    /// A host that sits in front (the editor) calls it when it has decided the
+    /// game owns the event; it does not keep a second copy of those keys.
+    void write(const FInputEvent& event);
 };
 
 class YA_GAME_RUNTIME_API InputRouter
