@@ -39,3 +39,7 @@
 - GUI 按像素改窗口走 `GUIWindowHost::matchDrawablePixelSize`：按密度换算成窗口尺寸，再调私有的 `requestWindowSize`（置 `bSwapchainRecreatePending` 并清除最小化）。游戏适配器仍直接调 `INativeWindow::matchDrawablePixelSize`。
 - 窗口缩放不再丢掉已排队的 present mode，单独提交 `[vulkan] resize keeps a queued present mode`。
 - 验收（profile 构建，共享工作区无其它构建，随后已切回 debug / `ya_profile=engine` / `ya_linkage=shared`）：`Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json`，Dock，1920×1080，immediate，预热 120，采样 600。`meta.swapchainExtent` 与 `renderResolution` 都是 1920×1080，present mode 为 immediate，`sampledFrames` 600。frame p50 **3.050 ms** / p99 16.593 ms，frame.cpuMs p50 **0.775 ms** / p99 14.607 ms，frame.gpuMs p50 **2.122 ms** / p99 3.585 ms，RSS p50 **192.78 MiB**（峰值 192.98 MiB），GPU 合计 **46.66 MiB**，`unifiedMemory` true。`gpu_passes` 为空。Apple M5，MoltenVK 1.4.1，Vulkan 1.3.334。HelloMaterial 短跑（预热 8、采样 16）的 summary 键树与改宿主路径之前的那份一致：顶层 `schemaVersion`、`meta`、`frame`、`cpu_stages`、`gpu_passes`、`render_counters`、`process_memory`、`gpu_memory`，meta 键集合相同。配置测试 13 项通过（`BenchmarkConfigTest`、`GuiBenchmarkConfigTest`、`PerfLabBenchmarkConfigTest`）。`ya-testing` 1783 项里 1781 通过；失败的两项来自工作区里未提交的 Dialogue 文档：`ReflectionSceneResave.UiDocumentsMatchBaseline` 对不上已提交基线，`GameUIHostTest.DialogueDocumentStaysInsideNarrowAndWideCanvases` 在已提交文档上预先就失败（盒 760×168、x=260，测试期望 880×160、x=200）。
+
+## 2026-10-12 — 门禁连续 10 次
+
+`python3 Script/gui_workbench_gate.py --skip-build` 连续 10 次，每次都是 `scenarios=31 failed=0 digest=PASS gpu=PASS`。先前那次 `failed=2` 没有留下场景名，这 10 次没有复现。失败输出现在带场景名和日志路径（`Engine/Saved/Automation/gui-workbench-gate/<scenario>.log`）。

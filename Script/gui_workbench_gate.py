@@ -89,7 +89,7 @@ def run_scenarios(workbench: str) -> list[str]:
             print(f"[pass]    {path.name}  page={page}")
         else:
             failed.append(path.name)
-            print(f"[FAIL]    {path.name}  exit={code}  page={page}", file=sys.stderr)
+            print(f"[FAIL]    {path.name}  exit={code}  page={page}  log={log_path}", file=sys.stderr)
             print(tail(log_path), file=sys.stderr)
     return failed
 
@@ -136,7 +136,8 @@ def main() -> int:
         f"gpu={'skipped' if args.skip_gpu else 'PASS' if gpu == 0 else 'FAIL'}"
     )
     if failed:
-        print("failed scenarios: " + ", ".join(failed))
+        for name in failed:
+            print(f"failed scenario: {name}  log={LOG_DIR / f'{Path(name).stem}.log'}")
     if failed or digest != 0 or gpu != 0:
         return 1
     return 0
