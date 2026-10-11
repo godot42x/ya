@@ -813,3 +813,8 @@ R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档
 - 目标与边界：G2.5 剩下的录屏。不改玩法，也不做 G2.6 / G2.7。
 - 桌面录屏抓不到游戏窗口（它不在当前 Space 的 on-screen 列表里）。改从呈现图像抓帧，和通关脚本串行：每一步走到、每一句对话出来抓一张。并行抓帧会占住游戏线程，一格移动等不到。
 - 验证：`playthrough` 仍走到「Three coins. Look in the storage pot.」和「The well answers. Tiny Town is awake again.」。38 帧合成 `Engine/Saved/Automation/2d-rpg-playthrough/playthrough.mp4`。开头是城镇，摊位一句是钱不够，结尾是井上的 Quest complete。文件在 `Saved/` 下，不进 git。
+
+## 2026-10-12 — 对话框测试跟上固定卡片
+
+- `GameUIHostTest.DialogueDocumentStaysInsideNarrowAndWideCanvases` 从 `12cb87b0` 起失败。该提交把对话框改成固定的 760×168，正文改到 `Row`，提示改到 `Header`。当前布局跑改之前的文档仍然通过，所以不是布局退化。
+- 期望改为：宽画布 1280 上卡片在 x=260，仍在画布内；700 宽的画布比卡片窄，卡片保持 760×168、中心在 x=-30，不再缩进画布。`Body` 留在 `Row` 里，`Hint` 留在 `Header` 里。

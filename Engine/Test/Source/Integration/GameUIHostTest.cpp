@@ -815,6 +815,8 @@ TEST(GameUIHostTest, ReferenceResolutionScalesLayoutAndPointer)
 
 TEST(GameUIHostTest, DialogueDocumentStaysInsideNarrowAndWideCanvases)
 {
+    // 12cb87b0 replaced the shrink-to-fit 880×160 slot with a fixed 760×168 card.
+    // A canvas narrower than 760 does not shrink it; the card stays centered.
     std::ifstream stream("Example/2DRpgPrototype/Content/UI/Dialogue.yaui.json");
     ASSERT_TRUE(stream.is_open());
     const auto document = UIDocument::fromJson(nlohmann::json::parse(stream));
@@ -823,8 +825,7 @@ TEST(GameUIHostTest, DialogueDocumentStaysInsideNarrowAndWideCanvases)
     const auto roundTrip = UIDocument::fromJson(document->toJson());
     ASSERT_NE(roundTrip, nullptr);
 
-    const auto expectInside = [](const std::shared_ptr<UIDocument>& source, Extent2D canvas, float expectedBoxWidth,
-                                 float expectedBoxX) {
+    const auto expectCard = [](const std::shared_ptr<UIDocument>& source, Extent2D canvas, float expectedBoxX) {
         const UIElementRef root = source->instantiate();
         ASSERT_NE(root, nullptr);
         WidgetTree tree(canvas);
@@ -845,32 +846,46 @@ TEST(GameUIHostTest, DialogueDocumentStaysInsideNarrowAndWideCanvases)
         ASSERT_NE(bodyText, nullptr);
         EXPECT_TRUE(bodyText->_bWrap);
 
-        EXPECT_FLOAT_EQ(box->_layoutRect.extent.x, expectedBoxWidth);
-        EXPECT_FLOAT_EQ(box->_layoutRect.extent.y, 160.0f);
+        constexpr float kCardWidth  = 760.0f;
+        constexpr float kCardHeight = 168.0f;
+        EXPECT_FLOAT_EQ(box->_layoutRect.extent.x, kCardWidth);
+        EXPECT_FLOAT_EQ(box->_layoutRect.extent.y, kCardHeight);
         EXPECT_FLOAT_EQ(box->_layoutRect.pos.x, expectedBoxX);
-        EXPECT_GE(box->_layoutRect.pos.x, 0.0f);
-        EXPECT_LE(box->_layoutRect.pos.x + box->_layoutRect.extent.x, static_cast<float>(canvas.width) + 0.5f);
         EXPECT_GE(box->_layoutRect.pos.y, 0.0f);
         EXPECT_LE(box->_layoutRect.pos.y + box->_layoutRect.extent.y, static_cast<float>(canvas.height) + 0.5f);
+        if (kCardWidth <= static_cast<float>(canvas.width)) {
+            EXPECT_GE(box->_layoutRect.pos.x, 0.0f);
+            EXPECT_LE(box->_layoutRect.pos.x + box->_layoutRect.extent.x, static_cast<float>(canvas.width) + 0.5f);
+        }
 
-        UIElement* frame = body->getParent();
-        ASSERT_NE(frame, nullptr);
-        EXPECT_EQ(frame->getParent(), box);
-        // Child rects are in the same space as the frame rect (it carries the
-        // box's position), so compare against that rect, not its extent alone.
-        const Rect2D frameRect = frame->_layoutRect;
+        UIElement* row = body->getParent();
+        ASSERT_NE(row, nullptr);
+        EXPECT_EQ(row->_name, "Row");
+        UIElement* column = row->getParent();
+        ASSERT_NE(column, nullptr);
+        EXPECT_EQ(column->_name, "Column");
+        EXPECT_EQ(column->getParent(), box);
+
+        UIElement* header = hint->getParent();
+        ASSERT_NE(header, nullptr);
+        EXPECT_EQ(header->_name, "Header");
+        EXPECT_EQ(header->getParent(), column);
+
+        // Child rects share the parent's space (the rect carries the ancestor
+        // offset), so compare against that rect, not its extent alone.
         const auto inside = [](const Rect2D& child, const Rect2D& parent) {
             EXPECT_GE(child.pos.x, parent.pos.x - 0.5f);
             EXPECT_GE(child.pos.y, parent.pos.y - 0.5f);
             EXPECT_LE(child.pos.x + child.extent.x, parent.pos.x + parent.extent.x + 0.5f);
             EXPECT_LE(child.pos.y + child.extent.y, parent.pos.y + parent.extent.y + 0.5f);
         };
-        inside(body->_layoutRect, frameRect);
-        inside(hint->_layoutRect, frameRect);
+        inside(body->_layoutRect, row->_layoutRect);
+        inside(hint->_layoutRect, header->_layoutRect);
+        inside(column->_layoutRect, box->_layoutRect);
     };
 
-    expectInside(document, Extent2D{.width = 1280, .height = 720}, 880.0f, 200.0f);
-    expectInside(roundTrip, Extent2D{.width = 700, .height = 500}, 636.0f, 32.0f);
+    expectCard(document, Extent2D{.width = 1280, .height = 720}, 260.0f);
+    expectCard(roundTrip, Extent2D{.width = 700, .height = 500}, -30.0f);
 }
 
 namespace
