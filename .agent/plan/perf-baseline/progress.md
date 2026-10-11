@@ -196,7 +196,8 @@ PB6 的基线已入库，但复查发现三处问题，都在「这份基线本�
 - summary 段与游戏基准相同。`process_memory` 与 `gpu_memory` 分列；Apple Silicon 上 `unifiedMemory` 为 true。GUI 合成没有 render graph pass，所以 `gpu_passes` 为空，`render_counters` 记的是 2D 批次。
 - 窗口缩放不再丢掉已经排队的 present mode（单独提交 `[vulkan] resize keeps a queued present mode`）。否则 Mailbox 不可用时重建会落回 FIFO。
 - GUI 按像素改窗口走 `GUIWindowHost::matchDrawablePixelSize`，内部调私有的 `requestWindowSize`，所以 swapchain 会按基准分辨率重建。游戏和 GUI 的配置都内嵌 `FBenchmarkCommonConfig`。
-- profile、机器上没有其它构建、Dock、1920×1080、immediate、预热 120、采样 600，随后已切回 debug：`swapchainExtent` 1920×1080，present mode immediate。frame p50 3.050 ms / p99 16.593 ms，frame.cpuMs p50 0.775 ms，frame.gpuMs p50 2.122 ms，RSS p50 192.78 MiB，GPU 合计 46.66 MiB，`unifiedMemory` true。
+- **作废**：单次 frame p50 8.356 ms（修复前，没有三次 ±3% 定稿）和单次 3.050 ms（修复后那一档，紧接着三次是 3.764 / 1.088 / 1.284 ms，相对均值最大偏差 84%）。3.050 不是 swapchain 没按 1920×1080 重建：`e8af80cf` 在同样条件下预热后是 8.299 ms，swapchain 1920×1080，整次只重建一次 swapchain，首帧 layout 0 ms。
+- **定稿**（profile，无其它构建，Dock，1920×1080，immediate，预热 120，采样 600）：frame p50 = 8.338 / 8.343 / 8.371 ms，均值 8.351，相对均值最大偏差 0.25%。p99 = 9.425 / 9.398 / 9.372 ms，落在 `Tick/Total`（Acquire / Present 的 p99 < 0.06 ms）。swapchain 1920×1080。
 
 ## 2026-10-11 — R1 A/B 数字 + 两个环境发现（分配钩子 / validation）
 

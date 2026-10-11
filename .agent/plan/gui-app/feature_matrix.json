@@ -65,7 +65,7 @@
       "status": "pass",
       "evidence": [
         "shared Core/Profiling/BenchmarkSession; GUI extension key is page only and uncapFrameRate is rejected",
-        "profile Dock 1920x1080 immediate, warmup 120 sample 600, swapchain 1920x1080 via GUIWindowHost: frame p50 3.050 ms p99 16.593 ms, cpuMs p50 0.775 ms, gpuMs p50 2.122 ms, RSS p50 192.78 MiB, GPU total 46.66 MiB, unifiedMemory true",
+        "profile Dock 1920x1080 immediate, warmup 120 sample 600, swapchain 1920x1080: three frame p50 8.338/8.343/8.371 ms (mean 8.351, 0.25% from mean). Single-run 8.356 and 3.050 are void",
         "HelloMaterial summary key tree matches the existing bench_summary schema; GuiBenchmarkConfigTest and BenchmarkConfigTest pass"
       ]
     },

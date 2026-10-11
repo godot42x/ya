@@ -38,7 +38,17 @@
 - RHI 只留通用工具：`EPresentMode` 与字符串互转、`choosePreferredPresentMode`、`INativeWindow::matchDrawablePixelSize`。帧级 GPU 计时只在主窗口的 `recordGuiSnapshot` 里打点。
 - GUI 按像素改窗口走 `GUIWindowHost::matchDrawablePixelSize`：按密度换算成窗口尺寸，再调私有的 `requestWindowSize`（置 `bSwapchainRecreatePending` 并清除最小化）。游戏适配器仍直接调 `INativeWindow::matchDrawablePixelSize`。
 - 窗口缩放不再丢掉已排队的 present mode，单独提交 `[vulkan] resize keeps a queued present mode`。
-- 验收（profile 构建，共享工作区无其它构建，随后已切回 debug / `ya_profile=engine` / `ya_linkage=shared`）：`Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json`，Dock，1920×1080，immediate，预热 120，采样 600。`meta.swapchainExtent` 与 `renderResolution` 都是 1920×1080，present mode 为 immediate，`sampledFrames` 600。frame p50 **3.050 ms** / p99 16.593 ms，frame.cpuMs p50 **0.775 ms** / p99 14.607 ms，frame.gpuMs p50 **2.122 ms** / p99 3.585 ms，RSS p50 **192.78 MiB**（峰值 192.98 MiB），GPU 合计 **46.66 MiB**，`unifiedMemory` true。`gpu_passes` 为空。Apple M5，MoltenVK 1.4.1，Vulkan 1.3.334。HelloMaterial 短跑（预热 8、采样 16）的 summary 键树与改宿主路径之前的那份一致：顶层 `schemaVersion`、`meta`、`frame`、`cpu_stages`、`gpu_passes`、`render_counters`、`process_memory`、`gpu_memory`，meta 键集合相同。配置测试 13 项通过（`BenchmarkConfigTest`、`GuiBenchmarkConfigTest`、`PerfLabBenchmarkConfigTest`）。`ya-testing` 1783 项里 1781 通过；失败的两项来自工作区里未提交的 Dialogue 文档：`ReflectionSceneResave.UiDocumentsMatchBaseline` 对不上已提交基线，`GameUIHostTest.DialogueDocumentStaysInsideNarrowAndWideCanvases` 在已提交文档上预先就失败（盒 760×168、x=260，测试期望 880×160、x=200）。
+- 验收（profile 构建，共享工作区无其它构建，随后已切回 debug / `ya_profile=engine` / `ya_linkage=shared`）：`Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json`，Dock，1920×1080，immediate，预热 120，采样 600。`meta.swapchainExtent` 与 `renderResolution` 都是 1920×1080，present mode 为 immediate，`sampledFrames` 600。定稿三次 frame p50 = **8.338 / 8.343 / 8.371 ms**（均值 8.351，相对均值最大偏差 0.25%，在 ±3% 内）。同三次 frame p99 = 9.425 / 9.398 / 9.372 ms，Tick/Total p50 约 8.31 ms，gpuMs p50 3.02–3.14 ms。单次 **3.050 ms** 与更早的单次 **8.356 ms** 都作废，原因见下面一节。`gpu_passes` 为空。Apple M5，MoltenVK 1.4.1，Vulkan 1.3.334。HelloMaterial 短跑（预热 8、采样 16）的 summary 键树与改宿主路径之前的那份一致：顶层 `schemaVersion`、`meta`、`frame`、`cpu_stages`、`gpu_passes`、`render_counters`、`process_memory`、`gpu_memory`，meta 键集合相同。配置测试 13 项通过（`BenchmarkConfigTest`、`GuiBenchmarkConfigTest`、`PerfLabBenchmarkConfigTest`）。`ya-testing` 1783 项里 1781 通过；失败的两项来自工作区里未提交的 Dialogue 文档：`ReflectionSceneResave.UiDocumentsMatchBaseline` 对不上已提交基线，`GameUIHostTest.DialogueDocumentStaysInsideNarrowAndWideCanvases` 在已提交文档上预先就失败（盒 760×168、x=260，测试期望 880×160、x=200）。
+
+## 2026-10-12 — GUI 基准数字定稿
+
+同一份 `GUIWorkbench.bench.json`（Dock，1920×1080，immediate，预热 120，采样 600），profile 构建，机器上没有其它构建。
+
+- **作废 8.356 ms**：那是修复前的单次，没有按「同提交连跑三次、frame p50 相对均值 ±3%」定稿。它落在后来三次定稿的同一档，但不再单独当官方数字。
+- **作废 3.050 ms**：修复后的单次（frame p99 16.593，cpuMs p50 0.775）。同一二进制紧接着三次是 3.764 / 1.088 / 1.284 ms，相对均值最大偏差 84%，过不了 ±3%。这不是官方数字。
+- **定稿**：预热一次之后连续三次 frame p50 = 8.338 / 8.343 / 8.371 ms，均值 8.351，最大偏差 0.25%。p99 = 9.425 / 9.398 / 9.372 ms。swapchain 1920×1080，present mode immediate。
+- **8.36 和 3.05 的差别不是 swapchain 尺寸不匹配。** 临时 worktree 回到 `e8af80cf`（绕过宿主、直接 `INativeWindow::matchDrawablePixelSize`），同样 profile、无其它构建、同一配置：预热后 frame p50 **8.299 ms**，swapchain **1920×1080**。整次日志里 swapchain 只创建两次（启动时 FIFO 2560×1600，随后一次重建为 immediate 1920×1080），首帧 layout 0.000 ms、paint 7.861 ms。没有每帧重建，也没有每帧重排。3.05 那档是同一条路径上另一套不可复现的帧时间（Tick/Total 中位不到 1 ms，p99 却到约 16 ms），不是修复前尺寸错了导致每帧重排。
+- **p99**：定稿的长尾就是 `cpu_stages` 的 `Tick/Total`（p99 9.40 / 9.38 / 9.34 ms）。`Vulkan/Acquire` 与 `Vulkan/Present` 的 p99 都低于 0.06 ms。GUI 只有这三项 cpu stage；`--cpu-profile` 是游戏运行时的开关，GUIWorkbench 没有，这次没有另抓 trace，那组数字也不入库。长尾在宿主 tick（内容 tick、录制、submit）里面，没有拆到更细的阶段，也没有看出要单独开项的代码缺陷。
 
 ## 2026-10-12 — 门禁连续 10 次
 
