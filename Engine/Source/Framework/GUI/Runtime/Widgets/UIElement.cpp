@@ -343,33 +343,22 @@ glm::vec2 UIElement::computeIntrinsicSize() const
 
 void UIElement::paint(UIFrameBuilder& builder)
 {
-    // Authoring-canvas subtree filter (designer display toggles): the host
-    // decides per widget; false here prunes the widget and its whole subtree.
-    const std::function<bool(const UIElement&)>& subtreeFilter = builder.subtreePaintFilter();
-    if (subtreeFilter && !subtreeFilter(*this)) {
+    // The host's display policy prunes whole subtrees (the designer's tree-row
+    // eye); the framework only runs the gate.
+    const UIPresentationPolicy& policy = builder.presentationPolicy();
+    if (policy.subtreeFilter && !policy.subtreeFilter(*this)) {
         return;
     }
     if (!isVisibleForRender()) {
-        paintGhost(builder);
-        return;
+        // Collapsed has no layout rect and nothing to preview. Hidden under
+        // the runtime policy contributes nothing; under the authoring policy
+        // the canvas previews the shown state, verbatim.
+        if (policy.hiddenWidgets != EHiddenWidgetPresentation::PaintShown ||
+            _visibility == EWidgetVisibility::Collapsed) {
+            return;
+        }
     }
     paintContent(builder);
-}
-
-/// Authoring-canvas opt-in: a Hidden widget keeps its layout rect, so a
-/// designer passing a non-zero opacity previews it (the canvas edits the
-/// shown state -- see EditorUIDesignerSession::buildPreviewSnapshot).
-/// Collapsed has no layout space and therefore no rect worth painting.
-/// Runtime hosts leave the opacity at 0 and keep the plain skip.
-void UIElement::paintGhost(UIFrameBuilder& builder)
-{
-    const float ghostOpacity = builder.ghostInvisibleOpacity();
-    if (ghostOpacity <= 0.0f || _visibility == EWidgetVisibility::Collapsed) {
-        return;
-    }
-    builder.pushRenderTransform(UIFrameBuilder::FUIRenderTransform{.opacity = ghostOpacity});
-    paintContent(builder);
-    builder.popRenderTransform();
 }
 
 void UIElement::paintContent(UIFrameBuilder& builder)

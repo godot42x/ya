@@ -124,12 +124,12 @@ TEST(EditorUIDesignerPreviewTest, RuntimeBuildContextKeepsSkippingHiddenWidgets)
     fillArgs.anchorMax = {1.0f, 1.0f};
    (void)tree.attachToLayer(WidgetTree::ELayer::Content, root, fillArgs);
 
-    UIFrameBuildContext ctx; // ghostInvisibleOpacity defaults to 0: runtime skip
+    UIFrameBuildContext ctx; // the default policy skips Hidden: runtime truth
     const UIFrameSnapshot snapshot = tree.buildSnapshot(ctx);
     EXPECT_TRUE(snapshot.items.empty());
 
-    // The designer opt-in paints the same tree, at the shown state.
-    ctx.ghostInvisibleOpacity = 1.0f;
+    // The authoring policy paints the same tree, at the shown state.
+    ctx.presentation.hiddenWidgets = EHiddenWidgetPresentation::PaintShown;
     const UIFrameSnapshot preview = tree.buildSnapshot(ctx);
     EXPECT_FALSE(preview.items.empty());
 }

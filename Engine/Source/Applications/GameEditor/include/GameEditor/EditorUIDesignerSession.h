@@ -140,6 +140,10 @@ struct EditorUIDesignerSession
     /// framebuffer scale * zoom and pan so the preview stays coherent with
     /// the canvas grid and with canvas picking).
     [[nodiscard]] UIFrameSnapshot buildPreviewSnapshot(const glm::vec2& uiScale, const glm::vec2& offset);
+    /// The authoring presentation, stated once: the canvas edits the shown
+    /// state and the tree-row eye is the editor's own hide. The snapshot build
+    /// and the canvas pick both run it, so what paints is what picks.
+    [[nodiscard]] UIPresentationPolicy authoringPresentation() const;
     /// Topmost widget under a canvas-logical point (for editor picking).
     [[nodiscard]] UIElement* pickAt(const glm::vec2& logicalPoint);
     /// Selection is not a document edit, but it is the selection an undo of

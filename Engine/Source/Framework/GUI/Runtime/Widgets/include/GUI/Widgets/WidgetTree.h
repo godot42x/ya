@@ -333,15 +333,12 @@ struct YA_GUI_API WidgetTree final
     /// editor preview picking and hit-test diagnostics; null when nothing is
     /// hit.
     [[nodiscard]] UIElement* pickAt(const glm::vec2& logicalPoint) const { return topmostHit(logicalPoint); }
-    /// Authoring pick (designer canvas): what paints is what picks. Runtime
-    /// visibility gates are input facts, not display facts, so a Hidden
-    /// widget the canvas previews is selectable here; `subtreeFilter` (the
-    /// host's display policy -- the tree-row eye) prunes what the canvas does
-    /// not paint, so a toggled-off widget cannot shadow its siblings either.
-    /// The hit is the layout rect itself; Collapsed has no rect and stays
-    /// unpickable.
-    [[nodiscard]] UIElement* pickAt(const glm::vec2&                             logicalPoint,
-                                    const std::function<bool(const UIElement&)>& subtreeFilter) const;
+    /// Authoring pick (designer canvas): what paints is what picks. The same
+    /// policy the snapshot build ran prunes the pick, so an eye-toggled-off
+    /// subtree cannot shadow painted siblings, and Hidden widgets the canvas
+    /// previews are selectable -- visibility is a runtime fact, not a display
+    /// one. Collapsed has no layout rect and stays unpickable.
+    [[nodiscard]] UIElement* pickAt(const glm::vec2& logicalPoint, const UIPresentationPolicy& presentation) const;
 
     // === Focus / capture / hover ===
     /// Move keyboard focus. Notifies the previous/next widget through
@@ -468,8 +465,7 @@ struct YA_GUI_API WidgetTree final
                                               const glm::vec2& logicalPoint,
                                               bool bForHover = false,
                                               UIElement* skipSubtree = nullptr,
-                                              const std::function<bool(const UIElement&)>* subtreeFilter = nullptr,
-                                              bool bAuthoring = false);
+                                              const UIPresentationPolicy* presentation = nullptr);
     /// Resolve the hover owner from a hit target: deepest attached
     /// isHoverable() ancestor whose hitTestSelf contains `logicalPoint`.
     /// A text child resolves to its button; an expander/split whose hoverable

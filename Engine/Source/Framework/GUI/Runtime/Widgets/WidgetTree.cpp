@@ -104,8 +104,7 @@ UIElement* WidgetTree::hitTestAt(UIElement* element,
                                  const glm::vec2& logicalPoint,
                                  bool bForHover,
                                  UIElement* skipSubtree,
-                                 const std::function<bool(const UIElement&)>* subtreeFilter,
-                                 bool bAuthoring)
+                                 const UIPresentationPolicy* presentation)
 {
     if (skipSubtree) {
         // Skip the dragged source subtree: a floating window that follows
@@ -120,7 +119,7 @@ UIElement* WidgetTree::hitTestAt(UIElement* element,
     }
     // The host's display policy prunes exactly what its canvas does not paint
     // (authoring pick); runtime input walks run unfiltered.
-    if (subtreeFilter && !(*subtreeFilter)(*element)) {
+    if (presentation && presentation->subtreeFilter && !presentation->subtreeFilter(*element)) {
         return nullptr;
     }
     // Authoring pick descends into Hidden subtrees: the canvas previews the
@@ -128,7 +127,8 @@ UIElement* WidgetTree::hitTestAt(UIElement* element,
     // (no layout rect) and HitTestInvisible stays an input fact -- a
     // full-canvas layer must not shadow the content beneath it.
     if (!element->isHitTestableSubtree() &&
-        !(bAuthoring && element->getVisibility() == EWidgetVisibility::Hidden)) {
+        !(presentation && presentation->hiddenWidgets == EHiddenWidgetPresentation::PaintShown &&
+          element->getVisibility() == EWidgetVisibility::Hidden)) {
         return nullptr;
     }
     // Clipped containers (scroll viewports): children outside the container
@@ -142,7 +142,7 @@ UIElement* WidgetTree::hitTestAt(UIElement* element,
     // the search stops at the first hit.
     const auto children = element->getChildrenInPaintOrder();
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
-        if (UIElement* hit = hitTestAt(*it, logicalPoint, bForHover, skipSubtree, subtreeFilter, bAuthoring)) {
+        if (UIElement* hit = hitTestAt(*it, logicalPoint, bForHover, skipSubtree, presentation)) {
             return hit;
         }
     }
@@ -150,7 +150,9 @@ UIElement* WidgetTree::hitTestAt(UIElement* element,
     // selection. Everything else keeps its runtime self-hit contract
     // (isHitTestableSelf, custom hit regions).
     const bool bSelfHit = element->hitTestSelf(logicalPoint) ||
-                          (bAuthoring && element->getVisibility() == EWidgetVisibility::Hidden &&
+                          (presentation &&
+                           presentation->hiddenWidgets == EHiddenWidgetPresentation::PaintShown &&
+                           element->getVisibility() == EWidgetVisibility::Hidden &&
                            element->hitTestLayoutRect(logicalPoint));
     if (!bSelfHit) {
         return nullptr;
@@ -1324,11 +1326,10 @@ UIElement* WidgetTree::topmostHit(const glm::vec2& logicalPoint) const
                      _bDragSkipSource ? _dragSource : nullptr);
 }
 
-UIElement* WidgetTree::pickAt(const glm::vec2& logicalPoint,
-                              const std::function<bool(const UIElement&)>& subtreeFilter) const
+UIElement* WidgetTree::pickAt(const glm::vec2& logicalPoint, const UIPresentationPolicy& presentation) const
 {
     return hitTestAt(_root.get(), logicalPoint, /*bForHover=*/false,
-                     _bDragSkipSource ? _dragSource : nullptr, &subtreeFilter, /*bAuthoring=*/true);
+                     _bDragSkipSource ? _dragSource : nullptr, &presentation);
 }
 
 std::vector<UIElement*> WidgetTree::buildPath(UIElement* target)

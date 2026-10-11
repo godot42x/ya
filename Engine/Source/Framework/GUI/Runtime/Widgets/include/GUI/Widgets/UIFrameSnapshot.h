@@ -45,6 +45,31 @@ struct Font;
 /// `uiScale` on a WidgetTree snapshot is the final logical->target-pixel
 /// factor (user zoom * tree DPI). `userZoom` keeps the host zoom that went
 /// into that product so text can re-rasterize from zoom and DPI separately.
+/// How one presentation walk treats widgets the tree excludes from rendering
+/// (Hidden). This is the walk's whole policy split between hosts: the runtime
+/// frame skips them, the authoring canvas previews the shown state instead --
+/// visibility is a runtime fact there, and the per-node display toggle is the
+/// editor's own hide.
+enum class EHiddenWidgetPresentation : uint8_t
+{
+    Skip,       // runtime: the widget contributes nothing to the snapshot
+    PaintShown, // authoring: paint its content verbatim, as if it were shown
+};
+
+/// The presentation policy one walk runs. The framework executes it; the host
+/// owns the values (a runtime host keeps the defaults, the designer states
+/// its authoring presentation once and hands the same policy to the snapshot
+/// build and the canvas pick, so what paints is what picks). Collapsed has no
+/// layout rect and stays unpainted under every policy.
+struct UIPresentationPolicy
+{
+    /// Prune whole subtrees regardless of visibility (the designer's
+    /// tree-row eye). Evaluated once per visited widget; null paints
+    /// everything.
+    std::function<bool(const UIElement&)> subtreeFilter;
+    EHiddenWidgetPresentation hiddenWidgets = EHiddenWidgetPresentation::Skip;
+};
+
 /// Ad-hoc builders leave `fontDpi` at 0 and `userZoom` at 1; their `uiScale`
 /// is the whole device scale.
 struct UIFrameBuildContext
@@ -73,19 +98,9 @@ struct UIFrameBuildContext
     /// Pending — this lambda cannot express Failed.
     std::function<std::shared_ptr<Texture>(const std::string& assetPath)> textureResolver;
 
-    /// Authoring-canvas opt-in. When > 0, a widget whose visibility excludes
-    /// it from rendering still paints, wrapped in this opacity. The designer
-    /// passes 1: visibility is a runtime fact there, the canvas edits the
-    /// shown state, and the per-node display toggle is the editor's own hide.
-    /// Collapsed stays unpainted even then -- it has no layout rect to paint.
-    /// 0 keeps runtime semantics (skip render entirely).
-    float ghostInvisibleOpacity = 0.0f;
-
-    /// Authoring-canvas subtree filter: return false to skip a widget and its
-    /// whole subtree in this snapshot (the designer's per-node display
-    /// toggles). Evaluated once per visited widget; null paints everything.
-    /// The policy lives with the host -- the framework only runs the gate.
-    std::function<bool(const UIElement&)> subtreePaintFilter;
+    /// How this walk treats widgets the tree excludes from rendering (see
+    /// UIPresentationPolicy). The runtime default skips them.
+    UIPresentationPolicy presentation;
 
     /// This tree's device pixels per logical pixel. 0 = ad-hoc builder: text
     /// follows `uiScale` alone. WidgetTree::buildSnapshot always sets it, so
@@ -332,14 +347,9 @@ class YA_GUI_API UIFrameBuilder
     /// Whether the read cache holds a segment for `widget` (cold-start check).
     [[nodiscard]] bool hasCachedItems(const UIElement* widget) const;
 
-    /// Ghost opacity for widgets excluded from rendering (0 = skip them, the
-    /// runtime default). Read by UIElement::paint.
-    [[nodiscard]] float ghostInvisibleOpacity() const { return _ctx.ghostInvisibleOpacity; }
-    /// Authoring-canvas subtree filter (null = paint everything).
-    [[nodiscard]] const std::function<bool(const UIElement&)>& subtreePaintFilter() const
-    {
-        return _ctx.subtreePaintFilter;
-    }
+    /// The presentation policy this builder runs (see UIPresentationPolicy).
+    /// Read by UIElement::paint.
+    [[nodiscard]] const UIPresentationPolicy& presentationPolicy() const { return _ctx.presentation; }
 
     /// Logical-size font for measure and for the face `addText` then re-rasterizes
     /// at the device pixel size. The size argument is logical pixels; density
