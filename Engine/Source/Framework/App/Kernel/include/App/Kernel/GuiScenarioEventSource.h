@@ -9,7 +9,9 @@
 
 #include "App/Kernel/AppKernel.h"
 #include "App/Control/GuiEventDriver.h"
+#include "Core/Log.h"
 
+#include <format>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -25,10 +27,19 @@ struct GuiScenarioEventSource final : IAppEventSource
     uint32_t remainingFrames = 0;
     bool bPendingDoneAfterLastFrame = false;
     bool bDone = false;
+    /// Set when a widget-targeted step could not be resolved (missing,
+    /// invisible or covered target, or no resolver installed). Hosts check
+    /// this after run() so a failed resolution exits non-zero instead of
+    /// silently skipping the step.
+    bool bFailed = false;
+    std::string failureReason;
     std::function<void(const std::string&)> onCheckpoint;
     std::function<bool(std::string_view)> onAssert;
     std::function<bool()> onAssertValidationClean;
     std::function<void(uint32_t, uint32_t)> onSetWindowSize;
+    /// Resolves widget-targeted steps against the live tree at replay time
+    /// (the GUI host installs one over its tree; see resolveWidgetEventTarget).
+    std::function<bool(const GuiScenarioStep&, glm::vec2&, glm::vec2&, std::string&)> onResolveWidgetTarget;
     std::function<void()> onCaptureFinal;
     std::function<void()> onDone;
 
@@ -102,7 +113,36 @@ struct GuiScenarioEventSource final : IAppEventSource
             case EGuiScenarioStepKind::KeyPress:
             case EGuiScenarioStepKind::KeyRelease:
             case EGuiScenarioStepKind::KeyTyped:
-            case EGuiScenarioStepKind::Drag: {
+            case EGuiScenarioStepKind::Drag:
+            case EGuiScenarioStepKind::WidgetClick: {
+                GuiScenarioStep step = steps[index - 1];
+                if (step.bWidgetTargeted()) {
+                    if (!onResolveWidgetTarget) {
+                        bFailed       = true;
+                        failureReason = std::format("step targets widget '{}' but no widget resolver is installed",
+                                                    step.widget);
+                        YA_CORE_ERROR("GuiScenarioEventSource: {}", failureReason);
+                        bDone = true;
+                        if (onDone) {
+                            onDone();
+                        }
+                        return;
+                    }
+                    std::string error;
+                    if (!onResolveWidgetTarget(step, step.point, step.dragTo, error)) {
+                        bFailed       = true;
+                        failureReason = std::format("widget target '{}' failed: {}", step.widget, error);
+                        YA_CORE_ERROR("GuiScenarioEventSource: {}", failureReason);
+                        bDone = true;
+                        if (onDone) {
+                            onDone();
+                        }
+                        return;
+                    }
+                    if (step.kind == EGuiScenarioStepKind::Drag && step.dragToWidget.empty()) {
+                        step.dragTo = step.point + step.dragBy;
+                    }
+                }
                 struct ScenarioSink final : IGuiEventSink
                 {
                     const std::function<void(const Event&)>& emitFn;

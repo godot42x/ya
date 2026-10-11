@@ -13,6 +13,7 @@
 #include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TableGrid.h"
+#include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/Controls/TreeView.h"
@@ -301,6 +302,111 @@ bool assertScenarioTree(const WidgetTree& tree, std::string_view assertion, std:
         return jsonContains(*node, expected, std::format("widget[{}]", widgetName), error);
     }
     return jsonContains(treeDump, expected, "tree", error);
+}
+
+namespace
+{
+
+// Live-tree counterpart of the dump lookup above: same semantics (match by
+// element name, all layers, paint order), but returns the element so event
+// replay can read laid-out rects instead of serialized JSON.
+UIElement* findWidgetElement(UIElement& element, const std::string& name)
+{
+    if (element._name == name) {
+        return &element;
+    }
+    for (UIElement* child : element.getChildrenInPaintOrder()) {
+        if (UIElement* hit = findWidgetElement(*child, name)) {
+            return hit;
+        }
+    }
+    return nullptr;
+}
+
+UIElement* findWidgetElement(const WidgetTree& tree, const std::string& name)
+{
+    static constexpr WidgetTree::ELayer kLayers[] = {
+        WidgetTree::ELayer::Content,
+        WidgetTree::ELayer::Popup,
+        WidgetTree::ELayer::Tooltip,
+        WidgetTree::ELayer::DragIme,
+    };
+    for (const WidgetTree::ELayer layer : kLayers) {
+        if (UIElement* hit = findWidgetElement(*tree.getLayer(layer), name)) {
+            return hit;
+        }
+    }
+    return nullptr;
+}
+
+bool isSelfOrDescendant(const UIElement* node, const UIElement& ancestor)
+{
+    for (const UIElement* it = node; it != nullptr; it = it->getParent()) {
+        if (it == &ancestor) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
+bool resolveWidgetEventTarget(const WidgetTree& tree,
+                              std::string_view name,
+                              std::string_view part,
+                              const glm::vec2& anchor,
+                              glm::vec2& outPoint,
+                              std::string& error)
+{
+    const std::string targetName{name};
+    UIElement* element = findWidgetElement(tree, targetName);
+    if (!element) {
+        error = std::format("widget '{}' not found", targetName);
+        return false;
+    }
+
+    Rect2D rect = element->getLayoutRect();
+    if (!part.empty()) {
+        if (part == "handle") {
+            if (element->getTypeIndex() != type_index_v<UISplitPane>) {
+                error = std::format("widget '{}' does not expose a split handle", targetName);
+                return false;
+            }
+            rect = static_cast<const UISplitPane*>(element)->getDividerRect();
+        }
+        else if (part == "close") {
+            if (element->getTypeIndex() != type_index_v<UITabButton>) {
+                error = std::format("widget '{}' does not expose a close hit-zone", targetName);
+                return false;
+            }
+            rect = static_cast<const UITabButton*>(element)->closeHitRect();
+        }
+        else {
+            error = std::format("unknown part '{}' on widget '{}'", part, targetName);
+            return false;
+        }
+    }
+
+    if (!element->isHitTestableInTree()) {
+        error = std::format("widget '{}' is not hit-testable in the current tree", targetName);
+        return false;
+    }
+    if (rect.extent.x <= 0.0f || rect.extent.y <= 0.0f) {
+        error = std::format("widget '{}' has no laid-out extent at the replay point", targetName);
+        return false;
+    }
+
+    const glm::vec2 point{rect.pos.x + rect.extent.x * anchor.x,
+                          rect.pos.y + rect.extent.y * anchor.y};
+    if (UIElement* hit = tree.pickAt(point); !isSelfOrDescendant(hit, *element)) {
+        error = std::format("widget '{}' is covered at the resolved point by '{}'",
+                            targetName,
+                            hit ? hit->_name : std::string("<nothing>"));
+        return false;
+    }
+
+    outPoint = point;
+    return true;
 }
 
 } // namespace ya

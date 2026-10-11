@@ -8,14 +8,14 @@
 {"assert":{"widget":"Tab_Console","control":{"type":"tabButton","closable":true}}}
 {"assert":{"widget":"DockTabBar4","control":{"type":"tabBar","tabs":["Hierarchy","Assets"]}}}
 {"checkpoint":"dock_tabs"}
-# Drag Assets onto the left half of Hierarchy so the west leaf becomes Assets, Hierarchy.
-{"drag":{"from":[459,57],"to":[325,57],"button":0,"steps":8}}
+# Drag Assets onto the left edge of Hierarchy. Ending on that edge keeps the
+# swapped tab under the pointer so a live reorder does not swap back.
+{"drag":{"widget":"Tab_Assets","to_widget":"Tab_Hierarchy","to_at":[0.0,0.5],"steps":12}}
 {"frame":3}
 {"assert":{"widget":"DockTabBar4","control":{"type":"tabBar","tabs":["Assets","Hierarchy"]}}}
 {"checkpoint":"leaf_reordered"}
-# Console close hit-zone is the trailing 12px of Tab_Console at (529,554) 82x21.
-{"event":"mouse_press","x":602,"y":564,"button":0}
-{"event":"mouse_release","x":602,"y":564,"button":0}
+# The close affordance is the tab's trailing hit-zone, addressed as part:"close".
+{"click":{"widget":"Tab_Console","part":"close"}}
 {"frame":3}
 {"assert":{"widget":"!Tab_Console"}}
 {"assert":{"widget":"!DockStack7"}}

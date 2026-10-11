@@ -1,29 +1,27 @@
 # GUIWorkbench --start-page=Dialog --scenario-render. Tooltip dwell and
 # UIDialog. (The tooltip dwell counts rendered frames, so this scenario
-# needs --scenario-render.) DemoHost x≈327 at 1280x720.
+# needs --scenario-render.) Hover and click targets are named widgets.
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
 {"assert":{"widget":"OpenModal"}}
 {"assert":{"widget":"TooltipBtn"}}
 {"assert":{"widget":"OpenDialogBtn"}}
 {"checkpoint":"dialog_widgets"}
-# Hover TooltipBtn center (≈427,196 200x26).
-{"event":"mouse_move","x":427,"y":196}
+# Hover TooltipBtn, then move to OpenModal to clear the tooltip.
+{"event":"mouse_move","widget":"TooltipBtn"}
 {"frame":35}
 {"assert":{"widget":"TooltipHost"}}
 {"checkpoint":"tooltip_shown"}
-{"event":"mouse_move","x":640,"y":400}
+{"event":"mouse_move","widget":"OpenModal"}
 {"frame":2}
 {"assert":{"layers":{"Tooltip":{"children":[]}}}}
 {"checkpoint":"tooltip_cleared"}
-# Modal dialog: OpenDialogBtn ≈327,250; DialogOK center ≈(705,388).
-{"event":"mouse_press","x":427,"y":263,"button":0}
-{"event":"mouse_release","x":427,"y":263,"button":0}
+# Open the modal dialog and confirm it with its OK button.
+{"click":{"widget":"OpenDialogBtn"}}
 {"frame":2}
 {"assert":{"widget":"Dialog","control":{"type":"popupOverlay","modal":true}}}
 {"checkpoint":"dialog_open"}
-{"event":"mouse_press","x":705,"y":388,"button":0}
-{"event":"mouse_release","x":705,"y":388,"button":0}
+{"click":{"widget":"DialogOK"}}
 {"frame":2}
 {"assert":{"layers":{"Popup":{"children":[]}}}}
 {"checkpoint":"dialog_confirmed"}

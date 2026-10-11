@@ -53,6 +53,7 @@ run_gui_shared() {
     xmake r ya-gui-headless-host-test
     xmake r ya-gui-workbench-workspace-test
     xmake r GUIWorkbench --smoke-actions
+    python3 Script/gui_workbench_gate.py --skip-build --skip-gpu
 }
 
 run_gui_monolith() {

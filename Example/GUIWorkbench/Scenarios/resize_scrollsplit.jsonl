@@ -1,3 +1,4 @@
+# GUIWorkbench --start-page=ScrollSplit. Split and nested scroll exist, then the window resizes.
 {"frame":2}
 {"assert":{"widget":"DemoSplit"}}
 {"assert":{"widget":"DemoScroll","control":{"type":"scrollViewport"}}}

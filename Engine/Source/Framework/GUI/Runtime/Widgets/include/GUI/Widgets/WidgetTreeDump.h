@@ -10,6 +10,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <glm/glm.hpp>
+
 #include <string>
 #include <string_view>
 
@@ -31,5 +33,22 @@ YA_GUI_API const nlohmann::json* findWidgetNode(const nlohmann::json& root,
 YA_GUI_API bool assertScenarioTree(const WidgetTree& tree,
                                    std::string_view assertion,
                                    std::string& error);
+
+/// Resolve a widget-targeted scenario event to a tree-local logical point
+/// from the live tree's laid-out rects. `name` is looked up the same way
+/// assert.widget does (by element name, all layers, paint order); `part`
+/// selects a named sub-rect ("handle" = UISplitPane divider, "close" =
+/// UITabButton close hit-zone); `anchor` is normalized inside that rect.
+///
+/// The target must be hit-testable in the tree with a non-empty rect AND the
+/// resolved point must actually land on the target or one of its descendants
+/// (topmost hit) — anything else returns false with a reason in `error` so
+/// scenario replay fails loudly instead of clicking into the void.
+YA_GUI_API bool resolveWidgetEventTarget(const WidgetTree& tree,
+                                         std::string_view name,
+                                         std::string_view part,
+                                         const glm::vec2& anchor,
+                                         glm::vec2& outPoint,
+                                         std::string& error);
 
 } // namespace ya

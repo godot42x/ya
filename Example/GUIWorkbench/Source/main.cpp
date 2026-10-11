@@ -63,6 +63,26 @@ bool writeHeadlessSnapshotJson(const ya::UIFrameSnapshot& snapshot, const std::s
     return true;
 }
 
+/// Resolve a widget-targeted scenario step against a live tree: the start
+/// point always comes from the named widget, the drag end from "to_widget"
+/// (same resolution) or from the "by" delta. Missing, invisible or covered
+/// targets fail loudly through `error`.
+bool resolveScenarioStepTargets(ya::WidgetTree&             tree,
+                                const ya::GuiScenarioStep&  step,
+                                glm::vec2&                  outPoint,
+                                glm::vec2&                  outDragTo,
+                                std::string&                error)
+{
+    if (!ya::resolveWidgetEventTarget(tree, step.widget, step.widgetPart, step.anchor, outPoint, error)) {
+        return false;
+    }
+    if (step.kind == ya::EGuiScenarioStepKind::Drag && !step.dragToWidget.empty() &&
+        !ya::resolveWidgetEventTarget(tree, step.dragToWidget, step.dragToPart, step.dragToAnchor, outDragTo, error)) {
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -243,9 +263,22 @@ int main(int argc, char** argv)
                 scenario->onSetWindowSize = [&host](uint32_t width, uint32_t height) {
                     host.getTree().setLogicalExtent({width, height});
                 };
+                scenario->onResolveWidgetTarget = [&host](const ya::GuiScenarioStep& step,
+                                                          glm::vec2& outPoint,
+                                                          glm::vec2& outDragTo,
+                                                          std::string& error) {
+                    return resolveScenarioStepTargets(host.getTree(), step, outPoint, outDragTo, error);
+                };
                 scenario->onDone = [&host]() { host.requestQuit(); };
 
                 const int runResult = host.run();
+                if (scenario->bFailed) {
+                    YA_CORE_ERROR("GUIWorkbench headless: scenario '{}' failed: {}",
+                                  config.scenarioPath,
+                                  scenario->failureReason);
+                    host.shutdown();
+                    return 1;
+                }
                 if (!config.dumpSnapshotJsonPath.empty() &&
                     !writeHeadlessSnapshotJson(host.getLastSnapshot(), config.dumpSnapshotJsonPath)) {
                     return 1;
@@ -283,7 +316,31 @@ int main(int argc, char** argv)
     if (app.bOpenExtraAtStart) {
         app.openExtraWindow();
     }
+    // Windowed scenario replay resolves widget targets against the primary
+    // tree; the host owns the GuiScenarioEventSource, so wire the resolver in
+    // between init (which installs the scenario source) and run, and check
+    // the resolution flag on the same source after the run.
+    ya::GuiScenarioEventSource* windowedScenario = nullptr;
+    if (!config.scenarioPath.empty()) {
+        windowedScenario = dynamic_cast<ya::GuiScenarioEventSource*>(guiApp.getPrimaryWindow().getEventSource());
+        if (!windowedScenario) {
+            YA_CORE_ERROR("GUIWorkbench: scenario mode requested but the host event source is not a scenario source");
+            guiApp.shutdown();
+            return 1;
+        }
+        windowedScenario->onResolveWidgetTarget = [&guiApp](const ya::GuiScenarioStep& step,
+                                                            glm::vec2& outPoint,
+                                                            glm::vec2& outDragTo,
+                                                            std::string& error) {
+            return resolveScenarioStepTargets(guiApp.getTree(), step, outPoint, outDragTo, error);
+        };
+    }
     const int result = guiApp.run();
+    if (windowedScenario && windowedScenario->bFailed) {
+        YA_CORE_ERROR("GUIWorkbench: scenario '{}' failed: {}", config.scenarioPath, windowedScenario->failureReason);
+        guiApp.shutdown();
+        return 1;
+    }
     guiApp.shutdown();
     if (app.bSmokeActions) {
         YA_CORE_INFO("GUIWorkbench smoke result: {}", app.getSmokePassed() ? "PASS" : "FAIL");

@@ -1,6 +1,7 @@
-# GUIWorkbench --start-page=Dock. DockSpace now boots into a real editor-like
-# layout: Hierarchy/Assets on the left, Scene center, Console bottom, Inspector right.
-# Drag the Console tab back into the Scene area; the bottom leaf collapses.
+# GUIWorkbench --start-page=Dock. DockSpace boots into a real editor-like
+# layout: Hierarchy/Assets on the left, Scene center, Console bottom, Inspector
+# right. Drag the Console tab into the Scene panel body; the bottom leaf
+# collapses. Both drag endpoints are named widgets.
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
 {"assert":{"widget":"DockSplit1"}}
@@ -13,8 +14,8 @@
 {"assert":{"widget":"Tab_Inspector"}}
 {"assert":{"widget":"Tab_Console"}}
 {"checkpoint":"dock_initial"}
-# Drag the Console tab onto the Scene content center -> merge and collapse the bottom leaf.
-{"drag":{"from":[562,573],"to":[776,318],"button":0,"steps":8}}
+# Drag the Console tab onto the Scene panel body -> merge and collapse the bottom leaf.
+{"drag":{"widget":"Tab_Console","to_widget":"Scene_Body","steps":12}}
 {"frame":3}
 {"assert":{"widget":"!DockStack7"}}
 {"checkpoint":"dock_dragged"}

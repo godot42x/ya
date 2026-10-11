@@ -1,7 +1,9 @@
 # GUIWorkbench --start-page=Inputs. Automated acceptance for the input
 # extras: double-click text entry (DragFloat/SpinBox), ColorEdit channel
-# selection, and SearchCombo filter/pick. Widgets sit at the top of the
-# Inputs page (no gallery scroll). DemoHost x≈327 at 1280x720.
+# selection, and SearchCombo filter/pick. Every input targets a named widget
+# from the live tree; the picker's SV square sits at a fixed inset inside
+# ColorPicker (8px pad, 160px square) and is addressed through normalized
+# anchors.
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
 {"assert":{"widget":"GalleryDragFloat","control":{"type":"dragFloat","value":3.5}}}
@@ -9,54 +11,47 @@
 {"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit"}}}
 {"assert":{"widget":"GallerySearchCombo","control":{"type":"searchComboBox","selectedIndex":0}}}
 {"checkpoint":"inputs_present"}
-# DragFloat ≈ (406,87) 120x24; double-click center and type 1.5.
-{"event":"mouse_press","x":466,"y":99,"button":0}
-{"event":"mouse_release","x":466,"y":99,"button":0}
-{"event":"mouse_press","x":466,"y":99,"button":0}
-{"event":"mouse_release","x":466,"y":99,"button":0}
+# Double-click GalleryDragFloat and type 1.5.
+{"click":{"widget":"GalleryDragFloat"}}
+{"click":{"widget":"GalleryDragFloat"}}
 {"event":"key_typed","text":"1.5"}
 {"event":"key_press","key":"Enter"}
 {"frame":2}
 {"assert":{"widget":"GalleryDragFloat","control":{"type":"dragFloat","value":1.5}}}
 {"checkpoint":"dragfloat_edited"}
-# SpinBox ≈ (390,123) 120x24; middle value area (not +/-) enters edit; type 4.
-{"event":"mouse_press","x":450,"y":135,"button":0}
-{"event":"mouse_release","x":450,"y":135,"button":0}
+# Click GallerySpinBox center (value area, not the +/- ends); type 4.
+{"click":{"widget":"GallerySpinBox"}}
 {"event":"key_typed","text":"4"}
 {"event":"key_press","key":"Enter"}
 {"frame":2}
 {"assert":{"widget":"GallerySpinBox","control":{"type":"spinBox","value":4.0}}}
 {"checkpoint":"spinbox_edited"}
-# ColorEdit ≈ (406,193) 280x28. A field is the 4th RGBA drag cell after the swatch.
-{"event":"mouse_press","x":650,"y":207,"button":0}
-{"event":"mouse_release","x":650,"y":207,"button":0}
+# Channel cells are the named DragFloat children of the ColorEdit.
+{"click":{"widget":"ChannelA"}}
 {"frame":2}
-{"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","activeChannel":3}}}
+{"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit"}}}
 {"checkpoint":"color_channel_selected"}
-# Swatch at ColorEdit+4; picker opens below (page is not near the bottom).
-{"event":"mouse_press","x":419,"y":207,"button":0}
-{"event":"mouse_release","x":419,"y":207,"button":0}
+# Swatch is the named swatch child; the picker opens below (page is not near the bottom).
+{"click":{"widget":"Swatch"}}
 {"frame":2}
 {"assert":{"widget":"ColorPickerOverlay","control":{"type":"popupOverlay","modal":false}}}
 {"assert":{"widget":"ColorPicker","control":{"type":"colorPicker"}}}
 {"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","pickerOpen":true}}}
 {"checkpoint":"picker_open"}
-# SV square is 8px inside the picker; click toward high saturation.
-{"event":"mouse_press","x":540,"y":360,"button":0}
-{"event":"mouse_release","x":540,"y":360,"button":0}
+# SV square is a fixed 160px region inset 8px into the 176px-wide picker:
+# [0.77,0.39] lands at s≈0.80, v≈0.49 (toward high saturation).
+{"click":{"widget":"ColorPicker","at":[0.77,0.39]}}
 {"frame":2}
 {"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","pickerOpen":true}}}
 {"assert":{"widget":"ColorPicker","control":{"type":"colorPicker","s":{"$gt":0.72},"v":{"$lt":0.78}}}}
 {"checkpoint":"picker_sv_changed"}
-# Picker stays open after SV pick; click the shield to dismiss before SearchCombo.
-{"event":"mouse_press","x":80,"y":80,"button":0}
-{"event":"mouse_release","x":80,"y":80,"button":0}
+# The popup overlay itself is the shield: click it away from its content to dismiss.
+{"click":{"widget":"ColorPickerOverlay","at":[0.06,0.11]}}
 {"frame":2}
 {"assert":{"layers":{"Popup":{"children":[]}}}}
 {"checkpoint":"picker_dismissed"}
-# SearchCombo ≈ (422,233) 180x24; type 'To' then pick Torus (Menu0 ≈426,261).
-{"event":"mouse_press","x":512,"y":245,"button":0}
-{"event":"mouse_release","x":512,"y":245,"button":0}
+# Type 'To' then pick Torus by the label-derived menu item name.
+{"click":{"widget":"GallerySearchCombo"}}
 {"frame":2}
 {"assert":{"widget":"GallerySearchCombo","control":{"type":"searchComboBox"}}}
 {"checkpoint":"search_menu_open"}
@@ -64,8 +59,7 @@
 {"frame":2}
 {"assert":{"widget":"GallerySearchCombo","control":{"type":"searchComboBox","filter":"To"}}}
 {"checkpoint":"search_filtered"}
-{"event":"mouse_press","x":463,"y":274,"button":0}
-{"event":"mouse_release","x":463,"y":274,"button":0}
+{"click":{"widget":"Menu_Torus"}}
 {"frame":2}
 {"assert":{"layers":{"Popup":{"children":[]}}}}
 {"checkpoint":"search_picked"}

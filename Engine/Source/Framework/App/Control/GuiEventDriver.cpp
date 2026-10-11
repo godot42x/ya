@@ -57,6 +57,63 @@ float numberOrDefault(const nlohmann::json& obj, const char* key, float fallback
     return it->get<float>();
 }
 
+/// "at" is either "center" (default) or a normalized [fx, fy] pair.
+bool parseAnchor(const nlohmann::json& parent, const char* key, glm::vec2& outAnchor, std::string* errorOut, int lineNo)
+{
+    const auto it = parent.find(key);
+    if (it == parent.end() || it->is_null()) {
+        return true;
+    }
+    if (it->is_string()) {
+        if (it->get<std::string>() != "center") {
+            if (errorOut) {
+                *errorOut = std::string("'") + key + "' must be \"center\" or [fx,fy] at line " + std::to_string(lineNo);
+            }
+            return false;
+        }
+        outAnchor = {0.5f, 0.5f};
+        return true;
+    }
+    if (it->is_array() && it->size() == 2 && (*it)[0].is_number() && (*it)[1].is_number()) {
+        const float fx = (*it)[0].get<float>();
+        const float fy = (*it)[1].get<float>();
+        if (fx < 0.0f || fx > 1.0f || fy < 0.0f || fy > 1.0f) {
+            if (errorOut) {
+                *errorOut = std::string("'") + key + "' normalized coordinates must be within [0,1] at line " + std::to_string(lineNo);
+            }
+            return false;
+        }
+        outAnchor = {fx, fy};
+        return true;
+    }
+    if (errorOut) {
+        *errorOut = std::string("'") + key + "' must be \"center\" or [fx,fy] at line " + std::to_string(lineNo);
+    }
+    return false;
+}
+
+bool parseWidgetTarget(const nlohmann::json& parent,
+                       std::string& outWidget,
+                       std::string& outPart,
+                       glm::vec2&   outAnchor,
+                       std::string* errorOut,
+                       int          lineNo)
+{
+    const auto widgetIt = parent.find("widget");
+    if (widgetIt == parent.end() || !widgetIt->is_string() || widgetIt->get<std::string>().empty()) {
+        if (errorOut) {
+            *errorOut = "widget target requires a non-empty 'widget' name at line " + std::to_string(lineNo);
+        }
+        return false;
+    }
+    outWidget = widgetIt->get<std::string>();
+    const auto partIt = parent.find("part");
+    if (partIt != parent.end() && partIt->is_string()) {
+        outPart = partIt->get<std::string>();
+    }
+    return parseAnchor(parent, "at", outAnchor, errorOut, lineNo);
+}
+
 } // namespace
 
 EKey::T keyFromName(std::string_view name)
@@ -121,14 +178,86 @@ std::vector<GuiScenarioStep> parseGuiScenario(std::string_view jsonl,
                 steps.push_back(std::move(step));
                 continue;
             }
+            if (obj.contains("click")) {
+                const auto& c = obj["click"];
+                if (!c.is_object() || !parseWidgetTarget(c, step.widget, step.widgetPart, step.anchor, errorOut, lineNo)) {
+                    if (errorOut && errorOut->empty()) {
+                        *errorOut = "click must be an object with a widget target at line " + std::to_string(lineNo);
+                    }
+                    return steps;
+                }
+                step.kind   = EGuiScenarioStepKind::WidgetClick;
+                step.button = c.value("button", 0);
+                steps.push_back(std::move(step));
+                continue;
+            }
+            if (obj.contains("wheel")) {
+                const auto& w = obj["wheel"];
+                if (!w.is_object() || !parseWidgetTarget(w, step.widget, step.widgetPart, step.anchor, errorOut, lineNo)) {
+                    if (errorOut && errorOut->empty()) {
+                        *errorOut = "wheel must be an object with a widget target at line " + std::to_string(lineNo);
+                    }
+                    return steps;
+                }
+                step.kind  = EGuiScenarioStepKind::MouseWheel;
+                step.wheel = {numberOrDefault(w, "dx", 0.0f), numberOrDefault(w, "dy", 0.0f)};
+                steps.push_back(std::move(step));
+                continue;
+            }
             if (obj.contains("drag")) {
-                const auto& d     = obj["drag"];
-                const auto  from  = d["from"];
-                const auto  to    = d["to"];
-                step.kind        = EGuiScenarioStepKind::Drag;
-                step.point       = {from[0].get<float>(), from[1].get<float>()};
-                step.dragTo      = {to[0].get<float>(), to[1].get<float>()};
-                step.dragSteps   = d.value("steps", 8);
+                const auto& d = obj["drag"];
+                if (!d.is_object()) {
+                    if (errorOut) {
+                        *errorOut = "drag must be an object at line " + std::to_string(lineNo);
+                    }
+                    return steps;
+                }
+                step.kind      = EGuiScenarioStepKind::Drag;
+                step.dragSteps = d.value("steps", 8);
+                if (d.contains("widget")) {
+                    if (!parseWidgetTarget(d, step.widget, step.widgetPart, step.anchor, errorOut, lineNo)) {
+                        return steps;
+                    }
+                    if (d.contains("to_widget")) {
+                        const auto& toWidget = d["to_widget"];
+                        if (!toWidget.is_string() || toWidget.get<std::string>().empty()) {
+                            if (errorOut) {
+                                *errorOut = "drag to_widget must be a non-empty name at line " + std::to_string(lineNo);
+                            }
+                            return steps;
+                        }
+                        step.dragToWidget = toWidget.get<std::string>();
+                        const auto toPartIt = d.find("to_part");
+                        if (toPartIt != d.end() && toPartIt->is_string()) {
+                            step.dragToPart = toPartIt->get<std::string>();
+                        }
+                        if (!parseAnchor(d, "to_at", step.dragToAnchor, errorOut, lineNo)) {
+                            return steps;
+                        }
+                    }
+                    else if (d.contains("by")) {
+                        const auto& by = d["by"];
+                        if (!by.is_array() || by.size() != 2 || !by[0].is_number() || !by[1].is_number()) {
+                            if (errorOut) {
+                                *errorOut = "drag 'by' must be [dx,dy] at line " + std::to_string(lineNo);
+                            }
+                            return steps;
+                        }
+                        step.dragBy = {by[0].get<float>(), by[1].get<float>()};
+                    }
+                    else {
+                        if (errorOut) {
+                            *errorOut = "widget drag requires 'by' or 'to_widget' at line " + std::to_string(lineNo);
+                        }
+                        return steps;
+                    }
+                    steps.push_back(std::move(step));
+                    continue;
+                }
+                const auto from = d["from"];
+                const auto to   = d["to"];
+                step.point  = {from[0].get<float>(), from[1].get<float>()};
+                step.dragTo = {to[0].get<float>(), to[1].get<float>()};
                 steps.push_back(std::move(step));
                 continue;
             }
@@ -137,6 +266,10 @@ std::vector<GuiScenarioStep> parseGuiScenario(std::string_view jsonl,
             step.point = {numberOrDefault(obj, "x", 0.0f), numberOrDefault(obj, "y", 0.0f)};
             if (type == "mouse_move") {
                 step.kind = EGuiScenarioStepKind::MouseMove;
+                if (obj.contains("widget") &&
+                    !parseWidgetTarget(obj, step.widget, step.widgetPart, step.anchor, errorOut, lineNo)) {
+                    return steps;
+                }
             }
             else if (type == "mouse_press") {
                 step.kind   = EGuiScenarioStepKind::MousePress;
@@ -205,14 +338,16 @@ std::vector<GuiScenarioStep> loadGuiScenarioFile(const std::string& path,
     return parseGuiScenario(buffer.str(), errorOut);
 }
 
-GuiScenarioExecutor::GuiScenarioExecutor(IGuiEventSink& sink,
-                                         StepFrameFn   stepFrame,
-                                         CheckpointFn  onCheckpoint,
-                                         AssertFn      onAssert)
+GuiScenarioExecutor::GuiScenarioExecutor(IGuiEventSink&  sink,
+                                         StepFrameFn     stepFrame,
+                                         CheckpointFn    onCheckpoint,
+                                         AssertFn        onAssert,
+                                         WidgetResolveFn onResolveWidget)
     : _sink(sink)
     , _stepFrame(std::move(stepFrame))
     , _onCheckpoint(std::move(onCheckpoint))
     , _onAssert(std::move(onAssert))
+    , _onResolveWidget(std::move(onResolveWidget))
 {
 }
 
@@ -304,6 +439,20 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
         sink.dispatch(releaseEv, step.dragTo);
         break;
     }
+    case EGuiScenarioStepKind::WidgetClick: {
+        // A click is one atomic gesture: bootstrap the cursor, press, release.
+        // The point comes from the host's widget resolution (step.point).
+        MouseMoveEvent          moveEv(step.point.x, step.point.y);
+        MouseButtonPressedEvent  pressEv(step.button == 1 ? EMouse::Right : EMouse::Left);
+        MouseButtonReleasedEvent releaseEv(step.button == 1 ? EMouse::Right : EMouse::Left);
+        stamp(moveEv);
+        stamp(pressEv);
+        stamp(releaseEv);
+        sink.dispatch(moveEv, step.point);
+        sink.dispatch(pressEv, step.point);
+        sink.dispatch(releaseEv, step.point);
+        break;
+    }
     case EGuiScenarioStepKind::Frame:
     case EGuiScenarioStepKind::SetWindowSize:
     case EGuiScenarioStepKind::Checkpoint:
@@ -332,8 +481,28 @@ bool GuiScenarioExecutor::run(const std::vector<GuiScenarioStep>& steps)
         case EGuiScenarioStepKind::KeyRelease:
         case EGuiScenarioStepKind::KeyTyped:
         case EGuiScenarioStepKind::Drag:
-            emitGuiScenarioStep(_sink, step);
+        case EGuiScenarioStepKind::WidgetClick: {
+            GuiScenarioStep resolved = step;
+            if (resolved.bWidgetTargeted()) {
+                if (!_onResolveWidget) {
+                    YA_CORE_ERROR("GuiScenarioExecutor: step targets widget '{}' but no widget resolver is installed",
+                                  resolved.widget);
+                    return false;
+                }
+                std::string error;
+                if (!_onResolveWidget(resolved, resolved.point, resolved.dragTo, error)) {
+                    YA_CORE_ERROR("GuiScenarioExecutor: widget target '{}' failed: {}",
+                                  resolved.widget,
+                                  error);
+                    return false;
+                }
+                if (resolved.kind == EGuiScenarioStepKind::Drag && resolved.dragToWidget.empty()) {
+                    resolved.dragTo = resolved.point + resolved.dragBy;
+                }
+            }
+            emitGuiScenarioStep(_sink, resolved);
             break;
+        }
         case EGuiScenarioStepKind::Checkpoint:
             if (_onCheckpoint) {
                 _onCheckpoint(step.tag);

@@ -36,6 +36,7 @@ enum class EGuiScenarioStepKind : uint8_t
     KeyRelease,
     KeyTyped,
     Drag,
+    WidgetClick,
     SetWindowSize,
     Checkpoint,
     Assert,
@@ -57,6 +58,27 @@ struct GuiScenarioStep
     uint32_t   width      = 0;
     uint32_t   height     = 0;
     std::string tag;
+
+    /// Widget-targeted input: the host resolves `widget` from the live tree's
+    /// laid-out rects at replay time (same lookup as assert.widget) and fills
+    /// `point` / `dragTo` before the step is emitted. Empty `widget` = the
+    /// step carries raw coordinates. A missing, invisible or covered target
+    /// fails the scenario — it never silently degrades to a skipped step.
+    std::string widget;
+    /// Optional named sub-rect of the target: "handle" = UISplitPane divider,
+    /// "close" = UITabButton close hit-zone.
+    std::string widgetPart;
+    /// Normalized [fx, fy] inside the target rect; {0.5, 0.5} = center.
+    glm::vec2  anchor     = {0.5f, 0.5f};
+    /// Drag end as a delta from the resolved start point ("by").
+    glm::vec2  dragBy     = {0.0f, 0.0f};
+    /// Drag end as another widget target ("to_widget") with its own part/anchor.
+    std::string dragToWidget;
+    std::string dragToPart;
+    glm::vec2  dragToAnchor = {0.5f, 0.5f};
+
+    [[nodiscard]] bool bWidgetTargeted() const { return !widget.empty(); }
+
     /// Serialized JSON assertion payload. Core deliberately treats this as an
     /// opaque contract; the GUI host evaluates it against its tree dump.
     std::string assertion;
@@ -74,20 +96,29 @@ public:
     using StepFrameFn  = std::function<void(uint32_t count)>;
     using CheckpointFn = std::function<void(const std::string& tag)>;
     using AssertFn     = std::function<bool(std::string_view assertion)>;
+    /// Resolves a widget-targeted step to tree-local points at replay time.
+    /// The GUI host installs one over its live tree (see
+    /// resolveWidgetEventTarget). Returning false fails the scenario.
+    using WidgetResolveFn = std::function<bool(const GuiScenarioStep& step,
+                                               glm::vec2& outPoint,
+                                               glm::vec2& outDragTo,
+                                               std::string& error)>;
 
     GuiScenarioExecutor(IGuiEventSink& sink,
                         StepFrameFn   stepFrame,
                         CheckpointFn  onCheckpoint = {},
-                        AssertFn      onAssert = {});
+                        AssertFn      onAssert = {},
+                        WidgetResolveFn onResolveWidget = {});
 
     bool run(const std::vector<GuiScenarioStep>& steps);
     bool runJsonl(std::string_view jsonl);
 
 private:
-    IGuiEventSink& _sink;
-    StepFrameFn    _stepFrame;
-    CheckpointFn   _onCheckpoint;
-    AssertFn       _onAssert;
+    IGuiEventSink&  _sink;
+    StepFrameFn     _stepFrame;
+    CheckpointFn    _onCheckpoint;
+    AssertFn        _onAssert;
+    WidgetResolveFn _onResolveWidget;
 };
 
 /// Scenario key name to EKey ("Enter", "Space", "Down", "A", ...).

@@ -600,10 +600,11 @@
       "priority": "P0",
       "title": "one-command gate: all scenarios + GPU/offscreen parity + portable baselines",
       "owner_line": "gui-app",
-      "status": "rework",
+      "status": "done",
       "evidence": [
-        "rework reason (2026-10-11 review): scenarios replay by raw pixel coordinates and assertions were loosened to current widget geometry",
-        "implementation uncommitted in the shared workspace; rework as GA2r (locate by widget, strict assertions) in gui-app/"
+        "GA2r rework landed: scenarios target widgets (click/drag/wheel + part:\"handle\"/\"close\" + normalized anchors); missing/covered targets fail loudly",
+        "gui_workbench_gate.py scenarios=31 failed=0 digest=PASS gpu=PASS; robustness proof: shell rail width 0.23 -> 0.30 still passes all migrated scenarios",
+        "baselines accepted after attribution (6571a09e palette/pages, f2f1a6fe, 05d7c0f9); text_wrap pins exact wrapped width (12cb87b0 changed desired to longest line)"
       ]
     },
     {

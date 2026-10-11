@@ -1,6 +1,9 @@
-# GUIWorkbench --start-page=Text. Wrapped text geometry.
+# GUIWorkbench --start-page=Text. Wrapped text geometry. Since 12cb87b0 the
+# desired width of wrapped text is the longest wrapped line (desired matches
+# paint; the page caps it with maxWrapWidth=360), so the exact value is pinned
+# instead of a range.
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
-{"assert":{"widget":"WrappedText","rect":{"w":360.0}}}
+{"assert":{"widget":"WrappedText","rect":{"w":345.5832824707031}}}
 {"checkpoint":"wrapped_text"}
 {"frame":1}

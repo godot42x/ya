@@ -20,9 +20,14 @@
 - 七个场景对着当前控件几何重对过（方向审查判为返工点：像素坐标回放、断言放宽）：Theme 走 View → Light Theme；折行宽度用 `$gt 300` / `$lte 360`；ColorEdit 不再断言已删除的 `activeChannel`；Dialog OK、Console 合并、同叶 tab 重排与关闭、分割条拖拽都改到实测矩形上。`theme_light` 基线用同一条菜单路径，暗色底约 0.11、亮色底约 0.95，两份 semantic digest 不同。
 - 验证：`workbench gate: scenarios=31 failed=0 digest=PASS gpu=PASS`。
 
-## 2026-10-11 — GA3 / PB7 GUIWorkbench 基准（实现未提交，返工中 → GA3r）
+## 2026-10-11 — GA2r 场景按控件定位（返工完成，`T3`）
 
-- `GUIWorkbench --benchmark <config.json>` 走和游戏运行时同一份 `bench_summary.json`：`frame`（墙钟 / CPU / GPU）、`cpu_stages`、`render_counters`、`process_memory`（M8）、`gpu_memory`（M4，设备自己登记）。GUI 没有场景相机和固定步长，`gpu_passes` 为空（合成不走 render graph pass）。
-- 配置 `Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json`：Dock 页，1920×1080，immediate，预热 120、采样 600。`--start-page` 优先于配置里的 `page`。headless 拒绝这条命令。
-- 窗口缩放触发的 swapchain 重建不再丢掉已经排队的 present mode。否则 Dock 基准会落回 FIFO，帧时间被刷新率夹住。
-- 验证：`GuiBenchmarkConfigTest` 3/3。debug 短窗（Dock，1280×720，immediate，采样 24）：frame p50 6.32 ms，cpu 5.64 ms，gpu 1.25 ms，RSS 214 MiB，GPU 合计 46.7 MiB，`unifiedMemory` true。这不是 profile 基线（方向审查判为返工点：平行实现了一套基准 → GA3r）。
+- **机制**：`GuiScenarioStep` 增加控件目标字段（`widget` / `widgetPart` / `at` 归一化锚点 / `by` / `to_widget`），新增 `click` 原子步骤（move+press+release）与 `wheel` 控件形式；`mouse_move` 也接受控件目标（tooltip 悬停）。回放时由宿主注入的 resolver 从**当前控件树取布局后矩形**（`WidgetTreeDump::resolveWidgetEventTarget`，与 assert.widget 同一套按名查找：全层、paint order），`part:"handle"` 解析 `UISplitPane::getDividerRect()`、`part:"close"` 解析 `UITabButton::closeHitRect()`。**缺失 / 不可命中 / 被覆盖（`pickAt` 顶点不是目标或其后代）一律让场景失败**，不静默跳过；`GuiScenarioEventSource::bFailed` + executor 返回 false 双路径生效。headless 在 `main.cpp` 接线；windowed 在 `guiApp.init()` 后经 `getEventSource()` 拿到场景源接同一个 resolver（GUIAppHost 未动——T2 禁区）。
+- **命名约定**：菜单项由 `Menu{index}` 改为 `Menu_{label}`（对齐 `MenuBar_{label}`；分隔符保留位置名）。索引名在 profile 构建下会因 Frame Inspector 项漂移，标签名稳定。split 手柄不加命名节点——分隔条是布局几何（`UISplitLayout`），已有 `getDividerRect()` 公开访问器，`part:"handle"` 是更轻的既有约定延伸。
+- **迁移**：theme（`MenuBar_View` → `Menu_Light Theme`）、dock（`Tab_Console` → `Scene_Body`）、dock_tabs（`to_at:[0,0.5]` 落 Hierarchy 左缘、`part:"close"` 关 Console）、gallery_acceptance（Channel cells `ChannelA`、`Swatch`、SV 区按 picker 固定内边距的归一化锚点、shield=点 `ColorPickerOverlay` 内容区之外、`Menu_Torus`）、gallery_p1（悬停/点击全控件名）、resize_scrollsplit_interaction_stress（`part:"handle"` + `by` 增量，不再按窗口尺寸查像素表）。resize_scrollsplit / resize_scrollsplit_stress 本无指针步骤，不变。`gui_style_baseline.py` 的 theme_light 同步。
+- **WrappedText 宽度（原 GA2 放宽为 (300,360] 的原因）**：`12cb87b0`（[rpg] town playthrough，2026-10-11）有意把折行文本的 desired 从「整段折行宽（=maxWrapWidth 360）」改为「最长实际行宽」（desired 与绘制一致）；页面仍是 `setMaxWrapWidth(360)`。**不是回归**——按裁决断言精确新值 `345.5832824707031`（13px 合成字体、固定 advance，确定性），不再用范围掩盖。
+- **digest 基线归因（HEAD `b72e2113` 基线 vs 重生成基线）**：差异全部来自已提交代码，GA2 的输入路径切换（ThemeToggle→View 菜单）不改变终态帧：6571a09e（[gui/theme] 表面阶梯抬升 dark bg 0.075→0.110 / light 0.86→0.945、按钮/tabs/list 去描边环、Theme 页重写为 View 菜单提示 + accent/checkbox/style-key 样例）；f2f1a6fe（[gui/animation]）与 05d7c0f9（[gui/workbench] add Windows page）给 rail 各加页（每页 +3 行）。旧基线落后是因为 `gui_style_baseline.py` 当时写死 debug 路径且不在常规门禁内。基线就此接受并随本提交入库。
+- **稳健性证明**：临时把 `WorkbenchShellSplit` ratio 0.23→0.30（不提交），重建后 9 个迁移场景全过；已还原并重建。旧像素场景在这种改动下会整批失效。
+- **验证**：`GuiEventDriverTest` 新增 5 例（解析/非法形式拒绝/click emit/无 resolver 或 resolver 失败即失败/解析器数学与 part/覆盖/隐藏失败语义）；`ya-gui-closure-test` 651/651；`gui_workbench_gate.py` 两次全绿 `scenarios=31 failed=0 digest=PASS gpu=PASS`（其中一次完整 gate 曾报 failed=2，未留下场景名，随后两次全绿——按偶发记录，不写进门禁豁免）。
+- **审查修正（review 2026-10-12）**：初版提交误把 benchmark 接线（`GuiBenchmark.h` include、`--benchmark` 参数、`guiApp.setBenchmark`）随 main.cpp 带进提交，而这些接口只在未提交工作区里——干净 checkout 编不过。已从提交剥离（amend），benchmark 块回到工作区留给 GA3r；windowed 的 `bFailed` 检查合并为一次 cast。gate 汇总现在打印失败场景名单（此前只报数量，failed=2 那次因此查无可查）。`Menu_{label}` 命名的已知代价记进 Menu.cpp 注释：名字跟随显示文案，本地化时查找名会跟着变，做菜单本地化时要回头处理。
+

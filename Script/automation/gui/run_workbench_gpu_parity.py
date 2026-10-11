@@ -11,6 +11,8 @@ import re
 import subprocess
 import sys
 
+from workbench_bin import find_workbench
+
 
 PARITY_RE = re.compile(
     r"offscreen parity diff: pass=(true|false) differing=(\d+) ratio=([0-9.]+)"
@@ -22,23 +24,6 @@ def tail(path: str, lines: int = 80) -> str:
         return ""
     with open(path, "r", encoding="utf-8", errors="replace") as handle:
         return "".join(handle.readlines()[-lines:])
-
-
-def find_workbench(workspace: str) -> str:
-    build_root = os.path.join(workspace, "build")
-    candidates: list[str] = []
-    for root, _dirs, files in os.walk(build_root):
-        for name in ("GUIWorkbench", "GUIWorkbench.exe"):
-            if name in files:
-                candidates.append(os.path.join(root, name))
-    if not candidates:
-        raise RuntimeError("GUIWorkbench binary not found under build/")
-    def rank(path: str) -> tuple[int, float]:
-        parts = path.split(os.sep)
-        mode_rank = 0 if "debug" in parts else 1
-        return (mode_rank, -os.path.getmtime(path))
-    candidates.sort(key=rank)
-    return candidates[0]
 
 
 def run_logged(cmd: list[str], cwd: str, log_path: str, timeout_s: float) -> int:

@@ -1,15 +1,16 @@
-# GUIWorkbench --start-page=Theme. Coordinates are window-space including
-# the workbench chrome (left page list ~238px, top bar ~46px). Hits the
-# ThemeToggle button (cross-stretched in ThemeForm).
+# GUIWorkbench --start-page=Theme. Theme switches from View → Light Theme.
+# Inputs target widgets from the live tree: the View menu opens under
+# MenuBar_View and the entry is addressed by its label-derived name, so the
+# scenario survives shell padding and menu-entry changes.
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
-{"assert":{"widget":"ThemeToggle"}}
 {"assert":{"widget":"ThemeShowButton"}}
-{"assert":{"widget":"ThemeShowButton2"}}
+{"assert":{"widget":"ThemeAccentButton"}}
 {"assert":{"widget":"ThemeShowPanel"}}
 {"checkpoint":"theme_dark"}
-{"event":"mouse_press","x":566,"y":120,"button":0}
-{"event":"mouse_release","x":566,"y":120,"button":0}
+{"click":{"widget":"MenuBar_View"}}
+{"frame":2}
+{"click":{"widget":"Menu_Light Theme"}}
 {"frame":2}
 {"assert":{"widget":"ThemeShowButton"}}
 {"assert":{"widget":"ThemeShowPanel"}}

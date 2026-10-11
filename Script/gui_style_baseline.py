@@ -29,11 +29,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE_DIR = ROOT / "Example" / "GUIWorkbench" / "Baselines"
-BIN = ROOT / "build" / "macosx" / "arm64" / "debug" / "GUIWorkbench"
+sys.path.insert(0, str(ROOT / "Script" / "automation" / "gui"))
+from workbench_bin import find_workbench  # noqa: E402
 
 # (slug, start-page, scenario-lines) — the shell pages that pin shell chrome
-# + theme values. theme_light toggles the tree theme via the ThemeToggle
-# button (same coordinates as Scenarios/theme.jsonl).
+# + theme values. theme_light opens View and chooses Light Theme by widget
+# target (same steps as Scenarios/theme.jsonl).
 MATRIX: list[tuple[str, str, list[str]]] = [
     ("render", "Render", ['{"frame":2}']),
     ("theme_dark", "Theme", ['{"frame":2}']),
@@ -41,10 +42,11 @@ MATRIX: list[tuple[str, str, list[str]]] = [
         "theme_light",
         "Theme",
         [
-            '{"frame":1}',
-            '{"event":"mouse_press","x":566,"y":120,"button":0}',
-            '{"event":"mouse_release","x":566,"y":120,"button":0}',
-            '{"frame":3}',
+            '{"frame":2}',
+            '{"click":{"widget":"MenuBar_View"}}',
+            '{"frame":2}',
+            '{"click":{"widget":"Menu_Light Theme"}}',
+            '{"frame":2}',
         ],
     ),
     ("dock", "Dock", ['{"frame":2}']),
@@ -65,7 +67,7 @@ def run_row(slug: str, page: str, lines: list[str]) -> dict:
     try:
         subprocess.run(
             [
-                str(BIN),
+                str(find_workbench(str(ROOT))),
                 "--headless",
                 f"--start-page={page}",
                 f"--scenario={scenario}",
@@ -91,8 +93,10 @@ def main() -> int:
     parser.add_argument("--verbose", action="store_true", help="print per-page digests")
     args = parser.parse_args()
 
-    if not BIN.exists():
-        print(f"GUIWorkbench binary not found: {BIN} — run 'xmake b GUIWorkbench' first")
+    try:
+        find_workbench(str(ROOT))
+    except RuntimeError as exc:
+        print(f"{exc} — run 'xmake b GUIWorkbench' first")
         return 2
     BASELINE_DIR.mkdir(parents=True, exist_ok=True)
 

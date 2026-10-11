@@ -278,7 +278,16 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
     };
 
     for (size_t i = 0; i < items.size(); ++i) {
-        auto menuItem = std::make_shared<UIMenuItem>(std::format("Menu{}", i));
+        // Name items after their label (same convention as MenuBar_{label}) so
+        // scenario replay and tests address them by identity instead of an
+        // index that shifts when the menu gains profiling entries. Separators
+        // keep the positional name; they are never clicked. Known cost: the
+        // name follows the displayed label, so a localized label moves the
+        // lookup name with it — revisit when menus get localization.
+        const std::string itemName = items[i].label.empty()
+                                         ? std::format("Menu{}", i)
+                                         : std::format("Menu_{}", items[i].label);
+        auto menuItem = std::make_shared<UIMenuItem>(itemName);
         const bool bSeparator = isSeparatorItem(items[i]);
         menuItem->_label    = items[i].label;
         menuItem->_icon     = items[i].icon;

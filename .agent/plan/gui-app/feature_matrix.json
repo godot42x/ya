@@ -35,11 +35,13 @@
       "priority": "P0",
       "title": "one-command gate: all scenarios + GPU/offscreen parity + portable baselines",
       "owner_line": "this",
-      "status": "rework",
+      "status": "done",
       "evidence": [
-        "rework reason (2026-10-11 review): scenarios replay by raw pixel coordinates and assertions were loosened to current widget geometry",
-        "implementation uncommitted in the shared workspace (gui_workbench_gate.py, workbench_bin.py, ci.sh gate step, re-aligned scenarios)",
-        "last run before rework: workbench gate: scenarios=31 failed=0 digest=PASS gpu=PASS"
+        "GA2r rework landed with the gate: scenarios target widgets from the live tree (click/drag/wheel/move with widget+part+normalized anchor), same lookup as assert.widget",
+        "missing / not hit-testable / covered targets fail the scenario loudly; GuiScenarioEventSource::bFailed propagates to a non-zero exit on both headless and windowed paths",
+        "menu items named Menu_{label}; split handle via part:\"handle\" (UISplitPane::getDividerRect), tab close via part:\"close\"",
+        "robustness proof: WorkbenchShellSplit ratio 0.23 -> 0.30 (temporary, reverted) still passes all 9 migrated scenarios",
+        "gui_workbench_gate.py: scenarios=31 failed=0 digest=PASS gpu=PASS (twice); ya-gui-closure-test 651/651"
       ]
     },
     {
@@ -48,8 +50,11 @@
       "priority": "P0",
       "title": "GA2 rework: scenarios locate widgets, strict assertions",
       "owner_line": "this",
-      "status": "todo",
-      "evidence": []
+      "status": "done",
+      "evidence": [
+        "theme/dock/dock_tabs/gallery_acceptance/gallery_p1/resize_scrollsplit_interaction_stress migrated off pixel coordinates; text_wrap pins the exact wrapped width 345.5832824707031 (desired = longest line since 12cb87b0, intentional)",
+        "digest baselines accepted after attribution: 6571a09e palette lift + outline removal + theme page rewrite, f2f1a6fe and 05d7c0f9 added rail pages; the GA2 input-path switch does not change the final frame"
+      ]
     },
     {
       "id": "GA3",
