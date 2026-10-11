@@ -1,0 +1,9 @@
+{
+    "name": "GUIWorkbench",
+    "page": "Dock",
+    "resolution": { "width": 1920, "height": 1080 },
+    "presentMode": "immediate",
+    "warmupFrames": 120,
+    "sampleFrames": 600,
+    "outputDir": "Engine/Saved/Benchmark/GUIWorkbench"
+}

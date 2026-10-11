@@ -67,7 +67,8 @@ void recordGuiSnapshot(FGUISurfacePresentResources&  resources,
                        bool&                         bSwapchainRecreatePending,
                        FFrameSubmission&             submission,
                        const std::function<void(const FGUIPresentExtensionContext&, ScreenDrawList&)>& composeExtra = {},
-                       const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit    = {});
+                       const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit    = {},
+                       bool bWriteFrameGpuTiming = false);
 
 [[nodiscard]] inline bool guiPresentationIndexValid(int32_t imageIndex,
                                                     size_t  targetCount,

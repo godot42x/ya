@@ -6,7 +6,7 @@
 - [x] PB4 进程内存统计：RSS / 峰值 + 堆分配按子系统归类。子系统桶已接上（`1dcab812`）：Resource 在 `loadModelImpl` 与四处贴图解码点、Render 在 `RenderGraphExecutor::prepare` / `::executeCompiled`、Script 在 `script::callMethod` 漏斗。实跑 PerfLab `Lights_50`：render 17.5 MiB 逐帧波动 / resource 加载后恒定 0.054 MiB / untagged 29.5 MiB；GreedySnake（有脚本）script 0.0012 MiB，PerfLab（无脚本实体）script 正确为 0
 - [x] PB5 压测场景：多光源、多网格、2D 合批、Sponza（`Example/PerfLab` + 生成脚本 + 10 组 scene/config；正式数字留给 PB6）
 - [~] PB6 对比报告脚本 + 一条命令跑一组 + 首份 macOS profile 基线（`baselines/macos/profile-15277c00/`，15 次运行 / 9 场景，干净 checkout；Sponza 未含，资产未拉。索引已按复查结论重建：commit 回填、路径相对化）
-- [ ] PB7 GUI 基准（与 GA3 共用）
+- [x] PB7 GUI 基准（与 GA3 共用）：`GUIWorkbench --benchmark` 写同一份 `bench_summary.json`
 - [ ] R15a 之后重采 `Lights_*` 的 profile 基线（`49d70331` 取消点光上限后 `Lights_200` / `Lights_500` 不再被截断；旧基线 `profile-15277c00` 与分配钩子后的构建不可比）：在无并发构建的机器上跑，Windows 数字由用户回传
 
 ## PB6 记下的边界

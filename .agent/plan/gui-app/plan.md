@@ -21,17 +21,17 @@ gui profile 的构建必须在独立 worktree / 构建目录里做：在共享�
 | GA0 | 盘点（已完成）；子计划方案问答 | P0 |
 | GA1 | 已完成（`2ee635a1`）：3D 示例（HelloMaterial / GreedySnake / 2DRpgPrototype / PerfLab）只在 `ya_profile ~= gui` 时 include；`ci.sh gui-shared` 补 headless-host-test 与 `--smoke-actions`；修文档漂移（`make test-gui`、closure-test「唯一 target」注释、场景数 31）。附带的大小写路径当时只修了一半（include 写成与目录一致的 `2dRpgPrototype`）；2026-10-11 拍板规范名 `2DRpgPrototype`，统一已随 showcase W5 落地（`c377e0df`） | P0 |
 | GA2 | 一条命令门禁：headless 批量跑全部场景断言 + windowed GPU / 离屏一致性；基线脚本路径可移植；结构化 digest 作跨平台主门禁，像素基准按平台分存（MoltenVK 与原生 Vulkan 像素不保证一致）。**第一版实现未提交，返工中 → GA2r** | P0 |
-| GA3 | GUI 帧开销与内存数字：windowed CPU / GPU 帧时间、进程内存（M8 口径）、显存（M4 口径）。**第一版实现未提交，返工中 → GA3r** | P0 |
+| GA3 | GUI 帧开销与内存数字：windowed CPU / GPU 帧时间、进程内存（M8 口径）、显存（M4 口径）。GA3r 已收口：与游戏运行时共用 `Core/Profiling/BenchmarkSession`，profile Dock 数字见 `progress.md` | P0 |
 | GA4 | 打包成独立应用：不依赖仓库根的资源根、预编译 shader 或带 Slang 运行时、字体、MoltenVK / SDL 动态库；macOS `.app` 与 Windows 目录布局 | P0 |
 | GA5 | Windows 跑绿（MSVC 构建 + 全部场景），需要用户的 Windows 机器 | P1 |
 | GA6 | 框架独立性证明：D1 依赖图、对外 API 文档；`ya-rhi` 的 entt 泄漏 | P1 |
 
 ## 4. 返工 checkpoint（2026-10-11 方向审查新增）
 
-GA2 / GA3 的第一版实现留在共享工作区**未提交**；按下述两点返工，返工完成后再提交：
+GA2 / GA3 的第一版实现曾留在共享工作区未提交。GA2r 已另提交入库。GA3r 已收口：
 
-- **GA3r 共享基准会话**（下一轮派发项 T2）：GA3 第一版平行实现了一套基准（`GUIWorkbench --benchmark` + `GuiBenchmark*` 自成一格），且只有 debug 短跑、没有 profile 数字。返工为与 perf-baseline 共享同一套基准会话与汇总链路，不平行造第二套；profile 数字出来才算数。
-- **GA2r 场景按控件定位**（下一轮派发项 T3）：GA2 第一版的场景用像素坐标回放、断言对着当前控件几何放宽（七个场景重对过），布局一变门禁就失效。返工为场景按控件定位、断言恢复严格。
+- **GA3r 共享基准会话**（T2，完成）：游戏运行时和 GUI host 共用 `Core/Profiling/BenchmarkSession`（预热 / 采样 / 结束、五个数据源、`bench_summary.json`）。配置公共字段只解析一次；GUI 扩展只留 `page`，拒绝 `uncapFrameRate`。profile 构建、无其它构建、Dock 1920×1080、immediate、预热 120、采样 600：frame p50 8.356 ms / p99 9.398 ms，cpu p50 8.224 ms，gpu p50 3.007 ms，RSS p50 188.17 MiB，GPU 合计 46.66 MiB，`unifiedMemory` true。
+- **GA2r 场景按控件定位**（已另提交）：场景按控件定位，断言恢复严格。
 
 ## 5. 执行规则
 

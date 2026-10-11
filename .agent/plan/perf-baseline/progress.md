@@ -190,12 +190,13 @@ PB6 的基线已入库，但复查发现三处问题，都在「这份基线本�
 - 帧时间 8.758 ms vs 已入库基线 8.384 ms：不同提交、且当时机器有并发构建（本项目实测并发构建能让同一场景 frame p50 差 87%），**不作为性能回归判断**，只作「能跑通、数量级合理」的证据；要比必须在同一提交、机器空闲时重采。
 - 剩余：三个子系统桶恒为 0（机制已测但还没在任何子系统入口打 `YA_MEMORY_OWNER`，所以没有真实归属数据）；Windows 未编译；这层在 profile 下的开销未量化。
 
-## 2026-10-11 — PB7 GUI 基准
+## 2026-10-12 — PB7 GUI 基准（与游戏运行时共用会话）
 
-- GUIWorkbench 接上 PB1 的汇总器，不经过 GameRuntime。命令：`GUIWorkbench --benchmark Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json`。
+- GUIWorkbench 和 GameRuntime 走同一个 `Core/Profiling/BenchmarkSession`，写出同一份 `bench_summary.json`。命令：`GUIWorkbench --benchmark Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json`。
 - summary 段与游戏基准相同。`process_memory` 与 `gpu_memory` 分列；Apple Silicon 上 `unifiedMemory` 为 true。GUI 合成没有 render graph pass，所以 `gpu_passes` 为空，`render_counters` 记的是 2D 批次。
-- 窗口缩放的 `requestRecreate()` 会把已经排队的 present mode 盖回旧的 `_ci`。Mailbox 在这台机器上不可用，于是基准落成 FIFO、帧时间贴在刷新率上。已排队的 CI 现在保留。
-- 验证见 showcase-roadmap 同日 GA3 条目。短窗数字只说明管线通了，不是 profile 基线。
+- 窗口缩放不再丢掉已经排队的 present mode（单独提交 `[vulkan] resize keeps a queued present mode`）。否则 Mailbox 不可用时重建会落回 FIFO。
+- profile、机器上没有其它构建、Dock、1920×1080、immediate、预热 120、采样 600：frame p50 8.356 ms / p99 9.398 ms，cpu p50 8.224 ms，gpu p50 3.007 ms，RSS p50 188.17 MiB，GPU 合计 46.66 MiB，`unifiedMemory` true。present mode 实际为 immediate。
+
 ## 2026-10-11 — R1 A/B 数字 + 两个环境发现（分配钩子 / validation）
 
 `render-view-family` R1（FIF 1→2，`327e9e30` + `cee44ae1` + `100ae306`）的同构建 A/B：数字与口径见

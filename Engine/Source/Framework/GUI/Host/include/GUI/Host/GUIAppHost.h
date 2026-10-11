@@ -229,7 +229,9 @@ public:
     /// in the same frame for all of them.
     void tickContent(float dt);
     /// Record this window into `submission`. Does not submit or present.
-    void recordSnapshot(FFrameSubmission& submission);
+    /// Frame GPU timestamps go on the primary window only: every window
+    /// writing them shares one query pool and the ranges overlap.
+    void recordSnapshot(FFrameSubmission& submission, bool bWriteFrameGpuTiming);
     /// Read back captures recorded by `recordSnapshot`, after the submission
     /// that contains this window has been submitted and presented.
     void completeCaptures();
@@ -256,10 +258,11 @@ public:
     void onTick(float dt) override;
     void onShutdown() override;
     [[nodiscard]] bool shouldClose() const override;
+    void               requestQuit();
+    [[nodiscard]] bool requestWindowSize(uint32_t width, uint32_t height, std::string_view reason);
 
 private:
     void dispatchToTree(const Event& event, float mouseX, float mouseY);
-    [[nodiscard]] bool requestWindowSize(uint32_t width, uint32_t height, std::string_view reason);
 
     // === Automation control plane: framework-side verbs over one window ===
     /// Registers this host's methods on its registry (called by init once the
@@ -308,6 +311,8 @@ private:
 class GUIWindowManager;
 class IGUIWindowCoordinator;
 struct IGUIWindowSession;
+struct FGuiBenchmarkConfig;
+class GuiBenchmarkRun;
 
 /// GUI assembly/policy layer. Owns the startup `GUIWindowHost` plus the
 /// native windows opened later (`GUIWindowManager` as `IGUIWindowCoordinator`).
@@ -324,6 +329,7 @@ class YA_GUI_API GUIApp final : public IAppLoopDelegate
     GUIWindowHost                     _primaryWindow;
     std::unique_ptr<GUIWindowManager> _extraWindows;
     GUIDragRouter                     _dragRouter;
+    std::unique_ptr<GuiBenchmarkRun>  _benchmark;
 
 public:
     GUIApp(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate);
@@ -335,6 +341,9 @@ public:
     [[nodiscard]] bool init();
     [[nodiscard]] int  run();
     void               shutdown();
+    /// Windowed benchmark. Call before `run`. Headless hosts do not present,
+    /// so they cannot sample this.
+    void setBenchmark(const FGuiBenchmarkConfig& config);
 
     [[nodiscard]] GUIWindowHost& getPrimaryWindow() { return _primaryWindow; }
     [[nodiscard]] WidgetTree&    getTree() { return _primaryWindow.getTree(); }

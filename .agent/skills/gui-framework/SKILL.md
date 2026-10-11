@@ -780,6 +780,8 @@ xmake b ya-gui-closure-test && xmake r ya-gui-closure-test
 xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test
 xmake b ya-gui-headless-host-test && xmake r ya-gui-headless-host-test
 xmake b ya-gui-workbench-workspace-test && xmake r ya-gui-workbench-workspace-test
+# windowed frame / process-memory / VRAM summary (same bench_summary.json as the game runtime)
+# GUIWorkbench --benchmark Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json
 ```
 
 macOS / MoltenVK convergence gate (must be run on macOS, not emulated from a

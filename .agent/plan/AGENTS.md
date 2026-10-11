@@ -61,7 +61,7 @@ completion_and_make_the_final_plan(this_plan);
 | 目录 | 主题 |
 | --- | --- |
 | `showcase-roadmap/` | 项目级伞形计划（2026-10-07）：渲染半成品与缺口收口、测量与压测（显存与进程内存分列）、2D / 3D 两个可玩 demo、音频、GUI 活跃线排序、架构文档与吸收；只定优先级（P0–P2）与依赖，细节在各子计划 / 已有线。2026-10-11 方向审查后不直接改代码；纯 GUI app 线已迁 `gui-app/` |
-| `gui-app/` | 纯 GUI app 线（2026-10-11 自 showcase-roadmap §3 GA 迁出）：gui profile + GUIWorkbench / GUIFrameworkSmoke 独立产品线。GA1 已落地（`2ee635a1`）；GA2 门禁已收口（GA2r 场景按控件定位，gate 31/31 + digest + gpu 全绿）；GA3 返工中（GA3r 共享基准会话，实现未提交）；gui profile 构建只在独立 worktree 做 |
+| `gui-app/` | 纯 GUI app 线（2026-10-11 自 showcase-roadmap §3 GA 迁出）：gui profile + GUIWorkbench / GUIFrameworkSmoke 独立产品线。GA1 已落地（`2ee635a1`）；GA2 门禁已收口（GA2r 场景按控件定位）；GA3 已收口（与游戏运行时共用 `BenchmarkSession`，profile Dock 数字在 `gui-app/progress.md`）；gui profile 构建只在独立 worktree 做 |
 | `perf-baseline/` | 测量、压测与内存统计（`showcase-roadmap` M 组）：基准模式、`bench_summary.json`、pass 级 GPU 计时、GPU 显存与进程内存分列、压测场景、前后对比报告 |
 | `render-view-family/` | view/frame 语义拆分、`PreparedView`、RenderRuntime 状态与逻辑分离（开放项最多） |
 | `render-application-boundary/` | Framework/Render 只放可复用管线，本帧的排布与状态归应用（AB1/AB2 已落地） |

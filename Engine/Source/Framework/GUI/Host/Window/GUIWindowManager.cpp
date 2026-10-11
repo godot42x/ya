@@ -323,7 +323,10 @@ void GUIWindowManager::recordAll(FFrameSubmission& submission)
                           session->presentRecorder,
                           session->bMinimized || (session->native && session->native->isHidden()),
                           session->bSwapchainRecreatePending,
-                          submission);
+                          submission,
+                          {},
+                          {},
+                          /*bWriteFrameGpuTiming=*/false);
     }
 }
 

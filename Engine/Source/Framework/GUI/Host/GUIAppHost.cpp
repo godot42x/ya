@@ -1,4 +1,5 @@
 #include "GUI/Host/GUIAppHost.h"
+#include "GUI/Host/GuiBenchmark.h"
 #include "GUI/Host/GUIPresentationTarget.h"
 #include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Host/GUIWindowManager.h"
@@ -16,6 +17,8 @@
 #include "Core/FName.h"
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "RHI/Render.h"
 #include "RHI/RenderDefines.h"
@@ -60,6 +63,17 @@ namespace
 
 constexpr uint32_t DEFAULT_WINDOW_WIDTH  = 1024;
 constexpr uint32_t DEFAULT_WINDOW_HEIGHT = 768;
+
+void publishCompletedGuiFrameGpuTime(IRender* render)
+{
+    if (!render || !YA_PERF_IS_ENABLED()) {
+        return;
+    }
+    PerfState::get().setValue(perf::sample::hostTick(),
+                              perf::metric::gpuTimeMs(),
+                              render->getLastCompletedFrameGpuTimeMs(),
+                              perf::domain::gpu());
+}
 
 Extent2D queryWindowLogicalExtent(INativeWindow& window)
 {
@@ -1202,6 +1216,11 @@ bool GUIWindowHost::shouldClose() const
     return _impl->bQuitRequested || _impl->delegate->shouldRequestClose();
 }
 
+void GUIWindowHost::requestQuit()
+{
+    _impl->bQuitRequested = true;
+}
+
 void GUIWindowHost::onTick(float dt)
 {
     // One window's frame is exactly its content and its presentation (see the
@@ -1215,9 +1234,13 @@ void GUIWindowHost::onTick(float dt)
     // `GUIApp::onTick`) instead.
     if (_impl->render) {
         _impl->render->beginRecordedFrame();
+        publishCompletedGuiFrameGpuTime(_impl->render);
     }
-    tickContent(dt);
-    presentSnapshot();
+    {
+        YA_PERF_SCOPE(perf::sample::hostTick(), perf::metric::cpuTimeMs(), perf::domain::render());
+        tickContent(dt);
+        presentSnapshot();
+    }
 }
 
 void GUIWindowHost::tickContent(float dt)
@@ -1335,7 +1358,7 @@ bool GUIWindowHost::closeRequested() const
     return _impl->bQuitRequested;
 }
 
-void GUIWindowHost::recordSnapshot(FFrameSubmission& submission)
+void GUIWindowHost::recordSnapshot(FFrameSubmission& submission, bool bWriteFrameGpuTiming)
 {
     _impl->capture = {};
     // Scenario frames have no presentable swapchain (see tickContent); the
@@ -1424,7 +1447,8 @@ void GUIWindowHost::recordSnapshot(FFrameSubmission& submission)
                                                       Extent2D{.width = ctx.presentExtent.width,
                                                                .height = ctx.presentExtent.height});
                       },
-                      preSubmit);
+                      preSubmit,
+                      bWriteFrameGpuTiming);
 }
 
 void GUIWindowHost::completeCaptures()
@@ -1491,7 +1515,7 @@ void GUIWindowHost::completeCaptures()
 void GUIWindowHost::presentSnapshot()
 {
     FFrameSubmission submission;
-    recordSnapshot(submission);
+    recordSnapshot(submission, YA_PERF_IS_ENABLED());
     if (_impl->render) {
         (void)submission.submitAndPresent(*_impl->render);
     }
@@ -1702,8 +1726,20 @@ int GUIApp::run()
         YA_CORE_ERROR("GUIApp::run called before a successful init()");
         return 1;
     }
+    if (_benchmark && !_benchmark->begin(_primaryWindow)) {
+        return 1;
+    }
     AppKernel kernel({.eventSource = _primaryWindow.getEventSource()}, *this);
-    return _primaryWindow.finishRun(kernel.run(_primaryWindow.getConfig().automation));
+    const int result = _primaryWindow.finishRun(kernel.run(_primaryWindow.getConfig().automation));
+    if (_benchmark && _benchmark->failed() && result == 0) {
+        return 1;
+    }
+    return result;
+}
+
+void GUIApp::setBenchmark(const FGuiBenchmarkConfig& config)
+{
+    _benchmark = std::make_unique<GuiBenchmarkRun>(config);
 }
 
 void GUIApp::shutdown()
@@ -1827,38 +1863,45 @@ void GUIApp::onTick(float dt)
     // halves below deliberately do not, see GUIWindowHost::tickContent).
     if (IRender* render = _primaryWindow.isInitialized() ? _primaryWindow.getRender() : nullptr) {
         render->beginRecordedFrame();
+        publishCompletedGuiFrameGpuTime(render);
     }
-    // Every window's content is ticked and snapshotted before any window
-    // presents: presenting window A first would leave window B's chrome a frame
-    // stale, and a window torn off in this frame would show a tree that was
-    // never laid out for its surface. The two halves of a window's frame are
-    // what makes that ordering expressible (see GUIWindowHost::tickContent).
-    if (_primaryWindow.isInitialized()) {
-        _primaryWindow.tickContent(dt);
+    {
+        YA_PERF_SCOPE(perf::sample::hostTick(), perf::metric::cpuTimeMs(), perf::domain::render());
+        // Every window's content is ticked and snapshotted before any window
+        // presents: presenting window A first would leave window B's chrome a frame
+        // stale, and a window torn off in this frame would show a tree that was
+        // never laid out for its surface. The two halves of a window's frame are
+        // what makes that ordering expressible (see GUIWindowHost::tickContent).
+        if (_primaryWindow.isInitialized()) {
+            _primaryWindow.tickContent(dt);
+        }
+        // tickAll is this manager's "tick every window's content" (it flushes the
+        // frame's close requests first); presentation is the separate step below,
+        // which is what keeps every window's content a frame ahead of the first
+        // window's presentation.
+        _extraWindows->tickAll(dt);
+        // Every window records into one submission, then the frame submits once
+        // and presents each acquired image. Captures wait on that submit.
+        FFrameSubmission submission;
+        if (_primaryWindow.isInitialized()) {
+            _primaryWindow.recordSnapshot(submission, YA_PERF_IS_ENABLED());
+        }
+        _extraWindows->recordAll(submission);
+        if (IRender* render = _primaryWindow.isInitialized() ? _primaryWindow.getRender() : nullptr) {
+            (void)submission.submitAndPresent(*render);
+        }
+        if (_primaryWindow.isInitialized()) {
+            _primaryWindow.completeCaptures();
+        }
+        if (_extraWindows->extraWindowCount() == 0) {
+            _primaryWindow.setAcceptAllWindowEvents(false);
+        }
+        bindDragRouter();
+        applyPointerUniverse();
     }
-    // tickAll is this manager's "tick every window's content" (it flushes the
-    // frame's close requests first); presentation is the separate step below,
-    // which is what keeps every window's content a frame ahead of the first
-    // window's presentation.
-    _extraWindows->tickAll(dt);
-    // Every window records into one submission, then the frame submits once
-    // and presents each acquired image. Captures wait on that submit.
-    FFrameSubmission submission;
-    if (_primaryWindow.isInitialized()) {
-        _primaryWindow.recordSnapshot(submission);
+    if (_benchmark && _primaryWindow.isInitialized()) {
+        _benchmark->onFrameEnd(_primaryWindow);
     }
-    _extraWindows->recordAll(submission);
-    if (IRender* render = _primaryWindow.isInitialized() ? _primaryWindow.getRender() : nullptr) {
-        (void)submission.submitAndPresent(*render);
-    }
-    if (_primaryWindow.isInitialized()) {
-        _primaryWindow.completeCaptures();
-    }
-    if (_extraWindows->extraWindowCount() == 0) {
-        _primaryWindow.setAcceptAllWindowEvents(false);
-    }
-    bindDragRouter();
-    applyPointerUniverse();
 }
 
 void GUIApp::onShutdown() {}

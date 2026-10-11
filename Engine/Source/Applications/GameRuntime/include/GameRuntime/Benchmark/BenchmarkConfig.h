@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace ya
@@ -69,14 +68,6 @@ struct BenchmarkConfig
     std::string     outputDir         = "Engine/Saved/Benchmark";
     FBenchmarkCameraPath cameraPath;
 };
-
-[[nodiscard]] YA_GAME_RUNTIME_API const char* toBenchmarkPresentModeLabel(EPresentMode::T mode);
-[[nodiscard]] YA_GAME_RUNTIME_API bool        tryParseBenchmarkPresentMode(std::string_view text, EPresentMode::T& outMode);
-
-/// Pick from what the surface offers: the requested mode, then the other
-/// non-vsync modes (Immediate, Mailbox, FIFO relaxed), FIFO last.
-[[nodiscard]] YA_GAME_RUNTIME_API EPresentMode::T chooseBenchmarkPresentMode(EPresentMode::T                     requested,
-                                                                             const std::vector<EPresentMode::T>& available);
 
 /// Strict: unknown keys and malformed values are errors, so a typo in a
 /// config cannot silently produce a different benchmark.

@@ -8,6 +8,7 @@
 #include "App/Control/GuiEventDriver.h"
 #include "App/Kernel/GuiScenarioEventSource.h"
 #include "GUI/Host/GUIAppHost.h"
+#include "GUI/Host/GuiBenchmark.h"
 #include "GUI/Host/GUIHeadlessHost.h"
 #include "Render2D/ScreenDraw.h"
 #include "Render/Resources/FontManager.h"
@@ -131,7 +132,12 @@ int main(int argc, char** argv)
         ("gui-frame-inspector", "Enable GUI Frame Inspector channels: hud,rebuild,overdraw (debug/profile builds)", cxxopts::value<std::string>()->implicit_value("hud,rebuild"))
         ("debug-render2d-log", "Enable Render2D session/clip/flush diagnostics in the log")
         ("debug-render2d-log-limit", "Maximum Render2D clip/flush logs per frame", cxxopts::value<uint32_t>()->default_value("16"))
-        ("perf-telemetry", "Emit per-frame GUI perf telemetry (draw/painted/rebuilt/dirty/notify) for the performance baseline");
+        ("perf-telemetry", "Emit per-frame GUI perf telemetry (draw/painted/rebuilt/dirty/notify) for the performance baseline")
+        ("benchmark", "Run a windowed benchmark from this JSON config and write bench_summary.json", cxxopts::value<std::string>())
+        ("benchmark-output", "Override the benchmark config output directory", cxxopts::value<std::string>());
+
+    ya::FGuiBenchmarkConfig benchmarkConfig;
+    bool                    bBenchmark = false;
 
     try {
         const auto result = options.parse(argc, argv);
@@ -194,6 +200,25 @@ int main(int argc, char** argv)
             const uint32_t limit = result["debug-render2d-log-limit"].as<uint32_t>();
             debug.maxClipLogsPerFrame  = limit;
             debug.maxFlushLogsPerFrame = limit;
+        }
+
+        if (result.count("benchmark") > 0) {
+            if (result.count("headless") > 0) {
+                YA_CORE_ERROR("GUIWorkbench: --benchmark needs a window; it cannot run headless");
+                return 1;
+            }
+            std::string error;
+            if (!ya::loadGuiBenchmarkConfig(result["benchmark"].as<std::string>(), benchmarkConfig, error)) {
+                YA_CORE_ERROR("GUIWorkbench: invalid --benchmark config: {}", error);
+                return 1;
+            }
+            if (result.count("benchmark-output") > 0) {
+                benchmarkConfig.outputDir = result["benchmark-output"].as<std::string>();
+            }
+            if (app.startPageName.empty() && !benchmarkConfig.page.empty()) {
+                app.startPageName = benchmarkConfig.page;
+            }
+            bBenchmark = true;
         }
 
         if (result.count("headless") > 0) {
@@ -309,6 +334,9 @@ int main(int argc, char** argv)
     }
 
     ya::GUIApp guiApp(config, app);
+    if (bBenchmark) {
+        guiApp.setBenchmark(benchmarkConfig);
+    }
     if (!guiApp.init()) {
         return 1;
     }

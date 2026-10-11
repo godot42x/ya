@@ -53,7 +53,8 @@ void recordGuiSnapshot(FGUISurfacePresentResources&  resources,
                        bool&                         bSwapchainRecreatePending,
                        FFrameSubmission&             submission,
                        const std::function<void(const FGUIPresentExtensionContext&, ScreenDrawList&)>& composeExtra,
-                       const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit)
+                       const std::function<void(const FGUIPresentExtensionContext&)>& preSubmit,
+                       bool bWriteFrameGpuTiming)
 {
     if (!resources.render || !resources.present) {
         return;
@@ -117,6 +118,9 @@ void recordGuiSnapshot(FGUISurfacePresentResources&  resources,
     auto cmdBuf = resources.commandBuffers[static_cast<size_t>(imageIndex)];
     cmdBuf->reset();
     cmdBuf->begin();
+    if (bWriteFrameGpuTiming) {
+        resources.render->beginFrameGpuTiming(cmdBuf.get());
+    }
     cmdBuf->retireResource(renderImage->getImageShared());
     cmdBuf->retireResource(renderImage->getImageViewShared());
     cmdBuf->transitionImageLayoutAuto(renderImage->getImage(), EImageLayout::ColorAttachmentOptimal);
@@ -166,6 +170,9 @@ void recordGuiSnapshot(FGUISurfacePresentResources&  resources,
             : std::function<void(ScreenDrawList&)>{});
     if (preSubmit) {
         preSubmit(extensionContext);
+    }
+    if (bWriteFrameGpuTiming) {
+        resources.render->endFrameGpuTiming(cmdBuf.get());
     }
     cmdBuf->end();
     (void)submission.add(presentFrame, {cmdBuf->getHandle()});

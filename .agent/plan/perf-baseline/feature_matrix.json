@@ -123,8 +123,12 @@
         "GA3"
       ],
       "title": "GUI benchmark in the same summary format",
-      "status": "todo",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json",
+        "Core/Profiling/BenchmarkSession.h shared with GameRuntime BenchmarkRun",
+        "profile Dock 1920x1080 immediate, warmup 120 sample 600: frame p50 8.356 ms p99 9.398 ms, cpu p50 8.224 ms, gpu p50 3.007 ms, RSS p50 188.17 MiB, GPU total 46.66 MiB, unifiedMemory true"
+      ]
     }
   ]
 }

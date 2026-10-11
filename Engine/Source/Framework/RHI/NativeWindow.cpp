@@ -1,8 +1,11 @@
 #include "RHI/NativeWindow.h"
 
+#include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "SDL3/SDL.h"
 
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 
 #if USE_VULKAN
@@ -288,6 +291,24 @@ void SDLNativeWindow::refreshDpiScale()
     // the back buffer is not high-density, so it is the wrong number here.
     const float density = SDL_GetWindowPixelDensity(static_cast<SDL_Window *>(nativeWindowHandle));
     dpiScale            = (density > 0.0f) ? density : 1.0f;
+}
+
+bool INativeWindow::matchDrawablePixelSize(uint32_t pixelWidth, uint32_t pixelHeight)
+{
+    int windowW = 0, windowH = 0, drawableW = 0, drawableH = 0;
+    getWindowSize(windowW, windowH);
+    getDrawableSize(drawableW, drawableH);
+    if (drawableW == static_cast<int>(pixelWidth) && drawableH == static_cast<int>(pixelHeight)) {
+        return true;
+    }
+    const float density = windowW > 0 && drawableW > 0 ? static_cast<float>(drawableW) / static_cast<float>(windowW) : 1.0f;
+    const int   targetW = std::max(1, static_cast<int>(std::lround(static_cast<float>(pixelWidth) / density)));
+    const int   targetH = std::max(1, static_cast<int>(std::lround(static_cast<float>(pixelHeight) / density)));
+    if (!setWindowSize(targetW, targetH)) {
+        YA_CORE_WARN("could not resize the window to {}x{} (drawable stays {}x{})", targetW, targetH, drawableW, drawableH);
+        return false;
+    }
+    return true;
 }
 
 bool SDLNativeWindow::setWindowSize(int width, int height)

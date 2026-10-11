@@ -185,6 +185,11 @@ struct INativeWindow
         YA_CORE_ERROR("setWindowSize not implemented in INativeWindow");
         return false;
     }
+    /// Resize so the drawable is `pixelWidth` x `pixelHeight`. The window's
+    /// own coordinates may be points; the pixel target is divided by the
+    /// current drawable-to-window ratio. True when the drawable already
+    /// matches or the resize was accepted.
+    bool matchDrawablePixelSize(uint32_t pixelWidth, uint32_t pixelHeight);
     /// Smallest logical client size the user can drag the window to. Same
     /// space as `setWindowSize`. Default is a no-op (no minimum).
     virtual bool setMinimumSize(int width, int height)

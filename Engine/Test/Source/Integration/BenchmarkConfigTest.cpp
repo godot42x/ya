@@ -4,6 +4,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "GameRuntime/AppOptions.h"
 #include "GameRuntime/Benchmark/BenchmarkConfig.h"
+#include "RHI/PresentMode.h"
 
 #include <gtest/gtest.h>
 
@@ -123,14 +124,14 @@ TEST(BenchmarkConfigTest, RejectsMalformedConfigs)
 TEST(BenchmarkConfigTest, PresentModeFallsBackAwayFromVsync)
 {
     namespace E = EPresentMode;
-    EXPECT_EQ(chooseBenchmarkPresentMode(E::Mailbox, {E::FIFO, E::Mailbox, E::Immediate}), E::Mailbox);
-    EXPECT_EQ(chooseBenchmarkPresentMode(E::Immediate, {E::FIFO, E::Mailbox}), E::Mailbox);
-    EXPECT_EQ(chooseBenchmarkPresentMode(E::Mailbox, {E::FIFO, E::Immediate}), E::Immediate);
-    EXPECT_EQ(chooseBenchmarkPresentMode(E::Immediate, {E::FIFO, E::FIFO_Relaxed}), E::FIFO_Relaxed);
-    EXPECT_EQ(chooseBenchmarkPresentMode(E::Immediate, {E::FIFO}), E::FIFO);
+    EXPECT_EQ(choosePreferredPresentMode(E::Mailbox, {E::FIFO, E::Mailbox, E::Immediate}), E::Mailbox);
+    EXPECT_EQ(choosePreferredPresentMode(E::Immediate, {E::FIFO, E::Mailbox}), E::Mailbox);
+    EXPECT_EQ(choosePreferredPresentMode(E::Mailbox, {E::FIFO, E::Immediate}), E::Immediate);
+    EXPECT_EQ(choosePreferredPresentMode(E::Immediate, {E::FIFO, E::FIFO_Relaxed}), E::FIFO_Relaxed);
+    EXPECT_EQ(choosePreferredPresentMode(E::Immediate, {E::FIFO}), E::FIFO);
 
     EPresentMode::T parsed = E::FIFO;
-    EXPECT_TRUE(tryParseBenchmarkPresentMode(toBenchmarkPresentModeLabel(E::Mailbox), parsed));
+    EXPECT_TRUE(tryParsePresentMode(toPresentModeString(E::Mailbox), parsed));
     EXPECT_EQ(parsed, E::Mailbox);
 }
 

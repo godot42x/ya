@@ -31,3 +31,10 @@
 - **验证**：`GuiEventDriverTest` 新增 5 例（解析/非法形式拒绝/click emit/无 resolver 或 resolver 失败即失败/解析器数学与 part/覆盖/隐藏失败语义）；`ya-gui-closure-test` 651/651；`gui_workbench_gate.py` 两次全绿 `scenarios=31 failed=0 digest=PASS gpu=PASS`（其中一次完整 gate 曾报 failed=2，未留下场景名，随后两次全绿——按偶发记录，不写进门禁豁免）。
 - **审查修正（review 2026-10-12）**：初版提交误把 benchmark 接线（`GuiBenchmark.h` include、`--benchmark` 参数、`guiApp.setBenchmark`）随 main.cpp 带进提交，而这些接口只在未提交工作区里——干净 checkout 编不过。已从提交剥离（amend），benchmark 块回到工作区留给 GA3r；windowed 的 `bFailed` 检查合并为一次 cast。gate 汇总现在打印失败场景名单（此前只报数量，failed=2 那次因此查无可查）。`Menu_{label}` 命名的已知代价记进 Menu.cpp 注释：名字跟随显示文案，本地化时查找名会跟着变，做菜单本地化时要回头处理。
 
+## 2026-10-12 — GA3r 游戏运行时与 GUI 共用一个基准会话
+
+- 状态机、五个数据源（frame、cpu_stages、gpu_passes、render_counters、process_memory）、pass GPU 计时开关的保存/恢复、以及 `bench_summary.json` 的写出都在 `Core/Profiling/BenchmarkSession`。宿主只实现 `IBenchmarkHost`（present mode 标签、按像素匹配窗口、设备元数据、已完成的 pass GPU 时间、退出）。summary schema 没改。
+- 配置分两层。公共字段（name、resolution、presentMode、warmupFrames、sampleFrames、outputDir）只在 Core 解析一次。游戏扩展保留 scene、cameraPath、fixedDeltaSeconds、uncapFrameRate、cpuTrace。GUI 扩展只有 page，`uncapFrameRate` 按未知键拒绝。
+- RHI 只留通用工具：`EPresentMode` 与字符串互转、`choosePreferredPresentMode`、`INativeWindow::matchDrawablePixelSize`。帧级 GPU 计时只在主窗口的 `recordGuiSnapshot` 里打点。
+- 窗口缩放不再丢掉已排队的 present mode，单独提交 `[vulkan] resize keeps a queued present mode`。
+- 验收（profile 构建，共享工作区无其它构建，随后已切回 debug / `ya_profile=engine`）：`Example/GUIWorkbench/Benchmark/GUIWorkbench.bench.json`，Dock，1920×1080，immediate，预热 120，采样 600。frame p50 **8.356 ms** / p99 9.398 ms，cpu p50 **8.224 ms** / p99 9.292 ms，gpu p50 **3.007 ms** / p99 5.755 ms，RSS p50 **188.17 MiB**（峰值 188.44 MiB），GPU 合计 **46.66 MiB**，`unifiedMemory` true。`gpu_passes` 为空。Apple M5，MoltenVK 1.4.1，Vulkan 1.3.334。HelloMaterial 短跑的 summary 键树与现有写出器一致（顶层段与 meta 键相同）。配置测试：公共字段、两个宿主的扩展字段、未知键、GUI 拒绝 `uncapFrameRate`。`ya-testing` 1782 通过；`GameUIHostTest.DialogueDocumentStaysInsideNarrowAndWideCanvases` 在已提交的 Dialogue 文档上预先就失败（盒 760×168、x=260，测试期望 880×160、x=200），不是这次改动引入的。
