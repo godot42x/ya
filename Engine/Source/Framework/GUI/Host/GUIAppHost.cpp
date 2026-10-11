@@ -46,7 +46,6 @@
 #include <stb_image.h>
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -809,16 +808,11 @@ bool GUIWindowHost::matchDrawablePixelSize(uint32_t pixelWidth, uint32_t pixelHe
         YA_CORE_ERROR("GUIAppHost benchmark: no native window to resize to {}x{}", pixelWidth, pixelHeight);
         return false;
     }
-    int windowW = 0, windowH = 0, drawableW = 0, drawableH = 0;
-    native->getWindowSize(windowW, windowH);
-    native->getDrawableSize(drawableW, drawableH);
-    if (drawableW == static_cast<int>(pixelWidth) && drawableH == static_cast<int>(pixelHeight)) {
+    const INativeWindow::FDrawableWindowSize size = native->windowSizeForDrawablePixels(pixelWidth, pixelHeight);
+    if (size.bMatches) {
         return true;
     }
-    const float density = windowW > 0 && drawableW > 0 ? static_cast<float>(drawableW) / static_cast<float>(windowW) : 1.0f;
-    const int   targetW = std::max(1, static_cast<int>(std::lround(static_cast<float>(pixelWidth) / density)));
-    const int   targetH = std::max(1, static_cast<int>(std::lround(static_cast<float>(pixelHeight) / density)));
-    return requestWindowSize(static_cast<uint32_t>(targetW), static_cast<uint32_t>(targetH), "benchmark");
+    return requestWindowSize(static_cast<uint32_t>(size.width), static_cast<uint32_t>(size.height), "benchmark");
 }
 
 bool GUIWindowHost::requestWindowSize(uint32_t width, uint32_t height, std::string_view reason)

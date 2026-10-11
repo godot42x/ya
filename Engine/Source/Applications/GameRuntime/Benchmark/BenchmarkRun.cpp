@@ -117,7 +117,10 @@ profiling::FBenchmarkPresentModeSelection BenchmarkRun::selectPresentMode(std::s
 void BenchmarkRun::matchResolution(uint32_t width, uint32_t height)
 {
     if (_context.mainWindow) {
-        (void)_context.mainWindow->matchDrawablePixelSize(width, height);
+        const INativeWindow::FDrawableWindowSize size = _context.mainWindow->windowSizeForDrawablePixels(width, height);
+        if (!size.bMatches) {
+            (void)_context.mainWindow->setWindowSize(size.width, size.height);
+        }
     }
 }
 

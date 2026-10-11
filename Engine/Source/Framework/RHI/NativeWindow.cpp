@@ -293,22 +293,20 @@ void SDLNativeWindow::refreshDpiScale()
     dpiScale            = (density > 0.0f) ? density : 1.0f;
 }
 
-bool INativeWindow::matchDrawablePixelSize(uint32_t pixelWidth, uint32_t pixelHeight)
+INativeWindow::FDrawableWindowSize INativeWindow::windowSizeForDrawablePixels(uint32_t pixelWidth, uint32_t pixelHeight)
 {
     int windowW = 0, windowH = 0, drawableW = 0, drawableH = 0;
     getWindowSize(windowW, windowH);
     getDrawableSize(drawableW, drawableH);
     if (drawableW == static_cast<int>(pixelWidth) && drawableH == static_cast<int>(pixelHeight)) {
-        return true;
+        return {.bMatches = true, .width = windowW, .height = windowH};
     }
     const float density = windowW > 0 && drawableW > 0 ? static_cast<float>(drawableW) / static_cast<float>(windowW) : 1.0f;
-    const int   targetW = std::max(1, static_cast<int>(std::lround(static_cast<float>(pixelWidth) / density)));
-    const int   targetH = std::max(1, static_cast<int>(std::lround(static_cast<float>(pixelHeight) / density)));
-    if (!setWindowSize(targetW, targetH)) {
-        YA_CORE_WARN("could not resize the window to {}x{} (drawable stays {}x{})", targetW, targetH, drawableW, drawableH);
-        return false;
-    }
-    return true;
+    return {
+        .bMatches = false,
+        .width    = std::max(1, static_cast<int>(std::lround(static_cast<float>(pixelWidth) / density))),
+        .height   = std::max(1, static_cast<int>(std::lround(static_cast<float>(pixelHeight) / density))),
+    };
 }
 
 bool SDLNativeWindow::setWindowSize(int width, int height)
