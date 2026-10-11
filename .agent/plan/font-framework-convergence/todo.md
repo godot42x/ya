@@ -29,5 +29,5 @@
 - [ ] 生僻字触发扩容后 UV 正确、无渲染错误
 - [ ] 帧录制期零字体纹理创建（Rule 6）
 - [ ] Vulkan + OpenGL 双后端编译；MSVC 门禁走查
-- [ ] 全量 21 场景 + 137 闭包测试 + 样式基线门（基线重生成）
+- [ ] 全量 31 场景（`Example/GUIWorkbench/Scenarios/*.jsonl`）+ 闭包测试 + 样式基线门（基线重生成）
 - [ ] IFontRasterizer 扩展点验证（新后端不触上层）

@@ -53,7 +53,7 @@ GUI 与编辑器活跃线
 
 纯 GUI app 线
 - [~] GA0 盘点（已完成）与子计划问答
-- [ ] GA1 gui profile 恢复可配置可构建（示例 include 守卫等）
+- [x] GA1 gui profile 恢复可配置可构建（示例 include 守卫、`ci.sh gui-shared`、文档漂移、`2dRpgPrototype` 路径）
 - [ ] GA2 一条命令门禁：全部场景 + GPU / 离屏一致性 + 可移植基线
 - [ ] GA3 GUI 帧开销、进程内存、显存数字
 - [ ] GA4 打包成独立应用

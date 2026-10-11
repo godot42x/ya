@@ -777,7 +777,9 @@ make b t=GUIWorkbench && make r t=GUIWorkbench          # standalone demo
 make r t=GUIWorkbench ARGS="--smoke-actions"            # 端到端自动化
 make run t=HelloMaterial / make run-editor t=HelloMaterial
 xmake b ya-gui-closure-test && xmake r ya-gui-closure-test
-make test-gui                                            # closure + widgets + workspace
+xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test
+xmake b ya-gui-headless-host-test && xmake r ya-gui-headless-host-test
+xmake b ya-gui-workbench-workspace-test && xmake r ya-gui-workbench-workspace-test
 ```
 
 macOS / MoltenVK convergence gate (must be run on macOS, not emulated from a
@@ -831,7 +833,7 @@ python3 Script/gui_convergence_macos_validation.py
 
 ## 人肉测试前的自动化验收
 
-按 `Example/GUIWorkbench/Scenarios/` 的 jsonl 回放做第一道闸（跑法：
+按 `Example/GUIWorkbench/Scenarios/` 的 31 个 jsonl 回放做第一道闸（跑法：
 `xmake run GUIWorkbench --start-page <Page> --scenario <abs path> --scenario-dump-dir <dir>`，
 exit 0 = 全 checkpoint 过）。页名必须是分组 rail 上的 Gallery 页（`Inputs`/`Tree`/`Brush`/`Dialog`…
 不要再写已删除的 `Gallery`/`Layout`/`Modal`，除非有意走别名）。tooltip dwell 用

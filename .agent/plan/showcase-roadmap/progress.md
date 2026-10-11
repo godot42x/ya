@@ -89,3 +89,11 @@
 - 验证：`ya-testing` debug 1764/1764（新增 4 例）；HelloMaterial 完整基准 17/17 个 pass 有数（count 全 600），pass p50 求和 4.04 ms 对整帧 gpuMs p50 4.51 ms。
 - 复查返工（同一提交序列的后续提交）：`render_counters` 的清零原先挂在采样点，预热帧累积量被第一帧吞下，max 被撑大 120 倍（max/p50 精确等于 `warmupFrames`）；清零改到帧边界 `VulkanRender::beginRecordedFrame`，实测比值降到 1.0x。另删掉一个零读取的死状态 `_bPassGpuTimingFrameOpen`，并把 `passGpuTimingEnabled` 的「默认关」写成有编译期条件的契约（它在 `ECompileMode::Enabled` 下会被 `normalizeRuntimeToggle` 压成常开）。`ya-testing` 1767/1767。
 - 未达成：M 组验收的三次 p50 ±3% 本轮没实测——本机 debug 构建且有并行编译，噪声大于信号；正式数字按 M6 / PB6 在 profile 口径下出。
+
+## 2026-10-11 — GA1 gui profile 可配置可构建
+
+- 3D 示例（HelloMaterial / GreedySnake / 2dRpgPrototype / PerfLab）只在 `ya_profile ~= gui` 时 include。GUIFrameworkSmoke 与 GUIWorkbench 两个 profile 都在。
+- `Example.xmake.lua` 的示例路径改成目录名 `2dRpgPrototype`。另一种大小写在大小写不敏感盘上是第二个 include，`Entry.cpp` 会进链接两次。全新配置只登记这一条源文件。
+- `Script/ci.sh` 的 `gui-shared` 补上 `ya-gui-headless-host-test` 和 `GUIWorkbench --smoke-actions`。
+- 文档：`gui-framework` skill 去掉不存在的 `make test-gui`，改成 closure / widgets / headless-host / workspace 四条；`Test.xmake.lua` 不再把 closure test 写成 gui profile 里唯一的测试；场景数按目录写成 31。
+- 验证在独立 worktree（`/tmp/ya-gui-ga1`，不改共享工作区的 engine 配置）：`ya_profile=gui` 配过；`ya-gui-minimal-host`、`GUIWorkbench`、`ya-gui-headless-host-test` 链接通过。共享工作区仍是 engine profile。

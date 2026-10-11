@@ -62,8 +62,8 @@ function ya_test_sources(...)
 end
 
 -- Engine test runner + module fixture depend on the full engine aggregate,
--- so they are engine-profile only; the GUI closure test below is the single
--- test target that also exists in the gui profile.
+-- so they are engine-profile only. The GUI tests after this block (closure,
+-- widgets, declarative contract, headless host) stay in the gui profile.
 if get_config("ya_profile") ~= "gui" then
     target("ya-module-fixture")
     do

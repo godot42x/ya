@@ -46,10 +46,13 @@ run_gui_shared() {
     xmake b -r GUIWorkbench
     xmake b ya-gui-closure-test
     xmake b ya-gui-widgets-test
+    xmake b ya-gui-headless-host-test
     xmake b ya-gui-workbench-workspace-test
     xmake r ya-gui-closure-test
     xmake r ya-gui-widgets-test
+    xmake r ya-gui-headless-host-test
     xmake r ya-gui-workbench-workspace-test
+    xmake r GUIWorkbench --smoke-actions
 }
 
 run_gui_monolith() {

@@ -173,5 +173,5 @@ set_rundir(os.scriptdir())
 
 -- Example products: the standalone GUI examples (GUIFrameworkSmoke /
 -- GUIWorkbench) build in both profiles; the 3D project examples are
--- engine-profile only (guarded inside Example/xmake.lua).
+-- engine-profile only (guarded inside Example/Example.xmake.lua).
 includes("./Example/Example.xmake.lua")

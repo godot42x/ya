@@ -505,8 +505,12 @@
       "priority": "P0",
       "title": "gui profile configures/builds again (example include guard, ci.sh, doc drift)",
       "owner_line": "new:gui-app",
-      "status": "todo",
-      "evidence": []
+      "status": "done",
+      "evidence": [
+        "2026-10-11: Example/Example.xmake.lua guards 3D examples; include path is 2dRpgPrototype",
+        "worktree ya_profile=gui: xmake b ya-gui-minimal-host, GUIWorkbench, ya-gui-headless-host-test ok",
+        "fresh engine configure lists one source: Example/2dRpgPrototype/Source/Entry.cpp"
+      ]
     },
     {
       "id": "GA2",
