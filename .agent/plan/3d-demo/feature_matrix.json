@@ -1,0 +1,128 @@
+{
+  "plan": "3d-demo",
+  "status": "in_progress",
+  "parent": "showcase-roadmap",
+  "features": [
+    {
+      "id": "G3.1",
+      "group": "G3",
+      "priority": "P0",
+      "title": "physics component redesign: Kinematic, sized box/sphere/capsule, glTF mesh+convex collision, world transform/scale, sensors, contact events to ECS",
+      "puzzle_users": ["level mesh", "crate (dynamic box)", "pressure plate (sensor)", "door (Kinematic)"],
+      "conflict_surface": "physics module",
+      "wave": 1,
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.2",
+      "group": "G3",
+      "priority": "P0",
+      "title": "Lua physics API: raycast (E interact), onTriggerEnter/Exit (plate), Kinematic target position (door), force/velocity (push crate)",
+      "conflict_surface": "physics module + script bindings (mutually exclusive with reflection-runtime RR8)",
+      "wave": 2,
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.3",
+      "group": "G3",
+      "priority": "P0",
+      "title": "character controller on JPH::CharacterVirtual: move/jump/ground + push dynamic bodies via contact impulse",
+      "conflict_surface": "physics module",
+      "wave": 2,
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.4",
+      "group": "G3",
+      "priority": "P0",
+      "title": "glTF import: skin, animation, node hierarchy; evaluate MAX_BONE_COUNT=64 against the chosen pack's real bone count",
+      "conflict_surface": "asset importer",
+      "wave": 1,
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.5",
+      "group": "G3",
+      "priority": "P0",
+      "title": "animation play-by-name + two-clip crossfade; clips idle/walk/run/jump/push; known gap: substitute walk for push (pack has no push clip)",
+      "conflict_surface": "animation / asset importer",
+      "wave": 2,
+      "status": "todo",
+      "evidence": [
+        "asset survey 2026-10-12: KayKit Character Animations 161 clips, categories list no push"
+      ]
+    },
+    {
+      "id": "G3.6",
+      "group": "G3",
+      "priority": "P0",
+      "title": "third-person spring-arm camera with collision avoidance; InputMap mouse axes (axes part runs in wave 1)",
+      "conflict_surface": "input system",
+      "wave": 1,
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.7",
+      "group": "G3",
+      "priority": "P0",
+      "title": "runtime spawn world.spawn(path) + world timers (door animation, crate respawn after falling off map)",
+      "conflict_surface": "script bindings",
+      "wave": 2,
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.8",
+      "group": "G3",
+      "priority": "P0",
+      "title": "puzzle content (Lua): courtyard -> basement, three puzzles (plate door, crate push, E interact)",
+      "wave": 3,
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.9",
+      "group": "G3",
+      "priority": "P0",
+      "title": "three-zone lighting: courtyard (sun+CSM), corridor (spot+spot shadow), basement (point light cluster); depends on R15b, spot-light shadows (new item), R2, R3",
+      "wave": 3,
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "G3.11",
+      "group": "G3",
+      "priority": "P0",
+      "title": "perf overlay (M-group live metrics) + package + playthrough recording; depends on A1 audio and the F5 metric-calibration item (perf-baseline has no such entry yet)",
+      "wave": 3,
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "ASSET",
+      "group": "asset",
+      "priority": "P0",
+      "title": "asset selection + intake with LICENSE.md (pending user confirmation)",
+      "status": "awaiting_user",
+      "evidence": [
+        "recommended: KayKit Dungeon Remastered (CC0, 31 MB free tier, static modular dungeon pieces)",
+        "recommended: KayKit Adventurers (CC0, 12 MB, 5 rigged Rig_Medium characters, GLTF)",
+        "recommended: KayKit Character Animations (CC0, 14 MB, 161 clips, no push)",
+        "fallback: Quaternius Universal Animation Library - license changed to QAL v1.0 (free, no attribution, but no redistribution of the assets); itch page still says CC0 (stale)"
+      ]
+    },
+    {
+      "id": "PROJNAME",
+      "group": "meta",
+      "priority": "P0",
+      "title": "example project directory name (placeholder Example/3DPuzzleDemo/, pending user confirmation)",
+      "status": "awaiting_user",
+      "evidence": []
+    }
+  ]
+}

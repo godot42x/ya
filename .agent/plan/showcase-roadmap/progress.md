@@ -127,3 +127,11 @@
 - 已收口的线一份吸收笔记都没有（测量、反射重构、2D demo、W3 / W4）→ 新增 D5 补写。
 - 矩阵与 todo 漂移：M4 / M5 / R1 / R15 / G2.5 / U.S4 / U.C2 / W2 / W3 等已落地项在矩阵里还是 todo / in_progress。本轮（T1）对齐，done 项逐一补 commit 锚点；待定项（G2.5 无音频、A1 原排在打包之前）记进 plan §1，不写成决策。
 - 决策落地：GA 线迁 `gui-app/` 子计划（GA0–GA6、GA0 盘点、独立 worktree 约束随迁，GA1–GA3 进度条目移入子计划 progress）；GA2 / GA3 第一版实现不提交、按 GA2r / GA3r 返工后再提交；伞形计划此后不直接改代码。
+
+## 2026-10-12 — G3.0 收口，3D demo 子计划 `3d-demo/` 立项
+
+- 两轮方案问答收口，五件套在 `.agent/plan/3d-demo/`。§1 追加决策行；§3 G3 表改为指向子计划，G3.0 标完成；todo / feature_matrix 同步（G3.1–G3.11 归 `3d-demo`，波次与冲突面进子计划）。
+- 工作项范围按谜题实际需要写死：物理组件（Kinematic / 传感器 / glTF 网格与 convex 碰撞 / 接触事件进 ECS）对应关卡网格、箱子、压力板、门四类谜题元素；G3.2 API 按 E 交互 / 压力板 / 门 / 推箱各给一招；G3.5 的 push clip 缺失预案 = walk 顶替。
+- 新增渲染工作项：**聚光灯阴影**（G3.9 三区光照的依赖，归 `shadow-and-light-line/`，其 todo 已有 R15b / R2 / R3，本项待该线登记）。
+- G3.11 依赖：A1 音频排在其前（维持既有结论）；F5「指标口径修正」在 `.agent/` 全树无对应计划条目（perf-baseline checkpoint 只有 PB1–PB7）——子计划里如实标注为「perf-baseline 尚未立项」，不臆造内容。
+- 素材调研（子计划 plan §3）：KayKit Dungeon Remastered / Adventurers / Character Animations 全 CC0（161 clips，无 push）；Quaternius 官网许可证改版为 QAL v1.0（免费免署名但禁止再分发素材本身；itch 页仍写 CC0 属过时）→ 降为备选。推荐 KayKit 组合，待用户确认。

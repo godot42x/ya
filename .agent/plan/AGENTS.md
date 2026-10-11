@@ -83,6 +83,7 @@ completion_and_make_the_final_plan(this_plan);
 | `shadow-and-light-line/` | 点光源/聚光灯/阴影（R2/R3/R15）：R15a deferred 点光 SSBO 无上限已落地；R15b 聚光灯、R2 阴影 GPU 剔除、R3 CSM 待做；后续演进 UE 逐灯 draw / Forward+ cluster |
 | `rdg-cache-dx/` | RenderGraph import 替换决策诊断与 owner 身份收敛、Bloom 切片、Forward/Deferred/Shadow 资源容器按生命周期拆分（接手自 render-view-family）、Slang 生成 descriptor layout（P0 skinning、P1 registry 诊断、P2 import 按 owner key 匹配已落地；下一步 P3 Bloom 切片） |
 | `rpg-prototype/` | 2D 世界线（2026-10-02 合并 `scene-2d-world-and-game-ui`）：RPG Maker 式俯视 2D 示例驱动引擎，脚本中立绑定层（B2 收口归本线）、Tilemap、通行查询、交互 / 对话、切场景，以及 2D 渲染（P0 契约、合批核心与 y-sort、纯 2D View 家族）。B1 / R0–R4 已落地；评审后待办按 7 步排，见目录内 `todo.md` / `review-2026-09-30.md`；步骤 1–3 已完成（P0 契约已冻结），下一步骤 4 2D 模块 |
+| `3d-demo/` | 3D demo 线（2026-10-12 自 `showcase-roadmap` §3 G3 立项，G3.0 问答已收口）：第三人称探索解谜（庭院 → 地下室）驱动引擎玩法层——物理组件（Kinematic / 传感器 / glTF 网格与 convex 碰撞 / 接触事件进 ECS）、物理 Lua API、`JPH::CharacterVirtual` 角色控制器、glTF skin / animation / 节点层级导入、动画交叉淡入、第三人称弹簧臂相机与鼠标轴、`world.spawn` 与世界计时器；三区光照依赖 `shadow-and-light-line/`（R15b + 新增聚光灯阴影 + R2 / R3）。工作项、波次、冲突面、素材调研见目录内 `plan.md`；待用户确认：示例目录名、素材选型 |
 
 ## 归档判据
 
