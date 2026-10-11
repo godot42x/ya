@@ -280,7 +280,16 @@ TEST(EditorUIDesignerSessionTest, DocumentRegistryTracksDirtyCloseAndSingleton)
     EXPECT_FALSE(designer.closeDocument());
     EXPECT_TRUE(designer.hasDocument());
 
-    ASSERT_TRUE(designer.saveDocument());
+    // Untitled with no host picker: nothing was persisted, so the save fails
+    // and the document stays dirty -- a "successful" save here would let the
+    // close guard discard work that exists nowhere on disk.
+    EXPECT_FALSE(designer.saveDocument());
+    EXPECT_TRUE(designer.isDocumentDirty());
+    EXPECT_FALSE(designer.closeDocument());
+    EXPECT_TRUE(designer.hasDocument());
+
+    fixture.uiDocuments.put(FDesignerFixture::kDocumentPath, designer.getOpenDocument());
+    EXPECT_TRUE(designer.openDocument(FDesignerFixture::kDocumentPath));
     EXPECT_FALSE(designer.isDocumentDirty());
     EXPECT_TRUE(designer.closeDocument());
     EXPECT_FALSE(designer.hasDocument());

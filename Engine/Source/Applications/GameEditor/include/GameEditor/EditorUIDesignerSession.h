@@ -258,6 +258,10 @@ struct EditorUIDesignerSession
     bool closeSession(EEditorDocumentCloseMode mode);
     void dropLocalDocument();
     bool installPreview(const std::shared_ptr<UIDocument>& document);
+    /// Untitled save: open the host's save-as picker for a `.yaui.json`
+    /// target; the picked path continues into the normal save. False when the
+    /// host wired no picker.
+    bool beginSaveAs();
 
     EditorLayer* _owner = nullptr;
     EditorDocumentSession*  _session   = nullptr;

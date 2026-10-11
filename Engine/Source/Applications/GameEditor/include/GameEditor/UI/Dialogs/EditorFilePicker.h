@@ -126,6 +126,22 @@ using EditorFilePickerCallback = std::function<void(FEditorFilePickerRequest req
     return request;
 }
 
+[[nodiscard]] inline FEditorFilePickerRequest makeUiDocumentSavePickerRequest(std::string defaultName,
+                                                                             std::function<void(std::string)> onPicked)
+{
+    FEditorFilePickerRequest request;
+    request.title           = "Save UI Document";
+    request.configScope     = "filePicker.uiDocumentSave";
+    request.filterMode      = FileExplorer::FilterMode::Directories;
+    request.selectionMode   = FileExplorer::SelectionMode::Directory;
+    request.confirmLabel    = "Save";
+    request.saveAsName      = std::move(defaultName);
+    request.saveAsExtension = ".yaui.json";
+    request.nameFieldLabel  = "Document Name";
+    request.onPicked        = std::move(onPicked);
+    return request;
+}
+
 [[nodiscard]] inline FEditorFilePickerRequest makeAssetPickerRequest(const AssetTypeDesc& desc,
                                                                      std::string currentPath,
                                                                      std::function<void(std::string)> onPicked)

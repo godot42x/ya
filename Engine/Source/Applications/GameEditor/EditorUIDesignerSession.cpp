@@ -1,6 +1,7 @@
 #include "GameEditor/EditorUIDesignerSession.h"
 
 #include "Core/Log.h"
+#include "Core/System/VirtualFileSystem.h"
 
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/EditorUISlotEdit.h"
@@ -17,6 +18,7 @@
 #include "GameRuntime/App.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 
 namespace ya
@@ -406,15 +408,57 @@ bool EditorUIDesignerSession::saveDocument()
             return false;
         }
     }
+    else if (beginSaveAs()) {
+        // Untitled: the save completes from the picker's continuation, once a
+        // target exists.
+        return true;
+    }
     else {
-        // Untitled: the rebuilt document stays in `_document`. There is no
-        // save target until the asset is created (see the UI asset browser).
-        YA_CORE_INFO("EditorUIDesignerSession: rebuilt untitled document '{}'", _document->typeId);
+        // Untitled with no host picker: the rebuilt document stays in
+        // `_document` and the document remains dirty.
+        YA_CORE_INFO("EditorUIDesignerSession: rebuilt untitled document '{}' (no save-as picker)", _document->typeId);
+        return false;
     }
 
     if (_session) {
         _session->clearDirty();
     }
+    return true;
+}
+
+bool EditorUIDesignerSession::beginSaveAs()
+{
+    if (!_owner || !_owner->_filePickerHandler) {
+        return false;
+    }
+    // Default name: the type's short name ("engine.panel" -> "Panel") reads as
+    // a file name; the type id itself does not.
+    std::string defaultName = "Panel";
+    if (_document && !_document->typeId.empty()) {
+        const std::string& typeId   = _document->typeId;
+        const size_t       dot      = typeId.find_last_of('.');
+        std::string        shortName = (dot == std::string::npos) ? typeId : typeId.substr(dot + 1);
+        if (!shortName.empty()) {
+            shortName[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(shortName[0])));
+            defaultName  = std::move(shortName);
+        }
+    }
+    _owner->_filePickerHandler(makeUiDocumentSavePickerRequest(
+        std::move(defaultName),
+        [this](std::string picked) {
+            if (picked.empty()) {
+                return;
+            }
+            std::string vfsPath = picked;
+            if (VirtualFileSystem* vfs = VirtualFileSystem::get()) {
+                const std::string mapped = vfs->toVfsPath(picked);
+                if (!mapped.empty()) {
+                    vfsPath = mapped;
+                }
+            }
+            _documentPath = std::move(vfsPath);
+            (void)saveDocument();
+        }));
     return true;
 }
 
