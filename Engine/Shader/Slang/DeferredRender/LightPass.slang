@@ -66,9 +66,12 @@ struct PointLight{
     float farPlane;
 };
 
+// Point lights live in a storage buffer (binding 2,0): the per-frame count
+// is dynamic -- no compile-time cap, no reserved-but-unused slots. The shadow
+// cube array stays budget-sized; a light past the shadow budget carries
+// farPlane == 0 and calculatePointShadow returns before sampling it.
 struct LightData{
     DirectionalLight dirLight;
-    PointLight pointLights[MAX_POINT_LIGHTS];
     bool hasDirLight;
     uint numPointLight;
 };
@@ -213,15 +216,15 @@ float calculatePointShadow(uint pointLightIndex, vec3 worldPos)
 #if !YA_DEFERRED_ENABLE_SHADOW_MAPPING || !YA_DEFERRED_ENABLE_POINT_LIGHT_SHADOW
     return 0.0;
 #else
-    vec3 sampleDir = worldPos - uLight.pointLights[pointLightIndex].pos;
+    vec3 sampleDir = worldPos - uPointLights[pointLightIndex].pos;
     float currentDepth = length(sampleDir);
-    if (currentDepth <= 0.0001 || uLight.pointLights[pointLightIndex].farPlane <= 0.0) {
+    if (currentDepth <= 0.0001 || uPointLights[pointLightIndex].farPlane <= 0.0) {
         return 0.0;
     }
 
     float closestDepth = uPointLightCubeArray[pointLightIndex].Sample(sampleDir).x;
-    closestDepth *= uLight.pointLights[pointLightIndex].farPlane;
-    float bias = clamp(uLight.dirLight.bias * uLight.pointLights[pointLightIndex].farPlane, 0.001, 0.02);
+    closestDepth *= uPointLights[pointLightIndex].farPlane;
+    float bias = clamp(uLight.dirLight.bias * uPointLights[pointLightIndex].farPlane, 0.001, 0.02);
     return (currentDepth - bias) > closestDepth ? 1.0 : 0.0;
 #endif
 }
@@ -256,11 +259,11 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
     for (int i = 0; i < uLight.numPointLight; ++i)
     {
         // per-light radiance
-        vec3 L = normalize(uLight.pointLights[i].pos - worldPos);
+        vec3 L = normalize(uPointLights[i].pos - worldPos);
         vec3 H = normalize(V + L);
-        float dist = length(uLight.pointLights[i].pos - worldPos);
+        float dist = length(uPointLights[i].pos - worldPos);
         // raw light
-        vec3 radiance = uLight.pointLights[i].color * uLight.pointLights[i].intensity 
+        vec3 radiance = uPointLights[i].color * uPointLights[i].intensity 
                         / (dist * dist);
         float shadow = calculatePointShadow(i, worldPos);
 
@@ -339,14 +342,14 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
 
     for(uint i = 0; i< uLight.numPointLight; ++i)
     {
-        vec3  lightDir   = normalize(uLight.pointLights[i].pos - worldPos);
+        vec3  lightDir   = normalize(uPointLights[i].pos - worldPos);
         float diff      = max(dot(lightDir, N), 0.0);
         vec3  halfwayDir = normalize(lightDir + V);
         float spec      = pow(max(dot(N, halfwayDir), 0.0),shininess);
         float shadow    = calculatePointShadow(i, worldPos);
 
-        float dist = length(uLight.pointLights[i].pos - worldPos);
-        vec3 radiance = uLight.pointLights[i].color * uLight.pointLights[i].intensity / (dist * dist);
+        float dist = length(uPointLights[i].pos - worldPos);
+        vec3 radiance = uPointLights[i].color * uPointLights[i].intensity / (dist * dist);
 
         vec3 ambient  = albedo * radiance * ambientFactor * ao;
         vec3 diffuse  = diff * albedo * radiance;
@@ -363,6 +366,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
 
 [[vk::binding(0,0)]] ConstantBuffer<FrameData,Std140DataLayout> uFrame;
 [[vk::binding(1,0)]] ConstantBuffer<LightData,Std140DataLayout> uLight;
+[[vk::binding(2,0)]] StructuredBuffer<PointLight> uPointLights;
 
 [[vk::binding(0,1)]] Sampler2D uTexRT0; // RT0: (position.xyz, roughness/shininess)
 [[vk::binding(1,1)]] Sampler2D uTexRT1; // RT1: (normal.xyz, ao/reflectRatio)

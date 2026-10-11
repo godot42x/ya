@@ -411,8 +411,11 @@ struct SceneSnapshot
 {
     bool                                                     bHasDirectionalLight = false;
     SceneDirectionalLightData                                directionalLightSource;
-    uint32_t                                                 pointLightSourceCount = 0;
-    std::array<ScenePointLightData, MAX_POINT_LIGHTS>        pointLightSources;
+    /// The scene's point lights, as many as the scene has: the deferred path
+    /// uploads them to a storage buffer sized by the actual count, so there is
+    /// no compile-time cap to hit (see LightPass.slang's uPointLights). The
+    /// shadow budget picks the first `maxShadowedPointLights` of these.
+    std::vector<ScenePointLightData>                         pointLightSources;
 
     RenderMeshClassDrawBuckets drawBuckets;
     std::vector<RenderSkinningPalette> skinningPalettes;
@@ -424,8 +427,7 @@ struct SceneSnapshot
     {
         bHasDirectionalLight = false;
         directionalLightSource = {};
-        pointLightSourceCount  = 0;
-        pointLightSources      = {};
+        pointLightSources.clear();
         drawBuckets.clear();
         skinningPalettes.clear();
         worldSprites.clear();
@@ -443,8 +445,11 @@ struct RenderFrameData
     /// sprite pass reads it, so recording never walks the Scene's ECS again.
     ViewSpriteBucket                                            worldSprites;
     FrameContext::DirectionalLightData                          directionalLight;
+    /// numPointLights == pointLights.size(): kept as a field because the
+    /// shadow budget math and the forward path read the count alongside the
+    /// per-flight pool's clear().
     uint32_t                                                   numPointLights = 0;
-    std::array<FrameContext::PointLightData, MAX_POINT_LIGHTS> pointLights;
+    std::vector<FrameContext::PointLightData>                  pointLights;
 
     glm::mat4    view           = glm::mat4(1.0f);
     glm::mat4    projection     = glm::mat4(1.0f);
@@ -475,7 +480,7 @@ struct RenderFrameData
         worldSprites.clear();
         directionalLight = {};
         numPointLights = 0;
-        pointLights = {};
+        pointLights.clear();
         sceneResources.clear();
     }
 

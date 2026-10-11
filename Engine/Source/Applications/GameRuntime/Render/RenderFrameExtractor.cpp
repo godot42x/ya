@@ -144,7 +144,7 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
 {
     outSnapshot.clearScene();
     outSnapshot.bHasDirectionalLight = false;
-    outSnapshot.pointLightSourceCount = 0;
+    outSnapshot.pointLightSources.clear();
 
     if (!input.scene) {
         return;
@@ -354,8 +354,8 @@ void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
         outFrame.worldSprites.order.push_back(index);
     }
 
-    outFrame.numPointLights = outFrame.sceneSnapshot->pointLightSourceCount;
-    for (uint32_t index = 0; index < outFrame.sceneSnapshot->pointLightSourceCount; ++index) {
+    outFrame.pointLights.resize(outFrame.sceneSnapshot->pointLightSources.size());
+    for (uint32_t index = 0; index < outFrame.sceneSnapshot->pointLightSources.size(); ++index) {
         const auto& source = outFrame.sceneSnapshot->pointLightSources[index];
         auto&       target = outFrame.pointLights[index];
         target.position    = source.position;
@@ -371,6 +371,7 @@ void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
         target.nearPlane   = source.nearPlane;
         target.farPlane    = source.farPlane;
     }
+    outFrame.numPointLights = static_cast<uint32_t>(outFrame.pointLights.size());
     outFrame.directionalLight.direction = outFrame.sceneSnapshot->directionalLightSource.direction;
     outFrame.directionalLight.color     = outFrame.sceneSnapshot->directionalLightSource.color;
     outFrame.directionalLight.intensity = outFrame.sceneSnapshot->directionalLightSource.intensity;
@@ -414,14 +415,11 @@ void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneSnapshot
         }
     }
 
-    // Point lights
-    out.pointLightSourceCount = 0;
+    // Point lights: every light the scene has -- the deferred path uploads
+    // them to a count-sized storage buffer, so there is no cap to break here.
+    out.pointLightSources.clear();
     for (const auto& [e, plc, tc] : reg.view<PointLightComponent, TransformComponent>().each()) {
-        if (out.pointLightSourceCount >= MAX_POINT_LIGHTS) {
-            break;
-        }
-
-        auto& pl       = out.pointLightSources[out.pointLightSourceCount];
+        auto& pl = out.pointLightSources.emplace_back();
         pl.type        = static_cast<float>(plc._type);
         pl.constant    = plc._constant;
         pl.linear      = plc._linear;
@@ -434,8 +432,6 @@ void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneSnapshot
         pl.farPlane    = plc.farPlane;
         pl.color       = plc.color;
         pl.intensity   = plc.intensity;
-
-        ++out.pointLightSourceCount;
     }
 
     // Keep point-light order stable across camera motion so the shadow budget does not flicker

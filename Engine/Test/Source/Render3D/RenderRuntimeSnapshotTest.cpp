@@ -179,7 +179,7 @@ TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
     static_assert(!std::is_base_of_v<SceneSnapshot, RenderFrameData>);
     static_assert(std::is_same_v<decltype(SceneSnapshot{}.directionalLightSource), SceneDirectionalLightData>);
     static_assert(std::is_same_v<std::remove_cvref_t<decltype(SceneSnapshot{}.pointLightSources[0])>,
-                                 ScenePointLightData>);
+                                 ScenePointLightData>);  // vector: element type stable, count dynamic
     static_assert(!std::is_same_v<decltype(SceneSnapshot{}.directionalLightSource),
                                   FrameContext::DirectionalLightData>);
 
@@ -258,7 +258,9 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
         {
             extractedScenes.push_back(&scene);
             auto snapshot = std::make_shared<SceneSnapshot>();
-            snapshot->pointLightSourceCount = static_cast<uint32_t>(scene.getInstanceId());
+            // The snapshot carries as many lights as the scene declared; the
+            // count IS the vector size now, so size it to the instance id.
+            snapshot->pointLightSources.resize(static_cast<size_t>(scene.getInstanceId()));
             return std::shared_ptr<const SceneSnapshot>(std::move(snapshot));
         });
     // The extractor is handed the declared Scene, one call per unique Scene.

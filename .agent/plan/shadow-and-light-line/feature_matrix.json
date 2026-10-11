@@ -1,0 +1,33 @@
+{
+  "line": "shadow-and-light-line",
+  "features": [
+    {
+      "id": "R15a",
+      "title": "Deferred point lights: storage-buffer light list, no per-frame cap",
+      "status": "pass",
+      "evidence": [
+        "Engine/Shader/Slang/DeferredRender/LightPass.slang: uPointLights StructuredBuffer (binding 2,0)",
+        "ya-testing full run green (except 2 pre-existing content failures)",
+        "Lights_500: Deferred Light GPU p50 30.31ms, frame p50 34.96ms (was ~9ms with 6 lights)"
+      ]
+    },
+    {
+      "id": "R15b",
+      "title": "Spot light component + cone shading",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R2",
+      "title": "Point light shadow GPU culling + indirect default-on",
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "R3",
+      "title": "CSM cascade stabilization, default-on",
+      "status": "todo",
+      "evidence": []
+    }
+  ]
+}

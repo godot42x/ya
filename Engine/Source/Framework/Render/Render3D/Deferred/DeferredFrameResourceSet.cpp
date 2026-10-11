@@ -27,6 +27,7 @@ void DeferredFrameResourceSet::init(IRender* render)
             .bindings = {
                 {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::All},
                 {.binding = 1, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                {.binding = 2, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
             },
         }});
 
@@ -81,21 +82,7 @@ DeferredFrameResourceSet::LightData DeferredFrameResourceSet::buildLightData(con
         lightData.hasDirLight = 1;
     }
 
-    int            pointLightIndex        = 0;
-    const uint32_t shadowedPointLightBudget = std::min(_shadowState.maxShadowedPointLights, frameData.numPointLights);
-    for (uint32_t sourceIndex = 0;
-         sourceIndex < frameData.numPointLights && pointLightIndex < static_cast<int>(MAX_POINT_LIGHTS);
-         ++sourceIndex) {
-        const auto& source = frameData.pointLights[sourceIndex];
-        lightData.pointLights[pointLightIndex] = {
-            .pos       = source.position,
-            .color     = source.color,
-            .intensity = source.intensity,
-            .farPlane  = static_cast<uint32_t>(pointLightIndex) < shadowedPointLightBudget ? source.farPlane : 0.0f,
-        };
-        ++pointLightIndex;
-    }
-    lightData.numPointLight = static_cast<uint32_t>(pointLightIndex);
+    lightData.numPointLight = frameData.numPointLights;
     return lightData;
 }
 
@@ -147,6 +134,12 @@ void DeferredFrameResourceSet::updateFrameAndLightDescriptorSet(const Binding& b
             0,
             EPipelineDescriptorType::UniformBuffer,
             {binding.light.descriptor()}),
+        IDescriptorSetHelper::genBufferWrite(
+            binding.frameAndLightDescriptorSet,
+            2,
+            0,
+            EPipelineDescriptorType::StorageBuffer,
+            {binding.pointLights.descriptor()}),
     });
 }
 
@@ -194,6 +187,20 @@ bool DeferredFrameResourceSet::writeViewPayloads(
     binding.frame = *frame;
     binding.light = *light;
 
+    // The point-light storage buffer: one slice sized by the actual count.
+    // Zero lights still binds one zeroed entry -- the shader statically reads
+    // uPointLights, so the binding must exist; numPointLight == 0 means the
+    // shading loop never indexes it.
+    PointLightGpu zero{};
+    const auto*   lightData  = payloads.pointLights.empty() ? &zero : payloads.pointLights.data();
+    const auto    lightCount = payloads.pointLights.empty() ? 1u : static_cast<uint32_t>(payloads.pointLights.size());
+    auto pointLights = writeUploadSlice(
+        arena, flightIndex, alignment, lightData, lightCount * static_cast<uint32_t>(sizeof(PointLightGpu)));
+    if (!pointLights) {
+        return false;
+    }
+    binding.pointLights = *pointLights;
+
     if (payloads.ssao) {
         auto ssaoFrame = writeUploadSlice(
             arena, flightIndex, alignment, payloads.ssao, sizeof(*payloads.ssao));
@@ -231,6 +238,16 @@ bool DeferredFrameResourceSet::writeViewPayloads(
 
     binding.frame = *frame;
     binding.light = *light;
+
+    PointLightGpu zero{};
+    const auto*   lightData  = payloads.pointLights.empty() ? &zero : payloads.pointLights.data();
+    const auto    lightCount = payloads.pointLights.empty() ? 1u : static_cast<uint32_t>(payloads.pointLights.size());
+    auto pointLights = writeUploadSlice(
+        submission, alignment, lightData, lightCount * static_cast<uint32_t>(sizeof(PointLightGpu)));
+    if (!pointLights) {
+        return false;
+    }
+    binding.pointLights = *pointLights;
 
     if (payloads.ssao) {
         auto ssaoFrame = writeUploadSlice(submission, alignment, payloads.ssao, sizeof(*payloads.ssao));
@@ -296,13 +313,12 @@ const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
         .projMatrix = view.frameData->projection,
     };
     payloads.light  = buildLightData(*view.frameData);
+    payloads.pointLights = std::span{
+        reinterpret_cast<const DeferredFrameResourceSet::PointLightGpu*>(view.frameData->pointLights.data()),
+        view.frameData->pointLights.size()};
     payloads.ssao   = ssao;
     payloads.skybox = skybox;
-    _lastShadowedPointLights = std::min({
-        _shadowState.maxShadowedPointLights,
-        view.frameData->numPointLights,
-        static_cast<uint32_t>(MAX_POINT_LIGHTS),
-    });
+    _lastShadowedPointLights = std::min(_shadowState.maxShadowedPointLights, view.frameData->numPointLights);
 
     const uint32_t alignment = std::max(_render->getUniformBufferOffsetAlignment(), 1u);
     if (!writeViewPayloads(submission, alignment, payloads, slot->frame)) {

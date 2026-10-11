@@ -17,6 +17,8 @@
 
 #include <array>
 #include <optional>
+#include <span>
+#include <vector>
 
 namespace ya
 {
@@ -40,10 +42,19 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
     using SSAOFrameData = slang_types::DeferredRender::SSAO::FrameData;
     using SkyboxFrameData = slang_types::Skybox::FrameUBO;
 
+    /// The deferred shader's point-light storage buffer element (see
+    /// LightPass.slang's uPointLights): tightly packed 36 bytes, layout owned
+    /// by the generated header.
+    using PointLightGpu = slang_types::DeferredRender::LightPass::PointLight;
+
     struct ViewPayloads
     {
         FrameData            frame{};
         LightData            light{};
+        /// The frame's point lights, uploaded as one count-sized storage
+        /// buffer slice. Spans the RenderFrameData vector, which outlives the
+        /// recording that consumes it.
+        std::span<const PointLightGpu> pointLights{};
         const SSAOFrameData* ssao   = nullptr;
         const SkyboxFrameData* skybox = nullptr;
     };
@@ -56,6 +67,7 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
         DescriptorSetHandle             skyboxFrameDescriptorSet{};
         FrameUploadArena::Allocation    frame;
         FrameUploadArena::Allocation    light;
+        FrameUploadArena::Allocation    pointLights;
         FrameUploadArena::Allocation    ssaoFrame;
         FrameUploadArena::Allocation    skyboxFrame;
         stdptr<IBuffer>                  skinningBuffer;

@@ -29,7 +29,7 @@ GUI 与编辑器活跃线
 - [x] R1 frames-in-flight 1→2（`render-view-family` M4：旋钮 1→2 + deletion queue init 收敛 + 槽 1 轮转实证；基准对比见 perf-baseline）
 - [ ] R2 点光源阴影 GPU 剔除修稳并默认开启
 - [ ] R3 CSM 多级 cascade 修稳并默认开启
-- [ ] R15 延迟管线聚光灯 + 点光源上限理顺
+- [~] R15 延迟管线聚光灯 + 点光源上限理顺（R15a 点光 SSBO 无上限已落地 `shadow-and-light-line/`；R15b 聚光灯待做）
 
 2D demo（`rpg-prototype`）
 - [x] G2.1 相机 2D 字段在 `CameraComponent`；跟随留在 `FollowCamera.lua`。对话逐字在 `Dialogue.lua`

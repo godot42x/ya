@@ -704,11 +704,14 @@ void ForwardViewLitPasses::fillPBRLightFromFrameData(const RenderFrameData& fd,
         outLight.hasDirLight            = true;
     }
 
-    outLight.numPointLight                  = fd.numPointLights;
+    // The forward shader's ring stays at MAX_POINT_LIGHTS: the deferred path
+    // owns the unbounded storage buffer, and frameData now carries as many
+    // lights as the scene has.
+    outLight.numPointLight                  = std::min<uint32_t>(fd.numPointLights, MAX_POINT_LIGHTS);
     const uint32_t shadowedPointLightBudget = _shadowState.bEnablePointLightShadow
-        ? std::min(_shadowState.maxShadowedPointLights, fd.numPointLights)
+        ? std::min(_shadowState.maxShadowedPointLights, outLight.numPointLight)
         : 0u;
-    for (uint32_t i = 0; i < fd.numPointLights; ++i) {
+    for (uint32_t i = 0; i < outLight.numPointLight; ++i) {
         const auto& src = fd.pointLights[i];
         auto&       dst = outLight.pointLights[i];
         dst             = {};
@@ -734,8 +737,8 @@ void ForwardViewLitPasses::fillPhongLightFromFrameData(const RenderFrameData& fd
         }
     }
 
-    outLight.numPointLights = fd.numPointLights;
-    for (uint32_t i = 0; i < fd.numPointLights; ++i) {
+    outLight.numPointLights = std::min<uint32_t>(fd.numPointLights, MAX_POINT_LIGHTS);
+    for (uint32_t i = 0; i < outLight.numPointLights; ++i) {
         const auto& pl  = fd.pointLights[i];
         auto&       dst = outLight.pointLights[i];
         dst             = {};
