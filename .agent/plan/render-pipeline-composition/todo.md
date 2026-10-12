@@ -13,17 +13,18 @@
 - [x] **C3A-trim（接手/开闭收敛）**：ForwardOpaque 槽位改由 recipe 声明；`ColorContinuation.h` 单一契约（4 个使用者）；recipe 头"Adding a pass"接入说明；target 发布守卫测试；子系统 7672→7568（−104）。
 - [x] **C3B（M17 Deferred 侧）**：SSAO/Skybox payload+DSL+DS 归 feature 局部准备；共享 `Binding` 只留 frame/light/skinning（6 字段）；trace 每共享 buffer 每 View import 一次、SSAO off 无 SSAO UBO import；子系统 7568→7536（−32）。
 - [x] Runtime 证据（C1i + C3A + C3A-trim + C3B）：SSAO on/off 图对照 + `Deferred.SSAO` import 14245→0 + Forward↔Deferred 切换逐像素一致 + 三场景像素 0 diff（C3B 再次逐像素一致）。
-- [x] **C3G（剩余门禁）**：sprite+opaque 遮挡（`run_sprite2d_isolated.py` 全绿：遮挡 0→137270 px、世界尺寸/正交尺度断言；trace 证明跑在 Deferred 组合的 `Deferred Sprites` pass）；overlay/billboard（editor 回归绿；修复 companion 重构造成的过期键名测试债）；grading off（10 pass、Finalize 仍发布 `Deferred.View.Display`、与 graded 基线仅色彩差异 max 19/255）；M11 bloom on/off 续写 backing 断言成文。
+- [x] **C3G（剩余门禁）**：sprite+opaque 遮挡（`run_sprite2d_isolated.py` 全绿：遮挡 0→137270 px、世界尺寸/正交尺度断言；trace 证明跑在 Deferred 组合的 `Deferred Sprites` pass）；overlay/billboard（editor 回归绿；修复 companion 重构造成的过期键名测试脚本债）；grading off（10 pass、Finalize 仍发布 `Deferred.View.Display`、与 graded 基线仅色彩差异 max 19/255）；M11 bloom on/off 续写 backing 断言成文。
+- [x] **协议诚实化（审计后续，非 plan.md checkpoint）**：`Feature` concept 改为真实签名并由 9 个 feature `static_assert` 强制；`FeatureGraphContext` 删 `graph`/`render` 死字段；`RenderStageContext` 删 `Scene* derivedScene`（Forward 侧唯一读点改显式传参）。证据：SSAO-on 与 c3b 基线逐像素一致、Forward 与切换前基线逐像素一致、切换回 Deferred 逐像素一致。
 
 ## 下一步（按优先级）
 
+- [ ] **C4**（建议下一批）：Forward recipe（共享 feature 作为跨管线开闭性正式验收证据）、Forward 侧 shared inputs 收口（M17 余下半边：`ForwardFrameResourceSet` 的 skybox frame DSL/DS 与 payload）、Shadow typed token、`appendTargetRequests` 全退出。协议已在 Deferred 侧强制，Forward 接入时直接满足同一 concept。
 - [ ] **待决定的测试 hook（C3 遗留缺口）**：entity-id/picking runtime hook（读取 `DeferredView.EntityId` 的 pick/readback；editor 已有 isolate readback 路径）与 direction gizmo 场景 hook（回归场景加一个 `DirectionComponent` 实体）。
 - [ ] **M12 余项**：`SurfaceImageTest` 侧编码回归未跑。
 - [ ] **plan.md C2 剩余**：`_lastBlurPassCount` 调用状态退出、blur pass 次数边界测试（M09/M14）。
 - [ ] **M08 双 View runtime**：两 View 不同 SSAO payload/DS 互不覆盖；共享 frame/skinning 复用。
 - [ ] **M10 failure injection**：prepare/build/compile/execute 失败不发布部分新 family。
 - [ ] **M13 完整**：统一输出收集，不在 pipeline 侧按 feature 名称解析。
-- [ ] **C4**：Forward recipe（共享 feature 作为跨管线开闭性正式验收证据）、Forward 侧 shared inputs 收口（M17 余下半边：`ForwardFrameResourceSet` 的 skybox frame DSL/DS 与 payload）、Shadow typed token、`appendTargetRequests` 全退出。
 - [ ] **C5**：组合诊断、扩展用例、多 View、performance/churn 门禁与 skill 吸收（"如何新增一个 pass"进 skill）。
 
 ## 不得漏掉

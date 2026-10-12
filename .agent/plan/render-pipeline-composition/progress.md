@@ -466,7 +466,8 @@
 - C3A-trim（薄壳降级 + 接入说明/守卫）: ✅ 完成并带 runtime 证据
 - C3B（M17 Deferred 侧共享输入收口）: ✅ 完成并带 runtime/trace 证据
 - C3G（C3 剩余门禁）: ✅ 可运行部分全部跑绿（sprite/billboard/grading-off/M11 断言）；entity-id/picking 与 direction gizmo 记为缺口
-- 剩余: M17 Forward 半边（C4）、plan-C2 剩余（`_lastBlurPassCount`）、M12 的 SurfaceImageTest、entity-id/picking 与 gizmo hook 决定、M08/M10/M13 完整、C4/C5
+- 协议诚实化（审计后续）: ✅ Feature concept 由 9 个 feature static_assert 强制；context 死字段与 Scene 泄漏删除；runtime 三帧逐像素一致（含 Forward）
+- 剩余: C4（Forward recipe / shared inputs 收口 / Shadow typed token）、plan-C2 剩余（`_lastBlurPassCount`）、M12 的 SurfaceImageTest、entity-id/picking 与 gizmo hook 决定、M08/M10/M13 完整、C5
 
 ### 工作区状态
 
@@ -474,3 +475,38 @@
 - **测试全绿**: 1812/1812 full tests passed；render3d 221/221
 - **编译通过**: ya-render-3d, ya-game-runtime（closure）
 - **无关改动**: Engine/Plugins/log.cc 未 stage（灯光线工作）
+
+## 2026-10-12 深夜 — 协议诚实化（审计后续，非 plan.md checkpoint）
+
+### 为什么做这一批
+
+独立审计（读代码而非读文档）发现三处「机制存在但无强制力」：`Feature` concept 要求 `(FeatureResolveContext&, const Inputs&, const void*)`，与任何真实 feature 签名都不匹配，生产零 `static_assert`；typed refs 生产零使用；`FeatureGraphContext` 带 `stageCtx = RenderStageContext`（含 live `Scene*`），违反计划「graph callback 不查询 active Scene」的不变量。C4 要把这套协议复制到 Forward，所以先让协议真实可强制。
+
+同时更正审计中的两处误判：`DeferredPipelineRecipe.h` 的 "Adding a pass" 注释与 `collectViewTargets` 注释**是准确的**（opaque 槽确实经 `declareColorContinuation` 声明），无需修改。
+
+### 实施内容
+
+- **concept 对齐真实签名**：`Feature` 要求 8 个嵌套类型（含 `Stage`）＋三个方法返回 `Resolved` / `Result<Prepared,FeatureError>` / `Result<GraphOutputs,FeatureError>`。嵌套类型放在第一个 `requires` conjunct，缺失时是「不满足」而非硬错误。
+- **9 个 feature 各自 `static_assert`**：`GBuffer/SSAO/Lighting/Skybox/Sprite2D/Bloom/Overlay/EntityId/Finalize` 统一补 `using Stage = <StageType>;`，签名收敛（`LightingFeature` 去掉 `static`、`GBufferFeature::PrepareInputs` → `PrepareContext`、`prepareBindings`/`append` 全部返回 `Result`）。
+- **`FeatureGraphContext` 收窄**：删死字段 `graph`、`render`（真实使用 0）。
+- **`RenderStageContext` 删 `Scene* derivedScene`**：全仓库唯一读点是 Forward 侧 `ForwardViewStage::buildPassContext`，改为显式参数 `buildPassContext(ctx, viewScene)`，由 `ForwardRenderPipeline` 从 View 自己的声明（`frame.derivedScene`）传入。Forward per-pass 入口由 `const PassContext*` 可选改为 `const PassContext&` 必需 —— null 路径本来就要现造 context，现改为断言响亮失败。
+
+### 验证
+
+- 编译：`xmake b ya-render-3d-test` / `xmake b ya-runtime` ok。
+- 测试：`xmake r ya-render-3d-test` 221/221；`python3 Script/ya.py test --target ya` 1812/1812。
+- **concept 确实生效（负向证明）**：临时把 `FinalizeFeature::append` 返回类型从 `Result<GraphOutputs,FeatureError>` 改成裸 `GraphOutputs`，`static_assert` 报 `FinalizeFeature must satisfy the composition Feature protocol`；改动已还原。
+- Runtime（HelloMaterial，`wait_up=180`）：
+  - SSAO on 截图 vs `c3b-ssao-on.png` **逐像素一致**（max diff 0，`protocol-ssao-on.png`）。
+  - 切 Forward 截图 vs 改动前基线 `composition-forward.png`（18:37 抓取）**逐像素一致**（max diff 0）—— 这是签名改动未改变 Forward 行为的直接证据。
+  - 切回 Deferred vs `c3b-ssao-on.png` **逐像素一致**（max diff 0）。
+  - 日志唯一 ERROR 仍为历史 VkDescriptorPool STORAGE_BUFFER 校验告警。
+- 证据文件在 gitignored 的 `Engine/Saved/Automation/` 下；日志 `control-game-HelloMaterial-61389.log`。
+
+### 保留 / 未做 / 偏离
+
+- **偏离**：本批动到 Forward（`ForwardViewStage` 签名 + `ForwardFrameGraphPasses` 调用点 + `ForwardRenderPipeline` 一处），比原定「不碰 Forward」多。理由是 `derivedScene` 的唯一读点在 Forward，若不动它就只能把 `Scene*` 留在共享 context 里、让协议收窄停留在注释上——即审计批评的「纸面承诺」。这是唯一一处越界，已在本文记录，并带 Forward 逐像素一致证据。
+- 保留：typed refs（`CompositionTextureRef`/`composition_tag`）未删——生产零使用但删除涉及测试改动，按惯例单独拍板；它们是「死脚手架」的事实不变。
+- 保留：`ViewResources` 混合 bag（C4）、`_lastBlurPassCount`（plan-C2）、M08/M10/M13、entity-id/gizmo hook。
+- 未做：C4 Forward recipe 本身（下一批）。
+- 工作区：`Engine/Shader/Slang/Common/Limits.slang`（`MAX_POINT_LIGHTS_DEFERRED`）与 `Engine/Plugins/log.cc` 是并行会话/灯光线改动，未 stage、未提交。

@@ -171,7 +171,7 @@ TEST(DeferredCompositionTargetsTest, TargetListComesFromResolvedFeaturesOnceAndG
     view.viewId     = 7;
     view.viewExtent = {.width = 640, .height = 480};
     view.gbuffer    = GBufferFeature{}.resolve(gbufferSettings, GBufferFeature::Facts{}, GBufferFeature::Inputs{});
-    view.lighting   = LightingFeature::resolve(lightingSettings, LightingFeature::Facts{}, LightingFeature::Inputs{});
+    view.lighting   = LightingFeature{}.resolve(lightingSettings, LightingFeature::Facts{}, LightingFeature::Inputs{});
     view.entityId   = EntityIdFeature{}.resolve(EntityIdFeature::Settings{}, EntityIdFeature::Facts{}, EntityIdFeature::Inputs{});
     view.finalize   = FinalizeFeature{}.resolve(finalizeSettings, FinalizeFeature::Facts{}, FinalizeFeature::Inputs{});
 
@@ -258,9 +258,10 @@ TEST(GBufferFeatureTest, DisabledResolveCarriesNoFormatsAndEnabledResolveOwnsIts
     EXPECT_TRUE(enabled.outputs.depth.isDepth);
 
     // A disabled feature prepares nothing, even when the View binding has sets.
-    const auto disabledPrepared = feature.prepareBindings(disabled, GBufferFeature::PrepareInputs{});
-    EXPECT_FALSE(disabledPrepared.frameAndLightDS);
-    EXPECT_FALSE(disabledPrepared.skinningDS);
+    const auto disabledPrepared = feature.prepareBindings(disabled, GBufferFeature::PrepareContext{});
+    ASSERT_TRUE(disabledPrepared.isOk());
+    EXPECT_FALSE(disabledPrepared.value().frameAndLightDS);
+    EXPECT_FALSE(disabledPrepared.value().skinningDS);
 }
 
 TEST(SSAOFeatureTest, DisabledResolveRequiresNoTargetAndEnabledResolveBuildsFrameData)
@@ -309,7 +310,7 @@ TEST(LightingFeatureTest, ResolveCarriesThePipelineSceneColorFormat)
     LightingFeature::Settings settings;
     settings.sceneColorFormat = EFormat::R16G16B16A16_SFLOAT;
 
-    const auto resolved = LightingFeature::resolve(settings, LightingFeature::Facts{}, LightingFeature::Inputs{});
+    const auto resolved = LightingFeature{}.resolve(settings, LightingFeature::Facts{}, LightingFeature::Inputs{});
     ASSERT_TRUE(resolved.bEnabled);
     EXPECT_EQ(resolved.target.role, EViewAttachment::SceneColor);
     EXPECT_EQ(resolved.target.format, EFormat::R16G16B16A16_SFLOAT);

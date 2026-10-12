@@ -59,7 +59,7 @@ Result<BloomFeature::Prepared, FeatureError> BloomFeature::prepareBindings(const
 }
 
 Result<BloomFeature::GraphOutputs, FeatureError> BloomFeature::append(RenderGraph&               graph,
-                                                                      PostProcessingStage*       stage,
+                                                                      Stage*                     stage,
                                                                       const FeatureGraphContext& ctx,
                                                                       const Facts&               facts,
                                                                       const Resolved&            resolved,

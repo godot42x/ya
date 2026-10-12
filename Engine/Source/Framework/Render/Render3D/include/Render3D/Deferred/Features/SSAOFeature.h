@@ -27,6 +27,8 @@ class RenderSubmission;
 /// Lighting consumes an invalid AO and binds neutral occlusion.
 struct SSAOFeature
 {
+    using Stage = SSAOStage;
+
     /// Optional AO output: wraps RGTextureHandle with validity tracking.
     struct OptionalAO
     {
@@ -107,12 +109,14 @@ struct SSAOFeature
                                                                  const PrepareContext& ctx) const;
 
     [[nodiscard]] Result<GraphOutputs, FeatureError> append(RenderGraph&                graph,
-                                                            SSAOStage*                   stage,
+                                                            Stage*                      stage,
                                                             const FeatureGraphContext&   ctx,
                                                             const Facts&                 facts,
                                                             const Resolved&              resolved,
                                                             const Prepared&              prepared,
                                                             const Inputs&                inputs) const;
 };
+
+static_assert(Feature<SSAOFeature>, "SSAOFeature must satisfy the composition Feature protocol");
 
 } // namespace ya

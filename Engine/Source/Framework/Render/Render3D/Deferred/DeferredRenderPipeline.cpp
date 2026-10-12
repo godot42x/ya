@@ -1007,7 +1007,6 @@ void DeferredRenderPipeline::beginViewRecording(const RenderPipelineFrameContext
         .deltaTime      = frame.frame ? frame.frame->deltaTime : 0.0f,
         .timeSeconds    = frame.frame ? frame.frame->elapsedTimeSeconds : 0.0f,
         .viewExtent = {.width = vpW, .height = vpH},
-        .derivedScene   = frame.derivedScene,
     };
 }
 

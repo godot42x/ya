@@ -46,13 +46,13 @@ Result<Sprite2DFeature::Prepared, FeatureError> Sprite2DFeature::prepareBindings
     return prepared;
 }
 
-Sprite2DFeature::GraphOutputs Sprite2DFeature::append(RenderGraph&               graph,
-                                                      Sprite2DStage*             stage,
-                                                      const FeatureGraphContext& ctx,
-                                                      const Facts&               facts,
-                                                      const Resolved&            resolved,
-                                                      const Prepared&            prepared,
-                                                      const Inputs&              inputs) const
+Result<Sprite2DFeature::GraphOutputs, FeatureError> Sprite2DFeature::append(RenderGraph&               graph,
+                                                                             Stage*                     stage,
+                                                                             const FeatureGraphContext& ctx,
+                                                                             const Facts&               facts,
+                                                                             const Resolved&            resolved,
+                                                                             const Prepared&            prepared,
+                                                                             const Inputs&              inputs) const
 {
     GraphOutputs outputs;
     outputs.color = inputs.color;

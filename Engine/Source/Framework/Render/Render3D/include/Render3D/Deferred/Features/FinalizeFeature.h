@@ -20,6 +20,8 @@ class RenderSubmission;
 /// whether it exists.
 struct FinalizeFeature
 {
+    using Stage = PostProcessingStage;
+
     struct Settings
     {
         bool           bEnabled      = true;
@@ -68,12 +70,14 @@ struct FinalizeFeature
                                                                  const PrepareContext& ctx) const;
 
     [[nodiscard]] Result<GraphOutputs, FeatureError> append(RenderGraph&               graph,
-                                                            PostProcessingStage*       stage,
+                                                            Stage*                     stage,
                                                             const FeatureGraphContext& ctx,
                                                             const Facts&               facts,
                                                             const Resolved&            resolved,
                                                             const Prepared&            prepared,
                                                             const Inputs&              inputs) const;
 };
+
+static_assert(Feature<FinalizeFeature>, "FinalizeFeature must satisfy the composition Feature protocol");
 
 } // namespace ya

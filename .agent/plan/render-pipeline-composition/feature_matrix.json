@@ -2,7 +2,7 @@
   "plan": "render-pipeline-composition",
   "updated": "2026-10-12",
   "implementation_status": "in_progress",
-  "next_checkpoint": "C3B",
+  "next_checkpoint": "C4",
   "intent": "RDG 上方建立一等 feature、typed recipe、单源资源需求与贯通 prepare/build/publication 的同一份 resolved composition；不以 Bloom 算法为目标",
   "status_rules": {
     "todo": "未实施，evidence 为空",
@@ -20,9 +20,12 @@
       "verification": ["PipelineCompositionTest", "requires/static_assert 类型契约", "公开 API diff review"],
       "status": "in_progress",
       "evidence": [
-        "DeferredPipelineRecipe::appendGraph 以 GBufferFeature/SSAOFeature/LightingFeature 的 typed Resolved/Prepared/Inputs/GraphOutputs 组合三 pass（DeferredPipelineRecipe.cpp）",
-        "公开 API 无 feature 枚举 switch / std::any / 字符串 blackboard（IRenderPipeline.h / recipe / features diff）",
-        "缺口：无通用 add-storage 容器与 concept 保存（C5 M21）"
+        "Feature concept 以真实签名定义（Settings/Facts/Inputs -> Resolved；prepareBindings -> Result<Prepared,FeatureError>；append(graph, Stage*, ctx, facts, resolved, prepared, inputs) -> Result<GraphOutputs,FeatureError>），由 9 个 feature 各自 static_assert(Feature<X>) 强制（Composition/FeatureProtocol.h + Deferred/Features/*.h）",
+        "负向验证：临时把 FinalizeFeature::append 返回类型改为裸 GraphOutputs，static_assert 报 \"FinalizeFeature must satisfy the composition Feature protocol\"（已还原）",
+        "FeatureProtocolTest 正/反例：真实形状 feature 满足；缺嵌套类型或 append 未包 Result 均不满足",
+        "FeatureGraphContext 删死字段 graph/render；RenderStageContext 删 Scene* derivedScene，Forward 唯一读点改 buildPassContext(ctx, viewScene) 显式传参",
+        "DeferredPipelineRecipe::appendGraph 以 GBufferFeature/SSAOFeature/LightingFeature 的 typed Resolved/Prepared/Inputs/GraphOutputs 组合三 pass（DeferredPipelineRecipe.cpp）；公开 API 无 feature 枚举 switch / std::any / 字符串 blackboard",
+        "缺口：无通用 add/seal 存储容器与类型擦除保存（C5 M21）；typed refs（CompositionTextureRef/composition_tag）仍只在测试中使用"
       ]
     },
     {

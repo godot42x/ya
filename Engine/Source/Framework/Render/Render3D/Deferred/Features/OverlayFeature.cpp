@@ -59,13 +59,13 @@ Result<OverlayFeature::Prepared, FeatureError> OverlayFeature::prepareBindings(c
     return prepared;
 }
 
-OverlayFeature::GraphOutputs OverlayFeature::append(RenderGraph&               graph,
-                                                    ViewOverlayStage*          stage,
-                                                    const FeatureGraphContext& ctx,
-                                                    const Facts&               facts,
-                                                    const Resolved&            resolved,
-                                                    const Prepared&            prepared,
-                                                    const Inputs&              inputs) const
+Result<OverlayFeature::GraphOutputs, FeatureError> OverlayFeature::append(RenderGraph&               graph,
+                                                                           Stage*                     stage,
+                                                                           const FeatureGraphContext& ctx,
+                                                                           const Facts&               facts,
+                                                                           const Resolved&            resolved,
+                                                                           const Prepared&            prepared,
+                                                                           const Inputs&              inputs) const
 {
     GraphOutputs outputs;
     outputs.color = inputs.color;

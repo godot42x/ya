@@ -54,7 +54,7 @@ Result<EntityIdFeature::Prepared, FeatureError> EntityIdFeature::prepareBindings
 }
 
 Result<EntityIdFeature::GraphOutputs, FeatureError> EntityIdFeature::append(RenderGraph&               graph,
-                                                                            EntityIdPass*              stage,
+                                                                            Stage*                     stage,
                                                                             const FeatureGraphContext& ctx,
                                                                             const Facts&               facts,
                                                                             const Resolved&            resolved,

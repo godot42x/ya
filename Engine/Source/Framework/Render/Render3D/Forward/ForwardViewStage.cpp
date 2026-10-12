@@ -126,22 +126,22 @@ void ForwardViewStage::execute(const RenderStageContext& ctx)
 
 void ForwardViewStage::executeSkybox(const RenderStageContext& ctx,
                                          const ForwardFrameResourceSet::Binding& binding,
-                                         const PassContext* snapshot)
+                                         const PassContext& passContext)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
+    PassContext passCtx = passContext;
     passCtx.skyboxFrameDescriptorSet = binding.skyboxFrameDescriptorSet;
     executePass(EPass::Skybox, passCtx);
 }
 
 void ForwardViewStage::executePBR(const RenderStageContext& ctx,
                                       const ForwardFrameResourceSet::Binding& binding,
-                                      const PassContext* snapshot)
+                                      const PassContext& passContext)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
+    PassContext passCtx = passContext;
     passCtx.skinningDescriptorSet   = binding.skinningDescriptorSet;
     passCtx.pbrFrameDescriptorSet   = binding.pbrFrameDescriptorSet;
     executePass(EPass::PBR, passCtx);
@@ -149,11 +149,11 @@ void ForwardViewStage::executePBR(const RenderStageContext& ctx,
 
 void ForwardViewStage::executePhong(const RenderStageContext& ctx,
                                         const ForwardFrameResourceSet::Binding& binding,
-                                        const PassContext* snapshot)
+                                        const PassContext& passContext)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
+    PassContext passCtx = passContext;
     passCtx.skinningDescriptorSet    = binding.skinningDescriptorSet;
     passCtx.phongFrameDescriptorSet  = binding.phongFrameDescriptorSet;
     executePass(EPass::Phong, passCtx);
@@ -161,51 +161,49 @@ void ForwardViewStage::executePhong(const RenderStageContext& ctx,
 
 void ForwardViewStage::executeUnlit(const RenderStageContext& ctx,
                                         const ForwardFrameResourceSet::Binding& binding,
-                                        const PassContext* snapshot)
+                                        const PassContext& passContext)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
+    PassContext passCtx = passContext;
     passCtx.skinningDescriptorSet   = binding.skinningDescriptorSet;
     passCtx.unlitFrameDescriptorSet = binding.unlitFrameDescriptorSet;
     executePass(EPass::Unlit, passCtx);
 }
 
-void ForwardViewStage::executeSimple(const RenderStageContext& ctx, const PassContext* snapshot)
+void ForwardViewStage::executeSimple(const RenderStageContext& ctx, const PassContext& passContext)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
-    executePass(EPass::Simple, passCtx);
+    executePass(EPass::Simple, passContext);
 }
 
 void ForwardViewStage::executeDirection(const RenderStageContext& ctx,
                                             std::vector<ForwardDirectionGizmoInput> directionGizmos,
-                                            const PassContext* snapshot)
+                                            const PassContext& passContext)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
+    PassContext passCtx = passContext;
     passCtx.directionGizmos = std::move(directionGizmos);
     executePass(EPass::DirectionOverlay, passCtx);
 }
 
-void ForwardViewStage::executeDebug(const RenderStageContext& ctx, const PassContext* snapshot)
+void ForwardViewStage::executeDebug(const RenderStageContext& ctx, const PassContext& passContext)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
-    executePass(EPass::Debug, passCtx);
+    executePass(EPass::Debug, passContext);
 }
 
-ForwardViewStage::PassContext ForwardViewStage::buildPassContext(const RenderStageContext& ctx)
+ForwardViewStage::PassContext ForwardViewStage::buildPassContext(const RenderStageContext& ctx, Scene* viewScene)
 {
     // The View's own scene resources, resolved before recording began. Reading
     // them here means this pass binds what the View declared, not what some
     // owner answers to "which Scene is current".
     const RenderViewSceneResources& sceneResources =
         ctx.frameData ? ctx.frameData->sceneResources : RenderViewSceneResources{};
-    auto* activeScene  = ctx.derivedScene;
+    auto* activeScene  = viewScene;
     auto* envProcessor = sceneResources.environmentLighting;
     return PassContext{
         .stageCtx = ctx,

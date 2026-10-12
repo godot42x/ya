@@ -56,26 +56,26 @@ GBufferFeature::Resolved GBufferFeature::resolve(const Settings& settings,
     return resolved;
 }
 
-GBufferFeature::Prepared GBufferFeature::prepareBindings(const Resolved&      resolved,
-                                                         const PrepareInputs& inputs) const
+Result<GBufferFeature::Prepared, FeatureError> GBufferFeature::prepareBindings(const Resolved&       resolved,
+                                                                               const PrepareContext& ctx) const
 {
     Prepared prepared;
     if (!resolved.bEnabled) {
         return prepared;
     }
 
-    prepared.frameAndLightDS = inputs.frameAndLightDS;
-    prepared.skinningDS      = inputs.skinningDS;
+    prepared.frameAndLightDS = ctx.frameAndLightDS;
+    prepared.skinningDS      = ctx.skinningDS;
     return prepared;
 }
 
-GBufferFeature::GraphOutputs GBufferFeature::append(RenderGraph&               graph,
-                                                    GBufferStage*              stage,
-                                                    const FeatureGraphContext& ctx,
-                                                    const Facts&               facts,
-                                                    const Resolved&            resolved,
-                                                    const Prepared&            prepared,
-                                                    const Inputs&              inputs) const
+Result<GBufferFeature::GraphOutputs, FeatureError> GBufferFeature::append(RenderGraph&               graph,
+                                                                         Stage*                     stage,
+                                                                         const FeatureGraphContext& ctx,
+                                                                         const Facts&               facts,
+                                                                         const Resolved&            resolved,
+                                                                         const Prepared&            prepared,
+                                                                         const Inputs&              inputs) const
 {
     GraphOutputs outputs;
     if (!resolved.bEnabled || stage == nullptr || ctx.viewLease == nullptr || ctx.stageCtx == nullptr) {

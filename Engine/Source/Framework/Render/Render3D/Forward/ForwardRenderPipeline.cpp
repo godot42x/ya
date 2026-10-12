@@ -499,8 +499,10 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
 
         liveBranches.push_back(std::move(branch));
         ForwardFamilyViewBranch& live = liveBranches.back();
+        // The View's Scene comes from its own declaration, not from ambient
+        // recording state, so the pass context can only bind what it declared.
         live.viewPassContext = std::make_unique<ForwardViewStage::PassContext>(
-            _viewStage->buildPassContext(live.stageCtx));
+            _viewStage->buildPassContext(live.stageCtx, live.frame.derivedScene));
         if (live.viewResources) {
             live.viewPassContext->debug = live.viewResources->debug;
         }
@@ -562,7 +564,6 @@ void ForwardRenderPipeline::beginViewRecording(const RenderPipelineFrameContext&
         .deltaTime      = frame.frame ? frame.frame->deltaTime : 0.0f,
         .timeSeconds    = frame.frame ? frame.frame->elapsedTimeSeconds : 0.0f,
         .viewExtent     = frame.view.viewExtent,
-        .derivedScene   = frame.derivedScene,
     };
 }
 

@@ -21,6 +21,8 @@ class RenderSubmission;
 /// shadow/environment imports. Produces the SceneColor target.
 struct LightingFeature
 {
+    using Stage = LightStage;
+
     struct Settings
     {
         bool           bEnabled          = true;
@@ -88,18 +90,20 @@ struct LightingFeature
         RGTextureHandle sceneColor;
     };
 
-    [[nodiscard]] static Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs);
+    [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;
 
-    [[nodiscard]] static Result<Prepared, FeatureError> prepareBindings(const Resolved&       resolved,
-                                                                        const PrepareContext& ctx);
+    [[nodiscard]] Result<Prepared, FeatureError> prepareBindings(const Resolved&       resolved,
+                                                                 const PrepareContext& ctx) const;
 
-    [[nodiscard]] static GraphOutputs append(RenderGraph&               graph,
-                                             LightStage*                stage,
-                                             const FeatureGraphContext& ctx,
-                                             const Facts&               facts,
-                                             const Resolved&            resolved,
-                                             const Prepared&            prepared,
-                                             const Inputs&              inputs);
+    [[nodiscard]] Result<GraphOutputs, FeatureError> append(RenderGraph&               graph,
+                                                            Stage*                     stage,
+                                                            const FeatureGraphContext& ctx,
+                                                            const Facts&               facts,
+                                                            const Resolved&            resolved,
+                                                            const Prepared&            prepared,
+                                                            const Inputs&              inputs) const;
 };
+
+static_assert(Feature<LightingFeature>, "LightingFeature must satisfy the composition Feature protocol");
 
 } // namespace ya

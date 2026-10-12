@@ -93,6 +93,7 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
 
     const GBufferFeature       gbufferFeature;
     const SSAOFeature          ssaoFeature;
+    const LightingFeature      lightingFeature;
     const SkyboxFeature        skyboxFeature;
     const Sprite2DFeature      spriteFeature;
     const OverlayFeature       overlayFeature;
@@ -126,7 +127,7 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
             },
             SSAOFeature::Inputs{});
 
-        view.lighting = LightingFeature::resolve(
+        view.lighting = lightingFeature.resolve(
             lightingSettings,
             LightingFeature::Facts{.viewExtent = view.viewExtent},
             LightingFeature::Inputs{});
@@ -181,12 +182,16 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
     prepared.lightRange      = toRange(ctx.frameBinding->light);
 
     const GBufferFeature gbufferFeature;
-    prepared.gbuffer = gbufferFeature.prepareBindings(
+    auto gbufferPrepared = gbufferFeature.prepareBindings(
         resolved.gbuffer,
-        GBufferFeature::PrepareInputs{
+        GBufferFeature::PrepareContext{
             .frameAndLightDS = ctx.frameBinding->frameAndLightDescriptorSet,
             .skinningDS      = ctx.frameBinding->skinningDescriptorSet,
         });
+    if (gbufferPrepared.isErr()) {
+        return gbufferPrepared.error();
+    }
+    prepared.gbuffer = gbufferPrepared.value();
 
     const SSAOFeature ssaoFeature;
     auto ssaoPrepared = ssaoFeature.prepareBindings(
@@ -216,7 +221,8 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
     }
     prepared.skybox = skyboxPrepared.value();
 
-    auto lightingPrepared = LightingFeature::prepareBindings(
+    const LightingFeature lightingFeature;
+    auto lightingPrepared = lightingFeature.prepareBindings(
         resolved.lighting,
         LightingFeature::PrepareContext{
             .submission            = ctx.submission,
@@ -317,7 +323,6 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     GraphOutputs outputs;
 
     FeatureGraphContext featureCtx;
-    featureCtx.graph             = &ctx.graph;
     featureCtx.viewLease         = ctx.viewLease;
     featureCtx.stageCtx          = &ctx.stageCtx;
     featureCtx.viewId            = resolved.viewId;
@@ -326,7 +331,7 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
 
     // ── GBuffer ───────────────────────────────────────────────────────────
     const GBufferFeature gbufferFeature;
-    outputs.gbuffer = gbufferFeature.append(
+    auto gbufferOutputs = gbufferFeature.append(
         ctx.graph,
         ctx.stages->gBuffer,
         featureCtx,
@@ -340,6 +345,11 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
             .lightRange = prepared.lightRange,
             .skinning   = ctx.skinningBuffer,
         });
+    if (gbufferOutputs.isErr()) {
+        YA_CORE_ERROR("GBuffer append failed for View {}", resolved.viewId);
+        return gbufferOutputs.error();
+    }
+    outputs.gbuffer = gbufferOutputs.value();
 
     // ── SSAO (optional) ───────────────────────────────────────────────────
     const SSAOFeature ssaoFeature;
@@ -389,7 +399,8 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
             *ctx.environmentLighting->brdfLut, "DeferredLight.Environment.BrdfLut", EImageLayout::ShaderReadOnlyOptimal));
     }
 
-    outputs.lighting = LightingFeature::append(
+    const LightingFeature lightingFeature;
+    auto lightingOutputs = lightingFeature.append(
         ctx.graph,
         ctx.stages->light,
         featureCtx,
@@ -397,6 +408,11 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         resolved.lighting,
         prepared.lighting,
         lightingInputs);
+    if (lightingOutputs.isErr()) {
+        YA_CORE_ERROR("Lighting append failed for View {}", resolved.viewId);
+        return lightingOutputs.error();
+    }
+    outputs.lighting = lightingOutputs.value();
 
     if (!outputs.lighting.sceneColor.isValid()) {
         YA_CORE_ERROR("Lighting append produced no SceneColor for View {}", resolved.viewId);
@@ -422,7 +438,7 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
 
     // ── Skybox ────────────────────────────────────────────────────────────
     const SkyboxFeature skyboxFeature;
-    outputs.skybox = skyboxFeature.append(
+    auto skyboxOutputs = skyboxFeature.append(
         ctx.graph,
         ctx.stages->overlay,
         featureCtx,
@@ -438,10 +454,15 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
             .color = outputs.lighting.sceneColor,
             .depth = outputs.gbuffer.depth,
         });
+    if (skyboxOutputs.isErr()) {
+        YA_CORE_ERROR("Skybox append failed for View {}", resolved.viewId);
+        return skyboxOutputs.error();
+    }
+    outputs.skybox = skyboxOutputs.value();
 
     // ── Scene sprites ─────────────────────────────────────────────────────
     const Sprite2DFeature spriteFeature;
-    outputs.sprites = spriteFeature.append(
+    auto spriteOutputs = spriteFeature.append(
         ctx.graph,
         ctx.stages->sprites,
         featureCtx,
@@ -452,6 +473,11 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
             .color = outputs.skybox.color,
             .depth = outputs.gbuffer.depth,
         });
+    if (spriteOutputs.isErr()) {
+        YA_CORE_ERROR("Sprite append failed for View {}", resolved.viewId);
+        return spriteOutputs.error();
+    }
+    outputs.sprites = spriteOutputs.value();
 
     // ── Bloom (optional) ──────────────────────────────────────────────────
     const BloomFeature bloomFeature;
@@ -471,7 +497,7 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
 
     // ── Overlay (forward transparent) ─────────────────────────────────────
     const OverlayFeature overlayFeature;
-    outputs.overlay = overlayFeature.append(
+    auto overlayOutputs = overlayFeature.append(
         ctx.graph,
         ctx.stages->overlay,
         featureCtx,
@@ -482,6 +508,11 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
             .color = outputs.bloom.color,
             .depth = outputs.gbuffer.depth,
         });
+    if (overlayOutputs.isErr()) {
+        YA_CORE_ERROR("Overlay append failed for View {}", resolved.viewId);
+        return overlayOutputs.error();
+    }
+    outputs.overlay = overlayOutputs.value();
 
     // ── Entity id (picking) ───────────────────────────────────────────────
     const EntityIdFeature entityIdFeature;

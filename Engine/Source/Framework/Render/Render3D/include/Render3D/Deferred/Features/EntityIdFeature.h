@@ -19,6 +19,8 @@ class RenderSubmission;
 /// visible. The feature declares and imports its own target.
 struct EntityIdFeature
 {
+    using Stage = EntityIdPass;
+
     struct Settings
     {
         bool bEnabled = true;
@@ -69,12 +71,14 @@ struct EntityIdFeature
                                                                  const PrepareContext& ctx) const;
 
     [[nodiscard]] Result<GraphOutputs, FeatureError> append(RenderGraph&               graph,
-                                                            EntityIdPass*              stage,
+                                                            Stage*                     stage,
                                                             const FeatureGraphContext& ctx,
                                                             const Facts&               facts,
                                                             const Resolved&            resolved,
                                                             const Prepared&            prepared,
                                                             const Inputs&              inputs) const;
 };
+
+static_assert(Feature<EntityIdFeature>, "EntityIdFeature must satisfy the composition Feature protocol");
 
 } // namespace ya

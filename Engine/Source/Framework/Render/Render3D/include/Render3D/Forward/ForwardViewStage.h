@@ -110,14 +110,18 @@ struct ForwardViewStage : public IRenderStage
     /// skybox / PBR / Phong / rest as separate passes, so the stage no longer
     /// hides pass order inside one fixed loop. Explicit current-flight binding,
     /// does not read stage members for per-flight resources.
-    void executeSkybox(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext* snapshot = nullptr);
-    void executePBR(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext* snapshot = nullptr);
-    void executePhong(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext* snapshot = nullptr);
-    void executeUnlit(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext* snapshot = nullptr);
-    void executeSimple(const RenderStageContext& ctx, const PassContext* snapshot = nullptr);
+    ///
+    /// `passContext` is built once by the pipeline from the View's own
+    /// declaration (including the Scene its skybox/gizmos come from) and is
+    /// required: recording never re-derives it from ambient state.
+    void executeSkybox(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext& passContext);
+    void executePBR(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext& passContext);
+    void executePhong(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext& passContext);
+    void executeUnlit(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext& passContext);
+    void executeSimple(const RenderStageContext& ctx, const PassContext& passContext);
     /// Direction overlay draws only the prebuilt gizmo snapshot (FG-704).
-    void executeDirection(const RenderStageContext& ctx, std::vector<ForwardDirectionGizmoInput> directionGizmos, const PassContext* snapshot = nullptr);
-    void executeDebug(const RenderStageContext& ctx, const PassContext* snapshot = nullptr);
+    void executeDirection(const RenderStageContext& ctx, std::vector<ForwardDirectionGizmoInput> directionGizmos, const PassContext& passContext);
+    void executeDebug(const RenderStageContext& ctx, const PassContext& passContext);
 
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS);
@@ -129,7 +133,10 @@ struct ForwardViewStage : public IRenderStage
     [[nodiscard]] ForwardViewUnlitPass&       getUnlitPass() { return _unlitPass; }
     [[nodiscard]] const ForwardViewUnlitPass& getUnlitPass() const { return _unlitPass; }
     [[nodiscard]] const ForwardFrameResourceSet::FramePayloads& getFramePayloads() const { return _framePayloads; }
-    [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
+    /// Build the per-View pass context. `viewScene` is the Scene the View was
+    /// declared against; the caller owns that fact, so it is passed in rather
+    /// than looked up in ambient recording state.
+    [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx, Scene* viewScene);
 
   private:
     [[nodiscard]] PassContext::SkyboxInput buildSkyboxInput(

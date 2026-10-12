@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Result.h"
 #include "Graph/RenderGraph.h"
 #include "Render3D/Common/ViewTargetStore.h"
 #include "Render3D/Composition/FeatureProtocol.h"
@@ -21,6 +22,8 @@ struct GBufferStage;
 /// skinning SSBO arrive as typed inputs from the frame-level import step.
 struct GBufferFeature
 {
+    using Stage = GBufferStage;
+
     /// Pipeline-resolved configuration. Formats and usages come from the
     /// pipeline's runtime formats, so allocation and PSO formats cannot drift
     /// apart from one hardcoded literal.
@@ -69,7 +72,7 @@ struct GBufferFeature
     };
 
     /// The View binding's descriptor sets this pass consumes.
-    struct PrepareInputs
+    struct PrepareContext
     {
         DescriptorSetHandle frameAndLightDS{};
         DescriptorSetHandle skinningDS{};
@@ -92,15 +95,18 @@ struct GBufferFeature
 
     [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;
 
-    [[nodiscard]] Prepared prepareBindings(const Resolved& resolved, const PrepareInputs& inputs) const;
+    [[nodiscard]] Result<Prepared, FeatureError> prepareBindings(const Resolved&       resolved,
+                                                                 const PrepareContext& ctx) const;
 
-    [[nodiscard]] GraphOutputs append(RenderGraph&               graph,
-                                      GBufferStage*              stage,
-                                      const FeatureGraphContext& ctx,
-                                      const Facts&               facts,
-                                      const Resolved&            resolved,
-                                      const Prepared&            prepared,
-                                      const Inputs&              inputs) const;
+    [[nodiscard]] Result<GraphOutputs, FeatureError> append(RenderGraph&               graph,
+                                                            Stage*                     stage,
+                                                            const FeatureGraphContext& ctx,
+                                                            const Facts&               facts,
+                                                            const Resolved&            resolved,
+                                                            const Prepared&            prepared,
+                                                            const Inputs&              inputs) const;
 };
+
+static_assert(Feature<GBufferFeature>, "GBufferFeature must satisfy the composition Feature protocol");
 
 } // namespace ya

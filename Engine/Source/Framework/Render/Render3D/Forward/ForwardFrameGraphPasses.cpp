@@ -156,12 +156,19 @@ void appendOpaquePass(RenderGraph& graph,
             const auto viewExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
             stageCtx->viewExtent = viewExtent;
-            stage->executePBR(*stageCtx, frameBinding, passContext);
-            stage->executePhong(*stageCtx, frameBinding, passContext);
-            stage->executeUnlit(*stageCtx, frameBinding, passContext);
-            stage->executeSimple(*stageCtx, passContext);
-            stage->executeDirection(*stageCtx, std::move(directionGizmos), passContext);
-            stage->executeDebug(*stageCtx, passContext);
+            // The View's pass context is built by the pipeline from the View's
+            // own declaration; a pass recorded without one is a wiring error.
+            YA_CORE_ASSERT(passContext != nullptr, "Forward opaque pass requires the View's pass context");
+            if (passContext == nullptr) {
+                rgCtx.endRendering();
+                return;
+            }
+            stage->executePBR(*stageCtx, frameBinding, *passContext);
+            stage->executePhong(*stageCtx, frameBinding, *passContext);
+            stage->executeUnlit(*stageCtx, frameBinding, *passContext);
+            stage->executeSimple(*stageCtx, *passContext);
+            stage->executeDirection(*stageCtx, std::move(directionGizmos), *passContext);
+            stage->executeDebug(*stageCtx, *passContext);
             rgCtx.endRendering();
         });
 }
@@ -199,7 +206,10 @@ void appendSkyboxPass(RenderGraph& graph,
             const auto viewExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
             stageCtx->viewExtent = viewExtent;
-            stage->executeSkybox(*stageCtx, frameBinding, passContext);
+            YA_CORE_ASSERT(passContext != nullptr, "Forward skybox pass requires the View's pass context");
+            if (passContext != nullptr) {
+                stage->executeSkybox(*stageCtx, frameBinding, *passContext);
+            }
             rgCtx.endRendering();
         });
 }

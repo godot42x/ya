@@ -18,7 +18,7 @@ namespace ya
 
 LightingFeature::Resolved LightingFeature::resolve(const Settings& settings,
                                                    const Facts&    facts,
-                                                   const Inputs&   inputs)
+                                                   const Inputs&   inputs) const
 {
     (void)facts;
     (void)inputs;
@@ -38,7 +38,7 @@ LightingFeature::Resolved LightingFeature::resolve(const Settings& settings,
 }
 
 Result<LightingFeature::Prepared, FeatureError> LightingFeature::prepareBindings(const Resolved&       resolved,
-                                                                                  const PrepareContext& ctx)
+                                                                                  const PrepareContext& ctx) const
 {
     Prepared prepared;
     if (!resolved.bEnabled) {
@@ -61,13 +61,13 @@ Result<LightingFeature::Prepared, FeatureError> LightingFeature::prepareBindings
     return prepared;
 }
 
-LightingFeature::GraphOutputs LightingFeature::append(RenderGraph&               graph,
-                                                      LightStage*                stage,
-                                                      const FeatureGraphContext& ctx,
-                                                      const Facts&               facts,
-                                                      const Resolved&            resolved,
-                                                      const Prepared&            prepared,
-                                                      const Inputs&              inputs)
+Result<LightingFeature::GraphOutputs, FeatureError> LightingFeature::append(RenderGraph&               graph,
+                                                                              Stage*                     stage,
+                                                                              const FeatureGraphContext& ctx,
+                                                                              const Facts&               facts,
+                                                                              const Resolved&            resolved,
+                                                                              const Prepared&            prepared,
+                                                                              const Inputs&              inputs) const
 {
     GraphOutputs outputs;
     if (!resolved.bEnabled || stage == nullptr || ctx.viewLease == nullptr || ctx.stageCtx == nullptr) {

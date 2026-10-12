@@ -18,6 +18,8 @@ class RenderSubmission;
 /// texture tables are prepared here from the View's extracted sprite bucket.
 struct Sprite2DFeature
 {
+    using Stage = Sprite2DStage;
+
     struct Settings
     {
         bool bEnabled = true;
@@ -64,13 +66,15 @@ struct Sprite2DFeature
     [[nodiscard]] Result<Prepared, FeatureError> prepareBindings(const Resolved&       resolved,
                                                                  const PrepareContext& ctx) const;
 
-    [[nodiscard]] GraphOutputs append(RenderGraph&               graph,
-                                      Sprite2DStage*             stage,
-                                      const FeatureGraphContext& ctx,
-                                      const Facts&               facts,
-                                      const Resolved&            resolved,
-                                      const Prepared&            prepared,
-                                      const Inputs&              inputs) const;
+    [[nodiscard]] Result<GraphOutputs, FeatureError> append(RenderGraph&               graph,
+                                                            Stage*                     stage,
+                                                            const FeatureGraphContext& ctx,
+                                                            const Facts&               facts,
+                                                            const Resolved&            resolved,
+                                                            const Prepared&            prepared,
+                                                            const Inputs&              inputs) const;
 };
+
+static_assert(Feature<Sprite2DFeature>, "Sprite2DFeature must satisfy the composition Feature protocol");
 
 } // namespace ya

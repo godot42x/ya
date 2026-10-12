@@ -20,6 +20,8 @@ class RenderSubmission;
 /// targets and no descriptor sets.
 struct BloomFeature
 {
+    using Stage = PostProcessingStage;
+
     struct Settings
     {
         bool bEnabled = false;
@@ -65,12 +67,14 @@ struct BloomFeature
                                                                  const PrepareContext& ctx) const;
 
     [[nodiscard]] Result<GraphOutputs, FeatureError> append(RenderGraph&               graph,
-                                                            PostProcessingStage*       stage,
+                                                            Stage*                     stage,
                                                             const FeatureGraphContext& ctx,
                                                             const Facts&               facts,
                                                             const Resolved&            resolved,
                                                             const Prepared&            prepared,
                                                             const Inputs&              inputs) const;
 };
+
+static_assert(Feature<BloomFeature>, "BloomFeature must satisfy the composition Feature protocol");
 
 } // namespace ya

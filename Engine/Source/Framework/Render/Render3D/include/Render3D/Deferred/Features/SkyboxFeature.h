@@ -20,6 +20,8 @@ class RenderSubmission;
 /// set, mesh, availability) comes from Facts.
 struct SkyboxFeature
 {
+    using Stage = ViewOverlayStage;
+
     struct Settings
     {
         bool bEnabled = true;
@@ -72,13 +74,15 @@ struct SkyboxFeature
 
     /// Skybox color continuation. The frame UBO is the prepared binding; the
     /// packet (cubemap set, mesh) comes from Facts.
-    [[nodiscard]] GraphOutputs append(RenderGraph&                graph,
-                                      ViewOverlayStage*           stage,
-                                      const FeatureGraphContext&  ctx,
-                                      const Facts&                facts,
-                                      const Resolved&             resolved,
-                                      const Prepared&             prepared,
-                                      const Inputs&               inputs) const;
+    [[nodiscard]] Result<GraphOutputs, FeatureError> append(RenderGraph&                graph,
+                                                           Stage*                      stage,
+                                                           const FeatureGraphContext&  ctx,
+                                                           const Facts&                facts,
+                                                           const Resolved&             resolved,
+                                                           const Prepared&             prepared,
+                                                           const Inputs&               inputs) const;
 };
+
+static_assert(Feature<SkyboxFeature>, "SkyboxFeature must satisfy the composition Feature protocol");
 
 } // namespace ya

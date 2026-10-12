@@ -11,9 +11,16 @@ namespace ya
 
 struct IRender;
 struct ICommandBuffer;
-struct Scene;
 
-/// Context passed to every RenderStage each frame.
+/// Context passed to every RenderStage each frame: a value snapshot of what the
+/// View extracted, never a handle into live engine state.
+///
+/// It deliberately carries no Scene or ECS access. Passes record the View's
+/// extracted `frameData` and its declared resources; `derivedScene` used to live
+/// here and made "which Scene is this pass drawing" answerable at record time,
+/// so the same pass could produce different results depending on when it ran.
+/// A pass that needs Scene-derived data receives it through its View's prepared
+/// inputs instead.
 struct RenderStageContext
 {
     ICommandBuffer*        cmdBuf         = nullptr;
@@ -31,7 +38,6 @@ struct RenderStageContext
     /// `time`. Not the same as `deltaTime`.
     float                  timeSeconds    = 0.0f;
     Extent2D               viewExtent = {};
-    Scene*                 derivedScene   = nullptr;
 };
 
 /// Base class for a render stage — a logical phase in the rendering pipeline.

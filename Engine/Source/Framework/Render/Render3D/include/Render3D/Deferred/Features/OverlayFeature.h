@@ -18,6 +18,8 @@ struct RenderFrameData;
 /// assembled by the pipeline and handed in, not read from live ECS here.
 struct OverlayFeature
 {
+    using Stage = ViewOverlayStage;
+
     struct Settings
     {
         bool bEnabled = true;
@@ -65,13 +67,15 @@ struct OverlayFeature
     [[nodiscard]] Result<Prepared, FeatureError> prepareBindings(const Resolved&       resolved,
                                                                  const PrepareContext& ctx) const;
 
-    [[nodiscard]] GraphOutputs append(RenderGraph&                graph,
-                                      ViewOverlayStage*           stage,
-                                      const FeatureGraphContext&  ctx,
-                                      const Facts&                facts,
-                                      const Resolved&             resolved,
-                                      const Prepared&             prepared,
-                                      const Inputs&               inputs) const;
+    [[nodiscard]] Result<GraphOutputs, FeatureError> append(RenderGraph&                graph,
+                                                            Stage*                      stage,
+                                                            const FeatureGraphContext&  ctx,
+                                                            const Facts&                facts,
+                                                            const Resolved&             resolved,
+                                                            const Prepared&             prepared,
+                                                            const Inputs&               inputs) const;
 };
+
+static_assert(Feature<OverlayFeature>, "OverlayFeature must satisfy the composition Feature protocol");
 
 } // namespace ya

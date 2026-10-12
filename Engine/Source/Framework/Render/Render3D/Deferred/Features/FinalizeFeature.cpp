@@ -46,7 +46,7 @@ Result<FinalizeFeature::Prepared, FeatureError> FinalizeFeature::prepareBindings
 }
 
 Result<FinalizeFeature::GraphOutputs, FeatureError> FinalizeFeature::append(RenderGraph&               graph,
-                                                                            PostProcessingStage*       stage,
+                                                                            Stage*                     stage,
                                                                             const FeatureGraphContext& ctx,
                                                                             const Facts&               facts,
                                                                             const Resolved&            resolved,

@@ -47,13 +47,13 @@ Result<SkyboxFeature::Prepared, FeatureError> SkyboxFeature::prepareBindings(con
     return prepared;
 }
 
-SkyboxFeature::GraphOutputs SkyboxFeature::append(RenderGraph&               graph,
-                                                  ViewOverlayStage*          stage,
-                                                  const FeatureGraphContext& ctx,
-                                                  const Facts&               facts,
-                                                  const Resolved&            resolved,
-                                                  const Prepared&            prepared,
-                                                  const Inputs&              inputs) const
+Result<SkyboxFeature::GraphOutputs, FeatureError> SkyboxFeature::append(RenderGraph&               graph,
+                                                                       Stage*                     stage,
+                                                                       const FeatureGraphContext& ctx,
+                                                                       const Facts&               facts,
+                                                                       const Resolved&            resolved,
+                                                                       const Prepared&            prepared,
+                                                                       const Inputs&              inputs) const
 {
     GraphOutputs outputs;
     outputs.color = inputs.color;

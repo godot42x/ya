@@ -74,7 +74,7 @@ Result<SSAOFeature::Prepared, FeatureError> SSAOFeature::prepareBindings(const R
 }
 
 Result<SSAOFeature::GraphOutputs, FeatureError> SSAOFeature::append(RenderGraph&               graph,
-                                                                    SSAOStage*                 stage,
+                                                                    Stage*                     stage,
                                                                     const FeatureGraphContext& ctx,
                                                                     const Facts&               facts,
                                                                     const Resolved&            resolved,
