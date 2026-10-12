@@ -202,12 +202,8 @@ TEST(RenderViewBindingTableTest, DeferredViewSlicesStayIndependent)
     FrameUploadArena    arena(factory, /*flightCount=*/1, /*initialCapacity=*/64u * 1024u);
     ASSERT_TRUE(arena.beginFlight(0, 1u));
 
-    DeferredFrameResourceSet::SSAOFrameData ssaoA{};
-    DeferredFrameResourceSet::SSAOFrameData ssaoB{};
-    DeferredFrameResourceSet::ViewPayloads  payloadsA{};
-    DeferredFrameResourceSet::ViewPayloads  payloadsB{};
-    payloadsA.ssao = &ssaoA;
-    payloadsB.ssao = &ssaoB;
+    DeferredFrameResourceSet::ViewPayloads payloadsA{};
+    DeferredFrameResourceSet::ViewPayloads payloadsB{};
 
     DeferredFrameResourceSet::Binding viewA{};
     DeferredFrameResourceSet::Binding viewB{};
@@ -216,23 +212,17 @@ TEST(RenderViewBindingTableTest, DeferredViewSlicesStayIndependent)
 
     EXPECT_TRUE(viewA.frame.valid());
     EXPECT_TRUE(viewB.frame.valid());
-    EXPECT_TRUE(viewA.ssaoFrame.valid());
-    EXPECT_TRUE(viewB.ssaoFrame.valid());
     EXPECT_EQ(viewA.frame.buffer.get(), viewB.frame.buffer.get());
     EXPECT_EQ(viewA.frame.offset, 0u);
     EXPECT_GT(viewB.frame.offset, viewA.frame.offset);
     EXPECT_NE(viewA.light.offset, viewB.light.offset);
-    EXPECT_NE(viewA.ssaoFrame.offset, viewB.ssaoFrame.offset);
 
     const uint64_t viewAOffset = viewA.frame.offset;
     const uint64_t viewALight  = viewA.light.offset;
-    const uint64_t viewASsao   = viewA.ssaoFrame.offset;
-    viewB.frame.offset     = 4096;
-    viewB.light.offset     = 8192;
-    viewB.ssaoFrame.offset = 16384;
+    viewB.frame.offset = 4096;
+    viewB.light.offset = 8192;
     EXPECT_EQ(viewA.frame.offset, viewAOffset);
     EXPECT_EQ(viewA.light.offset, viewALight);
-    EXPECT_EQ(viewA.ssaoFrame.offset, viewASsao);
 }
 
 TEST(RenderViewBindingTableTest, ShadowViewSlicesStayIndependent)

@@ -12,8 +12,6 @@
 
 #include "DeferredRender.GBufferPass_PBR.slang.h"
 #include "DeferredRender.LightPass.slang.h"
-#include "DeferredRender.SSAO.slang.h"
-#include "Skybox.slang.h"
 
 #include <array>
 #include <optional>
@@ -27,20 +25,19 @@ struct IRender;
 class RenderSubmission;
 
 /**
- * Owns Deferred's persistent layouts and skinning storage.
+ * Owns Deferred's shared frame/light layout and scene-family skinning storage.
  *
- * Layouts are device-lifetime. Frame/light/SSAO/skybox descriptor sets and
- * upload slices are allocated from `RenderSubmission` so a second View cannot
- * overwrite the first. Skinning palettes belong to the Scene family on
- * `RenderSubmission`.
+ * Frame/light descriptor sets and upload slices are allocated from
+ * `RenderSubmission` so a second View cannot overwrite the first. Feature-local
+ * payloads (SSAO frame UBO, skybox frame UBO, overlay/entity/postprocess sets)
+ * live in the features' own prepared bindings. Skinning palettes belong to the
+ * Scene family on `RenderSubmission`.
  */
 class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceSetBase
 {
   public:
     using FrameData = slang_types::DeferredRender::GBufferPass_PBR::FrameData;
     using LightData = slang_types::DeferredRender::LightPass::LightData;
-    using SSAOFrameData = slang_types::DeferredRender::SSAO::FrameData;
-    using SkyboxFrameData = slang_types::Skybox::FrameUBO;
 
     /// The deferred shader's light-instance storage buffer element (see
     /// LightPass.slang's uLightInstances): layout owned by the generated
@@ -55,21 +52,15 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
         /// count-sized storage buffer slice. Built by
         /// `buildLightInstanceBuffer`, owned here through the upload.
         std::vector<LightInstanceGpu> lightInstances;
-        const SSAOFrameData* ssao   = nullptr;
-        const SkyboxFrameData* skybox = nullptr;
     };
 
     struct Binding
     {
         DescriptorSetHandle             frameAndLightDescriptorSet{};
         DescriptorSetHandle             skinningDescriptorSet{};
-        DescriptorSetHandle             ssaoFrameDescriptorSet{};
-        DescriptorSetHandle             skyboxFrameDescriptorSet{};
         FrameUploadArena::Allocation    frame;
         FrameUploadArena::Allocation    light;
         FrameUploadArena::Allocation    lightInstances;
-        FrameUploadArena::Allocation    ssaoFrame;
-        FrameUploadArena::Allocation    skyboxFrame;
         stdptr<IBuffer>                  skinningBuffer;
 
         [[nodiscard]] bool isValid() const
@@ -79,10 +70,10 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
         }
     };
 
-    /// Typed View owner: the frame UBO Binding the View's passes read from.
-    /// Feature-owned sets (SSAO inputs, lighting GBuffer/shadow, entity id,
-    /// overlay, sprite, postprocess) live in the features' own Prepared values;
-    /// the bag is deliberately gone.
+    /// Typed View owner: the shared frame/light UBOs and skinning buffer the
+    /// View's passes read from. Feature-owned sets (SSAO, skybox, lighting
+    /// GBuffer/shadow, entity id, overlay, sprite, postprocess) live in the
+    /// features' own Prepared values; the bag is deliberately gone.
     /// (No ViewResources struct: the binding IS the View slot.)
 
     void init(IRender* render);
@@ -93,13 +84,11 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
         _shadowState = shadowState;
     }
 
-    /// Upload this View's frame/light (and optional SSAO/skybox) slices into a
-    /// new Binding slot. On success, `view.viewSlot` is the live index and the
-    /// returned Binding stays stable for the rest of the submission.
+    /// Upload this View's shared frame/light/skinning slices into a new Binding
+    /// slot. On success, `view.viewSlot` is the live index and the returned
+    /// Binding stays stable for the rest of the submission.
     const Binding* beginView(RenderSubmission&           submission,
-                             RenderViewRecordingContext& view,
-                             const SSAOFrameData*        ssao   = nullptr,
-                             const SkyboxFrameData*      skybox = nullptr);
+                             RenderViewRecordingContext& view);
 
     bool prepareSkinning(RenderSubmission& submission, const RenderViewRecordingContext& view);
 
@@ -115,8 +104,6 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
                                   Binding&            binding);
 
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameAndLightDSL() const { return _frameAndLightDSL; }
-    [[nodiscard]] stdptr<IDescriptorSetLayout> getSSAOFrameDSL() const { return _ssaoFrameDSL; }
-    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxFrameDSL() const { return _skyboxFrameDSL; }
     [[nodiscard]] const Binding*               getViewBinding(uint32_t flightIndex, uint32_t viewSlot) const;
     [[nodiscard]] uint32_t                     liveViewCount(uint32_t flightIndex) const;
     [[nodiscard]] uint32_t getMaxShadowedPointLights() const { return _shadowState.maxShadowedPointLights; }
@@ -132,8 +119,6 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
 
   private:
     stdptr<IDescriptorSetLayout> _frameAndLightDSL;
-    stdptr<IDescriptorSetLayout> _ssaoFrameDSL;
-    stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
     RenderViewBindingTable<Binding> _viewBindings;
     ShadowRuntimeState _shadowState{};
     uint32_t _lastShadowedPointLights = 0;
@@ -146,8 +131,6 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
 
     bool ensureViewDescriptors(RenderSubmission& submission, Binding& binding);
     void updateFrameAndLightDescriptorSet(const Binding& binding);
-    void updateSSAODescriptorSet(const Binding& binding);
-    void updateSkyboxDescriptorSet(const Binding& binding);
 };
 
 } // namespace ya

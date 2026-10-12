@@ -30,30 +30,12 @@ void DeferredFrameResourceSet::init(IRender* render)
                 {.binding = 2, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
             },
         }});
-
-    _ssaoFrameDSL = IDescriptorSetLayout::create(
-        _render,
-        DescriptorSetLayoutDesc{
-            .label    = "Deferred_SSAO_Frame_DSL",
-            .set      = 0,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-        });
-
-    _skyboxFrameDSL = IDescriptorSetLayout::create(
-        _render,
-        DescriptorSetLayoutDesc{
-            .label    = "Deferred_Skybox_Frame_DSL",
-            .set      = 0,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-        });
 }
 
 void DeferredFrameResourceSet::destroy()
 {
     _viewBindings.clear();
     destroySkinningLayout();
-    _ssaoFrameDSL.reset();
-    _skyboxFrameDSL.reset();
     _frameAndLightDSL.reset();
     _shadowState = {};
     _lastShadowedPointLights = 0;
@@ -130,23 +112,10 @@ bool DeferredFrameResourceSet::prepareSkinning(
 
 bool DeferredFrameResourceSet::ensureViewDescriptors(RenderSubmission& submission, Binding& binding)
 {
-    if (binding.frameAndLightDescriptorSet && binding.ssaoFrameDescriptorSet &&
-        binding.skyboxFrameDescriptorSet) {
-        return true;
-    }
-
     if (!binding.frameAndLightDescriptorSet) {
         binding.frameAndLightDescriptorSet = submission.allocateDescriptorSet(_frameAndLightDSL, 2);
     }
-    if (!binding.ssaoFrameDescriptorSet) {
-        binding.ssaoFrameDescriptorSet = submission.allocateDescriptorSet(_ssaoFrameDSL, 1);
-    }
-    if (!binding.skyboxFrameDescriptorSet) {
-        binding.skyboxFrameDescriptorSet = submission.allocateDescriptorSet(_skyboxFrameDSL, 1);
-    }
-
-    return binding.frameAndLightDescriptorSet && binding.ssaoFrameDescriptorSet &&
-           binding.skyboxFrameDescriptorSet;
+    return binding.frameAndLightDescriptorSet != nullptr;
 }
 
 void DeferredFrameResourceSet::updateFrameAndLightDescriptorSet(const Binding& binding)
@@ -170,30 +139,6 @@ void DeferredFrameResourceSet::updateFrameAndLightDescriptorSet(const Binding& b
             0,
             EPipelineDescriptorType::StorageBuffer,
             {binding.lightInstances.descriptor()}),
-    });
-}
-
-void DeferredFrameResourceSet::updateSSAODescriptorSet(const Binding& binding)
-{
-    _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::genBufferWrite(
-            binding.ssaoFrameDescriptorSet,
-            0,
-            0,
-            EPipelineDescriptorType::UniformBuffer,
-            {binding.ssaoFrame.descriptor()}),
-    });
-}
-
-void DeferredFrameResourceSet::updateSkyboxDescriptorSet(const Binding& binding)
-{
-    _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::genBufferWrite(
-            binding.skyboxFrameDescriptorSet,
-            0,
-            0,
-            EPipelineDescriptorType::UniformBuffer,
-            {binding.skyboxFrame.descriptor()}),
     });
 }
 
@@ -230,23 +175,6 @@ bool DeferredFrameResourceSet::writeViewPayloads(
         return false;
     }
     binding.lightInstances = *lightInstanceSlice;
-
-    if (payloads.ssao) {
-        auto ssaoFrame = writeUploadSlice(
-            arena, flightIndex, alignment, payloads.ssao, sizeof(*payloads.ssao));
-        if (!ssaoFrame) {
-            return false;
-        }
-        binding.ssaoFrame = *ssaoFrame;
-    }
-    if (payloads.skybox) {
-        auto skyboxFrame = writeUploadSlice(
-            arena, flightIndex, alignment, payloads.skybox, sizeof(*payloads.skybox));
-        if (!skyboxFrame) {
-            return false;
-        }
-        binding.skyboxFrame = *skyboxFrame;
-    }
     return true;
 }
 
@@ -278,29 +206,12 @@ bool DeferredFrameResourceSet::writeViewPayloads(
         return false;
     }
     binding.lightInstances = *lightInstanceSlice;
-
-    if (payloads.ssao) {
-        auto ssaoFrame = writeUploadSlice(submission, alignment, payloads.ssao, sizeof(*payloads.ssao));
-        if (!ssaoFrame) {
-            return false;
-        }
-        binding.ssaoFrame = *ssaoFrame;
-    }
-    if (payloads.skybox) {
-        auto skyboxFrame = writeUploadSlice(submission, alignment, payloads.skybox, sizeof(*payloads.skybox));
-        if (!skyboxFrame) {
-            return false;
-        }
-        binding.skyboxFrame = *skyboxFrame;
-    }
     return true;
 }
 
 const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
     RenderSubmission&           submission,
-    RenderViewRecordingContext& view,
-    const SSAOFrameData*        ssao,
-    const SkyboxFrameData*      skybox)
+    RenderViewRecordingContext& view)
 {
     if (!_render || !submission.isRecording()) {
         return nullptr;
@@ -346,8 +257,6 @@ const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
     uint32_t shadowSlotsUsed = 0;
     payloads.lightInstances = buildLightInstanceBuffer(
         *view.frameData, _shadowState.maxShadowedPointLights, &shadowSlotsUsed);
-    payloads.ssao   = ssao;
-    payloads.skybox = skybox;
     _lastShadowedPointLights = shadowSlotsUsed;
 
     const uint32_t alignment = std::max(_render->getUniformBufferOffsetAlignment(), 1u);
@@ -357,12 +266,6 @@ const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
     }
 
     updateFrameAndLightDescriptorSet(*slot);
-    if (payloads.ssao) {
-        updateSSAODescriptorSet(*slot);
-    }
-    if (payloads.skybox) {
-        updateSkyboxDescriptorSet(*slot);
-    }
 
     if (!_viewBindings.commitNextView(submission.flightIndex())) {
         return nullptr;

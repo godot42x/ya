@@ -52,14 +52,22 @@ Result<SSAOFeature::Prepared, FeatureError> SSAOFeature::prepareBindings(const R
     if (!resolved.bEnabled) {
         return prepared;
     }
-    if (ctx.submission == nullptr || ctx.stage == nullptr) {
+    if (ctx.submission == nullptr || ctx.render == nullptr || ctx.stage == nullptr) {
         return FeatureError::MissingContext;
     }
 
     prepared.bEnabled = true;
-    prepared.frameDS  = ctx.frameDS;
-    prepared.inputDS  = allocateCombinedImageSamplerSet(*ctx.submission, ctx.stage->getInputDSL(), 4);
-    if (!prepared.frameDS || !prepared.inputDS) {
+    if (!writeUniformPassBinding(*ctx.submission,
+                                 ctx.render,
+                                 ctx.stage->getFrameDSL(),
+                                 ctx.alignment,
+                                 &resolved.frameData,
+                                 sizeof(resolved.frameData),
+                                 prepared.frame)) {
+        return FeatureError::AllocationFailed;
+    }
+    prepared.inputDS = allocateCombinedImageSamplerSet(*ctx.submission, ctx.stage->getInputDSL(), 4);
+    if (!prepared.frame.isValid() || !prepared.inputDS) {
         return FeatureError::AllocationFailed;
     }
     return prepared;
@@ -77,7 +85,7 @@ Result<SSAOFeature::GraphOutputs, FeatureError> SSAOFeature::append(RenderGraph&
     if (!resolved.bEnabled) {
         return outputs;
     }
-    if (stage == nullptr || ctx.viewLease == nullptr || !resolved.aoTarget.has_value()) {
+    if (stage == nullptr || ctx.viewLease == nullptr || !resolved.aoTarget.has_value() || !prepared.frame.isValid()) {
         return FeatureError::MissingContext;
     }
 
@@ -95,12 +103,22 @@ Result<SSAOFeature::GraphOutputs, FeatureError> SSAOFeature::append(RenderGraph&
     const RGTextureHandle noise = graph.importTexture(
         makeImportedTextureDesc(*noiseTexture, "SSAO.Noise", EImageLayout::ShaderReadOnlyOptimal));
 
+    // The frame UBO is this feature's own host-written slice: imported here
+    // rather than through the View's shared frame binding.
+    const RGBufferHandle frame = graph.importBuffer(makeHostWrittenImportedBufferDesc(
+        prepared.frame.slice.buffer,
+        "Deferred.SSAOFrameUBO",
+        EBufferUsage::UniformBuffer,
+        prepared.frame.slice.offset,
+        prepared.frame.slice.size));
+    const RGBufferRange frameRange{.offset = prepared.frame.slice.offset, .size = prepared.frame.slice.size};
+
     const Rect2D renderArea{.pos = {0.0f, 0.0f}, .extent = glm::vec2(facts.viewExtent.width, facts.viewExtent.height)};
 
     (void)graph.addPass(
         makeViewGraphName(deferred_pass_names::kSSAO, ctx.viewId),
-        [inputs, noise, output, renderArea](RGPassBuilder& passBuilder) {
-            passBuilder.uniformRead(inputs.frame, inputs.frameRange);
+        [frame, frameRange, inputs, noise, output, renderArea](RGPassBuilder& passBuilder) {
+            passBuilder.uniformRead(frame, frameRange);
             passBuilder.read(inputs.albedo);
             passBuilder.read(inputs.normal);
             passBuilder.read(inputs.depth);
@@ -134,7 +152,7 @@ Result<SSAOFeature::GraphOutputs, FeatureError> SSAOFeature::append(RenderGraph&
             rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(viewWidth), static_cast<float>(viewHeight));
             rgCtx.getCommandBuffer().setScissor(0, 0, viewWidth, viewHeight);
             rgCtx.getCommandBuffer().bindDescriptorSets(
-                stage->getPipelineLayout(), 0, {prepared.frameDS, prepared.inputDS});
+                stage->getPipelineLayout(), 0, {prepared.frame.set, prepared.inputDS});
             rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
             rgCtx.endRendering();
         });

@@ -85,8 +85,6 @@ TEST(ViewPassResourcesTest, DualViewFrameBindingsStayIndependent)
     ASSERT_NE(viewA, nullptr);
     viewA->frameAndLightDescriptorSet = DescriptorSetHandle{reinterpret_cast<void*>(0xA1)};
     viewA->skinningDescriptorSet      = DescriptorSetHandle{reinterpret_cast<void*>(0xA2)};
-    viewA->ssaoFrameDescriptorSet     = DescriptorSetHandle{reinterpret_cast<void*>(0xA3)};
-    viewA->skyboxFrameDescriptorSet   = DescriptorSetHandle{reinterpret_cast<void*>(0xA4)};
     viewA->frame.offset               = 0x1A;
     ASSERT_TRUE(table.commitNextView(0));
 
@@ -95,8 +93,6 @@ TEST(ViewPassResourcesTest, DualViewFrameBindingsStayIndependent)
     EXPECT_NE(viewA, viewB);
     viewB->frameAndLightDescriptorSet = DescriptorSetHandle{reinterpret_cast<void*>(0xB1)};
     viewB->skinningDescriptorSet      = DescriptorSetHandle{reinterpret_cast<void*>(0xB2)};
-    viewB->ssaoFrameDescriptorSet     = DescriptorSetHandle{reinterpret_cast<void*>(0xB3)};
-    viewB->skyboxFrameDescriptorSet   = DescriptorSetHandle{reinterpret_cast<void*>(0xB4)};
     viewB->frame.offset               = 0x1B;
     ASSERT_TRUE(table.commitNextView(0));
 
@@ -107,11 +103,12 @@ TEST(ViewPassResourcesTest, DualViewFrameBindingsStayIndependent)
     EXPECT_NE(slotA, slotB);
     EXPECT_NE(slotA->frameAndLightDescriptorSet, slotB->frameAndLightDescriptorSet);
     EXPECT_NE(slotA->skinningDescriptorSet, slotB->skinningDescriptorSet);
-    EXPECT_NE(slotA->ssaoFrameDescriptorSet, slotB->ssaoFrameDescriptorSet);
-    EXPECT_NE(slotA->skyboxFrameDescriptorSet, slotB->skyboxFrameDescriptorSet);
+    EXPECT_NE(slotA->frame.offset, slotB->frame.offset);
 
-    viewB->ssaoFrameDescriptorSet = DescriptorSetHandle{reinterpret_cast<void*>(0xB9)};
-    EXPECT_EQ(slotA->ssaoFrameDescriptorSet, DescriptorSetHandle{reinterpret_cast<void*>(0xA3)});
+    viewB->frameAndLightDescriptorSet = DescriptorSetHandle{reinterpret_cast<void*>(0xB9)};
+    viewB->frame.offset               = 0x1C;
+    EXPECT_EQ(slotA->frameAndLightDescriptorSet, DescriptorSetHandle{reinterpret_cast<void*>(0xA1)});
+    EXPECT_EQ(slotA->frame.offset, 0x1A);
 }
 
 TEST(ViewPassResourcesTest, UniformPassBindingsUseIndependentSlices)

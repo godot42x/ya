@@ -204,7 +204,7 @@
         "C3A：GBuffer→SSAO→Lighting→ForwardOpaque→Skybox→Sprites→Bloom→Overlay→EntityId→Finalize 全部 feature pass，recipe 单入口可读；DeferredFrameGraphPasses/DeferredFrameGraphResources/allocateDeferredViewPassResources/ViewResources 槽位删除（33 files +1876/−964）",
         "C3A-trim：无功能契约的 forward-opaque 槽位改由 recipe 声明（`ColorContinuation.h` 单一定义，4 个使用者）；recipe 头含 Adding-a-pass 接入说明；target 发布守卫测试（唯一性+顺序）；子系统 7672→7568（−104）",
         "runtime：ssao on 14 pass / off 13 pass / bloom-off 10 pass；三场景截图对基线逐像素一致",
-        "缺口：shared inputs（frame/light/skinning/ssao/skybox payload 与 DSL）仍在 DeferredFrameResourceSet::Binding，未收口为明确共享 provider（C3B/M17）"
+        "C3B：shared provider 收口——Binding 只留 frame/light/skinning（6 字段），SSAO/skybox payload+layout+DS 归 feature；trace 每共享 buffer 每 View import 一次；仍缺 §6 截图门禁余项（grading off、sprite+opaque 遮挡、overlay/gizmo、entity-id/picking 行为断言）"
       ]
     },
     {
@@ -222,8 +222,13 @@
       "checkpoints": ["C3", "C4"],
       "expected": "真实 shared GPU inputs 明确并准备一次；最新 local-light generated 类型/字段映射/预算用例保留；feature-specific payload/layout/binding 不再进入 shared bag",
       "verification": ["DeferredLightBufferTest", "shared upload-count test", "owner diff review"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "Deferred 侧（C3B）：DeferredFrameResourceSet::Binding/ViewPayloads 只含 frame/light/lightInstances/skinning；SSAOStage/ViewOverlayStage 自持 frame DSL；SSAOFeature/SkyboxFeature 自建 payload、上传（writeUniformPassBinding）与 import（label 不变）；pipeline 不再有 feature payload 参数与 skybox frame DS 写点",
+        "runtime trace：Deferred.FrameUBO/LightUBO/SkinningSSBO/SSAOFrameUBO/SkyboxFrameUBO 每 View 各 ImportBound 一次、每 pass access=1；SSAO off 无 SSAOFrameUBO import；三场景截图对基线逐像素一致",
+        "DeferredLightBufferTest 全绿（1812/1812 内含）；owner diff review：feature 局部 binding 全部出 shared bag",
+        "缺口：Forward 侧 shared inputs（ForwardFrameResourceSet 的 skybox frame DSL/DS 与 payload）待 C4 同口径收口"
+      ]
     },
     {
       "id": "M18",

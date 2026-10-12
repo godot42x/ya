@@ -74,7 +74,7 @@ void SSAOStage::initNoiseTexture()
     _noiseTexture = Texture::fromData(*_render, 4, 4, std::vector<ColorRGBA<uint8_t>>(noisePixels.begin(), noisePixels.end()), "ssao-noise");
 }
 
-void SSAOStage::init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL)
+void SSAOStage::init(IRender* render)
 {
     _render = render;
 
@@ -84,7 +84,13 @@ void SSAOStage::init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL)
     _power  = config.getOr<float>(SSAO_CONFIG_DOC_NAME, SSAO_CONFIG_KEY_POWER, _power);
     _intensity = config.getOr<float>(SSAO_CONFIG_DOC_NAME, SSAO_CONFIG_KEY_INTENSITY, _intensity);
 
-    _frameDSL = std::move(frameDSL);
+    _frameDSL = IDescriptorSetLayout::create(
+        _render,
+        DescriptorSetLayoutDesc{
+            .label    = "Deferred_SSAO_Frame_DSL",
+            .set      = 0,
+            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
+        });
     YA_CORE_ASSERT(_frameDSL != nullptr, "SSAOStage requires a frame descriptor layout");
 
     _inputDSL = IDescriptorSetLayout::create(

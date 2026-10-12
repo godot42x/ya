@@ -25,9 +25,8 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
     IRender*                 _render          = nullptr;
     stdptr<IGraphicsPipeline>    _pipeline;
     stdptr<IPipelineLayout>      _pipelineLayout;
-    // Kept alive for the pipeline layout; frame descriptor sets and upload
-    // slices are owned by DeferredFrameResourceSet. SSAO input CIS is owned by
-    // ViewResources, not this recipe.
+    // Frame and input layouts are owned by this stage; the per-View sets and
+    // upload slices are owned by the SSAO feature's prepared binding.
     stdptr<IDescriptorSetLayout> _frameDSL;
     stdptr<IDescriptorSetLayout> _inputDSL;
 
@@ -42,8 +41,7 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
 
     void refreshPipelineFormat();
 
-    void init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL);
-    void init(IRender* render) override { init(render, nullptr); }
+    void init(IRender* render) override;
     void destroy() override;
     /// Submission-scoped PSO warmup; the stage holds no per-View state.
     void beginFrame();
@@ -59,6 +57,7 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
                                                   float                  power,
                                                   float                  intensity,
                                                   bool                   bReverseY);
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameDSL() const { return _frameDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getInputDSL() const { return _inputDSL; }
     [[nodiscard]] IPipelineLayout* getPipelineLayout() const { return _pipelineLayout.get(); }
     [[nodiscard]] const stdptr<Texture>& getNoiseTexture() const { return _noiseTexture; }

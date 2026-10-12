@@ -123,18 +123,19 @@ struct DeferredPipelineRecipe
         GBufferFeature::Prepared  gbuffer;
         SSAOFeature::Prepared     ssao;
         LightingFeature::Prepared lighting;
+        SkyboxFeature::Prepared   skybox;
         Sprite2DFeature::Prepared sprites;
         BloomFeature::Prepared    bloom;
         OverlayFeature::Prepared  overlay;
         EntityIdFeature::Prepared entityId;
         FinalizeFeature::Prepared finalize;
 
-        /// Ranges of the View's imported host-written buffers, taken from the
-        /// View binding; the RDG handles themselves are imported per graph.
+        /// Ranges of the View's shared imported host-written buffers, taken from
+        /// the View binding; the RDG handles themselves are imported per graph.
+        /// Feature-local UBOs (SSAO/skybox frames) travel in the features'
+        /// prepared bindings instead.
         RGBufferRange frameRange{};
         RGBufferRange lightRange{};
-        RGBufferRange ssaoFrameRange{};
-        RGBufferRange skyboxFrameRange{};
     };
 
     struct PrepareContext
@@ -146,7 +147,7 @@ struct DeferredPipelineRecipe
         /// The View's overlay packet. Mutable: billboard texture bindings are
         /// resolved into it while the overlay feature prepares.
         ViewOverlayStage::FrameInputs*         overlayInputs  = nullptr;
-        /// The View binding: frame/light/skinning/SSAO/skybox sets and slices.
+        /// The View binding: shared frame/light/skinning sets and slices.
         const DeferredFrameResourceSet::Binding* frameBinding = nullptr;
         /// The View's environment-lighting set (may be empty when the Scene has
         /// no resolved environment).
@@ -164,12 +165,11 @@ struct DeferredPipelineRecipe
         ViewOverlayStage::FrameInputs* overlayInputs = nullptr;
         FrameContext*                  postContext   = nullptr;
 
-        /// Imported host-written buffers for this View.
+        /// Imported shared host-written buffers for this View. Feature-local
+        /// UBOs (SSAO/skybox frames) are imported by their own features.
         RGBufferHandle                frameBuffer{};
         RGBufferHandle                lightBuffer{};
         RGBufferHandle                skinningBuffer{};
-        std::optional<RGBufferHandle> ssaoFrameBuffer{};
-        RGBufferHandle                skyboxFrameBuffer{};
 
         /// The View's shared shadow output, imported by whoever appended the
         /// shadow passes.

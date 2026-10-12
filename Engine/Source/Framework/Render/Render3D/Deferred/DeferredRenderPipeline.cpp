@@ -711,7 +711,7 @@ void DeferredRenderPipeline::initStages()
         _frameResources->getSkinningDSL());
 
     _ssaoStage = ya::makeShared<SSAOStage>();
-    _ssaoStage->init(_render, _frameResources->getSSAOFrameDSL());
+    _ssaoStage->init(_render);
     _ssaoStage->setSettings(_ssaoRadius, _ssaoBias, _ssaoPower, _ssaoIntensity, _bReverseViewportY);
 
     _lightStage = ya::makeShared<LightStage>();
@@ -727,7 +727,7 @@ void DeferredRenderPipeline::initStages()
 
     _overlayStage = ya::makeShared<ViewOverlayStage>();
     _overlayStage->setDebugRenderSystem(_debugRenderSystem);
-    _overlayStage->init(_render, _frameResources->getSkyboxFrameDSL());
+    _overlayStage->init(_render);
 
     _spriteStage = ya::makeShared<Sprite2DStage>();
     _spriteStage->init(_render);
@@ -1279,15 +1279,14 @@ ShadowPreparedView DeferredRenderPipeline::prepareShadowPass(const RenderPipelin
 namespace
 {
 
-/// The View's imported host-written buffers: one import site for every pass of
-/// this View, so the graph sees one binding per buffer.
+/// The View's imported host-written buffers: one import site for every shared
+/// buffer of this View, so the graph sees one binding per buffer. Feature-local
+/// UBOs (SSAO/skybox frames) are imported by their own features.
 struct DeferredViewBufferImports
 {
     RGBufferHandle                frame{};
     RGBufferHandle                light{};
     RGBufferHandle                skinning{};
-    std::optional<RGBufferHandle> ssaoFrame{};
-    RGBufferHandle                skyboxFrame{};
 };
 
 [[nodiscard]] DeferredViewBufferImports importDeferredViewBuffers(
@@ -1311,20 +1310,6 @@ struct DeferredViewBufferImports
         frameBinding.skinningBuffer,
         "Deferred.SkinningSSBO",
         EBufferUsage::StorageBuffer));
-    if (frameBinding.ssaoFrame.valid()) {
-        imports.ssaoFrame = graph.importBuffer(makeHostWrittenImportedBufferDesc(
-            frameBinding.ssaoFrame.buffer,
-            "Deferred.SSAOFrameUBO",
-            EBufferUsage::UniformBuffer,
-            frameBinding.ssaoFrame.offset,
-            frameBinding.ssaoFrame.size));
-    }
-    imports.skyboxFrame = graph.importBuffer(makeHostWrittenImportedBufferDesc(
-        frameBinding.skyboxFrame.buffer,
-        "Deferred.SkyboxFrameUBO",
-        EBufferUsage::UniformBuffer,
-        frameBinding.skyboxFrame.offset,
-        frameBinding.skyboxFrame.size));
     return imports;
 }
 
@@ -1357,18 +1342,14 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         view.viewExtent = stageCtx.viewExtent;
     }
 
-    // The SSAO frame UBO is uploaded with the View's payloads, from the same
-    // resolved value the composition's SSAO pass reads: enabled is a composition
-    // fact, not a second switch here.
-    DeferredFrameResourceSet::SkyboxFrameData skyboxStorage = _overlayStage->buildSkyboxFrameData(stageCtx);
-    const DeferredFrameResourceSet::SSAOFrameData* ssao = resolved.ssao.bEnabled ? &resolved.ssao.frameData : nullptr;
-
-    const auto* viewBinding = _frameResources->beginView(submission, view, ssao, &skyboxStorage);
+    // Shared frame/light/skinning payloads land in the View binding; the SSAO
+    // and skybox frame UBOs are uploaded by their features' prepared bindings
+    // from the same resolved values the composition's passes read.
+    const auto* viewBinding = _frameResources->beginView(submission, view);
     if (!viewBinding) {
         return false;
     }
 
-    overlayInputs.skybox.frameDescriptorSet = viewBinding->skyboxFrameDescriptorSet;
     _gBufferStage->prepare(stageCtx);
 
     postContext = FrameContext{
@@ -1440,8 +1421,6 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
             .frameBuffer         = imports.frame,
             .lightBuffer         = imports.light,
             .skinningBuffer      = imports.skinning,
-            .ssaoFrameBuffer     = imports.ssaoFrame,
-            .skyboxFrameBuffer   = imports.skyboxFrame,
             .shadow              = shadowOutputs,
             .environmentLighting = &environmentLighting,
             .predecessor         = predecessor,

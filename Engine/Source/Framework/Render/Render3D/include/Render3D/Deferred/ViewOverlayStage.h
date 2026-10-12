@@ -20,10 +20,12 @@ namespace ya
 
 struct Mesh;
 struct BillboardComponent;
+struct RenderFrameData;
 
 /// Deferred viewport overlay stage — Skybox background + SimpleMaterial debug overlay.
 ///
-/// Skybox: View-owned frame UBO (view/proj without translation) + cubemap DS from RenderRuntime.
+/// Skybox: per-View frame UBO (view/proj without translation), written through
+/// the skybox feature's prepared binding + cubemap DS from RenderRuntime.
 /// Overlay: push constant only (view/proj/model/colorType), no UBO/DS.
 struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
 {
@@ -50,10 +52,9 @@ struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
 
         struct SkyboxInput
         {
-            bool                bAvailable         = false;
-            DescriptorSetHandle descriptorSet      = nullptr;
-            DescriptorSetHandle frameDescriptorSet = nullptr;
-            Mesh*               mesh               = nullptr;
+            bool                bAvailable    = false;
+            DescriptorSetHandle descriptorSet = nullptr;
+            Mesh*               mesh          = nullptr;
         };
 
         std::vector<BillboardInput>      billboards{};
@@ -135,8 +136,7 @@ struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
     // ── IRenderStage ─────────────────────────────────────────────
     ViewOverlayStage() : IRenderStage("ViewportOverlay") {}
 
-    void init(IRender* render, stdptr<IDescriptorSetLayout> skyboxFrameDSL);
-    void init(IRender* render) override { init(render, nullptr); }
+    void init(IRender* render) override;
     void destroy() override;
     /// Submission-scoped PSO / debug-system warmup; the stage holds no
     /// per-View state.
@@ -144,13 +144,14 @@ struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
     /// IRenderStage conformance; graph passes must use the parameterized
     /// executeSkybox/executeOverlay overloads.
     void execute(const RenderStageContext& ctx) override;
-    void executeSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput);
+    void executeSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput, DescriptorSetHandle frameDescriptorSet);
     void executeOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs, const OverlayPassBindings& overlay);
     void updateBillboardTextures(FrameInputs& frameInputs, OverlayPassBindings& overlay);
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     void setDebugRenderSystem(DebugRenderSystem* debugRenderSystem);
-    [[nodiscard]] SkyboxFrameUBO buildSkyboxFrameData(const RenderStageContext& ctx) const;
+    [[nodiscard]] static SkyboxFrameUBO buildFrameData(const RenderFrameData& frameData);
     [[nodiscard]] IGraphicsPipeline* getSkyboxPipeline() const { return _skyboxPipeline.get(); }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxFrameDSL() const { return _skyboxFrameDSL; }
     [[nodiscard]] IGraphicsPipeline* getOverlayPipeline() const { return _overlayPipeline.get(); }
     [[nodiscard]] DebugRenderSystem* getDebugRenderSystem() const { return _debugRenderSystem; }
     [[nodiscard]] DebugSkinning&       getDebugSkinning() { return _debugSkinning; }
@@ -160,14 +161,14 @@ struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
     static constexpr uint32_t kBillboardTextureCount = 16;
 
   private:
-    void initSkybox(stdptr<IDescriptorSetLayout> skyboxFrameDSL);
+    void initSkybox();
     void initOverlay();
     void initBillboards();
     void initWorldGrid();
     uint32_t resolveBillboardTextureIndex(std::vector<TextureBinding>& bindings, const TextureBinding& binding);
     void drawWorldGrid(const RenderStageContext& ctx);
     void drawBillboards(const RenderStageContext& ctx, const FrameInputs& frameInputs, const OverlayPassBindings& overlay);
-    void drawSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput);
+    void drawSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput, DescriptorSetHandle frameDescriptorSet);
     void drawOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs);
 };
 

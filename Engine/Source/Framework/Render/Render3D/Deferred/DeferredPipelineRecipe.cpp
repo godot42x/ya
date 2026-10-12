@@ -133,7 +133,7 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
 
         view.skybox = skyboxFeature.resolve(
             skyboxSettings,
-            SkyboxFeature::Facts{.viewExtent = view.viewExtent},
+            SkyboxFeature::Facts{.viewExtent = view.viewExtent, .frameData = recording.frameData},
             SkyboxFeature::Inputs{});
 
         view.sprites = spriteFeature.resolve(
@@ -179,8 +179,6 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
     prepared.viewId          = resolved.viewId;
     prepared.frameRange      = toRange(ctx.frameBinding->frame);
     prepared.lightRange      = toRange(ctx.frameBinding->light);
-    prepared.ssaoFrameRange  = toRange(ctx.frameBinding->ssaoFrame);
-    prepared.skyboxFrameRange = toRange(ctx.frameBinding->skyboxFrame);
 
     const GBufferFeature gbufferFeature;
     prepared.gbuffer = gbufferFeature.prepareBindings(
@@ -195,13 +193,28 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
         resolved.ssao,
         SSAOFeature::PrepareContext{
             .submission = ctx.submission,
+            .render     = ctx.render,
             .stage      = stages.ssao,
-            .frameDS    = ctx.frameBinding->ssaoFrameDescriptorSet,
+            .alignment  = ctx.alignment,
         });
     if (ssaoPrepared.isErr()) {
         return ssaoPrepared.error();
     }
     prepared.ssao = ssaoPrepared.value();
+
+    const SkyboxFeature skyboxFeature;
+    auto skyboxPrepared = skyboxFeature.prepareBindings(
+        resolved.skybox,
+        SkyboxFeature::PrepareContext{
+            .submission = ctx.submission,
+            .render     = ctx.render,
+            .stage      = stages.overlay,
+            .alignment  = ctx.alignment,
+        });
+    if (skyboxPrepared.isErr()) {
+        return skyboxPrepared.error();
+    }
+    prepared.skybox = skyboxPrepared.value();
 
     auto lightingPrepared = LightingFeature::prepareBindings(
         resolved.lighting,
@@ -338,8 +351,6 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         resolved.ssao,
         prepared.ssao,
         SSAOFeature::Inputs{
-            .frame      = ctx.ssaoFrameBuffer.value_or(RGBufferHandle{}),
-            .frameRange = prepared.ssaoFrameRange,
             .albedo     = outputs.gbuffer.albedo,
             .normal     = outputs.gbuffer.normal,
             .depth      = outputs.gbuffer.depth,
@@ -422,11 +433,10 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
                 : ViewOverlayStage::FrameInputs::SkyboxInput{},
         },
         resolved.skybox,
+        prepared.skybox,
         SkyboxFeature::Inputs{
-            .color      = outputs.lighting.sceneColor,
-            .depth      = outputs.gbuffer.depth,
-            .frame      = ctx.skyboxFrameBuffer,
-            .frameRange = prepared.skyboxFrameRange,
+            .color = outputs.lighting.sceneColor,
+            .depth = outputs.gbuffer.depth,
         });
 
     // ── Scene sprites ─────────────────────────────────────────────────────

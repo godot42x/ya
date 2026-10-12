@@ -4,6 +4,7 @@
 #include "Core/Result.h"
 #include "Graph/RenderGraph.h"
 #include "RHI/RenderDefines.h"
+#include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Common/ViewTargetStore.h"
 #include "Render3D/Composition/FeatureProtocol.h"
 #include "Render3D/Deferred/SSAOStage.h"
@@ -17,7 +18,9 @@ class RenderSubmission;
 
 /// SSAO feature: derives ambient occlusion from the View's GBuffer.
 ///
-/// Inputs: GBuffer albedo/normal/depth plus the View's imported SSAO frame UBO.
+/// Inputs: GBuffer albedo/normal/depth. The View's SSAO frame UBO is built in
+/// resolve, uploaded with this feature's prepared binding, and imported into
+/// the graph by append; nothing of it passes through the shared frame binding.
 /// Outputs: OptionalAO, valid exactly when the feature is enabled.
 ///
 /// When disabled, resolve declares no resource requirement, no pass is added and
@@ -52,12 +55,10 @@ struct SSAOFeature
         bool                   bReverseY = true;
     };
 
-    /// Typed data flow into the pass: imported GBuffer handles and the View's
-    /// imported SSAO frame UBO.
+    /// Typed data flow into the pass: the imported GBuffer handles. The frame
+    /// UBO is the feature's own prepared binding.
     struct Inputs
     {
-        RGBufferHandle  frame{};
-        RGBufferRange   frameRange{};
         RGTextureHandle albedo{};
         RGTextureHandle normal{};
         RGTextureHandle depth{};
@@ -81,18 +82,18 @@ struct SSAOFeature
 
     struct PrepareContext
     {
-        RenderSubmission*   submission = nullptr;
-        SSAOStage*          stage      = nullptr;
-        /// The View binding's SSAO frame descriptor set (allocated with the
-        /// View's frame payloads).
-        DescriptorSetHandle frameDS{};
+        RenderSubmission* submission = nullptr;
+        IRender*          render     = nullptr;
+        SSAOStage*        stage      = nullptr;
+        uint32_t          alignment  = 1;
     };
 
     struct Prepared
     {
-        bool                bEnabled = false;
-        DescriptorSetHandle frameDS{};
-        DescriptorSetHandle inputDS{};
+        bool                     bEnabled = false;
+        /// This View's SSAO frame UBO: upload slice + its own descriptor set.
+        UniformBufferPassBinding frame;
+        DescriptorSetHandle      inputDS{};
     };
 
     struct GraphOutputs

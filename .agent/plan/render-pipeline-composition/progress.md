@@ -361,9 +361,44 @@
 - skill 沉淀（"如何新增一个 pass"进 render-arch 或新 skill）按计划留 C5；本轮说明放在 recipe 头注释。
 - C3B/M17（shared inputs 收口）为下一步；C4 的共享 feature 是跨管线开闭性的正式验收证据。
 
+## 2026-10-12 深夜 — C3B：共享输入收口（M17 Deferred 侧）
+
+### 目标与边界
+
+**单一验收目标**：`DeferredFrameResourceSet::Binding` 只留真实共享输入（frame/light/skinning），SSAO/Skybox 的 payload、上传 slice、layout、DS 全部归 feature 局部准备。行为零变化；Forward 侧不动（Forward 自己的 skybox frame DSL/DS 留 C4）；灯光 generated 类型/字段映射/预算用例保留。
+
+### 实施内容
+
+- `DeferredFrameResourceSet`：`Binding` 收到 6 字段（frameAndLightDS + skinningDS + frame/light/lightInstances slice + skinningBuffer）；`ViewPayloads` 同口径；`beginView(submission, view)` 不再收 feature payload；`ensureViewDescriptors` 只分配 frame/light；`updateSSAO/SkyboxDescriptorSet`、`getSSAO/SkyboxFrameDSL` 删除。
+- DSL 归设备对象：`SSAOStage::init(render)` 自建并持有 `Deferred_SSAO_Frame_DSL`；`ViewOverlayStage::init(render)` 自建并持有 `Deferred_Skybox_Frame_DSL`（不再由 frame resource set 传入）。
+- SSAOFeature：`resolve` 建 payload（原样）；`prepareBindings` 用 `writeUniformPassBinding` 上传 slice + 自有 DS；`append` 自己 import `Deferred.SSAOFrameUBO`（label 不变）并绑定自有 set。
+- SkyboxFeature：`resolve` 从 `Facts::frameData` 建 payload（`ViewOverlayStage::buildFrameData` 变 static，`buildSkyboxFrameData` 删除）；prepare/append 同 SSAO 模式；`executeSkybox` 收 frameDescriptorSet 参数，`SkyboxInput` 不再携 DS。
+- Recipe：`PreparedView` 增 `skybox`、删 ssao/skyboxFrameRange；`AppendContext` 删 ssao/skyboxFrameBuffer；`PrepareContext` 注释口径更新。
+- Pipeline：`beginView` 去掉两参数；`DeferredViewBufferImports` 只 import frame/light/skinning；`overlayInputs.skybox.frameDescriptorSet` 写点删除。
+
+### 实测
+
+- diff：**17 files, +222 / −272（净 −50）**；Deferred 子系统 **7568 → 7536（净 −32）**；共享 Binding 从 10 字段降到 6 字段。
+
+### 验证
+
+- 编译：`xmake b ya-render-3d-test` ok；`control start --game --build` ok。
+- 测试：`xmake r ya-render-3d-test` 221/221；`python3 Script/ya.py test --target ya` 1812/1812（含 DeferredLightBufferTest 灯光映射/预算回归）。
+- Runtime（HelloMaterial，`--render-graph-trace`，warmup 180）：
+  - SSAO on：14 pass；截图对 C3A-trim 基线**逐像素一致**（`c3b-ssao-on.png`，max diff 0）。
+  - SSAO off：13 pass；**无 `Deferred.SSAOFrameUBO` import**；像素一致（`c3b-ssao-off.png`，max diff 0）。
+  - Bloom off：10 pass；像素一致（`c3b-bloom-off.png`，max diff 0）。
+  - 共享上传计数（trace）：`Deferred.FrameUBO`/`LightUBO`/`SkinningSSBO`/`SSAOFrameUBO`/`SkyboxFrameUBO` 每 View 各 ImportBound 一次、每 pass access=1；feature-local UBO 随 feature 开关出现/消失。
+
+### 保留 / 未做
+
+- Forward 侧 shared inputs（`ForwardFrameResourceSet` 的 skybox frame DSL/DS）与 M17 的 Forward 半边留 C4。
+- C3 剩余截图门禁：grading off、sprite+opaque 遮挡、overlay/gizmo、entity-id/picking（图像 + 行为断言）。
+- 容器化不做（理由同 C3A-trim）；skill 沉淀留 C5。
+
 ## 总结
 
-### 已完成（12 个 commits）
+### 已完成（13 个 commits）
 
 | Commit | 内容 | 测试 |
 | --- | --- | --- |
@@ -378,7 +413,8 @@
 | 7df25e0b | progress update | — |
 | 9726b2d0 | 集成切片：features 拥有真实 pass、recipe 单源驱动、旧 orchestrator 删除 | 220/220 render3d + 1811/1811 full + runtime on/off/切换证据 |
 | 5e3dcb55 | C3A：tail 全 feature 化 + 集中层删除（+1876/−964） | 221/221 render3d + 1812/1812 full + on/off 像素 0 diff + bloom-off 10 pass |
-| （本提交） | C3A-trim：薄壳降级 + continuation 单一定义 + 接入说明/守卫测试（+49/−189） | 221/221 render3d + 1812/1812 full + 三场景像素 0 diff |
+| ad9a20f5 | C3A-trim：薄壳降级 + continuation 单一定义 + 接入说明/守卫测试（+49/−189） | 221/221 render3d + 1812/1812 full + 三场景像素 0 diff |
+| （本提交） | C3B：SSAO/Skybox payload/DSL/DS 归 feature，共享 Binding 只留 frame/light/skinning（+222/−272） | 221/221 render3d + 1812/1812 full + 三场景像素 0 diff + 每共享 buffer import 一次 |
 
 ### 关键成果
 
@@ -388,7 +424,8 @@
 - ✅ **无 Legacy wrapper**: 旧 orchestrator/passes/bag/ViewResources 槽位直接删除，不回兼容桥
 - ✅ **Runtime 证据**: SSAO on/off 图对照与逐像素一致、bloom-off 10 pass、管线切换逐像素一致
 - ✅ **接手/开闭收敛（C3A-trim）**: 无功能契约槽位由 recipe 声明；continuation 语义单一 `ColorContinuation.h`；recipe 头"Adding a pass"说明 + target 发布守卫测试；子系统 −104 行
-- ⚠️ **复杂度**: C3A 净 +612 后 C3A-trim −104（当前 7568）；删除面门槛仍未回正，容器化暂缓（C4 实测触点后再判）
+- ✅ **共享输入收口（C3B）**: 共享 Binding 只留 frame/light/skinning 六字段；SSAO/skybox payload+layout+DS 归各自 feature；每共享 buffer 每 View import 一次（trace）；SSAO off 无 SSAO UBO import
+- ⚠️ **复杂度**: C3A 净 +612 后 C3A-trim −104、C3B −32（当前 7536）；删除面门槛仍未回正，容器化暂缓（C4 实测触点后再判）
 
 ### 当前状态
 
@@ -396,11 +433,12 @@
 - 集成切片（plan.md C1 验收主体）: ✅ 完成并带 runtime 证据
 - C3A（tail 全 feature 化 + 集中层删除）: ✅ 完成并带 runtime 证据
 - C3A-trim（薄壳降级 + 接入说明/守卫）: ✅ 完成并带 runtime 证据
-- 剩余: C3B（M17 shared inputs 收口）、plan-C2 剩余（`_lastBlurPassCount`/grading-off）、M08/M10/M13 完整、C4/C5
+- C3B（M17 Deferred 侧共享输入收口）: ✅ 完成并带 runtime/trace 证据；C3 剩余截图门禁（grading off、sprite+opaque、overlay/gizmo、entity-id/picking）
+- 剩余: M17 Forward 半边（C4）、plan-C2 剩余（`_lastBlurPassCount`/grading-off）、M08/M10/M13 完整、C4/C5
 
 ### 工作区状态
 
-- **干净**: 12 个 composition 相关提交
+- **干净**: 13 个 composition 相关提交
 - **测试全绿**: 1812/1812 full tests passed；render3d 221/221
 - **编译通过**: ya-render-3d, ya-game-runtime（closure）
 - **无关改动**: Engine/Plugins/log.cc 未 stage（灯光线工作）
