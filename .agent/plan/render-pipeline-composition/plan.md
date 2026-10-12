@@ -1,8 +1,9 @@
 # RDG 上方的管线组合层收敛
 
-> 建立 / 更新：2026-10-12
-> 状态：计划已落盘，代码实施未开始；下一代码 checkpoint 为 C1。
-> 本轮授权：建立真正可开工的计划参照，不实施渲染代码、不制造进度提交。
+> 建立 / 更新：2026-10-13
+> 状态：实施进行中。已落地（均带 runtime 逐像素证据）：C1-foundation + 集成切片（GBuffer→SSAO→Lighting 单源贯通）、C3A（Deferred tail 全 feature 化 + 集中层删除）、C3A-trim、C3B（Deferred 共享输入收口）、C3G（C3 剩余门禁）、协议诚实化（Feature concept 由 9 个 feature static_assert 强制）、C4a（Forward recipe + Bloom/EntityId/Finalize 跨管线共享 + M17 Forward 半边 + appendTargetRequests 退出）。
+> 下一 checkpoint：C4b（Shadow typed token / 剩余槽位复核）；随后 C5（诊断、扩展用例、多 View、performance）。
+> 命名对应：本文件 C1 = 实际执行的 "C1-foundation + 集成切片"；C2 剩余项、C3 遗留 hook 与 C4b 见 todo.md。
 
 ## 1. 目标与成功定义
 

@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Deferred/DeferredPipelineRecipe.h"
+#include "Render3D/Forward/ForwardPipelineRecipe.h"
 
 #include <cstdint>
 #include <vector>
@@ -34,6 +35,14 @@ struct PreparedPipelineFrame
         std::vector<DeferredPipelineRecipe::ResolvedView> resolved;
     };
     DeferredComposition deferred;
+
+    /// Typed Forward pipeline composition. Only the active pipeline's block is
+    /// filled for a given frame; the other stays unchanged.
+    struct ForwardComposition
+    {
+        std::vector<ForwardPipelineRecipe::ResolvedView> resolved;
+    };
+    ForwardComposition forward;
 };
 
 /// Result type for frame preparation (can fail if resources unavailable).

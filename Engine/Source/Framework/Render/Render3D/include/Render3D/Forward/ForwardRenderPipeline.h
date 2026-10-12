@@ -2,7 +2,7 @@
 
 #include "Core/Base.h"
 #include "Render3D/Forward/ForwardViewStage.h"
-#include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
+#include "Render3D/Forward/ForwardPipelineRecipe.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
 #include "Graph/RenderGraphExecutor.h"
 #include "RHI/Core/RenderAttachmentFormats.h"
@@ -69,7 +69,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     stdptr<ShadowStage>          _shadowStage;
     stdptr<ForwardViewStage> _viewStage;
     PostProcessingStage          _postProcessStage;
-    ForwardFrameGraphOrchestrator _frameGraphOrchestrator{};
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
     stdptr<ForwardFrameResourceSet> _frameResources;
 
@@ -89,7 +88,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void init(const InitDesc& desc);
     ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
     void                   beginSubmission() override;
-    void appendTargetRequests(const SceneRenderPlan& plan, std::vector<ViewTargetRequest>& out) const override;
     void shutdown();
 
     bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner,
@@ -97,6 +95,13 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
                                     EFormat::T                               format) override;
     bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner,
                                     EFormat::T                               format) override;
+
+    /// Safe-point composition: resolve this frame's Forward map and produce the
+    /// View target requests it requires. Recording then consumes the same
+    /// resolved values, so allocation and passes cannot disagree.
+    [[nodiscard]] EFrameComposition resolveFrameComposition(const RenderFramePlan& plan,
+                                                            PreparedPipelineFrame& prepared,
+                                                            std::vector<ViewTargetRequest>& out) override;
 
     [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Forward; }
     [[nodiscard]] EFormat::T     getViewColorFormat() const override;
@@ -147,16 +152,21 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void               refreshViewSnapshot();
     void               refreshViewStageState();
     void               refreshShadowStageState();
-    bool               appendViewportPassGraph(RenderGraph& graph,
-                                               const RenderPipelineFrameContext& frame,
-                                               RenderStageContext&             stageCtx,
-                                               const ShadowPreparedView&       shadowPrepared,
-                                               FrameContext&                    postContext,
-                                               ForwardViewStage::PassContext& viewPassContext,
-                                               const ForwardFrameResourceSet::Binding& frameBinding,
-                                               ForwardFrameResourceSet::ViewResources* viewResources,
-                                               const ViewTargetLease& targets,
-                                               std::optional<RGPassHandle> familyPredecessor);
+    [[nodiscard]] ForwardPipelineRecipe::Config buildRecipeConfig(const RenderPipelineSettings& settings) const;
+    bool               appendForwardViewToGraph(RenderGraph& graph,
+                                                const RenderPipelineFrameContext& frame,
+                                                RenderStageContext&             stageCtx,
+                                                const ShadowPreparedView&       shadowPrepared,
+                                                FrameContext&                    postContext,
+                                                ForwardViewStage::PassContext& viewPassContext,
+                                                const ForwardFrameResourceSet::Binding& frameBinding,
+                                                const ViewTargetLease& targets,
+                                                const ForwardPipelineRecipe::ResolvedView& resolved,
+                                                std::optional<RGPassHandle> familyPredecessor,
+                                                ForwardPipelineRecipe::GraphOutputs& outputs);
+    void               exportGraphOutputs(RenderGraph& graph,
+                                          const ForwardPipelineRecipe::GraphOutputs& outputs,
+                                          uint64_t viewId) const;
     [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
                                                      const SceneViewTask* task,
                                                      uint64_t viewId,

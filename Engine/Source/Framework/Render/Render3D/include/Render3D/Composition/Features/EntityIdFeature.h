@@ -17,6 +17,9 @@ class RenderSubmission;
 /// camera-facing billboards into a dedicated R32_UINT target, depth-testing
 /// against the scene depth so a readback under the cursor matches what is
 /// visible. The feature declares and imports its own target.
+///
+/// Shared by both world pipelines: each resolves it with its own graph
+/// vocabulary so the topology keeps naming the pipeline it belongs to.
 struct EntityIdFeature
 {
     using Stage = EntityIdPass;
@@ -24,6 +27,16 @@ struct EntityIdFeature
     struct Settings
     {
         bool bEnabled = true;
+        /// Topology vocabulary of the pipeline resolving this feature: the pass
+        /// name base and the diagnostic import label. Stated by the recipe that
+        /// owns the map, not defaulted inside the feature.
+        std::string_view passName{};
+        std::string_view importLabel{};
+        /// Layout the scene depth is left in after this pass. The two pipelines
+        /// end their depth differently (Forward keeps it attachable, Deferred
+        /// leaves it shader-readable), and the pass must not silently normalize
+        /// one into the other.
+        EImageLayout::T depthFinalLayout = EImageLayout::ShaderReadOnlyOptimal;
     };
 
     struct Facts
@@ -58,6 +71,9 @@ struct EntityIdFeature
     {
         bool                bEnabled = false;
         ViewTargetRequirement target{};
+        std::string_view    passName{};
+        std::string_view    importLabel{};
+        EImageLayout::T     depthFinalLayout = EImageLayout::ShaderReadOnlyOptimal;
     };
 
     struct GraphOutputs

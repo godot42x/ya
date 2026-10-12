@@ -16,9 +16,17 @@
 - [x] **C3G（剩余门禁）**：sprite+opaque 遮挡（`run_sprite2d_isolated.py` 全绿：遮挡 0→137270 px、世界尺寸/正交尺度断言；trace 证明跑在 Deferred 组合的 `Deferred Sprites` pass）；overlay/billboard（editor 回归绿；修复 companion 重构造成的过期键名测试脚本债）；grading off（10 pass、Finalize 仍发布 `Deferred.View.Display`、与 graded 基线仅色彩差异 max 19/255）；M11 bloom on/off 续写 backing 断言成文。
 - [x] **协议诚实化（审计后续，非 plan.md checkpoint）**：`Feature` concept 改为真实签名并由 9 个 feature `static_assert` 强制；`FeatureGraphContext` 删 `graph`/`render` 死字段；`RenderStageContext` 删 `Scene* derivedScene`（Forward 侧唯一读点改显式传参）。证据：SSAO-on 与 c3b 基线逐像素一致、Forward 与切换前基线逐像素一致、切换回 Deferred 逐像素一致。
 
+- [x] **C4a（Forward recipe + 共享 feature + 两处收口）**：
+  - `ForwardPipelineRecipe`（resolve/prepareBindings/appendGraph）取代 `ForwardFrameGraphOrchestrator`/`ForwardFrameGraphPasses`/`ForwardFrameGraphResources`；Forward 的 View target 由 `collectViewTargets()` 单一来源产生。
+  - **共享 feature**：`BloomFeature`/`EntityIdFeature`/`FinalizeFeature` 移到 `Composition/Features/`，pass 名与 import 标签由 Settings 从 recipe 传入（两管线各自词汇，字符串逐字不变）——M16 要的跨管线同协议证据。
+  - 新增 `ForwardOpaqueFeature`（clear + 全部 shading model + direction overlay + debug）与 `ForwardSkyboxFeature`（skybox frame UBO 自持）；`ForwardViewStage::execute*` 去掉只重复 pass context 的 binding 参数。
+  - **M17 Forward 半边**：skybox frame UBO/DS 自 `ForwardFrameResourceSet` 移出（唯一消费者 = skybox feature）；`ForwardViewAuxPasses` 自持 skybox frame DSL（同 C3B Deferred 模式）；其 `prepare` 删除。
+  - **`EFrameComposition::NotApplicable` / `appendTargetRequests` 全退出**：两管线都 resolve composition，`RenderDeviceState` 无预组合分配路径。
+  - 证据：render3d 223/223、full 1814/1814；Deferred / Forward / 切回 Deferred 三帧与改动前基线**逐像素一致**（max diff 0）。
+
 ## 下一步（按优先级）
 
-- [ ] **C4**（建议下一批）：Forward recipe（共享 feature 作为跨管线开闭性正式验收证据）、Forward 侧 shared inputs 收口（M17 余下半边：`ForwardFrameResourceSet` 的 skybox frame DSL/DS 与 payload）、Shadow typed token、`appendTargetRequests` 全退出。协议已在 Deferred 侧强制，Forward 接入时直接满足同一 concept。
+- [ ] **C4b（C4 剩余）**：Shadow typed token 经 composition 接入两 recipe（M18；当前 shadow 仍是 pipeline 侧 `_shadowStage->appendGraphPasses` 直调）；确认无剩余混合生命周期资源槽位；Forward 透明槽保持"无功能契约"记录。
 - [ ] **待决定的测试 hook（C3 遗留缺口）**：entity-id/picking runtime hook（读取 `DeferredView.EntityId` 的 pick/readback；editor 已有 isolate readback 路径）与 direction gizmo 场景 hook（回归场景加一个 `DirectionComponent` 实体）。
 - [ ] **M12 余项**：`SurfaceImageTest` 侧编码回归未跑。
 - [ ] **plan.md C2 剩余**：`_lastBlurPassCount` 调用状态退出、blur pass 次数边界测试（M09/M14）。

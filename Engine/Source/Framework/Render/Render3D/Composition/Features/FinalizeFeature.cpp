@@ -1,4 +1,4 @@
-#include "Render3D/Deferred/Features/FinalizeFeature.h"
+#include "Render3D/Composition/Features/FinalizeFeature.h"
 
 #include "Graph/RenderGraphImportUtils.h"
 #include "Render3D/Common/PostProcessingStage.h"
@@ -17,6 +17,7 @@ FinalizeFeature::Resolved FinalizeFeature::resolve(const Settings& settings,
     Resolved resolved;
     resolved.bEnabled      = settings.bEnabled;
     resolved.bOutputIsSRGB = settings.bOutputIsSRGB;
+    resolved.importLabel   = settings.importLabel;
     resolved.target = ViewTargetRequirement{
         .role   = EViewAttachment::DisplayColor,
         .format = settings.displayFormat,
@@ -66,7 +67,7 @@ Result<FinalizeFeature::GraphOutputs, FeatureError> FinalizeFeature::append(Rend
         return FeatureError::MissingDependency;
     }
     const RGTextureHandle display = graph.importTexture(makeImportedTextureDesc(
-        *target, "DeferredView.Display", EImageLayout::ShaderReadOnlyOptimal, resolved.target.usage));
+        *target, resolved.importLabel, EImageLayout::ShaderReadOnlyOptimal, resolved.target.usage));
 
     const RGTextureHandle result = stage->appendFinalizeGraphPasses(
         graph,

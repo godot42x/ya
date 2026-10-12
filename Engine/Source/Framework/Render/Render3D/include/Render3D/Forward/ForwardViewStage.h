@@ -113,11 +113,13 @@ struct ForwardViewStage : public IRenderStage
     ///
     /// `passContext` is built once by the pipeline from the View's own
     /// declaration (including the Scene its skybox/gizmos come from) and is
-    /// required: recording never re-derives it from ambient state.
-    void executeSkybox(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext& passContext);
-    void executePBR(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext& passContext);
-    void executePhong(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext& passContext);
-    void executeUnlit(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext& passContext);
+    /// required: recording never re-derives it from ambient state. It carries
+    /// the View's frame descriptor sets, so the pass does not also take the
+    /// View binding.
+    void executeSkybox(const RenderStageContext& ctx, const PassContext& passContext);
+    void executePBR(const RenderStageContext& ctx, const PassContext& passContext);
+    void executePhong(const RenderStageContext& ctx, const PassContext& passContext);
+    void executeUnlit(const RenderStageContext& ctx, const PassContext& passContext);
     void executeSimple(const RenderStageContext& ctx, const PassContext& passContext);
     /// Direction overlay draws only the prebuilt gizmo snapshot (FG-704).
     void executeDirection(const RenderStageContext& ctx, std::vector<ForwardDirectionGizmoInput> directionGizmos, const PassContext& passContext);

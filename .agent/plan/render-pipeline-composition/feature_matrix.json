@@ -2,7 +2,7 @@
   "plan": "render-pipeline-composition",
   "updated": "2026-10-12",
   "implementation_status": "in_progress",
-  "next_checkpoint": "C4",
+  "next_checkpoint": "C4b",
   "intent": "RDG 上方建立一等 feature、typed recipe、单源资源需求与贯通 prepare/build/publication 的同一份 resolved composition；不以 Bloom 算法为目标",
   "status_rules": {
     "todo": "未实施，evidence 为空",
@@ -219,8 +219,13 @@
       "checkpoints": ["C4"],
       "expected": "Forward 全功能连接由一个 recipe 可读；共享 feature 通过同一协议；旧 orchestrator/context/bag 退出；不顺带补 transparent/Sprite 功能",
       "verification": ["PipelineRecipeTest Forward", "old-entry deletion review", "runtime screenshots and topo"],
-      "status": "todo",
-      "evidence": []
+      "status": "verified",
+      "evidence": [
+        "ForwardPipelineRecipe (resolve/prepareBindings/appendGraph) 为 Forward 的唯一地图：opaque -> skybox -> transparent slot -> entityId -> bloom -> finalize（ForwardPipelineRecipe.cpp）；View target 由 ResolvedView::collectViewTargets() 单一来源产生，resolveFrameComposition 与 Deferred 同形（ForwardRenderPipeline.cpp）",
+        "共享 feature 作为跨管线同协议证据：BloomFeature/EntityIdFeature/FinalizeFeature 移入 Composition/Features/，两 recipe 各自传入 pass 名与 import 标签（Settings）；同一份实现同时驱动两条管线（DeferredPipelineRecipe.cpp / ForwardPipelineRecipe.cpp）",
+        "旧入口退出：ForwardFrameGraphOrchestrator.{h,cpp}、ForwardFrameGraphPasses.{h,cpp}、ForwardFrameGraphResources.h 删除；ForwardFrameGraphOrchestratorTest.cpp 由 ForwardPipelineRecipeTest.cpp 取代",
+        "runtime：Forward 截图与改动前基线 composition-forward.png 逐像素一致（max diff 0）；Deferred 与切回 Deferred 同样 0 diff（c4b-*.png）"
+      ]
     },
     {
       "id": "M17",
@@ -234,7 +239,8 @@
         "runtime trace：Deferred.FrameUBO/LightUBO/SkinningSSBO/SSAOFrameUBO/SkyboxFrameUBO 每 View 各 ImportBound 一次、每 pass access=1；SSAO off 无 SSAOFrameUBO import；三场景截图对基线逐像素一致",
         "DeferredLightBufferTest 全绿（1812/1812 内含）；owner diff review：feature 局部 binding 全部出 shared bag",
         "缺口：Forward 侧 shared inputs（ForwardFrameResourceSet 的 skybox frame DSL/DS 与 payload）待 C4 同口径收口"
-      ]
+      ,
+        "Forward 侧（C4a）：skybox frame UBO/DS 自 ForwardFrameResourceSet 移出（唯一消费者 = ForwardSkyboxFeature）；ForwardViewAuxPasses 自建并持有 FwdSkybox_PerFrame_DSL；ForwardFramePayloads 只留 PBR/Phong/Unlit frame 与 light/debug；其 prepare() 删除"]
     },
     {
       "id": "M18",

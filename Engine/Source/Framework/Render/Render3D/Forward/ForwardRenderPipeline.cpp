@@ -13,10 +13,12 @@
 #include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Common/ViewTargetStore.h"
 #include "Render3D/Common/ViewGraphName.h"
+#include "Render3D/Common/PreparedPipelineFrame.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Pipelines/BloomPostprocessing.h"
 #include "Graph/RenderGraph.h"
-#include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
+#include "Render3D/Forward/ForwardPipelineRecipe.h"
+#include "Render3D/Forward/ForwardPassNames.h"
 #include "Scene/Core/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <memory>
@@ -182,35 +184,6 @@ void ForwardRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& catal
     });
 }
 
-void ForwardRenderPipeline::appendTargetRequests(
-    const SceneRenderPlan& plan,
-    std::vector<ViewTargetRequest>& out) const
-{
-    const auto post = resolvePostProcessSettings();
-    for (const SceneViewTask& task : plan.viewTasks) {
-        if (task.desc.viewId == 0 || !task.output.hasExtent()) {
-            continue;
-        }
-        ViewTargetRequest request{
-            .viewId   = task.desc.viewId,
-            .pipeline = ERenderPipelineKind::Forward,
-            .extent   = task.output.extent,
-            .attachments = {
-                {EViewAttachment::SceneColor, _viewFormats.colorFormats.front(), _viewRTSpec.attachments.colorAttach.front().usage},
-                {EViewAttachment::SceneDepth, _viewFormats.depthFormat.value_or(EFormat::Undefined), _viewRTSpec.attachments.depthAttach->usage, ESampleCount::Sample_1, true},
-                {EViewAttachment::DisplayColor, POSTPROCESS_COLOR_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc},
-                {EViewAttachment::EntityId, EFormat::R32_UINT, EImageUsage::ColorAttachment | EImageUsage::TransferSrc},
-            },
-        };
-        if (isGradingEnabled() && post.bEnableBloom) {
-            request.attachments.push_back({EViewAttachment::BloomExtract, BloomPostprocessing::BLOOM_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled});
-            request.attachments.push_back({EViewAttachment::BloomBlur, BloomPostprocessing::BLOOM_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled});
-            request.attachments.push_back({EViewAttachment::BloomComposite, BloomPostprocessing::BLOOM_FORMAT, EImageUsage::ColorAttachment | EImageUsage::Sampled});
-        }
-        out.push_back(std::move(request));
-    }
-}
-
 void ForwardRenderPipeline::rebuildShadowViews()
 {
     _shadowResources.rebuildViews(_render, "Shadow Map");
@@ -351,7 +324,6 @@ void ForwardRenderPipeline::initStageResources()
         .pbrFrameDSL                        = _frameResources ? _frameResources->getPBRFrameDSL() : nullptr,
         .phongFrameDSL                      = _frameResources ? _frameResources->getPhongFrameDSL() : nullptr,
         .unlitFrameDSL                      = _frameResources ? _frameResources->getUnlitFrameDSL() : nullptr,
-        .skyboxFrameDSL                     = _frameResources ? _frameResources->getSkyboxFrameDSL() : nullptr,
         .depthBufferShadowDS                = depthBufferShadowDS,
         .shadowState                        = buildShadowState(),
     });
@@ -400,6 +372,9 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         ForwardFrameResourceSet::Binding frameBinding{};
         ForwardFrameResourceSet::ViewResources* viewResources = nullptr;
         ViewTargetLease targets{};
+        /// The composition this View records through, resolved at the safe point.
+        const ForwardPipelineRecipe::ResolvedView* resolved = nullptr;
+        ForwardPipelineRecipe::GraphOutputs outputs{};
     };
 
     RenderGraph graph;
@@ -497,6 +472,22 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         }
         branch.postContext.extent         = branch.stageCtx.viewExtent;
 
+        // The composition this View records through was resolved at the safe
+        // point; a View without one has no target allocation and is skipped.
+        const uint64_t viewId = recording.task ? recording.task->desc.viewId : 0;
+        if (ctx.prepared != nullptr) {
+            for (const auto& candidate : ctx.prepared->forward.resolved) {
+                if (candidate.viewId == viewId) {
+                    branch.resolved = &candidate;
+                    break;
+                }
+            }
+        }
+        if (branch.resolved == nullptr) {
+            YA_CORE_ERROR("Forward View {} has no resolved composition", viewId);
+            continue;
+        }
+
         liveBranches.push_back(std::move(branch));
         ForwardFamilyViewBranch& live = liveBranches.back();
         // The View's Scene comes from its own declaration, not from ambient
@@ -506,7 +497,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         if (live.viewResources) {
             live.viewPassContext->debug = live.viewResources->debug;
         }
-        if (!appendViewportPassGraph(
+        if (!appendForwardViewToGraph(
                 graph,
                 live.frame,
                 live.stageCtx,
@@ -514,9 +505,10 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
                 live.postContext,
                 *live.viewPassContext,
                 live.frameBinding,
-                live.viewResources,
                 live.targets,
-                familyPredecessor)) {
+                *live.resolved,
+                familyPredecessor,
+                live.outputs)) {
             liveBranches.pop_back();
             continue;
         }
@@ -859,19 +851,80 @@ void ForwardRenderPipeline::shutdown()
     _deleter.clear();
 }
 
-bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
-                                                    const RenderPipelineFrameContext& frame,
-                                                    RenderStageContext&             stageCtx,
-                                                    const ShadowPreparedView&       shadowPrepared,
-                                                    FrameContext&                    postContext,
-                                                    ForwardViewStage::PassContext& viewPassContext,
-                                                    const ForwardFrameResourceSet::Binding& frameBinding,
-                                                    ForwardFrameResourceSet::ViewResources* viewResources,
-                                                    const ViewTargetLease& targets,
-                                                    std::optional<RGPassHandle> familyPredecessor)
+ForwardPipelineRecipe::Config ForwardRenderPipeline::buildRecipeConfig(const RenderPipelineSettings& settings) const
+{
+    ForwardPipelineRecipe::Config config;
+    config.bEnabled          = true;
+    config.bReverseViewportY = settings.bReverseViewportY;
+    if (!_viewRTSpec.attachments.colorAttach.empty()) {
+        config.viewColorFormat = _viewRTSpec.attachments.colorAttach.front().format;
+        config.viewColorUsage  = _viewRTSpec.attachments.colorAttach.front().usage;
+    }
+    if (_viewRTSpec.attachments.depthAttach.has_value()) {
+        config.viewDepthFormat = _viewRTSpec.attachments.depthAttach->format;
+        config.viewDepthUsage  = _viewRTSpec.attachments.depthAttach->usage;
+    }
+
+    // The composition's optional color-effect stages are feature settings, not
+    // per-pass enable flags: Bloom resolves on only when grading and the bloom
+    // setting agree; Finalize is the mandatory display pass.
+    const PostProcessingState postSettings = getPostProcessSettings();
+    config.bloom.bEnabled = isGradingEnabled() && postSettings.bEnableBloom;
+
+    config.finalize.bEnabled      = true;
+    config.finalize.bOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT);
+    config.finalize.displayFormat = POSTPROCESS_COLOR_FORMAT;
+    config.finalize.displayUsage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc;
+    config.finalize.importLabel   = forward_pass_names::kDisplayImport;
+    return config;
+}
+
+EFrameComposition ForwardRenderPipeline::resolveFrameComposition(const RenderFramePlan& plan,
+                                                                  PreparedPipelineFrame& prepared,
+                                                                  std::vector<ViewTargetRequest>& out)
+{
+    const RenderPipelineSettings settings = resolveSettings();
+
+    auto resolved = ForwardPipelineRecipe::resolve(buildRecipeConfig(settings), plan);
+    if (resolved.isErr()) {
+        YA_CORE_ERROR("Failed to resolve the Forward composition for tick {}", plan.frame.hostTick);
+        return EFrameComposition::Failed;
+    }
+    prepared.forward.resolved = std::move(resolved.value());
+
+    // The composition's Resolved values are the single source of the View's
+    // target requests: the features already declared role/format/usage, so the
+    // request builder only orders them.
+    for (const ForwardPipelineRecipe::ResolvedView& view : prepared.forward.resolved) {
+        out.push_back(ViewTargetRequest{
+            .viewId      = view.viewId,
+            .pipeline    = ERenderPipelineKind::Forward,
+            .extent      = view.viewExtent,
+            .attachments = view.collectViewTargets(),
+        });
+    }
+    return EFrameComposition::Resolved;
+}
+
+bool ForwardRenderPipeline::appendForwardViewToGraph(RenderGraph& graph,
+                                                     const RenderPipelineFrameContext& frame,
+                                                     RenderStageContext&             stageCtx,
+                                                     const ShadowPreparedView&       shadowPrepared,
+                                                     FrameContext&                    postContext,
+                                                     ForwardViewStage::PassContext& viewPassContext,
+                                                     const ForwardFrameResourceSet::Binding& frameBinding,
+                                                     const ViewTargetLease& targets,
+                                                     const ForwardPipelineRecipe::ResolvedView& resolved,
+                                                     std::optional<RGPassHandle> familyPredecessor,
+                                                     ForwardPipelineRecipe::GraphOutputs& outputs)
 {
     YA_CORE_ASSERT(_graphExecutor != nullptr, "ForwardRenderPipeline graph executor is not initialized");
+    if (!frame.submission || !frame.submission->isRecording()) {
+        return false;
+    }
 
+    // The View's direction gizmos are extracted before the graph, never queried
+    // during execute (FG-704).
     std::vector<ForwardDirectionGizmoInput> directionGizmos;
     if (auto* activeScene = frame.derivedScene) {
         const auto& dirView = activeScene->getRegistry().view<TransformComponent, DirectionComponent>();
@@ -882,34 +935,76 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
         }
     }
 
-    RenderTargetCreateInfo viewRTSpec = _viewRTSpec;
-    if (stageCtx.viewExtent.width > 0 && stageCtx.viewExtent.height > 0) {
-        viewRTSpec.extent = stageCtx.viewExtent;
+    // Shadow passes come first and take the family ordering point when they run,
+    // exactly as the composition's predecessor accounting expects.
+    std::optional<RGPassHandle> predecessor = familyPredecessor;
+    ShadowGraphOutputs shadowOutputs{};
+    if (_shadowStage && currentShadowSettings().isEnabled()) {
+        const size_t passCountBefore = graph.getPasses().size();
+        shadowOutputs = _shadowStage->appendGraphPasses(graph, stageCtx, shadowPrepared, predecessor);
+        if (graph.getPasses().size() > passCountBefore) {
+            predecessor = std::nullopt;
+        }
     }
-    _frameGraphOrchestrator.build(
-        ForwardFrameGraphOrchestrator::BuildDependencies{
-            .viewStage    = _viewStage.get(),
-            .entityIdPass     = &_entityIdPass,
-            .shadowStage      = _shadowStage.get(),
-            .postProcessStage = &_postProcessStage,
-        },
-        ForwardFrameGraphOrchestrator::BuildInputs{
-            .graph                    = &graph,
-            .stageCtx                 = &stageCtx,
-            .frameBinding             = frameBinding,
-            .viewRTSpec           = &viewRTSpec,
-            .directionGizmos          = std::move(directionGizmos),
-            .viewPassContext      = &viewPassContext,
-            .postContext              = &postContext,
-            .bEnableShadow            = _shadowStage && currentShadowSettings().isEnabled(),
-            .shadowPrepared           = shadowPrepared,
-            .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
-            .viewId                   = frame.view.task ? frame.view.task->desc.viewId : 0,
-            .viewResources            = viewResources,
-            .targets                  = &targets,
-            .familyPredecessor        = familyPredecessor,
+
+    // The composition: the whole Forward map. Resolved at the safe point,
+    // prepared with this submission's descriptors and uploads, appended here.
+    const ForwardPipelineRecipe::Stages stages{
+        .viewStage = _viewStage.get(),
+        .entityId  = &_entityIdPass,
+        .post      = &_postProcessStage,
+    };
+    const uint32_t alignment = std::max(_render ? _render->getUniformBufferOffsetAlignment() : 1u, 1u);
+    auto preparedResult = ForwardPipelineRecipe::prepareBindings(
+        resolved,
+        stages,
+        ForwardPipelineRecipe::PrepareContext{
+            .submission   = frame.submission,
+            .render       = _render,
+            .alignment    = alignment,
+            .frameData    = frame.view.frameData,
+            .frameBinding = &frameBinding,
         });
+    if (preparedResult.isErr()) {
+        YA_CORE_ERROR("Failed to prepare the Forward composition for View {}", resolved.viewId);
+        return false;
+    }
+
+    // The View's pass context carries its own scene resources and skybox packet.
+    const auto& skyboxInput = viewPassContext.skybox;
+    auto composition = ForwardPipelineRecipe::appendGraph(
+        resolved,
+        preparedResult.value(),
+        ForwardPipelineRecipe::AppendContext{
+            .graph               = graph,
+            .stageCtx            = stageCtx,
+            .stages              = &stages,
+            .viewLease           = &targets,
+            .frameBinding        = &frameBinding,
+            .viewPassContext     = &viewPassContext,
+            .postContext         = &postContext,
+            .directionGizmos     = std::move(directionGizmos),
+            .skybox              = &skyboxInput,
+            .shadow              = shadowOutputs,
+            .predecessor         = predecessor,
+            .bReverseViewportY   = _viewStage != nullptr ? _viewStage->bReverseViewportY : true,
+        });
+    if (composition.isErr()) {
+        YA_CORE_ERROR("Failed to append the Forward composition for View {}", resolved.viewId);
+        return false;
+    }
+    outputs = std::move(composition.value());
+
+    exportGraphOutputs(graph, outputs, resolved.viewId);
     return true;
+}
+
+void ForwardRenderPipeline::exportGraphOutputs(RenderGraph& graph,
+                                               const ForwardPipelineRecipe::GraphOutputs& outputs,
+                                               uint64_t viewId) const
+{
+    graph.exportTexture(outputs.opaque.color, makeViewGraphName(forward_graph_exports::viewColor, viewId));
+    graph.exportTexture(outputs.entityId.entityId, makeViewGraphName(forward_graph_exports::entityId, viewId));
 }
 
 RenderViewOutput ForwardRenderPipeline::collectViewOutput(const RenderGraphExecutionResult& result,

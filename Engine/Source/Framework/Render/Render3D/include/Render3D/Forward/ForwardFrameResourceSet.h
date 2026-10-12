@@ -40,7 +40,6 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase
     using PhongLightUBO  = slang_types::PhongLit::LightData;
     using PhongDebugUBO  = slang_types::PhongLit::DebugData;
     using UnlitFrameUBO  = slang_types::Unlit::FrameUBO;
-    using SkyboxFrameUBO = slang_types::Skybox::FrameUBO;
 
     /// CPU payloads built by the viewport stage for the current View.
     struct FramePayloads
@@ -51,7 +50,6 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase
         PhongLightUBO  phongLight{};
         PhongDebugUBO  phongDebug{};
         UnlitFrameUBO  unlitFrame{};
-        SkyboxFrameUBO skyboxFrame{};
     };
 
     struct Binding
@@ -60,7 +58,6 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase
         DescriptorSetHandle pbrFrameDescriptorSet{};
         DescriptorSetHandle phongFrameDescriptorSet{};
         DescriptorSetHandle unlitFrameDescriptorSet{};
-        DescriptorSetHandle skyboxFrameDescriptorSet{};
         stdptr<IBuffer>     skinningBuffer;
 
         FrameUploadArena::Allocation pbrFrame{};
@@ -69,13 +66,12 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase
         FrameUploadArena::Allocation phongLight{};
         FrameUploadArena::Allocation phongDebug{};
         FrameUploadArena::Allocation unlitFrame{};
-        FrameUploadArena::Allocation skyboxFrame{};
 
         [[nodiscard]] bool isValid() const
         {
             return skinningDescriptorSet && skinningBuffer &&
                    pbrFrameDescriptorSet && phongFrameDescriptorSet &&
-                   unlitFrameDescriptorSet && skyboxFrameDescriptorSet &&
+                   unlitFrameDescriptorSet &&
                    pbrFrame.valid() && pbrLight.valid();
         }
     };
@@ -114,7 +110,6 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase
     [[nodiscard]] stdptr<IDescriptorSetLayout> getPBRFrameDSL() const { return _pbrFrameDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getPhongFrameDSL() const { return _phongFrameDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getUnlitFrameDSL() const { return _unlitFrameDSL; }
-    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxFrameDSL() const { return _skyboxFrameDSL; }
     [[nodiscard]] const Binding*               getViewBinding(uint32_t flightIndex, uint32_t viewSlot) const;
     [[nodiscard]] const ViewResources*         getViewResources(uint32_t flightIndex, uint32_t viewSlot) const;
     [[nodiscard]] ViewResources*               mutableViewResources(uint32_t flightIndex, uint32_t viewSlot);
@@ -124,14 +119,12 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase
     stdptr<IDescriptorSetLayout> _pbrFrameDSL;
     stdptr<IDescriptorSetLayout> _phongFrameDSL;
     stdptr<IDescriptorSetLayout> _unlitFrameDSL;
-    stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
     RenderViewBindingTable<ViewResources> _viewBindings;
 
     bool ensureViewDescriptors(RenderSubmission& submission, Binding& binding);
     void                    updatePBRFrameDescriptorSet(const Binding& binding);
     void                    updatePhongFrameDescriptorSet(const Binding& binding);
     void                    updateUnlitFrameDescriptorSet(const Binding& binding);
-    void                    updateSkyboxFrameDescriptorSet(const Binding& binding);
 };
 
 } // namespace ya

@@ -118,9 +118,6 @@ class YA_RENDER_3D_API ForwardViewAuxPasses
     void destroy();
     void beginFrame();
     void refreshPipelineFormats(const RenderAttachmentFormats& formats);
-    /// Build the current frame's skybox payload; the pipeline uploads it
-    /// through ForwardFrameResourceSet (FG-701).
-    void prepare(const RenderStageContext& ctx, SkyboxFrameUBO& outFrame);
 
     void drawSkybox(const DrawContext& ctx);
     void drawSimple(const DrawContext& ctx);
@@ -132,6 +129,7 @@ class YA_RENDER_3D_API ForwardViewAuxPasses
 
     [[nodiscard]] EDebugMode getDebugMode() const { return _debugMode; }
     void                     setDebugMode(EDebugMode mode);
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxFrameDSL() const { return _skyboxFrameDSL; }
     [[nodiscard]] DebugUBO&       getDebugUBO() { return _debugUBO; }
     [[nodiscard]] const DebugUBO& getDebugUBO() const { return _debugUBO; }
 

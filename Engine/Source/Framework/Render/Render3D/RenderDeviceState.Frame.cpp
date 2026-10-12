@@ -111,8 +111,9 @@ PreparedPipelineFrameResult RenderDeviceState::prepareFrameRecord(const RenderFr
     // resources are keyed by it. See PipelineCoordinator::applyPendingChanges.
     _pipelineCoordinator.applyPendingChanges();
 
-    // C1/C2: resolve composition and collect the View target requests it makes
-    // at the safe point, before any command or submission exists.
+    // Resolve composition and collect the View target requests it makes at the
+    // safe point, before any command or submission exists. Both pipelines
+    // resolve one, so there is no pre-composition allocation path.
     PreparedPipelineFrame prepared;
     prepared.pipelineKind = resolveActivePipelineKind();
     prepared.hostTick     = plan.frame.hostTick;
@@ -124,9 +125,6 @@ PreparedPipelineFrameResult RenderDeviceState::prepareFrameRecord(const RenderFr
         if (composition == EFrameComposition::Failed) {
             YA_CORE_ERROR("Failed to resolve the active pipeline composition before recording");
             return std::nullopt; // preparation failure aborts recording
-        }
-        if (composition == EFrameComposition::NotApplicable) {
-            pipeline->appendTargetRequests(plan.sceneRender.plan(), requests);
         }
         if (!_viewTargets.prepare(requests)) {
             YA_CORE_ERROR("Failed to prepare View targets before recording");

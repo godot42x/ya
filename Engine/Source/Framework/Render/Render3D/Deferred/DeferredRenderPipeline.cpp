@@ -487,6 +487,7 @@ DeferredPipelineRecipe::Config DeferredRenderPipeline::buildRecipeConfig(const R
     config.finalize.bOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT);
     config.finalize.displayFormat = POSTPROCESS_COLOR_FORMAT;
     config.finalize.displayUsage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc;
+    config.finalize.importLabel   = deferred_pass_names::kDisplayImport;
     return config;
 }
 

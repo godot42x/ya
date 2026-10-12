@@ -21,6 +21,12 @@ inline constexpr std::string_view kSprites           = "Deferred Sprites";
 inline constexpr std::string_view kForwardTransparent = "Deferred Forward Transparent";
 inline constexpr std::string_view kEntityId          = "Deferred EntityId";
 
+/// Diagnostic import labels of feature-owned targets. Features are shared
+/// between pipelines, so the pipeline that owns the map states the vocabulary.
+inline constexpr std::string_view kEntityIdImport       = "DeferredView.EntityId";
+inline constexpr std::string_view kDisplayImport        = "DeferredView.Display";
+inline constexpr std::string_view kBloomImportPrefix    = "Deferred.";
+
 } // namespace deferred_pass_names
 
 /// Graph export names of the Deferred view's public outputs. These are the

@@ -510,3 +510,34 @@
 - 保留：`ViewResources` 混合 bag（C4）、`_lastBlurPassCount`（plan-C2）、M08/M10/M13、entity-id/gizmo hook。
 - 未做：C4 Forward recipe 本身（下一批）。
 - 工作区：`Engine/Shader/Slang/Common/Limits.slang`（`MAX_POINT_LIGHTS_DEFERRED`）与 `Engine/Plugins/log.cc` 是并行会话/灯光线改动，未 stage、未提交。
+
+## 2026-10-13 — C4a：Forward 接入同一 recipe，三个颜色效果 feature 跨管线共享
+
+### 目标与边界
+
+**单一验收目标**：Forward 有一条与 Deferred 同协议的 typed recipe；至少一类 feature 真正跨两条管线复用同一实现；Forward 侧混合生命周期的 skybox 资源收口；两管线都不再走预组合分配路径。
+
+### 实施内容
+
+- `ForwardPipelineRecipe.{h,cpp}`：`resolve` / `prepareBindings` / `appendGraph`，map 为 opaque → skybox → 透明槽 → entity id → bloom → finalize。`ResolvedView::collectViewTargets()` 是 Forward View target 的单一来源；`resolveFrameComposition` 与 Deferred 同形。
+- **共享 feature（M16 核心证据）**：`BloomFeature` / `EntityIdFeature` / `FinalizeFeature` 移入 `Composition/Features/`；`Settings` 增加 `passName` / `importLabel` / `importLabelPrefix` / `depthFinalLayout`，由各自 recipe 从管线词汇表传入。Deferred 侧字符串逐字不变（`Deferred EntityId` / `DeferredView.EntityId` / `DeferredView.Display` / `Deferred.`），Forward 用 `forward_pass_names` 新词汇表（`ForwardPassNames.h`，替换被删的 `ForwardFrameGraphResources.h`）。
+- `ForwardOpaqueFeature`：clear + PBR/Phong/Unlit/Simple + direction overlay + debug；`Facts` 携带 `ForwardViewStage::PassContext`（沿用既有"recording 输入走 Facts"模式）。`ForwardSkyboxFeature`：frame UBO 在 resolve 构建、prepare 上传、append import，depth/color 保持 attachable（不套 `declareColorContinuation`，因为 Forward 的后续 pass 仍 attach color）。
+- **M17 Forward 半边**：skybox frame UBO/DS 移出 `ForwardFrameResourceSet`（唯一消费者是 skybox pass）；`ForwardViewAuxPasses` 自建并持有 `FwdSkybox_PerFrame_DSL`；`ForwardViewAuxPasses::prepare` 与 `ForwardFramePayloads::skyboxFrame` 删除。`ForwardViewStage::execute*` 去掉 `Binding` 参数（只重复 pass context 已带的 set）。
+- **删除**：`ForwardFrameGraphOrchestrator.{h,cpp}`、`ForwardFrameGraphPasses.{h,cpp}`、`ForwardFrameGraphResources.h`；`EFrameComposition::NotApplicable` 与 `IRenderPipeline::appendTargetRequests`（两管线都 resolve，`RenderDeviceState.Frame.cpp` 无回退分支）。`ForwardFrameGraphOrchestratorTest.cpp` → `ForwardPipelineRecipeTest.cpp`（3 例：默认无 optional target、Config/Prepare 默认值、bloom 三个 role 稳定追加）。
+
+### 一处实现期 bug（如实记录）
+
+首轮 Forward 截图 mean 43.47 vs 基线 117.48（偏暗）：`ForwardSkyboxFeature::Facts.frameData` 未由 recipe 传入，skybox frame UBO 全零。补 `recording.frameData` 后与基线**逐像素一致**。这正是"resolved 值单一来源"要防的错误类型，而它被截图门禁抓到。
+
+### 验证
+
+- 编译：`xmake b ya-render-3d-test` / `xmake b ya-runtime` ok。
+- 测试：`xmake r ya-render-3d-test` 223/223（40 suites）；`python3 Script/ya.py test --target ya` 1814/1814。
+- Runtime（HelloMaterial，warmup 180）：Deferred vs `c3b-ssao-on.png`、Forward vs `composition-forward.png`、切回 Deferred vs c3b 基线——三帧**逐像素 max diff 0**。日志除历史 VkDescriptorPool 告警外无 ERROR。
+- 证据：`Engine/Saved/Automation/c4b-{deferred,forward,deferred-back}.png`、`control-game-HelloMaterial-53222.log`（gitignored）。
+
+### 保留 / 未做 / 偏离
+
+- **未做（C4b）**：Shadow typed token（M18）——shadow 仍由 pipeline 侧 `_shadowStage->appendGraphPasses` 直调，两 recipe 均如此；`ViewResources` 剩余槽位复核。
+- 保留：透明槽仍是 recipe 内联声明（无功能契约，与 Deferred 的 forward-opaque 槽同待遇）。
+- 提交卫生：本轮 `git mv` 后按 pathspec 提交曾漏掉删除（HEAD 一度同时含新旧路径）。用 `read-tree` + `commit-tree` 重建提交修正为 `6b2581f8`；重建过程重置了 index，已把并行会话（rpg-prototype）的 5 项 R100 rename 逐项恢复。教训记入提交说明与本文件：**带 rename 的提交必须 diff 校验 HEAD 树，不能只信 pathspec add**。

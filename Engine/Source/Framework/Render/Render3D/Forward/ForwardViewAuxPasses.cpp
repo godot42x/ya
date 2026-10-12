@@ -30,8 +30,17 @@ static const VertexBufferDescription kAuxVBDesc{.slot = 0, .pitch = sizeof(ya::V
 
 void ForwardViewAuxPasses::init(const InitDesc& desc)
 {
-    _render          = desc.render;
-    _skyboxFrameDSL  = desc.skyboxFrameDSL;
+    _render = desc.render;
+    // The skybox frame layout describes this stage's own shader, so the stage
+    // creates and holds it rather than taking it from a shared View bag.
+    _skyboxFrameDSL = IDescriptorSetLayout::create(
+        _render,
+        DescriptorSetLayoutDesc{
+            .label    = "FwdSkybox_PerFrame_DSL",
+            .set      = 0,
+            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
+        });
+    YA_CORE_ASSERT(_skyboxFrameDSL != nullptr, "ForwardViewAuxPasses failed to create skybox frame layout");
     initSimple(desc);
     initSkybox(desc);
     initDebug(desc);
@@ -113,19 +122,6 @@ void ForwardViewAuxPasses::refreshPipelineFormats(const RenderAttachmentFormats&
         _debugPipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = formats.depthFormat.value_or(EFormat::Undefined);
         _debugPipeline->updateDesc(_debugPipelineCI);
     }
-}
-
-void ForwardViewAuxPasses::prepare(const RenderStageContext& ctx,
-                                       SkyboxFrameUBO& outFrame)
-{
-    if (!ctx.frameData) {
-        return;
-    }
-
-    outFrame = SkyboxFrameUBO{
-        .proj = ctx.frameData->projection,
-        .view       = FMath::dropTranslation(ctx.frameData->view),
-    };
 }
 
 void ForwardViewAuxPasses::initSimple(const InitDesc& desc)

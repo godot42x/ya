@@ -1,44 +1,55 @@
 #pragma once
 
 #include "Graph/RenderGraph.h"
-#include "RHI/RenderDefines.h"
 #include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Composition/FeatureProtocol.h"
+
+#include <optional>
 
 namespace ya
 {
 
-struct FrameContext;
 struct PostProcessingStage;
 class RenderSubmission;
 
-/// Finalize: the mandatory display pass. It applies the configured grading (or
-/// none) and the display encoding to the linear color stream and writes the
-/// View's DisplayColor target, which is what publication exposes as `display`.
+/// Bloom as a multi-pass color contribution: extract → blur chain → composite,
+/// all continuing the same color stream. The feature declares the three View
+/// targets it needs and owns the pass sequence through its device helper.
 ///
-/// The pass runs every frame; grading/Bloom settings only change its look, never
-/// whether it exists.
-struct FinalizeFeature
+/// Disabled: the color passes through unchanged and the feature allocates no
+/// targets and no descriptor sets.
+///
+/// Shared by both world pipelines: each resolves it with its own import label
+/// prefix so the View's diagnostics keep naming the pipeline they belong to.
+struct BloomFeature
 {
     using Stage = PostProcessingStage;
 
     struct Settings
     {
-        bool           bEnabled      = true;
-        bool           bOutputIsSRGB = false;
-        EFormat::T     displayFormat = EFormat::R8G8B8A8_UNORM;
-        EImageUsage::T displayUsage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc;
+        bool bEnabled = false;
+        /// Prefix of this View's diagnostic import labels ("Deferred.",
+        /// "ForwardView."). Stated by the recipe that owns the map.
+        std::string_view importLabelPrefix{};
     };
 
     struct Facts
     {
-        Extent2D       viewExtent{};
-        FrameContext*  postContext = nullptr;
+        Extent2D viewExtent{};
     };
 
     struct Inputs
     {
         RGTextureHandle color{};
+    };
+
+    struct Resolved
+    {
+        bool                                bEnabled = false;
+        std::optional<ViewTargetRequirement> extract{};
+        std::optional<ViewTargetRequirement> blur{};
+        std::optional<ViewTargetRequirement> composite{};
+        std::string_view                    importLabelPrefix{};
     };
 
     struct PrepareContext
@@ -49,19 +60,12 @@ struct FinalizeFeature
 
     struct Prepared
     {
-        ToneMapPassBindings toneMap{};
-    };
-
-    struct Resolved
-    {
-        bool                bEnabled      = false;
-        bool                bOutputIsSRGB = false;
-        ViewTargetRequirement target{};
+        BloomPassBindings bloom{};
     };
 
     struct GraphOutputs
     {
-        RGTextureHandle display{};
+        RGTextureHandle color{};
     };
 
     [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;
@@ -78,6 +82,6 @@ struct FinalizeFeature
                                                             const Inputs&              inputs) const;
 };
 
-static_assert(Feature<FinalizeFeature>, "FinalizeFeature must satisfy the composition Feature protocol");
+static_assert(Feature<BloomFeature>, "BloomFeature must satisfy the composition Feature protocol");
 
 } // namespace ya

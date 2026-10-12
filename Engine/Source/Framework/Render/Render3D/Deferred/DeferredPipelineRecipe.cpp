@@ -89,7 +89,12 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
     const SkyboxFeature::Settings        skyboxSettings{};
     const Sprite2DFeature::Settings      spriteSettings{};
     const OverlayFeature::Settings       overlaySettings{};
-    const EntityIdFeature::Settings      entityIdSettings{};
+
+    // Shared features take this pipeline's graph vocabulary from the recipe
+    // (the pipeline owns the map, so it owns the names on it).
+    EntityIdFeature::Settings entityIdSettings;
+    entityIdSettings.passName    = deferred_pass_names::kEntityId;
+    entityIdSettings.importLabel = deferred_pass_names::kEntityIdImport;
 
     const GBufferFeature       gbufferFeature;
     const SSAOFeature          ssaoFeature;
@@ -142,8 +147,11 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
             Sprite2DFeature::Facts{.viewExtent = view.viewExtent, .frameData = recording.frameData},
             Sprite2DFeature::Inputs{});
 
+        BloomFeature::Settings bloomSettings = config.bloom;
+        bloomSettings.importLabelPrefix      = deferred_pass_names::kBloomImportPrefix;
+
         view.bloom = bloomFeature.resolve(
-            config.bloom,
+            bloomSettings,
             BloomFeature::Facts{.viewExtent = view.viewExtent},
             BloomFeature::Inputs{});
 

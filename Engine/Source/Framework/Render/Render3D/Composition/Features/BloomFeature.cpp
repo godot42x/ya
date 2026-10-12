@@ -1,9 +1,11 @@
-#include "Render3D/Deferred/Features/BloomFeature.h"
+#include "Render3D/Composition/Features/BloomFeature.h"
 
 #include "Graph/RenderGraphImportUtils.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Pipelines/BloomPostprocessing.h"
+
+#include <string>
 
 namespace ya
 {
@@ -16,7 +18,8 @@ BloomFeature::Resolved BloomFeature::resolve(const Settings& settings,
     (void)inputs;
 
     Resolved resolved;
-    resolved.bEnabled = settings.bEnabled;
+    resolved.bEnabled          = settings.bEnabled;
+    resolved.importLabelPrefix = settings.importLabelPrefix;
     if (!resolved.bEnabled) {
         return resolved;
     }
@@ -87,9 +90,13 @@ Result<BloomFeature::GraphOutputs, FeatureError> BloomFeature::append(RenderGrap
             makeImportedTextureDesc(*target, label, EImageLayout::ShaderReadOnlyOptimal, requirement->usage));
     };
 
-    const RGTextureHandle extract = importTarget(EViewAttachment::BloomExtract, "Deferred.BloomExtract", resolved.extract);
-    const RGTextureHandle blur    = importTarget(EViewAttachment::BloomBlur, "Deferred.BloomBlur", resolved.blur);
-    const RGTextureHandle composite = importTarget(EViewAttachment::BloomComposite, "Deferred.BloomComposite", resolved.composite);
+    const std::string labelPrefix{resolved.importLabelPrefix};
+    const RGTextureHandle extract = importTarget(
+        EViewAttachment::BloomExtract, labelPrefix + "BloomExtract", resolved.extract);
+    const RGTextureHandle blur = importTarget(
+        EViewAttachment::BloomBlur, labelPrefix + "BloomBlur", resolved.blur);
+    const RGTextureHandle composite = importTarget(
+        EViewAttachment::BloomComposite, labelPrefix + "BloomComposite", resolved.composite);
     if (!extract.isValid() || !blur.isValid() || !composite.isValid()) {
         YA_CORE_ERROR("Bloom is enabled but the View has no prepared Bloom targets");
         return FeatureError::MissingDependency;

@@ -49,15 +49,6 @@ void ForwardFrameResourceSet::init(IRender* render)
             .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment}},
         });
 
-    _skyboxFrameDSL = IDescriptorSetLayout::create(
-        _render,
-        DescriptorSetLayoutDesc{
-            .label    = "FwdSkybox_PerFrame_DSL",
-            .set      = 0,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-        });
-
-    YA_CORE_ASSERT(_skyboxFrameDSL != nullptr, "ForwardFrameResourceSet failed to create skybox frame layout");
 }
 
 void ForwardFrameResourceSet::destroy()
@@ -67,13 +58,12 @@ void ForwardFrameResourceSet::destroy()
     _pbrFrameDSL.reset();
     _phongFrameDSL.reset();
     _unlitFrameDSL.reset();
-    _skyboxFrameDSL.reset();
 }
 
 bool ForwardFrameResourceSet::ensureViewDescriptors(RenderSubmission& submission, Binding& binding)
 {
     if (binding.pbrFrameDescriptorSet && binding.phongFrameDescriptorSet &&
-        binding.unlitFrameDescriptorSet && binding.skyboxFrameDescriptorSet) {
+        binding.unlitFrameDescriptorSet) {
         return true;
     }
 
@@ -86,12 +76,8 @@ bool ForwardFrameResourceSet::ensureViewDescriptors(RenderSubmission& submission
     if (!binding.unlitFrameDescriptorSet) {
         binding.unlitFrameDescriptorSet = submission.allocateDescriptorSet(_unlitFrameDSL, 1);
     }
-    if (!binding.skyboxFrameDescriptorSet) {
-        binding.skyboxFrameDescriptorSet = submission.allocateDescriptorSet(_skyboxFrameDSL, 1);
-    }
-
     return binding.pbrFrameDescriptorSet && binding.phongFrameDescriptorSet &&
-           binding.unlitFrameDescriptorSet && binding.skyboxFrameDescriptorSet;
+           binding.unlitFrameDescriptorSet;
 }
 
 bool ForwardFrameResourceSet::writeViewPayloads(
@@ -111,8 +97,7 @@ bool ForwardFrameResourceSet::writeViewPayloads(
     auto phongLight = writeUploadSlice(arena, flightIndex, alignment, &payloads.phongLight, sizeof(payloads.phongLight));
     auto phongDebug = writeUploadSlice(arena, flightIndex, alignment, &payloads.phongDebug, sizeof(payloads.phongDebug));
     auto unlitFrame = writeUploadSlice(arena, flightIndex, alignment, &payloads.unlitFrame, sizeof(payloads.unlitFrame));
-    auto skyboxFrame = writeUploadSlice(arena, flightIndex, alignment, &payloads.skyboxFrame, sizeof(payloads.skyboxFrame));
-    if (!pbrFrame || !pbrLight || !phongFrame || !phongLight || !phongDebug || !unlitFrame || !skyboxFrame) {
+    if (!pbrFrame || !pbrLight || !phongFrame || !phongLight || !phongDebug || !unlitFrame) {
         return false;
     }
 
@@ -122,7 +107,6 @@ bool ForwardFrameResourceSet::writeViewPayloads(
     binding.phongLight  = *phongLight;
     binding.phongDebug  = *phongDebug;
     binding.unlitFrame  = *unlitFrame;
-    binding.skyboxFrame = *skyboxFrame;
     return true;
 }
 
@@ -142,8 +126,7 @@ bool ForwardFrameResourceSet::writeViewPayloads(
     auto phongLight  = writeUploadSlice(submission, alignment, &payloads.phongLight, sizeof(payloads.phongLight));
     auto phongDebug  = writeUploadSlice(submission, alignment, &payloads.phongDebug, sizeof(payloads.phongDebug));
     auto unlitFrame  = writeUploadSlice(submission, alignment, &payloads.unlitFrame, sizeof(payloads.unlitFrame));
-    auto skyboxFrame = writeUploadSlice(submission, alignment, &payloads.skyboxFrame, sizeof(payloads.skyboxFrame));
-    if (!pbrFrame || !pbrLight || !phongFrame || !phongLight || !phongDebug || !unlitFrame || !skyboxFrame) {
+    if (!pbrFrame || !pbrLight || !phongFrame || !phongLight || !phongDebug || !unlitFrame) {
         return false;
     }
 
@@ -153,7 +136,6 @@ bool ForwardFrameResourceSet::writeViewPayloads(
     binding.phongLight  = *phongLight;
     binding.phongDebug  = *phongDebug;
     binding.unlitFrame  = *unlitFrame;
-    binding.skyboxFrame = *skyboxFrame;
     return true;
 }
 
@@ -213,7 +195,6 @@ const ForwardFrameResourceSet::Binding* ForwardFrameResourceSet::beginView(
     updatePBRFrameDescriptorSet(slot->frame);
     updatePhongFrameDescriptorSet(slot->frame);
     updateUnlitFrameDescriptorSet(slot->frame);
-    updateSkyboxFrameDescriptorSet(slot->frame);
 
     if (!_viewBindings.commitNextView(submission.flightIndex())) {
         return nullptr;
@@ -304,16 +285,5 @@ void ForwardFrameResourceSet::updateUnlitFrameDescriptorSet(const Binding& bindi
     });
 }
 
-void ForwardFrameResourceSet::updateSkyboxFrameDescriptorSet(const Binding& binding)
-{
-    _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::genBufferWrite(
-            binding.skyboxFrameDescriptorSet,
-            0,
-            0,
-            EPipelineDescriptorType::UniformBuffer,
-            {binding.skyboxFrame.descriptor()}),
-    });
-}
 
 } // namespace ya

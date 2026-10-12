@@ -1,10 +1,9 @@
-#include "Render3D/Deferred/Features/EntityIdFeature.h"
+#include "Render3D/Composition/Features/EntityIdFeature.h"
 
 #include "Graph/RenderGraphImportUtils.h"
 #include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/ViewGraphName.h"
-#include "Render3D/Deferred/DeferredPassNames.h"
 #include "Render3D/RenderFrameData.h"
 
 namespace ya
@@ -18,7 +17,10 @@ EntityIdFeature::Resolved EntityIdFeature::resolve(const Settings& settings,
     (void)inputs;
 
     Resolved resolved;
-    resolved.bEnabled = settings.bEnabled;
+    resolved.bEnabled    = settings.bEnabled;
+    resolved.passName    = settings.passName;
+    resolved.importLabel      = settings.importLabel;
+    resolved.depthFinalLayout = settings.depthFinalLayout;
     resolved.target = ViewTargetRequirement{
         .role   = EViewAttachment::EntityId,
         .format = EFormat::R32_UINT,
@@ -74,7 +76,7 @@ Result<EntityIdFeature::GraphOutputs, FeatureError> EntityIdFeature::append(Rend
         return FeatureError::MissingDependency;
     }
     outputs.entityId = graph.importTexture(
-        makeImportedTextureDesc(*target, "DeferredView.EntityId", EImageLayout::ColorAttachmentOptimal, resolved.target.usage));
+        makeImportedTextureDesc(*target, resolved.importLabel, EImageLayout::ColorAttachmentOptimal, resolved.target.usage));
 
     // Billboards are drawn by the overlay pass, which runs before this one, so
     // carry their camera-facing quads into the id pass to keep the id target
@@ -93,8 +95,8 @@ Result<EntityIdFeature::GraphOutputs, FeatureError> EntityIdFeature::append(Rend
 
     const Rect2D renderArea{.pos = {0, 0}, .extent = facts.viewExtent.toVec2()};
     (void)graph.addPass(
-        makeViewGraphName(deferred_pass_names::kEntityId, ctx.viewId),
-        [outputs, renderArea, inputs](RGPassBuilder& passBuilder) {
+        makeViewGraphName(resolved.passName, ctx.viewId),
+        [outputs, renderArea, inputs, depthFinalLayout = resolved.depthFinalLayout](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = renderArea,
                 .layerCount = 1,
@@ -109,7 +111,7 @@ Result<EntityIdFeature::GraphOutputs, FeatureError> EntityIdFeature::append(Rend
                     .depth       = inputs.depth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                    .finalLayout = depthFinalLayout,
                 },
             });
         },

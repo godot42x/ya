@@ -60,7 +60,6 @@ void ForwardViewStage::initWithDesc(const InitDesc& desc)
         .render = desc.render,
         .renderPass = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
-        .skyboxFrameDSL = desc.skyboxFrameDSL,
     });
 }
 
@@ -109,7 +108,9 @@ void ForwardViewStage::prepare(const RenderStageContext& ctx)
     _framePayloads = {};
     _litPasses.prepare(ctx, _framePayloads);
     _unlitPass.prepare(ctx, _framePayloads.unlitFrame);
-    _auxPasses.prepare(ctx, _framePayloads.skyboxFrame);
+    // The skybox frame UBO is the skybox feature's own payload now (built in its
+    // resolve, uploaded with its prepared binding), so the stage no longer
+    // stages it here.
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -124,51 +125,32 @@ void ForwardViewStage::execute(const RenderStageContext& ctx)
     YA_CORE_WARN("ForwardViewStage::execute(ctx) is a conformance stub; graph passes must use the per-pass overloads");
 }
 
-void ForwardViewStage::executeSkybox(const RenderStageContext& ctx,
-                                         const ForwardFrameResourceSet::Binding& binding,
-                                         const PassContext& passContext)
+void ForwardViewStage::executeSkybox(const RenderStageContext& ctx, const PassContext& passContext)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    PassContext passCtx = passContext;
-    passCtx.skyboxFrameDescriptorSet = binding.skyboxFrameDescriptorSet;
-    executePass(EPass::Skybox, passCtx);
+    executePass(EPass::Skybox, passContext);
 }
 
-void ForwardViewStage::executePBR(const RenderStageContext& ctx,
-                                      const ForwardFrameResourceSet::Binding& binding,
-                                      const PassContext& passContext)
+void ForwardViewStage::executePBR(const RenderStageContext& ctx, const PassContext& passContext)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    PassContext passCtx = passContext;
-    passCtx.skinningDescriptorSet   = binding.skinningDescriptorSet;
-    passCtx.pbrFrameDescriptorSet   = binding.pbrFrameDescriptorSet;
-    executePass(EPass::PBR, passCtx);
+    executePass(EPass::PBR, passContext);
 }
 
-void ForwardViewStage::executePhong(const RenderStageContext& ctx,
-                                        const ForwardFrameResourceSet::Binding& binding,
-                                        const PassContext& passContext)
+void ForwardViewStage::executePhong(const RenderStageContext& ctx, const PassContext& passContext)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    PassContext passCtx = passContext;
-    passCtx.skinningDescriptorSet    = binding.skinningDescriptorSet;
-    passCtx.phongFrameDescriptorSet  = binding.phongFrameDescriptorSet;
-    executePass(EPass::Phong, passCtx);
+    executePass(EPass::Phong, passContext);
 }
 
-void ForwardViewStage::executeUnlit(const RenderStageContext& ctx,
-                                        const ForwardFrameResourceSet::Binding& binding,
-                                        const PassContext& passContext)
+void ForwardViewStage::executeUnlit(const RenderStageContext& ctx, const PassContext& passContext)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    PassContext passCtx = passContext;
-    passCtx.skinningDescriptorSet   = binding.skinningDescriptorSet;
-    passCtx.unlitFrameDescriptorSet = binding.unlitFrameDescriptorSet;
-    executePass(EPass::Unlit, passCtx);
+    executePass(EPass::Unlit, passContext);
 }
 
 void ForwardViewStage::executeSimple(const RenderStageContext& ctx, const PassContext& passContext)
