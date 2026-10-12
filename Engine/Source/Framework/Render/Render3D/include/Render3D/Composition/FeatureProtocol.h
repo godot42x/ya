@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Core/Result.h"
+#include "Core/Optional.h"
 #include "Graph/RenderGraph.h"
 
 #include <cstdint>
@@ -11,59 +13,34 @@ namespace ya
 {
 
 // ────────────────────────────────────────────────────────────────────────────
-// Typed resource references
+// Feature errors
 // ────────────────────────────────────────────────────────────────────────────
 
-/// Type-safe texture reference in composition. The tag T is compile-time only;
-/// lowering may alias multiple TextureRef<T> to the same RG handle.
-template <typename T>
-struct TextureRef
+enum class FeatureError
 {
-    static_assert(std::is_empty_v<T>, "TextureRef tag must be empty type");
-
-    uint32_t _index = ~0u;
-
-    constexpr TextureRef() = default;
-    explicit constexpr TextureRef(uint32_t idx) : _index(idx) {}
-
-    [[nodiscard]] constexpr bool isValid() const { return _index != ~0u; }
-    [[nodiscard]] constexpr uint32_t index() const { return _index; }
-
-    constexpr bool operator==(const TextureRef& other) const = default;
+    MissingDependency,
+    MissingContext,
+    AllocationFailed,
+    InvalidInput,
 };
+
+// ────────────────────────────────────────────────────────────────────────────
+// Typed resource references (use Core::OptionalHandle<T>)
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Type-safe texture reference in composition.
+/// Use OptionalHandle<T> from Core/Optional.h for typed handle references.
+/// Not to be confused with Core/AssetRef.h TextureRef (asset path reference).
+template <typename T>
+using CompositionTextureRef = OptionalHandle<T>;
 
 /// Type-safe buffer reference in composition.
 template <typename T>
-struct BufferRef
-{
-    static_assert(std::is_empty_v<T>, "BufferRef tag must be empty type");
+using CompositionBufferRef = OptionalHandle<T>;
 
-    uint32_t _index = ~0u;
-
-    constexpr BufferRef() = default;
-    explicit constexpr BufferRef(uint32_t idx) : _index(idx) {}
-
-    [[nodiscard]] constexpr bool isValid() const { return _index != ~0u; }
-    [[nodiscard]] constexpr uint32_t index() const { return _index; }
-
-    constexpr bool operator==(const BufferRef& other) const = default;
-};
-
-/// Reference to another feature's prepared bindings. T is the prepared data type.
-/// PreparedRef<T> must be resolved in prepare phase, not resolve phase.
+/// Reference to another feature's prepared bindings.
 template <typename T>
-struct PreparedRef
-{
-    uint32_t _index = ~0u;
-
-    constexpr PreparedRef() = default;
-    explicit constexpr PreparedRef(uint32_t idx) : _index(idx) {}
-
-    [[nodiscard]] constexpr bool isValid() const { return _index != ~0u; }
-    [[nodiscard]] constexpr uint32_t index() const { return _index; }
-
-    constexpr bool operator==(const PreparedRef& other) const = default;
-};
+using CompositionPreparedRef = OptionalHandle<T>;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Composition tags (empty types for typed refs)
@@ -80,9 +57,27 @@ struct Depth {};
 struct Color {};
 struct DisplayColor {};
 struct AmbientOcclusion {};
+struct AO {}; // Alias for AmbientOcclusion
 struct Shadow {};
+struct FrameUBO {};
+struct LightUBO {};
 
 } // namespace composition_tag
+
+// ────────────────────────────────────────────────────────────────────────────
+// Typed aliases
+// ────────────────────────────────────────────────────────────────────────────
+
+using GBufferAlbedo = composition_tag::GBufferAlbedo;
+using GBufferNormal = composition_tag::GBufferNormal;
+using GBufferMaterial = composition_tag::GBufferMaterial;
+using GBufferEmissive = composition_tag::GBufferEmissive;
+using Depth = composition_tag::Depth;
+using Color = composition_tag::Color;
+using AO = composition_tag::AO;
+
+// Note: OptionalAO moved to SSAOFeature::OptionalAO (using OptionalHandle<ssao_tag::AO>)
+// Each feature defines its own optional output types for type safety.
 
 // ────────────────────────────────────────────────────────────────────────────
 // Feature concept (C++20)

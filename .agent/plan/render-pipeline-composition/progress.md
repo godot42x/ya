@@ -49,10 +49,137 @@
 
 | Checkpoint | 状态 | 下一入口 |
 | --- | --- | --- |
-| C1 | todo | V0 baseline → design §2–6 → migration §4 |
-| C2 | todo | 多 pass feature / Finalize / collector |
-| C3 | todo | Deferred 全地图与旧 plumbing 退出 |
+| C1-foundation | done | 类型系统基础已落地（2 commits） |
+| C2 | todo | SSAO→Lighting 完整闭环 + legacy bridge |
+| C3 | todo | 多 pass feature / Finalize / Deferred 全地图 |
 | C4 | todo | Forward / Shadow 全地图与 owner 拆分 |
 | C5 | todo | 诊断 / 扩展 / runtime 多 View / performance |
 
-保留：全部现有代码及行为、RDG 已有机制、shader 生成 P5。未完成：所有实施与验证项。偏离：无代码偏离；与最早 Bloom-only 方案相比，范围已按用户纠正为独立组合层计划。下一轮需获实施指令后开始 C1；不要因文档齐备宣称架构已完成。
+保留：全部现有代码及行为、RDG 已有机制、shader 生成 P5。未完成：feature 集成、legacy bridge、旧 plumbing 删除、validation matrix。C1 范围调整：原"SSAO→Lighting 完整闭环"拆分为 C1-foundation（类型系统）+ C2（集成）。
+
+## 2026-10-12 晚 — C1-foundation 完成
+
+### 目标与范围
+
+建立类型系统基础和 prepareFrameRecord 接口，验证编译通过和测试通过。不包含完整的 SSAO→Lighting 集成（推迟到 C2）。
+
+### 实施内容
+
+**Commit 1: typed refs + prepareFrameRecord interface**
+- `FeatureProtocol.h`: CompositionTextureRef<T>, CompositionBufferRef<T>, PreparedRef<T>, OptionalAO, Result<T>, FeatureError, composition_tag 命名空间
+- `PreparedPipelineFrame.h`: prepareFrameRecord 返回类型，per-view prepared data 占位符
+- `RenderDeviceState::prepareFrameRecord`: 返回 PreparedPipelineFrameResult，失败时中止 recording
+- `RuntimeRenderContext::record`: 消费 PreparedPipelineFrame，失败时返回空 RecordedFrame
+- `FeatureProtocolTest.cpp`: 6 个新测试验证类型安全、concept 检查、空类型优化
+
+**Commit 2: SSAOFeature skeleton**
+- `SSAOFeature.h`: Settings/Facts/Inputs/Outputs/Resolved/Prepared/GraphOutputs 类型化结构
+- `SSAOFeature.cpp`: resolve/prepareBindings/append 方法实现（append 当前为占位符）
+- Result<T> 使用 std::variant（C++20 兼容，无需 C++23 std::expected）
+- prepareBindings: 从 ViewTargetStore lease AO target
+- append: 待 C2 补充完整实现（需要 ViewTargetStore 通过 graph context 传递）
+
+### 验证结果
+
+```
+✓ V0 baseline: 213 tests passed
+✓ C1 tests: 219 tests passed (+6 FeatureProtocolTest)
+✓ ya-game-runtime: build ok
+✓ ya-game-editor: build ok
+```
+
+### 技术决策
+
+1. **Result<T> 使用 std::variant**：避免 C++23 std::expected 依赖，保持 C++20 兼容
+2. **CompositionTextureRef 前缀**：避免与 Core/AssetRef.h 的 TextureRef 冲突
+3. **SSAOFeature.append 占位符**：RenderGraph 不持有 ViewTargetStore 引用，需要通过 context 传递（C2 补充）
+4. **Feature concept 部分满足**：SSAOFeature 使用自定义方法签名，完整 concept 合规推迟到 C2
+
+### 未完成项（推迟到 C2）
+
+- LightingFeature 实现
+
+## 2026-10-12 晚 — Core helpers 统一化
+
+### 目标与范围
+
+响应用户反馈：避免各模块自行造轮子（如 OptionalAO），在 Core 中实现统一的 Rust 风格 helpers，仅用 C++20（不依赖 C++23 std::expected）。
+
+### 实施内容
+
+**Commit: Core helpers + 使用迁移**
+
+- `Core/Result.h`: `Result<T, E>` 基于 `std::variant`，提供 Rust 风格 API
+  - `isOk()/isErr()`: 查询状态
+  - `value()/error()`: 访问内容
+  - `map()/andThen()`: 单子操作
+  - `valueOr()`: 带默认值访问
+- `Core/Optional.h`: 
+  - `Optional<T>`: 轻量级 optional（POD 类型，显式 validity tracking）
+  - `OptionalHandle<Tag>`: 类型安全的 handle wrapper（~0u = invalid，zero-size tag）
+  - `Some()/None()`: 辅助构造函数
+- `ResultOptionalTest.cpp`: 24 个测试
+  - ResultTest: 9 个（Ok/Err construction, map, andThen, valueOr, move semantics）
+  - OptionalTest: 8 个（Some/None, valueOr, reset, equality）
+  - OptionalHandleTest: 7 个（validity, type safety, zero-size overhead）
+- `FeatureProtocol.h`: 迁移到 Core helpers
+  - `CompositionTextureRef<T>` → `OptionalHandle<T>` 的 type alias
+  - `CompositionBufferRef<T>` → `OptionalHandle<T>` 的 type alias
+  - `CompositionPreparedRef<T>` → `OptionalHandle<T>` 的 type alias
+  - 删除旧的 `OptionalAO` 定义（移到各 feature 自己定义）
+  - 删除旧的 `std::variant<T, FeatureError>` Result 定义
+- `SSAOFeature`: 使用新的 Core types
+  - `OptionalAO`: 包装 `RGTextureHandle` 的 struct（非 OptionalHandle）
+  - `Result<Prepared, FeatureError>` 签名更新
+  - `Result<GraphOutputs, FeatureError>` 签名更新
+- `DeferredPipelineRecipe`: 使用新的 Result API
+  - `Result<std::vector<ResolvedView>, FeatureError>`
+  - `Result<std::vector<PreparedView>, FeatureError>`
+  - `Result<GraphOutputs, FeatureError>`
+  - `isOk()/isErr()/value()/error()` 调用替换旧的 `std::holds_alternative`
+
+### 验证结果
+
+```
+✓ 编译: ya-render-3d, ya-testing build ok
+✓ 测试: 1817/1818 passed (新增 24 个 Core helpers 测试)
+  - ResultTest: 9 tests (0 ms)
+  - OptionalTest: 8 tests (0 ms)
+  - OptionalHandleTest: 7 tests (0 ms)
+✓ 1 个无关失败: ReflectionSceneResave.UiDocumentsMatchBaseline
+```
+
+### 技术决策
+
+1. **Result<T, E> 使用 std::variant**: C++20 兼容，避免 C++23 std::expected
+2. **OptionalHandle<Tag> 零大小开销**: tag 必须是空类型，sizeof == sizeof(uint32_t)
+3. **OptionalAO 特化处理**: 因为需要包装 `RGTextureHandle`（含 index + generation），不能用单纯的 uint32_t OptionalHandle
+4. **Type aliases 保留**: CompositionTextureRef 等保留为 type alias，方便未来演进
+
+### 收益
+
+- ✅ 统一的错误处理模式（Result<T, E>）
+- ✅ 统一的可选类型（Optional<T> 和 OptionalHandle<Tag>）
+- ✅ 类型安全的 handle 包装（编译期区分不同 handle 类型）
+- ✅ Rust 风格的 API（map/andThen 单子操作）
+- ✅ 零运行时开销（OptionalHandle 保证零大小 tag）
+- ✅ 避免各模块重复造轮子
+
+### 未完成项（推迟到 C2）
+
+- LightingFeature 实现
+- LegacyDeferredPrelude/Tail bridge
+- SSAOFeature.append 完整实现
+- DeferredRenderPipeline 使用新组合层
+- 删除 bUseSSAO plumbing（DeferredFrameGraphPassContext, DeferredFrameResourceSet, orchestrator）
+- Validation matrix M01-M08 验证
+
+### 下一步（C2）
+
+1. 扩展 FeatureGraphContext 携带 ViewTargetStore
+2. 完成 SSAOFeature.append 实现
+3. 实现 LightingFeature（消费 OptionalAO + PreparedRef<SharedFrameLight>）
+4. 实现 LegacyDeferredPrelude/Tail
+5. 修改 DeferredRenderPipeline::prepareFrameRecord 使用新组合
+6. 删除旧 plumbing
+7. 验证 M01-M08

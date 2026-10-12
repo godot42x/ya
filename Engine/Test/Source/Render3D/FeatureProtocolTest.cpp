@@ -9,8 +9,8 @@ TEST(FeatureProtocolTest, TextureRefTypeSafety)
 {
     using namespace composition_tag;
 
-    TextureRef<Color> color{0};
-    TextureRef<Depth> depth{0};
+    CompositionTextureRef<Color> color{0};
+    CompositionTextureRef<Depth> depth{0};
 
     // Same index but different types - not interchangeable
     EXPECT_TRUE(color.isValid());
@@ -23,11 +23,11 @@ TEST(FeatureProtocolTest, TextureRefTypeSafety)
     // depth = color;
 
     // Can compare same types
-    TextureRef<Color> color2{0};
+    CompositionTextureRef<Color> color2{0};
     EXPECT_EQ(color, color2);
 
     // Invalid refs
-    TextureRef<Color> invalid;
+    CompositionTextureRef<Color> invalid;
     EXPECT_FALSE(invalid.isValid());
     EXPECT_NE(color, invalid);
 }
@@ -37,8 +37,8 @@ TEST(FeatureProtocolTest, BufferRefTypeSafety)
     struct LightBuffer {};
     struct ShadowBuffer {};
 
-    BufferRef<LightBuffer> lights{1};
-    BufferRef<ShadowBuffer> shadows{1};
+    CompositionBufferRef<LightBuffer> lights{1};
+    CompositionBufferRef<ShadowBuffer> shadows{1};
 
     EXPECT_TRUE(lights.isValid());
     EXPECT_TRUE(shadows.isValid());
@@ -55,8 +55,8 @@ TEST(FeatureProtocolTest, PreparedRefTypeSafety)
     struct SSAOPrepared {};
     struct LightingPrepared {};
 
-    PreparedRef<SSAOPrepared> ssao{2};
-    PreparedRef<LightingPrepared> lighting{3};
+    CompositionPreparedRef<SSAOPrepared> ssao{2};
+    CompositionPreparedRef<LightingPrepared> lighting{3};
 
     EXPECT_TRUE(ssao.isValid());
     EXPECT_TRUE(lighting.isValid());
@@ -67,7 +67,7 @@ TEST(FeatureProtocolTest, PreparedRefTypeSafety)
     // This would fail to compile:
     // lighting = ssao;
 
-    PreparedRef<SSAOPrepared> invalid;
+    CompositionPreparedRef<SSAOPrepared> invalid;
     EXPECT_FALSE(invalid.isValid());
 }
 
@@ -86,10 +86,10 @@ TEST(FeatureProtocolTest, CompositionTagsAreEmpty)
     static_assert(std::is_empty_v<AmbientOcclusion>);
     static_assert(std::is_empty_v<Shadow>);
 
-    // TextureRef<T> should be just uint32_t in memory
-    static_assert(sizeof(TextureRef<Color>) == sizeof(uint32_t));
-    static_assert(sizeof(BufferRef<Color>) == sizeof(uint32_t));
-    static_assert(sizeof(PreparedRef<Color>) == sizeof(uint32_t));
+    // CompositionTextureRef<T> should be just uint32_t in memory
+    static_assert(sizeof(CompositionTextureRef<Color>) == sizeof(uint32_t));
+    static_assert(sizeof(CompositionBufferRef<Color>) == sizeof(uint32_t));
+    static_assert(sizeof(CompositionPreparedRef<Color>) == sizeof(uint32_t));
 }
 
 // Minimal feature implementation for concept validation
