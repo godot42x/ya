@@ -290,8 +290,12 @@
       "checkpoints": ["C5"],
       "expected": "测试专用 producer→multi-pass transform→consumer 经 request/prepare/lower/append/publish 完整运行，只需 feature 与 recipe 接线；无 core/context/bindings bag 改动",
       "verification": ["PipelineFeatureContractTest extension", "extension change map"],
-      "status": "todo",
-      "evidence": []
+      "status": "verified",
+      "evidence": [
+        "FeatureProtocolTest.TestOnlyFeatureRunsTheFullChainWithoutCorePlumbing：测试专用 TestTransformFeature（producer -> 两段多 pass transform over 私有 scratch -> result）经 resolve -> prepareBindings -> append -> compile 完整运行；static_assert(Feature<TestTransformFeature>) 证明它满足同一协议",
+        "扩展触点 = feature 自己的定义 + 测试接线：Stage 就是 RenderGraph（无设备对象）、PrepareContext 为空、私有 scratch 由 graph.createTexture 创建；全程零 pipeline/core/context/bindings bag 改动",
+        "负向证据（编译期）：首版把 transform 的 result 写成覆盖 scratch 自身，graph.compile 立刻报 ReadBeforeWrite；说明接线错误由 RDG 校验抓而不是静默"
+      ]
     },
     {
       "id": "M22",

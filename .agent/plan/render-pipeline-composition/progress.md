@@ -613,3 +613,19 @@
 
 - M21（扩展用例：测试专用 producer→transform→consumer 全链）、M22（双 View runtime 证据）、M23（performance/churn 前后对照）仍为 todo——见 todo.md。
 - C3 的两个 runtime hook（entity-id picking readback、direction gizmo 场景）仍未做。
+
+## 2026-10-13 — C5b：M21 扩展验收（测试 feature 全链跑通）
+
+### 实施内容
+
+`FeatureProtocolTest` 新增 `TestTransformFeature` + `TestOnlyFeatureRunsTheFullChainWithoutCorePlumbing`：一个测试专用 feature，`Stage` 就是 `RenderGraph`（无设备对象）、`PrepareContext` 为空、私有 scratch 由 `graph.createTexture` 创建，经 producer → 两段多 pass transform → result 完整跑 resolve → prepareBindings → append → compile。`static_assert(Feature<TestTransformFeature>)` 说明它满足同一 concept——扩展的触点只有 feature 自己的定义与测试接线。
+
+**负向证据**：首版把 transform 的 result 写成覆盖 scratch 自身（第二段既读又写同一张图且无中间态），`graph.compile()` 立刻报 `ReadBeforeWrite`；改成独立 result 后通过。接线错误由 RDG 校验抓住，不是静默通过。
+
+### 验证
+
+- `xmake r ya-render-3d-test` **225/225**；`python3 Script/ya.py test --target ya` **1809/1809**。
+
+### 保留
+
+- M22（双 View runtime）需要第二个 View 的声明入口，属应用/编辑器侧工作，不在本线范围；M23（performance/churn）依赖 perf-baseline 机制，同样是跨线任务。M20 的"与 RDG pass 区间显式关联"仍待补。已记入 todo 的 C5 余项。

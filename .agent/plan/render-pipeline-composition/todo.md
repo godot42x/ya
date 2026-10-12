@@ -32,6 +32,8 @@
   - 证据：render3d 224/224、full 1808/1808；**新实例**（未改任何设置）Deferred / Forward / 切回 Deferred 三帧对基线逐像素 max diff 0。
   - **事故记录**：一组并行 rpg-tactics runtime 与测试实例争抢 GPU 造成 `DEVICE_LOST`（28 个历史日志中仅该次出现；独占复跑 0 次，且它与既存 VUID-03320 相邻但后者在之前多次运行中都不致命）。另：并行会话的提交 `06e083ad` 扫入了我暂存的 `Optional.h` 删除，一度让 HEAD 的 include 悬空，已由本批补全删除后修复。
 
+- [x] **C5b（M21 扩展验收）**：`FeatureProtocolTest.TestOnlyFeatureRunsTheFullChainWithoutCorePlumbing`——测试专用 `TestTransformFeature`（producer → 两段多 pass transform，私有 scratch 由 `graph.createTexture` 创建 → result）走完 resolve → prepareBindings → append → compile；`static_assert(Feature<...>)` 证明同一协议；零 pipeline/core/bag 改动。负向证据：首版把 result 覆盖 scratch 自身时 `graph.compile` 立刻报 ReadBeforeWrite（接线错误被 RDG 校验抓住）。证据：render3d 225/225、full 1809/1809。
+
 ## 下一步（按优先级）
 
 - [x] **C4b（M18：Shadow 经 composition 接入）**：`ShadowFeature`（Composition/Features）成为两 recipe 的第一个条目——resolve 启用决策、prepareBindings 生产 `ShadowPreparedView` token、append 产出 `ShadowGraphOutputs`；Lighting 从 recipe 自己的 shadow 输出取 depth。两管线的 `_shadowStage->appendGraphPasses` 直调与 `prepareShadowPass` 退出，改为 `applyShadowFrameSettings()`（只应用 settings）。strategy 仍持 images/runtime/budget，算法与绑定不动。证据：trace 16-pass/13-pass 拓扑与 C3B 基线**逐条目一致**（shadow→GBuffer→…）；shadow on/off 差 31782 px 证明生效；Deferred/Forward 对基线逐像素 0 diff。
@@ -46,7 +48,7 @@
 - [ ] **M08 双 View runtime**：两 View 不同 SSAO payload/DS 互不覆盖；共享 frame/skinning 复用。
 - [ ] **M10 failure injection**：prepare/build/compile/execute 失败不发布部分新 family。
 - [ ] **M13 完整**：统一输出收集，不在 pipeline 侧按 feature 名称解析。
-- [ ] **C5**：组合诊断、扩展用例、多 View、performance/churn 门禁与 skill 吸收（"如何新增一个 pass"进 skill）。
+- [ ] **C5 余项**：M22（双 View runtime——需先有第二 View 声明入口，超出本线范围，待决定）、M23（performance/churn 三跑前后对照，依赖 perf-baseline 机制）、skill 吸收（"如何新增一个 pass"进 render-arch）；M20 的 RDG pass 区间关联。
 
 ## 不得漏掉
 
