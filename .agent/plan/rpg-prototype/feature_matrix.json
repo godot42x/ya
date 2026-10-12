@@ -398,6 +398,33 @@
       "plan": "all matrix entries done; package smoke; playthrough recording",
       "evidence": [],
       "tests": []
+    },
+    {
+      "id": "world_space_text",
+      "wave": "B2",
+      "phase": "WT1",
+      "status": "planned",
+      "driven_by": "game/user U3: damage numbers, unit names and HP text over heads without hand-composing digit sprites",
+      "engine_gap": "only ScreenDrawList::makeText exists; no world-space text",
+      "plan": "WorldDrawList::makeText + a world text draw path through FontManager; Text2DComponent; world.spawnText(name,pos,text,{color,size})",
+      "source": "user note 2026-10-13",
+      "evidence": [],
+      "tests": [
+        "WorldTextDrawsGlyphsAtWorldPos",
+        "Text2DComponentRoundTrips"
+      ]
+    },
+    {
+      "id": "battle_hud_redesign",
+      "wave": "B2",
+      "phase": "UB1",
+      "status": "planned",
+      "driven_by": "game/user U4: action menu as a bottom horizontal bar; readable target/skill choice; names and HP over heads",
+      "engine_gap": "content: current HUD is a plain vertical text list",
+      "plan": "BattleHUD.yaui.json bottom bar (EWidgetAlignV::Bottom + row layout); head text via WT1; Battle.lua drives the new sections",
+      "source": "user note 2026-10-13",
+      "evidence": [],
+      "tests": []
     }
   ]
 }

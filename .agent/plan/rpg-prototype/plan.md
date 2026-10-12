@@ -25,6 +25,22 @@
 方法论不变（继承 v1 §0.5）：**每个引擎改动必须写明是被哪个 checkpoint 的哪段游戏需求逼出来的**；
 写不出来就不做。但引擎能力只是游戏的子集——游戏内优先用 2D feature，不为演示而演示。
 
+### 0.1 用户反馈（2026-10-13，`Example/2DRpgPrototype/Notes.md`）
+
+| # | 反馈 | 处置 |
+| --- | --- | --- |
+| U1 | 需要本地化 feature（游戏切语言，引擎 / 编辑器也需要） | 游戏侧已有（`Locale.lua` + `Persist.locale`）。**引擎/编辑器级 locale 服务**是另一条线（归 `game-ui-authoring` / 编辑器），本计划只登记，不在此实现 |
+| U2 | AI Native：人工操纵编辑器逐步骤开发可能过时；要创新、要找到本引擎的生态位，不能只是 `Yet Another Game Engine` | **战略方向**，记入本计划作为持续指引；不伪装成 checkpoint。与本计划相关的落地：内容生成走 `image-gen`（本机无 grok-cli），后续接本地 ComfyUI |
+| U3 | 伤害跳字不该用一张 digits 图，应该用 `Sprite2D` 组件或**世界空间文字组件** | 现状：已用 `Sprite2DComponent`（每位一精灵），`digits.png` 只是它采样的贴图。真正的缺口是**世界空间文字**（引擎只有 `ScreenDrawList::makeText`）。新增 checkpoint **WT1：世界空间文字**（Wave B2） |
+| U4 | UI/HUD 简陋：行动面板应屏幕底部横向布局；敌人选择 / 技能选择太简陋；血条与血量直接显示在敌人头顶 | 拆成 **UB1 战斗 HUD 重做**（底部横向行动栏、目标/技能选择、头顶血条用 WT1 的世界文字）。底部横向布局框架已支持（`EWidgetAlignV::Bottom`），主要是内容工作 |
+| U5 | 面板要风格化；UI 框架可能需前置开发 | 归 `gui-style-system-convergence` 线；本计划只登记需求。战斗面板先用现有控件做出可用版 |
+
+### 0.2 checkpoint 顺序调整（响应 U3 / U4）
+
+原 Wave B 之后直接进 Wave C（四子系统）。用户反馈把「世界空间文字」与「战斗 HUD」提为近期待办：
+新增 **Wave B2**（WT1 世界文字 + UB1 HUD 重做）排在 Wave C 之前——它们是玩家直接看到的表观质量，
+且 WT1 是 U3/U4 共同的前置。四子系统（R1/A1/X1/P1）顺序不变。
+
 ## 1. 现状基线
 
 ### 1.1 v1 已落地、本计划直接复用（不重做）
@@ -219,7 +235,6 @@ Boss  遗迹·核心（多阶段：血量阶段切换 + 后处理阶段变化 + 
 - 验收：运行冒烟 exit 0；截图见地图。
 
 ### Wave B — 战术核心（先跑通主循环）
-
 #### T1 — 棋盘与回合骨架
 - 游戏验收：一个固定战斗地图上摆 3 个我方 + 3 个敌方单位；按确认键推进回合；
   行动序条按速度排序显示；单位格子高亮。
@@ -258,6 +273,33 @@ Boss  遗迹·核心（多阶段：血量阶段切换 + 后处理阶段变化 + 
 - 逼出来的引擎改动：战斗进出时的状态交接（队伍/血量存 `Persist`，战斗场景初始化时套回）。
 - 测试：`BattleResultTransfersBackToOverworld`。
 - 验收：**第一次完整闭环**：营地 → 战斗 → 回营地。
+
+### Wave B2 — 表观质量（响应 U3 / U4；排在 Wave C 之前）
+
+#### WT1 — 世界空间文字（响应 U3）
+
+- 游戏验收：伤害数字、单位名、头顶血条文字用引擎的世界文字渲染，脚本一行
+  `world.spawnText(pos, "12", { color, size })` 即可，不再手工拼数字精灵。
+- 逼出来的需求：U3（伤害跳字）。现状 `ScreenDrawList::makeText` 只有屏幕空间；世界空间没有文字。
+- 引擎改动（渲染侧，`Render2D`）：
+  - `WorldDrawList` 增 `makeText(text, worldPos, color, Font*, scale)`，与 `ScreenDrawList::makeText` 同源
+    （逐字形取 atlas、像素对齐；世界坐标经 view-projection）。
+  - 精灵 pass 之外的一条世界文字绘制入口（复用 `FontManager` / `DynamicFontAtlas`）；仍在 Bloom 之前、
+    与精灵同 pass 家族，不新增 3D attachment。
+  - 脚本面：`world.spawnText(name, pos, text, { color, size })` 返回实体（`Text2DComponent`），
+    可改 `text` / `color` / `size`；`world.destroyEntity` 回收。
+- 测试：`WorldTextDrawsGlyphsAtWorldPos`、`Text2DComponentRoundTrips`；像素验收（世界文字随相机移动）。
+- 依赖：字体栈（`font-rendering` skill）；世界文字用 SDF flavor（可缩放）。
+
+#### UB1 — 战斗 HUD 重做（响应 U4）
+
+- 游戏验收：行动选择是**屏幕底部横向**按钮条（攻击/技能/道具/待机）；目标选择有可读的敌人列表或光标信息；
+  每个单位**头顶**显示名字与血条文字（用 WT1）；技能有名称/消耗/射程提示。
+- 内容：`BattleHUD.yaui.json` 重做（底部横向栏，`EWidgetAlignV::Bottom` + 横向 `boxLayout`）；
+  单位头顶信息改走 WT1 世界文字 + 世界血条精灵；`Battle.lua` 把菜单/目标/hint 推给新 HUD。
+- 测试：HUD 底部栏可见、菜单切换、目标提示文本；截图。
+- 依赖：WT1。
+
 
 ### Wave C — 四子系统（每个都要有真实使用点）
 
