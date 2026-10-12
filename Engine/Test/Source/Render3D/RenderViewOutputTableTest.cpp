@@ -95,6 +95,25 @@ TEST(RenderViewOutputTableTest, NewTokenRewindsLiveOutputs)
     EXPECT_EQ(table.find(0, 3), nullptr);
 }
 
+TEST(RenderViewOutputTableTest, FailedPreparationCannotAnswerWithThePreviousTicksFrame)
+{
+    // M10 in one test: the safe point begins this tick's publication, so a frame
+    // whose preparation fails publishes nothing and answers nothing. Reading an
+    // earlier tick's View here would be exactly the "stale frame" this rule
+    // exists to prevent — the caller cannot tell it apart from a fresh one.
+    RenderViewOutputTable table;
+    ASSERT_TRUE(table.beginSubmission(0, 7u)); // tick 7 records fine
+    ASSERT_NE(table.publish(0, RenderViewOutput{.desc = {.viewId = 42, .extent = {.width = 8, .height = 8}}}),
+              nullptr);
+    ASSERT_NE(table.find(0, 42), nullptr);
+
+    // Tick 8 begins (the safe point), then preparation fails: no publish happens
+    // for this tick at all.
+    ASSERT_TRUE(table.beginSubmission(0, 8u));
+    EXPECT_EQ(table.find(0, 42), nullptr);
+    EXPECT_EQ(table.liveViewCount(0), 0u);
+}
+
 TEST(RenderViewOutputTableTest, OtherFlightPublishDoesNotDropOutputs)
 {
     RenderViewOutputTable table;

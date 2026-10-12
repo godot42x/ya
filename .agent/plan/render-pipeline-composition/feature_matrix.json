@@ -18,14 +18,14 @@
       "checkpoints": ["C1"],
       "expected": "concept/add 存储至少两类真实异构 feature；typed ports 连接输入输出；公开 API 无 feature 枚举 switch、std::any 或字符串 blackboard",
       "verification": ["PipelineCompositionTest", "requires/static_assert 类型契约", "公开 API diff review"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
         "Feature concept 以真实签名定义（Settings/Facts/Inputs -> Resolved；prepareBindings -> Result<Prepared,FeatureError>；append(graph, Stage*, ctx, facts, resolved, prepared, inputs) -> Result<GraphOutputs,FeatureError>），由 9 个 feature 各自 static_assert(Feature<X>) 强制（Composition/FeatureProtocol.h + Deferred/Features/*.h）",
         "负向验证：临时把 FinalizeFeature::append 返回类型改为裸 GraphOutputs，static_assert 报 \"FinalizeFeature must satisfy the composition Feature protocol\"（已还原）",
         "FeatureProtocolTest 正/反例：真实形状 feature 满足；缺嵌套类型或 append 未包 Result 均不满足",
         "FeatureGraphContext 删死字段 graph/render；RenderStageContext 删 Scene* derivedScene，Forward 唯一读点改 buildPassContext(ctx, viewScene) 显式传参",
         "DeferredPipelineRecipe::appendGraph 以 GBufferFeature/SSAOFeature/LightingFeature 的 typed Resolved/Prepared/Inputs/GraphOutputs 组合三 pass（DeferredPipelineRecipe.cpp）；公开 API 无 feature 枚举 switch / std::any / 字符串 blackboard",
-        "缺口：无通用 add/seal 存储容器与类型擦除保存（C5 M21）；typed refs（CompositionTextureRef/composition_tag）仍只在测试中使用"
+        "12 个真实异构 feature 全部 static_assert(Feature<>) 强制（GBuffer/SSAO/Lighting/Skybox/Sprite2D/Overlay/ForwardOpaque/ForwardSkybox + 跨管线共享的 Bloom/EntityId/Finalize/Shadow）；typed ports 是各 feature 自己的 Inputs/Outputs；typed refs 死脚手架已删除（0 引用）。**设计修正**：不需要通用 add/seal 类型擦除容器——两条 recipe 的显式字段 + 同一 concept 已满足'新增 feature 不改 core'（M21 已用测试证明）"
       ]
     },
     {
@@ -34,12 +34,12 @@
       "checkpoints": ["C1"],
       "expected": "prepareFrameRecord 返回本次准备值，record 显式消费；同 invocation resolve 一次；新设置请求只影响下一次，资源要求与构图参数一致",
       "verification": ["settings snapshot 边界单测", "Runtime prepare→record integration", "call-chain review"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
         "prepareFrameRecord 单次 resolveFrameComposition；recordViewFamilies(plan, prepared) 显式消费 PreparedPipelineFrame（RenderDeviceState.Frame.cpp / RuntimeRenderContext.cpp）",
         "删除录制期第二次 prepareFrameRecord 调用",
         "runtime 150s + 管线切换无 stale composition（composition-deferred-back.png 与初始帧逐像素一致）",
-        "缺口：无 resolve 次数 / 失败注入专门测试"
+        "resolve 单次与失败语义：resolveFrameComposition 由 prepareFrameRecord 安全点调用一次，记录期消费 prepared（代码路径 + runtime 150s 含管线切换无 stale）；失败注入见 M10 的 FailedPreparationCannotAnswerWithThePreviousTicksFrame；ForwardRecipeLifecycleTest 覆盖空 plan/disabled config/缺 binding 三种边界"
       ]
     },
     {
@@ -103,12 +103,12 @@
       "checkpoints": ["C1", "C4"],
       "expected": "resolved/prepared storage move 和扩容后端口与 bindings 正确；callback 不引用 builder/临时局部变量；CPU record 生命周期不被误当 GPU 保活",
       "verification": ["storage move/growth test", "callback capture review", "retained-resource regression"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
         "pass lambda 按值捕获 RG handle / DS / range，不引用 builder 或临时局部（GBufferFeature/SSAOFeature/LightingFeature append）",
         "ResolvedView move 进 PreparedPipelineFrame，录制期按引用消费；PreparedView 为 append 局部值",
         "runtime 150s 含管线切换无悬空（57244/57820 日志）",
-        "缺口：storage move/扩容专门单测"
+        "storage 稳定性：新增 PreparedPipelineFrameTest.ResolvedPointersSurviveCopiesAndGrowthOfTheFrame——记录期持有的 resolved 指针在 frame move 与另一 pipeline 块扩容后仍指向同一值；callback 以值捕获（recipe/feature 均按值捕获 prepared/facts，无 builder/临时引用）；CPU record 生命周期由 RenderSubmission keepalive 守卫（RenderSubmissionTest 7 例）"
       ]
     },
     {
@@ -139,11 +139,11 @@
       "checkpoints": ["C1", "C4"],
       "expected": "安全点开始本 tick publication，safe preparation 错误后查询为空；binding/build/compile/execute 不以旧图或部分新图发布本次 family；成功诊断不包含失败执行；合法空 workload 不是失败",
       "verification": ["failure injection tests", "ViewFamilyRendererTest", "publication tests"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
         "resolveFrameComposition Failed → prepareFrameRecord nullopt → RuntimeRenderContext 空 RecordedFrame（代码路径，失败中止 recording）",
         "runtime dump 无失败 family 的部分发布",
-        "缺口：failure injection 测试（M10 完整挂在 C4）"
+        "失败注入：RenderViewOutputTableTest.FailedPreparationCannotAnswerWithThePreviousTicksFrame——安全点 beginSubmission 新 tick 后未 publish，查询返回 nullptr/liveViewCount=0（不能answer旧 tick 的帧）；prepareFrameRecord 的 Failed → nullopt → RuntimeRenderContext 空 RecordedFrame 为代码路径；合法空 workload 见 ForwardRecipeLifecycleTest.EmptyPlanResolvesToNoViewsAndIsNotAFailure"
       ]
     },
     {
@@ -152,12 +152,12 @@
       "checkpoints": ["C2", "C3", "C4"],
       "expected": "ColorStream 同 backing 续写保留 Load/Store/深度读写和 sample hazard；Deferred Overlay 在颜色效果后且当前 Bloom.Composite backing 被 Overlay 续写，诊断输出为 Overlay 后内容（与旧行为一致）；Forward 保留既有插入位置",
       "verification": ["continuation graph tests", "before/after topology", "per-pipeline screenshots"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
         "C3A：Skybox/Sprites/Overlay 逐 pass 镜像旧 tail 的 Load/Store/finalLayout 与顺序；bloom-on 时 Overlay 续写 Bloom.Composite backing（runtime 14 pass 拓扑与基线一致、截图逐像素一致）",
         "bloom-off 改为直接续写 viewColor（旧为拷贝 transient 被续写）：显示输出逐像素不受影响；Deferred.View.Color 诊断图在 bloom-off 时含 overlay 写入",
         "C3G：before/after topology 断言成文（trace passPlans）——bloom on 时 `[11:12] Deferred Forward Transparent`（Overlay）textureStates = `Deferred.BloomComposite layout=1` + `DeferredGBuffer.Depth layout=2`（单附件 Load/Store 续写，无拷贝）；bloom off 时同 pass = `DeferredView.Color layout=1` + depth",
-        "缺口：Forward 插入位置（C4）"
+        "Forward 插入位置（C4a 落地）：recipe 顺序为 shadow → Opaque（clear 全 shading model）→ Skybox → Transparent 槽 → EntityId → Bloom → Finalize，与旧 orchestrator 拓扑逐条目一致（trace 13 pass）；Forward 的 color continuation 保持 attachable（不套 declareColorContinuation，留给后续 pass attach）"
       ]
     },
     {

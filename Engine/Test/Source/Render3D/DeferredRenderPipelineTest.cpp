@@ -1,4 +1,5 @@
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
+#include "Render3D/Common/PreparedPipelineFrame.h"
 #include "Render3D/Common/SceneFamilyResources.h"
 
 #include "Core/Config/ConfigManager.h"
@@ -536,6 +537,38 @@ TEST(BloomPostprocessingTest, EachCallPicksItsOwnFinalBlurTargetFromItsOwnCount)
     EXPECT_EQ(countName("BloomComposite"), 2u);
     EXPECT_EQ(countName("BloomBlurHorizontal"), 3u);
     EXPECT_EQ(countName("BloomBlurVertical"), 3u);
+}
+
+
+TEST(PreparedPipelineFrameTest, ResolvedPointersSurviveCopiesAndGrowthOfTheFrame)
+{
+    // Recording holds a pointer into the prepared frame's resolved vector while
+    // it appends each View in turn. That is only safe because nothing mutates the
+    // vector during recording: the prepared frame is handed over as const and
+    // fully populated at the safe point. This pins that fact — a pointer taken
+    // for one View must still name the same resolved values after the frame is
+    // moved and after the other block grows.
+    PreparedPipelineFrame frame;
+    frame.deferred.resolved.resize(2);
+    frame.deferred.resolved[0].viewId = 100;
+    frame.deferred.resolved[0].gbuffer.bEnabled = true;
+    frame.deferred.resolved[1].viewId = 200;
+
+    const auto* firstView = &frame.deferred.resolved[0];
+    ASSERT_EQ(firstView->viewId, 100u);
+
+    PreparedPipelineFrame moved = std::move(frame);
+    // Moving the frame does not disturb the resolved values themselves.
+    const auto* afterMove = &moved.deferred.resolved[0];
+    EXPECT_EQ(afterMove->viewId, 100u);
+    EXPECT_TRUE(afterMove->gbuffer.bEnabled);
+
+    // The other pipeline's block growing must not touch this one.
+    moved.forward.resolved.resize(4);
+    moved.forward.resolved[0].viewId = 300;
+    EXPECT_EQ(moved.deferred.resolved[0].viewId, 100u);
+    EXPECT_EQ(moved.deferred.resolved[1].viewId, 200u);
+    EXPECT_EQ(moved.forward.resolved[0].viewId, 300u);
 }
 
 } // namespace ya

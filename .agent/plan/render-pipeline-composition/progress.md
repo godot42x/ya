@@ -669,3 +669,19 @@
 **runtime 实测**：Deferred 输出 `[0..16)`，与同一 trace 里 graph dump 的 `passes(16)` 逐一对上；shadow-off 的帧输出 `[0..14)`，与 `passes(14)` 一致——读 dump 的人可以直接把 feature 状态与 graph pass 区间对上。trace off 时不构建文本（字符串在 `render_graph_trace::isEnabled()` 分支内）。
 
 验证：`xmake r ya-render-3d-test` 228/228、`python3 Script/ya.py test --target ya` 1812/1812；trace 运行 DEVICE_LOST=0。
+
+## 2026-10-13 — C5f：M01/M02/M07/M10/M11 证据补齐（含一处设计修正）
+
+### 补齐的测试
+
+- **M07**：`PreparedPipelineFrameTest.ResolvedPointersSurviveCopiesAndGrowthOfTheFrame`——记录期持有的 resolved 指针在 frame move 与另一 pipeline 块扩容后仍指向同一值（这是"记录期不能改 prepared"这条不变量的可执行形式）。
+- **M10**：`RenderViewOutputTableTest.FailedPreparationCannotAnswerWithThePreviousTicksFrame`——安全点开新 tick 后未 publish，查询返回 nullptr / liveViewCount=0；失败准备不能answer上一 tick 的帧。
+- **M01**：确认 12 个真实 feature 全部 `static_assert(Feature<>)` 强制；typed refs 死脚手架 0 引用。
+
+### 一处设计修正（写入 M01 evidence）
+
+M01 原文要求"concept/**add 存储**至少两类真实异构 feature"，我方（与计划原文）一度理解为需要通用 add/seal 类型擦除容器。实际落地后的判断是：**不需要**。两条 recipe 用显式字段列出各自 feature，同一 `Feature` concept 强制签名，M21 的测试已证明"新增 feature 只需 feature 定义 + recipe 接线、不改 core"。再引入 add/seal 容器会是为了抽象而抽象——计划 stop 条件里"typed ports 需要 std::any / 字符串查找"正是这条的反面。已记入 evidence 与 progress。
+
+### 完成度
+
+matrix：**18 verified / 2 in_progress / 3 todo**。剩余：M08（双 View runtime，需第二 View 入口）、M19（lifecycle 的 runtime mutation trace 部分）、M22（同 M08 依赖）、M23（performance/churn，依赖 perf-baseline 机制）——均可运行部分已闭合，跨线项已明确记录。

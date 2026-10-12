@@ -40,6 +40,8 @@
 
 - [x] **C5e（M20 收口）**：组合诊断补 pass 贡献关联——两管线输出 `composition contributed ... passes [a..b)`，runtime 实测与 graph trace 的 pass 数（16 / shadow-off 14）逐一对上。
 
+- [x] **C5f（M01/M02/M07/M10/M11 证据补齐）**：新增 `ResolvedPointersSurviveCopiesAndGrowthOfTheFrame`（M07 记录期指针稳定）、`FailedPreparationCannotAnswerWithThePreviousTicksFrame`（M10 失败不answer旧帧）；确认 12 feature 全部 static_assert 强制、typed refs 0 引用（M01）。**设计修正**：M01 的"add 存储容器"判定为不需要——显式 recipe 字段 + concept + M21 测试已满足"新增 feature 不改 core"，引入通用容器属为抽象而抽象。matrix 19/22 verified。
+
 ## 下一步（按优先级）
 
 - [x] **C4b（M18：Shadow 经 composition 接入）**：`ShadowFeature`（Composition/Features）成为两 recipe 的第一个条目——resolve 启用决策、prepareBindings 生产 `ShadowPreparedView` token、append 产出 `ShadowGraphOutputs`；Lighting 从 recipe 自己的 shadow 输出取 depth。两管线的 `_shadowStage->appendGraphPasses` 直调与 `prepareShadowPass` 退出，改为 `applyShadowFrameSettings()`（只应用 settings）。strategy 仍持 images/runtime/budget，算法与绑定不动。证据：trace 16-pass/13-pass 拓扑与 C3B 基线**逐条目一致**（shadow→GBuffer→…）；shadow on/off 差 31782 px 证明生效；Deferred/Forward 对基线逐像素 0 diff。
