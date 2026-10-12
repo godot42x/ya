@@ -56,7 +56,9 @@
 - [ ] **M08 双 View runtime**：两 View 不同 SSAO payload/DS 互不覆盖；共享 frame/skinning 复用。
 - [ ] **M10 failure injection**：prepare/build/compile/execute 失败不发布部分新 family。
 - [ ] **M13 完整**：统一输出收集，不在 pipeline 侧按 feature 名称解析。
-- [ ] **C5 余项**：M22（双 View runtime——需先有第二 View 声明入口，超出本线范围，待决定）、M23（performance/churn 三跑前后对照，依赖 perf-baseline 机制）、skill 吸收（"如何新增一个 pass"进 render-arch）；M20 的 RDG pass 区间关联。
+- [ ] **M23（跨线，已定性）**：perf 前后对照在本机不成立——基线与当前不可比（基线早于灯光线 `039570590`/`49d70331`；perf-baseline 线自己的 todo 已登记「R15a 后重采 Lights_*」），且本机有并行构建/运行。**顺带发现两条预先存在的状态**（非本线引入，逐值对照 C1i 基线日志证实）：① Lights_200 因不再截断而变慢、Lights_500 在 500 灯下 DEVICE_LOST（属灯光线 R15a 后续）；② Deferred registry 稳态 `replaced=21..23/rebound=23..25` 每 sync。建议转 perf-baseline / shadow-and-light 线处理。
+- [ ] **M08 / M22（跨线）**：双 View runtime 证据需要第二个 View 的声明入口（应用/编辑器侧），当前本线无法产生；同 label scope 的单测不能替代（plan 明写）。
+- [ ] **C5 余项**：skill 吸收（"如何新增一个 pass"进 render-arch，内容已在两个 recipe 头注释）；M19 的完整 runtime mutation trace。
 
 ## 不得漏掉
 

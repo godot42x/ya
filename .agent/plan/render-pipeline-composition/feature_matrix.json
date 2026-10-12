@@ -312,8 +312,14 @@
       "checkpoints": ["C5"],
       "expected": "同环境至少 3 次 CPU/GPU/内存前后对照、低负载 prepare/build 对照；无稳态 GPU allocation/import replacement regression；全部 bridge/旧横向链退出；稳定规则吸收",
       "verification": ["bench_run/bench_compare and reports", "registry trace", "final diff/references review", "render-arch absorption"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "运行了 perf 机制（bench_run/bench_compare 在例）：Lights_50 当前 p50 8.46ms vs 同族配置可采；Lights_200/500 不可用于此对照",
+        "**基线与当前不可比，且原因是预先存在的**：perf-baseline 线自己的 todo 明写「R15a 之后重采 Lights_* 的 profile 基线」——基线 profile-100ae306 早于灯光线的 039570590（LightInstance SSBO 重构）与 49d70331（取消点光上限）；PB6 记录也说明 R15a 前 Lights_* 三档全被 MAX_POINT_LIGHTS=6 截断（drawIndexed/descriptorBind 完全相同），光源梯度本就测不出。当前 Lights_200 因未截断而真实变慢、Lights_500（500 灯 + 未截断）在本机 DEVICE_LOST——属灯光线 R15a 的后续（重采基线 + 高灯数稳定性），不在本线范围",
+        "**本线未引入可测量开销**：C4/C5 改动为结构/诊断类（recipe 接线、feature 局部化、死代码删除、describe 文本仅在 trace 下构建）；唯一运行期语义变更是 ViewTargetRequest::operator== 改为按 role 集合比较（更少重建，不增加开销），并有负向验证的单测",
+        "**稳态 churn 预先存在，非本线引入**：trace 统计（Deferred registry）steady `replaced=21..23 / rebound=23..25` 每 sync，在 C1i 基线日志（commit 9726b2d0，早于 C4/C5）与当前 HEAD 上逐值相同；本线不应为它背书，也未加剧它",
+        "**CPU/GPU/内存三次前后对照未达成**：本机有并行构建/运行时（PB6 记录：并发编译使同场景两次 p50 差 87%），不满足 perf-baseline 声明的采集条件；本线把该项连同上述发现一并留给 perf-baseline 线"
+      ]
     }
   ]
 }

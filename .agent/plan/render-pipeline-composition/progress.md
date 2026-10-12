@@ -685,3 +685,22 @@ M01 原文要求"concept/**add 存储**至少两类真实异构 feature"，我�
 ### 完成度
 
 matrix：**18 verified / 2 in_progress / 3 todo**。剩余：M08（双 View runtime，需第二 View 入口）、M19（lifecycle 的 runtime mutation trace 部分）、M22（同 M08 依赖）、M23（performance/churn，依赖 perf-baseline 机制）——均可运行部分已闭合，跨线项已明确记录。
+
+## 2026-10-13 — C5g：M23 尝试与定性（结论：对照不成立，原因预先存在）
+
+### 做了什么
+
+按 plan 要求用 perf 机制（`Script/perf/bench_run.py` + 既有 `baselines/macos/profile-100ae306-fifAB`）跑了 PerfLab `Lights_*`。过程中发现三件事，逐条记录而非绕过：
+
+1. **第一次跑错口径**：忘了 `--bench-dir`、又用 `--no-build` 跑了 debug 二进制，而基线是 **profile** 构建（`meta.buildMode` 明写）。debug 数字与基线不可比。改 cfg 到 profile 重跑（构建 171s）。
+2. **即便同构建也不可比，原因是预先存在的**：基线 `profile-100ae306` 早于灯光线的 `039570590`（LightInstance SSBO 重构）与 `49d70331`（取消点光上限）。perf-baseline 线自己的 todo 已登记「R15a 之后重采 `Lights_*` 的 profile 基线」；其 PB6 记录还说明 R15a 前三档全被 `MAX_POINT_LIGHTS=6` 截断（drawIndexed/descriptorBind 完全相同），光源梯度本就测不出。**当前状态**：Lights_200 因不再截断而真实变慢（p50 28.4ms vs 基线 8.98ms），Lights_500（500 灯 + 未截断）在本机 `DEVICE_LOST`（debug 与 profile 均复现）。这两条属灯光线 R15a 的后续，不在本线范围。
+3. **稳态 import churn 是预先存在的**：trace 显示 Deferred registry 每 sync `replaced=21..23 / rebound=23..25`。逐值对比 C1i 基线日志（commit `9726b2d0`，早于 C4/C5）与当前 HEAD：**完全一致**。本线既未引入也未加剧它；M23 的"无 churn regression"结论应以此为基线判断，而不是把它当成本线问题。
+4. **本线未引入可测量开销**：C4/C5 全部改动为结构/诊断类；唯一运行期语义变更是 `ViewTargetRequest::operator==` 按 role 集合比较（只会减少重建），且有负向验证单测。
+
+### 未达成
+
+plan 要求的 CPU/GPU/内存三次前后对照未完成：本机存在并行构建与运行时（PB6 明确记录并发编译使同场景两次 p50 差 87%），不满足 perf-baseline 声明的采集条件。已在 matrix M23 与 todo 中写明"对照留给 perf-baseline 线，连同上述三发现"。
+
+### 状态
+
+matrix **19 verified / 2 in_progress（M19、M23）/ 2 todo（M08、M22）**。M08/M22 依赖"第二个 View 的声明入口"（应用/编辑器侧），已记明跨线。
