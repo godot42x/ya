@@ -4,7 +4,7 @@
   "started": "2026-10-13",
   "status": "in_progress",
   "acceptance_standard": "capability_coverage",
-  "note": "v1 feature matrix preserved at feature_matrix-v1-landed.json. Each 'done' entry needs an evidence path or test name.",
+  "note": "v1 feature matrix preserved at feature_matrix-v1-landed.json. Each done entry needs an evidence path or test name. F1 (camp hub + Kenney assets) and T1 (turn frame) landed 2026-10-13.",
   "capabilities": [
     {
       "id": "tilemap_multilayer_ysort",
@@ -12,7 +12,10 @@
       "status": "done",
       "source": "v1 R1",
       "used_by": "battle maps (ground/decor/overlay), camp",
-      "evidence": ["Scene2D/TilemapComponent.h", "feature_matrix-v1-landed.json#tilemap"]
+      "evidence": [
+        "Scene2D/TilemapComponent.h",
+        "feature_matrix-v1-landed.json#tilemap"
+      ]
     },
     {
       "id": "sprite_batch_texture_table",
@@ -20,7 +23,10 @@
       "status": "done",
       "source": "v1 step 5",
       "used_by": "many units + effects on one screen",
-      "evidence": ["Render3D/Deferred/Features/Sprite2DFeature.h", "Render2D/TextureTableBatch.h"]
+      "evidence": [
+        "Render3D/Deferred/Features/Sprite2DFeature.h",
+        "Render2D/TextureTableBatch.h"
+      ]
     },
     {
       "id": "sprite_frame_animation",
@@ -28,7 +34,10 @@
       "status": "done",
       "source": "v1 R0 / D-T2",
       "used_by": "unit idle/hit, chests, flags",
-      "evidence": ["Scene2D/SpriteAnimationComponent.h", "Content/Animations/*.yaanim.json"]
+      "evidence": [
+        "Scene2D/SpriteAnimationComponent.h",
+        "Content/Animations/*.yaanim.json"
+      ]
     },
     {
       "id": "pixel_perfect_camera",
@@ -36,7 +45,10 @@
       "status": "done",
       "source": "v1 §10",
       "used_by": "battle framing, exploration follow",
-      "evidence": ["CameraComponent.resolveCameraViewFraming", "plan-v1-landed.md §10"]
+      "evidence": [
+        "CameraComponent.resolveCameraViewFraming",
+        "plan-v1-landed.md §10"
+      ]
     },
     {
       "id": "scene_transfer_persist",
@@ -44,7 +56,11 @@
       "status": "done",
       "source": "v1 R3",
       "used_by": "camp <-> ruins, battle in/out",
-      "evidence": ["world.loadScene", "Persist global", "skills/2d-gameplay SKILL.md"]
+      "evidence": [
+        "world.loadScene",
+        "Persist global",
+        "skills/2d-gameplay SKILL.md"
+      ]
     },
     {
       "id": "save_load",
@@ -52,7 +68,10 @@
       "status": "done",
       "source": "v1 G2.2",
       "used_by": "clearing-the-slice save point",
-      "evidence": ["AppSceneServices::saveWorld", "world.save/load/saveRestored"]
+      "evidence": [
+        "AppSceneServices::saveWorld",
+        "world.save/load/saveRestored"
+      ]
     },
     {
       "id": "runtime_spawn_destroy",
@@ -60,7 +79,11 @@
       "status": "done",
       "source": "v1",
       "used_by": "damage numbers, summons, temp obstacles",
-      "evidence": ["world.spawnSprite", "world.destroyEntity", "GameplayScriptFunctions.cpp"]
+      "evidence": [
+        "world.spawnSprite",
+        "world.destroyEntity",
+        "GameplayScriptFunctions.cpp"
+      ]
     },
     {
       "id": "gui_widget_catalog",
@@ -68,7 +91,11 @@
       "status": "done",
       "source": "engine",
       "used_by": "battle HUD, inventory, equipment, skills, journal, dialogue, settings",
-      "evidence": ["GUI/Widgets/Controls/", "LuaWidgetHandle.cpp", "LuaWidgetScripts.cpp"]
+      "evidence": [
+        "GUI/Widgets/Controls/",
+        "LuaWidgetHandle.cpp",
+        "LuaWidgetScripts.cpp"
+      ]
     },
     {
       "id": "input_actions",
@@ -76,9 +103,11 @@
       "status": "done",
       "source": "v1 R0",
       "used_by": "battle commands, cursor, confirm/cancel",
-      "evidence": ["InputMap.json", "input:isActionDown/isActionPressed"]
+      "evidence": [
+        "InputMap.json",
+        "input:isActionDown/isActionPressed"
+      ]
     },
-
     {
       "id": "postfx_runtime_control",
       "wave": "C",
@@ -88,7 +117,11 @@
       "engine_gap": "N1 PostProcessingState is config-only; no script surface, no transitions",
       "plan": "render.setLook{...}, render.fadeOut/in, render.shake, camera.zoomTo; look timeline interpolated before recording; write RenderPipelineSettings pre-record",
       "evidence": [],
-      "tests": ["PostFxRuntimeTest.SetLookReachesPipelineSettings", "FadeAdvancesAndEnds", "CameraShakeOffsetsViewNotTransform"],
+      "tests": [
+        "PostFxRuntimeTest.SetLookReachesPipelineSettings",
+        "FadeAdvancesAndEnds",
+        "CameraShakeOffsetsViewNotTransform"
+      ],
       "pixel_acceptance": "one fade screenshot + one crit-bloom screenshot"
     },
     {
@@ -100,7 +133,11 @@
       "engine_gap": "N2 no audio subsystem at all",
       "plan": "ya-audio target, SDL3 backend; device/clip/instance/bus; AudioSourceComponent + AudioListenerComponent; neutral-layer audio.play/stop/setBusVolume/playMusic/crossfade",
       "evidence": [],
-      "tests": ["AudioBusVolumeIsScoped", "PlayReturnsAStoppableHandle", "MissingDeviceDegradesSilently"]
+      "tests": [
+        "AudioBusVolumeIsScoped",
+        "PlayReturnsAStoppableHandle",
+        "MissingDeviceDegradesSilently"
+      ]
     },
     {
       "id": "particles",
@@ -111,7 +148,11 @@
       "engine_gap": "N3 no particle system at all",
       "plan": "ya-particles target; .yaparticle.json asset; ParticleEmitterComponent; CPU sim -> existing 2D instanced path (no new pass); neutral-layer particles.emit / emitter:play/stop",
       "evidence": [],
-      "tests": ["ParticleAssetRoundTrips", "EmitSpawnsCountedParticles", "ParticlesDieAfterLifetime"]
+      "tests": [
+        "ParticleAssetRoundTrips",
+        "EmitSpawnsCountedParticles",
+        "ParticlesDieAfterLifetime"
+      ]
     },
     {
       "id": "physics2d_triggers",
@@ -122,7 +163,12 @@
       "engine_gap": "N4 Jolt is 3D box/sphere only; no triggers, no script callbacks",
       "plan": "ya-physics-2d target on Box2D (xmake-repo box2d-v3.1.1); RigidBody2DComponent + Collider2DComponent; Physics2DSystem fixed step writing Transform x/y; contact events into ECS; neutral-layer physics2D.overlapCircle/raycast2D, body:applyImpulse",
       "evidence": [],
-      "tests": ["BoxBodiesSettleOnAGround", "SensorFiresBeginAndEnd", "KinematicMoverPushesADynamicBox", "RaycastHitsTheNearestBox"]
+      "tests": [
+        "BoxBodiesSettleOnAGround",
+        "SensorFiresBeginAndEnd",
+        "KinematicMoverPushesADynamicBox",
+        "RaycastHitsTheNearestBox"
+      ]
     },
     {
       "id": "camera_zoom_shake",
@@ -133,7 +179,9 @@
       "engine_gap": "N6 no camera effects",
       "plan": "shake = view offset after texel snap; zoom = scale input to resolveCameraViewFraming",
       "evidence": [],
-      "tests": ["CameraShakeOffsetsViewNotTransform"]
+      "tests": [
+        "CameraShakeOffsetsViewNotTransform"
+      ]
     },
     {
       "id": "mouse_picking",
@@ -144,19 +192,31 @@
       "engine_gap": "N7 Sprite2DComponent.pickId reflected but unused; no screen->cell",
       "plan": "input:mousePosition() + camera unproject -> cell (render.screenToCell); pickId for unit selection, entityAt fallback",
       "evidence": [],
-      "tests": ["ScreenToCellRoundTrips"]
+      "tests": [
+        "ScreenToCellRoundTrips"
+      ]
     },
-
     {
       "id": "turn_battle_frame",
       "wave": "B",
       "phase": "T1",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: SRPG turn order by speed, move+action, initiative bar",
       "engine_gap": "N5",
       "plan": "Lua Battle.lua turn queue + Unit.lua stats/team; tile highlights; BattleHUD",
-      "evidence": [],
-      "tests": ["TurnOrderFollowsSpeed", "AdvancingSkipsDefeatedUnits"]
+      "evidence": [
+        "Content/Scenes/BattleRuins1.scene.json: 16x12 dungeon board, 3 player + 3 enemy units, Battle controller",
+        "Content/Scripts/Battle.lua: board-is-roster (map:entityAt), speed-descending turn queue, downed skip",
+        "Content/Scripts/Unit.lua: stats as script properties, hp, active tint, takeDamage",
+        "Content/UI/BattleHUD.{yaui.json,lua}: turn bar with active marker and per-unit hp",
+        "Script/automation/2d-rpg/battle_turns.py: 6 units ordered Bat14->Archer12->Mage10->Ghost9->Knight8->Slime6; marker advances on confirm",
+        "Engine/Saved/Automation/battle-turns/battle_turns.png"
+      ],
+      "tests": [
+        "TurnOrderFollowsSpeed",
+        "AdvancingSkipsDefeatedUnits"
+      ],
+      "verified": "2026-10-13"
     },
     {
       "id": "grid_movement_range",
@@ -167,7 +227,9 @@
       "engine_gap": "N5",
       "plan": "Lua BFS over isSolid + entityAt; sink to TilemapComponent::reachableCells only if a second impl or cost demands",
       "evidence": [],
-      "tests": ["ReachableCellsRespectMovementAndBlockers"]
+      "tests": [
+        "ReachableCellsRespectMovementAndBlockers"
+      ]
     },
     {
       "id": "damage_skill_resolution",
@@ -178,7 +240,11 @@
       "engine_gap": "N5",
       "plan": "Lua damage formula; damage numbers via world.spawnSprite; HP bars as world sprites (NOT a world-space UI system)",
       "evidence": [],
-      "tests": ["DamageFormulaInRange", "SkillSpendsMana", "DefeatedUnitLeavesTheBoard"]
+      "tests": [
+        "DamageFormulaInRange",
+        "SkillSpendsMana",
+        "DefeatedUnitLeavesTheBoard"
+      ]
     },
     {
       "id": "battle_ai",
@@ -189,7 +255,10 @@
       "engine_gap": "N5",
       "plan": "pure Lua: close to nearest target, attack in range, else move; boss phases",
       "evidence": [],
-      "tests": ["AiClosesDistanceThenAttacks", "AiDoesNothingWithoutTargets"]
+      "tests": [
+        "AiClosesDistanceThenAttacks",
+        "AiDoesNothingWithoutTargets"
+      ]
     },
     {
       "id": "battle_overworld_handoff",
@@ -200,9 +269,10 @@
       "engine_gap": "none",
       "plan": "party HP/exp in Persist; battle scene init restores; result writes back",
       "evidence": [],
-      "tests": ["BattleResultTransfersBackToOverworld"]
+      "tests": [
+        "BattleResultTransfersBackToOverworld"
+      ]
     },
-
     {
       "id": "progression_levels",
       "wave": "D",
@@ -211,7 +281,10 @@
       "driven_by": "game: exp -> level -> stat growth + skill unlock, class tables",
       "plan": "Persist.party; Lua level/class tables",
       "evidence": [],
-      "tests": ["LevelUpRaisesStats", "SkillUnlocksAtLevel"]
+      "tests": [
+        "LevelUpRaisesStats",
+        "SkillUnlocksAtLevel"
+      ]
     },
     {
       "id": "equipment_inventory",
@@ -221,7 +294,10 @@
       "driven_by": "game: battle drops, bag UI, equip slots, live stat update",
       "plan": ".yaui bag/equip panel with TableGrid/ScrollViewport/Button; Persist.inventory",
       "evidence": [],
-      "tests": ["EquippingRaisesStats", "UnequipRestoresBase"]
+      "tests": [
+        "EquippingRaisesStats",
+        "UnequipRestoresBase"
+      ]
     },
     {
       "id": "party_companions",
@@ -231,7 +307,9 @@
       "driven_by": "game: companions join via quest, deploy selection, independent growth",
       "plan": "Persist.party roster",
       "evidence": [],
-      "tests": ["CompanionJoinsAndFights"]
+      "tests": [
+        "CompanionJoinsAndFights"
+      ]
     },
     {
       "id": "quest_system",
@@ -241,7 +319,10 @@
       "driven_by": "game: quest log, battle outcome advances, rewards",
       "plan": "Persist.quests; journal UI",
       "evidence": [],
-      "tests": ["QuestAdvancesOnBattleOutcome", "QuestRewardGrantedOnce"]
+      "tests": [
+        "QuestAdvancesOnBattleOutcome",
+        "QuestRewardGrantedOnce"
+      ]
     },
     {
       "id": "vertical_slice_content",
@@ -251,9 +332,10 @@
       "driven_by": "game: 3-4 battles (tutorial/mechanism/magic/boss), 3 quests, ending",
       "plan": "BattleRuins1/2/3/Core scenes, BattleAI phases, boss phase script",
       "evidence": [],
-      "tests": ["PlaythroughReachesEnding"]
+      "tests": [
+        "PlaythroughReachesEnding"
+      ]
     },
-
     {
       "id": "save_load_loop",
       "wave": "E",
@@ -262,7 +344,9 @@
       "driven_by": "game: save at camp, quit, load back with party/level/equipment/quests intact",
       "plan": "onSave writes party+quests into Persist; save point entity",
       "evidence": [],
-      "tests": ["SaveRestoresPartyAndQuests"]
+      "tests": [
+        "SaveRestoresPartyAndQuests"
+      ]
     },
     {
       "id": "hud_polish",

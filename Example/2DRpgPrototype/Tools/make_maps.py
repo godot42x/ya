@@ -72,34 +72,33 @@ def cell_world(origin: tuple[float, float], cx: int, cy: int, z: float) -> list[
     return [origin[0] + cx + 0.5, origin[1] + cy + 0.5, z]
 
 
-def camera_entity(cell: tuple[int, int], origin: tuple[float, float]) -> dict:
-    return {
-        "id": 1001,
-        "name": "Camera",
-        "components": {
-            "TransformComponent": {
-                "_position": cell_world(origin, cell[0], cell[1], 24.0),
-                "_rotation": [0.0, 0.0, 0.0],
-                "_scale": [1.0, 1.0, 1.0],
-            },
-            "CameraComponent": {
-                "bPrimary": True,
-                "_projection": "Orthographic",
-                "_orthoHalfHeight": 8.0,
-                "_pixelPerfect": True,
-                "_pixelsPerUnit": 16.0,
-                "_referenceHeightPx": 192.0,
-                "_fov": 45.0,
-                "_aspectRatio": 1.7777778,
-                "_nearClip": 0.1,
-                "_farClip": 100.0,
-                "_fixedAspectRatio": False,
-                "_distance": 24.0,
-                "_focusPoint": [0.0, 0.0, 0.0],
-            },
-            "LuaScriptComponent": {"scripts": [{"enabled": True, "scriptPath": "Content/Scripts/FollowCamera.lua"}]},
+def camera_entity(cell: tuple[int, int], origin: tuple[float, float],
+                  script: str | None = "Content/Scripts/FollowCamera.lua") -> dict:
+    components: dict = {
+        "TransformComponent": {
+            "_position": cell_world(origin, cell[0], cell[1], 24.0),
+            "_rotation": [0.0, 0.0, 0.0],
+            "_scale": [1.0, 1.0, 1.0],
+        },
+        "CameraComponent": {
+            "bPrimary": True,
+            "_projection": "Orthographic",
+            "_orthoHalfHeight": 8.0,
+            "_pixelPerfect": True,
+            "_pixelsPerUnit": 16.0,
+            "_referenceHeightPx": 192.0,
+            "_fov": 45.0,
+            "_aspectRatio": 1.7777778,
+            "_nearClip": 0.1,
+            "_farClip": 100.0,
+            "_fixedAspectRatio": False,
+            "_distance": 24.0,
+            "_focusPoint": [0.0, 0.0, 0.0],
         },
     }
+    if script:
+        components["LuaScriptComponent"] = {"scripts": [{"enabled": True, "scriptPath": script}]}
+    return {"id": 1001, "name": "Camera", "components": components}
 
 
 def tilemap_entity(entity_id: int, name: str, atlas: str, tileset: str, width: int, height: int,
@@ -247,6 +246,22 @@ def build_camp() -> dict:
             "layers": [ground, decor, overlay]}
 
 
+def script_entity(entity_id: int, name: str, script: str, props: dict | None = None) -> dict:
+    """An entity that only carries a script (no sprite): controllers, markers."""
+    entry: dict = {"enabled": True, "scriptPath": script}
+    if props:
+        entry["propertyOverrides"] = props
+    return {
+        "id": entity_id,
+        "name": name,
+        "components": {
+            "TransformComponent": {"_position": [0.0, 0.0, 0.0], "_rotation": [0.0, 0.0, 0.0],
+                                   "_scale": [1.0, 1.0, 1.0]},
+            "LuaScriptComponent": {"scripts": [entry]},
+        },
+    }
+
+
 def build_battle_ruins1() -> dict:
     origin = map_origin(BAT_W, BAT_H)
     ground = [DUN_FLOOR + 1] * (BAT_W * BAT_H)
@@ -271,33 +286,54 @@ def build_battle_ruins1() -> dict:
         put(cx, cy, DUN_CRATE)
 
     spawn = (BAT_W // 2, 1)
+    board_center = (BAT_W // 2, BAT_H // 2)
     entities: list[dict] = [
-        camera_entity(spawn, origin),
+        # Frame the whole board: the battle camera looks at the board centre,
+        # not the party spawn, so both sides are on screen. No follow script --
+        # the board is static and there is no "Player" entity here.
+        camera_entity(board_center, origin, script=None),
+        # The turn controller. It owns no unit list; it finds units through the
+        # board (map:entityAt) and reads their own scripts.
+        script_entity(1002, "Battle", "Content/Scripts/Battle.lua"),
     ]
-    party = [("UnitKnight", CHAR_KNIGHT, (spawn[0] - 2, 1), WHITE),
-             ("UnitArcher", CHAR_ARCHER, (spawn[0], 1), (0.8, 1.0, 0.8, 1.0)),
-             ("UnitMage", CHAR_MAGE, (spawn[0] + 2, 1), (0.8, 0.85, 1.0, 1.0))]
-    for i, (uname, tile, cell, tint) in enumerate(party):
+    # name, tile, cell, tint, stats(displayName/team/spd/hp/atk/def/move/range)
+    party = [
+        ("UnitKnight", CHAR_KNIGHT, (spawn[0] - 2, 1), WHITE,
+         {"team": "player", "displayName": "Knight", "maxHp": 30, "atk": 7, "def": 3, "spd": 8, "move": 3, "range": 1}),
+        ("UnitArcher", CHAR_ARCHER, (spawn[0], 1), (0.8, 1.0, 0.8, 1.0),
+         {"team": "player", "displayName": "Archer", "maxHp": 20, "atk": 6, "def": 1, "spd": 12, "move": 3, "range": 3}),
+        ("UnitMage", CHAR_MAGE, (spawn[0] + 2, 1), (0.8, 0.85, 1.0, 1.0),
+         {"team": "player", "displayName": "Mage", "maxHp": 18, "atk": 9, "def": 0, "spd": 10, "move": 2, "range": 3}),
+    ]
+    for i, (uname, tile, cell, tint, stats) in enumerate(party):
         entities.append(sprite_entity(1100 + i, uname, cell_world(origin, cell[0], cell[1], 0.1),
                                       DUN_ATLAS, tile_uv(tile), (1.0, 1.0), tint,
-                                      "Content/Scripts/Unit.lua", None, None, True))
-    enemies = [("EnemySlime", MON_SLIME, (spawn[0] - 3, 9)),
-               ("EnemyBat", MON_BAT, (spawn[0], 9)),
-               ("EnemyGhost", MON_GHOST, (spawn[0] + 3, 9))]
-    for i, (ename, tile, cell) in enumerate(enemies):
+                                      "Content/Scripts/Unit.lua", None, None, True, stats))
+    # name, tile, cell, stats
+    enemies = [
+        ("EnemySlime", MON_SLIME, (spawn[0] - 3, 9),
+         {"team": "enemy", "displayName": "Slime", "maxHp": 14, "atk": 4, "def": 0, "spd": 6, "move": 2, "range": 1}),
+        ("EnemyBat", MON_BAT, (spawn[0], 9),
+         {"team": "enemy", "displayName": "Bat", "maxHp": 10, "atk": 5, "def": 0, "spd": 14, "move": 4, "range": 1}),
+        ("EnemyGhost", MON_GHOST, (spawn[0] + 3, 9),
+         {"team": "enemy", "displayName": "Ghost", "maxHp": 16, "atk": 6, "def": 1, "spd": 9, "move": 2, "range": 2}),
+    ]
+    for i, (ename, tile, cell, stats) in enumerate(enemies):
         entities.append(sprite_entity(1200 + i, ename, cell_world(origin, cell[0], cell[1], 0.1),
                                       DUN_ATLAS, tile_uv(tile), (1.0, 1.0), WHITE,
-                                      "Content/Scripts/Unit.lua", None, None, True))
+                                      "Content/Scripts/Unit.lua", None, None, True, stats))
     entities.append(tilemap_entity(2000, "TilemapGround", DUN_ATLAS, DUN_TILESET, BAT_W, BAT_H, origin,
                                    [layer("Ground", ground), layer("Decor", decor, 0.03)]))
     return {"name": "BattleRuins1", "width": BAT_W, "height": BAT_H, "entities": entities,
-            "layers": [ground, decor]}
+            "layers": [ground, decor], "widgets": BATTLE_WIDGETS}
 
 
 # ── scene root + write ────────────────────────────────────────────────────
 
-WIDGET_ENTRIES = [("Dialogue", 10), ("Inventory", 20), ("Journal", 30),
-                  ("QuestNotice", 40), ("Settings", 50)]
+# (entryId, zOrder) mounted per scene. Battle scenes add the turn HUD.
+OVERWORLD_WIDGETS = [("Dialogue", 10), ("Inventory", 20), ("Journal", 30),
+                     ("QuestNotice", 40), ("Settings", 50)]
+BATTLE_WIDGETS = OVERWORLD_WIDGETS + [("BattleHUD", 5)]
 
 
 def fullscreen_slot() -> dict:
@@ -321,7 +357,7 @@ def write_scene(path: Path, map_data: dict) -> None:
         "widgetEntries": [
             {"entryId": eid, "zOrder": z, "autoMount": True,
              "document": f"Content:UI/{eid}.yaui.json", "rootSlot": fullscreen_slot()}
-            for eid, z in WIDGET_ENTRIES
+            for eid, z in map_data.get("widgets", OVERWORLD_WIDGETS)
         ],
     }
     tilemap = next(e for e in entities if "TilemapComponent" in e["components"])
@@ -341,7 +377,8 @@ def write_scene(path: Path, map_data: dict) -> None:
 
 def main() -> None:
     write_scene(ROOT / "Content/Scenes/Camp.scene.json", build_camp())
-    print(f"Camp {CAMP_W}x{CAMP_H}; BattleRuins1 {BAT_W}x{BAT_H} builder ready (emitted at T1)")
+    write_scene(ROOT / "Content/Scenes/BattleRuins1.scene.json", build_battle_ruins1())
+    print(f"Camp {CAMP_W}x{CAMP_H}, BattleRuins1 {BAT_W}x{BAT_H}")
 
 
 if __name__ == "__main__":

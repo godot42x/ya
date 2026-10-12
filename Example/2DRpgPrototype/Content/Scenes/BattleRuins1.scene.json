@@ -1,0 +1,1038 @@
+{
+  "name": "BattleRuins1",
+  "entities": [
+    {
+      "id": 1001,
+      "name": "Camera",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            0.5,
+            0.5,
+            24.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "CameraComponent": {
+          "bPrimary": true,
+          "_projection": "Orthographic",
+          "_orthoHalfHeight": 8.0,
+          "_pixelPerfect": true,
+          "_pixelsPerUnit": 16.0,
+          "_referenceHeightPx": 192.0,
+          "_fov": 45.0,
+          "_aspectRatio": 1.7777778,
+          "_nearClip": 0.1,
+          "_farClip": 100.0,
+          "_fixedAspectRatio": false,
+          "_distance": 24.0,
+          "_focusPoint": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "id": 1002,
+      "name": "Battle",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Battle.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1100,
+      "name": "UnitKnight",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            -1.5,
+            -4.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/tiny_dungeon.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.0
+          ],
+          "uvRect": [
+            0.0,
+            0.7272727272727273,
+            0.08333333333333333,
+            0.8181818181818182
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "bYSort": true,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Unit.lua",
+              "propertyOverrides": {
+                "team": "player",
+                "displayName": "Knight",
+                "maxHp": 30,
+                "atk": 7,
+                "def": 3,
+                "spd": 8,
+                "move": 3,
+                "range": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1101,
+      "name": "UnitArcher",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            0.5,
+            -4.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/tiny_dungeon.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.0
+          ],
+          "uvRect": [
+            0.16666666666666666,
+            0.7272727272727273,
+            0.25,
+            0.8181818181818182
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.8,
+            1.0,
+            0.8,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "bYSort": true,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Unit.lua",
+              "propertyOverrides": {
+                "team": "player",
+                "displayName": "Archer",
+                "maxHp": 20,
+                "atk": 6,
+                "def": 1,
+                "spd": 12,
+                "move": 3,
+                "range": 3
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1102,
+      "name": "UnitMage",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            2.5,
+            -4.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/tiny_dungeon.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.0
+          ],
+          "uvRect": [
+            0.0,
+            0.6363636363636364,
+            0.08333333333333333,
+            0.7272727272727273
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            0.8,
+            0.85,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "bYSort": true,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Unit.lua",
+              "propertyOverrides": {
+                "team": "player",
+                "displayName": "Mage",
+                "maxHp": 18,
+                "atk": 9,
+                "def": 0,
+                "spd": 10,
+                "move": 2,
+                "range": 3
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1200,
+      "name": "EnemySlime",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            -2.5,
+            3.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/tiny_dungeon.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.0
+          ],
+          "uvRect": [
+            0.0,
+            0.8181818181818182,
+            0.08333333333333333,
+            0.9090909090909091
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "bYSort": true,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Unit.lua",
+              "propertyOverrides": {
+                "team": "enemy",
+                "displayName": "Slime",
+                "maxHp": 14,
+                "atk": 4,
+                "def": 0,
+                "spd": 6,
+                "move": 2,
+                "range": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1201,
+      "name": "EnemyBat",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            0.5,
+            3.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/tiny_dungeon.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.0
+          ],
+          "uvRect": [
+            0.0,
+            0.9090909090909091,
+            0.08333333333333333,
+            1.0
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "bYSort": true,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Unit.lua",
+              "propertyOverrides": {
+                "team": "enemy",
+                "displayName": "Bat",
+                "maxHp": 10,
+                "atk": 5,
+                "def": 0,
+                "spd": 14,
+                "move": 4,
+                "range": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1202,
+      "name": "EnemyGhost",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            3.5,
+            3.5,
+            0.1
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "Sprite2DComponent": {
+          "bVisible": true,
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Nearest"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/tiny_dungeon.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "size": [
+            1.0,
+            1.0
+          ],
+          "uvRect": [
+            0.08333333333333333,
+            0.9090909090909091,
+            0.16666666666666666,
+            1.0
+          ],
+          "bFlipU": false,
+          "bFlipV": false,
+          "tint": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "layer": 0,
+          "sortOrder": 0,
+          "bYSort": true,
+          "pickId": 0
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/Unit.lua",
+              "propertyOverrides": {
+                "team": "enemy",
+                "displayName": "Ghost",
+                "maxHp": 16,
+                "atk": 6,
+                "def": 1,
+                "spd": 9,
+                "move": 2,
+                "range": 2
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 2000,
+      "name": "TilemapGround",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            -8.0,
+            -6.0,
+            0.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "TilemapComponent": {
+          "tileset": {
+            "__base__": {
+              "AssetRefBase": {
+                "_path": "Content:Tilesets/dungeon.yatileset.json"
+              }
+            }
+          },
+          "cellSize": [
+            1.0,
+            1.0
+          ],
+          "width": 16,
+          "height": 12,
+          "layers": [
+            {
+              "name": "Ground",
+              "zOffset": 0.0,
+              "cells": [
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
+        49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49
+      ]
+            },
+            {
+              "name": "Decor",
+              "zOffset": 0.03,
+              "cells": [
+        15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
+        15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15,
+        15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15,
+        15, 0, 0, 0, 15, 0, 0, 0, 0, 59, 0, 15, 0, 0, 0, 15,
+        15, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0, 15, 0, 0, 0, 15,
+        15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15,
+        15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15,
+        15, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0, 15, 0, 0, 0, 15,
+        15, 0, 0, 0, 15, 0, 59, 0, 0, 0, 0, 15, 0, 0, 0, 15,
+        15, 0, 59, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15,
+        15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15,
+        15, 15, 15, 15, 15, 15, 15, 15, 1, 15, 15, 15, 15, 15, 15, 15
+      ]
+            }
+          ],
+          "layer": 0
+        }
+      }
+    }
+  ],
+  "nodeTree": {
+    "name": "scene_root",
+    "children": [
+      {
+        "name": "Camera",
+        "entityRef": 1001
+      },
+      {
+        "name": "Battle",
+        "entityRef": 1002
+      },
+      {
+        "name": "UnitKnight",
+        "entityRef": 1100
+      },
+      {
+        "name": "UnitArcher",
+        "entityRef": 1101
+      },
+      {
+        "name": "UnitMage",
+        "entityRef": 1102
+      },
+      {
+        "name": "EnemySlime",
+        "entityRef": 1200
+      },
+      {
+        "name": "EnemyBat",
+        "entityRef": 1201
+      },
+      {
+        "name": "EnemyGhost",
+        "entityRef": 1202
+      },
+      {
+        "name": "TilemapGround",
+        "entityRef": 2000
+      }
+    ]
+  },
+  "widgetEntries": [
+    {
+      "entryId": "Dialogue",
+      "zOrder": 10,
+      "autoMount": true,
+      "document": "Content:UI/Dialogue.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [
+          0.0,
+          0.0
+        ],
+        "anchorMax": [
+          1.0,
+          1.0
+        ],
+        "offset": [
+          0.0,
+          0.0
+        ],
+        "minSize": [
+          0.0,
+          0.0
+        ],
+        "maxSize": [
+          1000000.0,
+          1000000.0
+        ],
+        "offsets": {
+          "left": 0.0,
+          "top": 0.0,
+          "right": 0.0,
+          "bottom": 0.0
+        },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [
+          0.0,
+          0.0
+        ],
+        "preferredSize": [
+          0.0,
+          0.0
+        ],
+        "fixedSize": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "entryId": "Inventory",
+      "zOrder": 20,
+      "autoMount": true,
+      "document": "Content:UI/Inventory.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [
+          0.0,
+          0.0
+        ],
+        "anchorMax": [
+          1.0,
+          1.0
+        ],
+        "offset": [
+          0.0,
+          0.0
+        ],
+        "minSize": [
+          0.0,
+          0.0
+        ],
+        "maxSize": [
+          1000000.0,
+          1000000.0
+        ],
+        "offsets": {
+          "left": 0.0,
+          "top": 0.0,
+          "right": 0.0,
+          "bottom": 0.0
+        },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [
+          0.0,
+          0.0
+        ],
+        "preferredSize": [
+          0.0,
+          0.0
+        ],
+        "fixedSize": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "entryId": "Journal",
+      "zOrder": 30,
+      "autoMount": true,
+      "document": "Content:UI/Journal.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [
+          0.0,
+          0.0
+        ],
+        "anchorMax": [
+          1.0,
+          1.0
+        ],
+        "offset": [
+          0.0,
+          0.0
+        ],
+        "minSize": [
+          0.0,
+          0.0
+        ],
+        "maxSize": [
+          1000000.0,
+          1000000.0
+        ],
+        "offsets": {
+          "left": 0.0,
+          "top": 0.0,
+          "right": 0.0,
+          "bottom": 0.0
+        },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [
+          0.0,
+          0.0
+        ],
+        "preferredSize": [
+          0.0,
+          0.0
+        ],
+        "fixedSize": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "entryId": "QuestNotice",
+      "zOrder": 40,
+      "autoMount": true,
+      "document": "Content:UI/QuestNotice.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [
+          0.0,
+          0.0
+        ],
+        "anchorMax": [
+          1.0,
+          1.0
+        ],
+        "offset": [
+          0.0,
+          0.0
+        ],
+        "minSize": [
+          0.0,
+          0.0
+        ],
+        "maxSize": [
+          1000000.0,
+          1000000.0
+        ],
+        "offsets": {
+          "left": 0.0,
+          "top": 0.0,
+          "right": 0.0,
+          "bottom": 0.0
+        },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [
+          0.0,
+          0.0
+        ],
+        "preferredSize": [
+          0.0,
+          0.0
+        ],
+        "fixedSize": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "entryId": "Settings",
+      "zOrder": 50,
+      "autoMount": true,
+      "document": "Content:UI/Settings.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [
+          0.0,
+          0.0
+        ],
+        "anchorMax": [
+          1.0,
+          1.0
+        ],
+        "offset": [
+          0.0,
+          0.0
+        ],
+        "minSize": [
+          0.0,
+          0.0
+        ],
+        "maxSize": [
+          1000000.0,
+          1000000.0
+        ],
+        "offsets": {
+          "left": 0.0,
+          "top": 0.0,
+          "right": 0.0,
+          "bottom": 0.0
+        },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [
+          0.0,
+          0.0
+        ],
+        "preferredSize": [
+          0.0,
+          0.0
+        ],
+        "fixedSize": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "entryId": "BattleHUD",
+      "zOrder": 5,
+      "autoMount": true,
+      "document": "Content:UI/BattleHUD.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [
+          0.0,
+          0.0
+        ],
+        "anchorMax": [
+          1.0,
+          1.0
+        ],
+        "offset": [
+          0.0,
+          0.0
+        ],
+        "minSize": [
+          0.0,
+          0.0
+        ],
+        "maxSize": [
+          1000000.0,
+          1000000.0
+        ],
+        "offsets": {
+          "left": 0.0,
+          "top": 0.0,
+          "right": 0.0,
+          "bottom": 0.0
+        },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [
+          0.0,
+          0.0
+        ],
+        "preferredSize": [
+          0.0,
+          0.0
+        ],
+        "fixedSize": [
+          0.0,
+          0.0
+        ]
+      }
+    }
+  ]
+}

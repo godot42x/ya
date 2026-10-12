@@ -49,7 +49,39 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
 
 ### 未完成 / 待确认
 
-- 素材入库方式（我去下载 Kenney zip，还是用户手动放）。
-- 单位静态 vs 动画（Tiny Battle 无内置动画）。
+- 素材入库方式（我去下载 Kenney zip，还是用户手动放）—— 已自行下载并入 `Content/`（Kenney 页面授权抓取）。
+- 单位静态 vs 动画（Tiny Battle 无内置动画；暂用 Tiny Dungeon 静态角色/怪物，够用）。
 - 后处理作用域（管线级先做；每 View 独立 look 到 R1 再定）。
 - 示例目录名（沿用 `2DRpgPrototype` 或改名）。
+
+## 2026-10-13 — F1：重编壳 + 素材入库
+
+- 目标：`2DRpgPrototype` 以新默认场景启动，显示营地地图；Kenney CC0 素材入库。
+- 内容：`Content/Scenes/Camp.scene.json`（28×20，tiny_town 草/树/栅栏）、`Content/Scripts/Elder.lua`
+  （发任务，走 `Dialogue`）、`Content/Tilesets/dungeon.yatileset.json`；素材 = Tiny Dungeon / Tiny Battle
+  图集 + Kenney Particle Pack 9 张 + UI/SFX 音频 18 个（`Content/Textures|Audio/LICENSE.md` 记来源，全 CC0）。
+  生成器 `Tools/make_maps.py`（确定性）。
+- 途中发现（两个真 bug，都在我的生成器侧）：
+  1. `uvRect` 契约是 `(u0, v0, u1, v1)`，不是 `(origin, size)` —— 第一版 `tile_uv` 返回 `(u0,v0,w,h)`，
+     导致每个角色精灵的 UV 窗口宽度为 0，画成一条色带。读 `Sprite2DWorld.slang` 的 `lerp(uvRect.xy, uvRect.zw, ...)` 定案。
+  2. Tiny Town 的树是**两个堆叠 tile**（树冠在上、树干在下相邻格），第一版把两者放同一格，树画成断头拱形。
+- 验证：`Script/automation/2d-rpg/camp_hub.py`（scene=Camp、Player/Elder 在场、截图）通过；
+  `python3 Script/ya.py run ... --exit-after-frame=120` exit 0。截图 `Engine/Saved/Automation/camp-hub/camp_hub.png`。
+- 保留 / 偏离：Tiny Battle 是载具不是幻想单位，改主用 Tiny Dungeon 自带的角色（84–95）与怪物（108–131）。
+- 提交 `89696f80`。
+
+## 2026-10-13 — T1：棋盘与回合骨架
+
+- 目标：固定战斗地图摆 3 我 + 3 敌；确认键推进回合；行动序条按速度排序；活动单位高亮。
+- 内容：`Content/Scenes/BattleRuins1.scene.json`（16×12 石室 + 6 单位 + Battle 控制器）、
+  `Content/Scripts/Unit.lua`（属性脚本 + HP/变色/受伤）、`Content/Scripts/Battle.lua`（回合队列）、
+  `Content/UI/BattleHUD.yaui.json` + `.lua`（行动序条，生成器 `Tools/make_battle_hud.py`）。
+- 设计：Battle **不持有单位列表** —— 它遍历棋盘，用 `map:entityAt(x,y)` 问谁站在这格，再读该单位自己的
+  脚本（`team/spd/hp/displayName`）。棋盘即名册，没有第二份列表要同步。
+- 途中发现：`ui.get(entry)` 在条目脚本加载完成前返回**根控件句柄**（不是脚本 self），所以 Battle 前几帧
+  `hud.setTurnOrder` 不存在；改为每帧重试直到 HUD 就绪（`bHudPending`）。
+- 验证：`Script/automation/2d-rpg/battle_turns.py` —— 6 单位、按速度排序（Bat14→Archer12→Mage10→Ghost9→
+  Knight8→Slime6）、确认后活动标记移到 Archer；截图确认整块棋盘与 HUD。
+  截图 `Engine/Saved/Automation/battle-turns/battle_turns.png`。
+- 未完成（T2 起）：移动/可达范围、攻击/伤害、AI、进战/出战拼接。
+
