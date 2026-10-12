@@ -119,6 +119,7 @@ struct IRender;
 struct IRenderResourceFactory;
 class RenderSubmission;
 class ViewTargetStore;
+struct ViewTargetLease;
 
 /// Context for feature resolve phase: resource requirements and configuration.
 struct FeatureResolveContext
@@ -145,6 +146,7 @@ struct FeatureGraphContext
 {
     RenderGraph*             graph          = nullptr;
     IRender*                 render         = nullptr;
+    const ViewTargetLease*   viewLease      = nullptr;
     uint64_t                 viewId         = 0;
 };
 
