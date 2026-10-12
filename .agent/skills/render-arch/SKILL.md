@@ -147,6 +147,21 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
 问"这一行在每种模式下读到的是什么"；答不出来的那个字段就是错的。修法通常是**按语义拆成两个名字
 不同的东西**（`renderResolution` 设置 vs `getWindowSize()` 测量），而不是继续加注释解释它。
 
+## 世界管线的组合层（recipe + feature）
+
+两条世界管线各有一份 typed recipe，是"这帧画什么、按什么顺序、什么数据流向谁"的唯一地图：
+
+- `Render3D/include/Render3D/Deferred/DeferredPipelineRecipe.h`：GBuffer → SSAO(可选) → Lighting → forward-opaque 槽 → Skybox → Sprites → Bloom(可选) → Overlay → EntityId → Finalize。
+- `Render3D/include/Render3D/Forward/ForwardPipelineRecipe.h`：Opaque(clear + 全 shading model) → Skybox → transparent 槽 → EntityId → Bloom(可选) → Finalize。
+
+**新增一个 pass**：写一个满足 `Feature` concept 的 feature（`resolve` / `prepareBindings` / `append`，见 `Composition/FeatureProtocol.h`），在 recipe 的 `resolve`/`prepareBindings`/`appendGraph` 各接一行。数据流靠 feature 之间传 typed handle（`outputs.gbuffer.albedo → lightingInputs.albedo`），不需要改 RDG core、pipeline context 或任何 bindings bag——`FeatureProtocolTest.TestOnlyFeatureRunsTheFullChainWithoutCorePlumbing` 就是这条承诺的可执行形式。两个 recipe 头部各有 `# Adding a pass` 小节，实现时读它。
+
+**feature 协议是被强制的**：每个 feature 头文件有 `static_assert(Feature<X>)`，签名漂移会编译失败而不是静默退化。
+
+**跨管线共享**：`Composition/Features/` 下的 `BloomFeature` / `EntityIdFeature` / `FinalizeFeature` / `ShadowFeature` 被两条管线共用；管线各自的 pass 名与 import 标签由 `Settings` 从 `DeferredPassNames.h` / `ForwardPassNames.h` 传入（feature 内不写死）。
+
+**诊断**：`--render-graph-trace` 下，两管线在 resolve 时打印每个 feature 的开关与声明的 targets，在 append 后打印本次贡献的 pass 区间（`passes [a..b)`），可与 graph dump 的 pass 列表逐条对照。
+
 ## 帧索引与缓冲规范（多窗口世界的五个计数器）
 
 单窗口时代 `hostTick ≈ deviceFrameIndex ≈ surfaceSlot`，混用不出错；多窗口后影子消失，
