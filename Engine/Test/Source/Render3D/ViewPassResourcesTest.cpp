@@ -168,27 +168,31 @@ TEST(ViewPassResourcesTest, SsaoRecipeKeepsInputLayoutNotSingletonSet)
     EXPECT_EQ(stage.getRadius(), radiusBefore);
 }
 
-TEST(ViewPassResourcesTest, ForwardDebugAndPostSlotsStayIndependent)
+TEST(ViewPassResourcesTest, ForwardViewSlotIsTheBindingAndStaysPerViewIndependent)
 {
-    RenderViewBindingTable<ForwardFrameResourceSet::ViewResources> table;
+    // The View slot IS the Binding: the shared frame/light/skinning sets. The
+    // per-feature sets (debug, entity id, postprocess) live in the features'
+    // Prepared values, so nothing here mirrors them.
+    RenderViewBindingTable<ForwardFrameResourceSet::Binding> table;
     ASSERT_TRUE(table.beginSubmission(0, 42));
 
     auto* viewA = table.mutableNextView(0);
     ASSERT_NE(viewA, nullptr);
-    viewA->debug.ubo.set         = DescriptorSetHandle{reinterpret_cast<void*>(0xD1)};
-    viewA->post.toneMap.input.set = DescriptorSetHandle{reinterpret_cast<void*>(0xD2)};
+    viewA->pbrFrameDescriptorSet = DescriptorSetHandle{reinterpret_cast<void*>(0xD1)};
+    viewA->skinningDescriptorSet = DescriptorSetHandle{reinterpret_cast<void*>(0xD2)};
     ASSERT_TRUE(table.commitNextView(0));
 
     auto* viewB = table.mutableNextView(0);
     ASSERT_NE(viewB, nullptr);
-    viewB->debug.ubo.set         = DescriptorSetHandle{reinterpret_cast<void*>(0xE1)};
-    viewB->post.toneMap.input.set = DescriptorSetHandle{reinterpret_cast<void*>(0xE2)};
+    viewB->pbrFrameDescriptorSet = DescriptorSetHandle{reinterpret_cast<void*>(0xE1)};
+    viewB->skinningDescriptorSet = DescriptorSetHandle{reinterpret_cast<void*>(0xE2)};
     ASSERT_TRUE(table.commitNextView(0));
 
-    EXPECT_NE(table.getView(0, 0)->debug.ubo.set, table.getView(0, 1)->debug.ubo.set);
-    EXPECT_NE(table.getView(0, 0)->post.toneMap.input.set, table.getView(0, 1)->post.toneMap.input.set);
-    viewB->debug.ubo.set = DescriptorSetHandle{reinterpret_cast<void*>(0xE9)};
-    EXPECT_EQ(table.getView(0, 0)->debug.ubo.set, DescriptorSetHandle{reinterpret_cast<void*>(0xD1)});
+    EXPECT_NE(table.getView(0, 0)->pbrFrameDescriptorSet, table.getView(0, 1)->pbrFrameDescriptorSet);
+    EXPECT_NE(table.getView(0, 0)->skinningDescriptorSet, table.getView(0, 1)->skinningDescriptorSet);
+    // Writing the second View's slot cannot disturb the first's.
+    viewB->pbrFrameDescriptorSet = DescriptorSetHandle{reinterpret_cast<void*>(0xE9)};
+    EXPECT_EQ(table.getView(0, 0)->pbrFrameDescriptorSet, DescriptorSetHandle{reinterpret_cast<void*>(0xD1)});
 }
 
 } // namespace ya

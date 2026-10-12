@@ -1,5 +1,7 @@
 #include "Render3D/Forward/ForwardPipelineRecipe.h"
 
+#include "Render3D/Common/RenderFrameInputs.h"
+
 #include <gtest/gtest.h>
 
 namespace ya
@@ -81,6 +83,48 @@ TEST(ForwardRecipeInputsTest, BloomAddsExactlyItsThreeTargetsInStableOrder)
     EXPECT_EQ(targets[4].role, EViewAttachment::BloomExtract);
     EXPECT_EQ(targets[5].role, EViewAttachment::BloomBlur);
     EXPECT_EQ(targets[6].role, EViewAttachment::BloomComposite);
+}
+
+TEST(ForwardRecipeLifecycleTest, EmptyPlanResolvesToNoViewsAndIsNotAFailure)
+{
+    // The legal empty case: no View declared one, so the composition is empty
+    // and that is a resolved composition, not an error. A UI-only or headless
+    // frame must not be answered with "the pipeline failed".
+    const ForwardPipelineRecipe::Config config{};
+    const RenderFramePlan plan{};
+
+    const auto resolved = ForwardPipelineRecipe::resolve(config, plan);
+    ASSERT_TRUE(resolved.isOk());
+    EXPECT_TRUE(resolved.value().empty());
+}
+
+TEST(ForwardRecipeLifecycleTest, DisabledCompositionIsAnErrorNotAnEmptyResolve)
+{
+    // A composition handed a disabled config is a wiring bug, not a legal
+    // "nothing to draw": callers read the error and fail the frame instead of
+    // recording a View with no targets.
+    ForwardPipelineRecipe::Config config{};
+    config.bEnabled = false;
+
+    const RenderFramePlan plan{};
+    const auto resolved = ForwardPipelineRecipe::resolve(config, plan);
+    ASSERT_TRUE(resolved.isErr());
+    EXPECT_EQ(resolved.error(), FeatureError::InvalidInput);
+}
+
+TEST(ForwardRecipeLifecycleTest, MissingFrameBindingFailsPreparationInsteadOfBindingNothing)
+{
+    // Preparing without the View's binding must fail: a pass that bound empty
+    // sets would draw with whatever the driver left there.
+    ForwardPipelineRecipe::ResolvedView view{};
+    view.viewId = 5;
+    view.opaque.bEnabled = true;
+
+    const ForwardPipelineRecipe::Stages stages{};
+    const ForwardPipelineRecipe::PrepareContext ctx{}; // no submission, no binding
+    const auto prepared = ForwardPipelineRecipe::prepareBindings(view, stages, ctx);
+    ASSERT_TRUE(prepared.isErr());
+    EXPECT_EQ(prepared.error(), FeatureError::MissingContext);
 }
 
 } // namespace ya

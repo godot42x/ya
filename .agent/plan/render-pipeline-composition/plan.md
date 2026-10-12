@@ -2,8 +2,8 @@
 
 > 建立 / 更新：2026-10-13
 > 状态：实施进行中。已落地（均带 runtime 逐像素证据）：C1-foundation + 集成切片（GBuffer→SSAO→Lighting 单源贯通）、C3A（Deferred tail 全 feature 化 + 集中层删除）、C3A-trim、C3B（Deferred 共享输入收口）、C3G（C3 剩余门禁）、协议诚实化（Feature concept 由 9 个 feature static_assert 强制）、C4a（Forward recipe + Bloom/EntityId/Finalize 跨管线共享 + M17 Forward 半边 + appendTargetRequests 退出）。
-> 下一 checkpoint：C4c（剩余槽位复核 / M19 lifecycle）；随后 C5（诊断、扩展用例、多 View、performance）。
-> C4b 已完成：ShadowFeature 经 composition 接入两 recipe，pipeline 侧 shadow 旁路退出，trace 拓扑与基线逐条目一致。
+> 下一 checkpoint：C5（组合诊断、扩展用例、多 View、performance/churn、skill 吸收）。
+> C4 已完成（C4a Forward recipe + 共享 feature；C4b Shadow 经 composition 接入；C4c ViewResources bag 退场 / 死结构清除 / M19 recipe 级用例）。两管线全部贡献走同一 Feature 协议。
 > 命名对应：本文件 C1 = 实际执行的 "C1-foundation + 集成切片"；C2 剩余项、C3 遗留 hook 与 C4b 见 todo.md。
 
 ## 1. 目标与成功定义

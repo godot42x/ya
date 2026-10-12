@@ -567,3 +567,23 @@
 
 - C4c：`ViewResources` 剩余槽位复核、Forward 透明槽记录、M19 lifecycle 用例。
 - 未动：typed refs（仍只在测试使用，删除待拍板）。
+
+## 2026-10-13 — C4c：C4 收尾（bag 退场、死结构清除、M19 recipe 级用例）
+
+### 实施内容
+
+- **`ViewResources` bag 退场**：复核三个槽位——entityId/post 在 C4a 后已是死写（features 自己分配），debug 是唯一活消费者。按 C3B 模式把 debug UBO 收进 `ForwardOpaqueFeature::prepareBindings`（它画 debug pass，UBO 本属它；stage 无 debug DSL 或无 frameData = 本帧无 debug，同旧分配器答案）。`ViewResources`、`getViewResources`、`mutableViewResources`、`allocateForwardViewPassResources` 全部删除；Forward 的 View slot 与 Deferred 同为 `Binding`。
+- **死绑定结构清除**：`SSAOPassBindings`/`DeferredLightingPassBindings`（C3A bag 删除后零引用）、`PostprocessPassBindings`（bloom+toneMap 镜像；feature 各自持有后无消费者）。删除前逐一 grep 确认引用数为 1（仅定义处）。
+- **M19 recipe 级合法用例**（`ForwardPipelineRecipeTest` 3 例）：空 plan → 空组合（非失败）；disabled config → `InvalidInput`（不是"空组合"，不让调用方把 wiring bug 当空帧）；无 View binding 的 prepare → `MissingContext`（不静默绑空集）。
+- Forward 透明槽的无功能契约记录保留在 recipe 注释（与 Deferred opaque 槽同待遇）。
+
+### 验证
+
+- 编译：`xmake b ya-render-3d-test` / `ya-runtime` ok。
+- 测试：`xmake r ya-render-3d-test` **226/226**（+3）；`python3 Script/ya.py test --target ya` **1817/1817**。
+- Runtime：Deferred / Forward / 切回 Deferred 三帧对各自基线（c3b-ssao-on.png / composition-forward.png）**逐像素 max diff 0**；日志除历史 VkDescriptorPool 告警外无 ERROR。
+
+### 保留 / 未做
+
+- C5：组合诊断、扩展用例、多 View runtime、performance/churn 门禁、skill 吸收。
+- 未动：typed refs（仍只在测试使用，删除待拍板）；C3 的两个 runtime hook（entity-id picking readback、direction gizmo 场景）；plan-C2 余项（`_lastBlurPassCount`）。

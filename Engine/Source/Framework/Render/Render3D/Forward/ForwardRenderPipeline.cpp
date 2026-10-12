@@ -103,63 +103,9 @@ RenderTargetCreateInfo buildForwardViewRenderTargetSpec(Extent2D extent, EFormat
 
 /// The View's own feature policy. A View that prepared no frame data declares
 /// no features, which is a policy of its own rather than "everything".
-FRenderFeatureMask viewFeatureMask(const RenderPipelineFrameContext& frame)
+[[maybe_unused]] FRenderFeatureMask viewFeatureMask(const RenderPipelineFrameContext& frame)
 {
     return frame.view.frameData ? frame.view.frameData->viewFeatures : 0;
-}
-
-void allocateForwardViewPassResources(
-    RenderSubmission&                        submission,
-    IRender*                                 render,
-    uint32_t                                 alignment,
-    const RenderStageContext&                stageCtx,
-    EntityIdPass*                    entityIdPass,
-    ForwardViewAuxPasses&                auxPasses,
-    PostProcessingStage*                     postStage,
-    ForwardFrameResourceSet::ViewResources&  resources)
-{
-    const RenderFrameData* frameData = stageCtx.frameData;
-    if (entityIdPass && frameData) {
-        EntityIdPass::FrameUBO ubo{};
-        ubo.viewProj = frameData->viewProjection;
-        ubo.view     = frameData->view;
-        writeUniformPassBinding(
-            submission,
-            render,
-            entityIdPass->getFrameDSL(),
-            alignment,
-            &ubo,
-            sizeof(ubo),
-            resources.entityId.frame);
-    }
-
-    if (auxPasses.getDebugDSL() && frameData) {
-        auto& debugUBO = auxPasses.getDebugUBO();
-        debugUBO.projection = frameData->projection;
-        debugUBO.view       = frameData->view;
-        debugUBO.resolution = glm::ivec2(
-            static_cast<int>(stageCtx.viewExtent.width),
-            static_cast<int>(stageCtx.viewExtent.height));
-        writeUniformPassBinding(
-            submission,
-            render,
-            auxPasses.getDebugDSL(),
-            alignment,
-            &debugUBO,
-            sizeof(debugUBO),
-            resources.debug.ubo);
-    }
-
-    if (postStage) {
-        allocateBloomPassBindings(
-            submission,
-            postStage->getBloomExtractDSL(),
-            postStage->getBloomBlurDSL(),
-            postStage->getBloomCompositeDSL(),
-            resources.post.bloom);
-        resources.post.toneMap.input.set = allocateCombinedImageSamplerSet(
-            submission, postStage->getToneMapInputDSL(), 1);
-    }
 }
 
 } // namespace
@@ -370,7 +316,6 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         FrameContext               postContext{};
         std::unique_ptr<ForwardViewStage::PassContext> viewPassContext;
         ForwardFrameResourceSet::Binding frameBinding{};
-        ForwardFrameResourceSet::ViewResources* viewResources = nullptr;
         ViewTargetLease targets{};
         /// The composition this View records through, resolved at the safe point.
         const ForwardPipelineRecipe::ResolvedView* resolved = nullptr;
@@ -437,20 +382,6 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
                 continue;
             }
             branch.frameBinding = *binding;
-            branch.viewResources = _frameResources->mutableViewResources(
-                branch.frame.submission->flightIndex(), view.viewSlot);
-            if (branch.viewResources) {
-                const uint32_t alignment = std::max(_render ? _render->getUniformBufferOffsetAlignment() : 1u, 1u);
-                allocateForwardViewPassResources(
-                    *branch.frame.submission,
-                    _render,
-                    alignment,
-                    branch.stageCtx,
-                    &_entityIdPass,
-                    _viewStage->getAuxPasses(),
-                    &_postProcessStage,
-                    *branch.viewResources);
-            }
         }
 
         branch.postContext = {};
@@ -494,9 +425,6 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         // recording state, so the pass context can only bind what it declared.
         live.viewPassContext = std::make_unique<ForwardViewStage::PassContext>(
             _viewStage->buildPassContext(live.stageCtx, live.frame.derivedScene));
-        if (live.viewResources) {
-            live.viewPassContext->debug = live.viewResources->debug;
-        }
         if (!appendForwardViewToGraph(
                 graph,
                 live.frame,

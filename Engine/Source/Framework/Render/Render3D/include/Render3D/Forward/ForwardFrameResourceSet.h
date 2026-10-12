@@ -7,7 +7,6 @@
 #include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewBindingTable.h"
-#include "Render3D/Common/ViewPassResources.h"
 
 #include "PBRForward.slang.h"
 #include "PhongLit.slang.h"
@@ -76,14 +75,9 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase
         }
     };
 
-    struct ViewResources
-    {
-        Binding                  frame{};
-        EntityIdPassBindings     entityId{};
-        ForwardDebugPassBindings debug{};
-        PostprocessPassBindings  post{};
-    };
-
+    /// The View slot is the Binding itself: the shared frame/light/skinning
+    /// sets. Feature-owned sets (debug, entity id, postprocess) live in the
+    /// features' own Prepared values; the bag is deliberately gone.
     void init(IRender* render);
     void destroy();
 
@@ -111,15 +105,13 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase
     [[nodiscard]] stdptr<IDescriptorSetLayout> getPhongFrameDSL() const { return _phongFrameDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getUnlitFrameDSL() const { return _unlitFrameDSL; }
     [[nodiscard]] const Binding*               getViewBinding(uint32_t flightIndex, uint32_t viewSlot) const;
-    [[nodiscard]] const ViewResources*         getViewResources(uint32_t flightIndex, uint32_t viewSlot) const;
-    [[nodiscard]] ViewResources*               mutableViewResources(uint32_t flightIndex, uint32_t viewSlot);
     [[nodiscard]] uint32_t                     liveViewCount(uint32_t flightIndex) const;
 
   private:
     stdptr<IDescriptorSetLayout> _pbrFrameDSL;
     stdptr<IDescriptorSetLayout> _phongFrameDSL;
     stdptr<IDescriptorSetLayout> _unlitFrameDSL;
-    RenderViewBindingTable<ViewResources> _viewBindings;
+    RenderViewBindingTable<Binding> _viewBindings;
 
     bool ensureViewDescriptors(RenderSubmission& submission, Binding& binding);
     void                    updatePBRFrameDescriptorSet(const Binding& binding);

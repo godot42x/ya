@@ -29,17 +29,6 @@ struct CombinedImageSamplerPassBinding
     DescriptorSetHandle set{};
 };
 
-struct SSAOPassBindings
-{
-    CombinedImageSamplerPassBinding inputs;
-};
-
-struct DeferredLightingPassBindings
-{
-    CombinedImageSamplerPassBinding gBufferTextures;
-    CombinedImageSamplerPassBinding shadows;
-};
-
 struct EntityIdPassBindings
 {
     UniformBufferPassBinding frame;
@@ -88,12 +77,6 @@ struct BloomPassBindings
 struct ToneMapPassBindings
 {
     CombinedImageSamplerPassBinding input;
-};
-
-struct PostprocessPassBindings
-{
-    BloomPassBindings  bloom;
-    ToneMapPassBindings toneMap;
 };
 
 bool writeUniformPassBinding(

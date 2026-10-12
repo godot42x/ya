@@ -2,7 +2,7 @@
   "plan": "render-pipeline-composition",
   "updated": "2026-10-12",
   "implementation_status": "in_progress",
-  "next_checkpoint": "C4c",
+  "next_checkpoint": "C5",
   "intent": "RDG 上方建立一等 feature、typed recipe、单源资源需求与贯通 prepare/build/publication 的同一份 resolved composition；不以 Bloom 算法为目标",
   "status_rules": {
     "todo": "未实施，evidence 为空",
@@ -262,8 +262,13 @@
       "checkpoints": ["C3", "C4"],
       "expected": "resize/switch/reload/unregister 保留 reuse、generation、lease、fence；empty/UI-only/no surface/no extent 合法；失败或 absence 无跨 flight 旧图兜底",
       "verification": ["ViewTargetStoreTest", "RenderSubmissionTest", "runtime mutation trace", "application integration"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "recipe 级：空 plan resolve 为合法空组合（ForwardPipelineRecipeTest EmptyPlanResolvesToNoViewsAndIsNotAFailure）；disabled config 是 InvalidInput 错误（DisabledCompositionIsAnErrorNotAnEmptyResolve）；缺 View binding 的 prepare 是 MissingContext（MissingFrameBindingFailsPreparationInsteadOfBindingNothing）",
+        "store/submission 层由既有用例覆盖：ViewTargetStoreTest（exact request reuse、resize 换一次、View 独立、跳过帧保 allocation、未注册 View 跳过、unregister 丢 allocation+publication）、RenderSubmissionTest（keepalive 跨 finish、同 flight 新 token 丢旧、跨 flight 独立、fence 语义）",
+        "bag 退场后的独立槽位断言：Forward 的 View slot 就是 Binding，两 View 的 frame/skinning set 互不干扰（ViewPassResourcesTest ForwardViewSlotIsTheBindingAndStaysPerViewIndependent）",
+        "runtime：resize/switch/reload 由 pipeline switch 与 resize 场景覆盖（C4a/C4b 的 Deferred↔Forward 切换三帧逐像素 0 diff）；完整 runtime mutation trace 与 application integration 仍待 C5"
+      ]
     },
     {
       "id": "M20",

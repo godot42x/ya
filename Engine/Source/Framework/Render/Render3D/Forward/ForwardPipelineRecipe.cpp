@@ -169,7 +169,15 @@ ForwardPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
     const ForwardOpaqueFeature opaqueFeature;
     auto opaquePrepared = opaqueFeature.prepareBindings(
         resolved.opaque,
-        ForwardOpaqueFeature::PrepareContext{.frameBinding = ctx.frameBinding});
+        ForwardOpaqueFeature::PrepareContext{
+            .frameBinding = ctx.frameBinding,
+            .submission   = ctx.submission,
+            .render       = ctx.render,
+            .auxPasses    = ctx.auxPasses,
+            .alignment    = ctx.alignment,
+            .frameData    = ctx.frameData,
+            .viewExtent   = resolved.viewExtent,
+        });
     if (opaquePrepared.isErr()) {
         return opaquePrepared.error();
     }

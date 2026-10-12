@@ -27,7 +27,12 @@
 ## 下一步（按优先级）
 
 - [x] **C4b（M18：Shadow 经 composition 接入）**：`ShadowFeature`（Composition/Features）成为两 recipe 的第一个条目——resolve 启用决策、prepareBindings 生产 `ShadowPreparedView` token、append 产出 `ShadowGraphOutputs`；Lighting 从 recipe 自己的 shadow 输出取 depth。两管线的 `_shadowStage->appendGraphPasses` 直调与 `prepareShadowPass` 退出，改为 `applyShadowFrameSettings()`（只应用 settings）。strategy 仍持 images/runtime/budget，算法与绑定不动。证据：trace 16-pass/13-pass 拓扑与 C3B 基线**逐条目一致**（shadow→GBuffer→…）；shadow on/off 差 31782 px 证明生效；Deferred/Forward 对基线逐像素 0 diff。
-- [ ] **C4c（C4 收尾）**：确认无剩余混合生命周期资源槽位（`ViewResources` 复核）；Forward 透明槽保持"无功能契约"记录；M19 lifecycle 用例。
+- [x] **C4c（C4 收尾）**：
+  - **`ForwardFrameResourceSet::ViewResources` bag 删除**：entityId/post 槽位在 C4a 后已是死写，debug 收进 `ForwardOpaqueFeature`（它在画 debug pass，UBO 本就该它建）；`ViewResources` 结构、`getViewResources`/`mutableViewResources`、`allocateForwardViewPassResources` 全部退出——Forward 的 View slot 与 Deferred 一样就是 `Binding`。
+  - **死绑定结构清除**：`SSAOPassBindings` / `DeferredLightingPassBindings`（bag 删除后零引用）、`PostprocessPassBindings`（bloom+toneMap 镜像，feature 各自持有后无消费者）。
+  - **M19 recipe 级用例**（`ForwardPipelineRecipeTest` +3）：空 plan resolve 为"空组合"而非失败；disabled config 是 `InvalidInput` 错误而非空组合；缺 View binding 的 prepare 是 `MissingContext` 而非静默绑定空集。store/submission 层的 reuse/generation/lease/fence 由既有 `ViewTargetStoreTest`/`RenderSubmissionTest` 覆盖。
+  - Forward 透明槽保持"无功能契约"记录（recipe 内联声明，同 Deferred opaque 槽待遇）——注释已在 `ForwardPipelineRecipe.cpp`。
+  - 证据：render3d 226/226、full 1817/1817；Deferred / Forward / 切回 Deferred 三帧与基线**逐像素 0 diff**。
 - [ ] **待决定的测试 hook（C3 遗留缺口）**：entity-id/picking runtime hook（读取 `DeferredView.EntityId` 的 pick/readback；editor 已有 isolate readback 路径）与 direction gizmo 场景 hook（回归场景加一个 `DirectionComponent` 实体）。
 - [ ] **M12 余项**：`SurfaceImageTest` 侧编码回归未跑。
 - [ ] **plan.md C2 剩余**：`_lastBlurPassCount` 调用状态退出、blur pass 次数边界测试（M09/M14）。

@@ -65,20 +65,28 @@ struct ForwardOpaqueFeature
         EImageUsage::T depthUsage  = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled;
     };
 
-    /// Nothing to allocate: the frame UBOs are the View's shared inputs, written
-    /// once by the View binding. Declared so the feature satisfies the same
-    /// protocol as every other feature; the sets are referenced, not rebuilt.
+    /// The frame UBOs are the View's shared inputs, written once by the View
+    /// binding and referenced here; the debug UBO is this pass's own payload
+    /// because the debug draw is part of this pass.
     struct PrepareContext
     {
         const ForwardFrameResourceSet::Binding* frameBinding = nullptr;
+        RenderSubmission*                       submission   = nullptr;
+        IRender*                                render       = nullptr;
+        ForwardViewAuxPasses*                   auxPasses    = nullptr;
+        uint32_t                                alignment    = 1;
+        const RenderFrameData*                  frameData    = nullptr;
+        Extent2D                                viewExtent{};
     };
 
     struct Prepared
     {
-        DescriptorSetHandle pbrFrameDescriptorSet   = nullptr;
-        DescriptorSetHandle phongFrameDescriptorSet = nullptr;
-        DescriptorSetHandle unlitFrameDescriptorSet = nullptr;
-        DescriptorSetHandle skinningDescriptorSet   = nullptr;
+        DescriptorSetHandle       pbrFrameDescriptorSet   = nullptr;
+        DescriptorSetHandle       phongFrameDescriptorSet = nullptr;
+        DescriptorSetHandle       unlitFrameDescriptorSet = nullptr;
+        DescriptorSetHandle       skinningDescriptorSet   = nullptr;
+        /// This pass's debug draw UBO: upload slice + the set the Debug pass binds.
+        ForwardDebugPassBindings  debug{};
     };
 
     struct GraphOutputs

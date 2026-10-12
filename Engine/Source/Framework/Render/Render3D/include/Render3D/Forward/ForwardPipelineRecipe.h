@@ -126,6 +126,9 @@ struct ForwardPipelineRecipe
         const RenderFrameData*                 frameData      = nullptr;
         /// The View binding: shared frame/light/skinning sets and slices.
         const ForwardFrameResourceSet::Binding* frameBinding = nullptr;
+        /// The Forward stage's auxiliary passes, whose debug layout and UBO
+        /// scratch the opaque pass's debug draw uses.
+        ForwardViewAuxPasses*                   auxPasses = nullptr;
         /// The View the shadow feature prepares its per-View resources for.
         RenderViewRecordingContext             view{};
     };

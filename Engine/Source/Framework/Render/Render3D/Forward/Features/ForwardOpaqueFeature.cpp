@@ -45,6 +45,29 @@ Result<ForwardOpaqueFeature::Prepared, FeatureError> ForwardOpaqueFeature::prepa
     prepared.phongFrameDescriptorSet = ctx.frameBinding->phongFrameDescriptorSet;
     prepared.unlitFrameDescriptorSet = ctx.frameBinding->unlitFrameDescriptorSet;
     prepared.skinningDescriptorSet   = ctx.frameBinding->skinningDescriptorSet;
+
+    // The debug draw is this pass's own; its UBO is built and uploaded here.
+    // A stage without a debug layout (or a View with no frame data) has no
+    // debug draw, which is the same answer the pipeline's allocator gave.
+    if (ctx.auxPasses != nullptr && ctx.auxPasses->getDebugDSL() && ctx.frameData != nullptr) {
+        if (ctx.submission == nullptr || ctx.render == nullptr) {
+            return FeatureError::MissingContext;
+        }
+        auto& debugUBO      = ctx.auxPasses->getDebugUBO();
+        debugUBO.projection = ctx.frameData->projection;
+        debugUBO.view       = ctx.frameData->view;
+        debugUBO.resolution = glm::ivec2(static_cast<int>(ctx.viewExtent.width),
+                                         static_cast<int>(ctx.viewExtent.height));
+        if (!writeUniformPassBinding(*ctx.submission,
+                                     ctx.render,
+                                     ctx.auxPasses->getDebugDSL(),
+                                     ctx.alignment,
+                                     &debugUBO,
+                                     sizeof(debugUBO),
+                                     prepared.debug.ubo)) {
+            return FeatureError::AllocationFailed;
+        }
+    }
     return prepared;
 }
 
@@ -75,6 +98,7 @@ Result<ForwardOpaqueFeature::GraphOutputs, FeatureError> ForwardOpaqueFeature::a
     passContext.pbrFrameDescriptorSet         = prepared.pbrFrameDescriptorSet;
     passContext.phongFrameDescriptorSet       = prepared.phongFrameDescriptorSet;
     passContext.unlitFrameDescriptorSet       = prepared.unlitFrameDescriptorSet;
+    passContext.debug                         = prepared.debug;
 
     (void)graph.addPass(
         makeViewGraphName(resolved.passName, ctx.viewId),
