@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "Render3D/Common/IRenderPipeline.h"
+#include "Render3D/Deferred/DeferredPipelineRecipe.h"
 
 #include <cstdint>
 #include <optional>
@@ -34,6 +35,14 @@ struct PreparedPipelineFrame
     };
 
     std::vector<PreparedView> views;
+
+    // C2: Typed Deferred pipeline composition
+    struct DeferredComposition
+    {
+        std::vector<DeferredPipelineRecipe::ResolvedView> resolved;
+        std::vector<DeferredPipelineRecipe::PreparedView> prepared;
+    };
+    DeferredComposition deferred;
 
     [[nodiscard]] bool isEmpty() const { return views.empty(); }
 };

@@ -6,6 +6,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "Render3D/RenderFrameData.h"
+#include "Render3D/Deferred/DeferredPipelineRecipe.h"
 
 #include <limits>
 #include <unordered_map>
@@ -127,14 +128,37 @@ PreparedPipelineFrameResult RenderDeviceState::prepareFrameRecord(const RenderFr
         }
     }
 
-    // C1: Build minimal prepared frame. Full typed composition will be added in
-    // subsequent checkpoints; for now, existing pipelines still use legacy paths.
+    // C2: Build prepared frame with typed composition for Deferred pipeline
     PreparedPipelineFrame prepared;
     prepared.pipelineKind = resolveActivePipelineKind();
     prepared.hostTick     = plan.frame.hostTick;
     prepared.flightIndex  = plan.frame.flightIndex;
 
-    // Placeholder per-view prepared data (expanded in C2-C3)
+    // When using Deferred pipeline, resolve and prepare features
+    if (prepared.pipelineKind == ERenderPipelineKind::Deferred) {
+        // Resolve features (collect resource requirements)
+        auto resolvedResult = DeferredPipelineRecipe::resolve(_render, &_viewTargets, plan);
+        if (resolvedResult.isErr()) {
+            YA_CORE_ERROR("Failed to resolve Deferred pipeline composition");
+            return std::nullopt;
+        }
+        prepared.deferred.resolved = std::move(resolvedResult.value());
+
+        // Prepare bindings (allocate descriptors, upload UBOs)
+        auto preparedResult = DeferredPipelineRecipe::prepareBindings(
+            _render,
+            nullptr, // RenderSubmission not available yet in prepareFrameRecord
+            &_viewTargets,
+            prepared.deferred.resolved,
+            plan.frame.flightIndex);
+        if (preparedResult.isErr()) {
+            YA_CORE_ERROR("Failed to prepare Deferred pipeline bindings");
+            return std::nullopt;
+        }
+        prepared.deferred.prepared = std::move(preparedResult.value());
+    }
+
+    // Placeholder per-view prepared data for legacy Forward pipeline
     prepared.views.reserve(plan.sceneRender.views().size());
     for (const SceneViewRecording& recording : plan.sceneRender.views()) {
         if (recording.task) {

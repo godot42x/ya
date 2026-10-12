@@ -50,6 +50,7 @@ DeferredPipelineRecipe::resolve(
         if (view.ssao.aoTarget.has_value()) {
             ViewTargetRequest req;
             req.viewId = view.viewId;
+            req.pipeline = ERenderPipelineKind::Deferred;
             req.extent = ssaoFacts.viewExtent;
             req.attachments.push_back(ViewAttachmentDesc{
                 .role = view.ssao.aoTarget->role,
