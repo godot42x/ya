@@ -4,6 +4,8 @@
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
 #include "Render3D/Deferred/DeferredAttachmentFormats.h"
+#include "Render3D/Deferred/DeferredPipelineRecipe.h"
+#include "Render3D/Common/PreparedPipelineFrame.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Systems/Components/DirectionComponent.h"
@@ -888,6 +890,8 @@ struct DeferredFamilyViewBranch
     FrameContext                          postContext{};
     DeferredFrameGraphResources           graphResources{};
     ViewTargetLease                       targets{};
+    /// C2: Prepared composition data for this view (from PreparedPipelineFrame)
+    std::optional<DeferredPipelineRecipe::PreparedView> preparedComposition;
 };
 
 } // namespace
@@ -972,6 +976,29 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
 
         branch.overlayInputs = buildOverlayFrameInputs(
             branch.frame, branch.environmentLighting, branch.environmentLightingDS);
+        
+        // C2: Prepare bindings for this view if we have resolved composition
+        if (ctx.prepared && !ctx.prepared->deferred.resolved.empty()) {
+            const uint64_t viewId = recording.task ? recording.task->desc.viewId : 0;
+            // Find the resolved view matching this viewId
+            for (const auto& resolvedView : ctx.prepared->deferred.resolved) {
+                if (resolvedView.viewId == viewId) {
+                    // Prepare bindings now that we have RenderSubmission available
+                    // Note: ViewTargetStore is logically mutable during recording
+                    auto preparedResult = DeferredPipelineRecipe::prepareBindings(
+                        _render,
+                        ctx.submission,
+                        const_cast<ViewTargetStore*>(ctx.targets),
+                        {resolvedView},
+                        ctx.frame->flightIndex);
+                    if (preparedResult.isOk() && !preparedResult.value().empty()) {
+                        branch.preparedComposition = preparedResult.value()[0];
+                    }
+                    break;
+                }
+            }
+        }
+        
         liveBranches.push_back(std::move(branch));
         DeferredFamilyViewBranch& live = liveBranches.back();
         if (!appendDeferredViewToGraph(

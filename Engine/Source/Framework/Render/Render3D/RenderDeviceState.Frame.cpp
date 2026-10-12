@@ -138,28 +138,15 @@ PreparedPipelineFrameResult RenderDeviceState::prepareFrameRecord(const RenderFr
     prepared.hostTick     = plan.frame.hostTick;
     prepared.flightIndex  = plan.frame.flightIndex;
 
-    // When using Deferred pipeline, resolve and prepare features
+    // When using Deferred pipeline, resolve features (collect resource requirements)
+    // Note: prepareBindings is deferred to appendDeferredViewToGraph where RenderSubmission is available
     if (prepared.pipelineKind == ERenderPipelineKind::Deferred) {
-        // Resolve features (collect resource requirements)
         auto resolvedResult = DeferredPipelineRecipe::resolve(_render, &_viewTargets, plan);
         if (resolvedResult.isErr()) {
             YA_CORE_ERROR("Failed to resolve Deferred pipeline composition");
             return std::nullopt;
         }
         prepared.deferred.resolved = std::move(resolvedResult.value());
-
-        // Prepare bindings (allocate descriptors, upload UBOs)
-        auto preparedResult = DeferredPipelineRecipe::prepareBindings(
-            _render,
-            nullptr, // RenderSubmission not available yet in prepareFrameRecord
-            &_viewTargets,
-            prepared.deferred.resolved,
-            plan.frame.flightIndex);
-        if (preparedResult.isErr()) {
-            YA_CORE_ERROR("Failed to prepare Deferred pipeline bindings");
-            return std::nullopt;
-        }
-        prepared.deferred.prepared = std::move(preparedResult.value());
     }
 
     // Placeholder per-view prepared data for legacy Forward pipeline

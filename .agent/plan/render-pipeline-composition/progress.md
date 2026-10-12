@@ -240,10 +240,10 @@
 
 ### 下一步（C2）
 
-1. 读取 DeferredFrameResourceSet.h/cpp 理解 shared frame/light 绑定管理
-2. 读取 GBufferStage.h/cpp 理解 GBuffer 生成
-3. 读取 LightStage.h/cpp 理解 lighting 实现
-4. 读取 DeferredRenderPipeline.cpp::appendDeferredViewToGraph 理解当前组合流程
+1. ✅ 读取 DeferredFrameResourceSet.h 理解 shared frame/light 绑定管理
+2. ✅ 读取 DeferredRenderPipeline.cpp::appendDeferredViewToGraph 理解当前组合流程
+3. 读取 GBufferStage.h/cpp 理解 GBuffer 生成
+4. 读取 LightStage.h/cpp 理解 lighting 实现
 5. 实现 LegacyDeferredPrelude feature (outputs GBuffer/Depth/PreparedRef<SharedFrameLight>)
 6. 完成 SSAOFeature.append 实现
 7. 实现 LightingFeature (consumes OptionalAO + PreparedRef<SharedFrameLight>)
@@ -251,3 +251,58 @@
 9. 集成到 DeferredRenderPipeline::appendDeferredViewToGraph
 10. 删除 bUseSSAO plumbing
 11. 验证 M01-M08
+
+## 2026-10-12 晚 — prepareBindings 集成到 recordFamily
+
+### 目标与范围
+
+建立 resolve→prepare→append 的完整数据流，使 prepareBindings 在 RenderSubmission 可用时调用。
+
+### 实施内容
+
+**Commit: Wire prepareBindings into recordFamily loop**
+
+- `DeferredFamilyViewBranch`: 添加 `std::optional<DeferredPipelineRecipe::PreparedView> preparedComposition` 字段
+- `DeferredRenderPipeline::recordFamily`: 在构建每个 view 的 branch 时
+  - 检查 `ctx.prepared` 是否存在且有 resolved data
+  - 按 viewId 匹配对应的 resolved view
+  - 调用 `DeferredPipelineRecipe::prepareBindings` 准备该 view 的绑定
+  - 将结果存入 `branch.preparedComposition`
+- 包含头文件: `PreparedPipelineFrame.h` 和 `DeferredPipelineRecipe.h`
+- 使用 `const_cast<ViewTargetStore*>` 因为 ViewTargetStore 在 recording 时逻辑上需要修改
+
+### 架构决策
+
+**prepareBindings 时机调整**：
+- ❌ 原方案: 在 `prepareFrameRecord` 中调用 prepareBindings → 问题: RenderSubmission 尚未可用
+- ✅ 新方案: 在 `recordFamily` 循环中为每个 view 调用 prepareBindings → RenderSubmission 已经可用
+
+**数据流完整链路**：
+1. `RenderDeviceState::prepareFrameRecord`: 调用 `DeferredPipelineRecipe::resolve` 收集资源需求
+2. `RenderDeviceState::recordViewFamilies`: 调用 `prepareFrameRecord` 获取 PreparedPipelineFrame
+3. `DeferredRenderPipeline::recordFamily`: 为每个 view 调用 `prepareBindings` 分配描述符和上传 UBO
+4. `DeferredRenderPipeline::appendDeferredViewToGraph`: (待实现) 使用 preparedComposition 构建 graph
+
+### 验证结果
+
+```
+✓ 编译: ya-render-3d build ok (5.5s)
+✓ 测试: 1810/1810 passed
+✓ 编辑器: 启动无错误 (HelloMaterial project, 15s timeout)
+```
+
+### 技术细节
+
+- `ViewFamilyRecordContext::prepared` 是 `const PreparedPipelineFrame*`，从 `prepareFrameRecord` 传递
+- `DeferredFamilyViewBranch::preparedComposition` 保存每个 view 的准备数据，供后续 graph 构建使用
+- `const_cast<ViewTargetStore*>` 是安全的：ViewTargetStore 在 recording 期间确实需要修改（分配、lease）
+
+### 未完成项（推迟到 C2 后续）
+
+- DeferredPipelineRecipe::prepareBindings 完整实现（当前占位符）
+- DeferredPipelineRecipe::appendGraph 完整实现（当前占位符）
+- 在 appendDeferredViewToGraph 中使用 preparedComposition 替代 orchestrator
+- SSAOFeature.append 完整实现
+- LegacyDeferredPrelude/LightingFeature/LegacyDeferredTail 实现
+- 删除 bUseSSAO plumbing
+- Validation matrix M01-M08 验证
