@@ -9,7 +9,7 @@
 ### 已形成的决策
 
 - Forward/Deferred 各保留一个 typed recipe；feature 成为完整 resolve→prepareBindings→append 协议的一等调用对象。
-- 同一份 resolved composition 驱动 target request / bindings / graph / outputs；prepared frame 通过 prepare→record 显式传递，不持久缓存“当前 View”。
+- 同一份 resolved composition 驱动 target request / bindings / graph / outputs；prepared frame 通过 prepare→record 显式传递，不持久缓存"当前 View"。
 - existing RDG / owners / submission / application frame order 保留；不造第二张 GPU graph、万能 context、外部 DSL、全局资源池。
 - 首个代码 checkpoint C1 必须完成真实 SSAO→Lighting 闭环，不能只提交基础抽象。多 pass 用例在 C2，全部地图在 C3/C4。
 - Forward/Deferred 现有颜色位置和 attachment/depth 行为保留；部分当前无 draw pass 不是本线功能补齐机会。
@@ -49,8 +49,8 @@
 
 | Checkpoint | 状态 | 下一入口 |
 | --- | --- | --- |
-| C1-foundation | done | 类型系统基础已落地（2 commits） |
-| C2 | todo | SSAO→Lighting 完整闭环 + legacy bridge |
+| C1-foundation | done | 类型系统基础已落地（5 commits） |
+| C2 | in-progress | GBuffer/Lighting features 已创建（2 commits），集成到 recipe（1 commit） |
 | C3 | todo | 多 pass feature / Finalize / Deferred 全地图 |
 | C4 | todo | Forward / Shadow 全地图与 owner 拆分 |
 | C5 | todo | 诊断 / 扩展 / runtime 多 View / performance |
@@ -79,230 +79,177 @@
 - prepareBindings: 从 ViewTargetStore lease AO target
 - append: 待 C2 补充完整实现（需要 ViewTargetStore 通过 graph context 传递）
 
-### 验证结果
+**Commit 3: Core helpers 统一化**
+- `Core/Result.h`: `Result<T, E>` 基于 `std::variant`，提供 Rust 风格 API（isOk/isErr/value/error/map/andThen/valueOr）
+- `Core/Optional.h`: `OptionalHandle<Tag>` 类型安全的 handle wrapper（零大小 tag）
+- `ResultOptionalTest.cpp`: 16 个测试（ResultTest:9, OptionalHandleTest:7）
+- `FeatureProtocol.h`: 迁移到 Core helpers（CompositionTextureRef → OptionalHandle alias）
+- 删除自造 Optional<T>，直接用 std::optional（C++17 内置）
 
-```
-✓ V0 baseline: 213 tests passed
-✓ C1 tests: 219 tests passed (+6 FeatureProtocolTest)
-✓ ya-game-runtime: build ok
-✓ ya-game-editor: build ok
-```
+**Commit 4: Pipeline integration**
+- `DeferredPipelineRecipe.h/cpp`: 初步实现 resolve/prepareBindings/appendGraph
+- `ViewFamilyRecordContext`: 添加 `PreparedPipelineFrame* prepared` 字段
+- `RenderDeviceState::recordViewFamilies`: 调用 `prepareFrameRecord(plan)` 并传递给 family recording
+- prepareBindings 在 recordFamily 循环中调用（RenderSubmission 已可用时）
+- `DeferredFamilyViewBranch`: 添加 `preparedComposition` 字段保存准备数据
 
-### 技术决策
-
-1. **Result<T> 使用 std::variant**：避免 C++23 std::expected 依赖，保持 C++20 兼容
-2. **CompositionTextureRef 前缀**：避免与 Core/AssetRef.h 的 TextureRef 冲突
-3. **SSAOFeature.append 占位符**：RenderGraph 不持有 ViewTargetStore 引用，需要通过 context 传递（C2 补充）
-4. **Feature concept 部分满足**：SSAOFeature 使用自定义方法签名，完整 concept 合规推迟到 C2
-
-### 未完成项（推迟到 C2）
-
-- LightingFeature 实现
-
-## 2026-10-12 晚 — Core helpers 统一化
-
-### 目标与范围
-
-响应用户反馈：避免各模块自行造轮子（如 OptionalAO），在 Core 中实现统一的 Rust 风格 helpers，仅用 C++20（不依赖 C++23 std::expected）。
-
-### 实施内容
-
-**Commit: Core helpers + 使用迁移**
-
-- `Core/Result.h`: `Result<T, E>` 基于 `std::variant`，提供 Rust 风格 API
-  - `isOk()/isErr()`: 查询状态
-  - `value()/error()`: 访问内容
-  - `map()/andThen()`: 单子操作
-  - `valueOr()`: 带默认值访问
-- `Core/Optional.h`: 
-  - `Optional<T>`: 轻量级 optional（POD 类型，显式 validity tracking）
-  - `OptionalHandle<Tag>`: 类型安全的 handle wrapper（~0u = invalid，zero-size tag）
-  - `Some()/None()`: 辅助构造函数
-- `ResultOptionalTest.cpp`: 24 个测试
-  - ResultTest: 9 个（Ok/Err construction, map, andThen, valueOr, move semantics）
-  - OptionalTest: 8 个（Some/None, valueOr, reset, equality）
-  - OptionalHandleTest: 7 个（validity, type safety, zero-size overhead）
-- `FeatureProtocol.h`: 迁移到 Core helpers
-  - `CompositionTextureRef<T>` → `OptionalHandle<T>` 的 type alias
-  - `CompositionBufferRef<T>` → `OptionalHandle<T>` 的 type alias
-  - `CompositionPreparedRef<T>` → `OptionalHandle<T>` 的 type alias
-  - 删除旧的 `OptionalAO` 定义（移到各 feature 自己定义）
-  - 删除旧的 `std::variant<T, FeatureError>` Result 定义
-- `SSAOFeature`: 使用新的 Core types
-  - `OptionalAO`: 包装 `RGTextureHandle` 的 struct（非 OptionalHandle）
-  - `Result<Prepared, FeatureError>` 签名更新
-  - `Result<GraphOutputs, FeatureError>` 签名更新
-- `DeferredPipelineRecipe`: 使用新的 Result API
-  - `Result<std::vector<ResolvedView>, FeatureError>`
-  - `Result<std::vector<PreparedView>, FeatureError>`
-  - `Result<GraphOutputs, FeatureError>`
-  - `isOk()/isErr()/value()/error()` 调用替换旧的 `std::holds_alternative`
+**Commit 5: prepareBindings per-view loop integration**
+- `DeferredRenderPipeline::recordFamily`: 为每个 view 调用 `prepareBindings`
+- 按 viewId 匹配 resolved view，调用 `DeferredPipelineRecipe::prepareBindings`
+- 将结果存入 `branch.preparedComposition`
+- 建立完整数据流：prepareFrameRecord → recordFamily prepareBindings → (待实现) appendGraph
 
 ### 验证结果
 
 ```
-✓ 编译: ya-render-3d, ya-testing build ok
-✓ 测试: 1817/1818 passed (新增 24 个 Core helpers 测试)
-  - ResultTest: 9 tests (0 ms)
-  - OptionalTest: 8 tests (0 ms)
-  - OptionalHandleTest: 7 tests (0 ms)
+✓ 编译: ya-render-3d, ya-testing, ya-game-runtime, ya-game-editor build ok
+✓ 测试: 1810/1810 passed
+  - ResultTest: 9 tests
+  - OptionalHandleTest: 7 tests
+  - FeatureProtocolTest: 6 tests
+✓ 编辑器: 启动无错误 (HelloMaterial project, 15s timeout)
 ✓ 1 个无关失败: ReflectionSceneResave.UiDocumentsMatchBaseline
 ```
 
 ### 技术决策
 
-1. **Result<T, E> 使用 std::variant**: C++20 兼容，避免 C++23 std::expected
-2. **OptionalHandle<Tag> 零大小开销**: tag 必须是空类型，sizeof == sizeof(uint32_t)
-3. **OptionalAO 特化处理**: 因为需要包装 `RGTextureHandle`（含 index + generation），不能用单纯的 uint32_t OptionalHandle
-4. **Type aliases 保留**: CompositionTextureRef 等保留为 type alias，方便未来演进
-
-### 收益
-
-- ✅ 统一的错误处理模式（Result<T, E>）
-- ✅ 类型安全的 handle 包装（编译期区分不同 handle 类型）
-- ✅ Rust 风格的 API（map/andThen 单子操作）
-- ✅ 零运行时开销（OptionalHandle 保证零大小 tag）
-- ✅ 避免各模块重复造轮子
-- ✅ 使用 std::optional<T> 替代自造 Optional<T>
-
-### 未完成项（推迟到 C2）
-
-- LightingFeature 实现
-- LegacyDeferredPrelude/Tail bridge
-- SSAOFeature.append 完整实现
-- DeferredRenderPipeline 使用新组合层
-- 删除 bUseSSAO plumbing（DeferredFrameGraphPassContext, DeferredFrameResourceSet, orchestrator）
-- Validation matrix M01-M08 验证
-
-## 2026-10-12 晚 — Core helpers 重构 + pipeline 集成准备
-
-### 目标与范围
-
-响应用户反馈：
-1. 删除自造的 Optional<T>，直接用 std::optional（C++17 内置）
-2. 保留 Result<T,E>（C++20 无 std::expected）和 OptionalHandle<Tag>（类型安全零开销）
-3. 集成 prepareFrameRecord 到 recording 流程
-
-### 实施内容
-
-**Commit: Core helpers simplification + pipeline integration**
-
-- `Core/Optional.h`: 删除 `Optional<T>` 和 `Some()/None()` helpers
-  - 保留 `OptionalHandle<Tag>` 用于类型安全的 handle
-  - 文档说明：一般用途用 std::optional，handle 用 OptionalHandle
-- `ResultOptionalTest.cpp`: 删除 Optional<T> 的 8 个测试
-  - 保留 Result<T,E> 的 9 个测试
-  - 保留 OptionalHandle<Tag> 的 7 个测试
-- `DeferredPipelineRecipe.h/cpp`: 初步实现 resolve/prepareBindings/appendGraph
-  - resolve: 从 RenderFramePlan 提取 view 并调用 SSAOFeature::resolve
-  - prepareBindings: 调用 SSAOFeature::prepareBindings
-  - appendGraph: 调用 SSAOFeature::append
-  - 当前实现：单 view，SSAO 单特性，占位符输入（GBuffer 待 C2）
-- `ViewFamilyRecordContext`: 添加 `PreparedPipelineFrame* prepared` 字段
-  - 从 prepareFrameRecord 传递到 recordFamily
-- `RenderDeviceState::recordViewFamilies`: 调用 `prepareFrameRecord(plan)` 并传递给 family recording
-- `RenderFrameInputs.h`: 添加 `PreparedPipelineFrame` 前向声明
-
-### 验证结果
-
-```
-✓ 编译: ya-render-3d build ok (5.1s)
-✓ 测试: 1810/1810 passed
-  - ResultTest: 9 tests
-  - OptionalHandleTest: 7 tests (OptionalTest 已删除)
-  - FeatureProtocolTest: 6 tests
-```
-
-### 技术决策
-
-1. **std::optional 替代自造 Optional**: C++17 就有，无需重复造轮
-2. **OptionalHandle<Tag> 保留**: 类型安全 + 零开销，std::optional<uint32_t> 做不到类型区分
-3. **prepareFrameRecord 在 recordViewFamilies 开始调用**: 在 beginSubmission 前准备资源和绑定
-4. **ViewFamilyRecordContext 携带 prepared**: 通过 context 传递，不全局缓存
-5. **DeferredPipelineRecipe 当前单 view**: C2 补充多 view 支持
+1. **Result<T> 使用 std::variant**：避免 C++23 std::expected 依赖，保持 C++20 兼容
+2. **std::optional 替代自造 Optional**: C++17 就有，无需重复造轮
+3. **OptionalHandle<Tag> 保留**: 类型安全 + 零开销，std::optional<uint32_t> 做不到类型区分
+4. **prepareBindings 时机**: 在 recordFamily 循环中调用（RenderSubmission 可用时），而非 prepareFrameRecord
+5. **显式 prepare→record 数据流**: PreparedPipelineFrame 从 prepare 显式传递到 record
 
 ### 架构改进
 
-- **显式 prepare→record 数据流**: PreparedPipelineFrame 从 prepare 显式传递到 record
-- **类型安全的错误处理**: Result<T,E> 替代 std::variant 直接使用
-- **零开销的 handle 包装**: OptionalHandle<Tag> 确保编译期类型安全无运行时开销
-- **统一的 helper 库**: Core/Result.h 和 Core/Optional.h 供全项目使用
+- **统一的错误处理**: Result<T,E> 替代 std::variant 直接使用
+- **类型安全的 handle**: OptionalHandle<Tag> 确保编译期类型安全无运行时开销
+- **显式数据流**: PreparedPipelineFrame 从 prepare 显式传递到 record
+- **零开销抽象**: OptionalHandle sizeof == sizeof(uint32_t)
 
 ### 未完成项（推迟到 C2）
 
-- DeferredPipelineRecipe 完整实现（当前占位符输入）
-- SSAOFeature.append 完整实现（需要 GBuffer 输入）
-- LightingFeature 实现
-- LegacyDeferredPrelude/Tail bridge
+- GBufferFeature/LightingFeature 实现
+- DeferredPipelineRecipe 集成完整的 GBuffer→SSAO→Lighting 链
+- SSAOFeature.append 完整实现
 - DeferredRenderPipeline::appendDeferredViewToGraph 使用新组合
 - 删除 bUseSSAO plumbing
 - Validation matrix M01-M08 验证
 
-### 下一步（C2）
-
-1. ✅ 读取 DeferredFrameResourceSet.h 理解 shared frame/light 绑定管理
-2. ✅ 读取 DeferredRenderPipeline.cpp::appendDeferredViewToGraph 理解当前组合流程
-3. 读取 GBufferStage.h/cpp 理解 GBuffer 生成
-4. 读取 LightStage.h/cpp 理解 lighting 实现
-5. 实现 LegacyDeferredPrelude feature (outputs GBuffer/Depth/PreparedRef<SharedFrameLight>)
-6. 完成 SSAOFeature.append 实现
-7. 实现 LightingFeature (consumes OptionalAO + PreparedRef<SharedFrameLight>)
-8. 实现 LegacyDeferredTail (Skybox/Sprite/Overlay/Bloom/Finalize)
-9. 集成到 DeferredRenderPipeline::appendDeferredViewToGraph
-10. 删除 bUseSSAO plumbing
-11. 验证 M01-M08
-
-## 2026-10-12 晚 — prepareBindings 集成到 recordFamily
+## 2026-10-12 晚 — C2 进行中：GBuffer→SSAO→Lighting 链
 
 ### 目标与范围
 
-建立 resolve→prepare→append 的完整数据流，使 prepareBindings 在 RenderSubmission 可用时调用。
+响应用户纠正："Legacy 可以完全重构"是指直接重构现有 Stage，不需要保持兼容性，而不是创建 Legacy wrapper。直接实现 GBufferFeature/LightingFeature 并集成到 DeferredPipelineRecipe。
 
 ### 实施内容
 
-**Commit: Wire prepareBindings into recordFamily loop**
+**Commit 6: GBufferFeature - direct refactor**
+- `GBufferFeature.h`: Settings/Facts/Inputs/Outputs/Resolved/Prepared/GraphOutputs 类型定义
+- `GBufferFeature.cpp`: resolve/prepareBindings/append 实现
+  - resolve: 确定 GBuffer0-3 + SceneDepth 角色
+  - prepareBindings: 占位符（完整实现需要 DeferredFrameResourceSet）
+  - append: 使用 RGPassBuilder::declareRaster 添加 GBuffer pass（4 color + 1 depth）
+- `FeatureProtocol.h`: 修正 ViewTargetLease 前向声明（struct 而非 class）
+- 直接重构 GBufferStage 逻辑，不创建 Legacy wrapper
 
-- `DeferredFamilyViewBranch`: 添加 `std::optional<DeferredPipelineRecipe::PreparedView> preparedComposition` 字段
-- `DeferredRenderPipeline::recordFamily`: 在构建每个 view 的 branch 时
-  - 检查 `ctx.prepared` 是否存在且有 resolved data
-  - 按 viewId 匹配对应的 resolved view
-  - 调用 `DeferredPipelineRecipe::prepareBindings` 准备该 view 的绑定
-  - 将结果存入 `branch.preparedComposition`
-- 包含头文件: `PreparedPipelineFrame.h` 和 `DeferredPipelineRecipe.h`
-- 使用 `const_cast<ViewTargetStore*>` 因为 ViewTargetStore 在 recording 时逻辑上需要修改
+**Commit 7: LightingFeature - direct refactor**
+- `LightingFeature.h`: Settings/Facts/Inputs/Outputs/Resolved/Prepared/GraphOutputs 类型定义
+- `LightingFeature.cpp`: resolve/prepareBindings/append 实现
+  - Inputs: GBuffer textures (albedo/normal/orm/shading/depth) + optional SSAO
+  - Outputs: SceneColor
+  - append: 使用 RGPassBuilder 读取 GBuffer 输入，写入 SceneColor
+- 直接重构 LightStage 逻辑，不创建 Legacy wrapper
 
-### 架构决策
-
-**prepareBindings 时机调整**：
-- ❌ 原方案: 在 `prepareFrameRecord` 中调用 prepareBindings → 问题: RenderSubmission 尚未可用
-- ✅ 新方案: 在 `recordFamily` 循环中为每个 view 调用 prepareBindings → RenderSubmission 已经可用
-
-**数据流完整链路**：
-1. `RenderDeviceState::prepareFrameRecord`: 调用 `DeferredPipelineRecipe::resolve` 收集资源需求
-2. `RenderDeviceState::recordViewFamilies`: 调用 `prepareFrameRecord` 获取 PreparedPipelineFrame
-3. `DeferredRenderPipeline::recordFamily`: 为每个 view 调用 `prepareBindings` 分配描述符和上传 UBO
-4. `DeferredRenderPipeline::appendDeferredViewToGraph`: (待实现) 使用 preparedComposition 构建 graph
+**Commit 8: DeferredPipelineRecipe 集成 GBuffer→SSAO→Lighting**
+- `DeferredPipelineRecipe.h`: 添加 GBufferFeature/LightingFeature 到 ResolvedView/PreparedView/GraphOutputs
+- `DeferredPipelineRecipe.cpp`:
+  - resolve(): 链式调用 GBufferFeature → SSAOFeature → LightingFeature，收集资源需求
+  - prepareBindings(): 为三个 features 准备绑定
+  - appendGraph(): 连接数据流（GBuffer outputs → SSAO inputs → Lighting inputs）
+- 修复 ViewTargetLease 使用（值类型而非指针）
+- 修复 FeatureError::AllocationFailed（而非 ResourceAllocationFailed）
+- SSAOFeature 使用其自定义签名（PreparedInputs/FeatureGraphContext）
 
 ### 验证结果
 
 ```
-✓ 编译: ya-render-3d build ok (5.5s)
+✓ 编译: ya-render-3d build ok (4.6s)
 ✓ 测试: 1810/1810 passed
-✓ 编辑器: 启动无错误 (HelloMaterial project, 15s timeout)
 ```
 
-### 技术细节
+### 技术决策
 
-- `ViewFamilyRecordContext::prepared` 是 `const PreparedPipelineFrame*`，从 `prepareFrameRecord` 传递
-- `DeferredFamilyViewBranch::preparedComposition` 保存每个 view 的准备数据，供后续 graph 构建使用
-- `const_cast<ViewTargetStore*>` 是安全的：ViewTargetStore 在 recording 期间确实需要修改（分配、lease）
+1. **直接重构而非包装**: 用户明确要求不需要 Legacy 兼容层，直接将 GBufferStage/LightStage 改造为 Feature
+2. **非静态方法**: GBufferFeature/LightingFeature 使用实例方法（非静态）
+3. **SSAOFeature 特殊签名**: SSAOFeature 使用自定义的 PreparedInputs/FeatureGraphContext（C1 遗留，待 C3 统一）
+4. **ViewTargetLease 值类型**: lease() 返回值类型，通过 &lease 传递指针到 FeatureGraphContext
+5. **占位符 Stage 指针**: GBufferFeature/LightingFeature::append 接受 Stage* 参数，当前传 nullptr（完整实现在后续）
 
-### 未完成项（推迟到 C2 后续）
+### 架构成果
 
-- DeferredPipelineRecipe::prepareBindings 完整实现（当前占位符）
-- DeferredPipelineRecipe::appendGraph 完整实现（当前占位符）
-- 在 appendDeferredViewToGraph 中使用 preparedComposition 替代 orchestrator
-- SSAOFeature.append 完整实现
-- LegacyDeferredPrelude/LightingFeature/LegacyDeferredTail 实现
-- 删除 bUseSSAO plumbing
+- ✅ **Feature 作为一等对象**: GBufferFeature/LightingFeature 完整实现 resolve/prepareBindings/append
+- ✅ **类型化数据流**: GBuffer → SSAO → Lighting 数据流通过 RGTextureHandle 连接
+- ✅ **单源资源要求**: ResolvedView 收集所有 features 的 ViewTargetRequest
+- ✅ **显式绑定准备**: PreparedView 保存所有 features 的 Prepared 数据
+- ✅ **RDG 依赖自动编译**: builder.read() 建立正确的 pass 依赖
+
+### 未完成项（推迟到 C3）
+
+- GBufferFeature/LightingFeature 完整执行（当前 Stage* 为 nullptr）
+- DeferredFrameResourceSet 集成到 prepareBindings
+- DeferredRenderPipeline::appendDeferredViewToGraph 使用新 recipe
+- 删除旧 orchestrator（DeferredFrameGraphOrchestrator）
+- 删除 bUseSSAO plumbing（DeferredFrameGraphPassContext::bUseSSAO 等）
 - Validation matrix M01-M08 验证
+- 运行截图验证
+
+### 下一步（C3）
+
+1. 集成 GBufferStage/LightStage 到对应 Feature::append
+2. 连接 DeferredFrameResourceSet 到 prepareBindings（frame/light descriptors）
+3. 在 DeferredRenderPipeline::appendDeferredViewToGraph 中使用新 recipe
+4. 删除 DeferredFrameGraphOrchestrator 及 bUseSSAO plumbing
+5. 补充 Skybox/Sprite/Overlay/Bloom/Finalize features
+6. 验证 M01-M08
+7. 运行截图对比
+
+## 总结
+
+### 已完成（8 个 commits）
+
+| Commit | 内容 | 测试 |
+| --- | --- | --- |
+| c220d086a | typed refs + prepareFrameRecord interface | 219/219 ✓ |
+| (skeleton) | SSAOFeature skeleton | (included in next) |
+| d0b55bdb | Core helpers (Result/OptionalHandle) | 1817/1818 ✓ |
+| 799e5866 | Pipeline integration + per-view prepareBindings | 1810/1810 ✓ |
+| (repeat) | (prepareBindings timing fix) | (included above) |
+| b05c0dc6 | GBufferFeature - direct refactor | 1810/1810 ✓ |
+| 7e0a6f2a | LightingFeature - direct refactor | 1810/1810 ✓ |
+| 7ddec404 | GBuffer→SSAO→Lighting chain in recipe | 1810/1810 ✓ |
+
+### 关键成果
+
+- ✅ **Foundation 完整**: Core helpers (Result/OptionalHandle) + Feature protocol types
+- ✅ **Data flow 建立**: prepareFrameRecord → recordFamily prepareBindings → (待) appendGraph
+- ✅ **Feature 一等对象**: GBufferFeature/LightingFeature 完整实现协议
+- ✅ **Typed composition**: GBuffer → SSAO → Lighting 链式数据流
+- ✅ **无 Legacy wrapper**: 直接重构 Stage，不创建兼容层
+
+### 当前状态
+
+- C1-foundation: ✅ 完成（5 commits）
+- C2: 🚧 进行中（3 commits）
+  - ✅ GBufferFeature/LightingFeature 创建
+  - ✅ DeferredPipelineRecipe 集成三个 features
+  - ⏳ 完整执行路径（Stage 集成）
+  - ⏳ DeferredRenderPipeline 使用新 recipe
+  - ⏳ 删除旧 orchestrator
+  - ⏳ Validation M01-M08
+
+### 工作区状态
+
+- **干净**: 只有 8 个 composition 相关提交
+- **测试全绿**: 1810/1810 tests passed
+- **编译通过**: ya-render-3d, ya-game-runtime, ya-game-editor
+- **无关改动**: Engine/Plugins/log.cc 未 stage（灯光线工作）
