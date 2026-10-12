@@ -2,7 +2,7 @@
   "plan": "render-pipeline-composition",
   "updated": "2026-10-12",
   "implementation_status": "in_progress",
-  "next_checkpoint": "C5",
+  "next_checkpoint": "none (remaining rows are cross-line)",
   "intent": "RDG 上方建立一等 feature、typed recipe、单源资源需求与贯通 prepare/build/publication 的同一份 resolved composition；不以 Bloom 算法为目标",
   "status_rules": {
     "todo": "未实施，evidence 为空",

@@ -2,9 +2,9 @@
 
 > 建立 / 更新：2026-10-13
 > 状态：实施进行中。已落地（均带 runtime 逐像素证据）：C1-foundation + 集成切片（GBuffer→SSAO→Lighting 单源贯通）、C3A（Deferred tail 全 feature 化 + 集中层删除）、C3A-trim、C3B（Deferred 共享输入收口）、C3G（C3 剩余门禁）、协议诚实化（Feature concept 由 9 个 feature static_assert 强制）、C4a（Forward recipe + Bloom/EntityId/Finalize 跨管线共享 + M17 Forward 半边 + appendTargetRequests 退出）。
-> 下一 checkpoint：C5 余项（M21 扩展用例、M22 双 View runtime、M23 performance/churn）；C5a（plan-C2 余项 / M13 / 死脚手架 / M20 诊断）已完成。
+> 状态（2026-10-13）：**19 / 23 verified**。C1–C4 全部落地并带 runtime 逐像素证据；C5a–C5g 完成 plan-C2 余项、M13 收集、死脚手架删除、M20 诊断（含 pass 区间）、M21 扩展验收、M05/M06/M04/M07/M10/M11/M01/M02 证据补齐。剩余 M08/M22（需第二 View 声明入口，应用侧）、M19（runtime mutation trace）、M23（perf 对照，基线需灯光线重采）——均已在 matrix/todo 写明阻塞对象。
 > C4 已完成（C4a Forward recipe + 共享 feature；C4b Shadow 经 composition 接入；C4c ViewResources bag 退场 / 死结构清除 / M19 recipe 级用例）。两管线全部贡献走同一 Feature 协议。
-> C5a 已完成：`_lastBlurPassCount` 退场（含负向验证的边界用例）、共享输出收集单一化、typed refs/OptionalHandle 死脚手架删除、组合诊断接入 trace。
+> C5 系列已完成：plan-C2 余项（blur 状态局部化 + 边界用例）、共享输出收集单一化、死脚手架删除、组合诊断（feature 状态 + pass 区间）、M21 扩展验收、M04 真实修复（allocation identity 顺序无关）。
 > 命名对应：本文件 C1 = 实际执行的 "C1-foundation + 集成切片"；C2 剩余项、C3 遗留 hook 与 C4b 见 todo.md。
 
 ## 1. 目标与成功定义
