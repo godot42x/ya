@@ -3,6 +3,7 @@
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/Sprite2DStage.h"
 #include "Render3D/Common/ViewGraphName.h"
+#include "Render3D/Composition/ColorContinuation.h"
 #include "Render3D/Deferred/DeferredPassNames.h"
 #include "Render3D/RenderFrameData.h"
 
@@ -63,23 +64,7 @@ Sprite2DFeature::GraphOutputs Sprite2DFeature::append(RenderGraph&              
     (void)graph.addPass(
         makeViewGraphName(deferred_pass_names::kSprites, ctx.viewId),
         [inputs, renderArea](RGPassBuilder& passBuilder) {
-            passBuilder.declareRaster({
-                .renderArea = renderArea,
-                .layerCount = 1,
-                .colors = {{
-                    .color       = inputs.color,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                }},
-                .depth = RGDepthAttachmentDesc{
-                    .depth       = inputs.depth,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                    .bReadOnly   = true,
-                },
-            });
+            composition::declareColorContinuation(passBuilder, renderArea, inputs.color, inputs.depth, /*bDepthReadOnly=*/true);
         },
         [stageCtx = *ctx.stageCtx, bindings = prepared.bindings, stage](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();

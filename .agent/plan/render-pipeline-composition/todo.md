@@ -10,18 +10,18 @@
 - [x] 同一份 resolved composition 生成 ViewTargetRequest（旧手工清单 → `collectViewTargets()`）。
 - [x] 删除 `DeferredFrameGraphOrchestrator`、`appendGBuffer/appendSSAO/appendLight`、`bUseSSAO` 透传、Deferred `appendTargetRequests`、`preparedComposition` 占位、`SSAOStage::appendGraphPass`。
 - [x] **C3A**：ForwardOpaque/Skybox/Sprite2D/Bloom/Overlay/EntityId/Finalize 全部迁入 feature；`DeferredFrameGraphPasses`/`DeferredFrameGraphResources` bag/`allocateDeferredViewPassResources`/`ViewResources` 槽位删除；runtime：SSAO on/off 逐像素一致、bloom-off 10 pass 无拷贝 pass/transient（详见 progress.md C3A 节）。
-- [x] Runtime 证据（C1i + C3A 复验）：SSAO on/off 图对照 + `Deferred.SSAO` import 14245→0 + Forward↔Deferred 切换逐像素一致 + C3A on/off 像素 0 diff。
+- [x] **C3A-trim（接手/开闭收敛）**：ForwardOpaque 槽位改由 recipe 声明；`ColorContinuation.h` 单一契约（4 个使用者）；recipe 头"Adding a pass"接入说明；target 发布守卫测试；子系统 7672→7568（−104）。
+- [x] Runtime 证据（C1i + C3A + C3A-trim）：SSAO on/off 图对照 + `Deferred.SSAO` import 14245→0 + Forward↔Deferred 切换逐像素一致 + trim 后三场景像素 0 diff。
 
 ## 下一步（按优先级）
 
 - [ ] **C3B / M17**：SSAO/Skybox payload+DSL+DS 归 feature 局部准备；`Binding` 只留真实共享输入；shared upload 计数验证。
-- [ ] **裁薄壳决定**：C3A 实测行数净 +612（协议壳 > 集中层删除）；对 ForwardOpaque/Skybox 等薄 pass 评估 recipe 声明或共享 helper，先决定再动工。
 - [ ] **plan.md C2 剩余**：`_lastBlurPassCount` 调用状态退出、blur pass 次数边界测试（M09/M14）、grading-off 截图（M12）。
 - [ ] **M08 双 View runtime**：两 View 不同 SSAO payload/DS 互不覆盖；共享 frame/skinning 复用。
 - [ ] **M10 failure injection**：prepare/build/compile/execute 失败不发布部分新 family。
 - [ ] **M13 完整**：统一输出收集，不在 pipeline 侧按 feature 名称解析。
-- [ ] **C4**：Forward recipe、Shadow typed token、`appendTargetRequests` 全退出。
-- [ ] **C5**：组合诊断、扩展用例、多 View、performance/churn 门禁与 skill 吸收。
+- [ ] **C4**：Forward recipe（共享 feature 作为跨管线开闭性正式验收证据）、Shadow typed token、`appendTargetRequests` 全退出。
+- [ ] **C5**：组合诊断、扩展用例、多 View、performance/churn 门禁与 skill 吸收（"如何新增一个 pass"进 skill）。
 
 ## 不得漏掉
 

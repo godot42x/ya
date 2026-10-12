@@ -327,9 +327,43 @@
 - M15 记 `in_progress`：tail 迁移完成，shared provider 收口后才达 verified。
 - 偏离：无范围偏离；未新增 test/ 级工程；多 View（M08）与 failure injection（M10）仍待补。
 
+## 2026-10-12 深夜 — C3A-trim：按"开闭 + 快速接手"验收的收敛（Checkpoint T）
+
+### 目标与边界
+
+用户的验收标准修正：不是行数，而是"编排/改动/新增 pass 时符合开闭、真人能快速接手"。本批只做两件事——(1) 无功能契约的薄壳降级、continuation 语义单一定义；(2) 看守测试与接入说明。行为零变化（pass 保留、拓扑/像素与 C3A 基线一致）；不动协议形状；容器化（design.md `PipelineComposition`）**不做**，理由：显式 map 的可读性优于模板化相位，除非 C4 实测触点扩散。
+
+### 实施内容
+
+- 删除 `ForwardOpaqueFeature.{h,cpp}`（无功能契约的槽位不配 feature 协议；迁移地图要求保留 pass）。forward-opaque 槽改由 recipe 在 `appendGraph` 内直接声明：`composition::declareColorContinuation` + 空 execute；`ResolvedView`/`GraphOutputs` 的对应字段删除，Skybox 输入直接取 `outputs.lighting.sceneColor`。槽位获得 workload 时再毕业为 feature（注释写明）。
+- 新增 `Composition/ColorContinuation.h`：color-continuation 的唯一契约定义（Load color、Load/test depth、final ShaderReadOnlyOptimal）。使用者：recipe（opaque 槽）、SkyboxFeature、Sprite2DFeature（depth readOnly）、OverlayFeature——4 个真实消费者。
+- `DeferredPipelineRecipe.h` 头注释新增"Adding a pass"接入说明（触点、target 发布、失败模式）。
+- 守卫测试：目标清单测试增加"每 feature 声明的 target 恰好发布一次"的唯一性断言；配合既有顺序断言，漏发布/重复发布会失败（且 feature append 以 `MissingDependency` 响亮失败，不会静默不画）。
+
+### 实测
+
+- diff：**9 files, +49 / −189（净 −140）**；Deferred 子系统（同一口径）**7672 → 7568，净 −104**。
+- 新增一个 pass 的接入面（当前形态）：feature 文件对 + recipe 接线（字段列 2~3 处 + resolve/prepare/append 各一处，约 20–40 行，全在 recipe 两个文件内）；只有引入新设备对象才再动 pipeline 的 `Stages` 一行；**无集中层触点**。
+- 薄壳样板：`ColorContinuation` 让每个 continuation pass 的 raster 声明从 ~28 行收敛到 1 行；ForwardOpaque 的 115 行协议壳清零。
+
+### 验证
+
+- 编译：`xmake b ya-render-3d-test` ok；`control start --game --build` ok。
+- 测试：`xmake r ya-render-3d-test` 221/221；`python3 Script/ya.py test --target ya` 1812/1812（226 suites）。
+- Runtime（HelloMaterial，`--render-graph-trace`）：
+  - SSAO on：14 pass；截图对 C3A 基线**逐像素一致**（`c3a-trim-ssao-on.png`，max diff 0）。
+  - SSAO off：13 pass；截图**逐像素一致**（`c3a-trim-ssao-off.png`，max diff 0）。
+  - Bloom off：10 pass，无 Bloom/拷贝 pass；截图**逐像素一致**（`c3a-trim-bloom-off.png`，max diff 0）。
+  - 经验记录：一次 warmup_frames=30 抓到未完成帧（mean 15 vs 114），warmup=180 复现通过——截图校验统一用长 warmup。
+
+### 保留 / 未做
+
+- skill 沉淀（"如何新增一个 pass"进 render-arch 或新 skill）按计划留 C5；本轮说明放在 recipe 头注释。
+- C3B/M17（shared inputs 收口）为下一步；C4 的共享 feature 是跨管线开闭性的正式验收证据。
+
 ## 总结
 
-### 已完成（11 个 commits）
+### 已完成（12 个 commits）
 
 | Commit | 内容 | 测试 |
 | --- | --- | --- |
@@ -343,7 +377,8 @@
 | 7ddec404 | GBuffer→SSAO→Lighting chain in recipe | 1810/1810 ✓ |
 | 7df25e0b | progress update | — |
 | 9726b2d0 | 集成切片：features 拥有真实 pass、recipe 单源驱动、旧 orchestrator 删除 | 220/220 render3d + 1811/1811 full + runtime on/off/切换证据 |
-| （本提交） | C3A：tail 全 feature 化 + 集中层删除（+1876/−964；runtime 三场景） | 221/221 render3d + 1812/1812 full + on/off 像素 0 diff + bloom-off 10 pass |
+| 5e3dcb55 | C3A：tail 全 feature 化 + 集中层删除（+1876/−964） | 221/221 render3d + 1812/1812 full + on/off 像素 0 diff + bloom-off 10 pass |
+| （本提交） | C3A-trim：薄壳降级 + continuation 单一定义 + 接入说明/守卫测试（+49/−189） | 221/221 render3d + 1812/1812 full + 三场景像素 0 diff |
 
 ### 关键成果
 
@@ -352,18 +387,20 @@
 - ✅ **Feature 一等对象**: GBuffer/SSAO/Lighting + tail 7 features 各自拥有 resolve/prepareBindings/append 与真实 pass
 - ✅ **无 Legacy wrapper**: 旧 orchestrator/passes/bag/ViewResources 槽位直接删除，不回兼容桥
 - ✅ **Runtime 证据**: SSAO on/off 图对照与逐像素一致、bloom-off 10 pass、管线切换逐像素一致
-- ⚠️ **复杂度**: C3A 行数净 +612（集中层 −660，协议壳 +1160）；未达删除面门槛，裁薄壳为下一决定点（见 C3A 实测节）
+- ✅ **接手/开闭收敛（C3A-trim）**: 无功能契约槽位由 recipe 声明；continuation 语义单一 `ColorContinuation.h`；recipe 头"Adding a pass"说明 + target 发布守卫测试；子系统 −104 行
+- ⚠️ **复杂度**: C3A 净 +612 后 C3A-trim −104（当前 7568）；删除面门槛仍未回正，容器化暂缓（C4 实测触点后再判）
 
 ### 当前状态
 
 - C1-foundation: ✅ 完成
 - 集成切片（plan.md C1 验收主体）: ✅ 完成并带 runtime 证据
-- C3A（tail 全 feature 化 + 集中层删除）: ✅ 完成并带 runtime 证据；复杂度净增，待裁薄壳决定
+- C3A（tail 全 feature 化 + 集中层删除）: ✅ 完成并带 runtime 证据
+- C3A-trim（薄壳降级 + 接入说明/守卫）: ✅ 完成并带 runtime 证据
 - 剩余: C3B（M17 shared inputs 收口）、plan-C2 剩余（`_lastBlurPassCount`/grading-off）、M08/M10/M13 完整、C4/C5
 
 ### 工作区状态
 
-- **干净**: 11 个 composition 相关提交
+- **干净**: 12 个 composition 相关提交
 - **测试全绿**: 1812/1812 full tests passed；render3d 221/221
 - **编译通过**: ya-render-3d, ya-game-runtime（closure）
 - **无关改动**: Engine/Plugins/log.cc 未 stage（灯光线工作）

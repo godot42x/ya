@@ -1,6 +1,7 @@
 #include "Render3D/Deferred/Features/SkyboxFeature.h"
 
 #include "Render3D/Common/ViewGraphName.h"
+#include "Render3D/Composition/ColorContinuation.h"
 #include "Render3D/Deferred/DeferredPassNames.h"
 
 namespace ya
@@ -36,22 +37,7 @@ SkyboxFeature::GraphOutputs SkyboxFeature::append(RenderGraph&               gra
         makeViewGraphName(deferred_pass_names::kSkybox, ctx.viewId),
         [inputs, renderArea](RGPassBuilder& passBuilder) {
             passBuilder.uniformRead(inputs.frame, inputs.frameRange);
-            passBuilder.declareRaster({
-                .renderArea = renderArea,
-                .layerCount = 1,
-                .colors = {{
-                    .color       = inputs.color,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                }},
-                .depth = RGDepthAttachmentDesc{
-                    .depth       = inputs.depth,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                },
-            });
+            composition::declareColorContinuation(passBuilder, renderArea, inputs.color, inputs.depth);
         },
         [stageCtx = *ctx.stageCtx, skybox = facts.skybox, stage](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();

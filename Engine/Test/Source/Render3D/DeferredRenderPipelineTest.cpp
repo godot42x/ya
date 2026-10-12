@@ -217,6 +217,16 @@ TEST(DeferredCompositionTargetsTest, TargetListComesFromResolvedFeaturesOnceAndG
     EXPECT_EQ(targets[9].role, EViewAttachment::BloomExtract);
     EXPECT_EQ(targets[10].role, EViewAttachment::BloomBlur);
     EXPECT_EQ(targets[11].role, EViewAttachment::BloomComposite);
+
+    // Guard: each enabled feature's declared requirement is published exactly
+    // once, in map order. A target-bearing feature missing from
+    // collectViewTargets (or published twice) fails here — and its own append
+    // fails with MissingDependency instead of silently rendering nothing.
+    for (size_t i = 0; i < targets.size(); ++i) {
+        for (size_t j = i + 1; j < targets.size(); ++j) {
+            EXPECT_NE(targets[i].role, targets[j].role);
+        }
+    }
 }
 
 TEST(GBufferFeatureTest, DisabledResolveCarriesNoFormatsAndEnabledResolveOwnsItsRoles)
@@ -307,11 +317,6 @@ TEST(LightingFeatureTest, ResolveCarriesThePipelineSceneColorFormat)
 
 TEST(DeferredFeatureMapTest, ThinTailFeaturesOwnTheirPassPresence)
 {
-    ForwardOpaqueFeature forwardOpaque;
-    const auto forwardOpaqueResolved = forwardOpaque.resolve(
-        ForwardOpaqueFeature::Settings{}, ForwardOpaqueFeature::Facts{}, ForwardOpaqueFeature::Inputs{});
-    EXPECT_TRUE(forwardOpaqueResolved.bEnabled);
-
     SkyboxFeature skybox;
     const auto skyboxResolved = skybox.resolve(
         SkyboxFeature::Settings{}, SkyboxFeature::Facts{}, SkyboxFeature::Inputs{});

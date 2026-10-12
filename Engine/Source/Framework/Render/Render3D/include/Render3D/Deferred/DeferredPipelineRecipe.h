@@ -9,7 +9,6 @@
 #include "Render3D/Deferred/Features/BloomFeature.h"
 #include "Render3D/Deferred/Features/EntityIdFeature.h"
 #include "Render3D/Deferred/Features/FinalizeFeature.h"
-#include "Render3D/Deferred/Features/ForwardOpaqueFeature.h"
 #include "Render3D/Deferred/Features/GBufferFeature.h"
 #include "Render3D/Deferred/Features/LightingFeature.h"
 #include "Render3D/Deferred/Features/OverlayFeature.h"
@@ -49,6 +48,22 @@ class RenderSubmission;
 /// device objects, the View's prepared targets own the attachments, and the
 /// frame import step owns the imported host-written buffers. The recipe states
 /// which features run, in what order, and what data flows between them.
+///
+/// # Adding a pass
+///
+/// 1. Create the feature under `Deferred/Features/` with its
+///    resolve/prepareBindings/append. If it needs a View target, declare it in
+///    resolve as a `ViewTargetRequirement`; `ResolvedView::collectViewTargets`
+///    publishes exactly what the features declared.
+/// 2. Wire it here in `appendGraph` (plus `resolve`/`prepareBindings`), in the
+///    order it runs: the connections are this function, the ports are typed.
+/// 3. A slot with no functional contract is declared by the map itself through
+///    `composition::declareColorContinuation` (today: the forward-opaque slot)
+///    and graduates to a feature once it owns workload.
+///
+/// Failure stays loud: a feature whose target was not published fails its
+/// append with `FeatureError::MissingDependency`, and any phase failure fails
+/// the View instead of publishing a partial frame.
 struct DeferredPipelineRecipe
 {
     /// Device objects the features' passes need. Passed in, never reached for.
@@ -86,7 +101,6 @@ struct DeferredPipelineRecipe
         GBufferFeature::Resolved      gbuffer;
         SSAOFeature::Resolved         ssao;
         LightingFeature::Resolved     lighting;
-        ForwardOpaqueFeature::Resolved forwardOpaque;
         SkyboxFeature::Resolved       skybox;
         Sprite2DFeature::Resolved     sprites;
         BloomFeature::Resolved        bloom;
@@ -174,7 +188,6 @@ struct DeferredPipelineRecipe
         GBufferFeature::GraphOutputs      gbuffer;
         SSAOFeature::GraphOutputs         ssao;
         LightingFeature::GraphOutputs     lighting;
-        ForwardOpaqueFeature::GraphOutputs forwardOpaque;
         SkyboxFeature::GraphOutputs       skybox;
         Sprite2DFeature::GraphOutputs     sprites;
         BloomFeature::GraphOutputs        bloom;

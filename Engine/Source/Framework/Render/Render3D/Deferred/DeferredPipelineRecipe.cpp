@@ -7,6 +7,8 @@
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ViewGraphName.h"
 #include "Render3D/Common/ViewTargetStore.h"
+#include "Render3D/Composition/ColorContinuation.h"
+#include "Render3D/Deferred/DeferredPassNames.h"
 
 namespace ya
 {
@@ -84,7 +86,6 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
     lightingSettings.sceneColorFormat = config.viewColorFormat;
     lightingSettings.sceneColorUsage  = config.viewColorUsage;
 
-    const ForwardOpaqueFeature::Settings forwardOpaqueSettings{};
     const SkyboxFeature::Settings        skyboxSettings{};
     const Sprite2DFeature::Settings      spriteSettings{};
     const OverlayFeature::Settings       overlaySettings{};
@@ -92,7 +93,6 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
 
     const GBufferFeature       gbufferFeature;
     const SSAOFeature          ssaoFeature;
-    const ForwardOpaqueFeature forwardOpaqueFeature;
     const SkyboxFeature        skyboxFeature;
     const Sprite2DFeature      spriteFeature;
     const OverlayFeature       overlayFeature;
@@ -130,11 +130,6 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
             lightingSettings,
             LightingFeature::Facts{.viewExtent = view.viewExtent},
             LightingFeature::Inputs{});
-
-        view.forwardOpaque = forwardOpaqueFeature.resolve(
-            forwardOpaqueSettings,
-            ForwardOpaqueFeature::Facts{.viewExtent = view.viewExtent},
-            ForwardOpaqueFeature::Inputs{});
 
         view.skybox = skyboxFeature.resolve(
             skyboxSettings,
@@ -398,15 +393,20 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     }
 
     // ── Forward-opaque slot ───────────────────────────────────────────────
-    const ForwardOpaqueFeature forwardOpaqueFeature;
-    outputs.forwardOpaque = forwardOpaqueFeature.append(
-        ctx.graph,
-        featureCtx,
-        ForwardOpaqueFeature::Facts{.viewExtent = resolved.viewExtent},
-        resolved.forwardOpaque,
-        ForwardOpaqueFeature::Inputs{
-            .color = outputs.lighting.sceneColor,
-            .depth = outputs.gbuffer.depth,
+    // A slot with no functional contract today: forward-rendered opaque content
+    // would continue the lit color here. The pass is part of the map (kept per
+    // the migration map; removing it needs separate resource-semantics
+    // evidence) and is declared by the map itself — it graduates to a feature
+    // once it owns workload.
+    const Rect2D viewRenderArea{.pos = {0, 0}, .extent = resolved.viewExtent.toVec2()};
+    (void)ctx.graph.addPass(
+        makeViewGraphName(deferred_pass_names::kForwardOpaque, resolved.viewId),
+        [color = outputs.lighting.sceneColor, depth = outputs.gbuffer.depth, viewRenderArea](RGPassBuilder& passBuilder) {
+            composition::declareColorContinuation(passBuilder, viewRenderArea, color, depth);
+        },
+        [](RGRenderContext& rgCtx) {
+            rgCtx.beginDeclaredRasterRendering();
+            rgCtx.endRendering();
         });
 
     // ── Skybox ────────────────────────────────────────────────────────────
@@ -423,7 +423,7 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         },
         resolved.skybox,
         SkyboxFeature::Inputs{
-            .color      = outputs.forwardOpaque.color,
+            .color      = outputs.lighting.sceneColor,
             .depth      = outputs.gbuffer.depth,
             .frame      = ctx.skyboxFrameBuffer,
             .frameRange = prepared.skyboxFrameRange,

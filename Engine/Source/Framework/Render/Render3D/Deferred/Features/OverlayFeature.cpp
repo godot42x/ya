@@ -5,6 +5,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/ViewGraphName.h"
+#include "Render3D/Composition/ColorContinuation.h"
 #include "Render3D/Deferred/DeferredPassNames.h"
 #include "Render3D/RenderFrameData.h"
 
@@ -77,22 +78,7 @@ OverlayFeature::GraphOutputs OverlayFeature::append(RenderGraph&               g
     (void)graph.addPass(
         makeViewGraphName(deferred_pass_names::kForwardTransparent, ctx.viewId),
         [inputs, renderArea](RGPassBuilder& passBuilder) {
-            passBuilder.declareRaster({
-                .renderArea = renderArea,
-                .layerCount = 1,
-                .colors = {{
-                    .color       = inputs.color,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                }},
-                .depth = RGDepthAttachmentDesc{
-                    .depth       = inputs.depth,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                },
-            });
+            composition::declareColorContinuation(passBuilder, renderArea, inputs.color, inputs.depth);
         },
         [stageCtx = *ctx.stageCtx, frameInputs, bindings = prepared.bindings, stage](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();

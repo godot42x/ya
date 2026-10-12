@@ -202,7 +202,8 @@
       "status": "in_progress",
       "evidence": [
         "C3A：GBuffer→SSAO→Lighting→ForwardOpaque→Skybox→Sprites→Bloom→Overlay→EntityId→Finalize 全部 feature pass，recipe 单入口可读；DeferredFrameGraphPasses/DeferredFrameGraphResources/allocateDeferredViewPassResources/ViewResources 槽位删除（33 files +1876/−964）",
-        "runtime：ssao on 14 pass / off 13 pass 与基线一致；两场景截图逐像素一致；bloom-off 10 pass 无拷贝",
+        "C3A-trim：无功能契约的 forward-opaque 槽位改由 recipe 声明（`ColorContinuation.h` 单一定义，4 个使用者）；recipe 头含 Adding-a-pass 接入说明；target 发布守卫测试（唯一性+顺序）；子系统 7672→7568（−104）",
+        "runtime：ssao on 14 pass / off 13 pass / bloom-off 10 pass；三场景截图对基线逐像素一致",
         "缺口：shared inputs（frame/light/skinning/ssao/skybox payload 与 DSL）仍在 DeferredFrameResourceSet::Binding，未收口为明确共享 provider（C3B/M17）"
       ]
     },
