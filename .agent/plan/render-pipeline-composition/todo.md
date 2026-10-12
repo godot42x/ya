@@ -1,7 +1,7 @@
 # 当前待办
 
-> 2026-10-12 深夜；C1-foundation + 集成切片（真实 GBuffer→SSAO→Lighting 闭环）+ C3A（tail 全 feature 化与集中层删除）+ C3A-trim + C3B（Deferred 侧共享输入收口）已带 runtime 证据落地。
-> 命名对应：plan.md 的 C1 验收主体 = "C1-foundation + 集成切片"；plan.md 的 C2（Bloom/Finalize 样本）剩余项、C3 剩余截图门禁与 C4 为下一步。
+> 2026-10-12 深夜；C1-foundation + 集成切片（真实 GBuffer→SSAO→Lighting 闭环）+ C3A（tail 全 feature 化与集中层删除）+ C3A-trim + C3B（Deferred 侧共享输入收口）+ C3G（剩余门禁）已带 runtime 证据落地。
+> 命名对应：plan.md 的 C1 验收主体 = "C1-foundation + 集成切片"；plan.md 的 C2（Bloom/Finalize 样本）剩余项、C3 遗留测试 hook 与 C4 为下一步。
 
 ## 已完成（带证据）
 
@@ -13,10 +13,12 @@
 - [x] **C3A-trim（接手/开闭收敛）**：ForwardOpaque 槽位改由 recipe 声明；`ColorContinuation.h` 单一契约（4 个使用者）；recipe 头"Adding a pass"接入说明；target 发布守卫测试；子系统 7672→7568（−104）。
 - [x] **C3B（M17 Deferred 侧）**：SSAO/Skybox payload+DSL+DS 归 feature 局部准备；共享 `Binding` 只留 frame/light/skinning（6 字段）；trace 每共享 buffer 每 View import 一次、SSAO off 无 SSAO UBO import；子系统 7568→7536（−32）。
 - [x] Runtime 证据（C1i + C3A + C3A-trim + C3B）：SSAO on/off 图对照 + `Deferred.SSAO` import 14245→0 + Forward↔Deferred 切换逐像素一致 + 三场景像素 0 diff（C3B 再次逐像素一致）。
+- [x] **C3G（剩余门禁）**：sprite+opaque 遮挡（`run_sprite2d_isolated.py` 全绿：遮挡 0→137270 px、世界尺寸/正交尺度断言；trace 证明跑在 Deferred 组合的 `Deferred Sprites` pass）；overlay/billboard（editor 回归绿；修复 companion 重构造成的过期键名测试债）；grading off（10 pass、Finalize 仍发布 `Deferred.View.Display`、与 graded 基线仅色彩差异 max 19/255）；M11 bloom on/off 续写 backing 断言成文。
 
 ## 下一步（按优先级）
 
-- [ ] **C3 剩余截图门禁**：grading off（M12）、sprite+opaque 遮挡、overlay/gizmo、entity-id/picking（图像 + 行为断言）；Bloom on 时 Overlay 续写 Composite backing 的 before/after topology 断言（M11）。
+- [ ] **待决定的测试 hook（C3 遗留缺口）**：entity-id/picking runtime hook（读取 `DeferredView.EntityId` 的 pick/readback；editor 已有 isolate readback 路径）与 direction gizmo 场景 hook（回归场景加一个 `DirectionComponent` 实体）。
+- [ ] **M12 余项**：`SurfaceImageTest` 侧编码回归未跑。
 - [ ] **plan.md C2 剩余**：`_lastBlurPassCount` 调用状态退出、blur pass 次数边界测试（M09/M14）。
 - [ ] **M08 双 View runtime**：两 View 不同 SSAO payload/DS 互不覆盖；共享 frame/skinning 复用。
 - [ ] **M10 failure injection**：prepare/build/compile/execute 失败不发布部分新 family。
@@ -29,7 +31,7 @@
 - [ ] M22 双管线多 View 实跑；历史 scope 单测不是 runtime 验证。
 - [x] AO 关闭无专属 requirement/import/pass/新 publication；C3A 收口：ViewResources 槽位删除，SSAO off 时 feature 不分配 DS（runtime off 13 pass + 像素一致）。
 - [x] Bloom off：无 Bloom pass/transient/import；Finalize 仍执行产生 DisplayColor（runtime bloom-off 10 pass）。
-- [ ] Bloom on 时 Overlay 续写 Composite backing 的诊断内容（M11）需要在 C4 前补 before/after topology 断言。
+- [x] Bloom on 时 Overlay 续写 Composite backing 的诊断内容（M11）：C3G 已把 before/after topology 断言成文（bloom on = `Deferred.BloomComposite`；bloom off = `DeferredView.Color`，单附件 Load/Store 无拷贝）。
 - [x] 旧灯光 GPU 字段映射、生成类型、预算和现有 shadow 策略用例随迁移保留（C3B：`DeferredLightBufferTest` 全绿，shared provider 只含 frame/light/skinning）。
 - [x] prepare 失败中止 recording（代码路径）；[ ] 完整 failure injection 仍待补。
 - [ ] 不并行推进 `rdg-cache-dx` 旧 P3/P4 或旧 orchestrator 改名批次。

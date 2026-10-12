@@ -76,14 +76,18 @@ def main() -> int:
     if billboards.get("count", 0) < 2:
         raise RuntimeError("expected at least two managed billboards in isolated scene")
 
-    managed = [entry for entry in billboards.get("billboards", []) if entry.get("managed_by_light")]
-    if len(managed) < 2:
-        raise RuntimeError("expected at least two light-managed billboards")
+    # Generated light icons are companion entities of their light hosts; the
+    # handler reports that as is_companion/host_entity_id (the older
+    # managed_by_light/owner_entity_id contract was retired by the companion
+    # refactor, so this smoke had gone stale).
+    companions = [entry for entry in billboards.get("billboards", []) if entry.get("is_companion")]
+    if len(companions) < 2:
+        raise RuntimeError("expected at least two light billboards as light companions")
 
-    if not all(entry.get("owner_entity_id") for entry in managed):
-        raise RuntimeError("expected every managed billboard to report its owner entity")
+    if not all(entry.get("host_entity_id") for entry in companions):
+        raise RuntimeError("expected every light billboard companion to report its host entity")
 
-    texture_paths = {entry.get("texture_path") for entry in managed}
+    texture_paths = {entry.get("texture_path") for entry in companions}
     if "Engine:Content/TestTextures/icons8-light-64.png" not in texture_paths:
         raise RuntimeError("expected a default point-light billboard texture in isolated scene")
     if "Engine:Content/TestTextures/icons8-light-64.png" not in texture_paths:

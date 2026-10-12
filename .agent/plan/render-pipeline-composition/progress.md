@@ -396,9 +396,37 @@
 - C3 剩余截图门禁：grading off、sprite+opaque 遮挡、overlay/gizmo、entity-id/picking（图像 + 行为断言）。
 - 容器化不做（理由同 C3A-trim）；skill 沉淀留 C5。
 
+## 2026-10-12 深夜 — C3G：C3 剩余门禁（截图 / 行为 / topology 断言）
+
+### 目标与边界
+
+**单一验收目标**：把 C3 清单里剩余的画面/行为门禁真实跑掉并留证据：grading off、sprite+opaque 遮挡、overlay/billboard、M11 before/after topology 断言、entity-id/picking 能力盘点。除一处过期 smoke 测试契约外不改产品代码；单测不是替代品，跑不到的门禁明确记为缺口。
+
+### 运行与结果
+
+1. **sprite+opaque 遮挡**：`Script/automation/sprite2d/run_sprite2d_isolated.py` 全绿——遮挡侧 probe 像素 0（开放侧 344844），隐藏 occluder 后遮挡侧 137270（开放侧稳定 ±0.4%），相机拉远面积收缩（483k→150k），正交半高 4 在 z=6/z=12 面积一致、半高翻倍面积 1/4。
+   - 组合绑定证据：`set_render_pipeline forward → deferred` 重建 Deferred 图后 trace dump `passes(14)`，`Deferred Sprites` 位于 `[6:7]`（Skybox 后、Bloom 前），同状态截图遮挡行为一致（open 344844 / occluded 0）。`control-game-HelloMaterial-55408.log`。
+2. **overlay/billboard**：`Script/automation/billboard/run_billboard_isolated.py`（editor 模式）**首次红**，根因是过期契约：companion 重构 `1c91e9d83` 把列表 JSON 键从 `managed_by_light`/`owner_entity_id` 改为 `is_companion`/`host_entity_id`，Python smoke 未同步。修 2 处键名后全绿（`BillboardRegression` 场景 + 2 个 light companion + viewport 截图）。
+3. **grading off（M12）**：新配置 `Automation.composition_grading_off.json`（`smoke.postprocess.enabled=false` → `PostProcessingStage::setGradingEnabled(false)`）。runtime：10 pass（Bloom 随 grading 跳过）、`Postprocessing` 仍执行并导出 `Deferred.View.Display`；截图有效（alpha 253.7），与 graded 基线仅色彩差异（max 19/255、mean 9.1），无结构性异常。`control-game-HelloMaterial-54894.log`、`c3g-grading-off.png`。
+4. **M11 before/after topology 断言成文**（trace `passPlans`，同一 pass 名）：
+   - bloom on：`[11:12] Deferred Forward Transparent`（Overlay）`textureStates(2)` = `Deferred.BloomComposite layout=1` + `DeferredGBuffer.Depth layout=2` → 单附件 Load/Store 续写 bloom composite backing，无拷贝。
+   - bloom off：同 pass = `DeferredView.Color layout=1` + `DeferredGBuffer.Depth layout=2` → 直接续写 view color。
+5. **entity-id/picking 能力盘点（缺口）**：图像侧已具备——`Deferred.View.EntityId → DeferredView.EntityId` 每帧导出，editor 用 isolate readback（`EditorLayer.Interaction.cpp`）按像素解析实体；但 runtime automation 无 hook（`capture_screenshot` 仅 viewport/presentation，无 pick/readback 方法），**行为断言无法在本轮产生**。
+6. **direction gizmo（缺口）**：全仓库无场景/回归场景创建 `DirectionComponent`（`addComponent<DirectionComponent>` 0 命中），`frameInputs.directionGizmos` 分支无运行时覆盖；hook = 往回归场景加一个 DirectionComponent 实体（scene-side 小改动），待决定。
+
+### 代码变更
+
+- `Script/automation/billboard/test_billboard_isolated.py`：2 处过期键名（测试债修复，非渲染回归）。引擎代码零改动。
+
+### 保留 / 未做
+
+- entity-id/picking runtime hook 与 direction gizmo 场景 hook 未做（记录为缺口，不伪造证据）。
+- M12 余项 `SurfaceImageTest` 侧编码回归未跑。
+- 建议 order：C4 前决定是否补这两个 hook。
+
 ## 总结
 
-### 已完成（13 个 commits）
+### 已完成（14 个 commits）
 
 | Commit | 内容 | 测试 |
 | --- | --- | --- |
@@ -414,7 +442,8 @@
 | 9726b2d0 | 集成切片：features 拥有真实 pass、recipe 单源驱动、旧 orchestrator 删除 | 220/220 render3d + 1811/1811 full + runtime on/off/切换证据 |
 | 5e3dcb55 | C3A：tail 全 feature 化 + 集中层删除（+1876/−964） | 221/221 render3d + 1812/1812 full + on/off 像素 0 diff + bloom-off 10 pass |
 | ad9a20f5 | C3A-trim：薄壳降级 + continuation 单一定义 + 接入说明/守卫测试（+49/−189） | 221/221 render3d + 1812/1812 full + 三场景像素 0 diff |
-| （本提交） | C3B：SSAO/Skybox payload/DSL/DS 归 feature，共享 Binding 只留 frame/light/skinning（+222/−272） | 221/221 render3d + 1812/1812 full + 三场景像素 0 diff + 每共享 buffer import 一次 |
+| ab762faf | C3B：SSAO/Skybox payload/DSL/DS 归 feature，共享 Binding 只留 frame/light/skinning（+222/−272） | 221/221 render3d + 1812/1812 full + 三场景像素 0 diff + 每共享 buffer import 一次 |
+| （本提交） | C3G：sprite2d/overlay 隔离回归 + grading-off 截图 + M11 topology 断言成文；修复过期 billboard smoke 键名（引擎零改动） | sprite2d 门禁全绿（0→137270 px、尺寸/正交断言）+ billboard editor 门禁绿 + grading-off 10 pass |
 
 ### 关键成果
 
@@ -425,6 +454,8 @@
 - ✅ **Runtime 证据**: SSAO on/off 图对照与逐像素一致、bloom-off 10 pass、管线切换逐像素一致
 - ✅ **接手/开闭收敛（C3A-trim）**: 无功能契约槽位由 recipe 声明；continuation 语义单一 `ColorContinuation.h`；recipe 头"Adding a pass"说明 + target 发布守卫测试；子系统 −104 行
 - ✅ **共享输入收口（C3B）**: 共享 Binding 只留 frame/light/skinning 六字段；SSAO/skybox payload+layout+DS 归各自 feature；每共享 buffer 每 View import 一次（trace）；SSAO off 无 SSAO UBO import
+- ✅ **C3 门禁（C3G）**: sprite2d 隔离回归（遮挡 0→137270 px + 世界尺寸/正交尺度）全绿，且 trace 证明跑在 Deferred 组合（`Deferred Sprites` 位于 Skybox 后/Bloom 前）；billboard overlay editor 回归绿（修复过期键名测试债）；grading-off 10 pass 且 Finalize 仍发布；M11 bloom on/off 续写 backing 断言成文
+- ⚠️ **剩余缺口**: entity-id/picking 无 runtime hook（图像已导出、editor readback 存在）、direction gizmo 无场景 hook、M12 的 SurfaceImageTest 未跑
 - ⚠️ **复杂度**: C3A 净 +612 后 C3A-trim −104、C3B −32（当前 7536）；删除面门槛仍未回正，容器化暂缓（C4 实测触点后再判）
 
 ### 当前状态
@@ -433,12 +464,13 @@
 - 集成切片（plan.md C1 验收主体）: ✅ 完成并带 runtime 证据
 - C3A（tail 全 feature 化 + 集中层删除）: ✅ 完成并带 runtime 证据
 - C3A-trim（薄壳降级 + 接入说明/守卫）: ✅ 完成并带 runtime 证据
-- C3B（M17 Deferred 侧共享输入收口）: ✅ 完成并带 runtime/trace 证据；C3 剩余截图门禁（grading off、sprite+opaque、overlay/gizmo、entity-id/picking）
-- 剩余: M17 Forward 半边（C4）、plan-C2 剩余（`_lastBlurPassCount`/grading-off）、M08/M10/M13 完整、C4/C5
+- C3B（M17 Deferred 侧共享输入收口）: ✅ 完成并带 runtime/trace 证据
+- C3G（C3 剩余门禁）: ✅ 可运行部分全部跑绿（sprite/billboard/grading-off/M11 断言）；entity-id/picking 与 direction gizmo 记为缺口
+- 剩余: M17 Forward 半边（C4）、plan-C2 剩余（`_lastBlurPassCount`）、M12 的 SurfaceImageTest、entity-id/picking 与 gizmo hook 决定、M08/M10/M13 完整、C4/C5
 
 ### 工作区状态
 
-- **干净**: 13 个 composition 相关提交
+- **干净**: 14 个 composition 相关提交
 - **测试全绿**: 1812/1812 full tests passed；render3d 221/221
 - **编译通过**: ya-render-3d, ya-game-runtime（closure）
 - **无关改动**: Engine/Plugins/log.cc 未 stage（灯光线工作）

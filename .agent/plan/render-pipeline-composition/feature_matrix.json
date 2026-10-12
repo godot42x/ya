@@ -152,7 +152,8 @@
       "evidence": [
         "C3A：Skybox/Sprites/Overlay 逐 pass 镜像旧 tail 的 Load/Store/finalLayout 与顺序；bloom-on 时 Overlay 续写 Bloom.Composite backing（runtime 14 pass 拓扑与基线一致、截图逐像素一致）",
         "bloom-off 改为直接续写 viewColor（旧为拷贝 transient 被续写）：显示输出逐像素不受影响；Deferred.View.Color 诊断图在 bloom-off 时含 overlay 写入",
-        "缺口：Forward 插入位置（C4）；continuation 专项 before/after topology 断言未成文"
+        "C3G：before/after topology 断言成文（trace passPlans）——bloom on 时 `[11:12] Deferred Forward Transparent`（Overlay）textureStates = `Deferred.BloomComposite layout=1` + `DeferredGBuffer.Depth layout=2`（单附件 Load/Store 续写，无拷贝）；bloom off 时同 pass = `DeferredView.Color layout=1` + depth",
+        "缺口：Forward 插入位置（C4）"
       ]
     },
     {
@@ -165,7 +166,8 @@
       "evidence": [
         "C3A：FinalizeFeature 恒在 map 且必需（被解析为 disabled 时 prepareBindings 返回 InvalidInput）；display format/usage/编码由 pipeline config 单源传入",
         "runtime 三场景（ssao on/off、bloom off）Postprocessing pass 均执行并发布 DisplayColor；bloom-off 显示输出正常",
-        "缺口：grading-off（postprocess 禁用）截图；SurfaceImageTest 侧编码回归未跑"
+        "C3G：grading off（`smoke.postprocess.enabled=false` → `setGradingEnabled(false)`）runtime——10 pass（Bloom 随 grading 跳过）、Postprocessing 仍执行并导出 `Deferred.View.Display`；截图有效（alpha 253.7）且与 graded 基线仅色彩差异（max 19/255、mean 9.1）",
+        "缺口：SurfaceImageTest 侧编码回归未跑"
       ]
     },
     {
@@ -204,7 +206,8 @@
         "C3A：GBuffer→SSAO→Lighting→ForwardOpaque→Skybox→Sprites→Bloom→Overlay→EntityId→Finalize 全部 feature pass，recipe 单入口可读；DeferredFrameGraphPasses/DeferredFrameGraphResources/allocateDeferredViewPassResources/ViewResources 槽位删除（33 files +1876/−964）",
         "C3A-trim：无功能契约的 forward-opaque 槽位改由 recipe 声明（`ColorContinuation.h` 单一定义，4 个使用者）；recipe 头含 Adding-a-pass 接入说明；target 发布守卫测试（唯一性+顺序）；子系统 7672→7568（−104）",
         "runtime：ssao on 14 pass / off 13 pass / bloom-off 10 pass；三场景截图对基线逐像素一致",
-        "C3B：shared provider 收口——Binding 只留 frame/light/skinning（6 字段），SSAO/skybox payload+layout+DS 归 feature；trace 每共享 buffer 每 View import 一次；仍缺 §6 截图门禁余项（grading off、sprite+opaque 遮挡、overlay/gizmo、entity-id/picking 行为断言）"
+        "C3B：shared provider 收口——Binding 只留 frame/light/skinning（6 字段），SSAO/skybox payload+layout+DS 归 feature；trace 每共享 buffer 每 View import 一次",
+        "C3G 门禁：sprite2d 隔离回归全绿（遮挡侧 0→揭示 137270 px；世界尺寸/正交尺度断言）且 trace 证明跑在 Deferred 组合（`Deferred Sprites` 位于 Skybox 后/Bloom 前）；billboard overlay editor 回归绿（修复过期键名测试债）；grading-off 截图；缺口：entity-id/picking 无 runtime hook（图像已导出、editor readback 存在）、direction gizmo 无场景 hook"
       ]
     },
     {
