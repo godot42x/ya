@@ -629,3 +629,19 @@
 ### 保留
 
 - M22（双 View runtime）需要第二个 View 的声明入口，属应用/编辑器侧工作，不在本线范围；M23（performance/churn）依赖 perf-baseline 机制，同样是跨线任务。M20 的"与 RDG pass 区间显式关联"仍待补。已记入 todo 的 C5 余项。
+
+## 2026-10-13 — C5c：M04 真实修复（声明重排不应重建 View 目标）
+
+### 发现的真问题
+
+补 M04 要求的"声明重排不变性"测试时发现：`ViewTargetRequest::operator==` 是 `= default`，对 `attachments` 向量**顺序敏感**；而 `ViewTargetStore::prepare` 用 `entry.allocation->desc == request` 判断是否可复用。于是 recipe 里调换两个 feature 的声明顺序（同样一组 target）会判定为"新请求"，触发整组 View target 重建（新 generation + 重分配 GPU 图像）——正是 plan 的"request 按 role 规范化、声明重排不改变 allocation"要禁止的。
+
+### 修复
+
+`ViewTargetRequest::operator==` 改为按 **role 集合**比较（role 在请求内唯一，`createAllocation` 拒绝重复）。allocation 本身一直按 `role` 索引存放，顺序从不是其身份的一部分；这次只是让相等判断与事实一致。graph-use metadata（label/final layout）不在 `ViewAttachmentDesc` 内，天然不进 equality。
+
+### 验证
+
+- 新增 `ViewTargetStoreTest.ReorderingDeclarationsKeepsTheAllocation`：声明重排后 allocation 指针与 generation 均不变、`imageCreates` 计数不增。**负向验证**：还原为默认（顺序敏感）比较后该测试立刻失败。
+- `xmake r ya-render-3d-test` **226/226**；`python3 Script/ya.py test --target ya` **1810/1810**。
+- Runtime：Deferred / Forward / 切回 Deferred 三帧对基线**逐像素 max diff 0**（分配身份判定变更未影响画面）。

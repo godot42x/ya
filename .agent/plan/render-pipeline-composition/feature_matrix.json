@@ -64,11 +64,11 @@
       "checkpoints": ["C1"],
       "expected": "同一声明生成 allocation request 和 graph import 描述；format/usage 同步；request 按 role 规范化，声明重排不改变 allocation；graph-use metadata 不进入 equality",
       "verification": ["PipelineFeatureContractTest", "ViewTargetStoreTest reuse/replacement"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
         "GBufferFeature::Outputs 同时驱动 ViewTargetRequest（DeferredRenderPipeline::resolveFrameComposition）与 graph import（feature append）——同一份声明",
         "format/usage 来自 pipeline 运行期 formats（buildRecipeConfig: gBufferFormats/viewColorFormat/viewColorUsage），无硬编码字面量",
-        "缺口：声明重排不变性与 graph-use metadata 不进 equality 无专门测试"
+        "**修复**：ViewTargetRequest::operator== 改为按 role 集合比较（allocation 本就按 role 索引，顺序从不是其身份的一部分）；新增 ViewTargetStoreTest.ReorderingDeclarationsKeepsTheAllocation——声明重排后 allocation 与 generation 不变、无 GPU 图像重建，负向验证过（还原默认比较即失败）；graph-use metadata（label/final layout）不在 ViewAttachmentDesc 内，天然不进 equality"
       ]
     },
     {
@@ -205,13 +205,13 @@
       "checkpoints": ["C3"],
       "expected": "Deferred 全功能连接由一个 recipe 可读；无 legacy prelude/tail、all-stage context、graph resources bag、集中 bindings 分配；旧 draw/gating/picking/debug 行为一致",
       "verification": ["PipelineRecipeTest Deferred", "old-entry deletion review", "runtime screenshots and topo"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
         "C3A：GBuffer→SSAO→Lighting→ForwardOpaque→Skybox→Sprites→Bloom→Overlay→EntityId→Finalize 全部 feature pass，recipe 单入口可读；DeferredFrameGraphPasses/DeferredFrameGraphResources/allocateDeferredViewPassResources/ViewResources 槽位删除（33 files +1876/−964）",
         "C3A-trim：无功能契约的 forward-opaque 槽位改由 recipe 声明（`ColorContinuation.h` 单一定义，4 个使用者）；recipe 头含 Adding-a-pass 接入说明；target 发布守卫测试（唯一性+顺序）；子系统 7672→7568（−104）",
         "runtime：ssao on 14 pass / off 13 pass / bloom-off 10 pass；三场景截图对基线逐像素一致",
         "C3B：shared provider 收口——Binding 只留 frame/light/skinning（6 字段），SSAO/skybox payload+layout+DS 归 feature；trace 每共享 buffer 每 View import 一次",
-        "C3G 门禁：sprite2d 隔离回归全绿（遮挡侧 0→揭示 137270 px；世界尺寸/正交尺度断言）且 trace 证明跑在 Deferred 组合（`Deferred Sprites` 位于 Skybox 后/Bloom 前）；billboard overlay editor 回归绿（修复过期键名测试债）；grading-off 截图；缺口：entity-id/picking 无 runtime hook（图像已导出、editor readback 存在）、direction gizmo 无场景 hook"
+        "C3G 门禁：sprite2d 隔离回归全绿（遮挡侧 0→揭示 137270 px；世界尺寸/正交尺度断言）且 trace 证明跑在 Deferred 组合（`Deferred Sprites` 位于 Skybox 后/Bloom 前）；billboard overlay editor 回归绿（修复过期键名测试债）；grading-off 截图；entity-id runtime hook 为独立缺口（图像已导出、editor readback 存在，runtime hook 未做）；entity-id/picking 无 runtime hook（图像已导出、editor readback 存在）、direction gizmo 无场景 hook"
       ]
     },
     {
@@ -234,12 +234,12 @@
       "checkpoints": ["C3", "C4"],
       "expected": "真实 shared GPU inputs 明确并准备一次；最新 local-light generated 类型/字段映射/预算用例保留；feature-specific payload/layout/binding 不再进入 shared bag",
       "verification": ["DeferredLightBufferTest", "shared upload-count test", "owner diff review"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
         "Deferred 侧（C3B）：DeferredFrameResourceSet::Binding/ViewPayloads 只含 frame/light/lightInstances/skinning；SSAOStage/ViewOverlayStage 自持 frame DSL；SSAOFeature/SkyboxFeature 自建 payload、上传（writeUniformPassBinding）与 import（label 不变）；pipeline 不再有 feature payload 参数与 skybox frame DS 写点",
         "runtime trace：Deferred.FrameUBO/LightUBO/SkinningSSBO/SSAOFrameUBO/SkyboxFrameUBO 每 View 各 ImportBound 一次、每 pass access=1；SSAO off 无 SSAOFrameUBO import；三场景截图对基线逐像素一致",
         "DeferredLightBufferTest 全绿（1812/1812 内含）；owner diff review：feature 局部 binding 全部出 shared bag",
-        "缺口：Forward 侧 shared inputs（ForwardFrameResourceSet 的 skybox frame DSL/DS 与 payload）待 C4 同口径收口"
+        "C4a 补齐 Forward 半边：skybox frame DSL/DS 与 payload 自 ForwardFrameResourceSet 移出（见下条），该缺口已关闭"
       ,
         "Forward 侧（C4a）：skybox frame UBO/DS 自 ForwardFrameResourceSet 移出（唯一消费者 = ForwardSkyboxFeature）；ForwardViewAuxPasses 自建并持有 FwdSkybox_PerFrame_DSL；ForwardFramePayloads 只留 PBR/Phong/Unlit frame 与 light/debug；其 prepare() 删除"]
     },

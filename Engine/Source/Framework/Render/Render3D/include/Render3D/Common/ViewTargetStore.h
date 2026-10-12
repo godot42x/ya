@@ -5,6 +5,7 @@
 #include "Render3D/Common/RenderPipelineSettings.h"
 #include "Render3D/Common/SceneViewDesc.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -52,7 +53,30 @@ struct ViewTargetRequest
     Extent2D                       extent{};
     std::vector<ViewAttachmentDesc> attachments;
 
-    bool operator==(const ViewTargetRequest&) const = default;
+    /// Equality is by the SET of attachments, not their order: a recipe that
+    /// declares the same targets in a different sequence asks for the same
+    /// allocation, and must not force the View's targets to be rebuilt. The
+    /// allocation itself is role-indexed already, so this only aligns the check
+    /// with what an allocation actually is.
+    bool operator==(const ViewTargetRequest& other) const
+    {
+        if (viewId != other.viewId || pipeline != other.pipeline || extent != other.extent ||
+            attachments.size() != other.attachments.size()) {
+            return false;
+        }
+        // Roles are unique within a request (createAllocation rejects duplicates),
+        // so comparing the sorted role list plus the per-role description is
+        // exact.
+        for (const ViewAttachmentDesc& attachment : attachments) {
+            const auto it = std::find_if(other.attachments.begin(), other.attachments.end(),
+                                         [&attachment](const ViewAttachmentDesc& candidate)
+                                         { return candidate.role == attachment.role; });
+            if (it == other.attachments.end() || !(*it == attachment)) {
+                return false;
+            }
+        }
+        return true;
+    }
 };
 
 struct ViewTargetAllocation

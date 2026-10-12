@@ -2,6 +2,8 @@
 
 #include "RHI/Core/RenderResourceFactory.h"
 
+#include <algorithm>
+
 #include <gtest/gtest.h>
 
 #include <array>
@@ -114,6 +116,36 @@ TEST(ViewTargetStoreTest, ExactRequestReusesAllocationAndResizeReplacesOnce)
     EXPECT_EQ(factory.imageCreates, 4u);
     EXPECT_EQ(first.find(EViewAttachment::SceneColor)->getExtent().width, 1280u);
     EXPECT_EQ(replacement.find(EViewAttachment::SceneColor)->getExtent().width, 640u);
+}
+
+TEST(ViewTargetStoreTest, ReorderingDeclarationsKeepsTheAllocation)
+{
+    // A recipe reorders its feature declarations: same targets, same View. That
+    // is the same allocation request, so the View's targets must not be rebuilt
+    // (and no GPU image recreated). The allocation is role-indexed, so order was
+    // never part of its identity — only the equality check had to agree.
+    StoreTestFactory factory;
+    ViewTargetStore store;
+    store.init(factory);
+    store.registerView(kViewA);
+
+    ViewTargetRequest ordered = request(kViewA, {.width = 800, .height = 600});
+    ordered.attachments = {
+        {EViewAttachment::SceneColor, EFormat::R8G8B8A8_UNORM, EImageUsage::ColorAttachment | EImageUsage::Sampled},
+        {EViewAttachment::SceneDepth, EFormat::D32_SFLOAT, EImageUsage::DepthStencilAttachment | EImageUsage::Sampled, ESampleCount::Sample_1, true},
+    };
+    ASSERT_TRUE(store.prepare(std::span<const ViewTargetRequest>(&ordered, 1)));
+    const ViewTargetLease first = store.lease(kViewA.viewId());
+    ASSERT_TRUE(first);
+    const uint32_t creates = factory.imageCreates;
+
+    ViewTargetRequest reordered = ordered;
+    std::reverse(reordered.attachments.begin(), reordered.attachments.end());
+    ASSERT_TRUE(store.prepare(std::span<const ViewTargetRequest>(&reordered, 1)));
+    const ViewTargetLease reused = store.lease(kViewA.viewId());
+    EXPECT_EQ(reused.allocation, first.allocation);
+    EXPECT_EQ(reused.allocation->generation, first.allocation->generation);
+    EXPECT_EQ(factory.imageCreates, creates);
 }
 
 TEST(ViewTargetStoreTest, DifferentViewsOwnIndependentAllocations)
