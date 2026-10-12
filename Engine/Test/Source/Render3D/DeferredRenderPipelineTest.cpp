@@ -1,5 +1,4 @@
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
-#include "Render3D/Deferred/DeferredFrameGraphPasses.h"
 #include "Render3D/Common/SceneFamilyResources.h"
 
 #include "Core/Config/ConfigManager.h"
@@ -153,28 +152,71 @@ TEST(DeferredFrameResourceSetTest, SkinningCapacityStartsSmallGrowsAndRejectsOve
             .has_value());
 }
 
-TEST(DeferredFrameGraphResourcesTest, KeepsOptionalInputsExplicitAndHandlesFrameLocal)
+TEST(DeferredCompositionTargetsTest, TargetListComesFromResolvedFeaturesOnceAndGatesOptionalOnes)
 {
-    DeferredFrameGraphResources resources{};
+    GBufferFeature::Settings gbufferSettings;
+    gbufferSettings.albedoFormat  = EFormat::R8G8B8A8_UNORM;
+    gbufferSettings.normalFormat  = EFormat::R16G16B16A16_SFLOAT;
+    gbufferSettings.ormFormat     = EFormat::R8G8B8A8_UNORM;
+    gbufferSettings.shadingFormat = EFormat::R8_UNORM;
+    gbufferSettings.depthFormat   = EFormat::D32_SFLOAT;
 
-    EXPECT_FALSE(resources.buffers.ssaoFrame.has_value());
-    EXPECT_FALSE(resources.textures.ssao.has_value());
-    EXPECT_FALSE(resources.textures.environmentCubemap.has_value());
-    EXPECT_FALSE(resources.textures.shadowDepth.has_value());
-    EXPECT_FALSE(resources.textures.postprocessOutput.has_value());
-    EXPECT_FALSE(resources.passes.shadow.shadowDepth.has_value());
+    LightingFeature::Settings lightingSettings;
+    lightingSettings.sceneColorFormat = EFormat::R16G16B16A16_SFLOAT;
 
-    resources.buffers.frame = RGBufferHandle{.index = 2, .generation = 7};
-    resources.textures.gBufferColors[0] = RGTextureHandle{.index = 3, .generation = 9};
-    resources.textures.ssao = RGTextureHandle{.index = 4, .generation = 11};
-    resources.passes.skybox = RGPassHandle{.index = 5, .generation = 13};
+    FinalizeFeature::Settings finalizeSettings;
+    finalizeSettings.displayFormat = EFormat::R8G8B8A8_UNORM;
 
-    EXPECT_TRUE(resources.buffers.frame.isValid());
-    EXPECT_TRUE(resources.textures.gBufferColors[0].isValid());
-    ASSERT_TRUE(resources.textures.ssao.has_value());
-    EXPECT_EQ(resources.textures.ssao->index, 4u);
-    ASSERT_TRUE(resources.passes.skybox.has_value());
-    EXPECT_EQ(resources.passes.skybox->generation, 13u);
+    DeferredPipelineRecipe::ResolvedView view;
+    view.viewId     = 7;
+    view.viewExtent = {.width = 640, .height = 480};
+    view.gbuffer    = GBufferFeature{}.resolve(gbufferSettings, GBufferFeature::Facts{}, GBufferFeature::Inputs{});
+    view.lighting   = LightingFeature::resolve(lightingSettings, LightingFeature::Facts{}, LightingFeature::Inputs{});
+    view.entityId   = EntityIdFeature{}.resolve(EntityIdFeature::Settings{}, EntityIdFeature::Facts{}, EntityIdFeature::Inputs{});
+    view.finalize   = FinalizeFeature{}.resolve(finalizeSettings, FinalizeFeature::Facts{}, FinalizeFeature::Inputs{});
+
+    auto targets = view.collectViewTargets();
+    ASSERT_EQ(targets.size(), 8u);
+    EXPECT_EQ(targets[0].role, EViewAttachment::GBuffer0);
+    EXPECT_EQ(targets[1].role, EViewAttachment::GBuffer1);
+    EXPECT_EQ(targets[2].role, EViewAttachment::GBuffer2);
+    EXPECT_EQ(targets[3].role, EViewAttachment::GBuffer3);
+    EXPECT_EQ(targets[4].role, EViewAttachment::SceneDepth);
+    EXPECT_EQ(targets[5].role, EViewAttachment::SceneColor);
+    EXPECT_EQ(targets[6].role, EViewAttachment::EntityId);
+    EXPECT_EQ(targets[7].role, EViewAttachment::DisplayColor);
+    for (const auto& target : targets) {
+        EXPECT_NE(target.role, EViewAttachment::SSAO);
+        EXPECT_NE(target.role, EViewAttachment::BloomExtract);
+        EXPECT_NE(target.role, EViewAttachment::BloomBlur);
+        EXPECT_NE(target.role, EViewAttachment::BloomComposite);
+    }
+
+    // Enabling the optional features inserts exactly their roles, in the same
+    // stable order the request builder publishes every frame.
+    SSAOFeature::Settings ssaoSettings;
+    ssaoSettings.bEnabled = true;
+    RenderFrameData frameData{};
+    frameData.projection = glm::mat4(1.0f);
+    frameData.view       = glm::mat4(1.0f);
+    view.ssao = SSAOFeature{}.resolve(
+        ssaoSettings,
+        SSAOFeature::Facts{.viewExtent = view.viewExtent, .frameData = &frameData, .bReverseY = true},
+        SSAOFeature::Inputs{});
+
+    BloomFeature::Settings bloomSettings;
+    bloomSettings.bEnabled = true;
+    view.bloom = BloomFeature{}.resolve(bloomSettings, BloomFeature::Facts{}, BloomFeature::Inputs{});
+
+    targets = view.collectViewTargets();
+    ASSERT_EQ(targets.size(), 12u);
+    EXPECT_EQ(targets[5].role, EViewAttachment::SSAO);
+    EXPECT_EQ(targets[6].role, EViewAttachment::SceneColor);
+    EXPECT_EQ(targets[7].role, EViewAttachment::EntityId);
+    EXPECT_EQ(targets[8].role, EViewAttachment::DisplayColor);
+    EXPECT_EQ(targets[9].role, EViewAttachment::BloomExtract);
+    EXPECT_EQ(targets[10].role, EViewAttachment::BloomBlur);
+    EXPECT_EQ(targets[11].role, EViewAttachment::BloomComposite);
 }
 
 TEST(GBufferFeatureTest, DisabledResolveCarriesNoFormatsAndEnabledResolveOwnsItsRoles)
@@ -259,29 +301,63 @@ TEST(LightingFeatureTest, ResolveCarriesThePipelineSceneColorFormat)
 
     const auto resolved = LightingFeature::resolve(settings, LightingFeature::Facts{}, LightingFeature::Inputs{});
     ASSERT_TRUE(resolved.bEnabled);
-    EXPECT_EQ(resolved.outputs.sceneColorRole, EViewAttachment::SceneColor);
-    EXPECT_EQ(resolved.outputs.sceneColorFormat, EFormat::R16G16B16A16_SFLOAT);
+    EXPECT_EQ(resolved.target.role, EViewAttachment::SceneColor);
+    EXPECT_EQ(resolved.target.format, EFormat::R16G16B16A16_SFLOAT);
 }
 
-TEST(DeferredPassParamsTest, SkyboxOverlayDefaultsAreEmptyAndCallbacksRemainExplicit)
+TEST(DeferredFeatureMapTest, ThinTailFeaturesOwnTheirPassPresence)
 {
-    DeferredSkyboxPassParams skybox{};
-    EXPECT_FALSE(skybox.frame.handle.isValid());
-    EXPECT_FALSE(skybox.viewColor.isValid());
-    EXPECT_FALSE(skybox.depth.isValid());
-    EXPECT_EQ(skybox.layerCount, 1u);
-    EXPECT_FALSE(skybox.skybox.bAvailable);
-    EXPECT_FALSE(skybox.skybox.frameDescriptorSet);
-    EXPECT_FALSE(skybox.skybox.descriptorSet);
-    EXPECT_EQ(skybox.skybox.mesh, nullptr);
+    ForwardOpaqueFeature forwardOpaque;
+    const auto forwardOpaqueResolved = forwardOpaque.resolve(
+        ForwardOpaqueFeature::Settings{}, ForwardOpaqueFeature::Facts{}, ForwardOpaqueFeature::Inputs{});
+    EXPECT_TRUE(forwardOpaqueResolved.bEnabled);
 
-    DeferredForwardTransparentPassParams transparent{};
-    EXPECT_FALSE(transparent.color.isValid());
-    EXPECT_FALSE(transparent.depth.isValid());
-    EXPECT_EQ(transparent.layerCount, 1u);
-    EXPECT_TRUE(transparent.overlay.billboards.empty());
-    EXPECT_TRUE(transparent.overlay.directionGizmos.empty());
+    SkyboxFeature skybox;
+    const auto skyboxResolved = skybox.resolve(
+        SkyboxFeature::Settings{}, SkyboxFeature::Facts{}, SkyboxFeature::Inputs{});
+    EXPECT_TRUE(skyboxResolved.bEnabled);
 
+    RenderFrameData frameData{};
+    Sprite2DFeature sprites;
+    const auto spriteResolved = sprites.resolve(
+        Sprite2DFeature::Settings{},
+        Sprite2DFeature::Facts{.frameData = &frameData},
+        Sprite2DFeature::Inputs{});
+    EXPECT_FALSE(spriteResolved.bEnabled);
+
+    OverlayFeature overlay;
+    const auto overlayResolved = overlay.resolve(
+        OverlayFeature::Settings{}, OverlayFeature::Facts{}, OverlayFeature::Inputs{});
+    EXPECT_TRUE(overlayResolved.bEnabled);
+}
+
+TEST(DeferredFeatureMapTest, BloomDisabledDeclaresNoTargetsAndFinalizeCarriesTheDisplayContract)
+{
+    BloomFeature bloom;
+    const auto bloomDisabled = bloom.resolve(BloomFeature::Settings{}, BloomFeature::Facts{}, BloomFeature::Inputs{});
+    EXPECT_FALSE(bloomDisabled.bEnabled);
+    EXPECT_FALSE(bloomDisabled.extract.has_value());
+    EXPECT_FALSE(bloomDisabled.blur.has_value());
+    EXPECT_FALSE(bloomDisabled.composite.has_value());
+
+    BloomFeature::Settings bloomSettings;
+    bloomSettings.bEnabled = true;
+    const auto bloomEnabled = bloom.resolve(bloomSettings, BloomFeature::Facts{}, BloomFeature::Inputs{});
+    ASSERT_TRUE(bloomEnabled.bEnabled);
+    ASSERT_TRUE(bloomEnabled.extract.has_value());
+    ASSERT_TRUE(bloomEnabled.blur.has_value());
+    ASSERT_TRUE(bloomEnabled.composite.has_value());
+    EXPECT_EQ(bloomEnabled.extract->role, EViewAttachment::BloomExtract);
+    EXPECT_EQ(bloomEnabled.blur->role, EViewAttachment::BloomBlur);
+    EXPECT_EQ(bloomEnabled.composite->role, EViewAttachment::BloomComposite);
+
+    FinalizeFeature::Settings finalizeSettings;
+    finalizeSettings.displayFormat = EFormat::R8G8B8A8_UNORM;
+    const auto finalize = FinalizeFeature{}.resolve(
+        finalizeSettings, FinalizeFeature::Facts{}, FinalizeFeature::Inputs{});
+    ASSERT_TRUE(finalize.bEnabled);
+    EXPECT_EQ(finalize.target.role, EViewAttachment::DisplayColor);
+    EXPECT_EQ(finalize.target.format, EFormat::R8G8B8A8_UNORM);
 }
 
 TEST(PostProcessingStageTest, FinalizeParamsDefaultsStayEmpty)

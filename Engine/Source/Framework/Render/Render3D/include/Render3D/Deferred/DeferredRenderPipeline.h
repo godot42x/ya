@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
-#include "Render3D/Deferred/DeferredFrameGraphResources.h"
 #include "Render3D/Deferred/DeferredFrameResourceSet.h"
 #include "Render3D/Deferred/DeferredPipelineRecipe.h"
 #include "Render3D/Deferred/GBufferStage.h"
@@ -195,7 +194,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool shouldSkipView(const RenderPipelineFrameContext& frame) const;
     void               beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
-                                                     const DeferredFrameGraphResources& graphResources,
+                                                     const DeferredPipelineRecipe::GraphOutputs& outputs,
                                                      const SceneViewTask* task,
                                                      uint64_t viewId) const;
     void               refreshGBufferStageState();
@@ -221,7 +220,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
                                                  EnvironmentLightingSceneResources& environmentLighting,
                                                  DescriptorSetHandle environmentLightingDS,
                                                  FrameContext& postContext,
-                                                 DeferredFrameGraphResources& graphResources,
+                                                 DeferredPipelineRecipe::GraphOutputs& outputs,
                                                  const ViewTargetLease& targets,
                                                  const DeferredPipelineRecipe::ResolvedView& resolved,
                                                  std::optional<RGPassHandle> familyPredecessor);
@@ -229,7 +228,9 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     /// against: same settings snapshot and runtime formats the render targets
     /// were prepared from.
     [[nodiscard]] DeferredPipelineRecipe::Config buildRecipeConfig(const RenderPipelineSettings& settings) const;
-    void               exportGraphOutputs(RenderGraph& graph, const DeferredFrameGraphResources& resources, uint64_t viewId) const;
+    void               exportGraphOutputs(RenderGraph& graph,
+                                         const DeferredPipelineRecipe::GraphOutputs& outputs,
+                                         uint64_t viewId) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               markPendingResourceRefresh(EDeferredPendingResourceRefresh refresh);
     [[nodiscard]] bool hasPendingResourceRefresh(EDeferredPendingResourceRefresh refresh) const;

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Render3D/Deferred/DeferredFrameGraphResources.h"
 #include "RHI/Core/Buffer.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/FrameUploadArena.h"

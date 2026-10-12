@@ -76,32 +76,28 @@ ICommandBuffer* dummyCmdBuf(uintptr_t token)
 
 } // namespace
 
-TEST(ViewPassResourcesTest, DualViewTypedPassSlotsStayIndependent)
+TEST(ViewPassResourcesTest, DualViewFrameBindingsStayIndependent)
 {
-    RenderViewBindingTable<DeferredFrameResourceSet::ViewResources> table;
+    RenderViewBindingTable<DeferredFrameResourceSet::Binding> table;
     ASSERT_TRUE(table.beginSubmission(0, 41));
 
-    DeferredFrameResourceSet::ViewResources* viewA = table.mutableNextView(0);
+    DeferredFrameResourceSet::Binding* viewA = table.mutableNextView(0);
     ASSERT_NE(viewA, nullptr);
-    viewA->ssao.inputs.set              = DescriptorSetHandle{reinterpret_cast<void*>(0xA1)};
-    viewA->lighting.gBufferTextures.set = DescriptorSetHandle{reinterpret_cast<void*>(0xA2)};
-    viewA->lighting.shadows.set         = DescriptorSetHandle{reinterpret_cast<void*>(0xA3)};
-    viewA->entityId.frame.set           = DescriptorSetHandle{reinterpret_cast<void*>(0xA4)};
-    viewA->overlay.billboardTextures.set = DescriptorSetHandle{reinterpret_cast<void*>(0xA5)};
-    viewA->post.toneMap.input.set       = DescriptorSetHandle{reinterpret_cast<void*>(0xA6)};
-    viewA->post.bloom.extract.set       = DescriptorSetHandle{reinterpret_cast<void*>(0xA7)};
+    viewA->frameAndLightDescriptorSet = DescriptorSetHandle{reinterpret_cast<void*>(0xA1)};
+    viewA->skinningDescriptorSet      = DescriptorSetHandle{reinterpret_cast<void*>(0xA2)};
+    viewA->ssaoFrameDescriptorSet     = DescriptorSetHandle{reinterpret_cast<void*>(0xA3)};
+    viewA->skyboxFrameDescriptorSet   = DescriptorSetHandle{reinterpret_cast<void*>(0xA4)};
+    viewA->frame.offset               = 0x1A;
     ASSERT_TRUE(table.commitNextView(0));
 
-    DeferredFrameResourceSet::ViewResources* viewB = table.mutableNextView(0);
+    DeferredFrameResourceSet::Binding* viewB = table.mutableNextView(0);
     ASSERT_NE(viewB, nullptr);
     EXPECT_NE(viewA, viewB);
-    viewB->ssao.inputs.set              = DescriptorSetHandle{reinterpret_cast<void*>(0xB1)};
-    viewB->lighting.gBufferTextures.set = DescriptorSetHandle{reinterpret_cast<void*>(0xB2)};
-    viewB->lighting.shadows.set         = DescriptorSetHandle{reinterpret_cast<void*>(0xB3)};
-    viewB->entityId.frame.set           = DescriptorSetHandle{reinterpret_cast<void*>(0xB4)};
-    viewB->overlay.billboardTextures.set = DescriptorSetHandle{reinterpret_cast<void*>(0xB5)};
-    viewB->post.toneMap.input.set       = DescriptorSetHandle{reinterpret_cast<void*>(0xB6)};
-    viewB->post.bloom.extract.set       = DescriptorSetHandle{reinterpret_cast<void*>(0xB7)};
+    viewB->frameAndLightDescriptorSet = DescriptorSetHandle{reinterpret_cast<void*>(0xB1)};
+    viewB->skinningDescriptorSet      = DescriptorSetHandle{reinterpret_cast<void*>(0xB2)};
+    viewB->ssaoFrameDescriptorSet     = DescriptorSetHandle{reinterpret_cast<void*>(0xB3)};
+    viewB->skyboxFrameDescriptorSet   = DescriptorSetHandle{reinterpret_cast<void*>(0xB4)};
+    viewB->frame.offset               = 0x1B;
     ASSERT_TRUE(table.commitNextView(0));
 
     const auto* slotA = table.getView(0, 0);
@@ -109,17 +105,13 @@ TEST(ViewPassResourcesTest, DualViewTypedPassSlotsStayIndependent)
     ASSERT_NE(slotA, nullptr);
     ASSERT_NE(slotB, nullptr);
     EXPECT_NE(slotA, slotB);
-    EXPECT_NE(slotA->ssao.inputs.set, slotB->ssao.inputs.set);
-    EXPECT_NE(slotA->lighting.gBufferTextures.set, slotB->lighting.gBufferTextures.set);
-    EXPECT_NE(slotA->entityId.frame.set, slotB->entityId.frame.set);
-    EXPECT_NE(slotA->overlay.billboardTextures.set, slotB->overlay.billboardTextures.set);
-    EXPECT_NE(slotA->post.toneMap.input.set, slotB->post.toneMap.input.set);
-    EXPECT_NE(slotA->post.bloom.extract.set, slotB->post.bloom.extract.set);
+    EXPECT_NE(slotA->frameAndLightDescriptorSet, slotB->frameAndLightDescriptorSet);
+    EXPECT_NE(slotA->skinningDescriptorSet, slotB->skinningDescriptorSet);
+    EXPECT_NE(slotA->ssaoFrameDescriptorSet, slotB->ssaoFrameDescriptorSet);
+    EXPECT_NE(slotA->skyboxFrameDescriptorSet, slotB->skyboxFrameDescriptorSet);
 
-    viewB->ssao.inputs.set        = DescriptorSetHandle{reinterpret_cast<void*>(0xB9)};
-    viewB->post.bloom.extract.set = DescriptorSetHandle{reinterpret_cast<void*>(0xBA)};
-    EXPECT_EQ(slotA->ssao.inputs.set, DescriptorSetHandle{reinterpret_cast<void*>(0xA1)});
-    EXPECT_EQ(slotA->post.bloom.extract.set, DescriptorSetHandle{reinterpret_cast<void*>(0xA7)});
+    viewB->ssaoFrameDescriptorSet = DescriptorSetHandle{reinterpret_cast<void*>(0xB9)};
+    EXPECT_EQ(slotA->ssaoFrameDescriptorSet, DescriptorSetHandle{reinterpret_cast<void*>(0xA3)});
 }
 
 TEST(ViewPassResourcesTest, UniformPassBindingsUseIndependentSlices)

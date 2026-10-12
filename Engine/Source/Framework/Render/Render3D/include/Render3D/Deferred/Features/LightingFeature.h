@@ -58,17 +58,10 @@ struct LightingFeature
         std::optional<RGTextureHandle> environmentBrdfLut{};
     };
 
-    struct OutputRequirements
-    {
-        EViewAttachment sceneColorRole   = EViewAttachment::SceneColor;
-        EFormat::T      sceneColorFormat = EFormat::Undefined;
-        EImageUsage::T  sceneColorUsage  = EImageUsage::ColorAttachment | EImageUsage::Sampled;
-    };
-
     struct Resolved
     {
-        bool              bEnabled = false;
-        OutputRequirements outputs;
+        bool                 bEnabled = false;
+        ViewTargetRequirement target{};
     };
 
     struct PrepareContext

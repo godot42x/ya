@@ -313,7 +313,7 @@ const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
         return nullptr;
     }
 
-    ViewResources* slot = _viewBindings.mutableNextView(submission.flightIndex());
+    Binding* slot = _viewBindings.mutableNextView(submission.flightIndex());
     if (!slot) {
         YA_CORE_ERROR("Deferred beginView requires a recording submission on flight {}", submission.flightIndex());
         return nullptr;
@@ -328,10 +328,10 @@ const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
     if (!family) {
         return nullptr;
     }
-    slot->frame.skinningDescriptorSet = family->skinningDescriptorSet(_skinningDSL.get());
-    slot->frame.skinningBuffer        = view.frameData->sceneResources.skinningBuffer;
+    slot->skinningDescriptorSet = family->skinningDescriptorSet(_skinningDSL.get());
+    slot->skinningBuffer        = view.frameData->sceneResources.skinningBuffer;
 
-    if (!ensureViewDescriptors(submission, slot->frame)) {
+    if (!ensureViewDescriptors(submission, *slot)) {
         YA_CORE_ERROR("Deferred beginView failed to allocate view descriptor sets");
         return nullptr;
     }
@@ -351,17 +351,17 @@ const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
     _lastShadowedPointLights = shadowSlotsUsed;
 
     const uint32_t alignment = std::max(_render->getUniformBufferOffsetAlignment(), 1u);
-    if (!writeViewPayloads(submission, alignment, payloads, slot->frame)) {
+    if (!writeViewPayloads(submission, alignment, payloads, *slot)) {
         YA_CORE_ERROR("Deferred beginView failed to upload view payloads");
         return nullptr;
     }
 
-    updateFrameAndLightDescriptorSet(slot->frame);
+    updateFrameAndLightDescriptorSet(*slot);
     if (payloads.ssao) {
-        updateSSAODescriptorSet(slot->frame);
+        updateSSAODescriptorSet(*slot);
     }
     if (payloads.skybox) {
-        updateSkyboxDescriptorSet(slot->frame);
+        updateSkyboxDescriptorSet(*slot);
     }
 
     if (!_viewBindings.commitNextView(submission.flightIndex())) {
@@ -369,27 +369,12 @@ const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
     }
 
     view.viewSlot = viewSlot;
-    return &_viewBindings.getView(submission.flightIndex(), viewSlot)->frame;
+    return _viewBindings.getView(submission.flightIndex(), viewSlot);
 }
 
 const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::getViewBinding(
     uint32_t flightIndex,
     uint32_t viewSlot) const
-{
-    const ViewResources* resources = _viewBindings.getView(flightIndex, viewSlot);
-    return resources ? &resources->frame : nullptr;
-}
-
-const DeferredFrameResourceSet::ViewResources* DeferredFrameResourceSet::getViewResources(
-    uint32_t flightIndex,
-    uint32_t viewSlot) const
-{
-    return _viewBindings.getView(flightIndex, viewSlot);
-}
-
-DeferredFrameResourceSet::ViewResources* DeferredFrameResourceSet::mutableViewResources(
-    uint32_t flightIndex,
-    uint32_t viewSlot)
 {
     return _viewBindings.getView(flightIndex, viewSlot);
 }

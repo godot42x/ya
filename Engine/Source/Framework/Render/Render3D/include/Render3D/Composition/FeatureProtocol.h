@@ -4,6 +4,7 @@
 #include "Core/Result.h"
 #include "Core/Optional.h"
 #include "Graph/RenderGraph.h"
+#include "Render3D/Common/ViewTargetStore.h"
 
 #include <cstdint>
 #include <optional>
@@ -141,6 +142,29 @@ struct FeaturePrepareContext
     ViewTargetStore*         targetStore    = nullptr;
     uint64_t                 hostTick       = 0;
     uint32_t                 flightIndex    = 0;
+};
+
+/// One View target a feature needs allocated: the composition turns these into
+/// ViewTargetRequest attachments, and the feature's append imports the same role
+/// from its View's lease. One declaration, both uses.
+struct ViewTargetRequirement
+{
+    EViewAttachment role    = EViewAttachment::SceneColor;
+    EFormat::T      format  = EFormat::Undefined;
+    EImageUsage::T  usage   = EImageUsage::None;
+    ESampleCount::T samples = ESampleCount::Sample_1;
+    bool            isDepth = false;
+
+    [[nodiscard]] ViewAttachmentDesc toDesc() const
+    {
+        return ViewAttachmentDesc{
+            .role    = role,
+            .format  = format,
+            .usage   = usage,
+            .samples = samples,
+            .isDepth = isDepth,
+        };
+    }
 };
 
 /// Context for feature graph append phase: add RDG passes.

@@ -79,18 +79,11 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
         }
     };
 
-    /// Typed View owner: frame UBO Binding plus per-pass DS/UBO. Do not fold
-    /// SSAO/Light/EntityId/overlay/sprite/post CIS into Binding.
-    struct ViewResources
-    {
-        Binding                     frame{};
-        SSAOPassBindings            ssao{};
-        DeferredLightingPassBindings lighting{};
-        EntityIdPassBindings        entityId{};
-        OverlayPassBindings         overlay{};
-        Sprite2DPassBindings        sprite{};
-        PostprocessPassBindings     post{};
-    };
+    /// Typed View owner: the frame UBO Binding the View's passes read from.
+    /// Feature-owned sets (SSAO inputs, lighting GBuffer/shadow, entity id,
+    /// overlay, sprite, postprocess) live in the features' own Prepared values;
+    /// the bag is deliberately gone.
+    /// (No ViewResources struct: the binding IS the View slot.)
 
     void init(IRender* render);
     void destroy();
@@ -125,8 +118,6 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSSAOFrameDSL() const { return _ssaoFrameDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxFrameDSL() const { return _skyboxFrameDSL; }
     [[nodiscard]] const Binding*               getViewBinding(uint32_t flightIndex, uint32_t viewSlot) const;
-    [[nodiscard]] const ViewResources*         getViewResources(uint32_t flightIndex, uint32_t viewSlot) const;
-    [[nodiscard]] ViewResources*               mutableViewResources(uint32_t flightIndex, uint32_t viewSlot);
     [[nodiscard]] uint32_t                     liveViewCount(uint32_t flightIndex) const;
     [[nodiscard]] uint32_t getMaxShadowedPointLights() const { return _shadowState.maxShadowedPointLights; }
     [[nodiscard]] uint32_t getLastShadowedPointLights() const { return _lastShadowedPointLights; }
@@ -143,7 +134,7 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
     stdptr<IDescriptorSetLayout> _frameAndLightDSL;
     stdptr<IDescriptorSetLayout> _ssaoFrameDSL;
     stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
-    RenderViewBindingTable<ViewResources> _viewBindings;
+    RenderViewBindingTable<Binding> _viewBindings;
     ShadowRuntimeState _shadowState{};
     uint32_t _lastShadowedPointLights = 0;
 

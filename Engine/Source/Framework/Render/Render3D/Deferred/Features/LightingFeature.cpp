@@ -29,9 +29,11 @@ LightingFeature::Resolved LightingFeature::resolve(const Settings& settings,
         return resolved;
     }
 
-    resolved.outputs.sceneColorRole   = EViewAttachment::SceneColor;
-    resolved.outputs.sceneColorFormat = settings.sceneColorFormat;
-    resolved.outputs.sceneColorUsage  = settings.sceneColorUsage;
+    resolved.target = ViewTargetRequirement{
+        .role   = EViewAttachment::SceneColor,
+        .format = settings.sceneColorFormat,
+        .usage  = settings.sceneColorUsage,
+    };
     return resolved;
 }
 
@@ -72,13 +74,13 @@ LightingFeature::GraphOutputs LightingFeature::append(RenderGraph&              
         return outputs;
     }
 
-    const std::shared_ptr<RenderTexture> sceneColorTarget = ctx.viewLease->find(resolved.outputs.sceneColorRole);
+    const std::shared_ptr<RenderTexture> sceneColorTarget = ctx.viewLease->find(resolved.target.role);
     if (sceneColorTarget == nullptr) {
         YA_CORE_ERROR("Lighting SceneColor target missing for View {}", ctx.viewId);
         return outputs;
     }
     outputs.sceneColor = graph.importTexture(makeImportedTextureDesc(
-        *sceneColorTarget, "DeferredView.Color", EImageLayout::ShaderReadOnlyOptimal, resolved.outputs.sceneColorUsage));
+        *sceneColorTarget, "DeferredView.Color", EImageLayout::ShaderReadOnlyOptimal, resolved.target.usage));
 
     const Rect2D renderArea{.pos = {0, 0}, .extent = facts.viewExtent.toVec2()};
 

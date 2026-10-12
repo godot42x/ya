@@ -23,4 +23,23 @@ inline constexpr std::string_view kEntityId          = "Deferred EntityId";
 
 } // namespace deferred_pass_names
 
+/// Graph export names of the Deferred view's public outputs. These are the
+/// publication contract the pipeline's output collector reads; features export
+/// their own diagnostics (Bloom/Postprocessing) separately.
+namespace deferred_graph_exports
+{
+
+inline constexpr std::string_view gBufferColor[4] = {
+    "Deferred.GBuffer.Color0",
+    "Deferred.GBuffer.Color1",
+    "Deferred.GBuffer.Color2",
+    "Deferred.GBuffer.Color3",
+};
+inline constexpr std::string_view gBufferDepth = "Deferred.GBuffer.Depth";
+inline constexpr std::string_view viewColor    = "Deferred.View.Color";
+inline constexpr std::string_view ssao         = "Deferred.SSAO.Output";
+inline constexpr std::string_view entityId     = "Deferred.View.EntityId";
+
+} // namespace deferred_graph_exports
+
 } // namespace ya

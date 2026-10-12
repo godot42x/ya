@@ -9,7 +9,6 @@
 #include "Render3D/Deferred/SSAOStage.h"
 
 #include <optional>
-
 namespace ya
 {
 
@@ -69,13 +68,6 @@ struct SSAOFeature
         OptionalAO ao;
     };
 
-    struct ResourceRequirement
-    {
-        EViewAttachment role   = EViewAttachment::SSAO;
-        EFormat::T      format = SSAOStage::AO_FORMAT;
-        EImageUsage::T  usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled;
-    };
-
     struct Resolved
     {
         bool     bEnabled = false;
@@ -84,7 +76,7 @@ struct SSAOFeature
         /// View's binding step and the shader see one value.
         SSAOStage::FrameData frameData{};
         /// Present exactly when enabled: the AO target this feature needs.
-        std::optional<ResourceRequirement> aoTarget{};
+        std::optional<ViewTargetRequirement> aoTarget{};
     };
 
     struct PrepareContext

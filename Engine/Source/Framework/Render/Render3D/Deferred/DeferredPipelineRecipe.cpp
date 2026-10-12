@@ -5,6 +5,7 @@
 #include "Render3D/Common/EnvironmentLightingSceneResources.h"
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
+#include "Render3D/Common/ViewGraphName.h"
 #include "Render3D/Common/ViewTargetStore.h"
 
 namespace ya
@@ -15,7 +16,50 @@ namespace
 
 constexpr size_t kGBufferColorCount = 4;
 
+[[nodiscard]] RGBufferRange toRange(const FrameUploadArena::Allocation& allocation)
+{
+    return RGBufferRange{.offset = allocation.offset, .size = allocation.size};
+}
+
 } // namespace
+
+std::vector<ViewAttachmentDesc> DeferredPipelineRecipe::ResolvedView::collectViewTargets() const
+{
+    // Stable order: the request builder publishes the same list every frame, so
+    // the View target store only rebuilds when the composition actually changes.
+    std::vector<ViewAttachmentDesc> targets;
+    targets.reserve(12);
+
+    const auto push = [&targets](const ViewTargetRequirement& requirement) {
+        targets.push_back(requirement.toDesc());
+    };
+
+    targets.push_back(gbuffer.outputs.albedo);
+    targets.push_back(gbuffer.outputs.normal);
+    targets.push_back(gbuffer.outputs.orm);
+    targets.push_back(gbuffer.outputs.shading);
+    targets.push_back(gbuffer.outputs.depth);
+    if (ssao.aoTarget.has_value()) {
+        push(*ssao.aoTarget);
+    }
+    push(lighting.target);
+    if (entityId.bEnabled) {
+        push(entityId.target);
+    }
+    if (finalize.bEnabled) {
+        push(finalize.target);
+    }
+    if (bloom.extract.has_value()) {
+        push(*bloom.extract);
+    }
+    if (bloom.blur.has_value()) {
+        push(*bloom.blur);
+    }
+    if (bloom.composite.has_value()) {
+        push(*bloom.composite);
+    }
+    return targets;
+}
 
 Result<std::vector<DeferredPipelineRecipe::ResolvedView>, FeatureError>
 DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& plan)
@@ -40,8 +84,21 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
     lightingSettings.sceneColorFormat = config.viewColorFormat;
     lightingSettings.sceneColorUsage  = config.viewColorUsage;
 
-    const GBufferFeature  gbufferFeature;
-    const SSAOFeature     ssaoFeature;
+    const ForwardOpaqueFeature::Settings forwardOpaqueSettings{};
+    const SkyboxFeature::Settings        skyboxSettings{};
+    const Sprite2DFeature::Settings      spriteSettings{};
+    const OverlayFeature::Settings       overlaySettings{};
+    const EntityIdFeature::Settings      entityIdSettings{};
+
+    const GBufferFeature       gbufferFeature;
+    const SSAOFeature          ssaoFeature;
+    const ForwardOpaqueFeature forwardOpaqueFeature;
+    const SkyboxFeature        skyboxFeature;
+    const Sprite2DFeature      spriteFeature;
+    const OverlayFeature       overlayFeature;
+    const BloomFeature         bloomFeature;
+    const EntityIdFeature      entityIdFeature;
+    const FinalizeFeature      finalizeFeature;
 
     std::vector<ResolvedView> resolved;
     resolved.reserve(plan.sceneRender.views().size());
@@ -74,6 +131,41 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
             LightingFeature::Facts{.viewExtent = view.viewExtent},
             LightingFeature::Inputs{});
 
+        view.forwardOpaque = forwardOpaqueFeature.resolve(
+            forwardOpaqueSettings,
+            ForwardOpaqueFeature::Facts{.viewExtent = view.viewExtent},
+            ForwardOpaqueFeature::Inputs{});
+
+        view.skybox = skyboxFeature.resolve(
+            skyboxSettings,
+            SkyboxFeature::Facts{.viewExtent = view.viewExtent},
+            SkyboxFeature::Inputs{});
+
+        view.sprites = spriteFeature.resolve(
+            spriteSettings,
+            Sprite2DFeature::Facts{.viewExtent = view.viewExtent, .frameData = recording.frameData},
+            Sprite2DFeature::Inputs{});
+
+        view.bloom = bloomFeature.resolve(
+            config.bloom,
+            BloomFeature::Facts{.viewExtent = view.viewExtent},
+            BloomFeature::Inputs{});
+
+        view.overlay = overlayFeature.resolve(
+            overlaySettings,
+            OverlayFeature::Facts{.viewExtent = view.viewExtent},
+            OverlayFeature::Inputs{});
+
+        view.entityId = entityIdFeature.resolve(
+            entityIdSettings,
+            EntityIdFeature::Facts{.viewExtent = view.viewExtent},
+            EntityIdFeature::Inputs{});
+
+        view.finalize = finalizeFeature.resolve(
+            config.finalize,
+            FinalizeFeature::Facts{.viewExtent = view.viewExtent},
+            FinalizeFeature::Inputs{});
+
         resolved.push_back(view);
     }
     return resolved;
@@ -84,22 +176,23 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
                                         const Stages&         stages,
                                         const PrepareContext& ctx)
 {
-    if (ctx.submission == nullptr) {
+    if (ctx.submission == nullptr || ctx.frameBinding == nullptr) {
         return FeatureError::MissingContext;
     }
 
     PreparedView prepared;
     prepared.viewId          = resolved.viewId;
-    prepared.frameRange      = ctx.frameRange;
-    prepared.lightRange      = ctx.lightRange;
-    prepared.ssaoFrameRange  = ctx.ssaoFrameRange;
+    prepared.frameRange      = toRange(ctx.frameBinding->frame);
+    prepared.lightRange      = toRange(ctx.frameBinding->light);
+    prepared.ssaoFrameRange  = toRange(ctx.frameBinding->ssaoFrame);
+    prepared.skyboxFrameRange = toRange(ctx.frameBinding->skyboxFrame);
 
     const GBufferFeature gbufferFeature;
     prepared.gbuffer = gbufferFeature.prepareBindings(
         resolved.gbuffer,
         GBufferFeature::PrepareInputs{
-            .frameAndLightDS = ctx.frameAndLightDS,
-            .skinningDS      = ctx.skinningDS,
+            .frameAndLightDS = ctx.frameBinding->frameAndLightDescriptorSet,
+            .skinningDS      = ctx.frameBinding->skinningDescriptorSet,
         });
 
     const SSAOFeature ssaoFeature;
@@ -108,7 +201,7 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
         SSAOFeature::PrepareContext{
             .submission = ctx.submission,
             .stage      = stages.ssao,
-            .frameDS    = ctx.ssaoFrameDS.value_or(DescriptorSetHandle{}),
+            .frameDS    = ctx.frameBinding->ssaoFrameDescriptorSet,
         });
     if (ssaoPrepared.isErr()) {
         return ssaoPrepared.error();
@@ -120,13 +213,83 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
         LightingFeature::PrepareContext{
             .submission            = ctx.submission,
             .stage                 = stages.light,
-            .frameAndLightDS       = ctx.frameAndLightDS,
+            .frameAndLightDS       = ctx.frameBinding->frameAndLightDescriptorSet,
             .environmentLightingDS = ctx.environmentLightingDS,
         });
     if (lightingPrepared.isErr()) {
         return lightingPrepared.error();
     }
     prepared.lighting = lightingPrepared.value();
+
+    const Sprite2DFeature spriteFeature;
+    auto spritePrepared = spriteFeature.prepareBindings(
+        resolved.sprites,
+        Sprite2DFeature::PrepareContext{
+            .submission = ctx.submission,
+            .render     = ctx.render,
+            .stage      = stages.sprites,
+            .frameData  = ctx.frameData,
+            .alignment  = ctx.alignment,
+        });
+    if (spritePrepared.isErr()) {
+        return spritePrepared.error();
+    }
+    prepared.sprites = spritePrepared.value();
+
+    const BloomFeature bloomFeature;
+    auto bloomPrepared = bloomFeature.prepareBindings(
+        resolved.bloom,
+        BloomFeature::PrepareContext{
+            .submission = ctx.submission,
+            .stage      = stages.post,
+        });
+    if (bloomPrepared.isErr()) {
+        return bloomPrepared.error();
+    }
+    prepared.bloom = bloomPrepared.value();
+
+    const OverlayFeature overlayFeature;
+    auto overlayPrepared = overlayFeature.prepareBindings(
+        resolved.overlay,
+        OverlayFeature::PrepareContext{
+            .submission = ctx.submission,
+            .render     = ctx.render,
+            .stage      = stages.overlay,
+            .inputs     = ctx.overlayInputs,
+            .frameData  = ctx.frameData,
+            .alignment  = ctx.alignment,
+        });
+    if (overlayPrepared.isErr()) {
+        return overlayPrepared.error();
+    }
+    prepared.overlay = overlayPrepared.value();
+
+    const EntityIdFeature entityIdFeature;
+    auto entityIdPrepared = entityIdFeature.prepareBindings(
+        resolved.entityId,
+        EntityIdFeature::PrepareContext{
+            .submission = ctx.submission,
+            .render     = ctx.render,
+            .stage      = stages.entityId,
+            .frameData  = ctx.frameData,
+            .alignment  = ctx.alignment,
+        });
+    if (entityIdPrepared.isErr()) {
+        return entityIdPrepared.error();
+    }
+    prepared.entityId = entityIdPrepared.value();
+
+    const FinalizeFeature finalizeFeature;
+    auto finalizePrepared = finalizeFeature.prepareBindings(
+        resolved.finalize,
+        FinalizeFeature::PrepareContext{
+            .submission = ctx.submission,
+            .stage      = stages.post,
+        });
+    if (finalizePrepared.isErr()) {
+        return finalizePrepared.error();
+    }
+    prepared.finalize = finalizePrepared.value();
 
     return prepared;
 }
@@ -136,7 +299,7 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
                                     const PreparedView&  prepared,
                                     const AppendContext& ctx)
 {
-    if (ctx.stages == nullptr || ctx.viewLease == nullptr) {
+    if (ctx.stages == nullptr || ctx.viewLease == nullptr || ctx.frameBinding == nullptr) {
         return FeatureError::MissingContext;
     }
     if (!resolved.gbuffer.bEnabled || !resolved.lighting.bEnabled) {
@@ -153,6 +316,7 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     featureCtx.predecessor       = ctx.predecessor;
     featureCtx.bReverseViewportY = ctx.bReverseViewportY;
 
+    // ── GBuffer ───────────────────────────────────────────────────────────
     const GBufferFeature gbufferFeature;
     outputs.gbuffer = gbufferFeature.append(
         ctx.graph,
@@ -169,6 +333,7 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
             .skinning   = ctx.skinningBuffer,
         });
 
+    // ── SSAO (optional) ───────────────────────────────────────────────────
     const SSAOFeature ssaoFeature;
     auto ssaoOutputs = ssaoFeature.append(
         ctx.graph,
@@ -190,6 +355,7 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     }
     outputs.ssao = ssaoOutputs.value();
 
+    // ── Lighting ──────────────────────────────────────────────────────────
     LightingFeature::Inputs lightingInputs;
     lightingInputs.albedo      = outputs.gbuffer.albedo;
     lightingInputs.normal      = outputs.gbuffer.normal;
@@ -230,6 +396,122 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         YA_CORE_ERROR("Lighting append produced no SceneColor for View {}", resolved.viewId);
         return FeatureError::MissingDependency;
     }
+
+    // ── Forward-opaque slot ───────────────────────────────────────────────
+    const ForwardOpaqueFeature forwardOpaqueFeature;
+    outputs.forwardOpaque = forwardOpaqueFeature.append(
+        ctx.graph,
+        featureCtx,
+        ForwardOpaqueFeature::Facts{.viewExtent = resolved.viewExtent},
+        resolved.forwardOpaque,
+        ForwardOpaqueFeature::Inputs{
+            .color = outputs.lighting.sceneColor,
+            .depth = outputs.gbuffer.depth,
+        });
+
+    // ── Skybox ────────────────────────────────────────────────────────────
+    const SkyboxFeature skyboxFeature;
+    outputs.skybox = skyboxFeature.append(
+        ctx.graph,
+        ctx.stages->overlay,
+        featureCtx,
+        SkyboxFeature::Facts{
+            .viewExtent = resolved.viewExtent,
+            .skybox     = ctx.overlayInputs != nullptr
+                ? ctx.overlayInputs->skybox
+                : ViewOverlayStage::FrameInputs::SkyboxInput{},
+        },
+        resolved.skybox,
+        SkyboxFeature::Inputs{
+            .color      = outputs.forwardOpaque.color,
+            .depth      = outputs.gbuffer.depth,
+            .frame      = ctx.skyboxFrameBuffer,
+            .frameRange = prepared.skyboxFrameRange,
+        });
+
+    // ── Scene sprites ─────────────────────────────────────────────────────
+    const Sprite2DFeature spriteFeature;
+    outputs.sprites = spriteFeature.append(
+        ctx.graph,
+        ctx.stages->sprites,
+        featureCtx,
+        Sprite2DFeature::Facts{.viewExtent = resolved.viewExtent, .frameData = ctx.stageCtx.frameData},
+        resolved.sprites,
+        prepared.sprites,
+        Sprite2DFeature::Inputs{
+            .color = outputs.skybox.color,
+            .depth = outputs.gbuffer.depth,
+        });
+
+    // ── Bloom (optional) ──────────────────────────────────────────────────
+    const BloomFeature bloomFeature;
+    auto bloomOutputs = bloomFeature.append(
+        ctx.graph,
+        ctx.stages->post,
+        featureCtx,
+        BloomFeature::Facts{.viewExtent = resolved.viewExtent},
+        resolved.bloom,
+        prepared.bloom,
+        BloomFeature::Inputs{.color = outputs.sprites.color});
+    if (bloomOutputs.isErr()) {
+        YA_CORE_ERROR("Bloom append failed for View {}", resolved.viewId);
+        return bloomOutputs.error();
+    }
+    outputs.bloom = bloomOutputs.value();
+
+    // ── Overlay (forward transparent) ─────────────────────────────────────
+    const OverlayFeature overlayFeature;
+    outputs.overlay = overlayFeature.append(
+        ctx.graph,
+        ctx.stages->overlay,
+        featureCtx,
+        OverlayFeature::Facts{.viewExtent = resolved.viewExtent, .inputs = ctx.overlayInputs},
+        resolved.overlay,
+        prepared.overlay,
+        OverlayFeature::Inputs{
+            .color = outputs.bloom.color,
+            .depth = outputs.gbuffer.depth,
+        });
+
+    // ── Entity id (picking) ───────────────────────────────────────────────
+    const EntityIdFeature entityIdFeature;
+    auto entityIdOutputs = entityIdFeature.append(
+        ctx.graph,
+        ctx.stages->entityId,
+        featureCtx,
+        EntityIdFeature::Facts{
+            .viewExtent    = resolved.viewExtent,
+            .frameData     = ctx.stageCtx.frameData,
+            .overlayInputs = ctx.overlayInputs,
+        },
+        resolved.entityId,
+        prepared.entityId,
+        EntityIdFeature::Inputs{
+            .depth      = outputs.gbuffer.depth,
+            .skinningDS = ctx.frameBinding->skinningDescriptorSet,
+        });
+    if (entityIdOutputs.isErr()) {
+        YA_CORE_ERROR("Entity id append failed for View {}", resolved.viewId);
+        return entityIdOutputs.error();
+    }
+    outputs.entityId = entityIdOutputs.value();
+
+    // ── Finalize (mandatory display pass) ─────────────────────────────────
+    const FinalizeFeature finalizeFeature;
+    auto finalizeOutputs = finalizeFeature.append(
+        ctx.graph,
+        ctx.stages->post,
+        featureCtx,
+        FinalizeFeature::Facts{.viewExtent = resolved.viewExtent, .postContext = ctx.postContext},
+        resolved.finalize,
+        prepared.finalize,
+        FinalizeFeature::Inputs{.color = outputs.overlay.color});
+    if (finalizeOutputs.isErr()) {
+        YA_CORE_ERROR("Finalize append failed for View {}", resolved.viewId);
+        return finalizeOutputs.error();
+    }
+    outputs.finalize = finalizeOutputs.value();
+
     return outputs;
 }
 

@@ -27,7 +27,7 @@ SSAOFeature::Resolved SSAOFeature::resolve(const Settings& settings,
         return resolved;
     }
 
-    resolved.aoTarget = ResourceRequirement{
+    resolved.aoTarget = ViewTargetRequirement{
         .role   = EViewAttachment::SSAO,
         .format = SSAOStage::AO_FORMAT,
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,

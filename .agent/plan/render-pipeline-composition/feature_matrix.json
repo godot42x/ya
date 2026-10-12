@@ -2,7 +2,7 @@
   "plan": "render-pipeline-composition",
   "updated": "2026-10-12",
   "implementation_status": "in_progress",
-  "next_checkpoint": "C3",
+  "next_checkpoint": "C3B",
   "intent": "RDG 上方建立一等 feature、typed recipe、单源资源需求与贯通 prepare/build/publication 的同一份 resolved composition；不以 Bloom 算法为目标",
   "status_rules": {
     "todo": "未实施，evidence 为空",
@@ -51,7 +51,8 @@
         "runtime off（automation smoke.deferred.ssao.enabled=false）：13 pass 无 'SSAO Pass'；'Deferred.SSAO' import 出现 14245→0（-57820.log）",
         "截图 composition-ssao-on/off.png 差异 13.51% 像素（>4/255）、mean 2.7、max 42——AO 着色差异无结构位移",
         "bUseSSAO 透传删除：DeferredFrameGraphPasses context / Orchestrator BuildInputs / Deferred appendTargetRequests（diff）",
-        "LightStage::writeGBufferTextureDescriptors 无 AO 时绑定中性 fallback（LightStage.cpp:264-277）"
+        "LightStage::writeGBufferTextureDescriptors 无 AO 时绑定中性 fallback（LightStage.cpp:264-277）",
+        "C3A 复验：SSAO on 14 pass / off 13 pass；off 时 SSAOFeature 不分配任何 DS，截图对基线逐像素一致（c3a-ssao-{on,off}.png，max diff 0）"
       ]
     },
     {
@@ -122,8 +123,11 @@
       "checkpoints": ["C2"],
       "expected": "Bloom 等多 pass contribution 每次更新需要独立 descriptor；归一化 pass 次数在 invocation 内；persistent/transient 来源固定；无共享 last-call 状态",
       "verification": ["pass count boundary tests", "descriptor independence tests", "runtime Bloom on/off"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "BloomFeature 拥有 extract/blur/composite 三段 pass 序列与 per-view DS：启用时从 lease 导入三个 target，prepareBindings 分配 DS；关闭时无 target/DS/pass（runtime bloom-off 10 pass，无 Deferred.Bloom* import/transient）",
+        "缺口：`_lastBlurPassCount` 仍为 BloomPostprocessing 调用状态（plan-C2 待删）；blur pass 次数边界与 DS 独立性无专门单测"
+      ]
     },
     {
       "id": "M10",
@@ -144,8 +148,12 @@
       "checkpoints": ["C2", "C3", "C4"],
       "expected": "ColorStream 同 backing 续写保留 Load/Store/深度读写和 sample hazard；Deferred Overlay 在颜色效果后且当前 Bloom.Composite backing 被 Overlay 续写，诊断输出为 Overlay 后内容（与旧行为一致）；Forward 保留既有插入位置",
       "verification": ["continuation graph tests", "before/after topology", "per-pipeline screenshots"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "C3A：Skybox/Sprites/Overlay 逐 pass 镜像旧 tail 的 Load/Store/finalLayout 与顺序；bloom-on 时 Overlay 续写 Bloom.Composite backing（runtime 14 pass 拓扑与基线一致、截图逐像素一致）",
+        "bloom-off 改为直接续写 viewColor（旧为拷贝 transient 被续写）：显示输出逐像素不受影响；Deferred.View.Color 诊断图在 bloom-off 时含 overlay 写入",
+        "缺口：Forward 插入位置（C4）；continuation 专项 before/after topology 断言未成文"
+      ]
     },
     {
       "id": "M12",
@@ -153,8 +161,12 @@
       "checkpoints": ["C2", "C4"],
       "expected": "grading/Bloom off 仍产生合法 DisplayColor；编码及 display compose 不变；缺 Finalize 不被兼容 fallback 吞掉",
       "verification": ["SurfaceImageTest", "Finalize contract test", "grading-off screenshot"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "C3A：FinalizeFeature 恒在 map 且必需（被解析为 disabled 时 prepareBindings 返回 InvalidInput）；display format/usage/编码由 pipeline config 单源传入",
+        "runtime 三场景（ssao on/off、bloom off）Postprocessing pass 均执行并发布 DisplayColor；bloom-off 显示输出正常",
+        "缺口：grading-off（postprocess 禁用）截图；SurfaceImageTest 侧编码回归未跑"
+      ]
     },
     {
       "id": "M13",
@@ -164,8 +176,9 @@
       "verification": ["RenderViewOutputTableTest", "collector tests", "debug/picking runtime"],
       "status": "in_progress",
       "evidence": [
-        "exportGraphOutputs 移入 DeferredRenderPipeline；SSAO off 时 graphResources.textures.ssao 为空 → 不 export（off-run 无 SSAO export/import）",
-        "collectViewOutput 仍按 role 读取有效 handle；统一 collector 与名称解析退出未做（剩余 C2/C4）"
+        "exportGraphOutputs 从 Recipe GraphOutputs 取 handle（SSAO/Display 之外的 export 不变）；SSAO off 时 outputs.ssao.ao 无效 → 不 export/不发布",
+        "collectViewOutput 的 presence 门控改为 recipe outputs（不再是 graphResources bag）；bloom-off 时 Bloom.Output 不再导出（诊断减少，符合 C2 语义）",
+        "缺口：统一 role collector 与「不在 pipeline 侧解析 feature export 名」未做（C2/C4）"
       ]
     },
     {
@@ -174,8 +187,11 @@
       "checkpoints": ["C2", "C5"],
       "expected": "多 pass feature 增加私有 scratch / 修改局部资源描述，通过同一 contract 路径工作，无 pipeline、executor、registry、集中 slot 修改",
       "verification": ["resource change test", "changed-file responsibility map"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "C3A：Bloom 三段 pass 序列 + 私有 blur scratch 完全在 feature/processor 内；关闭时 target/DS/scratch 均不申请；pipeline 尾部与集中 slot 无改动",
+        "缺口：私有 scratch 来源固定的专项测试；资源描述变化的 responsibility-map 证据未成文"
+      ]
     },
     {
       "id": "M15",
@@ -183,8 +199,12 @@
       "checkpoints": ["C3"],
       "expected": "Deferred 全功能连接由一个 recipe 可读；无 legacy prelude/tail、all-stage context、graph resources bag、集中 bindings 分配；旧 draw/gating/picking/debug 行为一致",
       "verification": ["PipelineRecipeTest Deferred", "old-entry deletion review", "runtime screenshots and topo"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "C3A：GBuffer→SSAO→Lighting→ForwardOpaque→Skybox→Sprites→Bloom→Overlay→EntityId→Finalize 全部 feature pass，recipe 单入口可读；DeferredFrameGraphPasses/DeferredFrameGraphResources/allocateDeferredViewPassResources/ViewResources 槽位删除（33 files +1876/−964）",
+        "runtime：ssao on 14 pass / off 13 pass 与基线一致；两场景截图逐像素一致；bloom-off 10 pass 无拷贝",
+        "缺口：shared inputs（frame/light/skinning/ssao/skybox payload 与 DSL）仍在 DeferredFrameResourceSet::Binding，未收口为明确共享 provider（C3B/M17）"
+      ]
     },
     {
       "id": "M16",

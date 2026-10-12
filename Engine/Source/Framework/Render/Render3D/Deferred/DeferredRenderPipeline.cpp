@@ -4,7 +4,7 @@
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
 #include "Render3D/Deferred/DeferredAttachmentFormats.h"
-#include "Render3D/Deferred/DeferredFrameGraphPasses.h"
+#include "Render3D/Deferred/DeferredPassNames.h"
 #include "Render3D/Deferred/DeferredPipelineRecipe.h"
 #include "Render3D/Common/PreparedPipelineFrame.h"
 #include "ECS/Component/2D/BillboardComponent.h"
@@ -187,82 +187,6 @@ DeferredAttachmentFormats buildDeferredFormatsFromSpec(const RenderTargetCreateI
         formats.depthFormat = spec.attachments.depthAttach->format;
     }
     return formats;
-}
-
-/// Allocate the View's remaining (tail) pass bindings. The composition's
-/// bindings (frame/light set, SSAO inputs, lighting GBuffer/shadow sets) are
-/// allocated by their features from the same submission; this stays for the
-/// passes that have not migrated yet.
-void allocateDeferredViewPassResources(
-    RenderSubmission&                         submission,
-    IRender*                                  render,
-    uint32_t                                  alignment,
-    const RenderFrameData*                    frameData,
-    EntityIdPass*                     entityIdPass,
-    ViewOverlayStage*                     overlayStage,
-    Sprite2DStage*                        spriteStage,
-    PostProcessingStage*                      postStage,
-    ViewOverlayStage::FrameInputs*        overlayInputs,
-    DeferredFrameResourceSet::ViewResources&  resources)
-{
-    if (entityIdPass && frameData) {
-        EntityIdPass::FrameUBO ubo{};
-        ubo.viewProj = frameData->viewProjection;
-        ubo.view     = frameData->view;
-        writeUniformPassBinding(
-            submission,
-            render,
-            entityIdPass->getFrameDSL(),
-            alignment,
-            &ubo,
-            sizeof(ubo),
-            resources.entityId.frame);
-    }
-    if (overlayStage && frameData) {
-        ViewOverlayStage::BillboardFrameUBO ubo{
-            .viewProjection = frameData->viewProjection,
-            .view           = frameData->view,
-        };
-        writeUniformPassBinding(
-            submission,
-            render,
-            overlayStage->getBillboardFrameDSL(),
-            alignment,
-            &ubo,
-            sizeof(ubo),
-            resources.overlay.billboardFrame);
-        resources.overlay.billboardTextures.set = allocateCombinedImageSamplerSet(
-            submission,
-            overlayStage->getBillboardTextureDSL(),
-            ViewOverlayStage::kBillboardTextureCount);
-        if (overlayInputs) {
-            overlayStage->updateBillboardTextures(*overlayInputs, resources.overlay);
-        }
-    }
-    if (spriteStage && frameData) {
-        const Sprite2DStage::FrameData frame = Sprite2DStage::FrameData{
-            .viewProj = frameData->viewProjection,
-        };
-        writeUniformPassBinding(
-            submission,
-            render,
-            spriteStage->getFrameDSL(),
-            alignment,
-            &frame,
-            sizeof(frame),
-            resources.sprite.frame);
-        spriteStage->updateTextures(submission, *frameData, resources.sprite);
-    }
-    if (postStage) {
-        allocateBloomPassBindings(
-            submission,
-            postStage->getBloomExtractDSL(),
-            postStage->getBloomBlurDSL(),
-            postStage->getBloomCompositeDSL(),
-            resources.post.bloom);
-        resources.post.toneMap.input.set = allocateCombinedImageSamplerSet(
-            submission, postStage->getToneMapInputDSL(), 1);
-    }
 }
 
 } // namespace
@@ -553,6 +477,16 @@ DeferredPipelineRecipe::Config DeferredRenderPipeline::buildRecipeConfig(const R
         config.viewColorFormat = _viewRTSpec.attachments.colorAttach.front().format;
         config.viewColorUsage  = _viewRTSpec.attachments.colorAttach.front().usage;
     }
+
+    // The composition's optional color-effect stages are feature settings, not
+    // per-pass enable flags: Bloom resolves on only when grading and the bloom
+    // setting agree; Finalize is the mandatory display pass.
+    config.bloom.bEnabled = isGradingEnabled() && settings.postProcessing.bEnableBloom;
+
+    config.finalize.bEnabled      = true;
+    config.finalize.bOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT);
+    config.finalize.displayFormat = POSTPROCESS_COLOR_FORMAT;
+    config.finalize.displayUsage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc;
     return config;
 }
 
@@ -569,66 +503,16 @@ EFrameComposition DeferredRenderPipeline::resolveFrameComposition(const RenderFr
     }
     prepared.deferred.resolved = std::move(resolved.value());
 
-    // The composition owns the GBuffer, shared depth, optional SSAO and
-    // SceneColor requirements. The tail it does not own yet (picking id, the
-    // display output, bloom) still contributes its attachments here until those
-    // features migrate.
-    const bool bBloomEnabled = isGradingEnabled() && settings.postProcessing.bEnableBloom;
+    // The composition's Resolved values are the single source of the View's
+    // target requests: the features already declared role/format/usage, so the
+    // request builder only orders them.
     for (const DeferredPipelineRecipe::ResolvedView& view : prepared.deferred.resolved) {
-        ViewTargetRequest request{
-            .viewId   = view.viewId,
-            .pipeline = ERenderPipelineKind::Deferred,
-            .extent   = view.viewExtent,
-            .attachments = {
-                view.gbuffer.outputs.albedo,
-                view.gbuffer.outputs.normal,
-                view.gbuffer.outputs.orm,
-                view.gbuffer.outputs.shading,
-                view.gbuffer.outputs.depth,
-            },
-        };
-        if (view.ssao.aoTarget.has_value()) {
-            request.attachments.push_back(ViewAttachmentDesc{
-                .role    = view.ssao.aoTarget->role,
-                .format  = view.ssao.aoTarget->format,
-                .usage   = view.ssao.aoTarget->usage,
-                .samples = ESampleCount::Sample_1,
-            });
-        }
-        request.attachments.push_back(ViewAttachmentDesc{
-            .role    = view.lighting.outputs.sceneColorRole,
-            .format  = view.lighting.outputs.sceneColorFormat,
-            .usage   = view.lighting.outputs.sceneColorUsage,
-            .samples = ESampleCount::Sample_1,
+        out.push_back(ViewTargetRequest{
+            .viewId      = view.viewId,
+            .pipeline    = ERenderPipelineKind::Deferred,
+            .extent      = view.viewExtent,
+            .attachments = view.collectViewTargets(),
         });
-        request.attachments.push_back(ViewAttachmentDesc{
-            .role    = EViewAttachment::DisplayColor,
-            .format  = POSTPROCESS_COLOR_FORMAT,
-            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
-        });
-        request.attachments.push_back(ViewAttachmentDesc{
-            .role    = EViewAttachment::EntityId,
-            .format  = EFormat::R32_UINT,
-            .usage   = EImageUsage::ColorAttachment | EImageUsage::TransferSrc,
-        });
-        if (bBloomEnabled) {
-            request.attachments.push_back(ViewAttachmentDesc{
-                .role    = EViewAttachment::BloomExtract,
-                .format  = BloomPostprocessing::BLOOM_FORMAT,
-                .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            });
-            request.attachments.push_back(ViewAttachmentDesc{
-                .role    = EViewAttachment::BloomBlur,
-                .format  = BloomPostprocessing::BLOOM_FORMAT,
-                .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            });
-            request.attachments.push_back(ViewAttachmentDesc{
-                .role    = EViewAttachment::BloomComposite,
-                .format  = BloomPostprocessing::BLOOM_FORMAT,
-                .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            });
-        }
-        out.push_back(std::move(request));
     }
     return EFrameComposition::Resolved;
 }
@@ -936,7 +820,9 @@ struct DeferredFamilyViewBranch
     EnvironmentLightingSceneResources     environmentLighting{};
     DescriptorSetHandle                   environmentLightingDS{};
     FrameContext                          postContext{};
-    DeferredFrameGraphResources           graphResources{};
+    /// The composition's graph outputs for this View: published handles read
+    /// back after execution, and the presence facts the output collector needs.
+    DeferredPipelineRecipe::GraphOutputs  outputs{};
     ViewTargetLease                       targets{};
 };
 
@@ -1053,7 +939,7 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
                 live.environmentLighting,
                 live.environmentLightingDS,
                 live.postContext,
-                live.graphResources,
+                live.outputs,
                 live.targets,
                 *resolvedView,
                 familyPredecessor)) {
@@ -1079,7 +965,7 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
     for (const DeferredFamilyViewBranch& branch : liveBranches) {
         const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
         auto output = collectViewOutput(
-            execution, branch.graphResources, branch.frame.view.task, viewId);
+            execution, branch.outputs, branch.frame.view.task, viewId);
         output.targets = branch.targets.allocation;
         output.allocationGeneration = branch.targets.allocation ? branch.targets.allocation->generation : 0;
         result.views.push_back(std::move(output));
@@ -1225,7 +1111,7 @@ ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
 
 RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     const RenderGraphExecutionResult& result,
-    const DeferredFrameGraphResources& graphResources,
+    const DeferredPipelineRecipe::GraphOutputs& outputs,
     const SceneViewTask* task,
     uint64_t viewId) const
 {
@@ -1241,7 +1127,7 @@ RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     output.color    = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::viewColor, viewId));
     output.depth    = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId));
     output.entityId = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::entityId, viewId));
-    output.ssao     = graphResources.textures.ssao.has_value()
+    output.ssao     = outputs.ssao.ao.isValid()
         ? result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::ssao, viewId))
         : nullptr;
     for (uint32_t attachmentIndex = 0;
@@ -1256,7 +1142,7 @@ RenderViewOutput DeferredRenderPipeline::collectViewOutput(
         output.bloomBlur = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kBlurPingExportName, viewId));
     }
     output.bloomComposite = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kOutputExportName, viewId));
-    const auto postprocess = graphResources.textures.postprocessOutput.has_value()
+    const auto postprocess = outputs.finalize.display.isValid()
         ? result.getExportedTextureShared(makeViewGraphName(PostProcessingStage::kOutputExportName, viewId))
         : nullptr;
     // The display image is the finalize output, always: finalize is the pass
@@ -1390,6 +1276,60 @@ ShadowPreparedView DeferredRenderPipeline::prepareShadowPass(const RenderPipelin
     return {};
 }
 
+namespace
+{
+
+/// The View's imported host-written buffers: one import site for every pass of
+/// this View, so the graph sees one binding per buffer.
+struct DeferredViewBufferImports
+{
+    RGBufferHandle                frame{};
+    RGBufferHandle                light{};
+    RGBufferHandle                skinning{};
+    std::optional<RGBufferHandle> ssaoFrame{};
+    RGBufferHandle                skyboxFrame{};
+};
+
+[[nodiscard]] DeferredViewBufferImports importDeferredViewBuffers(
+    RenderGraph&                             graph,
+    const DeferredFrameResourceSet::Binding& frameBinding)
+{
+    DeferredViewBufferImports imports;
+    imports.frame = graph.importBuffer(makeHostWrittenImportedBufferDesc(
+        frameBinding.frame.buffer,
+        "Deferred.FrameUBO",
+        EBufferUsage::UniformBuffer,
+        frameBinding.frame.offset,
+        frameBinding.frame.size));
+    imports.light = graph.importBuffer(makeHostWrittenImportedBufferDesc(
+        frameBinding.light.buffer,
+        "Deferred.LightUBO",
+        EBufferUsage::UniformBuffer,
+        frameBinding.light.offset,
+        frameBinding.light.size));
+    imports.skinning = graph.importBuffer(makeHostWrittenImportedBufferDesc(
+        frameBinding.skinningBuffer,
+        "Deferred.SkinningSSBO",
+        EBufferUsage::StorageBuffer));
+    if (frameBinding.ssaoFrame.valid()) {
+        imports.ssaoFrame = graph.importBuffer(makeHostWrittenImportedBufferDesc(
+            frameBinding.ssaoFrame.buffer,
+            "Deferred.SSAOFrameUBO",
+            EBufferUsage::UniformBuffer,
+            frameBinding.ssaoFrame.offset,
+            frameBinding.ssaoFrame.size));
+    }
+    imports.skyboxFrame = graph.importBuffer(makeHostWrittenImportedBufferDesc(
+        frameBinding.skyboxFrame.buffer,
+        "Deferred.SkyboxFrameUBO",
+        EBufferUsage::UniformBuffer,
+        frameBinding.skyboxFrame.offset,
+        frameBinding.skyboxFrame.size));
+    return imports;
+}
+
+} // namespace
+
 bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
                                                        const RenderPipelineFrameContext& frame,
                                                        RenderStageContext& stageCtx,
@@ -1400,7 +1340,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
                                                        EnvironmentLightingSceneResources& environmentLighting,
                                                        DescriptorSetHandle environmentLightingDS,
                                                        FrameContext& postContext,
-                                                       DeferredFrameGraphResources& graphResources,
+                                                       DeferredPipelineRecipe::GraphOutputs& outputs,
                                                        const ViewTargetLease& targets,
                                                        const DeferredPipelineRecipe::ResolvedView& resolved,
                                                        std::optional<RGPassHandle> familyPredecessor)
@@ -1427,22 +1367,6 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
     if (!viewBinding) {
         return false;
     }
-    auto* viewResources = _frameResources->mutableViewResources(submission.flightIndex(), view.viewSlot);
-    if (!viewResources) {
-        return false;
-    }
-    const uint32_t alignment = std::max(_render ? _render->getUniformBufferOffsetAlignment() : 1u, 1u);
-    allocateDeferredViewPassResources(
-        submission,
-        _render,
-        alignment,
-        view.frameData,
-        &_entityIdPass,
-        _overlayStage.get(),
-        _spriteStage.get(),
-        &_postProcessStage,
-        &overlayInputs,
-        *viewResources);
 
     overlayInputs.skybox.frameDescriptorSet = viewBinding->skyboxFrameDescriptorSet;
     _gBufferStage->prepare(stageCtx);
@@ -1454,88 +1378,71 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         .cameraPos      = frame.view.frameData->cameraPos,
         .extent         = {.width = vpW, .height = vpH},
     };
-    graphResources = {};
+    outputs = {};
 
     const RGImportScope importScope(graph, resolved.viewId);
 
-    DeferredFrameGraphPassContext passContext{
-        .graph                    = graph,
-        .graphResources           = graphResources,
-        .stageCtx                 = stageCtx,
-        .frameBinding             = *viewBinding,
-        .viewResources            = viewResources,
-        .targets                  = &targets,
-        .overlayInputs            = &overlayInputs,
-        .postContext              = &postContext,
-        .viewExtent               = {.width = vpW, .height = vpH},
-        .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
-        .viewId                   = resolved.viewId,
-        .overlayStage             = *_overlayStage,
-        .postProcessStage         = _postProcessStage,
-        .entityIdPass             = &_entityIdPass,
-        .spriteStage              = _spriteStage.get(),
-    };
-
     // Host-written buffer imports: one site for every pass of this View.
-    deferred_frame_graph_passes::importFrameBuffers(passContext);
-    deferred_frame_graph_passes::createTailAttachmentTextures(passContext);
+    const DeferredViewBufferImports imports = importDeferredViewBuffers(graph, *viewBinding);
 
     // Shadow passes come first and take the family ordering point when they run,
     // exactly as the composition's predecessor accounting expects.
     std::optional<RGPassHandle> predecessor = familyPredecessor;
+    ShadowGraphOutputs shadowOutputs{};
     if (_shadowStage) {
         const size_t passCountBefore = graph.getPasses().size();
-        graphResources.passes.shadow = _shadowStage->appendGraphPasses(graph, stageCtx, shadowPrepared, predecessor);
+        shadowOutputs = _shadowStage->appendGraphPasses(graph, stageCtx, shadowPrepared, predecessor);
         if (graph.getPasses().size() > passCountBefore) {
             predecessor = std::nullopt;
         }
     }
 
-    // The composition: GBuffer -> SSAO -> Lighting. Resolved at the safe point,
+    // The composition: the whole Deferred map. Resolved at the safe point,
     // prepared with this submission's descriptors and uploads, appended here.
-    DeferredPipelineRecipe::Stages stages{
-        .gBuffer = _gBufferStage.get(),
-        .ssao    = _ssaoStage.get(),
-        .light   = _lightStage.get(),
+    const DeferredPipelineRecipe::Stages stages{
+        .gBuffer  = _gBufferStage.get(),
+        .ssao     = _ssaoStage.get(),
+        .light    = _lightStage.get(),
+        .overlay  = _overlayStage.get(),
+        .sprites  = _spriteStage.get(),
+        .entityId = &_entityIdPass,
+        .post     = &_postProcessStage,
     };
+    const uint32_t alignment = std::max(_render ? _render->getUniformBufferOffsetAlignment() : 1u, 1u);
     auto preparedResult = DeferredPipelineRecipe::prepareBindings(
         resolved,
         stages,
         DeferredPipelineRecipe::PrepareContext{
             .submission            = &submission,
-            .frameAndLightDS       = viewBinding->frameAndLightDescriptorSet,
-            .skinningDS            = viewBinding->skinningDescriptorSet,
-            .ssaoFrameDS           = viewBinding->ssaoFrameDescriptorSet,
+            .render                = _render,
+            .alignment             = alignment,
+            .frameData             = view.frameData,
+            .overlayInputs         = &overlayInputs,
+            .frameBinding          = viewBinding,
             .environmentLightingDS = environmentLightingDS,
-            .frameRange            = RGBufferRange{.offset = viewBinding->frame.offset, .size = viewBinding->frame.size},
-            .lightRange            = RGBufferRange{.offset = viewBinding->light.offset, .size = viewBinding->light.size},
-            .ssaoFrameRange        = RGBufferRange{.offset = viewBinding->ssaoFrame.offset, .size = viewBinding->ssaoFrame.size},
         });
     if (preparedResult.isErr()) {
         YA_CORE_ERROR("Failed to prepare the Deferred composition for View {}", resolved.viewId);
         return false;
     }
-    const DeferredPipelineRecipe::PreparedView& prepared = preparedResult.value();
 
-    // The View's binding bag mirrors the composition's prepared handles, so the
-    // per-View table stays the one place its pass bindings are read from.
-    viewResources->ssao.inputs.set              = prepared.ssao.inputDS;
-    viewResources->lighting.gBufferTextures.set = prepared.lighting.gBufferTextureDS;
-    viewResources->lighting.shadows.set         = prepared.lighting.shadowDS;
-
-    const auto composition = DeferredPipelineRecipe::appendGraph(
+    auto composition = DeferredPipelineRecipe::appendGraph(
         resolved,
-        prepared,
+        preparedResult.value(),
         DeferredPipelineRecipe::AppendContext{
             .graph               = graph,
             .stageCtx            = stageCtx,
             .stages              = &stages,
             .viewLease           = &targets,
-            .frameBuffer         = graphResources.buffers.frame,
-            .lightBuffer         = graphResources.buffers.light,
-            .skinningBuffer      = graphResources.buffers.skinning,
-            .ssaoFrameBuffer     = graphResources.buffers.ssaoFrame,
-            .shadow              = graphResources.passes.shadow,
+            .frameBinding        = viewBinding,
+            .overlayInputs       = &overlayInputs,
+            .postContext         = &postContext,
+            .frameBuffer         = imports.frame,
+            .lightBuffer         = imports.light,
+            .skinningBuffer      = imports.skinning,
+            .ssaoFrameBuffer     = imports.ssaoFrame,
+            .skyboxFrameBuffer   = imports.skyboxFrame,
+            .shadow              = shadowOutputs,
             .environmentLighting = &environmentLighting,
             .predecessor         = predecessor,
             .bReverseViewportY   = _bReverseViewportY,
@@ -1544,48 +1451,32 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         YA_CORE_ERROR("Failed to append the Deferred composition for View {}", resolved.viewId);
         return false;
     }
+    outputs = std::move(composition.value());
 
-    graphResources.textures.gBufferColors = {
-        composition.value().gbuffer.albedo,
-        composition.value().gbuffer.normal,
-        composition.value().gbuffer.orm,
-        composition.value().gbuffer.shading,
-    };
-    graphResources.textures.gBufferDepth = composition.value().gbuffer.depth;
-    graphResources.textures.viewColor    = composition.value().lighting.sceneColor;
-    if (composition.value().ssao.ao.isValid()) {
-        graphResources.textures.ssao = composition.value().ssao.ao.get();
-    }
-
-    // The tail the composition does not own yet: opaque/skybox/sprites/bloom,
-    // transparent overlays, picking and finalize. Their order relative to the
-    // composition is expressed by the resources they read and write.
-    deferred_frame_graph_passes::appendForwardOpaque(passContext);
-    deferred_frame_graph_passes::appendSkybox(passContext);
-    deferred_frame_graph_passes::appendSprite2D(passContext);
-    deferred_frame_graph_passes::appendBloom(passContext);
-    deferred_frame_graph_passes::appendForwardTransparent(passContext);
-    deferred_frame_graph_passes::appendEntityId(passContext);
-    deferred_frame_graph_passes::appendPostprocess(passContext);
-
-    exportGraphOutputs(graph, graphResources, resolved.viewId);
+    exportGraphOutputs(graph, outputs, resolved.viewId);
     return true;
 }
 
-void DeferredRenderPipeline::exportGraphOutputs(RenderGraph&                       graph,
-                                                const DeferredFrameGraphResources& resources,
-                                                uint64_t                           viewId) const
+void DeferredRenderPipeline::exportGraphOutputs(RenderGraph&                                graph,
+                                                const DeferredPipelineRecipe::GraphOutputs& outputs,
+                                                uint64_t                                    viewId) const
 {
-    for (uint32_t attachmentIndex = 0; attachmentIndex < resources.textures.gBufferColors.size(); ++attachmentIndex) {
+    const std::array<RGTextureHandle, 4> gBufferColors{
+        outputs.gbuffer.albedo,
+        outputs.gbuffer.normal,
+        outputs.gbuffer.orm,
+        outputs.gbuffer.shading,
+    };
+    for (uint32_t attachmentIndex = 0; attachmentIndex < gBufferColors.size(); ++attachmentIndex) {
         graph.exportTexture(
-            resources.textures.gBufferColors[attachmentIndex],
+            gBufferColors[attachmentIndex],
             makeViewGraphName(deferred_graph_exports::gBufferColor[attachmentIndex], viewId));
     }
-    graph.exportTexture(resources.textures.gBufferDepth, makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId));
-    graph.exportTexture(resources.textures.viewColor, makeViewGraphName(deferred_graph_exports::viewColor, viewId));
-    graph.exportTexture(resources.textures.entityId, makeViewGraphName(deferred_graph_exports::entityId, viewId));
-    if (resources.textures.ssao.has_value()) {
-        graph.exportTexture(*resources.textures.ssao, makeViewGraphName(deferred_graph_exports::ssao, viewId));
+    graph.exportTexture(outputs.gbuffer.depth, makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId));
+    graph.exportTexture(outputs.lighting.sceneColor, makeViewGraphName(deferred_graph_exports::viewColor, viewId));
+    graph.exportTexture(outputs.entityId.entityId, makeViewGraphName(deferred_graph_exports::entityId, viewId));
+    if (outputs.ssao.ao.isValid()) {
+        graph.exportTexture(outputs.ssao.ao.get(), makeViewGraphName(deferred_graph_exports::ssao, viewId));
     }
 }
 

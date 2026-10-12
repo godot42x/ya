@@ -263,9 +263,73 @@
 - 无 failure injection（M10 完整）、无双 View runtime（M08）、无双管线性能对照（M23）。
 - 本切片未新增 `test/` 级临时工程；截图对照为单次抓帧，重复性基线（至少 2 次）属 C5。
 
+## 2026-10-12 深夜 — C3A 完成：Deferred tail 全 feature 化与集中层删除
+
+### 目标与边界
+
+**单一验收目标**：完整 Deferred 地图由一个 recipe 读出——GBuffer → SSAO(可选) → Lighting → ForwardOpaque 槽 → Skybox → Sprites → Bloom(可选) → Overlay → EntityId → Finalize 全部是 feature 拥有的 pass；`DeferredFrameGraphPasses` / `DeferredFrameGraphResources` / `allocateDeferredViewPassResources` / `DeferredFrameResourceSet::ViewResources` 退出。
+
+边界外（保留，属后续）：SSAO/Skybox 的 frame payload/DSL 仍在 `DeferredFrameResourceSet::Binding`（本地化 = C3B/M17）；Forward 全图（C4）；`_lastBlurPassCount` 调用状态（plan-C2）；`buildOverlayFrameInputs` 录制期读 derivedScene 属既有实现（发现记录，本批未改）。
+
+### 新 feature 与职责
+
+| Feature | resolve | prepareBindings | append 移除/保留的旧行为 |
+| --- | --- | --- | --- |
+| ForwardOpaqueFeature | 恒在 map（空 draw 槽保留，删除需另证） | — | Load/Store color+depth，无 workload |
+| SkyboxFeature | 恒在 map | — | `uniformRead(frame)` + skybox packet execute |
+| Sprite2DFeature | `worldSprites` 非空才在 map | frame UBO + `updateTextures` | 内容门控；depth readOnly |
+| BloomFeature | `grading && bEnableBloom` 才在 map | 仅启用时分配 bloom DS | 关闭 = 返回原 ColorStream，无 pass/无 transient |
+| OverlayFeature | 恒在 map | billboard frame UBO + texture DS + `updateBillboardTextures` | ForwardTransparent；续写返回流 |
+| EntityIdFeature | 恒在 map，声明自身 target | EntityId frame UBO | 独立输出 + billboard 透传 + skinning DS |
+| FinalizeFeature | 恒在 map（必需），声明 DisplayColor | toneMap input set | `appendFinalizeGraphPasses`，编码来自 Config |
+
+### 删除的集中层
+
+- `DeferredFrameGraphPasses.{h,cpp}`（整文件，7 个 append + import + 3 个 PassParams 结构）。
+- `DeferredFrameGraphResources.h`（bag；`deferred_graph_exports` 移入 `DeferredPassNames.h`）。
+- `allocateDeferredViewPassResources`（分配回各 feature 的 prepareBindings）。
+- `DeferredFrameResourceSet::ViewResources` 槽位、`getViewResources/mutableViewResources`、pipeline 3 处 mirror 写；`_viewBindings` 直接存 `Binding`。
+- pipeline：`appendDeferredViewToGraph` 的 14 字段 `DeferredFrameGraphPassContext`、bag 填充、`DeferredFamilyViewBranch::graphResources` → `DeferredPipelineRecipe::GraphOutputs`。
+- `resolveFrameComposition` 手工附件清单（旧代码请求与导入各写一遍）→ `ResolvedView::collectViewTargets()`：同一份 Resolved 同时驱动请求与导入。
+
+### 行为保持与新语义
+
+- Bloom 关闭：不再有 composite 拷贝 pass 与 transient（旧 `appendBloomGraphPasses` 关闭分支仍建图内拷贝）；Bloom feature 直接返回原 ColorStream（C2 既定语义）。随之 Overlay 直接续写 viewColor，`Deferred.View.Color` 诊断图内容在 bloom-off 时含 overlay 写入。显示输出逐像素不受影响（拷贝两侧同为 FP16、clamp 恒等）。
+- 附件请求顺序：EntityId 移到 DisplayColor 前（原 Display→EntityId），ViewTargetStore 一次性重建后稳定。
+- ForwardOpaque 空 pass、Skybox/Overlay/Sprites/Bloom/EntityId/Finalize 的 pass 顺序、Load/Store、finalLayout 逐条镜像旧 tail。
+
+### 验证
+
+- 编译：`xmake b ya-render-3d-test` ok；`control start --game --build`（ya-game-runtime closure）ok。
+- 测试：`xmake r ya-render-3d-test` 221/221（40 suites，新增目标清单/薄 feature 契约测试）；`python3 Script/ya.py test --target ya` 1812/1812（226 suites）。
+- Runtime（HelloMaterial，`--render-graph-trace`，control `--game`）：
+  - SSAO on：Deferred executor 14 pass，顺序与 C1i 基线一致；截图对基线**逐像素一致**（max diff 0，`c3a-ssao-on.png`）。
+  - SSAO off：13 pass（无 SSAO）；截图对基线**逐像素一致**（max diff 0，`c3a-ssao-off.png`）。
+  - Bloom off（新增场景，Runtime.json 默认 bloom on）：10 pass，无 Bloom×4、无拷贝 pass、无 `Deferred.Bloom*` import/transient（`c3a-bloom-off.png`）。
+  - 日志唯一 ERROR 仍为历史 VkDescriptorPool STORAGE_BUFFER 校验告警。
+- 证据：`Engine/Saved/Automation/{c3a-ssao-on,c3a-ssao-off,c3a-bloom-off}.png` 与 `control-game-HelloMaterial-{62846,63187,63242}.log`（gitignored）；配置 `Engine/Saved/Config/Automation.composition_bloom_off.json`。
+
+### 实测复杂度（诚实数字）
+
+- 本批 diff：**33 files, +1876 / −964**。
+- 集中层删除 ≈ 660 行（passes 481 + resources 70 + allocate 77 + ViewResources/getter/mirror ≈ 31）。
+- Deferred 子系统（`Deferred/` + `include/Deferred/` + `Composition/`）总行数：7060（HEAD，含被删文件）→ **7672，净 +612**。
+- 三门槛判定：
+  - 删除面：**未达标**（行数净增；feature 协议壳对薄 pass 是纯开销）。
+  - 单一声明面：**达标**（`collectViewTargets` 单源；ViewResources 镜像与双份附件清单消失；SSAO on/off 由同一 Resolved 门控请求/pass/export）。
+  - 扩展面：**达标**（新增 pass = feature 文件 + recipe 一行 + collectViewTargets 一处）。
+- 处置候选（下一决定点，未执行）：裁薄壳——ForwardOpaque 改由 recipe 声明（pass 保留、语义不变）、Skybox/Sprites/Overlay 共享 color-continuation declare helper，预计回收 ~300–400 行协议壳。未定之前不宣称 C3 复杂度已下降。
+
+### 保留 / 未验证 / 偏离
+
+- C3B/M17：SSAO/Skybox payload+DSL+DS 归 feature 局部；Binding 收口为真实共享输入。
+- plan-C2 剩余：`_lastBlurPassCount` 调用状态、blur pass 次数边界（M09/M14）；grading-off 截图（M12，bloom-off 已覆盖 Bloom off 分支）。
+- M15 记 `in_progress`：tail 迁移完成，shared provider 收口后才达 verified。
+- 偏离：无范围偏离；未新增 test/ 级工程；多 View（M08）与 failure injection（M10）仍待补。
+
 ## 总结
 
-### 已完成（10 个 commits）
+### 已完成（11 个 commits）
 
 | Commit | 内容 | 测试 |
 | --- | --- | --- |
@@ -278,25 +342,28 @@
 | 7e0a6f2a | LightingFeature - direct refactor | 1810/1810 ✓ |
 | 7ddec404 | GBuffer→SSAO→Lighting chain in recipe | 1810/1810 ✓ |
 | 7df25e0b | progress update | — |
-| （本次提交） | 集成切片：features 拥有真实 pass、recipe 单源驱动、旧 orchestrator 删除 | 220/220 render3d + 1811/1811 full + runtime on/off/切换证据 |
+| 9726b2d0 | 集成切片：features 拥有真实 pass、recipe 单源驱动、旧 orchestrator 删除 | 220/220 render3d + 1811/1811 full + runtime on/off/切换证据 |
+| （本提交） | C3A：tail 全 feature 化 + 集中层删除（+1876/−964；runtime 三场景） | 221/221 render3d + 1812/1812 full + on/off 像素 0 diff + bloom-off 10 pass |
 
 ### 关键成果
 
 - ✅ **Foundation 完整**: Core helpers (Result/OptionalHandle) + Feature protocol types
 - ✅ **单源数据流闭环**: 安全点 resolve → 录制期 prepare → RDG append → 输出发布同源
-- ✅ **Feature 一等对象**: GBuffer/SSAO/Lighting 各自拥有 resolve/prepareBindings/append 与真实 pass
-- ✅ **无 Legacy wrapper**: 旧 orchestrator/集中清单直接删除，不回兼容桥
-- ✅ **Runtime 证据**: SSAO on/off 图对照、import 计数、截图差异、管线切换逐像素一致
+- ✅ **Feature 一等对象**: GBuffer/SSAO/Lighting + tail 7 features 各自拥有 resolve/prepareBindings/append 与真实 pass
+- ✅ **无 Legacy wrapper**: 旧 orchestrator/passes/bag/ViewResources 槽位直接删除，不回兼容桥
+- ✅ **Runtime 证据**: SSAO on/off 图对照与逐像素一致、bloom-off 10 pass、管线切换逐像素一致
+- ⚠️ **复杂度**: C3A 行数净 +612（集中层 −660，协议壳 +1160）；未达删除面门槛，裁薄壳为下一决定点（见 C3A 实测节）
 
 ### 当前状态
 
 - C1-foundation: ✅ 完成
 - 集成切片（plan.md C1 验收主体）: ✅ 完成并带 runtime 证据
-- 剩余: M08/M10/M13 完整（failure injection、双 View）、plan.md C2（Bloom/Finalize 样本）、C3（tail/共享输入全地图）、C4/C5
+- C3A（tail 全 feature 化 + 集中层删除）: ✅ 完成并带 runtime 证据；复杂度净增，待裁薄壳决定
+- 剩余: C3B（M17 shared inputs 收口）、plan-C2 剩余（`_lastBlurPassCount`/grading-off）、M08/M10/M13 完整、C4/C5
 
 ### 工作区状态
 
-- **干净**: 10 个 composition 相关提交
-- **测试全绿**: 1811/1811 full tests passed；render3d 220/220
+- **干净**: 11 个 composition 相关提交
+- **测试全绿**: 1812/1812 full tests passed；render3d 221/221
 - **编译通过**: ya-render-3d, ya-game-runtime（closure）
 - **无关改动**: Engine/Plugins/log.cc 未 stage（灯光线工作）
