@@ -37,17 +37,31 @@ def box_slot() -> dict:
 
 
 def build() -> dict:
-    tabs = [text("Title", "Round 1", 16, [0.95, 0.84, 0.45, 1.0]),
+    rows = [text("Title", "Round 1", 16, [0.95, 0.84, 0.45, 1.0]),
             text("Header", "Acting: -", 14, [0.85, 0.85, 0.9, 1.0])]
     for i in range(1, 7):
-        tabs.append(text(f"Row{i}", "", 14, [0.75, 0.9, 1.0, 1.0]))
+        rows.append(text(f"Row{i}", "", 14, [0.75, 0.9, 1.0, 1.0]))
+
+    # The action menu sits under the roster: attack / skill / wait.
+    menu_tabs = []
+    for i in range(1, 4):
+        menu_tabs.append(text(f"Menu{i}", "", 15, [0.9, 0.9, 0.92, 1.0]))
+    menu_column = {
+        "version": 2, "typeId": "engine.container",
+        "fields": {"_boxLayout": {"_direction": 1, "_spacing": 2.0, "_padding": [0.0, 6.0]},
+                   "__base__": {"UIElement": {"_name": "Menu"}}},
+        "children": menu_tabs,
+        "childSlots": [box_slot() for _ in menu_tabs],
+    }
+    hint = text("Hint", "", 13, [0.8, 0.8, 0.85, 1.0])
+    outcome = text("Outcome", "", 22, [0.6, 0.95, 0.65, 1.0])
 
     column = {
         "version": 2, "typeId": "engine.container",
         "fields": {"_boxLayout": {"_direction": 1, "_spacing": 4.0, "_padding": [14.0, 12.0]},
                    "__base__": {"UIElement": {"_name": "Column"}}},
-        "children": tabs,
-        "childSlots": [box_slot() for _ in tabs],
+        "children": rows + [menu_column, hint, outcome],
+        "childSlots": [box_slot() for _ in rows] + [box_slot(), box_slot(), box_slot()],
     }
     border = {
         "version": 2, "typeId": "engine.border",

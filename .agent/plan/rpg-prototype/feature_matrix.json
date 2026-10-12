@@ -243,16 +243,25 @@
       "id": "damage_skill_resolution",
       "wave": "B",
       "phase": "T3",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: attack/skill damage, floating numbers, HP bars, defeat",
       "engine_gap": "N5",
       "plan": "Lua damage formula; damage numbers via world.spawnSprite; HP bars as world sprites (NOT a world-space UI system)",
-      "evidence": [],
+      "evidence": [
+        "Content/Scripts/Unit.lua: atk/def spd, hp, mp, skill fields (skillName/skillPower/skillCost/skillRange), deterministic damageAgainst (no RNG)",
+        "Content/Scripts/Battle.lua: phase machine select->move->menu->target; action menu Attack/Skill/Wait; target cells = living enemies within reach",
+        "Content/Scripts/BattleFx.lua: floating damage numbers (digit atlas strip), per-unit HP bars as 1x1 white sprites, fade and destroy",
+        "Content/Textures/digits.png (Tools/make_digits.py) + white.png; HUD Menu1..3/Hint/Outcome",
+        "Defeat: takeDamage hides the sprite; roster row shows (down); battle-end sets phase over + writes Persist.battle.lastOutcome",
+        "Script/automation/2d-rpg/battle_combat.py: Archer attack drops Bat 10->4; battle_skill_kill.py: Mage Firebolt drops Ghost 16->4",
+        "Engine/Saved/Automation/battle-combat|battle-skill/*.png"
+      ],
       "tests": [
         "DamageFormulaInRange",
         "SkillSpendsMana",
         "DefeatedUnitLeavesTheBoard"
-      ]
+      ],
+      "verified": "2026-10-13"
     },
     {
       "id": "battle_ai",

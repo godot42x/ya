@@ -102,7 +102,9 @@ def main() -> None:
         rpg.wait_until(lambda: scene_name() if scene_name() == "BattleRuins1" else None,
                        20.0, "BattleRuins1 active")
 
-        # First to act is the Bat (spd 14) at cell (5, 9) -> world (5-8+0.5, 9-6+0.5).
+        # First to act is the Bat (spd 14, enemy) on the enemy row. Read where
+        # it starts and step left twice: any two open cells work, so the test
+        # does not hardcode the board layout.
         bat = entity_id("EnemyBat")
         start = position(bat)
         print(f"Bat start {start}")
@@ -120,24 +122,20 @@ def main() -> None:
         rpc(port, "capture_screenshot", {"target": "presentation", "path": str(OUT), "warmup_frames": 4})
         print(f"screenshot with highlights -> {OUT}")
 
-        # Drive the cursor onto a reachable cell and confirm: the unit walks.
-        # The Bat is at (8, 9) with move 4; step left twice to (6, 9).
-        target = cell_world(6, 9)
+        # Drive the cursor left one cell and confirm: the unit walks. One cell
+        # always works (two would cross the Slime on the enemy row).
         import time
-        for _ in range(2):
-            rpg.call("input.inject_key", {"key": "Left", "action": "hold", "frames": 1})
-            time.sleep(0.25)
+        rpg.call("input.inject_key", {"key": "Left", "action": "hold", "frames": 1})
+        time.sleep(0.3)
         rpg.tap("Space")
 
         walked = rpg.wait_until(
-            lambda: position(bat) if rpg.near(position(bat), target, tol=0.15) else None,
-            6.0, f"Bat walked to {target}",
+            lambda: position(bat) if position(bat) != start else None,
+            6.0, "Bat left its start cell",
         )
-        print(f"Bat walked {start} -> {walked} (target {target})")
-        # The move ends the Bat's turn; the next unit begins its own selection
-        # and paints its own reachable cells, so highlights stay on screen --
-        # they just belong to the new active unit now.
-        print(f"highlights after the turn passed: {visible_highlights()}")
+        print(f"Bat walked {start} -> {walked}")
+        if walked[0] >= start[0]:
+            raise SystemExit(f"Bat moved the wrong way: {start} -> {walked}")
         print("battle move OK")
     finally:
         rpg.stop()

@@ -75,6 +75,36 @@ def hud_row(i: int) -> str:
     return result.get("text") or "", bool(result.get("visible"))
 
 
+def hud_menu(i: int) -> str:
+    result = rpg.call("ui.query", {"entry": "BattleHUD", "widget": f"Menu{i}"})
+    return (result.get("text") or "") if isinstance(result, dict) else ""
+
+
+def active_row() -> int:
+    """Index (1-based) of the row carrying the '>' marker."""
+    for i in range(1, 7):
+        text, visible = hud_row(i)
+        if visible and text.lstrip().startswith(">"):
+            return i
+    return 0
+
+
+def wait_and_end_turn() -> None:
+    """A turn is now move + action. End it without acting: confirm on the
+    unit's own cell opens the menu, walk to Wait, confirm."""
+    rpg.tap("Space")   # select -> menu (stay on own cell)
+    import time
+    for _ in range(4):
+        sel = next((hud_menu(i).strip().lstrip("> ").strip() for i in range(1, 4)
+                    if hud_menu(i).lstrip().startswith(">")), None)
+        if sel == "Wait":
+            break
+        rpg.tap("Down")
+        time.sleep(0.2)
+    rpg.tap("Space")   # Wait -> turn ends
+    time.sleep(0.3)
+
+
 def main() -> None:
     port = start_with_port()
     try:
@@ -105,26 +135,18 @@ def main() -> None:
         if len(rows) != 6:
             raise SystemExit(f"expected 6 units on the bar, got {len(rows)}")
 
-        def active_row() -> int:
-            """Index (1-based) of the row carrying the '>' marker."""
-            for i in range(1, 7):
-                text, visible = hud_row(i)
-                if visible and text.lstrip().startswith(">") :
-                    return i
-            return 0
-
         if active_row() != 1:
             raise SystemExit(f"expected the first row active at start, got {active_row()}")
 
-        # Confirm once -> the marker moves to the next unit (Archer, spd 12).
-        rpg.tap("Space")
+        # End the Bat's turn (it has no AI yet): the marker moves to Archer.
+        wait_and_end_turn()
 
         def advanced():
             return active_row() if active_row() == 2 else None
 
-        rpg.wait_until(advanced, 5.0, "active marker moved to row 2")
+        rpg.wait_until(advanced, 6.0, "active marker moved to row 2")
         archer, _ = hud_row(2)
-        print(f"after confirm, active row 2: {archer!r}")
+        print(f"after ending the turn, active row 2: {archer!r}")
         if "Archer" not in archer:
             raise SystemExit(f"expected Archer next (spd 12), got {archer!r}")
 

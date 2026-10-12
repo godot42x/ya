@@ -278,14 +278,21 @@ def build_battle_ruins1() -> dict:
         put(BAT_W - 1, y, DUN_WALL)
     put(BAT_W // 2, BAT_H - 1, 0)  # south entrance
 
-    for y in range(3, BAT_H - 3):
-        if y not in (5, 6):
-            put(4, y, DUN_WALL)
-            put(BAT_W - 5, y, DUN_WALL)
-    for cx, cy in ((6, 8), (9, 3), (2, 9)):
+    # Side pillars leave the middle open, so the two lines start in contact
+    # range of a move-plus-attack turn.
+    for y in range(2, 5):
+        put(3, y, DUN_WALL)
+        put(BAT_W - 4, y, DUN_WALL)
+    for y in range(7, 10):
+        put(3, y, DUN_WALL)
+        put(BAT_W - 4, y, DUN_WALL)
+    for cx, cy in ((6, 5), (9, 6)):
         put(cx, cy, DUN_CRATE)
 
-    spawn = (BAT_W // 2, 1)
+    # Party on row 4, enemies on row 7: three cells apart, so the first mover
+    # can close and strike in one turn. Combat in T3/T4 wants contact.
+    spawn = (BAT_W // 2, 4)
+    enemy_row = 7
     board_center = (BAT_W // 2, BAT_H // 2)
     entities: list[dict] = [
         # Frame the whole board: the battle camera looks at the board centre,
@@ -296,26 +303,29 @@ def build_battle_ruins1() -> dict:
         # board (map:entityAt) and reads their own scripts.
         script_entity(1002, "Battle", "Content/Scripts/Battle.lua"),
     ]
-    # name, tile, cell, tint, stats(displayName/team/spd/hp/atk/def/move/range)
+    # name, tile, cell, tint, stats. Skill fields: skillName/skillPower/skillCost/
+    # skillRange + maxMp; an empty skillName hides the skill menu entry.
+    party_row = spawn[1]
     party = [
-        ("UnitKnight", CHAR_KNIGHT, (spawn[0] - 2, 1), WHITE,
+        ("UnitKnight", CHAR_KNIGHT, (spawn[0] - 2, party_row), WHITE,
          {"team": "player", "displayName": "Knight", "maxHp": 30, "atk": 7, "def": 3, "spd": 8, "move": 3, "range": 1}),
-        ("UnitArcher", CHAR_ARCHER, (spawn[0], 1), (0.8, 1.0, 0.8, 1.0),
-         {"team": "player", "displayName": "Archer", "maxHp": 20, "atk": 6, "def": 1, "spd": 12, "move": 3, "range": 3}),
-        ("UnitMage", CHAR_MAGE, (spawn[0] + 2, 1), (0.8, 0.85, 1.0, 1.0),
-         {"team": "player", "displayName": "Mage", "maxHp": 18, "atk": 9, "def": 0, "spd": 10, "move": 2, "range": 3}),
+        ("UnitArcher", CHAR_ARCHER, (spawn[0], party_row), (0.8, 1.0, 0.8, 1.0),
+         {"team": "player", "displayName": "Archer", "maxHp": 20, "atk": 6, "def": 1, "spd": 12, "move": 3, "range": 3,
+          "maxMp": 8, "skillName": "Pierce", "skillPower": 10, "skillCost": 3, "skillRange": 4}),
+        ("UnitMage", CHAR_MAGE, (spawn[0] + 2, party_row), (0.8, 0.85, 1.0, 1.0),
+         {"team": "player", "displayName": "Mage", "maxHp": 18, "atk": 4, "def": 0, "spd": 10, "move": 2, "range": 1,
+          "maxMp": 12, "skillName": "Firebolt", "skillPower": 13, "skillCost": 4, "skillRange": 3}),
     ]
     for i, (uname, tile, cell, tint, stats) in enumerate(party):
         entities.append(sprite_entity(1100 + i, uname, cell_world(origin, cell[0], cell[1], 0.1),
                                       DUN_ATLAS, tile_uv(tile), (1.0, 1.0), tint,
                                       "Content/Scripts/Unit.lua", None, None, True, stats))
-    # name, tile, cell, stats
     enemies = [
-        ("EnemySlime", MON_SLIME, (spawn[0] - 3, 9),
+        ("EnemySlime", MON_SLIME, (spawn[0] - 2, enemy_row),
          {"team": "enemy", "displayName": "Slime", "maxHp": 14, "atk": 4, "def": 0, "spd": 6, "move": 2, "range": 1}),
-        ("EnemyBat", MON_BAT, (spawn[0], 9),
+        ("EnemyBat", MON_BAT, (spawn[0], enemy_row),
          {"team": "enemy", "displayName": "Bat", "maxHp": 10, "atk": 5, "def": 0, "spd": 14, "move": 4, "range": 1}),
-        ("EnemyGhost", MON_GHOST, (spawn[0] + 3, 9),
+        ("EnemyGhost", MON_GHOST, (spawn[0] + 2, enemy_row),
          {"team": "enemy", "displayName": "Ghost", "maxHp": 16, "atk": 6, "def": 1, "spd": 9, "move": 2, "range": 2}),
     ]
     for i, (ename, tile, cell, stats) in enumerate(enemies):

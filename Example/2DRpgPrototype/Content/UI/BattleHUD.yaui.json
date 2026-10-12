@@ -222,9 +222,293 @@
               },
               "children": [],
               "childSlots": []
+            },
+            {
+              "version": 2,
+              "typeId": "engine.container",
+              "fields": {
+                "_boxLayout": {
+                  "_direction": 1,
+                  "_spacing": 2.0,
+                  "_padding": [
+                    0.0,
+                    6.0
+                  ]
+                },
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Menu"
+                  }
+                }
+              },
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "_text": "",
+                    "_fontSize": 15,
+                    "_color": [
+                      0.9,
+                      0.9,
+                      0.92,
+                      1.0
+                    ],
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Menu1"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "_text": "",
+                    "_fontSize": 15,
+                    "_color": [
+                      0.9,
+                      0.9,
+                      0.92,
+                      1.0
+                    ],
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Menu2"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "_text": "",
+                    "_fontSize": 15,
+                    "_color": [
+                      0.9,
+                      0.9,
+                      0.92,
+                      1.0
+                    ],
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Menu3"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                }
+              ]
+            },
+            {
+              "version": 2,
+              "typeId": "engine.text",
+              "fields": {
+                "_text": "",
+                "_fontSize": 13,
+                "_color": [
+                  0.8,
+                  0.8,
+                  0.85,
+                  1.0
+                ],
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Hint"
+                  }
+                }
+              },
+              "children": [],
+              "childSlots": []
+            },
+            {
+              "version": 2,
+              "typeId": "engine.text",
+              "fields": {
+                "_text": "",
+                "_fontSize": 22,
+                "_color": [
+                  0.6,
+                  0.95,
+                  0.65,
+                  1.0
+                ],
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Outcome"
+                  }
+                }
+              },
+              "children": [],
+              "childSlots": []
             }
           ],
           "childSlots": [
+            {
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
+              "crossAlignment": 0,
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            },
+            {
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
+              "crossAlignment": 0,
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            },
+            {
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
+              "crossAlignment": 0,
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            },
             {
               "type": "box",
               "sizeRule": 0,

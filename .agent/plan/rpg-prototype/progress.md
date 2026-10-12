@@ -102,4 +102,24 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
 - 保留 / 偏离：鼠标拾取（screen→cell，N7）暂未做 —— 键盘光标已能选格；鼠标拾取放到需要点选交互的
   checkpoint（或与 N7 一起）再落地，避免为演示而做。
 
+## 2026-10-13 — T3：攻击 / 技能 / 伤害结算
+
+- 目标：行动选攻击/技能/待机；选射程内目标 → 伤害飘字 → HP 条更新 → 死亡移除。
+- 内容：
+  - `Content/Scripts/Unit.lua`：加 `maxMp/skillName/skillPower/skillCost/skillRange`；确定性伤害
+    `damageAgainst(power, target) = max(1, power - def)`（无 RNG，战斗可复现、可精确断言）。
+  - `Content/Scripts/Battle.lua`：阶段机 `select → move → menu → target → done`；菜单 `Attack / <技能> / Wait`；
+    目标格 = 射程内活着的敌方；进入目标阶段自动吸附最近敌人。
+  - `Content/Scripts/BattleFx.lua`（新）：伤害数字（`digits.png` 逐位拼条、上浮+淡出+销毁）、每单位 HP 条
+    （1×1 白图按 size 缩放的暗底 + 血量填充，低血变红）。
+  - 资产：`Content/Textures/digits.png`（`Tools/make_digits.py` 生成 10 个 8×8 字形）、`white.png`。
+  - HUD：`BattleHUD` 加 `Menu1..3 / Hint / Outcome`（`Tools/make_battle_hud.py` 重生成）。
+- 途中发现（第三个跨边界坑）：`world.spawnSprite` 的 `size` 又是嵌套 vec2 —— `BattleFx` 第一版写 `size[0]`/`size[1]`，
+  Lua 1 基下标使 `size[0]` 为 nil，报 `sol: no matching function call`。统一走 `Vec2.new(size[1], size[2])`。
+- 验证：`battle_combat.py`（Archer 普攻 Bat 10→4）、`battle_skill_kill.py`（Mage Firebolt Ghost 16→4，
+  扣 def 1）、`battle_turns.py` / `battle_move.py` 回归通过（三项均已适配新阶段机）。
+- 未完成：敌方 AI（T4）、胜负结算的完整闭环验收（需要 AI 才能公平打完；`checkBattleOver` 已实现并写
+  `Persist.battle.lastOutcome`，留给 T4 一起验）。伤害数字/HP 条为世界空间精灵（未引入世界空间 UI 系统）。
+
+
 
