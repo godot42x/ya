@@ -159,11 +159,11 @@
 ### 收益
 
 - ✅ 统一的错误处理模式（Result<T, E>）
-- ✅ 统一的可选类型（Optional<T> 和 OptionalHandle<Tag>）
 - ✅ 类型安全的 handle 包装（编译期区分不同 handle 类型）
 - ✅ Rust 风格的 API（map/andThen 单子操作）
 - ✅ 零运行时开销（OptionalHandle 保证零大小 tag）
 - ✅ 避免各模块重复造轮子
+- ✅ 使用 std::optional<T> 替代自造 Optional<T>
 
 ### 未完成项（推迟到 C2）
 
@@ -174,12 +174,80 @@
 - 删除 bUseSSAO plumbing（DeferredFrameGraphPassContext, DeferredFrameResourceSet, orchestrator）
 - Validation matrix M01-M08 验证
 
+## 2026-10-12 晚 — Core helpers 重构 + pipeline 集成准备
+
+### 目标与范围
+
+响应用户反馈：
+1. 删除自造的 Optional<T>，直接用 std::optional（C++17 内置）
+2. 保留 Result<T,E>（C++20 无 std::expected）和 OptionalHandle<Tag>（类型安全零开销）
+3. 集成 prepareFrameRecord 到 recording 流程
+
+### 实施内容
+
+**Commit: Core helpers simplification + pipeline integration**
+
+- `Core/Optional.h`: 删除 `Optional<T>` 和 `Some()/None()` helpers
+  - 保留 `OptionalHandle<Tag>` 用于类型安全的 handle
+  - 文档说明：一般用途用 std::optional，handle 用 OptionalHandle
+- `ResultOptionalTest.cpp`: 删除 Optional<T> 的 8 个测试
+  - 保留 Result<T,E> 的 9 个测试
+  - 保留 OptionalHandle<Tag> 的 7 个测试
+- `DeferredPipelineRecipe.h/cpp`: 初步实现 resolve/prepareBindings/appendGraph
+  - resolve: 从 RenderFramePlan 提取 view 并调用 SSAOFeature::resolve
+  - prepareBindings: 调用 SSAOFeature::prepareBindings
+  - appendGraph: 调用 SSAOFeature::append
+  - 当前实现：单 view，SSAO 单特性，占位符输入（GBuffer 待 C2）
+- `ViewFamilyRecordContext`: 添加 `PreparedPipelineFrame* prepared` 字段
+  - 从 prepareFrameRecord 传递到 recordFamily
+- `RenderDeviceState::recordViewFamilies`: 调用 `prepareFrameRecord(plan)` 并传递给 family recording
+- `RenderFrameInputs.h`: 添加 `PreparedPipelineFrame` 前向声明
+
+### 验证结果
+
+```
+✓ 编译: ya-render-3d build ok (5.1s)
+✓ 测试: 1810/1810 passed
+  - ResultTest: 9 tests
+  - OptionalHandleTest: 7 tests (OptionalTest 已删除)
+  - FeatureProtocolTest: 6 tests
+```
+
+### 技术决策
+
+1. **std::optional 替代自造 Optional**: C++17 就有，无需重复造轮
+2. **OptionalHandle<Tag> 保留**: 类型安全 + 零开销，std::optional<uint32_t> 做不到类型区分
+3. **prepareFrameRecord 在 recordViewFamilies 开始调用**: 在 beginSubmission 前准备资源和绑定
+4. **ViewFamilyRecordContext 携带 prepared**: 通过 context 传递，不全局缓存
+5. **DeferredPipelineRecipe 当前单 view**: C2 补充多 view 支持
+
+### 架构改进
+
+- **显式 prepare→record 数据流**: PreparedPipelineFrame 从 prepare 显式传递到 record
+- **类型安全的错误处理**: Result<T,E> 替代 std::variant 直接使用
+- **零开销的 handle 包装**: OptionalHandle<Tag> 确保编译期类型安全无运行时开销
+- **统一的 helper 库**: Core/Result.h 和 Core/Optional.h 供全项目使用
+
+### 未完成项（推迟到 C2）
+
+- DeferredPipelineRecipe 完整实现（当前占位符输入）
+- SSAOFeature.append 完整实现（需要 GBuffer 输入）
+- LightingFeature 实现
+- LegacyDeferredPrelude/Tail bridge
+- DeferredRenderPipeline::appendDeferredViewToGraph 使用新组合
+- 删除 bUseSSAO plumbing
+- Validation matrix M01-M08 验证
+
 ### 下一步（C2）
 
-1. 扩展 FeatureGraphContext 携带 ViewTargetStore
-2. 完成 SSAOFeature.append 实现
-3. 实现 LightingFeature（消费 OptionalAO + PreparedRef<SharedFrameLight>）
-4. 实现 LegacyDeferredPrelude/Tail
-5. 修改 DeferredRenderPipeline::prepareFrameRecord 使用新组合
-6. 删除旧 plumbing
-7. 验证 M01-M08
+1. 读取 DeferredFrameResourceSet.h/cpp 理解 shared frame/light 绑定管理
+2. 读取 GBufferStage.h/cpp 理解 GBuffer 生成
+3. 读取 LightStage.h/cpp 理解 lighting 实现
+4. 读取 DeferredRenderPipeline.cpp::appendDeferredViewToGraph 理解当前组合流程
+5. 实现 LegacyDeferredPrelude feature (outputs GBuffer/Depth/PreparedRef<SharedFrameLight>)
+6. 完成 SSAOFeature.append 实现
+7. 实现 LightingFeature (consumes OptionalAO + PreparedRef<SharedFrameLight>)
+8. 实现 LegacyDeferredTail (Skybox/Sprite/Overlay/Bloom/Finalize)
+9. 集成到 DeferredRenderPipeline::appendDeferredViewToGraph
+10. 删除 bUseSSAO plumbing
+11. 验证 M01-M08

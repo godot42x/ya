@@ -64,6 +64,9 @@ void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan)
     RenderSubmission* live = _submissions.get(plan.frame.flightIndex);
     YA_CORE_ASSERT(live && live->isRecording(), "Family record requires a recording submission");
 
+    // Prepare pipeline composition (resolve resources, allocate bindings)
+    auto prepared = prepareFrameRecord(plan);
+
     // Submission-scoped warmup runs once here; stages must not repeat it per
     // View or per family.
     pipeline->beginSubmission();
@@ -77,6 +80,7 @@ void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan)
             .family     = family,
             .targets    = &_viewTargets,
             .views      = std::move(views),
+            .prepared   = prepared.has_value() ? &(*prepared) : nullptr,
         };
         publishFamilyResult(plan.frame.flightIndex, pipeline->recordFamily(ctx));
     };

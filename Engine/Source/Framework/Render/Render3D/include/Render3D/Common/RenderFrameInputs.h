@@ -18,6 +18,7 @@ struct IRenderSurfaceContext;
 struct RenderFrameData;
 class RenderSubmission;
 class ViewTargetStore;
+struct PreparedPipelineFrame;
 struct Scene;
 
 /// Frame-level facts of one recorded host frame.
@@ -120,6 +121,8 @@ struct ViewFamilyRecordContext
     /// The family's views, each carrying its own task and therefore its own
     /// Scene; a family exists only for one (Scene, revision, policy).
     std::vector<SceneViewRecording>                      views;
+    /// Prepared pipeline frame from prepareFrameRecord (contains resolved/prepared composition).
+    const PreparedPipelineFrame*                         prepared   = nullptr;
 };
 
 /// One View being recorded, plus the frame-level facts it shares with its
