@@ -403,16 +403,25 @@
       "id": "world_space_text",
       "wave": "B2",
       "phase": "WT1",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game/user U3: damage numbers, unit names and HP text over heads without hand-composing digit sprites",
       "engine_gap": "only ScreenDrawList::makeText exists; no world-space text",
       "plan": "WorldDrawList::makeText + a world text draw path through FontManager; Text2DComponent; world.spawnText(name,pos,text,{color,size})",
       "source": "user note 2026-10-13",
-      "evidence": [],
+      "evidence": [
+        "Engine/Source/Framework/Scene/Scene2D/include/Scene2D/Text2DComponent.h: world label component (text/font/fontPixelSize/color/size/pivot/layer/sortOrder/bYSort), reflected",
+        "Render3D/Common/Text2DExtraction.{h,cpp}: appendText2DCandidates lays out glyphs (advance, bearing, line breaks) into WorldSpriteCandidate quads on the existing sprite pass; missing glyphs are skipped, not drawn as ?",
+        "GameRuntime/Render/RenderFrameExtractor.cpp extractText2D: resolves the FontManager face, requests glyphs, maps to candidates",
+        "GameRuntime/Script/GameplayScriptFunctions.cpp: world.spawnText(name, position, text[, {font,size,color,fontPixelSize}])",
+        "Script/automation/2d-rpg/world_text.py: labels spawn with correct text; screenshot shows \"Hello 123\" and \"World\" drawn at their world positions",
+        "Engine/Saved/Automation/world-text/world_text.png"
+      ],
       "tests": [
         "WorldTextDrawsGlyphsAtWorldPos",
         "Text2DComponentRoundTrips"
-      ]
+      ],
+      "verified": "2026-10-13",
+      "notes": "Uses the UI font (Inter). A fresh string pops in one frame late (the atlas flushes after extract); the component keeps a fixed raster size because the scene snapshot is view-independent."
     },
     {
       "id": "battle_hud_redesign",

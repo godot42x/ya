@@ -1,0 +1,411 @@
+{
+  "name": "WorldText",
+  "entities": [
+    {
+      "id": 1001,
+      "name": "Camera",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            0.5,
+            0.5,
+            24.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "CameraComponent": {
+          "bPrimary": true,
+          "_projection": "Orthographic",
+          "_orthoHalfHeight": 8.0,
+          "_pixelPerfect": true,
+          "_pixelsPerUnit": 16.0,
+          "_referenceHeightPx": 192.0,
+          "_fov": 45.0,
+          "_aspectRatio": 1.7777778,
+          "_nearClip": 0.1,
+          "_farClip": 100.0,
+          "_fixedAspectRatio": false,
+          "_distance": 24.0,
+          "_focusPoint": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "id": 1002,
+      "name": "TextDemo",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/WorldTextTest.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 2000,
+      "name": "TilemapGround",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            -8.0,
+            -6.0,
+            0.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "TilemapComponent": {
+          "tileset": {
+            "__base__": {
+              "AssetRefBase": {
+                "_path": "Content:Tilesets/town.yatileset.json"
+              }
+            }
+          },
+          "cellSize": [
+            1.0,
+            1.0
+          ],
+          "width": 16,
+          "height": 12,
+          "layers": [
+            {
+              "name": "Ground",
+              "zOffset": 0.0,
+              "cells": [
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+      ]
+            }
+          ],
+          "layer": 0
+        }
+      }
+    }
+  ],
+  "nodeTree": {
+    "name": "scene_root",
+    "children": [
+      {
+        "name": "Camera",
+        "entityRef": 1001
+      },
+      {
+        "name": "TextDemo",
+        "entityRef": 1002
+      },
+      {
+        "name": "TilemapGround",
+        "entityRef": 2000
+      }
+    ]
+  },
+  "widgetEntries": [
+    {
+      "entryId": "Dialogue",
+      "zOrder": 10,
+      "autoMount": true,
+      "document": "Content:UI/Dialogue.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [
+          0.0,
+          0.0
+        ],
+        "anchorMax": [
+          1.0,
+          1.0
+        ],
+        "offset": [
+          0.0,
+          0.0
+        ],
+        "minSize": [
+          0.0,
+          0.0
+        ],
+        "maxSize": [
+          1000000.0,
+          1000000.0
+        ],
+        "offsets": {
+          "left": 0.0,
+          "top": 0.0,
+          "right": 0.0,
+          "bottom": 0.0
+        },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [
+          0.0,
+          0.0
+        ],
+        "preferredSize": [
+          0.0,
+          0.0
+        ],
+        "fixedSize": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "entryId": "Inventory",
+      "zOrder": 20,
+      "autoMount": true,
+      "document": "Content:UI/Inventory.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [
+          0.0,
+          0.0
+        ],
+        "anchorMax": [
+          1.0,
+          1.0
+        ],
+        "offset": [
+          0.0,
+          0.0
+        ],
+        "minSize": [
+          0.0,
+          0.0
+        ],
+        "maxSize": [
+          1000000.0,
+          1000000.0
+        ],
+        "offsets": {
+          "left": 0.0,
+          "top": 0.0,
+          "right": 0.0,
+          "bottom": 0.0
+        },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [
+          0.0,
+          0.0
+        ],
+        "preferredSize": [
+          0.0,
+          0.0
+        ],
+        "fixedSize": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "entryId": "Journal",
+      "zOrder": 30,
+      "autoMount": true,
+      "document": "Content:UI/Journal.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [
+          0.0,
+          0.0
+        ],
+        "anchorMax": [
+          1.0,
+          1.0
+        ],
+        "offset": [
+          0.0,
+          0.0
+        ],
+        "minSize": [
+          0.0,
+          0.0
+        ],
+        "maxSize": [
+          1000000.0,
+          1000000.0
+        ],
+        "offsets": {
+          "left": 0.0,
+          "top": 0.0,
+          "right": 0.0,
+          "bottom": 0.0
+        },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [
+          0.0,
+          0.0
+        ],
+        "preferredSize": [
+          0.0,
+          0.0
+        ],
+        "fixedSize": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "entryId": "QuestNotice",
+      "zOrder": 40,
+      "autoMount": true,
+      "document": "Content:UI/QuestNotice.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [
+          0.0,
+          0.0
+        ],
+        "anchorMax": [
+          1.0,
+          1.0
+        ],
+        "offset": [
+          0.0,
+          0.0
+        ],
+        "minSize": [
+          0.0,
+          0.0
+        ],
+        "maxSize": [
+          1000000.0,
+          1000000.0
+        ],
+        "offsets": {
+          "left": 0.0,
+          "top": 0.0,
+          "right": 0.0,
+          "bottom": 0.0
+        },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [
+          0.0,
+          0.0
+        ],
+        "preferredSize": [
+          0.0,
+          0.0
+        ],
+        "fixedSize": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "entryId": "Settings",
+      "zOrder": 50,
+      "autoMount": true,
+      "document": "Content:UI/Settings.yaui.json",
+      "rootSlot": {
+        "type": "canvas",
+        "anchorMin": [
+          0.0,
+          0.0
+        ],
+        "anchorMax": [
+          1.0,
+          1.0
+        ],
+        "offset": [
+          0.0,
+          0.0
+        ],
+        "minSize": [
+          0.0,
+          0.0
+        ],
+        "maxSize": [
+          1000000.0,
+          1000000.0
+        ],
+        "offsets": {
+          "left": 0.0,
+          "top": 0.0,
+          "right": 0.0,
+          "bottom": 0.0
+        },
+        "alignmentH": 0,
+        "alignmentV": 0,
+        "widthSizeMode": 0,
+        "heightSizeMode": 0,
+        "pivot": [
+          0.0,
+          0.0
+        ],
+        "preferredSize": [
+          0.0,
+          0.0
+        ],
+        "fixedSize": [
+          0.0,
+          0.0
+        ]
+      }
+    }
+  ]
+}

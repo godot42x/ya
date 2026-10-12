@@ -154,3 +154,32 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
 
 
 
+
+## 2026-10-13 — WT1 可行性核实（实现前）
+
+- 世界空间文字可复用世界精灵路径：一个字形 = 一个 `WorldSpriteCandidate`（字体图集 = 1 张纹理，
+  alpha 带 coverage，`tint` 上色）。字形 `uvRect` 是 `(offsetU,offsetV,scaleU,scaleV)`，需转成精灵的
+  `(u0,v0,u1,v1)`。
+- 入口：`FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, size)` 取 face；`atlasTextureFor(character)`
+  取图集纹理；`TextureLibrary::get().getNearestSampler()` 做 bitmap 采样（像素游戏够用，世界精灵 shader 无 SDF 分支）。
+- **一个真实时序约束**：`RuntimeRenderContext` 在 extract（约 L382）之后才 `flushPendingGlyphs`（L480）。
+  字形首次出现的那一帧，`atlasSlot` 还是 ~0u，只能跳过 → **新字延迟一帧出现**；图集重打包时已显示字形
+  可能有一帧 UV 抖动。这与引擎对动态文字的既有取舍一致（GUI 靠「request → flush → 重建 snapshot」规避，
+  世界快照不重建）。伤害跳字是瞬时的，可接受；长期若要零抖动需给文字候选做图集 revision 失效重建。
+- 结论：WT1 按「bitmap 面 + Nearest + 首次延迟一帧」实现；SDF 世界文字（大缩放无锯齿）留后续。
+
+## 2026-10-13 — WT1：世界空间文字
+
+- 目标（响应 Notes.md U3）：伤害跳字/名字/头顶信息用引擎世界文字，脚本一行 `world.spawnText` 即可。
+- 引擎改动：
+  - `Scene2D/Text2DComponent`（新）：`text / font / fontPixelSize / color / size / pivot / layer / sortOrder / bYSort`，全反射。
+  - `Render3D/Common/Text2DExtraction.{h,cpp}`（新）：把一行文字按字形（advance/bearing/换行）展开成
+    世界精灵候选（复用 `Sprite2DWorld` pass，不新增 pass）；字形图集 alpha 带 coverage，`tint` 上色。
+    字体图集分页，所以每个字形取自己那一页的纹理 + 采样器（采样器按图集的 `SamplerCategory` 选 nearest/linear）。
+  - `GameRuntime/Render/RenderFrameExtractor::extractText2D`：解析 `FontManager` face、`requestGlyphs`、转候选。
+  - `world.spawnText(name, position, text[, { font, size, color, fontPixelSize }])`（中立层）。
+- 关键取舍（已写进头文件注释）：快照是 view-independent 的，所以 `fontPixelSize` 是固定量、不跟随相机缩放；
+  字形首次出现晚一帧（图集在 extract 之后 `flushPendingGlyphs`），且**未栅格化的字形跳过而不是画 `?`**
+  （`Font::getCharacter` 会替换成 `?`，所以走 `characters.find` 直读）。
+- 验证：`Script/automation/2d-rpg/world_text.py` —— 标签实体带正确 `text`；截图
+  `Engine/Saved/Automation/world-text/world_text.png` 显示 "Hello 123" 与 "World" 画在世界坐标上。

@@ -413,10 +413,28 @@ def write_scene(path: Path, map_data: dict) -> None:
     print(f"wrote {path}")
 
 
+def build_world_text_scene() -> dict:
+    """A minimal scene for the WT1 (world-space text) test: a grass tilemap,
+    a camera, and a controller entity that spawns world labels at runtime."""
+    w, h = 16, 12
+    origin = map_origin(w, h)
+    ground = [TOWN_GRASS + 1] * (w * h)
+    spawn = (w // 2, h // 2)
+    entities: list[dict] = [
+        camera_entity(spawn, origin, script=None),
+        script_entity(1002, "TextDemo", "Content/Scripts/WorldTextTest.lua"),
+        tilemap_entity(2000, "TilemapGround", TOWN_ATLAS, TOWN_TILESET, w, h, origin,
+                       [layer("Ground", ground)]),
+    ]
+    return {"name": "WorldText", "width": w, "height": h, "entities": entities,
+            "layers": [ground]}
+
+
 def main() -> None:
     write_scene(ROOT / "Content/Scenes/Camp.scene.json", build_camp())
     write_scene(ROOT / "Content/Scenes/BattleRuins1.scene.json", build_battle_ruins1())
-    print(f"Camp {CAMP_W}x{CAMP_H}, BattleRuins1 {BAT_W}x{BAT_H}")
+    write_scene(ROOT / "Content/Scenes/WorldText.scene.json", build_world_text_scene())
+    print(f"Camp {CAMP_W}x{CAMP_H}, BattleRuins1 {BAT_W}x{BAT_H}, WorldText 16x12")
 
 
 if __name__ == "__main__":

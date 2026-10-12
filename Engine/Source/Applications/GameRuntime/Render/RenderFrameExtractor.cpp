@@ -14,8 +14,11 @@
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "Scene2D/Sprite2DComponent.h"
 #include "Scene2D/TilemapComponent.h"
+#include "Scene2D/Text2DComponent.h"
 #include "Render3D/Common/TilemapExtraction.h"
-#include "Render3D/Common/TilemapExtraction.h"
+#include "Render3D/Common/Text2DExtraction.h"
+#include "Render/Resources/FontManager.h"
+#include "RHI/Backend/TextureLibrary.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -154,6 +157,7 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
     extractSceneLights(registry, outSnapshot);
     extractSprites(input.scene, registry, outSnapshot);
     extractTilemaps(input.scene, registry, outSnapshot);
+    extractText2D(input.scene, registry, outSnapshot);
     // Texel grid of the primary camera. Zoom is per view and is applied when
     // that view snaps its eye; this grid is the one every integer zoom shares.
     float texelStep = 0.0f;
@@ -277,6 +281,53 @@ void RenderFrameExtractor::extractTilemaps(Scene* scene, entt::registry& reg, Sc
             .textureHeight = atlasTexture->getHeight(),
         },
                                 out.worldSprites);
+        for (size_t index = first; index < out.worldSprites.size(); ++index) {
+            tagCompanionFeatures(scene, reg, entity, out.worldSprites[index].features,
+                                 out.worldSprites[index].hostEntityId);
+        }
+    }
+}
+
+void RenderFrameExtractor::extractText2D(Scene* scene, entt::registry& reg, SceneSnapshot& out)
+{
+    // Only a scene that actually has world text pays for the font lookup.
+    FontManager* fonts = FontManager::get();
+    if (!fonts) {
+        return;
+    }
+    for (const auto& [entity, text, transform] : reg.view<Text2DComponent, TransformComponent>().each()) {
+        if (!text.bVisible || text.text.empty()) {
+            continue;
+        }
+        const FName family = text.font.empty() ? FName(DEFAULT_RUNTIME_FONT_NAME) : FName(text.font);
+        std::shared_ptr<Font> font = fonts->getFont(family, text.fontPixelSize);
+        if (!font || font->characters.empty()) {
+            continue;
+        }
+        // Queue glyphs the atlas is missing: they land at the next flush and
+        // draw from the following frame, so a fresh string's first frame is
+        // skipped rather than drawn as substitute glyphs.
+        fonts->requestGlyphs(*font, text.text);
+        if (!fontHasAnyGlyph(*font, text.text)) {
+            continue;
+        }
+        TransformSystem::computeWorldMatrix(&transform);
+        const size_t first = out.worldSprites.size();
+        appendText2DCandidates(Text2DExtractionInput{
+            .component = &text,
+            .font      = font.get(),
+            // The glyph atlas declares its own sampler category, the same way
+            // a sprite slot does: SDF pages want linear, bitmap pages nearest.
+            .resolveSampler = [](const Texture& page) -> Ptr<Sampler> {
+                const EFilter::T filter =
+                    page.getSamplerCategory() == ESamplerCategory::ClampLinear ? EFilter::Linear : EFilter::Nearest;
+                return TextureLibrary::get().getSampler(filter, ESamplerAddressMode::ClampToEdge);
+            },
+            .world           = transform.getTransform(),
+            .entityId        = static_cast<uint32_t>(entity),
+            .lineWorldHeight = text.size,
+        },
+                               out.worldSprites);
         for (size_t index = first; index < out.worldSprites.size(); ++index) {
             tagCompanionFeatures(scene, reg, entity, out.worldSprites[index].features,
                                  out.worldSprites[index].hostEntityId);

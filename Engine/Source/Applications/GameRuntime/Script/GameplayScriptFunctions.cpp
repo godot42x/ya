@@ -4,6 +4,7 @@
 #include "Core/Reflection/Reflection.h"
 #include "Core/Scripting/ScriptBindings.h"
 #include "Scene2D/Sprite2DComponent.h"
+#include "Scene2D/Text2DComponent.h"
 #include "Scene2D/TilemapComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/CameraComponent.h"
@@ -217,6 +218,84 @@ ScriptValue destroyEntityFn(const GameplayScriptContext& ctx, ScriptArgs args)
     return {};
 }
 
+/// Options table for `world.spawnText`. `size` is the world height of one text
+/// line; `color` is the ink (alpha fades the line); `fontPixelSize` is the
+/// device pixel size the face is rasterized at (fixed while the text lives).
+struct FTextSpawnOptions
+{
+    std::string font;
+    float       size          = 0.5f;
+    glm::vec4   color{1.0f, 1.0f, 1.0f, 1.0f};
+    int64_t     fontPixelSize = 32;
+
+    YA_REFLECT_BEGIN_NAMED(FTextSpawnOptions, "FTextSpawnOptions")
+    YA_REFLECT_FIELD(font)
+    YA_REFLECT_FIELD(size)
+    YA_REFLECT_FIELD(color)
+    YA_REFLECT_FIELD(fontPixelSize)
+    YA_REFLECT_END()
+    YA_REFLECT_VALUE_STRUCT()
+};
+
+type_index_t textSpawnOptionsType()
+{
+    FTextSpawnOptions::__ensure_reflection_registered();
+    return type_index_v<FTextSpawnOptions>;
+}
+
+/// A world-space label at the given world position (WT1). The entity carries
+/// Text2DComponent beside a Transform, expanded into glyph sprite candidates
+/// by the frame extractor.
+Entity* spawnText(const GameplayScriptContext& ctx, const std::string& name, const glm::vec3& position,
+                  const std::string& text, const FTextSpawnOptions& options)
+{
+    Scene* scene = ctx.activeScene ? ctx.activeScene() : nullptr;
+    if (!scene) {
+        YA_CORE_ERROR("world.spawnText: no active scene");
+        return nullptr;
+    }
+    Node3D* node = scene->createNode3D(name.empty() ? "Text" : name);
+    if (!node || !node->getEntity()) {
+        return nullptr;
+    }
+    if (TransformComponent* transform = node->getEntity()->tryGetComponent<TransformComponent>()) {
+        transform->setPosition(position);
+    }
+    Text2DComponent* label = node->getEntity()->addComponent<Text2DComponent>();
+    label->text          = text;
+    label->font          = options.font;
+    label->size          = options.size;
+    label->color         = options.color;
+    label->fontPixelSize = options.fontPixelSize > 0 ? static_cast<uint32_t>(options.fontPixelSize) : 32;
+    return node->getEntity();
+}
+
+ScriptValue spawnTextFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    if (args.size() < 3 || args.size() > 4) {
+        throw ScriptError("expects spawnText(name, position, text[, { font, size, color, fontPixelSize }])");
+    }
+    const std::string name = script::scriptToString(args[0]);
+    const auto*       pos  = script::scriptIf<glm::vec3>(args[1]);
+    if (pos == nullptr) {
+        throw ScriptError("expects spawnText(name, position, text[, options]); position is a Vec3");
+    }
+    const std::string text = script::scriptToString(args[2]);
+    FTextSpawnOptions options;
+    if (args.size() > 3) {
+        const FTextSpawnOptions* table = script::scriptIf<FTextSpawnOptions>(args[3]);
+        if (table == nullptr) {
+            throw ScriptError("expects spawnText(name, position, text[, { font, size, color, fontPixelSize }])");
+        }
+        options = *table;
+    }
+    Entity* entity = spawnText(ctx, name, *pos, text, options);
+    if (!entity) {
+        return {};
+    }
+    return script::scriptMake(script::entityRef(entity));
+}
+
 ScriptValue viewAspect(const GameplayScriptContext& ctx, ScriptArgs args)
 {
     expectArgCount(args, 0);
@@ -370,6 +449,8 @@ void registerGameplayScriptFunctions(GameplayScriptContext ctx)
     script::registerModuleFunction("world", "viewAspect", [ctx](ScriptArgs args) { return viewAspect(ctx, args); });
     script::registerModuleFunction("world", "spawnSprite", [ctx](ScriptArgs args) { return spawnSpriteFn(ctx, args); },
                                    {0, spriteSpawnOptionsType()});
+    script::registerModuleFunction("world", "spawnText", [ctx](ScriptArgs args) { return spawnTextFn(ctx, args); },
+                                   {0, 0, 0, textSpawnOptionsType()});
     script::registerModuleFunction("world", "destroyEntity", [ctx](ScriptArgs args) { return destroyEntityFn(ctx, args); });
     script::registerModuleFunction("world", "scriptOf", [ctx](ScriptArgs args) { return scriptOf(ctx, args); });
     script::registerModuleFunction("ui", "get", [ctx](ScriptArgs args) { return uiGet(ctx, args); });
