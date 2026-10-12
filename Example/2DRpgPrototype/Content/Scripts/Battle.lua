@@ -14,6 +14,7 @@
 -- automation run can assert exact HP.
 local ScriptBase = require("ScriptBase")
 local BattleFx = require("BattleFx")
+local BattleAI = require("BattleAI")
 local Script = ScriptBase:new()
 
 Script.mapName = "TilemapGround"
@@ -287,9 +288,59 @@ function Script:beginTurn()
     local unit = self.units[self.index]
     unit:setActive(true)
     self.active = unit
-    self:enterSelect(unit)
+    -- An enemy is played by the AI (no cursor); a player unit waits for input.
+    if unit.team == "enemy" then
+        self:beginAiTurn(unit)
+    else
+        self:enterSelect(unit)
+    end
     self:setHudDirty()
     return true
+end
+
+-- ── enemy AI turn ─────────────────────────────────────────────────────────
+--
+-- The AI reuses the same reachable() / damage code the player does, and plays
+-- its plan through the same move path, so there is one movement and one
+-- damage implementation. It just skips the cursor and menus.
+
+function Script:beginAiTurn(unit)
+    self.phase = "ai"
+    -- The AI plans against the same reachable set the player would see; keep
+    -- the parent map so its chosen cell can be walked to through pathTo.
+    self.reachCells, self.reachDist, self.reachParent = self:reachable(unit)
+    self.aiPlan = BattleAI.plan(self, unit)
+    self.aiTimer = 0.25   -- a short pause so the turn reads as deliberate
+    self:clearHighlights()
+    self:setHudDirty()
+end
+
+function Script:updateAi(dt)
+    self.aiTimer = self.aiTimer - dt
+    if self.aiTimer > 0 then
+        return
+    end
+    local plan = self.aiPlan
+    if plan and plan.move then
+        -- Walk to the planned cell through the normal move path.
+        self.path = self:pathTo(plan.move.x, plan.move.y, self.reachParent)
+        self.pathIndex = 1
+        self.moveProgress = 0
+        self.moveDest = { x = plan.move.x, y = plan.move.y }
+        self.phase = "aiMove"
+        self:clearHighlights()
+        return
+    end
+    self:resolveAiHit()
+end
+
+function Script:resolveAiHit()
+    local plan = self.aiPlan
+    if plan and plan.attack and plan.attack:isAlive() then
+        self:resolveHit(plan.attack, self.active.atk, false)
+    end
+    self.aiPlan = nil
+    self:finishTurn()
 end
 
 function Script:enterSelect(unit)
@@ -464,6 +515,7 @@ function Script:updateSelect(dt)
         self.path = self:pathTo(self.cursor.x, self.cursor.y, self.reachParent)
         self.pathIndex = 1
         self.moveProgress = 0
+        self.moveDest = { x = self.cursor.x, y = self.cursor.y }
         self.phase = "move"
         self:clearHighlights()
     else
@@ -476,9 +528,15 @@ function Script:updateMove(dt)
     local unit = self.active
     local step = self.path[self.pathIndex]
     if not step then
-        self.phase = "done"
-        unit.cell = { x = self.cursor.x, y = self.cursor.y }
-        self:enterMenu()
+        -- Path exhausted: land on the destination the path targeted.
+        local dest = self.moveDest or unit.cell
+        unit.cell = { x = dest.x, y = dest.y }
+        if self.phase == "aiMove" then
+            self:resolveAiHit()
+        else
+            self.phase = "done"
+            self:enterMenu()
+        end
         return
     end
     self.moveProgress = self.moveProgress + dt / MOVE_SECONDS
@@ -579,12 +637,14 @@ function Script:onUpdate(dt)
         if self.phase == "target" then
             self:snapTargetCursor()
         end
-    elseif self.phase == "move" then
+    elseif self.phase == "move" or self.phase == "aiMove" then
         self:updateMove(dt)
     elseif self.phase == "menu" then
         self:updateMenu(dt)
     elseif self.phase == "target" then
         self:updateTarget(dt)
+    elseif self.phase == "ai" then
+        self:updateAi(dt)
     end
 end
 

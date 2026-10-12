@@ -121,5 +121,19 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
 - 未完成：敌方 AI（T4）、胜负结算的完整闭环验收（需要 AI 才能公平打完；`checkBattleOver` 已实现并写
   `Persist.battle.lastOutcome`，留给 T4 一起验）。伤害数字/HP 条为世界空间精灵（未引入世界空间 UI 系统）。
 
+## 2026-10-13 — T4：敌方 AI
+
+- 目标：敌方回合自动进行（接近最近目标 → 射程内攻击 → 否则移动），玩家无需操作。
+- 内容：`Content/Scripts/BattleAI.lua`（新，纯 Lua）：`nearestOpponent` 选最近存活敌方（平局按棋盘序，
+  确定性）、`approachCell` 在可达集里选最靠近目标的格、`plan` 给出 `{move, attack}`。
+  `Battle.lua` 加 `ai` / `aiMove` 阶段：敌方回合不进光标，直接按 plan 走同一条 `pathTo` + `resolveHit`，
+  与玩家共用移动与伤害实现。
+- 验证：`Script/automation/2d-rpg/battle_ai.py` —— 只把玩家回合按 Wait 跳过，敌方（AI）自行前进并命中
+  （Mage 18→12），无玩家输入。截图 `Engine/Saved/Automation/battle-ai/battle_ai.png`。
+- 适配回归：敌方回合自动进行后，T1/T2/T3 的自动化不能再假设「谁在第几行行动」或「按 Space 结束敌方回合」；
+  三个脚本改为只跳过玩家回合、按单位名等自己的回合。全部五个战斗脚本（turns/move/combat/skill/ai）通过。
+- 未完成（M1）：战斗与探索拼接、胜负回传营地的闭环。
+
+
 
 

@@ -135,20 +135,19 @@ def main() -> None:
         if len(rows) != 6:
             raise SystemExit(f"expected 6 units on the bar, got {len(rows)}")
 
-        if active_row() != 1:
-            raise SystemExit(f"expected the first row active at start, got {active_row()}")
-
-        # End the Bat's turn (it has no AI yet): the marker moves to Archer.
-        wait_and_end_turn()
-
-        def advanced():
-            return active_row() if active_row() == 2 else None
-
-        rpg.wait_until(advanced, 6.0, "active marker moved to row 2")
-        archer, _ = hud_row(2)
-        print(f"after ending the turn, active row 2: {archer!r}")
-        if "Archer" not in archer:
-            raise SystemExit(f"expected Archer next (spd 12), got {archer!r}")
+        # The roster order is the assertion (speed descending). Which row is
+        # active is not fixed: enemy turns already play themselves via the AI.
+        names = []
+        for text, visible in (hud_row(i) for i in range(1, 7)):
+            if not (visible and text.strip()):
+                continue
+            for name in ("Bat", "Archer", "Mage", "Ghost", "Knight", "Slime"):
+                if name in text:
+                    names.append(name)
+                    break
+        print(f"speed order: {names}")
+        if names != ["Bat", "Archer", "Mage", "Ghost", "Knight", "Slime"]:
+            raise SystemExit(f"unexpected speed order: {names}")
 
         OUT.parent.mkdir(parents=True, exist_ok=True)
         rpc(port, "capture_screenshot", {"target": "presentation", "path": str(OUT), "warmup_frames": 4})

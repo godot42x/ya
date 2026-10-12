@@ -267,15 +267,22 @@
       "id": "battle_ai",
       "wave": "B",
       "phase": "T4",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: enemy turns resolve automatically",
       "engine_gap": "N5",
       "plan": "pure Lua: close to nearest target, attack in range, else move; boss phases",
-      "evidence": [],
+      "evidence": [
+        "Content/Scripts/BattleAI.lua: nearestOpponent + approachCell + plan {move, attack}; pure Lua, reads the board only through the controller queries",
+        "Battle.lua: enemy turns enter an ai/aiMove phase (no cursor); the plan is played through the same reachable/pathTo/resolveHit the player uses",
+        "Script/automation/2d-rpg/battle_ai.py: with player turns only skipped, an enemy advances and damages the party (Mage 18->12) unprompted",
+        "Engine/Saved/Automation/battle-ai/battle_ai.png"
+      ],
       "tests": [
         "AiClosesDistanceThenAttacks",
         "AiDoesNothingWithoutTargets"
-      ]
+      ],
+      "verified": "2026-10-13",
+      "notes": "Enemy turns auto-play, so T1/T2/T3 automation now skips only player turns and no longer assumes which row is active."
     },
     {
       "id": "battle_overworld_handoff",

@@ -2,8 +2,9 @@
 
     python3 Script/automation/2d-rpg/battle_move.py
 
-Boots BattleRuins1, then drives the active unit with the cursor onto a
-reachable cell and checks the unit's Transform moved there. Writes a
+Enemy turns play themselves (AI), so this drives a *player* unit: it waits for
+the Archer's turn, checks the reachable cells are highlighted, walks the cursor
+one cell and confirms, and asserts the unit's Transform moved. Writes a
 screenshot with the reachable cells highlighted.
 """
 
@@ -13,19 +14,12 @@ import json
 import socket
 import subprocess
 import sys
+import time
 
 import rpg_control as rpg
 
 SCENE = "Content/Scenes/BattleRuins1.scene.json"
 OUT = rpg.ROOT / "Engine" / "Saved" / "Automation" / "battle-move" / "battle_move.png"
-
-# BattleRuins1 board is 16x12 at origin (-8, -6), cell (x, y) centre =
-# (-8 + x + 0.5, -6 + y + 0.5).
-ORIGIN = (-8.0, -6.0)
-
-
-def cell_world(cx: int, cy: int) -> tuple[float, float]:
-    return (ORIGIN[0] + cx + 0.5, ORIGIN[1] + cy + 0.5)
 
 
 def start_with_port() -> int:
@@ -66,8 +60,26 @@ def rpc(port: int, method: str, params: dict | None = None, timeout: float = 60.
 
 
 def scene_name() -> str:
-    summary = rpg.call("scene.get_active")
-    return summary.get("name") if isinstance(summary, dict) else None
+    s = rpg.call("scene.get_active")
+    return s.get("name") if isinstance(s, dict) else None
+
+
+def hud_row(i: int) -> str:
+    return (rpg.call("ui.query", {"entry": "BattleHUD", "widget": f"Row{i}"}).get("text") or "")
+
+
+def hud_menu(i: int) -> str:
+    return (rpg.call("ui.query", {"entry": "BattleHUD", "widget": f"Menu{i}"}).get("text") or "")
+
+
+def active_name() -> str:
+    for i in range(1, 7):
+        text = hud_row(i)
+        if text.lstrip().startswith(">"):
+            for name in ("Bat", "Slime", "Ghost", "Archer", "Mage", "Knight"):
+                if name in text:
+                    return name
+    return ""
 
 
 def entity_id(name: str) -> int:
@@ -84,7 +96,6 @@ def position(entity: int) -> tuple[float, float]:
 
 
 def visible_highlights() -> int:
-    """Count the ReachHighlight sprites that are currently visible."""
     count = 0
     for e in rpg.call("entity.list"):
         if not isinstance(e, dict) or not str(e.get("name", "")).startswith("ReachHighlight"):
@@ -95,19 +106,30 @@ def visible_highlights() -> int:
     return count
 
 
+def menu_label() -> str:
+    return next((hud_menu(i).strip().lstrip("> ").strip() for i in range(1, 4)
+                 if hud_menu(i).lstrip().startswith(">")), "") or ""
+
+
+def wait_for_player_turn(name: str, timeout: float = 30.0) -> None:
+    def ready():
+        return True if active_name() == name else None
+
+    rpg.wait_until(ready, timeout, f"{name}'s turn")
+
+
 def main() -> None:
     port = start_with_port()
     try:
         rpg.call("scene.load", {"path": SCENE})
         rpg.wait_until(lambda: scene_name() if scene_name() == "BattleRuins1" else None,
                        20.0, "BattleRuins1 active")
+        rpg.wait_until(lambda: hud_row(1).strip() or None, 20.0, "HUD ready")
 
-        # First to act is the Bat (spd 14, enemy) on the enemy row. Read where
-        # it starts and step left twice: any two open cells work, so the test
-        # does not hardcode the board layout.
-        bat = entity_id("EnemyBat")
-        start = position(bat)
-        print(f"Bat start {start}")
+        wait_for_player_turn("Archer")
+        archer = entity_id("UnitArcher")
+        start = position(archer)
+        print(f"Archer start {start}")
 
         def highlighted():
             n = visible_highlights()
@@ -122,20 +144,19 @@ def main() -> None:
         rpc(port, "capture_screenshot", {"target": "presentation", "path": str(OUT), "warmup_frames": 4})
         print(f"screenshot with highlights -> {OUT}")
 
-        # Drive the cursor left one cell and confirm: the unit walks. One cell
-        # always works (two would cross the Slime on the enemy row).
+        # Walk the cursor left one cell and confirm: the unit steps there.
         import time
         rpg.call("input.inject_key", {"key": "Left", "action": "hold", "frames": 1})
         time.sleep(0.3)
         rpg.tap("Space")
 
-        walked = rpg.wait_until(
-            lambda: position(bat) if position(bat) != start else None,
-            6.0, "Bat left its start cell",
-        )
-        print(f"Bat walked {start} -> {walked}")
+        def moved():
+            return position(archer) if position(archer) != start else None
+
+        walked = rpg.wait_until(moved, 6.0, "Archer left its start cell")
+        print(f"Archer walked {start} -> {walked}")
         if walked[0] >= start[0]:
-            raise SystemExit(f"Bat moved the wrong way: {start} -> {walked}")
+            raise SystemExit(f"Archer moved the wrong way: {start} -> {walked}")
         print("battle move OK")
     finally:
         rpg.stop()

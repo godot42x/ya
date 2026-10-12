@@ -146,11 +146,14 @@ def main() -> None:
         # take its (AI-less: wait) turn, then act with the Archer.
         rpg.wait_until(lambda: hud_row(1).strip() != "" , 20.0, "HUD ready")
 
-        # Advance to the Archer's turn by waiting for its marker. Turns before
-        # it (the enemy Bat, and no AI yet) are ended with Wait.
-        deadline = time.time() + 30.0
+        # Advance to the Archer's turn. Enemy turns play themselves (AI);
+        # only player turns are skipped with Wait.
+        deadline = time.time() + 40.0
         while not active_is("Archer") and time.time() < deadline:
-            end_turn_with_wait()
+            if active_is("Mage") or active_is("Knight"):
+                end_turn_with_wait()
+            else:
+                time.sleep(0.25)
         if not active_is("Archer"):
             raise SystemExit("never reached the Archer's turn")
 
