@@ -85,3 +85,21 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
   截图 `Engine/Saved/Automation/battle-turns/battle_turns.png`。
 - 未完成（T2 起）：移动/可达范围、攻击/伤害、AI、进战/出战拼接。
 
+## 2026-10-13 — T2：移动与可达范围
+
+- 目标：选中单位 → 显示可达格子 → 光标选目标格 → 单位沿路径逐格移动。
+- 内容（全在 `Content/Scripts/Battle.lua`）：BFS `reachable()`（受 `isSolid` 与 `entityAt` 阻挡限制）、
+  `pathTo()` 回溯路径、可达格用复用的 `ReachHighlight` 精灵池绘制（`world.spawnSprite`，`bYSort` +
+  `sortOrder -1`）、光标四向移动、`updateMove` 按格补间（0.14s/格）。
+- 途中发现（两个跨边界限制，已写进脚本注释）：
+  1. `world.spawnSprite` 的 options 是**类型化的值结构体**，嵌套的 `glm::vec2` 只能传 `Vec2.new(...)`；
+     普通 `{1.0, 1.0}` 表不转换（`a Lua table cannot be passed to the engine`）。
+  2. 拿到的**别的脚本 self** 不暴露实体原生访问器（`unit:getTransform()` 不存在）；实体访问器挂在 `entity` 上。
+     改为读该单位自己缓存的 `unit.transform`（`Unit.lua` 在 onInit 存过）。
+- 验证：`Script/automation/2d-rpg/battle_move.py` —— 25 个可达格高亮、光标移到 (6,9)、
+  Bat 从 (8,9) 走到 (6,9)；`battle_turns.py` 回归通过。截图
+  `Engine/Saved/Automation/battle-move/battle_move.png`（可达菱形清晰可见）。
+- 保留 / 偏离：鼠标拾取（screen→cell，N7）暂未做 —— 键盘光标已能选格；鼠标拾取放到需要点选交互的
+  checkpoint（或与 N7 一起）再落地，避免为演示而做。
+
+

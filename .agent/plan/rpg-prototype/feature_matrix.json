@@ -222,14 +222,22 @@
       "id": "grid_movement_range",
       "wave": "B",
       "phase": "T2",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: reachable-cell highlight and per-cell move animation",
       "engine_gap": "N5",
       "plan": "Lua BFS over isSolid + entityAt; sink to TilemapComponent::reachableCells only if a second impl or cost demands",
-      "evidence": [],
+      "evidence": [
+        "Content/Scripts/Battle.lua: BFS reachable() over isSolid + entityAt blockers, pathTo() rebuilds the walk path",
+        "Reachable cells painted by a reused ReachHighlight sprite pool (world.spawnSprite, bYSort, sortOrder -1)",
+        "Per-cell eased walk (0.14s/cell) in updateMove, moving the unit own transform (unit.transform)",
+        "Script/automation/2d-rpg/battle_move.py: 25 cells highlighted, cursor to (6,9), Bat walks (8,9)->(6,9)",
+        "Engine/Saved/Automation/battle-move/battle_move.png"
+      ],
       "tests": [
         "ReachableCellsRespectMovementAndBlockers"
-      ]
+      ],
+      "verified": "2026-10-13",
+      "notes": "Limit found: world.spawnSprite options are a typed value struct; nested glm::vec2 needs Vec2.new, a plain {1.0,1.0} table cannot cross. Also another script self does not expose the entity native accessors (getTransform); Unit.lua caches its own transform."
     },
     {
       "id": "damage_skill_resolution",
