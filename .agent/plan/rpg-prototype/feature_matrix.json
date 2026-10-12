@@ -288,14 +288,21 @@
       "id": "battle_overworld_handoff",
       "wave": "B",
       "phase": "M1",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: overworld <-> battle loop with state carried in Persist",
       "engine_gap": "none",
       "plan": "party HP/exp in Persist; battle scene init restores; result writes back",
-      "evidence": [],
+      "evidence": [
+        "Content/Scenes/Camp.scene.json: RuinsGate (Door.lua) leads to BattleRuins1; SpawnFromRuins marker is the return point",
+        "Content/Scenes/BattleRuins1.scene.json: Battle.lua returnScene/returnSpawn/returnActor properties",
+        "Content/Scripts/Battle.lua: on outcome, sets Persist.battle.lastOutcome and, after returnDelay, world.loadScene back to Camp",
+        "Script/automation/2d-rpg/camp_battle_loop.py: step on the gate -> BattleRuins1 -> resolve -> Camp at SpawnFromRuins",
+        "Engine/Saved/Automation/camp-battle-loop/back_in_camp.png"
+      ],
       "tests": [
         "BattleResultTransfersBackToOverworld"
-      ]
+      ],
+      "verified": "2026-10-13"
     },
     {
       "id": "progression_levels",

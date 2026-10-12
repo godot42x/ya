@@ -33,6 +33,7 @@ TOWN_ATLAS = "Content:Textures/tiny_town.png"
 DUN_FLOOR = 48
 DUN_WALL = 14
 DUN_CRATE = 58
+DUN_DOOR = 45   # closed door panel (a door tile in the dungeon atlas)
 DUN_TILESET = "Content:Tilesets/dungeon.yatileset.json"
 DUN_ATLAS = "Content:Textures/tiny_dungeon.png"
 
@@ -227,8 +228,12 @@ def build_camp() -> dict:
             put(decor, x, y, TOWN_BUSH if rng.random() < 0.7 else TOWN_MUSHROOM)
 
     put(decor, spawn[0] - 3, spawn[1], TOWN_SIGN)
-    gate = (spawn[0] + 3, spawn[1] + 6)
-    put(decor, gate[0], gate[1], TOWN_SIGN)
+    # The ruins gate: a walkable doorway a couple of cells from the player, so
+    # the player walks onto it to enter the battle (M1). Its return marker sits
+    # just below it, where the battle sends the player back.
+    gate_open = (spawn[0], spawn[1] - 2)
+    put(decor, gate_open[0], gate_open[1], DUN_DOOR)
+    return_cell = (gate_open[0], gate_open[1] - 1)
 
     entities: list[dict] = [
         camera_entity(spawn, origin),
@@ -238,12 +243,32 @@ def build_camp() -> dict:
         sprite_entity(1030, "Elder", cell_world(origin, spawn[0] - 1, spawn[1] + 1, 0.1),
                       DUN_ATLAS, tile_uv(CHAR_ELDER), (1.0, 1.0), WHITE,
                       "Content/Scripts/Elder.lua", None, None, True),
+        # A walkable doorway into the ruins, driven by the overworld Door script.
+        sprite_entity(1040, "RuinsGate", cell_world(origin, gate_open[0], gate_open[1], 0.05),
+                      DUN_ATLAS, tile_uv(DUN_DOOR), (1.0, 1.0), WHITE,
+                      "Content/Scripts/Door.lua", None, None, False,
+                      {"targetScene": "Content/Scenes/BattleRuins1.scene.json",
+                       "spawnName": "", "actorName": ""}),
+        # Where the battle returns the player, just south of the gate.
+        marker_entity(1050, "SpawnFromRuins", cell_world(origin, return_cell[0], return_cell[1], 0.1)),
         tilemap_entity(2000, "TilemapGround", TOWN_ATLAS, TOWN_TILESET, CAMP_W, CAMP_H, origin,
                        [layer("Ground", ground), layer("Decor", decor, 0.03),
                         layer("Overlay", overlay, 0.2, layer_offset=1)]),
     ]
     return {"name": "Camp", "width": CAMP_W, "height": CAMP_H, "entities": entities,
             "layers": [ground, decor, overlay]}
+
+
+def marker_entity(entity_id: int, name: str, position: list[float]) -> dict:
+    """A named, empty Node3D used as a spawn marker (nothing but a transform)."""
+    return {
+        "id": entity_id,
+        "name": name,
+        "components": {
+            "TransformComponent": {"_position": list(position), "_rotation": [0.0, 0.0, 0.0],
+                                   "_scale": [1.0, 1.0, 1.0]},
+        },
+    }
 
 
 def script_entity(entity_id: int, name: str, script: str, props: dict | None = None) -> dict:
@@ -300,8 +325,11 @@ def build_battle_ruins1() -> dict:
         # the board is static and there is no "Player" entity here.
         camera_entity(board_center, origin, script=None),
         # The turn controller. It owns no unit list; it finds units through the
-        # board (map:entityAt) and reads their own scripts.
-        script_entity(1002, "Battle", "Content/Scripts/Battle.lua"),
+        # board (map:entityAt) and reads their own scripts. On an outcome it
+        # returns the player to Camp (M1).
+        script_entity(1002, "Battle", "Content/Scripts/Battle.lua",
+                      {"returnScene": "Content/Scenes/Camp.scene.json",
+                       "returnSpawn": "SpawnFromRuins", "returnActor": "Player"}),
     ]
     # name, tile, cell, tint, stats. Skill fields: skillName/skillPower/skillCost/
     # skillRange + maxMp; an empty skillName hides the skill menu entry.
@@ -313,7 +341,7 @@ def build_battle_ruins1() -> dict:
          {"team": "player", "displayName": "Archer", "maxHp": 20, "atk": 6, "def": 1, "spd": 12, "move": 3, "range": 3,
           "maxMp": 8, "skillName": "Pierce", "skillPower": 10, "skillCost": 3, "skillRange": 4}),
         ("UnitMage", CHAR_MAGE, (spawn[0] + 2, party_row), (0.8, 0.85, 1.0, 1.0),
-         {"team": "player", "displayName": "Mage", "maxHp": 18, "atk": 4, "def": 0, "spd": 10, "move": 2, "range": 1,
+         {"team": "player", "displayName": "Mage", "maxHp": 18, "atk": 5, "def": 0, "spd": 10, "move": 2, "range": 2,
           "maxMp": 12, "skillName": "Firebolt", "skillPower": 13, "skillCost": 4, "skillRange": 3}),
     ]
     for i, (uname, tile, cell, tint, stats) in enumerate(party):

@@ -20,10 +20,20 @@ local Script = ScriptBase:new()
 Script.mapName = "TilemapGround"
 Script.hudName = "BattleHUD"
 Script.highlightTexture = "Content:Textures/cell_highlight.png"
+-- Where the outcome sends the party (M1). Empty returnScene keeps the battle
+-- on screen (used by the standalone battle tests).
+Script.returnScene = ""
+Script.returnSpawn = ""
+Script.returnActor = "Player"
+Script.returnDelay = 2.5
 Script:properties({
     mapName = { type = "string", tooltip = "Tilemap entity holding the board" },
     hudName = { type = "string", tooltip = "Game UI entry showing the turn order" },
     highlightTexture = { type = "string", tooltip = "Texture used for reachable-cell markers" },
+    returnScene = { type = "string", tooltip = "Scene to load when the battle ends; empty stays put" },
+    returnSpawn = { type = "string", tooltip = "Spawn marker in the return scene" },
+    returnActor = { type = "string", tooltip = "Entity in the return scene to place on the marker" },
+    returnDelay = { type = "float", min = 0.0, max = 30.0, tooltip = "Seconds the outcome banner holds" },
 })
 
 local MOVE_SECONDS = 0.14   -- per cell while walking
@@ -450,6 +460,10 @@ function Script:checkBattleOver()
         Persist.battle = Persist.battle or {}
         Persist.battle.lastOutcome = self.outcome
         Persist.battle.lastScene = "BattleRuins1"
+        -- And, when this battle was entered from a scene, go back after a beat.
+        if self.returnScene ~= nil and self.returnScene ~= "" then
+            self.returnTimer = self.returnDelay or 2.5
+        end
         return true
     end
     return false
@@ -604,6 +618,16 @@ end
 function Script:onUpdate(dt)
     if not self.map then
         return
+    end
+    -- Once the outcome is up and a return scene is authored, hold the banner
+    -- for a beat, then hand the party back (M1).
+    if self.returnTimer then
+        self.returnTimer = self.returnTimer - dt
+        if self.returnTimer <= 0 then
+            self.returnTimer = nil
+            world.loadScene(self.returnScene, self.returnSpawn or "", self.returnActor or "")
+            return
+        end
     end
     if not self.bCollected then
         self:collectUnits()

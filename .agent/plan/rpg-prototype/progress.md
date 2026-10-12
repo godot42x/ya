@@ -134,6 +134,23 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
   三个脚本改为只跳过玩家回合、按单位名等自己的回合。全部五个战斗脚本（turns/move/combat/skill/ai）通过。
 - 未完成（M1）：战斗与探索拼接、胜负回传营地的闭环。
 
+## 2026-10-13 — M1：战斗与探索拼接（第一次完整闭环）
+
+- 目标：营地走动 → 进遗迹 → 打一场 → 回营地，状态经 `Persist` 保留。
+- 内容：
+  - `Camp.scene.json`：`RuinsGate`（`Door.lua`，走上去切到 `BattleRuins1`）+ `SpawnFromRuins` 出生标记
+    （战斗结束回到这里）；生成器加 `marker_entity` 与开场就到门口的摆位。
+  - `BattleRuins1.scene.json`：Battle 控制器带 `returnScene / returnSpawn / returnActor / returnDelay`。
+  - `Battle.lua`：结算时写 `Persist.battle.lastOutcome`，`returnDelay` 秒后用 `world.loadScene` 把队伍送回。
+- 验证：`Script/automation/2d-rpg/camp_battle_loop.py` —— 起点 Camp → 踩门 → `BattleRuins1` → 打完
+  （本次是 `Defeat...`，因为测试用 Wait 跳过玩家回合、让 AI 打）→ 回到 Camp 的 `SpawnFromRuins`
+  （0.5, -8.5）。截图 `Engine/Saved/Automation/camp-battle-loop/back_in_camp.png`。
+- 说明 / 偏离：M1 的验收口径是**闭环成立**（Camp→战斗→Camp），不要求测试会打仗；胜负本身由 T2–T4
+  的战斗脚本覆盖。测试驱动只按 Wait 结束玩家回合，避开「方向键同时驱动光标与菜单」的自动化噪声。
+- 途中发现：场景转移那一帧 automation RPC 会 reset（连接被重置），测试的 `scene_name` / `widget`
+  读取做了容错（返回空串/空表）。
+
+
 
 
 

@@ -68,7 +68,12 @@
           "scripts": [
             {
               "enabled": true,
-              "scriptPath": "Content/Scripts/Battle.lua"
+              "scriptPath": "Content/Scripts/Battle.lua",
+              "propertyOverrides": {
+                "returnScene": "Content/Scenes/Camp.scene.json",
+                "returnSpawn": "SpawnFromRuins",
+                "returnActor": "Player"
+              }
             }
           ]
         }
@@ -335,11 +340,11 @@
                 "team": "player",
                 "displayName": "Mage",
                 "maxHp": 18,
-                "atk": 4,
+                "atk": 5,
                 "def": 0,
                 "spd": 10,
                 "move": 2,
-                "range": 1,
+                "range": 2,
                 "maxMp": 12,
                 "skillName": "Firebolt",
                 "skillPower": 13,
