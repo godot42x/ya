@@ -1,8 +1,14 @@
 # RenderGraph 资源生命周期与管线开发体验
 
 > 建立日期：2026-09-29
-> 更新日期：2026-09-29
-> 状态：P0 skinning 生命周期收敛、P1 registry 决策诊断、P2 import 按 owner key 匹配（部分执行）已落地；P3–P5 待做。
+> 更新日期：2026-10-12
+> 状态：P0 skinning、P1 registry 诊断、P2 import owner key（部分执行）保留历史成果；P3/P4 已转交 `../render-pipeline-composition/`，未实施；本线下一项为 P5 descriptor layout 生成。
+
+## 当前执行路由（2026-10-12）
+
+用户明确目标是 RDG 上方组合层与横向 plumbing 复杂度，不是 Bloom 算法 / 单 feature 整理。P3/P4 的任务统一由 [render-pipeline-composition](../render-pipeline-composition/plan.md) C1–C5 承担，具体协议、资源边界、迁移和验收以该线为准。本文件保留原阶段描述作历史，不再据旧 P3/P4 另开实现批次。
+
+P0–P2 不重做。P5 仍归本线，生成 layout 与组合层正交；改 feature layout 前核对新 owner / 当前工作区，避免和组合层迁移冲突。P5 未实施，不能声称 shader descriptor 单源化已完成。
 
 ## 目标
 
@@ -69,7 +75,9 @@ P1 数据：稳态替换已为 0，真实 owner 重建（扩容、环境加载�
 
 验收：拓扑变化不产生误替换（P1 trace 计数，含单测覆盖 pass 插入与多 View 同 label）；HelloMaterial 稳态替换 0；resize 只触发 owner 单次替换且旧 transient 条目被淘汰；ya-render-3d-test 全过；flush 基线不回退。
 
-### P3：Bloom 垂直切片
+### P3：Bloom 垂直切片（原口径；2026-10-12 转交）
+
+当前归属：`render-pipeline-composition`，从 SSAO→Lighting 开始，Bloom 仅为 C2 多 pass 样本；不是完成以下局部整理就满足新的组合层目标。
 
 以 Bloom 验证普通 feature 的局部扩展路径。Bloom 经 `PostProcessingStage` 被 Forward 与 Deferred 共用，并依赖 `ViewTargetStore` 的 `BloomExtract/Blur/Composite` 附件。把它的输入要求、资源声明、pass 组合、descriptor/buffer 要求与调用方参数整理为一个可读入口，并检查改动 Bloom 时是否被迫触碰 executor、registry、无关 feature 或多个缓存。
 
@@ -77,7 +85,9 @@ P1 数据：稳态替换已为 0，真实 owner 重建（扩容、环境加载�
 
 验收：一份具体变更清单（触及文件与职责）；开发者能从 Bloom 入口追全调用与输入；Forward 与 Deferred 下 Bloom 渲染结果不变（截图或 automation 对照）；相关测试通过。
 
-### P4：Forward / Deferred / Shadow 资源容器按生命周期拆分（接手自 render-view-family）
+### P4：Forward / Deferred / Shadow 资源容器按生命周期拆分（2026-10-12 转交）
+
+当前归属：`render-pipeline-composition` C1–C4。按 feature bindings 与真实共享输入拆分；不强制保留原定 `*GpuResourceLibrary` 大容器。下文为 2026-09-29 口径，不能与新线重复派工。
 
 2026-09-29 起由本计划接手 `render-view-family` 中的以下条目：`DeferredFrameResourceSet` → `DeferredGpuResourceLibrary`、`ForwardFrameResourceSet` → `ForwardGpuResourceLibrary`、`ShadowFrameResources` → `ShadowViewResources`、`PerFlightFrameResourceSetBase` → `SkinningLayoutProvider`，以及这些容器的职责拆分。`RenderSubmission` → `FrameRecording`、`flightIndex` → `flightSlot`、`FrameUploadArena` → `UploadArena` 及 orchestrator/passes 文件改名仍归 `render-view-family`。
 

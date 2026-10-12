@@ -1,6 +1,6 @@
 {
   "plan": "rdg-cache-dx",
-  "updated": "2026-09-29",
+  "updated": "2026-10-12",
   "intent": {
     "primary": "降低 pipeline feature 扩展的跨文件心智负担，并让 GPU allocation 生命周期具有可追踪的唯一 owner",
     "contract_view": "shader 侧接口以 Slang 生成物为唯一事实源（含 descriptor layout）；不引入平行手写 schema 或外部 DSL"
@@ -38,15 +38,17 @@
       "area": "Bloom 垂直切片（Forward + Deferred 共用）",
       "owner": "BloomPostprocessing / PostProcessingStage + pipeline composition entry",
       "phase": "P3",
-      "status": "todo",
-      "proof": "变更清单；从 Bloom 入口可追全输入；Forward/Deferred 渲染结果不变"
+      "status": "transferred",
+      "transferred_to": "render-pipeline-composition C1-C5",
+      "proof": "2026-10-12 仅转交任务，未实施；新目标为整个组合层，Bloom 仅作为 C2 多 pass 样本，不另开旧 P3"
     },
     {
       "area": "Forward/Deferred/Shadow 资源容器按生命周期拆分（接手自 render-view-family）",
       "owner": "*GpuResourceLibrary（device）+ submission 侧 ViewResources 持有者 + shadow strategy",
       "phase": "P4",
-      "status": "todo",
-      "proof": "先 Deferred 一条链；View/Scene/flight 身份不靠散落字段推断；测试与 allocation/flush 基线通过；render-view-family 对应条目标注已转交"
+      "status": "transferred",
+      "transferred_to": "render-pipeline-composition C1-C4",
+      "proof": "2026-10-12 仅转交任务，未实施；新线按 feature/真实共享输入和生命周期拆分，不强制旧 GpuResourceLibrary 形态，不重复派工"
     },
     {
       "area": "Slang 生成 descriptor layout 并替换手写（Bloom + 一条完整管线）",

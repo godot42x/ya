@@ -4,6 +4,7 @@
 > 状态：R2 架构未收口，且**本文件 §2、§3.7、§4 里关于 `RenderDeviceState` + `RenderFrameCoordinator` 的描述已经过时**（2026-09-22 校正：Coordinator 已于 2026-09-19 删除并合回 `RenderDeviceState`，`friend` 越界与 `_publishedOutputViewId` 也已删除）。功能已向 ViewFamily 靠近（typed View resources、`recordFamily` 入口、host live Scene 列表）。Checkpoint C/D/E 均为部分完成。
 > **下一刀不在这里，而在 `./../render-application-boundary/plan.md`**：原定的"合并为公开 `Renderer` owner"已改为结构性拆分（AB7 —— `RenderDeviceState` 的整帧录制编排搬回应用侧 `RuntimeRenderContext`，而不是改名）。判据见该文件 §1 与 §3：只把 `RenderDeviceState` 改名成 `Renderer` 会让"Framework 拥有整帧排布"换一个更好看的名字继续存在。
 > 本文件保持历史叙述原样（§5 之后的进度与发现仍然有效），但**方向性决策以 `render-application-boundary` 为准**。
+> **2026-10-12 组合层任务归属校正**：原转交 `rdg-cache-dx` P4 的 FrameResourceSet / Shadow 资源职责现由 `../render-pipeline-composition/` C1–C4 承担；本文件中的旧 `*FrameGraphOrchestrator/Passes/Resources` 改名目标由新 recipe/feature 结构替换，不再给即将删除的类型另开改名批次。时间轴、extraction/submission 类型收敛和 `RenderDeviceState.Frame.cpp` 其他职责仍归本线；新线不接手全项目命名。
 
 ## 1. 主线选择
 

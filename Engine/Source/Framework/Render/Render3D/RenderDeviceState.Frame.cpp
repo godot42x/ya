@@ -93,7 +93,7 @@ void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan)
     }
 }
 
-void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan)
+PreparedPipelineFrameResult RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan)
 {
     const std::vector<Scene*> scenes = renderedScenes(plan.sceneRender.plan());
     prepareDerivedState(scenes, plan.frame.deltaTime);
@@ -111,6 +111,7 @@ void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan)
         pipeline->appendTargetRequests(plan.sceneRender.plan(), requests);
         if (!_viewTargets.prepare(requests)) {
             YA_CORE_ERROR("Failed to prepare View targets before recording");
+            return std::nullopt; // C1: preparation failure aborts recording
         }
     }
     // Pre-record preparation: resolve each View's Scene-keyed GPU bindings now,
@@ -125,6 +126,25 @@ void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan)
                                       plan.frame.flightIndex);
         }
     }
+
+    // C1: Build minimal prepared frame. Full typed composition will be added in
+    // subsequent checkpoints; for now, existing pipelines still use legacy paths.
+    PreparedPipelineFrame prepared;
+    prepared.pipelineKind = resolveActivePipelineKind();
+    prepared.hostTick     = plan.frame.hostTick;
+    prepared.flightIndex  = plan.frame.flightIndex;
+
+    // Placeholder per-view prepared data (expanded in C2-C3)
+    prepared.views.reserve(plan.sceneRender.views().size());
+    for (const SceneViewRecording& recording : plan.sceneRender.views()) {
+        if (recording.task) {
+            PreparedPipelineFrame::PreparedView view;
+            view.viewId = recording.task->desc.viewId;
+            prepared.views.push_back(view);
+        }
+    }
+
+    return prepared;
 }
 
 void RenderDeviceState::resolveViewSceneResources(const SceneViewTask*                        task,

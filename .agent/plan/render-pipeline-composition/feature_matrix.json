@@ -1,0 +1,223 @@
+{
+  "plan": "render-pipeline-composition",
+  "updated": "2026-10-12",
+  "implementation_status": "not_started",
+  "next_checkpoint": "C1",
+  "intent": "RDG 上方建立一等 feature、typed recipe、单源资源需求与贯通 prepare/build/publication 的同一份 resolved composition；不以 Bloom 算法为目标",
+  "status_rules": {
+    "todo": "未实施，evidence 为空",
+    "in_progress": "已有部分实现或验证，尚未满足完整 expected",
+    "blocked": "必须记录具体原因、现有证据与解除条件",
+    "verified": "完整 expected 有本次可复现测试/runtime/performance 证据；历史记录不能代替",
+    "editing": "默认仅更新 status/evidence；改变 expected/checkpoints 必须先复审并记入 progress"
+  },
+  "rows": [
+    {
+      "id": "M01",
+      "area": "typed heterogeneous feature protocol",
+      "checkpoints": ["C1"],
+      "expected": "concept/add 存储至少两类真实异构 feature；typed ports 连接输入输出；公开 API 无 feature 枚举 switch、std::any 或字符串 blackboard",
+      "verification": ["PipelineCompositionTest", "requires/static_assert 类型契约", "公开 API diff review"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M02",
+      "area": "single resolve and explicit prepared frame",
+      "checkpoints": ["C1"],
+      "expected": "prepareFrameRecord 返回本次准备值，record 显式消费；同 invocation resolve 一次；新设置请求只影响下一次，资源要求与构图参数一致",
+      "verification": ["settings snapshot 边界单测", "Runtime prepare→record integration", "call-chain review"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M03",
+      "area": "SSAO policy resolves into workload",
+      "checkpoints": ["C1"],
+      "expected": "SSAO off 无 AO requirement/专属 upload/DS/pass/新 AO publication；Lighting OptionalAO absent 使用明确中性语义；删除 bUseSSAO 逐层透传",
+      "verification": ["SSAO→Lighting behavior test", "Deferred on/off 截图", "plumbing diff review"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M04",
+      "area": "resource requirement is executable source of truth",
+      "checkpoints": ["C1"],
+      "expected": "同一声明生成 allocation request 和 graph import 描述；format/usage 同步；request 按 role 规范化，声明重排不改变 allocation；graph-use metadata 不进入 equality",
+      "verification": ["PipelineFeatureContractTest", "ViewTargetStoreTest reuse/replacement"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M05",
+      "area": "typed connections and preparation token validation",
+      "checkpoints": ["C1"],
+      "expected": "拒绝缺 required input、串 composition 端口、role 冲突、错 tick/pipeline token；类型不兼容在编译期暴露；optional absence 合法",
+      "verification": ["concept/static_assert", "seal error tests", "prepared token tests"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M06",
+      "area": "resource identity independent of recipe position",
+      "checkpoints": ["C1", "C4"],
+      "expected": "feature 插入、View 增减不改变既有 import key；同 label 不同 scope 独立；同资源消费者借同一 lowered slot 不重复 import",
+      "verification": ["RenderGraphCoreTest import regression", "composition lowering test", "runtime trace"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M07",
+      "area": "invocation storage and CPU callback lifetime",
+      "checkpoints": ["C1", "C4"],
+      "expected": "resolved/prepared storage move 和扩容后端口与 bindings 正确；callback 不引用 builder/临时局部变量；CPU record 生命周期不被误当 GPU 保活",
+      "verification": ["storage move/growth test", "callback capture review", "retained-resource regression"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M08",
+      "area": "per-view preparation isolation",
+      "checkpoints": ["C1"],
+      "expected": "双 View SSAO settings/payload/upload/DS/output 独立，B 不覆盖 A；共享 frame/skinning input 不被机械复制",
+      "verification": ["dual-view invocation tests", "RenderSubmissionTest", "shared provider tests"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M09",
+      "area": "multi-pass bindings and graph scratch",
+      "checkpoints": ["C2"],
+      "expected": "Bloom 等多 pass contribution 每次更新需要独立 descriptor；归一化 pass 次数在 invocation 内；persistent/transient 来源固定；无共享 last-call 状态",
+      "verification": ["pass count boundary tests", "descriptor independence tests", "runtime Bloom on/off"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M10",
+      "area": "failure does not publish stale or partial family",
+      "checkpoints": ["C1", "C4"],
+      "expected": "安全点开始本 tick publication，safe preparation 错误后查询为空；binding/build/compile/execute 不以旧图或部分新图发布本次 family；成功诊断不包含失败执行；合法空 workload 不是失败",
+      "verification": ["failure injection tests", "ViewFamilyRendererTest", "publication tests"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M11",
+      "area": "same-backing continuation and recipe semantics",
+      "checkpoints": ["C2", "C3", "C4"],
+      "expected": "ColorStream 同 backing 续写保留 Load/Store/深度读写和 sample hazard；Deferred Overlay 在颜色效果后且当前 Bloom.Composite backing 被 Overlay 续写，诊断输出为 Overlay 后内容（与旧行为一致）；Forward 保留既有插入位置",
+      "verification": ["continuation graph tests", "before/after topology", "per-pipeline screenshots"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M12",
+      "area": "mandatory finalize and encoding",
+      "checkpoints": ["C2", "C4"],
+      "expected": "grading/Bloom off 仍产生合法 DisplayColor；编码及 display compose 不变；缺 Finalize 不被兼容 fallback 吞掉",
+      "verification": ["SurfaceImageTest", "Finalize contract test", "grading-off screenshot"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M13",
+      "area": "single-source output publication",
+      "checkpoints": ["C1", "C2", "C4"],
+      "expected": "只发布本次 declared 且有效输出；allocated-but-skipped 不发布；统一 role collector，不在两个 pipeline 解析 feature export 名；现有 consumers 兼容",
+      "verification": ["RenderViewOutputTableTest", "collector tests", "debug/picking runtime"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M14",
+      "area": "private feature resource change is local",
+      "checkpoints": ["C2", "C5"],
+      "expected": "多 pass feature 增加私有 scratch / 修改局部资源描述，通过同一 contract 路径工作，无 pipeline、executor、registry、集中 slot 修改",
+      "verification": ["resource change test", "changed-file responsibility map"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M15",
+      "area": "complete Deferred recipe",
+      "checkpoints": ["C3"],
+      "expected": "Deferred 全功能连接由一个 recipe 可读；无 legacy prelude/tail、all-stage context、graph resources bag、集中 bindings 分配；旧 draw/gating/picking/debug 行为一致",
+      "verification": ["PipelineRecipeTest Deferred", "old-entry deletion review", "runtime screenshots and topo"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M16",
+      "area": "complete Forward recipe",
+      "checkpoints": ["C4"],
+      "expected": "Forward 全功能连接由一个 recipe 可读；共享 feature 通过同一协议；旧 orchestrator/context/bag 退出；不顺带补 transparent/Sprite 功能",
+      "verification": ["PipelineRecipeTest Forward", "old-entry deletion review", "runtime screenshots and topo"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M17",
+      "area": "shared inputs and current lighting contract",
+      "checkpoints": ["C3", "C4"],
+      "expected": "真实 shared GPU inputs 明确并准备一次；最新 local-light generated 类型/字段映射/预算用例保留；feature-specific payload/layout/binding 不再进入 shared bag",
+      "verification": ["DeferredLightBufferTest", "shared upload-count test", "owner diff review"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M18",
+      "area": "Shadow participates without changing owner or algorithm",
+      "checkpoints": ["C3", "C4"],
+      "expected": "Shadow typed token 经 composition 接入两 recipe，无旁路子 executor；strategy 持 images/runtime；invocation face/cascade/cull bindings 独立；View/Scene 不串",
+      "verification": ["ShadowPreparedViewTest", "same/different Scene tests", "shadow trace/runtime"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M19",
+      "area": "lifecycle and legal empty cases",
+      "checkpoints": ["C3", "C4"],
+      "expected": "resize/switch/reload/unregister 保留 reuse、generation、lease、fence；empty/UI-only/no surface/no extent 合法；失败或 absence 无跨 flight 旧图兜底",
+      "verification": ["ViewTargetStoreTest", "RenderSubmissionTest", "runtime mutation trace", "application integration"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M20",
+      "area": "actual composition map diagnostics",
+      "checkpoints": ["C5"],
+      "expected": "调用状态/原因、typed connections、owner、pass 贡献、有效 outputs 可与 actual graph 核对；owning diagnostic strings 不悬空；trace off 不收重型文本",
+      "verification": ["diagnostic snapshot tests", "existing graph trace integration", "lifetime test"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M21",
+      "area": "extension without core plumbing",
+      "checkpoints": ["C5"],
+      "expected": "测试专用 producer→multi-pass transform→consumer 经 request/prepare/lower/append/publish 完整运行，只需 feature 与 recipe 接线；无 core/context/bindings bag 改动",
+      "verification": ["PipelineFeatureContractTest extension", "extension change map"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M22",
+      "area": "runtime multiple Views on both strategies",
+      "checkpoints": ["C4", "C5"],
+      "expected": "真实 backend 两 pipeline 多 View 实跑，参数/DS/attachments/publication 各自独立；不能仅用同 label scope 单测代替",
+      "verification": ["integration fixture or editor multi-view evidence", "trace and screenshots"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M23",
+      "area": "performance, GPU churn and final closure",
+      "checkpoints": ["C5"],
+      "expected": "同环境至少 3 次 CPU/GPU/内存前后对照、低负载 prepare/build 对照；无稳态 GPU allocation/import replacement regression；全部 bridge/旧横向链退出；稳定规则吸收",
+      "verification": ["bench_run/bench_compare and reports", "registry trace", "final diff/references review", "render-arch absorption"],
+      "status": "todo",
+      "evidence": []
+    }
+  ]
+}

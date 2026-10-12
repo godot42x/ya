@@ -1,5 +1,13 @@
 # 进度
 
+## 2026-10-12 组合层任务转交（仅计划）
+
+- 用户纠正：需要解决 RDG 上方的 feature/资源/组合地图与横向 plumbing，不是 Bloom-only 改造。
+- P3/P4 转交 `../render-pipeline-composition/`；新线 C1 为 SSAO→Lighting 真实闭环，C2 多 pass，C3 Deferred，C4 Forward/Shadow，C5 诊断与扩展验收。
+- 本线 P0–P2 成果与历史证据不改；P5 生成 descriptor layout 保留，本线下一可执行目标是 P5（与新 owner 的文件修改先协调）。
+- 同步本线 plan / matrix / checklist / todo 与 active index；转交状态不是 done，也不代表代码已迁移。
+- 本轮没有渲染代码修改、构建、GPU 运行或新 checkpoint commit；保留工作区其他线的未提交改动。
+
 ## 2026-09-29 P2 import 条目按 owner key 匹配（部分执行）
 
 - 改动：import 身份 = `RGImportKey{label, scope}`；registry 的 import 条目按 key 存（`_importedTextures` / `_importedBuffers`），handle 映射每次 sync 重建、只用于 resolve；替换判定仍是 desc + backing 指针。`importTexture` 要求 owner 提供 image 与 view（`RGImportedTextureDesc::viewDesc`、`bRegistryCreatedImportObject`、`ERGImportChange::ViewDesc` 删除），registry 不再为 import 建任何 GPU 对象。transient 纹理池条目记 `lastUsedSync`，空闲超过 `kTransientTextureIdleSyncLimit`（8 次 sync）经 DDQ 淘汰；transient 先认领保留绑定再分配，修掉"新声明纹理抢走后续 handle 仍保留的池条目"导致的别名。入口收敛：删 SSAO/Bloom/PostProcess/Environment×2 转发包装、`makeImportedSubresourceTextureDesc`，Deferred/DirectionalShadow/PointShadow 的 host-written lambda 改为直接 `makeHostWrittenImportedBufferDesc`（size 0 = 整个 buffer，由 executor `normalizeBufferState` 保证）。

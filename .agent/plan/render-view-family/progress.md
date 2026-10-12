@@ -1,5 +1,12 @@
 # Progress
 
+## 2026-10-12 — 组合层任务归属校正（仅计划）
+
+- `rdg-cache-dx` P3/P4 转交 `render-pipeline-composition`；原本从本线转出的 FrameResourceSet / Shadow / skinning layout 职责由新线 C1–C4 接续。
+- 本线旧 `*FrameGraphOrchestrator/Passes/Resources` 改名任务不再独立执行，改为由新线 recipe/feature 结构替换；不重命名后又删除同一类型。
+- extraction/submission/flight 时间轴与其余命名仍归本线；新线仅做 prepare→record token 的必要接口接入，不重写本线 View 类型收敛。
+- 只同步 plan 顶部与当前 todo，历史章节保留；无本轮代码实施或新 runtime 验证。
+
 ## 2026-09-19 checkpoint：4.0.3 checkpoint 5 view 身份 owner-scoped
 
 ### 唯一目标

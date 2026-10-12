@@ -90,7 +90,13 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan,
     // game UI composes against.
     const SceneViewTask* displayRoot = plan.sceneRender.displayRootTask();
 
-    _device->prepareFrameRecord(plan);
+    // C1: prepareFrameRecord now returns a PreparedPipelineFrame. On failure,
+    // abort recording and return an invalid RecordedFrame.
+    PreparedPipelineFrameResult prepared = _device->prepareFrameRecord(plan);
+    if (!prepared.has_value()) {
+        YA_CORE_ERROR("Frame preparation failed; aborting recording for tick {}", plan.frame.hostTick);
+        return {};
+    }
 
     // The runtime's own UI compose pass, prepared before recording begins: the
     // packet that goes onto the display RT after the world graph. This is a

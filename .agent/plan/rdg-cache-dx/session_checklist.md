@@ -3,11 +3,12 @@
 ## 开工
 
 - 读本目录 plan.md 的当前目标、边界和本 phase 验收；读 progress.md 的未决项。
+- 2026-10-12：P3/P4 已转交 `render-pipeline-composition`，本目录只继续 P5；不要按历史 Bloom 切片 / 容器改名口径开工。
 - 只进入当前 phase 所需的主 skill；核对目标文件、调用链与当前分支状态。
 - 先确认该 phase 的用户可见 DX 问题与证据；不要仅凭“有两层对象”推断重复 allocation。
 - 明确本轮单一可验收目标及边界，再实施；普通 feature 路径要记录实际变更触及的职责。
 - P2 开工前确认 progress.md 已有 P1 的 owner 表与明确决策；没有决策不开工。
-- P4 开工前核对 render-view-family 当前状态，避免与其 `FrameRecording` 改名批次交叉。
+- P5 开工前核对 `render-pipeline-composition` 当前 feature/layout owner，避免和 C1–C4 迁移及灯光 shader 改动交叉；`FrameRecording` 改名仍归 render-view-family。
 
 ## 资源生命周期审计
 

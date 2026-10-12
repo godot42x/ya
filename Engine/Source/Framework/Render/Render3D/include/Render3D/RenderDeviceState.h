@@ -10,6 +10,7 @@
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/RecordedFrame.h"
+#include "Render3D/Common/PreparedPipelineFrame.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/ViewTargetStore.h"
@@ -303,7 +304,10 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// the Game UI compose pipeline when the plan carries a UI snapshot. No
     /// View's geometry is applied here: a View sizes its own resources, and the
     /// plan is what names the Views this frame records.
-    void prepareFrameRecord(const RenderFramePlan& plan);
+    ///
+    /// Returns the prepared frame on success. Recording contexts consume this
+    /// result; failure means no recording and no publication for this tick.
+    [[nodiscard]] PreparedPipelineFrameResult prepareFrameRecord(const RenderFramePlan& plan);
     /// Opens this plan's flight: begins its command buffer and opens the
     /// submission and the view-output table on it. False when there is nothing to
     /// record (the plan names no presentable surface / flight, or its flight has
