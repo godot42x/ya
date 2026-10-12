@@ -541,3 +541,29 @@
 - **未做（C4b）**：Shadow typed token（M18）——shadow 仍由 pipeline 侧 `_shadowStage->appendGraphPasses` 直调，两 recipe 均如此；`ViewResources` 剩余槽位复核。
 - 保留：透明槽仍是 recipe 内联声明（无功能契约，与 Deferred 的 forward-opaque 槽同待遇）。
 - 提交卫生：本轮 `git mv` 后按 pathspec 提交曾漏掉删除（HEAD 一度同时含新旧路径）。用 `read-tree` + `commit-tree` 重建提交修正为 `6b2581f8`；重建过程重置了 index，已把并行会话（rpg-prototype）的 5 项 R100 rename 逐项恢复。教训记入提交说明与本文件：**带 rename 的提交必须 diff 校验 HEAD 树，不能只信 pathspec add**。
+
+## 2026-10-13 — C4b：Shadow 作为 composition 贡献接入两条 recipe（M18）
+
+### 目标与边界
+
+**单一验收目标**：Shadow 不再是 recipe 之外的旁路——两条 recipe 都以 typed token 接入它（resolve 启用决策 / prepare token / append 输出），而策略、算法、阴影图所有权与预算不动。
+
+### 实施内容
+
+- 新增 `Composition/Features/ShadowFeature.{h,cpp}`（满足 Feature concept，带 `static_assert`）：`resolve` 只带启用决策；`prepareBindings` 调用 `ShadowStage::prepareView` 生产 `ShadowPreparedView`；`append` 调用 `ShadowStage::appendGraphPasses` 并把依赖点交给它。两 recipe 的顺序记账改为它第一个跑（shadow pass 会吃掉 family predecessor）。
+- Deferred recipe：`ResolvedView.shadow` / `PreparedView.shadow` / `GraphOutputs.shadow`；**Lighting 改从 `outputs.shadow.outputs.shadowDepth` 取**（不再由 pipeline 从外部传 `AppendContext.shadow`）。Forward recipe 同样接入 `Stages.shadow` 与对应三个槽位。
+- 管线侧：Deferred 的 `prepareShadowPass`（生产 token）与 Forward/Deferred 的 `_shadowStage->appendGraphPasses` 直调退出，替换为 `applyShadowFrameSettings()`——只把本帧 settings 应用到 stage（pipeline 仍拥有 frame packet）。`DeferredFamilyViewBranch::shadowPrepared` 与 `ForwardFamilyViewBranch::shadowPrepared` 删除。
+- 边界保持：`ShadowStage`/`BasicShadowMapTechnique` 仍持 images/runtime/cascade/face/cull bindings；`ShadowSettings` 预算语义未动；pipeline 仍负责 `#36` 资源刷新与 stage 生命周期。
+- 无 stage 时（settings 说开但资源从未建）返回"本帧无阴影"而非组合失败——与 stage-less 旧路径同答案，已在 `ShadowFeature::prepareBindings` 注释写明。
+
+### 验证
+
+- 编译：`xmake b ya-render-3d-test` / `ya-runtime` ok；测试：render3d 223/223、full 1814/1814。
+- **Trace 拓扑**（`--render-graph-trace`）：Deferred 16 pass（shadow 4 → GBuffer → SSAO → Light → ForwardOpaque → Skybox → Bloom×4 → Transparent → EntityId → Postprocessing），Forward 13 pass（shadow 4 → Opaque → Skybox → Transparent → EntityId → Bloom×4 → Postprocessing），**逐条目与 C3B 基线一致**（含 dependencies 列表）。
+- **像素**：shadow on 时 Deferred/Forward 均与改动前基线逐像素 max diff 0；**shadow on vs off 差 31782 px（max 36）**，证明 shadow 确实经 recipe 追加而非被静默跳过。
+- 日志除历史 VkDescriptorPool 告警外无 ERROR。
+
+### 保留 / 未做
+
+- C4c：`ViewResources` 剩余槽位复核、Forward 透明槽记录、M19 lifecycle 用例。
+- 未动：typed refs（仍只在测试使用，删除待拍板）。

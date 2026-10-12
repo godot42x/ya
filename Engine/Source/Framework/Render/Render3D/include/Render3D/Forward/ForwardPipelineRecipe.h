@@ -6,6 +6,7 @@
 #include "Render3D/Composition/Features/BloomFeature.h"
 #include "Render3D/Composition/Features/EntityIdFeature.h"
 #include "Render3D/Composition/Features/FinalizeFeature.h"
+#include "Render3D/Composition/Features/ShadowFeature.h"
 #include "Render3D/Composition/FeatureProtocol.h"
 #include "Render3D/Forward/Features/ForwardOpaqueFeature.h"
 #include "Render3D/Forward/Features/ForwardSkyboxFeature.h"
@@ -24,6 +25,8 @@ struct PostProcessingStage;
 struct RenderFrameData;
 struct RenderFramePlan;
 struct RenderStageContext;
+struct RenderViewRecordingContext;
+struct ShadowStage;
 struct ViewTargetLease;
 class RenderSubmission;
 
@@ -61,6 +64,7 @@ struct ForwardPipelineRecipe
     /// Device objects the features' passes need. Passed in, never reached for.
     struct Stages
     {
+        ShadowStage*         shadow    = nullptr;
         ForwardViewStage*    viewStage = nullptr;
         EntityIdPass*        entityId  = nullptr;
         PostProcessingStage* post      = nullptr;
@@ -77,6 +81,7 @@ struct ForwardPipelineRecipe
         EImageUsage::T viewDepthUsage  = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled;
         bool           bReverseViewportY = true;
 
+        ShadowFeature::Settings   shadow{};
         BloomFeature::Settings    bloom{};
         FinalizeFeature::Settings finalize{};
     };
@@ -86,6 +91,7 @@ struct ForwardPipelineRecipe
         uint64_t viewId     = 0;
         Extent2D viewExtent{};
 
+        ShadowFeature::Resolved        shadow;
         ForwardOpaqueFeature::Resolved opaque;
         ForwardSkyboxFeature::Resolved skybox;
         EntityIdFeature::Resolved      entityId;
@@ -104,6 +110,7 @@ struct ForwardPipelineRecipe
     {
         uint64_t viewId = 0;
 
+        ShadowFeature::Prepared        shadow;
         ForwardOpaqueFeature::Prepared opaque;
         ForwardSkyboxFeature::Prepared skybox;
         EntityIdFeature::Prepared      entityId;
@@ -119,6 +126,8 @@ struct ForwardPipelineRecipe
         const RenderFrameData*                 frameData      = nullptr;
         /// The View binding: shared frame/light/skinning sets and slices.
         const ForwardFrameResourceSet::Binding* frameBinding = nullptr;
+        /// The View the shadow feature prepares its per-View resources for.
+        RenderViewRecordingContext             view{};
     };
 
     struct AppendContext
@@ -137,9 +146,6 @@ struct ForwardPipelineRecipe
         /// The View's skybox packet (cubemap set + mesh), from its declaration.
         const ForwardViewAuxPasses::DrawContext::SkyboxInput* skybox = nullptr;
 
-        /// The View's shared shadow output, imported by whoever appended the
-        /// shadow passes.
-        ShadowGraphOutputs shadow{};
         /// The View's resolved environment lighting. Imported here because this
         /// is the graph-owning step; features receive handles only.
         const EnvironmentLightingSceneResources* environmentLighting = nullptr;
@@ -151,6 +157,7 @@ struct ForwardPipelineRecipe
 
     struct GraphOutputs
     {
+        ShadowFeature::GraphOutputs        shadow;
         ForwardOpaqueFeature::GraphOutputs opaque;
         ForwardSkyboxFeature::GraphOutputs skybox;
         EntityIdFeature::GraphOutputs      entityId;

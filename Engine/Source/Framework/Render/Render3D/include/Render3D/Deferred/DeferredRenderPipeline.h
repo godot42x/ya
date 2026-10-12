@@ -206,14 +206,13 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
         DescriptorSetHandle& environmentLightingDS) const;
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
-    /// Returns the token the View's graph build must hand back to the shadow
-    /// stage. An invalid token means this View appends no shadow passes.
-    [[nodiscard]] ShadowPreparedView prepareShadowPass(const RenderPipelineFrameContext& frame,
-                                                       RenderStageContext&               stageCtx);
+    /// Apply this frame's shadow settings to the shadow stage before the
+    /// composition's shadow feature prepares. The pipeline owns the frame
+    /// packet, so this stays here; the passes themselves belong to the recipe.
+    void               applyShadowFrameSettings();
     bool               appendDeferredViewToGraph(RenderGraph& graph,
                                                  const RenderPipelineFrameContext& frame,
                                                  RenderStageContext& stageCtx,
-                                                 const ShadowPreparedView& shadowPrepared,
                                                  uint32_t vpW,
                                                  uint32_t vpH,
                                                  ViewOverlayStage::FrameInputs& overlayInputs,

@@ -26,7 +26,8 @@
 
 ## 下一步（按优先级）
 
-- [ ] **C4b（C4 剩余）**：Shadow typed token 经 composition 接入两 recipe（M18；当前 shadow 仍是 pipeline 侧 `_shadowStage->appendGraphPasses` 直调）；确认无剩余混合生命周期资源槽位；Forward 透明槽保持"无功能契约"记录。
+- [x] **C4b（M18：Shadow 经 composition 接入）**：`ShadowFeature`（Composition/Features）成为两 recipe 的第一个条目——resolve 启用决策、prepareBindings 生产 `ShadowPreparedView` token、append 产出 `ShadowGraphOutputs`；Lighting 从 recipe 自己的 shadow 输出取 depth。两管线的 `_shadowStage->appendGraphPasses` 直调与 `prepareShadowPass` 退出，改为 `applyShadowFrameSettings()`（只应用 settings）。strategy 仍持 images/runtime/budget，算法与绑定不动。证据：trace 16-pass/13-pass 拓扑与 C3B 基线**逐条目一致**（shadow→GBuffer→…）；shadow on/off 差 31782 px 证明生效；Deferred/Forward 对基线逐像素 0 diff。
+- [ ] **C4c（C4 收尾）**：确认无剩余混合生命周期资源槽位（`ViewResources` 复核）；Forward 透明槽保持"无功能契约"记录；M19 lifecycle 用例。
 - [ ] **待决定的测试 hook（C3 遗留缺口）**：entity-id/picking runtime hook（读取 `DeferredView.EntityId` 的 pick/readback；editor 已有 isolate readback 路径）与 direction gizmo 场景 hook（回归场景加一个 `DirectionComponent` 实体）。
 - [ ] **M12 余项**：`SurfaceImageTest` 侧编码回归未跑。
 - [ ] **plan.md C2 剩余**：`_lastBlurPassCount` 调用状态退出、blur pass 次数边界测试（M09/M14）。

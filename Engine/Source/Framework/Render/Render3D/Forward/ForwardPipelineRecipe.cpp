@@ -6,6 +6,7 @@
 #include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/EnvironmentLightingSceneResources.h"
 #include "Render3D/Common/PostProcessingStage.h"
+#include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ViewGraphName.h"
 #include "Render3D/Common/ViewPassResources.h"
@@ -62,6 +63,8 @@ ForwardPipelineRecipe::resolve(const Config& config, const RenderFramePlan& plan
         return FeatureError::InvalidInput;
     }
 
+    const ShadowFeature shadowFeature;
+
     ForwardOpaqueFeature::Settings opaqueSettings;
     opaqueSettings.passName    = forward_pass_names::kOpaque;
     opaqueSettings.colorFormat = config.viewColorFormat;
@@ -99,6 +102,11 @@ ForwardPipelineRecipe::resolve(const Config& config, const RenderFramePlan& plan
         ResolvedView view;
         view.viewId     = task->desc.viewId;
         view.viewExtent = task->output.extent;
+
+        view.shadow = shadowFeature.resolve(
+            config.shadow,
+            ShadowFeature::Facts{},
+            ShadowFeature::Inputs{});
 
         view.opaque = opaqueFeature.resolve(
             opaqueSettings,
@@ -142,8 +150,21 @@ ForwardPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
         return FeatureError::MissingContext;
     }
 
+    const ShadowFeature shadowFeature;
+    auto shadowPrepared = shadowFeature.prepareBindings(
+        resolved.shadow,
+        ShadowFeature::PrepareContext{
+            .submission = ctx.submission,
+            .stage      = stages.shadow,
+            .view       = ctx.view,
+        });
+    if (shadowPrepared.isErr()) {
+        return shadowPrepared.error();
+    }
+
     PreparedView prepared;
     prepared.viewId = resolved.viewId;
+    prepared.shadow = shadowPrepared.value();
 
     const ForwardOpaqueFeature opaqueFeature;
     auto opaquePrepared = opaqueFeature.prepareBindings(
@@ -240,6 +261,22 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         *colorTarget, forward_graph_exports::viewColor, EImageLayout::ColorAttachmentOptimal, resolved.opaque.colorUsage));
     const RGTextureHandle depth = ctx.graph.importTexture(makeImportedTextureDesc(
         *depthTarget, forward_graph_exports::viewDepth, EImageLayout::DepthStencilAttachmentOptimal, resolved.opaque.depthUsage));
+
+    // ── Shadow (first: its passes take the family ordering point) ─────────
+    const ShadowFeature shadowFeature;
+    auto shadowOutputs = shadowFeature.append(
+        ctx.graph,
+        ctx.stages->shadow,
+        featureCtx,
+        ShadowFeature::Facts{},
+        resolved.shadow,
+        prepared.shadow,
+        ShadowFeature::Inputs{});
+    if (shadowOutputs.isErr()) {
+        YA_CORE_ERROR("Forward shadow append failed for View {}", resolved.viewId);
+        return shadowOutputs.error();
+    }
+    outputs.shadow = shadowOutputs.value();
 
     // ── Opaque (clear + every shading model) ──────────────────────────────
     auto opaqueOutputs = ctx.stages->viewStage != nullptr

@@ -871,6 +871,10 @@ ForwardPipelineRecipe::Config ForwardRenderPipeline::buildRecipeConfig(const Ren
     const PostProcessingState postSettings = getPostProcessSettings();
     config.bloom.bEnabled = isGradingEnabled() && postSettings.bEnableBloom;
 
+    // Shadow participates in the composition: whether the frame's settings turn
+    // it on decides if the recipe resolves it and appends its passes.
+    config.shadow.bEnabled = settings.shadow.isEnabled();
+
     config.finalize.bEnabled      = true;
     config.finalize.bOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT);
     config.finalize.displayFormat = POSTPROCESS_COLOR_FORMAT;
@@ -935,21 +939,14 @@ bool ForwardRenderPipeline::appendForwardViewToGraph(RenderGraph& graph,
         }
     }
 
-    // Shadow passes come first and take the family ordering point when they run,
-    // exactly as the composition's predecessor accounting expects.
-    std::optional<RGPassHandle> predecessor = familyPredecessor;
-    ShadowGraphOutputs shadowOutputs{};
-    if (_shadowStage && currentShadowSettings().isEnabled()) {
-        const size_t passCountBefore = graph.getPasses().size();
-        shadowOutputs = _shadowStage->appendGraphPasses(graph, stageCtx, shadowPrepared, predecessor);
-        if (graph.getPasses().size() > passCountBefore) {
-            predecessor = std::nullopt;
-        }
-    }
+    // Shadow is the composition's first contribution: the recipe appends its
+    // passes and reports its output, so nothing here holds a shadow token.
+    const std::optional<RGPassHandle> predecessor = familyPredecessor;
 
     // The composition: the whole Forward map. Resolved at the safe point,
     // prepared with this submission's descriptors and uploads, appended here.
     const ForwardPipelineRecipe::Stages stages{
+        .shadow    = _shadowStage.get(),
         .viewStage = _viewStage.get(),
         .entityId  = &_entityIdPass,
         .post      = &_postProcessStage,
@@ -964,6 +961,7 @@ bool ForwardRenderPipeline::appendForwardViewToGraph(RenderGraph& graph,
             .alignment    = alignment,
             .frameData    = frame.view.frameData,
             .frameBinding = &frameBinding,
+            .view         = frame.view,
         });
     if (preparedResult.isErr()) {
         YA_CORE_ERROR("Failed to prepare the Forward composition for View {}", resolved.viewId);
@@ -985,7 +983,6 @@ bool ForwardRenderPipeline::appendForwardViewToGraph(RenderGraph& graph,
             .postContext         = &postContext,
             .directionGizmos     = std::move(directionGizmos),
             .skybox              = &skyboxInput,
-            .shadow              = shadowOutputs,
             .predecessor         = predecessor,
             .bReverseViewportY   = _viewStage != nullptr ? _viewStage->bReverseViewportY : true,
         });

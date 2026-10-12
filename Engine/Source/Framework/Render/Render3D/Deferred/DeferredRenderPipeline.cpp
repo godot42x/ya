@@ -483,6 +483,10 @@ DeferredPipelineRecipe::Config DeferredRenderPipeline::buildRecipeConfig(const R
     // setting agree; Finalize is the mandatory display pass.
     config.bloom.bEnabled = isGradingEnabled() && settings.postProcessing.bEnableBloom;
 
+    // Shadow participates in the composition: whether the frame's settings turn
+    // it on decides if the recipe resolves it and appends its passes.
+    config.shadow.bEnabled = settings.shadow.isEnabled();
+
     config.finalize.bEnabled      = true;
     config.finalize.bOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT);
     config.finalize.displayFormat = POSTPROCESS_COLOR_FORMAT;
@@ -812,9 +816,6 @@ struct DeferredFamilyViewBranch
 {
     RenderPipelineFrameContext            frame{};
     RenderStageContext                    stageCtx{};
-    /// The View's own shadow preparation result, carried from prepare to the
-    /// graph build so the shadow stage needs no "current View".
-    ShadowPreparedView                    shadowPrepared{};
     uint32_t                              vpW = 0;
     uint32_t                              vpH = 0;
     ViewOverlayStage::FrameInputs     overlayInputs{};
@@ -897,7 +898,7 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
         beginViewRecording(branch.frame, branch.stageCtx, branch.vpW, branch.vpH);
         syncFrameSettings(branch.frame);
         applyPendingResourceRefreshes();
-        branch.shadowPrepared = prepareShadowPass(branch.frame, branch.stageCtx);
+        applyShadowFrameSettings();
 
         if (!preparedSkinning) {
             RenderViewRecordingContext view = branch.frame.view;
@@ -933,7 +934,6 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
                 graph,
                 live.frame,
                 live.stageCtx,
-                live.shadowPrepared,
                 live.vpW,
                 live.vpH,
                 live.overlayInputs,
@@ -1253,27 +1253,18 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
     syncShadowSettings();
 }
 
-ShadowPreparedView DeferredRenderPipeline::prepareShadowPass(const RenderPipelineFrameContext& frame,
-                                                             RenderStageContext&               stageCtx)
+void DeferredRenderPipeline::applyShadowFrameSettings()
 {
     const auto shadowSettings = currentShadowSettings();
     if (_shadowStage && shadowSettings.isEnabled()) {
         _shadowStage->applySettings(shadowSettings);
         YA_PERF_SCOPE(perf::sample::deferredShadow(), perf::metric::cpuTimeMs(), perf::domain::render());
-        if (!frame.submission || !frame.submission->isRecording()) {
-            YA_CORE_ERROR("Deferred shadow pass requires a recording submission");
-            return {};
-        }
-
-        RenderViewRecordingContext view = frame.view;
-            if (view.viewExtent.width == 0 && view.viewExtent.height == 0) {
-            view.viewExtent = stageCtx.viewExtent;
-        }
-        return _shadowStage->prepareView(*frame.submission, view);
+        return;
     }
 
+    // Shadows off this frame: nothing to apply, and the composition's shadow
+    // feature resolves off for the same reason.
     PerfState::get().clearMetric(perf::sample::deferredShadow(), perf::metric::cpuTimeMs());
-    return {};
 }
 
 namespace
@@ -1318,7 +1309,6 @@ struct DeferredViewBufferImports
 bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
                                                        const RenderPipelineFrameContext& frame,
                                                        RenderStageContext& stageCtx,
-                                                       const ShadowPreparedView& shadowPrepared,
                                                        uint32_t vpW,
                                                        uint32_t vpH,
                                                        ViewOverlayStage::FrameInputs& overlayInputs,
@@ -1366,21 +1356,14 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
     // Host-written buffer imports: one site for every pass of this View.
     const DeferredViewBufferImports imports = importDeferredViewBuffers(graph, *viewBinding);
 
-    // Shadow passes come first and take the family ordering point when they run,
-    // exactly as the composition's predecessor accounting expects.
-    std::optional<RGPassHandle> predecessor = familyPredecessor;
-    ShadowGraphOutputs shadowOutputs{};
-    if (_shadowStage) {
-        const size_t passCountBefore = graph.getPasses().size();
-        shadowOutputs = _shadowStage->appendGraphPasses(graph, stageCtx, shadowPrepared, predecessor);
-        if (graph.getPasses().size() > passCountBefore) {
-            predecessor = std::nullopt;
-        }
-    }
+    // Shadow is the composition's first contribution: the recipe appends its
+    // passes and reports its output, so nothing here holds a shadow token.
+    const std::optional<RGPassHandle> predecessor = familyPredecessor;
 
     // The composition: the whole Deferred map. Resolved at the safe point,
     // prepared with this submission's descriptors and uploads, appended here.
     const DeferredPipelineRecipe::Stages stages{
+        .shadow   = _shadowStage.get(),
         .gBuffer  = _gBufferStage.get(),
         .ssao     = _ssaoStage.get(),
         .light    = _lightStage.get(),
@@ -1401,6 +1384,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
             .overlayInputs         = &overlayInputs,
             .frameBinding          = viewBinding,
             .environmentLightingDS = environmentLightingDS,
+            .view                  = view,
         });
     if (preparedResult.isErr()) {
         YA_CORE_ERROR("Failed to prepare the Deferred composition for View {}", resolved.viewId);
@@ -1421,7 +1405,6 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
             .frameBuffer         = imports.frame,
             .lightBuffer         = imports.light,
             .skinningBuffer      = imports.skinning,
-            .shadow              = shadowOutputs,
             .environmentLighting = &environmentLighting,
             .predecessor         = predecessor,
             .bReverseViewportY   = _bReverseViewportY,

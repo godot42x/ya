@@ -10,6 +10,7 @@
 #include "Render3D/Composition/Features/BloomFeature.h"
 #include "Render3D/Composition/Features/EntityIdFeature.h"
 #include "Render3D/Composition/Features/FinalizeFeature.h"
+#include "Render3D/Composition/Features/ShadowFeature.h"
 #include "Render3D/Deferred/Features/GBufferFeature.h"
 #include "Render3D/Deferred/Features/LightingFeature.h"
 #include "Render3D/Deferred/Features/OverlayFeature.h"
@@ -33,7 +34,9 @@ struct PostProcessingStage;
 struct RenderFrameData;
 struct RenderFramePlan;
 struct RenderStageContext;
+struct RenderViewRecordingContext;
 struct SSAOStage;
+struct ShadowStage;
 struct Sprite2DStage;
 struct ViewOverlayStage;
 struct ViewTargetLease;
@@ -70,6 +73,7 @@ struct DeferredPipelineRecipe
     /// Device objects the features' passes need. Passed in, never reached for.
     struct Stages
     {
+        ShadowStage*         shadow   = nullptr;
         GBufferStage*        gBuffer  = nullptr;
         SSAOStage*           ssao     = nullptr;
         LightStage*          light    = nullptr;
@@ -85,6 +89,7 @@ struct DeferredPipelineRecipe
     /// from the same settings snapshot the pipeline is about to apply.
     struct Config
     {
+        ShadowFeature::Settings   shadow{};
         SSAOFeature::Settings     ssao{};
         BloomFeature::Settings    bloom{};
         FinalizeFeature::Settings finalize{};
@@ -99,6 +104,7 @@ struct DeferredPipelineRecipe
         uint64_t viewId     = 0;
         Extent2D viewExtent{};
 
+        ShadowFeature::Resolved       shadow;
         GBufferFeature::Resolved      gbuffer;
         SSAOFeature::Resolved         ssao;
         LightingFeature::Resolved     lighting;
@@ -121,6 +127,7 @@ struct DeferredPipelineRecipe
     {
         uint64_t viewId = 0;
 
+        ShadowFeature::Prepared   shadow;
         GBufferFeature::Prepared  gbuffer;
         SSAOFeature::Prepared     ssao;
         LightingFeature::Prepared lighting;
@@ -153,6 +160,8 @@ struct DeferredPipelineRecipe
         /// The View's environment-lighting set (may be empty when the Scene has
         /// no resolved environment).
         DescriptorSetHandle                    environmentLightingDS{};
+        /// The View the shadow feature prepares its per-View resources for.
+        RenderViewRecordingContext             view{};
     };
 
     struct AppendContext
@@ -172,9 +181,6 @@ struct DeferredPipelineRecipe
         RGBufferHandle                lightBuffer{};
         RGBufferHandle                skinningBuffer{};
 
-        /// The View's shared shadow output, imported by whoever appended the
-        /// shadow passes.
-        ShadowGraphOutputs shadow{};
         /// The View's resolved environment lighting. Imported here because this
         /// is the graph-owning step; features receive handles only.
         const EnvironmentLightingSceneResources* environmentLighting = nullptr;
@@ -186,6 +192,7 @@ struct DeferredPipelineRecipe
 
     struct GraphOutputs
     {
+        ShadowFeature::GraphOutputs       shadow;
         GBufferFeature::GraphOutputs      gbuffer;
         SSAOFeature::GraphOutputs         ssao;
         LightingFeature::GraphOutputs     lighting;

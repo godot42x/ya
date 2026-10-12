@@ -2,7 +2,7 @@
   "plan": "render-pipeline-composition",
   "updated": "2026-10-12",
   "implementation_status": "in_progress",
-  "next_checkpoint": "C4b",
+  "next_checkpoint": "C4c",
   "intent": "RDG 上方建立一等 feature、typed recipe、单源资源需求与贯通 prepare/build/publication 的同一份 resolved composition；不以 Bloom 算法为目标",
   "status_rules": {
     "todo": "未实施，evidence 为空",
@@ -248,8 +248,13 @@
       "checkpoints": ["C3", "C4"],
       "expected": "Shadow typed token 经 composition 接入两 recipe，无旁路子 executor；strategy 持 images/runtime；invocation face/cascade/cull bindings 独立；View/Scene 不串",
       "verification": ["ShadowPreparedViewTest", "same/different Scene tests", "shadow trace/runtime"],
-      "status": "todo",
-      "evidence": []
+      "status": "verified",
+      "evidence": [
+        "ShadowFeature（Composition/Features）满足 Feature concept：resolve 启用决策 / prepareBindings 生产 ShadowPreparedView token / append 产出 ShadowGraphOutputs；两 recipe 均以其为首个条目并接收 typed token（DeferredPipelineRecipe.cpp / ForwardPipelineRecipe.cpp）",
+        "旁路退出：pipeline 侧 prepareShadowPass 与 _shadowStage->appendGraphPasses 直调删除，改为 applyShadowFrameSettings() 只应用 settings；branch 的 shadowPrepared 字段删除",
+        "strategy/算法无变化：ShadowStage/BasicShadowMapTechnique 仍持 images/runtime/cascade/face/cull bindings；ShadowSettings 预算语义未动；无 stage 时=本帧无阴影（同旧 stage-less 答案）",
+        "trace 拓扑逐条目与 C3B 基线一致：Deferred 16 pass（shadow 4 → GBuffer → SSAO → Light → …）、Forward 13 pass（shadow 4 → Opaque → …）；shadow on/off 差 31782 px；两管线 on 时对基线逐像素 max diff 0"
+      ]
     },
     {
       "id": "M19",

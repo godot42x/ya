@@ -73,6 +73,8 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
         return FeatureError::InvalidInput;
     }
 
+    const ShadowFeature shadowFeature;
+
     GBufferFeature::Settings gbufferSettings;
     gbufferSettings.bEnabled      = true;
     gbufferSettings.albedoFormat  = config.gBufferFormats.colorFormats[0];
@@ -117,6 +119,11 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
         ResolvedView view;
         view.viewId     = task->desc.viewId;
         view.viewExtent = task->output.extent;
+
+        view.shadow = shadowFeature.resolve(
+            config.shadow,
+            ShadowFeature::Facts{},
+            ShadowFeature::Inputs{});
 
         view.gbuffer = gbufferFeature.resolve(
             gbufferSettings,
@@ -184,8 +191,21 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
         return FeatureError::MissingContext;
     }
 
+    const ShadowFeature shadowFeature;
+    auto shadowPrepared = shadowFeature.prepareBindings(
+        resolved.shadow,
+        ShadowFeature::PrepareContext{
+            .submission = ctx.submission,
+            .stage      = stages.shadow,
+            .view       = ctx.view,
+        });
+    if (shadowPrepared.isErr()) {
+        return shadowPrepared.error();
+    }
+
     PreparedView prepared;
     prepared.viewId          = resolved.viewId;
+    prepared.shadow          = shadowPrepared.value();
     prepared.frameRange      = toRange(ctx.frameBinding->frame);
     prepared.lightRange      = toRange(ctx.frameBinding->light);
 
@@ -337,6 +357,22 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     featureCtx.predecessor       = ctx.predecessor;
     featureCtx.bReverseViewportY = ctx.bReverseViewportY;
 
+    // ── Shadow (first: its passes take the family ordering point) ─────────
+    const ShadowFeature shadowFeature;
+    auto shadowOutputs = shadowFeature.append(
+        ctx.graph,
+        ctx.stages->shadow,
+        featureCtx,
+        ShadowFeature::Facts{},
+        resolved.shadow,
+        prepared.shadow,
+        ShadowFeature::Inputs{});
+    if (shadowOutputs.isErr()) {
+        YA_CORE_ERROR("Shadow append failed for View {}", resolved.viewId);
+        return shadowOutputs.error();
+    }
+    outputs.shadow = shadowOutputs.value();
+
     // ── GBuffer ───────────────────────────────────────────────────────────
     const GBufferFeature gbufferFeature;
     auto gbufferOutputs = gbufferFeature.append(
@@ -393,8 +429,8 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     if (outputs.ssao.ao.isValid()) {
         lightingInputs.ssao = outputs.ssao.ao.get();
     }
-    if (ctx.shadow.shadowDepth.has_value()) {
-        lightingInputs.shadowDepth = *ctx.shadow.shadowDepth;
+    if (outputs.shadow.outputs.shadowDepth.has_value()) {
+        lightingInputs.shadowDepth = *outputs.shadow.outputs.shadowDepth;
     }
     if (ctx.environmentLighting != nullptr && ctx.environmentLighting->isComplete()) {
         lightingInputs.environmentCubemap = ctx.graph.importTexture(makeImportedTextureDesc(
