@@ -16,7 +16,6 @@ namespace ya
 {
 
 struct IFrameBuffer;
-struct DeferredSSAOPassParams;
 
 struct YA_RENDER_3D_API SSAOStage : public IRenderStage
 {
@@ -52,7 +51,18 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
     void execute(const RenderStageContext& ctx) override;
 
     [[nodiscard]] FrameData buildFrameData(const RenderStageContext& ctx) const;
+    /// The same payload built from explicit values, so a feature's resolve can
+    /// produce the frame UBO without reaching into applied stage state.
+    [[nodiscard]] static FrameData buildFrameData(const RenderFrameData& frameData,
+                                                  Extent2D               viewExtent,
+                                                  float                  radius,
+                                                  float                  bias,
+                                                  float                  power,
+                                                  float                  intensity,
+                                                  bool                   bReverseY);
     [[nodiscard]] stdptr<IDescriptorSetLayout> getInputDSL() const { return _inputDSL; }
+    [[nodiscard]] IPipelineLayout* getPipelineLayout() const { return _pipelineLayout.get(); }
+    [[nodiscard]] const stdptr<Texture>& getNoiseTexture() const { return _noiseTexture; }
     void writeInputDescriptors(
         DescriptorSetHandle                          inputDS,
         const RGRenderContext::RGPassBindingContext& binding,
@@ -61,10 +71,6 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
         RGTextureHandle                              depth,
         RGTextureHandle                              noise) const;
 
-    RGTextureHandle appendGraphPass(RenderGraph& graph,
-                                    const RenderStageContext& ctx,
-                                    const DeferredSSAOPassParams& params,
-                                    RGTextureHandle output);
     [[nodiscard]] float getRadius() const { return _radius; }
     [[nodiscard]] float getBias() const { return _bias; }
     [[nodiscard]] float getPower() const { return _power; }

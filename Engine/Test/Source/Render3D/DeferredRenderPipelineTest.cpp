@@ -167,93 +167,100 @@ TEST(DeferredFrameGraphResourcesTest, KeepsOptionalInputsExplicitAndHandlesFrame
     resources.buffers.frame = RGBufferHandle{.index = 2, .generation = 7};
     resources.textures.gBufferColors[0] = RGTextureHandle{.index = 3, .generation = 9};
     resources.textures.ssao = RGTextureHandle{.index = 4, .generation = 11};
-    resources.passes.gBuffer = RGPassHandle{.index = 5, .generation = 13};
+    resources.passes.skybox = RGPassHandle{.index = 5, .generation = 13};
 
     EXPECT_TRUE(resources.buffers.frame.isValid());
     EXPECT_TRUE(resources.textures.gBufferColors[0].isValid());
     ASSERT_TRUE(resources.textures.ssao.has_value());
     EXPECT_EQ(resources.textures.ssao->index, 4u);
-    ASSERT_TRUE(resources.passes.gBuffer.has_value());
-    EXPECT_EQ(resources.passes.gBuffer->generation, 13u);
+    ASSERT_TRUE(resources.passes.skybox.has_value());
+    EXPECT_EQ(resources.passes.skybox->generation, 13u);
 }
 
-TEST(DeferredGBufferPassParamsTest, DefaultsAreEmptyAndHandlesRemainFrameLocal)
+TEST(GBufferFeatureTest, DisabledResolveCarriesNoFormatsAndEnabledResolveOwnsItsRoles)
 {
-    DeferredGBufferPassParams params{};
+    GBufferFeature feature;
 
-    EXPECT_FALSE(params.frame.handle.isValid());
-    EXPECT_FALSE(params.light.handle.isValid());
-    EXPECT_FALSE(params.skinning.isValid());
-    EXPECT_EQ(params.frame.range.offset, 0u);
-    EXPECT_EQ(params.frame.range.size, 0u);
-    EXPECT_EQ(params.layerCount, 1u);
-    EXPECT_FALSE(params.frameAndLightDescriptorSet);
-    EXPECT_FALSE(params.skinningDescriptorSet);
-    for (const auto& color : params.gBufferColors) {
-        EXPECT_FALSE(color.isValid());
-    }
-    EXPECT_FALSE(params.gBufferDepth.isValid());
+    GBufferFeature::Settings settings;
+    settings.bEnabled = false;
 
-    params.frame.handle = RGBufferHandle{.index = 2, .generation = 7};
-    params.frame.range  = RGBufferRange{.offset = 256, .size = 128};
-    params.light.handle = RGBufferHandle{.index = 3, .generation = 8};
-    params.skinning     = RGBufferHandle{.index = 4, .generation = 9};
-    params.gBufferColors[0] = RGTextureHandle{.index = 5, .generation = 10};
-    params.gBufferDepth     = RGTextureHandle{.index = 6, .generation = 11};
-    params.renderArea       = Rect2D{.pos = {0, 0}, .extent = {1920, 1080}};
+    const auto disabled = feature.resolve(settings, GBufferFeature::Facts{}, GBufferFeature::Inputs{});
+    EXPECT_FALSE(disabled.bEnabled);
 
-    EXPECT_TRUE(params.frame.handle.isValid());
-    EXPECT_EQ(params.frame.range.offset, 256u);
-    EXPECT_EQ(params.frame.range.size, 128u);
-    EXPECT_TRUE(params.light.handle.isValid());
-    EXPECT_TRUE(params.skinning.isValid());
-    EXPECT_TRUE(params.gBufferColors[0].isValid());
-    EXPECT_TRUE(params.gBufferDepth.isValid());
-    EXPECT_EQ(params.renderArea.extent.x, 1920);
-    EXPECT_EQ(params.renderArea.extent.y, 1080);
+    settings.bEnabled      = true;
+    settings.albedoFormat  = EFormat::R8G8B8A8_UNORM;
+    settings.normalFormat  = EFormat::R16G16B16A16_SFLOAT;
+    settings.ormFormat     = EFormat::R8G8B8A8_UNORM;
+    settings.shadingFormat = EFormat::R8_UNORM;
+    settings.depthFormat   = EFormat::D32_SFLOAT;
+
+    const auto enabled = feature.resolve(settings, GBufferFeature::Facts{}, GBufferFeature::Inputs{});
+    ASSERT_TRUE(enabled.bEnabled);
+    EXPECT_EQ(enabled.outputs.albedo.role, EViewAttachment::GBuffer0);
+    EXPECT_EQ(enabled.outputs.albedo.format, EFormat::R8G8B8A8_UNORM);
+    EXPECT_EQ(enabled.outputs.normal.role, EViewAttachment::GBuffer1);
+    EXPECT_EQ(enabled.outputs.orm.role, EViewAttachment::GBuffer2);
+    EXPECT_EQ(enabled.outputs.shading.role, EViewAttachment::GBuffer3);
+    EXPECT_EQ(enabled.outputs.depth.role, EViewAttachment::SceneDepth);
+    EXPECT_EQ(enabled.outputs.depth.format, EFormat::D32_SFLOAT);
+    EXPECT_TRUE(enabled.outputs.depth.isDepth);
+
+    // A disabled feature prepares nothing, even when the View binding has sets.
+    const auto disabledPrepared = feature.prepareBindings(disabled, GBufferFeature::PrepareInputs{});
+    EXPECT_FALSE(disabledPrepared.frameAndLightDS);
+    EXPECT_FALSE(disabledPrepared.skinningDS);
 }
 
-TEST(DeferredPassParamsTest, SSAOAndLightDefaultsAreEmptyAndHandlesRemainFrameLocal)
+TEST(SSAOFeatureTest, DisabledResolveRequiresNoTargetAndEnabledResolveBuildsFrameData)
 {
-    DeferredSSAOPassParams ssao{};
-    EXPECT_FALSE(ssao.frame.isValid());
-    EXPECT_FALSE(ssao.albedo.isValid());
-    EXPECT_FALSE(ssao.normal.isValid());
-    EXPECT_FALSE(ssao.depth.isValid());
-    EXPECT_FALSE(ssao.output.isValid());
-    EXPECT_EQ(ssao.frameRange.offset, 0u);
-    EXPECT_EQ(ssao.frameRange.size, 0u);
-    EXPECT_FALSE(ssao.frameDescriptorSet);
-    EXPECT_FALSE(ssao.inputDescriptorSet);
-    EXPECT_EQ(ssao.viewId, 0u);
+    SSAOFeature feature;
 
-    ssao.frame  = RGBufferHandle{.index = 1, .generation = 2};
-    ssao.albedo = RGTextureHandle{.index = 3, .generation = 4};
-    EXPECT_TRUE(ssao.frame.isValid());
-    EXPECT_TRUE(ssao.albedo.isValid());
+    SSAOFeature::Settings settings; // disabled by default
 
-    DeferredLightPassParams light{};
-    EXPECT_FALSE(light.frame.handle.isValid());
-    EXPECT_FALSE(light.light.handle.isValid());
-    EXPECT_FALSE(light.gBufferDepth.isValid());
-    EXPECT_FALSE(light.ssao.has_value());
-    EXPECT_FALSE(light.viewColor.isValid());
-    EXPECT_FALSE(light.gBufferTextureDescriptorSet);
-    EXPECT_FALSE(light.shadowDescriptorSet);
-    EXPECT_EQ(light.layerCount, 1u);
-    for (const auto& color : light.gBufferColors) {
-        EXPECT_FALSE(color.isValid());
-    }
+    const auto disabled = feature.resolve(settings, SSAOFeature::Facts{}, SSAOFeature::Inputs{});
+    EXPECT_FALSE(disabled.bEnabled);
+    EXPECT_FALSE(disabled.aoTarget.has_value());
 
-    light.frame.handle      = RGBufferHandle{.index = 5, .generation = 6};
-    light.gBufferColors[0]  = RGTextureHandle{.index = 7, .generation = 8};
-    light.gBufferDepth      = RGTextureHandle{.index = 8, .generation = 9};
-    light.ssao              = RGTextureHandle{.index = 9, .generation = 10};
-    EXPECT_TRUE(light.frame.handle.isValid());
-    EXPECT_TRUE(light.gBufferColors[0].isValid());
-    EXPECT_TRUE(light.gBufferDepth.isValid());
-    ASSERT_TRUE(light.ssao.has_value());
-    EXPECT_EQ(light.ssao->index, 9u);
+    settings.bEnabled  = true;
+    settings.radius    = 1.25f;
+    settings.bias      = 0.04f;
+    settings.power     = 1.75f;
+    settings.intensity = 2.0f;
+
+    RenderFrameData frameData{};
+    frameData.projection = glm::mat4(2.0f);
+    frameData.view       = glm::mat4(1.0f);
+
+    const auto enabled = feature.resolve(
+        settings,
+        SSAOFeature::Facts{
+            .viewExtent = {.width = 640, .height = 480},
+            .frameData  = &frameData,
+            .bReverseY  = false,
+        },
+        SSAOFeature::Inputs{});
+    ASSERT_TRUE(enabled.bEnabled);
+    ASSERT_TRUE(enabled.aoTarget.has_value());
+    EXPECT_EQ(enabled.aoTarget->role, EViewAttachment::SSAO);
+    EXPECT_EQ(enabled.frameData.screenResolution.x, 640);
+    EXPECT_EQ(enabled.frameData.screenResolution.y, 480);
+    EXPECT_FLOAT_EQ(enabled.frameData.radius, 1.25f);
+    EXPECT_FLOAT_EQ(enabled.frameData.bias, 0.04f);
+    EXPECT_FLOAT_EQ(enabled.frameData.power, 1.75f);
+    EXPECT_FLOAT_EQ(enabled.frameData.intensity, 2.0f);
+    EXPECT_EQ(enabled.frameData.reverseY, 0u);
+    EXPECT_FLOAT_EQ(enabled.frameData.projectMat[0][0], 2.0f);
+}
+
+TEST(LightingFeatureTest, ResolveCarriesThePipelineSceneColorFormat)
+{
+    LightingFeature::Settings settings;
+    settings.sceneColorFormat = EFormat::R16G16B16A16_SFLOAT;
+
+    const auto resolved = LightingFeature::resolve(settings, LightingFeature::Facts{}, LightingFeature::Inputs{});
+    ASSERT_TRUE(resolved.bEnabled);
+    EXPECT_EQ(resolved.outputs.sceneColorRole, EViewAttachment::SceneColor);
+    EXPECT_EQ(resolved.outputs.sceneColorFormat, EFormat::R16G16B16A16_SFLOAT);
 }
 
 TEST(DeferredPassParamsTest, SkyboxOverlayDefaultsAreEmptyAndCallbacksRemainExplicit)

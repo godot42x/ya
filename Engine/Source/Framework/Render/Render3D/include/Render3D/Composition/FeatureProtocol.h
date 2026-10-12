@@ -6,6 +6,7 @@
 #include "Graph/RenderGraph.h"
 
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <type_traits>
 
@@ -117,6 +118,7 @@ concept Feature = requires(F feature) {
 
 struct IRender;
 struct IRenderResourceFactory;
+struct RenderStageContext;
 class RenderSubmission;
 class ViewTargetStore;
 struct ViewTargetLease;
@@ -147,7 +149,16 @@ struct FeatureGraphContext
     RenderGraph*             graph          = nullptr;
     IRender*                 render         = nullptr;
     const ViewTargetLease*   viewLease      = nullptr;
+    /// The View's recording context this graph belongs to. Features read it for
+    /// the frame facts their existing stages already consume, never for live
+    /// ECS / active-scene lookups.
+    const RenderStageContext* stageCtx      = nullptr;
     uint64_t                 viewId         = 0;
+    /// Explicit ordering point for this View's first pass: the previous View's
+    /// last pass. Null when another pass (a shadow pass) already took it.
+    std::optional<RGPassHandle> predecessor{};
+    /// Viewport convention of the pipeline this View records through.
+    bool                     bReverseViewportY = true;
 };
 
 } // namespace ya

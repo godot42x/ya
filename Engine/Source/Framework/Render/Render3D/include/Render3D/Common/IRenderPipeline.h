@@ -11,6 +11,7 @@
 #include <functional>
 #include <glm/glm.hpp>
 #include <memory>
+#include <vector>
 
 #include <cstdint>
 
@@ -23,6 +24,19 @@ struct RenderTexture;
 struct Texture;
 struct RenderFrameData;
 struct ViewTargetRequest;
+struct PreparedPipelineFrame;
+
+/// Outcome of a pipeline's safe-point composition step.
+enum class EFrameComposition
+{
+    /// This pipeline has no typed composition (yet); the caller allocates View
+    /// targets from `appendTargetRequests`.
+    NotApplicable,
+    /// Composition resolved and the View target requests it requires produced.
+    Resolved,
+    /// Composition resolution failed; the frame must not record.
+    Failed,
+};
 
 struct IRenderPipelineExecution
 {
@@ -38,13 +52,26 @@ struct IRenderPipelineExecution
     /// Submission-scoped warmup: PSO beginFrame and the state that must land
     /// before any family records. Called once per submission, never per View.
     virtual void beginSubmission() = 0;
+    /// Safe-point composition: resolve this frame's typed composition, fill
+    /// `prepared` for recording, and append the View target requests it
+    /// requires. The default is the pre-composition answer: no typed
+    /// composition, allocate from `appendTargetRequests` instead.
+    [[nodiscard]] virtual EFrameComposition resolveFrameComposition(
+        [[maybe_unused]] const RenderFramePlan& plan,
+        [[maybe_unused]] PreparedPipelineFrame& prepared,
+        [[maybe_unused]] std::vector<ViewTargetRequest>& out)
+    {
+        return EFrameComposition::NotApplicable;
+    }
+    /// Allocation requirements for a pipeline without a typed composition.
+    /// Retires when every pipeline resolves one (see `resolveFrameComposition`).
     virtual void appendTargetRequests(
-        const SceneRenderPlan& plan,
-        std::vector<ViewTargetRequest>& out) const = 0;
+        [[maybe_unused]] const SceneRenderPlan& plan,
+        [[maybe_unused]] std::vector<ViewTargetRequest>& out) const
+    {}
 
     [[nodiscard]] virtual EFormat::T getViewColorFormat() const     = 0;
     [[nodiscard]] virtual EFormat::T getViewDepthFormat() const     = 0;
-
 };
 
 struct IRenderPipelineSettings

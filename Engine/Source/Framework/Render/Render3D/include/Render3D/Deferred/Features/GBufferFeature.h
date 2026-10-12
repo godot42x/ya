@@ -1,91 +1,86 @@
 #pragma once
 
-#include "Render3D/Composition/FeatureProtocol.h"
-#include "Render3D/Common/ViewTargetStore.h"
-#include "RHI/Core/DescriptorSet.h"
-#include "RHI/Core/FrameUploadArena.h"
 #include "Graph/RenderGraph.h"
+#include "Render3D/Common/ViewTargetStore.h"
+#include "Render3D/Composition/FeatureProtocol.h"
+#include "RHI/Core/DescriptorSet.h"
 
 #include <cstdint>
 
 namespace ya
 {
 
-struct RenderFrameData;
 struct GBufferStage;
-class DeferredFrameResourceSet;
 
-/// GBuffer generation feature: renders opaque geometry to deferred buffers.
-/// 
-/// Outputs: albedo, normal, ORM (occlusion/roughness/metallic), shading model, depth
-/// These become inputs for SSAO, lighting, and other deferred passes.
-class GBufferFeature
+/// GBuffer generation feature: renders the View's opaque geometry into the
+/// deferred buffers.
+///
+/// The feature owns its resource requirements (the four color targets plus the
+/// shared depth), the binding handles its pass consumes, and the pass itself.
+/// The buffers are the View's imported targets; the frame/light UBOs and the
+/// skinning SSBO arrive as typed inputs from the frame-level import step.
+struct GBufferFeature
 {
-public:
-    // ────────────────────────────────────────────────────────────────────────
-    // Settings
-    // ────────────────────────────────────────────────────────────────────────
-    
+    /// Pipeline-resolved configuration. Formats and usages come from the
+    /// pipeline's runtime formats, so allocation and PSO formats cannot drift
+    /// apart from one hardcoded literal.
     struct Settings
     {
-        bool bEnabled = true;
+        bool           bEnabled      = true;
+        EFormat::T     albedoFormat  = EFormat::Undefined;
+        EFormat::T     normalFormat  = EFormat::Undefined;
+        EFormat::T     ormFormat     = EFormat::Undefined;
+        EFormat::T     shadingFormat = EFormat::Undefined;
+        EFormat::T     depthFormat   = EFormat::Undefined;
+        EImageUsage::T colorUsage    = EImageUsage::ColorAttachment | EImageUsage::Sampled;
+        EImageUsage::T depthUsage    = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled;
     };
-    
-    // ────────────────────────────────────────────────────────────────────────
-    // Facts (immutable per-view data)
-    // ────────────────────────────────────────────────────────────────────────
-    
+
+    /// Immutable per-View facts.
     struct Facts
     {
         uint64_t viewId = 0;
-        Extent2D viewExtent;
-        const RenderFrameData* frameData = nullptr;
-        uint32_t flightIndex = 0;
+        Extent2D viewExtent{};
     };
-    
-    // ────────────────────────────────────────────────────────────────────────
-    // Inputs (data flow from other features)
-    // ────────────────────────────────────────────────────────────────────────
-    
+
+    /// Typed data flow into the pass: the View's imported host-written buffers.
     struct Inputs
     {
-        // GBuffer has no feature inputs (it's the first geometry pass)
+        RGBufferHandle frame{};
+        RGBufferRange  frameRange{};
+        RGBufferHandle light{};
+        RGBufferRange  lightRange{};
+        RGBufferHandle skinning{};
     };
-    
-    // ────────────────────────────────────────────────────────────────────────
-    // Resolved (resource requirements)
-    // ────────────────────────────────────────────────────────────────────────
-    
+
+    struct Outputs
+    {
+        ViewAttachmentDesc albedo;
+        ViewAttachmentDesc normal;
+        ViewAttachmentDesc orm;
+        ViewAttachmentDesc shading;
+        ViewAttachmentDesc depth;
+    };
+
     struct Resolved
     {
-        struct Outputs
-        {
-            EViewAttachment albedoRole  = EViewAttachment::GBuffer0;
-            EViewAttachment normalRole  = EViewAttachment::GBuffer1;
-            EViewAttachment ormRole     = EViewAttachment::GBuffer2;
-            EViewAttachment shadingRole = EViewAttachment::GBuffer3;
-            EViewAttachment depthRole   = EViewAttachment::SceneDepth;
-        } outputs;
-        
-        bool bEnabled = false;
+        bool    bEnabled = false;
+        Outputs outputs;
     };
-    
-    // ────────────────────────────────────────────────────────────────────────
-    // Prepared (submission-allocated resources)
-    // ────────────────────────────────────────────────────────────────────────
-    
+
+    /// The View binding's descriptor sets this pass consumes.
+    struct PrepareInputs
+    {
+        DescriptorSetHandle frameAndLightDS{};
+        DescriptorSetHandle skinningDS{};
+    };
+
     struct Prepared
     {
-        DescriptorSetHandle frameAndLightDS;
-        DescriptorSetHandle skinningDS;
-        FrameUploadArena::Allocation frameUBO;
-        FrameUploadArena::Allocation lightUBO;
+        DescriptorSetHandle frameAndLightDS{};
+        DescriptorSetHandle skinningDS{};
     };
-    
-    // ────────────────────────────────────────────────────────────────────────
-    // Graph outputs (RDG handles)
-    // ────────────────────────────────────────────────────────────────────────
-    
+
     struct GraphOutputs
     {
         RGTextureHandle albedo;
@@ -94,26 +89,18 @@ public:
         RGTextureHandle shading;
         RGTextureHandle depth;
     };
-    
-    // ────────────────────────────────────────────────────────────────────────
-    // Feature protocol
-    // ────────────────────────────────────────────────────────────────────────
-    
-    Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs);
-    
-    Prepared prepareBindings(
-        DeferredFrameResourceSet* resourceSet,
-        const Facts& facts,
-        const Resolved& resolved);
-    
-    GraphOutputs append(
-        RenderGraph& graph,
-        GBufferStage* stage,
-        const FeatureGraphContext& ctx,
-        const Facts& facts,
-        const Resolved& resolved,
-        const Prepared& prepared,
-        const Inputs& inputs);
+
+    [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;
+
+    [[nodiscard]] Prepared prepareBindings(const Resolved& resolved, const PrepareInputs& inputs) const;
+
+    [[nodiscard]] GraphOutputs append(RenderGraph&               graph,
+                                      GBufferStage*              stage,
+                                      const FeatureGraphContext& ctx,
+                                      const Facts&               facts,
+                                      const Resolved&            resolved,
+                                      const Prepared&            prepared,
+                                      const Inputs&              inputs) const;
 };
 
 } // namespace ya

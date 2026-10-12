@@ -61,8 +61,6 @@ struct DeferredFrameGraphResources
     struct Passes
     {
         ShadowGraphOutputs          shadow{};
-        std::optional<RGPassHandle> gBuffer{};
-        std::optional<RGPassHandle> light{};
         std::optional<RGPassHandle> skybox{};
         std::optional<RGPassHandle> sceneOverlay{};
         std::optional<RGPassHandle> viewOverlay{};

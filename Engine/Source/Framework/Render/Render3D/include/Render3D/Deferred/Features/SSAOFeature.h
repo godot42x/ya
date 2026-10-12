@@ -1,35 +1,28 @@
 #pragma once
 
-#include "Core/Result.h"
 #include "Core/Optional.h"
-#include "Render3D/Composition/FeatureProtocol.h"
-#include "Render3D/Deferred/SSAOStage.h"
-#include "Render3D/Common/ViewTargetStore.h"
+#include "Core/Result.h"
 #include "Graph/RenderGraph.h"
 #include "RHI/RenderDefines.h"
+#include "Render3D/Common/ViewTargetStore.h"
+#include "Render3D/Composition/FeatureProtocol.h"
+#include "Render3D/Deferred/SSAOStage.h"
+
+#include <optional>
 
 namespace ya
 {
 
 struct RenderFrameData;
-class ViewTargetStore;
 class RenderSubmission;
-struct RenderStageContext;
 
-// Type tags for SSAOFeature
-namespace ssao_tag
-{
-struct AO {};
-struct FrameUBO {};
-}
-
-/// SSAO feature implementing the composition protocol.
+/// SSAO feature: derives ambient occlusion from the View's GBuffer.
 ///
-/// Inputs: GBuffer albedo/normal/depth from GBufferFeature or legacy prelude.
-/// Outputs: OptionalAO (valid when enabled, invalid when disabled).
+/// Inputs: GBuffer albedo/normal/depth plus the View's imported SSAO frame UBO.
+/// Outputs: OptionalAO, valid exactly when the feature is enabled.
 ///
-/// When disabled, resolve returns no resource requirements and append contributes
-/// no passes. Lighting consumes the optional AO and uses a neutral binding when invalid.
+/// When disabled, resolve declares no resource requirement, no pass is added and
+/// Lighting consumes an invalid AO and binds neutral occlusion.
 struct SSAOFeature
 {
     /// Optional AO output: wraps RGTextureHandle with validity tracking.
@@ -43,28 +36,32 @@ struct SSAOFeature
         [[nodiscard]] constexpr bool isValid() const { return handle.isValid(); }
         [[nodiscard]] constexpr RGTextureHandle get() const { return handle; }
     };
+
     struct Settings
     {
-        bool  bEnabled = true;
-        float radius   = 0.6f;
-        float bias     = 0.025f;
-        float power    = 1.5f;
+        bool  bEnabled  = false;
+        float radius    = 0.6f;
+        float bias      = 0.025f;
+        float power     = 1.5f;
         float intensity = 2.5f;
     };
 
     struct Facts
     {
-        uint32_t                 viewId     = 0;
-        Extent2D                 viewExtent = {};
-        const RenderFrameData*   frameData  = nullptr;
-        bool                     bReverseY  = true;
+        Extent2D               viewExtent{};
+        const RenderFrameData* frameData = nullptr;
+        bool                   bReverseY = true;
     };
 
+    /// Typed data flow into the pass: imported GBuffer handles and the View's
+    /// imported SSAO frame UBO.
     struct Inputs
     {
-        CompositionTextureRef<GBufferAlbedo> albedo;
-        CompositionTextureRef<GBufferNormal> normal;
-        CompositionTextureRef<Depth>         depth;
+        RGBufferHandle  frame{};
+        RGBufferRange   frameRange{};
+        RGTextureHandle albedo{};
+        RGTextureHandle normal{};
+        RGTextureHandle depth{};
     };
 
     struct Outputs
@@ -72,33 +69,38 @@ struct SSAOFeature
         OptionalAO ao;
     };
 
+    struct ResourceRequirement
+    {
+        EViewAttachment role   = EViewAttachment::SSAO;
+        EFormat::T      format = SSAOStage::AO_FORMAT;
+        EImageUsage::T  usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled;
+    };
+
     struct Resolved
     {
-        bool     bEnabled   = false;
-        Settings settings   = {};
-        Facts    facts      = {};
-        Inputs   inputs     = {};
-        
-        // Resource requirements (only when enabled)
-        struct ResourceRequirement
-        {
-            EViewAttachment role   = EViewAttachment::SSAO;
-            EFormat::T      format = EFormat::R8_UNORM;
-            EImageUsage::T  usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled;
-        };
-        std::optional<ResourceRequirement> aoTarget;
+        bool     bEnabled = false;
+        Settings settings{};
+        /// The frame UBO payload for this View. Built here so the upload in the
+        /// View's binding step and the shader see one value.
+        SSAOStage::FrameData frameData{};
+        /// Present exactly when enabled: the AO target this feature needs.
+        std::optional<ResourceRequirement> aoTarget{};
+    };
+
+    struct PrepareContext
+    {
+        RenderSubmission*   submission = nullptr;
+        SSAOStage*          stage      = nullptr;
+        /// The View binding's SSAO frame descriptor set (allocated with the
+        /// View's frame payloads).
+        DescriptorSetHandle frameDS{};
     };
 
     struct Prepared
     {
         bool                bEnabled = false;
-        SSAOStage::FrameData frameData = {};
-        // Descriptor sets allocated in prepareBindings
-        DescriptorSetHandle frameDS;
-        DescriptorSetHandle inputDS;
-        // UBO allocation info (the actual RGBufferHandle comes from graph in append)
-        uint32_t            frameUBOOffset = 0;
-        size_t              frameUBOSize = sizeof(SSAOStage::FrameData);
+        DescriptorSetHandle frameDS{};
+        DescriptorSetHandle inputDS{};
     };
 
     struct GraphOutputs
@@ -106,44 +108,18 @@ struct SSAOFeature
         OptionalAO ao;
     };
 
-    SSAOStage* stage = nullptr;
-
     [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;
 
-    struct PrepareContext
-    {
-        ViewTargetStore*        viewTargets  = nullptr;
-        RenderSubmission*       submission   = nullptr;
-        uint32_t                flightIndex  = 0;
-        SceneViewId             viewId       = 0;
-    };
+    [[nodiscard]] Result<Prepared, FeatureError> prepareBindings(const Resolved&       resolved,
+                                                                 const PrepareContext& ctx) const;
 
-    struct PreparedInputs
-    {
-        RGBufferHandle  frameBuffer;  // Frame UBO buffer (uploaded by submission)
-        RGTextureHandle albedo;
-        RGTextureHandle normal;
-        RGTextureHandle depth;
-    };
-
-    [[nodiscard]] Result<Prepared, FeatureError> prepareBindings(const Resolved& resolved,
-                                                   const PreparedInputs& inputs,
-                                                   const PrepareContext& ctx);
-
-    struct FeatureGraphContext
-    {
-        RenderGraph*             graph      = nullptr;
-        const RenderStageContext* stageCtx = nullptr;
-        ViewTargetStore*         viewTargets = nullptr;
-    };
-
-    [[nodiscard]] Result<GraphOutputs, FeatureError> append(const Resolved& resolved,
-                                              const Prepared& prepared,
-                                              const PreparedInputs& inputs,
-                                              const FeatureGraphContext& ctx);
+    [[nodiscard]] Result<GraphOutputs, FeatureError> append(RenderGraph&                graph,
+                                                            SSAOStage*                   stage,
+                                                            const FeatureGraphContext&   ctx,
+                                                            const Facts&                 facts,
+                                                            const Resolved&              resolved,
+                                                            const Prepared&              prepared,
+                                                            const Inputs&                inputs) const;
 };
-
-// Note: SSAOFeature uses custom method signatures for C1; full Feature concept
-// compliance will be achieved in C2 when the composition layer is complete.
 
 } // namespace ya

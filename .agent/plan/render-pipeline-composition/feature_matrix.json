@@ -1,8 +1,8 @@
 {
   "plan": "render-pipeline-composition",
   "updated": "2026-10-12",
-  "implementation_status": "not_started",
-  "next_checkpoint": "C1",
+  "implementation_status": "in_progress",
+  "next_checkpoint": "C3",
   "intent": "RDG 上方建立一等 feature、typed recipe、单源资源需求与贯通 prepare/build/publication 的同一份 resolved composition；不以 Bloom 算法为目标",
   "status_rules": {
     "todo": "未实施，evidence 为空",
@@ -18,8 +18,12 @@
       "checkpoints": ["C1"],
       "expected": "concept/add 存储至少两类真实异构 feature；typed ports 连接输入输出；公开 API 无 feature 枚举 switch、std::any 或字符串 blackboard",
       "verification": ["PipelineCompositionTest", "requires/static_assert 类型契约", "公开 API diff review"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "DeferredPipelineRecipe::appendGraph 以 GBufferFeature/SSAOFeature/LightingFeature 的 typed Resolved/Prepared/Inputs/GraphOutputs 组合三 pass（DeferredPipelineRecipe.cpp）",
+        "公开 API 无 feature 枚举 switch / std::any / 字符串 blackboard（IRenderPipeline.h / recipe / features diff）",
+        "缺口：无通用 add-storage 容器与 concept 保存（C5 M21）"
+      ]
     },
     {
       "id": "M02",
@@ -27,8 +31,13 @@
       "checkpoints": ["C1"],
       "expected": "prepareFrameRecord 返回本次准备值，record 显式消费；同 invocation resolve 一次；新设置请求只影响下一次，资源要求与构图参数一致",
       "verification": ["settings snapshot 边界单测", "Runtime prepare→record integration", "call-chain review"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "prepareFrameRecord 单次 resolveFrameComposition；recordViewFamilies(plan, prepared) 显式消费 PreparedPipelineFrame（RenderDeviceState.Frame.cpp / RuntimeRenderContext.cpp）",
+        "删除录制期第二次 prepareFrameRecord 调用",
+        "runtime 150s + 管线切换无 stale composition（composition-deferred-back.png 与初始帧逐像素一致）",
+        "缺口：无 resolve 次数 / 失败注入专门测试"
+      ]
     },
     {
       "id": "M03",
@@ -36,8 +45,14 @@
       "checkpoints": ["C1"],
       "expected": "SSAO off 无 AO requirement/专属 upload/DS/pass/新 AO publication；Lighting OptionalAO absent 使用明确中性语义；删除 bUseSSAO 逐层透传",
       "verification": ["SSAO→Lighting behavior test", "Deferred on/off 截图", "plumbing diff review"],
-      "status": "todo",
-      "evidence": []
+      "status": "verified",
+      "evidence": [
+        "runtime on：Deferred 图 14 pass 含 'SSAO Pass'（control-game-HelloMaterial-57244.log 的 [RGTrace] dump）",
+        "runtime off（automation smoke.deferred.ssao.enabled=false）：13 pass 无 'SSAO Pass'；'Deferred.SSAO' import 出现 14245→0（-57820.log）",
+        "截图 composition-ssao-on/off.png 差异 13.51% 像素（>4/255）、mean 2.7、max 42——AO 着色差异无结构位移",
+        "bUseSSAO 透传删除：DeferredFrameGraphPasses context / Orchestrator BuildInputs / Deferred appendTargetRequests（diff）",
+        "LightStage::writeGBufferTextureDescriptors 无 AO 时绑定中性 fallback（LightStage.cpp:264-277）"
+      ]
     },
     {
       "id": "M04",
@@ -45,8 +60,12 @@
       "checkpoints": ["C1"],
       "expected": "同一声明生成 allocation request 和 graph import 描述；format/usage 同步；request 按 role 规范化，声明重排不改变 allocation；graph-use metadata 不进入 equality",
       "verification": ["PipelineFeatureContractTest", "ViewTargetStoreTest reuse/replacement"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "GBufferFeature::Outputs 同时驱动 ViewTargetRequest（DeferredRenderPipeline::resolveFrameComposition）与 graph import（feature append）——同一份声明",
+        "format/usage 来自 pipeline 运行期 formats（buildRecipeConfig: gBufferFormats/viewColorFormat/viewColorUsage），无硬编码字面量",
+        "缺口：声明重排不变性与 graph-use metadata 不进 equality 无专门测试"
+      ]
     },
     {
       "id": "M05",
@@ -54,8 +73,12 @@
       "checkpoints": ["C1"],
       "expected": "拒绝缺 required input、串 composition 端口、role 冲突、错 tick/pipeline token；类型不兼容在编译期暴露；optional absence 合法",
       "verification": ["concept/static_assert", "seal error tests", "prepared token tests"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "FeatureError::{MissingContext,MissingDependency,InvalidInput,AllocationFailed} 在 features 与 recipe 全路径（GBufferFeature/SSAOFeature/LightingFeature/DeferredPipelineRecipe）",
+        "optional absence 合法：SSAO disabled resolve 无 aoTarget，recipe 不 append、Lighting Inputs.ssao 缺省（单测 SSAOFeatureTest + runtime off）",
+        "缺口：错 tick/pipeline token 与 role 冲突拒绝无专门测试"
+      ]
     },
     {
       "id": "M06",
@@ -63,8 +86,12 @@
       "checkpoints": ["C1", "C4"],
       "expected": "feature 插入、View 增减不改变既有 import key；同 label 不同 scope 独立；同资源消费者借同一 lowered slot 不重复 import",
       "verification": ["RenderGraphCoreTest import regression", "composition lowering test", "runtime trace"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "frame/light/skinning 由 importFrameBuffers 导入一次，经 recipe AppendContext 以 typed Inputs 传给 GBuffer/Lighting；SSAO frame UBO 同路径",
+        "import label 沿用旧键（DeferredGBuffer.Color0..3 / Deferred.SSAO / DeferredView.Color），owner 语义不变",
+        "缺口：feature 插入 / View 增减对 import key 的专门回归未跑"
+      ]
     },
     {
       "id": "M07",
@@ -72,8 +99,13 @@
       "checkpoints": ["C1", "C4"],
       "expected": "resolved/prepared storage move 和扩容后端口与 bindings 正确；callback 不引用 builder/临时局部变量；CPU record 生命周期不被误当 GPU 保活",
       "verification": ["storage move/growth test", "callback capture review", "retained-resource regression"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "pass lambda 按值捕获 RG handle / DS / range，不引用 builder 或临时局部（GBufferFeature/SSAOFeature/LightingFeature append）",
+        "ResolvedView move 进 PreparedPipelineFrame，录制期按引用消费；PreparedView 为 append 局部值",
+        "runtime 150s 含管线切换无悬空（57244/57820 日志）",
+        "缺口：storage move/扩容专门单测"
+      ]
     },
     {
       "id": "M08",
@@ -99,8 +131,12 @@
       "checkpoints": ["C1", "C4"],
       "expected": "安全点开始本 tick publication，safe preparation 错误后查询为空；binding/build/compile/execute 不以旧图或部分新图发布本次 family；成功诊断不包含失败执行；合法空 workload 不是失败",
       "verification": ["failure injection tests", "ViewFamilyRendererTest", "publication tests"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "resolveFrameComposition Failed → prepareFrameRecord nullopt → RuntimeRenderContext 空 RecordedFrame（代码路径，失败中止 recording）",
+        "runtime dump 无失败 family 的部分发布",
+        "缺口：failure injection 测试（M10 完整挂在 C4）"
+      ]
     },
     {
       "id": "M11",
@@ -126,8 +162,11 @@
       "checkpoints": ["C1", "C2", "C4"],
       "expected": "只发布本次 declared 且有效输出；allocated-but-skipped 不发布；统一 role collector，不在两个 pipeline 解析 feature export 名；现有 consumers 兼容",
       "verification": ["RenderViewOutputTableTest", "collector tests", "debug/picking runtime"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "exportGraphOutputs 移入 DeferredRenderPipeline；SSAO off 时 graphResources.textures.ssao 为空 → 不 export（off-run 无 SSAO export/import）",
+        "collectViewOutput 仍按 role 读取有效 handle；统一 collector 与名称解析退出未做（剩余 C2/C4）"
+      ]
     },
     {
       "id": "M14",

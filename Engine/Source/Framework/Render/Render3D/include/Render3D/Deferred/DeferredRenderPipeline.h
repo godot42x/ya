@@ -2,8 +2,8 @@
 
 #include "Core/Math/Geometry.h"
 #include "Render3D/Deferred/DeferredFrameGraphResources.h"
-#include "Render3D/Deferred/DeferredFrameGraphOrchestrator.h"
 #include "Render3D/Deferred/DeferredFrameResourceSet.h"
+#include "Render3D/Deferred/DeferredPipelineRecipe.h"
 #include "Render3D/Deferred/GBufferStage.h"
 #include "Render3D/Deferred/LightStage.h"
 #include "RHI/Core/DescriptorSet.h"
@@ -104,7 +104,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
 
     // ── Render stages ─────────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
-    DeferredFrameGraphOrchestrator _frameGraphOrchestrator;
     stdptr<DeferredFrameResourceSet> _frameResources;
     stdptr<GBufferStage>         _gBufferStage;
     stdptr<SSAOStage>            _ssaoStage;
@@ -144,7 +143,12 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
 
     void init(const InitDesc& desc);
     ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
-    void appendTargetRequests(const SceneRenderPlan& plan, std::vector<ViewTargetRequest>& out) const override;
+    /// Safe-point composition: resolve this frame's Deferred composition and
+    /// produce the View target requests it requires. See
+    /// `IRenderPipelineExecution::resolveFrameComposition`.
+    [[nodiscard]] EFrameComposition resolveFrameComposition(const RenderFramePlan& plan,
+                                                            PreparedPipelineFrame& prepared,
+                                                            std::vector<ViewTargetRequest>& out) override;
     void shutdown();
 
     [[nodiscard]] ERenderPipelineKind kind() const override { return ERenderPipelineKind::Deferred; }
@@ -219,7 +223,13 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
                                                  FrameContext& postContext,
                                                  DeferredFrameGraphResources& graphResources,
                                                  const ViewTargetLease& targets,
+                                                 const DeferredPipelineRecipe::ResolvedView& resolved,
                                                  std::optional<RGPassHandle> familyPredecessor);
+    /// The pipeline-resolved configuration this frame's composition resolves
+    /// against: same settings snapshot and runtime formats the render targets
+    /// were prepared from.
+    [[nodiscard]] DeferredPipelineRecipe::Config buildRecipeConfig(const RenderPipelineSettings& settings) const;
+    void               exportGraphOutputs(RenderGraph& graph, const DeferredFrameGraphResources& resources, uint64_t viewId) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               markPendingResourceRefresh(EDeferredPendingResourceRefresh refresh);
     [[nodiscard]] bool hasPendingResourceRefresh(EDeferredPendingResourceRefresh refresh) const;

@@ -2,14 +2,10 @@
 
 #include "Render3D/Deferred/DeferredFrameGraphResources.h"
 #include "Render3D/Deferred/DeferredFrameResourceSet.h"
-#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/RenderTargetCreateInfo.h"
 #include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/Sprite2DStage.h"
-#include "Render3D/Deferred/GBufferStage.h"
-#include "Render3D/Deferred/LightStage.h"
-#include "Render3D/Deferred/SSAOStage.h"
 #include "Render3D/Deferred/ViewOverlayStage.h"
 
 #include <array>
@@ -24,94 +20,28 @@ struct ShadowStage;
 struct PostProcessingStage;
 struct ViewTargetLease;
 
+/// The View-scoped context of the Deferred frame plumbing that is not (yet) a
+/// feature: the host-written buffer imports and the tail passes after lighting.
+/// The three composition passes (GBuffer/SSAO/Lighting) belong to their
+/// features and read a FeatureGraphContext instead.
 struct DeferredFrameGraphPassContext
 {
     RenderGraph&                             graph;
     DeferredFrameGraphResources&             graphResources;
     const RenderStageContext&                stageCtx;
     const DeferredFrameResourceSet::Binding& frameBinding;
-    const RenderTargetCreateInfo&            gBufferRTSpec;
-    const RenderTargetCreateInfo&            viewRTSpec;
-    const ViewOverlayStage::FrameInputs* overlayInputs = nullptr;
     const DeferredFrameResourceSet::ViewResources* viewResources = nullptr;
     const ViewTargetLease*                  targets = nullptr;
-    const EnvironmentLightingSceneResources*  environmentLighting = nullptr;
-    DescriptorSetHandle                      environmentLightingDS{};
-    FrameContext*                            postContext = nullptr;
-    Extent2D                                 viewExtent{};
-    bool                                     bUseSSAO = false;
-    bool                                     bReverseViewportY = true;
-    bool                                     bPostprocessOutputIsSRGB = false;
-    uint64_t                                 viewId = 0;
-    std::optional<RGPassHandle>              familyPredecessor = std::nullopt;
+    const ViewOverlayStage::FrameInputs*    overlayInputs = nullptr;
+    FrameContext*                           postContext = nullptr;
+    Extent2D                                viewExtent{};
+    bool                                    bPostprocessOutputIsSRGB = false;
+    uint64_t                                viewId = 0;
 
-    ShadowStage*          shadowStage = nullptr;
-    GBufferStage&         gBufferStage;
-    LightStage&           lightStage;
-    ViewOverlayStage& overlayStage;
-    PostProcessingStage&  postProcessStage;
-    SSAOStage*            ssaoStage = nullptr;
-    EntityIdPass* entityIdPass = nullptr;
-    Sprite2DStage*        spriteStage = nullptr;
-};
-
-struct DeferredGBufferPassParams
-{
-    struct BufferInput
-    {
-        RGBufferHandle handle{};
-        RGBufferRange  range{};
-    };
-
-    BufferInput                    frame{};
-    BufferInput                    light{};
-    RGBufferHandle                 skinning{};
-    std::array<RGTextureHandle, 4> gBufferColors{};
-    RGTextureHandle                gBufferDepth{};
-    Rect2D                         renderArea{};
-    uint32_t                       layerCount = 1;
-    DescriptorSetHandle            frameAndLightDescriptorSet{};
-    DescriptorSetHandle            skinningDescriptorSet{};
-};
-
-struct DeferredSSAOPassParams
-{
-    RGBufferHandle      frame{};
-    RGBufferRange       frameRange{};
-    RGTextureHandle     albedo{};
-    RGTextureHandle     normal{};
-    RGTextureHandle     depth{};
-    RGTextureHandle     output{};
-    DescriptorSetHandle frameDescriptorSet{};
-    DescriptorSetHandle inputDescriptorSet{};
-    uint64_t            viewId = 0;
-};
-
-struct DeferredLightPassParams
-{
-    struct BufferInput
-    {
-        RGBufferHandle handle{};
-        RGBufferRange  range{};
-    };
-
-    BufferInput                    frame{};
-    BufferInput                    light{};
-    std::array<RGTextureHandle, 4> gBufferColors{};
-    RGTextureHandle                gBufferDepth{};
-    std::optional<RGTextureHandle> ssao{};
-    std::optional<RGTextureHandle> environmentCubemap{};
-    std::optional<RGTextureHandle> environmentIrradiance{};
-    std::optional<RGTextureHandle> environmentPrefilter{};
-    std::optional<RGTextureHandle> environmentBrdfLut{};
-    std::optional<RGTextureHandle> shadowDepth{};
-    RGTextureHandle                viewColor{};
-    Rect2D                         renderArea{};
-    uint32_t                       layerCount = 1;
-    DescriptorSetHandle            frameAndLightDescriptorSet{};
-    DescriptorSetHandle            environmentLightingDescriptorSet{};
-    DescriptorSetHandle            gBufferTextureDescriptorSet{};
-    DescriptorSetHandle            shadowDescriptorSet{};
+    ViewOverlayStage&    overlayStage;
+    PostProcessingStage& postProcessStage;
+    EntityIdPass*        entityIdPass = nullptr;
+    Sprite2DStage*       spriteStage  = nullptr;
 };
 
 struct DeferredSkyboxPassParams
@@ -163,11 +93,16 @@ struct DeferredSprite2DPassParams
 namespace deferred_frame_graph_passes
 {
 
+/// Import the View's host-written buffers (frame/light/skinning UBOs, optional
+/// SSAO frame UBO, skybox frame UBO). One import site for every pass that reads
+/// them, so the graph sees one binding per buffer.
 void importFrameBuffers(DeferredFrameGraphPassContext& context);
-void createAttachmentTextures(DeferredFrameGraphPassContext& context);
-void appendGBuffer(DeferredFrameGraphPassContext& context);
-void appendSSAO(DeferredFrameGraphPassContext& context);
-void appendLight(DeferredFrameGraphPassContext& context);
+
+/// Import the tail passes' owned View targets: the picking id target and the
+/// display output. The composition's targets (GBuffer, SceneColor, SSAO) are
+/// imported by their features from the View lease.
+void createTailAttachmentTextures(DeferredFrameGraphPassContext& context);
+
 void appendForwardOpaque(DeferredFrameGraphPassContext& context);
 void appendSkybox(DeferredFrameGraphPassContext& context);
 void appendSprite2D(DeferredFrameGraphPassContext& context);

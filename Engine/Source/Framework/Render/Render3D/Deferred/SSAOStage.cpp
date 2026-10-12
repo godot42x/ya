@@ -138,21 +138,32 @@ void SSAOStage::destroy()
     _render           = nullptr;
 }
 
+SSAOStage::FrameData SSAOStage::buildFrameData(const RenderFrameData& frameData,
+                                               Extent2D               viewExtent,
+                                               float                  radius,
+                                               float                  bias,
+                                               float                  power,
+                                               float                  intensity,
+                                               bool                   bReverseY)
+{
+    FrameData data{};
+    data.screenResolution = {static_cast<int32_t>(viewExtent.width), static_cast<int32_t>(viewExtent.height)};
+    data.radius           = radius;
+    data.bias             = bias;
+    data.power            = power;
+    data.intensity        = intensity;
+    data.reverseY         = bReverseY ? 1u : 0u;
+    data.projectMat       = frameData.projection;
+    data.invProjectMat    = glm::inverse(frameData.projection);
+    data.viewMat          = frameData.view;
+    return data;
+}
+
 SSAOStage::FrameData SSAOStage::buildFrameData(const RenderStageContext& ctx) const
 {
     YA_CORE_ASSERT(ctx.frameData != nullptr, "SSAOStage requires frame data to build frame parameters");
 
-    FrameData frameData{};
-    frameData.screenResolution = {static_cast<int32_t>(ctx.viewExtent.width), static_cast<int32_t>(ctx.viewExtent.height)};
-    frameData.radius           = _radius;
-    frameData.bias             = _bias;
-    frameData.power            = _power;
-    frameData.intensity        = _intensity;
-    frameData.reverseY         = _bReverseY ? 1u : 0u;
-    frameData.projectMat       = ctx.frameData->projection;
-    frameData.invProjectMat    = glm::inverse(ctx.frameData->projection);
-    frameData.viewMat          = ctx.frameData->view;
-    return frameData;
+    return buildFrameData(*ctx.frameData, ctx.viewExtent, _radius, _bias, _power, _intensity, _bReverseY);
 }
 
 void SSAOStage::beginFrame()
@@ -166,7 +177,7 @@ void SSAOStage::beginFrame()
 void SSAOStage::execute(const RenderStageContext& ctx)
 {
     (void)ctx;
-    // SSAO is recorded exclusively by DeferredFrameGraphOrchestrator.
+    // SSAO is recorded exclusively by SSAOFeature's graph pass.
 }
 
 void SSAOStage::writeInputDescriptors(
@@ -193,61 +204,6 @@ void SSAOStage::writeInputDescriptors(
         IDescriptorSetHelper::genImageWrite(inputDS, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {*depthInfo}),
         IDescriptorSetHelper::genImageWrite(inputDS, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {*noiseInfo}),
     });
-}
-
-RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
-                                           const RenderStageContext& ctx,
-                                           const DeferredSSAOPassParams& params,
-                                           RGTextureHandle output)
-{
-    YA_CORE_ASSERT(_noiseTexture != nullptr, "SSAOStage requires initialized noise texture before graph pass append");
-
-    const auto  noise = graph.importTexture(makeImportedTextureDesc(_noiseTexture ? _noiseTexture->getResourceShared() : nullptr, "SSAO.Noise", EImageLayout::ShaderReadOnlyOptimal));
-    YA_CORE_ASSERT(output.isValid(), "SSAOStage requires a prepared output target");
-
-    [[maybe_unused]] const auto pass = graph.addPass(
-        makeViewGraphName("SSAO Pass", params.viewId),
-        [params, noise, output, viewExtent = ctx.viewExtent](RGPassBuilder& passBuilder) {
-            passBuilder.uniformRead(params.frame, params.frameRange);
-            passBuilder.read(params.albedo);
-            passBuilder.read(params.normal);
-            passBuilder.read(params.depth);
-            passBuilder.read(noise);
-            passBuilder.declareRaster({
-                .renderArea  = Rect2D{.pos = {0.0f, 0.0f}, .extent = glm::vec2(viewExtent.width, viewExtent.height)},
-                .layerCount  = 1,
-                .colors = {{
-                    .color       = output,
-                    .clearValue  = ClearValue(1.0f, 1.0f, 1.0f, 1.0f),
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                }},
-            });
-        },
-        [this, params, noise](RGRenderContext& rgCtx) {
-            writeInputDescriptors(
-                params.inputDescriptorSet,
-                rgCtx.getBindingContext(),
-                params.albedo,
-                params.normal,
-                params.depth,
-                noise);
-
-            const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
-            const auto renderExtent   = rasterParams.getRenderExtent();
-            const auto viewWidth  = renderExtent.width;
-            const auto viewHeight = renderExtent.height;
-            rgCtx.beginDeclaredRasterRendering();
-
-            rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
-            rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(viewWidth), static_cast<float>(viewHeight));
-            rgCtx.getCommandBuffer().setScissor(0, 0, viewWidth, viewHeight);
-            rgCtx.getCommandBuffer().bindDescriptorSets(
-                _pipelineLayout.get(), 0, {params.frameDescriptorSet, params.inputDescriptorSet});
-            rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
-            rgCtx.endRendering();
-        });
-
-    return output;
 }
 
 } // namespace ya

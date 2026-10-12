@@ -76,7 +76,9 @@ TEST(RuntimeRenderContextTest, TheApplicationsOrderIsWrittenWithTheRenderersOwnS
     static_assert(requires(Device& device, const RenderFramePlan& plan) {
         { device.beginFrameCommandBuffer(plan, std::declval<std::shared_ptr<ICommandBuffer>&>()) } -> std::same_as<bool>;
     });
-    static_assert(requires(Device& device, const RenderFramePlan& plan) { device.recordViewFamilies(plan); });
+    static_assert(requires(Device& device, const RenderFramePlan& plan, const PreparedPipelineFrame& prepared) {
+        device.recordViewFamilies(plan, prepared);
+    });
     static_assert(requires(Device& device) { device.endFrameCommandBuffer(static_cast<ICommandBuffer*>(nullptr)); });
     static_assert(requires(Device& device) {
         { device.sealFrame(0u, static_cast<ICommandBuffer*>(nullptr)) } -> std::same_as<RecordedFrame>;

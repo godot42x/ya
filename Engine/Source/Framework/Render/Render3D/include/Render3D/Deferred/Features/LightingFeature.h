@@ -3,8 +3,8 @@
 #include "Core/Base.h"
 #include "Core/Result.h"
 #include "Graph/RenderGraph.h"
-#include "Render3D/Composition/FeatureProtocol.h"
 #include "RHI/RenderDefines.h"
+#include "Render3D/Composition/FeatureProtocol.h"
 
 #include <optional>
 
@@ -12,98 +12,101 @@ namespace ya
 {
 
 struct LightStage;
-class DeferredFrameResourceSet;
-struct FeatureGraphContext;
+class RenderSubmission;
 
-/// Deferred lighting feature - fullscreen quad that reads GBuffer and computes lighting.
+/// Deferred lighting feature: fullscreen pass that shades the View's GBuffer.
 ///
-/// Consumes: GBuffer textures (albedo/normal/orm/shading/depth), optional SSAO
-/// Produces: SceneColor (lit result)
-struct YA_RENDER_3D_API LightingFeature
+/// Consumes the GBuffer handles (albedo/normal/orm/shading/depth), the optional
+/// AO output, the View's imported frame/light UBOs, and the View's shared
+/// shadow/environment imports. Produces the SceneColor target.
+struct LightingFeature
 {
-    // ── Settings (user-controlled) ──────────────────────────────────────────
-    
     struct Settings
     {
-        bool bEnabled = true;
+        bool           bEnabled          = true;
+        EFormat::T     sceneColorFormat  = EFormat::Undefined;
+        EImageUsage::T sceneColorUsage   = EImageUsage::ColorAttachment | EImageUsage::Sampled;
     };
-    
-    // ── Facts (scene/view geometry) ─────────────────────────────────────────
-    
+
     struct Facts
     {
-        uint64_t viewId = 0;
-        Extent2D viewExtent;
-        bool bReverseY = false;
+        Extent2D viewExtent{};
     };
-    
-    // ── Inputs (from other features) ────────────────────────────────────────
-    
+
+    /// Typed data flow into the pass. GBuffer/AO handles come from the
+    /// upstream features; the imported shared inputs come from the frame import
+    /// step (buffers) and the View's shared resource resolution (shadow,
+    /// environment).
     struct Inputs
     {
-        // GBuffer textures (from GBufferFeature)
         RGTextureHandle albedo;
         RGTextureHandle normal;
-        RGTextureHandle orm;      // Occlusion/Roughness/Metallic
+        RGTextureHandle orm;
         RGTextureHandle shading;
         RGTextureHandle depth;
-        
-        // Optional SSAO (from SSAOFeature)
-        std::optional<RGTextureHandle> ssao;
+        std::optional<RGTextureHandle> ssao{};
+
+        RGBufferHandle frame{};
+        RGBufferRange  frameRange{};
+        RGBufferHandle light{};
+        RGBufferRange  lightRange{};
+
+        std::optional<RGTextureHandle> shadowDepth{};
+        std::optional<RGTextureHandle> environmentCubemap{};
+        std::optional<RGTextureHandle> environmentIrradiance{};
+        std::optional<RGTextureHandle> environmentPrefilter{};
+        std::optional<RGTextureHandle> environmentBrdfLut{};
     };
-    
-    // ── Outputs (what this feature produces) ────────────────────────────────
-    
+
     struct OutputRequirements
     {
-        EViewAttachment sceneColorRole = EViewAttachment::SceneColor;
-        EFormat::T sceneColorFormat = EFormat::R16G16B16A16_SFLOAT;
-        EImageUsage::T sceneColorUsage = EImageUsage::ColorAttachment | EImageUsage::Sampled;
+        EViewAttachment sceneColorRole   = EViewAttachment::SceneColor;
+        EFormat::T      sceneColorFormat = EFormat::Undefined;
+        EImageUsage::T  sceneColorUsage  = EImageUsage::ColorAttachment | EImageUsage::Sampled;
     };
-    
-    // ── Resolved (resource requirements) ────────────────────────────────────
-    
+
     struct Resolved
     {
-        bool bEnabled = false;
+        bool              bEnabled = false;
         OutputRequirements outputs;
     };
-    
-    // ── Prepared (bindings/uploads) ─────────────────────────────────────────
-    
+
+    struct PrepareContext
+    {
+        RenderSubmission*        submission           = nullptr;
+        LightStage*              stage                = nullptr;
+        /// The View binding's frame/light set (also this pass's set 0).
+        DescriptorSetHandle      frameAndLightDS{};
+        /// The View's environment-lighting set (may be empty when the Scene has
+        /// no resolved environment).
+        DescriptorSetHandle      environmentLightingDS{};
+    };
+
     struct Prepared
     {
-        // GBuffer texture descriptors, shadow descriptors allocated here
-        // Full implementation will populate these when integrated
+        DescriptorSetHandle frameAndLightDS{};
+        DescriptorSetHandle environmentLightingDS{};
+        DescriptorSetHandle gBufferTextureDS{};
+        DescriptorSetHandle shadowDS{};
     };
-    
-    // ── Graph outputs (RDG handles) ─────────────────────────────────────────
-    
+
     struct GraphOutputs
     {
         RGTextureHandle sceneColor;
     };
-    
-    // ── Protocol implementation ─────────────────────────────────────────────
-    
-    [[nodiscard]] static Resolved resolve(
-        const Settings& settings,
-        const Facts& facts,
-        const Inputs& inputs);
-    
-    [[nodiscard]] static Prepared prepareBindings(
-        DeferredFrameResourceSet* resourceSet,
-        const Facts& facts,
-        const Resolved& resolved);
-    
-    [[nodiscard]] static GraphOutputs append(
-        RenderGraph& graph,
-        LightStage* stage,
-        const FeatureGraphContext& ctx,
-        const Facts& facts,
-        const Resolved& resolved,
-        const Prepared& prepared,
-        const Inputs& inputs);
+
+    [[nodiscard]] static Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs);
+
+    [[nodiscard]] static Result<Prepared, FeatureError> prepareBindings(const Resolved&       resolved,
+                                                                        const PrepareContext& ctx);
+
+    [[nodiscard]] static GraphOutputs append(RenderGraph&               graph,
+                                             LightStage*                stage,
+                                             const FeatureGraphContext& ctx,
+                                             const Facts&               facts,
+                                             const Resolved&            resolved,
+                                             const Prepared&            prepared,
+                                             const Inputs&              inputs);
 };
 
 } // namespace ya

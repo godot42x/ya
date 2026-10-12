@@ -116,7 +116,7 @@ RecordedFrame RuntimeRenderContext::record(const RenderFramePlan& plan,
     {
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
         if (!plan.sceneRender.empty()) {
-            _device->recordViewFamilies(plan);
+            _device->recordViewFamilies(plan, *prepared);
         }
     }
 

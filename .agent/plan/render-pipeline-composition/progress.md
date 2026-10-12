@@ -213,43 +213,90 @@
 6. 验证 M01-M08
 7. 运行截图对比
 
+## 2026-10-12 晚 — 集成切片完成：真实 GBuffer→SSAO→Lighting 闭环（C1i）
+
+### 目标与边界
+
+**单一验收目标**：同一份 resolved composition 驱动 Deferred 的 GBuffer→SSAO→Lighting——allocation request、per-view bindings、RDG pass、输出发布都出自这一份来源；旧 orchestrator 路径退出，不是空抽象骨架。
+
+边界外（保持现状，属后续 checkpoint）：
+
+- ForwardOpaque / Skybox / Sprite2D / Bloom / ForwardTransparent / EntityId / Postprocess 仍是 pipeline tail（`DeferredFrameGraphPasses` + `DeferredFrameGraphResources` bag + `DeferredFrameResourceSet::ViewResources` 槽位）。
+- Forward 仍走 `appendTargetRequests`（`resolveFrameComposition` 默认 `NotApplicable`）。
+- 切片名对应：plan.md 的 C1 验收 = 本线 "C1-foundation + 本集成切片"；plan.md 的 C2（Bloom 多 pass 样本 / Finalize）与 C3（Deferred 全地图）均未开始。
+
+### 代码职责
+
+- `GBufferFeature` / `SSAOFeature` / `LightingFeature`：各自拥有 resolve（资源要求 + 每 View 值）、prepareBindings（submission 期 DS 分配）、append（真实 RDG pass + stage execute）。SSAO 的 frame UBO 在 resolve 里用同一组 settings 构建（`SSAOStage::buildFrameData` 增加静态入口），上传与 shader 读同一份值。
+- `DeferredPipelineRecipe`：Config（pipeline 运行期 formats + settings 快照）→ resolve → PreparedView → appendGraph；host-written buffers 由 frame import 步骤导入一次、以 typed Inputs 传递；environment lighting 导入在 appendGraph；旧 recipe 的硬编码 format/extent/null stage 全部移除。
+- `DeferredRenderPipeline::resolveFrameComposition`：安全点解析并**由 composition 生成 ViewTargetRequest**（GBuffer×4 + shared depth + 可选 SSAO + SceneColor + tail 的 Display/EntityId/Bloom）；`appendDeferredViewToGraph` 录制期 prepare+append，把 frame/light/ssaoFrame range 交给 recipe；`exportGraphOutputs` 移入 pipeline。
+- `RenderDeviceState`：`prepareFrameRecord` 单次解析；`recordViewFamilies(plan, prepared)` 显式消费 `PreparedPipelineFrame`（删除录制中的第二次 `prepareFrameRecord` 调用）。
+
+删除的 plumbing：
+
+- `DeferredFrameGraphOrchestrator.{h,cpp}`（整文件）、`appendGBuffer/appendSSAO/appendLight` 与三个 PassParams 结构。
+- `bUseSSAO` 在 BuildInputs / PassContext 的透传；`DeferredRenderPipeline::appendTargetRequests` 集中清单；`DeferredFamilyViewBranch::preparedComposition`；`SSAOStage::appendGraphPass`；`DeferredFrameGraphResources::Passes.gBuffer/light`；`PreparedPipelineFrame::views/PreparedView` 占位。
+- `SSAOFeature` 统一到共享协议签名（`Result<...>` + `FeatureGraphContext`，含 `stageCtx`/`predecessor`）。
+
+### 验证结果
+
+- 编译：`xmake b ya-render-3d-test` ok；`xmake b ya-runtime`（ya-game-runtime closure）ok。
+- 测试：`xmake r ya-render-3d-test` 220/220（40 suites，含新增 GBufferFeatureTest / SSAOFeatureTest / LightingFeatureTest）；`python3 Script/ya.py test --target ya` 1811/1811（226 suites）。
+- Runtime（HelloMaterial，`--render-graph-trace`，control `--game`）：
+  - SSAO on（`--automation-config=Automation.composition_ssao_on.json`）：`Deferred` executor 首帧图 = Directional Shadow Cascade 0 → Point Shadow Faces → Deferred GBuffer → SSAO Pass → Deferred Light → Forward Opaque → Skybox → Bloom×4 → Forward Transparent → EntityId → Postprocessing（14 pass）。
+  - SSAO off（`Automation.composition_ssao_off.json`）：13 pass，无 "SSAO Pass"；`Deferred.SSAO` import 出现次数 14245 → 0（AO target/import/pass 全部随 composition 消失）。
+  - 截图：`Engine/Saved/Automation/composition-ssao-on.png` vs `composition-ssao-off.png` 差异 13.51% 像素（>4/255），mean 2.7/255，max 42——AO 着色差异，无结构位移。
+  - 管线切换：`set_render_pipeline forward` → 图切为 Forward legacy（13 pass）；切回 Deferred 后画面与初始 Deferred 帧**逐像素一致**（max diff 0，`composition-deferred-back.png`，属同配置重建管线后的确定性证据）。
+  - 日志唯一 ERROR 级条目为已有的 VkDescriptorPool STORAGE_BUFFER 校验告警（历史 2DRpgPrototype run 同样存在），非本次引入。
+- 证据文件在 gitignore 的 `Engine/Saved/` 下；配置：`Engine/Saved/Config/Automation.composition_ssao_{on,off}.json`。
+
+### Matrix 更新（feature_matrix.json）
+
+- M03 → `verified`。
+- M01 / M02 / M04 / M05 / M06 / M07 / M10 / M13 → `in_progress`（证据与缺口逐条记入）。
+- M08（双 View runtime）、M09/M11/M12/M14（plan.md C2）、M15–M23 保持 `todo`。
+
+### 保留 / 未验证
+
+- tail 未迁移、`ViewResources` 槽位仍写、Forward 仍 `appendTargetRequests`：
+  属 C3/C4 范围。
+- 无 failure injection（M10 完整）、无双 View runtime（M08）、无双管线性能对照（M23）。
+- 本切片未新增 `test/` 级临时工程；截图对照为单次抓帧，重复性基线（至少 2 次）属 C5。
+
 ## 总结
 
-### 已完成（8 个 commits）
+### 已完成（10 个 commits）
 
 | Commit | 内容 | 测试 |
 | --- | --- | --- |
-| c220d086a | typed refs + prepareFrameRecord interface | 219/219 ✓ |
-| (skeleton) | SSAOFeature skeleton | (included in next) |
-| d0b55bdb | Core helpers (Result/OptionalHandle) | 1817/1818 ✓ |
-| 799e5866 | Pipeline integration + per-view prepareBindings | 1810/1810 ✓ |
-| (repeat) | (prepareBindings timing fix) | (included above) |
+| 503228aa | C1 typed refs + prepareFrameRecord interface | 219/219 ✓ |
+| c220d086 | C1-foundation: type system + SSAOFeature skeleton | 219/219 ✓ |
+| 799e5866 | DeferredPipelineRecipe into prepareFrameRecord | 1810/1810 ✓ |
+| 321c6e08 | Core Result/OptionalHandle helpers | 1817/1818 ✓ |
+| 93df0526 | Wire prepareBindings into recordFamily loop | 1810/1810 ✓ |
 | b05c0dc6 | GBufferFeature - direct refactor | 1810/1810 ✓ |
 | 7e0a6f2a | LightingFeature - direct refactor | 1810/1810 ✓ |
 | 7ddec404 | GBuffer→SSAO→Lighting chain in recipe | 1810/1810 ✓ |
+| 7df25e0b | progress update | — |
+| （本次提交） | 集成切片：features 拥有真实 pass、recipe 单源驱动、旧 orchestrator 删除 | 220/220 render3d + 1811/1811 full + runtime on/off/切换证据 |
 
 ### 关键成果
 
 - ✅ **Foundation 完整**: Core helpers (Result/OptionalHandle) + Feature protocol types
-- ✅ **Data flow 建立**: prepareFrameRecord → recordFamily prepareBindings → (待) appendGraph
-- ✅ **Feature 一等对象**: GBufferFeature/LightingFeature 完整实现协议
-- ✅ **Typed composition**: GBuffer → SSAO → Lighting 链式数据流
-- ✅ **无 Legacy wrapper**: 直接重构 Stage，不创建兼容层
+- ✅ **单源数据流闭环**: 安全点 resolve → 录制期 prepare → RDG append → 输出发布同源
+- ✅ **Feature 一等对象**: GBuffer/SSAO/Lighting 各自拥有 resolve/prepareBindings/append 与真实 pass
+- ✅ **无 Legacy wrapper**: 旧 orchestrator/集中清单直接删除，不回兼容桥
+- ✅ **Runtime 证据**: SSAO on/off 图对照、import 计数、截图差异、管线切换逐像素一致
 
 ### 当前状态
 
-- C1-foundation: ✅ 完成（5 commits）
-- C2: 🚧 进行中（3 commits）
-  - ✅ GBufferFeature/LightingFeature 创建
-  - ✅ DeferredPipelineRecipe 集成三个 features
-  - ⏳ 完整执行路径（Stage 集成）
-  - ⏳ DeferredRenderPipeline 使用新 recipe
-  - ⏳ 删除旧 orchestrator
-  - ⏳ Validation M01-M08
+- C1-foundation: ✅ 完成
+- 集成切片（plan.md C1 验收主体）: ✅ 完成并带 runtime 证据
+- 剩余: M08/M10/M13 完整（failure injection、双 View）、plan.md C2（Bloom/Finalize 样本）、C3（tail/共享输入全地图）、C4/C5
 
 ### 工作区状态
 
-- **干净**: 只有 8 个 composition 相关提交
-- **测试全绿**: 1810/1810 tests passed
-- **编译通过**: ya-render-3d, ya-game-runtime, ya-game-editor
+- **干净**: 10 个 composition 相关提交
+- **测试全绿**: 1811/1811 full tests passed；render3d 220/220
+- **编译通过**: ya-render-3d, ya-game-runtime（closure）
 - **无关改动**: Engine/Plugins/log.cc 未 stage（灯光线工作）

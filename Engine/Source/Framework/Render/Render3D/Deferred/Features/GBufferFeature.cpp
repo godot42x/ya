@@ -1,135 +1,153 @@
 #include "Render3D/Deferred/Features/GBufferFeature.h"
 
-#include "Render3D/Deferred/GBufferStage.h"
-#include "Render3D/Deferred/DeferredFrameResourceSet.h"
-#include "Render3D/Common/ViewTargetStore.h"
-#include "Render3D/Common/RenderSubmission.h"
-#include "Render3D/Common/RenderRecordingContext.h"
-#include "Graph/RenderGraph.h"
-#include "Graph/RenderGraphImportUtils.h"
 #include "Core/Log.h"
+#include "Graph/RenderGraphImportUtils.h"
+#include "Render3D/Common/ViewGraphName.h"
+#include "Render3D/Deferred/DeferredPassNames.h"
+#include "Render3D/Deferred/GBufferStage.h"
 
 namespace ya
 {
 
-GBufferFeature::Resolved GBufferFeature::resolve(
-    const Settings& settings,
-    const Facts& facts,
-    const Inputs& inputs)
+GBufferFeature::Resolved GBufferFeature::resolve(const Settings& settings,
+                                                 const Facts&    facts,
+                                                 const Inputs&   inputs) const
 {
+    (void)facts;
+    (void)inputs;
+
     Resolved resolved;
     resolved.bEnabled = settings.bEnabled;
-    
-    // GBuffer attachment roles are fixed (GBuffer0-3 + SceneDepth)
-    resolved.outputs.albedoRole  = EViewAttachment::GBuffer0;
-    resolved.outputs.normalRole  = EViewAttachment::GBuffer1;
-    resolved.outputs.ormRole     = EViewAttachment::GBuffer2;
-    resolved.outputs.shadingRole = EViewAttachment::GBuffer3;
-    resolved.outputs.depthRole   = EViewAttachment::SceneDepth;
-    
+    if (!resolved.bEnabled) {
+        return resolved;
+    }
+
+    resolved.outputs.albedo = ViewAttachmentDesc{
+        .role    = EViewAttachment::GBuffer0,
+        .format  = settings.albedoFormat,
+        .usage   = settings.colorUsage,
+        .samples = ESampleCount::Sample_1,
+    };
+    resolved.outputs.normal = ViewAttachmentDesc{
+        .role    = EViewAttachment::GBuffer1,
+        .format  = settings.normalFormat,
+        .usage   = settings.colorUsage,
+        .samples = ESampleCount::Sample_1,
+    };
+    resolved.outputs.orm = ViewAttachmentDesc{
+        .role    = EViewAttachment::GBuffer2,
+        .format  = settings.ormFormat,
+        .usage   = settings.colorUsage,
+        .samples = ESampleCount::Sample_1,
+    };
+    resolved.outputs.shading = ViewAttachmentDesc{
+        .role    = EViewAttachment::GBuffer3,
+        .format  = settings.shadingFormat,
+        .usage   = settings.colorUsage,
+        .samples = ESampleCount::Sample_1,
+    };
+    resolved.outputs.depth = ViewAttachmentDesc{
+        .role    = EViewAttachment::SceneDepth,
+        .format  = settings.depthFormat,
+        .usage   = settings.depthUsage,
+        .samples = ESampleCount::Sample_1,
+        .isDepth = true,
+    };
     return resolved;
 }
 
-GBufferFeature::Prepared GBufferFeature::prepareBindings(
-    DeferredFrameResourceSet* resourceSet,
-    const Facts& facts,
-    const Resolved& resolved)
+GBufferFeature::Prepared GBufferFeature::prepareBindings(const Resolved&      resolved,
+                                                         const PrepareInputs& inputs) const
 {
     Prepared prepared;
-    
-    if (!resolved.bEnabled || !resourceSet) {
+    if (!resolved.bEnabled) {
         return prepared;
     }
-    
-    // Note: Actual binding allocation happens in append() when we have RenderSubmission
-    // This is just a placeholder for the protocol
-    
+
+    prepared.frameAndLightDS = inputs.frameAndLightDS;
+    prepared.skinningDS      = inputs.skinningDS;
     return prepared;
 }
 
-GBufferFeature::GraphOutputs GBufferFeature::append(
-    RenderGraph& graph,
-    GBufferStage* stage,
-    const FeatureGraphContext& ctx,
-    const Facts& facts,
-    const Resolved& resolved,
-    const Prepared& prepared,
-    const Inputs& inputs)
+GBufferFeature::GraphOutputs GBufferFeature::append(RenderGraph&               graph,
+                                                    GBufferStage*              stage,
+                                                    const FeatureGraphContext& ctx,
+                                                    const Facts&               facts,
+                                                    const Resolved&            resolved,
+                                                    const Prepared&            prepared,
+                                                    const Inputs&              inputs) const
 {
     GraphOutputs outputs;
-    
-    if (!resolved.bEnabled || !stage || !ctx.viewLease) {
+    if (!resolved.bEnabled || stage == nullptr || ctx.viewLease == nullptr || ctx.stageCtx == nullptr) {
         return outputs;
     }
-    
-    // Helper to import texture from ViewTargetLease
-    const auto importTarget = [&](EViewAttachment role, std::string_view label, EImageLayout::T finalLayout, EImageUsage::T usage) {
-        auto target = ctx.viewLease->find(role);
-        YA_CORE_ASSERT(target != nullptr, "GBuffer target missing role {}", static_cast<uint32_t>(role));
-        return graph.importTexture(makeImportedTextureDesc(*target, label, finalLayout, usage));
+
+    const auto importTarget = [&](const ViewAttachmentDesc& attachment, std::string_view label) {
+        const std::shared_ptr<RenderTexture> target = ctx.viewLease->find(attachment.role);
+        YA_CORE_ASSERT(target != nullptr, "GBuffer target missing role {}", static_cast<uint32_t>(attachment.role));
+        return graph.importTexture(
+            makeImportedTextureDesc(*target, label, EImageLayout::ShaderReadOnlyOptimal, attachment.usage));
     };
-    
-    // Import GBuffer attachments
-    outputs.albedo = importTarget(
-        resolved.outputs.albedoRole,
-        "GBuffer.Albedo",
-        EImageLayout::ShaderReadOnlyOptimal,
-        EImageUsage::ColorAttachment | EImageUsage::Sampled);
-    
-    outputs.normal = importTarget(
-        resolved.outputs.normalRole,
-        "GBuffer.Normal",
-        EImageLayout::ShaderReadOnlyOptimal,
-        EImageUsage::ColorAttachment | EImageUsage::Sampled);
-    
-    outputs.orm = importTarget(
-        resolved.outputs.ormRole,
-        "GBuffer.ORM",
-        EImageLayout::ShaderReadOnlyOptimal,
-        EImageUsage::ColorAttachment | EImageUsage::Sampled);
-    
-    outputs.shading = importTarget(
-        resolved.outputs.shadingRole,
-        "GBuffer.Shading",
-        EImageLayout::ShaderReadOnlyOptimal,
-        EImageUsage::ColorAttachment | EImageUsage::Sampled);
-    
-    outputs.depth = importTarget(
-        resolved.outputs.depthRole,
-        "GBuffer.Depth",
-        EImageLayout::ShaderReadOnlyOptimal,
-        EImageUsage::DepthStencilAttachment | EImageUsage::Sampled);
-    
-    // Add GBuffer pass
-    Rect2D renderArea{.pos = {0, 0}, .extent = facts.viewExtent.toVec2()};
-    
-    graph.addPass("GBuffer", [&](RGPassBuilder& builder) {
-        builder.declareRaster({
-            .renderArea = renderArea,
-            .layerCount = 1,
-            .colors = {
-                {.color = outputs.albedo,  .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                {.color = outputs.normal,  .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                {.color = outputs.orm,     .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                {.color = outputs.shading, .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-            },
-            .depth = RGDepthAttachmentDesc{
-                .depth       = outputs.depth,
-                .clearValue  = ClearValue(1.0f, 0),
-                .loadOp      = EAttachmentLoadOp::Clear,
-                .storeOp     = EAttachmentStoreOp::Store,
-                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-            },
+
+    outputs.albedo  = importTarget(resolved.outputs.albedo, "DeferredGBuffer.Color0");
+    outputs.normal  = importTarget(resolved.outputs.normal, "DeferredGBuffer.Color1");
+    outputs.orm     = importTarget(resolved.outputs.orm, "DeferredGBuffer.Color2");
+    outputs.shading = importTarget(resolved.outputs.shading, "DeferredGBuffer.Color3");
+    outputs.depth   = importTarget(resolved.outputs.depth, "DeferredGBuffer.Depth");
+
+    const RenderStageContext& stageCtx   = *ctx.stageCtx;
+    const Rect2D              renderArea{.pos = {0, 0}, .extent = facts.viewExtent.toVec2()};
+
+    (void)graph.addPass(
+        makeViewGraphName(deferred_pass_names::kGBuffer, ctx.viewId),
+        [outputs, inputs, predecessor = ctx.predecessor, renderArea](RGPassBuilder& passBuilder) {
+            if (predecessor.has_value()) {
+                passBuilder.dependsOn(*predecessor);
+            }
+            passBuilder.uniformRead(inputs.frame, inputs.frameRange);
+            passBuilder.uniformRead(inputs.light, inputs.lightRange);
+            passBuilder.storageRead(inputs.skinning);
+            passBuilder.declareRaster({
+                .renderArea = renderArea,
+                .layerCount = 1,
+                .colors = {
+                    {.color = outputs.albedo, .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = outputs.normal, .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = outputs.orm, .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = outputs.shading, .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                },
+                .depth = RGDepthAttachmentDesc{
+                    .depth       = outputs.depth,
+                    .clearValue  = ClearValue(1.0f, 0),
+                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                },
+            });
+        },
+        [stageCtx, prepared, inputs, bReverseViewportY = ctx.bReverseViewportY, stage](RGRenderContext& rgCtx) {
+            [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
+            [[maybe_unused]] IBuffer* const frameBuffer    = rgCtx.resolveBuffer(inputs.frame);
+            [[maybe_unused]] IBuffer* const lightBuffer    = rgCtx.resolveBuffer(inputs.light);
+            [[maybe_unused]] IBuffer* const skinningBuffer = rgCtx.resolveBuffer(inputs.skinning);
+
+            rgCtx.beginDeclaredRasterRendering();
+
+            const auto  gbufferExtent = rasterParams.getRenderExtent();
+            const auto  vpW           = gbufferExtent.width;
+            const auto  vpH           = gbufferExtent.height;
+            const float gbVpY         = bReverseViewportY ? static_cast<float>(vpH) : 0.0f;
+            const float gbVpH         = bReverseViewportY ? -static_cast<float>(vpH) : static_cast<float>(vpH);
+            rgCtx.getCommandBuffer().setViewport(0.0f, gbVpY, static_cast<float>(vpW), gbVpH);
+            rgCtx.getCommandBuffer().setScissor(0, 0, vpW, vpH);
+
+            stage->execute(stageCtx, GBufferStage::FrameInputs{
+                .frameAndLightDescriptorSet = prepared.frameAndLightDS,
+                .skinningDescriptorSet      = prepared.skinningDS,
+            });
+            rgCtx.endRendering();
         });
-    }, [=](RGRenderContext& rgCtx) {
-        // Execute GBufferStage
-        // Note: This is a placeholder - full integration needs frame/light bindings
-        // which will be provided when we wire this into DeferredRenderPipeline
-        rgCtx.beginDeclaredRasterRendering();
-        
-        // Actual GBufferStage::execute() call will go here with proper bindings
-    });
-    
+
     return outputs;
 }
 

@@ -3,125 +3,143 @@
 #include "Core/Log.h"
 #include "Graph/RenderGraphImportUtils.h"
 #include "Render3D/Common/RenderFrameInputs.h"
-#include "Render3D/Common/ViewTargetStore.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/ViewGraphName.h"
-#include "Render3D/Deferred/DeferredFrameGraphPasses.h"
+#include "Render3D/Common/ViewPassResources.h"
+#include "Render3D/Deferred/DeferredPassNames.h"
 #include "RHI/Backend/TextureLibrary.h"
+
+#include <glm/glm.hpp>
 
 namespace ya
 {
 
 SSAOFeature::Resolved SSAOFeature::resolve(const Settings& settings,
-                                           const Facts& facts,
-                                           const Inputs& inputs) const
+                                           const Facts&    facts,
+                                           const Inputs&   inputs) const
 {
+    (void)inputs;
+
     Resolved resolved;
     resolved.bEnabled = settings.bEnabled;
     resolved.settings = settings;
-    resolved.facts    = facts;
-    resolved.inputs   = inputs;
-
-    // Only declare resource requirements when enabled
-    if (settings.bEnabled) {
-        resolved.aoTarget = Resolved::ResourceRequirement{
-            .role   = EViewAttachment::SSAO,
-            .format = SSAOStage::AO_FORMAT,
-            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        };
+    if (!resolved.bEnabled) {
+        return resolved;
     }
 
+    resolved.aoTarget = ResourceRequirement{
+        .role   = EViewAttachment::SSAO,
+        .format = SSAOStage::AO_FORMAT,
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    };
+
+    if (facts.frameData != nullptr) {
+        resolved.frameData = SSAOStage::buildFrameData(*facts.frameData,
+                                                       facts.viewExtent,
+                                                       settings.radius,
+                                                       settings.bias,
+                                                       settings.power,
+                                                       settings.intensity,
+                                                       facts.bReverseY);
+    }
     return resolved;
 }
 
-Result<SSAOFeature::Prepared, FeatureError> SSAOFeature::prepareBindings(const Resolved& resolved,
-                                                           const PreparedInputs& inputs,
-                                                           const PrepareContext& ctx)
+Result<SSAOFeature::Prepared, FeatureError> SSAOFeature::prepareBindings(const Resolved&       resolved,
+                                                                         const PrepareContext& ctx) const
 {
     Prepared prepared;
-    prepared.bEnabled = resolved.bEnabled;
-
-    // When disabled, return minimal prepared state (no UBO, no DS)
     if (!resolved.bEnabled) {
         return prepared;
     }
-
-    if (!stage) {
-        YA_CORE_ERROR("SSAOFeature::prepareBindings called without stage");
-        return FeatureError::MissingDependency;
-    }
-
-    if (!ctx.viewTargets || !ctx.submission) {
-        YA_CORE_ERROR("SSAOFeature::prepareBindings missing ViewTargetStore or RenderSubmission");
+    if (ctx.submission == nullptr || ctx.stage == nullptr) {
         return FeatureError::MissingContext;
     }
 
-    // Build frame data (UBO content)
-    RenderStageContext stageCtx;
-    stageCtx.viewExtent = resolved.facts.viewExtent;
-    stageCtx.frameData  = resolved.facts.frameData;
-    prepared.frameData = stage->buildFrameData(stageCtx);
-
-    // C1: Frame UBO and descriptor sets are managed by existing DeferredFrameResourceSet
-    // Full implementation in C2-C3 will allocate them here via RenderSubmission
-
+    prepared.bEnabled = true;
+    prepared.frameDS  = ctx.frameDS;
+    prepared.inputDS  = allocateCombinedImageSamplerSet(*ctx.submission, ctx.stage->getInputDSL(), 4);
+    if (!prepared.frameDS || !prepared.inputDS) {
+        return FeatureError::AllocationFailed;
+    }
     return prepared;
 }
 
-Result<SSAOFeature::GraphOutputs, FeatureError> SSAOFeature::append(const Resolved& resolved,
-                                                      const Prepared& prepared,
-                                                      const PreparedInputs& inputs,
-                                                      const FeatureGraphContext& ctx)
+Result<SSAOFeature::GraphOutputs, FeatureError> SSAOFeature::append(RenderGraph&               graph,
+                                                                    SSAOStage*                 stage,
+                                                                    const FeatureGraphContext& ctx,
+                                                                    const Facts&               facts,
+                                                                    const Resolved&            resolved,
+                                                                    const Prepared&            prepared,
+                                                                    const Inputs&              inputs) const
 {
     GraphOutputs outputs;
-
-    // When disabled, return invalid OptionalAO
-    if (!resolved.bEnabled || !prepared.bEnabled) {
-        outputs.ao = OptionalAO{}; // invalid
+    if (!resolved.bEnabled) {
         return outputs;
     }
-
-    if (!stage || !ctx.graph || !ctx.stageCtx) {
-        YA_CORE_ERROR("SSAOFeature::append missing stage or graph context");
+    if (stage == nullptr || ctx.viewLease == nullptr || !resolved.aoTarget.has_value()) {
         return FeatureError::MissingContext;
     }
 
-    // Import AO output texture from ViewTargetStore
-    if (!ctx.viewTargets) {
-        YA_CORE_ERROR("SSAOFeature::append missing ViewTargetStore in context");
-        return FeatureError::MissingContext;
+    const std::shared_ptr<RenderTexture> target = ctx.viewLease->find(resolved.aoTarget->role);
+    if (target == nullptr) {
+        return FeatureError::MissingDependency;
     }
+    const RGTextureHandle output = graph.importTexture(makeImportedTextureDesc(
+        *target, "Deferred.SSAO", EImageLayout::ShaderReadOnlyOptimal, resolved.aoTarget->usage));
 
-    ViewTargetLease aoLease = ctx.viewTargets->lease(resolved.facts.viewId);
-    std::shared_ptr<RenderTexture> aoTexture = aoLease.find(EViewAttachment::SSAO);
-    
-    if (!aoTexture) {
-        YA_CORE_ERROR("SSAOFeature::append failed to find SSAO attachment for view {}", resolved.facts.viewId);
-        return FeatureError::AllocationFailed;
+    const stdptr<Texture>& noiseTexture = stage->getNoiseTexture();
+    if (!noiseTexture) {
+        return FeatureError::MissingDependency;
     }
+    const RGTextureHandle noise = graph.importTexture(
+        makeImportedTextureDesc(*noiseTexture, "SSAO.Noise", EImageLayout::ShaderReadOnlyOptimal));
 
-    RGTextureHandle aoOutput = ctx.graph->importTexture(makeImportedTextureDesc(
-        aoTexture->getResourceShared(),
-        makeViewGraphName("SSAO.Output", resolved.facts.viewId),
-        EImageLayout::Undefined));
+    const Rect2D renderArea{.pos = {0.0f, 0.0f}, .extent = glm::vec2(facts.viewExtent.width, facts.viewExtent.height)};
 
-    // Build DeferredSSAOPassParams using prepared descriptor sets and graph handles
-    DeferredSSAOPassParams params;
-    params.viewId             = resolved.facts.viewId;
-    params.albedo             = inputs.albedo;
-    params.normal             = inputs.normal;
-    params.depth              = inputs.depth;
-    params.frame              = inputs.frameBuffer;
-    params.frameRange         = {prepared.frameUBOOffset, prepared.frameUBOSize};
-    params.frameDescriptorSet = prepared.frameDS;
-    params.inputDescriptorSet = prepared.inputDS;
-    params.output             = aoOutput;
+    (void)graph.addPass(
+        makeViewGraphName(deferred_pass_names::kSSAO, ctx.viewId),
+        [inputs, noise, output, renderArea](RGPassBuilder& passBuilder) {
+            passBuilder.uniformRead(inputs.frame, inputs.frameRange);
+            passBuilder.read(inputs.albedo);
+            passBuilder.read(inputs.normal);
+            passBuilder.read(inputs.depth);
+            passBuilder.read(noise);
+            passBuilder.declareRaster({
+                .renderArea = renderArea,
+                .layerCount = 1,
+                .colors = {{
+                    .color       = output,
+                    .clearValue  = ClearValue(1.0f, 1.0f, 1.0f, 1.0f),
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
+            });
+        },
+        [stage, prepared, inputs, noise](RGRenderContext& rgCtx) {
+            stage->writeInputDescriptors(
+                prepared.inputDS,
+                rgCtx.getBindingContext(),
+                inputs.albedo,
+                inputs.normal,
+                inputs.depth,
+                noise);
 
-    // Append graph pass via existing SSAOStage::appendGraphPass
-    RGTextureHandle aoResult = stage->appendGraphPass(*ctx.graph, *ctx.stageCtx, params, aoOutput);
+            const auto rasterParams = rgCtx.getRasterPassExecutionParams();
+            const auto renderExtent = rasterParams.getRenderExtent();
+            const auto viewWidth    = renderExtent.width;
+            const auto viewHeight   = renderExtent.height;
+            rgCtx.beginDeclaredRasterRendering();
 
-    // Return valid OptionalAO
-    outputs.ao = OptionalAO{aoResult};
+            rgCtx.getCommandBuffer().bindPipeline(stage->getPipeline());
+            rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(viewWidth), static_cast<float>(viewHeight));
+            rgCtx.getCommandBuffer().setScissor(0, 0, viewWidth, viewHeight);
+            rgCtx.getCommandBuffer().bindDescriptorSets(
+                stage->getPipelineLayout(), 0, {prepared.frameDS, prepared.inputDS});
+            rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
+            rgCtx.endRendering();
+        });
+
+    outputs.ao = OptionalAO{output};
     return outputs;
 }
 

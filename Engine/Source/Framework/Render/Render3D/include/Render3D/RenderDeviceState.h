@@ -314,8 +314,9 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// no command buffer), which is a legitimate frame the host submits empty.
     bool beginFrameCommandBuffer(const RenderFramePlan& plan, std::shared_ptr<ICommandBuffer>& cmdBuf);
     /// Hands each family of the plan to the active strategy, which records it
-    /// into the flight's live submission and publishes its Views' outputs.
-    void recordViewFamilies(const RenderFramePlan& plan);
+    /// into the flight's live submission and publishes its Views' outputs. The
+    /// prepared frame resolved at the safe point is consumed, never re-derived.
+    void recordViewFamilies(const RenderFramePlan& plan, const PreparedPipelineFrame& prepared);
     /// Close the flight's command buffer and publish the frame's GPU timing.
     void endFrameCommandBuffer(ICommandBuffer* cmdBuf);
     /// Publish the just-completed frame's per-pass GPU times into PerfState,

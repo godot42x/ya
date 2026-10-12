@@ -6,7 +6,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "Render3D/RenderFrameData.h"
-#include "Render3D/Deferred/DeferredPipelineRecipe.h"
+#include "Render3D/Common/PreparedPipelineFrame.h"
 
 #include <limits>
 #include <unordered_map>
@@ -54,7 +54,7 @@ bool RenderDeviceState::beginFrameCommandBuffer(const RenderFramePlan& plan, std
     return true;
 }
 
-void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan)
+void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan, const PreparedPipelineFrame& prepared)
 {
     YA_PROFILE_FUNCTION();
 
@@ -64,11 +64,10 @@ void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan)
     RenderSubmission* live = _submissions.get(plan.frame.flightIndex);
     YA_CORE_ASSERT(live && live->isRecording(), "Family record requires a recording submission");
 
-    // Prepare pipeline composition (resolve resources, allocate bindings)
-    auto prepared = prepareFrameRecord(plan);
-
     // Submission-scoped warmup runs once here; stages must not repeat it per
-    // View or per family.
+    // View or per family. The composition was already resolved at the safe
+    // point and arrives as an argument: recording consumes it, never re-derives
+    // it.
     pipeline->beginSubmission();
 
     const auto recordOneFamily = [&](const SceneViewFamilyPlan* family, std::vector<SceneViewRecording> views) {
@@ -80,7 +79,7 @@ void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan)
             .family     = family,
             .targets    = &_viewTargets,
             .views      = std::move(views),
-            .prepared   = prepared.has_value() ? &(*prepared) : nullptr,
+            .prepared   = &prepared,
         };
         publishFamilyResult(plan.frame.flightIndex, pipeline->recordFamily(ctx));
     };
@@ -111,14 +110,30 @@ PreparedPipelineFrameResult RenderDeviceState::prepareFrameRecord(const RenderFr
     // geometry is not pushed here -- it is that View's own declaration and its
     // resources are keyed by it. See PipelineCoordinator::applyPendingChanges.
     _pipelineCoordinator.applyPendingChanges();
+
+    // C1/C2: resolve composition and collect the View target requests it makes
+    // at the safe point, before any command or submission exists.
+    PreparedPipelineFrame prepared;
+    prepared.pipelineKind = resolveActivePipelineKind();
+    prepared.hostTick     = plan.frame.hostTick;
+    prepared.flightIndex  = plan.frame.flightIndex;
+
     if (IRenderPipeline* pipeline = getActivePipeline()) {
         std::vector<ViewTargetRequest> requests;
-        pipeline->appendTargetRequests(plan.sceneRender.plan(), requests);
+        const EFrameComposition composition = pipeline->resolveFrameComposition(plan, prepared, requests);
+        if (composition == EFrameComposition::Failed) {
+            YA_CORE_ERROR("Failed to resolve the active pipeline composition before recording");
+            return std::nullopt; // preparation failure aborts recording
+        }
+        if (composition == EFrameComposition::NotApplicable) {
+            pipeline->appendTargetRequests(plan.sceneRender.plan(), requests);
+        }
         if (!_viewTargets.prepare(requests)) {
             YA_CORE_ERROR("Failed to prepare View targets before recording");
-            return std::nullopt; // C1: preparation failure aborts recording
+            return std::nullopt; // preparation failure aborts recording
         }
     }
+
     // Pre-record preparation: resolve each View's Scene-keyed GPU bindings now,
     // while the View's own declaration still names its Scene, so recording never
     // has to ask which Scene is current. Skipping this would leave every pass
@@ -129,33 +144,6 @@ PreparedPipelineFrameResult RenderDeviceState::prepareFrameRecord(const RenderFr
                                       recording.frameData->sceneSnapshot,
                                       recording.frameData->sceneResources,
                                       plan.frame.flightIndex);
-        }
-    }
-
-    // C2: Build prepared frame with typed composition for Deferred pipeline
-    PreparedPipelineFrame prepared;
-    prepared.pipelineKind = resolveActivePipelineKind();
-    prepared.hostTick     = plan.frame.hostTick;
-    prepared.flightIndex  = plan.frame.flightIndex;
-
-    // When using Deferred pipeline, resolve features (collect resource requirements)
-    // Note: prepareBindings is deferred to appendDeferredViewToGraph where RenderSubmission is available
-    if (prepared.pipelineKind == ERenderPipelineKind::Deferred) {
-        auto resolvedResult = DeferredPipelineRecipe::resolve(_render, &_viewTargets, plan);
-        if (resolvedResult.isErr()) {
-            YA_CORE_ERROR("Failed to resolve Deferred pipeline composition");
-            return std::nullopt;
-        }
-        prepared.deferred.resolved = std::move(resolvedResult.value());
-    }
-
-    // Placeholder per-view prepared data for legacy Forward pipeline
-    prepared.views.reserve(plan.sceneRender.views().size());
-    for (const SceneViewRecording& recording : plan.sceneRender.views()) {
-        if (recording.task) {
-            PreparedPipelineFrame::PreparedView view;
-            view.viewId = recording.task->desc.viewId;
-            prepared.views.push_back(view);
         }
     }
 

@@ -5,26 +5,14 @@
 #include "Graph/RenderGraphImportUtils.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/RenderOverlay.h"
-#include "Render3D/Common/Shadow/ShadowStage.h"
 #include "Render3D/Common/ViewGraphName.h"
 #include "Render3D/Common/ViewTargetStore.h"
+#include "Render3D/Deferred/DeferredPassNames.h"
 
 #include <string>
 
 namespace ya
 {
-
-namespace
-{
-
-constexpr std::string_view kTopologyPassGBuffer            = "Deferred GBuffer";
-constexpr std::string_view kTopologyPassLight             = "Deferred Light";
-constexpr std::string_view kTopologyPassForwardOpaque     = "Deferred Forward Opaque";
-constexpr std::string_view kTopologyPassSkybox            = "Deferred Skybox";
-constexpr std::string_view kTopologyPassSprites           = "Deferred Sprites";
-constexpr std::string_view kTopologyPassForwardTransparent = "Deferred Forward Transparent";
-
-} // namespace
 
 namespace deferred_frame_graph_passes
 {
@@ -51,7 +39,7 @@ void importFrameBuffers(DeferredFrameGraphPassContext& context)
         frameBinding.skinningBuffer,
         "Deferred.SkinningSSBO",
         EBufferUsage::StorageBuffer));
-    if (context.bUseSSAO) {
+    if (frameBinding.ssaoFrame.valid()) {
         graphResources.buffers.ssaoFrame = graph.importBuffer(makeHostWrittenImportedBufferDesc(
             frameBinding.ssaoFrame.buffer,
             "Deferred.SSAOFrameUBO",
@@ -67,11 +55,9 @@ void importFrameBuffers(DeferredFrameGraphPassContext& context)
         frameBinding.skyboxFrame.size));
 }
 
-void createAttachmentTextures(DeferredFrameGraphPassContext& context)
+void createTailAttachmentTextures(DeferredFrameGraphPassContext& context)
 {
     auto&       graphResources = context.graphResources;
-    const auto& gBufferSpec    = context.gBufferRTSpec;
-    const auto& viewportSpec   = context.viewRTSpec;
     YA_CORE_ASSERT(context.targets != nullptr, "Deferred graph requires prepared View targets");
     const auto importTarget = [&](EViewAttachment role, std::string_view label, EImageLayout::T finalLayout, EImageUsage::T usage) {
         auto target = context.targets->find(role);
@@ -79,260 +65,12 @@ void createAttachmentTextures(DeferredFrameGraphPassContext& context)
         return context.graph.importTexture(makeImportedTextureDesc(*target, label, finalLayout, usage));
     };
 
-    for (uint32_t attachmentIndex = 0; attachmentIndex < graphResources.textures.gBufferColors.size(); ++attachmentIndex) {
-        const auto label = std::format("DeferredGBuffer.Color{}", attachmentIndex);
-        graphResources.textures.gBufferColors[attachmentIndex] = importTarget(
-            static_cast<EViewAttachment>(static_cast<uint8_t>(EViewAttachment::GBuffer0) + attachmentIndex),
-            label, EImageLayout::ShaderReadOnlyOptimal, gBufferSpec.attachments.colorAttach[attachmentIndex].usage);
-    }
-    YA_CORE_ASSERT(gBufferSpec.attachments.depthAttach.has_value(),
-                   "Deferred GBuffer graph requires a depth attachment spec");
-    graphResources.textures.gBufferDepth = importTarget(
-        EViewAttachment::SceneDepth, "DeferredGBuffer.Depth", EImageLayout::ShaderReadOnlyOptimal,
-        gBufferSpec.attachments.depthAttach->usage);
-
-    YA_CORE_ASSERT(!viewportSpec.attachments.colorAttach.empty(),
-                   "Deferred viewport graph requires a color attachment spec");
-    graphResources.textures.viewColor = importTarget(
-        EViewAttachment::SceneColor, "DeferredView.Color", EImageLayout::ShaderReadOnlyOptimal,
-        viewportSpec.attachments.colorAttach.front().usage);
-
-    AttachmentDescription entityIdDesc{};
-    entityIdDesc.format      = EFormat::R32_UINT;
-    entityIdDesc.samples     = ESampleCount::Sample_1;
-    entityIdDesc.loadOp      = EAttachmentLoadOp::Clear;
-    entityIdDesc.storeOp     = EAttachmentStoreOp::Store;
-    entityIdDesc.usage       = EImageUsage::ColorAttachment | EImageUsage::TransferSrc;
-    entityIdDesc.finalLayout = EImageLayout::ColorAttachmentOptimal;
     graphResources.textures.entityId = importTarget(
-        EViewAttachment::EntityId, "DeferredView.EntityId", EImageLayout::ColorAttachmentOptimal, entityIdDesc.usage);
+        EViewAttachment::EntityId, "DeferredView.EntityId", EImageLayout::ColorAttachmentOptimal,
+        EImageUsage::ColorAttachment | EImageUsage::TransferSrc);
     graphResources.textures.postprocessOutput = importTarget(
         EViewAttachment::DisplayColor, "DeferredView.Display", EImageLayout::ShaderReadOnlyOptimal,
         EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc);
-}
-
-void appendGBuffer(DeferredFrameGraphPassContext& context)
-{
-    auto&       graph          = context.graph;
-    auto&       graphResources = context.graphResources;
-    const auto& frameBinding  = context.frameBinding;
-    const auto& gbufferExtent = context.gBufferRTSpec.extent;
-
-    DeferredGBufferPassParams params{
-        .frame = {
-            .handle = graphResources.buffers.frame,
-            .range  = RGBufferRange{.offset = frameBinding.frame.offset, .size = frameBinding.frame.size},
-        },
-        .light = {
-            .handle = graphResources.buffers.light,
-            .range  = RGBufferRange{.offset = frameBinding.light.offset, .size = frameBinding.light.size},
-        },
-        .skinning                    = graphResources.buffers.skinning,
-        .gBufferColors               = graphResources.textures.gBufferColors,
-        .gBufferDepth                = graphResources.textures.gBufferDepth,
-        .renderArea                  = Rect2D{.pos = {0, 0}, .extent = gbufferExtent.toVec2()},
-        .layerCount                  = 1,
-        .frameAndLightDescriptorSet  = frameBinding.frameAndLightDescriptorSet,
-        .skinningDescriptorSet       = frameBinding.skinningDescriptorSet,
-    };
-
-    graphResources.passes.gBuffer = graph.addPass(
-        makeViewGraphName(kTopologyPassGBuffer, context.viewId),
-        [&params, predecessor = context.familyPredecessor](RGPassBuilder& passBuilder) {
-            if (predecessor.has_value()) {
-                passBuilder.dependsOn(*predecessor);
-            }
-            passBuilder.uniformRead(params.frame.handle, params.frame.range);
-            passBuilder.uniformRead(params.light.handle, params.light.range);
-            passBuilder.storageRead(params.skinning);
-            passBuilder.declareRaster({
-                .renderArea = params.renderArea,
-                .layerCount = params.layerCount,
-                .colors = {
-                    {.color = params.gBufferColors[0], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                    {.color = params.gBufferColors[1], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                    {.color = params.gBufferColors[2], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                    {.color = params.gBufferColors[3], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                },
-                .depth = RGDepthAttachmentDesc{
-                    .depth       = params.gBufferDepth,
-                    .clearValue  = ClearValue(1.0f, 0),
-                    .loadOp      = EAttachmentLoadOp::Clear,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                },
-            });
-        },
-        [stageCtx = context.stageCtx, params, gBufferStage = &context.gBufferStage, bReverseViewportY = context.bReverseViewportY](RGRenderContext& rgCtx) {
-            const auto rasterParams = rgCtx.getRasterPassExecutionParams();
-            [[maybe_unused]] IBuffer* const frameBuffer    = rgCtx.resolveBuffer(params.frame.handle);
-            [[maybe_unused]] IBuffer* const lightBuffer    = rgCtx.resolveBuffer(params.light.handle);
-            [[maybe_unused]] IBuffer* const skinningBuffer = rgCtx.resolveBuffer(params.skinning);
-
-            rgCtx.beginDeclaredRasterRendering();
-
-            const auto gbufferExtent = rasterParams.getRenderExtent();
-            const auto vpW           = gbufferExtent.width;
-            const auto vpH           = gbufferExtent.height;
-            const float gbVpY         = bReverseViewportY ? static_cast<float>(vpH) : 0.0f;
-            const float gbVpH         = bReverseViewportY ? -static_cast<float>(vpH) : static_cast<float>(vpH);
-            rgCtx.getCommandBuffer().setViewport(0.0f, gbVpY, static_cast<float>(vpW), gbVpH);
-            rgCtx.getCommandBuffer().setScissor(0, 0, vpW, vpH);
-
-            gBufferStage->execute(stageCtx, GBufferStage::FrameInputs{
-                .frameAndLightDescriptorSet = params.frameAndLightDescriptorSet,
-                .skinningDescriptorSet      = params.skinningDescriptorSet,
-            });
-            rgCtx.endRendering();
-        });
-}
-
-void appendSSAO(DeferredFrameGraphPassContext& context)
-{
-    if (!context.bUseSSAO) {
-        return;
-    }
-
-    YA_CORE_ASSERT(context.ssaoStage != nullptr, "Deferred SSAO requires an SSAO stage");
-    YA_CORE_ASSERT(context.graphResources.buffers.ssaoFrame.has_value(),
-                   "Deferred SSAO requires an imported frame buffer");
-
-    const auto& frameBinding = context.frameBinding;
-    auto ssaoTarget = context.targets ? context.targets->find(EViewAttachment::SSAO) : nullptr;
-    YA_CORE_ASSERT(ssaoTarget != nullptr, "Deferred SSAO requires a prepared target");
-    const auto ssaoOutput = context.graph.importTexture(makeImportedTextureDesc(
-        *ssaoTarget, "Deferred.SSAO", EImageLayout::ShaderReadOnlyOptimal,
-        EImageUsage::ColorAttachment | EImageUsage::Sampled));
-    context.graphResources.textures.ssao = context.ssaoStage->appendGraphPass(
-        context.graph,
-        context.stageCtx,
-        DeferredSSAOPassParams{
-            .frame              = *context.graphResources.buffers.ssaoFrame,
-            .frameRange         = RGBufferRange{.offset = frameBinding.ssaoFrame.offset, .size = frameBinding.ssaoFrame.size},
-            .albedo             = context.graphResources.textures.gBufferColors[0],
-            .normal             = context.graphResources.textures.gBufferColors[1],
-            .depth              = context.graphResources.textures.gBufferDepth,
-            .frameDescriptorSet = frameBinding.ssaoFrameDescriptorSet,
-            .inputDescriptorSet = context.viewResources ? context.viewResources->ssao.inputs.set : DescriptorSetHandle{},
-            .viewId             = context.viewId,
-        },
-        ssaoOutput);
-}
-
-void appendLight(DeferredFrameGraphPassContext& context)
-{
-    auto&       graph          = context.graph;
-    auto&       graphResources = context.graphResources;
-    const auto& frameBinding  = context.frameBinding;
-
-    if (context.environmentLighting && context.environmentLighting->isComplete()) {
-        graphResources.textures.environmentCubemap = graph.importTexture(
-            makeImportedTextureDesc(context.environmentLighting->cubemap,
-                                    "DeferredLight.Environment.Cubemap",
-                                    EImageLayout::ShaderReadOnlyOptimal));
-        graphResources.textures.environmentIrradiance = graph.importTexture(
-            makeImportedTextureDesc(context.environmentLighting->irradiance,
-                                    "DeferredLight.Environment.Irradiance",
-                                    EImageLayout::ShaderReadOnlyOptimal));
-        graphResources.textures.environmentPrefilter = graph.importTexture(
-            makeImportedTextureDesc(context.environmentLighting->prefilter,
-                                    "DeferredLight.Environment.Prefilter",
-                                    EImageLayout::ShaderReadOnlyOptimal));
-        graphResources.textures.environmentBrdfLut = graph.importTexture(
-            makeImportedTextureDesc(*context.environmentLighting->brdfLut,
-                                    "DeferredLight.Environment.BrdfLut",
-                                    EImageLayout::ShaderReadOnlyOptimal));
-    }
-
-    graphResources.textures.shadowDepth = graphResources.passes.shadow.shadowDepth;
-
-    DeferredLightPassParams params{
-        .frame = {
-            .handle = graphResources.buffers.frame,
-            .range  = RGBufferRange{.offset = frameBinding.frame.offset, .size = frameBinding.frame.size},
-        },
-        .light = {
-            .handle = graphResources.buffers.light,
-            .range  = RGBufferRange{.offset = frameBinding.light.offset, .size = frameBinding.light.size},
-        },
-        .gBufferColors                    = graphResources.textures.gBufferColors,
-        .gBufferDepth                     = graphResources.textures.gBufferDepth,
-        .ssao                             = graphResources.textures.ssao,
-        .environmentCubemap               = graphResources.textures.environmentCubemap,
-        .environmentIrradiance            = graphResources.textures.environmentIrradiance,
-        .environmentPrefilter             = graphResources.textures.environmentPrefilter,
-        .environmentBrdfLut               = graphResources.textures.environmentBrdfLut,
-        .shadowDepth                      = graphResources.textures.shadowDepth,
-        .viewColor                    = graphResources.textures.viewColor,
-        .renderArea                      = Rect2D{.pos = {0, 0}, .extent = context.viewExtent.toVec2()},
-        .layerCount                      = 1,
-        .frameAndLightDescriptorSet      = frameBinding.frameAndLightDescriptorSet,
-        .environmentLightingDescriptorSet = context.environmentLightingDS,
-        .gBufferTextureDescriptorSet     = context.viewResources ? context.viewResources->lighting.gBufferTextures.set : DescriptorSetHandle{},
-        .shadowDescriptorSet             = context.viewResources ? context.viewResources->lighting.shadows.set : DescriptorSetHandle{},
-    };
-
-    graphResources.passes.light = graph.addPass(
-        makeViewGraphName(kTopologyPassLight, context.viewId),
-        [&params](RGPassBuilder& passBuilder) {
-            passBuilder.uniformRead(params.frame.handle, params.frame.range);
-            passBuilder.uniformRead(params.light.handle, params.light.range);
-            for (const auto handle : params.gBufferColors) {
-                passBuilder.read(handle);
-            }
-            passBuilder.read(params.gBufferDepth);
-            if (params.ssao.has_value()) {
-                passBuilder.read(*params.ssao);
-            }
-            if (params.shadowDepth.has_value()) {
-                passBuilder.read(*params.shadowDepth);
-            }
-            if (params.environmentCubemap.has_value()) {
-                passBuilder.read(*params.environmentCubemap);
-            }
-            if (params.environmentIrradiance.has_value()) {
-                passBuilder.read(*params.environmentIrradiance);
-            }
-            if (params.environmentPrefilter.has_value()) {
-                passBuilder.read(*params.environmentPrefilter);
-            }
-            if (params.environmentBrdfLut.has_value()) {
-                passBuilder.read(*params.environmentBrdfLut);
-            }
-            passBuilder.declareRaster({
-                .renderArea = params.renderArea,
-                .layerCount = params.layerCount,
-                .colors = {{
-                    .color       = params.viewColor,
-                    .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
-                    .loadOp      = EAttachmentLoadOp::Clear,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                }},
-            });
-        },
-        [stageCtx = context.stageCtx, params, lightStage = &context.lightStage](RGRenderContext& rgCtx) {
-            [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
-            lightStage->writeGBufferTextureDescriptors(
-                params.gBufferTextureDescriptorSet,
-                rgCtx.getBindingContext(),
-                params.gBufferColors[0],
-                params.gBufferColors[1],
-                params.gBufferColors[2],
-                params.gBufferColors[3],
-                params.gBufferDepth,
-                params.ssao);
-
-            rgCtx.beginDeclaredRasterRendering();
-            YA_PERF_SCOPE(perf::sample::deferredLight(), perf::metric::cpuTimeMs(), perf::domain::render());
-            lightStage->execute(
-                stageCtx,
-                params.frameAndLightDescriptorSet,
-                params.environmentLightingDescriptorSet,
-                params.gBufferTextureDescriptorSet,
-                params.shadowDescriptorSet);
-            rgCtx.endRendering();
-        });
 }
 
 void appendForwardOpaque(DeferredFrameGraphPassContext& context)
@@ -345,7 +83,7 @@ void appendForwardOpaque(DeferredFrameGraphPassContext& context)
     };
 
     (void)context.graph.addPass(
-        makeViewGraphName(kTopologyPassForwardOpaque, context.viewId),
+        makeViewGraphName(deferred_pass_names::kForwardOpaque, context.viewId),
         [&params](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = params.renderArea,
@@ -391,7 +129,7 @@ void appendSkybox(DeferredFrameGraphPassContext& context)
     };
 
     context.graphResources.passes.skybox = context.graph.addPass(
-        makeViewGraphName(kTopologyPassSkybox, context.viewId),
+        makeViewGraphName(deferred_pass_names::kSkybox, context.viewId),
         [&params](RGPassBuilder& passBuilder) {
             passBuilder.uniformRead(params.frame.handle, params.frame.range);
             passBuilder.declareRaster({
@@ -442,7 +180,7 @@ void appendSprite2D(DeferredFrameGraphPassContext& context)
     };
 
     (void)context.graph.addPass(
-        makeViewGraphName(kTopologyPassSprites, context.viewId),
+        makeViewGraphName(deferred_pass_names::kSprites, context.viewId),
         [&params](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = params.renderArea,
@@ -512,7 +250,7 @@ void appendForwardTransparent(DeferredFrameGraphPassContext& context)
     };
 
     context.graphResources.passes.sceneOverlay = context.graph.addPass(
-        makeViewGraphName(kTopologyPassForwardTransparent, context.viewId),
+        makeViewGraphName(deferred_pass_names::kForwardTransparent, context.viewId),
         [&params](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = params.renderArea,
@@ -565,7 +303,7 @@ void appendEntityId(DeferredFrameGraphPassContext& context)
     }
 
     (void)context.graph.addPass(
-        makeViewGraphName("Deferred EntityId", context.viewId),
+        makeViewGraphName(deferred_pass_names::kEntityId, context.viewId),
         [entityId, depth, extent](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = {.pos = {0, 0}, .extent = extent.toVec2()},
