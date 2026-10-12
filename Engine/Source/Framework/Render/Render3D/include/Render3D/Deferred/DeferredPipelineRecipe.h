@@ -3,7 +3,9 @@
 #include "Core/Base.h"
 #include "Core/Result.h"
 #include "Render3D/Composition/FeatureProtocol.h"
+#include "Render3D/Deferred/Features/GBufferFeature.h"
 #include "Render3D/Deferred/Features/SSAOFeature.h"
+#include "Render3D/Deferred/Features/LightingFeature.h"
 #include "Graph/RenderGraph.h"
 
 #include <vector>
@@ -39,7 +41,9 @@ struct DeferredPipelineRecipe
         uint64_t viewId = 0;
         
         // Feature resolved states
+        GBufferFeature::Resolved gbuffer;
         SSAOFeature::Resolved ssao;
+        LightingFeature::Resolved lighting;
         
         // Resource requirements (collected from all features)
         struct ResourceRequirements
@@ -55,14 +59,17 @@ struct DeferredPipelineRecipe
         uint64_t viewId = 0;
         
         // Feature prepared bindings
+        GBufferFeature::Prepared gbuffer;
         SSAOFeature::Prepared ssao;
+        LightingFeature::Prepared lighting;
     };
     
     /// Graph outputs for one view.
     struct GraphOutputs
     {
+        GBufferFeature::GraphOutputs gbuffer;
         SSAOFeature::OptionalAO ao;
-        // More outputs will be added in C2-C5
+        LightingFeature::GraphOutputs lighting;
     };
     
     /// Resolve composition for all views in the plan.
