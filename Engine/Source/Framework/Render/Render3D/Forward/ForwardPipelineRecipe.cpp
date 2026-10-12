@@ -1,6 +1,9 @@
 #include "Render3D/Forward/ForwardPipelineRecipe.h"
 
 #include "Core/Log.h"
+
+#include <format>
+#include <string>
 #include "Core/Math/Math.h"
 #include "Graph/RenderGraphImportUtils.h"
 #include "Render3D/Common/EntityIdPass.h"
@@ -54,6 +57,27 @@ std::vector<ViewAttachmentDesc> ForwardPipelineRecipe::ResolvedView::collectView
         targets.push_back(bloom.composite->toDesc());
     }
     return targets;
+}
+
+std::string ForwardPipelineRecipe::ResolvedView::describe() const
+{
+    std::string out = std::format("Forward View {} ({}x{})\n", viewId, viewExtent.width, viewExtent.height);
+    const auto feature = [&out](std::string_view name, bool bEnabled) {
+        out += std::format("  {} {}\n", bEnabled ? "[on] " : "[off]", name);
+    };
+    feature("shadow", shadow.bEnabled);
+    feature("opaque", opaque.bEnabled);
+    feature("skybox", skybox.bEnabled);
+    feature("entityId", entityId.bEnabled);
+    feature("bloom", bloom.bEnabled);
+    feature("finalize", finalize.bEnabled);
+
+    out += std::format("  targets: {}", collectViewTargets().size());
+    for (const ViewAttachmentDesc& target : collectViewTargets()) {
+        out += std::format(" {}", static_cast<uint32_t>(target.role));
+    }
+    out += "\n";
+    return out;
 }
 
 Result<std::vector<ForwardPipelineRecipe::ResolvedView>, FeatureError>

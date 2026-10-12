@@ -126,10 +126,11 @@
       "checkpoints": ["C2"],
       "expected": "Bloom 等多 pass contribution 每次更新需要独立 descriptor；归一化 pass 次数在 invocation 内；persistent/transient 来源固定；无共享 last-call 状态",
       "verification": ["pass count boundary tests", "descriptor independence tests", "runtime Bloom on/off"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
         "BloomFeature 拥有 extract/blur/composite 三段 pass 序列与 per-view DS：启用时从 lease 导入三个 target，prepareBindings 分配 DS；关闭时无 target/DS/pass（runtime bloom-off 10 pass，无 Deferred.Bloom* import/transient）",
-        "缺口：`_lastBlurPassCount` 仍为 BloomPostprocessing 调用状态（plan-C2 待删）；blur pass 次数边界与 DS 独立性无专门单测"
+        "无共享 last-call 状态：blur 次数改为 appendGraphPasses 的局部值（原 `_lastBlurPassCount` 成员删除），composite 的 ping-pong 侧只取决于本次调用",
+        "边界用例：BloomPostprocessingTest.EachCallPicksItsOwnFinalBlurTargetFromItsOwnCount 同帧两次不同次数各自独立；负向验证过（恢复成员态则失败）"
       ]
     },
     {
@@ -165,12 +166,11 @@
       "checkpoints": ["C2", "C4"],
       "expected": "grading/Bloom off 仍产生合法 DisplayColor；编码及 display compose 不变；缺 Finalize 不被兼容 fallback 吞掉",
       "verification": ["SurfaceImageTest", "Finalize contract test", "grading-off screenshot"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
-        "C3A：FinalizeFeature 恒在 map 且必需（被解析为 disabled 时 prepareBindings 返回 InvalidInput）；display format/usage/编码由 pipeline config 单源传入",
-        "runtime 三场景（ssao on/off、bloom off）Postprocessing pass 均执行并发布 DisplayColor；bloom-off 显示输出正常",
-        "C3G：grading off（`smoke.postprocess.enabled=false` → `setGradingEnabled(false)`）runtime——10 pass（Bloom 随 grading 跳过）、Postprocessing 仍执行并导出 `Deferred.View.Display`；截图有效（alpha 253.7）且与 graded 基线仅色彩差异（max 19/255、mean 9.1）",
-        "缺口：SurfaceImageTest 侧编码回归未跑"
+        "FinalizeFeature 恒在 map 且必需（被解析为 disabled 时 prepareBindings 返回 InvalidInput）；display format/usage/编码由 pipeline config 单源传入",
+        "runtime 三场景（ssao on/off、bloom off）Postprocessing pass 均执行并发布 DisplayColor；grading-off 场景 10 pass 且 Finalize 仍导出（C3G 证据）",
+        "SurfaceImageTest 两例通过（surface 重编码 encoded 图被拒、写时按 surface 格式编码）；display compose 与编码未在本线改动"
       ]
     },
     {
@@ -179,11 +179,11 @@
       "checkpoints": ["C1", "C2", "C4"],
       "expected": "只发布本次 declared 且有效输出；allocated-but-skipped 不发布；统一 role collector，不在两个 pipeline 解析 feature export 名；现有 consumers 兼容",
       "verification": ["RenderViewOutputTableTest", "collector tests", "debug/picking runtime"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
-        "exportGraphOutputs 从 Recipe GraphOutputs 取 handle（SSAO/Display 之外的 export 不变）；SSAO off 时 outputs.ssao.ao 无效 → 不 export/不发布",
-        "collectViewOutput 的 presence 门控改为 recipe outputs（不再是 graphResources bag）；bloom-off 时 Bloom.Output 不再导出（诊断减少，符合 C2 语义）",
-        "缺口：统一 role collector 与「不在 pipeline 侧解析 feature export 名」未做（C2/C4）"
+        "只发布本次 declared 且有效输出：exportGraphOutputs 从 Recipe GraphOutputs 取 handle；SSAO off 时 outputs.ssao.ao 无效 → 不 export/不发布",
+        "共享输出收集单一化：Composition/ViewOutputCollection.h 的 collectSharedViewOutputs 是 Bloom/Postprocess export 名的唯一读取点（两管线原各解析一遍）；管线自身 pass 词汇保留在各自 PassNames",
+        "collectViewOutput 的 presence 门控来自 recipe outputs（非 graphResources bag）；runtime 三帧逐像素 0 diff 证明 consumers 兼容"
       ]
     },
     {
@@ -192,10 +192,11 @@
       "checkpoints": ["C2", "C5"],
       "expected": "多 pass feature 增加私有 scratch / 修改局部资源描述，通过同一 contract 路径工作，无 pipeline、executor、registry、集中 slot 修改",
       "verification": ["resource change test", "changed-file responsibility map"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
-        "C3A：Bloom 三段 pass 序列 + 私有 blur scratch 完全在 feature/processor 内；关闭时 target/DS/scratch 均不申请；pipeline 尾部与集中 slot 无改动",
-        "缺口：私有 scratch 来源固定的专项测试；资源描述变化的 responsibility-map 证据未成文"
+        "Bloom 三段 pass 序列 + 私有 blur scratch 完全在 feature/processor 内；关闭时 target/DS/scratch 均不申请；管线尾部与集中 slot 无改动",
+        "私有 scratch 来源固定：blurPing 是 graph 内 createTexture 的 transient（label Bloom.BlurScratch），blurPong/composite 可来自 View target 或 transient；来源由 pass 声明决定而非调用方",
+        "无共享 last-call 状态（blur 次数局部化 + 边界用例）；新增私有资源的接入面 = feature 文件 + recipe 一行（recipe 头 Adding a pass 已记录）"
       ]
     },
     {
@@ -276,8 +277,12 @@
       "checkpoints": ["C5"],
       "expected": "调用状态/原因、typed connections、owner、pass 贡献、有效 outputs 可与 actual graph 核对；owning diagnostic strings 不悬空；trace off 不收重型文本",
       "verification": ["diagnostic snapshot tests", "existing graph trace integration", "lifetime test"],
-      "status": "todo",
-      "evidence": []
+      "status": "in_progress",
+      "evidence": [
+        "两管线 ResolvedView::describe() 输出每 feature 的 on/off 与声明 targets；owning 字符串（View id、feature 名、role 序号），不悬空于 graph-local 数据",
+        "接入既有 --render-graph-trace：off 时不构建文本；runtime 实测 Deferred/Forward 两管线 dump 均出现（[RGTrace] composition:）",
+        "缺口：与 actual graph pass 区间的显式关联（当前靠 pass 名与 dump 顺序对照）仍待补；diagnostic snapshot 单测未加"
+      ]
     },
     {
       "id": "M21",

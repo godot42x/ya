@@ -2,7 +2,6 @@
 
 #include "Core/Base.h"
 #include "Core/Result.h"
-#include "Core/Optional.h"
 #include "Graph/RenderGraph.h"
 #include "Render3D/Stage/IRenderStage.h"
 #include "Render3D/Common/ViewTargetStore.h"
@@ -26,61 +25,6 @@ enum class FeatureError
     AllocationFailed,
     InvalidInput,
 };
-
-// ────────────────────────────────────────────────────────────────────────────
-// Typed resource references (use Core::OptionalHandle<T>)
-// ────────────────────────────────────────────────────────────────────────────
-
-/// Type-safe texture reference in composition.
-/// Use OptionalHandle<T> from Core/Optional.h for typed handle references.
-/// Not to be confused with Core/AssetRef.h TextureRef (asset path reference).
-template <typename T>
-using CompositionTextureRef = OptionalHandle<T>;
-
-/// Type-safe buffer reference in composition.
-template <typename T>
-using CompositionBufferRef = OptionalHandle<T>;
-
-/// Reference to another feature's prepared bindings.
-template <typename T>
-using CompositionPreparedRef = OptionalHandle<T>;
-
-// ────────────────────────────────────────────────────────────────────────────
-// Composition tags (empty types for typed refs)
-// ────────────────────────────────────────────────────────────────────────────
-
-namespace composition_tag
-{
-
-struct GBufferAlbedo {};
-struct GBufferNormal {};
-struct GBufferMaterial {};
-struct GBufferEmissive {};
-struct Depth {};
-struct Color {};
-struct DisplayColor {};
-struct AmbientOcclusion {};
-struct AO {}; // Alias for AmbientOcclusion
-struct Shadow {};
-struct FrameUBO {};
-struct LightUBO {};
-
-} // namespace composition_tag
-
-// ────────────────────────────────────────────────────────────────────────────
-// Typed aliases
-// ────────────────────────────────────────────────────────────────────────────
-
-using GBufferAlbedo = composition_tag::GBufferAlbedo;
-using GBufferNormal = composition_tag::GBufferNormal;
-using GBufferMaterial = composition_tag::GBufferMaterial;
-using GBufferEmissive = composition_tag::GBufferEmissive;
-using Depth = composition_tag::Depth;
-using Color = composition_tag::Color;
-using AO = composition_tag::AO;
-
-// Note: OptionalAO moved to SSAOFeature::OptionalAO (using OptionalHandle<ssao_tag::AO>)
-// Each feature defines its own optional output types for type safety.
 
 // ────────────────────────────────────────────────────────────────────────────
 // Contexts

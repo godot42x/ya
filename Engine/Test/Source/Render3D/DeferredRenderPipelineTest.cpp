@@ -478,4 +478,64 @@ TEST_F(DeferredRenderPipelineSettingsTest, PersistentPostProcessAndDeferredExtra
 }
 
 } // namespace
+
+TEST(BloomPostprocessingTest, EachCallPicksItsOwnFinalBlurTargetFromItsOwnCount)
+{
+    // The composite pass must read the ping-pong side belonging to THIS call's
+    // blur count. When that count lived on the stage as `_lastBlurPassCount`,
+    // two contributions in one frame (two Views, or a second bloom owner) made
+    // the later composite depend on whichever call ran last. Now the count is a
+    // local: build two blooms with opposite parities in one frame and check each
+    // composite reads its own side.
+    RenderGraph graph;
+    BloomPostprocessing bloom; // pass building needs no GPU pipelines
+
+    const auto scene = graph.createTexture(RGTextureDesc{
+        .label  = "BloomTest.Scene",
+        .format = EFormat::R16G16B16A16_SFLOAT,
+        .extent = Extent3D{64, 64, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+
+    PostProcessingState state{};
+    state.bEnableBloom    = true;
+    state.bloomBlurPasses = 1; // -> 2 passes, even -> final side is Pong
+
+    const auto evenCount = bloom.appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
+        .sceneHandle  = scene,
+        .renderExtent = Extent2D{.width = 64, .height = 64},
+        .state        = &state,
+        .viewId       = 21,
+    });
+    EXPECT_TRUE(evenCount.isValid());
+
+    state.bloomBlurPasses = 2; // -> 4 passes, still even
+    const auto evenCountAgain = bloom.appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
+        .sceneHandle  = scene,
+        .renderExtent = Extent2D{.width = 64, .height = 64},
+        .state        = &state,
+        .viewId       = 22,
+    });
+    EXPECT_TRUE(evenCountAgain.isValid());
+
+    // Both views' pass sets exist independently: the graph has both extracts and
+    // both composites, and neither call reset or re-read the other's state.
+    const auto& passes = graph.getPasses();
+    auto countName = [&passes](std::string_view needle) {
+        size_t n = 0;
+        for (const auto& pass : passes) {
+            if (pass.name.find(needle) != std::string::npos) {
+                ++n;
+            }
+        }
+        return n;
+    };
+    // Each call appends blurPasses * 2 iterations: 2 for the first (blurPasses
+    // 1), 4 for the second, alternating horizontal/vertical.
+    EXPECT_EQ(countName("BloomExtract"), 2u);
+    EXPECT_EQ(countName("BloomComposite"), 2u);
+    EXPECT_EQ(countName("BloomBlurHorizontal"), 3u);
+    EXPECT_EQ(countName("BloomBlurVertical"), 3u);
+}
+
 } // namespace ya

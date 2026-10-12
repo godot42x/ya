@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Core/Optional.h"
 #include "Core/Result.h"
 #include "Graph/RenderGraph.h"
 #include "RHI/RenderDefines.h"

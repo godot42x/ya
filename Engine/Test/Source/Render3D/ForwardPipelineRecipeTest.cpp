@@ -127,4 +127,26 @@ TEST(ForwardRecipeLifecycleTest, MissingFrameBindingFailsPreparationInsteadOfBin
     EXPECT_EQ(prepared.error(), FeatureError::MissingContext);
 }
 
+
+TEST(ForwardRecipeLifecycleTest, DescribeStatesEachFeatureAndItsTargets)
+{
+    // The dump is the map talking: one line per feature with its decision, plus
+    // the declared targets. A reader lines it up against the graph trace, so it
+    // must name features and carry owning strings only.
+    ForwardPipelineRecipe::ResolvedView view{};
+    view.viewId     = 31;
+    view.viewExtent = {.width = 320, .height = 200};
+    view.opaque.bEnabled = true;
+    view.finalize.bEnabled = true;
+    view.bloom.bEnabled = true;
+
+    const std::string text = view.describe();
+    EXPECT_NE(text.find("Forward View 31"), std::string::npos);
+    EXPECT_NE(text.find("320x200"), std::string::npos);
+    EXPECT_NE(text.find("opaque"), std::string::npos);
+    EXPECT_NE(text.find("shadow"), std::string::npos);
+    EXPECT_NE(text.find("bloom"), std::string::npos);
+    EXPECT_NE(text.find("targets:"), std::string::npos);
+}
+
 } // namespace ya

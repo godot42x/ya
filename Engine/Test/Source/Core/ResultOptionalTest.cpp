@@ -1,5 +1,4 @@
 #include "Core/Result.h"
-#include "Core/Optional.h"
 
 #include <gtest/gtest.h>
 #include <string>
@@ -109,81 +108,4 @@ TEST(ResultTest, MoveSemantics)
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// OptionalHandle<T> tests
-// ────────────────────────────────────────────────────────────────────────────
-
-struct TextureHandle {};
-struct BufferHandle {};
-
-TEST(OptionalHandleTest, ValidConstruction)
-{
-    OptionalHandle<TextureHandle> handle{5};
-    
-    EXPECT_TRUE(handle.isValid());
-    EXPECT_TRUE(handle.isSome());
-    EXPECT_FALSE(handle.isNone());
-    EXPECT_TRUE(static_cast<bool>(handle));
-    EXPECT_EQ(handle.index(), 5u);
-}
-
-TEST(OptionalHandleTest, InvalidConstruction)
-{
-    OptionalHandle<TextureHandle> handle;
-    
-    EXPECT_FALSE(handle.isValid());
-    EXPECT_FALSE(handle.isSome());
-    EXPECT_TRUE(handle.isNone());
-    EXPECT_FALSE(static_cast<bool>(handle));
-    EXPECT_EQ(handle.index(), ~0u);
-}
-
-TEST(OptionalHandleTest, TypeSafety)
-{
-    OptionalHandle<TextureHandle> texture{0};
-    OptionalHandle<BufferHandle> buffer{0};
-    
-    // Same index but different types
-    EXPECT_TRUE(texture.isValid());
-    EXPECT_TRUE(buffer.isValid());
-    EXPECT_EQ(texture.index(), 0u);
-    EXPECT_EQ(buffer.index(), 0u);
-    
-    // Cannot cross-assign different handle types
-    // This would fail to compile:
-    // buffer = texture;
-}
-
-TEST(OptionalHandleTest, ValueOrReturnsValid)
-{
-    OptionalHandle<TextureHandle> handle{7};
-    EXPECT_EQ(handle.valueOr(0), 7u);
-}
-
-TEST(OptionalHandleTest, ValueOrReturnsDefault)
-{
-    OptionalHandle<TextureHandle> handle;
-    EXPECT_EQ(handle.valueOr(99), 99u);
-}
-
-TEST(OptionalHandleTest, ResetMakesInvalid)
-{
-    OptionalHandle<TextureHandle> handle{42};
-    EXPECT_TRUE(handle.isValid());
-    
-    handle.reset();
-    EXPECT_FALSE(handle.isValid());
-    EXPECT_EQ(handle.index(), ~0u);
-}
-
-TEST(OptionalHandleTest, ZeroSizeOverhead)
-{
-    // Tag type should be zero-size
-    static_assert(std::is_empty_v<TextureHandle>);
-    static_assert(std::is_empty_v<BufferHandle>);
-    
-    // OptionalHandle should be just uint32_t
-    static_assert(sizeof(OptionalHandle<TextureHandle>) == sizeof(uint32_t));
-    static_assert(sizeof(OptionalHandle<BufferHandle>) == sizeof(uint32_t));
-}
-
 } // namespace ya

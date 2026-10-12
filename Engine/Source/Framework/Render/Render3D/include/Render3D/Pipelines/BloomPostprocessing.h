@@ -58,8 +58,6 @@ struct BloomPostprocessing
     stdptr<IPipelineLayout>      _compositePPL;
     stdptr<IGraphicsPipeline>    _compositePipeline;
 
-    uint32_t _lastBlurPassCount = 0;
-
     void init(const InitDesc& initDesc);
     void shutdown();
     void beginFrame();

@@ -587,3 +587,29 @@
 
 - C5：组合诊断、扩展用例、多 View runtime、performance/churn 门禁、skill 吸收。
 - 未动：typed refs（仍只在测试使用，删除待拍板）；C3 的两个 runtime hook（entity-id picking readback、direction gizmo 场景）；plan-C2 余项（`_lastBlurPassCount`）。
+
+## 2026-10-13 — C5a：收尾批次（plan-C2 余项、M13 收集、死脚手架、M20 诊断）
+
+### 实施内容
+
+- **`_lastBlurPassCount` 退场**：它是"调用内事实存成成员"——由本次 `RenderDesc` 算出、几行后由 composite pass 读。改为局部 `blurPassCount`，composite 的 ping-pong 侧不再取决于"最后调用 bloom 的是哪个 View"。
+- **M13**：`Composition/ViewOutputCollection.h` 提供 `collectSharedViewOutputs()`，把 Bloom/Postprocess 的 export 名（两条管线共用同一 feature 代码，名字相同）从两处解析收敛到一处；管线各自的 pass 词汇仍留在 `DeferredPassNames.h` / `ForwardPassNames.h`。
+- **死脚手架删除**：typed refs（`CompositionTextureRef`/`CompositionBufferRef`/`CompositionPreparedRef`、`composition_tag`）与 `Core/Optional.h`（`OptionalHandle`）。四轮审计均为零生产使用；M01 要求的 typed ports 由各 feature 的 `Inputs`/`Outputs` + concept 满足，不需要第二套引用类型。`Core/Result.h` 保留（67 处生产使用）。
+- **M20 组合诊断**：`DeferredPipelineRecipe::ResolvedView::describe()` / `ForwardPipelineRecipe::ResolvedView::describe()` 输出每 feature 的 on/off 与声明的 target 数/role；在 `render_graph_trace::isEnabled()` 下由两管线 resolve 时打印，off 时不构建字符串。runtime 实测两条管线都输出（`[RGTrace] composition:` + 10/6 行 feature 状态 + targets）。
+
+### 验证
+
+- `xmake r ya-render-3d-test` **224/224**（+1 bloom 边界用例）；`python3 Script/ya.py test --target ya` **1808/1808**。
+- 新增 `BloomPostprocessingTest.EachCallPicksItsOwnFinalBlurTargetFromItsOwnCount` 的**负向验证**：临时恢复成员态 → 测试失败；恢复局部实现 → 通过。它守的是 M09/M14 要的"无共享 last-call 状态"。
+- Runtime（新实例、未改任何设置）：Deferred / Forward / 切回 Deferred 三帧对基线 `c3b-ssao-on.png` / `composition-forward.png` **逐像素 max diff 0**；trace 两管线 composition dump 均出现。
+
+### 事故与定性（如实记录）
+
+- 一次运行出现 `DEVICE_LOST` ×70060：**并行 rpg-tactics runtime 与我的实例争抢 GPU**。判据：28 个历史日志中仅该次出现；独占复跑 0 次；既存 VUID-03320（SceneDepth aspectMask，pipeline 切换时）在之前多次运行中同样出现且不致命。
+- 一次 `set_shadow_settings` 切换后画面出现 3545 px 差异带（y139-162）：**强制定性 = 阴影开关的正常结果**（新实例不切换则 0 diff；该带位置与阴影投影一致）。
+- 并行会话提交 `06e083ad` 扫入我暂存的 `Optional.h` 删除 → HEAD 一度 include 悬空；本批补全引用清理后修复。
+
+### 保留 / 未做
+
+- M21（扩展用例：测试专用 producer→transform→consumer 全链）、M22（双 View runtime 证据）、M23（performance/churn 前后对照）仍为 todo——见 todo.md。
+- C3 的两个 runtime hook（entity-id picking readback、direction gizmo 场景）仍未做。

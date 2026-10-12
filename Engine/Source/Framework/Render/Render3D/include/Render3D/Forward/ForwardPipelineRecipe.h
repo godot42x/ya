@@ -14,6 +14,7 @@
 #include "Render3D/Forward/ForwardViewStage.h"
 
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace ya
@@ -102,6 +103,11 @@ struct ForwardPipelineRecipe
         /// request builder publishes them. One declaration per fact: the same
         /// Resolved values gate the features' bindings and imports.
         [[nodiscard]] std::vector<ViewAttachmentDesc> collectViewTargets() const;
+
+        /// One line per feature: which ran, which skipped, and what they need.
+        /// Owning strings only — this survives the graph, and it is what a
+        /// reader lines up against the graph trace when a View renders wrong.
+        [[nodiscard]] std::string describe() const;
     };
 
     /// Submission-allocated bindings for one View, produced during recording

@@ -1,6 +1,9 @@
 #include "Render3D/Deferred/DeferredPipelineRecipe.h"
 
 #include "Core/Log.h"
+
+#include <format>
+#include <string>
 #include "Graph/RenderGraphImportUtils.h"
 #include "Render3D/Common/EnvironmentLightingSceneResources.h"
 #include "Render3D/Common/RenderFrameInputs.h"
@@ -61,6 +64,36 @@ std::vector<ViewAttachmentDesc> DeferredPipelineRecipe::ResolvedView::collectVie
         push(*bloom.composite);
     }
     return targets;
+}
+
+std::string DeferredPipelineRecipe::ResolvedView::describe() const
+{
+    // One line per feature, in the order the map runs them. A feature states its
+    // own decision; this function only lays them out.
+    std::string out = std::format("Deferred View {} ({}x{})\n", viewId, viewExtent.width, viewExtent.height);
+    const auto feature = [&out](std::string_view name, bool bEnabled) {
+        out += std::format("  {} {}\n", bEnabled ? "[on] " : "[off]", name);
+    };
+    feature("shadow", shadow.bEnabled);
+    feature("gbuffer", gbuffer.bEnabled);
+    feature("ssao", ssao.bEnabled);
+    feature("lighting", lighting.bEnabled);
+    feature("skybox", skybox.bEnabled);
+    feature("sprites", sprites.bEnabled);
+    feature("bloom", bloom.bEnabled);
+    feature("overlay", overlay.bEnabled);
+    feature("entityId", entityId.bEnabled);
+    feature("finalize", finalize.bEnabled);
+
+    // The declared targets are the allocation the composition asked for; listing
+    // them is what lets a reader check "this pass had no target" against the
+    // request the ViewTargetStore was given.
+    out += std::format("  targets: {}", collectViewTargets().size());
+    for (const ViewAttachmentDesc& target : collectViewTargets()) {
+        out += std::format(" {}", static_cast<uint32_t>(target.role));
+    }
+    out += "\n";
+    return out;
 }
 
 Result<std::vector<DeferredPipelineRecipe::ResolvedView>, FeatureError>

@@ -18,6 +18,8 @@
 #include "Render3D/Pipelines/BloomPostprocessing.h"
 #include "Graph/RenderGraph.h"
 #include "Render3D/Forward/ForwardPipelineRecipe.h"
+#include "Graph/RenderGraphResourceRegistry.h"
+#include "Render3D/Composition/ViewOutputCollection.h"
 #include "Render3D/Forward/ForwardPassNames.h"
 #include "Scene/Core/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -824,6 +826,14 @@ EFrameComposition ForwardRenderPipeline::resolveFrameComposition(const RenderFra
     }
     prepared.forward.resolved = std::move(resolved.value());
 
+    // Composition diagnostics: what this frame's map decided, next to the graph
+    // trace that shows what it produced. Text is built only under the switch.
+    if (render_graph_trace::isEnabled()) {
+        for (const ForwardPipelineRecipe::ResolvedView& view : prepared.forward.resolved) {
+            YA_CORE_INFO("[RGTrace] composition:\n{}", view.describe());
+        }
+    }
+
     // The composition's Resolved values are the single source of the View's
     // target requests: the features already declared role/format/usage, so the
     // request builder only orders them.
@@ -948,19 +958,13 @@ RenderViewOutput ForwardRenderPipeline::collectViewOutput(const RenderGraphExecu
     output.color    = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::viewColor, viewId));
     output.depth    = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::viewDepth, viewId));
     output.entityId = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::entityId, viewId));
-    output.bloomExtract = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kExtractExportName, viewId));
-    output.bloomBlur    = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kBlurPongExportName, viewId));
-    if (!output.bloomBlur) {
-        output.bloomBlur = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kBlurPingExportName, viewId));
-    }
-    output.bloomComposite = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kOutputExportName, viewId));
-    const auto postprocess = result.getExportedTextureShared(makeViewGraphName(PostProcessingStage::kOutputExportName, viewId));
-    // The display image is the finalize output, always: finalize is the pass
-    // that encodes the renderer's linear color, so it runs every frame and the
-    // display image never falls back to the raw color attachment. A fallback
-    // here is what let a presentation pass rescue an unencoded image by grading
-    // it itself, which double-graded the normal path.
-    output.display = postprocess;
+    // The colour-effect features are the same code Deferred runs, so their
+    // exports are read in one shared place instead of twice by copy.
+    const composition::SharedViewOutputs shared = composition::collectSharedViewOutputs(result, viewId);
+    output.bloomExtract   = shared.bloomExtract;
+    output.bloomBlur      = shared.bloomBlur;
+    output.bloomComposite = shared.bloomComposite;
+    output.display        = shared.display;
     if (output.color) {
         output.desc.colorFormat = output.color->getFormat();
         if (!output.desc.hasExtent()) {

@@ -90,7 +90,6 @@ void BloomPostprocessing::shutdown()
     _compositePipeline.reset();
     _compositePPL.reset();
     _render            = nullptr;
-    _lastBlurPassCount = 0;
 }
 
 void BloomPostprocessing::beginFrame()
@@ -190,6 +189,10 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
     std::optional<RGTextureHandle> bloomExtract{};
     std::optional<RGTextureHandle> blurPing{};
     std::optional<RGTextureHandle> blurPong{};
+    /// How many blur passes this call appends. Local on purpose: the composite
+    /// pass reads it, and a member would make one View's composite depend on
+    /// whichever View last called in.
+    uint32_t blurPassCount = 0;
 
     if (bBloomEnabled) {
         bloomExtract = desc.extractHandle.isValid()
@@ -264,10 +267,9 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
                 rgCtx.endRendering();
             });
 
-        const uint32_t blurPassCount = std::min(
+        blurPassCount = std::min(
             kMaxBloomBlurPasses,
             std::max<uint32_t>(1, desc.state->bloomBlurPasses * 2));
-        _lastBlurPassCount = blurPassCount;
 
         for (uint32_t passIndex = 0; passIndex < blurPassCount; ++passIndex) {
             const bool bHorizontal = (passIndex % 2) == 0;
@@ -311,16 +313,13 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
             });
         }
     }
-    else {
-        _lastBlurPassCount = 0;
-    }
 
     slang_types::Misc::BloomComposite::PushConstants compositePC{};
     compositePC.bloomStrength = desc.state->bloomStrength;
     compositePC.bloomEnabled  = bBloomEnabled ? 1u : 0u;
     [[maybe_unused]] const auto compositePass = graph.addPass(
         makeViewGraphName("BloomComposite", desc.viewId),
-        [scene, bBloomEnabled, renderExtent = desc.renderExtent, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{}), output](RGPassBuilder& pass) {
+        [scene, bBloomEnabled, renderExtent = desc.renderExtent, finalBloomHandle = (blurPassCount == 0 || (blurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{}), output](RGPassBuilder& pass) {
             pass.read(scene);
             if (bBloomEnabled) {
                 pass.read(finalBloomHandle);
@@ -335,7 +334,7 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
                 }},
             });
         },
-        [this, scene, bBloomEnabled, compositePC, compositeDS = desc.bloom.composite.set, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{})](RGRenderContext& rgCtx) {
+        [this, scene, bBloomEnabled, compositePC, compositeDS = desc.bloom.composite.set, finalBloomHandle = (blurPassCount == 0 || (blurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{})](RGRenderContext& rgCtx) {
             const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             const auto renderExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();

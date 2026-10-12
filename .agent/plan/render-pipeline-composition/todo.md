@@ -24,6 +24,14 @@
   - **`EFrameComposition::NotApplicable` / `appendTargetRequests` 全退出**：两管线都 resolve composition，`RenderDeviceState` 无预组合分配路径。
   - 证据：render3d 223/223、full 1814/1814；Deferred / Forward / 切回 Deferred 三帧与改动前基线**逐像素一致**（max diff 0）。
 
+- [x] **C5a（收尾批次：清理 + 诊断）**：
+  - **`_lastBlurPassCount` 退场（plan-C2 余项 / M09/M14）**：blur 次数改为 `appendGraphPasses` 的局部值（它由本次 state 算出、几行后由 composite 读）；成员态会让一个 View 的 composite 依赖"最后调用的是谁"。新增 `BloomPostprocessingTest` 边界用例：同帧两次不同次数的 bloom 各自选对自己的 ping-pong 侧——**验证过它确实抓 bug**（临时把成员态改回来，测试立刻红）。
+  - **M13 共享输出收集**：新增 `Composition/ViewOutputCollection.h`——Bloom/Postprocess 的 export 名（两条管线相同的 feature 词汇）从"两个 pipeline 各解析一遍"收敛为单一读取点；管线各自的 pass 词汇（`Deferred.*` / `ForwardView.*`）保留在各自 PassNames。
+  - **死脚手架删除**：`CompositionTextureRef`/`CompositionBufferRef`/`CompositionPreparedRef` + `composition_tag`（4 次审计均为零生产使用；真实 typed ports 是各 feature 的 Inputs/Outputs，由 concept 强制）与 `Core/Optional.h`（`OptionalHandle` 零生产使用）。`Result` 保留（67 处生产使用）。
+  - **M20 组合诊断**：两个 `ResolvedView::describe()` 输出"每 feature 开/关 + 声明的 targets"（owning 字符串，不悬空）；接入既有 `--render-graph-trace` 开关，off 时不构建文本。runtime 实测两个管线的 dump 均出现（`[RGTrace] composition:`）。
+  - 证据：render3d 224/224、full 1808/1808；**新实例**（未改任何设置）Deferred / Forward / 切回 Deferred 三帧对基线逐像素 max diff 0。
+  - **事故记录**：一组并行 rpg-tactics runtime 与测试实例争抢 GPU 造成 `DEVICE_LOST`（28 个历史日志中仅该次出现；独占复跑 0 次，且它与既存 VUID-03320 相邻但后者在之前多次运行中都不致命）。另：并行会话的提交 `06e083ad` 扫入了我暂存的 `Optional.h` 删除，一度让 HEAD 的 include 悬空，已由本批补全删除后修复。
+
 ## 下一步（按优先级）
 
 - [x] **C4b（M18：Shadow 经 composition 接入）**：`ShadowFeature`（Composition/Features）成为两 recipe 的第一个条目——resolve 启用决策、prepareBindings 生产 `ShadowPreparedView` token、append 产出 `ShadowGraphOutputs`；Lighting 从 recipe 自己的 shadow 输出取 depth。两管线的 `_shadowStage->appendGraphPasses` 直调与 `prepareShadowPass` 退出，改为 `applyShadowFrameSettings()`（只应用 settings）。strategy 仍持 images/runtime/budget，算法与绑定不动。证据：trace 16-pass/13-pass 拓扑与 C3B 基线**逐条目一致**（shadow→GBuffer→…）；shadow on/off 差 31782 px 证明生效；Deferred/Forward 对基线逐像素 0 diff。
@@ -35,7 +43,6 @@
   - 证据：render3d 226/226、full 1817/1817；Deferred / Forward / 切回 Deferred 三帧与基线**逐像素 0 diff**。
 - [ ] **待决定的测试 hook（C3 遗留缺口）**：entity-id/picking runtime hook（读取 `DeferredView.EntityId` 的 pick/readback；editor 已有 isolate readback 路径）与 direction gizmo 场景 hook（回归场景加一个 `DirectionComponent` 实体）。
 - [ ] **M12 余项**：`SurfaceImageTest` 侧编码回归未跑。
-- [ ] **plan.md C2 剩余**：`_lastBlurPassCount` 调用状态退出、blur pass 次数边界测试（M09/M14）。
 - [ ] **M08 双 View runtime**：两 View 不同 SSAO payload/DS 互不覆盖；共享 frame/skinning 复用。
 - [ ] **M10 failure injection**：prepare/build/compile/execute 失败不发布部分新 family。
 - [ ] **M13 完整**：统一输出收集，不在 pipeline 侧按 feature 名称解析。
