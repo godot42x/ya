@@ -4826,4 +4826,60 @@ TEST(RenderGraphCoreTest, FrameUploadArenaGrowsAndRetiresPreviousBacking)
     EXPECT_FALSE(arena.allocate(0, 4, 0).has_value());
 }
 
+
+TEST(RenderGraphCoreTest, InsertingAnImportLeavesExistingBindingsUnreplaced)
+{
+    // Import identity is the owner's stable label plus the View scope, never a
+    // graph position. One executor keeps the SAME backing across syncs (the
+    // steady state a live frame is in); inserting one more import must then
+    // replace nothing — which is what "a View's imports do not churn when a
+    // feature is added" means.
+    // The descriptors come from the same helper the other import tests use, so
+    // the subresource views are real; the backing is pinned by rebuilding the
+    // descriptor around a held resource.
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+
+    const auto makeImport = [](std::string_view label) {
+        return withTestBacking(RGImportedTextureDesc{
+            .desc = RGTextureDesc{.label = std::string(label)},
+            .importDesc = ImportedImageDesc{
+                .label  = std::string(label),
+                .format = EFormat::R16G16B16A16_SFLOAT,
+                .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .extent = Extent3D{256, 256, 1},
+            },
+        });
+    };
+
+    // First sync: the View's color import, as the executor first sees it.
+    auto firstColor = makeImport("View.Color");
+    // Second sync re-imports the same label with the same backing resource.
+    auto secondColor = makeImport("View.Color");
+    secondColor.resource = firstColor.resource;
+
+    {
+        RenderGraph graph;
+        const auto color = graph.importTexture(firstColor);
+        (void)graph.addPass("consume-color", [color](RGPassBuilder& pass) { pass.read(color); });
+        registry.sync(graph);
+    }
+    {
+        RenderGraph graph;
+        const auto color = graph.importTexture(secondColor);
+        const auto extra = graph.importTexture(makeImport("View.SSAO"));
+        (void)graph.addPass("consume-both", [color, extra](RGPassBuilder& pass) {
+            pass.read(color);
+            pass.read(extra);
+        });
+        registry.sync(graph);
+    }
+
+    const auto& stats = registry.getLastSyncStats();
+    // Same label, same scope, same backing: not a replacement. The added import
+    // is a new binding.
+    EXPECT_EQ(stats.importReplaced, 0u);
+    EXPECT_GE(stats.importBound, 1u);
+}
+
 } // namespace ya

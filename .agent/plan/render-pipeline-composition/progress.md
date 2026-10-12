@@ -645,3 +645,19 @@
 - 新增 `ViewTargetStoreTest.ReorderingDeclarationsKeepsTheAllocation`：声明重排后 allocation 指针与 generation 均不变、`imageCreates` 计数不增。**负向验证**：还原为默认（顺序敏感）比较后该测试立刻失败。
 - `xmake r ya-render-3d-test` **226/226**；`python3 Script/ya.py test --target ya` **1810/1810**。
 - Runtime：Deferred / Forward / 切回 Deferred 三帧对基线**逐像素 max diff 0**（分配身份判定变更未影响画面）。
+
+## 2026-10-13 — C5d：M05/M06 证据补齐（role 冲突拒绝、import key 稳定性）
+
+### 实施内容
+
+补 M05/M06 缺的专项测试（两者机制早已在代码中，缺的是证明）：
+
+- **M05 role 冲突拒绝**：`ViewTargetStoreTest.DuplicateRoleIsRejectedInsteadOfLastWins`——同一请求声明两次 `SceneColor` 时 `prepare` 返回 false（`createAllocation` 已有拒绝逻辑），而不是 last-wins 掩盖接线错误。
+- **M06 import key 稳定性**：`RenderGraphCoreTest.InsertingAnImportLeavesExistingBindingsUnreplaced`——同一 executor 稳态（同 label/scope/backing）下新增一个 import，既有 import **不被替换**（`stats.importReplaced == 0`），新增者记为 `importBound`；identity = `RGImportKey(label + scope)`，与 graph 内 handle 位置解耦。
+
+写测试过程中两次纠正了自己的假设（记录以防后续重复）：import 的"同一绑定"要求 backing 也相同——新 graph 每次新建 backing 会被判 `ImportReplaced`，这是设计而非缺陷；`normalizeImportedTextureDesc` 会断言 subresource 范围与 backing 的 mip/layer 一致，所以测试必须用 `withTestBacking` 造真实描述符。
+
+### 验证
+
+- `xmake r ya-render-3d-test` **228/228**（+2）；`python3 Script/ya.py test --target ya` **1811/1811**。
+- matrix：M05/M06 → verified（累计 13 verified）。

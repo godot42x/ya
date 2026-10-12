@@ -118,6 +118,27 @@ TEST(ViewTargetStoreTest, ExactRequestReusesAllocationAndResizeReplacesOnce)
     EXPECT_EQ(replacement.find(EViewAttachment::SceneColor)->getExtent().width, 640u);
 }
 
+TEST(ViewTargetStoreTest, DuplicateRoleIsRejectedInsteadOfLastWins)
+{
+    // Two features declaring the same role is a wiring bug: one View cannot own
+    // two SceneDepth attachments, and silently keeping the later one would hide
+    // the mistake until something sampled the wrong image.
+    StoreTestFactory factory;
+    ViewTargetStore store;
+    store.init(factory);
+    store.registerView(kViewA);
+
+    ViewTargetRequest duplicated = request(kViewA, {.width = 640, .height = 480});
+    duplicated.attachments = {
+        {EViewAttachment::SceneColor, EFormat::R8G8B8A8_UNORM, EImageUsage::ColorAttachment | EImageUsage::Sampled},
+        {EViewAttachment::SceneColor, EFormat::R16G16B16A16_SFLOAT, EImageUsage::ColorAttachment | EImageUsage::Sampled},
+    };
+
+    // The store reports the failure (the allocation is not created) rather than
+    // accepting a request whose meaning is ambiguous.
+    EXPECT_FALSE(store.prepare(std::span<const ViewTargetRequest>(&duplicated, 1)));
+}
+
 TEST(ViewTargetStoreTest, ReorderingDeclarationsKeepsTheAllocation)
 {
     // A recipe reorders its feature declarations: same targets, same View. That

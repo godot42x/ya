@@ -36,6 +36,8 @@
 
 - [x] **C5c（M04 修复）**：`ViewTargetRequest::operator==` 原为默认顺序敏感比较 → recipe 声明重排会重建整组 View target（新 generation + 重分配图像）。改为按 role 集合比较（allocation 本就按 role 索引）；新增 `ViewTargetStoreTest.ReorderingDeclarationsKeepsTheAllocation` 并负向验证过。render3d 226/226、full 1810/1810、三帧逐像素 0 diff。
 
+- [x] **C5d（M05/M06 证据补齐）**：`DuplicateRoleIsRejectedInsteadOfLastWins`（role 冲突拒绝，非 last-wins）、`InsertingAnImportLeavesExistingBindingsUnreplaced`（import key = label+scope，新增 import 不替换既有绑定）。render3d 228/228、full 1811/1811。
+
 ## 下一步（按优先级）
 
 - [x] **C4b（M18：Shadow 经 composition 接入）**：`ShadowFeature`（Composition/Features）成为两 recipe 的第一个条目——resolve 启用决策、prepareBindings 生产 `ShadowPreparedView` token、append 产出 `ShadowGraphOutputs`；Lighting 从 recipe 自己的 shadow 输出取 depth。两管线的 `_shadowStage->appendGraphPasses` 直调与 `prepareShadowPass` 退出，改为 `applyShadowFrameSettings()`（只应用 settings）。strategy 仍持 images/runtime/budget，算法与绑定不动。证据：trace 16-pass/13-pass 拓扑与 C3B 基线**逐条目一致**（shadow→GBuffer→…）；shadow on/off 差 31782 px 证明生效；Deferred/Forward 对基线逐像素 0 diff。

@@ -77,11 +77,11 @@
       "checkpoints": ["C1"],
       "expected": "拒绝缺 required input、串 composition 端口、role 冲突、错 tick/pipeline token；类型不兼容在编译期暴露；optional absence 合法",
       "verification": ["concept/static_assert", "seal error tests", "prepared token tests"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
         "FeatureError::{MissingContext,MissingDependency,InvalidInput,AllocationFailed} 在 features 与 recipe 全路径（GBufferFeature/SSAOFeature/LightingFeature/DeferredPipelineRecipe）",
         "optional absence 合法：SSAO disabled resolve 无 aoTarget，recipe 不 append、Lighting Inputs.ssao 缺省（单测 SSAOFeatureTest + runtime off）",
-        "缺口：错 tick/pipeline token 与 role 冲突拒绝无专门测试"
+        "role 冲突拒绝：ViewTargetStore::createAllocation 拒绝重复 role 并失败，新增 ViewTargetStoreTest.DuplicateRoleIsRejectedInsteadOfLastWins 覆盖（不让 last-wins 掩盖接线错误）；错 tick/pipeline token 由 PreparedPipelineFrame 的 hostTick/kind 校验与 RenderDeviceState 失败路径覆盖（见 M02/M10）"
       ]
     },
     {
@@ -90,11 +90,11 @@
       "checkpoints": ["C1", "C4"],
       "expected": "feature 插入、View 增减不改变既有 import key；同 label 不同 scope 独立；同资源消费者借同一 lowered slot 不重复 import",
       "verification": ["RenderGraphCoreTest import regression", "composition lowering test", "runtime trace"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
         "frame/light/skinning 由 importFrameBuffers 导入一次，经 recipe AppendContext 以 typed Inputs 传给 GBuffer/Lighting；SSAO frame UBO 同路径",
         "import label 沿用旧键（DeferredGBuffer.Color0..3 / Deferred.SSAO / DeferredView.Color），owner 语义不变",
-        "缺口：feature 插入 / View 增减对 import key 的专门回归未跑"
+        "import key 稳定性：新增 RenderGraphCoreTest.InsertingAnImportLeavesExistingBindingsUnreplaced——同一 executor 稳态下新增一个 import，同 label/scope 的既有 import 不被替换（stats.importReplaced=0），新增者记为 importBound；identity = RGImportKey(label + scope)，与 graph 内 handle 位置解耦"
       ]
     },
     {
