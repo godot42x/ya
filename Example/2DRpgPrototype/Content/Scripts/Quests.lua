@@ -12,6 +12,11 @@ local function notify(heading, title)
 end
 
 Quests.catalog = {
+    ruins = {
+        title = "The overrun ruins",
+        active = "Clear the monsters from the ruins east of camp.",
+        done = "The ruins are quiet again.",
+    },
     pot = {
         title = "The storage pot",
         active = "Look inside the storage pot in the house.",

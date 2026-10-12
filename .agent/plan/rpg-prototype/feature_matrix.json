@@ -1,229 +1,288 @@
 {
   "plan": "rpg-prototype",
+  "revision": "v2-rpg-tactics",
+  "started": "2026-10-13",
   "status": "in_progress",
-  "features": [
+  "acceptance_standard": "capability_coverage",
+  "note": "v1 feature matrix preserved at feature_matrix-v1-landed.json. Each 'done' entry needs an evidence path or test name.",
+  "capabilities": [
     {
-      "id": "script_neutral_binding",
-      "phase": "B1",
+      "id": "tilemap_multilayer_ysort",
+      "wave": "reuse",
       "status": "done",
-      "driven_by": "R0 uvRect animation, R1 tilemap query methods, R2a world.find",
-      "evidence": [
-        "D12: every reflected member whose type crosses is visible, no marks; FieldFlags::Blueprint* and Meta::ScriptName deleted",
-        "Lua caches method closures / field handles per type metatable after the first lookup (LuaScriptBindingTest.MembersAreCachedPerType)",
-        "reflected methods invoked through plugin Function::invoker via argTypeIndices/returnTypeIndex; MethodReflection JSON invokers and InstanceRef deleted",
-        "scene/entity/component refs resolve per access; destroyed entity or scene is a script error (ScriptBindingTest, LuaScriptBindingTest)",
-        "Lua and JS both dispatch through Core/Scripting/ScriptBindings; hand-written Transform/Camera/Sprite/Entity usertypes deleted",
-        "GreedySnake getSprite -> getSprite2D; GreedySnake / HelloMaterial camera.primary -> camera.bPrimary; runtime + editor smoke exit 0"
-      ]
+      "source": "v1 R1",
+      "used_by": "battle maps (ground/decor/overlay), camp",
+      "evidence": ["Scene2D/TilemapComponent.h", "feature_matrix-v1-landed.json#tilemap"]
     },
     {
-      "id": "walk_and_follow",
-      "phase": "R0",
+      "id": "sprite_batch_texture_table",
+      "wave": "reuse",
       "status": "done",
-      "driven_by": "game: editor-placed player walks on a grid with 4-direction animation; camera follows",
-      "evidence": [
-        "world.find / world.viewSize registered through the neutral layer (registerModuleFunction), projected to Lua world.* and JS ya.world.* (LuaScriptBindingTest.ModuleFunctionsBecomeGlobalTables, ScriptApiLibraryFixture.ModuleFunctionsExportUnderYa)",
-        "Nearest filtering honored by the sprite pass: resolveSlotSampler reads TextureSlot.samplerConfig",
-        "sprite pass shows the image's top rows at the quad's top edge",
-        "2DRpgPrototype 120-frame runtime and editor smoke exit 0; user review: walk sheet 16x24, example named 2DRpgPrototype"
-      ]
+      "source": "v1 step 5",
+      "used_by": "many units + effects on one screen",
+      "evidence": ["Render3D/Deferred/Features/Sprite2DFeature.h", "Render2D/TextureTableBatch.h"]
     },
     {
-      "id": "tilemap",
+      "id": "sprite_frame_animation",
+      "wave": "reuse",
+      "status": "done",
+      "source": "v1 R0 / D-T2",
+      "used_by": "unit idle/hit, chests, flags",
+      "evidence": ["Scene2D/SpriteAnimationComponent.h", "Content/Animations/*.yaanim.json"]
+    },
+    {
+      "id": "pixel_perfect_camera",
+      "wave": "reuse",
+      "status": "done",
+      "source": "v1 §10",
+      "used_by": "battle framing, exploration follow",
+      "evidence": ["CameraComponent.resolveCameraViewFraming", "plan-v1-landed.md §10"]
+    },
+    {
+      "id": "scene_transfer_persist",
+      "wave": "reuse",
+      "status": "done",
+      "source": "v1 R3",
+      "used_by": "camp <-> ruins, battle in/out",
+      "evidence": ["world.loadScene", "Persist global", "skills/2d-gameplay SKILL.md"]
+    },
+    {
+      "id": "save_load",
+      "wave": "reuse",
+      "status": "done",
+      "source": "v1 G2.2",
+      "used_by": "clearing-the-slice save point",
+      "evidence": ["AppSceneServices::saveWorld", "world.save/load/saveRestored"]
+    },
+    {
+      "id": "runtime_spawn_destroy",
+      "wave": "reuse",
+      "status": "done",
+      "source": "v1",
+      "used_by": "damage numbers, summons, temp obstacles",
+      "evidence": ["world.spawnSprite", "world.destroyEntity", "GameplayScriptFunctions.cpp"]
+    },
+    {
+      "id": "gui_widget_catalog",
+      "wave": "reuse",
+      "status": "done",
+      "source": "engine",
+      "used_by": "battle HUD, inventory, equipment, skills, journal, dialogue, settings",
+      "evidence": ["GUI/Widgets/Controls/", "LuaWidgetHandle.cpp", "LuaWidgetScripts.cpp"]
+    },
+    {
+      "id": "input_actions",
+      "wave": "reuse",
+      "status": "done",
+      "source": "v1 R0",
+      "used_by": "battle commands, cursor, confirm/cancel",
+      "evidence": ["InputMap.json", "input:isActionDown/isActionPressed"]
+    },
+
+    {
+      "id": "postfx_runtime_control",
+      "wave": "C",
       "phase": "R1",
-      "status": "done",
-      "driven_by": "game: the map is scene data the editor paints; painted walls block the player and the camera clamps to bounds",
-      "evidence": [
-        "Tileset asset (.yatileset.json): atlas TextureSlot + tile geometry + sparse solid list; TilesetRef mirrors TextureRef (path serialized, parsed copy cached)",
-        "TilemapComponent beside Sprite2DComponent: tileset/cellSize/width/height/layers/layer; cells row-major from bottom-left, 0 = empty else tile + 1",
-        "visible non-empty cells become WorldSpriteCandidate via appendTilemapCandidates (pure, range-narrowable); snapshot extracts all, view/chunk culling deferred to R4",
-        "no new render pass: candidates reuse Sprite2DStage; packed-atlas UVs inset by half a texel",
-        "Town.scene.json carries a 3-layer TilemapGround (ground/decor/overlay); player z=0.1 stands between decor 0.04 and overlay 0.21",
-        "tests: TilemapComponentTest.RoundTripsLayers, TilemapExtractionTest x2, TilemapSceneTest x2 (hand-written scene + tileset file)",
-        "Tile Palette tab (tool row / layer combo / atlas grid) registered as tile-palette; UITileAtlasGrid takes a single tile or drags a stamp box",
-        "EditorTileBrushController paints/erases/rect-fills/eyedrops over the selected TilemapComponent in ortho XY; grid and hover/rect outline go through the editor world overlay list, no new pass",
-        "one stroke = one step on the level root UndoStack; the step stores whole-layer before/after cells (TilemapEditUndoTest.StrokeIsOneUndoStep)",
-        "resize/setCell/fillRect edit component data only; onEdit replays the old row width from transient _editWidth/_editHeight, so Inspector 6->10 keeps the 6 left columns (TilemapEditTest.ResizeKeepsExistingCells / InspectorWidthEditKeepsCells / RectFillWritesOnlyTheActiveLayer)",
-        "Tileset moved to Core/Common/Tileset.h and TilesetRef joined the asset-ref list, so the Inspector tileset row edits as an asset (TilemapInspectorTest.GraphExposesEditableMapFields)",
-        "TilemapComponent exposes worldToCell / cellToWorld / isSolid / bounds through reflection, so the player and any later NPC share one face (LuaScriptBindingTest.TilemapQueryFaceReachesLua)",
-        "isSolid blocks on any layer's tileset-solid tile and treats off-map as solid, so the map edge stops the player like a wall (TilemapQueryTest.SolidTileBlocks / OutOfBoundsIsSolid)",
-        "worldToCell / cellToWorld / bounds fold in the owner's world matrix via getOwner() + TransformSystem; an ownerless map falls back to identity (TilemapQueryTest.WorldToCellUsesTheOwnerTransform / OwnerlessMapUsesIdentityTransform)",
-        "Player.lua has no grid of its own anymore: its cell is the map's cell, placed by cellToWorld and gated by isSolid, so editor-painted walls block without a script change",
-        "FollowCamera.lua clamps the framed rect with bounds(), centring an axis the map cannot fill, and follows without clamping when the map is absent",
-        "the map is now 32x20 at (-16,-10) with the scene's trees/bushes/sign/fence folded into its layers (scene: 21 entities -> 3); tileset solid list gained the fence 80-82"
-      ]
-    },
-    {
-      "id": "interaction",
-      "phase": "R2a",
-      "status": "done",
-      "driven_by": "game: face an NPC or sign and press confirm",
-      "evidence": [
-        "entity:call(name, ...) = LuaScriptingSystem::callNamed (instance face, host self binding refreshed) + callEntityScript (entity face: first loaded script defining the name answers); nil when no script defines it, ScriptError when the target fails, so a bug is not disguised as a quiet nil",
-        "registered as a capture-free Entity native method in LuaScriptingSystem::init, so Lua and JS share it and re-init (tests) never rebinds a dangling system; FEntityScriptHost::bindSelf and callEntityScript share rebindEntitySelf",
-        "map:entityAt(x, y) = TilemapComponent native method registered by registerGameplayScriptFunctions: first entity with sprite+script whose world position lands on the cell (asks the map's own worldToCell); camera / bare transforms never answer; linear walk until a real map needs an index (D-T4)",
-        "actor conventions in Example/2DRpgPrototype/Content/Scripts/Actor.lua: z = Z_BASE - y * Z_PER_Y (opaque sprite depth, G2), shared hero-sheet frame math; Player/Npc/Sign require it",
-        "Player.lua blocks on isSolid OR entityAt, and on confirm (Space/Enter/E down edge) calls entity:call(\"onInteract\") on the faced cell; Npc turns toward the player, Sign tints while read (print stands in for R2b text)",
-        "Town.scene.json: Sign (1022, tiny_town tile 5 as a sprite at cell (13,5), tile removed from Decor) and Npc (1023, tinted hero frame at cell (14,9)) join the tree",
-        "tests: LuaScriptHostTest.NamedCallReturnsValue / NamedCallOnMissingFunctionIsNil / NamedCallPropagatesTargetErrors, LuaEntityScriptCallTest x3 (first defining script, args+missing=nil, target error raises at caller), TilemapEntityQueryTest x2 (actor found, non-actors silent)"
-      ]
-    },
-    {
-      "id": "dialogue",
-      "phase": "R2b",
-      "status": "done",
-      "driven_by": "game: typewriter dialogue blocks movement",
-      "evidence": [
-        "Content/UI/Dialogue.yaui.json: hidden root panel carries the script.lua behavior; Box/Body/Hint flat under the root with canvas slots (a canvas-format slot on a border child asserts in UIContentSlot::deserialize — engine robustness debt, left to the gui line)",
-        "Content/UI/Dialogue.lua: say(lines, onDone) / busy() / per-character reveal via self:every with an explicit timer cancel; confirm reveals the page, then advances, then closes; the opening frame (time:getFrameIndex()) ignores confirm so the starting press never skips page one",
-        "Town.scene.json widgetEntries mounts the Dialogue entry (autoMount, full-screen canvas rootSlot)",
-        "Npc/Sign keep their reactions and speak through ui.get(\"Dialogue\"):say(LINES); Player holds movement+interact while dialogue:busy(), with a confirm re-arm guard (press must fully release before the next interaction) so one press never re-triggers",
-        "verified through the automation control port: eval_js (entity list filtered by name; note ya.entity.get takes a handle, a string coerces to 0) triggers onInteract and capture_screenshot shows the bottom-centre box mid-typewriter with the key hint; say-on-busy replaces pages",
-        "runtime/editor + GreedySnake smoke exit 0; ya-testing 1421 passed (display red light unchanged)"
-      ]
-    },
-    {
-      "id": "scene_transfer",
-      "phase": "R3",
-      "status": "done",
-      "driven_by": "game: door to another map, spawn point, chest state persists",
-      "evidence": [
-        "world.loadScene(path, spawnName) registered through the neutral layer; it only queues (last request wins) - AppSceneServices.runPendingSceneTransfer executes at the frame-end structural flush, never inline (a switch stops every script)",
-        "the transfer keeps the play session: app state, UI host and the Persist table are untouched; it is waitIdle -> onStop (old scene) -> SceneManager::loadScene -> placePlayerAtSpawn, NOT stopRuntime (which would end play in the editor and wipe Persist)",
-        "Persist = LuaScriptingSystem::persistentState(), bound as the global at state build; only stopRuntime/stopSimulation swap in a fresh table (play-session exit), so chest flags survive transfers and never leak across plays",
-        "placePlayerAtSpawn: the scene's \"Player\" entity lands on the named root-level spawn marker (x/y only, actor keeps its z); missing marker or player logs and leaves the scene as authored",
-        "walkable-event protocol: Player.lua blocks on isSolid OR (occupant whose call(\"blocksEntry\") ~= false) - doors answer false, chests/NPC default solid; stepping onto a cell pokes entityAt(x, y, self.entity) with onPlayerEnter",
-        "content: House.scene.json (10x7 stone-floor interior, walls solid via tile 99 in the tileset), Door.lua with per-door property overrides, Chest.lua (closed pot 107 / open golden 94), Town gains DoorToHouse + SpawnFromHouse",
-        "verified end to end through the automation control port: door -> House rendered with the player on the spawn, chest opened, round trip back to Town and again to House - the chest is still the golden pot; SceneTransferTest x4 green; ya-testing 1425; smokes exit 0"
-      ]
-    },
-    {
-      "id": "scale_decision",
-      "phase": "R4",
-      "status": "done",
-      "driven_by": "game: 64x64x3 map with 20 NPCs",
-      "evidence": [
-        "fixture: Content/Scenes/TownLarge.scene.json (64x64, Ground 4096 / Decor 776 / Overlay 241 cells, 20 NPCs + player = 5120 tile candidates + 21 sprite candidates), generated deterministically by Tools/make_scale_scene.py (--size/--npcs/--out for other sizes)",
-        "method: profile build + runtime CPU trace via --cpu-profile; frame root 'iterate' (600 frames, skip 60); analyzer .agent/plan/rpg-prototype/measure_trace.py; full record in r4-measurements.md",
-        "measured: recordFamily (the sprite-pass submission lives here) fits 1.14ms + 1.23us/candidate (700->1.77, 1329->3.05, 5134->7.41); TownLarge frame 10.56ms (95fps), so ~6.3ms of it is per-candidate CPU recording",
-        "measured: window 1024x768 -> 512x384 cuts the frame 7% with recordFamily unchanged and Render/Frame self -0.84ms -> the bottleneck is per-candidate CPU, not fill",
-        "measured: whole-map extraction 0.10-0.15ms at 5134 candidates (~1/50 of the submission cost); Lua 0.015-0.04ms",
-        "decision 1: batching / instancing is needed and is the highest-value render change (the one cost that grows linearly with content; only 2 distinct textures here)",
-        "decision 2: the 16-entry texture table is not the binding constraint (2 used), but its per-frame rebuild + per-candidate linear scan should become a direct mapping with batching",
-        "decision 3: bypassing Deferred for a pure-2D view is worth ~1ms at this scale - do it for correctness/layering, not for performance",
-        "decision 4: chunk caching of tile candidates is not needed yet (extraction is 1/50 of submission); revisit at 4x area",
-        "open (handed over): Render/Frame self time (4.3/5.0/2.9ms, not monotone in candidates, likely the frame-fence wait) is unattributed by the CPU trace; draw counts are derived from the implementation rule + scene data (no RenderDoc on this machine)"
-      ]
-    },
-    {
-      "id": "lua_plugin",
-      "phase": "B2",
       "status": "planned",
-      "driven_by": "D2: Lua becomes a plugin, QuickJS swappable",
-      "evidence": [
-        "owned here since 2026-10-02; waits on game-ui S5/S7 only where the same function changes",
-        "prerequisites: named-call primitive merge, script callMethod through the edit funnel (review step 2)",
-        "sol2 only inside the Lua backend target"
-      ]
+      "driven_by": "game: battle enter/exit fade, hit flash, downed grayscale, crit bloom, boss phase grading",
+      "engine_gap": "N1 PostProcessingState is config-only; no script surface, no transitions",
+      "plan": "render.setLook{...}, render.fadeOut/in, render.shake, camera.zoomTo; look timeline interpolated before recording; write RenderPipelineSettings pre-record",
+      "evidence": [],
+      "tests": ["PostFxRuntimeTest.SetLookReachesPipelineSettings", "FadeAdvancesAndEnds", "CameraShakeOffsetsViewNotTransform"],
+      "pixel_acceptance": "one fade screenshot + one crit-bloom screenshot"
     },
     {
-      "id": "review_governance",
-      "phase": "review-2",
-      "status": "in_progress",
-      "driven_by": "review 2026-09-30 step 2: merge scene-2d line, ownership transfer, small items",
-      "evidence": [
-        "scene-2d-world-and-game-ui merged into this plan and archived (§9)",
-        "small items: frame-task sink teardown, named-call primitive, callMethod edit funnel, input.inject_key + R0-R3 automation"
-      ]
+      "id": "audio",
+      "wave": "C",
+      "phase": "A1",
+      "status": "planned",
+      "driven_by": "game: camp/battle/boss BGM crossfade, hit/cast/UI sfx, victory jingle",
+      "engine_gap": "N2 no audio subsystem at all",
+      "plan": "ya-audio target, SDL3 backend; device/clip/instance/bus; AudioSourceComponent + AudioListenerComponent; neutral-layer audio.play/stop/setBusVolume/playMusic/crossfade",
+      "evidence": [],
+      "tests": ["AudioBusVolumeIsScoped", "PlayReturnsAStoppableHandle", "MissingDeviceDegradesSilently"]
     },
     {
-      "id": "p0_contract",
-      "phase": "review-3",
-      "status": "done",
-      "driven_by": "renderer changes need a frozen contract (merged pipeline_contract_audit + mixed_world2d_visual_contract)",
-      "evidence": [
-        "P0-contract-matrix.md C1-C5 (2026-10-03): painter order only, sprites do not write depth; key (layer, ySortRank, yKey, order, tiebreak); instance format and batching; resource lifetime; graph position",
-        "not decided: pure-2D graph strategy (step 6 / render-view-family P3); mixed-scene pixel checks land with step 5 batching core"
-      ]
+      "id": "particles",
+      "wave": "C",
+      "phase": "X1",
+      "status": "planned",
+      "driven_by": "game: hit sparks, magic bolts, heal light, camp torches/dust",
+      "engine_gap": "N3 no particle system at all",
+      "plan": "ya-particles target; .yaparticle.json asset; ParticleEmitterComponent; CPU sim -> existing 2D instanced path (no new pass); neutral-layer particles.emit / emitter:play/stop",
+      "evidence": [],
+      "tests": ["ParticleAssetRoundTrips", "EmitSpawnsCountedParticles", "ParticlesDieAfterLifetime"]
     },
     {
-      "id": "scene2d_module",
-      "phase": "review-4",
-      "status": "done",
-      "driven_by": "Sprite2D / Tilemap / Tileset live in ya-render-3d; TilemapComponent.cpp mixes data, queries, editing and render expansion",
-      "evidence": [
-        "ya-scene-2d (Framework/Scene/Scene2D): Sprite2DComponent, TilemapComponent (data + edit), TilemapQuery.cpp; no renderer dependency",
-        "tile -> WorldSpriteCandidate expansion moved to ya-render-3d Render3D/Common/TilemapExtraction.{h,cpp}",
-        "ya-testing 1550 passed / 1 skipped; editor smoke gate and 2DRpgPrototype run exit 0"
-      ]
+      "id": "physics2d_triggers",
+      "wave": "C",
+      "phase": "P1",
+      "status": "planned",
+      "driven_by": "game: push-block onto pressure plate, spike hazard zone, moving platform, knockback",
+      "engine_gap": "N4 Jolt is 3D box/sphere only; no triggers, no script callbacks",
+      "plan": "ya-physics-2d target on Box2D (xmake-repo box2d-v3.1.1); RigidBody2DComponent + Collider2DComponent; Physics2DSystem fixed step writing Transform x/y; contact events into ECS; neutral-layer physics2D.overlapCircle/raycast2D, body:applyImpulse",
+      "evidence": [],
+      "tests": ["BoxBodiesSettleOnAGround", "SensorFiresBeginAndEnd", "KinematicMoverPushesADynamicBox", "RaycastHitsTheNearestBox"]
     },
     {
-      "id": "sprite_animation",
-      "phase": "review-4",
-      "status": "done",
-      "driven_by": "D-T2 gate fired: Player / Npc / Chest each compute uvRect",
-      "evidence": [
-        "SpriteAnimationComponent references a shared SpriteAnimationSet (.yaanim.json: columns x rows grid, named clips) + SpriteAnimationSystem (Simulation group, runtime/simulation only); Player / Npc / Chest scripts play clips by name",
-        "SpriteAnimationTest / SpriteAnimationSetTest; Script/automation/2d-rpg/walk_animation.py; Town / House / TownLarge scenes carry the component with a Content:Animations/*.yaanim.json reference",
-        "not covered: Chest open/close in House under play (scene.load does not restart runtime); no Inspector clip editing yet (step 4c P3)"
-      ]
+      "id": "camera_zoom_shake",
+      "wave": "C",
+      "phase": "R1",
+      "status": "planned",
+      "driven_by": "game: hit shake, crit shake, boss phase transition",
+      "engine_gap": "N6 no camera effects",
+      "plan": "shake = view offset after texel snap; zoom = scale input to resolveCameraViewFraming",
+      "evidence": [],
+      "tests": ["CameraShakeOffsetsViewNotTransform"]
     },
     {
-      "id": "sprite_pivot",
-      "phase": "review-4",
-      "status": "done",
-      "driven_by": "character sprites are taller than a cell; Player.lua lifted the entity by footLift to stand on the tile edge",
-      "evidence": [
-        "Sprite2DComponent::pivot (normalized 0..1, default 0.5,0.5) + spriteQuadCenterOffset shared by RenderFrameExtractor::buildSpriteCandidate and RayCastMousePickingSystem",
-        "7 unit tests (default centre, bottom pivot, rotated/scaled axes, texel snapping, serialization incl. missing field, picking)",
-        "Player / Npc use pivot (0.5, 1/3); footLift removed from Player.lua; rpg_control FOOT_LIFT 0.0; 4 gameplay automation scripts pass",
-        "pivot is the y-sort point once step 5 lands (P0 contract C2)"
-      ]
+      "id": "mouse_picking",
+      "wave": "B",
+      "phase": "T2",
+      "status": "planned",
+      "driven_by": "game: click to select a unit / click a reachable cell to move",
+      "engine_gap": "N7 Sprite2DComponent.pickId reflected but unused; no screen->cell",
+      "plan": "input:mousePosition() + camera unproject -> cell (render.screenToCell); pickId for unit selection, entityAt fallback",
+      "evidence": [],
+      "tests": ["ScreenToCellRoundTrips"]
+    },
+
+    {
+      "id": "turn_battle_frame",
+      "wave": "B",
+      "phase": "T1",
+      "status": "planned",
+      "driven_by": "game: SRPG turn order by speed, move+action, initiative bar",
+      "engine_gap": "N5",
+      "plan": "Lua Battle.lua turn queue + Unit.lua stats/team; tile highlights; BattleHUD",
+      "evidence": [],
+      "tests": ["TurnOrderFollowsSpeed", "AdvancingSkipsDefeatedUnits"]
     },
     {
-      "id": "sprite_painter_order",
-      "phase": "review-5a",
-      "status": "done",
-      "driven_by": "sprite-vs-sprite order was a z = base - y*eps convention in Actor.lua; opaque/translucent split drew in two passes",
-      "evidence": [
-        "single sprite pipeline: blend on, depth LessOrEqual test only (graph DepthReadOnly access); Transform.z only depth-tests against 3D opaque",
-        "Scene2D/SpriteDrawOrder.h spriteDrawsBefore: (layer, ySortRank, yKey, order, entityId, sequence); extraction stable_sort and RayCastMousePickingSystem share it",
-        "Sprite2DComponent::bYSort, TilemapLayer::bYSort and layerOffset (C2 amendment: Overlay sublayer above y-sorted actors); defaults omitted from scene files",
-        "Actor.lua / zFor deleted; Player/Npc/Sign/Chest bYSort; Door sortOrder 1 so ground (same order, larger entity id) does not cover it",
-        "not covered: 3D cube crossing a sprite plane screenshot; Overlay-over-actor overlap screenshot (covered by TilemapExtractionTest only)"
-      ]
+      "id": "grid_movement_range",
+      "wave": "B",
+      "phase": "T2",
+      "status": "planned",
+      "driven_by": "game: reachable-cell highlight and per-cell move animation",
+      "engine_gap": "N5",
+      "plan": "Lua BFS over isSolid + entityAt; sink to TilemapComponent::reachableCells only if a second impl or cost demands",
+      "evidence": [],
+      "tests": ["ReachableCellsRespectMovementAndBlockers"]
     },
     {
-      "id": "batching_core",
-      "phase": "review-5",
-      "status": "in_progress",
-      "driven_by": "R4: per-candidate submission ~6.3ms of a 10.6ms frame",
-      "evidence": [
-        "5b-1 done: world sprites drawn as instanced batches (SpriteInstance from Slang generated header, per-instance vertex rate), TextureTableCursor/planInstancedDraws in Render2D; TownLarge recordFamily self 7.516 -> 0.425 ms",
-        "5b-2 done: ScreenDrawList/ScreenDrawRecorder use TextureTableCursor + planScreenDrawRemap; hand-written tables removed; UI pixels unchanged",
-        "painter order + y-sort as the sort key (done in sprite_painter_order, step 5a)",
-        "texture table direct mapping",
-        "tilemap static instance buffers: deferred (measured 0.245 ms/frame on TownLarge, see progress.md 5c); viewport culling first when maps grow",
-        "merged render2d_upload_submit_lifetime and legacy_pipeline_removed"
-      ]
+      "id": "damage_skill_resolution",
+      "wave": "B",
+      "phase": "T3",
+      "status": "planned",
+      "driven_by": "game: attack/skill damage, floating numbers, HP bars, defeat",
+      "engine_gap": "N5",
+      "plan": "Lua damage formula; damage numbers via world.spawnSprite; HP bars as world sprites (NOT a world-space UI system)",
+      "evidence": [],
+      "tests": ["DamageFormulaInRange", "SkillSpendsMana", "DefeatedUnitLeavesTheBoard"]
     },
     {
-      "id": "pure_2d_view_family",
-      "phase": "review-6",
-      "status": "not_started",
-      "driven_by": "pure 2D views still run GBuffer / lighting / skybox / bloom",
-      "evidence": [
-        "prerequisite: render-view-family PreparedView / ViewFamily compiler"
-      ]
+      "id": "battle_ai",
+      "wave": "B",
+      "phase": "T4",
+      "status": "planned",
+      "driven_by": "game: enemy turns resolve automatically",
+      "engine_gap": "N5",
+      "plan": "pure Lua: close to nearest target, attack in range, else move; boss phases",
+      "evidence": [],
+      "tests": ["AiClosesDistanceThenAttacks", "AiDoesNothingWithoutTargets"]
     },
     {
-      "id": "engine_capabilities",
-      "phase": "review-7",
-      "status": "not_started",
-      "driven_by": "2D gameplay framework lives in example scripts",
-      "evidence": [
-        "camera 2D fields + follow, InputMap, GUI text reveal, grid-move Lua library, remove hardcoded names"
-      ]
+      "id": "battle_overworld_handoff",
+      "wave": "B",
+      "phase": "M1",
+      "status": "planned",
+      "driven_by": "game: overworld <-> battle loop with state carried in Persist",
+      "engine_gap": "none",
+      "plan": "party HP/exp in Persist; battle scene init restores; result writes back",
+      "evidence": [],
+      "tests": ["BattleResultTransfersBackToOverworld"]
+    },
+
+    {
+      "id": "progression_levels",
+      "wave": "D",
+      "phase": "G1",
+      "status": "planned",
+      "driven_by": "game: exp -> level -> stat growth + skill unlock, class tables",
+      "plan": "Persist.party; Lua level/class tables",
+      "evidence": [],
+      "tests": ["LevelUpRaisesStats", "SkillUnlocksAtLevel"]
+    },
+    {
+      "id": "equipment_inventory",
+      "wave": "D",
+      "phase": "G2",
+      "status": "planned",
+      "driven_by": "game: battle drops, bag UI, equip slots, live stat update",
+      "plan": ".yaui bag/equip panel with TableGrid/ScrollViewport/Button; Persist.inventory",
+      "evidence": [],
+      "tests": ["EquippingRaisesStats", "UnequipRestoresBase"]
+    },
+    {
+      "id": "party_companions",
+      "wave": "D",
+      "phase": "G3",
+      "status": "planned",
+      "driven_by": "game: companions join via quest, deploy selection, independent growth",
+      "plan": "Persist.party roster",
+      "evidence": [],
+      "tests": ["CompanionJoinsAndFights"]
+    },
+    {
+      "id": "quest_system",
+      "wave": "D",
+      "phase": "G4",
+      "status": "planned",
+      "driven_by": "game: quest log, battle outcome advances, rewards",
+      "plan": "Persist.quests; journal UI",
+      "evidence": [],
+      "tests": ["QuestAdvancesOnBattleOutcome", "QuestRewardGrantedOnce"]
+    },
+    {
+      "id": "vertical_slice_content",
+      "wave": "D",
+      "phase": "C1",
+      "status": "planned",
+      "driven_by": "game: 3-4 battles (tutorial/mechanism/magic/boss), 3 quests, ending",
+      "plan": "BattleRuins1/2/3/Core scenes, BattleAI phases, boss phase script",
+      "evidence": [],
+      "tests": ["PlaythroughReachesEnding"]
+    },
+
+    {
+      "id": "save_load_loop",
+      "wave": "E",
+      "phase": "Z1",
+      "status": "planned",
+      "driven_by": "game: save at camp, quit, load back with party/level/equipment/quests intact",
+      "plan": "onSave writes party+quests into Persist; save point entity",
+      "evidence": [],
+      "tests": ["SaveRestoresPartyAndQuests"]
+    },
+    {
+      "id": "hud_polish",
+      "wave": "E",
+      "phase": "Z2",
+      "status": "planned",
+      "driven_by": "game: full battle HUD (action menu, unit panel, initiative bar), settings (volume/language)",
+      "plan": "yaui panels using existing controls",
+      "evidence": [],
+      "tests": []
+    },
+    {
+      "id": "capability_audit",
+      "wave": "E",
+      "phase": "Z3",
+      "status": "planned",
+      "driven_by": "plan: every capability has a demonstrable use point",
+      "plan": "all matrix entries done; package smoke; playthrough recording",
+      "evidence": [],
+      "tests": []
     }
   ]
 }

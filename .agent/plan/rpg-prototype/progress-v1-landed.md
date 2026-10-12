@@ -1,0 +1,825 @@
+# Progress
+
+## 2026-09-29 — 计划建立
+
+- 评估结论：2D 对象沿用 `Node3D` + `Sprite2DComponent`，Game UI 沿用 yaui；缺的是 Tilemap、通行查询、
+  实体查询与脚本互调、玩法切场景、帧动画，以及手写脚本绑定这笔架构债（见 plan §0、§1）。
+- 用户决策 D1–D7 见 plan §3：tile 通行表先行、UE 式反射标记绑定且与脚本语言无关、场景即地图、
+  新开本目录、与 game-ui / ui-behavior 线交替推进、绑定层分 B1/B2、地图用 Tiny Town + 角色图试生成。
+- 从 `game-ui-script-framework` §7 接手「反射自动绑定 Lua」与「场景可编辑性」。
+- 下一步：B1。开工前按 `session_checklist.md` 确认 game-ui S5/S7 当前是否在改 `GameplayLua.cpp`。
+
+## 2026-09-29 — B1 完成
+
+- 保留：标记（`.script()` / `.scriptReadOnly()`）、中立值与引用（`Core/Scripting/ScriptValue.h`）、
+  按名字的导出面（`ScriptBindings.h`）、scene-core 的场景 / 实体 / 组件引用种类与实体原生方法、
+  Lua（`LuaScriptBinding`）与 JS（`JSScriptingSystem`）两个后端都走中立层。
+- 偏离：原计划「每个标记方法生成类型化调用器挂 `Function*` 扩展表」是与插件平行的调用路径；经用户确认改为
+  D11——插件 `Function` 补记参数 / 返回 `type_index`、`Enum` 可装箱，脚本调用直接走 `Function::invoker`。
+- 附带：`Scene` 删除移动构造（实体与实例表都持有场景地址）；`Entity` 只留 `add/removeComponentByName`
+  （返回 `void*` / `bool`，未知类型名一律抛错），删除无人再用的 `has/componentByName` 与 `components()`；`ya_mcp_bridge.py` 的 `eval_js` 说明写明只暴露标记成员。
+- 验证：`ya-testing` 1394 通过，唯一失败 `GUIWindowManagerTest.DragOverlaySessionIsExemptFromFocusAndInput`
+  是既有红灯；`ya-gui-closure-test` 614、`ya-render-3d-test` 188、`ya-resource-core-test` 11、
+  `ya-ecs-core-test` 1 全过；GreedySnake / HelloMaterial 运行与编辑器冒烟退出码 0，无 `[Script]` 跳过告警。
+- 未完成：无。下一步 R0。
+
+## 2026-09-29 — B1 修订：去掉可见性门禁 + Lua 按类型缓存（D12）
+
+- 用户决策：没有「脚本不可访问」的需求，门禁整套删除——`.script()` / `.scriptReadOnly()`、`Meta::ScriptName`、
+  插件 `FieldFlags::BlueprintReadOnly/ReadWrite/Callable/Pure`。反射了的成员类型能过边界即导出；
+  const / 无可写访问器的字段只读。没有改名覆盖，`camera.primary` 在两个示例脚本里改为 `camera.bPrimary`。
+- 中立层：`findMember` 换成常驻句柄 `findField / findMethod`；原生方法、解析器答出的方法与反射方法同表，只增不删。
+- Lua：`LuaScriptObject` 不再是 sol usertype，改为 full userdata + 每类型一张懒建元表，首次命中把方法闭包 /
+  字段句柄 `rawset` 进该类型缓存；方法闭包校验 self 类型；元表 `__metatable` 隐藏。sol 走 `sol_lua_push/get/check`。
+- JS：只改用句柄 API，不缓存（用户决定）。
+
+## 2026-09-29 — B1 后续：Lua 绑定层读性（用户反馈）
+
+- 对象路径去 sol：建表 / 值转换全 raw C API，`sol::` 从 41 处降到 14 处，剩下的都在 Vec usertype
+  注册区和 `sol_lua_push/get/check` 三个桥函数（其他模块经 sol 移动引擎对象的唯一入口）。
+- `LuaScriptBinding.cpp` 文件头放机制图：推入（userdata + 按类型元表）、三个入口（__index/__newindex/方法闭包）、
+  懒缓存；`pushObjectMetatable` 等栈操作收进按意图命名的工具（`setField*` / `setMarker`，内部先转绝对索引）。
+- 途中教训：sol v3.5 的 usertype 元表懒定稿，注册时打的识别标记会在首次实例化后丢失；Vec 识别退回 sol 自己的检查。
+- 验证：脚本相关 80 测试全过；GreedySnake / HelloMaterial 冒烟退出码 0，无脚本错误。
+
+## 2026-09-29 — B1 后续二：脚本生命周期读性（B/C/D）
+
+- B：受保护调用收敛为 `protectedCall`（push→protected_function→调用），`invokeLuaCallback` 只剩
+  判空 + 记日志；`LuaScriptingSystem::invoke` 删掉手写舞步改调它。
+- C：`reloadScript` 的单实例重载体（属性快照、destroy、重绑、回填、单批 init/start）提取为
+  `reloadInstance(host, id, source)`；`_live.contains` 的 belt-and-braces 改为直接 `host->resolve`。
+- D：`LuaScriptInstance::applyPropertyOverridesTo` 的 40 行 typeid if-chain 改为类型列表 fold
+  （`makeLuaObject<T...>`）。`solToAny` 保持 if-chain——每类一行、本身就是表的直写形式，包一层反而变长。
+- 用户同时确认不动 `init()`（A 项不做）。
+- 验证：`ya-testing` 1395 通过（唯一失败仍是既有红灯）；GreedySnake / HelloMaterial 冒烟退出码 0。
+
+## 2026-09-29 — R0：示例壳 + 按格走动 + 相机跟随
+
+- 目标与边界：`Example/2DRpgPrototype` 跑起来，方向键 / WASD 按格走、四方向 + 三帧行走、相机平滑跟随且像素对齐；
+  新脚本函数只经中立层，不新增 pass，不动 `world.spawnSprite` / `ui.*` 语义。
+- 中立层模块函数：`registerModuleFunction / forEachModuleFunction`（同名覆盖、条目不搬家），Lua 投影成全局表闭包、
+  JS 投影成 `ya.<module>.<fn>`；`ScriptApiRegistry` 头注释收窄为编辑 / 自动化 JSON 命令表。
+  GameRuntime `registerGameplayScriptFunctions` 登记 `world.find(name)`、`world.viewSize()`，在 Lua / JS init 前；
+  `GameplayLua` 的 `world` 表改为取或建，保住投影进来的函数。
+- G12 修复：`TextureLibrary` 预建（Nearest / Linear）×4 寻址 sampler，`resolveSlotSampler` 按 `samplerConfig` 取。
+- 途中发现并修复：精灵图像上下颠倒（共享 quad 的 `texCoord.y` 朝 +Y，`uvRect` 是图像空间）；只改 `Sprite2DWorld.slang`。
+- 素材：生图后 `Tools/quantize_walk_sheet.py` 量化——生图不在整齐网格上，按连通区域找 12 个人物，
+  原图先压 12 色调色板再逐块多数表决，脚底对齐格子底行；右向行 = 左向行镜像（生图的右向第 3 帧朝反了）。
+  用户在 16×16 / 16×24 预览中选 16×24：精灵 1×1.5 单位，`Player.lua` 按 `sprite.size.y` 抬高半个超出量让脚踩格底。
+  示例名按用户要求为 `2DRpgPrototype`（C++ 模块结构体仍叫 `RpgPrototypeModule`，标识符不能以数字开头）。
+  Tiny Town 图集与草地 tile 拷入 `Content/Textures/`，`LICENSE.md` 记来源。
+- 场景：`Town.scene.json` 草地一张大精灵（Repeat + Nearest 平铺），树 / 灌木 / 告示牌 / 栅栏为 atlas `uvRect` 精灵，
+  玩家 z=0.1 在景物 0.05 之上。`FollowCamera.lua` 取最大整数缩放使纵向至少 12 格，`orthoHalfHeight = 视口高 / (2×16×缩放)`，
+  相机位置吸附到屏幕像素；`Player.lua` 位置吸附到 texel。
+- 验证：`ya-testing` 1442 全过（新增 `ModuleFunctionsReplaceInPlaceOnReRegistration`、
+  `ModuleFunctionsBecomeGlobalTables`、`ModuleFunctionsExportUnderYa`）；2DRpgPrototype 运行 / 编辑器、GreedySnake、
+  HelloMaterial 冒烟退出码 0，截图确认最近邻与朝向。
+- 未完成：按键注入自动化（等 S7 `input.inject_key`）。下一步 R1。
+
+## 2026-09-29 — R1：Tilemap（数据 + 渲染 + 编辑笔刷 + 通行查询）
+
+R1a / R1b / R1c 共享 `TilemapComponent`、`Town.scene.json` 与 tileset 文档，R1b / R1c 改的正是 R1a
+引入的文件，所以落在一个提交里；下面按三段记录。
+
+### R1a：Tileset 资产 + TilemapComponent + 渲染
+
+- 目标与边界：手写一份带 tilemap 的场景，Play 看到地面 / 装饰 / 遮挡三层，玩家在地面与遮挡层之间；
+  不新增 pass（复用 Sprite2DStage），不做查询 API（R1c）、不做笔刷（R1b）、不加脚本函数。
+- 数据：Tileset（atlas TextureSlot + tile 几何 + 稀疏 solid 表）存 .yatileset.json，TilesetRef
+  照 TextureRef 的样子只序列化 path、缓存解析结果，同步加载（小 authoring JSON，同 .yaui 待遇）；
+  TilemapComponent 与 Sprite2DComponent 同模块：tileset / cellSize / width / height /
+  layers（name/zOffset/cells，左下起按行，0 = 空否则 tile+1）/ layer。
+- 渲染：纯函数 appendTilemapCandidates 把范围内非空格展开成 WorldSpriteCandidate（entityId 取
+  tilemap 实体，layer 取组件 layer，sortOrder 取层号）；extractor 在 snapshot 里全量展开（与精灵
+  一致，View 裁剪留给 R4 定），无内边距图集 uv 半像素内缩；resolve 走 GameplayResourceBinding
+ （tileset 文档同步 + atlas 贴图异步），未就绪产出零候选（无占位图规则与精灵一致）。
+- 内容：Content/Tilesets/town.yatileset.json（tiny_town 图集，Nearest + ClampToEdge，solid 记树冠 4
+  与树干 16）；Town.scene.json 加 1022 号 TilemapGround（6x5，origin (-5,-2,0.01)，overlay 层
+  z=0.21，玩家 0.1 在 decor 0.04 与 overlay 之间；玩家出生格 (5,2) 是草地）。
+- 保留 / 偏离：snapshot 层不做 View 可见裁剪（与精灵一致；纯函数留了 cell range 参数给 R4 的
+  frustum / chunk 缓存）；Tileset 文件热重载不在 R1a（改文件需重载场景，笔刷改的是组件数据即时生效）。
+- 途中发现（引擎既有行为，非本计划改动）：反序列化 TextureRef 会立即触发贴图加载，需要 App 上下文
+  （VFS + AssetManager）；测试里只能验到 TilemapComponent 子对象与 tileset 文件结构，整场景加载由冒烟覆盖。
+- 验证：新增 5 测试全绿（TilemapComponentTest.RoundTripsLayers、TilemapExtractionTest x2、
+  TilemapSceneTest x2）；ya-render-3d-test 191 全过（基线 188+3）；
+  ya-testing 1381 通过，23 失败全是 AppAutomationControl 系 TCP 回环被本机沙盒拒绝（环境性，
+  与 tilemap 无关）；运行 / 编辑器冒烟因沙盒无显示器无法执行（SDL 起不来），改用文件级验证代替。
+- 未完成：冒烟待有显示器环境补跑。
+
+### R1b：编辑器 Tile 笔刷
+
+- 目标与边界：选中 tilemap 后在正交 XY 视口里画 / 擦 / 矩形填充 / 吸管，一笔一个撤销步，保存重开仍在；
+  Inspector 可改宽高 / 每格尺寸 / tileset 且改宽高保留已有格子。不做通行查询（R1c）、不加脚本函数、
+  不新增 pass。
+- 引擎侧 cell 编辑（`TilemapComponent`）：`resize` / `setCell` / `fillRect` 只改组件数据；`onEdit()` 用
+  `_editWidth/_editHeight` 这份 transient 旧尺寸做按行重排，所以 Inspector 把宽 6 改成 10 时左边 6 列原样保留，
+  不是按线性前缀硬搬；`onPostSerialize()` 同景；图层 cell 数与 width*height 不符时提取照样跳过该层。
+- 撤销：`EditorTilemapUndo`（`FTileLayerSnapshot` + `pushTileLayerUndo`）推的是关卡根会话的同一个 `UndoStack`
+  （与 `EditorTransformUndo`、Inspector 属性编辑同栈），一笔按下到松开存整层前 / 后 cell；前后相同不记步。
+- 笔刷：`EditorTileBrushController` 管 Move/Paint/Erase/RectFill/Eyedropper、矩形图章、相邻格间 Bresenham 连线、
+  press 时抓一次 `_strokeBefore`；`screenToCell` 走 view×projection 反投影再乘 tilemap 世界逆矩阵；
+  网格线与悬停 / 矩形框走编辑器 overlay 的世界绘制列表（`recordWorldOverlay`），不加新 pass。
+- 接线：`EditorSurface` 把 `EditorViewportGizmoOverlay` 的 brush 指向 `EditorLayer::tileBrush()` 并挂同一 UndoStack；
+  `EditorViewportGizmoOverlay::dispatchEvent` 在 brush 处于「已上膛 + 正交 XY + 选中 tilemap」时优先于 gizmo 接管左键，
+  `wantsPointerCapture()` 把进行中的笔画算进去，`isActive()` 也一并算上，笔画期间编辑器不会把鼠标当相机导航。
+- Tile Palette tab：`EditorTilePaletteTab`（工具行 / 图层下拉 / 图集网格）+ 内嵌 `UITileAtlasGrid`（点选或框选图章，
+  拖拽期间自己 setPointerCapture）；注册进 `EditorTabSpawnerRegistry`（tabId `tile-palette`，归关卡编辑器根会话）。
+- 顺带：`Tileset` 从 Render3D 下沉到 Core（`Core/Common/Tileset.h`），`TilesetRef` 接进 asset-ref 名单
+  （`isAssetRefType` / `resolveAssetRef` / `hasAssetResolveError` / `registerAssetRef` / picker 各分支 + `openTilesetPicker`），
+  Inspector 的 tileset 行因此是资产行而非纯文本行。
+- 偏差：plan 写「图集网格」为 tile 单选 / 框选，实现一致；未做笔画中右键取消的 UI 入口（`cancelStroke()` 已具备，
+  等有明确按键约定再接）。
+- 途中修复（本轮新引入，非既有 bug）：`EntityIdPass.h` 用了 `DrawCandidateView` 却只做前置声明、没包含定义它的
+  `RenderFrameData.h`；新增 `TilemapComponent.cpp` 改变 unity 分组后暴露，补上 include 即解。
+- 验证：`ya-testing` 1386 通过 / 23 失败（22 个 `AppAutomationControl*` 走 TCP 回环被沙盒拒绝、
+  1 个 `GUIWindowManagerTest.DragOverlaySessionIsExemptFromFocusAndInput` 需显示器，均环境性）；
+  Tilemap 相关 10 项全过（`TilemapEditTest` x3、`TilemapComponentTest`、`TilemapExtractionTest` x2、
+  `TilemapSceneTest` x2、`TilemapEditUndoTest`、`TilemapInspectorTest`）；`ya-render-3d` 与 `ya-game-editor` 编译通过。
+- 未完成：编辑器冒烟（需显示器，沙盒内 SDL 起不来）。
+
+### R1c：通行查询 + 被墙挡住 + 相机限界
+
+- 目标与边界：玩家被地图挡住、方向键在地图边界停下；相机跟随但画面不越出地图。
+  不加碰撞体 / 物理、不新增 pass、不加脚本专用的平行接口。
+- 查询面（D1）：`TilemapComponent` 四个反射方法 `worldToCell` / `cellToWorld` / `isSolid` / `bounds`，
+  四个都能过脚本边界，所以玩家与以后的 NPC 走同一条路，没有第二套绑定。
+  - `isSolid(x, y)`：任一图层该格是 tileset 的 solid tile 即阻挡；**出界也算阻挡**，地图边缘因此
+    像墙一样挡住玩家，不用在脚本里再写一遍范围判断。
+  - `worldToCell` / `cellToWorld` / `bounds` 都带 owner 的 Transform（组件经 `getOwner()` 取，
+    `TransformSystem::computeWorldMatrix` 递归算父级）；没有 owner 时退化为 identity，纯数据测试
+    与提取路径不必造 Scene。
+  - 「小接口」（D1 原话）在这里读作「窄的能力面」：四个名字够用，且实现只有 tile 一种。
+    真正的「谁是场景的碰撞权威」这件事没有抽象——现在只有一个地图、一个调用方，抽象是投机；
+    R2a 的 NPC 或 R3 的换图成为第二个调用方时再决定接口形态（见「未完成」）。
+- 玩家（Player.lua）：不再自带一套整数格。它的 cell 直接是 TilemapGround 的 cell，
+  位置由 `cellToWorld` 给出，通行由 `isSolid` 判定——**地图是碰撞权威**，编辑器画的墙不用改脚本就生效。
+  这次重写顺带修掉了 R0 遗留的隐式约定：旧版玩家格与地图格差半格，靠 `+5 / +2` 这类魔法偏移才对齐，
+  现在两边用同一个格定义。
+- 相机（FollowCamera.lua）：按 `bounds()` 把取景矩形夹在地图内；地图某轴比视野还窄时该轴取中，
+  否则 clamp 会和跟随互相拉扯、在边缘抖动。取景仍吸附到整屏幕像素。地图缺失时只跟随、不夹取，
+  R3 换图不会先崩在限界上。
+- 内容重建：地图从 6x5 扩到 32x20（origin 由 (-5,-2) 改为 (-16,-10)），理由——原地图比可视范围还小，
+  「相机停在地图边界内」这条验收根本演示不出来。按 D3「场景即地图」把原先散落的精灵收进地图：
+  草地精灵（`Ground`）、树冠 / 树干（5 棵树的 Top/Trunk 共 10 个精灵）、灌木 / 蘑菇 / 告示牌、
+  4 段栅栏共 13 个实体合并成 Ground / Decor / Overlay 三层，场景实体从 21 降到 3（Camera / Player /
+  TilemapGround）。tileset 的 `solid` 表补上栅栏 80–82（原本只有树冠 4 与树干 16），
+  所以「栅栏挡住玩家」也是地图数据而不是脚本判断。玩家出生格改为地图中心格 (16,10)，
+  与 footLift 对齐，首帧不动。
+- 偏差：计划说查询面「抽成小接口」，实现为组件上的窄能力面而不是 C++ 抽象基类，理由如上；
+  如果要在 Box2D/Jolt 之间切换，那时需要的是「碰撞权威的发现」（谁回答查询）而不是这四个数学方法，
+  一并留到第二个调用方出现时决定。
+- 验证：`ya-testing` 1391 通过 / 23 失败（22 个 `AppAutomationControl*` 需 TCP 回环、
+  1 个 `GUIWindowManagerTest` 需显示器，均环境性）；新增 `TilemapQueryTest` x4
+  （`SolidTileBlocks` / `OutOfBoundsIsSolid` / `WorldToCellUsesTheOwnerTransform` /
+  `OwnerlessMapUsesIdentityTransform`）与 `LuaScriptBindingTest.TilemapQueryFaceReachesLua`
+  （反射签名确实能过脚本边界）；`TilemapSceneTest` 断言随新内容更新；两个 Lua 脚本用 lua 5.4
+  `loadfile` 语法检查通过；`ya-game-runtime` / `2DRpgPrototype` / `ya-game-editor` / `ya-testing` 编译通过。
+- 未完成：编辑器冒烟（沙盒无显示器，SDL 起不来）；相机限界与「画墙→被挡住」只有手测路径，
+  没有自动化（等 S7 的 `input.inject_key`）；「谁是碰撞权威」的发现留到 R2a/R3。下一步 R2a。
+
+## 2026-09-30 — R2a：事件实体与交互
+
+- 目标与边界：编辑器摆 NPC 与告示牌（精灵 + 各自脚本），玩家面朝按确认键 → 其 `onInteract`
+  被调用；NPC 占住的格子走不进去。不碰 `world.spawnSprite` / `ui.*`（game-ui 线所有）、
+  不新增渲染 pass、不造事件总线；对话框归 R2b。冲突检查：`ui-behavior-capabilities` 到 C1d
+  （C2/C3 未动工，R2a 先定具名调用接口，C3 复用）；`game-ui-script-framework` 停在 S3b。
+- 逼出来的引擎改动（对应游戏需求）：
+  - `entity:call(name, ...)` ← 玩家要调目标脚本函数。`LuaScriptingSystem::callNamed`
+    （实例面：host bindSelf 后 `self:<name>(args...)`，带返回值）+ `callEntityScript`
+    （实体面：走查 `LuaScriptComponent::scripts`，第一个定义该名字的已加载脚本作答，
+    `rebindEntitySelf` 复用 FEntityScriptHost 的 self.entity 绑定）。init() 以无捕获
+    原生方法挂在 Entity 类型上——Lua / JS 共用，且重复 init（测试）不会重绑悬垂系统。
+    语义：未定义返回 nil；目标脚本出错抛 ScriptError 到调用方（错误不能伪装成安静 nil）。
+  - `map:entityAt(x, y)` ← 玩家要找面前格子里的 actor、进门格前查占位。原生方法注册在
+    `GameplayScriptFunctions.cpp`（GameRuntime 才同时看得见 Scene 与组件）：返回格子里
+    第一个「有 Sprite2D 又有 LuaScript」的实体，逐候选问地图自己的 `worldToCell`，
+    相机 / 纯变换实体永不作答；线性遍历（D-T4），量大再加索引。tilemap 组件保持在
+    Render3D 看不见场景，注册点不放那里。
+  - 「角色 z = 图层基准 − y × ε」← 玩家与 NPC 同层时按屏幕上下正确遮挡（G2 不透明深度）。
+    收进示例 `Content/Scripts/Actor.lua`（`Actor.zFor` + hero 图帧算式），三个脚本共用；
+    约定与「地图即碰撞权威」「entity:call 互调」写进新 skill `.agent/skills/2d-gameplay/`。
+- 内容：`Actor.lua`（新）、`Player.lua`（tryStep 加 `isSolid(...) or entityAt(...)`；
+  确认键 Space/Enter/E 边沿（`input:isKeyPressed`）触发 `target:call("onInteract")`；
+  z 改按 Actor.zFor 随 y 重算）、`Npc.lua`（新，onInteract 转身朝玩家 + print）、
+  `Sign.lua`（新，onInteract 变暖色 + print，替 R2b 的文字占位）；`Town.scene.json`
+  加 Sign（1022，tiny_town tile 5 改成精灵放回 (13,5) 格，Decor 层该格清零）与
+  Npc（1023，hero 图调蓝放在 (14,9) 格）。
+- 保留 / 偏离：
+  - 「扩展 S1 的 call」落地为并行的 callNamed（invoke 的 bool 过滤语义与其三个调用方原样保留）；
+    C3（Lua call 热路径）落地时复用同一入口。
+  - entityAt 的 actor 判定（精灵+脚本）是引擎面约定的最小实现；将来「隐形触发区」需求
+    出现时再放宽，届时一并评估 D-T4 的索引。
+  - 计划写「两个以上脚本重复这段时下沉成组件字段」：z 约定现在是 Player/Npc/Sign 三处
+    require 同一个 Actor.lua（游戏内容内复用），尚未到引擎组件；组件字段属于 authored
+    sprite 能力（scene-2d 线），出现第四处重复再评估。
+- 验证：新增 8 测试全绿——`LuaScriptHostTest.NamedCallReturnsValue` /
+  `NamedCallOnMissingFunctionIsNil` / `NamedCallPropagatesTargetErrors`、
+  `LuaEntityScriptCallTest` x3（第一个定义者作答、参数/nil、目标错误在调用方可见）、
+  `TilemapEntityQueryTest` x2（actor 命中、非 actor 静默）；脚本 / tilemap 相关 90 项全绿；
+  `ya-testing` 1421 通过，唯一失败仍是既有红灯
+  `GUIWindowManagerTest.DragOverlaySessionIsExemptFromFocusAndInput`；
+  2DRpgPrototype 运行 / 编辑器与 GreedySnake 冒烟（--exit-after-frame=120）exit 0、
+  无脚本错误；全部脚本 luajit loadfile 语法检查通过。
+- 手测步骤（验证「面朝 + 确认」）：Play 后走到告示牌（(13,5) 格）或 NPC（(14,9) 格）旁，
+  面朝它按 Space/Enter/E：NPC 转身朝玩家并在控制台打印欢迎；告示牌变暖色并打印；
+  走进 NPC 所在格被挡住；站在 NPC 上方时 NPC 遮住玩家、下方时玩家遮住 NPC。
+- 未完成：按键注入自动化（等 S7）；R2b 对话框。下一步 R2b。
+
+## 2026-09-30 — R2b：对话框
+
+- 目标与边界：交互弹出对话框、逐字显示、确认键翻页/关闭、对话期间玩家不能移动。
+  S4 未落地 → 移动锁由玩法状态控制（S4 落地后迁移 modal）；不改 `ui.*` / `world.*`
+  语义（game-ui 线所有）；无引擎代码改动，全部落在示例内容。
+- 内容（`Example/2DRpgPrototype/Content/`）：
+  - `UI/Dialogue.yaui.json`：根 panel（Hidden）挂 `script.lua` behavior，Box/Body/Hint
+    三个子控件全部平铺在根下用 canvas 槽（底部居中 880×160 卡片 + 内嵌正文 + 右下键位提示）。
+  - `UI/Dialogue.lua`：`say(lines, onDone)` / `busy()` / 逐字（`self:every` 0.02s 一字，
+    `revealTimer:cancel()` 收尾）/ 确认键三段（补完本页 → 翻页 → 关闭）；开框帧
+    （`time:getFrameIndex()`）屏蔽确认键，起始那次按键不会跳过第一页。
+  - `Town.scene.json`：`widgetEntries` 加 Dialogue 条目（autoMount，rootSlot 抄 GreedySnake
+    全屏 canvas）。
+  - `Npc.lua` / `Sign.lua`：onInteract 保留各自的转身/变色反应，改为经
+    `ui.get("Dialogue"):say(LINES)` 说话。
+  - `Player.lua`：每帧 `dialogue:busy()` 决定 `talking`，说话时锁移动与交互；确认键
+    「再武装」——按下触发后必须完全松开才允许下一次，同一次按键不会同时推进对话又再次触发。
+- 途中发现（引擎既有，非本计划改动）：
+  - **yaui 槽格式必须匹配父控件**：给 `engine.border` 的子控件写 canvas 槽会在
+    `UIContentSlot::deserialize` 断言崩进程（`UILayout.cpp` 的 content/overlay 槽反序列化
+    用无守卫的 `node["padding"]`）。格式不匹配应是可读的错误，不是 assert——健壮性债，
+    留给 gui 线；本次内容改为平铺根 panel（canvas 槽，GameOver 已验证的形状）。
+  - **JS `ya.entity.get(id)` 按句柄不按名字**：字符串被 `JS_ToUint32` 归 0，拿到的是
+    第一个实体（Camera）。自动化里用 `ya.entity.list()` 按名字过滤再调用。
+  - **Lua 全局是小写 `time`**（`LuaTimeApi` 实例），大写 `Time` 是 usertype 表，
+    在其上调方法报 "received nil for self"。
+- 验证（自动化控制口真实验证）：`ya.py control start --game` 起实例，`eval_js` 按
+  `ya.entity.list()` 过滤出 Npc/Sign 调 `call("onInteract")`，`capture_screenshot`
+  （presentation 目标）截图确认——对话框底部居中弹出、逐字显示进行中、右下键位提示、
+  NPC 转身朝玩家；对已打开的框再次 `say` 正确替换页。翻页/关闭需要确认键，留手测。
+  另：2DRpgPrototype 运行/编辑器与 GreedySnake 冒烟（--exit-after-frame=120）exit 0
+  无错误；`ya-testing` 1421 通过（唯一失败仍是既有显示器红灯）；脚本 luajit 语法检查通过。
+- 手测步骤：面朝 NPC/告示牌按 Space → 弹框逐字；再按一次 → 本页立即补完；再按 → 翻页；
+  末页再按 → 关闭、恢复移动。对话期间方向键应无效。
+- 未完成：翻页/关闭的按键自动化（等 S7 `input.inject_key`）；移动锁迁 S4 modal。
+  下一步 R3（切换地图与跨场景状态）。
+
+## 2026-09-30 — R3：切换地图与跨场景状态
+
+- 目标与边界：走进门切到 House 场景站上出生点、出来回到门口、宝箱状态跨场景保留。
+  不合并自动化 `scene.load` 与玩法 `world.loadScene` 两套 API（共用 SceneManager::loadScene
+  底层）；不做实例索引优化。冲突检查同前两条线未动本处。
+- 引擎改动（对应游戏需求）：
+  - `world.loadScene(path, spawnName)`（GameplayScriptFunctions 注册）← 门脚本要换图。
+    只排队（`AppSceneServices::requestSceneTransfer`，同帧后者覆盖），**在帧尾结构变更阶段执行**
+    （orchestrator `flushStructuralChanges` 末尾）：一次转移会停掉全部脚本，绝不能在脚本
+    运行中内联发生。执行 = waitIdle → 旧场景 onStop → SceneManager::loadScene → 出生点
+    放置；**保持 play 会话**（app 状态、UI host、常驻表都不动——走 stopRuntime 会让编辑器
+    误以为退出 play，也会把常驻表一起清掉）。
+  - 显式常驻表 `Persist`（LuaScriptingSystem::persistentState/resetPersistentState）←
+    宝箱状态要跨图保留但不跨局泄漏。init 时绑定全局；**只有 stopRuntime/stopSimulation
+    （退出 play）换新表**，转移路径不碰它。普通 Lua 表，脚本可存任意值。
+  - `placePlayerAtSpawn(scene, spawnName)`（自由函数）← 出生点放置。约定：玩法主角实体
+    名为 "Player"，出生标记是场景根上的 Node3D，只取其 x/y（z 归角色自己）。
+- 内容：`Door.lua`（propertyOverrides 授权目标场景与出生点，Inspector 可改）+ `Chest.lua`
+  （Persist.opened[实体名] 记开态，关=107 号罐/开=94 号金罐换图）+ `House.scene.json`
+  （10×7 室内：石板地 108、墙 99 入 solid、门、箱、SpawnFromTown、玩家、相机、Dialogue 条目）
+  + Town 加 DoorToHouse 与 SpawnFromHouse + `Player.lua`（tryStep 先问
+  `occupant:call("blocksEntry") ~= false` 才阻挡——门可穿行、罐子阻挡、无作答=阻挡；
+  到达新格 `pokeArrival` 触发 `onPlayerEnter`，查询用 `entityAt(x, y, self.entity)` 排除自己）。
+- 途中发现（内容侧三连坑，全部真实踩到）：
+  - **cell 值 = tile 序号 + 1**：手写 House 时把裸 tile 序号填进 cells，整个地图错位一格
+    （isSolid 探测的"异常"其实是它，不是 tileset 解析问题）。
+  - **TilesetRef 的 JSON 形状**是 `{"__base__": {"AssetRefBase": {"_path": ...}}}`，
+    不是 TextureSlot 那套 bEnable/samplerConfig（写错时 ReflectionSerializer 静默丢弃，
+    只有 Warn）。
+  - **每个场景的行走地图实体必须叫 `TilemapGround`**（Player.lua 按名字找地图）——写进
+    skill 约定；违反时 onInit 报错、字段全空、onUpdate 每帧刷错。
+- 验证（自动化控制口端到端）：`eval_js`（`ya.entity.list()` 按名过滤，`ya.entity.get`
+  按句柄不按名）触发门 → 截图确认 House 渲染完整、玩家站在出生点 → 开箱（金罐 + 对话）→
+  回 Town → 再进 House → **金罐仍是打开的**。往返切换共 3 次全成功。另：SceneTransferTest
+  四项全绿（SpawnPointPlacesPlayer / PersistentStateSurvivesTransfer /
+  TransferWithoutSpawnKeepsAuthoredPositions / PlayStopClearsPersistentState，App 用
+  AppModuleTestAccess 无头组装 + 临时目录场景文件走真 loadScene）；`ya-testing` 1425 通过
+  （唯一失败仍是显示器红灯）；2DRpgPrototype / GreedySnake 冒烟 exit 0；脚本 luajit 语法通过。
+  注意：control 实例有约 220s 的寿命上限（防遗忘自杀），长验证中途会被掐，需要续命就重启。
+- 未完成：按键注入自动化（等 S7）；`world.loadScene` 的 spawn 只放 Player 一名实体。
+  下一步 R4（规模与定案）。
+
+## 2026-09-30 — R4：规模与定案
+
+- 目标与边界：64×64、3 层地图 + 20 NPC，量 profile 构建下的帧时间与 draw 数；
+  **只产出数据与决策记录，不改渲染**。完整数据、方法与复现命令见 `r4-measurements.md`。
+- 夹具：`Content/Scenes/TownLarge.scene.json`（64×64；Ground 4096 / Decor 776 / Overlay 241 格，
+  20 NPC + 玩家；5120 个 tile 候选 + 21 精灵候选），由 `Tools/make_scale_scene.py` 确定性生成
+  （`--size/--npcs/--out` 可造其它尺寸，用于斜率与对照）。
+- 测量手段：profile 构建 + runtime CPU trace（speedscope），帧根取 `iterate`（600 帧，跳前 60）；
+  分析脚本 `.agent/plan/rpg-prototype/measure_trace.py`（flat self 表 + inclusive 表 + 最热帧树）。
+  读数前提写进了记录：默认帧限速（120fps）会把小场景的绝对帧时间夹住，只有超出预算的场景
+  （TownLarge 10.56ms）帧时间可用；`Tick/FpsControl` 的 self 就是限速 sleep。
+- 数据（profile，ms/帧）：三点拟合 `recordFamily ≈ 1.14ms + 1.23µs × 候选数`
+  （700→1.77 / 1329→3.05 / 5134→7.41，残差 ±3%，点对点边际 1.15~2.04µs）；
+  窗口 1024×768→512×384（像素 1/4）帧只降 7%，`recordFamily` 不变、`Render/Frame` self 降 0.84ms
+  → 瓶颈是逐候选 CPU 录制而非填充；提取（5134 候选）0.10-0.15ms；Lua 0.015-0.04ms。
+- 决策（交 `scene-2d-world-and-game-ui`）：①合批/实例化**需要**且优先级最高（唯一随内容
+  线性增长的成本项，纹理高度集中）；②16 张纹理表当前不是约束，但每帧重建 + 逐候选线性查找
+  要随合批改成直接映射；③纯 2D View 绕开 Deferred 按正确性推进、不以性能为由（收益 ~1ms 级）；
+  ④tile 区块缓存现在不需要（提取是提交的 1/50，4× 面积再评估）。
+- 未决（已列交接）：`Render/Frame` 的 self 时间（4.3/5.0/2.9ms，与候选数不单调，疑似
+  `beginRecordedFrame` 的帧栅栏等待或 offscreen pump）在 CPU trace 里无法归因；draw 数是
+  按实现规则 + 场景数据推导（环境无 RenderDoc），长期量化建议加只读诊断计数走 automation。
+- 验证：`TownLarge` 在 profile 下跑通 600 帧 exit 0；测量脚本对三个夹具 + 尺寸对照共 4 条
+  trace 均可复现；测完已恢复原构建模式（debug）。
+- 未完成：B2（Lua 插件化与旧绑定收口，排在 game-ui S7 之后）。R0–R4 全部落地。
+
+## 2026-09-30 — 评审与双面 quad 修复
+
+- 评审（R0–R4 六个问题）写进 `review-2026-09-30.md`，未排期待办列在 `todo.md`；资源层每帧 resolve
+  另立计划 `../archive/resource-handle-events/`（已归档）。
+- 修复：共享 `EPrimitiveGeometry::Quad` 带正反两套绕序（`createFullscreenQuad` 12 个索引，背面给编辑器
+  放置的 Quad 网格用）。三个使用方设 `cullMode None`，每个像素画两遍：`Sprite2DStage`（半透明精灵
+  混合两次）、`LightStage`（延迟光照全屏 pass 片元开销翻倍，画面不变）、`ViewOverlayStage` billboard
+  （编辑器图标混合两次）。三处都改为剔除背面：从任意方向看恰有一套绕序朝前，仍双面可见、只画一次，
+  与视口 Y 翻转无关。几何不动。
+- 验证：ya-testing 1469 全过；HelloMaterial 前后截图逐像素一致（光照 pass 不混合，符合预期）；
+  2DRpgPrototype 前后截图仅物体轮廓差异（两次运行跟随相机约 1px 偏移，场景精灵均为 alpha 裁剪不透明）；
+  2DRpgPrototype 编辑器、GreedySnake 冒烟 exit 0。
+- 保留：GPU 侧收益未量化（环境无 GPU 计时）；半透明精灵的颜色修正没有现成场景可截图对照。
+
+## 2026-09-30 — `Render/Frame` 归因
+
+- 给 `RuntimeRenderContext::tick` 里没有 scope 的步骤补了 `YA_PROFILE_SCOPE`，
+  并在 `VulkanRender::beginRecordedFrame` 内拆出 `waitFrameFence` / `DeferredDeletionQueue::flush`；
+  在 `prepareDerivedState` 和 Terrain / GameplayBinding 两个处理器外包了 scope（资源计划 H1 的基线要用）。
+  误名 scope `RenderFrameExtractor::sceneSnapshot`（实际包的是 `prepareViews`）改名为 `Render/PrepareViews`，
+  真正的快照抽取加上 `Render/ExtractScenes`。
+- 结果（`r4-measurements.md` §7）：`Render/Frame` self 从 2.9–5ms 降到 0.006ms；TownLarge 上的主体是
+  `waitFrameFence` 2.18ms（CPU/GPU 串行，归 M4），`SubmitPresent` 0.52ms；资源准备 0.011ms/帧。
+- 验证：profile 构建 TownLarge / Town 600 帧 exit 0；已切回 debug；ya-testing 1469 全过；
+  HelloMaterial 运行时 / 编辑器、2DRpgPrototype 冒烟 exit 0。
+- 保留：MoltenVK 下 `tickGpuMs` 恒 0，GPU 时间只能由栅栏等待反推；`FPSControl` 与配置
+  `fpsLimit: 60` 对不上的现象未查。
+
+## 2026-10-02 — 清空 AssetManager frame task sink
+
+- `App::quit` 在 `TaskQueue::stop()` 之后调用 `AssetManager::setFrameTaskSink({})`。
+  stop 会 join worker 并丢掉尚未执行的主线程完成回调，异步加载此后不再投递；
+  清空排在 `onQuit` / 场景卸载 / `_deleter` 之前，App 仍然有效。之后的
+  `dispatchToGameThread` 走无 sink 的内联回落。
+- 没有把 sink 从文件静态改成 `AssetManager` 成员：管理器是 Meyers 单例，进程级寿命
+  比 App 更长，搬到成员上不结束对 `&app` 的捕获，真正的修复是对称清空。
+- `LinkageFramework::setFrameTaskSink` 安全，未改：sink 是实例成员，system 在
+  `quit` 的 `_deleter` 里销毁（此时 App 仍有效），且 `shutdown` 先置取消标志。
+  已入队的延迟任务不捕获 App。
+- 验证：`ya-resource-runtime-closure-test --gtest_filter=AssetManagerFrameTaskSink.*`
+  1 通过。
+- 偏离：无。`resource-leftovers.md` 已删掉这一条。
+
+## 2026-10-02 — 合并 callNamed 与 invoke
+
+- 只留 `LuaScriptingSystem::callNamed(instance, name, ScriptArgs, ENamedCallError)`，
+  返回第一个 `ScriptValue`。`ENamedCallError::Throw` 抛 `ScriptError`（`entity:call` /
+  `callEntityScript`）；`Swallow` 记日志并返回空值（`onShow` / `onHide`）。
+  “返回 true 表示已消费”由调用方自己看返回值。删掉 sol 参数版 `invoke`。
+  生命周期 `call(instance, ELuaScriptCallback, dt)` 未动。`ScriptApiRegistry::invoke`
+  与 `JSScriptingSystem::invoke` 未动。
+- 验证：`ya-testing --gtest_filter=LuaScriptHostTest.*:LuaEntityScriptCallTest.*:GameUIScriptTest.*`
+  27 通过，含 `NamedCallSwallowContainsTargetErrors`。
+- 偏离：无。
+
+## 2026-10-02 — 脚本 callMethod 接入编辑漏斗
+
+- `ScriptRefKind` 增加 `afterCall`，由 `script::callMethod` 在反射方法成功返回后调用。
+  只对非 const 方法触发；const 来自已有的 `Function::isConst()`（`Class::function` 对
+  `Ret (T::*)(Args...) const` 的重载，不是手工标注）。组件引用的 `afterCall` 与
+  `afterWrite` 走同一个 `notifyComponentEdited`。方法自己已做本地更新，不再补
+  `onPostSerialize`。原生方法没有 const 记录，不发通知（`entityAt` 是查询）。
+  Lua / JS 都走这一层。
+- 验证：`ya-testing --gtest_filter=LuaScriptBindingTest.*` 9 通过，含
+  `ComponentMethodCallRoutesThroughTheSceneEditFunnel`（`getPosition` 不通知，
+  `setPosition` 通知一次）；`ScriptBindingTest.*` 8 通过。
+- 偏离：无。`setModelPath` / `AssetRef::setPath` 没有 `YA_REFLECT_METHOD`，脚本
+  今天调不到它们；漏斗覆盖的是已经反射出来的非 const 方法。`resource-leftovers.md`
+  已删掉 callMethod 这一条。
+
+## 2026-10-02 — input.inject_key 与 R0–R3 按键自动化
+
+- 注入走平台键盘同一条路：`OsEventPump::emitKey` 造 `KeyPressedEvent` /
+  `KeyReleasedEvent`，命令里立刻 `App::dispatchEvent`（这一帧的 poll 已经结束，
+  排到下一轮 poll 的话脚本看不到）。`hold` 的抬起进 `enqueueKey`，由
+  `SdlEventSource::pollEvents` 在后续帧 poll 开头排空，和 SDL 事件共用 emit。
+  按下后同一帧 `wasKeyPressed`（Lua `isKeyPressed`）为真，`preUpdate` 之后为假，
+  `isKeyPressed`（Lua `isKeyDown`）保持到抬起。键名用已有的 `keyFromName`
+  （`Right` / `Space` / `W`），没有新表。
+- 命令：`input.inject_key`，参数 `{key, action: "down"|"up"|"hold", frames?}`。
+  `hold` 要求 `frames >= 1`：现在按下，过 `frames` 个逻辑帧在 poll 里抬起。
+  返回里带 `down` / `edge`，表示事件已经进了 `InputManager`。
+- 断言对话需要读挂载控件，现有命令做不到，加了 `ui.query {entry, widget?}`
+  → `{name, visible, text?}`。
+- 端到端（`python3 Script/ya.py control`，`--game`，Town 启动场景）：
+  `Script/automation/2d-rpg/walk_one_cell.py` 右走一格 `(0.5, 0.75) -> (1.5, 0.75)`；
+  `blocked_by_wall.py` 从 (16,10) 向下五格到 (16,5)，再向下被栅栏挡住，位置停在
+  `(0.5, -4.25)`；`dialogue_page.py` 走到 NPC 上方、面朝下、Space 打开对话并翻页，
+  正文从 `Welcome t` 变成 `Mind the fences`。三个脚本 exit 0。
+- 验证：`InputInjection.*` 1 通过；全量 `ya-testing` 1509 例、1508 过、1 跳过
+  （`RHISurfaceContext.ExtraWindowUnpresentableDoesNotBlockStartupWindowPresent`）；
+  GreedySnake 与 2DRpgPrototype `--exit-after-frame=120` 退出码 0。
+- 偏离：自动化 `scene.load` 会 `stopRuntime` 且不重新 `startRuntime`，脚本因此不 tick。
+  端到端不重载场景，用项目默认的 Town。`ui.query` 不在原步骤里，没有它断言不了对话正文。
+
+## 2026-10-02 — 合并 scene-2d-world-and-game-ui
+
+- 2D 世界只剩一条线：`scene-2d-world-and-game-ui` 归档到 `archive/`（归档理由 2：
+  被本线接管）；`P0-contract-matrix.md` 移到本目录。原线继续生效的约束收在
+  plan.md §9，四个未完成矩阵项映射到评审步骤 3 / 5（见 §9 表与 feature_matrix）。
+- 归属转移（plan.md §5）：命名调用原语、`input.inject_key` 归本线；game-ui S5/S7
+  仍定 `onKey` / `spawnSprite` / `ui.*` 的语义，但新形态注册在 B1 中立层；C3 只管
+  `call(ELuaScriptCallback)` 生命周期路径。
+- 偏离：无代码改动。
+
+## 2026-10-03 — 像素完美相机的高度是 View 设备像素
+
+`resolveCameraViewFraming` 的高度是该 View 的设备像素（`outputRect.extent` = 逻辑点 × `pixelDensity`）。2x 表面上整数 zoom 翻倍，一个 texel 占 `zoom` 个设备像素。脚本的 `viewSize` / `viewAspect` 仍是世界半宽高和宽高比，不改成像素。
+
+## 2026-10-03 — P0 契约冻结（评审步骤 3，只改文档）
+
+- 精灵之间的前后关系改为只用画家顺序：精灵对 3D 不透明深度只测不写，不透明与半透明走同一条混合管线。
+  依据是主流 2D 引擎（Unity 2D、Godot 4、Bevy）都是画家顺序，只有 Unreal Paper2D 靠深度；深度方案需要
+  `z = 基准 − y × ε` 约定，抗锯齿边缘的美术也会出问题。用户在三个方案里选了画家顺序。
+- 排序键 `(layer, ySortRank, yKey, order, tiebreak)`，y-sort 逐对象开关（`Sprite2DComponent` 与 tilemap 子层各一个，
+  tilemap 默认关）。比较函数只有一个，提取期排序与 2D 拾取共用。冻结在 `P0-contract-matrix.md` 的 C1–C5。
+- 保留：摆在矩阵开头的 owner 表作为 `pipeline_contract_audit` 的结论；`kTextureTableSize = 16` 与分批规则（不为合批打乱顺序）。
+- 偏离 / 未完成：纯 2D View 的 graph 策略用户选择先不定，等 `render-view-family` P3；混合场景的像素验收没有证据，
+  本步骤不写代码，已整理成步骤 5 的验收项。`2d-gameplay` skill 里的 z 约定仍然有效，到步骤 5 才删。
+
+## 2026-10-03 — Scene2D 模块（评审步骤 4，第一部分）
+
+- 新 target `ya-scene-2d`（`Framework/Scene/Scene2D`，公开头 `Scene2D/Sprite2DComponent.h`、`Scene2D/TilemapComponent.h`，
+  导出宏 `YA_SCENE_2D_API`）。依赖 `ya-scene-3d` / `ya-ecs-core` / `ya-ecs-systems`，不依赖渲染。
+  `ya-render-3d` 公开依赖它；`ya-engine` 聚合目标也加了。
+- `TilemapComponent.cpp` 拆三份：数据 + 编辑（`TilemapComponent.cpp`）、查询面（`TilemapQuery.cpp`，
+  世界矩阵经 `TransformSystem`）、tile 到 `WorldSpriteCandidate` 的展开（留在 render-3d：
+  `Render3D/Common/TilemapExtraction.{h,cpp}`，`TilemapExtractionInput` 与 `appendTilemapCandidates` 一起搬）。
+  行为没变，只搬代码和 include 路径；`ECS/Component/2D/` 下只剩 `BillboardComponent`。
+- 验证：`ya-testing` 1550 过、1 跳过（同前）；编辑器冒烟门禁（2DRpgPrototype）编辑态 78 fps、PIE 80 fps、字体构建 0；
+  `ya.py run` 2DRpgPrototype `--exit-after-frame=120` 退出码 0。
+- 偏离 / 未完成：`SpriteAnimation` 与 pivot 是步骤 4 的后两项，下一个 checkpoint；两个头里关于「不透明写深度」的
+  注释还是旧口径，随步骤 5 一起改，没有顺手动。
+
+## 2026-10-03 — SpriteAnimation（评审步骤 4，第二部分）
+
+- 设计由用户选定：组件自带 `columns × rows` 均匀网格（帧下标 = `row * columns + column`，行主序），不复用 Tileset 资产、不逐帧写
+  uvRect；时间由引擎系统推进，脚本只调 `anim:play(name)` / `setFrame` / `stop`。
+- `SpriteAnimationComponent`（`Scene2D`）：`columns / rows / clips[{name, frames, fps, bLoop}] / clip`（开局自动播的片段）；
+  运行态（片段下标、已播时间、是否在播）不序列化。只写同实体 `Sprite2DComponent.uvRect`，翻转、尺寸、tint 不碰。
+  `play` / `setFrame` 立即写 uvRect，因为系统在 Lua 之前跑，不立即写脚本要晚一帧才看到。同名片段正在播时 `play` 是空操作，
+  脚本可以每帧调。未知片段返回 false 并告警。
+- `SpriteAnimationSystem`：Simulation 组（游戏暂停时跟着停）；tick 策略只在 runtime / simulation 模式推进，因为 uvRect 要序列化，
+  编辑器里不能让动画改写正在编辑的场景。
+- Player 的走路循环（`WALK_COLUMNS` + `walkTime`）、Npc 转向、Chest 开合都改成按名播片段；`Actor.heroFrame` 和 Chest 的图集计算删除。
+  Town / House / TownLarge 场景加了组件；`Tools/make_scale_scene.py` 同步产出，重新生成会得到同样的组件。
+- 验证：`SpriteAnimationTest` 9 例（网格、立即写、未知片段、不重启、循环 / 一次性、setFrame、首帧启动、策略关闭时不推进、序列化往返）；
+  `ya-testing` 1559 过、1 跳过（同前）；新增 `Script/automation/2d-rpg/walk_animation.py`（站立朝下 → 右走循环三个列 → 松开站立朝右），
+  同目录三个旧脚本照样通过；编辑器冒烟门禁 83 / 84 fps，字体构建 0。
+- 偏离 / 未覆盖：House 里宝箱开合没有在 play 下端到端验证（`scene.load` 不重启 runtime，已知问题），只验证了场景载入后组件
+  数据正确；Inspector 里编辑 clips 没有目视确认。pivot 是步骤 4 最后一项，下一个 checkpoint。
+
+## 2026-10-03 — 步骤 4c P1：场景组件默认值省略
+
+- 起因：TownLarge 里每个 `Sprite2DComponent` 都写满 `image.samplerConfig / uvOffset / tint / flip / layer …`
+  等默认值；反序列化本来就只覆盖出现的字段，缺的保持构造默认值，所以不用改加载。
+- 机制（用户选定 json_prune）：`SceneSerializer::serializeEntity` 把组件的反射 JSON 与 `T{}` 的反射 JSON 递归对比，等于默认的不写。
+  对象递归（含 `__base__`），裁空且默认也是对象则删键，数组整体相等才删；组件键保留（全默认写 `{}`）；
+  `useReflectionSerialization()==false` 的组件（`LuaScriptComponent`）的自定义输出不裁剪。默认实例入口是
+  `IComponentOps::createDefaultInstance()`（`std::shared_ptr<void>`，不可默认构造返回空、不裁剪），默认 JSON 按类型缓存，
+  与实体走同一个 `serializeByRuntimeReflection`。
+- 代价：场景隐含依赖代码里的默认值，改默认值会改变旧场景（已写进 `scene-object-boundary` 第 10 条）。
+- 验证：`SceneSerializerDefaultsTest` 7 例（默认写 `{}`、只写被改字段与嵌套子键、往返、旧版全量 JSON 与稀疏 JSON 加载一致、
+  所有注册组件可默认构造、所有注册组件经 addComponent 创建后与 `T{}` 一致、Lua 自定义输出不裁剪）；
+  `CameraProjection.PixelPerfectFieldsRoundTrip` 改成断言默认值被省略；`ya-testing` 1574 ran / 1573 passed / 1 skipped（同前）。
+  估算：TownLarge 一个 Player Sprite2D 块 1037 → 约 569 字节。
+- 未完成：三个示例场景还没用引擎重存（并入 P2 的场景迁移，只重写一次）。
+
+## 2026-10-04 — 步骤 4c P2a：SpriteAnimationSet 资产与开闭的资产类型注册
+
+- 起因：新增一个资产类型要改约 14 个引擎文件（`AssetManager` 逐类型方法与聚合、`IAssetRefResolver` 纯虚函数、`isAssetRefType`、
+  `PropertyAccessor` 的 Failed 判断、`EEditorAssetPickerKind` 与两处 switch、`openXxxPicker`…），用户的游戏模块碰不到这些，不能自定义资产。
+- 做法：`Core/Common/AssetTypeRegistry`（描述：name / displayName / extensions / refType / resourceType / store）+ 类型擦除 `IAssetStore`
+  + `DocumentAssetRef<T>` + 通用 `AssetDocumentManager<T, Traits>`（从 Resource 挪到 Core，只依赖 Core 头）。Tileset 与 SpriteAnimationSet 是
+  两个实例，各在自己的 cpp 里一处 `registerDocument`；Texture / Model / Mesh 只登记描述（选择器扩展名），store 为空。`AssetManager` 的清理 /
+  collectUnused / unload / invalidate / 文件与 meta 变更遍历 registry；`IAssetRefResolver` 只剩贴图和模型；`AssetRefBase::getResolveState()` 虚函数取代类型判断；
+  选择器请求由描述生成，`EEditorAssetPickerKind`、`PropertyCapabilityRegistry`、`openTilesetPicker` 删除。
+- 验证：`ya-testing` 1585 ran / 1584 passed / 1 skipped（同前一个窗口用例）；`DocumentAssetOpenClosedTest` 在测试里定义玩具资产，只调注册函数就得到
+  共享槽、Failed、unload / invalidate / collectUnused / clearCache 聚合、`isAssetRefType`、选择器请求；Tileset 既有测试不变。
+- 未完成 / 偏离：Texture / Model / Mesh 仍走 resolver 与 AssetManager 的贴图模型链路；内容浏览器双击按后缀硬编码（`.scene.json` / `.lua` /
+  `.yaui.json` / `.mat`），P3 一起做成「扩展名 → 打开器」注册表；选择器配置 scope 由 `assetPickerDialog.texture` 变成 `assetPickerDialog.Texture`
+  （保存过的对话框位置会重置一次）。静态注册依赖该 cpp 被链接进来（静态库被丢弃时不会注册），游戏模块要保证。
+
+## 2026-10-04 — 步骤 4c P2b：SpriteAnimationComponent 改为引用 .yaanim.json
+
+- `SpriteAnimationComponent` 只存 `animation`（`SpriteAnimationSetRef`）和开局 `clip`；`columns / rows / clips` 删除，旧场景一次迁完，不做兼容读取。
+  运行态以片段**名字**为准，下标缓存绑定资产槽的 `generation`（并校验该下标的名字），热重载后按名字重新解析；资产未加载时 `advance` 不动、
+  `play` 返回 false，告警只打一次；Inspector 的 `onEdit` 清运行态。Lua 绑定和 `SpriteAnimationSystem` 没改。
+- 解析放宽：`fps` / `bLoop` 缺省用 8.0 / true（与默认值省略一致），写了但类型不对仍报错。
+- 示例：`Content/Animations/{Hero,Npc,Chest}.yaanim.json`（3×4 八段 / 3×4 四段 / 12×11 两段）；三个场景的动画块换成引用，其余字节不变
+  （Town 15931→15154，House 8602→7988，TownLarge 87294→82603）；`make_scale_scene.py` 产出引用；`2d-gameplay` skill 改成资产模型。
+  引用在场景里的形状是现有约定 `__base__/AssetRefBase/_path`，所以体积只小一点，真正的瘦身要等引擎重存场景后默认值省略生效。
+- 验证：`ya-testing` 1590 ran / 1589 passed / 1 skipped（同前）；`walk_one_cell` / `blocked_by_wall` / `dialogue_page` / `walk_animation` 四条通过；
+  编辑器冒烟 exit 0，编辑 72.5 fps、游玩 83.9 fps，字体构建 0。
+- 偏离 / 注意：已持有的 Ref 在 store `invalidate`（丢条目）后仍握旧槽，要 `rebind()`；同槽被 `registerAsset` 覆盖时 `generation` 递增、按名字重解析，
+  所以 P3 的编辑器保存应走覆盖同槽而不是 invalidate。场景尚未用引擎重存（默认值省略未落到文件）。
+
+## 2026-10-04 — Sprite2D pivot（评审步骤 4 最后一项）
+
+- `Sprite2DComponent::pivot`：归一化（0,0 左下，1,1 右上），默认 (0.5, 0.5)，缺字段的旧场景加载后居中不变。pivot 点落在实体位置，
+  也是 y-sort 点（P0 契约 C2）。`spriteQuadCenterOffset(sprite)` 返回 quad 中心相对实体的局部偏移，`RenderFrameExtractor::buildSpriteCandidate`
+  和 `RayCastMousePickingSystem` 共用；吸附仍吸附 quad 中心（示例偏移 0.25 = 4 texel，吸中心与吸 pivot 等价）。
+  Sprite2DStage / shader / tilemap / z 约定没动。
+- 示例：Player / Npc 用 pivot (0.5, 1/3)（1×1.5 精灵，底边落在格子底边），实体放在格子中心；`Player.lua` 的 `footLift` 与只为它存在的
+  `getSprite2D` 删除；Town 里 Player y 0.75→0.5；`rpg_control.FOOT_LIFT` 0.25→0.0；`make_scale_scene.py` 产出同样数据。
+  Chest / Sign / Door 保持居中。
+- 验证：7 个新单测；`ya-testing` 1590 ran / 1589 passed / 1 skipped（同前）；四条玩法脚本通过（走格 (0.5,0.5)→(1.5,0.5)，栅栏停在 (0.5,-4.5)）；
+  编辑器冒烟 81.6 / 83.8 fps、字体构建 0。截图：玩家世界位置不变，NPC 整体上移 0.25（脚从探出格子底边 0.25 收到底边上），
+  相机跟随实体 y 一并下移 0.25；玩家在 NPC 南北两侧时更靠南的画在前面。
+- 未验证：House / TownLarge 没有实际启动，门的换图没跑；场景里默认值还没裁剪（下一步用引擎重存）。
+
+## 2026-10-04 — 紧凑 JSON 输出 + 引擎重存示例场景（步骤 4c 收尾）
+
+- 第一次重存发现场景反而变大：`SceneSerializer::saveToFile` 用 `dump(4)`，每个数组元素独占一行（TownLarge tile 数组一数一行），
+  Town 15245→79275、TownLarge 84325→481608，抵消了默认值省略。该次结果未提交。
+- 新增 `Core/Common/JsonFormat.h/.cpp`：`dumpJsonCompactLeaves(json, indent=2, wrapColumn=100)`——对象逐键展开，全标量数组写一行、超列宽在元素间折行，
+  含容器的数组展开，键序沿用 nlohmann。接入 `SceneSerializer::saveToFile` 与 `serializeSpriteAnimationSetJson`；三份 `.yaanim.json` 按新格式重写，
+  `SpriteAnimationSetTest.ExampleDocumentsMatchSerializerBytes` 锁定逐字节一致。`AssetMeta.cpp` 的 `dump(4)` 未动。
+- 引擎 load→save 重存三个场景（runtime 停稳后）：Town 15245→13965，House 8034→6281，TownLarge 84325→73178。按实体 id 对齐比较 `changed=0`，
+  只剩：删默认值字段、新增 `version` / 空 `children` / `overrides`、`Content:`→`Content/`、~1e-6 浮点舍入；tile 单元格与实体 id 集合相同；
+  Town 的 TilemapGround 排到 `entities` 末尾。玩家位置、相机未变。
+- 验证：新增 7 个单测；`ya-testing` 1597 ran / 1596 passed / 1 skipped；四条玩法脚本通过；Town 前后截图 0 像素差；编辑器冒烟 editing 65.1 / play 43.1 fps。
+- 注意：Hero walk 的 `fps` 在文件里是 `8.33329963684082`（float 提升为 double 的写法），是序列化不动点，不影响语义。
+
+## 2026-10-04 — P3a 内容浏览器打开器注册表
+
+- 决策：动画集编辑页签的图集来源 = 资产里加可选 `atlas`（页签独立打开，没有实体上下文）；Godot 式切帧编辑器留作后续优化。P3 拆为 a 注册表 / b 页签 / c Inspector 面板。
+- `GameEditor/UI/Shell/EditorContentOpenerRegistry`：进程级表，key = 后缀（最长匹配、大小写不敏感、可省略前导点），value = `std::function<void(EditorLayer&, std::string)>`；
+  `get()` 首次使用时灌入内建打开器，之后同后缀覆盖、新后缀追加。`EditorContentBrowserTab::activateItem` 只剩目录进入 + `selectItem` + 注册表查找。
+- 验证：6 个新单测；`ya-testing` 1603 ran / 1602 passed / 1 skipped；`--editor-tab=content-browser` 冒烟 exit 0。
+- 未验证：没有在编辑器里真双击四类文件（打开调用原样搬入，单测只覆盖匹配）。行为差异：`Hero.LUA` 这类大写后缀现在也能打开。
+
+## 2026-10-04 — P3b 动画集编辑页签
+
+- `SpriteAnimationSet::atlas`（可选，编辑/预览用，运行时不读；空则序列化省略；非字符串报 `invalid field 'atlas'`）。Hero / Npc 填 `Content/Textures/hero_walk.png`，Chest 填 `tiny_town.png`。
+- `GameEditor/Animation/SpriteAnimationSetEditModel`：与 GUI 无关的编辑模型（工作副本、dirty、clip/frame/fps/loop/grid/atlas 编辑、校验 = `parse(serialize())`、revert、save）。
+  保存 = 序列化 → VFS 写文件 → `registerAsset` 覆盖同一 canonical 槽键（`Content/Animations/Hero.yaanim.json`），generation 递增，已持有的 Ref 热更新。
+- `EditorAnimationSetTab`（spawner `animation-set-editor`，独立 tool tab，未加 `EEditorDocumentKind`——现有四种是重型窗口根）：路径 / Save / Revert / 校验信息、图集网格 + 序号 + 点格追加帧、clip 列表与帧序列、fps / loop、预览播放（`addSprite` 的 uv 子矩形）。
+  `EditorLayer` 持有待打开路径；dirty 时拒绝切换另一份并提示，Save / Revert 后下一 tick 加载。`.yaanim.json` 经 `EditorContentOpenerRegistry` 注册；新增通用 `--open-asset <path>`。
+- 验证：新增 8 个测试；`ya-testing` 1611 ran / 1610 passed / 1 skipped；编辑器 `--open-asset` 冒烟 exit 0，Hero / Chest 页签截图可见网格、序号、clip 列表、预览；三份 `.yaanim.json` 运行后 diff 仅 atlas 一行。
+  为 unity 批次补了四处仅 include 的改动（`PropertyProjection.cpp`、`Sprite2DStage.cpp`、`PresentationGraphService.h`、`GUIWindowPresent.cpp`）。
+- 未在实机点过：点格追加帧并保存、播放/暂停、贴图选择器、dirty 时拒绝切换、关闭未保存无弹窗。侧栏窄时 Rows 与 Play 会被裁切。
+
+## 2026-10-04 — P3c SpriteAnimationComponent Inspector 面板
+
+- 命名：用户确认不重命名，保持 `SpriteAnimation*`（中途发起的 Frame* 重命名已取消并还原，未提交）。
+- `EditorComponentSectionRegistry`（GameEditor/Inspector）：组件类型 → 自定义 section 工厂；单选走工厂，多选可配置回退 `EditorAutoPropertySection` 或跳过。
+  `EditorInspectorTab` 不再有具体组件类型分支，Lua 脚本 section 迁入内建注册（行为不变，多选仍不画）。
+- `EditorSpriteAnimationSection`：动画集行（路径 / Browse / Show，类型来自 `AssetTypeRegistry`）+ Edit（打开动画集页签）；clip 下拉取自已加载动画集的 clips，写回走 undo / `onEdit`；
+  不在列表里的 clip 保留原文并提示，未加载时禁用不改值；Play / Stop + 只读状态行（clip、图集帧号、是否播放，`SpriteAnimationComponent::shownFrame()`）。
+- 预览方案：`SpriteAnimationSystem` 编辑态不推进，`uvRect` 是会序列化的反射字段。预览只在 section 内：Play 记下当前 `uvRect` → `play` → section tick 调 `advance`；Stop 或 section 销毁（换选中）时 `stop()` 并写回 `uvRect`；不标脏场景。
+- 验证：新增 5 个测试（含 `PreviewDoesNotChangeSerializedScene`）；`ya-testing` 1616 ran / 1615 passed / 1 skipped；四条玩法脚本通过；编辑器打开 Town 冒烟 exit 0。
+- 未验证：选中 Player 后的真实 Inspector（无编辑器 automation 可选中实体）、真实文件对话框、Edit 实机打开页签。
+
+## 2026-10-04 — 步骤 5a 画家顺序 + y-sort
+
+- 方案与切分（用户拍板）：5a 语义 → 5b 实例化 + 槽身份纹理表（只与 ScreenDrawList 共享纹理表和批游标，目标 TownLarge `recordFamily` self ≤ 1.5ms、三场景像素 0 差）→ 5c tilemap 静态实例缓冲。
+- C1：`Sprite2DStage` 单一管线（混合开，深度 `LessOrEqual` 只测不写，`a<0.01` discard 保留）；`bTranslucent` 删除；render graph 新增 `ERGPassResourceAccess::DepthReadOnly` / `RGDepthAttachmentDesc::bReadOnly`（layout 仍是 DepthStencilAttachmentOptimal，该 access 不算 writer）。
+- C2：`Scene2D/SpriteDrawOrder.h` 唯一比较函数 `(layer, ySortRank, yKey, order, entityId, sequence)`；提取与 `prepareView` `stable_sort`，拾取保留绘制更晚的命中。`Sprite2DComponent::bYSort`、`TilemapLayer::bYSort`、`TilemapLayer::layerOffset`（C2 增补，见 P0 矩阵）；排序点 = 实体世界位置（pivot，texel 吸附后），tile 取格子中心。
+- 删除 `Actor.lua` / `zFor`；Player / Npc / Sign 不再写 z；三个场景角色/家具 z 统一 0.1，Player/Npc/Sign/Chest `bYSort`，Overlay `layerOffset=1`，Door `sortOrder=1`；`make_scale_scene.py`、`2d-gameplay` skill 同步。
+- 验证：`ya-testing` 1626 ran / 1625 passed / 1 skipped（净增 10）；四条玩法脚本、编辑器冒烟 exit 0；House 与无精灵场景 0 像素差，Town 相机在第 40 帧偏 1 设备像素，对齐后 32 像素通道差 ≤ 1，TownLarge 热启动 0 差；
+  Player 走到 NPC 上方/下方各一张，屏幕更靠下者盖住更靠上者。
+- 未验证：立方体穿过精灵平面的 3D 交线截图；Overlay 盖住角色的实际交叠截图（Town 里树冠下方一格是实心，走不进去，只有 `TilemapExtractionTest.LayerOffsetAndYSortFeedThePainterKey` 覆盖）。
+
+## 2026-10-04 — SpriteAnimationSet 拥有贴图（atlas 运行时语义）
+
+- 问题（用户提出）：同一张图集在 `Sprite2DComponent::image`、`SpriteAnimationSet::atlas`（仅预览）、动画组件三处各写各的，运行时不一致也不报错。拍板「方案 1」：帧资源拥有贴图，动画组件驱动渲染器。
+- `atlas` 非空：显示帧时同时把同实体 `Sprite2DComponent::image` 的**路径**设为 atlas（不动 `samplerConfig`；路径和贴图槽 generation 都没变不重复 rebind）。`atlas` 为空：只写 `uvRect`，贴图用 Sprite2D 自己的（有意保留：同一布局可套多种皮肤）。
+- 一致性：不新增系统。加载 / 克隆走 `onPostSerialize`（动画组件与 Sprite2D 谁后到都会再套一次），Inspector 改动走 `onEdit`（先 reset 再套 clip 首帧），动画集热更新由已在 Simulation 组的 `SpriteAnimationSystem` 在编辑态也 `refreshDisplayedFrame`（只跳过 `advance`）。
+  `uvRect` 差值 ≤1e-4 视为相同不重写，避免场景文件因舍入变化。
+- 编辑器：动画面板在 atlas 非空时显示只读「贴图由动画集提供」，预览停止恢复路径与 `uvRect`；动画集页签空 atlas 文案改为「使用 Sprite2D 自己的贴图」。skills（2d-gameplay / resource-system / scene-object-boundary）同步。
+- 验证：新增 9 个测试；`ya-testing` 1635 ran / 1634 passed / 1 skipped；四条玩法脚本通过；编辑器 `--open-asset` 冒烟 exit 0；Town / House / TownLarge 前后截图字节相同；示例场景未改（实体 image 路径本就等于 atlas）。
+- 已知代价：被驱动的 `Sprite2D.image` 路径与 `uvRect` 仍写进场景（派生值）；空 atlas 不会把之前写上的路径改回去。序列化抑制留待后续。
+  `SpriteAnimationSystem.h` 里「policy 为假时不能写 uvRect」的注释已与 `.cpp` 不一致（该头是用户未提交文件，未改）。
+
+## 2026-10-04 — 步骤 5b-1 世界精灵实例化 + 槽身份纹理表
+
+- `Sprite2DStage` 改为按批实例化：一个共享 quad + 实例缓冲（`slang_types::Sprite2DWorld::SpriteInstance`，当时 80 字节（后改为 72，见下方债务条），worldCenter / textureIndex / axisX / axisY / uvRect / tint），顶点输入走 per-instance rate（RHI 新增 `EVertexInputRate`，Vulkan 映射 `VK_VERTEX_INPUT_RATE_INSTANCE`），
+  `textureIndex` 作 flat varying（与屏幕精灵一致，不需要 descriptor indexing）。批切片用顶点缓冲字节偏移，不用 `baseInstance`。
+- `Render2D/TextureTableBatch.h`：`TextureTableKey`（纹理 + image view + sampler；`fromTexture` 留给 5b-2）、`TextureTableCursor`（epoch 戳开放寻址，槽 0 白，满了返回空）、`planInstancedDraws`（纯 CPU，保持传入顺序，装不下就切批并在新表重映射）。
+  装不下的精灵不再被丢掉；容量 16 含槽 0，一批最多 15 张内容纹理；A B A 能放下时仍是一批。
+- 资源：实例缓冲是精灵阶段自己的 `FrameUploadArena`（只 VertexBuffer 用途），按 flight 保活、只增不减，增长在 `updateTextures`（录制前），销毁走 `DeferredDeletionQueue`；纹理描述符集按 flight 池，一批一个 set。
+- 度量（profile 构建，TownLarge，540 帧）：`recordFamily` self 7.516 → **0.425 ms**（目标 ≤1.5），`iterate` 12.162 → 8.382ms（顶到 120fps 上限），`SubmitPresent` 0.510 → 3.355（垂直同步等待记在 present 上）。
+- 验证：新增 8 个测试；`ya-testing` 1643 ran / 1642 passed / 1 skipped；四条玩法脚本、编辑器冒烟 exit 0；House / TownLarge / HelloMaterial / Player 在 NPC 上下两张与改前逐字节相同，Town 一次 1 设备像素跟随抖动，紧接着重截与改前相同；20 种纹理压力场景（/tmp，未入库）不丢精灵。
+- 债务 / 未验证：（`Sprite2DWorld.slang` 的 push-constant 绕路已由「Slang 生成器支持 `[YaVertexInput]` 顶点输入结构」取代：实例记录 72 字节，`SpriteInstanceFields` 驱动 `Sprite2DStage` 的实例属性，`vertexAttributeFormat` 在 `RHI/RenderDefines.h`；House / painter-order 截图相对改动前逐像素 0 差，43 个其他生成头不变；SPIR-V location = 参数基址 + 字段下标，所以字段不能直接写 3–8）；OpenGL 后端管线整文件仍注释，实例路径没有同步，仅 Vulkan/MoltenVK 实测；`backpack/normal.png`（4096²）在截图帧不可绘制，疑为异步加载未就绪，未深究。
+
+## 2026-10-04 — 步骤 5b-2 ScreenDrawList 迁移到共享纹理表
+
+- 删除：`ScreenDrawList` 无上限 `unordered_map<const Texture*, uint32_t>`，录制器的 `findOrAddTexture` / `resetTextureBatch` / `textureTableFull` / `_texturePtr2Idx` / `_lastPushTextureSlot`，`ScreenDraw.cpp` 手写的 `placeTriangle` 切批循环。
+- `TextureTableBatch.h` 新增 `planScreenDrawRemap`（+ `ScreenDrawCommandSpan` / `ScreenDrawBatchRange` / `ScreenDrawRemap`）：整段 command 的切批、顶点去重与批内索引；`TextureTableCursor` 与世界精灵的 `planInstancedDraws` 未变。
+  CPU 目录用同一游标（容量 `1<<20`），16 槽切批留在录制时（command 仍只在 clip 变化和 `seal()` 时关闭，避免改 `ScreenDrawListTest` 与 clip 快照）。
+- 语义差异：CPU `vertex.textureSlot` 现在槽 0 固定是 null/白、第一张实纹理是槽 1（旧 map 首张在槽 0）；只有录制器读该字段并按键重映射，GPU 顺序仍是首次出现顺序。切批点（clip、顶点/索引容量、表满、未映射的 null 在表满时仍切批）与迁移前一致；描述符集仅在 `catalogSlots` 变化时重写。
+- 验证：新增 9 个测试（切批期望按旧录制器算法写死，没有重跑旧二进制取数）；`ya-testing` 1652 ran / 1651 passed / 1 skipped；四条玩法脚本、编辑器冒烟 exit 0；
+  像素对照 GUIWorkbench / GreedySnake / RPG 编辑器（含动画集页签）/ 对话框页 0 差；HelloMaterial 编辑器 149 像素，仅 Stats 面板帧号末位。
+- 未验证：屏幕录制 CPU 耗时（没有现成度量）；OpenGL 屏幕路径。
+
+## 2026-10-04 — 步骤 5c 度量：推迟 tilemap 静态实例缓冲
+
+- 度量（profile 构建，TownLarge，540 帧均值，trace `/tmp/r5c_townlarge.json`，临时 profile scope 已还原）：tile 展开 0.054 + 精灵候选 0.001 + texel 吸附 0.009 + 排序 0.117（快照 0.084 + 视图 0.032）+ 视图桶 0.009 + 批规划/写入/描述符 0.048 + 录制 draw 0.008 = **0.245 ms/帧**（占整帧 3%）。
+  整帧 `iterate` 8.238ms 顶着 120fps 上限：`waitFrameFence` 5.830（71%）、`SubmitPresent` 1.143、`Tick/FpsControl` 0.529。5134 实例 × 80B = 401KiB/帧，上传 0.006ms。
+- 外推：256×256×3 全满 196608 实例，线性约 9.4ms CPU / 15MiB 上传；视口约看到全图 7% 量级的 tile。**地图变大时先要视口裁剪**（`bHasVisibleRange` 现在没开，全图展开），静态全图缓冲只是把成本挪到顶点阶段。
+- 失效核实：没有 tilemap generation；抽取每帧重读组件所以现在不需要信号。若做缓存需重建的触发：`setCell`/`fillRect`/`resize`/`onEdit`、撤销重做（已走 `notifyComponentEdited`）、Inspector 属性（已走漏斗）、tileset/atlas 热更新、实体 Transform/父节点、`pixelsPerUnit`、场景加载与克隆；
+  texel 吸附打在世界坐标上、不依赖相机位置，但与矩阵 uniform 不可交换（TownLarge 开了 pixel-perfect，uniform 替代不了重建）；笔刷正向笔画只调 `setCell`/`fillRect` 不发 `notifyComponentEdited`，做缓存时应在笔画结束补发现有信号。
+- 画家顺序兼容：未开 `bYSort` 的子层整层可作一个排序单元（别的实体 `entityId` 不同，不会插进层内序列），两层之间要给 `order` 落在其间的精灵留位；开了 `bYSort` 的层必须走动态路径。
+- 决策：推迟 5c；写入 `todo.md` 的触发条件（≥2 万实例或 256² 地图时先做视口裁剪）。
+
+## 2026-10-04 — 自动化 `scene.load` 保持运行模式
+
+- 根因：`scene.load` 与编辑器打开场景共用 `App::loadSceneInternal`，它在 Runtime / Simulation 下 `stopRuntime` / `stopSimulation` 后换场景、不再启动；纯 runtime 的 `--scene=` 是“加载完再 `startRuntime`”，所以已在 play 时再 `scene.load` 就停在编辑态，脚本不 tick。
+- 修复放在命令层：`scene.load` 改走 `App::loadSceneKeepingRunMode`（捕获调用前 `AppState`，加载后回到该模式；是重新开局，不是 `world.loadScene` 的同局转移）；`AppSceneServices::loadScene`（编辑器双击 / `cmdLoadScene` / `cmdOpenScene` / `openProject`）仍停在编辑态。没有给共享加载函数加布尔参数。
+- 验证：新增 5 个无 GPU 用例（`AppLifecycleTest`）；`ya-testing` 1657 ran / 1656 passed / 1 skipped；四条玩法脚本 + 新 `scene_load_ticks.py`（House 从 (5.5, 4.5) 走到 (6.5, 4.5)；TownLarge 靠朝向换帧证明脚本在 tick）；编辑器宿主 `scene.load` 仍停在编辑态，play 中再 `scene.load` 日志为 stop → 加载 → start。
+- 发现：TownLarge 出生点在地图外一格，已记入 todo。编辑器 play 内注入方向键不会让玩家走格（编辑器输入路径吃掉按键），编辑器侧只验证到“重新 start”和 FollowCamera 生效。
+
+## 2026-10-04 — 5a 视觉验收补齐
+
+- 新增 `Script/automation/2d-rpg/painter_order_visual.py`（runtime 宿主，/tmp 混合场景 + API 创建的 StaticMesh Cube / Unlit / Sprite2D，不入库场景资产），带像素断言：
+  立方体绕 Y 转 45° 穿过精灵平面，中心立方体挡住精灵、两翼精灵盖住立方体、精灵外侧无立方体（精灵只测不写深度）；同位置红蓝精灵调换 z 画面像素差 0，调换 `sortOrder` 顶色变化（153660 像素）；
+  Town 第一棵树（树冠格 (8,7)，树干格 (8,6)）：Player 放到树干中心，Overlay 树冠盖住角色头部，Decor 树干在角色之下（canopy 重叠 0/49 差、trunk 49/49 差、角色可见差 y∈[-3.991,-2.938] 止于树冠下沿 -3.0）。
+- 结论：5a 没有发现缺陷。编辑器 play 内需先点 viewport 才路由输入（已写入 `2d-gameplay` skill）；编辑器宿主下的这条验收未跑。
+
+## 2026-10-05 — TownLarge 出生点修复
+
+- 根因：`make_scale_scene.py` 把格子下标当世界坐标。tilemap 原点 (-32,-32)、64×64，中心格 (32,32) 的格心世界坐标是 (0.5,0.5)，原写 (32.5,32.5) 落在地图外一格；相机、NPC 同一错误。改为 `cell_world(cell, z)`，NPC 额外跳过 tileset `solid` 格（Npc3 原目标是树，沿原步进挪到 (12,24)）。
+- `scene_load_ticks.py` 的 TownLarge 一步由“只换朝向”改为从 (0.5,0.5) 真实走到 (1.5,0.5)（实测停在 (1.4375,0.5)，在 `rpg.step` 容差内）。
+- 场景只含这件事的变化（44 处 xy，z 不变）；空容器省略与重存另见下一条。
+
+## 2026-10-05 — 场景省略空容器
+
+- 实体本身不写 `children` / `overrides`；会写出的空容器只剩两处：相机节点滤掉 companion 后的 `children: []`，和每个 widget 条目的 `overrides: {}`。缺键与空容器加载结果相同（测试按“保存→加载→重存逐字相等”断言），有真实子节点 / 字段覆盖时仍写出。保留不删：文件级 `version`、`{}` 的组件键、`rootSlot` 各字段、Lua 空 `scripts` 数组。
+- Town / House / TownLarge 用引擎重存，各少 47 字节（Town 14046、House 6309、TownLarge 73715）；帧 480 截图相对重存前 0 差。
+- 同批：`AssetMeta::saveToFile` 改走 `dumpJsonCompactLeaves`（旧 `dump(4)` 文本仍可读；仓库里没有 `.ya-meta.json`）。
+- 验证：`ya-testing` 1662 ran / 1661 passed / 1 skipped。
+
+## 2026-10-05 — 按格移动抽成引擎 Lua 库
+
+- `Engine/Content/Lua/GridMover.lua`（`Class.define("GridMover")`，构造用 `GridMover:new(entity, {map, stepSeconds, texelsPerUnit, facing})`）：步进、缓动、texel 吸附、碰撞（isSolid / entityAt / blocksEntry）、到达触发 `onPlayerEnter`、对话冻结。库内没有动画、实体名、地图名、按键；`update(dt, direction)` 返回这一帧是否在走。
+- `Player.lua` 只读键、对话冻结、确认键交互，并按 `update` 返回值选 `idle_/walk_<facing>` clip。Npc / Chest / Door / Sign 的朝向与阻挡是各自的交互回答，不收进库。
+- 验证：`luajit Engine/Test/Lua/GridMoverTest.lua`（8 用例 47 断言，独立 LuaJIT 脚本，未接入 gtest）；`Script/automation/2d-rpg/` 六条脚本脚本未改、全部通过。
+
+## 2026-10-05 — B2-1 脚本属性值改成 ScriptValue
+
+- `LuaScriptProperty::value` / `propertyOverrides` 从 `std::any` 换成 `script::ScriptValue`（int→int64_t，float→double，向量同类型，空→monostate）；`LuaScriptComponent.h` 序列化阶梯与 `EditorLuaScriptSection` 的 `anyAs` 随之替换。场景 JSON 每个值的编码与旧阶梯逐值一致（`PropertyOverrideJsonMatchesLegacyEncoding`），现有场景未改。
+- 设计与拍板结果见 `B2-lua-backend-split.md` §8（含 `world.scriptOf` 直调面并入 B2-6）。
+- 验证：LuaScriptComponentLifetime / SceneSerializerDefaults / EditorComponent / ScriptBinding / LuaScript / LuaEntity / GameUIScript / TickOrder / SceneTransfer / ScriptApi 共 102 个测试通过。
+
+## 2026-10-05 — B2-2 玩法脚本函数不再经 App::get()
+
+- `GameplayScriptContext`（activeScene / presentedPixels / requestSceneTransfer / inputRouter）由 `AppLifecycle` 构造并注入 `registerGameplayScriptFunctions` 与 `bindGameplayLua`；`find` / `viewSize` / `loadScene` / `spawnSprite` / `destroyEntity` / `setKeyHandler` 的 5 处 `App::get()` 去掉。`viewAspect` 与 `viewSize` 共用 `gameplayPresentedView`，`gameplayViewAspect()` 删除。退出时 deleter 清空捕获。`spawnSprite` 探针图与 `setKeyHandler` 回调语义冻结不变。
+- 仍有 `App::get()`：`AppLifecycle.cpp` 里 `RayCastMousePickingSystem` 的应用状态（非脚本函数，不在 B2 范围）。`entityAt` 不用 context。
+- 验证：`ya-testing` 1663 ran / 1662 passed / 1 skipped；2D 自动化六条 + `property_override.py` 通过；GreedySnake / 2DRpgPrototype 120 帧冒烟退出码 0。
+
+## 2026-10-05 — 脚本侧去硬编码（属性覆盖）
+
+- 地图名、相机跟随目标、对话框名改成脚本属性（`self:properties`，场景 `propertyOverrides` 覆盖）：`Player.mapName` / `dialogueName`，`FollowCamera.targetName` / `mapName`，`Npc` / `Chest` / `Sign` 的 `dialogueName`；默认值等于原常量，Town / House / TownLarge 不改。
+- 新增 `PropertyOverride.scene.json` 与 `Script/automation/2d-rpg/property_override.py`：地图/角色/对话框改名后角色仍能走、相机仍夹边、对话仍锁移动。
+- 仍硬编码：C++ `placePlayerAtSpawn` 按名 "Player"、`spawnSprite` 贴图、方向键/确认键（等 InputMap）、`Npc.lua` 的 `world.find("Player")`。
+
+## 2026-10-05 — C++ 侧去硬编码
+
+- `world.loadScene(path[, spawnName[, actorName]])`：落点实体名由调用方传入，`placePlayerAtSpawn(scene, spawnName, actorName)` 不再写死 "Player"；名字随 `requestSceneTransfer` 带到帧尾。空 `actorName` 不移动任何人。Door 的脚本属性 `actorName` 默认 "Player"，现有场景不改。不用相机 `targetName`：落点发生在脚本加载之前，属性默认值那时只在 Lua 源里。
+- `world.spawnSprite(name[, texturePath])`：缺省/空串仍用探针图，路径走 `TextureSlot::fromPath`。
+- 验证：SceneTransfer / GameUIScript 新增用例；全量 ya-testing 1672 ran / 1671 passed / 1 skipped；2D 自动化七条、两个 120 帧冒烟通过。
+
+## 2026-10-05 — 最小 InputMap（命名动作）
+
+- `.yaproject` 的 `inputMap` 指向项目内一份 JSON（动作名 → 按键名数组，任一键成立；路径走 `FProjectDescriptor::resolvePath`）。2D RPG 原型：`Example/2DRpgPrototype/InputMap.json`（move_up/down/left/right、confirm），默认键位与原硬编码相同。Lua：`input:isActionDown` / `input:isActionPressed`（按下沿）。缺文件 / 坏文件 / 缺动作：告警并返回 false，未知动作名只告警一次；没写 `inputMap` 的项目沿用 `inputActions` 或内置键位。
+- 顺带修：`InputManager::init()` 原来在描述符应用之后把动作表刷回内置键位，自定义表在 runtime 里不生效；现在不覆盖已装好的表。
+- `Player.lua` / `Dialogue.lua` 删掉键表，改查动作。不做：运行时重绑、手柄、UI 面板、组合键。
+- 验证：`InputMapTest` 6 个；全量 ya-testing 1672 ran / 1671 passed / 1 skipped；2D 自动化七条通过。
+
+## 2026-10-05 — B2-3 侧表：公开实例头去掉 sol
+
+- 活的 `self` 表、回调、`LuaListenerScope` 从 `LuaScriptInstance` 挪进 `LuaScriptingSystem.cpp` 的侧表（`(lua_State*, runtimeId)` 索引；id 进程内递增不复用）。`LuaScriptInstance.h` 不再 include sol；属性捕获 / 覆盖写回改为自由函数；`LuaScriptComponent::releaseLuaHandles` 按 `runtimeId` 摘表。`LuaWidgetScripts` / `EditorLuaPreview` / `EditorLuaScriptSection` 随之改读侧表。
+- 契约保持：热重载保持同一 `runtimeId` 但换整张 `self`；计时器仍用 `lua_rawequal(selfOf(id), owner)` 判断是否该停（设计文档原写「旧 id 一释放就停」不成立，热重载不换 id）；`ui.get` 推回的仍是同一张 Lua 表。
+- 过渡形态（B2-4 收掉）：侧表是 `LuaScriptingSystem.cpp` 里的三张进程级静态表；`LuaScriptingSystem.h` 仍 include sol，`rg` 验收还不会绿。
+- 验证：脚本过滤 96 个通过；全量 ya-testing 1672 ran / 1671 passed / 1 skipped；GreedySnake / 2DRpgPrototype 120 帧、编辑器 30 帧冒烟；2D 自动化七条通过。
+
+## 2026-10-05 — B2-4 Lua 后端拆成 `ya-script-lua`
+
+- 新 target `ya-script-lua`（`Engine/Source/Framework/Script/Lua/`，公开路径 `Script/Lua/...`，不进 `ya-engine` 聚合）。搬入 `LuaScriptingSystem` / `LuaScriptBinding` / `LuaEvent`、`LuaScriptLive.cpp`（原 `LuaScriptInstance.cpp` 的 sol 捕获）、`ScriptPropertyPreview.cpp`（原 `EditorLuaPreview`）。ECS 只留无 sol 的 `ScriptInstance.h` 与 `ScriptPropertyPreview.h`；`ya-ecs-systems` / `ya-engine` 不再带 `sol2` / `lua` 包；`ya-game-editor` 不链接新 target，检查器经 ECS 侧预览指针取属性（指针为空则不画属性行）。
+- B2-3 的三张进程级静态表收进 `LuaScriptingSystem::_instances`（成员排在 `sol::state` 之后）；按 id 丢表没有系统指针，所以 Lua DLL 里留一张不含 sol 的 id → 系统裸指针注册表。测试入口 `Script/Lua/LuaTesting.h`。
+- `rg -n "sol/|sol::" Engine/Source --glob '!**/Script/Lua/**'` 现在只剩 `GameplayLua.cpp`、`LuaWidgetHandle.*`、`LuaWidgetScripts.*`（B2-6/B2-7）。`ya-game-runtime` 仍暂时依赖 `ya-script-lua`（B2-5 拆）；`installLuaScriptBackend` 未做。
+- 验证：脚本过滤 96 个通过；全量 ya-testing 1672 ran / 1671 passed / 1 skipped（`GUIWindowManagerTest.IsolatesPointerFocusCaptureTooltipDpiAndSnapshot` 在约 22 次运行里出现 2 次失败、其余通过，与 Lua 无关，未定位）；GreedySnake / 2DRpgPrototype 120 帧、编辑器 30 帧冒烟；2D 自动化七条通过。
+
+## 2026-10-05 — B2-5 GameRuntime 经中立接口持有脚本运行时
+
+- `App` 只持有 `IWorldScriptRuntime*`（`ECS/Systems/WorldScriptRuntime.h`），由 `createWorldScriptRuntime()` 工厂创建；工厂未安装时 `YA_CORE_ERROR` 并继续无脚本模式。`installLuaScriptBackend()`（`Script/Lua/LuaBackend.h`）登记工厂与进程级属性预览，只从 `YARuntime/Entry.cpp` 与测试 runner 调用。
+- `ScriptValue` 加三个臂：`ScriptFnHandle`、`ScriptSelfHandle`（推回活的 self 表）、`ScriptRect`；JS 的 `toJs` 对三臂抛 "not projected to JS"，`fromJs` 不产生。`ScriptBindings` 加 `addNativeField` / `addScriptBase` / `setScriptTypeName` / `ScriptRefKind::missingIsNil`（今天的控件仍走 sol，B2-7 才用上）。
+- 边界结论：`GameplayLua.cpp` / `LuaWidget*` 按文档留在 GameRuntime 并仍含 sol（它们依赖 App / gui-widgets，`ya-script-lua` 不能依赖这些），所以 `ya-game-runtime` 的 `sol2` / `lua` 包与对 `ya-script-lua` 的依赖到 B2-6/B2-7 之后才能去；`bindGameplayLua` 参数已是接口，函数体内 `dynamic_cast` 回具体类型（过渡）。`ya-render-3d` 去掉未使用的 `sol2`；`ya-runtime` 加 `ya-script-lua`。
+- 提醒 B2-7：登记控件 `valid` 时，`missingIsNil` 的短路会让所有读变 nil，而今天 `valid` 在控件已摘掉时返回 false，要保持。
+- 验证：脚本过滤 96 个通过；全量 ya-testing 1672 ran / 1671 passed / 1 skipped；GreedySnake / 2DRpgPrototype 120 帧、编辑器 30 帧冒烟；2D 自动化七条通过。
+
+## 2026-10-05 — B2-6/B2-7 手写 sol 收口，GameRuntime 不再含 sol
+
+- 合并为一个提交：B2-6 的 `ui.get` 要用 B2-7 的 `widgetScriptRef` / `scriptSelfOf`，单独提交 B2-6 过不了编译。
+- B2-6：`world.spawnSprite` / `destroyEntity` / `viewAspect` / `scriptOf`、`Input.setKeyHandler`、`ui.get` / `setText` / `setVisible` 全走 `registerModuleFunction`。`world.scriptOf(entity[, path])` 经 `ScriptSelfHandle` 返回目标脚本的活 `self`（无脚本 / 路径对不上为 nil，返回前重绑 `self.entity`）。`GridMover` 的 `blocksEntry` / `onPlayerEnter`、`Player.lua` 的 `onInteract` 由 `:call("...")` 转发改为 `scriptOf` 直调，写错方法名当场 `attempt to call`。`Input` usertype 会盖掉投影表，所以 `bindGameplayLua` 保留，用来在 init 之后装回 `setKeyHandler`；函数体已无 `dynamic_cast`、无 sol。
+- B2-7：`LuaWidgetHandle` / `LuaWidgetScripts` 改为 `ScriptRef` + 原生字段/方法，引用表在 `WidgetScriptRefs.cpp`；`ILuaScriptHost::bindSelf` 换成 `IScriptInstanceHost::contributeSelf`；`TLuaEvent` / `LuaListenerScope` / `makeLuaEvent` 无调用方已删。`missingIsNil` 下原生 `valid` 仍对已摘掉的控件返回 false。
+- 入口脚本未加载前，`ui.get` 返回控件 `ScriptRef`，读未知字段会报错，所以 `Player.lua` 先判 `type(dialogue) == "table"` 再问 `busy`。
+- `ya-game-runtime` 的 xmake 去掉 `lua` / `sol2` 包，保留对 `ya-script-lua` 的依赖（只用无 sol 的 `LuaBackend.h` / `ScriptInstanceOps.h`）。`rg -n "sol/|sol::" Engine/Source --glob '!**/Script/Lua/**'` 无命中。
+- 遗留：`LuaScriptBinding.cpp` 的 `MethodCall::arguments` 把无法跨界的普通表参数吞成 nil（为保住 `ListenersEndWithTheirScriptInstance` 里 `add({}, fn)` 返回 0 的契约），语义偏宽，之后应改成只针对 owner 参数；`LuaScriptBinding.cpp` 有一行旧注释仍提 `bindSelf`。
+- 验证：全量 ya-testing 1677 ran / 1676 passed / 1 skipped（5 个 `ScriptOf*` 新增）；`luajit Engine/Test/Lua/GridMoverTest.lua` 47 个断言；GreedySnake / 2DRpgPrototype 120 帧、编辑器 30 帧冒烟；2D 自动化七条通过（`walk_one_cell` worker 侧首跑超时一次，我这边一次通过）。
+
+## 2026-10-10 — 对话逐字留在脚本
+
+- 文本控件不长 reveal，也不单做打字机控件。`Dialogue.lua` 把当前页按 UTF-8 码点截成前缀，写进 `Body.text`。正文左对齐、槽位尺寸固定，贪心折行时已经排满的行保持不动。
+- 脚本状态没有 `utf8` 库，码点边界在 Lua 里按首字节走。确认键直接写上整页。
+
+## 2026-10-10 — 相机跟随留在脚本
+
+- 指数平滑和地图夹取继续由 `FollowCamera.lua` 做。像素缩放、吸附仍在 `CameraComponent`。不单做跟随组件或系统。
+- Town / House / TownLarge 的相机挂这份脚本，默认目标 `Player`、地图 `TilemapGround`。PropertyOverride 用脚本属性把目标和地图改成 `Hero` / `WalkMap`。
+- 验证：四张 RPG 场景回到脚本挂载后，`ReflectionSceneResave.TrackedScenesMatchBaseline` 通过。
+
+## 2026-10-10 — 存档 / 读档
+
+- 目标与边界：一局能写到磁盘再读回来。文件只记场景路径和 `Persist`。要留下的状态由脚本在 `onSave` 里写进 `Persist`。引擎不扫描实体位置。不存整份场景副本，也不做背包或存档界面。
+- `world.save(path)` 先对已加载的世界脚本调 `onSave`，再立刻写文件。`world.load(path)` 排到帧尾：停脚本、按存档里的场景路径加载（不放出生点）、换上 `Persist`。下一帧 `onInit` 时 `world.saveRestored()` 为真。场景转移不置这个标志，出生点仍然有效。同一帧后到的 `loadScene` 或 `load` 覆盖先到的。退出 play 仍然清空内存里的 `Persist`，文件还在。
+- `Player.lua` 的 `onSave` 记下当前格子和朝向；`onInit` 只在读档后的那一帧把人放回去。宝箱仍是交互时写 `Persist.opened`，`onInit` 套外观。
+- 验证：`SceneTransferTest.SaveRestoresPersistOnly` 通过。玩家被挪到 `(9, 9)` 不会进文件；`Persist.opened.Pot` 和 `Persist.player` 读档后还在，场景里的坐标回到文件里的 `(1, 1)`。同组其余 6 个转移测试仍通过。
+
+## 2026-10-10 — 对话分支
+
+- 目标与边界：对话框按页数据跳转。一页可以带 `choices`，选中项的 `next` 是另一页的键。不改文本控件，也不做背包、任务、商店。
+- `say` 仍接受字符串数组。具名稿用 `start` 指出第一页。数组页没有 `next` 就顺序往后；具名页没有 `next` 就关上。选项画在正文下面，`>` 标出当前项。Up / Down 移动，确认选中。逐字还没完时，确认只补全本页。
+- 村民的第二页有「井在哪」和「再见」。前者跳到井的那一句，后者关上。
+- 验证：`dialogue_page.py` exit 0。第一页仍是 Welcome，第二页出现 `> Where is the well?`，确认后正文是 `The well is north of the square.`
+
+## 2026-10-10 — 背包
+
+- 目标与边界：只存玩家拿到的物品。名字在 `Items.lua` 的目录里，数量在 `Persist.items`。面板列出这些数量。不做任务、商店，也不做格子拖拽。
+- `I` 开关 `Inventory` 条目。面板藏着时不进控件 tick，所以用 `every` 听按键。对话框开着时不切换。箱子第一次打开给 `brass_key` 一把，并仍用 `Persist.opened` 记住盖子。
+- 验证：`inventory.py` exit 0。房子里打开罐子后，`I` 列出 `Brass Key x1`。四张 RPG 场景挂上 `Inventory` 条目后，`ReflectionSceneResave.TrackedScenesMatchBaseline` 的重存哈希已换。
+
+## 2026-10-10 — 任务
+
+- 目标与边界：只记玩家接过的任务。文案在 `Quests.lua` 的目录里，状态在 `Persist.quests`（`active` / `done`）。面板列出这些状态。不做商店，也不做多步目标链。
+- `J` 开关 `Journal` 条目。面板藏着时不进控件 tick，所以用 `every` 听按键。对话框开着时不切换。村民选「What's in the house?」时 `onShow` 接上 `pot`。罐子第一次打开把它记成 `done`，没接过也记。
+- 验证：`quest.py` exit 0。城镇里接任务后，`J` 列出进行中的 `The storage pot`。`scene.load` 清掉 `Persist` 之后，打开罐子，`J` 列出同一条的完成句。`dialogue_page.py` 仍走到井的那一句。四张 RPG 场景挂上 `Journal` 条目后，重存哈希已换。
+
+## 2026-10-10 — 面板按内容长高
+
+- 目标与边界：对话框第三个选项不再被固定高度裁掉。背包和任务日志不再是铺满视口的一条黑底文字。不改对话数据，也不做商店。
+- `UIText` 的固有高度按换行计数。三张卡片都是边框里的纵向容器，高度跟正文走。背包靠右上，日志靠左上，对话框靠底部并且限宽。
+- 验证：`WidgetLayoutTest.NewlineRaisesTextHeightByALine`。`dialogue_page.py` 在三个选项都写进正文时，正文高度至少 96。`inventory.py` 与 `quest.py` 仍通过。
+
+## 2026-10-10 — 任务提示
+
+- 目标与边界：接取和完成各出现一次短提示。不锁移动，也不做商店。
+- `Quests.start` / `complete` 只在状态真的变化时叫 `QuestNotice:show`。横幅在顶部中间，2.5 秒后隐藏。
+- 验证：`quest.py` 在接上 `pot` 时看到 `Quest accepted`，打开罐子时看到 `Quest complete`。四张 RPG 场景挂上这个条目后，重存哈希已换。
+
+## 2026-10-10 — 任务折行，选项在右侧
+
+- 目标与边界：任务长句不再被卡片裁掉。选项在这一页打开时就出现，排在对话框右侧，不写进正文下面。不做商店。
+- 日志正文按 `_maxWrapWidth` 折行，卡片跟着长高。对话框是左正文、右 `Choice1`..`Choice4`。打字机只填左侧。
+- 验证：`WidgetLayoutTest.EmptyTextTakesNoSpace`。`dialogue_page.py` 在正文还没打完时就能看到右侧三个选项，打完后再确认走进井的那一句。`quest.py` 与 `inventory.py` 仍通过。
+
+## 2026-10-11 — 商店和井的结局
+
+- 目标与边界：补上商店，并把城镇、房子、回城、结局接成一条能玩通的流程。不新做迷宫图，也不做纯 2D View（G2.6，等 render-view-family）和 tilemap 静态缓冲（G2.7，触发条件未到）。
+- 硬币和护符进 `Items` 目录。`Shop.buy` 花 3 枚硬币卖出护符，已经有的不再卖。商人对话框成交，并接上 `well`。井在身上有护符时完成这条任务。罐子同时给出钥匙和 5 枚硬币。
+- 验证：`playthrough.py` 先在摊位听到钱不够，再从房子带回硬币，买到护符，井上看到结局。`dialogue_page.py`、`quest.py`、`inventory.py` 仍通过。Town 重存哈希换成 `b72b685af319a8ed`。
+- 打包：shader 名字现在写在 `Framework/Render`，扫描目录还指着旧的 `Engine/Source/Render`，包里没有 slang，冒烟在 BRDF LUT 上断言失败。扫描改到 Framework，并把 `InputMap.json` 拷进包。`ya.py package --smoke-run` 退出码 0。录屏没有做。
+
+## 2026-10-11 — 按词折行，Esc 切换中英文
+
+- 目标与边界：商人那句不再从单词中间断开，也不在 340 像素处提前换行。Esc 打开设置，空格在英文和中文之间切。默认仍是英文，已有玩法测试对的还是英文字符串。
+- `UIText` 在空格处折行，中日韩字符各自可断；一个词比整行还宽才切开。对话框是固定的 760×168。正文长度上限是 500，文案按这个上限写，卡片不跟着某一句变大。
+- `Persist.locale` 缺省是英文。`Locale.tr` 在显示时翻译。Esc 走运行时的 `onCancel`：玩家脚本打开设置，设置自己再被 Esc 关上。空格切换后，开着的对话、背包、日志和任务提示立刻重画。
+- 验证：`WidgetLayoutTest.WrappedTextBreaksOnSpaces`。`settings_locale.py` 把「Welcome to Tiny Town!」换成「欢迎来到小镇！」。`dialogue_page.py`、`quest.py`、`inventory.py`、`playthrough.py` 仍是英文并通过。四张 RPG 场景挂上 `Settings` 后，重存哈希换成 House `f3db3e2533f81135`、PropertyOverride `4e5a90448a2bbec4`、Town `5a8ada40098e8ade`、TownLarge `3abb4a52113cb63a`。
+
+## 2026-10-11 — Esc 设置，柜子与井之玻璃
+
+- 目标与边界：Play 里按 Esc 能打开设置。主线仍是买护符唤醒井，另给一条用钥匙的岔路。不改 TownLarge，也不做新地图。
+- 编辑器里 Esc 先前只在视口控件拥有键盘焦点时才进游戏，否则松键直接停止 Play。视口里点一下还会抓住鼠标，捕获会话把后续按键全部吃掉，Esc 既打不开设置也不会停 Play。现在 Play 中 Esc 先走游戏的 `onCancel`（捕获中也一样），游戏接住就松开鼠标；文本框正聚焦时除外。设置卡片改为固定的 320×140，停在画面正中。
+- 房子左侧 `Cabinet` 用黄铜钥匙打开一次，换成井之玻璃。井认护符或玻璃，结局句子不同。告示牌、商人和井会提到这条路。村民的差事仍只说储物罐。
+- House 重存哈希换成 `ef548321fafc473f`。
+
+## 2026-10-11 — 通关录屏
+
+- 目标与边界：G2.5 剩下的录屏。不改玩法，也不做 G2.6 / G2.7。
+- 桌面录屏抓不到游戏窗口（它不在当前 Space 的 on-screen 列表里）。改从呈现图像抓帧，和通关脚本串行：每一步走到、每一句对话出来抓一张。并行抓帧会占住游戏线程，一格移动等不到。
+- 验证：`playthrough` 仍走到「Three coins. Look in the storage pot.」和「The well answers. Tiny Town is awake again.」。38 帧合成 `Engine/Saved/Automation/2d-rpg-playthrough/playthrough.mp4`。开头是城镇，摊位一句是钱不够，结尾是井上的 Quest complete。文件在 `Saved/` 下，不进 git。
+
+## 2026-10-12 — 对话框测试跟上固定卡片
+
+- `GameUIHostTest.DialogueDocumentStaysInsideNarrowAndWideCanvases` 从 `12cb87b0` 起失败。该提交把对话框改成固定的 760×168，正文改到 `Row`，提示改到 `Header`。当前布局跑改之前的文档仍然通过，所以不是布局退化。
+- 当时把期望改成「700 宽的画布上卡片中心在 x=-30」。这是把卡片直接摆进 700 宽的逻辑画布，不是游戏窗口的缩放路径。下一节换成参考分辨率。
+
+## 2026-10-12 — 对话框测试走参考分辨率
+
+- `GameUIHostTest.DialogueCardFitsReferenceScaledCanvas` 先设参考分辨率 1280×720，再 `setPresentation`。700×500 的逻辑画布是 1280×914（缩放 700/1280）；1280×720 缩放 1.0；2560×1080 缩放 1.5。`Extent2D` 把 2560/1.5 截成 1706，逻辑画布是 1706×720。
+- 三种窗口上卡片都是 760×168 逻辑尺寸，水平居中，并且完整落在逻辑画布内。`Body` 留在 `Row` 里，`Hint` 留在 `Header` 里。不再断言「700 宽画布、x=-30」。

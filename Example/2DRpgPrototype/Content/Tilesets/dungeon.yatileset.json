@@ -1,0 +1,65 @@
+{
+  "atlas": {
+    "textureRef": {
+      "__base__": {
+        "AssetRefBase": {
+          "_path": "Content:Textures/tiny_dungeon.png"
+        }
+      }
+    },
+    "bEnable": true,
+    "uvScale": [
+      1.0,
+      1.0
+    ],
+    "uvOffset": [
+      0.0,
+      0.0
+    ],
+    "uvRotation": 0.0,
+    "samplerConfig": {
+      "filterMode": "Nearest",
+      "addressMode": "ClampToEdge"
+    }
+  },
+  "tileWidth": 16,
+  "tileHeight": 16,
+  "margin": 0,
+  "spacing": 0,
+  "columns": 12,
+  "solid": [
+    4,
+    5,
+    6,
+    13,
+    14,
+    15,
+    16,
+    17,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    40,
+    41,
+    58,
+    59,
+    60,
+    61,
+    70,
+    71,
+    72,
+    73,
+    79,
+    80,
+    81
+  ]
+}

@@ -83,7 +83,7 @@ completion_and_make_the_final_plan(this_plan);
 | `shadow-and-light-line/` | 点光源/聚光灯/阴影（R2/R3/R15）：R15a deferred 点光 SSBO 无上限已落地；R15b 聚光灯、R2 阴影 GPU 剔除、R3 CSM 待做；后续演进 UE 逐灯 draw / Forward+ cluster |
 | `rdg-cache-dx/` | P0 skinning、P1 registry 诊断、P2 import 按 owner key 匹配保留历史；2026-10-12 P3 feature 切片 / P4 容器拆分转交 `render-pipeline-composition`，不再重复开工；本线剩余 P5 Slang 生成 descriptor layout |
 | `render-pipeline-composition/` | RDG 上方组合层收敛（2026-10-12 立项）：一等 feature、typed Forward/Deferred recipe、单源资源要求与显式 prepare→record 数据；接手 rdg-cache-dx P3/P4 及旧 orchestrator/passes/resources 的结构替换。计划已落盘，代码未开始；下一 C1 为真实 SSAO→Lighting 闭环，不是 Bloom-only 或空抽象骨架 |
-| `rpg-prototype/` | 2D 世界线（2026-10-02 合并 `scene-2d-world-and-game-ui`）：RPG Maker 式俯视 2D 示例驱动引擎，脚本中立绑定层（B2 收口归本线）、Tilemap、通行查询、交互 / 对话、切场景，以及 2D 渲染（P0 契约、合批核心与 y-sort、纯 2D View 家族）。B1 / R0–R4 已落地；评审后待办按 7 步排，见目录内 `todo.md` / `review-2026-09-30.md`；步骤 1–3 已完成（P0 契约已冻结），下一步骤 4 2D 模块 |
+| `rpg-prototype/` | 2D 世界线（2026-10-02 合并 `scene-2d-world-and-game-ui`）。**2026-10-13 改版为「RPG Tactics」**：`Example/2DRpgPrototype` 主流程从「城镇跑腿」重编为 **2D 战旗 RPG 垂直切片**（格棋盘 + 回合制 + 任务 + 成长养成：等级/装备/技能/队伍），并以此驱动四个新子系统——**后处理运行时控制、音频（SDL3）、粒子、2D 物理/触发器（Box2D）**。验收重点 = 能力覆盖（`feature_matrix.json`）。v1（RPG Maker 式俯视小镇）B1/R0–R4 已落地、工件存 `*-v1-landed.*`，其引擎能力（tilemap/精灵/动画/相机/脚本层/存档/场景转移）被本版复用。新计划工件见目录内 `plan.md` / `todo.md` / `progress.md`；代码未开工，下一步 Wave A F1 |
 | `3d-demo/` | 3D demo 线（2026-10-12 自 `showcase-roadmap` §3 G3 立项，G3.0 问答已收口）：第三人称探索解谜（庭院 → 地下室）驱动引擎玩法层——物理组件（Kinematic / 传感器 / glTF 网格与 convex 碰撞 / 接触事件进 ECS）、物理 Lua API、`JPH::CharacterVirtual` 角色控制器、glTF skin / animation / 节点层级导入、动画交叉淡入、第三人称弹簧臂相机与鼠标轴、`world.spawn` 与世界计时器；三区光照依赖 `shadow-and-light-line/`（R15b + 新增聚光灯阴影 + R2 / R3）。工作项、波次、冲突面、素材调研见目录内 `plan.md`；待用户确认：示例目录名、素材选型 |
 
 ## 归档判据

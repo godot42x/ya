@@ -1,73 +1,52 @@
-# TODO
+# TODO — RPG Tactics (v2)
 
-## 评审待办（2026-10-02 重排，细节见 `review-2026-09-30.md` 文末）
+一眼版进度。详细目标与验收见 `plan.md`；能力覆盖审计见 `feature_matrix.json`。
 
-已完成
-- [x] 双面 quad：精灵 / 延迟光照全屏 pass / billboard 都 `cullMode None` 画两遍 → 改剔除背面（364ab87c）
-- [x] `Render/Frame` self 2.9–5ms 归因：主体是帧栅栏等待（`kFramesInFlight = 1`，CPU/GPU 串行，归 render-view-family M4），见 `r4-measurements.md` §7（3070fafe）
+## 图例
 
-步骤 1 资源线收尾（51f0d090 / 344b0456）
-- [x] 删 Loading 槽计数：审计只按间隔，不计入稳态探针，只断言不自愈
-- [x] 环境光照由处理器维护每个场景选中的来源，消费侧 O(1)，去掉每帧分配与排序
-- [x] 结论进 resource-system skill；IBL 基线换同尺寸截图；归档 `resource-handle-events`，遗留项移到 `resource-leftovers.md`
+- `[ ]` 未开工 `[~]` 进行中 `[x]` 完成 `[!]` 阻塞
 
-步骤 2 治理与小项
-- [x] 合并 rpg-prototype 与 scene-2d-world-and-game-ui 为 2D 世界线（scene-2d 归档，剩余项见 `plan.md` §9）；从 game-ui-script-framework / ui-behavior-capabilities 转出 B2、`input.inject_key`、`viewAspect` 的归属
-- [x] 按键注入（`input.inject_key`）提前，补 R0–R3 行为的自动化（`Script/automation/2d-rpg/`）
-- [x] 合并 `callNamed` 与 `invoke`（B2 的前置）：`callNamed(..., ENamedCallError)`
-- [x] 清空 `AssetManager::setFrameTaskSink` 悬空 sink（App 关闭时不清空）
-- [x] 脚本 `callMethod` 接入统一编辑漏斗（B2 的前置）
-- [x] 自动化 `scene.load` 保持调用前的运行模式（`App::loadSceneKeepingRunMode`）；编辑器打开场景仍停在编辑态；`scene_load_ticks.py` 端到端验证 House / TownLarge
-- [x] TownLarge 出生点修复：脚本把格子下标当世界坐标（tilemap 原点 -32），玩家 / 相机 / NPC 改为格心世界坐标；Npc3 落在树上，沿原步进挪到可走格；`scene_load_ticks.py` 的 TownLarge 改为真实走一格
+## Wave A — 重编基础
 
-步骤 3 P0 契约冻结（前置：步骤 2 的计划线合并）
-- [x] 契约矩阵：混合语义、sprite 与 3D 深度的关系、资源责任、实例格式与排序键（layer → y → order）冻结在 `P0-contract-matrix.md` 文末（C1–C5）；精灵只用画家顺序、不写深度，y-sort 逐对象开关
-- [ ] 纯 2D View 的 graph 策略未选（workload 跳 stage 还是单独 2D graph），随步骤 6 / `render-view-family` P3 定；混合场景的像素验收随步骤 5
+- [ ] F1 项目壳重编 + Kenney 素材入库（Tiny Dungeon / Tiny Battle），新默认场景显示营地地图
 
-步骤 4 2D 模块（可与步骤 3 并行）
-- [x] `Scene2D` target（`ya-scene-2d`）：Sprite2D / Tilemap 移出 `ya-render-3d`（Tileset 数据本来在 Core），`TilemapComponent.cpp` 拆成数据+编辑 / 查询 / 渲染展开
-- [x] `SpriteAnimationComponent` + `SpriteAnimationSystem`（D-T2 决策门已触发），Player / Npc / Chest 三处脚本的 `uvRect` 计算已删，`Actor.heroFrame` 已删
-- [x] `Sprite2DComponent` pivot / anchor（归一化 0..1，默认 0.5,0.5；Player / Npc 用 (0.5, 1/3)，footLift 删除）
+## Wave B — 战术核心（先跑通主循环）
 
-步骤 4c 场景数据瘦身与动画资产（2026-10-03 用户提出，三项已拍板：json_prune / asset / set_editor）
-- [x] P1 场景组件默认值省略：`SceneSerializer::serializeEntity` 把组件 JSON 与「默认构造实例的 JSON」递归对比，等于默认的字段不写；组件本身仍写 `{}`；`IComponentOps::createDefaultInstance()` 提供默认实例；全部已注册组件经 addComponent 创建后与 `T{}` 一致（有测试守）
-- [x] P1 收尾：已有场景用引擎重存一遍（不手改），并入 P2 的场景迁移，只重写一次
-- [x] P2a `SpriteAnimationSet` 资产类型（`.yaanim.json`：columns / rows / clips；解析 + 序列化 + 校验）；并把「每种资产改一堆引擎文件」改成开闭：`AssetTypeRegistry` + `DocumentAssetRef<T>` + 通用 `AssetDocumentManager`（Core），新增文档型资产 = 类型 + parse + 一处 `registerDocument`；`EEditorAssetPickerKind` / `PropertyCapabilityRegistry` / `AssetManager` 的 Tileset 专属方法删除；开闭测试用玩具资产证明
-- [x] P2b `SpriteAnimationComponent` 只留资产引用 + 当前 clip 名；Hero / Npc / Chest 三份数据抽成 `.yaanim.json`，TownLarge 21 个重复块（仅 2 种内容）迁成引用；解析允许 fps / bLoop 缺省（与默认值省略一致）；场景用引擎重存
-- [x] P3a 内容浏览器「后缀 → 打开器」注册表 `EditorContentOpenerRegistry`（`activateItem` 不再有后缀字面量；`.scene.json/.lua/.yaui.json/.mat/.material` 迁为内建打开器，其它模块可追加）
-- [x] P3b `SpriteAnimationSet` 加可选 `atlas`（图集贴图路径，仅编辑/预览用，运行时不读）+ 动画集编辑页签 + 注册 `.yaanim.json` 打开器；保存走覆盖同槽（`registerAsset`）使已加载引用热更新。完整的 Godot 式「选图后自动切帧」编辑器留作后续优化
-- [x] P3c `SpriteAnimationComponent` Inspector 面板（动画集选择、clip 下拉、播放/停止；仿 Lua 脚本组件的专属 section）
-- [x] （P3 总目标，已拆为 a/b/c，全部完成）资产选择器分类 + 组件面板 clip 下拉与播放/停止；`SpriteAnimationSet` 编辑页签（仿 Tile Palette：图集网格点选帧、clip 增删改、fps / loop、预览播放）
-- 顺序：P1 → P2 → pivot → 引擎重存场景 → P3（共享构建，串行）
-- [x] 用引擎 load→save 重存 Town / House / TownLarge，让默认值省略落到文件（单独提交，前后截图对照）
-- 风险：省略默认值后，场景隐含依赖代码里的默认值，以后改默认值会改变旧场景（需写进 scene-serialization 相关 skill）
+- [ ] T1 棋盘与回合骨架（回合队列按速度、行动序条、格子高亮）
+- [ ] T2 移动与可达范围（BFS 高亮 + 逐格移动；鼠标拾取 screen->cell）
+- [ ] T3 攻击 / 技能 / 伤害结算（伤害数字、HP 条、死亡移除）
+- [ ] T4 敌方 AI（接近→攻击→移动；Boss 分阶段骨架）
+- [ ] M1 战斗与探索拼接（营地→遗迹→遇敌→战斗→回营地）**第一次完整闭环**
 
-步骤 5 2D 合批核心（前置：步骤 3、4）
-- [x] 5b-1 世界精灵实例化（`recordFamily` self 7.516 → 0.425ms，像素 0 差）；纹理表组件 `Render2D/TextureTableBatch.h`（槽身份键、epoch 直接映射、满了切批）
-- [x] 5b-2 `ScreenDrawList` 迁移到同一纹理表 + 批游标（顶点格式保留，UI 像素不变）
-- [x] 5a 画家顺序 + y-sort（单一混合管线、深度只测不写、`spriteDrawsBefore` 排序键、`bYSort`/`layerOffset`），删 `z = base − y·ε` / `Actor.zFor`；拾取共用比较函数
-- [x] 5b-1 世界精灵纹理表直接映射（按绑定身份：纹理 + view + sampler 作键）
-- [~] 5c tilemap 静态实例缓冲：**推迟**（2026-10-04 度量：TownLarge tilemap+精灵 CPU 合计 0.245ms/帧，占整帧 3%，整帧卡在 `waitFrameFence` 5.83ms；见 `progress.md`）。触发条件：单图 ≥2 万实例或明确要做 256² 地图；届时先做视口裁剪（填 `bHasVisibleRange`，约两处调用点），再评估未开 y-sort 子层的静态缓冲（整层作排序单元、失效走 `onComponentEdited`、笔刷结束补发通知）
+## Wave C — 四子系统（每个都要有真实使用点）
 
-步骤 6 纯 2D View 家族（前置：`../render-view-family/` P3 的 `PreparedView` / ViewFamily compiler）
-- [ ] 纯 2D View 不跑 GBuffer / 光照 / 天空盒 / Bloom
+- [ ] R1 后处理运行时控制 + 相机效果（fade / look / shake / zoom）
+- [ ] A1 音频子系统（SDL3：BGM crossfade、sfx、总线音量）
+- [ ] X1 粒子子系统（.yaparticle 资产 + 发射器 + 命中/魔法/治疗特效）
+- [ ] P1 2D 物理 / 触发器（Box2D：推箱、压力板、尖刺、移动平台、击退）
 
-步骤 7 能力进引擎（前置：步骤 2、4）
-- [x] B2 脚本对外接口收口（含 `viewAspect` / `viewSize` 去重、脚本函数不经 `App::get()`）
-  - 设计：`B2-lua-backend-split.md`（7 个 checkpoint）。B2-1 属性值 `std::any`→`ScriptValue`、B2-2 注入上下文、B2-3 侧表、B2-4 `ya-script-lua` 拆 target、B2-5 中立运行时接口、B2-6 `GameplayLua` 中立注册 + `world.scriptOf`、B2-7 控件句柄/self API 全部完成（收口提交 `c3a77218`）；`Engine/Source` 在 `Script/Lua/` 之外已无 sol
-- [x] 相机 2D 字段（每单位像素数、像素吸附、整数缩放）已在 `CameraComponent`；跟随留在 `FollowCamera.lua`（指数平滑 + 地图夹取）
-- [x] InputMap（命名动作）
-- [x] 对话逐字显示：留在 `Dialogue.lua`，按 UTF-8 码点把前缀写进 `Body.text`。文本控件不提供 reveal
-- [x] 按格移动做成引擎 Lua 库
-- [x] 去硬编码：`"Player"`、`kSpriteTexture`、`TilemapGround` / `"Dialogue"` 命名约定（C++ 侧：`loadScene` 带 `actorName`、`spawnSprite` 可传贴图；剩 `Npc.lua` 的 `world.find("Player")`、`kSpriteTexture` 缺省、自动化按名找）
+## Wave D — 成长与内容
 
-并行
-- [x] 定 flight 深度：定为 2（R1 落地 `327e9e30` / `cee44ae1`，同构建 A/B p50 -24.5~-39.8%；归 `../render-view-family/`，本线不做）
+- [ ] G1 成长：等级 / 属性 / 技能 / 职业
+- [ ] G2 装备与背包
+- [ ] G3 队伍与同伴
+- [ ] G4 任务系统
+- [ ] C1 内容：3–4 场战斗 + 3 任务 + Boss + 结局
 
-## 用户报告（2026-10-02，不在评审 7 步内）
+## Wave E — 收口
 
-- [x] Pixel-perfect camera：`CameraComponent` 整数缩放 + 提取期 texel 吸附（`plan.md` §10）
+- [ ] Z1 存档 / 读档闭环
+- [ ] Z2 UI 完善与打磨（战斗 HUD、设置、对话）
+- [ ] Z3 收口：矩阵全绿 + 打包 + 通关录屏
 
-## 已拆出
+## 待用户确认 / 决策门
 
-- 资源层每帧 resolve → `../archive/resource-handle-events/`（H1–H5 已完成并归档）
+- [ ] 素材下载与入库（Kenney zip 是否由我去取？还是你手动放？）
+- [ ] 单位动画策略（Tiny Battle 静态是否接受；需要动画才用 image-gen 生成）
+- [ ] 后处理作用域（管线级先做；是否需要每 View 独立 look 到 R1 再定）
+- [ ] Box2D 与 tile 棋盘的空间边界约定（写进 `2d-gameplay` skill）
+- [ ] 目录名（沿用 `2DRpgPrototype` 还是改名，如 `2DTacticsRpg`）
+
+## 历史（v1）
+
+v1 落地内容与遗留见 `todo-v1-landed.md`、`progress-v1-landed.md`。

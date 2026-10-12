@@ -5,7 +5,7 @@
   "modules": ["2DRpgPrototype.yamodule"],
   "plugins": [],
   "contentDir": "Content",
-  "defaultScene": "Content/Scenes/Town.scene.json",
+  "defaultScene": "Content/Scenes/Camp.scene.json",
   "uiReferenceResolution": [1280, 720],
   "inputMap": "InputMap.json"
 }
