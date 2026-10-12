@@ -1393,6 +1393,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         return false;
     }
 
+    const size_t passesBeforeComposition = graph.getPasses().size();
     auto composition = DeferredPipelineRecipe::appendGraph(
         resolved,
         preparedResult.value(),
@@ -1416,6 +1417,15 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         return false;
     }
     outputs = std::move(composition.value());
+
+    // Composition diagnostics: which passes this View's map contributed, so the
+    // dump can be checked against the graph trace pass by pass.
+    if (render_graph_trace::isEnabled()) {
+        YA_CORE_INFO("[RGTrace] composition contributed Deferred View {} passes [{}..{})",
+                     resolved.viewId,
+                     passesBeforeComposition,
+                     graph.getPasses().size());
+    }
 
     exportGraphOutputs(graph, outputs, resolved.viewId);
     return true;

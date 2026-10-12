@@ -661,3 +661,11 @@
 
 - `xmake r ya-render-3d-test` **228/228**（+2）；`python3 Script/ya.py test --target ya` **1811/1811**。
 - matrix：M05/M06 → verified（累计 13 verified）。
+
+## 2026-10-13 — C5e：M20 收口（pass 贡献关联）
+
+补 M20 的最后一块：组合 dump 原本只说"哪些 feature 开着、要了哪些 target"，不说"贡献了哪些 pass"。现两管线在 `appendGraph` 前后记录 pass 计数并输出 `composition contributed <pipeline> View N passes [a..b)`。
+
+**runtime 实测**：Deferred 输出 `[0..16)`，与同一 trace 里 graph dump 的 `passes(16)` 逐一对上；shadow-off 的帧输出 `[0..14)`，与 `passes(14)` 一致——读 dump 的人可以直接把 feature 状态与 graph pass 区间对上。trace off 时不构建文本（字符串在 `render_graph_trace::isEnabled()` 分支内）。
+
+验证：`xmake r ya-render-3d-test` 228/228、`python3 Script/ya.py test --target ya` 1812/1812；trace 运行 DEVICE_LOST=0。

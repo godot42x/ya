@@ -908,6 +908,7 @@ bool ForwardRenderPipeline::appendForwardViewToGraph(RenderGraph& graph,
 
     // The View's pass context carries its own scene resources and skybox packet.
     const auto& skyboxInput = viewPassContext.skybox;
+    const size_t passesBeforeComposition = graph.getPasses().size();
     auto composition = ForwardPipelineRecipe::appendGraph(
         resolved,
         preparedResult.value(),
@@ -929,6 +930,15 @@ bool ForwardRenderPipeline::appendForwardViewToGraph(RenderGraph& graph,
         return false;
     }
     outputs = std::move(composition.value());
+
+    // Composition diagnostics: which passes this View's map contributed, so the
+    // dump can be checked against the graph trace pass by pass.
+    if (render_graph_trace::isEnabled()) {
+        YA_CORE_INFO("[RGTrace] composition contributed Forward View {} passes [{}..{})",
+                     resolved.viewId,
+                     passesBeforeComposition,
+                     graph.getPasses().size());
+    }
 
     exportGraphOutputs(graph, outputs, resolved.viewId);
     return true;

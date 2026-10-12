@@ -277,11 +277,11 @@
       "checkpoints": ["C5"],
       "expected": "调用状态/原因、typed connections、owner、pass 贡献、有效 outputs 可与 actual graph 核对；owning diagnostic strings 不悬空；trace off 不收重型文本",
       "verification": ["diagnostic snapshot tests", "existing graph trace integration", "lifetime test"],
-      "status": "in_progress",
+      "status": "verified",
       "evidence": [
         "两管线 ResolvedView::describe() 输出每 feature 的 on/off 与声明 targets；owning 字符串（View id、feature 名、role 序号），不悬空于 graph-local 数据",
         "接入既有 --render-graph-trace：off 时不构建文本；runtime 实测 Deferred/Forward 两管线 dump 均出现（[RGTrace] composition:）",
-        "缺口：与 actual graph pass 区间的显式关联（当前靠 pass 名与 dump 顺序对照）仍待补；diagnostic snapshot 单测未加"
+        "**pass 贡献关联**：两管线在 append 前后记录 pass 区间并输出 `composition contributed <pipeline> View N passes [a..b)`；runtime 实测 Deferred `[0..16)` 与 graph trace 的 16 pass 逐一对上（含 shadow-off 的 `[0..14)`），与 feature 状态的 dump 同帧可核对；trace off 时不产生文本"
       ]
     },
     {
