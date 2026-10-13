@@ -61,7 +61,7 @@
 - [x] D1 安全点冻结（M24/M02 verified）。
 - [x] D3 invocation tuple + fold（M26 verified）。
 - [x] D4 typed 发布 + family 原子失败（M27/M13/M10/M21 verified）；顺带恢复 C4a 丢失的 Forward depth 导出。
-- [~] D5 feature 吸收 Stage（M28）：**批 1（SSAO）**；**批 2（Skybox/Overlay）**；**批 3（Bloom/Finalize）**——PostProcessingStage 退场，两个 processor 各归其 feature，settings 半区经 Settings→Resolved（修复了两个栈临时 feature 相关 bug：lambda this 悬空 SIGSEGV、state 藏成员致配置失联）；五帧逐像素 0 diff；**批 4（Lighting/GBuffer）**——各归其 feature，IBL 开关随迁；四帧逐像素 0 diff；剩 Shadow（最后，依赖灯光线）；concept 去掉 typename F::Stage 随最后一批。
+- [~] D5 feature 吸收 Stage（M28）：**批 1（SSAO）**；**批 2（Skybox/Overlay）**；**批 3（Bloom/Finalize）**——PostProcessingStage 退场，两个 processor 各归其 feature，settings 半区经 Settings→Resolved（修复了两个栈临时 feature 相关 bug：lambda this 悬空 SIGSEGV、state 藏成员致配置失联）；五帧逐像素 0 diff；**批 4（Lighting/GBuffer）**——各归其 feature，IBL 开关随迁；四帧逐像素 0 diff；剩 Shadow——**批 5 暂停**：侦察发现它是三层结构（ShadowMapResources 安全点重建 + ShadowStage + ShadowRuntimeState，Deferred 44 处/Forward 46 处引用），把 stage 交给 feature 需连带搬迁 D1 的安全点资源所有权，且 plan 原文标注它依赖 `shadow-and-light-line` 最新实现（该线仍活动）；等其资源形态收敛后再评估；concept 去掉 typename F::Stage 随之。
 - [ ] D2 extraction 快照外部交付（M25，blocked 于 render-view-family）。
 
 ## 下一步（按优先级）

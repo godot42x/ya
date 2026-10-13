@@ -958,3 +958,29 @@ D4 侦察时按 `forward_graph_exports::viewDepth` 追读，发现 C4a（6679b00
 ### 保留 / 未做
 
 - D5 最后一批：Shadow（依赖 `shadow-and-light-line` 的最新实现）；concept 的 `typename F::Stage` / `Stage*` 参数随最后一批去掉，`Stages` 传参表清空。
+
+## 2026-10-13 — D5 批 5（Shadow）暂停：侦察后按停止条件报告
+
+### 为什么不在本批硬推
+
+批 5 与批 1–4 不是同一形态。批 1–4 迁移的对象是"feature 拥有的单个设备对象"；Shadow 是**三层结构**：
+
+1. `ShadowMapResources`——持久阴影贴图资源，由 pipeline 在安全点销毁/重建（`destroyShadowResources` → `initShadowResources` → `refreshShadowResources` 三步 + `EDeferredPendingResourceRefresh::ShadowResources` 掩码），是 D1「安全点准备持久设备资源」的产物。
+2. `ShadowStage`——设备对象（technique 持有 + 两份 DSL + per-View prepare）。
+3. `ShadowRuntimeState`——派生状态，喂 LightStage 的 per-View shadow set 写入与调试输出。
+
+Deferred 侧 44 处、Forward 侧 46 处 shadow 相关引用横跨这三层。把 stage 交给 ShadowFeature 意味着资源所有权（含安全点重建路径与刷新掩码）也要跟着搬——这不是"feature 拥有其设备对象"，而是把 pipeline 的安全点资源管理搬进 feature，属于会改变 D1 既有边界的重构。
+
+### 与 plan 已有约束一致
+
+plan §10.3 D5 原文：**顺序建议 SSAO → Skybox/Overlay → Bloom/Finalize → Lighting/GBuffer → Shadow（最后，依赖 D1 的 device-prepare 与 `shadow-and-light-line` 最新实现）**。`shadow-and-light-line` 仍在活动：R15a/R15b 之后仍有聚光灯阴影图（记在 3d-demo 计划 G3.9 依赖）等工作项，工作区 `Engine/Plugins/log.cc` 仍是该线未提交改动。在此之上重排 shadow 资源所有权，冲突面大且验收基线不稳。
+
+### 判定
+
+按 plan §10.4 停止条件的精神（D1 条款：「发现安全点无法拿到某个 device-prepare 所需的事实，应先报告缺哪个事实，而非退回录制期准备」）与工作规则 13/14（方向偏离时先停止编码并报告，不臆造新任务）：**批 5 暂停**，等 `shadow-and-light-line` 的阴影资源形态收敛后再评估。缺的事实是"阴影资源在收敛后的 owner 归属"——这由该线的聚光灯阴影图等工作项决定，不是本线能单方面假定的。
+
+### 当前 D5 完成度
+
+- 批 1（SSAO）、批 2（Skybox/Overlay）、批 3（Bloom/Finalize）、批 4（Lighting/GBuffer）已落地并带逐像素证据（详见上文各节）。
+- 剩余：批 5（Shadow，暂停如上）；concept 的 `typename F::Stage` / `Stage*` 参数去掉（与批 5 同一批，因为剩它一个 Stage 槽）。
+- pipeline 头文件中被迁移 Stage 成员数：`_gBufferStage`/`_ssaoStage`/`_lightStage`/`_overlayStage`（拆为 skybox+overlay 两 feature）已全部退出；只剩 `_shadowStage`。
