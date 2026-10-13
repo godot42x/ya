@@ -411,6 +411,19 @@ void App::init(AppDesc ci)
         .loadWorld = [&app](std::string path) { return app.getSceneServices().requestWorldLoad(path); },
         .worldRuntime = [&app]() -> IWorldScriptRuntime* { return app._luaScriptingSystem; },
         .gameUI       = app.getGameUIHost(),
+        // `render.setLook`: read-modify-write the active pipeline's
+        // post-processing state. It lands on the next submission (the pipeline
+        // re-reads its pending settings each frame), so a script change is
+        // applied between frames and never mid-recording.
+        .mutatePostProcessing = [&app](const std::function<void(PostProcessingState&)>& mutate) {
+            AppRenderServices& render = app.getRenderServices();
+            if (!render.hasRenderer()) {
+                return;
+            }
+            RenderPipelineSettings settings = render.getRenderPipelineSettings();
+            mutate(settings.postProcessing);
+            render.setRenderPipelineSettings(settings);
+        },
     };
     registerGameplayScriptFunctions(scriptContext);
     // The module registry outlives this App. Pushed before the Lua deleter so

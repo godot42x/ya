@@ -414,8 +414,9 @@ def write_scene(path: Path, map_data: dict) -> None:
 
 
 def build_world_text_scene() -> dict:
-    """A minimal scene for the WT1 (world-space text) test: a grass tilemap,
-    a camera, and a controller entity that spawns world labels at runtime."""
+    """A minimal scene for the WT1 (world-space text) and R1 (post-processing)
+    tests: a grass tilemap, a camera, a controller that spawns world labels, and
+    a controller that cycles post-processing looks."""
     w, h = 16, 12
     origin = map_origin(w, h)
     ground = [TOWN_GRASS + 1] * (w * h)
@@ -423,6 +424,7 @@ def build_world_text_scene() -> dict:
     entities: list[dict] = [
         camera_entity(spawn, origin, script=None),
         script_entity(1002, "TextDemo", "Content/Scripts/WorldTextTest.lua"),
+        script_entity(1003, "LookDemo", "Content/Scripts/LookDemo.lua"),
         tilemap_entity(2000, "TilemapGround", TOWN_ATLAS, TOWN_TILESET, w, h, origin,
                        [layer("Ground", ground)]),
     ]

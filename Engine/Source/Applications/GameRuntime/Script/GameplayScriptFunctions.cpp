@@ -15,6 +15,7 @@
 #include "LuaWidgetHandle.h"
 #include "LuaWidgetScripts.h"
 #include "GameRuntime/Render/SceneCameraQuery.h"
+#include "Render3D/Common/PostProcessingState.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Core/SceneScriptBindings.h"
 #include "Script/Lua/LuaBackend.h"
@@ -296,6 +297,75 @@ ScriptValue spawnTextFn(const GameplayScriptContext& ctx, ScriptArgs args)
     return script::scriptMake(script::entityRef(entity));
 }
 
+/// Options for `render.setLook`. Every field is optional; the ones a caller
+/// sets are applied and the rest keep their current value. Ranges are the
+/// shader's: exposure is a multiplier, threshold/strength are unbounded
+/// positives. `toneMap` / `gamma` toggle the encode; `bloom` toggles bloom.
+struct FLookOptions
+{
+    bool     bToneMap       = true;
+    bool     bGamma         = true;
+    float    exposure       = 0.6f;
+    bool     bBloom         = false;
+    float    bloomThreshold = 1.0f;
+    float    bloomStrength  = 0.8f;
+    int64_t  grayscale      = 0;   // 0 none, 1 average, 2 weighted
+    int64_t  kernel         = 0;   // 0 none, 1 sharpen, 2 blur, 3 edge
+    bool     bGrain         = false;
+    bool     bInversion     = false;
+
+    YA_REFLECT_BEGIN_NAMED(FLookOptions, "FLookOptions")
+    YA_REFLECT_FIELD(bToneMap)
+    YA_REFLECT_FIELD(bGamma)
+    YA_REFLECT_FIELD(exposure)
+    YA_REFLECT_FIELD(bBloom)
+    YA_REFLECT_FIELD(bloomThreshold)
+    YA_REFLECT_FIELD(bloomStrength)
+    YA_REFLECT_FIELD(grayscale)
+    YA_REFLECT_FIELD(kernel)
+    YA_REFLECT_FIELD(bGrain)
+    YA_REFLECT_FIELD(bInversion)
+    YA_REFLECT_END()
+    YA_REFLECT_VALUE_STRUCT()
+};
+
+type_index_t lookOptionsType()
+{
+    FLookOptions::__ensure_reflection_registered();
+    return type_index_v<FLookOptions>;
+}
+
+// `render.setLook{ ... }`: read-modify-write the pipeline's post-processing
+// state. Applied fields override; unset fields keep the current look, so a
+// script can raise only exposure without resetting bloom. No renderer (a
+// headless run) is a silent no-op so scripts stay runnable in tests.
+ScriptValue setLookFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 1);
+    const FLookOptions* options = script::scriptIf<FLookOptions>(args[0]);
+    if (options == nullptr) {
+        throw ScriptError("expects setLook{ exposure, bloom, grayscale, kernel, ... }");
+    }
+    if (!ctx.mutatePostProcessing) {
+        return {};
+    }
+    const FLookOptions in = *options;
+    ctx.mutatePostProcessing([in](PostProcessingState& post) {
+        post.bEnableToneMapping   = in.bToneMap;
+        post.bEnableGammaCorrection = in.bGamma;
+        post.exposure             = in.exposure;
+        post.bEnableBloom         = in.bBloom;
+        post.bloomThreshold       = in.bloomThreshold;
+        post.bloomStrength        = in.bloomStrength;
+        post.grayscaleMode =
+            static_cast<PostProcessingState::EGrayscaleMode>(std::clamp<int64_t>(in.grayscale, 0, 2));
+        post.kernelMode = static_cast<PostProcessingState::EKernelMode>(std::clamp<int64_t>(in.kernel, 0, 3));
+        post.bEnableRandomGrain = in.bGrain;
+        post.bEnableInversion   = in.bInversion;
+    });
+    return {};
+}
+
 ScriptValue viewAspect(const GameplayScriptContext& ctx, ScriptArgs args)
 {
     expectArgCount(args, 0);
@@ -451,6 +521,8 @@ void registerGameplayScriptFunctions(GameplayScriptContext ctx)
                                    {0, spriteSpawnOptionsType()});
     script::registerModuleFunction("world", "spawnText", [ctx](ScriptArgs args) { return spawnTextFn(ctx, args); },
                                    {0, 0, 0, textSpawnOptionsType()});
+    script::registerModuleFunction("render", "setLook", [ctx](ScriptArgs args) { return setLookFn(ctx, args); },
+                                   {lookOptionsType()});
     script::registerModuleFunction("world", "destroyEntity", [ctx](ScriptArgs args) { return destroyEntityFn(ctx, args); });
     script::registerModuleFunction("world", "scriptOf", [ctx](ScriptArgs args) { return scriptOf(ctx, args); });
     script::registerModuleFunction("ui", "get", [ctx](ScriptArgs args) { return uiGet(ctx, args); });

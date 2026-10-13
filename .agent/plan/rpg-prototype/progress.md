@@ -202,3 +202,20 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
   `Engine/Saved/Automation/battle-skill/battle_skill.png` 显示底部行动栏、左上状态卡、每个单位头顶名字+血条
   （低血变红）。
 - 偏离：行动栏当前把菜单项做成一排文字按钮；真正的按钮控件（可点/hover）留到风格化 UI（U5）一起。
+
+## 2026-10-13 — R1（一半）：后处理运行时控制 `render.setLook`
+
+- 目标：脚本运行时改后处理的 look（受击闪白/暴击 bloom/倒地灰度/Boss 阶段调色）。
+- 现状核实：post pass 全在（bloom/tone-map/灰度/边缘/噪点/反色），`PostProcessingState` 由
+  `RenderPipelineSettings` 驱动；`DeferredRenderPipeline::beginSubmission → applyPendingSettings` **每帧**重读，
+  所以运行时写设置下一帧生效，且不在录制中途改资源。
+- 引擎改动：
+  - `GameplayScriptContext.mutatePostProcessing`（`GameplayScriptFunctions.h`）：宿主注入
+    「读当前 settings → 让调用方改 postProcessing → 写回」，走 `AppRenderServices::get/setRenderPipelineSettings`；
+    无渲染器（headless）是 no-op，脚本在测试里也能跑。
+  - `render.setLook{ exposure, bloom, bloomThreshold, bloomStrength, grayscale, kernel, grain, inversion, toneMap, gamma }`：
+    read-modify-write，只覆盖写了字段，其余保持当前 look。
+- 验证：`Script/automation/2d-rpg/post_look.py` —— 曝光 look 提亮（131.7→158.2），灰度 look 完全去饱和
+  （93.4→0.0）；截图 `Engine/Saved/Automation/post-look/look_{neutral,bright,gray}.png`。
+- 未完成（R1 后半）：`render.fadeOut/in`（需要一层过渡：往屏幕盖纯色）与相机 `shake`/`zoomTo`。
+  fade 需要在 post 或 overlay 加一个基础过渡（下一步）。

@@ -75,6 +75,37 @@
       }
     },
     {
+      "id": 1003,
+      "name": "LookDemo",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/LookDemo.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": 2000,
       "name": "TilemapGround",
       "components": {
@@ -144,6 +175,10 @@
       {
         "name": "TextDemo",
         "entityRef": 1002
+      },
+      {
+        "name": "LookDemo",
+        "entityRef": 1003
       },
       {
         "name": "TilemapGround",
