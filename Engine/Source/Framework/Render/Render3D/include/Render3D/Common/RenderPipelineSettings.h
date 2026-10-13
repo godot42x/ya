@@ -51,6 +51,13 @@ struct RenderPipelineSettings
     float ssaoIntensity     = 2.5f;
     bool  bPBRDiffuseIBL    = true;
     bool  bPBRSpecularIBL   = true;
+
+    /// Master grading switch of the finalize pass (the look-changing stages;
+    /// the pass and the display encoding always run). Owned by the finalize
+    /// feature; this is its wire field, so automation/editor write it through
+    /// the same request path as everything else instead of reaching into a
+    /// stage object.
+    bool  bPostProcessGrading = true;
 };
 
 } // namespace ya

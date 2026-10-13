@@ -15,6 +15,7 @@
 #include "Render3D/Common/ViewGraphName.h"
 #include "Render3D/Common/PreparedPipelineFrame.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
+#include "Render3D/Pipelines/BasicPostprocessing.h"
 #include "Render3D/Pipelines/BloomPostprocessing.h"
 #include "Graph/RenderGraph.h"
 #include "Render3D/Forward/ForwardPipelineRecipe.h"
@@ -192,15 +193,14 @@ void ForwardRenderPipeline::initViewResources(const InitDesc& desc)
 
 void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
 {
-    _postProcessStage.init(PostProcessingStage::InitDesc{
-        .render      = _render,
-        .colorFormat = POSTPROCESS_COLOR_FORMAT,
-        .width       = static_cast<uint32_t>(desc.viewWidth),
-        .height      = static_cast<uint32_t>(desc.viewHeight),
-    });
-    _postProcessStage.getState() = postprocess_settings::loadRuntimeSettings(_postProcessStage.getState());
-    _deleter.push("PostProcessStage", [this](void*)
-                  { _postProcessStage.shutdown(); });
+    _finalizeFeature.init(_render, POSTPROCESS_COLOR_FORMAT);
+    _bloomFeature.init(_render);
+    _postProcessState = postprocess_settings::loadRuntimeSettings(_postProcessState);
+    _deleter.push("PostProcessFeatures", [this](void*)
+                  {
+                      _finalizeFeature.shutdown();
+                      _bloomFeature.shutdown();
+                  });
 }
 
 void ForwardRenderPipeline::initShadowResources()
@@ -329,7 +329,8 @@ void ForwardRenderPipeline::beginSubmission(const PreparedPipelineFrame& prepare
     (void)prepared;
     // Submission-scoped warmup only: settings and device resources were frozen
     // at the safe point.
-    _postProcessStage.beginFrame();
+    _finalizeFeature.beginFrame();
+    _bloomFeature.beginFrame();
 }
 
 ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecordContext& ctx)
@@ -679,12 +680,12 @@ void ForwardRenderPipeline::requestShadowSettings(const ShadowSettings& shadowSe
 
 PostProcessingState ForwardRenderPipeline::getPostProcessSettings() const
 {
-    return _postProcessStage.getState();
+    return _postProcessState;
 }
 
 PostProcessingState ForwardRenderPipeline::resolvePostProcessSettings() const
 {
-    return _pendingPostProcessSettings ? *_pendingPostProcessSettings : _postProcessStage.getState();
+    return _pendingPostProcessSettings ? *_pendingPostProcessSettings : getPostProcessSettings();
 }
 
 void ForwardRenderPipeline::requestPostProcessSettings(const PostProcessingState& settings)
@@ -695,9 +696,10 @@ void ForwardRenderPipeline::requestPostProcessSettings(const PostProcessingState
 RenderPipelineSettings ForwardRenderPipeline::resolveSettings() const
 {
     return {
-        .kind           = ERenderPipelineKind::Forward,
-        .shadow         = currentShadowSettings(),
-        .postProcessing = resolvePostProcessSettings(),
+        .kind                = ERenderPipelineKind::Forward,
+        .shadow              = currentShadowSettings(),
+        .postProcessing      = resolvePostProcessSettings(),
+        .bPostProcessGrading = _pendingPostProcessGrading.value_or(_bGradingEnabled),
     };
 }
 
@@ -705,14 +707,19 @@ void ForwardRenderPipeline::requestSettings(const RenderPipelineSettings& settin
 {
     requestShadowSettings(settings.shadow);
     requestPostProcessSettings(settings.postProcessing);
+    _pendingPostProcessGrading = settings.bPostProcessGrading;
 }
 
 void ForwardRenderPipeline::applyPendingPostProcessSettings()
 {
+    if (_pendingPostProcessGrading.has_value()) {
+        _bGradingEnabled = *_pendingPostProcessGrading;
+        _pendingPostProcessGrading.reset();
+    }
     if (!_pendingPostProcessSettings) {
         return;
     }
-    _postProcessStage.getState() = *_pendingPostProcessSettings;
+    _postProcessState = *_pendingPostProcessSettings;
     _pendingPostProcessSettings.reset();
 }
 
@@ -823,6 +830,7 @@ ForwardPipelineRecipe::Config ForwardRenderPipeline::buildRecipeConfig(const Ren
     // setting agree; Finalize is the mandatory display pass.
     const PostProcessingState postSettings = getPostProcessSettings();
     config.bloom.bEnabled = isGradingEnabled() && postSettings.bEnableBloom;
+    config.bloom.state    = postSettings.bloomOnly();
 
     // Shadow participates in the composition: whether the frame's settings turn
     // it on decides if the recipe resolves it and appends its passes.
@@ -833,6 +841,8 @@ ForwardPipelineRecipe::Config ForwardRenderPipeline::buildRecipeConfig(const Ren
     config.finalize.displayFormat = POSTPROCESS_COLOR_FORMAT;
     config.finalize.displayUsage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc;
     config.finalize.importLabel   = forward_pass_names::kDisplayImport;
+    config.finalize.grading       = postSettings.gradingOnly();
+    config.finalize.bGradingEnabled = isGradingEnabled();
     return config;
 }
 
@@ -910,7 +920,8 @@ bool ForwardRenderPipeline::appendForwardViewToGraph(RenderGraph& graph,
         .shadow    = _shadowStage.get(),
         .viewStage = _viewStage.get(),
         .entityId  = &_entityIdPass,
-        .post      = &_postProcessStage,
+        .post         = _finalizeFeature.stage(),
+        .bloom        = _bloomFeature.stage(),
     };
     const uint32_t alignment = std::max(_render ? _render->getUniformBufferOffsetAlignment() : 1u, 1u);
     auto preparedResult = ForwardPipelineRecipe::prepareBindings(

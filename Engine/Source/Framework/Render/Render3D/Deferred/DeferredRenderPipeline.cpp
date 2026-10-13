@@ -288,7 +288,8 @@ RenderPipelineSettings DeferredRenderPipeline::buildSettingsSnapshot() const
     return {
         .kind              = ERenderPipelineKind::Deferred,
         .shadow            = currentShadowSettings(),
-        .postProcessing    = _postProcessStage.getState(),
+        .postProcessing    = _postProcessState,
+        .bPostProcessGrading = _bGradingEnabled,
         .bReverseViewportY = _bReverseViewportY,
         .bSSAOEnabled      = _ssaoFeature.settings().bEnabled,
         .ssaoRadius        = _ssaoFeature.settings().radius,
@@ -379,7 +380,8 @@ void DeferredRenderPipeline::applyPendingSettings()
     };
     _bEnablePBRDiffuseIBL  = settings.bPBRDiffuseIBL;
     _bEnablePBRSpecularIBL = settings.bPBRSpecularIBL;
-    _postProcessStage.getState() = settings.postProcessing;
+    _postProcessState = settings.postProcessing;
+    _bGradingEnabled  = settings.bPostProcessGrading;
     applyShadowSettings(settings.shadow);
     if (_lightStage) {
         _lightStage->setIBLSettings(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL);
@@ -428,7 +430,7 @@ void DeferredRenderPipeline::loadPersistentSettings()
     _bEnablePBRDiffuseIBL  = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.light.enablePBRDiffuseIBL", _bEnablePBRDiffuseIBL);
     _bEnablePBRSpecularIBL = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.light.enablePBRSpecularIBL", _bEnablePBRSpecularIBL);
 
-    _postProcessStage.getState() = postprocess_settings::loadRuntimeSettings(_postProcessStage.getState());
+    _postProcessState = postprocess_settings::loadRuntimeSettings(_postProcessState);
 
     const ShadowSettings baselineShadowSettings = _shadowSettings ? *_shadowSettings : currentShadowSettings();
     ShadowSettings shadowSettings = shadow_settings::loadRuntimeSettings(baselineShadowSettings);
@@ -493,6 +495,7 @@ DeferredPipelineRecipe::Config DeferredRenderPipeline::buildRecipeConfig(const R
     // per-pass enable flags: Bloom resolves on only when grading and the bloom
     // setting agree; Finalize is the mandatory display pass.
     config.bloom.bEnabled = isGradingEnabled() && settings.postProcessing.bEnableBloom;
+    config.bloom.state    = settings.postProcessing.bloomOnly();
 
     // Shadow participates in the composition: whether the frame's settings turn
     // it on decides if the recipe resolves it and appends its passes.
@@ -503,6 +506,8 @@ DeferredPipelineRecipe::Config DeferredRenderPipeline::buildRecipeConfig(const R
     config.finalize.displayFormat = POSTPROCESS_COLOR_FORMAT;
     config.finalize.displayUsage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc;
     config.finalize.importLabel   = deferred_pass_names::kDisplayImport;
+    config.finalize.grading       = settings.postProcessing.gradingOnly();
+    config.finalize.bGradingEnabled = isGradingEnabled();
     return config;
 }
 
@@ -759,12 +764,8 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
         initShadowResources();
     }
 
-    _postProcessStage.init(PostProcessingStage::InitDesc{
-        .render      = _render,
-        .colorFormat = POSTPROCESS_COLOR_FORMAT,
-        .width       = extent.width,
-        .height      = extent.height,
-    });
+    _finalizeFeature.init(_render, POSTPROCESS_COLOR_FORMAT);
+    _bloomFeature.init(_render);
 }
 
 void DeferredRenderPipeline::initStages()
@@ -813,7 +814,8 @@ void DeferredRenderPipeline::initStages()
 void DeferredRenderPipeline::shutdown()
 {
     _entityIdPass.destroy();
-    _postProcessStage.shutdown();
+    _finalizeFeature.shutdown();
+    _bloomFeature.shutdown();
 
     _pendingResourceRefreshMask      = 0;
     _graphExecutor.reset();
@@ -905,7 +907,8 @@ void DeferredRenderPipeline::beginSubmission(const PreparedPipelineFrame& prepar
     if (_gBufferStage) {
         _gBufferStage->beginFrame();
     }
-    _postProcessStage.beginFrame();
+    _finalizeFeature.beginFrame();
+    _bloomFeature.beginFrame();
     if (bSsaoOn) {
         _ssaoFeature.beginFrame();
     }
@@ -1377,7 +1380,8 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         .overlay  = _overlayFeature.stage(),
         .sprites  = _spriteStage.get(),
         .entityId = &_entityIdPass,
-        .post     = &_postProcessStage,
+        .post         = _finalizeFeature.stage(),
+        .bloom        = _bloomFeature.stage(),
     };
     const uint32_t alignment = std::max(_render ? _render->getUniformBufferOffsetAlignment() : 1u, 1u);
     auto preparedResult = DeferredPipelineRecipe::prepareBindings(

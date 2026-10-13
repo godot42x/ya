@@ -1,15 +1,16 @@
 #pragma once
 
 #include "Graph/RenderGraph.h"
+#include "Render3D/Common/PostProcessingState.h"
 #include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Composition/FeatureProtocol.h"
+#include "Render3D/Pipelines/BloomPostprocessing.h"
 
 #include <optional>
 
 namespace ya
 {
 
-struct PostProcessingStage;
 class RenderSubmission;
 
 /// Bloom as a multi-pass color contribution: extract → blur chain → composite,
@@ -21,9 +22,14 @@ class RenderSubmission;
 ///
 /// Shared by both world pipelines: each resolves it with its own import label
 /// prefix so the View's diagnostics keep naming the pipeline they belong to.
+///
+/// The feature owns its device object (`BloomPostprocessing`) and the bloom
+/// half of the postprocess settings; the finalize feature owns the other half
+/// (D5). Each pipeline holds one instance, exactly as it held the old shared
+/// stage.
 struct BloomFeature
 {
-    using Stage = PostProcessingStage;
+    using Stage = BloomPostprocessing;
 
     struct Settings
     {
@@ -31,6 +37,9 @@ struct BloomFeature
         /// Prefix of this View's diagnostic import labels ("Deferred.",
         /// "ForwardView."). Stated by the recipe that owns the map.
         std::string_view importLabelPrefix{};
+        /// The bloom half of the postprocess state: the five chain parameters.
+        /// Grading's half never reaches this feature.
+        PostProcessingState state = PostProcessingState{}.bloomOnly();
     };
 
     struct Facts
@@ -50,12 +59,16 @@ struct BloomFeature
         std::optional<ViewTargetRequirement> blur{};
         std::optional<ViewTargetRequirement> composite{};
         std::string_view                    importLabelPrefix{};
+        /// The chain parameters this View runs with, copied out of Settings so
+        /// append reads the resolved value and never a feature-held copy (the
+        /// recipe holds the feature as a stack temporary).
+        PostProcessingState                 state{};
     };
 
     struct PrepareContext
     {
-        RenderSubmission*    submission = nullptr;
-        PostProcessingStage* stage      = nullptr;
+        RenderSubmission*   submission = nullptr;
+        BloomPostprocessing* stage      = nullptr;
     };
 
     struct Prepared
@@ -73,6 +86,18 @@ struct BloomFeature
         RGTextureHandle blur{};
         RGTextureHandle composite{};
     };
+
+    /// The device object this feature owns (D5); the pipeline drives it.
+    /// The chain parameters are NOT held here: they arrive through Settings and
+    /// leave through Resolved, so the recipe's stack-temporary feature and the
+    /// pipeline's member instance behave identically.
+    stdptr<BloomPostprocessing> _stage;
+
+    void init(IRender* render);
+    void shutdown();
+    void beginFrame();
+
+    [[nodiscard]] BloomPostprocessing* stage() const { return _stage.get(); }
 
     [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;
 

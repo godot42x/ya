@@ -2,7 +2,9 @@
 
 #include "Graph/RenderGraph.h"
 #include "RHI/RenderDefines.h"
+#include "Render3D/Common/PostProcessingState.h"
 #include "Render3D/Common/ViewPassResources.h"
+#include "Render3D/Pipelines/BasicPostprocessing.h"
 
 #include <string_view>
 #include "Render3D/Composition/FeatureProtocol.h"
@@ -11,7 +13,6 @@ namespace ya
 {
 
 struct FrameContext;
-struct PostProcessingStage;
 class RenderSubmission;
 
 /// Finalize: the mandatory display pass. It applies the configured grading (or
@@ -20,9 +21,13 @@ class RenderSubmission;
 ///
 /// The pass runs every frame; grading/Bloom settings only change its look, never
 /// whether it exists.
+///
+/// The feature owns its device object (`BasicPostprocessing`) and the grading
+/// half of the postprocess settings, including the master grading switch; the
+/// bloom feature owns the other half (D5).
 struct FinalizeFeature
 {
-    using Stage = PostProcessingStage;
+    using Stage = BasicPostprocessing;
 
     struct Settings
     {
@@ -33,6 +38,12 @@ struct FinalizeFeature
         /// Diagnostic import label of this View's display target. Stated by the
         /// recipe that owns the map so each pipeline keeps its own vocabulary.
         std::string_view importLabel{};
+        /// The grading state the pass runs with, and the master switch. Config
+        /// loads and settings requests write the pipeline's snapshot; the recipe
+        /// hands the resolved value to append, so the pass never reads a
+        /// feature-held copy that a stack temporary would not have.
+        PostProcessingState grading = PostProcessingState{}.gradingOnly();
+        bool                bGradingEnabled = true;
     };
 
     struct Facts
@@ -48,8 +59,8 @@ struct FinalizeFeature
 
     struct PrepareContext
     {
-        RenderSubmission*    submission = nullptr;
-        PostProcessingStage* stage      = nullptr;
+        RenderSubmission*   submission = nullptr;
+        BasicPostprocessing* stage      = nullptr;
     };
 
     struct Prepared
@@ -63,12 +74,23 @@ struct FinalizeFeature
         bool                bOutputIsSRGB = false;
         ViewTargetRequirement target{};
         std::string_view    importLabel{};
+        /// The grading the pass applies, already folded through the master
+        /// switch: append records what resolve decided and nothing re-reads it.
+        PostProcessingState grading{};
     };
 
     struct GraphOutputs
     {
         RGTextureHandle display{};
     };
+
+    /// The device object this feature owns (D5); the pipeline drives it.
+    stdptr<BasicPostprocessing> _stage;
+
+    void init(IRender* render, EFormat::T colorFormat);
+    void shutdown();
+    void beginFrame();
+    [[nodiscard]] BasicPostprocessing* stage() const { return _stage.get(); }
 
     [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;
 

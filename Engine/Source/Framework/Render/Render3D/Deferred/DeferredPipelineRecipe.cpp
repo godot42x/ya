@@ -296,7 +296,7 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
         resolved.bloom(),
         BloomFeature::PrepareContext{
             .submission = ctx.submission,
-            .stage      = stages.post,
+            .stage      = stages.bloom,
         });
     if (bloomPrepared.isErr()) {
         return bloomPrepared.error();
@@ -541,7 +541,7 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     const BloomFeature bloomFeature;
     auto bloomOutputs = bloomFeature.append(
         ctx.graph,
-        ctx.stages->post,
+        ctx.stages->bloom,
         featureCtx,
         BloomFeature::Facts{.viewExtent = resolved.viewExtent},
         resolved.bloom(),

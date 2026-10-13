@@ -577,11 +577,13 @@
       ],
       "status": "in_progress",
       "evidence": [
-        "批 1（SSAO，已落地）：SSAOFeature 拥有 SSAOStage + Settings + init/shutdown/beginFrame/refreshDeviceFormats；pipeline 删 _ssaoStage 与五个镜像设置成员；SSAOStage 变纯设备对象",
-        "批 2（Skybox/Overlay，已落地）：ViewOverlayStage 按 feature 边界拆开——skybox 管线独立为 SkyboxStage 归 SkyboxFeature；billboard/worldGrid/SimpleMaterial/debug 留在 ViewOverlayStage 归 OverlayFeature（原先是 SkyboxFeature 与 OverlayFeature 共用同一个 672 行设备对象）；两 feature 各自 init/shutdown/beginFrame/refreshDeviceFormats，pipeline 删 _overlayStage 成员",
-        "批 2 数据边界：per-View 包抽到 Common/ViewOverlayInputs.h 的 ViewOverlayFrameInputs（纯值，无设备依赖），EntityIdFeature 不再 include 任何 Stage 头；recipe Stages 拆出 skybox 槽位",
-        "待办批次：Bloom/Finalize → Lighting/GBuffer → Shadow；每批删除 pipeline 对应 Stage 成员与 setter；concept 去掉 typename F::Stage 随最后一批",
-        "证据：235/235；Deferred/Forward/切回 Deferred 三帧逐像素 0 diff（skybox 路径）；trace 拓扑含 Deferred Skybox 与 Deferred Forward Transparent（overlay pass）且 billboard 场景 billboards=2 无失败日志；VUID 分布与本批无关"
+        "批 1（SSAO）：SSAOFeature 拥有 SSAOStage + Settings + 生命周期；pipeline 删 _ssaoStage 与五个镜像设置成员",
+        "批 2（Skybox/Overlay）：两个 feature 共用的 ViewOverlayStage 按边界拆为 SkyboxStage（归 SkyboxFeature）与收窄的 ViewOverlayStage（归 OverlayFeature）；per-View 包独立成 Common/ViewOverlayInputs.h（EntityIdFeature 不再依赖设备头）",
+        "批 3（Bloom/Finalize）：两 feature 共用的 PostProcessingStage 删除，BloomPostprocessing 归 BloomFeature、BasicPostprocessing 归 FinalizeFeature；两者由两管线原样各持一份实例；grading/bloom 以 PostProcessingState 半区投影经 Settings→Resolved 传递",
+        "批 3 实施期发现并修复两个真 bug（均属'把设备对象从管线成员搬到 feature'的类型）：① FinalizeFeature::append 的 execute lambda 捕获 this，但 recipe 持栈上临时 feature，图执行时悬空（SIGSEGV，lldb 定位 this=0x0）；改为捕获传入的 stage 指针。② grading/bloom state 首版存在 feature 成员上，recipe 的栈临时从未拿到管线载入的配置（曝光 0.8 变成默认 0.6，全屏均匀变暗）；改为 state 全走 Settings→Resolved，feature 实例保持无状态",
+        "automation 的 postprocess overrides 改为走 pipeline.requestSettings（wire 字段 bPostProcessGrading），不再伸手进 stage 对象；Forward 补上了原先会丢 bPostProcessGrading 的转发缺口",
+        "证据：235/235（44 suites）；五帧逐像素 max diff 0：Deferred/Forward/切回 Deferred（vs c3b-ssao-on、c4b-forward）、bloom-off（vs c3b-bloom-off）、grading-off（vs c3g-grading-off）",
+        "待办批次：Lighting/GBuffer → Shadow（最后，依赖灯光线）；concept 去掉 typename F::Stage / Stage* 参数随最后一批"
       ]
     }
   ]

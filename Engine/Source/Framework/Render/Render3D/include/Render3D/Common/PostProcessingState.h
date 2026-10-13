@@ -47,6 +47,39 @@ struct PostProcessingState
     uint32_t          bloomBlurPasses        = 5;
     float             bloomStrength          = 0.8f;
 
+    /// The grading half only: bloom fields are reset. This is the finalize
+    /// feature's state -- it decides how the linear image is encoded and what
+    /// look changes apply, and it must not carry another feature's parameters
+    /// just because the wire format groups them.
+    [[nodiscard]] PostProcessingState gradingOnly() const
+    {
+        PostProcessingState state = *this;
+        state.bEnableBloom          = false;
+        state.bloomThreshold        = 1.0f;
+        state.bloomSoftKnee         = 0.25f;
+        state.bloomExtractIntensity = 1.0f;
+        state.bloomBlurPasses       = 5;
+        state.bloomStrength         = 0.8f;
+        return state;
+    }
+
+    /// The bloom half only: grading fields are reset. This is the bloom
+    /// feature's state -- the extract/blur/composite chain reads exactly these
+    /// five parameters. The two halves partition the wire value: every field
+    /// has exactly one owner, and each pipeline keeps the assembled value for
+    /// its snapshot/requests.
+    [[nodiscard]] PostProcessingState bloomOnly() const
+    {
+        PostProcessingState state;
+        state.bEnableBloom          = bEnableBloom;
+        state.bloomThreshold        = bloomThreshold;
+        state.bloomSoftKnee         = bloomSoftKnee;
+        state.bloomExtractIntensity = bloomExtractIntensity;
+        state.bloomBlurPasses       = bloomBlurPasses;
+        state.bloomStrength         = bloomStrength;
+        return state;
+    }
+
     /// Display compose for an input that is ALREADY display-encoded (a View's
     /// display image). Every stage here is a look-changing stage, and this image
     /// has already been through them, so any flag left on grades it twice: an

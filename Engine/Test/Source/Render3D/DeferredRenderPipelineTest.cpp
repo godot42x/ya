@@ -368,37 +368,57 @@ TEST(DeferredFeatureMapTest, BloomDisabledDeclaresNoTargetsAndFinalizeCarriesThe
     EXPECT_EQ(finalize.target.format, EFormat::R8G8B8A8_UNORM);
 }
 
-TEST(PostProcessingStageTest, FinalizeParamsDefaultsStayEmpty)
+TEST(PostProcessingStateTest, TheTwoHalvesPartitionTheWireValue)
 {
-    PostProcessingStage::FinalizePassParams params{};
-    EXPECT_FALSE(params.input.isValid());
-    EXPECT_FALSE(params.output.isValid());
-    EXPECT_EQ(params.inputExtent.width, 0u);
-    EXPECT_EQ(params.inputExtent.height, 0u);
-    EXPECT_FALSE(params.bOutputIsSRGB);
-    EXPECT_EQ(params.postContext, nullptr);
-    EXPECT_EQ(params.viewId, 0u);
-    EXPECT_EQ(params.toneMap.input.set, DescriptorSetHandle{});
+    // D5: grading and bloom are two features' settings now. Every field has
+    // exactly one owner -- gradingOnly() drops the bloom five, bloomOnly()
+    // zeroes everything else -- and the projection a pipeline hands a feature
+    // must carry that half's values unchanged.
+    PostProcessingState wire;
+    wire.bEnableInversion       = true;
+    wire.grayscaleMode          = PostProcessingState::EGrayscaleMode::Weighted;
+    wire.exposure               = 1.75f;
+    wire.bEnableGammaCorrection = false;
+    wire.gamma                  = 2.0f;
+    wire.bEnableBloom           = true;
+    wire.bloomThreshold         = 2.5f;
+    wire.bloomSoftKnee          = 0.4f;
+    wire.bloomExtractIntensity  = 1.2f;
+    wire.bloomBlurPasses        = 3;
+    wire.bloomStrength          = 0.55f;
+
+    const PostProcessingState grading = wire.gradingOnly();
+    EXPECT_TRUE(grading.bEnableInversion);
+    EXPECT_FLOAT_EQ(grading.exposure, 1.75f);
+    EXPECT_FALSE(grading.bEnableBloom);
+    EXPECT_EQ(grading.bloomBlurPasses, 5u); // default: grading carries no bloom values
+
+    const PostProcessingState bloom = wire.bloomOnly();
+    EXPECT_TRUE(bloom.bEnableBloom);
+    EXPECT_FLOAT_EQ(bloom.bloomThreshold, 2.5f);
+    EXPECT_EQ(bloom.bloomBlurPasses, 3u);
+    EXPECT_FALSE(bloom.bEnableInversion);          // default: bloom carries no grading values
+    EXPECT_FLOAT_EQ(bloom.exposure, 0.6f);
+    EXPECT_EQ(bloom.grayscaleMode, PostProcessingState::EGrayscaleMode::None);
 }
 
-TEST(PostProcessingStageTest, BloomAndFinalizeViewIdsStayIndependent)
+TEST(PostProcessFeatureTest, BloomAndFinalizeCarryTheirOwnViewIds)
 {
+    // D5: the two passes are two features with two device objects, so their
+    // per-View ids are independent by construction -- there is no shared stage
+    // whose last call could leak one pass's id into the other's.
     BloomPostprocessing::RenderDesc bloom{};
     EXPECT_EQ(bloom.viewId, 0u);
     bloom.viewId = 11;
 
-    PostProcessingStage::FinalizePassParams finalize{};
-    finalize.viewId = 12;
-
     BasicPostprocessing::RenderDesc toneMap{};
     EXPECT_EQ(toneMap.viewId, 0u);
     EXPECT_EQ(toneMap.toneMap.input.set, DescriptorSetHandle{});
-    toneMap.viewId = bloom.viewId;
+    toneMap.viewId = 12;
 
     EXPECT_EQ(bloom.viewId, 11u);
-    EXPECT_EQ(finalize.viewId, 12u);
-    EXPECT_EQ(toneMap.viewId, 11u);
-    EXPECT_NE(bloom.viewId, finalize.viewId);
+    EXPECT_EQ(toneMap.viewId, 12u);
+    EXPECT_NE(bloom.viewId, toneMap.viewId);
 }
 
 TEST(SSAOStageTest, ResolvedFrameDataComesFromTheFeaturesOwnSettings)

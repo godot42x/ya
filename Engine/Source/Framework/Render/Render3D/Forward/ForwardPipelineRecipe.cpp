@@ -8,7 +8,8 @@
 #include "Graph/RenderGraphImportUtils.h"
 #include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/EnvironmentLightingSceneResources.h"
-#include "Render3D/Common/PostProcessingStage.h"
+#include "Render3D/Pipelines/BasicPostprocessing.h"
+#include "Render3D/Pipelines/BloomPostprocessing.h"
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ViewGraphName.h"
@@ -222,7 +223,7 @@ ForwardPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
         resolved.bloom(),
         BloomFeature::PrepareContext{
             .submission = ctx.submission,
-            .stage      = stages.post,
+            .stage      = stages.bloom,
         });
     if (bloomPrepared.isErr()) {
         return bloomPrepared.error();
@@ -400,7 +401,7 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     const BloomFeature bloomFeature;
     auto bloomOutputs = bloomFeature.append(
         ctx.graph,
-        ctx.stages->post,
+        ctx.stages->bloom,
         featureCtx,
         BloomFeature::Facts{.viewExtent = resolved.viewExtent},
         resolved.bloom(),

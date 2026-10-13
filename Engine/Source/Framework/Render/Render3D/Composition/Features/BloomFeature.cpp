@@ -1,14 +1,45 @@
 #include "Render3D/Composition/Features/BloomFeature.h"
 
 #include "Graph/RenderGraphImportUtils.h"
-#include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/RenderSubmission.h"
-#include "Render3D/Pipelines/BloomPostprocessing.h"
+#include "RHI/Render.h"
 
 #include <string>
 
 namespace ya
 {
+
+void BloomFeature::init(IRender* render)
+{
+    if (_stage == nullptr) {
+        _stage = ya::makeShared<BloomPostprocessing>();
+    }
+    _stage->init(BloomPostprocessing::InitDesc{
+        .render = render,
+        .pipelineRenderingInfo = PipelineRenderingInfo{
+            .label                   = "BloomPostprocessing",
+            .viewMask                = 0,
+            .colorAttachmentFormats  = {BloomPostprocessing::BLOOM_FORMAT},
+            .depthAttachmentFormat   = EFormat::Undefined,
+            .stencilAttachmentFormat = EFormat::Undefined,
+        },
+    });
+}
+
+void BloomFeature::shutdown()
+{
+    if (_stage) {
+        _stage->shutdown();
+        _stage.reset();
+    }
+}
+
+void BloomFeature::beginFrame()
+{
+    if (_stage) {
+        _stage->beginFrame();
+    }
+}
 
 BloomFeature::Resolved BloomFeature::resolve(const Settings& settings,
                                              const Facts&    facts,
@@ -20,6 +51,7 @@ BloomFeature::Resolved BloomFeature::resolve(const Settings& settings,
     Resolved resolved;
     resolved.bEnabled          = settings.bEnabled;
     resolved.importLabelPrefix = settings.importLabelPrefix;
+    resolved.state             = settings.state;
     if (!resolved.bEnabled) {
         return resolved;
     }
@@ -54,9 +86,9 @@ Result<BloomFeature::Prepared, FeatureError> BloomFeature::prepareBindings(const
     }
 
     allocateBloomPassBindings(*ctx.submission,
-                              ctx.stage->getBloomExtractDSL(),
-                              ctx.stage->getBloomBlurDSL(),
-                              ctx.stage->getBloomCompositeDSL(),
+                              ctx.stage->getExtractDSL(),
+                              ctx.stage->getBlurDSL(),
+                              ctx.stage->getCompositeDSL(),
                               prepared.bloom);
     return prepared;
 }
@@ -102,8 +134,22 @@ Result<BloomFeature::GraphOutputs, FeatureError> BloomFeature::append(RenderGrap
         return FeatureError::MissingDependency;
     }
 
-    const BloomPostprocessing::ChainOutputs chain = stage->appendBloomGraphPasses(
-        graph, inputs.color, facts.viewExtent, nullptr, ctx.viewId, prepared.bloom, outputs.extract, outputs.blur, outputs.composite);
+    // The chain runs with the resolved state; grading is not this feature's
+    // decision (its bEnabled already folds in the master switch).
+    PostProcessingState chainState = resolved.state;
+    chainState.bEnableBloom        = true;
+    const BloomPostprocessing::ChainOutputs chain = stage->appendBloomChain(
+        graph,
+        BloomPostprocessing::RenderDesc{
+            .sceneHandle  = inputs.color,
+            .renderExtent = facts.viewExtent,
+            .state        = &chainState,
+            .viewId       = ctx.viewId,
+            .bloom        = prepared.bloom,
+            .extractHandle   = outputs.extract,
+            .blurHandle      = outputs.blur,
+            .compositeHandle = outputs.composite,
+        });
     if (!chain.composite.isValid()) {
         return FeatureError::MissingDependency;
     }

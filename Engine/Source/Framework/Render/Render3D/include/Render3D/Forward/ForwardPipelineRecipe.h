@@ -23,7 +23,8 @@ namespace ya
 
 struct EntityIdPass;
 struct FrameContext;
-struct PostProcessingStage;
+struct BasicPostprocessing;
+struct BloomPostprocessing;
 struct RenderFrameData;
 struct RenderFramePlan;
 struct RenderStageContext;
@@ -69,7 +70,10 @@ struct ForwardPipelineRecipe
         ShadowStage*         shadow    = nullptr;
         ForwardViewStage*    viewStage = nullptr;
         EntityIdPass*        entityId  = nullptr;
-        PostProcessingStage* post      = nullptr;
+        /// The finalize pass's device object (owned by FinalizeFeature).
+        BasicPostprocessing* post      = nullptr;
+        /// The bloom chain's device object (owned by BloomFeature).
+        BloomPostprocessing* bloom     = nullptr;
     };
 
     /// Pipeline-resolved configuration for one frame: the View's formats, this

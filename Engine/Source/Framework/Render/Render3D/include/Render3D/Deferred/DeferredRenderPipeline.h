@@ -14,7 +14,8 @@
 #include "Render3D/RenderFrameData.h"
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/EntityIdPass.h"
-#include "Render3D/Common/PostProcessingStage.h"
+#include "Render3D/Composition/Features/BloomFeature.h"
+#include "Render3D/Composition/Features/FinalizeFeature.h"
 #include "Render3D/Common/PostProcessingState.h"
 #include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
@@ -117,7 +118,18 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     OverlayFeature               _overlayFeature;
     /// Authored scene sprites drawn into the lit scene color (see Sprite2DStage).
     stdptr<Sprite2DStage>    _spriteStage;
-    PostProcessingStage          _postProcessStage;
+    /// Bloom's device object and lifecycle live on this feature (D5); the
+    /// chain parameters are this pipeline's settings, passed through
+    /// Settings -> Resolved each frame. Shared with Forward by type.
+    BloomFeature                 _bloomFeature;
+    /// Finalize's device object and lifecycle live on this feature (D5); the
+    /// grading state travels the same way.
+    FinalizeFeature              _finalizeFeature;
+    /// The master grading switch and the two state halves, owned by the
+    /// pipeline: features receive them as Settings and never keep their own
+    /// copy, so a config load and a settings request land in one place.
+    PostProcessingState          _postProcessState{};
+    bool                         _bGradingEnabled = true;
 
     ShadowMapResources                                              _shadowResources;
     Mesh*                                                           _defaultSkyboxMesh = nullptr;
@@ -178,15 +190,15 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     bool           isShadowMappingEnabled() const override;
     std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
     std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
-    bool     isGradingEnabled() const override { return _postProcessStage.isGradingEnabled(); }
+    bool     isGradingEnabled() const override { return _bGradingEnabled; }
     [[nodiscard]] EFormat::T getPostprocessColorFormat() const override { return POSTPROCESS_COLOR_FORMAT; }
     /// Same fact as the forward pipeline's: the finalize pass's gamma stage is
     /// what makes the linear render target a display image, so that switch is
     /// the encoding of this pipeline's display image.
     [[nodiscard]] EImageEncoding getDisplayImageEncoding() const override
     {
-        return _postProcessStage.getState().bEnableGammaCorrection ? EImageEncoding::DisplayEncoded
-                                                                   : EImageEncoding::Linear;
+        return _postProcessState.bEnableGammaCorrection ? EImageEncoding::DisplayEncoded
+                                                        : EImageEncoding::Linear;
     }
 
   private:

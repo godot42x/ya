@@ -32,12 +32,13 @@ struct EntityIdPass;
 struct FrameContext;
 struct GBufferStage;
 struct LightStage;
-struct PostProcessingStage;
 struct RenderFrameData;
 struct RenderFramePlan;
 struct RenderStageContext;
 struct RenderViewRecordingContext;
 struct SSAOStage;
+struct BasicPostprocessing;
+struct BloomPostprocessing;
 struct ShadowStage;
 struct SkyboxStage;
 struct Sprite2DStage;
@@ -87,7 +88,10 @@ struct DeferredPipelineRecipe
         ViewOverlayStage*    overlay  = nullptr;
         Sprite2DStage*       sprites  = nullptr;
         EntityIdPass*        entityId = nullptr;
-        PostProcessingStage* post     = nullptr;
+        /// The finalize pass's device object (owned by FinalizeFeature).
+        BasicPostprocessing* post     = nullptr;
+        /// The bloom chain's device object (owned by BloomFeature).
+        BloomPostprocessing* bloom    = nullptr;
     };
 
     /// Pipeline-resolved configuration for one frame. Formats come from the

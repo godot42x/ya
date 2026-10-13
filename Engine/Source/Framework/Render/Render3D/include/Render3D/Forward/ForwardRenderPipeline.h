@@ -10,7 +10,8 @@
 #include "RHI/Render.h"
 #include "Render3D/RenderFrameData.h"
 #include "Render3D/Common/IRenderPipeline.h"
-#include "Render3D/Common/PostProcessingStage.h"
+#include "Render3D/Composition/Features/BloomFeature.h"
+#include "Render3D/Composition/Features/FinalizeFeature.h"
 #include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
@@ -68,7 +69,13 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     // ── Render stages ─────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
     stdptr<ForwardViewStage> _viewStage;
-    PostProcessingStage          _postProcessStage;
+    /// Bloom's device object and lifecycle live on this feature (D5); the
+    /// chain parameters are this pipeline's settings, passed through
+    /// Settings -> Resolved each frame. One instance per pipeline.
+    BloomFeature                 _bloomFeature;
+    /// Finalize's device object and lifecycle live on this feature (D5); the
+    /// grading state travels the same way.
+    FinalizeFeature              _finalizeFeature;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
     stdptr<ForwardFrameResourceSet> _frameResources;
 
@@ -84,6 +91,11 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     EntityIdPass     _entityIdPass{};
     ShadowSettings _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
     std::optional<PostProcessingState> _pendingPostProcessSettings;
+    std::optional<bool>                _pendingPostProcessGrading;
+    /// The applied grading state and master switch: the pipeline owns them, the
+    /// features receive them as Settings (D5).
+    PostProcessingState                _postProcessState{};
+    bool                               _bGradingEnabled = true;
 
     void init(const InitDesc& desc);
     ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
@@ -113,7 +125,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
-    [[nodiscard]] bool           isGradingEnabled() const override { return _postProcessStage.isGradingEnabled(); }
+    [[nodiscard]] bool           isGradingEnabled() const override { return _bGradingEnabled; }
     [[nodiscard]] EFormat::T     getPostprocessColorFormat() const override { return POSTPROCESS_COLOR_FORMAT; }
     /// The finalize pass's gamma stage is what makes a linear render target a
     /// display image, so the encoding of this pipeline's display image is
@@ -130,6 +142,8 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] PostProcessingState getPostProcessSettings() const;
     [[nodiscard]] PostProcessingState resolvePostProcessSettings() const;
     void                         requestPostProcessSettings(const PostProcessingState& settings);
+    /// Master grading switch of the finalize pass (automation/editor path).
+    void                         setGradingEnabled(bool enabled) { _bGradingEnabled = enabled; }
 
     /// The forward strategy's settings as one value. It reads `shadow` and
     /// `postProcessing` and carries the strategy-specific block unchanged: those

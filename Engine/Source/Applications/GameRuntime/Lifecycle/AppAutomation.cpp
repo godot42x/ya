@@ -5,7 +5,7 @@
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Terrain/TerrainProcessor.h"
 #include "GameRuntime/App.h"
-#include "Render3D/Common/PostProcessingStage.h"
+#include "Render3D/Common/RenderPipelineSettings.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "Render3D/RenderDeviceState.h"
@@ -490,19 +490,32 @@ bool hasTickAutomationConfig(const AppAutomationOptions& automation)
            hasRenderDocAutomation(automation);
 }
 
-void applyPostprocessAutomationOverrides(PostProcessingStage& stage, const AppAutomationPostProcessOverrides& overrides)
+/// Postprocess overrides go through the pipeline's own settings request: the
+/// values land at the safe point like every other settings change, and the
+/// feature that owns each field (finalize owns grading, bloom owns the chain)
+/// reads it from the one snapshot. Nothing here reaches into a stage object.
+void applyPostprocessAutomationOverrides(IRenderPipeline& pipeline, const AppAutomationPostProcessOverrides& overrides)
 {
+    RenderPipelineSettings settings = pipeline.resolveSettings();
+    bool bChanged = false;
     if (overrides.enabled.has_value()) {
-        stage.setGradingEnabled(*overrides.enabled);
+        settings.bPostProcessGrading = *overrides.enabled;
+        bChanged = true;
     }
     if (overrides.bloomEnabled.has_value()) {
-        stage.setBloomEnabled(*overrides.bloomEnabled);
+        settings.postProcessing.bEnableBloom = *overrides.bloomEnabled;
+        bChanged = true;
     }
     if (overrides.toneMappingEnabled.has_value()) {
-        stage.setToneMappingEnabled(*overrides.toneMappingEnabled);
+        settings.postProcessing.bEnableToneMapping = *overrides.toneMappingEnabled;
+        bChanged = true;
     }
     if (overrides.toneMappingCurve.has_value()) {
-        stage.setToneMappingCurve(*overrides.toneMappingCurve);
+        settings.postProcessing.toneMappingCurve = *overrides.toneMappingCurve;
+        bChanged = true;
+    }
+    if (bChanged) {
+        pipeline.requestSettings(settings);
     }
 }
 
@@ -733,13 +746,13 @@ void AppAutomation::applyRuntimeOverrides(App& app)
 
     const auto& automation = app.getDesc().automation;
     if (auto* forward = device->_pipelineCoordinator.getSelectedForwardPipeline()) {
-        applyPostprocessAutomationOverrides(forward->_postProcessStage, automation.postprocess);
+        applyPostprocessAutomationOverrides(*forward, automation.postprocess);
     }
     if (auto* deferred = device->_pipelineCoordinator.getSelectedDeferredPipeline()) {
         if (automation.deferred.ssaoEnabled.has_value()) {
             deferred->setSSAOEnabled(*automation.deferred.ssaoEnabled);
         }
-        applyPostprocessAutomationOverrides(deferred->_postProcessStage, automation.postprocess);
+        applyPostprocessAutomationOverrides(*deferred, automation.postprocess);
     }
 }
 

@@ -899,3 +899,41 @@ D4 侦察时按 `forward_graph_exports::viewDepth` 追读，发现 C4a（6679b00
 
 - D5 后续：Bloom/Finalize → Lighting/GBuffer → Shadow（最后，依赖灯光线）；concept 的 `typename F::Stage` / `Stage*` 参数随最后一批去掉，`Stages` 传参表逐步清空。
 - Billboard 编辑器侧 smoke（`Script/automation/billboard/`）仍走 editor 目标，受并行 GUI 重构 `clearChildren` 签名变更阻塞，未复跑；game 侧 overlay 路径已由 trace + billboard 计数覆盖。
+
+## 2026-10-13 — D5 批 3：Bloom/Finalize 拆分设备对象，删除 PostProcessingStage（M28 分批进行中）
+
+### 目标与边界
+
+**单一验收目标（该批）**：Bloom 与 Finalize 各自拥有其设备对象与生命周期；`PostProcessingStage`（两 feature 共用的容器）退场；pipeline 不再持该 Stage 成员。
+
+### 侦察结论
+
+`PostProcessingStage` 是 Bloom/Finalize 共用的容器：内含 `BloomPostprocessing`（bloom 链设备）与 `BasicPostprocessing`（finalize 设备）两个对象、一个横跨两者的 settings blob、以及给 automation 直连的 setter。与批 2 同型——先按 feature 边界拆。
+
+### 实施内容
+
+- **设备对象归位**：`BloomPostprocessing` → `BloomFeature`（`stdptr` + init/shutdown/beginFrame；bloom 管线是格式固定的，无 refresh）；`BasicPostprocessing` → `FinalizeFeature`（+ init/shutdown/beginFrame/stage()）。两条管线各持一份 feature 实例（原来也是各持一份 stage，实例数不变）。
+- **settings 拆分**：`PostProcessingState` 增加两个半区投影 `gradingOnly()` / `bloomOnly()`（字段零重叠，每个字段恰有一个 owner）。管线的 `_postProcessState` 是唯一权威值，经 `Config.bloom.state` / `Config.finalize.grading`（含 `bGradingEnabled` 折叠）→ `Resolved` 流到两个 feature；feature 实例本身无 settings 状态（见下）。
+- **finalize pass 搬到 FinalizeFeature**：pass 的 setup/execute 与 `Postprocessing.Output` 导出从 stage 移入 feature 的 append；`BasicPostprocessing` 只留设备职责。
+- **automation 改道**：postprocess overrides 经由 `pipeline.requestSettings`（新增 wire 字段 `RenderPipelineSettings::bPostProcessGrading`）落点，不再直接写 stage 对象；顺带修复 Forward 原先只转发 shadow/postProcessing、会丢 grading 开关的缺口。
+- **删除**：`PostProcessingStage.{h,cpp}`。
+
+### 实施期发现并修复的两个真 bug（均已记录，值得后续批次警惕）
+
+两个都属**同一族**：把设备对象从「管线成员」搬到「recipe 里的栈上临时 feature」后，原先合法的写法变成悬空/失联。
+
+1. **lambda 捕获 this 悬空（SIGSEGV）**：`FinalizeFeature::append` 的 execute lambda 捕获 `this`，但 recipe 里 feature 是栈上临时对象（`const FinalizeFeature finalizeFeature;`），图执行时 `this` 已失效。症状：`App::quit` 前的 `BasicPostprocessing::writeInput(this=0x0)` 崩溃（lldb 定位），exit=139。修复：捕获传入的 `stage` 指针（管线持有的设备对象），与其余 feature 一致 —— 这也是既有模式的正确性依据。
+   - 诊断方法：git stash 只回退本批文件 → 重建 → exit=0，与本批 exit=139 对照，先定性再定位。
+2. **state 藏在 feature 成员导致配置失联**：grading/bloom state 首版存在 feature 的 `_grading`/`_settings` 成员上；管线载入的配置写在**管线成员的 feature 实例**上，而 recipe 用的是**另一个栈上临时实例**（默认值）——曝光 0.8 被静默读成默认 0.6，全屏均匀变暗（mean 111.5→93.8，p50=20 覆盖全图）。修复：state 全走 `Settings → Resolved` 数据流（feature 实例保持无状态），管线侧 `_postProcessState` 为权威值。
+   - 诊断方法：在 load（写入 0.8）与 finalize append（读到 0.6）两端加探针，确认写入成功而读取失联，从而定位到「实例不是同一个」。
+
+### 验证
+
+- `xmake r ya-render-3d-test` 235/235（44 suites）。
+- runtime（HelloMaterial）**五帧逐像素 max diff 0**：Deferred（vs `c3b-ssao-on`）/ Forward（vs `c4b-forward`）/ 切回 Deferred（vs `c3b-ssao-on`）/ bloom-off（vs `c3b-bloom-off`，`Automation.composition_bloom_off.json`）/ grading-off（vs `c3g-grading-off`，`Automation.composition_grading_off.json`）。
+- runtime exit=0（修复前为 139，崩溃已消除；stash 对照确认崩溃由本批引入、也已由本批修复）。
+
+### 保留 / 未做
+
+- D5 后续：Lighting/GBuffer → Shadow（最后，依赖灯光线最新实现）；concept 的 `typename F::Stage` / `Stage*` 参数随最后一批去掉。
+- 教训沉淀（供后续批次）：**recipe 里的 feature 是栈上临时对象**——lambda 只捕获管线持有的指针（stage/设备对象），不得捕获 `this`；feature 不得自持可变 settings，一切经 `Settings → Resolved`。
