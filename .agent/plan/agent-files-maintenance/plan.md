@@ -3,7 +3,7 @@
 > 建立：2026-10-13
 > 关联：`./.agent/AGENTS.md`、`./.agent/skills/AGENTS.md`、`./.agent/memories/AGENTS.md`、
 > `Script/ya_module_lint.py`（守卫形态参照）
-> 状态：A1 开工中
+> 状态：**A1–A4 全部落地**（`5187d22c` 结构 + 守卫、`f2684e06` 拆分）；lint 0 violation / 0 debt
 
 ## 0. 问题
 
