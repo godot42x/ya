@@ -204,7 +204,7 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   `addBehavior(IUITickable 行为)`，行为用 `setTickEnabled(bool)` 开关自己那一项（tween 播放期、
   对话框自刷新、Lua `self:setTickEnabled`）。两者**互相独立**：行为要帧不会让 owner 的 `tick()` 跑，
   override `tick()` 也不需要转发 `UIElement::tick`（基类 no-op），所以子类无法藏掉行为那一项
-  （历史坑见 `memories/widget_tick_gate_hidden_by_override.md`）。
+  （历史坑见 `../../memories/widget_tick_gate_hidden_by_override.md`）。
   登记随成员关系：节点挂上树时按当前开关登记，脱离树时移除，开关只在已挂树时增删表项。
   只 tick `isVisibleInTree()` 的 owner（按 `getVisibilityRevision()` 缓存，帧内可见性变化在下一项前刷新）；
   顺序只承诺「树结构变化后按前序重排」（同一 owner 先自身、再按行为添加顺序），不承诺更多。
@@ -480,7 +480,7 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
 ## GUI render surface
 
 - `GUIRenderSurface`（`Runtime/Compose`）是 GUI compose target 的唯一资源边界：
-  `createOffscreen()` 创建 Framework-owned `RenderImage`，`wrapExternal()` 包装
+  `createOffscreen()` 创建 Framework-owned `RenderTexture`，`wrapExternal()` 包装
   imported swapchain image；二者都经同一 `prepare()` / `record()` 调用
   `Render2DComposePass`。
 - surface 只拥有/保留目标 image、format 与最终 layout；**不** pump event、acquire

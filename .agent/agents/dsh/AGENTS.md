@@ -9,9 +9,9 @@ DSH（DeepSeek Harness）**没有 markdown agent 文件**：它不解析 `.curso
 | 角色 | DSH 落地 | 现状 |
 | --- | --- | --- |
 | worker | `subagent` 工具（provider `spawn`，`backgroundMode: continuable`） | base 组合已挂，可直接用 |
-| reviewer | 需新增一个实例：`toolName: ya_reviewer`，`toolFilter` 去掉写类工具，`persona` 指向 `common/reviewer.md` 摘要 | 未配置，现在只能靠 prompt 约束「只读」 |
-| explorer | 直接可用：`subagent` + prompt 指路 `common/explorer.md`；要机制只读就照下面的示例加 `toolName: ya_explorer` 实例 | 未配置专属实例 |
-| plan-harness | 不派发：它是主会话自身的角色，读 `common/plan-harness.md` 即可 | — |
+| reviewer | 需新增一个实例：`toolName: ya_reviewer`，`toolFilter` 去掉写类工具，`persona` 指向 `../common/reviewer.md` 摘要 | 未配置，现在只能靠 prompt 约束「只读」 |
+| explorer | 直接可用：`subagent` + prompt 指路 `../common/explorer.md`；要机制只读就照下面的示例加 `toolName: ya_explorer` 实例 | 未配置专属实例 |
+| plan-harness | 不派发：它是主会话自身的角色，读 `../common/plan-harness.md` 即可 | — |
 
 ## 默认组合里有什么
 

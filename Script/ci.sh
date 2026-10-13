@@ -8,6 +8,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Agent-docs guard needs no build: run it first so a broken index/link fails
+# fast instead of after a full compile.
+python3 Script/ya_agent_docs_lint.py
+
 run_engine_shared() {
     echo "== engine + shared =="
     xmake f -c -m debug --ya_profile=engine --ya_linkage=shared -y

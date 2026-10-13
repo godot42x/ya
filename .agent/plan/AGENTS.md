@@ -85,6 +85,7 @@ completion_and_make_the_final_plan(this_plan);
 | `render-pipeline-composition/` | RDG 上方组合层收敛（2026-10-12 立项）：一等 feature、typed Forward/Deferred recipe、单源资源要求与显式 prepare→record 数据；接手 rdg-cache-dx P3/P4 及旧 orchestrator/passes/resources 的结构替换。计划已落盘，代码未开始；下一 C1 为真实 SSAO→Lighting 闭环，不是 Bloom-only 或空抽象骨架 |
 | `rpg-prototype/` | 2D 世界线（2026-10-02 合并 `scene-2d-world-and-game-ui`）。**2026-10-13 改版为「RPG Tactics」**：`Example/2DRpgPrototype` 主流程从「城镇跑腿」重编为 **2D 战旗 RPG 垂直切片**（格棋盘 + 回合制 + 任务 + 成长养成：等级/装备/技能/队伍），并以此驱动四个新子系统——**后处理运行时控制、音频（SDL3）、粒子、2D 物理/触发器（Box2D）**。验收重点 = 能力覆盖（`feature_matrix.json`）。v1（RPG Maker 式俯视小镇）B1/R0–R4 已落地、工件存 `*-v1-landed.*`，其引擎能力（tilemap/精灵/动画/相机/脚本层/存档/场景转移）被本版复用。新计划工件见目录内 `plan.md` / `todo.md` / `progress.md`；代码未开工，下一步 Wave A F1 |
 | `3d-demo/` | 3D demo 线（2026-10-12 自 `showcase-roadmap` §3 G3 立项，G3.0 问答已收口）：第三人称探索解谜（庭院 → 地下室）驱动引擎玩法层——物理组件（Kinematic / 传感器 / glTF 网格与 convex 碰撞 / 接触事件进 ECS）、物理 Lua API、`JPH::CharacterVirtual` 角色控制器、glTF skin / animation / 节点层级导入、动画交叉淡入、第三人称弹簧臂相机与鼠标轴、`world.spawn` 与世界计时器；三区光照依赖 `shadow-and-light-line/`（R15b + 新增聚光灯阴影 + R2 / R3）。工作项、波次、冲突面、素材调研见目录内 `plan.md`；待用户确认：示例目录名、素材选型 |
+| `agent-files-maintenance/` | `.agent/` 自身治理（2026-10-13 立项）：拆 `skills/gui-framework/SKILL.md`（861 行 / 98.5 KB ≈ 全部 memory 之和，且 `GameEditor chrome` 166 行属 Application 层产品内容越界）、三张路由表合一（`skills/AGENTS.md` 为唯一真源）、索引补全与相对链接层深修复、新增 `Script/ya_agent_docs_lint.py` 体量/引用守卫。边界：不重写概念内容（符号失效多为误报）、不治理 `plan/archive/`、不手写签名清单。A1 结构一致性施工中 |
 
 ## 归档判据
 

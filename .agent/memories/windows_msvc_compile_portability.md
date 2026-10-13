@@ -4,7 +4,7 @@
 
 代码主要在 macOS (Clang) 上开发，切到 Windows (MSVC 2026, VS 18 Insiders) 后全量构建
 失败。本文记录 2026-08 一次性修完的故障清单与修复方式；稳定规则已收敛到
-`./skills/cross-platform/SKILL.md`，这里只留具体案例与定位手法。
+`../skills/cross-platform/SKILL.md`，这里只留具体案例与定位手法。
 
 ## 故障清单
 
@@ -69,5 +69,5 @@
 
 ## 关联
 
-- 稳定规则：`./skills/cross-platform/SKILL.md`
-- 构建入口：`./skills/ya-build/SKILL.md`
+- 稳定规则：`../skills/cross-platform/SKILL.md`
+- 构建入口：`../skills/ya-build/SKILL.md`

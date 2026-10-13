@@ -71,7 +71,23 @@ Windows 没有 `<unistd.h>`、`<arpa/inet.h>`、`<netinet/in.h>`、`<sys/socket.
 add_cxflags("/Zc:preprocessor", { force = true })
 ```
 
-### 6. 其他 MSVC 差异
+### 6. 有全局状态的 runtime 库不能被多个 DLL 各自静态持有
+
+规则 2 管"符号导没导出"，这条管"状态是不是只有一份"。两者都在 DLL 边界上，但症状不同：
+规则 2 是链接期查不到符号，这条是**编译链接全过、运行期状态分裂**。
+
+- 含单例、全局变量、静态局部变量、thread_local、registry、context 的库，必须有唯一
+  owner；无状态算法库才可以静态链接进多个 shared library。
+- 模板 / 宏 / inline 注册可以在多个模块各自执行，但注册目标必须是同一份共享状态，
+  且注册 API 要幂等（重复注册当正常情况处理，不要报错）。
+- 静态初始化顺序跨 DLL 不可控，不要依赖它。
+- YA 当前明确的高风险对象：ImGui / ImGuizmo（context 型）、
+  reflects-core / ClassRegistry / EnumRegistry、ECSRegistry / 延迟反射注册队列（注册表型）。
+- 能力允许时优先由 engine 封装第三方 ABI，避免 editor / 项目模块直接跨 DLL 调第三方库。
+- 症状识别：ImGui `GImGui == 0`、反射注册表查不到类型、编辑器面板空白、回调跨模块失效。
+- 排查单与历史案例：`../../memories/windows_dll_boundary.md`。
+
+### 7. 其他 MSVC 差异
 
 - 无变长数组（VLA）。
 - `std::format` 的 `basic_format_string` 在 MSVC 是立即函数，宏展开出来的非常量格式串
@@ -87,7 +103,8 @@ add_cxflags("/Zc:preprocessor", { force = true })
    - `LNK2019/LNK2001` → 规则 2 / 规则 3（用 dumpbin 区分）
    - `C1083 cannot open include file` → 规则 4
    - `__VA_OPT__` / `C3861` / `C7595` → 规则 5
-   - 其余 → 规则 6 或查 `ya-build`
+   - 编译链接全过但运行期状态不一致（UI 空白、注册表查不到类型）→ 规则 6
+   - 其余 → 规则 7 或查 `ya-build`
 4. 收尾验证：`xmake r ya-testing`（全量测试）、`xmake b` 确认 100% 通过。
 5. 若修复涉及公共头/导出/xmake 配置，把新坑补回本 skill 或 memory。
 

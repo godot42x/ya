@@ -42,8 +42,8 @@ description: YA Engine 崩溃排查、变更自检与提交前 review 清单。
 
 ## 专题记忆
 
-- Vulkan / MoltenVK submit 期生命周期排查：`../memories/vulkan_submit_lifecycle_debug.md`
-- IBL / environment lighting 视觉回归固定观察基线：`../memories/ibl_visual_regression_baseline.md`
+- Vulkan / MoltenVK submit 期生命周期排查：`../../memories/vulkan_submit_lifecycle_debug.md`
+- IBL / environment lighting 视觉回归固定观察基线：`../../memories/ibl_visual_regression_baseline.md`
 
 ## 相关 skills
 

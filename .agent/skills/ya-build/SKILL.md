@@ -186,7 +186,7 @@ ps -ax -o pid,etime,command | grep ya-runtime | grep -v grep
 ## Profiling
 
 - profiling、automation trace 与 speedscope 规则已独立到 `profiling` skill。
-- 若任务重点是 profile 模式、CPU trace、RenderDoc、automation 配置，转到 `./profiling/SKILL.md`。
+- 若任务重点是 profile 模式、CPU trace、RenderDoc、automation 配置，转到 `../profiling/SKILL.md`。
 - 最小入口仍是：
 
 ```bash
@@ -246,7 +246,7 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
 2. 确认目标是 `$(t)-testing` 或 `ya-testing`，`--gtest_filter` 写法正确。
 3. 断言失败先分清三类：框架 bug / 框架变更后用例没跟上 / 用例本身无意义（例如断言一个
    被注释掉的代码生成器产物、`EXPECT_EXIT` 里再起线程、依赖平台真的最小化窗口）。见
-   `../memories/stale_test_assertions_after_contract_change.md`。
+   `../../memories/stale_test_assertions_after_contract_change.md`。
 4. 构建没问题时再转去具体模块 skill。
 
 ## 并行 agent 的独占构建锁

@@ -217,10 +217,10 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
 
 ## Windows DLL Boundary
 
-1. Windows 下若某个库包含单例、全局状态、registry、延迟初始化队列或 UI context，不要让多个 DLL 各自静态持有一份。
-2. 这类库要么集中到唯一 shared owner，要么由 engine API 做边界封装。
-3. 宏/模板注册允许多模块执行，但注册目标必须共享，且注册 API 要幂等。
-4. 具体案例与排查单见 `./windows-dll-boundary.md` 与 `../../memories/windows_dll_boundary.md`。
+规则与排查单统一在 `../cross-platform/SKILL.md` 规则 6 与
+`../../memories/windows_dll_boundary.md`，不在这里重复。
+render/runtime 视角只需记住一句：运行时库若含单例 / registry / UI context，
+必须有唯一 owner，不能由多个 DLL 各自静态持有。
 
 ## 决策原则
 

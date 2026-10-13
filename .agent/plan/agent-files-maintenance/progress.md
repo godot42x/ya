@@ -1,0 +1,179 @@
+# 进度
+
+## 2026-10-13 — A1 + A2 + A4 落地
+
+### 做了什么
+
+**A1 结构一致性**
+
+- 三张路由表合一：`.agent/skills/AGENTS.md` 成为唯一真源（含优先级与完整
+  索引，按「构建/环境、GUI、渲染/资源/场景、玩法/内容、工程方法」分组）；
+  根 `AGENTS.md` 与 `.agent/AGENTS.md` 改为指针 + 少数高频入口。
+- 索引补全：skills 20/20、memories 27/27（补 3 条漏登，描述按各 memory 正文重写）。
+- 相对链接层深修复：计划里只列了 4 处，lint 建好后实际查出并修掉 **10 处**
+  （`debug-review` ×2、`ya-build`、`render-arch/windows-dll-boundary`、
+  `font-rendering`、`gui-framework`、`windows_msvc_compile_portability` ×2、
+  `agents/copilot`、`agents/dsh` ×3）。
+- 消除 `windows-dll-boundary` 重复：该主题原本散在 **三处**（`cross-platform` §2
+  导出规则、`render-arch/windows-dll-boundary.md` 21 行规则、memory 225 行历史）。
+  规则集归并进 `cross-platform` 新增的规则 6（"有全局状态的 runtime 库不能被多个
+  DLL 各自静态持有"），删掉 render-arch 子文件，memory 保持为历史与排查单。
+- 删除死重：`.agent/misc/`（11 文件，最后修改 2026-04-16，内含已腐的代码索引）与
+  `.agent/prompts/`（9 个 speckit 模板，`specs/` 最后提交 2026-04-05，无引用链）。
+  两者都完整存在于 git 历史，恢复锚点：`git show 1685766c4:.agent/misc/<file>`、
+  `git show b665317a4:.agent/prompts/<file>`。
+
+**A2 立规矩**
+
+- 新增 `Script/ya_agent_docs_lint.py`，五项检查：索引双向覆盖、链接可解析、
+  体量预算、行号引用、路由唯一真源。已接入 `Script/ci.sh`（放在最前，无需构建）。
+- 规则成文进根 `AGENTS.md` 的 Documentation Policy（L1–L4 分层表 + 四条硬纪律）
+  与 `.agent/AGENTS.md` 维护规则。
+
+**A4 定点核对**
+
+- 行号引用：全 skills 只有 `speedscope-analysis` 一处真命中，且是**粘贴的工具输出
+  示例**而非引用；据此给 lint 加了代码块豁免（示例输出不会像引用那样腐）。
+- 改名符号：`RenderImage` 已被 `ImageResource` / `RenderTexture` 取代，修了 3 处
+  活引用（`cpp-style` ×2、`gui-framework` ×1）。`legacy_test_target_break_after_module_move.md`
+  里的 `RenderImage` 是**记录这次改名本身**的，保留。
+
+### 验证
+
+- 负向用例：注入 4 类缺陷（不存在的 skill 名、坏相对链接、坏 memory 链接、
+  源码行号引用），lint 全部报出，退出码 1。
+- 正向用例：恢复后 lint 退出码 0。
+- 结构核对：磁盘 ↔ 索引集合完全相等（skills 20/20、memories 27/27）。
+- 路由核对：优先级串只在 `skills/AGENTS.md` 出现一次（另两处 0 次）。
+
+### 自我修正记录
+
+负向用例的清理用了 `git checkout -- .agent/memories/AGENTS.md`，把当时尚未提交的
+3 条索引新增一并回滚了——lint 立刻报出 3 条 "memory on disk but not in index"，
+等于被自己的守卫抓到。已重新应用。教训：清理探针要用逐文件副本恢复，不要用
+`git checkout` 回滚还带着未提交改动的文件。
+
+### 未完成 / 遗留
+
+- **A3 未开工**（最大件）：`gui-framework/SKILL.md` 862 行 / 98.5 KB，仍需拆分，
+  且 `GameEditor chrome` 166 行属 Application 层产品内容，需要迁出。
+- lint 的 `SIZE_EXEMPT` 表还有 3 条债：`gui-framework`（A3）、`ya-build` 367 行、
+  `render-arch` 311 行。这些是**警告不失败**，避免守卫在还债前永远红着而被忽略；
+  还清后必须清空该表（已记在 `todo.md` A3.6）。
+- 未测 skill 内容与当前代码的**语义**一致性（本轮只测路径、符号存在性与结构）。
+
+---
+
+## 2026-10-13 — 立项 + 审计基线
+
+审计在一次只读摸底中完成，未修改任何文件。以下是建立后续批次所依据的**实测数字**。
+
+### 体量
+
+| 对象 | 实测 |
+| --- | --- |
+| `.agent/skills/gui-framework/SKILL.md` | 861 行 / 98.5 KB / 约 2.8 万 token |
+| `.agent/skills/` 全量 | 20 skill / 286 KB（全载约 8 万 token） |
+| `.agent/memories/` 全量 | 28 文件 / 96 KB（约 2.4 万 token） |
+| `.agent/plan/` | 249 文件 / 4 MB（archive 29 目录） |
+| `.agent/misc/` | 10 文件 / 55 KB，最后修改 2026-04-16 |
+| 入口 `AGENTS.md` + `.agent/AGENTS.md` | 9.9 KB / 约 2500 token（每任务都付） |
+
+决策级事实：**单个 `gui-framework/SKILL.md` ≈ 全部 28 个 memory 之和**。
+
+### 索引覆盖（目录 ↔ 索引）
+
+- `skills/AGENTS.md`：覆盖 15/20，漏 `2d-gameplay`、`font-rendering`、
+  `reflection`、`gui-gallery-design`、`image-gen`。
+- 根 `AGENTS.md`：漏 `gui-gallery-design`、`image-gen`、`speedscope-analysis`。
+- `memories/AGENTS.md`：漏 `font_cjk_fallback_brightness_regression.md`、
+  `scenemanager_on_scene_destroy_alias_bug.md`、
+  `terrain_processor_active_pump_regression.md`。
+- `.agent/AGENTS.md` 只列 6 项是**设计如此**（自述二级路由），不算缺陷。
+
+### 三张路由表
+
+| 位置 | 内容 |
+| --- | --- |
+| `AGENTS.md:45` | 12 项优先级串（含 gui-framework / scene-object-boundary） |
+| `.agent/skills/AGENTS.md:7` | 10 项（**缺** gui-framework / scene-object-boundary），顺序不同 |
+| `.agent/AGENTS.md:25-33` | 第三个 6 项列表 |
+
+### 路径引用腐坏（3634 条）
+
+- 可精确解析 955 条（26%）
+- 只能靠 basename 反查 2062 条（57%）
+- 全库找不到 617 条（17%）
+
+按文档类别：
+
+| class | refs | stale | stale% |
+| --- | --- | --- | --- |
+| skills | 484 | 66 | 13.6% |
+| memories | 122 | 20 | 16.4% |
+| plan/active | 3189 | 715 | 22.4% |
+| plan/archive | 2085 | 437 | 21.0% |
+
+`plan/` 的比例高但按其自身声明属设计如此，本轮不治理。
+
+### 符号引用腐坏 —— 大部分是误报（重要）
+
+逐条对源码做词边界核验后确认，所谓失效项中：
+
+- `C7595` / `C7560` / `C3861`：MSVC 错误码，不是符号
+- `AEAUApp` / `AEAVApp`：MSVC 修饰名
+- `FD_SET`：POSIX 宏
+- `GLM_FORCE_CTOR_INIT`：第三方宏
+
+真实腐坏是个别改名（如 `RenderImage`）与硬编码行号。**结论：不做概念层重写。**
+
+### 相对链接层深错误（4 处）
+
+`../memories/` 应为 `../../memories/`，当前解析到不存在的 `.agent/skills/memories/`：
+
+- `.agent/skills/render-arch/windows-dll-boundary.md:20`
+- `.agent/skills/ya-build/SKILL.md:249`
+- `.agent/skills/debug-review/SKILL.md:45`、`:46`
+
+`.agent/skills/resource-system/SKILL.md` 用的是正确的 `../../memories/`，可作模板。
+
+### 同题双份
+
+- `.agent/skills/render-arch/windows-dll-boundary.md`（21 行）
+- `.agent/memories/windows_dll_boundary.md`（225 行）
+
+同名同题，内容重叠仅 2 行（即基本不重叠）。需定一个家。
+
+### `gui-framework/SKILL.md` 章节体量
+
+| 行数 | 字节 | 章节 |
+| --- | --- | --- |
+| 166 | 16062 | GameEditor chrome ← **作用域越界：Application 层产品内容** |
+| 117 | 8995 | 基础控件权责 |
+| 85 | 5894 | WidgetTree 模型 |
+| 62 | 3363 | 动画（framework 层） |
+| 56 | 2637 | 产品循环 |
+| 45 | 8791 | Style / Theme |
+| 45 | 2787 | Host（ya-gui-host） |
+| 42 | 1972 | 控件交互契约 |
+| 39 | 6593 | Dock 权责 |
+| 30 | 1734 | GUI render surface |
+| 27 | 1481 | 模块地图 |
+| 26 | 1249 | 人肉测试前的自动化验收 |
+| 23 | 1301 | Render2D pass slot |
+| 21 | 810 | 构建 / 测试 |
+| 15 | 919 | 责任规则 |
+| 13 | 672 | UX vs closure 测试 |
+| 13 | 2420 | 静态 DSL（live construct） |
+| 12 | 1679 | 布局契约 |
+
+### 渐进式披露现状
+
+- 完整分层（SKILL + references + scripts）：仅 `image-gen`
+- 有子文件：`render-arch`（1 个 21 行子文件，即上面那份重复）
+- 其余 18 个 skill 均为单文件
+
+### 未做的验证
+
+- 未测 skill 内容与当前代码语义的一致性（只测了路径与符号存在性）。
+  概念层的准确性需要在 A3 拆 `gui-framework` 时逐节确认。

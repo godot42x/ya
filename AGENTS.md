@@ -36,30 +36,24 @@ xmake project -k compile_commands
 - 问题不明确时先读 `./.agent/skills/soul/SKILL.md`。
 - 问题明确后，只进入一个主 skill；必要时再串行切换下一个。
 - 遇到历史回归、已知坑、相似故障时，才额外读取 `./.agent/memories/*.md`。
-- `./.agent/misc/` 不是规范来源，只是辅助分析资料。
 
-完整索引见 `./.agent/AGENTS.md`。
+完整索引见 `./.agent/AGENTS.md`；路由与 skill 清单见 `./.agent/skills/AGENTS.md`。
 
 ## Skill Routing
 
-默认优先级：`ya-build > gui-framework > cross-platform > profiling > vscode > resource-system > material-flow > scene-object-boundary > render-arch > cpp-style > code-reorganize > debug-review`
+**路由的唯一真源是 `./.agent/skills/AGENTS.md`**（含优先级与完整 skill 索引）。
+这里不重复列表，避免多处漂移。
+
+几个最常走的入口：
 
 - 构建、目标、编译、shader 生成、测试：`./.agent/skills/ya-build/SKILL.md`
 - GUI 框架（WidgetTree/控件/布局契约/Render2D pass slot/GUI host 诊断与 teardown）：`./.agent/skills/gui-framework/SKILL.md`
-- 跨平台（Windows/MSVC 与 macOS/Clang 切换、DLL 导出、designated initializer 顺序、平台差异编译/链接报错）：`./.agent/skills/cross-platform/SKILL.md`
-- profiling、automation trace、性能冒烟：`./.agent/skills/profiling/SKILL.md`
-- VS Code、clangd、launch、tasks：`./.agent/skills/vscode/SKILL.md`
+- 跨平台（Windows/MSVC 与 macOS/Clang 切换、DLL 导出、平台差异编译/链接报错）：`./.agent/skills/cross-platform/SKILL.md`
 - 资源加载、resolve、dirty queue、environment lighting：`./.agent/skills/resource-system/SKILL.md`
-- ECS -> material -> render consumer：`./.agent/skills/material-flow/SKILL.md`
-- 生成物边界（gizmo / 图标 / 子 mesh、派生视觉的序列化与可编辑规则、视图 feature 位）：`./.agent/skills/scene-object-boundary/SKILL.md`
-- 2D 玩法（角色遮挡 z 约定、tilemap 通行 / entityAt、脚本互调）：`./.agent/skills/2d-gameplay/SKILL.md`
-- RenderRuntime、后端边界、shader 生成链：`./.agent/skills/render-arch/SKILL.md`
-- C++ 风格、所有权、类布局：`./.agent/skills/cpp-style/SKILL.md`
-- 文件拆分、目录重组：`./.agent/skills/code-reorganize/SKILL.md`
-- 字体栈（FontManager/Atlas/Bitmap+SDF/flavor split/CJK fallback）：`./.agent/skills/font-rendering/SKILL.md`
 - 崩溃排查、review、自检：`./.agent/skills/debug-review/SKILL.md`
-- 派发 / 续接 subagent、交接与结果核对：`./.agent/skills/subagent-delegation/SKILL.md`
 - 反射（TypeOps / facet / MetaValue、type_index 不落盘、组件 JSON）：`./.agent/skills/reflection/SKILL.md`
+
+其余 skill 见 `./.agent/skills/AGENTS.md`。
 
 ## Core Rules
 
@@ -109,6 +103,21 @@ xmake project -k compile_commands
 - 历史故障、回归根因、项目坑点写到 `./.agent/memories/`
 - 阶段性重构目标与进度写到 `./.agent/plan/`；该目录是阶段性工件，不默认代表当前主工作流
 - 顶层 `AGENTS.md` 只保留当前默认路径；兼容路径只做简短说明
+
+分层（渐进式披露），写和读都按这四层：
+
+| 层 | 位置 | 放什么 |
+| --- | --- | --- |
+| L1 入口 | 根 `AGENTS.md` | 只做路由，不放规则细节 |
+| L2 索引 | `.agent/skills/AGENTS.md`、`.agent/memories/AGENTS.md` | 路由与索引，唯一真源 |
+| L3 契约 | `<skill>/SKILL.md` | 稳定规则、责任边界、intent |
+| L4 细节 | `<skill>/references/*.md` | 展开的实现细节、分场景补充 |
+
+- **路由只在 L2 维护**：其他入口只留指针，不重复优先级或清单。
+- **体量预算**：L3 与 L4 单文件各不超过 300 行；超了下沉到 `references/`。
+- **引用纪律**：只写符号名与路径，不写行号；相对链接必须能从本文件所在目录解析。
+- **符号/签名不进 prose**：API 清单属于生成物，手写必腐。
+- 改动后用 `python3 Script/ya_agent_docs_lint.py` 自检（已接入 `Script/ci.sh`）。
 
 ## Git
 

@@ -39,7 +39,7 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
 3. **Fallback 链 = 不同脚本才并列，同脚本必须单一**
    - `character.atlasIndex > 0` 表示走 fallback；`fallbacks[atlasIndex-1].fontPath` 是 fallback 字体路径；`atlasSlot >> 16` 是 page。
    - 合法组合：**主拉丁 + 一个中文(全覆封面孔) + 一个 emoji(色字体)**。
-   - **禁止**注册多个同脚本 fallback（尤其 CJK）：字符会按命中顺序分散到不同 face，hinting/笔画权重不同 → 相邻字亮度/粗细跳变（见 `memories/font_cjk_fallback_brightness_regression.md`）。
+   - **禁止**注册多个同脚本 fallback（尤其 CJK）：字符会按命中顺序分散到不同 face，hinting/笔画权重不同 → 相邻字亮度/粗细跳变（见 `../../memories/font_cjk_fallback_brightness_regression.md`）。
    - `attachFallbackToBase` 用 **base 的 `renderMode`** 覆盖 fallback 的 mode，所以小字 base 是 bitmap → fallback 也是 bitmap；注册时不要强制 SDF。
 
 4. **Bitmap 栅格必须 FORCE_AUTOHINT，不要跑 native TrueType bytecode**

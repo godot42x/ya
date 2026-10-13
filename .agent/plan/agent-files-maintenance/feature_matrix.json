@@ -1,0 +1,20 @@
+{
+  "plan": "agent-files-maintenance",
+  "status": "a1_started",
+  "features": [
+    {"id": "routing_single_source", "phase": "A1", "status": "not_started", "evidence": ["three priority lists exist: AGENTS.md:45 (12 items), .agent/skills/AGENTS.md:7 (10 items, missing gui-framework/scene-object-boundary), .agent/AGENTS.md:25-33 (6 items)"]},
+    {"id": "index_coverage_complete", "phase": "A1", "status": "not_started", "evidence": ["skills/AGENTS.md covers 15/20", "root AGENTS.md missing gui-gallery-design, image-gen, speedscope-analysis", "memories/AGENTS.md missing 3 entries"]},
+    {"id": "relative_links_resolve", "phase": "A1", "status": "not_started", "evidence": ["4 broken links resolve to .agent/skills/memories/ instead of .agent/memories/", "template to copy: resource-system/SKILL.md uses ../../memories/ correctly"]},
+    {"id": "no_duplicate_topic_files", "phase": "A1", "status": "not_started", "evidence": ["skills/render-arch/windows-dll-boundary.md (21 lines) vs memories/windows_dll_boundary.md (225 lines)", "content overlap only 2 lines"]},
+    {"id": "dead_weight_disposed", "phase": "A1", "status": "not_started", "evidence": [".agent/misc: 10 files 55 KB, last touched 2026-04-16, holds a stale code index referencing Engine/Source/Scene/Scene.h which moved to Engine/Source/Framework/Scene/Core/include/Scene/Core/Scene.h", ".agent/prompts: 8 speckit templates, no inbound reference chain"]},
+    {"id": "size_budget_enforced", "phase": "A2", "status": "not_started", "evidence": ["budget: SKILL.md and references/*.md <= 300 lines / 12 KB", "largest current violation: gui-framework/SKILL.md at 861 lines / 98.5 KB"]},
+    {"id": "reference_discipline", "phase": "A2", "status": "not_started", "evidence": ["no line numbers in skills", "relative links must resolve from their own file's directory"]},
+    {"id": "lint_guard_wired", "phase": "A2", "status": "not_started", "evidence": ["Script/ya_agent_docs_lint.py modeled on Script/ya_module_lint.py (exit 0 clean / 1 violations)", "wired into Script/ci.sh", "verified with deliberate bad-reference fixture"]},
+    {"id": "layering_rules_written", "phase": "A2", "status": "not_started", "evidence": ["L1 entry routes only / L2 index is sole routing truth / L3 SKILL.md holds contract only / L4 references hold detail"]},
+    {"id": "gui_framework_split", "phase": "A3", "status": "not_started", "evidence": ["target: SKILL.md <= 300 lines", "18 sections mapped to unique homes", "GameEditor chrome (166 lines / 16 KB) leaves the framework skill"]},
+    {"id": "gameeditor_scope_corrected", "phase": "A3", "status": "not_started", "evidence": ["GameEditor lives in Engine/Source/Applications/, not Framework/GUI", "GameEditor chrome + Dock 权责 (205 lines total) migrate to an Application-level skill"]},
+    {"id": "progressive_disclosure_default", "phase": "A3", "status": "not_started", "evidence": ["only image-gen currently has SKILL + references + scripts", "render-arch has 1 sub-file (the duplicate)", "18 of 20 skills are single-file"]},
+    {"id": "line_number_refs_removed", "phase": "A4", "status": "not_started", "evidence": ["subagent-delegation/SKILL.md x2", "pointer_session_lost_release.md x2"]},
+    {"id": "renamed_symbols_fixed", "phase": "A4", "status": "not_started", "evidence": ["RenderImage family; most other 'stale symbol' hits were false positives (MSVC error codes, decorated names, POSIX macros)"]}
+  ]
+}

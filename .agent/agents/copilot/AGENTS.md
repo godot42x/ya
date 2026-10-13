@@ -39,4 +39,4 @@ Copilot 没有 DSH / Cursor 的沙箱与审批参数，"只读"由 `tools:` 决�
 
 ## 该层没有的东西
 
-没有 `model` slug 约定（本仓库的项目 agent 没在 frontmatter 标模型）、没有续接语义、没有 `send_message`；派发与续接策略看 `../skills/subagent-delegation/SKILL.md`。
+没有 `model` slug 约定（本仓库的项目 agent 没在 frontmatter 标模型）、没有续接语义、没有 `send_message`；派发与续接策略看 `../../skills/subagent-delegation/SKILL.md`。

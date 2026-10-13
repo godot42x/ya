@@ -32,6 +32,9 @@
 - `./stale_test_assertions_after_contract_change.md`：断言层测试过期的三类归属与修法（`engine.panel` 不再绘制、剪贴板是进程级、按下标找控件、默认参数翻转、依赖被禁用的生成器、`EXPECT_EXIT`+线程、平台最小化标志残留）；含"优先改断言而不是改框架"的约定
 - `./pointer_reconcile_reads_live_hardware.md`：focus-loss / mouse-leave 的 pointer reconcile 在处理处查活硬件（`queryGlobalMouse().buttonMask`），读到的"现在"冒充事件发生那一刻的"过去" → 测试不确定；修法是事件自带 `heldButtons`（`SDL_GetGlobalMouseState` 采样进事件）；`EditorInputNode` 同族未收口
 - `./parallel_worker_amend_on_shared_branch.md`：两个 worker 在同一工作区同一分支并行提交时，`git commit --amend` 会打到对方刚形成的 HEAD；amend 前必须核对 HEAD hash 仍是自己的提交，并行提交要么串行要么各用独立 worktree
+- `./font_cjk_fallback_brightness_regression.md`：CJK fallback 分散到多个 fallback 字体 → 同一段中文相邻字亮度/粗细不一致；字体栈设计缺陷，非第三方库 bug
+- `./scenemanager_on_scene_destroy_alias_bug.md`：`destroySceneIfNeeded` 传 `_activeScene` 引用导致 onSceneDestroy 监听静默丢失 → 规则析构里访问已销毁 registry 触发 entt 断言
+- `./terrain_processor_active_pump_regression.md`：TerrainProcessor 拆分时丢失 active 重泵循环 → terrain 不渲染且无报错、`hasPendingTerrainResolve` 恒 true 卡住 stable
 
 ## 边界
 

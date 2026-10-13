@@ -9,35 +9,31 @@
 - 只有遇到历史坑、回归、相似故障时，才读 `./memories/*.md`。
 - `agents/` 是特定工作模式说明；只有确实需要时才打开。
 - `prompts/` 是模板资产，不属于默认上下文。
-- `misc/` 不是规范来源。
 
 ## 目录
 
-- `./skills/AGENTS.md`：skill 索引
+- `./skills/AGENTS.md`：**skill 索引与路由唯一真源**（含优先级顺序）
 - `./memories/AGENTS.md`：memory 索引
 - `./agents/AGENTS.md`：可选代理角色索引
 - `./prompts/AGENTS.md`：提示模板索引
 - `./plan/`：阶段性计划与进度，先读 `./plan/AGENTS.md`
-- `./misc/`：临时分析资料
 
-## 默认路由
+## 路由
 
-1. 构建、运行、测试、target、shader 生成：`./skills/ya-build/SKILL.md`
-2. GUI 框架（WidgetTree/控件/布局/pass slot/host）：`./skills/gui-framework/SKILL.md`
-3. VS Code / clangd / launch / tasks：`./skills/vscode/SKILL.md`
-4. 生成物边界（gizmo / 图标 / 子 mesh、派生视觉的序列化与可编辑规则）：`./skills/scene-object-boundary/SKILL.md`
-5. 资源、材质、渲染、代码组织等专项问题：只进入对应单个 skill
-6. 历史坑与回归：按需补充 memory
-
-跨平台（Windows/MSVC 与 macOS/Clang 切换、DLL 导出、平台差异导致的编译/链接报错）：
-`./skills/cross-platform/SKILL.md`
+按 `./skills/AGENTS.md` 的索引与优先级选一个主 skill，不要在这里另立列表。
+只有遇到历史坑、回归、相似故障时，才按 `./memories/AGENTS.md` 补读 memory。
 
 ## 维护规则
 
 - 稳定规则优先写 skill。
 - 历史坑优先写 memory。
 - 阶段性状态优先写 plan。
+- 路由与 skill 清单只在 `./skills/AGENTS.md` 维护，其他入口只留指针。
 - 若某条信息不是“当前默认路径”，不要留在顶层入口。
+- 分层：L1 入口只路由 / L2 索引是唯一真源 / L3 `SKILL.md` 只讲契约 /
+  L4 `references/*.md` 放细节。`SKILL.md` 与 `references/*.md` 各不超过 300 行。
+- 只写符号名与路径，不写行号；相对链接必须能从本文件所在目录解析。
+- 改动后用 `python3 Script/ya_agent_docs_lint.py` 自检。
 
 ## 计划执行与提交诚信
 
