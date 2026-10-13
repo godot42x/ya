@@ -254,7 +254,7 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
         SkyboxFeature::PrepareContext{
             .submission = ctx.submission,
             .render     = ctx.render,
-            .stage      = stages.overlay,
+            .stage      = stages.skybox,
             .alignment  = ctx.alignment,
         });
     if (skyboxPrepared.isErr()) {
@@ -498,13 +498,13 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     const SkyboxFeature skyboxFeature;
     auto skyboxOutputs = skyboxFeature.append(
         ctx.graph,
-        ctx.stages->overlay,
+        ctx.stages->skybox,
         featureCtx,
         SkyboxFeature::Facts{
             .viewExtent = resolved.viewExtent,
             .skybox     = ctx.overlayInputs != nullptr
                 ? ctx.overlayInputs->skybox
-                : ViewOverlayStage::FrameInputs::SkyboxInput{},
+                : ViewOverlayFrameInputs::SkyboxInput{},
         },
         resolved.skybox(),
         prepared.skybox(),

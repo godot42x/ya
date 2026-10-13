@@ -8,6 +8,7 @@
 #include "Render3D/Composition/ColorContinuation.h"
 #include "Render3D/Deferred/DeferredPassNames.h"
 #include "Render3D/RenderFrameData.h"
+#include "RHI/Render.h"
 
 namespace ya
 {
@@ -24,6 +25,37 @@ OverlayFeature::Resolved OverlayFeature::resolve(const Settings& settings,
     Resolved resolved;
     resolved.bEnabled = settings.bEnabled;
     return resolved;
+}
+
+void OverlayFeature::init(IRender* render, DebugRenderSystem* debugRenderSystem)
+{
+    if (_stage == nullptr) {
+        _stage = ya::makeShared<ViewOverlayStage>();
+    }
+    _stage->setDebugRenderSystem(debugRenderSystem);
+    _stage->init(render);
+}
+
+void OverlayFeature::shutdown()
+{
+    if (_stage) {
+        _stage->destroy();
+        _stage.reset();
+    }
+}
+
+void OverlayFeature::beginFrame()
+{
+    if (_stage) {
+        _stage->beginFrame();
+    }
+}
+
+void OverlayFeature::refreshDeviceFormats(const DeferredAttachmentFormats& formats)
+{
+    if (_stage) {
+        _stage->refreshPipelineFormats(formats);
+    }
 }
 
 Result<OverlayFeature::Prepared, FeatureError> OverlayFeature::prepareBindings(const Resolved&       resolved,
@@ -74,7 +106,7 @@ Result<OverlayFeature::GraphOutputs, FeatureError> OverlayFeature::append(Render
     }
 
     const Rect2D renderArea{.pos = {0, 0}, .extent = facts.viewExtent.toVec2()};
-    const ViewOverlayStage::FrameInputs frameInputs = *facts.inputs;
+    const ViewOverlayFrameInputs frameInputs = *facts.inputs;
     (void)graph.addPass(
         makeViewGraphName(deferred_pass_names::kForwardTransparent, ctx.viewId),
         [inputs, renderArea](RGPassBuilder& passBuilder) {

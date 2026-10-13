@@ -1,4 +1,5 @@
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
+#include "Render3D/Deferred/SkyboxStage.h"
 #include "Render3D/Common/PreparedPipelineFrame.h"
 #include "Render3D/Common/SceneFamilyResources.h"
 
@@ -437,14 +438,16 @@ TEST(SSAOStageTest, ResolvedFrameDataComesFromTheFeaturesOwnSettings)
     EXPECT_FLOAT_EQ(payload.invProjectMat[0][0], 0.5f);
 }
 
-TEST(ViewOverlayStageTest, BuildsSkyboxFrameDataWithoutCameraTranslation)
+TEST(SkyboxStageTest, BuildsFrameDataWithoutCameraTranslation)
 {
+    // The skybox payload belongs to the skybox's own device object (D5): the
+    // overlay stage no longer carries the skybox pipeline or its frame UBO.
     RenderFrameData frameData{};
     frameData.projection = glm::mat4(2.0f);
     frameData.view       = glm::mat4(1.0f);
     frameData.view[3]    = glm::vec4(5.0f, 6.0f, 7.0f, 1.0f);
 
-    const auto payload = ViewOverlayStage::buildFrameData(frameData);
+    const auto payload = SkyboxStage::buildFrameData(frameData);
     EXPECT_FLOAT_EQ(payload.proj[0][0], 2.0f);
     EXPECT_FLOAT_EQ(payload.view[3][0], 0.0f);
     EXPECT_FLOAT_EQ(payload.view[3][1], 0.0f);

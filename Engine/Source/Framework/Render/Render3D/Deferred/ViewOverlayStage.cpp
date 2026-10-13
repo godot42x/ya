@@ -4,7 +4,6 @@
 #include "Render3D/Common/RenderFeatures.h"
 
 #include "Core/Math/Geometry.h"
-#include "Core/Math/Math.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "ECS/Systems/Components/DirectionComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -73,13 +72,6 @@ void ViewOverlayStage::refreshPipelineFormats(const DeferredAttachmentFormats& f
     const auto colorFormat = formats.colorFormats.front();
     const auto depthFormat = formats.depthFormat.value_or(EFormat::Undefined);
 
-    if (_skyboxPipeline) {
-        auto ci                                         = _skyboxPipeline->getDesc();
-        ci.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
-        ci.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
-        _skyboxPipeline->updateDesc(std::move(ci));
-    }
-
     if (_billboardPipeline) {
         auto ci                                         = _billboardPipeline->getDesc();
         ci.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
@@ -121,7 +113,6 @@ void ViewOverlayStage::init(IRender* render)
     YA_CORE_ASSERT(_directionCone != nullptr, "ViewOverlayStage requires direction cone mesh");
     YA_CORE_ASSERT(_directionCylinder != nullptr, "ViewOverlayStage requires direction cylinder mesh");
     YA_CORE_ASSERT(_debugRenderSystem != nullptr, "ViewOverlayStage requires debug render system instance");
-    initSkybox();
     initBillboards();
     initWorldGrid();
     initOverlay();
@@ -129,56 +120,6 @@ void ViewOverlayStage::init(IRender* render)
     _debugRenderSystem->setReverseViewportY(bReverseViewportY);
     _debugSkinning.init(_render);
     _debugSkinning.bReverseViewportY = bReverseViewportY;
-}
-
-void ViewOverlayStage::initSkybox()
-{
-    _skyboxFrameDSL = IDescriptorSetLayout::create(
-        _render,
-        DescriptorSetLayoutDesc{
-            .label    = "Deferred_Skybox_Frame_DSL",
-            .set      = 0,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-        });
-    YA_CORE_ASSERT(_skyboxFrameDSL != nullptr, "ViewOverlayStage requires skybox frame DSL");
-    _skyboxResourceDSL = IDescriptorSetLayout::create(
-        _render,
-        DescriptorSetLayoutDesc{
-            .label    = "SkyboxOverlay_Resource_DSL",
-            .set      = 1,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-        });
-
-    // Pipeline layout
-    _skyboxPPL = IPipelineLayout::create(_render, "SkyboxOverlay_PPL", {}, {_skyboxFrameDSL, _skyboxResourceDSL});
-
-    // Pipeline
-    GraphicsPipelineCreateInfo ci{
-        .pipelineRenderingInfo = {
-            .label                  = "Deferred Skybox Overlay",
-            .colorAttachmentFormats = {LINEAR_FORMAT},
-            .depthAttachmentFormat  = DEPTH_FORMAT,
-        },
-        .pipelineLayout = _skyboxPPL.get(),
-        .shaderDesc     = ShaderDesc{
-            .shaderName        = "Skybox.slang",
-            .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
-            .vertexAttributes  = {
-                {.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)},
-                {.bufferSlot = 0, .location = 1, .format = EVertexAttributeFormat::Float2, .offset = offsetof(ya::Vertex, texCoord0)},
-                {.bufferSlot = 0, .location = 2, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, normal)},
-            },
-        },
-        .dynamicFeatures    = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor},
-        .primitiveType      = EPrimitiveType::TriangleList,
-        .rasterizationState = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::Front, .frontFace = EFrontFaceType::CounterClockWise},
-        .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = false, .depthCompareOp = ECompareOp::LessOrEqual},
-        .colorBlendState    = {.attachments = {{.index = 0, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A}}},
-        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
-    };
-    _skyboxPipeline = IGraphicsPipeline::create(_render);
-    YA_CORE_ASSERT(_skyboxPipeline && _skyboxPipeline->recreate(ci), "Failed to create Skybox overlay pipeline");
-
 }
 
 void ViewOverlayStage::initBillboards()
@@ -320,11 +261,6 @@ void ViewOverlayStage::initOverlay()
 
 void ViewOverlayStage::destroy()
 {
-    _skyboxPipeline.reset();
-    _skyboxPPL.reset();
-    _skyboxFrameDSL.reset();
-    _skyboxResourceDSL.reset();
-
     _billboardPipeline.reset();
     _billboardPPL.reset();
     _billboardFrameDSL.reset();
@@ -350,9 +286,6 @@ void ViewOverlayStage::destroy()
 void ViewOverlayStage::beginFrame()
 {
     YA_PROFILE_FUNCTION();
-    if (_skyboxPipeline) {
-        _skyboxPipeline->beginFrame();
-    }
     if (_overlayPipeline) {
         _overlayPipeline->beginFrame();
     }
@@ -368,14 +301,6 @@ void ViewOverlayStage::beginFrame()
     _debugSkinning.beginFrame();
 }
 
-ViewOverlayStage::SkyboxFrameUBO ViewOverlayStage::buildFrameData(const RenderFrameData& frameData)
-{
-    return SkyboxFrameUBO{
-        .proj = frameData.projection,
-        .view = FMath::dropTranslation(frameData.view),
-    };
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // Execute
 // ═══════════════════════════════════════════════════════════════════════
@@ -385,14 +310,7 @@ void ViewOverlayStage::execute(const RenderStageContext& ctx)
     YA_CORE_WARN("ViewOverlayStage::execute(ctx) is a conformance stub; graph passes must use the parameterized overloads");
 }
 
-void ViewOverlayStage::executeSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput, DescriptorSetHandle frameDescriptorSet)
-{
-    if (!ctx.cmdBuf || !ctx.frameData) return;
-
-    drawSkybox(ctx, skyboxInput, frameDescriptorSet);
-}
-
-void ViewOverlayStage::executeOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs, const OverlayPassBindings& overlay)
+void ViewOverlayStage::executeOverlay(const RenderStageContext& ctx, const ViewOverlayFrameInputs& frameInputs, const OverlayPassBindings& overlay)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
@@ -423,7 +341,7 @@ uint32_t ViewOverlayStage::resolveBillboardTextureIndex(std::vector<TextureBindi
     return static_cast<uint32_t>(bindings.size() - 1);
 }
 
-void ViewOverlayStage::updateBillboardTextures(FrameInputs& frameInputs, OverlayPassBindings& overlay)
+void ViewOverlayStage::updateBillboardTextures(ViewOverlayFrameInputs& frameInputs, OverlayPassBindings& overlay)
 {
     std::vector<TextureBinding> bindings;
     bindings.push_back(TextureBinding{
@@ -494,7 +412,7 @@ void ViewOverlayStage::drawWorldGrid(const RenderStageContext& ctx)
     cmdBuf->debugEndLabel();
 }
 
-void ViewOverlayStage::drawBillboards(const RenderStageContext& ctx, const FrameInputs& frameInputs, const OverlayPassBindings& overlay)
+void ViewOverlayStage::drawBillboards(const RenderStageContext& ctx, const ViewOverlayFrameInputs& frameInputs, const OverlayPassBindings& overlay)
 {
     if (frameInputs.billboards.empty() || !_billboardPipeline || !_billboardPPL || !_billboardMesh) {
         return;
@@ -538,36 +456,7 @@ void ViewOverlayStage::drawBillboards(const RenderStageContext& ctx, const Frame
     cmdBuf->debugEndLabel();
 }
 
-void ViewOverlayStage::drawSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput, DescriptorSetHandle frameDescriptorSet)
-{
-    auto* cmdBuf = ctx.cmdBuf;
-    auto  vpW    = ctx.viewExtent.width;
-    auto  vpH    = ctx.viewExtent.height;
-    if (vpW == 0 || vpH == 0) return;
-
-    // Check if skybox is available
-    if (!skyboxInput.bAvailable || !skyboxInput.mesh || !frameDescriptorSet) return;
-
-    cmdBuf->debugBeginLabel("Skybox");
-
-    cmdBuf->bindPipeline(_skyboxPipeline.get());
-
-    float viewportY      = 0.0f;
-    float viewHeight = static_cast<float>(vpH);
-    if (bReverseViewportY) {
-        viewportY      = static_cast<float>(vpH);
-        viewHeight = -static_cast<float>(vpH);
-    }
-    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(vpW), viewHeight, 0.0f, 1.0f);
-    cmdBuf->setScissor(0, 0, vpW, vpH);
-
-    cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {frameDescriptorSet, skyboxInput.descriptorSet});
-    skyboxInput.mesh->draw(cmdBuf);
-
-    cmdBuf->debugEndLabel();
-}
-
-void ViewOverlayStage::drawOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs)
+void ViewOverlayStage::drawOverlay(const RenderStageContext& ctx, const ViewOverlayFrameInputs& frameInputs)
 {
     auto* cmdBuf = ctx.cmdBuf;
     auto  vpW    = ctx.viewExtent.width;

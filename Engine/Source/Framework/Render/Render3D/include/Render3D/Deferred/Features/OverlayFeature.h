@@ -3,6 +3,8 @@
 #include "Graph/RenderGraph.h"
 #include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Composition/FeatureProtocol.h"
+#include "Render3D/Common/ViewOverlayInputs.h"
+#include "Render3D/Deferred/DeferredAttachmentFormats.h"
 #include "Render3D/Deferred/ViewOverlayStage.h"
 
 namespace ya
@@ -16,6 +18,10 @@ struct RenderFrameData;
 ///
 /// The overlay packet (billboards/gizmos) is per-View recording data; it is
 /// assembled by the pipeline and handed in, not read from live ECS here.
+///
+/// The feature owns its device object (`ViewOverlayStage`) and its lifecycle;
+/// the debug render system the stage draws through is injected at init, not
+/// reached for during recording (D5).
 struct OverlayFeature
 {
     using Stage = ViewOverlayStage;
@@ -27,8 +33,8 @@ struct OverlayFeature
 
     struct Facts
     {
-        Extent2D                       viewExtent{};
-        ViewOverlayStage::FrameInputs* inputs = nullptr;
+        Extent2D                      viewExtent{};
+        ViewOverlayFrameInputs*       inputs = nullptr;
     };
 
     struct Inputs
@@ -39,12 +45,12 @@ struct OverlayFeature
 
     struct PrepareContext
     {
-        RenderSubmission*             submission = nullptr;
-        IRender*                      render     = nullptr;
-        ViewOverlayStage*             stage      = nullptr;
-        ViewOverlayStage::FrameInputs* inputs    = nullptr;
-        const RenderFrameData*        frameData  = nullptr;
-        uint32_t                      alignment = 1;
+        RenderSubmission*       submission = nullptr;
+        IRender*                render     = nullptr;
+        ViewOverlayStage*       stage      = nullptr;
+        ViewOverlayFrameInputs* inputs     = nullptr;
+        const RenderFrameData*  frameData  = nullptr;
+        uint32_t                alignment  = 1;
     };
 
     struct Prepared
@@ -61,6 +67,16 @@ struct OverlayFeature
     {
         RGTextureHandle color{};
     };
+
+    /// The device object this feature owns (D5); the pipeline drives it.
+    stdptr<ViewOverlayStage> _stage;
+
+    void init(IRender* render, DebugRenderSystem* debugRenderSystem);
+    void shutdown();
+    void beginFrame();
+    void refreshDeviceFormats(const DeferredAttachmentFormats& formats);
+
+    [[nodiscard]] ViewOverlayStage* stage() const { return _stage.get(); }
 
     [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;
 

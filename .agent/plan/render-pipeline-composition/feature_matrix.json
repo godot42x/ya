@@ -577,11 +577,11 @@
       ],
       "status": "in_progress",
       "evidence": [
-        "批 1（SSAO，已落地）：SSAOFeature 拥有 SSAOStage（_stage）、SSAOFeature::Settings 与 init/shutdown/beginFrame/refreshDeviceFormats；pipeline 删 _ssaoStage 成员、删 _bEnableSSAO/_ssaoRadius/_ssaoBias/_ssaoPower/_ssaoIntensity 五个镜像成员与逐帧 setSettings 推送；setSSAOEnabled 转发到 feature settings（automation 路径保留）",
-        "SSAOStage 变为纯设备对象：settings 字段、setSettings、实例 buildFrameData(ctx)、init 内的 config 读取、ConfigManager include 全部删除（那些 config 读取此前总是被 initStages 的推送覆盖，是死代码）；frame UBO 由 feature 的 resolve 从自己的 settings 构建",
-        "recipe 的 Stages.ssao 暂留过渡（SSAOStage* 传入）——concept 去掉 typename F::Stage 留最后一批",
-        "待办批次：Skybox/Overlay → Bloom/Finalize → Lighting/GBuffer → Shadow；每批删除 pipeline 对应 Stage 成员与 setter",
-        "证据：235/235（ya-render-3d-test）+ runtime SSAO on/off/Forward 三帧逐像素 max diff 0；ViewPassResourcesTest.SsaoRecipeKeepsInputLayoutNotSingletonSet 与 SSAOStageTest 迁到 feature 侧"
+        "批 1（SSAO，已落地）：SSAOFeature 拥有 SSAOStage + Settings + init/shutdown/beginFrame/refreshDeviceFormats；pipeline 删 _ssaoStage 与五个镜像设置成员；SSAOStage 变纯设备对象",
+        "批 2（Skybox/Overlay，已落地）：ViewOverlayStage 按 feature 边界拆开——skybox 管线独立为 SkyboxStage 归 SkyboxFeature；billboard/worldGrid/SimpleMaterial/debug 留在 ViewOverlayStage 归 OverlayFeature（原先是 SkyboxFeature 与 OverlayFeature 共用同一个 672 行设备对象）；两 feature 各自 init/shutdown/beginFrame/refreshDeviceFormats，pipeline 删 _overlayStage 成员",
+        "批 2 数据边界：per-View 包抽到 Common/ViewOverlayInputs.h 的 ViewOverlayFrameInputs（纯值，无设备依赖），EntityIdFeature 不再 include 任何 Stage 头；recipe Stages 拆出 skybox 槽位",
+        "待办批次：Bloom/Finalize → Lighting/GBuffer → Shadow；每批删除 pipeline 对应 Stage 成员与 setter；concept 去掉 typename F::Stage 随最后一批",
+        "证据：235/235；Deferred/Forward/切回 Deferred 三帧逐像素 0 diff（skybox 路径）；trace 拓扑含 Deferred Skybox 与 Deferred Forward Transparent（overlay pass）且 billboard 场景 billboards=2 无失败日志；VUID 分布与本批无关"
       ]
     }
   ]

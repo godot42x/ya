@@ -4,7 +4,7 @@
 #include "RHI/Core/DescriptorSet.h"
 #include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Composition/FeatureProtocol.h"
-#include "Render3D/Deferred/ViewOverlayStage.h"
+#include "Render3D/Common/ViewOverlayInputs.h"
 
 namespace ya
 {
@@ -43,7 +43,7 @@ struct EntityIdFeature
     {
         Extent2D                             viewExtent{};
         const RenderFrameData*               frameData     = nullptr;
-        const ViewOverlayStage::FrameInputs* overlayInputs = nullptr;
+        const ViewOverlayFrameInputs* overlayInputs = nullptr;
     };
 
     struct Inputs

@@ -39,6 +39,7 @@ struct RenderStageContext;
 struct RenderViewRecordingContext;
 struct SSAOStage;
 struct ShadowStage;
+struct SkyboxStage;
 struct Sprite2DStage;
 struct ViewOverlayStage;
 struct ViewTargetLease;
@@ -79,7 +80,10 @@ struct DeferredPipelineRecipe
         GBufferStage*        gBuffer  = nullptr;
         SSAOStage*           ssao     = nullptr;
         LightStage*          light    = nullptr;
-        /// One device object hosts both the skybox and the overlay pass.
+        /// The skybox pass's device object (owned by SkyboxFeature).
+        SkyboxStage*         skybox   = nullptr;
+        /// The billboard/gizmo/SimpleMaterial overlay device object
+        /// (owned by OverlayFeature).
         ViewOverlayStage*    overlay  = nullptr;
         Sprite2DStage*       sprites  = nullptr;
         EntityIdPass*        entityId = nullptr;
@@ -203,7 +207,7 @@ struct DeferredPipelineRecipe
         const RenderFrameData*                 frameData      = nullptr;
         /// The View's overlay packet. Mutable: billboard texture bindings are
         /// resolved into it while the overlay feature prepares.
-        ViewOverlayStage::FrameInputs*         overlayInputs  = nullptr;
+        ViewOverlayFrameInputs*         overlayInputs  = nullptr;
         /// The View binding: shared frame/light/skinning sets and slices.
         const DeferredFrameResourceSet::Binding* frameBinding = nullptr;
         /// The View's environment-lighting set (may be empty when the Scene has
@@ -221,7 +225,7 @@ struct DeferredPipelineRecipe
         const ViewTargetLease*    viewLease = nullptr;
         const DeferredFrameResourceSet::Binding* frameBinding = nullptr;
         /// The View's overlay packet, seen by the skybox/overlay/id passes.
-        ViewOverlayStage::FrameInputs* overlayInputs = nullptr;
+        ViewOverlayFrameInputs* overlayInputs = nullptr;
         FrameContext*                  postContext   = nullptr;
 
         /// Imported shared host-written buffers for this View. Feature-local

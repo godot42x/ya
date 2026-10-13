@@ -61,7 +61,7 @@
 - [x] D1 安全点冻结（M24/M02 verified）。
 - [x] D3 invocation tuple + fold（M26 verified）。
 - [x] D4 typed 发布 + family 原子失败（M27/M13/M10/M21 verified）；顺带恢复 C4a 丢失的 Forward depth 导出。
-- [~] D5 feature 吸收 Stage（M28）：**批 1（SSAO）已落地**——SSAOFeature 拥有设备对象/Settings/生命周期，pipeline 删 _ssaoStage 与五个镜像成员，SSAO on/off 逐像素 0 diff；剩 Skybox/Overlay → Bloom/Finalize → Lighting/GBuffer → Shadow（Shadow 最后）；concept 去掉 typename F::Stage 随最后一批。
+- [~] D5 feature 吸收 Stage（M28）：**批 1（SSAO）**——SSAOFeature 拥有设备对象/Settings/生命周期；**批 2（Skybox/Overlay）**——ViewOverlayStage 按 feature 边界拆为 SkyboxStage + 收窄的 ViewOverlayStage，per-View 包独立成纯数据头；均逐像素 0 diff；剩 Bloom/Finalize → Lighting/GBuffer → Shadow（Shadow 最后）；concept 去掉 typename F::Stage 随最后一批。
 - [ ] D2 extraction 快照外部交付（M25，blocked 于 render-view-family）。
 
 ## 下一步（按优先级）

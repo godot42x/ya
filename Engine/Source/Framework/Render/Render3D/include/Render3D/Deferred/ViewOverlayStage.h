@@ -3,67 +3,28 @@
 #include "Render3D/Deferred/DeferredAttachmentFormats.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Pipeline.h"
-#include "Render3D/Material/UnlitMaterial.h"
-#include "Render3D/Pipelines/DebugSkinning.h"
-#include "Render3D/Stage/IRenderStage.h"
-#include "Render3D/Services/DebugRenderSystem.h"
-#include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/ViewOverlayInputs.h"
 #include "Render3D/Common/ViewPassResources.h"
+#include "Render3D/Pipelines/DebugSkinning.h"
+#include "Render3D/Services/DebugRenderSystem.h"
+#include "Render3D/Stage/IRenderStage.h"
 
-#include "Skybox.slang.h"
-
-#include <functional>
 #include <glm/glm.hpp>
 
 namespace ya
 {
 
 struct Mesh;
-struct BillboardComponent;
 struct RenderFrameData;
 
-/// Deferred viewport overlay stage — Skybox background + SimpleMaterial debug overlay.
+/// Billboard/gizmo/SimpleMaterial overlay device object.
 ///
-/// Skybox: per-View frame UBO (view/proj without translation), written through
-/// the skybox feature's prepared binding + cubemap DS from RenderRuntime.
-/// Overlay: push constant only (view/proj/model/colorType), no UBO/DS.
+/// The per-View packet it draws from is `ViewOverlayFrameInputs`, assembled by
+/// the pipeline; the skybox's pipeline lives on `SkyboxStage`, which the skybox
+/// feature owns. The two used to share one stage object, which made each
+/// feature's device half invisible in the other's header.
 struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
 {
-    struct FrameInputs
-    {
-        struct BillboardInput
-        {
-            glm::vec3      worldCenter    = glm::vec3(0.0f);
-            glm::vec3      worldDirection = glm::vec3(0.0f, 0.0f, -1.0f);
-            glm::vec2      worldSize      = glm::vec2(1.0f);
-            glm::vec4      tint           = glm::vec4(1.0f);
-            TextureBinding textureBinding{};
-            uint32_t       entityId       = 0;
-            uint32_t       textureIndex   = 0;
-        };
-
-        struct DirectionGizmoInput
-        {
-            glm::mat4 coneModel     = glm::mat4(1.0f);
-            glm::mat4 cylinderModel = glm::mat4(1.0f);
-            glm::vec3 lineStart     = glm::vec3(0.0f);
-            glm::vec3 lineEnd       = glm::vec3(0.0f);
-        };
-
-        struct SkyboxInput
-        {
-            bool                bAvailable    = false;
-            DescriptorSetHandle descriptorSet = nullptr;
-            Mesh*               mesh          = nullptr;
-        };
-
-        std::vector<BillboardInput>      billboards{};
-        std::vector<DirectionGizmoInput> directionGizmos{};
-        SkyboxInput            skybox{};
-    };
-
-    using SkyboxFrameUBO = slang_types::Skybox::FrameUBO;
-
     struct OverlayPushConstant
     {
         glm::mat4 projection;
@@ -105,12 +66,6 @@ struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
 
     IRender* _render = nullptr;
 
-    // ── Skybox pipeline ──────────────────────────────────────────
-    stdptr<IGraphicsPipeline>    _skyboxPipeline;
-    stdptr<IPipelineLayout>      _skyboxPPL;
-    stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
-    stdptr<IDescriptorSetLayout> _skyboxResourceDSL;
-
     stdptr<IGraphicsPipeline>    _billboardPipeline;
     stdptr<IPipelineLayout>      _billboardPPL;
     stdptr<IDescriptorSetLayout> _billboardFrameDSL;
@@ -141,17 +96,12 @@ struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
     /// Submission-scoped PSO / debug-system warmup; the stage holds no
     /// per-View state.
     void beginFrame();
-    /// IRenderStage conformance; graph passes must use the parameterized
-    /// executeSkybox/executeOverlay overloads.
+    /// IRenderStage conformance; graph passes must use executeOverlay.
     void execute(const RenderStageContext& ctx) override;
-    void executeSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput, DescriptorSetHandle frameDescriptorSet);
-    void executeOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs, const OverlayPassBindings& overlay);
-    void updateBillboardTextures(FrameInputs& frameInputs, OverlayPassBindings& overlay);
+    void executeOverlay(const RenderStageContext& ctx, const ViewOverlayFrameInputs& frameInputs, const OverlayPassBindings& overlay);
+    void updateBillboardTextures(ViewOverlayFrameInputs& frameInputs, OverlayPassBindings& overlay);
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     void setDebugRenderSystem(DebugRenderSystem* debugRenderSystem);
-    [[nodiscard]] static SkyboxFrameUBO buildFrameData(const RenderFrameData& frameData);
-    [[nodiscard]] IGraphicsPipeline* getSkyboxPipeline() const { return _skyboxPipeline.get(); }
-    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxFrameDSL() const { return _skyboxFrameDSL; }
     [[nodiscard]] IGraphicsPipeline* getOverlayPipeline() const { return _overlayPipeline.get(); }
     [[nodiscard]] DebugRenderSystem* getDebugRenderSystem() const { return _debugRenderSystem; }
     [[nodiscard]] DebugSkinning&       getDebugSkinning() { return _debugSkinning; }
@@ -161,15 +111,13 @@ struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
     static constexpr uint32_t kBillboardTextureCount = 16;
 
   private:
-    void initSkybox();
-    void initOverlay();
     void initBillboards();
     void initWorldGrid();
+    void initOverlay();
     uint32_t resolveBillboardTextureIndex(std::vector<TextureBinding>& bindings, const TextureBinding& binding);
     void drawWorldGrid(const RenderStageContext& ctx);
-    void drawBillboards(const RenderStageContext& ctx, const FrameInputs& frameInputs, const OverlayPassBindings& overlay);
-    void drawSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput, DescriptorSetHandle frameDescriptorSet);
-    void drawOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs);
+    void drawBillboards(const RenderStageContext& ctx, const ViewOverlayFrameInputs& frameInputs, const OverlayPassBindings& overlay);
+    void drawOverlay(const RenderStageContext& ctx, const ViewOverlayFrameInputs& frameInputs);
 };
 
 } // namespace ya

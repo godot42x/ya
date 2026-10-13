@@ -870,3 +870,32 @@ D4 侦察时按 `forward_graph_exports::viewDepth` 追读，发现 C4a（6679b00
 
 - D5 后续批次：Skybox/Overlay → Bloom/Finalize → Lighting/GBuffer → Shadow（最后，依赖灯光线最新实现）；concept 的 `typename F::Stage`/`Stage*` 参数随最后一批去掉。
 - `DeferredPipelineRecipe::Stages` 仍是"设备对象传参表"，批 1 后只剩 7 项；随批次递减。
+
+## 2026-10-13 — D5 批 2：Skybox/Overlay 按 feature 边界拆设备对象（M28 分批进行中）
+
+### 目标与边界
+
+**单一验收目标（该批）**：skybox 与 overlay 两个 feature 各自拥有其设备对象与生命周期；pipeline 不再持共用 Stage 成员。
+
+### 侦察结论：先拆，再吸收
+
+`ViewOverlayStage` 是两个 feature 共用的 672 行设备对象（skybox 管线 + billboard/worldGrid/SimpleMaterial/debug 四条管线）。直接让一个 feature 持有它会制造两次越界：SkyboxFeature 拿 OverlayFeature 的设备、或反之。按「feature 拥有其设备对象」的验收，正确动作是按 feature 边界先拆——这不是搬运而是纠偏，符合 AGENTS.md 规则 0（不做"能用就行"的假收口）与规则 5（不平行造新接口）。
+
+### 实施内容
+
+- **新设备对象 `SkyboxStage.{h,cpp}`**：skybox 的 DSL/PPL/pipeline、`refreshPipelineFormats`、`executeSkybox`、静态 `buildFrameData`（view 去平移）。归 `SkyboxFeature`（`stdptr<SkyboxStage> _stage` + init/shutdown/beginFrame/refreshDeviceFormats）。
+- **`ViewOverlayStage` 收窄**：只剩 billboard/worldGrid/SimpleMaterial/debug 四条管线与 `executeOverlay/updateBillboardTextures`；头文件删 skybox 依赖（UnlitMaterial/Skybox.slang.h）。归 `OverlayFeature`（同型生命周期，debug 系统在 init 注入）。
+- **纯数据头 `Common/ViewOverlayInputs.h`**：per-View 包 `ViewOverlayFrameInputs`（billboards/gizmos/skybox 可用性）从设备头移出。收益：`EntityIdFeature` 不再 include 任何 Stage 头（它只读 billboard 描边数据）；packet 的生命周期与设备对象解耦。
+- **接线**：`DeferredPipelineRecipe::Stages` 拆出 `skybox` 槽（原来是 overlay 槽兼用）；pipeline 删 `_overlayStage`，改持 `_skyboxFeature` + `_overlayFeature`，四处生命周期调用改为 feature 转发。
+
+### 验证
+
+- `xmake r ya-render-3d-test` 235/235（`ViewOverlayStageTest.BuildsSkyboxFrameDataWithoutCameraTranslation` → `SkyboxStageTest.BuildsFrameDataWithoutCameraTranslation`，断言不变）。
+- runtime（HelloMaterial）：Deferred / Forward / 切回 Deferred 三帧对基线（`c3b-ssao-on` / `c4b-forward`）**逐像素 max diff 0**——skybox 走新设备对象的直接证据。
+- overlay 路径：`--render-graph-trace` 拓扑 dump 含 `Deferred Skybox` 与 `Deferred Forward Transparent`（28 次）；`create_billboard_regression_scene` 后 `list_billboard_components` count=2，全日志零 `Failed to prepare/append`；VUID 分布与本批无关（既有的 descriptor pool/buffer 类）。
+- 引擎运行日志零新错误。
+
+### 保留 / 未做
+
+- D5 后续：Bloom/Finalize → Lighting/GBuffer → Shadow（最后，依赖灯光线）；concept 的 `typename F::Stage` / `Stage*` 参数随最后一批去掉，`Stages` 传参表逐步清空。
+- Billboard 编辑器侧 smoke（`Script/automation/billboard/`）仍走 editor 目标，受并行 GUI 重构 `clearChildren` 签名变更阻塞，未复跑；game 侧 overlay 路径已由 trace + billboard 计数覆盖。

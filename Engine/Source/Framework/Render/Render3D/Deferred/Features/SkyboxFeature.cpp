@@ -9,6 +9,36 @@
 namespace ya
 {
 
+void SkyboxFeature::init(IRender* render)
+{
+    if (_stage == nullptr) {
+        _stage = ya::makeShared<SkyboxStage>();
+    }
+    _stage->init(render);
+}
+
+void SkyboxFeature::shutdown()
+{
+    if (_stage) {
+        _stage->destroy();
+        _stage.reset();
+    }
+}
+
+void SkyboxFeature::beginFrame()
+{
+    if (_stage) {
+        _stage->beginFrame();
+    }
+}
+
+void SkyboxFeature::refreshDeviceFormats(const DeferredAttachmentFormats& formats)
+{
+    if (_stage) {
+        _stage->refreshPipelineFormats(formats);
+    }
+}
+
 SkyboxFeature::Resolved SkyboxFeature::resolve(const Settings& settings,
                                                const Facts&    facts,
                                                const Inputs&   inputs) const
@@ -18,7 +48,7 @@ SkyboxFeature::Resolved SkyboxFeature::resolve(const Settings& settings,
     Resolved resolved;
     resolved.bEnabled = settings.bEnabled;
     if (facts.frameData != nullptr) {
-        resolved.frameData = ViewOverlayStage::buildFrameData(*facts.frameData);
+        resolved.frameData = SkyboxStage::buildFrameData(*facts.frameData);
     }
     return resolved;
 }
@@ -37,7 +67,7 @@ Result<SkyboxFeature::Prepared, FeatureError> SkyboxFeature::prepareBindings(con
     prepared.bEnabled = true;
     if (!writeUniformPassBinding(*ctx.submission,
                                  ctx.render,
-                                 ctx.stage->getSkyboxFrameDSL(),
+                                 ctx.stage->getFrameDSL(),
                                  ctx.alignment,
                                  &resolved.frameData,
                                  sizeof(resolved.frameData),

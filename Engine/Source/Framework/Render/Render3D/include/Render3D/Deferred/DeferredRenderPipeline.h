@@ -22,7 +22,8 @@
 #include "Render3D/Services/RenderSharedResourceProvider.h"
 #include "Render3D/Deferred/Features/SSAOFeature.h"
 #include "Render3D/Common/Sprite2DStage.h"
-#include "Render3D/Deferred/ViewOverlayStage.h"
+#include "Render3D/Deferred/Features/OverlayFeature.h"
+#include "Render3D/Deferred/Features/SkyboxFeature.h"
 
 
 #include <array>
@@ -109,7 +110,11 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     /// feature; the pipeline drives it instead of holding the stage (D5).
     SSAOFeature                  _ssaoFeature;
     stdptr<LightStage>           _lightStage;
-    stdptr<ViewOverlayStage> _overlayStage;
+    /// Skybox's device object, settings and lifecycle live on this feature (D5).
+    SkyboxFeature                _skyboxFeature;
+    /// The billboard/gizmo/SimpleMaterial overlay device object and lifecycle
+    /// live on this feature (D5).
+    OverlayFeature               _overlayFeature;
     /// Authored scene sprites drawn into the lit scene color (see Sprite2DStage).
     stdptr<Sprite2DStage>    _spriteStage;
     PostProcessingStage          _postProcessStage;
@@ -203,7 +208,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
         const DeferredPipelineRecipe::GraphOutputs& outputs) const;
     void               refreshGBufferStageState();
     void               refreshViewStageState();
-    [[nodiscard]] ViewOverlayStage::FrameInputs buildOverlayFrameInputs(
+    [[nodiscard]] ViewOverlayFrameInputs buildOverlayFrameInputs(
         const RenderPipelineFrameContext& frame,
         EnvironmentLightingSceneResources& environmentLighting,
         DescriptorSetHandle& environmentLightingDS) const;
@@ -216,7 +221,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
                                                  RenderStageContext& stageCtx,
                                                  uint32_t vpW,
                                                  uint32_t vpH,
-                                                 ViewOverlayStage::FrameInputs& overlayInputs,
+                                                 ViewOverlayFrameInputs& overlayInputs,
                                                  EnvironmentLightingSceneResources& environmentLighting,
                                                  DescriptorSetHandle environmentLightingDS,
                                                  FrameContext& postContext,

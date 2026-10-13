@@ -68,7 +68,7 @@ EFormat::T chooseSupportedAttachmentFormat(IRender* render,
     return preferred != candidates.end() ? *preferred : EFormat::Undefined;
 }
 
-ViewOverlayStage::FrameInputs::DirectionGizmoInput buildDirectionGizmoInput(const TransformComponent& tc)
+ViewOverlayFrameInputs::DirectionGizmoInput buildDirectionGizmoInput(const TransformComponent& tc)
 {
     const glm::mat4 worldTransform = glm::translate(glm::mat4(1.0f), tc.getWorldPosition()) *
                                      glm::mat4_cast(glm::quat(glm::radians(tc.getRotation())));
@@ -79,7 +79,7 @@ ViewOverlayStage::FrameInputs::DirectionGizmoInput buildDirectionGizmoInput(cons
         glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1, 0, 0)) *
         glm::scale(glm::mat4(1.0f), glm::vec3(0.1f, 1.0f, 0.1f));
 
-    return ViewOverlayStage::FrameInputs::DirectionGizmoInput{
+    return ViewOverlayFrameInputs::DirectionGizmoInput{
         .coneModel     = glm::translate(glm::mat4(1.0f), -tc.getForward()) * coneLocalTransf * worldTransform,
         .cylinderModel = worldTransform * cylinderLocalTransf,
         .lineStart     = tc.getWorldPosition(),
@@ -799,9 +799,8 @@ void DeferredRenderPipeline::initStages()
     _lightStage->setIBLSettings(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL);
     syncShadowSettings();
 
-    _overlayStage = ya::makeShared<ViewOverlayStage>();
-    _overlayStage->setDebugRenderSystem(_debugRenderSystem);
-    _overlayStage->init(_render);
+    _skyboxFeature.init(_render);
+    _overlayFeature.init(_render, _debugRenderSystem);
 
     _spriteStage = ya::makeShared<Sprite2DStage>();
     _spriteStage->init(_render);
@@ -823,10 +822,8 @@ void DeferredRenderPipeline::shutdown()
         _spriteStage->destroy();
         _spriteStage.reset();
     }
-    if (_overlayStage) {
-        _overlayStage->destroy();
-        _overlayStage.reset();
-    }
+    _overlayFeature.shutdown();
+    _skyboxFeature.shutdown();
     if (_lightStage) {
         _lightStage->destroy();
         _lightStage.reset();
@@ -882,7 +879,7 @@ struct DeferredFamilyViewBranch
     RenderStageContext                    stageCtx{};
     uint32_t                              vpW = 0;
     uint32_t                              vpH = 0;
-    ViewOverlayStage::FrameInputs     overlayInputs{};
+    ViewOverlayFrameInputs     overlayInputs{};
     EnvironmentLightingSceneResources     environmentLighting{};
     DescriptorSetHandle                   environmentLightingDS{};
     FrameContext                          postContext{};
@@ -915,9 +912,8 @@ void DeferredRenderPipeline::beginSubmission(const PreparedPipelineFrame& prepar
     if (_lightStage) {
         _lightStage->beginFrame();
     }
-    if (_overlayStage) {
-        _overlayStage->beginFrame();
-    }
+    _overlayFeature.beginFrame();
+    _skyboxFeature.beginFrame();
 }
 
 ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyRecordContext& ctx)
@@ -1084,7 +1080,7 @@ void DeferredRenderPipeline::beginViewRecording(const RenderPipelineFrameContext
 }
 
 
-ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
+ViewOverlayFrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
     const RenderPipelineFrameContext& frame,
     EnvironmentLightingSceneResources& environmentLighting,
     DescriptorSetHandle& environmentLightingDS) const
@@ -1097,8 +1093,8 @@ ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
     environmentLighting   = sceneResources.environmentLightingResources;
     environmentLightingDS = sceneResources.environmentLightingDescriptorSet;
 
-    ViewOverlayStage::FrameInputs frameInputs{};
-    if (!_overlayStage) {
+    ViewOverlayFrameInputs frameInputs{};
+    if (_overlayFeature.stage() == nullptr) {
         return frameInputs;
     }
 
@@ -1133,7 +1129,7 @@ ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
                     continue;
                 }
 
-                ViewOverlayStage::FrameInputs::BillboardInput input{};
+                ViewOverlayFrameInputs::BillboardInput input{};
                 input.worldCenter    = worldCenter;
                 input.worldDirection = billboard.worldDirection;
                 input.worldSize      = glm::vec2(size, size);
@@ -1260,9 +1256,8 @@ void DeferredRenderPipeline::refreshViewStageState()
         _lightStage->refreshPipelineFormats(buildViewSnapshotFormats());
     }
 
-    if (_overlayStage) {
-        _overlayStage->refreshPipelineFormats(buildViewSnapshotFormats());
-    }
+    _overlayFeature.refreshDeviceFormats(buildViewSnapshotFormats());
+    _skyboxFeature.refreshDeviceFormats(buildViewSnapshotFormats());
 
     if (_spriteStage) {
         // Sprites draw into the View's color attachment with the GBuffer depth;
@@ -1319,7 +1314,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
                                                        RenderStageContext& stageCtx,
                                                        uint32_t vpW,
                                                        uint32_t vpH,
-                                                       ViewOverlayStage::FrameInputs& overlayInputs,
+                                                       ViewOverlayFrameInputs& overlayInputs,
                                                        EnvironmentLightingSceneResources& environmentLighting,
                                                        DescriptorSetHandle environmentLightingDS,
                                                        FrameContext& postContext,
@@ -1329,7 +1324,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
                                                        std::optional<RGPassHandle> familyPredecessor)
 {
     YA_CORE_ASSERT(_frameResources != nullptr, "Deferred pipeline frame resources are not initialized");
-    YA_CORE_ASSERT(_overlayStage != nullptr, "Deferred pipeline overlay stage is not initialized");
+    YA_CORE_ASSERT(_overlayFeature.stage() != nullptr, "Deferred pipeline overlay stage is not initialized");
     if (!frame.submission || !frame.submission->isRecording()) {
         return false;
     }
@@ -1378,7 +1373,8 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         .gBuffer  = _gBufferStage.get(),
         .ssao     = _ssaoFeature.stage(),
         .light    = _lightStage.get(),
-        .overlay  = _overlayStage.get(),
+        .skybox   = _skyboxFeature.stage(),
+        .overlay  = _overlayFeature.stage(),
         .sprites  = _spriteStage.get(),
         .entityId = &_entityIdPass,
         .post     = &_postProcessStage,
