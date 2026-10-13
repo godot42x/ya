@@ -704,3 +704,63 @@ plan 要求的 CPU/GPU/内存三次前后对照未完成：本机存在并行构
 ### 状态
 
 matrix **19 verified / 2 in_progress（M19、M23）/ 2 todo（M08、M22）**。M08/M22 依赖"第二个 View 的声明入口"（应用/编辑器侧），已记明跨线。
+
+## 2026-10-13 — 复审：计划重新打开（非实现 checkpoint）
+
+### 触发
+
+用户要求 review 本计划是否真的解决复杂度问题与实现质量。按代码核对（不是按 progress 自述）。
+
+### 结论
+
+保留：旧 orchestrator/passes/resources/ViewResources bag 退出；target request 单源；SSAO/Bloom 关闭无资源；Bloom/EntityId/Finalize 跨管线共享；M04 与 blur last-call 两个真实修复；逐像素行为证据。
+
+未达成 §1 成功定义 1–4，且 §8 第一条停止条件已触发：
+
+- `DeferredRenderPipeline::beginSubmission` 以 `_bEnableSSAO` 决定 SSAO warmup，与 resolved `config.ssao` 并存；shadow 设置有 resolve / 逐 View `captureShadowSettings` / `applyShadowFrameSettings` 三个来源。
+- `recordFamily` 逐 View 调 `applyPendingResourceRefreshes()`，录制期 destroy/init shadow 资源；design §2 的 device-prepare 未实现。M02 原 verified 不成立。
+- `buildOverlayFrameInputs` 录制期遍历 live ECS 决定 skybox/billboard/gizmo；`PrepareContext.overlayInputs` 被 Overlay prepare 写、EntityId append 读。
+- 新增 feature 需改 recipe 约 10 处 + pipeline 侧 4 处；`collectViewTargets` 漏登记只在运行期暴露。M21 测试绕过 recipe/request/publish。
+- typed ports 为裸 `RGTextureHandle`；M01 的「设计修正」以改解释替代 expected，违反 status_rules。M05 的编译期类型不兼容同理。
+- append 中途失败时已加入 family graph 的 pass 无撤回。
+- composition 提交在 `Engine/Source` 净增约 2,900 行（+7271 / −4381）。
+
+### 用户决策
+
+Feature 吸收 Stage（D5 分批）；extraction 快照交 `render-view-family`（本线 M25 blocked）；View 失败使整个 family 失败、不改 RDG；本目录重新打开。
+
+### 本轮工件变更
+
+- plan.md：头部状态改为重新打开；§9 完成条件纳入 D 系列；新增 §10（复审表、决策、D1/D3/D4/D5 checkpoint、D2 外部交付、追加停止条件）。
+- feature_matrix.json：M01/M02/M05/M21 → in_progress 并附复审说明；新增 M24（D1）、M25（D2，blocked）、M26（D3）、M27（D4）、M28（D5）；`next_checkpoint` = D1。
+- todo.md：顶部加复审后待办。
+- `render-view-family/todo.md`：登记 D2 交接项。
+
+未改代码、未构建、未跑测试。按仓库规则，本批计划改动与 D1 代码同批提交。
+
+### 状态
+
+matrix **15 verified / 6 in_progress / 6 todo / 1 blocked**（共 28 行）。下一 checkpoint：D1。
+
+## 2026-10-13 — D1：安全点冻结设置，录制期不重建持久资源（M24 verified、M02 回到 verified）
+
+### 复审缺口的代码核实（动手前逐条验证）
+
+复审 §10.1 的三条结论在当前代码上全部属实：`_bEnableSSAO` 与 resolved `config.ssao` 并存（`beginSubmission` 读前者）；shadow 有 resolve / 逐 View `captureShadowSettings` / `applyShadowFrameSettings` 三个来源；`recordFamily` 逐 View 调 `applyPendingResourceRefreshes()`，shadow 分辨率变化时在录制期 destroy/init 整套 shadow 资源。
+
+### 实施
+
+- **两步安全点**（design §6 顺序的落地）：`IRenderPipeline` 新增 `applyFrameSettings(plan)`（step 1：本帧 queued settings + 帧 packet 的 shadow settings 落地——后者是原逐 View capture 读的同一来源）与 `prepareFrameDevices(prepared)`（step 2：`applyPendingResourceRefreshes`——shadow 资源重建落在这里——+ shadow stage/state 同步）。`prepareFrameRecord` 按 **settings → resolve → devices → targets** 顺序调用，全程在任何 command buffer 之前。
+- **录制路径清空**：两管线的 `recordFamily` 删除逐 View `syncFrameSettings` / `applyPendingResourceRefreshes` / `captureShadowSettings`；两个逐 View helper 与 capture 函数删除。`applyPending*` 现在只在安全点被调（grep 核对）。
+- **`beginSubmission(prepared)`** 接收本帧 resolved composition：SSAO warmup 由"任一 `ResolvedView.ssao.bEnabled`"决定，`_bEnableSSAO` 不再是 warmup 决策来源（唯一消费者回到 `buildSettingsSnapshot`）。
+- shadow 的 destroy/init 现在只剩三处：pipeline `init`、`shutdown`、安全点内的 `applyPendingResourceRefreshes`——录制期零重建。
+
+### 验证
+
+- 测试：`xmake r ya-render-3d-test` **232/232**（新增 `ApplyFrameSettingsFreezesTheFrameAgainstLaterRequests`——apply 之后的 `requestSettings` 不动本帧状态、下一帧 apply 才落地；`FramePacketShadowSettingsAreTheSafePointSource`）；`python3 Script/ya.py test --target ya` **1816/1816**。
+- Runtime（HelloMaterial）：Deferred(shadow on) / re-on / Forward / 切回 Deferred 四帧对各自基线**逐像素 0 diff**；shadow on/off 差 31782 px（shadow 仍真实生效）。
+- **shadow 切换 trace**：录制期无 shadow destroy/init（重建只剩 init/shutdown/安全点三处）。trace 中 validation 错误分布（09600=20 / 03320=2 / 00331=20）与 D1 前三个 run（53222/62505/63301）**逐值一致**——这些是既有的 shadow-toggle 时序问题（首次 shadow off→on 后一帧 descriptor 引用重建前布局），预先存在、非 D1 引入也未恶化，留待 shadow-and-light 线。
+
+### 状态
+
+matrix **17 verified / 5 in_progress / 5 todo / 1 blocked**。下一 checkpoint：D3（D2 外部交付中）。

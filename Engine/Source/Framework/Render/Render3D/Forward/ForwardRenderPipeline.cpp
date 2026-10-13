@@ -282,9 +282,53 @@ void ForwardRenderPipeline::initStageResources()
         if (_shadowStage) { _shadowStage->destroy(); _shadowStage.reset(); } });
 }
 
-void ForwardRenderPipeline::beginSubmission()
+void ForwardRenderPipeline::applyFrameSettings(const RenderFramePlan& plan)
 {
+    // Safe point, step 1: this frame's queued settings land here, once, so the
+    // composition resolves from frozen values and recording changes nothing.
     applyPendingPostProcessSettings();
+
+    // The frame packet is this frame's shadow source (what the per-View capture
+    // used to read at recording start).
+    if (plan.frame.shadowSettings) {
+        _frameShadowSettings = *plan.frame.shadowSettings;
+        if (_shadowSettings) {
+            *_shadowSettings = _frameShadowSettings;
+        }
+    }
+    else if (_shadowSettings) {
+        _frameShadowSettings = *_shadowSettings;
+    }
+
+    // A shadow resolution change is a device-resource change: notice it here so
+    // step 2 lands it before recording rather than mid-frame.
+    const ShadowSettings shadowSettings = currentShadowSettings();
+    if (shadowSettings.isEnabled()) {
+        const uint32_t desiredShadowResolution = std::max(shadowSettings.resolution, 1u);
+        const bool bShadowResolutionDirty = !_shadowResources.depthImage ||
+                                            _shadowResources.extent.width != desiredShadowResolution ||
+                                            _shadowResources.extent.height != desiredShadowResolution;
+        if (bShadowResolutionDirty) {
+            requestShadowResourceRefresh();
+        }
+    }
+}
+
+void ForwardRenderPipeline::prepareFrameDevices(const PreparedPipelineFrame& prepared)
+{
+    (void)prepared;
+    // Safe point, step 2: persistent device resources (shadow images, format
+    // variants) are (re)built here so recording never destroys or initializes
+    // one. syncShadowSettings then publishes the frozen state to the stage.
+    applyPendingResourceRefreshes();
+    syncShadowSettings();
+}
+
+void ForwardRenderPipeline::beginSubmission(const PreparedPipelineFrame& prepared)
+{
+    (void)prepared;
+    // Submission-scoped warmup only: settings and device resources were frozen
+    // at the safe point.
     _postProcessStage.beginFrame();
 }
 
@@ -358,9 +402,6 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
             continue;
         }
 
-        captureShadowSettings(branch.frame);
-        syncFrameSettings(branch.frame);
-        applyPendingResourceRefreshes();
         beginViewRecording(branch.frame, branch.stageCtx);
         branch.shadowPrepared = executeShadowPass(branch.frame, branch.stageCtx);
 
@@ -578,21 +619,6 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
     }
 }
 
-void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
-{
-    const ShadowSettings shadowSettings          = currentShadowSettings();
-    const uint32_t       desiredShadowResolution = std::max(shadowSettings.resolution, 1u);
-    if (shadowSettings.isEnabled()) {
-        const bool bShadowResolutionDirty = !_shadowResources.depthImage ||
-                                            _shadowResources.extent.width != desiredShadowResolution ||
-                                            _shadowResources.extent.height != desiredShadowResolution;
-        if (bShadowResolutionDirty) {
-            requestShadowResourceRefresh();
-        }
-    }
-
-    syncShadowSettings();
-}
 
 void ForwardRenderPipeline::refreshViewSnapshot()
 {
@@ -624,15 +650,6 @@ void ForwardRenderPipeline::syncShadowSettings()
     }
 }
 
-void ForwardRenderPipeline::captureShadowSettings(const RenderPipelineFrameContext& frame)
-{
-    if (frame.frame && frame.frame->shadowSettings) {
-        _frameShadowSettings = *frame.frame->shadowSettings;
-    }
-    else if (_shadowSettings) {
-        _frameShadowSettings = *_shadowSettings;
-    }
-}
 
 ShadowSettings ForwardRenderPipeline::currentShadowSettings() const
 {

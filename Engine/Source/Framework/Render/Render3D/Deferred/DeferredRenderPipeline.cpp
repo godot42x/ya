@@ -497,6 +497,58 @@ DeferredPipelineRecipe::Config DeferredRenderPipeline::buildRecipeConfig(const R
     return config;
 }
 
+void DeferredRenderPipeline::applyFrameSettings(const RenderFramePlan& plan)
+{
+    // Safe point, step 1: this frame's queued settings land here, once, so the
+    // composition resolves from frozen values and recording changes nothing.
+    applyPendingSettings();
+
+    // The frame packet is this frame's shadow source (what the per-View capture
+    // used to read at recording start). Taking it here means the composition
+    // resolves from the same value the stage and technique are given below.
+    if (plan.frame.shadowSettings) {
+        _frameShadowSettings = *plan.frame.shadowSettings;
+        if (_shadowSettings) {
+            *_shadowSettings = _frameShadowSettings;
+        }
+    }
+    else if (_shadowSettings) {
+        _frameShadowSettings = *_shadowSettings;
+    }
+
+    // A shadow resolution change is a device-resource change. Notice it here so
+    // step 2 lands it before recording rather than mid-frame.
+    const ShadowSettings shadowSettings = currentShadowSettings();
+    if (shadowSettings.isEnabled()) {
+        const uint32_t desiredShadowResolution = std::max(shadowSettings.resolution, 1u);
+        const bool bShadowResolutionDirty = !_shadowResources.depthImage ||
+                                            _shadowResources.extent.width != desiredShadowResolution ||
+                                            _shadowResources.extent.height != desiredShadowResolution;
+        if (bShadowResolutionDirty) {
+            requestShadowResourceRefresh();
+        }
+    }
+}
+
+void DeferredRenderPipeline::prepareFrameDevices(const PreparedPipelineFrame& prepared)
+{
+    (void)prepared;
+    // Safe point, step 2: every persistent device resource the frame needs is
+    // (re)built here -- shadow images and the stage objects that own them -- so
+    // recording never destroys or initializes a resource.
+    applyPendingResourceRefreshes();
+
+    // Push the frozen shadow settings into the stage and the shared runtime
+    // state. This is stage state, not a resource rebuild, and it is the same
+    // value for every View of the frame.
+    const ShadowSettings shadowSettings = currentShadowSettings();
+    if (_shadowStage && shadowSettings.isEnabled()) {
+        _shadowStage->applySettings(shadowSettings);
+    }
+    syncShadowSettings();
+}
+
+
 EFrameComposition DeferredRenderPipeline::resolveFrameComposition(const RenderFramePlan& plan,
                                                                   PreparedPipelineFrame& prepared,
                                                                   std::vector<ViewTargetRequest>& out)
@@ -840,17 +892,22 @@ struct DeferredFamilyViewBranch
 
 } // namespace
 
-void DeferredRenderPipeline::beginSubmission()
+void DeferredRenderPipeline::beginSubmission(const PreparedPipelineFrame& prepared)
 {
-    // Submission-scoped warmup: pending settings land once, then every stage's
-    // PSO beginFrame runs once per submission instead of once per View.
-    applyPendingSettings();
-    applyPendingResourceRefreshes();
+    // Submission-scoped warmup only: settings and device resources were frozen
+    // at the safe point. Which PSOs need warming follows from what this frame's
+    // composition turned on -- the same Resolved values the passes read -- not
+    // from a second enablement flag kept beside them.
+    bool bSsaoOn = false;
+    for (const DeferredPipelineRecipe::ResolvedView& view : prepared.deferred.resolved) {
+        bSsaoOn = bSsaoOn || view.ssao.bEnabled;
+    }
+
     if (_gBufferStage) {
         _gBufferStage->beginFrame();
     }
     _postProcessStage.beginFrame();
-    if (_bEnableSSAO && _ssaoStage) {
+    if (_ssaoStage && bSsaoOn) {
         _ssaoStage->beginFrame();
     }
     if (_lightStage) {
@@ -906,9 +963,6 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
         }
 
         beginViewRecording(branch.frame, branch.stageCtx, branch.vpW, branch.vpH);
-        syncFrameSettings(branch.frame);
-        applyPendingResourceRefreshes();
-        applyShadowFrameSettings();
 
         if (!preparedSkinning) {
             RenderViewRecordingContext view = branch.frame.view;
@@ -1002,8 +1056,6 @@ bool DeferredRenderPipeline::shouldSkipView(const RenderPipelineFrameContext& fr
 
 void DeferredRenderPipeline::beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH)
 {
-    captureShadowSettings(frame);
-
     vpW = frame.view.viewExtent.width;
     vpH = frame.view.viewExtent.height;
 
@@ -1021,15 +1073,6 @@ void DeferredRenderPipeline::beginViewRecording(const RenderPipelineFrameContext
     };
 }
 
-void DeferredRenderPipeline::captureShadowSettings(const RenderPipelineFrameContext& frame)
-{
-    if (frame.frame && frame.frame->shadowSettings) {
-        _frameShadowSettings = *frame.frame->shadowSettings;
-    }
-    else if (_shadowSettings) {
-        _frameShadowSettings = *_shadowSettings;
-    }
-}
 
 ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
     const RenderPipelineFrameContext& frame,
@@ -1227,47 +1270,6 @@ void DeferredRenderPipeline::refreshViewStageState()
     }
 }
 
-void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&)
-{
-    if (_ssaoStage) {
-        _ssaoStage->setSettings(_ssaoStage->getRadius(),
-                                _ssaoStage->getBias(),
-                                _ssaoStage->getPower(),
-                                _ssaoStage->getIntensity(),
-                                _bReverseViewportY);
-    }
-
-    const auto     shadowSettings           = currentShadowSettings();
-    const uint32_t shadowedPointLightBudget = shadowSettings.getEffectivePointLightCount();
-    const uint32_t desiredShadowResolution  = std::max(shadowSettings.resolution, 1u);
-    if (shadowSettings.isEnabled()) {
-        const bool bShadowResolutionDirty = !_shadowResources.depthImage ||
-                                            _shadowResources.extent.width != desiredShadowResolution ||
-                                            _shadowResources.extent.height != desiredShadowResolution;
-        if (bShadowResolutionDirty) {
-            requestShadowResourceRefresh();
-        }
-    }
-
-    (void)shadowedPointLightBudget;
-    (void)shadowSettings;
-    (void)desiredShadowResolution;
-    syncShadowSettings();
-}
-
-void DeferredRenderPipeline::applyShadowFrameSettings()
-{
-    const auto shadowSettings = currentShadowSettings();
-    if (_shadowStage && shadowSettings.isEnabled()) {
-        _shadowStage->applySettings(shadowSettings);
-        YA_PERF_SCOPE(perf::sample::deferredShadow(), perf::metric::cpuTimeMs(), perf::domain::render());
-        return;
-    }
-
-    // Shadows off this frame: nothing to apply, and the composition's shadow
-    // feature resolves off for the same reason.
-    PerfState::get().clearMetric(perf::sample::deferredShadow(), perf::metric::cpuTimeMs());
-}
 
 namespace
 {

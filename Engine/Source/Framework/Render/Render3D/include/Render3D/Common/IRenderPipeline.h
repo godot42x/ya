@@ -46,9 +46,23 @@ struct IRenderPipelineExecution
     /// Compile and record one Scene family graph; return each View's output.
     /// Product recording does not use tick/beginTick/getCurrent.
     virtual ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) = 0;
+    /// Safe point, step 1 of 2: apply this frame's queued settings so the
+    /// composition resolves from frozen values. Runs before
+    /// `resolveFrameComposition`, in the same safe point (see design §6), and is
+    /// the only place settings change for a frame.
+    virtual void applyFrameSettings(const RenderFramePlan& plan) = 0;
+    /// Safe point, step 2 of 2: prepare the persistent device resources the
+    /// resolved composition needs (shadow images, format variants) and record
+    /// what it decided for the submission's warmup. Runs after the composition
+    /// resolved and before any command buffer exists, so recording never has to
+    /// mutate a persistent resource or re-decide enablement.
+    virtual void prepareFrameDevices(const PreparedPipelineFrame& prepared) = 0;
     /// Submission-scoped warmup: PSO beginFrame and the state that must land
     /// before any family records. Called once per submission, never per View.
-    virtual void beginSubmission() = 0;
+    /// The frame's resolved composition arrives as an argument: which PSOs need
+    /// warming follows from what the composition turned on, not from a second
+    /// enablement flag kept beside it.
+    virtual void beginSubmission(const PreparedPipelineFrame& prepared) = 0;
     /// Safe-point composition: resolve this frame's typed composition, fill
     /// `prepared` for recording, and produce the View target requests it
     /// requires. Both world pipelines resolve one, so allocation and the passes

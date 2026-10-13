@@ -68,7 +68,7 @@ void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan, const Pr
     // View or per family. The composition was already resolved at the safe
     // point and arrives as an argument: recording consumes it, never re-derives
     // it.
-    pipeline->beginSubmission();
+    pipeline->beginSubmission(prepared);
 
     const auto recordOneFamily = [&](const SceneViewFamilyPlan* family, std::vector<SceneViewRecording> views) {
         ViewFamilyRecordContext ctx{
@@ -120,12 +120,19 @@ PreparedPipelineFrameResult RenderDeviceState::prepareFrameRecord(const RenderFr
     prepared.flightIndex  = plan.frame.flightIndex;
 
     if (IRenderPipeline* pipeline = getActivePipeline()) {
+        // Order matters (design §6): settings first, so the composition resolves
+        // from frozen values; then resolve; then the device resources the
+        // resolved composition needs. All three are inside this safe point, so
+        // recording only consumes them.
+        pipeline->applyFrameSettings(plan);
+
         std::vector<ViewTargetRequest> requests;
         const EFrameComposition composition = pipeline->resolveFrameComposition(plan, prepared, requests);
         if (composition == EFrameComposition::Failed) {
             YA_CORE_ERROR("Failed to resolve the active pipeline composition before recording");
             return std::nullopt; // preparation failure aborts recording
         }
+        pipeline->prepareFrameDevices(prepared);
         if (!_viewTargets.prepare(requests)) {
             YA_CORE_ERROR("Failed to prepare View targets before recording");
             return std::nullopt; // preparation failure aborts recording

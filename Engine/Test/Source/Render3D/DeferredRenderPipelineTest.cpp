@@ -571,4 +571,71 @@ TEST(PreparedPipelineFrameTest, ResolvedPointersSurviveCopiesAndGrowthOfTheFrame
     EXPECT_EQ(moved.forward.resolved[0].viewId, 300u);
 }
 
+
+namespace
+{
+
+/// M24's freeze boundary needs a frame packet whose shadow settings the safe
+/// point can read, the way the extractor builds one.
+RenderFramePlan makeFramePlanWithShadow(const ShadowSettings& shadowSettings)
+{
+    static ShadowSettings held = shadowSettings;
+    held = shadowSettings;
+    RenderFramePlan plan;
+    plan.frame.shadowSettings = &held;
+    return plan;
+}
+
+} // namespace
+
+TEST_F(DeferredRenderPipelineSettingsTest, ApplyFrameSettingsFreezesTheFrameAgainstLaterRequests)
+{
+    // D1/M24: applyFrameSettings is the one place a frame's settings land. A
+    // request that arrives after it is next frame's business: the frame must
+    // resolve from what was frozen, and the stage must not see a third value.
+    DeferredRenderPipeline pipeline;
+    DeferredRenderPipelineTestAccess::loadPersistentSettings(pipeline);
+
+    RenderFramePlan plan = makeFramePlanWithShadow(ShadowSettings::fromQuality(EShadowQuality::Low));
+    pipeline.applyFrameSettings(plan);
+
+    // The frame's shadow source is now the packet's value, wherever it came from.
+    EXPECT_EQ(pipeline.buildSettingsSnapshot().shadow.quality, EShadowQuality::Low);
+
+    // A request arriving after the freeze is queued, not applied: the frozen
+    // frame state does not move, and resolveSettings still answers the pending
+    // value so the caller can see what next frame will do.
+    RenderPipelineSettings late = pipeline.buildSettingsSnapshot();
+    late.shadow                = ShadowSettings::fromQuality(EShadowQuality::Ultra);
+    late.ssaoRadius            = 9.0f;
+    pipeline.requestSettings(late);
+
+    EXPECT_EQ(pipeline.buildSettingsSnapshot().shadow.quality, EShadowQuality::Low);
+    EXPECT_FLOAT_EQ(pipeline.buildSettingsSnapshot().ssaoRadius, 0.6f);
+    EXPECT_EQ(pipeline.resolveSettings().shadow.quality, EShadowQuality::Ultra);
+
+    // Re-freezing (the next frame's safe point) is what lands it.
+    plan = makeFramePlanWithShadow(ShadowSettings::fromQuality(EShadowQuality::Ultra));
+    pipeline.applyFrameSettings(plan);
+    EXPECT_EQ(pipeline.buildSettingsSnapshot().shadow.quality, EShadowQuality::Ultra);
+    EXPECT_FLOAT_EQ(pipeline.buildSettingsSnapshot().ssaoRadius, 9.0f);
+}
+
+TEST_F(DeferredRenderPipelineSettingsTest, FramePacketShadowSettingsAreTheSafePointSource)
+{
+    // The per-View capture used to read the frame packet at recording start; the
+    // safe point reads the same packet, so a shadow change made through the
+    // packet (the automation path) is frozen before the composition resolves.
+    DeferredRenderPipeline pipeline;
+    DeferredRenderPipelineTestAccess::loadPersistentSettings(pipeline);
+
+    ShadowSettings packetSettings = ShadowSettings::fromQuality(EShadowQuality::High);
+    packetSettings.resolution     = 2048;
+    RenderFramePlan plan          = makeFramePlanWithShadow(packetSettings);
+
+    pipeline.applyFrameSettings(plan);
+    EXPECT_EQ(pipeline.buildSettingsSnapshot().shadow.resolution, 2048u);
+    EXPECT_EQ(pipeline.buildSettingsSnapshot().shadow.quality, EShadowQuality::High);
+}
+
 } // namespace ya

@@ -1,8 +1,8 @@
 {
   "plan": "render-pipeline-composition",
-  "updated": "2026-10-12",
+  "updated": "2026-10-13",
   "implementation_status": "in_progress",
-  "next_checkpoint": "none (remaining rows are cross-line)",
+  "next_checkpoint": "D1 (plan.md §10.3)",
   "intent": "RDG 上方建立一等 feature、typed recipe、单源资源需求与贯通 prepare/build/publication 的同一份 resolved composition；不以 Bloom 算法为目标",
   "status_rules": {
     "todo": "未实施，evidence 为空",
@@ -15,23 +15,24 @@
     {
       "id": "M01",
       "area": "typed heterogeneous feature protocol",
-      "checkpoints": ["C1"],
+      "checkpoints": ["C1", "D3"],
       "expected": "concept/add 存储至少两类真实异构 feature；typed ports 连接输入输出；公开 API 无 feature 枚举 switch、std::any 或字符串 blackboard",
       "verification": ["PipelineCompositionTest", "requires/static_assert 类型契约", "公开 API diff review"],
-      "status": "verified",
+      "status": "in_progress",
       "evidence": [
         "Feature concept 以真实签名定义（Settings/Facts/Inputs -> Resolved；prepareBindings -> Result<Prepared,FeatureError>；append(graph, Stage*, ctx, facts, resolved, prepared, inputs) -> Result<GraphOutputs,FeatureError>），由 9 个 feature 各自 static_assert(Feature<X>) 强制（Composition/FeatureProtocol.h + Deferred/Features/*.h）",
         "负向验证：临时把 FinalizeFeature::append 返回类型改为裸 GraphOutputs，static_assert 报 \"FinalizeFeature must satisfy the composition Feature protocol\"（已还原）",
         "FeatureProtocolTest 正/反例：真实形状 feature 满足；缺嵌套类型或 append 未包 Result 均不满足",
         "FeatureGraphContext 删死字段 graph/render；RenderStageContext 删 Scene* derivedScene，Forward 唯一读点改 buildPassContext(ctx, viewScene) 显式传参",
         "DeferredPipelineRecipe::appendGraph 以 GBufferFeature/SSAOFeature/LightingFeature 的 typed Resolved/Prepared/Inputs/GraphOutputs 组合三 pass（DeferredPipelineRecipe.cpp）；公开 API 无 feature 枚举 switch / std::any / 字符串 blackboard",
-        "12 个真实异构 feature 全部 static_assert(Feature<>) 强制（GBuffer/SSAO/Lighting/Skybox/Sprite2D/Overlay/ForwardOpaque/ForwardSkybox + 跨管线共享的 Bloom/EntityId/Finalize/Shadow）；typed ports 是各 feature 自己的 Inputs/Outputs；typed refs 死脚手架已删除（0 引用）。**设计修正**：不需要通用 add/seal 类型擦除容器——两条 recipe 的显式字段 + 同一 concept 已满足'新增 feature 不改 core'（M21 已用测试证明）"
+        "12 个真实异构 feature 全部 static_assert(Feature<>) 强制（GBuffer/SSAO/Lighting/Skybox/Sprite2D/Overlay/ForwardOpaque/ForwardSkybox + 跨管线共享的 Bloom/EntityId/Finalize/Shadow）；typed ports 是各 feature 自己的 Inputs/Outputs；typed refs 死脚手架已删除（0 引用）。**设计修正**：不需要通用 add/seal 类型擦除容器——两条 recipe 的显式字段 + 同一 concept 已满足'新增 feature 不改 core'（M21 已用测试证明）",
+        "2026-10-13 复审降级：typed ports 现为裸 RGTextureHandle，语义不同的端口可互换不报错；原「设计修正」以改解释替代 expected，不符合 status_rules。D3 重新验收（invocation 记录 + 端口类型）"
       ]
     },
     {
       "id": "M02",
       "area": "single resolve and explicit prepared frame",
-      "checkpoints": ["C1"],
+      "checkpoints": ["C1", "D1"],
       "expected": "prepareFrameRecord 返回本次准备值，record 显式消费；同 invocation resolve 一次；新设置请求只影响下一次，资源要求与构图参数一致",
       "verification": ["settings snapshot 边界单测", "Runtime prepare→record integration", "call-chain review"],
       "status": "verified",
@@ -39,7 +40,8 @@
         "prepareFrameRecord 单次 resolveFrameComposition；recordViewFamilies(plan, prepared) 显式消费 PreparedPipelineFrame（RenderDeviceState.Frame.cpp / RuntimeRenderContext.cpp）",
         "删除录制期第二次 prepareFrameRecord 调用",
         "runtime 150s + 管线切换无 stale composition（composition-deferred-back.png 与初始帧逐像素一致）",
-        "resolve 单次与失败语义：resolveFrameComposition 由 prepareFrameRecord 安全点调用一次，记录期消费 prepared（代码路径 + runtime 150s 含管线切换无 stale）；失败注入见 M10 的 FailedPreparationCannotAnswerWithThePreviousTicksFrame；ForwardRecipeLifecycleTest 覆盖空 plan/disabled config/缺 binding 三种边界"
+        "resolve 单次与失败语义：resolveFrameComposition 由 prepareFrameRecord 安全点调用一次，记录期消费 prepared（代码路径 + runtime 150s 含管线切换无 stale）；失败注入见 M10 的 FailedPreparationCannotAnswerWithThePreviousTicksFrame；ForwardRecipeLifecycleTest 覆盖空 plan/disabled config/缺 binding 三种边界",
+        "D1 收口复审缺口：设置应用与 shadow 资源刷新移入两步安全点（applyFrameSettings -> resolve -> prepareFrameDevices），录制路径无 applyPending*/无逐 View 设置捕获；_bEnableSSAO 只剩 buildSettingsSnapshot 一个消费者，SSAO warmup 改由 resolved composition 决定（见 M24）"
       ]
     },
     {
@@ -74,14 +76,15 @@
     {
       "id": "M05",
       "area": "typed connections and preparation token validation",
-      "checkpoints": ["C1"],
+      "checkpoints": ["C1", "D3"],
       "expected": "拒绝缺 required input、串 composition 端口、role 冲突、错 tick/pipeline token；类型不兼容在编译期暴露；optional absence 合法",
       "verification": ["concept/static_assert", "seal error tests", "prepared token tests"],
-      "status": "verified",
+      "status": "in_progress",
       "evidence": [
         "FeatureError::{MissingContext,MissingDependency,InvalidInput,AllocationFailed} 在 features 与 recipe 全路径（GBufferFeature/SSAOFeature/LightingFeature/DeferredPipelineRecipe）",
         "optional absence 合法：SSAO disabled resolve 无 aoTarget，recipe 不 append、Lighting Inputs.ssao 缺省（单测 SSAOFeatureTest + runtime off）",
-        "role 冲突拒绝：ViewTargetStore::createAllocation 拒绝重复 role 并失败，新增 ViewTargetStoreTest.DuplicateRoleIsRejectedInsteadOfLastWins 覆盖（不让 last-wins 掩盖接线错误）；错 tick/pipeline token 由 PreparedPipelineFrame 的 hostTick/kind 校验与 RenderDeviceState 失败路径覆盖（见 M02/M10）"
+        "role 冲突拒绝：ViewTargetStore::createAllocation 拒绝重复 role 并失败，新增 ViewTargetStoreTest.DuplicateRoleIsRejectedInsteadOfLastWins 覆盖（不让 last-wins 掩盖接线错误）；错 tick/pipeline token 由 PreparedPipelineFrame 的 hostTick/kind 校验与 RenderDeviceState 失败路径覆盖（见 M02/M10）",
+        "2026-10-13 复审降级：「类型不兼容在编译期暴露」「拒绝串 composition 端口」无实现（端口为裸 handle）。D3 重新验收"
       ]
     },
     {
@@ -239,9 +242,9 @@
         "Deferred 侧（C3B）：DeferredFrameResourceSet::Binding/ViewPayloads 只含 frame/light/lightInstances/skinning；SSAOStage/ViewOverlayStage 自持 frame DSL；SSAOFeature/SkyboxFeature 自建 payload、上传（writeUniformPassBinding）与 import（label 不变）；pipeline 不再有 feature payload 参数与 skybox frame DS 写点",
         "runtime trace：Deferred.FrameUBO/LightUBO/SkinningSSBO/SSAOFrameUBO/SkyboxFrameUBO 每 View 各 ImportBound 一次、每 pass access=1；SSAO off 无 SSAOFrameUBO import；三场景截图对基线逐像素一致",
         "DeferredLightBufferTest 全绿（1812/1812 内含）；owner diff review：feature 局部 binding 全部出 shared bag",
-        "C4a 补齐 Forward 半边：skybox frame DSL/DS 与 payload 自 ForwardFrameResourceSet 移出（见下条），该缺口已关闭"
-      ,
-        "Forward 侧（C4a）：skybox frame UBO/DS 自 ForwardFrameResourceSet 移出（唯一消费者 = ForwardSkyboxFeature）；ForwardViewAuxPasses 自建并持有 FwdSkybox_PerFrame_DSL；ForwardFramePayloads 只留 PBR/Phong/Unlit frame 与 light/debug；其 prepare() 删除"]
+        "C4a 补齐 Forward 半边：skybox frame DSL/DS 与 payload 自 ForwardFrameResourceSet 移出（见下条），该缺口已关闭",
+        "Forward 侧（C4a）：skybox frame UBO/DS 自 ForwardFrameResourceSet 移出（唯一消费者 = ForwardSkyboxFeature）；ForwardViewAuxPasses 自建并持有 FwdSkybox_PerFrame_DSL；ForwardFramePayloads 只留 PBR/Phong/Unlit frame 与 light/debug；其 prepare() 删除"
+      ]
     },
     {
       "id": "M18",
@@ -287,14 +290,15 @@
     {
       "id": "M21",
       "area": "extension without core plumbing",
-      "checkpoints": ["C5"],
+      "checkpoints": ["C5", "D3"],
       "expected": "测试专用 producer→multi-pass transform→consumer 经 request/prepare/lower/append/publish 完整运行，只需 feature 与 recipe 接线；无 core/context/bindings bag 改动",
       "verification": ["PipelineFeatureContractTest extension", "extension change map"],
-      "status": "verified",
+      "status": "in_progress",
       "evidence": [
         "FeatureProtocolTest.TestOnlyFeatureRunsTheFullChainWithoutCorePlumbing：测试专用 TestTransformFeature（producer -> 两段多 pass transform over 私有 scratch -> result）经 resolve -> prepareBindings -> append -> compile 完整运行；static_assert(Feature<TestTransformFeature>) 证明它满足同一协议",
         "扩展触点 = feature 自己的定义 + 测试接线：Stage 就是 RenderGraph（无设备对象）、PrepareContext 为空、私有 scratch 由 graph.createTexture 创建；全程零 pipeline/core/context/bindings bag 改动",
-        "负向证据（编译期）：首版把 transform 的 result 写成覆盖 scratch 自身，graph.compile 立刻报 ReadBeforeWrite；说明接线错误由 RDG 校验抓而不是静默"
+        "负向证据（编译期）：首版把 transform 的 result 写成覆盖 scratch 自身，graph.compile 立刻报 ReadBeforeWrite；说明接线错误由 RDG 校验抓而不是静默",
+        "2026-10-13 复审降级：测试 feature 未经 recipe / request / publish，只验证了协议本身，不能证明「只需 feature + recipe 接线」。D3 改走真实 recipe 后重新验收"
       ]
     },
     {
@@ -320,6 +324,59 @@
         "**稳态 churn 预先存在，非本线引入**：trace 统计（Deferred registry）steady `replaced=21..23 / rebound=23..25` 每 sync，在 C1i 基线日志（commit 9726b2d0，早于 C4/C5）与当前 HEAD 上逐值相同；本线不应为它背书，也未加剧它",
         "**CPU/GPU/内存三次前后对照未达成**：本机有并行构建/运行时（PB6 记录：并发编译使同场景两次 p50 差 87%），不满足 perf-baseline 声明的采集条件；本线把该项连同上述发现一并留给 perf-baseline 线"
       ]
+    },
+    {
+      "id": "M24",
+      "area": "settings frozen at safe point; no recording-time resource rebuild",
+      "checkpoints": ["D1"],
+      "expected": "一帧内 feature 启用与参数只来自安全点 resolved Config；pending settings 与持久设备资源（shadow images、PSO variant）在 prepareFrameRecord 内应用/准备；录制路径无 applyPending*、无逐 View 设置捕获；pipeline/Stage 不保留第二份决策状态",
+      "verification": ["settings-after-prepare 边界单测", "shadow toggle trace（录制期无 destroy/init）", "call-chain review", "三帧逐像素对照"],
+      "status": "verified",
+      "evidence": [
+        "两步安全点：IRenderPipeline 拆出 applyFrameSettings（step 1，本帧 queued settings + 帧 packet shadow 落地）与 prepareFrameDevices（step 2，pending 资源刷新 + shadow stage state），在 prepareFrameRecord 内按 settings -> resolve -> devices -> targets 顺序调用（RenderDeviceState.Frame.cpp）",
+        "录制路径清空：Deferred/Forward recordFamily 删除逐 View syncFrameSettings/applyPendingResourceRefreshes/captureShadowSettings；applyPending* 只在安全点被调（grep 核对）；shadow destroy/init 只剩 init/shutdown/安全点 refresh 三处",
+        "beginSubmission(prepared) 读本帧 resolved composition 决定 SSAO warmup（任一 ResolvedView.ssao.bEnabled），_bEnableSSAO 不再是 warmup 决策来源（buildSettingsSnapshot 仍读它，单一消费）",
+        "冻结边界单测：ApplyFrameSettingsFreezesTheFrameAgainstLaterRequests（apply 之后的 requestSettings 不动本帧状态、下一帧 apply 才落地）与 FramePacketShadowSettingsAreTheSafePointSource",
+        "runtime：Deferred on/re-on/Forward/back 四帧对基线逐像素 0 diff；shadow on/off 差 31782 px（仍真实生效）；shadow 切换 trace 中 validation 错误分布与 D1 前各 run 完全一致（09600=20/03320=2/00331=20，均预先存在）"
+      ]
+    },
+    {
+      "id": "M25",
+      "area": "feature inputs come from extracted snapshot",
+      "checkpoints": ["D2"],
+      "expected": "skybox 可用性、billboard、direction gizmo 来自 extraction 快照；Render3D 录制路径无 getRegistry()；RenderPipelineFrameContext 无 derivedScene；overlayInputs 不再是 prepare 写、其他 feature append 读的可变共享包",
+      "verification": ["录制路径 rg getRegistry 为 0", "editor billboard / picking 回归", "三帧逐像素对照"],
+      "status": "blocked",
+      "evidence": [
+        "blocked_on: render-view-family todo「extraction 产出 overlay/skybox/billboard/gizmo 快照」（2026-10-13 用户决定交由该线）；解除条件：快照字段落地后本线改 Overlay/Skybox/EntityId Facts 读快照"
+      ]
+    },
+    {
+      "id": "M26",
+      "area": "invocation records make wiring omissions a compile error",
+      "checkpoints": ["D3"],
+      "expected": "recipe 以 Invocation<F>{Resolved,Prepared,GraphOutputs} 的 tuple 组织；collectViewTargets/describe 为 fold，不手工逐 feature 列举；resolve 输入与 graph 输入分型，resolve 无恒空参数；无 std::any/type_index/字符串查找",
+      "verification": ["负向编译测试（缺 targets 登记）", "recipe 单测", "公开 API diff review"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M27",
+      "area": "direct publication and atomic family failure",
+      "checkpoints": ["D4"],
+      "expected": "GraphOutputs→RenderViewOutput 一处映射，pipeline 内部不经 export 字符串往返；任一 View prepare/append 失败则整个 family 不执行、不发布，其他 family 不受影响",
+      "verification": ["append 中途 failure injection", "RenderViewOutputTableTest", "两管线 collectViewOutput 删除 review"],
+      "status": "todo",
+      "evidence": []
+    },
+    {
+      "id": "M28",
+      "area": "feature owns its device objects and lifecycle",
+      "checkpoints": ["D5"],
+      "expected": "每个 feature 拥有其设备对象、Settings 与 init/beginFrame/refresh/shutdown；pipeline 不再持对应 Stage 成员与 setter；Feature concept 不再要求 typename F::Stage / Stage* 参数",
+      "verification": ["每批 Render3D 全量 + 三帧逐像素", "pipeline 头文件 Stage 成员递减", "concept diff review"],
+      "status": "todo",
+      "evidence": []
     }
   ]
 }

@@ -155,7 +155,9 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     EFormat::T getViewColorFormat() const override;
     EFormat::T getViewDepthFormat() const override;
 
-    void                   beginSubmission() override;
+    void                   applyFrameSettings(const RenderFramePlan& plan) override;
+    void                   prepareFrameDevices(const PreparedPipelineFrame& prepared) override;
+    void                   beginSubmission(const PreparedPipelineFrame& prepared) override;
     void setSSAOEnabled(bool enabled)
     {
         _bEnableSSAO = enabled;
@@ -199,17 +201,14 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
                                                      uint64_t viewId) const;
     void               refreshGBufferStageState();
     void               refreshViewStageState();
-    void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ViewOverlayStage::FrameInputs buildOverlayFrameInputs(
         const RenderPipelineFrameContext& frame,
         EnvironmentLightingSceneResources& environmentLighting,
         DescriptorSetHandle& environmentLightingDS) const;
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
-    void               syncFrameSettings(const RenderPipelineFrameContext& frame);
     /// Apply this frame's shadow settings to the shadow stage before the
     /// composition's shadow feature prepares. The pipeline owns the frame
     /// packet, so this stays here; the passes themselves belong to the recipe.
-    void               applyShadowFrameSettings();
     bool               appendDeferredViewToGraph(RenderGraph& graph,
                                                  const RenderPipelineFrameContext& frame,
                                                  RenderStageContext& stageCtx,

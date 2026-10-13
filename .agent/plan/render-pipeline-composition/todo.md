@@ -1,5 +1,19 @@
 # 当前待办
 
+## 2026-10-13 复审后（优先于下方旧清单）
+
+计划重新打开，细节见 `plan.md` §10。M01/M02/M05/M21 已降回 in_progress。
+
+- [x] **D1**（M24 verified、M02 回到 verified）：两步安全点 `applyFrameSettings` → resolve → `prepareFrameDevices` 进 `prepareFrameRecord`；录制路径 `applyPending*`/逐 View capture/sync 全删；`beginSubmission(prepared)` 由 resolved composition 决定 SSAO warmup。测试 232/232 + 1816/1816；四帧逐像素 0 diff；shadow 切换 trace 无录制期重建（validation 分布与 D1 前逐值一致，既有问题）。
+- [ ] **D2（外部）**：overlay/skybox/billboard/gizmo 进 extraction 快照——已交 `render-view-family`；本线 M25 blocked，交付后改 Facts 读快照。
+- [ ] **D3**：`Invocation<F>` tuple + fold 的 `collectViewTargets`/`describe`；拆 ResolveInputs/GraphInputs；M21 改走真实 recipe（M01、M05、M21、M26）。
+- [ ] **D4**：`GraphOutputs`→`RenderViewOutput` 一处映射；任一 View 失败则整个 family 不执行不发布（M13、M10、M27）。
+- [ ] **D5**：feature 吸收 Stage，按 SSAO → Skybox/Overlay → Bloom/Finalize → Lighting/GBuffer → Shadow 分批（M28）。
+
+---
+
+以下为复审前记录。
+
 > 2026-10-12 深夜；C1-foundation + 集成切片（真实 GBuffer→SSAO→Lighting 闭环）+ C3A（tail 全 feature 化与集中层删除）+ C3A-trim + C3B（Deferred 侧共享输入收口）+ C3G（剩余门禁）已带 runtime 证据落地。
 > 命名对应：plan.md 的 C1 验收主体 = "C1-foundation + 集成切片"；plan.md 的 C2（Bloom/Finalize 样本）剩余项、C3 遗留测试 hook 与 C4 为下一步。
 

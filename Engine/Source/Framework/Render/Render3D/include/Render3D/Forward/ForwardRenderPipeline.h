@@ -87,7 +87,9 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
 
     void init(const InitDesc& desc);
     ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
-    void                   beginSubmission() override;
+    void                   applyFrameSettings(const RenderFramePlan& plan) override;
+    void                   prepareFrameDevices(const PreparedPipelineFrame& prepared) override;
+    void                   beginSubmission(const PreparedPipelineFrame& prepared) override;
     void shutdown();
 
     bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner,
@@ -148,7 +150,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void               clearPendingResourceRefresh(EForwardPendingResourceRefresh refresh);
     void               requestShadowResourceRefresh();
     void               applyPendingResourceRefreshes();
-    void               syncFrameSettings(const RenderPipelineFrameContext& frame);
     void               refreshViewSnapshot();
     void               refreshViewStageState();
     void               refreshShadowStageState();
@@ -172,7 +173,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
                                                      uint64_t viewId,
                                                      Extent2D viewExtent) const;
     void               syncShadowSettings();
-    void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     /// Returns the token the View's graph build must hand back to the shadow

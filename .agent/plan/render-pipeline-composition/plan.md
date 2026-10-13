@@ -1,11 +1,9 @@
 # RDG 上方的管线组合层收敛
 
 > 建立 / 更新：2026-10-13
-> 状态：实施进行中。已落地（均带 runtime 逐像素证据）：C1-foundation + 集成切片（GBuffer→SSAO→Lighting 单源贯通）、C3A（Deferred tail 全 feature 化 + 集中层删除）、C3A-trim、C3B（Deferred 共享输入收口）、C3G（C3 剩余门禁）、协议诚实化（Feature concept 由 9 个 feature static_assert 强制）、C4a（Forward recipe + Bloom/EntityId/Finalize 跨管线共享 + M17 Forward 半边 + appendTargetRequests 退出）。
-> 状态（2026-10-13）：**19 / 23 verified**。C1–C4 全部落地并带 runtime 逐像素证据；C5a–C5g 完成 plan-C2 余项、M13 收集、死脚手架删除、M20 诊断（含 pass 区间）、M21 扩展验收、M05/M06/M04/M07/M10/M11/M01/M02 证据补齐。剩余 M08/M22（需第二 View 声明入口，应用侧）、M19（runtime mutation trace）、M23（perf 对照，基线需灯光线重采）——均已在 matrix/todo 写明阻塞对象。
-> C4 已完成（C4a Forward recipe + 共享 feature；C4b Shadow 经 composition 接入；C4c ViewResources bag 退场 / 死结构清除 / M19 recipe 级用例）。两管线全部贡献走同一 Feature 协议。
-> C5 系列已完成：plan-C2 余项（blur 状态局部化 + 边界用例）、共享输出收集单一化、死脚手架删除、组合诊断（feature 状态 + pass 区间）、M21 扩展验收、M04 真实修复（allocation identity 顺序无关）。
-> 命名对应：本文件 C1 = 实际执行的 "C1-foundation + 集成切片"；C2 剩余项、C3 遗留 hook 与 C4b 见 todo.md。
+> 状态（2026-10-13 复审后）：**重新打开**。C1–C5 已落地的结构删除与行为证据保留（旧 orchestrator/passes/resources/ViewResources bag 退出、target 单源、SSAO/Bloom 关闭无资源、共享 Bloom/EntityId/Finalize、M04 与 blur last-call 修复）；但 §1 的成功定义 1–4 未达成，且 §8 第一条停止条件已触发（设置多源、录制期重建 shadow 资源）。M01/M02/M05/M21 降回 in_progress。下一 checkpoint：**D1**（§10）。
+> 复审前的完成记录与 C 系列命名对应（C1 = "C1-foundation + 集成切片"）见 progress.md，不在此重复。
+> **D1 已落地**（2026-10-13）：两步安全点进 `prepareFrameRecord`，录制路径无设置应用、无 shadow 资源重建；M24/M02 verified。下一 checkpoint：D3。
 
 ## 1. 目标与成功定义
 
@@ -173,4 +171,65 @@
 
 ## 9. 完成条件
 
-C1–C5 完成且矩阵 verified；范围内旧横向组合链与迁移 adapter 退出；代码/测试/截图/生命周期/性能/扩展地图证据齐备；稳定规则进入 render-arch，计划才具备归档条件。仅有 design.md、类名或文件移动不构成完成。
+C1–C5 与 D1、D3–D5 完成且矩阵 verified（M25 随 `render-view-family` 交付后验收）；范围内旧横向组合链与迁移 adapter 退出；代码/测试/截图/生命周期/性能/扩展地图证据齐备；稳定规则进入 render-arch，计划才具备归档条件。仅有 design.md、类名或文件移动不构成完成。
+
+## 10. 2026-10-13 复审与 D 系列
+
+### 10.1 复审结论（代码核对，不是文档推断）
+
+| 成功定义 | 现状 |
+| --- | --- |
+| 1 管线地图一处可读 | 部分：recipe 列出顺序，但共享 buffer import、`beginView` 上传、`postContext`、GBuffer prepare 在 `append*ViewToGraph`；skybox/billboard/gizmo 的启用与内容由 `buildOverlayFrameInputs` 在录制期遍历 live ECS 决定；发布靠每管线 `exportGraphOutputs`/`collectViewOutput` 字符串往返 |
+| 2 feature 契约局部完整 | 否：加一个 feature 要改 recipe 的 Config/ResolvedView/PreparedView/GraphOutputs/resolve/prepare/append/collectViewTargets/describe/Stages 及 pipeline 侧 Stages/beginSubmission/export/collect；漏 `collectViewTargets` 只在运行期报 `MissingDependency`。feature 无状态、每次局部构造，状态/设备资源/生命周期仍在 Stage 与 pipeline |
+| 3 同一份 resolved composition 驱动全链路 | 否：SSAO 有 `_bEnableSSAO` + Stage setter 第二份状态；shadow 有 resolve、逐 View `captureShadowSettings`、`applyShadowFrameSettings` 三个来源；`recordFamily` 逐 View 调 `applyPendingResourceRefreshes()`，录制期 destroy/init shadow 资源（违反核心规则 6 与 C1 第 3 步；`prepareDevice` 未实现） |
+| 4 减少 plumbing | 否：`PrepareContext`/`AppendContext` 携带 overlayInputs（prepare 写、EntityId append 读的隐式数据流）、postContext、frameBinding、environmentLighting；源码净增约 2,900 行 |
+| 5 行为不变 | 是：逐像素证据成立 |
+
+协议层面另有：`resolve` 的 `Inputs` 是 RG handle、resolve 时恒为空；同一 `Facts` 在 resolve 与 append 填不同字段；typed ports 为裸 `RGTextureHandle`（M01/M05 原 evidence 以"设计修正"替代验收，不符合 matrix status_rules）；M21 测试未经 recipe/request/publish；append 中途失败时已加入 family graph 的 pass 无法撤回。
+
+### 10.2 用户决策（2026-10-13）
+
+- Feature **吸收 Stage**：设备对象、自身 Settings、beginFrame/refresh 生命周期归 feature；可按 feature 分批迁移（D5）。
+- 录制期 overlay / skybox / billboard / gizmo 改为 extraction 快照：**交给 `render-view-family`**（已登记其 todo），本线 M25 blocked_on 该项，不在本线改 extraction。
+- View append 失败：**整个 family 失败**，不执行该 graph；不给 RDG 加 rollback。
+- 在本目录重新打开，不另起新线。
+
+### 10.3 D 系列 checkpoints（顺序 D1 → D3 → D4 → D5；D2 外部交付）
+
+#### D1 — 安全点冻结设置，录制期不重建持久资源
+
+**单一验收目标**：一帧内所有 feature 启用与参数只来自安全点 resolved `Config`；持久设备资源（shadow images、PSO variant）在 `prepareFrameRecord` 内准备完毕。
+
+实施：`applyPendingSettings` / `applyPendingResourceRefreshes` / shadow resource refresh 移入安全点；删除逐 View `captureShadowSettings`、`syncFrameSettings` 与其死代码；`_bEnableSSAO`、SSAO Stage setter 不再作为录制期决策来源，`beginSubmission` 的 warmup 按 resolved composition 决定；补 design §2 的 device-prepare 步骤（最小形态，只覆盖现有需要的 shadow 与格式 variant）。
+
+验证：M24、M02；`recordFamily`/录制路径无 `applyPending*` 调用；准备后改设置不影响本帧（单测）；shadow 开关切换 trace 中录制期无 destroy/init；三帧逐像素对照。
+
+#### D2 — feature 输入来自快照（外部交付：`render-view-family`）
+
+skybox 可用性、billboard、direction gizmo 进 extraction / `frameData`；删 `RenderPipelineFrameContext::derivedScene`；`overlayInputs` 不再是可变共享包。本线只在交付后把 Overlay/Skybox/EntityId 的 Facts 改读快照并验收 M25。
+
+#### D3 — recipe 以单条 invocation 记录组织，接线遗漏编译期暴露
+
+**单一验收目标**：新增 feature 的触点 = feature 本身 + recipe 一处登记 + `appendGraph` 连线；`collectViewTargets` / `describe` / prepare 不再手工逐 feature 列举。
+
+实施：`Invocation<F>{Resolved, Prepared, GraphOutputs}` 与 recipe 级 `std::tuple`；concept 增加 `targets(const Resolved&)` 与名称；`collectViewTargets` / `describe` 为 fold；拆 `ResolveInputs` 与 `GraphInputs`，删除 resolve 恒空参数；`Facts` 按阶段拆分或只保留真实字段。不引入 `std::any`、type_index、字符串查找。
+
+验证：M01、M05、M21、M26；M21 测试改走真实 recipe 的 request → prepare → append → publish；负向：去掉某 feature 的 targets 登记编译失败。
+
+#### D4 — 输出直接发布，family 失败原子
+
+**单一验收目标**：`GraphOutputs` 到 `RenderViewOutput` 一处映射，不经 pipeline 内部 export 字符串往返；任一 View 的 prepare/append 失败使整个 family 不执行、不发布。
+
+验证：M13、M10、M27；failure injection（append 中途失败）后 graph 不执行、该 family 无发布、其他 family 不受影响。
+
+#### D5 — feature 吸收 Stage（按 feature 分批）
+
+**单一验收目标（每批）**：被迁移 feature 拥有其设备对象、Settings 与 init/beginFrame/refresh/shutdown；pipeline 不再持该 Stage 成员与对应 setter；concept 去掉 `typename F::Stage` / `Stage*` 参数（最后一批）。
+
+顺序建议：SSAO → Skybox/Overlay → Bloom/Finalize → Lighting/GBuffer → Shadow（最后，依赖 D1 的 device-prepare 与 `shadow-and-light-line` 最新实现）。每批独立提交，带逐像素证据。
+
+验证：M28；每批 Render3D 全量 + 三帧逐像素；pipeline 头文件中被迁移 Stage 成员数递减可核对。
+
+### 10.4 D 系列停止条件
+
+除 §8 外：D3 需要类型擦除容器或运行期查找才能 fold；D5 某批迁移需要改变 shader / 灯光算法 / 公开设置结构；D1 发现安全点无法拿到某个 device-prepare 所需的事实（应先报告缺哪个事实，而非退回录制期准备）。
