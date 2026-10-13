@@ -900,7 +900,7 @@ void DeferredRenderPipeline::beginSubmission(const PreparedPipelineFrame& prepar
     // from a second enablement flag kept beside them.
     bool bSsaoOn = false;
     for (const DeferredPipelineRecipe::ResolvedView& view : prepared.deferred.resolved) {
-        bSsaoOn = bSsaoOn || view.ssao.bEnabled;
+        bSsaoOn = bSsaoOn || view.ssao().bEnabled;
     }
 
     if (_gBufferStage) {
@@ -1180,7 +1180,7 @@ RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     output.color    = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::viewColor, viewId));
     output.depth    = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId));
     output.entityId = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::entityId, viewId));
-    output.ssao     = outputs.ssao.ao.isValid()
+    output.ssao     = outputs.ssao().ao.isValid()
         ? result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::ssao, viewId))
         : nullptr;
     for (uint32_t attachmentIndex = 0;
@@ -1195,7 +1195,7 @@ RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     output.bloomExtract   = shared.bloomExtract;
     output.bloomBlur      = shared.bloomBlur;
     output.bloomComposite = shared.bloomComposite;
-    output.display        = outputs.finalize.display.isValid() ? shared.display : nullptr;
+    output.display        = outputs.finalize().display.isValid() ? shared.display : nullptr;
     if (output.color) {
         output.desc.colorFormat = output.color->getFormat();
         if (!output.desc.hasExtent()) {
@@ -1353,7 +1353,10 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         .cameraPos      = frame.view.frameData->cameraPos,
         .extent         = {.width = vpW, .height = vpH},
     };
-    outputs = {};
+    // Reference members make the struct non-assignable as a whole; reset is a
+    // tuple-wise value copy (the branch struct owns the invocations).
+    assignInvocations(outputs.invocations, {});
+
 
     const RGImportScope importScope(graph, resolved.viewId);
 
@@ -1391,7 +1394,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
             .view                  = view,
         });
     if (preparedResult.isErr()) {
-        YA_CORE_ERROR("Failed to prepare the Deferred composition for View {}", resolved.viewId);
+        YA_CORE_ERROR("Failed to prepare the Deferred composition for View {}, error={}", resolved.viewId, static_cast<int>(preparedResult.error()));
         return false;
     }
 
@@ -1418,7 +1421,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         YA_CORE_ERROR("Failed to append the Deferred composition for View {}", resolved.viewId);
         return false;
     }
-    outputs = std::move(composition.value());
+    assignInvocations(outputs.invocations, composition.value().invocations);
 
     // Composition diagnostics: which passes this View's map contributed, so the
     // dump can be checked against the graph trace pass by pass.
@@ -1438,21 +1441,21 @@ void DeferredRenderPipeline::exportGraphOutputs(RenderGraph&                    
                                                 uint64_t                                    viewId) const
 {
     const std::array<RGTextureHandle, 4> gBufferColors{
-        outputs.gbuffer.albedo,
-        outputs.gbuffer.normal,
-        outputs.gbuffer.orm,
-        outputs.gbuffer.shading,
+        outputs.gbuffer().albedo,
+        outputs.gbuffer().normal,
+        outputs.gbuffer().orm,
+        outputs.gbuffer().shading,
     };
     for (uint32_t attachmentIndex = 0; attachmentIndex < gBufferColors.size(); ++attachmentIndex) {
         graph.exportTexture(
             gBufferColors[attachmentIndex],
             makeViewGraphName(deferred_graph_exports::gBufferColor[attachmentIndex], viewId));
     }
-    graph.exportTexture(outputs.gbuffer.depth, makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId));
-    graph.exportTexture(outputs.lighting.sceneColor, makeViewGraphName(deferred_graph_exports::viewColor, viewId));
-    graph.exportTexture(outputs.entityId.entityId, makeViewGraphName(deferred_graph_exports::entityId, viewId));
-    if (outputs.ssao.ao.isValid()) {
-        graph.exportTexture(outputs.ssao.ao.get(), makeViewGraphName(deferred_graph_exports::ssao, viewId));
+    graph.exportTexture(outputs.gbuffer().depth, makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId));
+    graph.exportTexture(outputs.lighting().sceneColor, makeViewGraphName(deferred_graph_exports::viewColor, viewId));
+    graph.exportTexture(outputs.entityId().entityId, makeViewGraphName(deferred_graph_exports::entityId, viewId));
+    if (outputs.ssao().ao.isValid()) {
+        graph.exportTexture(outputs.ssao().ao.get(), makeViewGraphName(deferred_graph_exports::ssao, viewId));
     }
 }
 

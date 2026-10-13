@@ -764,3 +764,57 @@ matrix **15 verified / 6 in_progress / 6 todo / 1 blocked**（共 28 行）。�
 ### 状态
 
 matrix **17 verified / 5 in_progress / 5 todo / 1 blocked**。下一 checkpoint：D3（D2 外部交付中）。
+
+## 2026-10-13 — D3：invocation tuple + fold（M26 verified、M01/M05 证据更新）
+
+### 复审缺口的落实
+
+复审指出加 feature 要改 recipe 约 10 处、collectViewTargets/describe 手工逐 feature 列举、漏登记只在运行期暴露。本批把它们变成结构性的：
+
+- concept 扩展：Feature 增加 name()（feature 自己的名字）与 targets(resolved, out)（feature 从自己的 Resolved 声明 View target——与 append 同门控：disabled 发布空）。13 个 feature 全部实现，static_assert 强制；缺 targets()/name() 是编译错误（负向测试 FeatureWithoutTargetsRegistrationIsNotAFeature）。
+- Invocation<F>：{Resolved, Prepared, GraphOutputs} 一条记录。两 recipe 的 FeatureInvocations = std::tuple<Invocation<F>...> 按 map 顺序列出 feature；ResolvedView/PreparedView/GraphOutputs 持有 tuple + accessor 方法（不是引用成员——见下方事故）。
+- fold：collectViewTargets 与 describe 是对 tuple 的 fold——feature 未在 tuple 里就不会被 fold 到，"漏登记"从运行期 MissingDependency 变成"这个 feature 根本不在 map 上"（接线遗漏 = 编译期/结构缺失而非静默）。
+
+### 实施中发现的真问题（比复审更深一层）
+
+引用成员在 vector 存储类型上是悬空陷阱：首版 ResolvedView 用引用成员绑定 tuple，runtime 全屏黑——resolve() 的局部 view push_back 进 vector 后，拷贝构造把新元素的引用绑定到源局部对象的 tuple，栈帧销毁即悬空，prepare 读到 finalize.bEnabled=false 导致 InvalidInput。改为 accessor 方法（每次调用重绑定到 this->invocations），与 design §5 "不捕获 vector element 地址" 一致。这个坑正是复审要 D3 消除的那类。
+
+targets() 必须与 append 同门控：disabled feature 的 target 不发布（SSAO off 无 AO target 的语义保留）。
+
+### 验证
+
+- xmake r ya-render-3d-test 233/233（新增负向编译测试 ×2）；python3 Script/ya.py test --target ya 1817/1817。
+- runtime（HelloMaterial）：Deferred / Forward / 切回 Deferred 三帧对基线逐像素 0 diff（fold 顺序 = map 顺序，target 发布顺序与旧行为在可选段不同——Bloom×3 在 EntityId/Display 之前——allocation identity 已是 role 集合比较，不受顺序影响）。
+- 加 feature 触点实测：feature 文件对 + recipe 的 FeatureInvocations 一行 + resolve/prepare/append 接线——collectViewTargets/describe 零改动。
+
+### 保留 / 未做
+
+- M21 测试改走真实 recipe 的 request→prepare→append→publish（复审要求）留 D4 一起（D4 改 publication 路径时验收）。
+- ResolveInputs/GraphInputs 分型、删除 resolve 恒空参数：本批评估后暂缓——当前 resolve 的 Inputs 全部为空类型（zero-size），分型的实际收益是文档性的，触点扩散（12 个 feature 签名 + 全部调用点）与收益不成比例，记录待 D5 feature 吸收 Stage 时一并处理。
+
+## 2026-10-13 — D3：invocation tuple + fold（M26 verified）
+
+### 复审缺口的落实
+
+复审指出加 feature 要改 recipe 约 10 处、collectViewTargets/describe 手工逐 feature 列举、漏登记只在运行期暴露。本批把它们变成结构性的：
+
+- concept 扩展：Feature 增加 name()（feature 自己的名字）与 targets(resolved, out)（feature 从自己的 Resolved 声明 View target——与 append 同门控：disabled 发布空）。13 个 feature 全部实现，static_assert 强制；缺 targets()/name() 是编译错误（负向测试 FeatureWithoutTargetsRegistrationIsNotAFeature）。
+- Invocation<F>：{Resolved, Prepared, GraphOutputs} 一条记录。两 recipe 的 FeatureInvocations = std::tuple<Invocation<F>...> 按 map 顺序列出；ResolvedView/PreparedView/GraphOutputs 持有 tuple + accessor 方法（不是引用成员——见下）。
+- fold：collectViewTargets 与 describe 是对 tuple 的 fold——feature 未在 tuple 里就不会被 fold 到，接线遗漏从运行期 MissingDependency 变成结构缺失。
+
+### 实施中发现的真问题（比复审更深一层）
+
+引用成员在 vector 存储类型上是悬空陷阱：首版 ResolvedView 用引用成员绑定 tuple，runtime 全屏黑——resolve() 的局部 view push_back 进 vector 后，拷贝构造把新元素的引用绑定到源局部对象的 tuple，栈帧销毁即悬空，prepare 读到 finalize.bEnabled=false → InvalidInput。改为 accessor 方法（每次调用重绑定到自身 invocations），与 design §5 不捕获 vector element 地址一致。这个坑正是复审要 D3 消除的那类。
+
+targets() 与 append 同门控：disabled feature 的 target 不发布（SSAO off 无 AO target 的语义保留）。
+
+### 验证
+
+- xmake r ya-render-3d-test 233/233（新增负向编译测试）；python3 Script/ya.py test --target ya 1817/1817。
+- runtime（HelloMaterial）：Deferred / Forward / 切回 Deferred 三帧对基线逐像素 0 diff。target 发布顺序在可选段与旧行为不同（Bloom x3 在 EntityId/Display 之前），allocation identity 已是 role 集合比较，不受顺序影响。
+- 加 feature 触点实测：feature 文件对 + FeatureInvocations 一行 + resolve/prepare/append 接线——collectViewTargets/describe 零改动。
+
+### 保留 / 未做
+
+- M21 测试改走真实 recipe 的 request→prepare→append→publish 留 D4（D4 改 publication 路径时验收）。
+- ResolveInputs/GraphInputs 分型暂缓：当前 resolve 的 Inputs 全为空类型，分型收益是文档性的，触点扩散（12 签名 + 全部调用点）与收益不成比例，随 D5 处理（记录于 todo）。

@@ -74,6 +74,8 @@ struct OverlayFeature
                                                             const Resolved&             resolved,
                                                             const Prepared&             prepared,
                                                             const Inputs&               inputs) const;
+    [[nodiscard]] static constexpr std::string_view name() { return "OverlayFeature"; }
+    static void targets(const Resolved& resolved, std::vector<ViewAttachmentDesc>& out) { (void)resolved; }
 };
 
 static_assert(Feature<OverlayFeature>, "OverlayFeature must satisfy the composition Feature protocol");

@@ -15,6 +15,7 @@
 
 #include <optional>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace ya
@@ -87,17 +88,38 @@ struct ForwardPipelineRecipe
         FinalizeFeature::Settings finalize{};
     };
 
+    /// The map's features, in the order they run (same shape as the Deferred
+    /// recipe; see its FeatureInvocations comment).
+    using FeatureInvocations = std::tuple<Invocation<ShadowFeature>,
+                                          Invocation<ForwardOpaqueFeature>,
+                                          Invocation<ForwardSkyboxFeature>,
+                                          Invocation<EntityIdFeature>,
+                                          Invocation<BloomFeature>,
+                                          Invocation<FinalizeFeature>>;
+
     struct ResolvedView
     {
         uint64_t viewId     = 0;
         Extent2D viewExtent{};
 
-        ShadowFeature::Resolved        shadow;
-        ForwardOpaqueFeature::Resolved opaque;
-        ForwardSkyboxFeature::Resolved skybox;
-        EntityIdFeature::Resolved      entityId;
-        BloomFeature::Resolved         bloom;
-        FinalizeFeature::Resolved      finalize;
+        FeatureInvocations invocations{};
+
+        // Accessor methods, NOT reference members: this type is stored in a
+        // vector, and a reference member binds to the copy SOURCE's tuple during
+        // copy construction — a dangling read after the local goes away. Methods
+        // rebind per call, so copies stay self-contained.
+        [[nodiscard]] auto& shadow()   { return std::get<Invocation<ShadowFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& opaque()   { return std::get<Invocation<ForwardOpaqueFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& skybox()   { return std::get<Invocation<ForwardSkyboxFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& entityId() { return std::get<Invocation<EntityIdFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& bloom()    { return std::get<Invocation<BloomFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& finalize() { return std::get<Invocation<FinalizeFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& shadow()   const { return std::get<Invocation<ShadowFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& opaque()   const { return std::get<Invocation<ForwardOpaqueFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& skybox()   const { return std::get<Invocation<ForwardSkyboxFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& entityId() const { return std::get<Invocation<EntityIdFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& bloom()    const { return std::get<Invocation<BloomFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& finalize() const { return std::get<Invocation<FinalizeFeature>>(invocations).resolved; }
 
         /// Every View target this composition needs, in the stable order the
         /// request builder publishes them. One declaration per fact: the same
@@ -116,12 +138,21 @@ struct ForwardPipelineRecipe
     {
         uint64_t viewId = 0;
 
-        ShadowFeature::Prepared        shadow;
-        ForwardOpaqueFeature::Prepared opaque;
-        ForwardSkyboxFeature::Prepared skybox;
-        EntityIdFeature::Prepared      entityId;
-        BloomFeature::Prepared         bloom;
-        FinalizeFeature::Prepared      finalize;
+        FeatureInvocations invocations{};
+
+        // Accessor methods, not reference members (see ResolvedView).
+        [[nodiscard]] auto& shadow()   { return std::get<Invocation<ShadowFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& opaque()   { return std::get<Invocation<ForwardOpaqueFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& skybox()   { return std::get<Invocation<ForwardSkyboxFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& entityId() { return std::get<Invocation<EntityIdFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& bloom()    { return std::get<Invocation<BloomFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& finalize() { return std::get<Invocation<FinalizeFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& shadow()   const { return std::get<Invocation<ShadowFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& opaque()   const { return std::get<Invocation<ForwardOpaqueFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& skybox()   const { return std::get<Invocation<ForwardSkyboxFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& entityId() const { return std::get<Invocation<EntityIdFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& bloom()    const { return std::get<Invocation<BloomFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& finalize() const { return std::get<Invocation<FinalizeFeature>>(invocations).prepared; }
     };
 
     struct PrepareContext
@@ -166,12 +197,21 @@ struct ForwardPipelineRecipe
 
     struct GraphOutputs
     {
-        ShadowFeature::GraphOutputs        shadow;
-        ForwardOpaqueFeature::GraphOutputs opaque;
-        ForwardSkyboxFeature::GraphOutputs skybox;
-        EntityIdFeature::GraphOutputs      entityId;
-        BloomFeature::GraphOutputs         bloom;
-        FinalizeFeature::GraphOutputs      finalize;
+        FeatureInvocations invocations{};
+
+        // Accessor methods, not reference members (see ResolvedView).
+        [[nodiscard]] auto& shadow()   { return std::get<Invocation<ShadowFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& opaque()   { return std::get<Invocation<ForwardOpaqueFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& skybox()   { return std::get<Invocation<ForwardSkyboxFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& entityId() { return std::get<Invocation<EntityIdFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& bloom()    { return std::get<Invocation<BloomFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& finalize() { return std::get<Invocation<FinalizeFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& shadow()   const { return std::get<Invocation<ShadowFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& opaque()   const { return std::get<Invocation<ForwardOpaqueFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& skybox()   const { return std::get<Invocation<ForwardSkyboxFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& entityId() const { return std::get<Invocation<EntityIdFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& bloom()    const { return std::get<Invocation<BloomFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& finalize() const { return std::get<Invocation<FinalizeFeature>>(invocations).outputs; }
     };
 
     /// Resolve one frame's composition: which features are on, what each needs,

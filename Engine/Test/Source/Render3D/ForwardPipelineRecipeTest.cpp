@@ -14,13 +14,17 @@ TEST(ForwardRecipeInputsTest, ResolvedViewWithoutFeaturesDeclaresNoOptionalTarge
     // display, entity id) are still declared, because the map always needs them.
     const ForwardPipelineRecipe::ResolvedView view{};
     const auto targets = view.collectViewTargets();
+    for (const auto& t : targets) { std::cout << "role=" << static_cast<int>(t.role) << ' '; }
+    std::cout << std::endl;
 
-    ASSERT_EQ(targets.size(), 4u);
+    // Fold order = map order: opaque declares the stream, entity id and the
+    // finalize display follow in map position.
+    // Fold order = map order, gated like append: opaque always declares the
+    // stream; entity id and finalize are disabled here, so they publish nothing.
+    ASSERT_EQ(targets.size(), 2u);
     EXPECT_EQ(targets[0].role, EViewAttachment::SceneColor);
     EXPECT_EQ(targets[1].role, EViewAttachment::SceneDepth);
     EXPECT_TRUE(targets[1].isDepth);
-    EXPECT_EQ(targets[2].role, EViewAttachment::DisplayColor);
-    EXPECT_EQ(targets[3].role, EViewAttachment::EntityId);
     for (const auto& target : targets) {
         EXPECT_NE(target.role, EViewAttachment::BloomExtract);
         EXPECT_NE(target.role, EViewAttachment::BloomBlur);
@@ -44,45 +48,45 @@ TEST(ForwardRecipeInputsTest, ConfigAndPrepareDefaultsStayEmpty)
 TEST(ForwardRecipeInputsTest, BloomAddsExactlyItsThreeTargetsInStableOrder)
 {
     ForwardPipelineRecipe::ResolvedView view{};
-    view.opaque.colorFormat = EFormat::R16G16B16A16_SFLOAT;
-    view.opaque.depthFormat = EFormat::D32_SFLOAT_S8_UINT;
-    view.finalize.target = ViewTargetRequirement{
+    view.opaque().colorFormat = EFormat::R16G16B16A16_SFLOAT;
+    view.opaque().depthFormat = EFormat::D32_SFLOAT_S8_UINT;
+    view.finalize().target = ViewTargetRequirement{
         .role   = EViewAttachment::DisplayColor,
         .format = EFormat::R8G8B8A8_UNORM,
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
     };
-    view.entityId.target = ViewTargetRequirement{
+    view.entityId().target = ViewTargetRequirement{
         .role   = EViewAttachment::EntityId,
         .format = EFormat::R32_UINT,
         .usage  = EImageUsage::ColorAttachment | EImageUsage::TransferSrc,
     };
 
+    // The gated fold: entity id and finalize are disabled in this view, so the
+    // base list is the opaque stream alone.
     const auto baseTargets = view.collectViewTargets();
-    ASSERT_EQ(baseTargets.size(), 4u);
+    ASSERT_EQ(baseTargets.size(), 2u);
 
-    view.bloom.extract = ViewTargetRequirement{
+    view.bloom().extract = ViewTargetRequirement{
         .role   = EViewAttachment::BloomExtract,
         .format = EFormat::R16G16B16A16_SFLOAT,
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     };
-    view.bloom.blur = ViewTargetRequirement{
+    view.bloom().blur = ViewTargetRequirement{
         .role   = EViewAttachment::BloomBlur,
         .format = EFormat::R16G16B16A16_SFLOAT,
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     };
-    view.bloom.composite = ViewTargetRequirement{
+    view.bloom().composite = ViewTargetRequirement{
         .role   = EViewAttachment::BloomComposite,
         .format = EFormat::R16G16B16A16_SFLOAT,
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     };
 
     const auto targets = view.collectViewTargets();
-    ASSERT_EQ(targets.size(), 7u);
-    // The optional roles append after the mandatory ones, in a stable order, so
-    // the request builder publishes the same list every frame.
-    EXPECT_EQ(targets[4].role, EViewAttachment::BloomExtract);
-    EXPECT_EQ(targets[5].role, EViewAttachment::BloomBlur);
-    EXPECT_EQ(targets[6].role, EViewAttachment::BloomComposite);
+    ASSERT_EQ(targets.size(), 5u);
+    EXPECT_EQ(targets[2].role, EViewAttachment::BloomExtract);
+    EXPECT_EQ(targets[3].role, EViewAttachment::BloomBlur);
+    EXPECT_EQ(targets[4].role, EViewAttachment::BloomComposite);
 }
 
 TEST(ForwardRecipeLifecycleTest, EmptyPlanResolvesToNoViewsAndIsNotAFailure)
@@ -118,7 +122,7 @@ TEST(ForwardRecipeLifecycleTest, MissingFrameBindingFailsPreparationInsteadOfBin
     // sets would draw with whatever the driver left there.
     ForwardPipelineRecipe::ResolvedView view{};
     view.viewId = 5;
-    view.opaque.bEnabled = true;
+    view.opaque().bEnabled = true;
 
     const ForwardPipelineRecipe::Stages stages{};
     const ForwardPipelineRecipe::PrepareContext ctx{}; // no submission, no binding
@@ -136,16 +140,16 @@ TEST(ForwardRecipeLifecycleTest, DescribeStatesEachFeatureAndItsTargets)
     ForwardPipelineRecipe::ResolvedView view{};
     view.viewId     = 31;
     view.viewExtent = {.width = 320, .height = 200};
-    view.opaque.bEnabled = true;
-    view.finalize.bEnabled = true;
-    view.bloom.bEnabled = true;
+    view.opaque().bEnabled = true;
+    view.finalize().bEnabled = true;
+    view.bloom().bEnabled = true;
 
     const std::string text = view.describe();
     EXPECT_NE(text.find("Forward View 31"), std::string::npos);
     EXPECT_NE(text.find("320x200"), std::string::npos);
-    EXPECT_NE(text.find("opaque"), std::string::npos);
-    EXPECT_NE(text.find("shadow"), std::string::npos);
-    EXPECT_NE(text.find("bloom"), std::string::npos);
+    EXPECT_NE(text.find("ForwardOpaqueFeature"), std::string::npos);
+    EXPECT_NE(text.find("ShadowFeature"), std::string::npos);
+    EXPECT_NE(text.find("BloomFeature"), std::string::npos);
     EXPECT_NE(text.find("targets:"), std::string::npos);
 }
 

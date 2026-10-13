@@ -106,6 +106,23 @@ struct ForwardOpaqueFeature
                                                             const Resolved&            resolved,
                                                             const Prepared&            prepared,
                                                             const Inputs&              inputs) const;
+    [[nodiscard]] static constexpr std::string_view name() { return "ForwardOpaqueFeature"; }
+    static void targets(const Resolved& resolved, std::vector<ViewAttachmentDesc>& out)
+    {
+        // This pass clears the View's stream, so it declares both attachments:
+        // role + format + usage are exactly what the request builder publishes.
+        out.push_back(ViewAttachmentDesc{
+            .role   = EViewAttachment::SceneColor,
+            .format = resolved.colorFormat,
+            .usage  = resolved.colorUsage,
+        });
+        out.push_back(ViewAttachmentDesc{
+            .role    = EViewAttachment::SceneDepth,
+            .format  = resolved.depthFormat,
+            .usage   = resolved.depthUsage,
+            .isDepth = true,
+        });
+    }
 };
 
 static_assert(Feature<ForwardOpaqueFeature>, "ForwardOpaqueFeature must satisfy the composition Feature protocol");

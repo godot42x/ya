@@ -6,7 +6,7 @@
 
 - [x] **D1**（M24 verified、M02 回到 verified）：两步安全点 `applyFrameSettings` → resolve → `prepareFrameDevices` 进 `prepareFrameRecord`；录制路径 `applyPending*`/逐 View capture/sync 全删；`beginSubmission(prepared)` 由 resolved composition 决定 SSAO warmup。测试 232/232 + 1816/1816；四帧逐像素 0 diff；shadow 切换 trace 无录制期重建（validation 分布与 D1 前逐值一致，既有问题）。
 - [ ] **D2（外部）**：overlay/skybox/billboard/gizmo 进 extraction 快照——已交 `render-view-family`；本线 M25 blocked，交付后改 Facts 读快照。
-- [ ] **D3**：`Invocation<F>` tuple + fold 的 `collectViewTargets`/`describe`；拆 ResolveInputs/GraphInputs；M21 改走真实 recipe（M01、M05、M21、M26）。
+- [x] **D3**（M26 verified、M01/M05 证据更新）：concept 加 name()+targets()（13 feature 全过 static_assert，负向编译测试就位）；两 recipe 改 Invocation<F> tuple + accessor（引用成员在 vector 上悬空——实施中发现的真问题，正是复审要消除的类型）；collectViewTargets/describe 改 fold。加 feature 触点 = feature + tuple 一行 + 接线。ResolveInputs/GraphInputs 分型评估后暂缓（Inputs 全为空类型，收益文档性 < 触点扩散，待 D5）。M21 走真实 recipe 留 D4。
 - [ ] **D4**：`GraphOutputs`→`RenderViewOutput` 一处映射；任一 View 失败则整个 family 不执行不发布（M13、M10、M27）。
 - [ ] **D5**：feature 吸收 Stage，按 SSAO → Skybox/Overlay → Bloom/Finalize → Lighting/GBuffer → Shadow 分批（M28）。
 

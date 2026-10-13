@@ -102,6 +102,14 @@ struct LightingFeature
                                                             const Resolved&            resolved,
                                                             const Prepared&            prepared,
                                                             const Inputs&              inputs) const;
+    [[nodiscard]] static constexpr std::string_view name() { return "LightingFeature"; }
+    static void targets(const Resolved& resolved, std::vector<ViewAttachmentDesc>& out)
+    {
+        if (!resolved.bEnabled) {
+            return;
+        }
+        out.push_back(resolved.target.toDesc());
+    }
 };
 
 static_assert(Feature<LightingFeature>, "LightingFeature must satisfy the composition Feature protocol");

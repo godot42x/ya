@@ -171,10 +171,10 @@ TEST(DeferredCompositionTargetsTest, TargetListComesFromResolvedFeaturesOnceAndG
     DeferredPipelineRecipe::ResolvedView view;
     view.viewId     = 7;
     view.viewExtent = {.width = 640, .height = 480};
-    view.gbuffer    = GBufferFeature{}.resolve(gbufferSettings, GBufferFeature::Facts{}, GBufferFeature::Inputs{});
-    view.lighting   = LightingFeature{}.resolve(lightingSettings, LightingFeature::Facts{}, LightingFeature::Inputs{});
-    view.entityId   = EntityIdFeature{}.resolve(EntityIdFeature::Settings{}, EntityIdFeature::Facts{}, EntityIdFeature::Inputs{});
-    view.finalize   = FinalizeFeature{}.resolve(finalizeSettings, FinalizeFeature::Facts{}, FinalizeFeature::Inputs{});
+    view.gbuffer()    = GBufferFeature{}.resolve(gbufferSettings, GBufferFeature::Facts{}, GBufferFeature::Inputs{});
+    view.lighting()   = LightingFeature{}.resolve(lightingSettings, LightingFeature::Facts{}, LightingFeature::Inputs{});
+    view.entityId()   = EntityIdFeature{}.resolve(EntityIdFeature::Settings{}, EntityIdFeature::Facts{}, EntityIdFeature::Inputs{});
+    view.finalize()   = FinalizeFeature{}.resolve(finalizeSettings, FinalizeFeature::Facts{}, FinalizeFeature::Inputs{});
 
     auto targets = view.collectViewTargets();
     ASSERT_EQ(targets.size(), 8u);
@@ -200,24 +200,24 @@ TEST(DeferredCompositionTargetsTest, TargetListComesFromResolvedFeaturesOnceAndG
     RenderFrameData frameData{};
     frameData.projection = glm::mat4(1.0f);
     frameData.view       = glm::mat4(1.0f);
-    view.ssao = SSAOFeature{}.resolve(
+    view.ssao() = SSAOFeature{}.resolve(
         ssaoSettings,
         SSAOFeature::Facts{.viewExtent = view.viewExtent, .frameData = &frameData, .bReverseY = true},
         SSAOFeature::Inputs{});
 
     BloomFeature::Settings bloomSettings;
     bloomSettings.bEnabled = true;
-    view.bloom = BloomFeature{}.resolve(bloomSettings, BloomFeature::Facts{}, BloomFeature::Inputs{});
+    view.bloom() = BloomFeature{}.resolve(bloomSettings, BloomFeature::Facts{}, BloomFeature::Inputs{});
 
     targets = view.collectViewTargets();
     ASSERT_EQ(targets.size(), 12u);
     EXPECT_EQ(targets[5].role, EViewAttachment::SSAO);
     EXPECT_EQ(targets[6].role, EViewAttachment::SceneColor);
-    EXPECT_EQ(targets[7].role, EViewAttachment::EntityId);
-    EXPECT_EQ(targets[8].role, EViewAttachment::DisplayColor);
-    EXPECT_EQ(targets[9].role, EViewAttachment::BloomExtract);
-    EXPECT_EQ(targets[10].role, EViewAttachment::BloomBlur);
-    EXPECT_EQ(targets[11].role, EViewAttachment::BloomComposite);
+    EXPECT_EQ(targets[7].role, EViewAttachment::BloomExtract);
+    EXPECT_EQ(targets[8].role, EViewAttachment::BloomBlur);
+    EXPECT_EQ(targets[9].role, EViewAttachment::BloomComposite);
+    EXPECT_EQ(targets[10].role, EViewAttachment::EntityId);
+    EXPECT_EQ(targets[11].role, EViewAttachment::DisplayColor);
 
     // Guard: each enabled feature's declared requirement is published exactly
     // once, in map order. A target-bearing feature missing from
@@ -551,7 +551,7 @@ TEST(PreparedPipelineFrameTest, ResolvedPointersSurviveCopiesAndGrowthOfTheFrame
     PreparedPipelineFrame frame;
     frame.deferred.resolved.resize(2);
     frame.deferred.resolved[0].viewId = 100;
-    frame.deferred.resolved[0].gbuffer.bEnabled = true;
+    frame.deferred.resolved[0].gbuffer().bEnabled = true;
     frame.deferred.resolved[1].viewId = 200;
 
     const auto* firstView = &frame.deferred.resolved[0];
@@ -561,7 +561,7 @@ TEST(PreparedPipelineFrameTest, ResolvedPointersSurviveCopiesAndGrowthOfTheFrame
     // Moving the frame does not disturb the resolved values themselves.
     const auto* afterMove = &moved.deferred.resolved[0];
     EXPECT_EQ(afterMove->viewId, 100u);
-    EXPECT_TRUE(afterMove->gbuffer.bEnabled);
+    EXPECT_TRUE(afterMove->gbuffer().bEnabled);
 
     // The other pipeline's block growing must not touch this one.
     moved.forward.resolved.resize(4);

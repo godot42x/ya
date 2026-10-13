@@ -19,58 +19,39 @@
 namespace ya
 {
 
+namespace
+{
+
+template <typename... F>
+void foldTargets(const std::tuple<Invocation<F>...>& invocations, std::vector<ViewAttachmentDesc>& out)
+{
+    (..., F::targets(std::get<Invocation<F>>(invocations).resolved, out));
+}
+
+template <typename... F>
+void foldDescribe(const std::tuple<Invocation<F>...>& invocations, std::string& out)
+{
+    // No lambda: the fold body runs as a plain comma expression so there is no
+    // capture to get wrong and nothing can swallow the expansion.
+    ((out += std::format("  {} {}\n",
+                         std::get<Invocation<F>>(invocations).resolved.bEnabled ? "[on] " : "[off]",
+                         F::name())), ...);
+}
+
+} // namespace
+
 std::vector<ViewAttachmentDesc> ForwardPipelineRecipe::ResolvedView::collectViewTargets() const
 {
-    // Stable order: the request builder publishes the same list every frame, so
-    // the View target store only rebuilds when the composition actually changes.
     std::vector<ViewAttachmentDesc> targets;
     targets.reserve(7);
-
-    targets.push_back(ViewAttachmentDesc{
-        .role   = EViewAttachment::SceneColor,
-        .format = opaque.bEnabled ? opaque.colorFormat : EFormat::Undefined,
-        .usage  = opaque.colorUsage,
-    });
-    targets.push_back(ViewAttachmentDesc{
-        .role    = EViewAttachment::SceneDepth,
-        .format  = opaque.depthFormat,
-        .usage   = opaque.depthUsage,
-        .isDepth = true,
-    });
-    targets.push_back(ViewAttachmentDesc{
-        .role   = EViewAttachment::DisplayColor,
-        .format = finalize.target.format,
-        .usage  = finalize.target.usage,
-    });
-    targets.push_back(ViewAttachmentDesc{
-        .role   = EViewAttachment::EntityId,
-        .format = entityId.target.format,
-        .usage  = entityId.target.usage,
-    });
-    if (bloom.extract.has_value()) {
-        targets.push_back(bloom.extract->toDesc());
-    }
-    if (bloom.blur.has_value()) {
-        targets.push_back(bloom.blur->toDesc());
-    }
-    if (bloom.composite.has_value()) {
-        targets.push_back(bloom.composite->toDesc());
-    }
+    foldTargets(invocations, targets);
     return targets;
 }
 
 std::string ForwardPipelineRecipe::ResolvedView::describe() const
 {
     std::string out = std::format("Forward View {} ({}x{})\n", viewId, viewExtent.width, viewExtent.height);
-    const auto feature = [&out](std::string_view name, bool bEnabled) {
-        out += std::format("  {} {}\n", bEnabled ? "[on] " : "[off]", name);
-    };
-    feature("shadow", shadow.bEnabled);
-    feature("opaque", opaque.bEnabled);
-    feature("skybox", skybox.bEnabled);
-    feature("entityId", entityId.bEnabled);
-    feature("bloom", bloom.bEnabled);
-    feature("finalize", finalize.bEnabled);
+    foldDescribe(invocations, out);
 
     out += std::format("  targets: {}", collectViewTargets().size());
     for (const ViewAttachmentDesc& target : collectViewTargets()) {
@@ -127,17 +108,17 @@ ForwardPipelineRecipe::resolve(const Config& config, const RenderFramePlan& plan
         view.viewId     = task->desc.viewId;
         view.viewExtent = task->output.extent;
 
-        view.shadow = shadowFeature.resolve(
+        view.shadow() = shadowFeature.resolve(
             config.shadow,
             ShadowFeature::Facts{},
             ShadowFeature::Inputs{});
 
-        view.opaque = opaqueFeature.resolve(
+        view.opaque() = opaqueFeature.resolve(
             opaqueSettings,
             ForwardOpaqueFeature::Facts{.viewExtent = view.viewExtent},
             ForwardOpaqueFeature::Inputs{});
 
-        view.skybox = skyboxFeature.resolve(
+        view.skybox() = skyboxFeature.resolve(
             skyboxSettings,
             ForwardSkyboxFeature::Facts{
                 .viewExtent = view.viewExtent,
@@ -145,17 +126,17 @@ ForwardPipelineRecipe::resolve(const Config& config, const RenderFramePlan& plan
             },
             ForwardSkyboxFeature::Inputs{});
 
-        view.entityId = entityIdFeature.resolve(
+        view.entityId() = entityIdFeature.resolve(
             entityIdSettings,
             EntityIdFeature::Facts{.viewExtent = view.viewExtent},
             EntityIdFeature::Inputs{});
 
-        view.bloom = bloomFeature.resolve(
+        view.bloom() = bloomFeature.resolve(
             bloomSettings,
             BloomFeature::Facts{.viewExtent = view.viewExtent},
             BloomFeature::Inputs{});
 
-        view.finalize = finalizeFeature.resolve(
+        view.finalize() = finalizeFeature.resolve(
             config.finalize,
             FinalizeFeature::Facts{.viewExtent = view.viewExtent},
             FinalizeFeature::Inputs{});
@@ -176,7 +157,7 @@ ForwardPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
 
     const ShadowFeature shadowFeature;
     auto shadowPrepared = shadowFeature.prepareBindings(
-        resolved.shadow,
+        resolved.shadow(),
         ShadowFeature::PrepareContext{
             .submission = ctx.submission,
             .stage      = stages.shadow,
@@ -188,11 +169,11 @@ ForwardPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
 
     PreparedView prepared;
     prepared.viewId = resolved.viewId;
-    prepared.shadow = shadowPrepared.value();
+    prepared.shadow() = shadowPrepared.value();
 
     const ForwardOpaqueFeature opaqueFeature;
     auto opaquePrepared = opaqueFeature.prepareBindings(
-        resolved.opaque,
+        resolved.opaque(),
         ForwardOpaqueFeature::PrepareContext{
             .frameBinding = ctx.frameBinding,
             .submission   = ctx.submission,
@@ -205,11 +186,11 @@ ForwardPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
     if (opaquePrepared.isErr()) {
         return opaquePrepared.error();
     }
-    prepared.opaque = opaquePrepared.value();
+    prepared.opaque() = opaquePrepared.value();
 
     const ForwardSkyboxFeature skyboxFeature;
     auto skyboxPrepared = skyboxFeature.prepareBindings(
-        resolved.skybox,
+        resolved.skybox(),
         ForwardSkyboxFeature::PrepareContext{
             .submission = ctx.submission,
             .render     = ctx.render,
@@ -219,11 +200,11 @@ ForwardPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
     if (skyboxPrepared.isErr()) {
         return skyboxPrepared.error();
     }
-    prepared.skybox = skyboxPrepared.value();
+    prepared.skybox() = skyboxPrepared.value();
 
     const EntityIdFeature entityIdFeature;
     auto entityIdPrepared = entityIdFeature.prepareBindings(
-        resolved.entityId,
+        resolved.entityId(),
         EntityIdFeature::PrepareContext{
             .submission = ctx.submission,
             .render     = ctx.render,
@@ -234,11 +215,11 @@ ForwardPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
     if (entityIdPrepared.isErr()) {
         return entityIdPrepared.error();
     }
-    prepared.entityId = entityIdPrepared.value();
+    prepared.entityId() = entityIdPrepared.value();
 
     const BloomFeature bloomFeature;
     auto bloomPrepared = bloomFeature.prepareBindings(
-        resolved.bloom,
+        resolved.bloom(),
         BloomFeature::PrepareContext{
             .submission = ctx.submission,
             .stage      = stages.post,
@@ -246,11 +227,11 @@ ForwardPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
     if (bloomPrepared.isErr()) {
         return bloomPrepared.error();
     }
-    prepared.bloom = bloomPrepared.value();
+    prepared.bloom() = bloomPrepared.value();
 
     const FinalizeFeature finalizeFeature;
     auto finalizePrepared = finalizeFeature.prepareBindings(
-        resolved.finalize,
+        resolved.finalize(),
         FinalizeFeature::PrepareContext{
             .submission = ctx.submission,
             .stage      = stages.post,
@@ -258,7 +239,7 @@ ForwardPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
     if (finalizePrepared.isErr()) {
         return finalizePrepared.error();
     }
-    prepared.finalize = finalizePrepared.value();
+    prepared.finalize() = finalizePrepared.value();
 
     return prepared;
 }
@@ -290,9 +271,9 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     }
     const RGImportScope importScope(ctx.graph, resolved.viewId);
     const RGTextureHandle color = ctx.graph.importTexture(makeImportedTextureDesc(
-        *colorTarget, forward_graph_exports::viewColor, EImageLayout::ColorAttachmentOptimal, resolved.opaque.colorUsage));
+        *colorTarget, forward_graph_exports::viewColor, EImageLayout::ColorAttachmentOptimal, resolved.opaque().colorUsage));
     const RGTextureHandle depth = ctx.graph.importTexture(makeImportedTextureDesc(
-        *depthTarget, forward_graph_exports::viewDepth, EImageLayout::DepthStencilAttachmentOptimal, resolved.opaque.depthUsage));
+        *depthTarget, forward_graph_exports::viewDepth, EImageLayout::DepthStencilAttachmentOptimal, resolved.opaque().depthUsage));
 
     // ── Shadow (first: its passes take the family ordering point) ─────────
     const ShadowFeature shadowFeature;
@@ -301,14 +282,14 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         ctx.stages->shadow,
         featureCtx,
         ShadowFeature::Facts{},
-        resolved.shadow,
-        prepared.shadow,
+        resolved.shadow(),
+        prepared.shadow(),
         ShadowFeature::Inputs{});
     if (shadowOutputs.isErr()) {
         YA_CORE_ERROR("Forward shadow append failed for View {}", resolved.viewId);
         return shadowOutputs.error();
     }
-    outputs.shadow = shadowOutputs.value();
+    outputs.shadow() = shadowOutputs.value();
 
     // ── Opaque (clear + every shading model) ──────────────────────────────
     auto opaqueOutputs = ctx.stages->viewStage != nullptr
@@ -321,15 +302,15 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
                   .passContext     = ctx.viewPassContext,
                   .directionGizmos = ctx.directionGizmos,
               },
-              resolved.opaque,
-              prepared.opaque,
+              resolved.opaque(),
+              prepared.opaque(),
               ForwardOpaqueFeature::Inputs{.color = color, .depth = depth})
         : Result<ForwardOpaqueFeature::GraphOutputs, FeatureError>{FeatureError::MissingContext};
     if (opaqueOutputs.isErr()) {
         YA_CORE_ERROR("Forward opaque append failed for View {}", resolved.viewId);
         return opaqueOutputs.error();
     }
-    outputs.opaque = opaqueOutputs.value();
+    outputs.opaque() = opaqueOutputs.value();
 
     // ── Skybox ────────────────────────────────────────────────────────────
     if (ctx.stages->viewStage != nullptr) {
@@ -341,10 +322,10 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
                 .viewExtent = resolved.viewExtent,
                 .skybox     = ctx.skybox,
             },
-            resolved.skybox,
-            prepared.skybox,
+            resolved.skybox(),
+            prepared.skybox(),
             ForwardSkyboxFeature::Inputs{
-                .color           = outputs.opaque.color,
+                .color           = outputs.opaque().color,
                 .depth           = depth,
                 .colorFinalLayout = EImageLayout::ColorAttachmentOptimal,
             });
@@ -352,10 +333,10 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
             YA_CORE_ERROR("Forward skybox append failed for View {}", resolved.viewId);
             return skyboxOutputs.error();
         }
-        outputs.skybox = skyboxOutputs.value();
+        outputs.skybox() = skyboxOutputs.value();
     }
     else {
-        outputs.skybox.color = outputs.opaque.color;
+        outputs.skybox().color = outputs.opaque().color;
     }
 
     // ── Transparent slot ──────────────────────────────────────────────────
@@ -366,7 +347,7 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     const Rect2D viewRenderArea{.pos = {0, 0}, .extent = resolved.viewExtent.toVec2()};
     (void)ctx.graph.addPass(
         makeViewGraphName(forward_pass_names::kTransparent, resolved.viewId),
-        [colorStream = outputs.skybox.color, depthStream = depth, viewRenderArea](RGPassBuilder& passBuilder) {
+        [colorStream = outputs.skybox().color, depthStream = depth, viewRenderArea](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = viewRenderArea,
                 .layerCount = 1,
@@ -399,8 +380,8 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
                   .viewExtent = resolved.viewExtent,
                   .frameData  = ctx.stageCtx.frameData,
               },
-              resolved.entityId,
-              prepared.entityId,
+              resolved.entityId(),
+              prepared.entityId(),
               EntityIdFeature::Inputs{
                   .depth      = depth,
                   .skinningDS = ctx.frameBinding->skinningDescriptorSet,
@@ -410,7 +391,7 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         YA_CORE_ERROR("Forward entity id append failed for View {}", resolved.viewId);
         return entityIdOutputs.error();
     }
-    outputs.entityId = entityIdOutputs.value();
+    outputs.entityId() = entityIdOutputs.value();
 
     // ── Bloom (optional) ──────────────────────────────────────────────────
     const BloomFeature bloomFeature;
@@ -419,14 +400,14 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         ctx.stages->post,
         featureCtx,
         BloomFeature::Facts{.viewExtent = resolved.viewExtent},
-        resolved.bloom,
-        prepared.bloom,
-        BloomFeature::Inputs{.color = outputs.skybox.color});
+        resolved.bloom(),
+        prepared.bloom(),
+        BloomFeature::Inputs{.color = outputs.skybox().color});
     if (bloomOutputs.isErr()) {
         YA_CORE_ERROR("Forward bloom append failed for View {}", resolved.viewId);
         return bloomOutputs.error();
     }
-    outputs.bloom = bloomOutputs.value();
+    outputs.bloom() = bloomOutputs.value();
 
     // ── Finalize (mandatory display pass) ─────────────────────────────────
     auto finalizeOutputs = FinalizeFeature{}.append(
@@ -434,14 +415,14 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         ctx.stages->post,
         featureCtx,
         FinalizeFeature::Facts{.viewExtent = resolved.viewExtent, .postContext = ctx.postContext},
-        resolved.finalize,
-        prepared.finalize,
-        FinalizeFeature::Inputs{.color = outputs.bloom.color});
+        resolved.finalize(),
+        prepared.finalize(),
+        FinalizeFeature::Inputs{.color = outputs.bloom().color});
     if (finalizeOutputs.isErr()) {
         YA_CORE_ERROR("Forward finalize append failed for View {}", resolved.viewId);
         return finalizeOutputs.error();
     }
-    outputs.finalize = finalizeOutputs.value();
+    outputs.finalize() = finalizeOutputs.value();
 
     return outputs;
 }

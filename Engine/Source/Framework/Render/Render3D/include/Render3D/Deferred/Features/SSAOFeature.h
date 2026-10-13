@@ -114,6 +114,13 @@ struct SSAOFeature
                                                             const Resolved&              resolved,
                                                             const Prepared&              prepared,
                                                             const Inputs&                inputs) const;
+    [[nodiscard]] static constexpr std::string_view name() { return "SSAOFeature"; }
+    static void targets(const Resolved& resolved, std::vector<ViewAttachmentDesc>& out)
+    {
+        if (resolved.aoTarget.has_value()) {
+            out.push_back(resolved.aoTarget->toDesc());
+        }
+    }
 };
 
 static_assert(Feature<SSAOFeature>, "SSAOFeature must satisfy the composition Feature protocol");

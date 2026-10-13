@@ -21,6 +21,7 @@
 
 #include <optional>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace ya
@@ -100,30 +101,59 @@ struct DeferredPipelineRecipe
         EImageUsage::T            viewColorUsage  = EImageUsage::ColorAttachment | EImageUsage::Sampled;
     };
 
+    /// The map's features, in the order they run. One tuple member per feature:
+    /// adding a feature adds a member here and its wiring in appendGraph; every
+    /// phase struct and the folds below pick it up from this list.
+    using FeatureInvocations = std::tuple<Invocation<ShadowFeature>,
+                                          Invocation<GBufferFeature>,
+                                          Invocation<SSAOFeature>,
+                                          Invocation<LightingFeature>,
+                                          Invocation<SkyboxFeature>,
+                                          Invocation<Sprite2DFeature>,
+                                          Invocation<BloomFeature>,
+                                          Invocation<OverlayFeature>,
+                                          Invocation<EntityIdFeature>,
+                                          Invocation<FinalizeFeature>>;
+
     struct ResolvedView
     {
         uint64_t viewId     = 0;
         Extent2D viewExtent{};
 
-        ShadowFeature::Resolved       shadow;
-        GBufferFeature::Resolved      gbuffer;
-        SSAOFeature::Resolved         ssao;
-        LightingFeature::Resolved     lighting;
-        SkyboxFeature::Resolved       skybox;
-        Sprite2DFeature::Resolved     sprites;
-        BloomFeature::Resolved        bloom;
-        OverlayFeature::Resolved      overlay;
-        EntityIdFeature::Resolved     entityId;
-        FinalizeFeature::Resolved     finalize;
+        FeatureInvocations invocations{};
 
-        /// Every View target this composition needs, in the stable order the
-        /// request builder publishes them. One declaration per fact: the same
-        /// Resolved values gate the features' bindings and imports.
+        // Accessor methods, NOT reference members: this type is stored in a
+        // vector, and a reference member binds to the copy SOURCE's tuple during
+        // copy construction — a dangling read once the local resolve() view goes
+        // out of scope. Methods rebind per call, so copies stay self-contained.
+        [[nodiscard]] auto& shadow()   { return std::get<Invocation<ShadowFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& gbuffer()  { return std::get<Invocation<GBufferFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& ssao()     { return std::get<Invocation<SSAOFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& lighting() { return std::get<Invocation<LightingFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& skybox()   { return std::get<Invocation<SkyboxFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& sprites()  { return std::get<Invocation<Sprite2DFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& bloom()    { return std::get<Invocation<BloomFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& overlay()  { return std::get<Invocation<OverlayFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& entityId() { return std::get<Invocation<EntityIdFeature>>(invocations).resolved; }
+        [[nodiscard]] auto& finalize() { return std::get<Invocation<FinalizeFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& shadow()   const { return std::get<Invocation<ShadowFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& gbuffer()  const { return std::get<Invocation<GBufferFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& ssao()     const { return std::get<Invocation<SSAOFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& lighting() const { return std::get<Invocation<LightingFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& skybox()   const { return std::get<Invocation<SkyboxFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& sprites()  const { return std::get<Invocation<Sprite2DFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& bloom()    const { return std::get<Invocation<BloomFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& overlay()  const { return std::get<Invocation<OverlayFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& entityId() const { return std::get<Invocation<EntityIdFeature>>(invocations).resolved; }
+        [[nodiscard]] const auto& finalize() const { return std::get<Invocation<FinalizeFeature>>(invocations).resolved; }
+
+        /// Every View target this composition needs, folded from what each
+        /// feature's Resolved declares. A feature missing from the fold cannot
+        /// happen: the tuple is the registration.
         [[nodiscard]] std::vector<ViewAttachmentDesc> collectViewTargets() const;
 
-        /// One line per feature: which ran, which skipped, and what they need.
-        /// Owning strings only — this survives the graph, and it is what a
-        /// reader lines up against the graph trace when a View renders wrong.
+        /// One line per feature, folded in map order with each feature's own
+        /// name and enablement. Owning strings only.
         [[nodiscard]] std::string describe() const;
     };
 
@@ -133,16 +163,29 @@ struct DeferredPipelineRecipe
     {
         uint64_t viewId = 0;
 
-        ShadowFeature::Prepared   shadow;
-        GBufferFeature::Prepared  gbuffer;
-        SSAOFeature::Prepared     ssao;
-        LightingFeature::Prepared lighting;
-        SkyboxFeature::Prepared   skybox;
-        Sprite2DFeature::Prepared sprites;
-        BloomFeature::Prepared    bloom;
-        OverlayFeature::Prepared  overlay;
-        EntityIdFeature::Prepared entityId;
-        FinalizeFeature::Prepared finalize;
+        FeatureInvocations invocations{};
+
+        // Accessor methods, not reference members (see ResolvedView).
+        [[nodiscard]] auto& shadow()   { return std::get<Invocation<ShadowFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& gbuffer()  { return std::get<Invocation<GBufferFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& ssao()     { return std::get<Invocation<SSAOFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& lighting() { return std::get<Invocation<LightingFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& skybox()   { return std::get<Invocation<SkyboxFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& sprites()  { return std::get<Invocation<Sprite2DFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& bloom()    { return std::get<Invocation<BloomFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& overlay()  { return std::get<Invocation<OverlayFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& entityId() { return std::get<Invocation<EntityIdFeature>>(invocations).prepared; }
+        [[nodiscard]] auto& finalize() { return std::get<Invocation<FinalizeFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& shadow()   const { return std::get<Invocation<ShadowFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& gbuffer()  const { return std::get<Invocation<GBufferFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& ssao()     const { return std::get<Invocation<SSAOFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& lighting() const { return std::get<Invocation<LightingFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& skybox()   const { return std::get<Invocation<SkyboxFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& sprites()  const { return std::get<Invocation<Sprite2DFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& bloom()    const { return std::get<Invocation<BloomFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& overlay()  const { return std::get<Invocation<OverlayFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& entityId() const { return std::get<Invocation<EntityIdFeature>>(invocations).prepared; }
+        [[nodiscard]] const auto& finalize() const { return std::get<Invocation<FinalizeFeature>>(invocations).prepared; }
 
         /// Ranges of the View's shared imported host-written buffers, taken from
         /// the View binding; the RDG handles themselves are imported per graph.
@@ -198,17 +241,31 @@ struct DeferredPipelineRecipe
 
     struct GraphOutputs
     {
-        ShadowFeature::GraphOutputs       shadow;
-        GBufferFeature::GraphOutputs      gbuffer;
-        SSAOFeature::GraphOutputs         ssao;
-        LightingFeature::GraphOutputs     lighting;
-        SkyboxFeature::GraphOutputs       skybox;
-        Sprite2DFeature::GraphOutputs     sprites;
-        BloomFeature::GraphOutputs        bloom;
-        OverlayFeature::GraphOutputs      overlay;
-        EntityIdFeature::GraphOutputs     entityId;
-        FinalizeFeature::GraphOutputs     finalize;
-    };
+        FeatureInvocations invocations{};
+
+        // Accessor methods, not reference members (see ResolvedView).
+        [[nodiscard]] auto& shadow()   { return std::get<Invocation<ShadowFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& gbuffer()  { return std::get<Invocation<GBufferFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& ssao()     { return std::get<Invocation<SSAOFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& lighting() { return std::get<Invocation<LightingFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& skybox()   { return std::get<Invocation<SkyboxFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& sprites()  { return std::get<Invocation<Sprite2DFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& bloom()    { return std::get<Invocation<BloomFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& overlay()  { return std::get<Invocation<OverlayFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& entityId() { return std::get<Invocation<EntityIdFeature>>(invocations).outputs; }
+        [[nodiscard]] auto& finalize() { return std::get<Invocation<FinalizeFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& shadow()   const { return std::get<Invocation<ShadowFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& gbuffer()  const { return std::get<Invocation<GBufferFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& ssao()     const { return std::get<Invocation<SSAOFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& lighting() const { return std::get<Invocation<LightingFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& skybox()   const { return std::get<Invocation<SkyboxFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& sprites()  const { return std::get<Invocation<Sprite2DFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& bloom()    const { return std::get<Invocation<BloomFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& overlay()  const { return std::get<Invocation<OverlayFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& entityId() const { return std::get<Invocation<EntityIdFeature>>(invocations).outputs; }
+        [[nodiscard]] const auto& finalize() const { return std::get<Invocation<FinalizeFeature>>(invocations).outputs; }
+
+};
 
     /// Resolve one frame's composition: which features are on, what each needs,
     /// and the per-View values the later phases consume. Pure data: no GPU

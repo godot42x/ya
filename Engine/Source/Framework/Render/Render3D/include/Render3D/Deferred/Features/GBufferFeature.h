@@ -105,6 +105,16 @@ struct GBufferFeature
                                                             const Resolved&            resolved,
                                                             const Prepared&            prepared,
                                                             const Inputs&              inputs) const;
+    [[nodiscard]] static constexpr std::string_view name() { return "GBufferFeature"; }
+    static void targets(const Resolved& resolved, std::vector<ViewAttachmentDesc>& out)
+    {
+        const Outputs& outputs = resolved.outputs;
+        out.push_back(outputs.albedo);
+        out.push_back(outputs.normal);
+        out.push_back(outputs.orm);
+        out.push_back(outputs.shading);
+        out.push_back(outputs.depth);
+    }
 };
 
 static_assert(Feature<GBufferFeature>, "GBufferFeature must satisfy the composition Feature protocol");

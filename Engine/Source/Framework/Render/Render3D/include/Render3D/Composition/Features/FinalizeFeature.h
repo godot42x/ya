@@ -82,6 +82,16 @@ struct FinalizeFeature
                                                             const Resolved&            resolved,
                                                             const Prepared&            prepared,
                                                             const Inputs&              inputs) const;
+    [[nodiscard]] static constexpr std::string_view name() { return "FinalizeFeature"; }
+    static void targets(const Resolved& resolved, std::vector<ViewAttachmentDesc>& out)
+    {
+        // Same gate as append: a disabled feature publishes nothing, so its
+        // target is not requested either.
+        if (!resolved.bEnabled) {
+            return;
+        }
+        out.push_back(resolved.target.toDesc());
+    }
 };
 
 static_assert(Feature<FinalizeFeature>, "FinalizeFeature must satisfy the composition Feature protocol");

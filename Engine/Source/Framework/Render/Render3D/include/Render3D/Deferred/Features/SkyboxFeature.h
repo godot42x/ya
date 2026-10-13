@@ -81,6 +81,8 @@ struct SkyboxFeature
                                                            const Resolved&             resolved,
                                                            const Prepared&             prepared,
                                                            const Inputs&               inputs) const;
+    [[nodiscard]] static constexpr std::string_view name() { return "SkyboxFeature"; }
+    static void targets(const Resolved& resolved, std::vector<ViewAttachmentDesc>& out) { (void)resolved; }
 };
 
 static_assert(Feature<SkyboxFeature>, "SkyboxFeature must satisfy the composition Feature protocol");

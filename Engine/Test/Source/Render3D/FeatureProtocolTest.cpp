@@ -2,6 +2,8 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
+
 #include <string>
 #include <type_traits>
 
@@ -23,6 +25,9 @@ struct MinimalFeature
     struct PrepareContext {};
     struct Prepared {};
     struct GraphOutputs {};
+
+    [[nodiscard]] static constexpr std::string_view name() { return "MinimalFeature"; }
+    static void targets(const Resolved&, std::vector<ViewAttachmentDesc>&) {}
 
     Resolved resolve(const Settings&, const Facts&, const Inputs&) const { return {}; }
     Result<Prepared, FeatureError> prepareBindings(const Resolved&, const PrepareContext&) const { return Prepared{}; }
@@ -62,6 +67,9 @@ struct UnwrappedAppendFeature
     struct PrepareContext {};
     struct Prepared {};
     struct GraphOutputs {};
+
+    [[nodiscard]] static constexpr std::string_view name() { return "MinimalFeature"; }
+    static void targets(const Resolved&, std::vector<ViewAttachmentDesc>&) {}
 
     Resolved resolve(const Settings&, const Facts&, const Inputs&) const { return {}; }
     Result<Prepared, FeatureError> prepareBindings(const Resolved&, const PrepareContext&) const { return Prepared{}; }
@@ -215,6 +223,9 @@ struct TestTransformFeature
         outputs.color = result;
         return outputs;
     }
+
+    [[nodiscard]] static constexpr std::string_view name() { return "TestTransformFeature"; }
+    static void targets(const Resolved&, std::vector<ViewAttachmentDesc>&) {}
 };
 
 static_assert(Feature<TestTransformFeature>);
@@ -280,6 +291,54 @@ TEST(FeatureProtocolTest, TestOnlyFeatureRunsTheFullChainWithoutCorePlumbing)
     // Producer + the transform's two passes: the chain the plan asks a test
     // feature to run end to end.
     EXPECT_EQ(transformPasses, 3u);
+}
+
+
+TEST(FeatureProtocolTest, FeatureWithoutTargetsRegistrationIsNotAFeature)
+{
+    // D3/M26: the recipe folds targets over the concept, so a feature that
+    // cannot state its declared targets does not compile into a map. This is
+    // the negative half of "wiring omissions are compile errors": forgetting
+    // targets() fails here, not at runtime with a missing View target.
+    struct NoTargetsFeature
+    {
+        struct Stage {};
+        struct Settings {};
+        struct Facts {};
+        struct Inputs {};
+        struct Resolved {};
+        struct PrepareContext {};
+        struct Prepared {};
+        struct GraphOutputs {};
+
+        [[nodiscard]] static constexpr std::string_view name() { return "NoTargets"; }
+        // targets() missing on purpose.
+
+        Resolved resolve(const Settings&, const Facts&, const Inputs&) const { return {}; }
+        Result<Prepared, FeatureError> prepareBindings(const Resolved&, const PrepareContext&) const { return Prepared{}; }
+        Result<GraphOutputs, FeatureError> append(RenderGraph&, Stage*, const FeatureGraphContext&, const Facts&, const Resolved&, const Prepared&, const Inputs&) const { return GraphOutputs{}; }
+    };
+    static_assert(!Feature<NoTargetsFeature>);
+
+    struct NoNameFeature
+    {
+        struct Stage {};
+        struct Settings {};
+        struct Facts {};
+        struct Inputs {};
+        struct Resolved {};
+        struct PrepareContext {};
+        struct Prepared {};
+        struct GraphOutputs {};
+
+        // name() missing on purpose.
+        static void targets(const Resolved&, std::vector<ViewAttachmentDesc>&) {}
+
+        Resolved resolve(const Settings&, const Facts&, const Inputs&) const { return {}; }
+        Result<Prepared, FeatureError> prepareBindings(const Resolved&, const PrepareContext&) const { return Prepared{}; }
+        Result<GraphOutputs, FeatureError> append(RenderGraph&, Stage*, const FeatureGraphContext&, const Facts&, const Resolved&, const Prepared&, const Inputs&) const { return GraphOutputs{}; }
+    };
+    static_assert(!Feature<NoNameFeature>);
 }
 
 } // namespace ya

@@ -9,7 +9,9 @@
 #include <concepts>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 #include <type_traits>
+#include <vector>
 
 namespace ya
 {
@@ -101,6 +103,11 @@ concept Feature = requires {
     typename F::GraphOutputs;
     typename F::PrepareContext;
     typename F::Stage;
+} && requires(const F&                                     feature,
+              const typename F::Resolved&                  resolved,
+              std::vector<ViewAttachmentDesc>&             targetOut) {
+    { feature.name() } -> std::same_as<std::string_view>;
+    { feature.targets(resolved, targetOut) } -> std::same_as<void>;
 } && requires(const F& feature, RenderGraph& graph, const FeatureGraphContext& graphContext) {
     {
         feature.resolve(std::declval<const typename F::Settings&>(),
@@ -123,5 +130,29 @@ concept Feature = requires {
                        std::declval<const typename F::Inputs&>())
     } -> std::same_as<Result<typename F::GraphOutputs, FeatureError>>;
 };
+
+/// One feature's per-phase values for one View. Recipes hold a tuple of these
+/// keyed by feature type, so adding a feature adds one tuple member and its
+/// wiring; nothing else in the recipe is per-feature.
+template <typename F>
+struct Invocation
+{
+    using Resolved     = F::Resolved;
+    using Prepared     = F::Prepared;
+    using GraphOutputs = F::GraphOutputs;
+
+    Resolved     resolved{};
+    Prepared     prepared{};
+    GraphOutputs outputs{};
+};
+
+/// Tuple-wise value copy for the phase structs that hold Invocations by value
+/// but expose named references (their members are not assignable as a whole).
+template <typename... F>
+void assignInvocations(std::tuple<Invocation<F>...>&       to,
+                       const std::tuple<Invocation<F>...>& from)
+{
+    (..., static_cast<void>(std::get<Invocation<F>>(to) = std::get<Invocation<F>>(from)));
+}
 
 } // namespace ya

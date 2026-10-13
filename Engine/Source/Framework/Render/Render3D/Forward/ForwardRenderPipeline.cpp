@@ -946,7 +946,7 @@ bool ForwardRenderPipeline::appendForwardViewToGraph(RenderGraph& graph,
         YA_CORE_ERROR("Failed to append the Forward composition for View {}", resolved.viewId);
         return false;
     }
-    outputs = std::move(composition.value());
+    assignInvocations(outputs.invocations, composition.value().invocations);
 
     // Composition diagnostics: which passes this View's map contributed, so the
     // dump can be checked against the graph trace pass by pass.
@@ -965,8 +965,8 @@ void ForwardRenderPipeline::exportGraphOutputs(RenderGraph& graph,
                                                const ForwardPipelineRecipe::GraphOutputs& outputs,
                                                uint64_t viewId) const
 {
-    graph.exportTexture(outputs.opaque.color, makeViewGraphName(forward_graph_exports::viewColor, viewId));
-    graph.exportTexture(outputs.entityId.entityId, makeViewGraphName(forward_graph_exports::entityId, viewId));
+    graph.exportTexture(outputs.opaque().color, makeViewGraphName(forward_graph_exports::viewColor, viewId));
+    graph.exportTexture(outputs.entityId().entityId, makeViewGraphName(forward_graph_exports::entityId, viewId));
 }
 
 RenderViewOutput ForwardRenderPipeline::collectViewOutput(const RenderGraphExecutionResult& result,

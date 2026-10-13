@@ -80,6 +80,19 @@ struct BloomFeature
                                                             const Resolved&            resolved,
                                                             const Prepared&            prepared,
                                                             const Inputs&              inputs) const;
+    [[nodiscard]] static constexpr std::string_view name() { return "BloomFeature"; }
+    static void targets(const Resolved& resolved, std::vector<ViewAttachmentDesc>& out)
+    {
+        if (resolved.extract.has_value()) {
+            out.push_back(resolved.extract->toDesc());
+        }
+        if (resolved.blur.has_value()) {
+            out.push_back(resolved.blur->toDesc());
+        }
+        if (resolved.composite.has_value()) {
+            out.push_back(resolved.composite->toDesc());
+        }
+    }
 };
 
 static_assert(Feature<BloomFeature>, "BloomFeature must satisfy the composition Feature protocol");

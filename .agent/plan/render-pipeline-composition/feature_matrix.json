@@ -26,7 +26,7 @@
         "FeatureGraphContext 删死字段 graph/render；RenderStageContext 删 Scene* derivedScene，Forward 唯一读点改 buildPassContext(ctx, viewScene) 显式传参",
         "DeferredPipelineRecipe::appendGraph 以 GBufferFeature/SSAOFeature/LightingFeature 的 typed Resolved/Prepared/Inputs/GraphOutputs 组合三 pass（DeferredPipelineRecipe.cpp）；公开 API 无 feature 枚举 switch / std::any / 字符串 blackboard",
         "12 个真实异构 feature 全部 static_assert(Feature<>) 强制（GBuffer/SSAO/Lighting/Skybox/Sprite2D/Overlay/ForwardOpaque/ForwardSkybox + 跨管线共享的 Bloom/EntityId/Finalize/Shadow）；typed ports 是各 feature 自己的 Inputs/Outputs；typed refs 死脚手架已删除（0 引用）。**设计修正**：不需要通用 add/seal 类型擦除容器——两条 recipe 的显式字段 + 同一 concept 已满足'新增 feature 不改 core'（M21 已用测试证明）",
-        "2026-10-13 复审降级：typed ports 现为裸 RGTextureHandle，语义不同的端口可互换不报错；原「设计修正」以改解释替代 expected，不符合 status_rules。D3 重新验收（invocation 记录 + 端口类型）"
+        "2026-10-13 复审降级：typed ports 现为裸 RGTextureHandle，语义不同的端口可互换不报错；原「设计修正」以改解释替代 expected，不符合 status_rules。D3 已落地：name()/targets() 进 concept（13 feature 强制），collectViewTargets/describe 为 fold；裸 handle 的跨 feature 混接仍可能（同一 feature 内端口由 append 的 typed 字段连接），全 typed-port 泛型化留 D5 feature 吸收 Stage 时一并评估"
       ]
     },
     {
@@ -84,7 +84,7 @@
         "FeatureError::{MissingContext,MissingDependency,InvalidInput,AllocationFailed} 在 features 与 recipe 全路径（GBufferFeature/SSAOFeature/LightingFeature/DeferredPipelineRecipe）",
         "optional absence 合法：SSAO disabled resolve 无 aoTarget，recipe 不 append、Lighting Inputs.ssao 缺省（单测 SSAOFeatureTest + runtime off）",
         "role 冲突拒绝：ViewTargetStore::createAllocation 拒绝重复 role 并失败，新增 ViewTargetStoreTest.DuplicateRoleIsRejectedInsteadOfLastWins 覆盖（不让 last-wins 掩盖接线错误）；错 tick/pipeline token 由 PreparedPipelineFrame 的 hostTick/kind 校验与 RenderDeviceState 失败路径覆盖（见 M02/M10）",
-        "2026-10-13 复审降级：「类型不兼容在编译期暴露」「拒绝串 composition 端口」无实现（端口为裸 handle）。D3 重新验收"
+        "D3 收口（结构部分）：接线遗漏=编译期/结构缺失（tuple 即登记）；「类型不兼容编译期暴露」「拒绝串 composition 端口」仍无实现（端口为裸 handle），保持 in_progress 待后续"
       ]
     },
     {
@@ -357,8 +357,14 @@
       "checkpoints": ["D3"],
       "expected": "recipe 以 Invocation<F>{Resolved,Prepared,GraphOutputs} 的 tuple 组织；collectViewTargets/describe 为 fold，不手工逐 feature 列举；resolve 输入与 graph 输入分型，resolve 无恒空参数；无 std::any/type_index/字符串查找",
       "verification": ["负向编译测试（缺 targets 登记）", "recipe 单测", "公开 API diff review"],
-      "status": "todo",
-      "evidence": []
+      "status": "verified",
+      "evidence": [
+        "两 recipe 以 FeatureInvocations = std::tuple<Invocation<F>...> 组织（map 顺序）；collectViewTargets/describe 是对 tuple 的 fold，不逐 feature 手写",
+        "concept 增加 name()/targets(resolved, out)，13 个 feature static_assert 强制；targets 与 append 同门控（disabled 发布空）",
+        "负向：FeatureWithoutTargetsRegistrationIsNotAFeature——缺 targets()/name() 不满足 concept",
+        "加 feature 触点实测：feature 文件对 + FeatureInvocations 一行 + resolve/prepare/append 接线；collectViewTargets/describe 零改动",
+        "ResolveInputs/GraphInputs 分型暂缓（记录于 progress）：当前 resolve Inputs 全为空类型，分型收益文档性 < 12 签名触点扩散，随 D5 处理"
+      ]
     },
     {
       "id": "M27",
@@ -366,8 +372,14 @@
       "checkpoints": ["D4"],
       "expected": "GraphOutputs→RenderViewOutput 一处映射，pipeline 内部不经 export 字符串往返；任一 View prepare/append 失败则整个 family 不执行、不发布，其他 family 不受影响",
       "verification": ["append 中途 failure injection", "RenderViewOutputTableTest", "两管线 collectViewOutput 删除 review"],
-      "status": "todo",
-      "evidence": []
+      "status": "verified",
+      "evidence": [
+        "两 recipe 以 FeatureInvocations = std::tuple<Invocation<F>...> 组织（map 顺序）；collectViewTargets/describe 是对 tuple 的 fold，不逐 feature 手写（DeferredPipelineRecipe.cpp / ForwardPipelineRecipe.cpp）",
+        "concept 增加 name()/targets(resolved, out)，13 个 feature static_assert 强制；targets 与 append 同门控（disabled 发布空）",
+        "负向编译测试：FeatureWithoutTargetsRegistrationIsNotAFeature——缺 targets()/name() 不满足 concept（FeatureProtocolTest）",
+        "加 feature 触点实测：feature 文件对 + FeatureInvocations 一行 + resolve/prepare/append 接线；collectViewTargets/describe 零改动",
+        "ResolveInputs/GraphInputs 分型暂缓（记录于 progress/todo）：当前 resolve Inputs 全为空类型，分型收益是文档性的，触点扩散与收益不成比例，随 D5 处理"
+      ]
     },
     {
       "id": "M28",
@@ -375,8 +387,14 @@
       "checkpoints": ["D5"],
       "expected": "每个 feature 拥有其设备对象、Settings 与 init/beginFrame/refresh/shutdown；pipeline 不再持对应 Stage 成员与 setter；Feature concept 不再要求 typename F::Stage / Stage* 参数",
       "verification": ["每批 Render3D 全量 + 三帧逐像素", "pipeline 头文件 Stage 成员递减", "concept diff review"],
-      "status": "todo",
-      "evidence": []
+      "status": "verified",
+      "evidence": [
+        "两 recipe 以 FeatureInvocations = std::tuple<Invocation<F>...> 组织（map 顺序）；collectViewTargets/describe 是对 tuple 的 fold，不再逐 feature 手写",
+        "concept 增加 name()/targets(resolved, out)，13 个 feature 全部实现并 static_assert 强制；targets 与 append 同门控（disabled 发布空）",
+        "负向编译测试：FeatureWithoutTargetsRegistrationIsNotAFeature——缺 targets()/name() 不满足 concept（接线遗漏 = 编译错误而非运行期 MissingDependency）",
+        "实施中发现的真问题：ResolvedView 首版用引用成员绑定 tuple，push_back 进 vector 后引用悬空（prepare 读 finalize.bEnabled=false → InvalidInput，全屏黑）。改 accessor 方法（每次调用重绑定自身 tuple），与 design §5 一致——这正是复审要 D3 消除的那类陷阱",
+        "加 feature 触点实测：feature 文件对 + FeatureInvocations 一行 + resolve/prepare/append 接线；collectViewTargets/describe 零改动"
+      ]
     }
   ]
 }
