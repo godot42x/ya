@@ -3,7 +3,6 @@
 #include "Graph/RenderGraphImportUtils.h"
 #include "Core/Profiling/Instrumentor.h"
 
-#include "Core/Config/ConfigManager.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Render.h"
 #include "RHI/Backend/TextureLibrary.h"
@@ -16,12 +15,6 @@ namespace ya
 
 namespace
 {
-
-constexpr const char* SSAO_CONFIG_DOC_NAME  = "runtime";
-constexpr const char* SSAO_CONFIG_KEY_RADIUS = "render.deferred.ssao.radius";
-constexpr const char* SSAO_CONFIG_KEY_BIAS   = "render.deferred.ssao.bias";
-constexpr const char* SSAO_CONFIG_KEY_POWER  = "render.deferred.ssao.power";
-constexpr const char* SSAO_CONFIG_KEY_INTENSITY = "render.deferred.ssao.intensity";
 
 std::array<ColorRGBA<uint8_t>, 16> buildNoisePixels()
 {
@@ -59,15 +52,6 @@ void SSAOStage::refreshPipelineFormat()
     _pipeline->updateDesc(std::move(ci));
 }
 
-void SSAOStage::setSettings(float radius, float bias, float power, float intensity, bool bReverseY)
-{
-    _radius     = radius;
-    _bias       = bias;
-    _power      = power;
-    _intensity  = intensity;
-    _bReverseY  = bReverseY;
-}
-
 void SSAOStage::initNoiseTexture()
 {
     auto noisePixels = buildNoisePixels();
@@ -77,12 +61,6 @@ void SSAOStage::initNoiseTexture()
 void SSAOStage::init(IRender* render)
 {
     _render = render;
-
-    auto& config = ConfigManager::get();
-    _radius = config.getOr<float>(SSAO_CONFIG_DOC_NAME, SSAO_CONFIG_KEY_RADIUS, _radius);
-    _bias   = config.getOr<float>(SSAO_CONFIG_DOC_NAME, SSAO_CONFIG_KEY_BIAS, _bias);
-    _power  = config.getOr<float>(SSAO_CONFIG_DOC_NAME, SSAO_CONFIG_KEY_POWER, _power);
-    _intensity = config.getOr<float>(SSAO_CONFIG_DOC_NAME, SSAO_CONFIG_KEY_INTENSITY, _intensity);
 
     _frameDSL = IDescriptorSetLayout::create(
         _render,
@@ -162,13 +140,6 @@ SSAOStage::FrameData SSAOStage::buildFrameData(const RenderFrameData& frameData,
     data.invProjectMat    = glm::inverse(frameData.projection);
     data.viewMat          = frameData.view;
     return data;
-}
-
-SSAOStage::FrameData SSAOStage::buildFrameData(const RenderStageContext& ctx) const
-{
-    YA_CORE_ASSERT(ctx.frameData != nullptr, "SSAOStage requires frame data to build frame parameters");
-
-    return buildFrameData(*ctx.frameData, ctx.viewExtent, _radius, _bias, _power, _intensity, _bReverseY);
 }
 
 void SSAOStage::beginFrame()

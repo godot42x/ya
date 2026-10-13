@@ -845,3 +845,28 @@ D4 侦察时按 `forward_graph_exports::viewDepth` 追读，发现 C4a（6679b00
 - 编辑器目标（`ya-game-editor`）构建被并行 GUI 重构阻塞（`EditorAnimationSetTab.cpp` 的 `clearChildren(tree, host)` vs 新签名 `clearChildren()`，他人工作区改动）；Forward depth 恢复的**编辑器活体**验证（overlay 从禁用变启用）未完成——runtime 侧四帧 0 diff 已排除画面回归，编辑器侧留作恢复后的跟进项。
 - `ya-testing` 全量被并行 `ScriptApiCore.cpp` 编译错误阻塞（rpg 线 WIP）；本线用 `ya-render-3d-test` closure 验收（覆盖全部 Render3D/Graph 触点）。
 - D4 未动 `resolveGraphOutputs` 之外的导出语义：`viewResolve`（MSAA resolve）无消费者，未恢复导出，记录待有需求时一并处理。
+
+## 2026-10-13 — D5 批 1：SSAOFeature 吸收 SSAOStage（M28 分批进行中）
+
+### 目标与边界
+
+**单一验收目标**：SSAO 的设备对象、Settings 与生命周期（init/beginFrame/refresh/shutdown）归 SSAOFeature；pipeline 不再持 `_ssaoStage` 成员与对应 setter。recipe 的 `Stages.ssao`（`SSAOStage*` 过渡参数）保留——concept 去掉 `typename F::Stage` 是最后一批的事。
+
+### 实施内容
+
+- `SSAOFeature` 增加 `stdptr<SSAOStage> _stage`、`Settings _settings{.bEnabled = true}`（保持 pipeline 历史默认）与 `init/shutdown/beginFrame/refreshDeviceFormats/stage()/settings()`；`.cpp` 加实现。
+- `SSAOStage` 变为纯设备对象：删 `_radius/_bias/_power/_intensity/_bReverseY`、`setSettings`、实例 `buildFrameData(ctx)`、`init` 内的 ConfigManager 读取（该读取此前总被 `initStages` 的推送覆盖，是死代码）与 `ConfigManager.h` include。静态 `buildFrameData(frameData, extent, r, b, p, i, reverseY)` 保留——feature 的 resolve 用它。
+- pipeline：`_ssaoStage` 与五个镜像成员（`_bEnableSSAO/_ssaoRadius/_ssaoBias/_ssaoPower/_ssaoIntensity`）删除；snapshot/loadPersistentSettings/applyPendingSettings/buildRecipeConfig 改读写 `_ssaoFeature.settings()`；`initStages` 调 `_ssaoFeature.init(_render)`；`beginSubmission` 的 `bSsaoOn` 门控保留；`refreshGBufferStageState` 调 `refreshDeviceFormats()`；`shutdown` 调 `_ssaoFeature.shutdown()`；`Stages.ssao = _ssaoFeature.stage()`。
+- 测试迁移：`ViewPassResourcesTest.SsaoRecipeKeepsInputLayoutNotSingletonSet` 改成"设备对象 init 前无 layout、settings 归 feature"；`SSAOStageTest` 从 stage 推设置改为 `SSAOFeature{}.resolve(...)` 直接断言 payload。
+
+### 验证
+
+- `xmake r ya-render-3d-test` 235/235。
+- runtime（HelloMaterial）：SSAO-on vs `c3b-ssao-on` **0 diff**；SSAO-off（`Automation.composition_ssao_off.json`）vs `c3b-ssao-off` **0 diff**；切 Forward vs `c4b-forward` **0 diff**。
+- 观察到并定性：切回 Deferred 后画面是 SSAO-on（对 `c3b-ssao-on` 0 diff），因为管线切换走 `shutdownActivePipeline → initActivePipeline` 整体重建，`loadPersistentSettings` 从 `Runtime.json` 读回 `ssaoEnabled=true`，而 automation override 只在启动时应用一次。这是既有语义（改造前后同构：重建读 config），非本批引入；要改的是"切换后 automation override 是否重放"的产品决定，不在本批范围。
+- 日志 validation 分布与基线逐值一致（09600=20 等），无 composition 失败。
+
+### 保留 / 未做
+
+- D5 后续批次：Skybox/Overlay → Bloom/Finalize → Lighting/GBuffer → Shadow（最后，依赖灯光线最新实现）；concept 的 `typename F::Stage`/`Stage*` 参数随最后一批去掉。
+- `DeferredPipelineRecipe::Stages` 仍是"设备对象传参表"，批 1 后只剩 7 项；随批次递减。

@@ -24,6 +24,10 @@ class RenderSubmission;
 ///
 /// When disabled, resolve declares no resource requirement, no pass is added and
 /// Lighting consumes an invalid AO and binds neutral occlusion.
+///
+/// The feature owns its device object (`SSAOStage`), its settings and its
+/// lifecycle: the pipeline drives init/beginFrame/refresh/shutdown through this
+/// feature and no longer holds the stage or mirrors its settings (D5).
 struct SSAOFeature
 {
     using Stage = SSAOStage;
@@ -101,6 +105,26 @@ struct SSAOFeature
     {
         OptionalAO ao;
     };
+
+    /// The device object this feature owns. The pipeline passes `stage()` into
+    /// the recipe's Stages until the concept drops its `Stage*` parameter.
+    stdptr<SSAOStage> _stage;
+    /// Runtime settings, held by the owner of the device object. Enabled by
+    /// default (the pipeline's historical default); config load and settings
+    /// requests overwrite it.
+    Settings _settings{.bEnabled = true};
+
+    [[nodiscard]] Settings& settings() { return _settings; }
+    [[nodiscard]] const Settings& settings() const { return _settings; }
+
+    /// Device lifecycle, driven by the owning pipeline at the same points it
+    /// used to drive the stage directly.
+    void init(IRender* render);
+    void shutdown();
+    void beginFrame();
+    void refreshDeviceFormats();
+
+    [[nodiscard]] SSAOStage* stage() const { return _stage.get(); }
 
     [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;
 

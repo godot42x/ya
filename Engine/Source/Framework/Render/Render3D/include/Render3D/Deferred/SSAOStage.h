@@ -17,6 +17,10 @@ namespace ya
 
 struct IFrameBuffer;
 
+/// The SSAO pass's device object: PSO, layouts, noise texture and descriptor
+/// writes -- no runtime settings and no per-View state. `SSAOFeature` owns this
+/// stage and drives init/refresh/beginFrame/shutdown; the settings and the
+/// per-View frame UBO live on the feature and its Prepared binding (D5).
 struct YA_RENDER_3D_API SSAOStage : public IRenderStage
 {
     using FrameData = slang_types::DeferredRender::SSAO::FrameData;
@@ -32,11 +36,6 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
     stdptr<IDescriptorSetLayout> _inputDSL;
 
     stdptr<Texture> _noiseTexture;
-    float _radius = 0.6f;
-    float _bias   = 0.025f;
-    float _power  = 1.5f;
-    float _intensity = 2.5f;
-    bool  _bReverseY = true;
 
     SSAOStage() : IRenderStage("SSAO") {}
 
@@ -48,9 +47,8 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
     void beginFrame();
     void execute(const RenderStageContext& ctx) override;
 
-    [[nodiscard]] FrameData buildFrameData(const RenderStageContext& ctx) const;
-    /// The same payload built from explicit values, so a feature's resolve can
-    /// produce the frame UBO without reaching into applied stage state.
+    /// The frame UBO payload from explicit values: the feature's resolve builds
+    /// it from its resolved settings, so nothing here reads applied stage state.
     [[nodiscard]] static FrameData buildFrameData(const RenderFrameData& frameData,
                                                   Extent2D               viewExtent,
                                                   float                  radius,
@@ -70,13 +68,7 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
         RGTextureHandle                              depth,
         RGTextureHandle                              noise) const;
 
-    [[nodiscard]] float getRadius() const { return _radius; }
-    [[nodiscard]] float getBias() const { return _bias; }
-    [[nodiscard]] float getPower() const { return _power; }
-    [[nodiscard]] float getIntensity() const { return _intensity; }
-    [[nodiscard]] bool  isReverseYEnabled() const { return _bReverseY; }
     [[nodiscard]] IGraphicsPipeline* getPipeline() const { return _pipeline.get(); }
-    void setSettings(float radius, float bias, float power, float intensity, bool bReverseY);
 
   private:
     void initNoiseTexture();

@@ -20,7 +20,7 @@
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Render3D/Common/Shadow/ShadowStage.h"
 #include "Render3D/Services/RenderSharedResourceProvider.h"
-#include "Render3D/Deferred/SSAOStage.h"
+#include "Render3D/Deferred/Features/SSAOFeature.h"
 #include "Render3D/Common/Sprite2DStage.h"
 #include "Render3D/Deferred/ViewOverlayStage.h"
 
@@ -105,7 +105,9 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     stdptr<ShadowStage>          _shadowStage;
     stdptr<DeferredFrameResourceSet> _frameResources;
     stdptr<GBufferStage>         _gBufferStage;
-    stdptr<SSAOStage>            _ssaoStage;
+    /// SSAO's device object, runtime settings and lifecycle all live on this
+    /// feature; the pipeline drives it instead of holding the stage (D5).
+    SSAOFeature                  _ssaoFeature;
     stdptr<LightStage>           _lightStage;
     stdptr<ViewOverlayStage> _overlayStage;
     /// Authored scene sprites drawn into the lit scene color (see Sprite2DStage).
@@ -116,11 +118,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     Mesh*                                                           _defaultSkyboxMesh = nullptr;
 
     bool     _bReverseViewportY    = true;
-    bool     _bEnableSSAO          = true;
-    float    _ssaoRadius           = 0.6f;
-    float    _ssaoBias             = 0.025f;
-    float    _ssaoPower            = 1.5f;
-    float    _ssaoIntensity        = 2.5f;
     bool     _bEnablePBRDiffuseIBL = true;
     bool     _bEnablePBRSpecularIBL = true;
 
@@ -158,9 +155,11 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     void                   applyFrameSettings(const RenderFramePlan& plan) override;
     void                   prepareFrameDevices(const PreparedPipelineFrame& prepared) override;
     void                   beginSubmission(const PreparedPipelineFrame& prepared) override;
+    /// Config/automation entry point. The value lands on the feature that
+    /// owns SSAO's runtime settings, not on a pipeline mirror (D5).
     void setSSAOEnabled(bool enabled)
     {
-        _bEnableSSAO = enabled;
+        _ssaoFeature.settings().bEnabled = enabled;
     }
     /// The settings the stage state currently holds.
     [[nodiscard]] RenderPipelineSettings buildSettingsSnapshot() const;

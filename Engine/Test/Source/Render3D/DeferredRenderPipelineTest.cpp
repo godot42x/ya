@@ -400,20 +400,32 @@ TEST(PostProcessingStageTest, BloomAndFinalizeViewIdsStayIndependent)
     EXPECT_NE(bloom.viewId, finalize.viewId);
 }
 
-TEST(SSAOStageTest, BuildsFrameDataWithoutOwningGpuResources)
+TEST(SSAOStageTest, ResolvedFrameDataComesFromTheFeaturesOwnSettings)
 {
-    SSAOStage stage;
-    stage.setSettings(1.25f, 0.04f, 1.75f, 2.0f, false);
+    // D5: the settings and the UBO payload both belong to the feature. The
+    // stage is the device object it owns; nothing is pushed onto or read back
+    // from a stage-held settings copy.
+    SSAOFeature::Settings settings;
+    settings.bEnabled  = true;
+    settings.radius    = 1.25f;
+    settings.bias      = 0.04f;
+    settings.power     = 1.75f;
+    settings.intensity = 2.0f;
 
     RenderFrameData frameData{};
     frameData.projection = glm::mat4(2.0f);
     frameData.view       = glm::mat4(1.0f);
-    RenderStageContext ctx{
-        .frameData      = &frameData,
-        .viewExtent = {.width = 640, .height = 480},
-    };
 
-    const auto payload = stage.buildFrameData(ctx);
+    const auto resolved = SSAOFeature{}.resolve(
+        settings,
+        SSAOFeature::Facts{
+            .viewExtent = {.width = 640, .height = 480},
+            .frameData  = &frameData,
+            .bReverseY  = false,
+        },
+        SSAOFeature::Inputs{});
+    ASSERT_TRUE(resolved.bEnabled);
+    const auto& payload = resolved.frameData;
     EXPECT_EQ(payload.screenResolution.x, 640);
     EXPECT_EQ(payload.screenResolution.y, 480);
     EXPECT_FLOAT_EQ(payload.radius, 1.25f);

@@ -8,11 +8,42 @@
 #include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Deferred/DeferredPassNames.h"
 #include "RHI/Backend/TextureLibrary.h"
+#include "RHI/Render.h"
 
 #include <glm/glm.hpp>
 
 namespace ya
 {
+
+void SSAOFeature::init(IRender* render)
+{
+    if (_stage == nullptr) {
+        _stage = ya::makeShared<SSAOStage>();
+    }
+    _stage->init(render);
+}
+
+void SSAOFeature::shutdown()
+{
+    if (_stage) {
+        _stage->destroy();
+        _stage.reset();
+    }
+}
+
+void SSAOFeature::beginFrame()
+{
+    if (_stage) {
+        _stage->beginFrame();
+    }
+}
+
+void SSAOFeature::refreshDeviceFormats()
+{
+    if (_stage) {
+        _stage->refreshPipelineFormat();
+    }
+}
 
 SSAOFeature::Resolved SSAOFeature::resolve(const Settings& settings,
                                            const Facts&    facts,

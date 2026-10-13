@@ -3,6 +3,7 @@
 #include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Common/Shadow/ShadowFrameResources.h"
 #include "Render3D/Deferred/DeferredFrameResourceSet.h"
+#include "Render3D/Deferred/Features/SSAOFeature.h"
 #include "Render3D/Deferred/SSAOStage.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
 #include "RHI/Core/Buffer.h"
@@ -161,11 +162,18 @@ TEST(ViewPassResourcesTest, PointShadowPacketsStayOnViewBinding)
 
 TEST(ViewPassResourcesTest, SsaoRecipeKeepsInputLayoutNotSingletonSet)
 {
+    // The device object builds no layouts until init: layouts are per-device,
+    // never a process singleton. The runtime settings belong to the feature
+    // that owns the device object (D5), so the stage carries none to mirror.
     SSAOStage stage;
     EXPECT_EQ(stage.getInputDSL(), nullptr);
-    const float radiusBefore = stage.getRadius();
-    EXPECT_GT(radiusBefore, 0.0f);
-    EXPECT_EQ(stage.getRadius(), radiusBefore);
+    EXPECT_EQ(stage.getFrameDSL(), nullptr);
+    EXPECT_EQ(stage.getPipeline(), nullptr);
+
+    SSAOFeature feature;
+    EXPECT_TRUE(feature._settings.bEnabled);
+    EXPECT_GT(feature._settings.radius, 0.0f);
+    EXPECT_EQ(feature.stage(), nullptr);
 }
 
 TEST(ViewPassResourcesTest, ForwardViewSlotIsTheBindingAndStaysPerViewIndependent)

@@ -290,11 +290,11 @@ RenderPipelineSettings DeferredRenderPipeline::buildSettingsSnapshot() const
         .shadow            = currentShadowSettings(),
         .postProcessing    = _postProcessStage.getState(),
         .bReverseViewportY = _bReverseViewportY,
-        .bSSAOEnabled      = _bEnableSSAO,
-        .ssaoRadius        = _ssaoStage ? _ssaoStage->getRadius() : _ssaoRadius,
-        .ssaoBias          = _ssaoStage ? _ssaoStage->getBias() : _ssaoBias,
-        .ssaoPower         = _ssaoStage ? _ssaoStage->getPower() : _ssaoPower,
-        .ssaoIntensity     = _ssaoStage ? _ssaoStage->getIntensity() : _ssaoIntensity,
+        .bSSAOEnabled      = _ssaoFeature.settings().bEnabled,
+        .ssaoRadius        = _ssaoFeature.settings().radius,
+        .ssaoBias          = _ssaoFeature.settings().bias,
+        .ssaoPower         = _ssaoFeature.settings().power,
+        .ssaoIntensity     = _ssaoFeature.settings().intensity,
         .bPBRDiffuseIBL    = _lightStage ? _lightStage->isPBRDiffuseIBLEnabled() : _bEnablePBRDiffuseIBL,
         .bPBRSpecularIBL   = _lightStage ? _lightStage->isPBRSpecularIBLEnabled() : _bEnablePBRSpecularIBL,
     };
@@ -370,18 +370,17 @@ void DeferredRenderPipeline::applyPendingSettings()
     _pendingSettings.reset();
 
     _bReverseViewportY = settings.bReverseViewportY;
-    setSSAOEnabled(settings.bSSAOEnabled);
-    _ssaoRadius            = settings.ssaoRadius;
-    _ssaoBias              = settings.ssaoBias;
-    _ssaoPower             = settings.ssaoPower;
-    _ssaoIntensity         = settings.ssaoIntensity;
+    _ssaoFeature.settings() = SSAOFeature::Settings{
+        .bEnabled  = settings.bSSAOEnabled,
+        .radius    = settings.ssaoRadius,
+        .bias      = settings.ssaoBias,
+        .power     = settings.ssaoPower,
+        .intensity = settings.ssaoIntensity,
+    };
     _bEnablePBRDiffuseIBL  = settings.bPBRDiffuseIBL;
     _bEnablePBRSpecularIBL = settings.bPBRSpecularIBL;
     _postProcessStage.getState() = settings.postProcessing;
     applyShadowSettings(settings.shadow);
-    if (_ssaoStage) {
-        _ssaoStage->setSettings(_ssaoRadius, _ssaoBias, _ssaoPower, _ssaoIntensity, _bReverseViewportY);
-    }
     if (_lightStage) {
         _lightStage->setIBLSettings(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL);
     }
@@ -416,11 +415,16 @@ void DeferredRenderPipeline::loadPersistentSettings()
 
     auto& config = ConfigManager::get();
     _bReverseViewportY = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.reverseViewportY", _bReverseViewportY);
-    _bEnableSSAO       = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssaoEnabled", _bEnableSSAO);
-    _ssaoRadius        = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.radius", _ssaoRadius);
-    _ssaoBias          = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.bias", _ssaoBias);
-    _ssaoPower         = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.power", _ssaoPower);
-    _ssaoIntensity     = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.intensity", _ssaoIntensity);
+    _ssaoFeature.settings().bEnabled = config.getOr<bool>(
+        RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssaoEnabled", _ssaoFeature.settings().bEnabled);
+    _ssaoFeature.settings().radius = config.getOr<float>(
+        RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.radius", _ssaoFeature.settings().radius);
+    _ssaoFeature.settings().bias = config.getOr<float>(
+        RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.bias", _ssaoFeature.settings().bias);
+    _ssaoFeature.settings().power = config.getOr<float>(
+        RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.power", _ssaoFeature.settings().power);
+    _ssaoFeature.settings().intensity = config.getOr<float>(
+        RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.intensity", _ssaoFeature.settings().intensity);
     _bEnablePBRDiffuseIBL  = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.light.enablePBRDiffuseIBL", _bEnablePBRDiffuseIBL);
     _bEnablePBRSpecularIBL = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.light.enablePBRSpecularIBL", _bEnablePBRSpecularIBL);
 
@@ -469,11 +473,16 @@ DeferredPipelineRecipe::Config DeferredRenderPipeline::buildRecipeConfig(const R
 {
     DeferredPipelineRecipe::Config config;
     config.bReverseViewportY = settings.bReverseViewportY;
-    config.ssao.bEnabled     = settings.bSSAOEnabled;
-    config.ssao.radius       = settings.ssaoRadius;
-    config.ssao.bias         = settings.ssaoBias;
-    config.ssao.power        = settings.ssaoPower;
-    config.ssao.intensity    = settings.ssaoIntensity;
+    // The recipe config is projected from the same settings snapshot the
+    // frame resolves through; the feature's held settings are that snapshot's
+    // SSAO fields (see buildSettingsSnapshot).
+    config.ssao = SSAOFeature::Settings{
+        .bEnabled  = settings.bSSAOEnabled,
+        .radius    = settings.ssaoRadius,
+        .bias      = settings.ssaoBias,
+        .power     = settings.ssaoPower,
+        .intensity = settings.ssaoIntensity,
+    };
     config.gBufferFormats    = buildGBufferSnapshotFormats();
     if (!_viewRTSpec.attachments.colorAttach.empty()) {
         config.viewColorFormat = _viewRTSpec.attachments.colorAttach.front().format;
@@ -777,9 +786,7 @@ void DeferredRenderPipeline::initStages()
         _frameResources->getFrameAndLightDSL(),
         _frameResources->getSkinningDSL());
 
-    _ssaoStage = ya::makeShared<SSAOStage>();
-    _ssaoStage->init(_render);
-    _ssaoStage->setSettings(_ssaoRadius, _ssaoBias, _ssaoPower, _ssaoIntensity, _bReverseViewportY);
+    _ssaoFeature.init(_render);
 
     _lightStage = ya::makeShared<LightStage>();
     _lightStage->setup(LightStage::SharedInputs{
@@ -810,8 +817,6 @@ void DeferredRenderPipeline::shutdown()
     _postProcessStage.shutdown();
 
     _pendingResourceRefreshMask      = 0;
-    if (_ssaoStage) {
-    }
     _graphExecutor.reset();
 
     if (_spriteStage) {
@@ -826,10 +831,7 @@ void DeferredRenderPipeline::shutdown()
         _lightStage->destroy();
         _lightStage.reset();
     }
-    if (_ssaoStage) {
-        _ssaoStage->destroy();
-        _ssaoStage.reset();
-    }
+    _ssaoFeature.shutdown();
     if (_gBufferStage) {
         _gBufferStage->destroy();
         _gBufferStage.reset();
@@ -907,8 +909,8 @@ void DeferredRenderPipeline::beginSubmission(const PreparedPipelineFrame& prepar
         _gBufferStage->beginFrame();
     }
     _postProcessStage.beginFrame();
-    if (_ssaoStage && bSsaoOn) {
-        _ssaoStage->beginFrame();
+    if (bSsaoOn) {
+        _ssaoFeature.beginFrame();
     }
     if (_lightStage) {
         _lightStage->beginFrame();
@@ -1239,9 +1241,7 @@ EFormat::T DeferredRenderPipeline::getViewDepthFormat() const
 
 void DeferredRenderPipeline::refreshGBufferStageState()
 {
-    if (_ssaoStage) {
-        _ssaoStage->refreshPipelineFormat();
-    }
+    _ssaoFeature.refreshDeviceFormats();
 
     if (_gBufferStage) {
         _gBufferStage->refreshPipelineFormats(buildGBufferSnapshotFormats());
@@ -1376,7 +1376,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
     const DeferredPipelineRecipe::Stages stages{
         .shadow   = _shadowStage.get(),
         .gBuffer  = _gBufferStage.get(),
-        .ssao     = _ssaoStage.get(),
+        .ssao     = _ssaoFeature.stage(),
         .light    = _lightStage.get(),
         .overlay  = _overlayStage.get(),
         .sprites  = _spriteStage.get(),

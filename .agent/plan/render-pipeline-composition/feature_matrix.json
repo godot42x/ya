@@ -575,13 +575,13 @@
         "pipeline 头文件 Stage 成员递减",
         "concept diff review"
       ],
-      "status": "verified",
+      "status": "in_progress",
       "evidence": [
-        "两 recipe 以 FeatureInvocations = std::tuple<Invocation<F>...> 组织（map 顺序）；collectViewTargets/describe 是对 tuple 的 fold，不再逐 feature 手写",
-        "concept 增加 name()/targets(resolved, out)，13 个 feature 全部实现并 static_assert 强制；targets 与 append 同门控（disabled 发布空）",
-        "负向编译测试：FeatureWithoutTargetsRegistrationIsNotAFeature——缺 targets()/name() 不满足 concept（接线遗漏 = 编译错误而非运行期 MissingDependency）",
-        "实施中发现的真问题：ResolvedView 首版用引用成员绑定 tuple，push_back 进 vector 后引用悬空（prepare 读 finalize.bEnabled=false → InvalidInput，全屏黑）。改 accessor 方法（每次调用重绑定自身 tuple），与 design §5 一致——这正是复审要 D3 消除的那类陷阱",
-        "加 feature 触点实测：feature 文件对 + FeatureInvocations 一行 + resolve/prepare/append 接线；collectViewTargets/describe 零改动"
+        "批 1（SSAO，已落地）：SSAOFeature 拥有 SSAOStage（_stage）、SSAOFeature::Settings 与 init/shutdown/beginFrame/refreshDeviceFormats；pipeline 删 _ssaoStage 成员、删 _bEnableSSAO/_ssaoRadius/_ssaoBias/_ssaoPower/_ssaoIntensity 五个镜像成员与逐帧 setSettings 推送；setSSAOEnabled 转发到 feature settings（automation 路径保留）",
+        "SSAOStage 变为纯设备对象：settings 字段、setSettings、实例 buildFrameData(ctx)、init 内的 config 读取、ConfigManager include 全部删除（那些 config 读取此前总是被 initStages 的推送覆盖，是死代码）；frame UBO 由 feature 的 resolve 从自己的 settings 构建",
+        "recipe 的 Stages.ssao 暂留过渡（SSAOStage* 传入）——concept 去掉 typename F::Stage 留最后一批",
+        "待办批次：Skybox/Overlay → Bloom/Finalize → Lighting/GBuffer → Shadow；每批删除 pipeline 对应 Stage 成员与 setter",
+        "证据：235/235（ya-render-3d-test）+ runtime SSAO on/off/Forward 三帧逐像素 max diff 0；ViewPassResourcesTest.SsaoRecipeKeepsInputLayoutNotSingletonSet 与 SSAOStageTest 迁到 feature 侧"
       ]
     }
   ]
