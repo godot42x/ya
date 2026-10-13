@@ -138,16 +138,24 @@
       "id": "audio",
       "wave": "C",
       "phase": "A1",
-      "status": "planned",
+      "status": "wip",
       "driven_by": "game: camp/battle/boss BGM crossfade, hit/cast/UI sfx, victory jingle",
       "engine_gap": "N2 no audio subsystem at all",
       "plan": "ya-audio target, SDL3 backend; device/clip/instance/bus; AudioSourceComponent + AudioListenerComponent; neutral-layer audio.play/stop/setBusVolume/playMusic/crossfade",
-      "evidence": [],
+      "evidence": [
+        "Engine/Source/Framework/Audio/: interface-only AudioSystem (device/clip/voice/4 buses+master/update/playMusic) + SDL3 backend (SdlAudioSystem) using SDL_OpenAudioDeviceStream + stb_vorbis decode of .ogg",
+        "ya-audio target wired into Engine/Source/Source.xmake.lua (engine profile)",
+        "GameplayScriptContext.audio + audio.play/music/stopMusic/setBus/stopAll; paths resolved through VirtualFileSystem::translatePath",
+        "GameRuntime opens the device in AppLifecycle init, shuts it down on teardown, advances it in tickLogic (unaffected by game pause)",
+        "Script/automation/2d-rpg/audio.py: device ready (48000 Hz), door_open.ogg 0.92s + click.ogg 0.10s decoded; headless logs \"no device\" and stays silent"
+      ],
       "tests": [
         "AudioBusVolumeIsScoped",
         "PlayReturnsAStoppableHandle",
         "MissingDeviceDegradesSilently"
-      ]
+      ],
+      "verified": "2026-10-13 (device + decode + play; music crossfade implemented, not yet exercised in-game)",
+      "notes": "Clips are .ogg via stb_vorbis (Kenney assets). One SDL stream per voice. Bus volumes re-apply to live voices. Music crossfade (playMusic/stopMusic with seconds) is implemented but not yet driven by content."
     },
     {
       "id": "particles",

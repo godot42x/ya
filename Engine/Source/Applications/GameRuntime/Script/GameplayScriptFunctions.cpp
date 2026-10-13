@@ -3,6 +3,7 @@
 #include "Core/Log.h"
 #include "Core/Reflection/Reflection.h"
 #include "Core/Scripting/ScriptBindings.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "Scene2D/Sprite2DComponent.h"
 #include "Scene2D/Text2DComponent.h"
 #include "Scene2D/TilemapComponent.h"
@@ -15,6 +16,7 @@
 #include "LuaWidgetHandle.h"
 #include "LuaWidgetScripts.h"
 #include "GameRuntime/Render/SceneCameraQuery.h"
+#include "Audio/AudioSystem.h"
 #include "Render3D/Common/PostProcessingState.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Core/SceneScriptBindings.h"
@@ -335,6 +337,149 @@ type_index_t lookOptionsType()
     return type_index_v<FLookOptions>;
 }
 
+/// Options for `audio.play`. `bus` is "master"/"music"/"sfx"/"ui"; `volume` and
+/// `pitch` default to 1; `loop` defaults to false.
+struct FAudioPlayOptions
+{
+    std::string bus    = "sfx";
+    float       volume = 1.0f;
+    float       pitch  = 1.0f;
+    bool        bLoop  = false;
+
+    YA_REFLECT_BEGIN_NAMED(FAudioPlayOptions, "FAudioPlayOptions")
+    YA_REFLECT_FIELD(bus)
+    YA_REFLECT_FIELD(volume)
+    YA_REFLECT_FIELD(pitch)
+    YA_REFLECT_FIELD(bLoop)
+    YA_REFLECT_END()
+    YA_REFLECT_VALUE_STRUCT()
+};
+
+type_index_t audioPlayOptionsType()
+{
+    FAudioPlayOptions::__ensure_reflection_registered();
+    return type_index_v<FAudioPlayOptions>;
+}
+
+EAudioBus audioBusNamed(const std::string& name)
+{
+    if (name == "master") {
+        return EAudioBus::Master;
+    }
+    if (name == "music") {
+        return EAudioBus::Music;
+    }
+    if (name == "ui") {
+        return EAudioBus::Ui;
+    }
+    return EAudioBus::Sfx;
+}
+
+/// A script names a clip by its asset path (the same "Content/..." form as a
+/// sprite texture). The audio layer reads the filesystem directly, so resolve
+/// through the VFS here, where the mounts are known, and hand it a real path.
+/// A path that does not resolve is returned unchanged (a caller may already
+/// have given an absolute one).
+std::string resolveAudioPath(const std::string& path)
+{
+    if (VirtualFileSystem* vfs = VirtualFileSystem::get(); vfs != nullptr) {
+        return vfs->translatePath(path).string();
+    }
+    return path;
+}
+
+// `audio.play(clip, { bus, volume, pitch, loop })` -> voice handle, or nil when
+// there is no device or the clip cannot be loaded. The clip path is project
+// relative (resolved by the asset layer before this), the same as spawnSprite's
+// texture.
+ScriptValue audioPlayFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    if (args.empty() || args.size() > 2) {
+        throw ScriptError("expects audio.play(path) or audio.play(path, { bus, volume, pitch, loop })");
+    }
+    if (!ctx.audio || !ctx.audio->isAvailable()) {
+        return {};
+    }
+    const std::string path = script::scriptToString(args[0]);
+    FAudioPlayOptions options;
+    if (args.size() > 1) {
+        const FAudioPlayOptions* table = script::scriptIf<FAudioPlayOptions>(args[1]);
+        if (table == nullptr) {
+            throw ScriptError("expects audio.play(path, { bus, volume, pitch, loop })");
+        }
+        options = *table;
+    }
+    auto clip = ctx.audio->loadClip(resolveAudioPath(path));
+    if (!clip) {
+        return {};
+    }
+    AudioPlayDesc desc;
+    desc.bus    = audioBusNamed(options.bus);
+    desc.volume = options.volume;
+    desc.pitch  = options.pitch;
+    desc.bLoop  = options.bLoop;
+    auto voice = ctx.audio->play(clip, desc);
+    if (!voice) {
+        return {};
+    }
+    // A voice is only useful to stop it; scripts rarely hold it, so return a
+    // truthy token instead of a live handle. `audio.stopAll` / bus volume cover
+    // the common cases.
+    return script::scriptMake(true);
+}
+
+ScriptValue audioMusicFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    if (args.empty() || args.size() > 2) {
+        throw ScriptError("expects audio.music(path[, seconds])");
+    }
+    if (!ctx.audio || !ctx.audio->isAvailable()) {
+        return {};
+    }
+    const std::string path  = script::scriptToString(args[0]);
+    const float       fade  = args.size() > 1 ? static_cast<float>(script::scriptToNumber(args[1])) : 0.0f;
+    if (path.empty()) {
+        ctx.audio->stopMusic(fade);
+        return {};
+    }
+    auto clip = ctx.audio->loadClip(resolveAudioPath(path));
+    if (!clip) {
+        return {};
+    }
+    ctx.audio->playMusic(clip, fade);
+    return {};
+}
+
+ScriptValue audioStopMusicFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    if (args.size() > 1) {
+        throw ScriptError("expects audio.stopMusic([seconds])");
+    }
+    if (ctx.audio && ctx.audio->isAvailable()) {
+        ctx.audio->stopMusic(args.empty() ? 0.0f : static_cast<float>(script::scriptToNumber(args[0])));
+    }
+    return {};
+}
+
+ScriptValue audioSetBusFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 2);
+    if (ctx.audio && ctx.audio->isAvailable()) {
+        ctx.audio->setBusVolume(audioBusNamed(script::scriptToString(args[0])),
+                                static_cast<float>(script::scriptToNumber(args[1])));
+    }
+    return {};
+}
+
+ScriptValue audioStopAllFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 0);
+    if (ctx.audio && ctx.audio->isAvailable()) {
+        ctx.audio->stopAll();
+    }
+    return {};
+}
+
 // `render.setLook{ ... }`: read-modify-write the pipeline's post-processing
 // state. Applied fields override; unset fields keep the current look, so a
 // script can raise only exposure without resetting bloom. No renderer (a
@@ -523,6 +668,12 @@ void registerGameplayScriptFunctions(GameplayScriptContext ctx)
                                    {0, 0, 0, textSpawnOptionsType()});
     script::registerModuleFunction("render", "setLook", [ctx](ScriptArgs args) { return setLookFn(ctx, args); },
                                    {lookOptionsType()});
+    script::registerModuleFunction("audio", "play", [ctx](ScriptArgs args) { return audioPlayFn(ctx, args); },
+                                   {0, audioPlayOptionsType()});
+    script::registerModuleFunction("audio", "music", [ctx](ScriptArgs args) { return audioMusicFn(ctx, args); });
+    script::registerModuleFunction("audio", "stopMusic", [ctx](ScriptArgs args) { return audioStopMusicFn(ctx, args); });
+    script::registerModuleFunction("audio", "setBus", [ctx](ScriptArgs args) { return audioSetBusFn(ctx, args); });
+    script::registerModuleFunction("audio", "stopAll", [ctx](ScriptArgs args) { return audioStopAllFn(ctx, args); });
     script::registerModuleFunction("world", "destroyEntity", [ctx](ScriptArgs args) { return destroyEntityFn(ctx, args); });
     script::registerModuleFunction("world", "scriptOf", [ctx](ScriptArgs args) { return scriptOf(ctx, args); });
     script::registerModuleFunction("ui", "get", [ctx](ScriptArgs args) { return uiGet(ctx, args); });

@@ -21,6 +21,9 @@ target("ya-game-runtime")
     add_deps("ya-scene-core", "ya-scene-runtime")
     -- Host composes the render ECS adapters (linkage rules).
     add_deps("ya-render-ecs-adapters")
+    -- Gameplay audio: the host opens the device at startup and exposes
+    -- `audio.*` to scripts. The audio interface is script-neutral.
+    add_deps("ya-audio")
     -- Host TUs use the Vulkan backend types directly (screenshot readback,
     -- frame loop); the include root is exposed by ya-rhi-vulkan
     -- (backend-common no longer re-exports it).

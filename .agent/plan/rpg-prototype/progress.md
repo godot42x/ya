@@ -238,3 +238,25 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
   `post_look.py`（曝光/灰度）全过；十个战斗/表现脚本全绿。
 - 未完成（R1 收尾，显式延后）：相机 `shake` / `zoomTo` —— 需要在 view producer 里注入 view 矩阵偏移；
   用户目标的「后处理驱动视觉」已由 `setLook` + fade 覆盖，shake/zoom 留到有明确命中反馈需求时再做。
+
+## 2026-10-13 — A1：音频子系统（SDL3 后端）
+
+- 目标：引擎有音频接口；游戏能放 BGM/SFX/UI 音并调总线音量。
+- 引擎改动（新 target `ya-audio`，接口中立）：
+  - `Audio/AudioSystem.h`：纯接口——设备、clip 目录、voice 句柄、四条总线（master/music/sfx/ui）、
+    `setBusVolume`、`update(dt)`、`playMusic/stopMusic`（带秒数的 crossfade）。无 ECS/Scene/Render 依赖，
+    以后自研混音器（showcase-roadmap A2）可整体替换，游戏与脚本层不动。
+  - `Audio/SdlAudioSystem.cpp`：SDL3 后端。每 voice 一个 `SDL_OpenAudioDeviceStream`，`update` 按需
+    喂 PCM；`.ogg` 用 **stb_vorbis** 解码（Kenney 素材就是 ogg），支持 pitch/loop/总线增益。
+    无设备（headless）时 `isAvailable()==false`，所有调用 no-op，脚本不必 guard。
+  - 接线：`Source.xmake.lua` 引擎 profile 引入 `ya-audio`；GameRuntime 依赖它，启动开设备、
+    退出关设备、每帧 `tickLogic` 推进（**不受游戏暂停影响**，点击/暂停音能收尾）。
+  - 脚本面（中立层）：`audio.play(path, {bus, volume, pitch, loop})`、`audio.music(path[, seconds])`、
+    `audio.stopMusic([seconds])`、`audio.setBus(bus, v)`、`audio.stopAll()`。路径经
+    `VirtualFileSystem::translatePath` 解析成真实路径再交给音频层（音频层不依赖 VFS）。
+- 途中发现：脚本传的 `Content/Audio/...` 是虚拟路径，`stb_vorbis_decode_filename` 要真实路径 —— 解析放在
+  GameRuntime 的脚本函数里（那里知道 mount），不污染框架层。
+- 验证：`Script/automation/2d-rpg/audio.py` —— 设备就绪（48000 Hz, 2ch）；`door_open.ogg` 0.92s、
+  `click.ogg` 0.10s（单声道 44.1k）解码成功；按确认键触发 `audio.play`。
+- 未完成 / 待验：曲子 crossfade 的实机验收（引擎实现了 `playMusic/stopMusic(seconds)`，但还没有内容曲目；
+  等拿到/生成一首 BGM 再验）；`AudioSourceComponent`（场景里挂音频源）留到有需求时加（脚本 API 已够用）。

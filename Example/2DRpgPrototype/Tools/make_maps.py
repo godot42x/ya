@@ -444,6 +444,7 @@ def build_fade_scene() -> dict:
     entities: list[dict] = [
         camera_entity(spawn, origin, script=None),
         script_entity(1004, "FadeDemo", "Content/Scripts/FadeDemo.lua"),
+        script_entity(1005, "AudioDemo", "Content/Scripts/AudioDemo.lua"),
         tilemap_entity(2000, "TilemapGround", TOWN_ATLAS, TOWN_TILESET, w, h, origin,
                        [layer("Ground", ground)]),
     ]

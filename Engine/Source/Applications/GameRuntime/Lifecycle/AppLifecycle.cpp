@@ -44,6 +44,7 @@
 
 #include "Resource/AssetManager.h"
 #include "Render/Resources/FontManager.h"
+#include "Audio/AudioSystem.h"
 
 #include "Render3D/Material/MaterialFactory.h"
 
@@ -182,6 +183,9 @@ void App::init(AppDesc ci)
         app.inputManager.init();
         FileWatcher::init();
         MaterialFactory::init();
+        // Open the audio device once. No hardware (headless CI) logs a warning
+        // and every audio call stays a no-op.
+        (void)AudioSystem::get().init();
         AssetManager::setFrameTaskSink([&app](std::function<void()> task)
         {
             app.getTaskManager().registerTickTask(std::move(task));
@@ -424,6 +428,7 @@ void App::init(AppDesc ci)
             mutate(settings.postProcessing);
             render.setRenderPipelineSettings(settings);
         },
+        .audio = &AudioSystem::get(),
     };
     registerGameplayScriptFunctions(scriptContext);
     // The module registry outlives this App. Pushed before the Lua deleter so
@@ -651,6 +656,8 @@ void App::quit()
     if (auto* materialFactory = MaterialFactory::get()) {
         materialFactory->destroy();
     }
+    // Stop every voice before the SDL subsystems go down.
+    AudioSystem::get().shutdown();
     profiling::endRuntimeSession();
     ConfigManager::get().shutdown();
 

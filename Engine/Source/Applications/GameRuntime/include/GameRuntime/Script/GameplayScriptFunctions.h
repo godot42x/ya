@@ -15,6 +15,7 @@ struct CameraComponent;
 struct GameUIHost;
 struct IWorldScriptRuntime;
 struct PostProcessingState;
+class AudioSystem;
 
 /// Injected by the host when gameplay module functions are registered.
 /// The functions close over this; they do not look up `App::get()`.
@@ -39,6 +40,8 @@ struct GameplayScriptContext
     /// caller mutate it, and writes it back. Null is "no renderer": the call
     /// is a no-op, so a headless run does not throw.
     std::function<void(const std::function<void(PostProcessingState&)>&)> mutatePostProcessing;
+    /// `audio.*`. Null (or an unavailable device) makes the audio calls no-ops.
+    AudioSystem* audio = nullptr;
 };
 
 /// One read of the presented frame: pixel size from `presentedPixels`, primary

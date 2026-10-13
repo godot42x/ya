@@ -75,6 +75,37 @@
       }
     },
     {
+      "id": 1005,
+      "name": "AudioDemo",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/AudioDemo.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": 2000,
       "name": "TilemapGround",
       "components": {
@@ -144,6 +175,10 @@
       {
         "name": "FadeDemo",
         "entityRef": 1004
+      },
+      {
+        "name": "AudioDemo",
+        "entityRef": 1005
       },
       {
         "name": "TilemapGround",

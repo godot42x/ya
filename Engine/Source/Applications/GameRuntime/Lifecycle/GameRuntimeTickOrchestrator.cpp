@@ -10,6 +10,7 @@
 #include "Render3D/Services/RenderDiagnosticsService.h"
 
 #include "Core/Async/TaskQueue.h"
+#include "Audio/AudioSystem.h"
 #include "Core/Manager/Facade.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
@@ -191,6 +192,15 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
     {
         YA_PROFILE_SCOPE("Logic/TimerManager");
         facade().timerManager.onUpdate(dt);
+    }
+    {
+        // Audio advances on the game clock even while paused, so a UI click or a
+        // pause sting can still finish; the music crossfade is unaffected by
+        // game pause.
+        YA_PROFILE_SCOPE("Logic/Audio");
+        if (auto& audio = AudioSystem::get(); audio.isAvailable()) {
+            audio.update(dt);
+        }
     }
     {
         YA_PROFILE_SCOPE("Logic/AppAutomationControlService");
