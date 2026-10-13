@@ -371,29 +371,35 @@ def build_battle_ruins1() -> dict:
                        "returnSpawn": "SpawnFromRuins", "returnActor": "Player"}),
     ]
     # name, tile, cell, tint, stats. Skill fields: skillName/skillPower/skillCost/
-    # skillRange + maxMp; an empty skillName hides the skill menu entry.
+    # Party units name a partyId + job, so their stats come from Party.lua at
+    # their current level (G1). The authored numbers are only the initial seed;
+    # Party.jobs holds the base + growth. Skill fields are per unit.
     party_row = spawn[1]
     party = [
         ("UnitKnight", CHAR_KNIGHT, (spawn[0] - 2, party_row), WHITE,
-         {"team": "player", "displayName": "Knight", "maxHp": 30, "atk": 7, "def": 3, "spd": 8, "move": 3, "range": 1}),
+         {"team": "player", "displayName": "Knight", "partyId": "knight", "job": "knight"}),
         ("UnitArcher", CHAR_ARCHER, (spawn[0], party_row), (0.8, 1.0, 0.8, 1.0),
-         {"team": "player", "displayName": "Archer", "maxHp": 20, "atk": 6, "def": 1, "spd": 12, "move": 3, "range": 3,
+         {"team": "player", "displayName": "Archer", "partyId": "archer", "job": "archer",
           "maxMp": 8, "skillName": "Pierce", "skillPower": 10, "skillCost": 3, "skillRange": 4}),
         ("UnitMage", CHAR_MAGE, (spawn[0] + 2, party_row), (0.8, 0.85, 1.0, 1.0),
-         {"team": "player", "displayName": "Mage", "maxHp": 18, "atk": 5, "def": 0, "spd": 10, "move": 2, "range": 2,
+         {"team": "player", "displayName": "Mage", "partyId": "mage", "job": "mage",
           "maxMp": 12, "skillName": "Firebolt", "skillPower": 13, "skillCost": 4, "skillRange": 3}),
     ]
     for i, (uname, tile, cell, tint, stats) in enumerate(party):
         entities.append(sprite_entity(1100 + i, uname, cell_world(origin, cell[0], cell[1], 0.1),
                                       DUN_ATLAS, tile_uv(tile), (1.0, 1.0), tint,
                                       "Content/Scripts/Unit.lua", None, None, True, stats))
+    # Enemies grant exp when defeated (G1).
     enemies = [
         ("EnemySlime", MON_SLIME, (spawn[0] - 2, enemy_row),
-         {"team": "enemy", "displayName": "Slime", "maxHp": 14, "atk": 4, "def": 0, "spd": 6, "move": 2, "range": 1}),
+         {"team": "enemy", "displayName": "Slime", "maxHp": 14, "atk": 4, "def": 0, "spd": 6, "move": 2, "range": 1,
+          "expReward": 8}),
         ("EnemyBat", MON_BAT, (spawn[0], enemy_row),
-         {"team": "enemy", "displayName": "Bat", "maxHp": 10, "atk": 5, "def": 0, "spd": 14, "move": 4, "range": 1}),
+         {"team": "enemy", "displayName": "Bat", "maxHp": 10, "atk": 5, "def": 0, "spd": 14, "move": 4, "range": 1,
+          "expReward": 6}),
         ("EnemyGhost", MON_GHOST, (spawn[0] + 2, enemy_row),
-         {"team": "enemy", "displayName": "Ghost", "maxHp": 16, "atk": 6, "def": 1, "spd": 9, "move": 2, "range": 2}),
+         {"team": "enemy", "displayName": "Ghost", "maxHp": 16, "atk": 6, "def": 1, "spd": 9, "move": 2, "range": 2,
+          "expReward": 10}),
     ]
     for i, (ename, tile, cell, stats) in enumerate(enemies):
         entities.append(sprite_entity(1200 + i, ename, cell_world(origin, cell[0], cell[1], 0.1),
@@ -485,6 +491,7 @@ def build_fade_scene() -> dict:
         script_entity(1004, "FadeDemo", "Content/Scripts/FadeDemo.lua"),
         script_entity(1005, "AudioDemo", "Content/Scripts/AudioDemo.lua"),
         script_entity(1006, "ParticleDemo", "Content/Scripts/ParticleDemo.lua"),
+        script_entity(1008, "PartySelfTest", "Content/Scripts/PartySelfTest.lua"),
         emitter_entity(1010, "SparkEmitter", cell_world(origin, spawn[0], spawn[1], 0.5),
                        "Content:Textures/Particles/star_07.png"),
         tilemap_entity(2000, "TilemapGround", TOWN_ATLAS, TOWN_TILESET, w, h, origin,
@@ -505,6 +512,7 @@ def build_fx_scene() -> dict:
     entities: list[dict] = [
         camera_entity(spawn, origin, script=None),
         script_entity(1006, "ParticleDemo", "Content/Scripts/ParticleDemo.lua"),
+        script_entity(1008, "PartySelfTest", "Content/Scripts/PartySelfTest.lua"),
         emitter_entity(1010, "SparkEmitter", cell_world(origin, spawn[0], spawn[1], 0.5),
                        "Content:Textures/Particles/circle_05.png",
                        {"velocity": [0.0, 0.6], "spread": 3.14, "gravity": [0.0, -1.0],

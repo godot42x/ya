@@ -137,6 +137,37 @@
       }
     },
     {
+      "id": 1008,
+      "name": "PartySelfTest",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/PartySelfTest.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": 1010,
       "name": "SparkEmitter",
       "components": {
@@ -290,6 +321,10 @@
       {
         "name": "ParticleDemo",
         "entityRef": 1006
+      },
+      {
+        "name": "PartySelfTest",
+        "entityRef": 1008
       },
       {
         "name": "SparkEmitter",

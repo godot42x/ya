@@ -467,6 +467,12 @@ function Script:checkBattleOver()
         Persist.battle = Persist.battle or {}
         Persist.battle.lastOutcome = self.outcome
         Persist.battle.lastScene = "BattleRuins1"
+        -- Grow the party (G1): a victory grants exp, and a party unit carries
+        -- its ending hp back so the next battle starts where this one left off.
+        if self.outcome == "victory" then
+            self:grantVictoryReward()
+        end
+        self:carryPartyState()
         -- And, when this battle was entered from a scene, go back after a beat.
         if self.returnScene ~= nil and self.returnScene ~= "" then
             self.returnTimer = self.returnDelay or 2.5
@@ -474,6 +480,42 @@ function Script:checkBattleOver()
         return true
     end
     return false
+end
+
+-- Exp from every defeated enemy (a simple per-unit value on the unit script).
+function Script:grantVictoryReward()
+    local total = 0
+    for _, unit in ipairs(self.units) do
+        if unit.team == "enemy" then
+            total = total + (unit.expReward or 10)
+        end
+    end
+    self.levelsGained = {}
+    for _, unit in ipairs(self.units) do
+        if unit.team == "player" and unit.partyId ~= nil and unit.partyId ~= "" and unit:isAlive() then
+            local gained = require("Party").gainExp(unit.partyId, total)
+            for _, level in ipairs(gained) do
+                self.levelsGained[#self.levelsGained + 1] = level
+                log:info("Battle: " .. tostring(unit.displayName) .. " reached level " .. tostring(level.level))
+            end
+        end
+    end
+    -- Best-effort feedback: a banner if the HUD has one.
+    local hud = ui.get(self.hudName)
+    if #self.levelsGained > 0 and type(hud) == "table" and hud.showHint then
+        local first = self.levelsGained[1]
+        hud:showHint("Level up! Lv " .. tostring(first.level))
+    end
+end
+
+-- Write each party unit's ending hp back into the roster (G1 carry-over).
+function Script:carryPartyState()
+    local Party = require("Party")
+    for _, unit in ipairs(self.units) do
+        if unit.team == "player" and unit.partyId ~= nil and unit.partyId ~= "" then
+            Party.setHp(unit.partyId, unit.hp)
+        end
+    end
 end
 
 function Script:finishTurn()

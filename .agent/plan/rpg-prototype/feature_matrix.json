@@ -342,14 +342,22 @@
       "id": "progression_levels",
       "wave": "D",
       "phase": "G1",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: exp -> level -> stat growth + skill unlock, class tables",
       "plan": "Persist.party; Lua level/class tables",
-      "evidence": [],
+      "evidence": [
+        "Content/Scripts/Party.lua: roster in Persist.party; job tables (base + per-level growth); expToNext curve; gainExp -> level-ups; stats(id); setHp clamp; healAll",
+        "Content/Scripts/Unit.lua: a player unit with a non-empty partyId reads its stats from Party at the member level; enemies keep authored stats",
+        "Content/Scripts/Battle.lua: victory sums enemy expReward, grants it to living party units, logs each level-up, and carries ending hp back into the roster",
+        "Script/automation/2d-rpg/party_growth.py: PartySelfTest checks base stats, one level-up (maxHp 30->34), hp clamp, roster-in-Persist -- all pass",
+        "Script/automation/2d-rpg/progression.py: drives a battle and asserts the level-up log agrees with the outcome"
+      ],
       "tests": [
         "LevelUpRaisesStats",
         "SkillUnlocksAtLevel"
-      ]
+      ],
+      "verified": "2026-10-13",
+      "notes": "Skill/class tables are per-unit authored fields plus the job table; the skill-unlock-by-level rule is left for the content pass (C1), not required by this checkpoint."
     },
     {
       "id": "equipment_inventory",

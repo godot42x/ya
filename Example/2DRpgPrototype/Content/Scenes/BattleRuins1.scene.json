@@ -156,12 +156,8 @@
               "propertyOverrides": {
                 "team": "player",
                 "displayName": "Knight",
-                "maxHp": 30,
-                "atk": 7,
-                "def": 3,
-                "spd": 8,
-                "move": 3,
-                "range": 1
+                "partyId": "knight",
+                "job": "knight"
               }
             }
           ]
@@ -245,12 +241,8 @@
               "propertyOverrides": {
                 "team": "player",
                 "displayName": "Archer",
-                "maxHp": 20,
-                "atk": 6,
-                "def": 1,
-                "spd": 12,
-                "move": 3,
-                "range": 3,
+                "partyId": "archer",
+                "job": "archer",
                 "maxMp": 8,
                 "skillName": "Pierce",
                 "skillPower": 10,
@@ -339,12 +331,8 @@
               "propertyOverrides": {
                 "team": "player",
                 "displayName": "Mage",
-                "maxHp": 18,
-                "atk": 5,
-                "def": 0,
-                "spd": 10,
-                "move": 2,
-                "range": 2,
+                "partyId": "mage",
+                "job": "mage",
                 "maxMp": 12,
                 "skillName": "Firebolt",
                 "skillPower": 13,
@@ -438,7 +426,8 @@
                 "def": 0,
                 "spd": 6,
                 "move": 2,
-                "range": 1
+                "range": 1,
+                "expReward": 8
               }
             }
           ]
@@ -527,7 +516,8 @@
                 "def": 0,
                 "spd": 14,
                 "move": 4,
-                "range": 1
+                "range": 1,
+                "expReward": 6
               }
             }
           ]
@@ -616,7 +606,8 @@
                 "def": 1,
                 "spd": 9,
                 "move": 2,
-                "range": 2
+                "range": 2,
+                "expReward": 10
               }
             }
           ]

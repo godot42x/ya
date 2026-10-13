@@ -297,3 +297,19 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
   （= 地板顶 -3.2 + 箱子半高 0.4，既没穿地也没悬停）。
 - 未完成 / 待验：推箱（kinematic 推 dynamic）、压力板触发（sensor 接触读 `contacts()`）、移动平台 —— 系统与
   组件都已支持（`applyImpulse`/`setBodyPosition`/`contacts()`），等第二场战斗内容（Wave D C1）一起做用例。
+
+## 2026-10-13 — G1：成长（等级 / 属性 / 职业 / 技能）
+
+- 目标：战斗得经验 → 升级 → 属性成长；职业决定基础与成长；技能按单位配置。
+- 内容（纯 Lua）：
+  - `Content/Scripts/Party.lua`（新）：名册存 `Persist.party`（跨场景/存档保留）；职业表 `jobs`
+    （基础 + 每级成长）；`expToNext(level)` 曲线；`gainExp` 连升并返回升级事件；`stats(id)` 按等级算
+    有效属性；`setHp` 带钳制；`healAll`（营地休息）。
+  - `Unit.lua`：玩家单位若有非空 `partyId`，属性来自 `Party.stats`（当前等级），而非场景里写死的值；
+    敌人保持原样。
+  - `Battle.lua`：胜利时把每个敌人 `expReward` 求和发给存活玩家单位，记录升级日志，并把战斗结束的 hp
+    写回名册（下一场从上一场结束的血量开始）。
+- 验证：`Script/automation/2d-rpg/party_growth.py`（FxScene 的 `PartySelfTest` 逐条跑 Party 契约：
+  基础属性、升一级 maxHp 30→34、hp 钳制、名册在 Persist —— 全 OK）；`progression.py` 驱动一场战斗并断言
+  升级日志与胜负一致。
+- 待办（随 C1 内容）：技能按等级解锁的规则表（当前技能是单位字段，够用）；职业转职。

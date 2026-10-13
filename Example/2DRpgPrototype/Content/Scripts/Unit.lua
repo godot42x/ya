@@ -5,11 +5,18 @@
 -- The board is the unit registry: Battle.lua walks the tilemap grid and asks
 -- map:entityAt(x, y) for whoever stands there, then reads that script's
 -- `team` / `spd` / `hp`. No separate unit list to keep in sync.
+--
+-- A player unit may name a `partyId`: its stats then come from Party.lua at the
+-- member's current level and job (growth from battles), instead of the authored
+-- fields. An enemy has no partyId and uses the authored fields as before.
 local ScriptBase = require("ScriptBase")
+local Party = require("Party")
 local Script = ScriptBase:new()
 
 Script.team = "player"   -- "player" or "enemy"
 Script.displayName = "Unit"
+Script.partyId = ""      -- non-empty: pull stats from Party at this member's level
+Script.job = "knight"    -- used when the member is first created in Party
 Script.maxHp = 20
 Script.atk = 5
 Script.def = 1
@@ -25,6 +32,8 @@ Script.skillRange = 1    -- skill reach in cells
 Script:properties({
     team        = { type = "string", tooltip = "player or enemy" },
     displayName = { type = "string", tooltip = "Name shown on the turn bar" },
+    partyId     = { type = "string", tooltip = "Party member id; empty uses the authored stats" },
+    job         = { type = "string", tooltip = "Job used when the party member is first created" },
     maxHp       = { type = "float", min = 1, max = 999, tooltip = "Maximum hit points" },
     atk         = { type = "float", min = 0, max = 99, tooltip = "Attack power" },
     def         = { type = "float", min = 0, max = 99, tooltip = "Damage reduction" },
@@ -46,11 +55,27 @@ end
 Script.cellDistance = cellDistance
 
 function Script:onInit()
-    self.hp = self.maxHp
-    self.mp = self.maxMp
     self.transform = self.entity:getTransform()
     self.sprite = self.entity:getSprite2D()
     self.baseTint = { self.sprite.tint.x, self.sprite.tint.y, self.sprite.tint.z, self.sprite.tint.w }
+    -- A party unit reads its stats from the roster at the member's level; the
+    -- authored fields are the fallback for an enemy or a standalone unit.
+    self.useParty = self.partyId ~= nil and self.partyId ~= "" and self.team == "player"
+    if self.useParty then
+        Party.ensure(self.partyId, self.job, self.displayName)
+        local stats = Party.stats(self.partyId)
+        self.maxHp = stats.maxHp
+        self.atk   = stats.atk
+        self.def   = stats.def
+        self.spd   = stats.spd
+        self.move  = stats.move
+        self.range = stats.range
+        self.displayName = stats.displayName
+        self.hp = math.max(1, Party.hp(self.partyId))
+    else
+        self.hp = self.maxHp
+    end
+    self.mp = self.maxMp
 end
 
 function Script:isAlive()
