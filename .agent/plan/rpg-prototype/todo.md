@@ -25,7 +25,7 @@
 
 ## Wave C — 四子系统（每个都要有真实使用点）
 
-- [ ] R1 后处理运行时控制 + 相机效果（fade / look / shake / zoom）
+- [x] R1 后处理运行时控制（`render.setLook`）+ 过渡 fade（`FadeOverlay`）——相机 shake/zoom 显式延后
 - [ ] A1 音频子系统（SDL3：BGM crossfade、sfx、总线音量）
 - [ ] X1 粒子子系统（.yaparticle 资产 + 发射器 + 命中/魔法/治疗特效）
 - [ ] P1 2D 物理 / 触发器（Box2D：推箱、压力板、尖刺、移动平台、击退）
