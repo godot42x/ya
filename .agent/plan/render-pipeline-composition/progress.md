@@ -937,3 +937,24 @@ D4 侦察时按 `forward_graph_exports::viewDepth` 追读，发现 C4a（6679b00
 
 - D5 后续：Lighting/GBuffer → Shadow（最后，依赖灯光线最新实现）；concept 的 `typename F::Stage` / `Stage*` 参数随最后一批去掉。
 - 教训沉淀（供后续批次）：**recipe 里的 feature 是栈上临时对象**——lambda 只捕获管线持有的指针（stage/设备对象），不得捕获 `this`；feature 不得自持可变 settings，一切经 `Settings → Resolved`。
+
+## 2026-10-13 — D5 批 4：Lighting/GBuffer 吸收各自 Stage（M28 分批进行中）
+
+### 目标与边界
+
+**单一验收目标（该批）**：GBuffer 与 Lighting 各自拥有其设备对象与生命周期；pipeline 不再持 `_gBufferStage` / `_lightStage`，也不再持 IBL 的两个镜像开关。
+
+### 实施内容
+
+- `GBufferStage` 归 `GBufferFeature`：init（frame/light DSL + skinning DSL）/shutdown/beginFrame/prepare/refreshDeviceFormats 全套转发；pipeline 的每 View `prepare(stageCtx)` 改走 feature。
+- `LightStage` 归 `LightingFeature`：init（frame/light DSL + environment lighting DSL 一并注入，替代原来的 setup+setEnvironmentLightingInput 两步外置调用）/shutdown/beginFrame/refreshDeviceFormats；`applyShadowState` 与 `setIBLSettings` 由 feature 转发，IBL 开关状态存在 feature 上（pipeline 的 snapshot/applyPending/loadPersistentSettings 读写它），pipeline 的 `_bEnablePBRDiffuseIBL`/`_bEnablePBRSpecularIBL` 镜像成员删除。
+- `refreshGBufferStageState` 里的 frame/light DSL 重推改读 `_lightFeature.stage()`（设备重建后不能让 pass 停在旧 layout）。
+
+### 验证
+
+- `xmake r ya-render-3d-test` 235/235；`xmake b ya-runtime` ok；runtime exit=0。
+- runtime（HelloMaterial）**四帧逐像素 max diff 0**：Deferred（vs `c3b-ssao-on`）/ Forward（vs `c4b-forward`）/ 切回 Deferred（vs `c3b-ssao-on`）/ SSAO-off（vs `c3b-ssao-off`）。
+
+### 保留 / 未做
+
+- D5 最后一批：Shadow（依赖 `shadow-and-light-line` 的最新实现）；concept 的 `typename F::Stage` / `Stage*` 参数随最后一批去掉，`Stages` 传参表清空。

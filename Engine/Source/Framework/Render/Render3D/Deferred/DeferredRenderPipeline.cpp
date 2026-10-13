@@ -269,9 +269,7 @@ void DeferredRenderPipeline::syncShadowSettings()
 {
     const auto shadowState = buildShadowState();
 
-    if (_lightStage) {
-        _lightStage->applyShadowState(shadowState);
-    }
+    _lightFeature.applyShadowState(shadowState);
 
     if (_frameResources) {
         _frameResources->applyShadowState(shadowState);
@@ -296,8 +294,8 @@ RenderPipelineSettings DeferredRenderPipeline::buildSettingsSnapshot() const
         .ssaoBias          = _ssaoFeature.settings().bias,
         .ssaoPower         = _ssaoFeature.settings().power,
         .ssaoIntensity     = _ssaoFeature.settings().intensity,
-        .bPBRDiffuseIBL    = _lightStage ? _lightStage->isPBRDiffuseIBLEnabled() : _bEnablePBRDiffuseIBL,
-        .bPBRSpecularIBL   = _lightStage ? _lightStage->isPBRSpecularIBLEnabled() : _bEnablePBRSpecularIBL,
+        .bPBRDiffuseIBL    = _lightFeature.isPBRDiffuseIBLEnabled(),
+        .bPBRSpecularIBL   = _lightFeature.isPBRSpecularIBLEnabled(),
     };
 }
 
@@ -378,14 +376,10 @@ void DeferredRenderPipeline::applyPendingSettings()
         .power     = settings.ssaoPower,
         .intensity = settings.ssaoIntensity,
     };
-    _bEnablePBRDiffuseIBL  = settings.bPBRDiffuseIBL;
-    _bEnablePBRSpecularIBL = settings.bPBRSpecularIBL;
     _postProcessState = settings.postProcessing;
     _bGradingEnabled  = settings.bPostProcessGrading;
     applyShadowSettings(settings.shadow);
-    if (_lightStage) {
-        _lightStage->setIBLSettings(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL);
-    }
+    _lightFeature.setIBLSettings(settings.bPBRDiffuseIBL, settings.bPBRSpecularIBL);
     if (_spriteStage) {
         // Sprites rasterize against the same depth buffer as the opaque pass, so
         // they share its viewport convention.
@@ -427,8 +421,11 @@ void DeferredRenderPipeline::loadPersistentSettings()
         RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.power", _ssaoFeature.settings().power);
     _ssaoFeature.settings().intensity = config.getOr<float>(
         RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.intensity", _ssaoFeature.settings().intensity);
-    _bEnablePBRDiffuseIBL  = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.light.enablePBRDiffuseIBL", _bEnablePBRDiffuseIBL);
-    _bEnablePBRSpecularIBL = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.light.enablePBRSpecularIBL", _bEnablePBRSpecularIBL);
+    // The IBL switches belong to the lighting feature; config seeds them
+    /// through the same setter a settings request uses.
+    _lightFeature.setIBLSettings(
+        config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.light.enablePBRDiffuseIBL", _lightFeature.isPBRDiffuseIBLEnabled()),
+        config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.light.enablePBRSpecularIBL", _lightFeature.isPBRSpecularIBLEnabled()));
 
     _postProcessState = postprocess_settings::loadRuntimeSettings(_postProcessState);
 
@@ -781,23 +778,17 @@ void DeferredRenderPipeline::initStages()
     _frameResources = ya::makeShared<DeferredFrameResourceSet>();
     _frameResources->init(_render);
 
-    _gBufferStage = ya::makeShared<GBufferStage>();
-    _gBufferStage->init(
+    _gBufferFeature.init(
         _render,
         _frameResources->getFrameAndLightDSL(),
         _frameResources->getSkinningDSL());
 
     _ssaoFeature.init(_render);
 
-    _lightStage = ya::makeShared<LightStage>();
-    _lightStage->setup(LightStage::SharedInputs{
-        .frameAndLightDSL = _frameResources->getFrameAndLightDSL(),
-    });
-    _lightStage->setEnvironmentLightingInput(LightStage::EnvironmentLightingInput{
-        .environmentLightingDSL = _environmentLightingDSL,
-    });
-    _lightStage->init(_render);
-    _lightStage->setIBLSettings(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL);
+    _lightFeature.init(
+        _render,
+        _frameResources->getFrameAndLightDSL(),
+        _environmentLightingDSL);
     syncShadowSettings();
 
     _skyboxFeature.init(_render);
@@ -826,15 +817,9 @@ void DeferredRenderPipeline::shutdown()
     }
     _overlayFeature.shutdown();
     _skyboxFeature.shutdown();
-    if (_lightStage) {
-        _lightStage->destroy();
-        _lightStage.reset();
-    }
+    _lightFeature.shutdown();
     _ssaoFeature.shutdown();
-    if (_gBufferStage) {
-        _gBufferStage->destroy();
-        _gBufferStage.reset();
-    }
+    _gBufferFeature.shutdown();
     if (_frameResources) {
         _frameResources->destroy();
         _frameResources.reset();
@@ -904,17 +889,13 @@ void DeferredRenderPipeline::beginSubmission(const PreparedPipelineFrame& prepar
         bSsaoOn = bSsaoOn || view.ssao().bEnabled;
     }
 
-    if (_gBufferStage) {
-        _gBufferStage->beginFrame();
-    }
+    _gBufferFeature.beginFrame();
     _finalizeFeature.beginFrame();
     _bloomFeature.beginFrame();
     if (bSsaoOn) {
         _ssaoFeature.beginFrame();
     }
-    if (_lightStage) {
-        _lightStage->beginFrame();
-    }
+    _lightFeature.beginFrame();
     _overlayFeature.beginFrame();
     _skyboxFeature.beginFrame();
 }
@@ -1242,22 +1223,20 @@ void DeferredRenderPipeline::refreshGBufferStageState()
 {
     _ssaoFeature.refreshDeviceFormats();
 
-    if (_gBufferStage) {
-        _gBufferStage->refreshPipelineFormats(buildGBufferSnapshotFormats());
-    }
+    _gBufferFeature.refreshDeviceFormats(buildGBufferSnapshotFormats());
 
-    if (_lightStage) {
-        _lightStage->setup(LightStage::SharedInputs{
-            .frameAndLightDSL = _frameResources ? _frameResources->getFrameAndLightDSL() : nullptr,
+    // The lighting feature's frame/light DSL comes from the same resource set;
+    // re-push it here so a rebuilt set cannot leave the pass on a stale layout.
+    if (_frameResources != nullptr && _lightFeature.stage() != nullptr) {
+        _lightFeature.stage()->setup(LightStage::SharedInputs{
+            .frameAndLightDSL = _frameResources->getFrameAndLightDSL(),
         });
     }
 }
 
 void DeferredRenderPipeline::refreshViewStageState()
 {
-    if (_lightStage) {
-        _lightStage->refreshPipelineFormats(buildViewSnapshotFormats());
-    }
+    _lightFeature.refreshDeviceFormats(buildViewSnapshotFormats());
 
     _overlayFeature.refreshDeviceFormats(buildViewSnapshotFormats());
     _skyboxFeature.refreshDeviceFormats(buildViewSnapshotFormats());
@@ -1346,7 +1325,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         return false;
     }
 
-    _gBufferStage->prepare(stageCtx);
+    _gBufferFeature.prepare(stageCtx);
 
     postContext = FrameContext{
         .view           = frame.view.frameData->view,
@@ -1373,9 +1352,9 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
     // prepared with this submission's descriptors and uploads, appended here.
     const DeferredPipelineRecipe::Stages stages{
         .shadow   = _shadowStage.get(),
-        .gBuffer  = _gBufferStage.get(),
+        .gBuffer  = _gBufferFeature.stage(),
         .ssao     = _ssaoFeature.stage(),
-        .light    = _lightStage.get(),
+        .light    = _lightFeature.stage(),
         .skybox   = _skyboxFeature.stage(),
         .overlay  = _overlayFeature.stage(),
         .sprites  = _spriteStage.get(),

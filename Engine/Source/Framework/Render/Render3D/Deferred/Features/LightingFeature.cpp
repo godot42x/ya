@@ -1,5 +1,7 @@
 #include "Render3D/Deferred/Features/LightingFeature.h"
 
+#include "RHI/Render.h"
+
 #include "Core/Log.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
@@ -15,6 +17,59 @@
 
 namespace ya
 {
+
+void LightingFeature::init(IRender* render,
+                           stdptr<IDescriptorSetLayout> frameAndLightDSL,
+                           stdptr<IDescriptorSetLayout> environmentLightingDSL)
+{
+    if (_stage == nullptr) {
+        _stage = ya::makeShared<LightStage>();
+    }
+    _stage->setup(LightStage::SharedInputs{.frameAndLightDSL = std::move(frameAndLightDSL)});
+    _stage->setEnvironmentLightingInput(LightStage::EnvironmentLightingInput{
+        .environmentLightingDSL = std::move(environmentLightingDSL),
+    });
+    _stage->init(render);
+    _stage->setIBLSettings(bPBRDiffuseIBL, bPBRSpecularIBL);
+}
+
+void LightingFeature::shutdown()
+{
+    if (_stage) {
+        _stage->destroy();
+        _stage.reset();
+    }
+}
+
+void LightingFeature::beginFrame()
+{
+    if (_stage) {
+        _stage->beginFrame();
+    }
+}
+
+void LightingFeature::applyShadowState(const ShadowRuntimeState& shadowState)
+{
+    if (_stage) {
+        _stage->applyShadowState(shadowState);
+    }
+}
+
+void LightingFeature::setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL)
+{
+    bPBRDiffuseIBL  = bEnablePBRDiffuseIBL;
+    bPBRSpecularIBL = bEnablePBRSpecularIBL;
+    if (_stage) {
+        _stage->setIBLSettings(bEnablePBRDiffuseIBL, bEnablePBRSpecularIBL);
+    }
+}
+
+void LightingFeature::refreshDeviceFormats(const DeferredAttachmentFormats& formats)
+{
+    if (_stage) {
+        _stage->refreshPipelineFormats(formats);
+    }
+}
 
 LightingFeature::Resolved LightingFeature::resolve(const Settings& settings,
                                                    const Facts&    facts,

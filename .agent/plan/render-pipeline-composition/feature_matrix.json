@@ -583,7 +583,9 @@
         "批 3 实施期发现并修复两个真 bug（均属'把设备对象从管线成员搬到 feature'的类型）：① FinalizeFeature::append 的 execute lambda 捕获 this，但 recipe 持栈上临时 feature，图执行时悬空（SIGSEGV，lldb 定位 this=0x0）；改为捕获传入的 stage 指针。② grading/bloom state 首版存在 feature 成员上，recipe 的栈临时从未拿到管线载入的配置（曝光 0.8 变成默认 0.6，全屏均匀变暗）；改为 state 全走 Settings→Resolved，feature 实例保持无状态",
         "automation 的 postprocess overrides 改为走 pipeline.requestSettings（wire 字段 bPostProcessGrading），不再伸手进 stage 对象；Forward 补上了原先会丢 bPostProcessGrading 的转发缺口",
         "证据：235/235（44 suites）；五帧逐像素 max diff 0：Deferred/Forward/切回 Deferred（vs c3b-ssao-on、c4b-forward）、bloom-off（vs c3b-bloom-off）、grading-off（vs c3g-grading-off）",
-        "待办批次：Lighting/GBuffer → Shadow（最后，依赖灯光线）；concept 去掉 typename F::Stage / Stage* 参数随最后一批"
+        "批 4（Lighting/GBuffer）：GBufferStage 归 GBufferFeature、LightStage 归 LightingFeature（含 IBL 开关与 shadow state 转发）；pipeline 删 _gBufferStage/_lightStage 与 _bEnablePBRDiffuseIBL/_bEnablePBRSpecularIBL 镜像成员",
+        "四帧逐像素 max diff 0：Deferred/Forward/切回 Deferred（vs c3b-ssao-on、c4b-forward）+ SSAO-off（vs c3b-ssao-off）；runtime exit=0、235/235",
+        "待办批次：Shadow（最后，依赖灯光线）；concept 去掉 typename F::Stage / Stage* 参数随最后一批"
       ]
     }
   ]

@@ -3,8 +3,10 @@
 #include "Core/Result.h"
 #include "Graph/RenderGraph.h"
 #include "Render3D/Common/ViewTargetStore.h"
+#include "Render3D/Deferred/GBufferStage.h"
 #include "Render3D/Composition/FeatureProtocol.h"
 #include "RHI/Core/DescriptorSet.h"
+#include "Render3D/Deferred/DeferredAttachmentFormats.h"
 
 #include <cstdint>
 
@@ -17,7 +19,8 @@ struct GBufferStage;
 /// deferred buffers.
 ///
 /// The feature owns its resource requirements (the four color targets plus the
-/// shared depth), the binding handles its pass consumes, and the pass itself.
+/// shared depth), the binding handles its pass consumes, the pass itself, and
+/// the device object that records it (D5).
 /// The buffers are the View's imported targets; the frame/light UBOs and the
 /// skinning SSBO arrive as typed inputs from the frame-level import step.
 struct GBufferFeature
@@ -92,6 +95,19 @@ struct GBufferFeature
         RGTextureHandle shading;
         RGTextureHandle depth;
     };
+
+    /// The device object this feature owns (D5); the pipeline drives it.
+    stdptr<GBufferStage> _stage;
+
+    void init(IRender* render,
+              stdptr<IDescriptorSetLayout> frameAndLightDSL,
+              stdptr<IDescriptorSetLayout> skinningDSL);
+    void shutdown();
+    void beginFrame();
+    void prepare(const RenderStageContext& ctx);
+    void refreshDeviceFormats(const DeferredAttachmentFormats& formats);
+
+    [[nodiscard]] GBufferStage* stage() const { return _stage.get(); }
 
     [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;
 

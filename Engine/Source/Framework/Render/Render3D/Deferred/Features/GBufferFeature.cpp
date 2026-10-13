@@ -1,5 +1,7 @@
 #include "Render3D/Deferred/Features/GBufferFeature.h"
 
+#include "RHI/Render.h"
+
 #include "Core/Log.h"
 #include "Graph/RenderGraphImportUtils.h"
 #include "Render3D/Common/ViewGraphName.h"
@@ -8,6 +10,45 @@
 
 namespace ya
 {
+
+void GBufferFeature::init(IRender* render,
+                          stdptr<IDescriptorSetLayout> frameAndLightDSL,
+                          stdptr<IDescriptorSetLayout> skinningDSL)
+{
+    if (_stage == nullptr) {
+        _stage = ya::makeShared<GBufferStage>();
+    }
+    _stage->init(render, std::move(frameAndLightDSL), std::move(skinningDSL));
+}
+
+void GBufferFeature::shutdown()
+{
+    if (_stage) {
+        _stage->destroy();
+        _stage.reset();
+    }
+}
+
+void GBufferFeature::beginFrame()
+{
+    if (_stage) {
+        _stage->beginFrame();
+    }
+}
+
+void GBufferFeature::prepare(const RenderStageContext& ctx)
+{
+    if (_stage) {
+        _stage->prepare(ctx);
+    }
+}
+
+void GBufferFeature::refreshDeviceFormats(const DeferredAttachmentFormats& formats)
+{
+    if (_stage) {
+        _stage->refreshPipelineFormats(formats);
+    }
+}
 
 GBufferFeature::Resolved GBufferFeature::resolve(const Settings& settings,
                                                  const Facts&    facts,

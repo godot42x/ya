@@ -4,6 +4,9 @@
 #include "Core/Result.h"
 #include "Graph/RenderGraph.h"
 #include "RHI/RenderDefines.h"
+#include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
+#include "Render3D/Deferred/DeferredAttachmentFormats.h"
+#include "Render3D/Deferred/LightStage.h"
 #include "Render3D/Composition/FeatureProtocol.h"
 
 #include <optional>
@@ -19,6 +22,9 @@ class RenderSubmission;
 /// Consumes the GBuffer handles (albedo/normal/orm/shading/depth), the optional
 /// AO output, the View's imported frame/light UBOs, and the View's shared
 /// shadow/environment imports. Produces the SceneColor target.
+///
+/// The feature owns its device object (`LightStage`) and the IBL settings the
+/// pass reads; the pipeline drives init/setup/beginFrame/refresh (D5).
 struct LightingFeature
 {
     using Stage = LightStage;
@@ -28,6 +34,10 @@ struct LightingFeature
         bool           bEnabled          = true;
         EFormat::T     sceneColorFormat  = EFormat::Undefined;
         EImageUsage::T sceneColorUsage   = EImageUsage::ColorAttachment | EImageUsage::Sampled;
+        /// IBL look switches the pass reads. Owned here (D5); the pipeline's
+        /// settings snapshot projects them.
+        bool           bPBRDiffuseIBL    = true;
+        bool           bPBRSpecularIBL   = true;
     };
 
     struct Facts
@@ -89,6 +99,26 @@ struct LightingFeature
     {
         RGTextureHandle sceneColor;
     };
+
+    /// The device object this feature owns (D5); the pipeline drives it.
+    stdptr<LightStage> _stage;
+    /// The IBL switches the pass runs with; the pipeline's settings snapshot
+    /// reads and writes these through this feature.
+    bool bPBRDiffuseIBL  = true;
+    bool bPBRSpecularIBL = true;
+
+    void init(IRender* render, stdptr<IDescriptorSetLayout> frameAndLightDSL, stdptr<IDescriptorSetLayout> environmentLightingDSL);
+    void shutdown();
+    void beginFrame();
+    /// The shadow side of this pass's state: which shadow technique the
+    /// per-View sets were written from. Set at the safe point, never mid-record.
+    void applyShadowState(const ShadowRuntimeState& shadowState);
+    void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);
+    void refreshDeviceFormats(const DeferredAttachmentFormats& formats);
+
+    [[nodiscard]] LightStage* stage() const { return _stage.get(); }
+    [[nodiscard]] bool isPBRDiffuseIBLEnabled() const { return bPBRDiffuseIBL; }
+    [[nodiscard]] bool isPBRSpecularIBLEnabled() const { return bPBRSpecularIBL; }
 
     [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;
 

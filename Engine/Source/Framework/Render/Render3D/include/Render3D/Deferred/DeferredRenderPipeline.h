@@ -3,8 +3,8 @@
 #include "Core/Math/Geometry.h"
 #include "Render3D/Deferred/DeferredFrameResourceSet.h"
 #include "Render3D/Deferred/DeferredPipelineRecipe.h"
-#include "Render3D/Deferred/GBufferStage.h"
-#include "Render3D/Deferred/LightStage.h"
+#include "Render3D/Deferred/Features/GBufferFeature.h"
+#include "Render3D/Deferred/Features/LightingFeature.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "Graph/RenderGraphExecutor.h"
 #include "RHI/Core/Pipeline.h"
@@ -106,11 +106,14 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     // ── Render stages ─────────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
     stdptr<DeferredFrameResourceSet> _frameResources;
-    stdptr<GBufferStage>         _gBufferStage;
+    /// GBuffer's device object and lifecycle live on this feature (D5).
+    GBufferFeature               _gBufferFeature;
     /// SSAO's device object, runtime settings and lifecycle all live on this
     /// feature; the pipeline drives it instead of holding the stage (D5).
     SSAOFeature                  _ssaoFeature;
-    stdptr<LightStage>           _lightStage;
+    /// Lighting's device object, IBL settings and lifecycle live on this
+    /// feature (D5).
+    LightingFeature              _lightFeature;
     /// Skybox's device object, settings and lifecycle live on this feature (D5).
     SkyboxFeature                _skyboxFeature;
     /// The billboard/gizmo/SimpleMaterial overlay device object and lifecycle
@@ -135,8 +138,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     Mesh*                                                           _defaultSkyboxMesh = nullptr;
 
     bool     _bReverseViewportY    = true;
-    bool     _bEnablePBRDiffuseIBL = true;
-    bool     _bEnablePBRSpecularIBL = true;
 
     std::optional<RenderPipelineSettings> _pendingSettings;
 
