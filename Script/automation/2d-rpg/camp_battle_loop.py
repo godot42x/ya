@@ -96,7 +96,7 @@ def row(i: int) -> str:
 
 
 def menu(i: int) -> str:
-    return widget(f"Menu{i}").get("text") or ""
+    return widget(f"Action{i}").get("text") or ""
 
 
 def active() -> str:
@@ -130,7 +130,7 @@ def menu_select(label: str) -> None:
         if menu_label() == label:
             return
         before = menu_label()
-        tap("Down")
+        tap("Right")
         deadline = time.time() + 0.6
         while time.time() < deadline and menu_label() == before:
             time.sleep(0.05)

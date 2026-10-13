@@ -183,3 +183,22 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
   （`Font::getCharacter` 会替换成 `?`，所以走 `characters.find` 直读）。
 - 验证：`Script/automation/2d-rpg/world_text.py` —— 标签实体带正确 `text`；截图
   `Engine/Saved/Automation/world-text/world_text.png` 显示 "Hello 123" 与 "World" 画在世界坐标上。
+
+## 2026-10-13 — UB1：战斗 HUD 重做（响应 Notes.md U4）
+
+- 目标：行动选择是**屏幕底部横向**按钮条；目标/技能提示可读；每个单位**头顶**显示名字与血条。
+- 内容：
+  - `Content/UI/BattleHUD.yaui.json`（`Tools/make_battle_hud.py` 重写）：三块——左上状态卡
+    （Round/Acting/行动序条 Row1–6）、底部居中行动栏（`Action1..3` + `Hint`）、居中结算横幅 `OutcomeBox/Outcome`。
+  - `Content/Scripts/BattleFx.lua`：头顶名字与血条改走 **WT1 世界文字**（`world.spawnText`）+ 1×1 白条精灵；
+    伤害跳字**不再用 digits 图集**，改成一个世界文字实体（上浮+淡出+销毁）。数字图集退役。
+  - `Content/UI/BattleHUD.lua`：`Action1..3` 菜单、`showOutcome` 连 `OutcomeBox` 一起显隐。
+  - `Battle.lua`：行动栏是横向的，菜单导航从上下改为**左右**。
+- 途中发现（引擎坐标约定，写进生成器注释）：**canvas 槽的 anchorY 0 = 顶、1 = 底**（`Dialogue` 底部面板
+  用 `[0,1]` + 负偏移）；第一版按 UI 直觉用 `[0,1]` 当顶，状态卡落到了屏幕底部。用 `ui.query` 读运行时 rect
+  和已知面板（Dialogue/Inventory/QuestSettings）对照才定案。空 `OutcomeBox` 会画一块底板，所以显隐必须
+  连盒子一起切。
+- 验证：六个战斗脚本（turns/move/combat/skill_kill/ai/camp_battle_loop）全过；截图
+  `Engine/Saved/Automation/battle-skill/battle_skill.png` 显示底部行动栏、左上状态卡、每个单位头顶名字+血条
+  （低血变红）。
+- 偏离：行动栏当前把菜单项做成一排文字按钮；真正的按钮控件（可点/hover）留到风格化 UI（U5）一起。

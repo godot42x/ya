@@ -427,13 +427,20 @@
       "id": "battle_hud_redesign",
       "wave": "B2",
       "phase": "UB1",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game/user U4: action menu as a bottom horizontal bar; readable target/skill choice; names and HP over heads",
       "engine_gap": "content: current HUD is a plain vertical text list",
       "plan": "BattleHUD.yaui.json bottom bar (EWidgetAlignV::Bottom + row layout); head text via WT1; Battle.lua drives the new sections",
       "source": "user note 2026-10-13",
-      "evidence": [],
-      "tests": []
+      "evidence": [
+        "Content/UI/BattleHUD.yaui.json (Tools/make_battle_hud.py): bottom-centre action bar (Action1..3 + Hint), top-left status card (round/acting/turn order), centred outcome banner; anchorY 0=top 1=bottom",
+        "Content/Scripts/BattleFx.lua: name + HP bar over every unit via WT1 world text and 1x1 white bar sprites; digit-atlas damage numbers replaced by world.spawnText numbers",
+        "Content/UI/BattleHUD.lua: Action1..3 menu, outcome toggles the box (not just the label)",
+        "Battle.lua: action menu navigates left/right (horizontal bar)",
+        "Automation battle_turns/move/combat/skill_kill/ai/camp_battle_loop all pass; Engine/Saved/Automation/battle-*/**.png show the new chrome"
+      ],
+      "tests": [],
+      "verified": "2026-10-13"
     }
   ]
 }

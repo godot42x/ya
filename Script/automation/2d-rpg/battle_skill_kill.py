@@ -76,7 +76,7 @@ def row(i: int) -> str:
 
 
 def menu(i: int) -> str:
-    return widget(f"Menu{i}").get("text") or ""
+    return widget(f"Action{i}").get("text") or ""
 
 
 def active() -> str:
@@ -106,7 +106,7 @@ def menu_select(label: str) -> None:
                     if menu(i).lstrip().startswith(">")), None)
         if sel == label:
             break
-        tap("Down")
+        tap("Right")
         time.sleep(0.18)
 
 
@@ -141,10 +141,14 @@ def main() -> None:
         ghost_before = hp_of("Ghost")
         print(f"Ghost before: {ghost_before}")
 
-        # End turns (Bat, then Archer) until the Mage is active.
-        deadline = time.time() + 30.0
+        # Advance to the Mage's turn. Enemy turns play themselves (AI), so only
+        # player turns are ended with Wait.
+        deadline = time.time() + 40.0
         while active() != "Mage" and time.time() < deadline:
-            end_turn()
+            if active() in ("Archer", "Knight"):
+                end_turn()
+            else:
+                time.sleep(0.25)
         if active() != "Mage":
             raise SystemExit("never reached the Mage's turn")
 

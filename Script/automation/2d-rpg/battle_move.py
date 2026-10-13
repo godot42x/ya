@@ -69,7 +69,7 @@ def hud_row(i: int) -> str:
 
 
 def hud_menu(i: int) -> str:
-    return (rpg.call("ui.query", {"entry": "BattleHUD", "widget": f"Menu{i}"}).get("text") or "")
+    return (rpg.call("ui.query", {"entry": "BattleHUD", "widget": f"Action{i}"}).get("text") or "")
 
 
 def active_name() -> str:

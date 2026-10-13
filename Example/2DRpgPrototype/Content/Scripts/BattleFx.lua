@@ -1,158 +1,158 @@
 -- BattleFx.lua -- the visual feedback of a battle: floating damage numbers and
--- the small HP bar over each unit. Plain module (not a script): Battle.lua
--- owns it, calls `attachBar` once per turn and `spawnDamage` on a hit, and
+-- the name + HP bar over each unit. Plain module (not a script): Battle.lua
+-- owns it, calls `showHealth` on every unit and `spawnDamage` on a hit, and
 -- drives `update` every frame.
 --
--- Two texture atlases cross the script boundary as paths:
---   digits.png  10 glyphs of 8x8 in one row   (damage numbers)
---   white.png   a 1x1 white pixel             (bars, tinted)
+-- Text is the engine's world-space text (WT1, `world.spawnText`), so a number
+-- is one entity, not a strip of digit sprites. The HP bar itself is a couple
+-- of 1x1 white sprites (`white.png`) scaled and tinted.
 local Fx = {}
 
-local DIGITS_TEXTURE = "Content:Textures/digits.png"
 local WHITE_TEXTURE = "Content:Textures/white.png"
 
-local DIGIT_COUNT = 10
-local DIGIT_SIZE = 0.5      -- world units per glyph (8px at 16 texels/unit)
-local RISE = 0.6            -- world units a number climbs
-local LIFETIME = 0.7        -- seconds
+local RISE = 0.7            -- world units a damage number climbs
+local LIFETIME = 0.8        -- seconds
+local TEXT_SIZE = 0.42      -- world height of a damage number
 
-local BAR_WIDTH = 0.75
-local BAR_HEIGHT = 0.12
-local BAR_LIFT = 0.7        -- above the unit's cell centre
-local COLOR_BAR_BG = { 0.12, 0.1, 0.14, 0.85 }
-local COLOR_BAR_HP = { 0.35, 0.85, 0.4, 1.0 }
-local COLOR_BAR_LOW = { 0.9, 0.35, 0.3, 1.0 }
-local COLOR_DAMAGE = { 1.0, 0.9, 0.55, 1.0 }
+local BAR_WIDTH = 0.7
+local BAR_HEIGHT = 0.1
+local COLORS = {
+    barBg    = { 0.10, 0.09, 0.13, 0.85 },
+    barHp    = { 0.35, 0.85, 0.4, 1.0 },
+    barLow   = { 0.90, 0.35, 0.30, 1.0 },
+    barAlly  = { 0.45, 0.72, 1.0, 1.0 },
+    damage   = { 1.0, 0.92, 0.55, 1.0 },
+    heal     = { 0.55, 1.0, 0.6, 1.0 },
+    name     = { 0.96, 0.96, 0.94, 1.0 },
+}
 
 function Fx.new(battle)
-    return setmetatable({ battle = battle, numbers = {}, bars = {} }, { __index = Fx })
+    return setmetatable({ battle = battle, numbers = {}, labels = {} }, { __index = Fx })
 end
 
-local function digitUV(index)
-    return index / DIGIT_COUNT, 0.0, (index + 1) / DIGIT_COUNT, 1.0
-end
-
-local function setTint(sprite, color)
+local function tint(sprite, color)
     sprite.tint = Vec4.new(color[1], color[2], color[3], color[4])
 end
 
--- Spawn a sprite through world.spawnSprite and configure its 2D component.
--- `size` is a plain {w, h} Lua table here; it crosses as Vec2.new, because a
--- nested plain table cannot become a glm::vec2 (the options struct is typed).
-function Fx:spawnSprite(name, texture, size, color)
-    local entity = world.spawnSprite(name, { texture = texture, size = Vec2.new(size[1], size[2]) })
+-- One sprite through world.spawnSprite. `size` is a {w, h} table; it crosses
+-- as Vec2.new (a nested plain table cannot become a glm::vec2).
+function Fx:spawnSprite(name, size, color)
+    local entity = world.spawnSprite(name, { texture = WHITE_TEXTURE, size = Vec2.new(size[1], size[2]) })
     if not entity then
         return nil
     end
     local sprite = entity:getSprite2D()
     if sprite then
         sprite.bYSort = false
-        sprite.sortOrder = 100  -- always over the board and units
-        setTint(sprite, color)
+        sprite.sortOrder = 100  -- over the board and units
+        tint(sprite, color)
     end
     return entity
 end
 
--- A damage number above a world point: one sprite per digit, side by side.
+-- A damage number: one world-text entity that rises and fades, then goes away.
+-- `worldY` is already lifted above the unit by the caller; this only adds the
+-- rise over the number's life.
 function Fx:spawnDamage(worldX, worldY, amount, color)
-    color = color or COLOR_DAMAGE
-    local text = tostring(math.max(0, math.floor(amount)))
-    local count = #text
-    local total = count * DIGIT_SIZE
-    local startX = worldX - total / 2 + DIGIT_SIZE / 2
-    local group = { sprites = {}, t = 0, x0 = startX, y0 = worldY }
-    for i = 1, count do
-        local digit = tonumber(string.sub(text, i, i)) or 0
-        local entity = self:spawnSprite("DamageNumber", DIGITS_TEXTURE,
-                                        { DIGIT_SIZE, DIGIT_SIZE }, color)
-        if entity then
-            local sprite = entity:getSprite2D()
-            local u0, v0, u1, v1 = digitUV(digit)
-            sprite.uvRect = Vec4.new(u0, v0, u1, v1)
-            entity:getTransform():setPosition(
-                Vec3.new(startX + (i - 1) * DIGIT_SIZE, worldY, 1.0))
-            group.sprites[#group.sprites + 1] = entity
-        end
+    color = color or COLORS.damage
+    local entity = world.spawnText("DamageNumber", Vec3.new(worldX, worldY, 1.0),
+                                   tostring(math.max(0, math.floor(amount))),
+                                   { size = TEXT_SIZE, color = Vec4.new(color[1], color[2], color[3], 1.0),
+                                     fontPixelSize = 24 })
+    if entity then
+        self.numbers[#self.numbers + 1] = { entity = entity, t = 0, x = worldX, y = worldY, color = color }
     end
-    self.numbers[#self.numbers + 1] = group
 end
 
--- One HP bar per unit: a dark backing and a fill that narrows with hp. Both
--- are 1x1 white sprites scaled by size; the fill's pivot moves left so it
--- shrinks from the right.
+-- The standing name + HP bar over a unit. `attachBar` is called once per unit;
+-- `updateBar` moves it as the unit walks or takes damage.
 function Fx:attachBar(unit)
     local key = tostring(unit.entity:getName())
-    if self.bars[key] then
-        return self.bars[key]
+    if self.labels[key] then
+        return self.labels[key]
     end
-    local bg = self:spawnSprite("HpBarBg", WHITE_TEXTURE, { BAR_WIDTH, BAR_HEIGHT }, COLOR_BAR_BG)
-    local fill = self:spawnSprite("HpBarFill", WHITE_TEXTURE, { BAR_WIDTH, BAR_HEIGHT }, COLOR_BAR_HP)
-    if not bg or not fill then
+    local pos = unit.transform:getPosition()
+    local label = world.spawnText("UnitName", Vec3.new(pos.x, pos.y + 1.05, 1.0), tostring(unit.displayName or "?"),
+                                  { size = 0.34, color = Vec4.new(COLORS.name[1], COLORS.name[2], COLORS.name[3], 1.0),
+                                    fontPixelSize = 20 })
+    local bg = self:spawnSprite("HpBarBg", { BAR_WIDTH + 0.06, BAR_HEIGHT + 0.04 }, COLORS.barBg)
+    local fill = self:spawnSprite("HpBarFill", { BAR_WIDTH, BAR_HEIGHT },
+                                  unit.team == "player" and COLORS.barAlly or COLORS.barHp)
+    if not label or not bg or not fill then
         return nil
     end
-    local fillSprite = fill:getSprite2D()
-    fillSprite.pivot = Vec2.new(0.0, 0.5)
-    local bar = { bg = bg, fill = fill }
-    self.bars[key] = bar
+    -- The fill shrinks from the right, so its pivot is the left edge.
+    fill:getSprite2D().pivot = Vec2.new(0.0, 0.5)
+    local bar = { label = label, bg = bg, fill = fill, unit = unit }
+    self.labels[key] = bar
     self:updateBar(unit, bar)
     return bar
 end
 
+local function setVisible(entity, visible)
+    if not entity then
+        return
+    end
+    local sprite = entity:getSprite2D()
+    if sprite then
+        sprite.bVisible = visible
+    end
+    local text = entity:getText2D()
+    if text then
+        text.bVisible = visible
+    end
+end
+
 function Fx:updateBar(unit, bar)
-    bar = bar or self.bars[tostring(unit.entity:getName())]
-    if not bar or not unit:isAlive() then
-        if bar then
-            bar.bg:getSprite2D().bVisible = false
-            bar.fill:getSprite2D().bVisible = false
-        end
+    bar = bar or self.labels[tostring(unit.entity:getName())]
+    if not bar then
+        return
+    end
+    if not unit:isAlive() then
+        setVisible(bar.bg, false)
+        setVisible(bar.fill, false)
+        setVisible(bar.label, false)
         return
     end
     local pos = unit.transform:getPosition()
-    local y = pos.y + BAR_LIFT
-    local x = pos.x
-    bar.bg:getTransform():setPosition(Vec3.new(x, y, 1.0))
-    local ratio = 1.0
-    if (unit.maxHp or 0) > 0 then
-        ratio = math.max(0.0, unit.hp / unit.maxHp)
-    end
-    bar.fill:getTransform():setPosition(
-        Vec3.new(x - BAR_WIDTH / 2, y, 1.01))
+    local barY = pos.y + 0.72
+    bar.bg:getTransform():setPosition(Vec3.new(pos.x, barY, 1.0))
+    bar.fill:getTransform():setPosition(Vec3.new(pos.x - BAR_WIDTH / 2, barY, 1.01))
+    bar.label:getTransform():setPosition(Vec3.new(pos.x, pos.y + 1.05, 1.0))
+    local ratio = (unit.maxHp or 0) > 0 and math.max(0.0, unit.hp / unit.maxHp) or 1.0
     bar.fill:getSprite2D().size = Vec2.new(math.max(0.001, BAR_WIDTH * ratio), BAR_HEIGHT)
-    local low = ratio < 0.34
-    setTint(bar.fill:getSprite2D(), low and COLOR_BAR_LOW or COLOR_BAR_HP)
-    bar.bg:getSprite2D().bVisible = true
-    bar.fill:getSprite2D().bVisible = true
+    if unit.team == "player" then
+        tint(bar.fill:getSprite2D(), ratio < 0.34 and COLORS.barLow or COLORS.barAlly)
+    else
+        tint(bar.fill:getSprite2D(), ratio < 0.34 and COLORS.barLow or COLORS.barHp)
+    end
+    setVisible(bar.bg, true)
+    setVisible(bar.fill, true)
+    setVisible(bar.label, true)
 end
 
--- Re-anchor every bar (called when a unit walks, so the bar follows it).
+-- Re-anchor every bar (the controller calls this when a unit walks).
 function Fx:refreshBars(units)
     for _, unit in ipairs(units) do
         self:updateBar(unit)
     end
 end
 
--- Advance numbers: rise, fade, and remove the group when spent.
 function Fx:update(dt)
     local keep = {}
-    for _, group in ipairs(self.numbers) do
-        group.t = group.t + dt
-        local k = group.t / LIFETIME
+    for _, number in ipairs(self.numbers) do
+        number.t = number.t + dt
+        local k = number.t / LIFETIME
         if k >= 1.0 then
-            for _, entity in ipairs(group.sprites) do
-                world.destroyEntity(entity)
-            end
+            world.destroyEntity(number.entity)
         else
-            local lift = RISE * k
-            local alpha = 1.0 - k * k
-            for i, entity in ipairs(group.sprites) do
-                local sprite = entity:getSprite2D()
-                if sprite then
-                    sprite.tint = Vec4.new(COLOR_DAMAGE[1], COLOR_DAMAGE[2], COLOR_DAMAGE[3], alpha)
-                end
-                entity:getTransform():setPosition(
-                    Vec3.new(group.x0 + (i - 1) * DIGIT_SIZE, group.y0 + lift, 1.0))
+            local text = number.entity:getText2D()
+            if text then
+                local fade = 1.0 - k * k
+                text.color = Vec4.new(number.color[1], number.color[2], number.color[3], fade)
             end
-            keep[#keep + 1] = group
+            number.entity:getTransform():setPosition(Vec3.new(number.x, number.y + RISE * k, 1.0))
+            keep[#keep + 1] = number
         end
     end
     self.numbers = keep

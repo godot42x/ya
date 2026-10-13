@@ -20,8 +20,8 @@
 
 ## Wave B2 — 表观质量（响应 Notes.md U3/U4，排在 Wave C 前）
 
-- [ ] WT1 世界空间文字（`world.spawnText` + `Text2DComponent`；伤害跳字/名字/头顶血条改用引擎世界文字）
-- [ ] UB1 战斗 HUD 重做（底部横向行动栏、目标/技能选择、头顶血条）
+- [x] WT1 世界空间文字（`world.spawnText` + `Text2DComponent`；伤害跳字/名字/头顶血条改用引擎世界文字）
+- [x] UB1 战斗 HUD 重做（底部横向行动栏、目标/技能选择、头顶血条）
 
 ## Wave C — 四子系统（每个都要有真实使用点）
 

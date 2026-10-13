@@ -115,6 +115,11 @@ function Script:showHint(text)
 end
 
 function Script:showOutcome(outcome)
+    -- Toggle the box, not just the label: an empty box would still draw its
+    -- background across the board.
+    if self.outcomeBox then
+        self.outcomeBox.visible = true
+    end
     if self.outcome then
         self.outcome.text = Locale.tr(outcome == "victory" and "Victory!" or "Defeat...")
         self.outcome.color = (outcome == "victory") and COLOR_VICTORY or COLOR_DEFEAT
@@ -131,6 +136,10 @@ function Script:onInit()
     self.header = self:find("Header")
     self.hintText = self:find("Hint")
     self.outcome = self:find("Outcome")
+    self.outcomeBox = self:find("OutcomeBox")
+    if self.outcomeBox then
+        self.outcomeBox.visible = false
+    end
     if self.outcome then
         self.outcome.visible = false
     end
@@ -143,7 +152,7 @@ function Script:onInit()
     end
     self.menuRows = {}
     for i = 1, 3 do
-        local line = self:find("Menu" .. i)
+        local line = self:find("Action" .. i)
         if line then
             self.menuRows[#self.menuRows + 1] = { line = line }
         end

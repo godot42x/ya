@@ -76,7 +76,7 @@ def hud_row(i: int) -> str:
 
 
 def hud_menu(i: int) -> str:
-    result = rpg.call("ui.query", {"entry": "BattleHUD", "widget": f"Menu{i}"})
+    result = rpg.call("ui.query", {"entry": "BattleHUD", "widget": f"Action{i}"})
     return (result.get("text") or "") if isinstance(result, dict) else ""
 
 
@@ -99,7 +99,7 @@ def wait_and_end_turn() -> None:
                     if hud_menu(i).lstrip().startswith(">")), None)
         if sel == "Wait":
             break
-        rpg.tap("Down")
+        rpg.tap("Right")
         time.sleep(0.2)
     rpg.tap("Space")   # Wait -> turn ends
     time.sleep(0.3)

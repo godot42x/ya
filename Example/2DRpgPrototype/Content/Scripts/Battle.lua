@@ -573,13 +573,14 @@ function Script:updateMove(dt)
 end
 
 function Script:updateMenu(dt)
-    if input:isActionPressed("move_up") then
+    -- The action bar is horizontal, so left/right move along it.
+    if input:isActionPressed("move_left") then
         self.menuIndex = self.menuIndex - 1
         if self.menuIndex < 1 then
             self.menuIndex = #self.menu
         end
         self:setHudDirty()
-    elseif input:isActionPressed("move_down") then
+    elseif input:isActionPressed("move_right") then
         self.menuIndex = self.menuIndex + 1
         if self.menuIndex > #self.menu then
             self.menuIndex = 1

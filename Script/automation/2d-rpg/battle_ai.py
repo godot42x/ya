@@ -79,7 +79,7 @@ def row(i: int) -> str:
 
 
 def menu(i: int) -> str:
-    return widget(f"Menu{i}").get("text") or ""
+    return widget(f"Action{i}").get("text") or ""
 
 
 def roster() -> dict[str, int]:
@@ -129,7 +129,7 @@ def menu_select(label: str) -> None:
     for _ in range(4):
         if menu_label() == label:
             break
-        tap("Down")
+        tap("Right")
         time.sleep(0.12)
 
 
