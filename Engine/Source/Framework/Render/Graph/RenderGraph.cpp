@@ -10,12 +10,32 @@
 namespace ya
 {
 
+void RenderGraphExecutionResult::clear()
+{
+    _exportedTextures.clear();
+    _exportedTextureByHandle.clear();
+}
+
 void RenderGraphExecutionResult::bindExportedTexture(std::string name, std::shared_ptr<RenderTexture> texture)
 {
     if (name.empty()) {
         return;
     }
     _exportedTextures[std::move(name)] = std::move(texture);
+}
+
+void RenderGraphExecutionResult::bindExportedTexture(RGTextureHandle handle, std::shared_ptr<RenderTexture> texture)
+{
+    if (!handle.isValid()) {
+        return;
+    }
+    for (auto& [bound, owner] : _exportedTextureByHandle) {
+        if (bound == handle) {
+            owner = std::move(texture);
+            return;
+        }
+    }
+    _exportedTextureByHandle.emplace_back(handle, std::move(texture));
 }
 
 bool RenderGraphExecutionResult::hasExportedTexture(std::string_view name) const
@@ -27,6 +47,16 @@ std::shared_ptr<RenderTexture> RenderGraphExecutionResult::getExportedTextureSha
 {
     if (const auto it = _exportedTextures.find(std::string(name)); it != _exportedTextures.end()) {
         return it->second;
+    }
+    return nullptr;
+}
+
+std::shared_ptr<RenderTexture> RenderGraphExecutionResult::getExportedTextureShared(RGTextureHandle handle) const
+{
+    for (const auto& [bound, owner] : _exportedTextureByHandle) {
+        if (bound == handle) {
+            return owner;
+        }
     }
     return nullptr;
 }

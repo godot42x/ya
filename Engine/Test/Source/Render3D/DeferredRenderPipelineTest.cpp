@@ -502,22 +502,22 @@ TEST(BloomPostprocessingTest, EachCallPicksItsOwnFinalBlurTargetFromItsOwnCount)
     state.bEnableBloom    = true;
     state.bloomBlurPasses = 1; // -> 2 passes, even -> final side is Pong
 
-    const auto evenCount = bloom.appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
+    const auto evenCount = bloom.appendBloomChain(graph, BloomPostprocessing::RenderDesc{
         .sceneHandle  = scene,
         .renderExtent = Extent2D{.width = 64, .height = 64},
         .state        = &state,
         .viewId       = 21,
     });
-    EXPECT_TRUE(evenCount.isValid());
+    EXPECT_TRUE(evenCount.composite.isValid());
 
     state.bloomBlurPasses = 2; // -> 4 passes, still even
-    const auto evenCountAgain = bloom.appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
+    const auto evenCountAgain = bloom.appendBloomChain(graph, BloomPostprocessing::RenderDesc{
         .sceneHandle  = scene,
         .renderExtent = Extent2D{.width = 64, .height = 64},
         .state        = &state,
         .viewId       = 22,
     });
-    EXPECT_TRUE(evenCountAgain.isValid());
+    EXPECT_TRUE(evenCountAgain.composite.isValid());
 
     // Both views' pass sets exist independently: the graph has both extracts and
     // both composites, and neither call reset or re-read the other's state.

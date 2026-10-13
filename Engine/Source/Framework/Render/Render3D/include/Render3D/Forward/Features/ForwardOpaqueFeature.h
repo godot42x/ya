@@ -92,6 +92,11 @@ struct ForwardOpaqueFeature
     struct GraphOutputs
     {
         RGTextureHandle color{};
+        /// The View's depth stream, typed at its import. The collector maps it
+        /// like every other output; whether the pipeline exports it (and so
+        /// whether it reaches RenderViewOutput::depth) is exportGraphOutputs'
+        /// call, not a name the collector has to guess.
+        RGTextureHandle depth{};
     };
 
     [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;

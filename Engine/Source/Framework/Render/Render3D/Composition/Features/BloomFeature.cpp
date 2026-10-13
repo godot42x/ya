@@ -78,7 +78,7 @@ Result<BloomFeature::GraphOutputs, FeatureError> BloomFeature::append(RenderGrap
         return FeatureError::MissingContext;
     }
 
-    const auto importTarget = [&](EViewAttachment role, std::string_view label, const std::optional<ViewTargetRequirement>& requirement) {
+    const auto importTarget = [&](EViewAttachment role, std::string_view label, const std::optional<ViewTargetRequirement>& requirement) -> RGTextureHandle {
         if (!requirement.has_value()) {
             return RGTextureHandle{};
         }
@@ -91,23 +91,23 @@ Result<BloomFeature::GraphOutputs, FeatureError> BloomFeature::append(RenderGrap
     };
 
     const std::string labelPrefix{resolved.importLabelPrefix};
-    const RGTextureHandle extract = importTarget(
+    outputs.extract = importTarget(
         EViewAttachment::BloomExtract, labelPrefix + "BloomExtract", resolved.extract);
-    const RGTextureHandle blur = importTarget(
+    outputs.blur = importTarget(
         EViewAttachment::BloomBlur, labelPrefix + "BloomBlur", resolved.blur);
-    const RGTextureHandle composite = importTarget(
+    outputs.composite = importTarget(
         EViewAttachment::BloomComposite, labelPrefix + "BloomComposite", resolved.composite);
-    if (!extract.isValid() || !blur.isValid() || !composite.isValid()) {
+    if (!outputs.extract.isValid() || !outputs.blur.isValid() || !outputs.composite.isValid()) {
         YA_CORE_ERROR("Bloom is enabled but the View has no prepared Bloom targets");
         return FeatureError::MissingDependency;
     }
 
-    const RGTextureHandle result = stage->appendBloomGraphPasses(
-        graph, inputs.color, facts.viewExtent, nullptr, ctx.viewId, prepared.bloom, extract, blur, composite);
-    if (!result.isValid()) {
+    const BloomPostprocessing::ChainOutputs chain = stage->appendBloomGraphPasses(
+        graph, inputs.color, facts.viewExtent, nullptr, ctx.viewId, prepared.bloom, outputs.extract, outputs.blur, outputs.composite);
+    if (!chain.composite.isValid()) {
         return FeatureError::MissingDependency;
     }
-    outputs.color = result;
+    outputs.color = chain.composite;
     return outputs;
 }
 

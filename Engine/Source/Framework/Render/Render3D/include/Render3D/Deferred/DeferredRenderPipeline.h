@@ -197,8 +197,11 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     void               beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
                                                      const DeferredPipelineRecipe::GraphOutputs& outputs,
-                                                     const SceneViewTask* task,
-                                                     uint64_t viewId) const;
+                                                     const RenderViewOutputDesc& declaredDesc,
+                                                     const std::array<std::shared_ptr<RenderTexture>, 4>& gBufferColors) const;
+    [[nodiscard]] std::array<std::shared_ptr<RenderTexture>, 4> gBufferColorTextures(
+        const RenderGraphExecutionResult& result,
+        const DeferredPipelineRecipe::GraphOutputs& outputs) const;
     void               refreshGBufferStageState();
     void               refreshViewStageState();
     [[nodiscard]] ViewOverlayStage::FrameInputs buildOverlayFrameInputs(

@@ -480,8 +480,14 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
                 *live.resolved,
                 familyPredecessor,
                 live.outputs)) {
+            // The family is atomic (D4): one View failing its prepare or
+            // append poisons the whole graph -- the passes already appended
+            // belong to a chain whose continuation is now undefined, so
+            // executing or publishing any View of this family would present a
+            // frame assembled from a half-built map. The graph dies here
+            // unexecuted; nothing of this family is published.
             liveBranches.pop_back();
-            continue;
+            return result;
         }
         familyPredecessor = graph.lastPassHandle();
     }
@@ -500,9 +506,9 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
     result.topology = graph.describeCompiledTopology(compiled);
 
     for (const ForwardFamilyViewBranch& branch : liveBranches) {
-        const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
         auto output = collectViewOutput(
-            execution, branch.frame.view.task, viewId, branch.stageCtx.viewExtent);
+            execution, branch.outputs,
+            branch.frame.view.task ? branch.frame.view.task->output : RenderViewOutputDesc{});
         output.targets = branch.targets.allocation;
         output.allocationGeneration = branch.targets.allocation ? branch.targets.allocation->generation : 0;
         result.views.push_back(std::move(output));
@@ -966,42 +972,34 @@ void ForwardRenderPipeline::exportGraphOutputs(RenderGraph& graph,
                                                uint64_t viewId) const
 {
     graph.exportTexture(outputs.opaque().color, makeViewGraphName(forward_graph_exports::viewColor, viewId));
+    // Depth stays part of the publication contract: consumers (viewport
+    // snapshot, editor world overlay) read it. C4a moved this export site and
+    // dropped this line with it; restored now that the handle is typed on the
+    // recipe's outputs.
+    graph.exportTexture(outputs.opaque().depth, makeViewGraphName(forward_graph_exports::viewDepth, viewId));
     graph.exportTexture(outputs.entityId().entityId, makeViewGraphName(forward_graph_exports::entityId, viewId));
 }
 
 RenderViewOutput ForwardRenderPipeline::collectViewOutput(const RenderGraphExecutionResult& result,
-                                                          const SceneViewTask* task,
-                                                          uint64_t viewId,
-                                                          Extent2D viewExtent) const
+                                                          const ForwardPipelineRecipe::GraphOutputs& outputs,
+                                                          const RenderViewOutputDesc& declaredDesc) const
 {
-    RenderViewOutput output;
-    if (task) {
-        output.desc = task->output;
-    }
-    output.desc.viewId = viewId != 0 ? viewId : (task ? task->desc.viewId : 0);
-    if (!output.desc.hasExtent()) {
-        output.desc.extent = viewExtent;
-    }
-    output.color    = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::viewColor, viewId));
-    output.depth    = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::viewDepth, viewId));
-    output.entityId = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::entityId, viewId));
-    // The colour-effect features are the same code Deferred runs, so their
-    // exports are read in one shared place instead of twice by copy.
-    const composition::SharedViewOutputs shared = composition::collectSharedViewOutputs(result, viewId);
-    output.bloomExtract   = shared.bloomExtract;
-    output.bloomBlur      = shared.bloomBlur;
-    output.bloomComposite = shared.bloomComposite;
-    output.display        = shared.display;
-    if (output.color) {
-        output.desc.colorFormat = output.color->getFormat();
-        if (!output.desc.hasExtent()) {
-            output.desc.extent = output.color->getExtent();
-        }
-    }
-    if (output.depth) {
-        output.desc.depthFormat = output.depth->getFormat();
-    }
-    return output;
+    // The one typed mapping (shared with Deferred in ViewOutputCollection.h):
+    // handles read back by identity, never by export name. Forward publishes
+    // what exportGraphOutputs registered; depth is not in that list, so
+    // Forward's published depth stays null (D4 finding -- recorded in the
+    // plan's progress notes; publishing it is a one-line export plus a
+    // decision about the editor overlay, not a rename).
+    const composition::ViewOutputHandles handles{
+        .color    = outputs.opaque().color,
+        .depth    = outputs.opaque().depth,
+        .entityId = outputs.entityId().entityId,
+        .display  = outputs.finalize().display,
+        .bloomExtract   = outputs.bloom().extract,
+        .bloomBlur      = outputs.bloom().blur,
+        .bloomComposite = outputs.bloom().composite,
+    };
+    return composition::collectViewOutput(result, handles, declaredDesc);
 }
 
 std::shared_ptr<ImageResource> ForwardRenderPipeline::getShadowDirectionalDepthResource() const

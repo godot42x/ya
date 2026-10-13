@@ -407,13 +407,18 @@ class YA_RENDER_GRAPH_API RenderGraphExecutionResult
 {
   private:
     std::unordered_map<std::string, std::shared_ptr<RenderTexture>> _exportedTextures;
+    /// The same exports keyed by the declaring handle, so the publisher reads
+    /// typed outputs back without round-tripping through names (D4).
+    std::vector<std::pair<RGTextureHandle, std::shared_ptr<RenderTexture>>> _exportedTextureByHandle;
 
   public:
-    void clear() { _exportedTextures.clear(); }
+    void clear();
     void bindExportedTexture(std::string name, std::shared_ptr<RenderTexture> texture);
+    void bindExportedTexture(RGTextureHandle handle, std::shared_ptr<RenderTexture> texture);
     [[nodiscard]] bool hasExportedTexture(std::string_view name) const;
     [[nodiscard]] std::shared_ptr<RenderTexture> getExportedTextureShared(std::string_view name) const;
     [[nodiscard]] RenderTexture* getExportedTexture(std::string_view name) const;
+    [[nodiscard]] std::shared_ptr<RenderTexture> getExportedTextureShared(RGTextureHandle handle) const;
 };
 
 class RenderGraph;

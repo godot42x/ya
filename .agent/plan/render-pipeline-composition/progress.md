@@ -818,3 +818,30 @@ targets() 与 append 同门控：disabled feature 的 target 不发布（SSAO of
 
 - M21 测试改走真实 recipe 的 request→prepare→append→publish 留 D4（D4 改 publication 路径时验收）。
 - ResolveInputs/GraphInputs 分型暂缓：当前 resolve 的 Inputs 全为空类型，分型收益是文档性的，触点扩散（12 签名 + 全部调用点）与收益不成比例，随 D5 处理（记录于 todo）。
+
+## 2026-10-13 — D4：typed 发布 + family 原子失败（M27/M13/M10/M21 verified）
+
+### 复审缺口的落实
+
+复审要求：GraphOutputs 到 RenderViewOutput 一处映射、不经 export 字符串往返；任一 View 的 prepare/append 失败使整个 family 不执行、不发布。本批落地：
+
+- **typed 读回通道**：`RenderGraphExecutionResult` 增加 `bindExportedTexture(RGTextureHandle)` / `getExportedTextureShared(handle)`（`RenderGraph.h/.cpp`）；executor 的 `captureExecutionResult` 在绑名字的同时绑 handle。名字仍导出（拓扑诊断），publish 路径零名字（grep 确认无 `getExportedTextureShared(makeViewGraphName(...))` 残留）。
+- **单一映射**：`Composition/ViewOutputCollection.h` 重写为 `ViewOutputHandles` + `collectViewOutput(result, handles, declaredDesc)`；两条管线各自的 `collectViewOutput` 只是把自家 GraphOutputs 适配成该结构（Deferred 另接 gBuffer/SSAO 调试字段）。旧 `SharedViewOutputs`/`collectSharedViewOutputs` 删除。
+- **handle 上浮到 producer**：`BloomFeature::GraphOutputs{color,extract,blur,composite}`——`BloomPostprocessing::ChainOutputs` 把终帧 blur 从 ping/pong 判定的局部决定上浮（旧「Pong 优先、fallback Ping」读回在奇数 blur pass 时会读到中点，这类错误现在结构上不可表达）；`ForwardOpaqueFeature::GraphOutputs.color+depth`。
+- **family 原子失败**：两条 `recordFamily` 任一 View 的 `prepareBindings`/`append` 失败即 `return`（graph 局部变量未执行即销毁；无 partial passes 执行、该 family 零发布）；其他 family 由 `recordViewFamilies` 的 per-family 调用天然不受影响。旧 `pop_back + continue`（partial passes 照常编译执行、只丢这一 View 的 publication）删除。
+
+### 侦察发现：C4a 引入的 Forward depth 导出回归（已修复）
+
+D4 侦察时按 `forward_graph_exports::viewDepth` 追读，发现 C4a（6679b00d）把 export 从 `ForwardFrameGraphPasses.cpp` 搬进 `ForwardRenderPipeline::exportGraphOutputs` 时丢了 depth：C4a 之前导出 color/depth/resolve/entityId 四个（6679b00d~1 的 ForwardFrameGraphPasses.cpp:383-388），之后只剩 color/entityId。后果是 `output.depth` 在 C4a 后恒 null——编辑器 viewport world overlay（`EditorViewportCompositor` 的 `bCanOverlay` 需要 depth）在 Forward 下静默失效。已恢复 depth 导出（`resolve` 无消费者，不恢复）；typed handle 已在 recipe outputs 上，修复是一行 export。
+
+### 测试与验证
+
+- `xmake r ya-render-3d-test` 235/235（43 suites）。新增：`PublishedOutputIsTheTypedReaderOfWhatTheRecipeReported`（executor.prepare → typed 读回 → 出版的就是 recipe 报告的 handle；未导出 handle 读回 null）、`AppendFailureKeepsTheWholeFamilyUnpublished`（失败注入契约：invalid input → MissingDependency）。`BloomPostprocessingTest` 迁到 `appendBloomChain`。
+- runtime（HelloMaterial）：Deferred / Forward / 切回 Deferred / bloom-off（`Automation.composition_bloom_off.json`）四帧对基线（`c3b-ssao-on` / `c4b-forward` / `c3b-bloom-off`）**逐像素 max diff 0**；恢复 depth 导出后三帧复测仍全 0。日志 validation 分布与 D1 基线逐值一致（09600=20，shadow-toggle 预存在，归灯光线），无 composition 失败。
+- 身份说明：`scene.get_active` 的 `(Play Mode)` 后缀即 runtime-play 会话；`set_render_pipeline` 的 `applied:false` 是"已排队、下帧生效"的既有语义（截图等待 2s 后取，切换已生效——Forward 帧与 Forward 基线 0 diff 可证）。
+
+### 保留 / 未做 / 偏离
+
+- 编辑器目标（`ya-game-editor`）构建被并行 GUI 重构阻塞（`EditorAnimationSetTab.cpp` 的 `clearChildren(tree, host)` vs 新签名 `clearChildren()`，他人工作区改动）；Forward depth 恢复的**编辑器活体**验证（overlay 从禁用变启用）未完成——runtime 侧四帧 0 diff 已排除画面回归，编辑器侧留作恢复后的跟进项。
+- `ya-testing` 全量被并行 `ScriptApiCore.cpp` 编译错误阻塞（rpg 线 WIP）；本线用 `ya-render-3d-test` closure 验收（覆盖全部 Render3D/Graph 触点）。
+- D4 未动 `resolveGraphOutputs` 之外的导出语义：`viewResolve`（MSAA resolve）无消费者，未恢复导出，记录待有需求时一并处理。

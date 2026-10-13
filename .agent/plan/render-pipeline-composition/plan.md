@@ -3,7 +3,7 @@
 > 建立 / 更新：2026-10-13
 > 状态（2026-10-13 复审后）：**重新打开**。C1–C5 已落地的结构删除与行为证据保留（旧 orchestrator/passes/resources/ViewResources bag 退出、target 单源、SSAO/Bloom 关闭无资源、共享 Bloom/EntityId/Finalize、M04 与 blur last-call 修复）；但 §1 的成功定义 1–4 未达成，且 §8 第一条停止条件已触发（设置多源、录制期重建 shadow 资源）。M01/M02/M05/M21 降回 in_progress。下一 checkpoint：**D1**（§10）。
 > 复审前的完成记录与 C 系列命名对应（C1 = "C1-foundation + 集成切片"）见 progress.md，不在此重复。
-> **D1 已落地**（2026-10-13）：两步安全点进 `prepareFrameRecord`，录制路径无设置应用、无 shadow 资源重建；M24/M02 verified。下一 checkpoint：D3。
+> **D1 已落地**（2026-10-13）：两步安全点进 `prepareFrameRecord`，录制路径无设置应用、无 shadow 资源重建；M24/M02 verified。**D3 已落地**：invocation tuple + fold（M26 verified，M01/M05 证据更新）。**D4 已落地**：typed 发布（GraphOutputs→RenderViewOutput 一处映射，publish 零 export 名字）+ family 原子失败（M27/M13/M10/M21 verified），并修复 C4a 丢失的 Forward depth 导出。下一 checkpoint：**D5**（feature 吸收 Stage，分批）。
 
 ## 1. 目标与成功定义
 

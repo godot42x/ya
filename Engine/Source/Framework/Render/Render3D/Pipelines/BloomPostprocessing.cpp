@@ -165,7 +165,7 @@ void BloomPostprocessing::writeComposite(DescriptorSetHandle set, IImageView* sc
     });
 }
 
-RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const RenderDesc& desc)
+BloomPostprocessing::ChainOutputs BloomPostprocessing::appendBloomChain(RenderGraph& graph, const RenderDesc& desc)
 {
     if (!desc.sceneHandle.isValid() || !desc.state) {
         return {};
@@ -175,6 +175,9 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
     }
 
     const bool bBloomEnabled = desc.state->bEnableBloom;
+
+    ChainOutputs chain;
+    chain.composite = desc.sceneHandle;
 
     const auto scene = desc.sceneHandle;
     const auto bloomDesc = RGTextureDesc{
@@ -220,8 +223,10 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
     }
 
     graph.exportTexture(output, makeViewGraphName(kOutputExportName, desc.viewId));
+    chain.composite = output;
     if (bloomExtract.has_value()) {
         graph.exportTexture(*bloomExtract, makeViewGraphName(kExtractExportName, desc.viewId));
+        chain.extract = *bloomExtract;
     }
     if (blurPing.has_value()) {
         graph.exportTexture(*blurPing, makeViewGraphName(kBlurPingExportName, desc.viewId));
@@ -357,7 +362,10 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
             rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
             rgCtx.endRendering();
         });
-    return output;
+    chain.blur = (blurPassCount == 0 || (blurPassCount % 2) == 0)
+        ? blurPong.value_or(RGTextureHandle{})
+        : blurPing.value_or(RGTextureHandle{});
+    return chain;
 }
 
 } // namespace ya

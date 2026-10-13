@@ -289,7 +289,9 @@ void RenderGraphExecutor::captureExecutionResult(const RGCompiledGraph& compiled
 {
     outResult.clear();
     for (const auto& exported : compiled.exportedTextures) {
-        outResult.bindExportedTexture(exported.name, _registry.resolveTextureShared(exported.texture));
+        auto texture = _registry.resolveTextureShared(exported.texture);
+        outResult.bindExportedTexture(exported.name, texture);
+        outResult.bindExportedTexture(exported.texture, std::move(texture));
     }
 }
 

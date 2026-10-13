@@ -311,6 +311,9 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         return opaqueOutputs.error();
     }
     outputs.opaque() = opaqueOutputs.value();
+    // The depth stream is the recipe's own import; it belongs in the typed
+    // outputs the collector reads, beside the color the opaque pass produced.
+    outputs.opaque().depth = depth;
 
     // ── Skybox ────────────────────────────────────────────────────────────
     if (ctx.stages->viewStage != nullptr) {

@@ -66,6 +66,12 @@ struct BloomFeature
     struct GraphOutputs
     {
         RGTextureHandle color{};
+        /// The chain's diagnostic midpoints, typed at their producer: the
+        /// collector reads these instead of export names, so an odd blur-pass
+        /// count can never answer with a midpoint as the final blur.
+        RGTextureHandle extract{};
+        RGTextureHandle blur{};
+        RGTextureHandle composite{};
     };
 
     [[nodiscard]] Resolved resolve(const Settings& settings, const Facts& facts, const Inputs& inputs) const;

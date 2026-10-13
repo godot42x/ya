@@ -1008,8 +1008,15 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
                 live.targets,
                 *resolvedView,
                 familyPredecessor)) {
+            // The family is atomic (D4): one View failing its prepare or
+            // append poisons the whole graph -- the passes already appended
+            // belong to a chain whose continuation is now undefined, so
+            // executing or publishing any View of this family would present a
+            // frame assembled from a half-built map. The graph dies here
+            // unexecuted; nothing of this family is published.
             liveBranches.pop_back();
-            continue;
+            ctx.cmdBuf->debugEndLabel();
+            return result;
         }
         familyPredecessor = graph.lastPassHandle();
     }
@@ -1028,9 +1035,10 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
     }
 
     for (const DeferredFamilyViewBranch& branch : liveBranches) {
-        const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
         auto output = collectViewOutput(
-            execution, branch.outputs, branch.frame.view.task, viewId);
+            execution, branch.outputs,
+            branch.frame.view.task ? branch.frame.view.task->output : RenderViewOutputDesc{},
+            gBufferColorTextures(execution, branch.outputs));
         output.targets = branch.targets.allocation;
         output.allocationGeneration = branch.targets.allocation ? branch.targets.allocation->generation : 0;
         result.views.push_back(std::move(output));
@@ -1165,47 +1173,43 @@ ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
 RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     const RenderGraphExecutionResult& result,
     const DeferredPipelineRecipe::GraphOutputs& outputs,
-    const SceneViewTask* task,
-    uint64_t viewId) const
+    const RenderViewOutputDesc& declaredDesc,
+    const std::array<std::shared_ptr<RenderTexture>, 4>& gBufferColors) const
 {
-    RenderViewOutput output;
-    if (task) {
-        output.desc = task->output;
-    }
-    output.desc.viewId = viewId != 0 ? viewId : (task ? task->desc.viewId : 0);
-    if (!output.desc.hasExtent()) {
-        output.desc.extent = task ? task->output.extent : Extent2D{};
-    }
-
-    output.color    = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::viewColor, viewId));
-    output.depth    = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId));
-    output.entityId = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::entityId, viewId));
-    output.ssao     = outputs.ssao().ao.isValid()
-        ? result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::ssao, viewId))
+    // The one typed mapping: every handle the recipe reported is read back by
+    // identity. Export names stay on the graph as diagnostics only.
+    composition::ViewOutputHandles handles{
+        .color    = outputs.lighting().sceneColor,
+        .depth    = outputs.gbuffer().depth,
+        .entityId = outputs.entityId().entityId,
+        .display  = outputs.finalize().display.isValid() ? outputs.finalize().display : RGTextureHandle{},
+        .bloomExtract   = outputs.bloom().extract,
+        .bloomBlur      = outputs.bloom().blur,
+        .bloomComposite = outputs.bloom().composite,
+    };
+    RenderViewOutput output = composition::collectViewOutput(result, handles, declaredDesc);
+    output.ssao = outputs.ssao().ao.isValid()
+        ? result.getExportedTextureShared(outputs.ssao().ao.get())
         : nullptr;
-    for (uint32_t attachmentIndex = 0;
-         attachmentIndex < std::size(deferred_graph_exports::gBufferColor);
-         ++attachmentIndex) {
-        output.gBufferColors[attachmentIndex] = result.getExportedTextureShared(
-            makeViewGraphName(deferred_graph_exports::gBufferColor[attachmentIndex], viewId));
-    }
-    // The colour-effect features are the same code Forward runs, so their
-    // exports are read in one shared place instead of twice by copy.
-    const composition::SharedViewOutputs shared = composition::collectSharedViewOutputs(result, viewId);
-    output.bloomExtract   = shared.bloomExtract;
-    output.bloomBlur      = shared.bloomBlur;
-    output.bloomComposite = shared.bloomComposite;
-    output.display        = outputs.finalize().display.isValid() ? shared.display : nullptr;
-    if (output.color) {
-        output.desc.colorFormat = output.color->getFormat();
-        if (!output.desc.hasExtent()) {
-            output.desc.extent = output.color->getExtent();
-        }
-    }
-    if (output.depth) {
-        output.desc.depthFormat = output.depth->getFormat();
-    }
+    output.gBufferColors = gBufferColors;
     return output;
+}
+
+std::array<std::shared_ptr<RenderTexture>, 4> DeferredRenderPipeline::gBufferColorTextures(
+    const RenderGraphExecutionResult&           result,
+    const DeferredPipelineRecipe::GraphOutputs& outputs) const
+{
+    const std::array<RGTextureHandle, 4> handles{
+        outputs.gbuffer().albedo,
+        outputs.gbuffer().normal,
+        outputs.gbuffer().orm,
+        outputs.gbuffer().shading,
+    };
+    std::array<std::shared_ptr<RenderTexture>, 4> textures{};
+    for (uint32_t attachmentIndex = 0; attachmentIndex < handles.size(); ++attachmentIndex) {
+        textures[attachmentIndex] = result.getExportedTextureShared(handles[attachmentIndex]);
+    }
+    return textures;
 }
 
 DeferredAttachmentFormats DeferredRenderPipeline::buildGBufferSnapshotFormats() const

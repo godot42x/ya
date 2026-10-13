@@ -169,9 +169,8 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
                                           const ForwardPipelineRecipe::GraphOutputs& outputs,
                                           uint64_t viewId) const;
     [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
-                                                     const SceneViewTask* task,
-                                                     uint64_t viewId,
-                                                     Extent2D viewExtent) const;
+                                                     const ForwardPipelineRecipe::GraphOutputs& outputs,
+                                                     const RenderViewOutputDesc& declaredDesc) const;
     void               syncShadowSettings();
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;

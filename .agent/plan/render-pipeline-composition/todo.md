@@ -56,6 +56,14 @@
 
 - [x] **C5f（M01/M02/M07/M10/M11 证据补齐）**：新增 `ResolvedPointersSurviveCopiesAndGrowthOfTheFrame`（M07 记录期指针稳定）、`FailedPreparationCannotAnswerWithThePreviousTicksFrame`（M10 失败不answer旧帧）；确认 12 feature 全部 static_assert 强制、typed refs 0 引用（M01）。**设计修正**：M01 的"add 存储容器"判定为不需要——显式 recipe 字段 + concept + M21 测试已满足"新增 feature 不改 core"，引入通用容器属为抽象而抽象。matrix 19/22 verified。
 
+## D 系列（复审重开）状态
+
+- [x] D1 安全点冻结（M24/M02 verified）。
+- [x] D3 invocation tuple + fold（M26 verified）。
+- [x] D4 typed 发布 + family 原子失败（M27/M13/M10/M21 verified）；顺带恢复 C4a 丢失的 Forward depth 导出。
+- [ ] D5 feature 吸收 Stage（M28）：分批 SSAO → Skybox/Overlay → Bloom/Finalize → Lighting/GBuffer → Shadow；concept 最终去掉 typename F::Stage。
+- [ ] D2 extraction 快照外部交付（M25，blocked 于 render-view-family）。
+
 ## 下一步（按优先级）
 
 - [x] **C4b（M18：Shadow 经 composition 接入）**：`ShadowFeature`（Composition/Features）成为两 recipe 的第一个条目——resolve 启用决策、prepareBindings 生产 `ShadowPreparedView` token、append 产出 `ShadowGraphOutputs`；Lighting 从 recipe 自己的 shadow 输出取 depth。两管线的 `_shadowStage->appendGraphPasses` 直调与 `prepareShadowPass` 退出，改为 `applyShadowFrameSettings()`（只应用 settings）。strategy 仍持 images/runtime/budget，算法与绑定不动。证据：trace 16-pass/13-pass 拓扑与 C3B 基线**逐条目一致**（shadow→GBuffer→…）；shadow on/off 差 31782 px 证明生效；Deferred/Forward 对基线逐像素 0 diff。
@@ -68,8 +76,8 @@
 - [ ] **待决定的测试 hook（C3 遗留缺口）**：entity-id/picking runtime hook（读取 `DeferredView.EntityId` 的 pick/readback；editor 已有 isolate readback 路径）与 direction gizmo 场景 hook（回归场景加一个 `DirectionComponent` 实体）。
 - [ ] **M12 余项**：`SurfaceImageTest` 侧编码回归未跑。
 - [ ] **M08 双 View runtime**：两 View 不同 SSAO payload/DS 互不覆盖；共享 frame/skinning 复用。
-- [ ] **M10 failure injection**：prepare/build/compile/execute 失败不发布部分新 family。
-- [ ] **M13 完整**：统一输出收集，不在 pipeline 侧按 feature 名称解析。
+- [x] **M10 failure injection**（D4）：recordFamily 原子失败（任一 View prepare/append 失败 → family 零执行零发布）+ 失败注入测试。
+- [x] **M13 完整**（D4）：统一输出收集 `ViewOutputCollection.h` typed 映射，publish 路径零 export 名字（names 仅拓扑诊断）。
 - [ ] **M23（跨线，已定性）**：perf 前后对照在本机不成立——基线与当前不可比（基线早于灯光线 `039570590`/`49d70331`；perf-baseline 线自己的 todo 已登记「R15a 后重采 Lights_*」），且本机有并行构建/运行。**顺带发现两条预先存在的状态**（非本线引入，逐值对照 C1i 基线日志证实）：① Lights_200 因不再截断而变慢、Lights_500 在 500 灯下 DEVICE_LOST（属灯光线 R15a 后续）；② Deferred registry 稳态 `replaced=21..23/rebound=23..25` 每 sync。建议转 perf-baseline / shadow-and-light 线处理。
 - [ ] **M08 / M22（跨线）**：双 View runtime 证据需要第二个 View 的声明入口（应用/编辑器侧），当前本线无法产生；同 label scope 的单测不能替代（plan 明写）。
 - [ ] **C5 余项**：skill 吸收（"如何新增一个 pass"进 render-arch，内容已在两个 recipe 头注释）；M19 的完整 runtime mutation trace。

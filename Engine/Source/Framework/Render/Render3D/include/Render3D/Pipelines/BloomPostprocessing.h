@@ -25,6 +25,17 @@ struct BloomPostprocessing
     static constexpr std::string_view kBlurPingExportName = "Bloom.BlurPing";
     static constexpr std::string_view kBlurPongExportName = "Bloom.BlurPong";
 
+    /// What one bloom chain appended, typed at the producer. `blur` is the
+    /// composite's own input -- the last blur pass's output, not a fixed
+    /// ping/pong side -- so a reader can never mistake a midpoint for the end
+    /// of the chain.
+    struct ChainOutputs
+    {
+        RGTextureHandle composite{};
+        RGTextureHandle extract{};
+        RGTextureHandle blur{};
+    };
+
     struct InitDesc
     {
         IRender*              render                = nullptr;
@@ -61,7 +72,7 @@ struct BloomPostprocessing
     void init(const InitDesc& initDesc);
     void shutdown();
     void beginFrame();
-    RGTextureHandle appendGraphPasses(RenderGraph& graph, const RenderDesc& desc);
+    [[nodiscard]] ChainOutputs appendBloomChain(RenderGraph& graph, const RenderDesc& desc);
     [[nodiscard]] stdptr<IDescriptorSetLayout> getExtractDSL() const { return _extractDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getBlurDSL() const { return _blurDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getCompositeDSL() const { return _compositeDSL; }

@@ -57,15 +57,15 @@ struct PostProcessingStage
     void     setBloomEnabled(bool enabled) { _state.bEnableBloom = enabled; }
     void     setToneMappingEnabled(bool enabled) { _state.bEnableToneMapping = enabled; }
     void     setToneMappingCurve(PostProcessingState::EToneMappingCurve curve) { _state.toneMappingCurve = curve; }
-    RGTextureHandle appendBloomGraphPasses(RenderGraph&   graph,
-                                           RGTextureHandle input,
-                                           Extent2D        inputExtent,
-                                           FrameContext*   ctx,
-                                           uint64_t        viewId = 0,
-                                           const BloomPassBindings& bloom = {},
-                                           RGTextureHandle bloomExtract = {},
-                                           RGTextureHandle bloomBlur = {},
-                                           RGTextureHandle bloomComposite = {});
+    BloomPostprocessing::ChainOutputs appendBloomGraphPasses(RenderGraph&   graph,
+                                                             RGTextureHandle input,
+                                                             Extent2D        inputExtent,
+                                                             FrameContext*   ctx,
+                                                             uint64_t        viewId = 0,
+                                                             const BloomPassBindings& bloom = {},
+                                                             RGTextureHandle bloomExtract = {},
+                                                             RGTextureHandle bloomBlur = {},
+                                                             RGTextureHandle bloomComposite = {});
     RGTextureHandle appendFinalizeGraphPasses(RenderGraph& graph, const FinalizePassParams& params);
     [[nodiscard]] bool                       isGradingEnabled() const { return bGradingEnabled; }
     [[nodiscard]] PostProcessingState&       getState() { return _state; }

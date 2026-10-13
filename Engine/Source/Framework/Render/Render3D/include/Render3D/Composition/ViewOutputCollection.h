@@ -1,9 +1,7 @@
 #pragma once
 
 #include "Graph/RenderGraphExecutor.h"
-#include "Render3D/Common/PostProcessingStage.h"
-#include "Render3D/Common/ViewGraphName.h"
-#include "Render3D/Pipelines/BloomPostprocessing.h"
+#include "Render3D/Common/RenderViewOutput.h"
 
 #include <cstdint>
 #include <memory>
@@ -11,53 +9,62 @@
 namespace ya::composition
 {
 
-/// The View outputs every composition publishes through shared (feature-owned)
-/// exports, read in one place.
+/// The one GraphOutputs → RenderViewOutput mapping (D4).
 ///
-/// The two pipelines keep their own vocabulary for their own passes ("Deferred
-/// View.Color" vs "ForwardView.Color"), because those names are the topology's
-/// diagnostics. But the color-effect features are the SAME code on both maps, so
-/// their export names are the same on both, and resolving them per-pipeline made
-/// two collectors agree by copy. This is the single reader of those names.
-struct SharedViewOutputs
+/// Every handle is read back typed, by the same RGTextureHandle the feature
+/// reported in its GraphOutputs -- never through an export name. Export names
+/// stay on the graph as topology diagnostics only. Two properties follow:
+/// - The ask and the answer are the same identity: a handle that was never
+///   exported answers null, and a handle the feature reported is read back
+///   without a string in between that could drift from it (D4 found Forward's
+///   depth handle was never exported at all, so its published depth is null;
+///   under names that read as "the lookup contract", under handles it reads as
+///   "this producer registered nothing", which is the truth).
+/// - Asking for the wrong side of a ping-pong chain is unspellable: the
+///   feature reports the chain's own final handle, so the old Pong-first
+///   fallback (which could answer with a midpoint blur when the pass count was
+///   odd) has no equivalent.
+///
+/// Each recipe adapts its own GraphOutputs into the small descriptor below;
+/// the mapping itself is single and shared.
+struct ViewOutputHandles
 {
-    std::shared_ptr<RenderTexture> bloomExtract;
-    std::shared_ptr<RenderTexture> bloomBlur;
-    std::shared_ptr<RenderTexture> bloomComposite;
-    std::shared_ptr<RenderTexture> display;
+    RGTextureHandle color{};
+    RGTextureHandle depth{};
+    RGTextureHandle entityId{};
+    RGTextureHandle display{};
+    RGTextureHandle bloomExtract{};
+    RGTextureHandle bloomBlur{};
+    RGTextureHandle bloomComposite{};
 };
 
-/// Read the shared outputs for one View out of an executed graph. Missing
-/// outputs stay null: a disabled feature exports nothing, and the caller's
-/// presence gates (bloom-off, finalize-off) already treat null as "not there".
-[[nodiscard]] inline SharedViewOutputs collectSharedViewOutputs(
-    const RenderGraphExecutionResult& result,
-    uint64_t                          viewId)
+/// Resolve one View's published output from the executed graph. Handles that
+/// were not exported (disabled feature) stay null; that is the same presence
+/// contract the name-based path had, now keyed by identity instead of string.
+[[nodiscard]] inline RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
+                                                        const ViewOutputHandles&          handles,
+                                                        const RenderViewOutputDesc&       declaredDesc)
 {
-    SharedViewOutputs outputs;
+    RenderViewOutput output;
+    output.desc    = declaredDesc;
+    output.color    = result.getExportedTextureShared(handles.color);
+    output.depth    = result.getExportedTextureShared(handles.depth);
+    output.entityId = result.getExportedTextureShared(handles.entityId);
+    output.display  = result.getExportedTextureShared(handles.display);
+    output.bloomExtract   = result.getExportedTextureShared(handles.bloomExtract);
+    output.bloomBlur      = result.getExportedTextureShared(handles.bloomBlur);
+    output.bloomComposite = result.getExportedTextureShared(handles.bloomComposite);
 
-    outputs.bloomExtract = result.getExportedTextureShared(
-        makeViewGraphName(BloomPostprocessing::kExtractExportName, viewId));
-    // The last blur pass alternates ping-pong sides; a 4-pass chain ends on Pong,
-    // an odd one on Ping. Ask for Pong first and fall back, which is what both
-    // pipelines did inline.
-    outputs.bloomBlur = result.getExportedTextureShared(
-        makeViewGraphName(BloomPostprocessing::kBlurPongExportName, viewId));
-    if (!outputs.bloomBlur) {
-        outputs.bloomBlur = result.getExportedTextureShared(
-            makeViewGraphName(BloomPostprocessing::kBlurPingExportName, viewId));
+    if (output.color) {
+        output.desc.colorFormat = output.color->getFormat();
+        if (!output.desc.hasExtent()) {
+            output.desc.extent = output.color->getExtent();
+        }
     }
-    outputs.bloomComposite = result.getExportedTextureShared(
-        makeViewGraphName(BloomPostprocessing::kOutputExportName, viewId));
-    // The display image is the finalize output, always: finalize is the pass
-    // that encodes the renderer's linear color, so it runs every frame and the
-    // display image never falls back to the raw color attachment. A fallback
-    // here is what let a presentation pass rescue an unencoded image by grading
-    // it itself, which double-graded the normal path.
-    outputs.display = result.getExportedTextureShared(
-        makeViewGraphName(PostProcessingStage::kOutputExportName, viewId));
-
-    return outputs;
+    if (output.depth) {
+        output.desc.depthFormat = output.depth->getFormat();
+    }
+    return output;
 }
 
 } // namespace ya::composition

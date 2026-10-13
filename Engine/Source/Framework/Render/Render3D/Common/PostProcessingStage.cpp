@@ -62,15 +62,15 @@ void PostProcessingStage::beginFrame()
     }
 }
 
-RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph,
-                                                            RGTextureHandle input,
-                                                            Extent2D        inputExtent,
-                                                            FrameContext*   ctx,
-                                                            uint64_t        viewId,
-                                                            const BloomPassBindings& bloom,
-                                                            RGTextureHandle bloomExtract,
-                                                            RGTextureHandle bloomBlur,
-                                                            RGTextureHandle bloomComposite)
+BloomPostprocessing::ChainOutputs PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph,
+                                                                              RGTextureHandle input,
+                                                                              Extent2D        inputExtent,
+                                                                              FrameContext*   ctx,
+                                                                              uint64_t        viewId,
+                                                                              const BloomPassBindings& bloom,
+                                                                              RGTextureHandle bloomExtract,
+                                                                              RGTextureHandle bloomBlur,
+                                                                              RGTextureHandle bloomComposite)
 {
     (void)ctx;
     if (!input.isValid() || inputExtent.width == 0 || inputExtent.height == 0) {
@@ -81,7 +81,7 @@ RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph
     // skipped: with grading off there is no bloom, so the input passes through
     // as itself rather than as an invalid handle.
     if (bGradingEnabled && _state.bEnableBloom && _bloomProcessor) {
-        return _bloomProcessor->appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
+        return _bloomProcessor->appendBloomChain(graph, BloomPostprocessing::RenderDesc{
             .sceneHandle  = input,
             .renderExtent = inputExtent,
             .state        = &_state,
@@ -93,7 +93,9 @@ RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph
         });
     }
 
-    return input;
+    BloomPostprocessing::ChainOutputs passthrough;
+    passthrough.composite = input;
+    return passthrough;
 }
 
 RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& graph, const FinalizePassParams& params)
