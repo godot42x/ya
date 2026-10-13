@@ -271,6 +271,45 @@ def marker_entity(entity_id: int, name: str, position: list[float]) -> dict:
     }
 
 
+def emitter_entity(entity_id: int, name: str, position: list[float], texture: str,
+                   props: dict | None = None) -> dict:
+    """A ParticleEmitterComponent on a Node3D (X1). Live particles are spawned
+    by a script; this only authors the emitter's look and behaviour."""
+    emitter: dict = {
+        "image": {
+            "bEnable": True,
+            "samplerConfig": {"addressMode": "ClampToEdge", "filterMode": "Linear"},
+            "textureRef": {"__base__": {"AssetRefBase": {"_path": texture}}},
+            "uvOffset": [0.0, 0.0],
+            "uvRotation": 0.0,
+            "uvScale": [1.0, 1.0],
+        },
+        "bEmitting": False,
+        "rate": 0.0,
+        "lifetime": 0.7,
+        "velocity": [0.0, 1.6],
+        "spread": 3.14159,
+        "gravity": [0.0, -3.0],
+        "sizeStart": 0.35,
+        "sizeEnd": 0.0,
+        "colorStart": [1.0, 0.85, 0.4, 1.0],
+        "colorEnd": [1.0, 0.4, 0.2, 0.0],
+        "layer": 0,
+        "sortOrder": 60,
+    }
+    if props:
+        emitter.update(props)
+    return {
+        "id": entity_id,
+        "name": name,
+        "components": {
+            "TransformComponent": {"_position": list(position), "_rotation": [0.0, 0.0, 0.0],
+                                   "_scale": [1.0, 1.0, 1.0]},
+            "ParticleEmitterComponent": emitter,
+        },
+    }
+
+
 def script_entity(entity_id: int, name: str, script: str, props: dict | None = None) -> dict:
     """An entity that only carries a script (no sprite): controllers, markers."""
     entry: dict = {"enabled": True, "scriptPath": script}
@@ -445,6 +484,9 @@ def build_fade_scene() -> dict:
         camera_entity(spawn, origin, script=None),
         script_entity(1004, "FadeDemo", "Content/Scripts/FadeDemo.lua"),
         script_entity(1005, "AudioDemo", "Content/Scripts/AudioDemo.lua"),
+        script_entity(1006, "ParticleDemo", "Content/Scripts/ParticleDemo.lua"),
+        emitter_entity(1010, "SparkEmitter", cell_world(origin, spawn[0], spawn[1], 0.5),
+                       "Content:Textures/Particles/star_07.png"),
         tilemap_entity(2000, "TilemapGround", TOWN_ATLAS, TOWN_TILESET, w, h, origin,
                        [layer("Ground", ground)]),
     ]
@@ -452,11 +494,34 @@ def build_fade_scene() -> dict:
             "layers": [ground]}
 
 
+def build_fx_scene() -> dict:
+    """A minimal scene for the X1 (particle) test: a tile floor, a camera, an
+    emitter, and a controller that bursts into it. No fade overlay or post look,
+    so a particle pixel is unambiguously a particle."""
+    w, h = 16, 12
+    origin = map_origin(w, h)
+    ground = [TOWN_GRASS + 1] * (w * h)
+    spawn = (w // 2, h // 2)
+    entities: list[dict] = [
+        camera_entity(spawn, origin, script=None),
+        script_entity(1006, "ParticleDemo", "Content/Scripts/ParticleDemo.lua"),
+        emitter_entity(1010, "SparkEmitter", cell_world(origin, spawn[0], spawn[1], 0.5),
+                       "Content:Textures/Particles/circle_05.png",
+                       {"velocity": [0.0, 0.6], "spread": 3.14, "gravity": [0.0, -1.0],
+                        "sizeStart": 0.5, "sizeEnd": 0.1, "lifetime": 1.2}),
+        tilemap_entity(2000, "TilemapGround", TOWN_ATLAS, TOWN_TILESET, w, h, origin,
+                       [layer("Ground", ground)]),
+    ]
+    return {"name": "FxScene", "width": w, "height": h, "entities": entities,
+            "layers": [ground], "widgets": []}
+
+
 def main() -> None:
     write_scene(ROOT / "Content/Scenes/Camp.scene.json", build_camp())
     write_scene(ROOT / "Content/Scenes/BattleRuins1.scene.json", build_battle_ruins1())
     write_scene(ROOT / "Content/Scenes/WorldText.scene.json", build_world_text_scene())
     write_scene(ROOT / "Content/Scenes/FadeScene.scene.json", build_fade_scene())
+    write_scene(ROOT / "Content/Scenes/FxScene.scene.json", build_fx_scene())
     print(f"Camp {CAMP_W}x{CAMP_H}, BattleRuins1 {BAT_W}x{BAT_H}, WorldText 16x12")
 
 

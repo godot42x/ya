@@ -6,6 +6,7 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "Scene2D/Sprite2DComponent.h"
 #include "Scene2D/Text2DComponent.h"
+#include "Scene2D/ParticleEmitterComponent.h"
 #include "Scene2D/TilemapComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/CameraComponent.h"
@@ -480,6 +481,47 @@ ScriptValue audioStopAllFn(const GameplayScriptContext& ctx, ScriptArgs args)
     return {};
 }
 
+// `particles.burst(entity[, count])`: spawn a one-shot burst on an entity that
+// carries a ParticleEmitterComponent. A missing entity or component is a no-op
+// (a scene may not have effects), matching the other gameplay calls.
+ScriptValue particlesBurstFn(const GameplayScriptContext& /*ctx*/, ScriptArgs args)
+{
+    if (args.empty() || args.size() > 2) {
+        throw ScriptError("expects particles.burst(entity) or particles.burst(entity, count)");
+    }
+    const auto* ref = script::scriptIf<ScriptRef>(args[0]);
+    if (ref == nullptr) {
+        throw ScriptError("expected an entity");
+    }
+    Entity* entity = script::entityOf(*ref);
+    if (!entity) {
+        return {};
+    }
+    ParticleEmitterComponent* emitter = entity->tryGetComponent<ParticleEmitterComponent>();
+    if (!emitter) {
+        return {};
+    }
+    const int count = args.size() > 1 ? static_cast<int>(script::scriptToInteger(args[1])) : 8;
+    emitter->spawnBurst(count);
+    return {};
+}
+
+// `particles.setEmitting(entity, on)`: toggle continuous emission on an entity.
+ScriptValue particlesSetEmittingFn(const GameplayScriptContext& /*ctx*/, ScriptArgs args)
+{
+    expectArgCount(args, 2);
+    const auto* ref = script::scriptIf<ScriptRef>(args[0]);
+    if (ref == nullptr) {
+        throw ScriptError("expected an entity");
+    }
+    if (Entity* entity = script::entityOf(*ref)) {
+        if (ParticleEmitterComponent* emitter = entity->tryGetComponent<ParticleEmitterComponent>()) {
+            emitter->bEmitting = script::scriptToBool(args[1]);
+        }
+    }
+    return {};
+}
+
 // `render.setLook{ ... }`: read-modify-write the pipeline's post-processing
 // state. Applied fields override; unset fields keep the current look, so a
 // script can raise only exposure without resetting bloom. No renderer (a
@@ -674,6 +716,8 @@ void registerGameplayScriptFunctions(GameplayScriptContext ctx)
     script::registerModuleFunction("audio", "stopMusic", [ctx](ScriptArgs args) { return audioStopMusicFn(ctx, args); });
     script::registerModuleFunction("audio", "setBus", [ctx](ScriptArgs args) { return audioSetBusFn(ctx, args); });
     script::registerModuleFunction("audio", "stopAll", [ctx](ScriptArgs args) { return audioStopAllFn(ctx, args); });
+    script::registerModuleFunction("particles", "burst", [ctx](ScriptArgs args) { return particlesBurstFn(ctx, args); });
+    script::registerModuleFunction("particles", "setEmitting", [ctx](ScriptArgs args) { return particlesSetEmittingFn(ctx, args); });
     script::registerModuleFunction("world", "destroyEntity", [ctx](ScriptArgs args) { return destroyEntityFn(ctx, args); });
     script::registerModuleFunction("world", "scriptOf", [ctx](ScriptArgs args) { return scriptOf(ctx, args); });
     script::registerModuleFunction("ui", "get", [ctx](ScriptArgs args) { return uiGet(ctx, args); });

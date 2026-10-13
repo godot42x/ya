@@ -15,8 +15,10 @@
 #include "Scene2D/Sprite2DComponent.h"
 #include "Scene2D/TilemapComponent.h"
 #include "Scene2D/Text2DComponent.h"
+#include "Scene2D/ParticleEmitterComponent.h"
 #include "Render3D/Common/TilemapExtraction.h"
 #include "Render3D/Common/Text2DExtraction.h"
+#include "Render3D/Common/ParticleExtraction.h"
 #include "Render/Resources/FontManager.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
@@ -158,6 +160,7 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
     extractSprites(input.scene, registry, outSnapshot);
     extractTilemaps(input.scene, registry, outSnapshot);
     extractText2D(input.scene, registry, outSnapshot);
+    extractParticles(input.scene, registry, outSnapshot);
     // Texel grid of the primary camera. Zoom is per view and is applied when
     // that view snaps its eye; this grid is the one every integer zoom shares.
     float texelStep = 0.0f;
@@ -328,6 +331,37 @@ void RenderFrameExtractor::extractText2D(Scene* scene, entt::registry& reg, Scen
             .lineWorldHeight = text.size,
         },
                                out.worldSprites);
+        for (size_t index = first; index < out.worldSprites.size(); ++index) {
+            tagCompanionFeatures(scene, reg, entity, out.worldSprites[index].features,
+                                 out.worldSprites[index].hostEntityId);
+        }
+    }
+}
+
+void RenderFrameExtractor::extractParticles(Scene* scene, entt::registry& reg, SceneSnapshot& out)
+{
+    for (const auto& [entity, emitter, transform] : reg.view<ParticleEmitterComponent, TransformComponent>().each()) {
+        if (emitter._particles.empty()) {
+            continue;
+        }
+        // Same "no substitute image" rule as a sprite: an unset or still-loading
+        // particle texture yields no candidates, never a placeholder.
+        if (!emitter.image.hasPath() || !emitter.image.textureRef.isLoaded()) {
+            continue;
+        }
+        const TextureBinding binding = slotToTextureBinding(emitter.image);
+        if (!binding.isValid()) {
+            continue;
+        }
+        TransformSystem::computeWorldMatrix(&transform);
+        const size_t first = out.worldSprites.size();
+        appendParticleCandidates(ParticleExtractionInput{
+            .emitter  = &emitter,
+            .world    = transform.getTransform(),
+            .entityId = static_cast<uint32_t>(entity),
+            .atlas    = &binding,
+        },
+                                 out.worldSprites);
         for (size_t index = first; index < out.worldSprites.size(); ++index) {
             tagCompanionFeatures(scene, reg, entity, out.worldSprites[index].features,
                                  out.worldSprites[index].hostEntityId);

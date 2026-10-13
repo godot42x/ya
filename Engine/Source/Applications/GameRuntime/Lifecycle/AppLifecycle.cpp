@@ -50,6 +50,7 @@
 
 #include "ECS/Systems/AnimationSystem.h"
 #include "Scene2D/SpriteAnimationSystem.h"
+#include "Scene2D/ParticleSystem.h"
 
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
@@ -345,6 +346,18 @@ void App::init(AppDesc ci)
     };
     spriteAnimation->init();
     app._systems.emplace_back(spriteAnimation, ESystemTickGroup::Simulation);
+    auto particleSystem = ya::makeShared<ParticleSystem>();
+    particleSystem->_sceneProvider = [&app]() -> Scene*
+    {
+        return app.getSceneServices().getActiveScene();
+    };
+    // Live particles are simulation state; only a running game accumulates them.
+    particleSystem->_tickPolicy = [&app]()
+    {
+        return app.isRuntimeMode() || app.isSimulationMode();
+    };
+    particleSystem->init();
+    app._systems.emplace_back(particleSystem, ESystemTickGroup::Simulation);
     auto sys5 = ya::makeShared<LinkageFramework>();
     // Light billboard policy is injected here (Host owns the config source);
     // the adapter never reaches Host/Config.

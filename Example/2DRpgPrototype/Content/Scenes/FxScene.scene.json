@@ -1,0 +1,235 @@
+{
+  "name": "FxScene",
+  "entities": [
+    {
+      "id": 1001,
+      "name": "Camera",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            0.5,
+            0.5,
+            24.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "CameraComponent": {
+          "bPrimary": true,
+          "_projection": "Orthographic",
+          "_orthoHalfHeight": 8.0,
+          "_pixelPerfect": true,
+          "_pixelsPerUnit": 16.0,
+          "_referenceHeightPx": 192.0,
+          "_fov": 45.0,
+          "_aspectRatio": 1.7777778,
+          "_nearClip": 0.1,
+          "_farClip": 100.0,
+          "_fixedAspectRatio": false,
+          "_distance": 24.0,
+          "_focusPoint": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "id": 1006,
+      "name": "ParticleDemo",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "LuaScriptComponent": {
+          "scripts": [
+            {
+              "enabled": true,
+              "scriptPath": "Content/Scripts/ParticleDemo.lua"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 1010,
+      "name": "SparkEmitter",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "ParticleEmitterComponent": {
+          "image": {
+            "bEnable": true,
+            "samplerConfig": {
+              "addressMode": "ClampToEdge",
+              "filterMode": "Linear"
+            },
+            "textureRef": {
+              "__base__": {
+                "AssetRefBase": {
+                  "_path": "Content:Textures/Particles/circle_05.png"
+                }
+              }
+            },
+            "uvOffset": [
+              0.0,
+              0.0
+            ],
+            "uvRotation": 0.0,
+            "uvScale": [
+              1.0,
+              1.0
+            ]
+          },
+          "bEmitting": false,
+          "rate": 0.0,
+          "lifetime": 1.2,
+          "velocity": [
+            0.0,
+            0.6
+          ],
+          "spread": 3.14,
+          "gravity": [
+            0.0,
+            -1.0
+          ],
+          "sizeStart": 0.5,
+          "sizeEnd": 0.1,
+          "colorStart": [
+            1.0,
+            0.85,
+            0.4,
+            1.0
+          ],
+          "colorEnd": [
+            1.0,
+            0.4,
+            0.2,
+            0.0
+          ],
+          "layer": 0,
+          "sortOrder": 60
+        }
+      }
+    },
+    {
+      "id": 2000,
+      "name": "TilemapGround",
+      "components": {
+        "TransformComponent": {
+          "_position": [
+            -8.0,
+            -6.0,
+            0.0
+          ],
+          "_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "_scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "TilemapComponent": {
+          "tileset": {
+            "__base__": {
+              "AssetRefBase": {
+                "_path": "Content:Tilesets/town.yatileset.json"
+              }
+            }
+          },
+          "cellSize": [
+            1.0,
+            1.0
+          ],
+          "width": 16,
+          "height": 12,
+          "layers": [
+            {
+              "name": "Ground",
+              "zOffset": 0.0,
+              "cells": [
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+      ]
+            }
+          ],
+          "layer": 0
+        }
+      }
+    }
+  ],
+  "nodeTree": {
+    "name": "scene_root",
+    "children": [
+      {
+        "name": "Camera",
+        "entityRef": 1001
+      },
+      {
+        "name": "ParticleDemo",
+        "entityRef": 1006
+      },
+      {
+        "name": "SparkEmitter",
+        "entityRef": 1010
+      },
+      {
+        "name": "TilemapGround",
+        "entityRef": 2000
+      }
+    ]
+  },
+  "widgetEntries": []
+}

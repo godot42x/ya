@@ -78,6 +78,8 @@ struct RenderFrameExtractor
     static void extractTilemaps(Scene* scene, entt::registry& reg, SceneSnapshot& out);
     /// World-space text: one sprite candidate per glyph (WT1).
     static void extractText2D(Scene* scene, entt::registry& reg, SceneSnapshot& out);
+    /// Live particles: one sprite candidate per particle (X1).
+    static void extractParticles(Scene* scene, entt::registry& reg, SceneSnapshot& out);
     static void prepareViewLights(const ViewPrepareInput& input, RenderFrameData& out);
     static int32_t registerSkinningPalette(DrawItemExtractionContext& ctx, entt::entity entity, Mesh* mesh);
     static void extractDrawItems(DrawItemExtractionContext& ctx);

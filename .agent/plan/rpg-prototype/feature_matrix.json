@@ -161,16 +161,24 @@
       "id": "particles",
       "wave": "C",
       "phase": "X1",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: hit sparks, magic bolts, heal light, camp torches/dust",
       "engine_gap": "N3 no particle system at all",
       "plan": "ya-particles target; .yaparticle.json asset; ParticleEmitterComponent; CPU sim -> existing 2D instanced path (no new pass); neutral-layer particles.emit / emitter:play/stop",
-      "evidence": [],
+      "evidence": [
+        "Scene2D/ParticleEmitterComponent: CPU particle pool + emission/burst/gravity/spread/size+color curves; update() advances the pool",
+        "Scene2D/ParticleSystem: registered in the Simulation group with a tick policy (only a running game accumulates particles)",
+        "Render3D/Common/ParticleExtraction: each live particle -> one WorldSpriteCandidate on the existing sprite pass (no particle pass, no GPU buffer)",
+        "GameRuntime extractParticles + world.spawnSprite-compatible TextureSlot; scripts: particles.burst(entity[,count]) / particles.setEmitting(entity,on)",
+        "Script/automation/2d-rpg/particles.py: FxScene emitter bursts ~1800-3200 added pixels per frame over the grass baseline",
+        "Engine/Saved/Automation/particles/particles_4.png"
+      ],
       "tests": [
         "ParticleAssetRoundTrips",
         "EmitSpawnsCountedParticles",
         "ParticlesDieAfterLifetime"
-      ]
+      ],
+      "verified": "2026-10-13"
     },
     {
       "id": "physics2d_triggers",

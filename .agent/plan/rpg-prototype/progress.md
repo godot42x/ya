@@ -260,3 +260,19 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
   `click.ogg` 0.10s（单声道 44.1k）解码成功；按确认键触发 `audio.play`。
 - 未完成 / 待验：曲子 crossfade 的实机验收（引擎实现了 `playMusic/stopMusic(seconds)`，但还没有内容曲目；
   等拿到/生成一首 BGM 再验）；`AudioSourceComponent`（场景里挂音频源）留到有需求时加（脚本 API 已够用）。
+
+## 2026-10-13 — X1：粒子子系统
+
+- 目标：命中火花、魔法弹、治疗光、火把/尘土等 2D 特效。
+- 引擎改动（不新增 pass）：
+  - `Scene2D/ParticleEmitterComponent`：CPU 粒子池（`update` 做发射/积分/回收），字段 `image/rate/lifetime/
+    velocity/spread/gravity/sizeStart..End/colorStart..End/layer/sortOrder/bYSort`；`spawnBurst(count)` 一键爆发；
+    确定性 RNG（seed）让测试可复现。
+  - `Scene2D/ParticleSystem`：Simulation 组，tick policy 只在运行中的游戏累积（编辑态不动）。
+  - `Render3D/Common/ParticleExtraction`：每个活粒子 → 一个 `WorldSpriteCandidate`，**复用精灵 pass**
+    （无独立粒子 pass、无跨帧 GPU buffer）。位置是组件局部量，随实体世界矩阵走。
+  - `world`/脚本面：`particles.burst(entity[,count])`、`particles.setEmitting(entity, on)`（中立层）。
+- 途中发现：Kenney Particle Pack 的贴图是**预乘 alpha**（RGB≈A），配上精灵 pass 的 straight-alpha 混合，
+  近距离看会偏白 —— 视觉上可接受（发光感），但要注意别当 bug；要纯色就用非预乘素材。
+- 验证：`Script/automation/2d-rpg/particles.py`（FxScene 的 SparkEmitter 每帧增加约 1800–3200 个非背景像素，
+  基于「无粒子的基线帧」做差）；截图 `Engine/Saved/Automation/particles/particles_4.png` 显示橙色圆形粒子爆发并淡出。
