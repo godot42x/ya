@@ -47,6 +47,7 @@ struct ICommandBuffer;
 struct IRenderSurfaceContext;
 struct IWorldScriptRuntime;
 struct JSScriptingSystem;
+struct Physics2DSystem;
 struct FProjectDescriptor;
 struct AppRenderState;
 struct FFrameSubmission;
@@ -168,6 +169,9 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
 
     IWorldScriptRuntime* _luaScriptingSystem = nullptr;
     JSScriptingSystem*  _jsScriptingSystem  = nullptr;
+    /// The 2D physics system, for the gameplay `physics2D.*` script surface.
+    /// Owned by `_systems`; this is a non-owning handle.
+    Physics2DSystem* _physics2D = nullptr;
 
   public:
     App();

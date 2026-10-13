@@ -516,12 +516,87 @@ def build_fx_scene() -> dict:
             "layers": [ground], "widgets": []}
 
 
+def body_entity(entity_id: int, name: str, position: list[float], body_type: str,
+                shape: str, size: list[float], *, sensor: bool = False,
+                gravity_scale: float = 1.0, fixed_rotation: bool = False,
+                texture: str | None = None, stats: dict | None = None) -> dict:
+    """A 2D body (P1): RigidBody2DComponent + Collider2DComponent on a Node3D.
+    `body_type` is Static/Kinematic/Dynamic; `shape` is Box/Circle; `size` is
+    half-extents (Box) or radius (Circle, x)."""
+    components: dict = {
+        "TransformComponent": {"_position": list(position), "_rotation": [0.0, 0.0, 0.0],
+                               "_scale": [1.0, 1.0, 1.0]},
+        "RigidBody2DComponent": {
+            "type": body_type,
+            "gravityScale": gravity_scale,
+            "fixedRotation": fixed_rotation,
+        },
+        "Collider2DComponent": {
+            "shape": shape,
+            "size": list(size),
+            "offset": [0.0, 0.0],
+            "bSensor": sensor,
+            "friction": 0.4,
+            "restitution": 0.0,
+            "categoryBits": 1,
+            "maskBits": 65535,
+        },
+    }
+    if texture:
+        components["Sprite2DComponent"] = {
+            "bVisible": True,
+            "image": {
+                "bEnable": True,
+                "samplerConfig": {"addressMode": "ClampToEdge", "filterMode": "Nearest"},
+                "textureRef": {"__base__": {"AssetRefBase": {"_path": texture}}},
+                "uvOffset": [0.0, 0.0],
+                "uvRotation": 0.0,
+                "uvScale": [1.0, 1.0],
+            },
+            "size": [size[0] * 2, size[1] * 2] if shape == "Box" else [size[0] * 2, size[0] * 2],
+            "uvRect": [0.0, 0.0, 1.0, 1.0],
+            "tint": [1.0, 1.0, 1.0, 1.0],
+            "layer": 0,
+            "sortOrder": 0,
+            "bYSort": True,
+        }
+    return {"id": entity_id, "name": name, "components": components}
+
+
+def build_physics_scene() -> dict:
+    """A minimal scene for the P1 (2D physics) test: a static floor, a dynamic
+    crate above it, a sensor pressure plate under the crate, and a controller."""
+    w, h = 16, 12
+    origin = map_origin(w, h)
+    ground = [TOWN_GRASS + 1] * (w * h)
+    spawn = (w // 2, h // 2)
+    entities: list[dict] = [
+        camera_entity(spawn, origin, script=None),
+        script_entity(1007, "PhysicsDemo", "Content/Scripts/PhysicsDemo.lua"),
+        # Floor: a static box across the bottom of the middle.
+        body_entity(1100, "Floor", cell_world(origin, spawn[0], 2, 0.0), "Static", "Box",
+                    [5.0, 0.3], texture="Content:Textures/white.png"),
+        # Pressure plate: a sensor resting on the floor.
+        body_entity(1101, "Plate", cell_world(origin, spawn[0], 3, 0.02), "Static", "Box",
+                    [0.5, 0.1], sensor=True, texture="Content:Textures/digits.png"),
+        # Crate: a dynamic box above the plate; it falls and lands on the floor.
+        body_entity(1102, "Crate", cell_world(origin, spawn[0], 8, 0.05), "Dynamic", "Box",
+                    [0.4, 0.4], gravity_scale=1.0, fixed_rotation=True,
+                    texture="Content:Textures/white.png"),
+        tilemap_entity(2000, "TilemapGround", TOWN_ATLAS, TOWN_TILESET, w, h, origin,
+                       [layer("Ground", ground)]),
+    ]
+    return {"name": "PhysicsScene", "width": w, "height": h, "entities": entities,
+            "layers": [ground], "widgets": []}
+
+
 def main() -> None:
     write_scene(ROOT / "Content/Scenes/Camp.scene.json", build_camp())
     write_scene(ROOT / "Content/Scenes/BattleRuins1.scene.json", build_battle_ruins1())
     write_scene(ROOT / "Content/Scenes/WorldText.scene.json", build_world_text_scene())
     write_scene(ROOT / "Content/Scenes/FadeScene.scene.json", build_fade_scene())
     write_scene(ROOT / "Content/Scenes/FxScene.scene.json", build_fx_scene())
+    write_scene(ROOT / "Content/Scenes/PhysicsScene.scene.json", build_physics_scene())
     print(f"Camp {CAMP_W}x{CAMP_H}, BattleRuins1 {BAT_W}x{BAT_H}, WorldText 16x12")
 
 

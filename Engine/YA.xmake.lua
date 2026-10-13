@@ -35,6 +35,7 @@ if ya_profile ~= "gui" then
         , "sol2"
         , "glad"
         , "joltphysics v5.5.0"
+        , "box2d v3.1.1"
         , "quickjs-ng v0.15.1"
     )
 end

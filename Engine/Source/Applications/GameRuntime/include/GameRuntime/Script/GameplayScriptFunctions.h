@@ -16,6 +16,7 @@ struct GameUIHost;
 struct IWorldScriptRuntime;
 struct PostProcessingState;
 class AudioSystem;
+struct Physics2DSystem;
 
 /// Injected by the host when gameplay module functions are registered.
 /// The functions close over this; they do not look up `App::get()`.
@@ -42,6 +43,8 @@ struct GameplayScriptContext
     std::function<void(const std::function<void(PostProcessingState&)>&)> mutatePostProcessing;
     /// `audio.*`. Null (or an unavailable device) makes the audio calls no-ops.
     AudioSystem* audio = nullptr;
+    /// `physics2D.*` and entity body accessors. Null makes those calls no-ops.
+    Physics2DSystem* physics2D = nullptr;
 };
 
 /// One read of the presented frame: pixel size from `presentedPixels`, primary

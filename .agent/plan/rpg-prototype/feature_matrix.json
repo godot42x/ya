@@ -184,17 +184,25 @@
       "id": "physics2d_triggers",
       "wave": "C",
       "phase": "P1",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: push-block onto pressure plate, spike hazard zone, moving platform, knockback",
       "engine_gap": "N4 Jolt is 3D box/sphere only; no triggers, no script callbacks",
       "plan": "ya-physics-2d target on Box2D (xmake-repo box2d-v3.1.1); RigidBody2DComponent + Collider2DComponent; Physics2DSystem fixed step writing Transform x/y; contact events into ECS; neutral-layer physics2D.overlapCircle/raycast2D, body:applyImpulse",
-      "evidence": [],
+      "evidence": [
+        "New target ya-physics-2d on Box2D v3.1.1 (separate from the 3D Jolt ya-physics)",
+        "Physics2DComponents.h: RigidBody2DComponent (Static/Kinematic/Dynamic) + Collider2DComponent (Box/Circle/sensor/filter)",
+        "Physics2DSystem: fixed 60Hz step, writes body x/y back into TransformComponent (z untouched), collects contact begin/end into contacts()",
+        "Script surface: physics2D.impulse/teleport/velocity; component fields reflected",
+        "Script/automation/2d-rpg/physics2d.py: crate falls from y=2.09 to rest at y=-2.80 (= floor top -3.2 + half 0.4)"
+      ],
       "tests": [
         "BoxBodiesSettleOnAGround",
         "SensorFiresBeginAndEnd",
         "KinematicMoverPushesADynamicBox",
         "RaycastHitsTheNearestBox"
-      ]
+      ],
+      "verified": "2026-10-13",
+      "notes": "Push-blocks, pressure plates and moving platforms are supported by the API (applyImpulse/setBodyPosition/contacts) but their in-game cases land with Wave D content (C1)."
     },
     {
       "id": "camera_zoom_shake",

@@ -51,6 +51,7 @@
 #include "ECS/Systems/AnimationSystem.h"
 #include "Scene2D/SpriteAnimationSystem.h"
 #include "Scene2D/ParticleSystem.h"
+#include "Physics2D/Physics2DSystem.h"
 
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
@@ -392,6 +393,13 @@ void App::init(AppDesc ci)
     sysPhysics->setAppStateChangedSource(&app.onAppStateChanged);
     sysPhysics->init();
     app._systems.emplace_back(sysPhysics, ESystemTickGroup::Simulation);
+    // 2D physics: a separate world (Box2D) for the top-down 2D gameplay line.
+    auto sysPhysics2D = ya::makeShared<Physics2DSystem>();
+    sysPhysics2D->setSceneManager(app.getSceneServices().getSceneManager());
+    sysPhysics2D->setAppStateChangedSource(&app.onAppStateChanged);
+    sysPhysics2D->init();
+    app._systems.emplace_back(sysPhysics2D, ESystemTickGroup::Simulation);
+    app._physics2D = sysPhysics2D.get();
     app._deleter.push("Systems", [&app](void*)
                       {
         for (auto& entry : app._systems) {
@@ -442,6 +450,7 @@ void App::init(AppDesc ci)
             render.setRenderPipelineSettings(settings);
         },
         .audio = &AudioSystem::get(),
+        .physics2D = app._physics2D,
     };
     registerGameplayScriptFunctions(scriptContext);
     // The module registry outlives this App. Pushed before the Lua deleter so

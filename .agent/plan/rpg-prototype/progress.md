@@ -276,3 +276,24 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
   近距离看会偏白 —— 视觉上可接受（发光感），但要注意别当 bug；要纯色就用非预乘素材。
 - 验证：`Script/automation/2d-rpg/particles.py`（FxScene 的 SparkEmitter 每帧增加约 1800–3200 个非背景像素，
   基于「无粒子的基线帧」做差）；截图 `Engine/Saved/Automation/particles/particles_4.png` 显示橙色圆形粒子爆发并淡出。
+
+## 2026-10-13 — P1：2D 物理 / 触发器（Box2D）
+
+- 目标：推箱、压力板、尖刺危险区、移动平台、击退。
+- 引擎改动（新 target `ya-physics-2d`，与 3D 的 `ya-physics` 分开）：
+  - `Physics2D/Physics2DComponents.h`：`RigidBody2DComponent`（Static/Kinematic/Dynamic、
+    gravityScale、fixedRotation、linearDamping）+ `Collider2DComponent`（Box/Circle、offset、
+    bSensor、friction/restitution、category/mask）。
+  - `Physics2D/Physics2DSystem`：Box2D v3 world，固定 60Hz 步进；每步把 body 的 x/y 写回
+    `TransformComponent`（**z 不动**）；接触事件收集进 `contacts()`（sensor 触发靠这个）。
+    场景/app 生命周期事件驱动 body 清理（与 3D 系统同款）。
+  - 脚本面（中立层）：`physics2D.impulse(entity, vx, vy)`、`physics2D.teleport(entity, x, y)`、
+    `physics2D.velocity(entity)`；组件字段（type/size/bSensor…）反射后脚本可读写。
+  - 接线：`Source.xmake.lua` 引入 target；`YA.xmake.lua` 加 `box2d v3.1.1`；GameRuntime 依赖并
+    注册系统、App 暴露 `_physics2D` 供脚本函数用。
+- 途中发现（Box2D v3.1.1 API 与旧直觉不同）：`friction/restitution` 在 `b2ShapeDef::material`
+  而不是直接字段；接触事件的 shape 字段叫 `shapeIdA/shapeIdB`；碰撞过滤在 `shapeDef.filter`。
+- 验证：`Script/automation/2d-rpg/physics2d.py` —— 动态箱子从 y=2.09 落到 y=-2.80 停住
+  （= 地板顶 -3.2 + 箱子半高 0.4，既没穿地也没悬停）。
+- 未完成 / 待验：推箱（kinematic 推 dynamic）、压力板触发（sensor 接触读 `contacts()`）、移动平台 —— 系统与
+  组件都已支持（`applyImpulse`/`setBodyPosition`/`contacts()`），等第二场战斗内容（Wave D C1）一起做用例。

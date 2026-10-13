@@ -24,6 +24,9 @@ target("ya-game-runtime")
     -- Gameplay audio: the host opens the device at startup and exposes
     -- `audio.*` to scripts. The audio interface is script-neutral.
     add_deps("ya-audio")
+    -- 2D physics for the top-down gameplay line (Box2D); the host owns the
+    -- system and exposes `physics2D.*` to scripts.
+    add_deps("ya-physics-2d")
     -- Host TUs use the Vulkan backend types directly (screenshot readback,
     -- frame loop); the include root is exposed by ya-rhi-vulkan
     -- (backend-common no longer re-exports it).

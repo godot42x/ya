@@ -7,6 +7,8 @@
 #include "Scene2D/Sprite2DComponent.h"
 #include "Scene2D/Text2DComponent.h"
 #include "Scene2D/ParticleEmitterComponent.h"
+#include "Physics2D/Physics2DComponents.h"
+#include "Physics2D/Physics2DSystem.h"
 #include "Scene2D/TilemapComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/CameraComponent.h"
@@ -481,6 +483,64 @@ ScriptValue audioStopAllFn(const GameplayScriptContext& ctx, ScriptArgs args)
     return {};
 }
 
+// `physics2D.impulse(entity, vx, vy)`: a linear impulse (a shove, a knockback).
+ScriptValue physics2DImpulseFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 3);
+    if (!ctx.physics2D) {
+        return {};
+    }
+    const auto* ref = script::scriptIf<ScriptRef>(args[0]);
+    if (ref == nullptr) {
+        throw ScriptError("expected an entity");
+    }
+    if (Entity* entity = script::entityOf(*ref)) {
+        ctx.physics2D->applyImpulse(static_cast<uint32_t>(entity->getHandle()),
+                                    {static_cast<float>(script::scriptToNumber(args[1])),
+                                     static_cast<float>(script::scriptToNumber(args[2]))});
+    }
+    return {};
+}
+
+// `physics2D.teleport(entity, x, y)`: move a body at once (a moving platform's
+// next waypoint, a scripted placement).
+ScriptValue physics2DTeleportFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 3);
+    if (!ctx.physics2D) {
+        return {};
+    }
+    const auto* ref = script::scriptIf<ScriptRef>(args[0]);
+    if (ref == nullptr) {
+        throw ScriptError("expected an entity");
+    }
+    if (Entity* entity = script::entityOf(*ref)) {
+        ctx.physics2D->setBodyPosition(static_cast<uint32_t>(entity->getHandle()),
+                                       {static_cast<float>(script::scriptToNumber(args[1])),
+                                        static_cast<float>(script::scriptToNumber(args[2]))});
+    }
+    return {};
+}
+
+// `physics2D.velocity(entity)` -> Vec2, or nil without a body.
+ScriptValue physics2DVelocityFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 1);
+    if (!ctx.physics2D) {
+        return {};
+    }
+    const auto* ref = script::scriptIf<ScriptRef>(args[0]);
+    if (ref == nullptr) {
+        throw ScriptError("expected an entity");
+    }
+    Entity* entity = script::entityOf(*ref);
+    if (!entity) {
+        return {};
+    }
+    const glm::vec2 v = ctx.physics2D->bodyVelocity(static_cast<uint32_t>(entity->getHandle()));
+    return script::scriptMake(v);
+}
+
 // `particles.burst(entity[, count])`: spawn a one-shot burst on an entity that
 // carries a ParticleEmitterComponent. A missing entity or component is a no-op
 // (a scene may not have effects), matching the other gameplay calls.
@@ -718,6 +778,9 @@ void registerGameplayScriptFunctions(GameplayScriptContext ctx)
     script::registerModuleFunction("audio", "stopAll", [ctx](ScriptArgs args) { return audioStopAllFn(ctx, args); });
     script::registerModuleFunction("particles", "burst", [ctx](ScriptArgs args) { return particlesBurstFn(ctx, args); });
     script::registerModuleFunction("particles", "setEmitting", [ctx](ScriptArgs args) { return particlesSetEmittingFn(ctx, args); });
+    script::registerModuleFunction("physics2D", "impulse", [ctx](ScriptArgs args) { return physics2DImpulseFn(ctx, args); });
+    script::registerModuleFunction("physics2D", "teleport", [ctx](ScriptArgs args) { return physics2DTeleportFn(ctx, args); });
+    script::registerModuleFunction("physics2D", "velocity", [ctx](ScriptArgs args) { return physics2DVelocityFn(ctx, args); });
     script::registerModuleFunction("world", "destroyEntity", [ctx](ScriptArgs args) { return destroyEntityFn(ctx, args); });
     script::registerModuleFunction("world", "scriptOf", [ctx](ScriptArgs args) { return scriptOf(ctx, args); });
     script::registerModuleFunction("ui", "get", [ctx](ScriptArgs args) { return uiGet(ctx, args); });
