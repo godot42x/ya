@@ -38,16 +38,11 @@ MEMORIES_INDEX = os.path.join(MEMORIES, "AGENTS.md")
 MAX_LINES = 300
 MAX_BYTES = 32 * 1024
 
-# Files exempt from the size budget until their batch lands. Keep this list
-# shrinking; each entry is a debt, not a permission. Exempt entries are still
-# reported on every run as warnings, but they do not fail the build - otherwise
-# the guard could never go green before the debt is paid, and an always-red
-# check gets ignored. Batch A3 pays these down; the list must then empty.
-SIZE_EXEMPT = {
-    "skills/gui-framework/SKILL.md": "A3 pending",
-    "skills/ya-build/SKILL.md": "A3 follow-on",
-    "skills/render-arch/SKILL.md": "A3 follow-on",
-}
+# Files exempt from the size budget. Empty as of 2026-10-13 (batch A3 paid the
+# debt down). Keep it empty: an entry here is a debt, not a permission. Exempt
+# entries are still reported as warnings but do not fail the build, because an
+# always-red check gets ignored; the fix is to split the file, not to add a row.
+SIZE_EXEMPT: dict[str, str] = {}
 
 # Directories that are historical records: links and paths there may be stale.
 EXEMPT_PREFIXES = ("plan/",)

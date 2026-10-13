@@ -48,6 +48,7 @@ xmake project -k compile_commands
 
 - 构建、目标、编译、shader 生成、测试：`./.agent/skills/ya-build/SKILL.md`
 - GUI 框架（WidgetTree/控件/布局契约/Render2D pass slot/GUI host 诊断与 teardown）：`./.agent/skills/gui-framework/SKILL.md`
+- GameEditor（窗口/工作区/chrome/编辑会话/Inspector/Content Browser/UI Designer）：`./.agent/skills/game-editor/SKILL.md`
 - 跨平台（Windows/MSVC 与 macOS/Clang 切换、DLL 导出、平台差异编译/链接报错）：`./.agent/skills/cross-platform/SKILL.md`
 - 资源加载、resolve、dirty queue、environment lighting：`./.agent/skills/resource-system/SKILL.md`
 - 崩溃排查、review、自检：`./.agent/skills/debug-review/SKILL.md`

@@ -8,7 +8,7 @@
 
 任务跨多个 skill 时，按此顺序取第一个命中的：
 
-`ya-build > gui-framework > cross-platform > profiling > vscode > resource-system > material-flow > scene-object-boundary > render-arch > cpp-style > code-reorganize > debug-review`
+`ya-build > gui-framework > game-editor > cross-platform > profiling > vscode > resource-system > material-flow > scene-object-boundary > render-arch > cpp-style > code-reorganize > debug-review`
 
 `soul` 是前置澄清，不参与优先级比较。
 
@@ -25,6 +25,7 @@
 ### GUI
 
 - `gui-framework`：WidgetTree / 控件 / 布局契约 / Render2D pass slot / GUI host 诊断与 teardown
+- `game-editor`：GameEditor（Application 层）窗口 / 工作区 / chrome 结构、编辑会话、主题与 Inspector/Content Browser/UI Designer
 - `gui-gallery-design`：GUIWorkbench / feature gallery 的信息架构与视觉层级
 - `font-rendering`：FontManager / Atlas / Bitmap+SDF / flavor split / CJK fallback
 

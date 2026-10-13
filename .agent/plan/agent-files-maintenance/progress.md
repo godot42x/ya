@@ -1,5 +1,45 @@
 # 进度
 
+## 2026-10-13 — A3 + A3.6 落地（拆分完成，lint 全绿）
+
+### 做了什么
+
+三个超预算 skill 全部按 H2 标题**机械抽取**拆分（不重打一个字，因此不会静默改写），
+每个 `SKILL.md` 留作入口 + 一张 `references/` 索引表（写明"何时读哪份"）。
+
+| 对象 | 之前 | 之后 | references |
+| --- | --- | --- | --- |
+| `gui-framework` | 861 行 / 98.5 KB | **158 行** / 9.2 KB | 7 份 |
+| `ya-build` | 366 行 | **107 行** | 3 份 |
+| `render-arch` | 310 行 | **65 行** | 3 份 |
+
+**作用域越界已修正**：原 `gui-framework` 的 `## GameEditor chrome`（166 行 / 16 KB，最大单节）
+与 `## 编辑器内嵌（已废弃）` 属 `Engine/Source/Applications/` 产品内容，迁出为
+新 skill `.agent/skills/game-editor/SKILL.md`（193 行），并在 frontmatter 明确写它是
+Application 层、framework 能力见 `../gui-framework/SKILL.md`。
+
+`gui-framework/references/` 分册：widget-tree / layout-and-controls / animation-and-dsl /
+style-theme / dock / host-and-render / interaction-contract。
+`SIZE_EXEMPT` 表已清空为空 dict——债还清了，表就不能留行。
+
+### 验证
+
+- **内容零丢失**：对三个对象逐行比对 HEAD 版本（≥40 字符的实质行），
+  唯一差异是刻意修正的链接层深（`../../` → `../../../`）；gui-framework 与
+  game-editor 合并后 677 行实质内容 0 丢失。
+- 全部 21 个 skill 的 `SKILL.md` 均 ≤300 行，最大 243 行。
+- `python3 Script/ya_agent_docs_lint.py` → **0 violation / 0 debt**（首次全绿）。
+- lint 在两次拆分中各抓到一处"移动后引用深度少一层"（`references/` 比原目录深一级），
+  说明该检查确实在拦真问题，不是摆设。
+
+### 自我修正记录
+
+`render-arch` 首次拆分报 `UNMAPPED: '目录锚点'`——我的分节计划漏了 6 个 `##` 节
+（目录锚点 / 相关 skills / Windows DLL Boundary / 决策原则 / Dynamic Rendering 约束 / 退出条件）。
+脚本对未映射节直接 `SystemExit` 而不是静默丢，这正是要的行为；补齐映射后重跑。
+
+---
+
 ## 2026-10-13 — A1 + A2 + A4 落地
 
 ### 做了什么

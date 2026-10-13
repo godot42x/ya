@@ -20,13 +20,14 @@
 
 ## A3 拆 `gui-framework/SKILL.md`
 
-- [ ] A3.1 出逐节对照表（原 861 行每一节的唯一归属）
-- [ ] A3.2 `SKILL.md` 瘦身至 ≤300 行
-- [ ] A3.3 `references/` 收纳控件 / 布局 / 动画 / DSL / Style / Host
-- [ ] A3.4 `GameEditor chrome` + Dock 权责迁出为 Application 层 skill
-- [ ] A3.5 全库引用改写同批提交
-- [ ] A3.6 顺带处理另两个超预算件：`ya-build`（367 行）、`render-arch`（311 行），
-      并清空 lint 的 `SIZE_EXEMPT` 表
+- [x] A3.1 逐节对照表（按 H2 机械抽取，18 节各有唯一归属）
+- [x] A3.2 `SKILL.md` 861 → 158 行
+- [x] A3.3 `references/` 7 份：widget-tree / layout-and-controls / animation-and-dsl /
+      style-theme / dock / host-and-render / interaction-contract
+- [x] A3.4 `GameEditor chrome` + Dock 产品侧迁出为 `skills/game-editor/SKILL.md`（Application 层）
+- [x] A3.5 引用改写（`AGENTS.md`、`skills/AGENTS.md`、跨 skill；references 内层深度 +1 已改）
+- [x] A3.6 顺带处理另两个超预算件：`ya-build` 366 → 107 行（+3 refs）、
+      `render-arch` 310 → 65 行（+3 refs）；`SIZE_EXEMPT` 已清空为空 dict
 
 ## A4 定点核对
 
@@ -35,7 +36,8 @@
 
 ## 验收
 
-- [x] `python3 Script/ya_agent_docs_lint.py` 退出码 0（剩 3 项已知体量债，见 A3.6）
-- [ ] `gui-framework/SKILL.md` ≤300 行，`references/*.md` ≤300 行
+- [x] `python3 Script/ya_agent_docs_lint.py` 退出码 0（**0 violation / 0 debt**）
+- [x] 全部 21 个 skill 的 `SKILL.md` ≤300 行；最大 243 行（`code-reorganize`）
 - [x] 目录 ↔ 索引双向 100% 覆盖（`plan/` 除外）
 - [x] 入口文档不再出现第二份优先级列表
+- [x] 内容零丢失：三个拆分对象逐行比对，唯一差异是刻意修正的链接层深

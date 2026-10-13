@@ -10,6 +10,7 @@ description: YA Engine 的 XMake 构建、项目运行、shader 生成与测试�
 - 需要刷新 `compile_commands.json` 或重跑 shader 生成
 - 需要判断应该用 `python3 Script/ya.py` 工作流命令还是直接用 `xmake`
 
+
 ## 核心规则
 
 1. 只使用 XMake；不要引入 CMake。
@@ -18,6 +19,7 @@ description: YA Engine 的 XMake 构建、项目运行、shader 生成与测试�
 4. 测试使用 GoogleTest 目标，不要自己发明另一套测试入口。
 5. 不要再为 project build/run/package 使用 legacy `--target` 语义。
 6. `python3 Script/ya.py package` 的定位是最小收集器，不默认承诺完整跨平台可分发包。
+
 
 ## 常用命令
 
@@ -59,140 +61,6 @@ group 内 target 顺序由 xmake 决定，**遇到第一个红 target 就停下*
 的闸门，不是“汇总报告”。要单独定位时直接 `xmake r <target>`，不要用二进制路径直接跑
 （`set_rundir` 把工作目录钉在仓库根，直接跑会让相对资源路径失效，产生假失败）。
 
-## 两种启动模式
-
-仓库只有两类入口，按"是否经过引擎项目流程"区分，不要混用：
-
-### 模式 1：直接运行某个 target（xmake / make b|r）
-
-适用于 standalone 可执行 target（GUI example、测试、引擎模块），不经过
-`ya.py` 的项目流程：
-
-```bash
-# GUI example（只链接 GUI closure，不依赖 Scene/ECS/Host/Editor）
-xmake b GUIWorkbench && xmake r GUIWorkbench                 # retain-mode 工具 app
-xmake r GUIWorkbench --smoke-actions                        # 端到端自动化（退出码=PASS/FAIL）
-xmake b ya-gui-minimal-host && xmake r ya-gui-minimal-host --exit-after-frame=30
-
-# GUI 测试 target
-xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test
-xmake b ya-gui-closure-test && xmake r ya-gui-closure-test
-xmake b ya-gui-workbench-workspace-test && xmake r ya-gui-workbench-workspace-test
-
-# make 等价（薄包装，t/ARGS 可覆盖）
-make b t=GUIWorkbench
-make r t=GUIWorkbench ARGS="--smoke-actions"
-make test
-```
-
-### 测试源码布局（新增用例时看这里）
-
-`Engine/Test/Source/` 按**门禁（gate）**分目录，每个 target 用目录 glob 收源码
-（`ya_test_sources("Support", "<Gate>")`），所以新用例只要放进对的目录就自动进闸门，
-不需要改 xmake：
-
-| 目录 | 谁编译它 | 说明 |
-| --- | --- | --- |
-| `Support/` | 全部测试 target | 共享 runner (`TestEntry.cpp`) 与测试辅助头（如 `TestSource.h`） |
-| `Integration/` | 仅 `ya-testing` | 需要整条引擎链路（App/Scene/Editor/Runtime）的用例 |
-| `EcCore` `ResourceCore` `Render2D` `Render3D` `ResourceRuntime` `RhiVulkan` | 对应 closure target | 只链接该模块的闭包回归 |
-| `GuiDeclarative` | `ya-gui-declarative-contract-test`、`ya-gui-widgets-test`、`ya-gui-closure-test` | declarative 契约 |
-| `GuiWidgets` | `ya-gui-widgets-test`、`ya-gui-closure-test` | 只依赖 widgets 的契约 |
-| `GuiFramework` | `ya-gui-closure-test` | 需要整个 GUI closure |
-| `GuiHost` | `ya-gui-headless-host-test` | host / 窗口 / chrome |
-
-两条硬约定：
-
-1. **不要用子节点下标定位控件**：布局会变，下标会静默变成 `nullptr` 让断言失效。按
-   authored key（`_stableKey`，直构控件在 `_name`）或类型查找，见
-   `EditorPropertyGraphTest` 的 `findControlByKeySuffix`。
-2. **读源码文本的用例**用 `#include "TestSource.h"` 的 `readEngineSource()`：它按仓库根
-   标记（`Engine/Source` + `Xmake`）向上查找，不要写 `__FILE__` 加固定 `../..` 层数——
-   用例换一个 suite 目录就会静默读到空文件。
-
-### 模式 2：项目相关 / editor（Script/ya.py）
-
-适用于 game 项目（`ya-runtime` + `.yaproject`）与 editor：
-
-```bash
-python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
-python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject
-python3 Script/ya.py build --project Example/HelloMaterial/HelloMaterial.yaproject
-python3 Script/ya.py package --project Example/HelloMaterial/HelloMaterial.yaproject
-
-# 自动化冒烟：跑 N 帧后自动退出
-python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject \
-    -- --exit-after-frame=120 --log-level=warn
-
-# make 等价
-make run t=HelloMaterial
-make run-editor t=HelloMaterial
-make build t=HelloMaterial
-make package t=HelloMaterial
-```
-
-要点：
-
-- `ya.py` 的子命令只负责引擎项目流程（`cfg / build / run / run-editor / package /
-  test`）；GUI/模块/测试 target 一律直接 `xmake b|r`；
-- `GUIWorkbench --smoke-actions` 是端到端自动化冒烟（走真实事件路径驱动
-  workbench 交互），PASS/FAIL 决定退出码；
-- GUIAppHost 默认开启 vsync（FIFO）；关闭 vsync 会退化为 Immediate present，
-  直出 swapchain 会出现撕裂/闪烁；
-- GUI example 属于 gui profile 也能构建：`xmake f --ya_profile=gui` 后构建同一批目标。
-
-## 实例与生命周期（多 agent / 长驻运行）
-
-需要驱动引擎（自动化、脚本、MCP、截图、回归）时，**走 `control` 入口，不要手搓启动命令**：
-
-```bash
-python3 Script/ya.py control start --project Example/HelloMaterial/HelloMaterial.yaproject
-python3 Script/ya.py control status
-python3 Script/ya.py control call --project <p> eval_js '{"source": "1+1"}'
-python3 Script/ya.py control mcp --project <p>        # stdio MCP，工具目录 = 引擎 list_commands
-python3 Script/ya.py control stop --project <p>       # 退出；不听话则 SIGTERM→SIGKILL
-```
-
-`control start` 的行为就是「有则接入、无则只起一个」：
-
-- 同 project 同模式已有实例 → **直接复用**（打印它的 pid 与端口），不再开第二个进程；
-- 需要新起时，自己挑空闲端口、脱离当前 shell 存活，并**默认带 30 分钟墙钟上限**
-  （`--lifetime 0` 才是显式取消）；
-- 实例把自己登记在 `tempfile.gettempdir()/ya-instances/*.instance.json`（pid/project/mode/
-  controlPort/启动时间），所以「谁在跑、端口是多少」是查询而不是猜；
-- 进程被 SIGKILL 后记录可能残留，`status`/`stop` 会按 pid 存活情况清掉，不必手工删文件。
-
-引擎侧的同一条规则（`ya-runtime`，game 与 editor 同一套入口）：
-
-- 同一 project 同一模式只允许一个实例；第二个实例立刻以退出码 1 停止，日志给出
-  `Refusing to start '<project>|editor': already running as pid <PID> (automation control port <p>)`
-  —— 消息里直接给出可接入的端口，接到活的那一个而不是再起一个。不同 project 可以并存
-  （合法的双开），锁由内核在进程退出或被 kill 时释放，不需要手工删锁文件。
-- 长驻运行（agent 调试、录制、自动化）统一带上墙钟上限 `--max-lifetime-seconds=<s>`：
-  到点退出码 0，日志 `App loop exited: reason=max-lifetime after N frames, Ts`。
-  `--exit-after-frame` 只数帧，挡不住卡住或闲置的进程，墙钟才会。
-- 请求了 `--automation-control-port=<p>` 而端口已被占用时，启动直接失败（退出码 1，
-  `automation control port <p> is already in use`），不会出现「进程看起来健康、但自动化
-  调用实际打在别人身上」。
-- 脚本里 Popen 起引擎的：`engine.kill()` 杀的是启动器（`ya.py`/`xmake`），**不是引擎**。
-  这类 harness 必须给引擎传 `--max-lifetime-seconds`，否则 harness 自己死掉就留下孤儿。
-- 收工前确认没有自己的残留实例：
-
-```bash
-python3 Script/ya.py control status
-ps -ax -o pid,etime,command | grep ya-runtime | grep -v grep
-```
-
-## Profiling
-
-- profiling、automation trace 与 speedscope 规则已独立到 `profiling` skill。
-- 若任务重点是 profile 模式、CPU trace、RenderDoc、automation 配置，转到 `../profiling/SKILL.md`。
-- 最小入口仍是：
-
-```bash
-python3 Script/ya.py cfg --mode profile
-python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=300 --log-level=warn --log-detail-level=error
-```
 
 ## 何时用哪种入口
 
@@ -203,144 +71,14 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
 5. 需要收集最小项目包时，用 `python3 Script/ya.py package --project <path>`。
 6. 若问题已经进入平台发行、app bundle、签名、图形驱动分发，先明确那不是当前默认 package 目标，再决定是否单独扩工作范围。
 
-## 当前仓库锚点
 
-- `Script/ya.py`：引擎项目流程入口，封装 `cfg / build / run / run-editor / package / test`
-- `makefile`：两种模式的薄包装（模式 1：`make b|r TARGET=...`；模式 2：
-  `make run|run-editor|build|package t=...`）
-- `xmake.lua`：全局规则、`compile_commands.autoupdate`
-- `Engine/Shader/Shader.xmake.lua`：shader 生成入口
-- `Engine/Test/Test.xmake.lua`：测试 target 定义 + `xmake test` action；`Engine/Test/Source/<Gate>/` 按门禁分目录收源码
-- `test/Test.xmake.lua`：作者 scratch 原型（`bus` / `type_size` / `LazyStatic`），**不在** `test` group 里（不是 gtest 用例，`bus.cpp` 还会卡在 `std::cin`）
-- `Example/`：可运行示例目标
+## 细节参考（按需读，不要全载）
 
-## 常见排查顺序
-
-### 1. 目标找不到
-
-1. 先运行 `xmake l targets` 确认 xmake 目标名。
-2. 再确认当前要跑的是 `ya-runtime + project=...`，还是 `*-testing`。
-3. 若是 VS Code 启动项问题，再联动看 `vscode` skill。
-
-### 2. 编译通过但运行入口不对
-
-1. 优先检查是否应该使用 `python3 Script/ya.py run --project <path>`。
-2. 确认 `launch.json` 中程序路径是否仍匹配当前输出目录。
-
-### 3. shader 相关报错
-
-1. 先确认是不是生成头过期。
-2. 运行 `xmake ya-shader`。
-3. 若仍失败，回看 `Engine/Shader/Shader.xmake.lua`、`slang_gen_header.py`。
-4. 不要直接编辑 `Generated/*.slang.h`。
-
-### 4. IntelliSense / clangd 不对
-
-1. 先刷新 `compile_commands.json`：`python3 Script/ya.py cfg`。
-2. 再检查 VS Code 是否读取了正确文件。
-3. 这类问题通常和 `vscode` skill 一起看。
-
-### 5. 测试运行失败
-
-1. 先跑 `make test` 拿全貌；group 遇红即停，所以再 `xmake r <target>` 单独复现。
-2. 确认目标是 `$(t)-testing` 或 `ya-testing`，`--gtest_filter` 写法正确。
-3. 断言失败先分清三类：框架 bug / 框架变更后用例没跟上 / 用例本身无意义（例如断言一个
-   被注释掉的代码生成器产物、`EXPECT_EXIT` 里再起线程、依赖平台真的最小化窗口）。见
-   `../../memories/stale_test_assertions_after_contract_change.md`。
-4. 构建没问题时再转去具体模块 skill。
-
-## 并行 agent 的独占构建锁
-
-同一仓库、同一构建目录同一时间只能有一份 xmake 构建 / `ya.py test` / `ya.py run` 在跑。多个 agent
-并行时用 `Script/agent/ya_lock.sh` 排队，并且能看到是谁占着：
-
-```bash
-export YA_AGENT_NAME=<你的名字>                       # 让别人看得到你是谁
-Script/agent/ya_lock.sh run -- python3 Script/ya.py test --target ya
-Script/agent/ya_lock.sh run -- python3 Script/ya.py run --project <p> -- --exit-after-frame=120
-Script/agent/ya_lock.sh status                    # free，或「held by 'x' (pid) for Ns: <命令>」
-```
-
-- `run` 拿不到锁会等待，每 30 秒打印一次占用者；默认 3600 秒超时，退出码 75（`YA_BUILD_LOCK_TIMEOUT` 可改）。
-- 锁是目录 `/tmp/ya-build.lock.d`（`YA_BUILD_LOCK_DIR` 可改）+ pid/owner/cmd/since；占用者进程死掉会被自动回收，不用手工删。
-- 锁内嵌套 `run` 直接执行（`YA_BUILD_LOCK_HELD=1`），不会死锁。
-- 只包「自己会结束」的命令（构建、测试、带 `--exit-after-frame` / `--max-lifetime-seconds` 的运行）。**不要把长驻进程放在锁里**（编辑器常驻、`control start` 的实例）。
-- 并行时只有一个 agent 的构建在跑，其余在等；纯读代码、写代码、跑 Python 脚本不需要锁。派发并行 worker 时，prompt 必须要求它们用这个锁，并说明各自的文件范围互不重叠（见 `subagent-delegation`）。
-
-## 共享缓存（多 worktree / 多 agent 并行）
-
-大体积产物（Vulkan SDK、重型 submodule）以**真实文件**存放在主项目自己的
-`Engine/ThirdParty` 里（SDK 在 `Engine/ThirdParty/VulkanSDK/`），其他
-worktree 通过目录链接（macOS/Linux symlink，Windows junction）指回主项目
-的同一份，避免各自下载/存储。系统目录（~/Library/Caches 等）从不写入：
-删除主项目目录即整体清理，不留垃圾。
-
-### 开一个独立 worktree（换构建模式又不影响别人时用）
-
-共享工作区只有一个 xmake 配置（`xmake f -m profile` 会改掉所有人正在用的
-配置），所以 profile / gui profile 这类模式要去独立 worktree 里跑：
-
-```bash
-git worktree add /tmp/ya-profile HEAD        # 从主项目里执行，别用 --detach 以外的姿势
-cd /tmp/ya-profile && python3 Script/ya.py cfg --mode profile
-```
-
-`cfg` 会做三件事：把重型 submodule 占位目录换成指回主项目的链接、把
-Vulkan SDK 链回来、配置 xmake。**在它之前不要跑裸 `git submodule update`**，
-否则重型仓库会先被完整拉下来，脚本才把干净的 checkout 转回链接。
-跑完 `git status` 应当是干净的（重型路径带 skip-worktree 标记）。
-
-实测（2026-10-09，macOS）：`git worktree add` + `cfg --mode profile` 全程没有
-任何下载，重型 submodule 与 SDK 都是链接，配置直接可用。
-
-### 三方库复用
-
-- **xmake 包**（glm / entt / sol2 / lua / nlohmann_json / libsdl3 /
-  vulkan-headers / vulkan-memory-allocator / gtest …）装在全局
-  `~/.xmake/packages`（约 600 MB），**所有 worktree 直接复用**，不需要每个
-  worktree 重新拉。worktree 里没有独立的包目录，只有 `.xmake/macosx`
-  （xmake 自己的配置缓存）。
-- **Vulkan SDK**（约 1.3 GB，gitignore）见下：主项目真实目录，worktree
-  symlink。
-- 所以真正随 worktree 数量线性增长的只有 **`build/`**（见下）。
-
-- 主项目解析：`$YA_CACHE_ROOT` → `git config ya.cacheRoot`（独立 clone 想
-  共享时设成主项目路径）→ 自动推导（git worktree 的 `--git-common-dir`
-  指向主项目，所有 worktree 自动共享，零配置）。
-- 主项目本身保持标准 git 语义：submodule 是真实 checkout，
-  `git submodule status/update` 正常可用；只有链接的 worktree 需要
-  skip-worktree。
-- 旧版布局（系统缓存 `~/Library/Caches/ya-engine`、`<主>/.ya-cache`、以及
-  非主 checkout 里的真实目录）会在首次运行时自动迁移回主项目原位，不会
-  重新下载。
-- macOS Vulkan SDK：`Script/setup_vulkan_sdk_macos.py` 装到
-  主项目的 `Engine/ThirdParty/VulkanSDK/`（`YA_VULKAN_SDK_ROOT` 可单独
-  覆盖），主项目内是真实目录，worktree 内是指向它的 symlink；安装原子化
-  （pid 唯一临时目录 + rename），并发执行不会损坏。
-- 重型 submodule（`Vulkan-Samples-Assets` ~1GB、`LearnOpenGL` ~250MB）：
-  `Script/setup_submodules.py` 在主项目里保持真实 checkout（标准 git），
-  worktree 内路径是指回主项目的链接，通过 `git update-index --skip-worktree`
-  保持 `git status` 干净。worktree 看到的 submodule 内容跟随主项目。
-
-注意：
-- 在**链接的 worktree** 里，重型 submodule 路径上不要跑裸
-  `git submodule status/update`（会报 "expected submodule path ... not to be
-  a symbolic link"）；主项目里完全正常。小 submodule（ImGui 等）到处都保持
-  标准 git 语义。
-- 新 clone 先跑 `ya.py cfg` 再手动 `git submodule update`，否则重型
-  submodule 会先被完整拉下来；脚本会把干净的 checkout 自动转回链接。
-- 不要在主项目里跑 `git clean -fdx`（会清掉 gitignore 的
-  `Engine/ThirdParty/VulkanSDK/` 触发重新下载）；误清后重跑
-  `python3 Script/ya.py vulkan-sdk-macos` 即可恢复。
-- 若链接目标异常，先跑 `python3 Script/ya.py cfg` 再看构建。
-- **每个 worktree 有自己的 `build/`**：一份 debug 构建约 11 GB，profile 同量级。
-  把 worktree 放 `/tmp` 并不省空间（macOS 上 `/tmp` 和数据盘是同一卷），
-  开第二个构建前先 `df -h` 确认有 10 GB 以上可用；构建中途写满会报
-  "cannot copy file … No space left on device"，且会连带拖垮其他 agent 的构建。
-- **删 worktree 前要先 `chmod -R u+w <path>`**：`setup_3rd_party.py` 把三方目录
-  设成只读（`0o555`），否则 `git worktree remove` / `rm -rf` 会一路
-  `Permission denied` 留下半个目录，还要手动 `git worktree prune`。
-  删完记得 `df -h` 确认空间回来了。
+| 何时读 | 文件 |
+| --- | --- |
+| 启动 target / 项目 / editor、worktree、实例与生命周期 | `references/launch-modes.md` |
+| profiling、共享缓存、多 agent 并行构建锁 | `references/profiling-and-locks.md` |
+| 构建或测试报错的排查顺序 | `references/troubleshooting.md` |
 
 ## 相关 skills
 
@@ -352,6 +90,7 @@ Vulkan SDK 链回来、配置 xmake。**在它之前不要跑裸 `git submodule 
 - `cpp-style`：修编译错误同时保持风格与最小改动时一起看
 - `debug-review`：构建修复后做提交前自检时一起看
 
+
 ## 不建议的方向
 
 1. 不要在仓库里引入 CMake 文件或 CMake 专用说明。
@@ -359,8 +98,10 @@ Vulkan SDK 链回来、配置 xmake。**在它之前不要跑裸 `git submodule 
 3. 不要把 VS Code 专属问题误判成构建系统问题。
 4. 不要在一次修构建时顺手做无关重构。
 
+
 ## 退出条件
 
 - 用户知道该用哪个命令入口
 - 构建 / 运行 / 测试 / shader 生成路径至少有一条明确可用
 - 问题已收敛为构建配置、生成链、目标选择，或已转交给更合适的 skill
+
