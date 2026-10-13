@@ -12,10 +12,10 @@ local Script = ScriptBase:new()
 
 local LOOKS = {
     { at = 0.0, look = { exposure = 0.6, bBloom = false, grayscale = 0, bToneMap = true, bGamma = true } },
-    { at = 1.2, look = { exposure = 2.2, bBloom = false, grayscale = 0, bToneMap = true, bGamma = true } },
-    { at = 2.4, look = { exposure = 0.6, bBloom = false, grayscale = 2, bToneMap = true, bGamma = true } },
-    { at = 3.6, look = { exposure = 1.4, bBloom = true, bloomThreshold = 0.35, bloomStrength = 1.2,
-                         grayscale = 0, bToneMap = true, bGamma = true } },
+    { at = 3.0, look = { exposure = 2.2, bBloom = false, grayscale = 0, bToneMap = true, bGamma = true } },
+    { at = 6.0, look = { exposure = 0.6, bBloom = false, grayscale = 2, bToneMap = true, bGamma = true } },
+    { at = 12.0, look = { exposure = 1.4, bBloom = true, bloomThreshold = 0.35, bloomStrength = 1.2,
+                          grayscale = 0, bToneMap = true, bGamma = true } },
 }
 
 function Script:onInit()

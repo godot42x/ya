@@ -219,3 +219,22 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
   （93.4→0.0）；截图 `Engine/Saved/Automation/post-look/look_{neutral,bright,gray}.png`。
 - 未完成（R1 后半）：`render.fadeOut/in`（需要一层过渡：往屏幕盖纯色）与相机 `shake`/`zoomTo`。
   fade 需要在 post 或 overlay 加一个基础过渡（下一步）。
+
+## 2026-10-13 — R1（后半）：过渡 fade（`FadeOverlay`）与转场接线
+
+- 目标：进战/切场景有淡入淡出，而不是硬切。
+- 内容：
+  - `Content/UI/FadeOverlay.yaui.json`（`Tools/make_fade_overlay.py`）：铺满视口的 Border，全场景挂载（zOrder 90）。
+  - `Content/UI/FadeOverlay.lua`：`fadeOut/fadeIn/fadeTo/setAlpha/isFading`，在控件 update 时钟上补间；
+    mount 时从黑淡入（可见即渐显），所以经 fade 进入的场景自然淡入。
+  - `Content/Scripts/Door.lua`：踩门后先 `fadeOut`，在**黑屏时** `world.loadScene`；`fadeSeconds`/`fadeEntry` 可覆写。
+- 途中发现：
+  - Border 的**脚本字段名是 `fill`**（反射成员是 `_color`），不是 `color`（`color` 是 Text 的）。
+  - 整条链上「空面板也会画底板」：`OutcomeBox`、以及 select/menu 之外的阶段若不显式清空行动栏，上一个单位的菜单会残留
+    —— `refreshHud` 改为「恰好一个阶段拥有行动栏，其余阶段清空」。
+  - **菜单不该提供无法解决的选项**：攻击射程内无目标时，Attack 会一直弹回菜单（玩家被困）；改为射程内无目标就不列 Attack/Skill。
+    这也是 `camp_battle_loop` 偶发卡在 Knight（1 射程、够不着）的根因。
+- 验证：`Script/automation/2d-rpg/fade_overlay.py`（155.7→0.0→155.7）、`camp_battle_loop.py`（带 fade 的进出闭环）、
+  `post_look.py`（曝光/灰度）全过；十个战斗/表现脚本全绿。
+- 未完成（R1 收尾，显式延后）：相机 `shake` / `zoomTo` —— 需要在 view producer 里注入 view 矩阵偏移；
+  用户目标的「后处理驱动视觉」已由 `setLook` + fade 覆盖，shake/zoom 留到有明确命中反馈需求时再做。

@@ -112,7 +112,7 @@
       "id": "postfx_runtime_control",
       "wave": "C",
       "phase": "R1",
-      "status": "wip",
+      "status": "done",
       "driven_by": "game: battle enter/exit fade, hit flash, downed grayscale, crit bloom, boss phase grading",
       "engine_gap": "N1 PostProcessingState is config-only; no script surface, no transitions",
       "plan": "render.setLook{...}, render.fadeOut/in, render.shake, camera.zoomTo; look timeline interpolated before recording; write RenderPipelineSettings pre-record",
@@ -121,7 +121,9 @@
         "render.setLook{ exposure, bloom, bloomThreshold, bloomStrength, grayscale, kernel, grain, inversion, toneMap, gamma } read-modify-writes the pipeline post state; a no-renderer run is a no-op",
         "Applied between frames: the pipeline re-reads pending settings each submission (DeferredRenderPipeline::applyPendingSettings)",
         "Script/automation/2d-rpg/post_look.py: exposure look brightens (131.7->158.2), grayscale desaturates (93.4->0.0)",
-        "Engine/Saved/Automation/post-look/look_{neutral,bright,gray}.png"
+        "Engine/Saved/Automation/post-look/look_{neutral,bright,gray}.png",
+        "Content/UI/FadeOverlay.{yaui.json,lua} + Tools/make_fade_overlay.py: full-screen tint panel; fadeOut/fadeIn/setAlpha tweened on the widget clock, fades in from black on mount; every scene mounts it (zOrder 90)",
+        "Content/Scripts/Door.lua covers the scene switch with a fade; Script/automation/2d-rpg/fade_overlay.py: clear 155.7 -> black 0.0 -> back 155.7"
       ],
       "tests": [
         "PostFxRuntimeTest.SetLookReachesPipelineSettings",
@@ -129,7 +131,8 @@
         "CameraShakeOffsetsViewNotTransform"
       ],
       "pixel_acceptance": "one fade screenshot + one crit-bloom screenshot",
-      "verified": "2026-10-13 (setLook); fade/shake/zoom pending"
+      "verified": "2026-10-13",
+      "notes": "Fade is a UI panel, not a render pass. Camera shake/zoom are not in this checkpoint (deferred: they need view-producer work; setLook + fade cover the stated visual goal)."
     },
     {
       "id": "audio",

@@ -368,9 +368,10 @@ def build_battle_ruins1() -> dict:
 
 # ── scene root + write ────────────────────────────────────────────────────
 
-# (entryId, zOrder) mounted per scene. Battle scenes add the turn HUD.
+# (entryId, zOrder) mounted per scene. Battle scenes add the turn HUD; every
+# scene gets the fade overlay on top (zOrder 90), which transitions drive.
 OVERWORLD_WIDGETS = [("Dialogue", 10), ("Inventory", 20), ("Journal", 30),
-                     ("QuestNotice", 40), ("Settings", 50)]
+                     ("QuestNotice", 40), ("Settings", 50), ("FadeOverlay", 90)]
 BATTLE_WIDGETS = OVERWORLD_WIDGETS + [("BattleHUD", 5)]
 
 
@@ -432,10 +433,29 @@ def build_world_text_scene() -> dict:
             "layers": [ground]}
 
 
+def build_fade_scene() -> dict:
+    """A minimal scene for the fade-overlay test: a tile floor, a camera, and a
+    controller that drives the FadeOverlay entry (post-processing is left
+    neutral so the fade's brightness change is unambiguous)."""
+    w, h = 16, 12
+    origin = map_origin(w, h)
+    ground = [TOWN_GRASS + 1] * (w * h)
+    spawn = (w // 2, h // 2)
+    entities: list[dict] = [
+        camera_entity(spawn, origin, script=None),
+        script_entity(1004, "FadeDemo", "Content/Scripts/FadeDemo.lua"),
+        tilemap_entity(2000, "TilemapGround", TOWN_ATLAS, TOWN_TILESET, w, h, origin,
+                       [layer("Ground", ground)]),
+    ]
+    return {"name": "FadeScene", "width": w, "height": h, "entities": entities,
+            "layers": [ground]}
+
+
 def main() -> None:
     write_scene(ROOT / "Content/Scenes/Camp.scene.json", build_camp())
     write_scene(ROOT / "Content/Scenes/BattleRuins1.scene.json", build_battle_ruins1())
     write_scene(ROOT / "Content/Scenes/WorldText.scene.json", build_world_text_scene())
+    write_scene(ROOT / "Content/Scenes/FadeScene.scene.json", build_fade_scene())
     print(f"Camp {CAMP_W}x{CAMP_H}, BattleRuins1 {BAT_W}x{BAT_H}, WorldText 16x12")
 
 

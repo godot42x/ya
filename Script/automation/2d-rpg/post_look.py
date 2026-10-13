@@ -88,20 +88,17 @@ def main() -> None:
     try:
         rpg.call("scene.load", {"path": SCENE})
         rpg.wait_until(lambda: True if scene_name() == "WorldText" else None, 20.0, "WorldText active")
-        # The look timeline starts on scene load; wait until the neutral look is
-        # up (before the 1.2s mark) is unreliable, so sample by wall clock from
-        # a known start: reload and immediately shoot the neutral frame.
-        time.sleep(0.4)
+        # LookDemo windows: neutral 0-3, bright 3-6, grayscale 6-12. Each
+        # screenshot costs about a second, so sample well inside each window.
+        time.sleep(1.2)
         neutral = mean_brightness(shoot(port, "look_neutral.png"))
         print(f"neutral brightness: {neutral:.1f}")
 
-        # Heavy exposure is the 1.2s-2.4s window.
-        time.sleep(1.1)
+        time.sleep(2.4)  # into the bright window (3-6)
         bright = mean_brightness(shoot(port, "look_bright.png"))
         print(f"bright brightness:  {bright:.1f}")
 
-        # Grayscale is the 2.4s-3.6s window: check saturation drops.
-        time.sleep(1.3)
+        time.sleep(3.0)  # into the grayscale window (6-12)
         gray_img = shoot(port, "look_gray.png")
         gray = mean_brightness(gray_img)
 

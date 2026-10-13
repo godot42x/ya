@@ -99,29 +99,26 @@ function Script:refreshHud()
     if self.active and hud.showActive then
         hud:showActive(self.active.displayName)
     end
-    if self.phase == "menu" and hud.showMenu then
-        local names = { "Attack" }
-        if self.active:hasSkill() then
-            names[#names + 1] = self.active.skillName
-        end
-        names[#names + 1] = "Wait"
-        hud:showMenu(names, self.menuIndex)
-        if hud.showHint then
-            hud:showHint("")
-        end
-    elseif self.phase == "target" then
-        if hud.showHint then
-            hud:showHint("Choose a target")
+    -- Exactly one of these phases owns the action bar; every other phase
+    -- clears it, so a previous unit's menu never lingers on screen.
+    local menu
+    local hint = ""
+    if self.phase == "menu" then
+        menu = {}
+        for _, name in ipairs(self.menu) do
+            menu[#menu + 1] = name == "attack" and "Attack" or (name == "skill" and self.active.skillName or "Wait")
         end
     elseif self.phase == "select" then
-        if hud.showMenu then
-            hud:showMenu({ "Move" }, 1)
-        end
-        if hud.showHint then
-            hud:showHint("Move, then confirm")
-        end
-    elseif hud.showHint then
-        hud:showHint("")
+        menu = { "Move" }
+        hint = "Move, then confirm"
+    elseif self.phase == "target" then
+        hint = "Choose a target"
+    end
+    if hud.showMenu then
+        hud:showMenu(menu or {}, menu and self.menuIndex or 1)
+    end
+    if hud.showHint then
+        hud:showHint(hint)
     end
     return true
 end
@@ -365,9 +362,19 @@ end
 function Script:enterMenu()
     self.phase = "menu"
     self.menuIndex = 1
-    self.menu = { "attack" }
-    if self.active:hasSkill() then
-        self.menu[#self.menu + 1] = "skill"
+    -- Offer Attack only when something is in reach: an Attack entry that can
+    -- never resolve would bounce the player back to the menu forever. Same for
+    -- the skill. Wait is always available.
+    self.menu = {}
+    local inReach = self:targetCells(self.active.range)
+    if #inReach > 0 then
+        self.menu[#self.menu + 1] = "attack"
+    end
+    if self.active:hasSkill() and self.active:canUseSkill() then
+        local inSkillReach = self:targetCells(self.active.skillRange)
+        if #inSkillReach > 0 then
+            self.menu[#self.menu + 1] = "skill"
+        end
     end
     self.menu[#self.menu + 1] = "wait"
     self:clearHighlights()

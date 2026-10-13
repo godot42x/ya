@@ -137,7 +137,9 @@ def menu_select(label: str) -> None:
 
 
 def in_menu() -> bool:
-    return any(menu(i).strip() for i in range(1, 4))
+    """True when the action menu (Attack/.../Wait) is up, not the select-phase
+    'Move' placeholder, so the driver knows the press opened the real menu."""
+    return any(menu(i).strip() for i in range(1, 4) if "Move" not in menu(i))
 
 
 def play_player_turn() -> None:
@@ -145,14 +147,23 @@ def play_player_turn() -> None:
     (Camp -> battle -> Camp); who wins is covered by the battle tests, so this
     does not need to fight well. The enemy AI still plays its own turns."""
     unit = active()
-    tap("Space")            # select -> menu (confirm on own cell)
-    rpg.wait_until(lambda: in_menu() or None, 3.0, "action menu")
-    menu_select("Wait")
-    if menu_label() == "Wait":
-        tap("Space")
-        time.sleep(0.3)
-    if active() == unit:
-        raise SystemExit(f"could not end {unit}'s turn")
+    for _ in range(5):
+        if active() != unit:
+            return  # the turn already ended (e.g. a stray press)
+        tap("Space")            # select -> menu (confirm on own cell)
+        try:
+            rpg.wait_until(lambda: in_menu() or None, 4.0, "action menu")
+        except SystemExit:
+            time.sleep(0.4)
+            continue
+        menu_select("Wait")
+        if menu_label() == "Wait":
+            tap("Space")
+            time.sleep(0.4)
+        if active() != unit:
+            return
+        time.sleep(0.4)
+    raise SystemExit(f"could not end {unit}'s turn")
 
 
 def main() -> None:
