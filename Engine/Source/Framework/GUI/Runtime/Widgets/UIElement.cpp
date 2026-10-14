@@ -614,6 +614,21 @@ void UIElement::tick(float deltaSeconds)
 
 // === Authoring ===
 
+void UIElement::detachAllChildren()
+{
+    // Copy first: releasing a parent edge may run a child's onDetached chain,
+    // which must not observe a half-cleared _children.
+    const std::vector<UIElementRef> dropped = _children;
+    _children.clear();
+    _childSlots.clear();
+    for (const UIElementRef& child : dropped) {
+        if (child) {
+            child->_parent = nullptr;
+        }
+    }
+    markLayoutDirty(EUIInvalidationReason::ChildStructure);
+}
+
 void UIElement::addDetachedChild(const UIElementRef& child)
 {
     addDetachedChild(child, [](UIElement&, UISlot&) {});

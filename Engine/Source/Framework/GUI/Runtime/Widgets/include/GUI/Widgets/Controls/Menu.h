@@ -88,6 +88,16 @@ struct YA_GUI_API UIMenu : public UIPopupOverlay
 
     explicit UIMenu(std::string name = "Menu") : UIPopupOverlay(std::move(name), "menu") {}
 
+    // Reflected as a type so the script surface (setItems/addItem/onChosen/
+    // openAtPixel/close in GameRuntime's LuaWidgetHandle) can attach: a class
+    // with no reflection block has no ClassRegistry entry and addMethod
+    // silently drops its methods.
+    YA_REFLECT_BEGIN(UIMenu, UIPopupOverlay)
+    YA_REFLECT_FIELD(_itemHeight, .instanceEditable())
+    YA_REFLECT_FIELD(_panelPadding, .instanceEditable())
+    YA_REFLECT_FIELD(_fontSize, .instanceEditable())
+    YA_REFLECT_END()
+
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIMenu>; }
 
     /// Menu panel metrics.
@@ -97,6 +107,9 @@ struct YA_GUI_API UIMenu : public UIPopupOverlay
 
     /// Create a menu with `items`; the returned menu is detached until open().
     static std::shared_ptr<UIMenu> create(const std::vector<FItem>& items);
+    /// Replace the item list of an existing menu (game UI popups rebuild per
+    /// open: the action menu of one unit differs from the next).
+    void setItems(const std::vector<FItem>& items);
 
     /// Attach to `tree`'s Popup layer with the menu top-left at `pos`,
     /// clamped into the tree viewport.

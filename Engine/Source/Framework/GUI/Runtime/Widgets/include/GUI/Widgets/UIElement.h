@@ -658,6 +658,17 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void addDetachedChild(const UIElementRef& child);
     void addDetachedChild(const UIElementRef& child, FChildSlotInitializer init);
     void initializeChildSlot(UIElement& child, FChildSlotInitializer init);
+    /// Drop every child edge. A compound widget that rebuilds its content
+    /// (UIMenu::setItems) must call this first: addDetachedChild rejects a
+    /// child that already has a parent, so a rebuild that skips it leaks the
+    /// previous content generation on top of the new one. Children are
+    /// released (parents hold the only strong refs).
+    ///
+    /// Named detachAllChildren, not clearChildren: `ya::clearChildren(WidgetTree&,
+    /// UIElement&)` already exists for the tree-aware detach, and a same-named
+    /// member would shadow it inside the class scope (unity build turns that
+    /// into a hard error at the editor's call sites).
+    void detachAllChildren();
 
   protected:
     /// Called when setLayoutRect detects a rect change (GI-304). Clip hosts

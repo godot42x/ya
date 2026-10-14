@@ -223,8 +223,16 @@ std::shared_ptr<UIMenu> UIMenu::create(const std::vector<FItem>& items)
     return menu;
 }
 
+void UIMenu::setItems(const std::vector<FItem>& items)
+{
+    rebuildContent(items);
+}
+
 void UIMenu::rebuildContent(const std::vector<FItem>& items)
 {
+    // A menu is rebuilt per open (setItems); the previous content generation
+    // must go first or the new panel stacks on top of the old one.
+    detachAllChildren();
     _items.clear();
     _highlightIndex = -1;
     _openSubmenu.reset();

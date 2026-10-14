@@ -4,6 +4,7 @@
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
+#include <unordered_set>
 
 namespace ya
 {
@@ -38,6 +39,26 @@ const UICanvasSlot* getCanvasSlot(const UIElement& parent, const UIElement& chil
 nlohmann::json marginJson(const FMargin& m)
 {
     return {{"left", m.left}, {"top", m.top}, {"right", m.right}, {"bottom", m.bottom}};
+}
+
+/// Read `key` from `node`, or an empty object when absent. Slot deserializers
+/// run on authored documents where a missing key is a data gap, not a bug in
+/// the walker: reading it with operator[] asserts (and aborts), so every
+/// optional field goes through here and the default stands in.
+const nlohmann::json& jsonOrEmpty(const nlohmann::json& node, const char* key,
+                                  const char* slotType, const char* consumedBy)
+{
+    static const nlohmann::json empty = nlohmann::json::object();
+    const auto it = node.find(key);
+    if (it != node.end()) {
+        return *it;
+    }
+    static std::unordered_set<std::string> warned;
+    if (warned.insert(std::string(consumedBy) + "." + key).second) {
+        YA_CORE_WARN("GUI slot '{}' is missing '{}' (consumed by {}); using its default",
+                     slotType, key, consumedBy);
+    }
+    return empty;
 }
 
 FMargin marginFromJson(const nlohmann::json& j)
@@ -495,19 +516,22 @@ void UICanvasSlot::serialize(nlohmann::json& node) const
 void UICanvasSlot::deserialize(const nlohmann::json& node)
 {
     FCanvasSlotArgs args;
-    args.anchorMin = vecFromJson(node["anchorMin"]);
-    args.anchorMax = vecFromJson(node["anchorMax"]);
-    args.offset = vecFromJson(node["offset"]);
-    args.minSize = vecFromJson(node["minSize"]);
-    args.maxSize = vecFromJson(node["maxSize"], args.maxSize);
-    args.offsets = marginFromJson(node["offsets"]);
+    const auto canvasKey = [&node](const char* key) {
+        return jsonOrEmpty(node, key, "canvas", "UICanvasSlot::deserialize");
+    };
+    args.anchorMin = vecFromJson(canvasKey("anchorMin"));
+    args.anchorMax = vecFromJson(canvasKey("anchorMax"), {1.0f, 1.0f});
+    args.offset = vecFromJson(canvasKey("offset"));
+    args.minSize = vecFromJson(canvasKey("minSize"));
+    args.maxSize = vecFromJson(canvasKey("maxSize"), args.maxSize);
+    args.offsets = marginFromJson(canvasKey("offsets"));
     args.alignmentH = static_cast<EWidgetAlignH>(node.value("alignmentH", 0));
     args.alignmentV = static_cast<EWidgetAlignV>(node.value("alignmentV", 0));
     args.widthSizeMode = static_cast<EWidgetSizeMode>(node.value("widthSizeMode", 0));
     args.heightSizeMode = static_cast<EWidgetSizeMode>(node.value("heightSizeMode", 0));
-    args.pivot = vecFromJson(node["pivot"]);
-    args.preferredSize = vecFromJson(node["preferredSize"]);
-    args.fixedSize = vecFromJson(node["fixedSize"]);
+    args.pivot = vecFromJson(canvasKey("pivot"));
+    args.preferredSize = vecFromJson(canvasKey("preferredSize"));
+    args.fixedSize = vecFromJson(canvasKey("fixedSize"));
     apply(args);
 }
 
@@ -690,11 +714,11 @@ void UIBoxSlot::deserialize(const nlohmann::json& node)
     FBoxSlotArgs args;
     args.sizeRule = static_cast<EUIBoxSlotSizeRule>(node.value("sizeRule", 0));
     args.weight = node.value("weight", 1.0f);
-    args.margin = marginFromJson(node["margin"]);
+    args.margin = marginFromJson(jsonOrEmpty(node, "margin", "box", "UIBoxSlot::deserialize"));
     args.crossAlignment = static_cast<EUIBoxSlotCrossAlignment>(node.value("crossAlignment", 0));
-    args.preferredSize = vecFromJson(node["preferredSize"]);
-    args.minSize = vecFromJson(node["minSize"]);
-    args.maxSize = vecFromJson(node["maxSize"], args.maxSize);
+    args.preferredSize = vecFromJson(jsonOrEmpty(node, "preferredSize", "box", "UIBoxSlot::deserialize"));
+    args.minSize = vecFromJson(jsonOrEmpty(node, "minSize", "box", "UIBoxSlot::deserialize"));
+    args.maxSize = vecFromJson(jsonOrEmpty(node, "maxSize", "box", "UIBoxSlot::deserialize"), args.maxSize);
     args.participatesInLayout = node.value("participatesInLayout", true);
     args.reserveSpaceWhenHidden = node.value("reserveSpaceWhenHidden", true);
     apply(args);
@@ -1287,8 +1311,10 @@ void UIContentSlot::deserialize(const nlohmann::json& node)
     FContentSlotArgs args;
     args.hAlign = static_cast<EUIOverlayAlignment>(node.value("hAlign", 0));
     args.vAlign = static_cast<EUIOverlayAlignment>(node.value("vAlign", 0));
-    args.padding = marginFromJson(node["padding"]);
-    args.preferredSize = vecFromJson(node["preferredSize"]);
+    args.padding = marginFromJson(jsonOrEmpty(node, "padding", "content",
+                                              "UIContentSlot::deserialize"));
+    args.preferredSize = vecFromJson(jsonOrEmpty(node, "preferredSize", "content",
+                                                 "UIContentSlot::deserialize"));
     apply(args);
 }
 
