@@ -117,9 +117,9 @@ struct SSAOFeature
     [[nodiscard]] Settings& settings() { return _settings; }
     [[nodiscard]] const Settings& settings() const { return _settings; }
 
-    /// Device lifecycle, driven by the owning pipeline at the same points it
-    /// used to drive the stage directly.
-    void init(IRender* render);
+    /// Device lifecycle, driven by the owning pipeline through the unified
+    /// context (it reads only `ctx.render`).
+    void init(const FeatureInitContext& ctx);
     void shutdown();
     void beginFrame();
     void refreshDeviceFormats();

@@ -20,6 +20,10 @@
 namespace ya
 {
 
+struct IRender;
+struct IDescriptorSetLayout;
+struct DebugRenderSystem;
+
 // ────────────────────────────────────────────────────────────────────────────
 // Feature errors
 // ────────────────────────────────────────────────────────────────────────────
@@ -233,6 +237,86 @@ template <typename F>
     }
     outOutputs = std::move(result.value());
     return Result<void, FeatureError>::success();
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Feature lifecycle: init / shutdown / beginFrame
+// ────────────────────────────────────────────────────────────────────────────
+
+/// The shared dependencies a feature may take at init time.
+///
+/// One context, each feature takes what it needs and ignores the rest: the
+/// pipeline states the environment once instead of knowing every feature's
+/// individual init signature. A feature that needs nothing from it (a graph-only
+/// feature) simply does not read it.
+///
+/// This is a plain aggregate, deliberately not a service locator: the fields are
+/// the concrete collaborators the pipeline already holds, and a feature reads
+/// them by name. No type erasure, no lookup by string, no registry.
+struct FeatureInitContext
+{
+    IRender*                     render = nullptr;
+    /// The frame/light descriptor layout the deferred GBuffer and lighting
+    /// passes share.
+    stdptr<IDescriptorSetLayout> frameAndLightDSL;
+    /// The skinning layout the GBuffer pass's skinned draws read.
+    stdptr<IDescriptorSetLayout> skinningDSL;
+    /// The environment-lighting layout; empty when the Scene has no resolved
+    /// environment.
+    stdptr<IDescriptorSetLayout> environmentLightingDSL;
+    /// The debug overlay sink the overlay pass draws through.
+    DebugRenderSystem*           debugRenderSystem = nullptr;
+    /// The finalize pass's output format (each pipeline states its own).
+    EFormat::T                   postProcessColorFormat = EFormat::Undefined;
+};
+
+/// The lifecycle a feature participates in through the unified context.
+///
+/// A feature that owns a device object implements all three; one that owns
+/// nothing (a graph-only feature) is not required to -- `initFeatures` below
+/// only visits features that declare the member.
+///
+/// The reference is non-const on purpose: lifecycle mutates the feature (it
+/// creates and tears down its device object). A `const F&` here would make the
+/// concept false for every real feature and the folds would silently skip them
+/// all.
+template <typename F>
+concept LifecycleFeature = requires(F& feature, const FeatureInitContext& ctx) {
+    { feature.init(ctx) } -> std::same_as<void>;
+    { feature.shutdown() } -> std::same_as<void>;
+    { feature.beginFrame() } -> std::same_as<void>;
+};
+
+/// One lifecycle fold over a heterogeneous feature list, in the order given.
+///
+/// A fold, not a base-class array: each feature is visited at its own static
+/// type, so nothing is erased. Every argument must satisfy `LifecycleFeature`:
+/// a feature whose lifecycle signature drifts fails to compile here instead of
+/// being silently skipped, which is the failure mode a conditional fold would
+/// hide (the first version of this used `if constexpr` and quietly initialized
+/// nothing when the concept was mis-written).
+template <typename... F>
+void initFeatures(const FeatureInitContext& ctx, F&... features)
+{
+    static_assert((LifecycleFeature<F> && ...), "every feature in a lifecycle fold must implement init/shutdown/beginFrame");
+    (..., features.init(ctx));
+}
+
+/// Shutdown in reverse order: a feature initialized earlier may be what a later
+/// one's device object points at, so teardown mirrors construction.
+template <typename... F>
+void shutdownFeatures(F&... features)
+{
+    static_assert((LifecycleFeature<F> && ...), "every feature in a lifecycle fold must implement init/shutdown/beginFrame");
+    (..., features.shutdown());
+}
+
+/// Submission-scoped warmup fold, in list order.
+template <typename... F>
+void beginFrameFeatures(F&... features)
+{
+    static_assert((LifecycleFeature<F> && ...), "every feature in a lifecycle fold must implement init/shutdown/beginFrame");
+    (..., features.beginFrame());
 }
 
 } // namespace ya

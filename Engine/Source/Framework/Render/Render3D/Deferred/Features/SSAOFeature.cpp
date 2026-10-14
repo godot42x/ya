@@ -15,12 +15,12 @@
 namespace ya
 {
 
-void SSAOFeature::init(IRender* render)
+void SSAOFeature::init(const FeatureInitContext& ctx)
 {
     if (_stage == nullptr) {
         _stage = ya::makeShared<SSAOStage>();
     }
-    _stage->init(render);
+    _stage->init(ctx.render);
 }
 
 void SSAOFeature::shutdown()

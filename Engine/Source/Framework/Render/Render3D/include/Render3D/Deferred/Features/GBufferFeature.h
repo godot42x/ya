@@ -99,9 +99,7 @@ struct GBufferFeature
     /// The device object this feature owns (D5); the pipeline drives it.
     stdptr<GBufferStage> _stage;
 
-    void init(IRender* render,
-              stdptr<IDescriptorSetLayout> frameAndLightDSL,
-              stdptr<IDescriptorSetLayout> skinningDSL);
+    void init(const FeatureInitContext& ctx);
     void shutdown();
     void beginFrame();
     void prepare(const RenderStageContext& ctx);

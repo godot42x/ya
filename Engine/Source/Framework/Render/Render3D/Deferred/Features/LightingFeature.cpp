@@ -18,18 +18,16 @@
 namespace ya
 {
 
-void LightingFeature::init(IRender* render,
-                           stdptr<IDescriptorSetLayout> frameAndLightDSL,
-                           stdptr<IDescriptorSetLayout> environmentLightingDSL)
+void LightingFeature::init(const FeatureInitContext& ctx)
 {
     if (_stage == nullptr) {
         _stage = ya::makeShared<LightStage>();
     }
-    _stage->setup(LightStage::SharedInputs{.frameAndLightDSL = std::move(frameAndLightDSL)});
+    _stage->setup(LightStage::SharedInputs{.frameAndLightDSL = ctx.frameAndLightDSL});
     _stage->setEnvironmentLightingInput(LightStage::EnvironmentLightingInput{
-        .environmentLightingDSL = std::move(environmentLightingDSL),
+        .environmentLightingDSL = ctx.environmentLightingDSL,
     });
-    _stage->init(render);
+    _stage->init(ctx.render);
     _stage->setIBLSettings(bPBRDiffuseIBL, bPBRSpecularIBL);
 }
 

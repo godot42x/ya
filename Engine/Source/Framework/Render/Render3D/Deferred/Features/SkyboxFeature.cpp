@@ -9,12 +9,12 @@
 namespace ya
 {
 
-void SkyboxFeature::init(IRender* render)
+void SkyboxFeature::init(const FeatureInitContext& ctx)
 {
     if (_stage == nullptr) {
         _stage = ya::makeShared<SkyboxStage>();
     }
-    _stage->init(render);
+    _stage->init(ctx.render);
 }
 
 void SkyboxFeature::shutdown()

@@ -27,13 +27,13 @@ OverlayFeature::Resolved OverlayFeature::resolve(const Settings& settings,
     return resolved;
 }
 
-void OverlayFeature::init(IRender* render, DebugRenderSystem* debugRenderSystem)
+void OverlayFeature::init(const FeatureInitContext& ctx)
 {
     if (_stage == nullptr) {
         _stage = ya::makeShared<ViewOverlayStage>();
     }
-    _stage->setDebugRenderSystem(debugRenderSystem);
-    _stage->init(render);
+    _stage->setDebugRenderSystem(ctx.debugRenderSystem);
+    _stage->init(ctx.render);
 }
 
 void OverlayFeature::shutdown()

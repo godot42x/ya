@@ -87,7 +87,7 @@ struct FinalizeFeature
     /// The device object this feature owns (D5); the pipeline drives it.
     stdptr<BasicPostprocessing> _stage;
 
-    void init(IRender* render, EFormat::T colorFormat);
+    void init(const FeatureInitContext& ctx);
     void shutdown();
     void beginFrame();
     [[nodiscard]] BasicPostprocessing* stage() const { return _stage.get(); }

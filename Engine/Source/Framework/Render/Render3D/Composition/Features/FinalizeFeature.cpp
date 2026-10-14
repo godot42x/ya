@@ -15,18 +15,18 @@ namespace
 constexpr std::string_view kFinalizeOutputExportName = "Postprocessing.Output";
 } // namespace
 
-void FinalizeFeature::init(IRender* render, EFormat::T colorFormat)
+void FinalizeFeature::init(const FeatureInitContext& ctx)
 {
     if (_stage == nullptr) {
         _stage = ya::makeShared<BasicPostprocessing>();
     }
     _stage->init(BasicPostprocessing::InitDesc{
-        .render                = render,
+        .render                = ctx.render,
         .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                   = "BasicPostprocessing",
             .viewMask                = 0,
-            .colorAttachmentFormats  = {colorFormat},
+            .colorAttachmentFormats  = {ctx.postProcessColorFormat},
             .depthAttachmentFormat   = EFormat::Undefined,
             .stencilAttachmentFormat = EFormat::Undefined,
         },

@@ -93,7 +93,7 @@ struct BloomFeature
     /// pipeline's member instance behave identically.
     stdptr<BloomPostprocessing> _stage;
 
-    void init(IRender* render);
+    void init(const FeatureInitContext& ctx);
     void shutdown();
     void beginFrame();
 

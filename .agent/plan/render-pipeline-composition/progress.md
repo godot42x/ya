@@ -31,6 +31,8 @@ Bloom、EntityId、Finalize、Shadow 的组合实现被两条管线共用。设�
 
 ## 最近一次更新
 
+2026-10-14：第二阶段落地——统一功能初始化。`FeatureInitContext`（6 个字段）+ `LifecycleFeature` concept + `initFeatures`/`shutdownFeatures`/`beginFrameFeatures` 三个编译期 fold 进 `FeatureProtocol.h`；7 个持设备的 feature 统一为 `init(const FeatureInitContext&)`；两条 Pipeline 的 init/shutdown/beginFrame 改为 fold 调用。**行数未减**（Deferred 1453→1455、Forward 1033→1035）——收益是 Pipeline 不再知道每个功能的 init 签名。**与 approach.md 方案 A 的偏离**：未用 `IFeature` 虚基类数组（design.md 禁止预先引入类型擦除），改用类型化上下文 + 编译期展开。**踩到并修掉的真 bug**：`LifecycleFeature` 最初写 `const F&` 而生命周期方法非 const → concept 恒 false → 带 `if constexpr` 的 fold 静默跳过全部初始化 → 运行时断言崩溃（exit 133）。修正为 `F&` + `static_assert` 强制（签名漂移现在编译失败），并加 `FeatureLifecycleTest` 钉住。验证：`ya-render-3d-test` 238/238；四帧逐像素 0 diff + 同实例连拍噪声判据；日志 0 ERROR、0 断言。
+
 2026-10-14：第一阶段落地——Recipe 折叠。`prepareFeature` / `appendFeature` 与两个 tuple fold 进 `FeatureProtocol.h`，`Result<void, E>` 进 `Core/Result.h`。真实行数：Deferred prepare 153→148、append 262→247，Forward prepare 96→92、append 184→180——**行数目标未达成**（中途用超长单行压行数被用户指出是作弊，已改回可读多行）。真实收益是每个功能的「调用→查错→存储→日志」样板被统一持有、新增功能只补两行。验证：`ya-render-3d-test` 237/237（基线 235 + 2 例 step 语义），四帧逐像素 0 diff（Deferred / Forward / 切回 Deferred）+ 同实例连拍 0 diff 噪声判据，日志 0 ERROR。未折叠 `resolve` 行与各功能 `PrepareContext` 字段投影，留给第二阶段。
 
 2026-10-14：重写当前计划文档，去掉批次流水账与过期草案；随后修正范围表达。整体目标始终是两条渲染管线的连接、功能封装、统一登记与驱动，而非 SSAO 专项。当前先用 SSAO 验证封装，随后用异构功能验证重复登记删除，再覆盖完整管线和整体验收。

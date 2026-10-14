@@ -65,54 +65,42 @@ if (auto err = prepareFeature(*stages.ssao, resolved.ssao, ctx, prepared.ssao); 
 
 ---
 
-### 第二阶段：统一功能初始化（随后，需设计初始化协议）
+### 第二阶段：统一功能初始化（已完成 2026-10-14）
 
-**现状：** Pipeline 的 `init` 里 10 个功能各有不同签名：
-- SSAO: `init(IRender*)`
-- Lighting: `init(IRender*, frameAndLightDSL, environmentLightingDSL)`
-- GBuffer: `init(IRender*, frameAndLightDSL, ...)`
-- Overlay: `init(IRender*, DebugRenderSystem*)`
+**原来的问题：** Pipeline 的 `init` 里各功能签名都不同（`init(IRender*)`、`init(IRender*, frameAndLightDSL, environmentLightingDSL)`、`init(IRender*, DebugRenderSystem*)`），Pipeline 必须逐个知道每个功能的初始化需求。
 
-Pipeline 必须逐个知道每个功能的初始化需求。
+**落地方式（与本节原先设想的差异）：** 采用类型化 `FeatureInitContext` + **编译期展开**，未用 `IFeature` 虚基类数组——design.md 明确禁止「预先引入类型擦除、字符串查找或新的 coordinator」。
 
-**目标：** 设计统一的初始化上下文，让 Pipeline 不再知道每个功能的具体 init 签名；功能自己从上下文里取需要的依赖。
-
-**方案：**
 ```cpp
 struct FeatureInitContext {
-    IRender* render;
+    IRender*                     render = nullptr;
     stdptr<IDescriptorSetLayout> frameAndLightDSL;
+    stdptr<IDescriptorSetLayout> skinningDSL;
     stdptr<IDescriptorSetLayout> environmentLightingDSL;
-    DebugRenderSystem* debugRenderSystem;
-    // 其他共享依赖...
+    DebugRenderSystem*           debugRenderSystem = nullptr;
+    EFormat::T                   postProcessColorFormat = EFormat::Undefined;
 };
 
-// 每个 Feature 统一签名，自己决定用哪些字段：
-void SSAOFeature::init(const FeatureInitContext& ctx) {
-    // 只用 ctx.render
-}
-void LightingFeature::init(const FeatureInitContext& ctx) {
-    // 用 ctx.render + 两个 DSL
-}
+// 每个 Feature 统一签名，自己取需要的字段：
+void SSAOFeature::init(const FeatureInitContext& ctx);     // 只用 ctx.render
+void LightingFeature::init(const FeatureInitContext& ctx); // render + 两个 DSL
 
-// Pipeline 的 init 变成表格驱动：
-FeatureInitContext ctx{...};
-for (auto* feature : {&_ssaoFeature, &_lightFeature, &_gBufferFeature, ...}) {
-    feature->init(ctx);
-}
+// Pipeline 的 init 变成一次编译期展开（类型安全，无虚调用）：
+initFeatures(featureInit, _gBufferFeature, _ssaoFeature, _lightFeature, _skyboxFeature, _overlayFeature);
 ```
 
-**验收标准：**
-- Pipeline 的 `init` 从逐个手写不同调用改为统一循环
-- 新增功能时 Pipeline 只需把它加入功能数组，不再补特殊初始化代码
-- 所有功能初始化成功，设备对象与当前实现等价
+**实测（如实）：**
 
-**改动：** 
-- Feature Protocol 加 `init(const FeatureInitContext&)` 要求
-- 10 个 Feature 适应新签名
-- Pipeline init/shutdown 改为表格驱动
+- 7 个持设备的 feature 统一签名：SSAO / Skybox / Overlay / GBuffer / Lighting / Bloom / Finalize
+- 两条 Pipeline 的 init/shutdown/beginFrame 共 9 处手写序列改为 fold 调用
+- **行数未减**：Deferred 1453→1455、Forward 1033→1035。收益是 Pipeline 不再知道各功能签名，不是行数
+- 新增功能 = 实现 `init(FeatureInitContext)` + 加入 fold 列表；**漏实现会编译失败**（fold 内的 `static_assert`）
 
-**时间：** 3-5 天（需改所有 Feature，测试初始化路径）
+**实现中发现并修掉的真 bug：** `LifecycleFeature` 最初写成 `requires(const F&, ...)`，而 init/shutdown/beginFrame 都是非 const 成员 → concept 对每个真实 feature 恒为 false → 带 `if constexpr` 的 fold 静默跳过全部初始化，运行时以 `Deferred pipeline overlay stage is not initialized` 断言崩溃。修正：(1) concept 改 `F&`；(2) 去掉 `if constexpr`，改 `static_assert` 强制——签名漂移从「静默跳过」变成「编译失败」，并加 `FeatureLifecycleTest` 钉住正反两面。
+
+**验收证据：** `ya-render-3d-test` 238/238（基线 235 + step 2 例 + lifecycle 1 例）；四帧逐像素 0 diff（Deferred / Forward / 切回 Deferred）+ 同实例连拍 0 diff 噪声判据；日志 0 ERROR、0 断言。
+
+**未覆盖（属第四阶段）：** Deferred 的 shadowStage/spriteStage/entityIdPass、Forward 的 viewStage/shadowStage 仍是手写生命周期。
 
 ---
 
@@ -255,9 +243,11 @@ auto extensionOut = executeExtensions(DeferredExtensionPoint::AfterLighting, ctx
 
 ### 下一步（按四阶段顺序）
 
-**第二阶段：统一功能初始化。** 设计 `FeatureInitContext`，让 Pipeline 的 init/shutdown 从逐功能特殊调用改为统一循环；前置是核对其与第一阶段的 step 行如何共用同一份"功能清单"。
+**第二阶段已完成**（见上，统一功能初始化）。
 
-**然后第三、四阶段依次推进。** 每个阶段独立验收、独立提交，不等全部完成。
+**第三阶段：定义扩展槽位。** 定义 `DeferredExtensionPoint` 与 `ExtensionContext`，用一个真实新功能（GTAO 或简单 SSR）验证接入成本。
+
+**然后第四阶段收尾。** 每个阶段独立验收、独立提交，不等全部完成。
 
 ---
 

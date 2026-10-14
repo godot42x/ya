@@ -11,14 +11,12 @@
 namespace ya
 {
 
-void GBufferFeature::init(IRender* render,
-                          stdptr<IDescriptorSetLayout> frameAndLightDSL,
-                          stdptr<IDescriptorSetLayout> skinningDSL)
+void GBufferFeature::init(const FeatureInitContext& ctx)
 {
     if (_stage == nullptr) {
         _stage = ya::makeShared<GBufferStage>();
     }
-    _stage->init(render, std::move(frameAndLightDSL), std::move(skinningDSL));
+    _stage->init(ctx.render, ctx.frameAndLightDSL, ctx.skinningDSL);
 }
 
 void GBufferFeature::shutdown()

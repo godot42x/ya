@@ -492,6 +492,69 @@ TEST(FeatureStepTest, AppendStoresOnSuccessAndLeavesSlotOnFailure)
 namespace
 {
 
+// A feature whose lifecycle actually runs: the counters are how the fold's
+// coverage is observed.
+struct LifecycleFeatureStub
+{
+    int* initCount      = nullptr;
+    int* shutdownCount  = nullptr;
+    int* beginFrameCount = nullptr;
+
+    void init(const FeatureInitContext&) { ++(*initCount); }
+    void shutdown() { ++(*shutdownCount); }
+    void beginFrame() { ++(*beginFrameCount); }
+};
+
+// A feature that implements the composition protocol but owns no device: it must
+// NOT satisfy LifecycleFeature, so a fold that lists it fails to compile.
+struct GraphOnlyFeatureStub
+{
+    void init(const FeatureInitContext&) {}
+};
+
+} // namespace
+
+// The lifecycle fold is the phase-2 contract: it must actually visit every
+// feature it is handed. This test exists because the first implementation used a
+// conditional fold whose concept required `const F&` while lifecycle mutates --
+// the fold compiled and silently initialized nothing, which the runtime caught
+// as "overlay stage is not initialized". The static_asserts in the folds make
+// that a compile error; this test pins the positive half.
+TEST(FeatureLifecycleTest, FoldVisitsEveryFeatureInOrder)
+{
+    int initA = 0;
+    int shutdownA = 0;
+    int beginA = 0;
+    int initB = 0;
+    int shutdownB = 0;
+    int beginB = 0;
+
+    LifecycleFeatureStub a{.initCount = &initA, .shutdownCount = &shutdownA, .beginFrameCount = &beginA};
+    LifecycleFeatureStub b{.initCount = &initB, .shutdownCount = &shutdownB, .beginFrameCount = &beginB};
+
+    const FeatureInitContext ctx{};
+    initFeatures(ctx, a, b);
+    beginFrameFeatures(a, b);
+    shutdownFeatures(a, b);
+
+    EXPECT_EQ(initA, 1);
+    EXPECT_EQ(initB, 1);
+    EXPECT_EQ(beginA, 1);
+    EXPECT_EQ(beginB, 1);
+    EXPECT_EQ(shutdownA, 1);
+    EXPECT_EQ(shutdownB, 1);
+
+    // The concept itself: a device-owning feature satisfies it, a graph-only
+    // one does not -- which is what turns "forgot the lifecycle" into a compile
+    // error at the fold instead of a silent skip.
+    static_assert(LifecycleFeature<LifecycleFeatureStub>);
+    static_assert(!LifecycleFeature<GraphOnlyFeatureStub>);
+    static_assert(!LifecycleFeature<SwitchableFeature>);
+}
+
+namespace
+{
+
 // Minimal factory for the executor-backed publish tests below: the same shape
 // the RDG core tests use, reduced to what transient textures need.
 class PublishTestImage final : public IImage

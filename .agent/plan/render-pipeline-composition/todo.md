@@ -29,50 +29,32 @@
 
 ---
 
-## 第二阶段：统一功能初始化（当前执行）
+## 第二阶段：统一功能初始化（已完成 2026-10-14）
 
-**目标：** Pipeline 的 init 从逐个手写不同调用改为统一上下文 + 表格驱动。
+**目标：** Pipeline 的 init 从逐个手写不同调用改为统一上下文 + 编译期展开。
 
-### 待办
+### 完成情况
 
-- [ ] 设计 `FeatureInitContext` 结构（包含所有功能可能需要的初始化依赖）
-- [ ] 核定与第一阶段 step 行的清单关系（避免第二份功能登记表）
-- [ ] Feature Protocol 加 `init(const FeatureInitContext&)` 要求
-- [ ] 10 个 Feature 适应新 init 签名（SSAOFeature, LightingFeature, GBufferFeature, ...）
-- [ ] Pipeline 的 init 改为表格驱动（功能数组 + 循环）
-- [ ] Pipeline 的 shutdown 同样改为表格驱动
-- [ ] 验收：所有功能初始化成功，设备对象与当前等价
-- [ ] 验收：新增功能时 Pipeline 只需加入数组，不补特殊 init 代码
-- [ ] 提交，标记"第二阶段完成"
+- [x] `FeatureInitContext`（render / frameAndLightDSL / skinningDSL / environmentLightingDSL / debugRenderSystem / postProcessColorFormat）
+- [x] `LifecycleFeature` concept（init/shutdown/beginFrame）+ `initFeatures` / `shutdownFeatures` / `beginFrameFeatures` 三个 fold
+- [x] 7 个持有设备的 feature 统一为 `init(const FeatureInitContext&)`：SSAO / Skybox / Overlay / GBuffer / Lighting / Bloom / Finalize
+- [x] 两条 Pipeline 的 init/shutdown/beginFrame 改为 fold 调用（Deferred 三处 + Forward 三处）
+- [x] 验收：单元测试 `ya-render-3d-test` 238/238（基线 235 + step 2 例 + lifecycle 1 例）
+- [x] 验收：四帧逐像素 0 diff（Deferred / Forward / 切回 Deferred）+ 同实例连拍噪声判据；日志 0 ERROR、0 断言
+- [x] 提交
 
-### 验收标准
+### 实测与偏差
 
-- Pipeline::init 不再逐个知道每个功能的 init 签名
-- 新增功能 = 实现 `init(FeatureInitContext)` + 加入 Pipeline 功能数组
-- 所有现有功能初始化路径通过，单元测试全绿
+- **行数未减**（Deferred 1453→1455、Forward 1033→1035）。本阶段的收益不是行数，是 Pipeline 不再知道每个功能的 init 签名。
+- **与 plan.md/approach.md 的方案差异（重要）**：approach.md 提的方案 A 是 `IFeature` 虚基类 + 功能指针数组；实际采用**类型化 `FeatureInitContext` + 编译期展开**，没有基类、没有指针数组、没有类型擦除。理由：design.md 明确写「不预先引入类型擦除、字符串查找或新的 coordinator」。静态分发同样达成「Pipeline init 变一处登记、新增功能只加一处」，且不触碰禁区。
+- **实现中踩到并修掉的真 bug**：`LifecycleFeature` 最初写成 `requires(const F&, ...)`，而生命周期方法都是非 const 成员 → concept 对所有真实 feature 恒为 false → 带 `if constexpr` 的 fold **静默跳过全部初始化**，运行时以 `Deferred pipeline overlay stage is not initialized` 断言崩溃（exit 133，lldb 定位）。两处修正：(1) concept 改 `F&`；(2) 去掉 `if constexpr`，改为 `static_assert((LifecycleFeature<F> && ...))` —— 签名漂移现在**编译失败**而不是静默跳过，并加 `FeatureLifecycleTest` 钉住正反两面。
+- 仍手写的 stage 生命周期（未 feature 化，属第四阶段范围）：Deferred 的 shadowStage/spriteStage/entityIdPass，Forward 的 viewStage/shadowStage。
 
----
+### 验收标准（对照）
 
-## 第二阶段：统一功能初始化（第一阶段后）
-
-**目标：** Pipeline 的 init 从逐个手写不同调用改为统一上下文 + 表格驱动。
-
-### 待办
-
-- [ ] 设计 `FeatureInitContext` 结构（包含所有功能可能需要的初始化依赖）
-- [ ] Feature Protocol 加 `init(const FeatureInitContext&)` 要求
-- [ ] 10 个 Feature 适应新 init 签名（SSAOFeature, LightingFeature, GBufferFeature, ...）
-- [ ] Pipeline 的 init 改为表格驱动（功能数组 + 循环）
-- [ ] Pipeline 的 shutdown 同样改为表格驱动
-- [ ] 验收：所有功能初始化成功，设备对象与当前等价
-- [ ] 验收：新增功能时 Pipeline 只需加入数组，不补特殊 init 代码
-- [ ] 提交，标记"第二阶段完成"
-
-### 验收标准
-
-- Pipeline::init 不再逐个知道每个功能的 init 签名
-- 新增功能 = 实现 `init(FeatureInitContext)` + 加入 Pipeline 功能数组
-- 所有现有功能初始化路径通过，单元测试全绿
+- Pipeline::init 不再逐个知道每个功能的 init 签名 —— 达成
+- 新增功能 = 实现 `init(FeatureInitContext)` + 加入 fold 列表 —— 达成（且漏实现会编译失败）
+- 所有现有功能初始化路径通过，单元测试全绿 —— 达成（238/238）
 
 ---
 
@@ -196,13 +178,13 @@
 
 ## 当前状态
 
-**阶段进度：** 1/4 完成
+**阶段进度：** 2/4 完成
 
-- 第一阶段：已完成（2026-10-14，见上）
-- 第二阶段：当前执行（统一功能初始化）
-- 第三阶段：未开始
-- 第四阶段：未开始
+- 第一阶段：已完成（2026-10-14，Recipe 折叠；行数目标未达成，真实收益是样板统一）
+- 第二阶段：已完成（2026-10-14，FeatureInitContext + 编译期展开；行数未减，收益是 Pipeline 不再知道各功能签名）
+- 第三阶段：未开始（扩展槽位）
+- 第四阶段：未开始（完成封装）
 
-**上次更新：** 2026-10-14，第一阶段落地（Recipe 折叠 + 验证证据）
+**上次更新：** 2026-10-14，第二阶段落地（7 个 feature 统一 init 签名 + 两条管线 fold 驱动 + lifecycle 测试）
 
-**下一步行动：** 第二阶段——设计 `FeatureInitContext`，核对它与第一阶段 step 行的清单关系。
+**下一步行动：** 第三阶段——定义 `DeferredExtensionPoint` 与 `ExtensionContext`，用一个真实新功能（GTAO 或简单 SSR）验证接入成本。

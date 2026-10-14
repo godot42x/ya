@@ -71,7 +71,7 @@ struct OverlayFeature
     /// The device object this feature owns (D5); the pipeline drives it.
     stdptr<ViewOverlayStage> _stage;
 
-    void init(IRender* render, DebugRenderSystem* debugRenderSystem);
+    void init(const FeatureInitContext& ctx);
     void shutdown();
     void beginFrame();
     void refreshDeviceFormats(const DeferredAttachmentFormats& formats);

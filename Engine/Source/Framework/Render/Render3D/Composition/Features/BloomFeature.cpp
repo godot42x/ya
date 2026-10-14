@@ -9,13 +9,13 @@
 namespace ya
 {
 
-void BloomFeature::init(IRender* render)
+void BloomFeature::init(const FeatureInitContext& ctx)
 {
     if (_stage == nullptr) {
         _stage = ya::makeShared<BloomPostprocessing>();
     }
     _stage->init(BloomPostprocessing::InitDesc{
-        .render = render,
+        .render = ctx.render,
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                   = "BloomPostprocessing",
             .viewMask                = 0,

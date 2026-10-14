@@ -107,7 +107,7 @@ struct LightingFeature
     bool bPBRDiffuseIBL  = true;
     bool bPBRSpecularIBL = true;
 
-    void init(IRender* render, stdptr<IDescriptorSetLayout> frameAndLightDSL, stdptr<IDescriptorSetLayout> environmentLightingDSL);
+    void init(const FeatureInitContext& ctx);
     void shutdown();
     void beginFrame();
     /// The shadow side of this pass's state: which shadow technique the

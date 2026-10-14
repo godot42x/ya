@@ -761,8 +761,13 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
         initShadowResources();
     }
 
-    _finalizeFeature.init(_render, POSTPROCESS_COLOR_FORMAT);
-    _bloomFeature.init(_render);
+    // The post-process features are initialized before initStages because their
+    // device objects' formats are pipeline constants, not stage-resource state.
+    const FeatureInitContext postProcessInit{
+        .render                 = _render,
+        .postProcessColorFormat = POSTPROCESS_COLOR_FORMAT,
+    };
+    initFeatures(postProcessInit, _finalizeFeature, _bloomFeature);
 }
 
 void DeferredRenderPipeline::initStages()
@@ -778,21 +783,21 @@ void DeferredRenderPipeline::initStages()
     _frameResources = ya::makeShared<DeferredFrameResourceSet>();
     _frameResources->init(_render);
 
-    _gBufferFeature.init(
-        _render,
-        _frameResources->getFrameAndLightDSL(),
-        _frameResources->getSkinningDSL());
-
-    _ssaoFeature.init(_render);
-
-    _lightFeature.init(
-        _render,
-        _frameResources->getFrameAndLightDSL(),
-        _environmentLightingDSL);
+    // The device features' init: one context, each feature taking the
+    // dependencies it needs. The list is the registration -- a feature added
+    // here has its lifecycle driven without the pipeline knowing its signature.
+    const FeatureInitContext featureInit{
+        .render                = _render,
+        .frameAndLightDSL      = _frameResources->getFrameAndLightDSL(),
+        .skinningDSL           = _frameResources->getSkinningDSL(),
+        .environmentLightingDSL = _environmentLightingDSL,
+        .debugRenderSystem     = _debugRenderSystem,
+    };
+    initFeatures(featureInit, _gBufferFeature, _ssaoFeature, _lightFeature, _skyboxFeature, _overlayFeature);
+    // Shadow's technique state depends on the lighting stage existing, so it is
+    // applied once both are up (the shadow resources themselves keep their own
+    // safe-point path).
     syncShadowSettings();
-
-    _skyboxFeature.init(_render);
-    _overlayFeature.init(_render, _debugRenderSystem);
 
     _spriteStage = ya::makeShared<Sprite2DStage>();
     _spriteStage->init(_render);
@@ -805,8 +810,10 @@ void DeferredRenderPipeline::initStages()
 void DeferredRenderPipeline::shutdown()
 {
     _entityIdPass.destroy();
-    _finalizeFeature.shutdown();
-    _bloomFeature.shutdown();
+    // Teardown order is the one the hand-written sequence had: the
+    // post-process pair first, then the device features in reverse of their
+    // init order.
+    shutdownFeatures(_finalizeFeature, _bloomFeature);
 
     _pendingResourceRefreshMask      = 0;
     _graphExecutor.reset();
@@ -815,11 +822,7 @@ void DeferredRenderPipeline::shutdown()
         _spriteStage->destroy();
         _spriteStage.reset();
     }
-    _overlayFeature.shutdown();
-    _skyboxFeature.shutdown();
-    _lightFeature.shutdown();
-    _ssaoFeature.shutdown();
-    _gBufferFeature.shutdown();
+    shutdownFeatures(_overlayFeature, _skyboxFeature, _lightFeature, _ssaoFeature, _gBufferFeature);
     if (_frameResources) {
         _frameResources->destroy();
         _frameResources.reset();
@@ -889,15 +892,14 @@ void DeferredRenderPipeline::beginSubmission(const PreparedPipelineFrame& prepar
         bSsaoOn = bSsaoOn || view.ssao().bEnabled;
     }
 
-    _gBufferFeature.beginFrame();
-    _finalizeFeature.beginFrame();
-    _bloomFeature.beginFrame();
+    // Submission-scoped warmup, in the order the hand-written sequence had.
+    // SSAO's PSO is warmed only when the composition turned it on; the folds
+    // cover the rest, whose warmup is unconditional.
+    beginFrameFeatures(_gBufferFeature, _finalizeFeature, _bloomFeature);
     if (bSsaoOn) {
         _ssaoFeature.beginFrame();
     }
-    _lightFeature.beginFrame();
-    _overlayFeature.beginFrame();
-    _skyboxFeature.beginFrame();
+    beginFrameFeatures(_lightFeature, _overlayFeature, _skyboxFeature);
 }
 
 ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyRecordContext& ctx)

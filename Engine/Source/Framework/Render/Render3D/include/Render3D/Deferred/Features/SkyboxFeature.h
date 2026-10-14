@@ -73,7 +73,7 @@ struct SkyboxFeature
     /// The device object this feature owns (D5); the pipeline drives it.
     stdptr<SkyboxStage> _stage;
 
-    void init(IRender* render);
+    void init(const FeatureInitContext& ctx);
     void shutdown();
     void beginFrame();
     void refreshDeviceFormats(const DeferredAttachmentFormats& formats);

@@ -193,13 +193,16 @@ void ForwardRenderPipeline::initViewResources(const InitDesc& desc)
 
 void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
 {
-    _finalizeFeature.init(_render, POSTPROCESS_COLOR_FORMAT);
-    _bloomFeature.init(_render);
+    (void)desc;
+    const FeatureInitContext featureInit{
+        .render                 = _render,
+        .postProcessColorFormat = POSTPROCESS_COLOR_FORMAT,
+    };
+    initFeatures(featureInit, _finalizeFeature, _bloomFeature);
     _postProcessState = postprocess_settings::loadRuntimeSettings(_postProcessState);
     _deleter.push("PostProcessFeatures", [this](void*)
                   {
-                      _finalizeFeature.shutdown();
-                      _bloomFeature.shutdown();
+                      shutdownFeatures(_finalizeFeature, _bloomFeature);
                   });
 }
 
@@ -329,8 +332,7 @@ void ForwardRenderPipeline::beginSubmission(const PreparedPipelineFrame& prepare
     (void)prepared;
     // Submission-scoped warmup only: settings and device resources were frozen
     // at the safe point.
-    _finalizeFeature.beginFrame();
-    _bloomFeature.beginFrame();
+    beginFrameFeatures(_finalizeFeature, _bloomFeature);
 }
 
 ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecordContext& ctx)
