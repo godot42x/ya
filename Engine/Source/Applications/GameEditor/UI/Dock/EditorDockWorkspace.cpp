@@ -1,6 +1,7 @@
 #include "GameEditor/UI/Dock/EditorDockWorkspace.h"
 
 #include "Core/Log.h"
+#include "GUI/Binding/LocalizedText.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
@@ -303,7 +304,9 @@ void EditorDockWorkspace::buildWindowMenu()
                 const bool bOpenNested = nested && nested->hasTab(tabId);
                 const bool bOpen = bOpenHere || bOpenNested;
                 items.push_back({
-                    .label    = EditorLocalization::editorTr(spawner.title),
+                    .label    = EditorLocalization::editorTr(spawner.titleKey.empty() ? spawner.title
+                                                                                     : spawner.titleKey,
+                                                             spawner.title),
                     .action   = [this, tabId, bOpen, bLocked, bOpenHere, nested]() {
                         if (bOpen) {
                             if (bLocked) {
@@ -508,7 +511,19 @@ bool EditorDockWorkspace::materializeTab(std::string_view tabId)
         YA_CORE_WARN("EditorDockWorkspace: no spawner for tab '{}'", tabId);
         return false;
     }
-    const DockPanelId id = _host.dock->addPanel(std::string(tabId), title, std::move(widget));
+    // Bind the tab title reactively: a language switch or a live document name
+    // re-labels this tab in place, with no dock rebuild, so the arrangement is
+    // preserved. A spawner with a `titleKey` translates with `title` as the
+    // fallback source; a short title is its own key.
+    std::shared_ptr<Reactive<std::string>> titleBinding;
+    if (spawner) {
+        const std::string key = spawner->titleKey.empty() ? spawner->title : spawner->titleKey;
+        if (!key.empty()) {
+            titleBinding = LocalizedText(key, {}, spawner->title).toReactive();
+        }
+    }
+    const DockPanelId id = _host.dock->addPanel(std::string(tabId), title, std::move(widget),
+                                                std::move(titleBinding));
     if (id == kInvalidDockPanelId) {
         return false;
     }

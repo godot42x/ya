@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
 #include "GUI/Widgets/Controls/DockSpace/DockDropTarget.h"
 
@@ -63,6 +64,10 @@ struct YA_GUI_API FDockContext
         DockPanelId                id = kInvalidDockPanelId;
         std::string                name;
         std::shared_ptr<UIElement> widget;
+        /// Optional reactive title. When set every projection reads it instead
+        /// of `name`, so a language switch / live document title repaints the
+        /// tab strips with no rebuild.
+        std::shared_ptr<Reactive<std::string>> titleBinding;
         uint32_t                   ownerEditorId = 0;
         std::string                documentKey;
     };
@@ -113,6 +118,9 @@ struct YA_GUI_API FDockContext
         uint32_t                   ownerEditorId = 0;
         std::string                documentKey;
         std::shared_ptr<UIElement> widget;
+        /// Carried through extract / adopt so a tear-off or cross-dock transfer
+        /// keeps the panel's live title binding.
+        std::shared_ptr<Reactive<std::string>> titleBinding;
     };
 
     /// Dock policy switches (central on/off for the whole session).
@@ -171,6 +179,25 @@ struct YA_GUI_API FDockContext
     /// stable panel id (kInvalidDockPanelId on failure).
     DockPanelId addPanel(const std::string& name, std::shared_ptr<UIElement> widget);
     DockPanelId addPanel(const std::string& stableKey, const std::string& title, std::shared_ptr<UIElement> widget);
+    /// Same, with a reactive title bound before the tab strip is materialized,
+    /// so the very first projection already reads the binding.
+    DockPanelId addPanel(const std::string& stableKey,
+                         const std::string& title,
+                         std::shared_ptr<UIElement> widget,
+                         std::shared_ptr<Reactive<std::string>> titleBinding);
+
+    /// Bind a reactive title to a panel. Every projection that shows this
+    /// panel's title (docked tab well, floating window tab strip / header)
+    /// reads the reactive value, so a `set()` repaints the affected tab strips
+    /// without touching the dock tree or rematerializing the DockSpace — the
+    /// arrangement is preserved. Bindings survive tear-off / re-dock because
+    /// they live on the panel registry record, not on a projection.
+    void bindPanelTitle(std::string_view stableKey, std::shared_ptr<Reactive<std::string>> title);
+    void bindPanelTitle(DockPanelId id, std::shared_ptr<Reactive<std::string>> title);
+    /// Set a plain (non-reactive) title; the model record changes but tabs
+    /// already materialized keep their old text until the next projection.
+    bool setPanelTitle(std::string_view stableKey, const std::string& title);
+    [[nodiscard]] std::shared_ptr<Reactive<std::string>> panelTitleBinding(DockPanelId id) const;
 
     // === Floating (Phase 5) ===
     /// Bind the overlay host that presents InProcessOverlay placements.

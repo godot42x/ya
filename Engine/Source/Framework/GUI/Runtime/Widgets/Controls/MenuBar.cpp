@@ -23,8 +23,10 @@ void UIMenuBarItem::paintSelf(UIFrameBuilder& builder)
 {
     // Resolve the (possibly reactive) label first so the dependency is
     // recorded even when the font is unavailable and the text is skipped
-    // (mirrors UIText::resolvedText ordering).
-    const std::string& label = resolvedLabel(ReactiveBase::EDirtyLevel::Paint);
+    // (mirrors UIText::resolvedText ordering). Layout level: the label width
+    // feeds the item's measured size, so a language switch must re-measure
+    // the bar, not just repaint it.
+    const std::string& label = resolvedLabel(ReactiveBase::EDirtyLevel::Layout);
 
     // Theme resolution (style-system Phase 3): the item draws its normal /
     // hovered fill brushes + the label color from FMenuBarItemStyle. Row
@@ -50,6 +52,20 @@ void UIMenuBarItem::onPointerEnter()
     if (_onHoveredEnter) {
         _onHoveredEnter(this);
     }
+}
+
+glm::vec2 UIMenuBarItem::computeDesiredSize() const
+{
+    // Same measure the bar used to author at addItem time, but read from the
+    // resolved (possibly reactive) label each measure pass: a language switch
+    // that re-labels the bar re-measures every item, so a wider string is not
+    // clipped by a stale width.
+    const std::string& label = resolvedLabel(ReactiveBase::EDirtyLevel::Layout);
+    const auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    return {
+        (font ? font->measureText(label) : static_cast<float>(label.size()) * 7.0f) + 20.0f,
+        26.0f,
+    };
 }
 
 bool UIMenuBarItem::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
@@ -91,13 +107,6 @@ UIMenuBarItem* UIMenuBar::addItem(const std::string& label, std::function<std::s
     auto item = std::make_shared<UIMenuBarItem>(std::format("MenuBar_{}", label));
     item->_label     = label;
     _entries.push_back({label, menuFactory});
-    // Size from the same font measurement the menu items use, so bar labels
-    // never overflow their button and stay consistent with the menus.
-    const auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, item->_fontSize);
-    const glm::vec2 itemSize{
-        (font ? font->measureText(label) : static_cast<float>(label.size()) * 7.0f) + 20.0f,
-        26.0f,
-    };
     item->_onActivate = [this, item, menuFactory]()
     {
         // A press on a menu-bar item while a menu is open is dismissed by
@@ -141,11 +150,33 @@ UIMenuBarItem* UIMenuBar::addItem(const std::string& label, std::function<std::s
         }
     };
     addDetachedChild(item);
-    if (UISlot* edge = getSlotForChild(*item); edge && edge->as<UIBoxSlot>()) {
-        auto* slot = edge->as<UIBoxSlot>();
-        slot->setPreferredSize(itemSize);
-    }
+    // No authored edge size: the item measures itself from its resolved label
+    // (computeDesiredSize), so a reactive label re-measures the bar on a
+    // language switch instead of being clipped by a width fixed at add time.
     return item.get();
+}
+
+void UIMenuBar::bindItemLabel(size_t index, std::shared_ptr<Reactive<std::string>> ref)
+{
+    const std::vector<UIElementRef>& children = getChildren();
+    if (index >= children.size() || !children[index]) {
+        return;
+    }
+    if (auto* item = dynamic_cast<UIMenuBarItem*>(children[index].get())) {
+        item->bindLabel(std::move(ref));
+    }
+}
+
+std::string UIMenuBar::resolvedItemLabel(size_t index) const
+{
+    const std::vector<UIElementRef>& children = getChildren();
+    if (index >= children.size() || !children[index]) {
+        return index < _entries.size() ? _entries[index].label : std::string{};
+    }
+    if (const auto* item = dynamic_cast<const UIMenuBarItem*>(children[index].get())) {
+        return item->resolvedLabel();
+    }
+    return index < _entries.size() ? _entries[index].label : std::string{};
 }
 
 void UIMenuBar::closeOpenMenu()

@@ -1,10 +1,12 @@
 #pragma once
 
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Theme.h"
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -42,6 +44,17 @@ struct YA_GUI_API UITabButton : public UIElement, public UIStyledWidget<UITabBut
     /// selects. Default true so dock wells stay draggable.
     bool        _bDraggable = true;
     uint32_t    _fontSize   = 13;
+
+    /// Reactive label binding (language switch, live document title). When
+    /// set, paint and measure read the reactive value (and record the
+    /// dependency), so a `set()` re-measures and repaints this tab without
+    /// rebuilding the strip — the dock layout is untouched. `_label` stays the
+    /// authored fallback shown before a binding is attached.
+    void bindLabel(std::shared_ptr<Reactive<std::string>> ref) { _labelBinding = std::move(ref); }
+    [[nodiscard]] const std::string& resolvedLabel(ReactiveBase::EDirtyLevel level = ReactiveBase::EDirtyLevel::Paint) const
+    {
+        return _labelBinding ? _labelBinding->get(level) : _label;
+    }
 
     /// Fired when this tab is activated (click / Enter / Space).
     std::function<void()> _onActivated;
@@ -82,6 +95,8 @@ struct YA_GUI_API UITabButton : public UIElement, public UIStyledWidget<UITabBut
     bool      _bPressed     = false;
     bool      _bDidReorder  = false;
     glm::vec2 _pressPoint{0.0f, 0.0f};
+    /// Optional reactive label source (see bindLabel / resolvedLabel).
+    std::shared_ptr<Reactive<std::string>> _labelBinding;
 };
 
 /// Tab strip (imgui-demo-style page switcher, gui-app-bootstrap Phase 4).

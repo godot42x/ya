@@ -53,8 +53,7 @@ void UITabButton::paintSelf(UIFrameBuilder& builder)
 
     builder.addBrush(_layoutRect,
                      resolveVisualFill(visualChrome(style),
-                                       composeVisualFlags(_bHovered, false, false, !isEnabled(), _bSelected, false, false)));
-    if (_bSelected) {
+                                       composeVisualFlags(_bHovered, false, false, !isEnabled(), _bSelected, false, false)));    if (_bSelected) {
         // Selected tab reads as "connected to the content below": the fill is
         // the editor-chrome base, with a thin accent bar along the top edge.
         // Drawing a slightly taller rect than our own (the bar's padding is
@@ -72,11 +71,14 @@ void UITabButton::paintSelf(UIFrameBuilder& builder)
     }
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {
+        // Resolve the (possibly reactive) label first so the dependency is
+        // recorded even when the font is unavailable (mirrors UIText ordering).
+        const std::string& label = resolvedLabel(ReactiveBase::EDirtyLevel::Layout);
         Rect2D labelRect = _layoutRect;
         if (_bClosable) {
             labelRect.extent.x = std::max(0.0f, labelRect.extent.x - (kTabCloseSize + kTabClosePad * 2.0f));
         }
-        builder.addText(labelRect, _label, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+        builder.addText(labelRect, label, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
         if (_bClosable) {
             builder.addText(closeHitRect(), "x", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
         }
@@ -91,7 +93,10 @@ glm::vec2 UITabButton::computeDesiredSize() const
     // FTabStyle padding is the framework fallback.
     const FTabStyle& style = resolvedStyle(ReactiveBase::EDirtyLevel::Layout, false);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
-    const float textWidth = font ? font->measureText(_label) : static_cast<float>(_label.size()) * 7.0f;
+    // Measure from the resolved label so a reactive label (language switch)
+    // re-measures this tab when the binding changes.
+    const std::string& label = resolvedLabel(ReactiveBase::EDirtyLevel::Layout);
+    const float textWidth = font ? font->measureText(label) : static_cast<float>(label.size()) * 7.0f;
     const float closeW    = _bClosable ? (kTabCloseSize + kTabClosePad) : 0.0f;
     return {textWidth + style.padding.x * 2.0f + closeW,
             style.padding.y * 2.0f + (font ? font->lineHeight : 14.0f)};

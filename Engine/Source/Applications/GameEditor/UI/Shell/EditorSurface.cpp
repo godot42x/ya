@@ -12,6 +12,7 @@
 #include "GameEditor/UI/Shell/EditorContentOpenerRegistry.h"
 #include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
 #include "GameEditor/Localization/EditorLocalization.h"
+#include "GUI/Binding/LocalizedText.h"
 
 #include "Core/Event.h"
 #include "Core/Log.h"
@@ -151,6 +152,10 @@ void EditorSurface::shutdown()
     _viewportTexture.reset();
     _viewportImageResource.reset();
     _viewportImageView.reset();
+    if (_languageHandle != 0) {
+        LocalizationManager::get().removeLanguageChangedListener(_languageHandle);
+        _languageHandle = 0;
+    }
     _layer = nullptr;
     _tabSpawners = nullptr;
     _rootSession = nullptr;
@@ -428,16 +433,18 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
                         ui::boxSlot().margin(bandInsets).preferredSize({0.0f, titleH}));
     }
 
-    // Menu-bar labels use the source string as their own key. The popup menus
-    // rebuild on every open, so action labels are translated here (key = the
-    // English source string the ActionMap registers): a language set before the
-    // chrome is built is reflected with no stale cache.
+    // Menu bar labels are the source string (short) as their own key, bound
+    // reactively so a language switch re-labels the bar in place: the switch
+    // only repaints/re-measures, the chrome tree is never rebuilt.
+    // Menu popups rebuild on every open, so action labels are translated here
+    // (key = the English source string the ActionMap registers): a language
+    // switch is reflected the next time the menu opens, with no stale cache.
     auto actionItem = [](ActionMap& actions, const char* id) {
         UIMenu::FItem item = UIMenu::FItem::fromAction(actions, id);
         item.label = EditorLocalization::editorTr(item.label);
         return item;
     };
-    _menuBar->addItem(EditorLocalization::editorTr("File"), [this, actionItem]() {
+    _menuBar->addItem("File", [this, actionItem]() {
         ActionMap& actions = _rootSession->actions();
         return UIMenu::create({
             actionItem(actions, "scene.new"),
@@ -448,7 +455,7 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
             actionItem(actions, "app.exit"),
         });
     });
-    _menuBar->addItem(EditorLocalization::editorTr("Edit"), [this, actionItem]() {
+    _menuBar->addItem("Edit", [this, actionItem]() {
         ActionMap& actions = activePageRoot()->actions();
         return UIMenu::create({
             actionItem(actions, "edit.undo"),
@@ -458,7 +465,7 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
             actionItem(actions, "selection.delete"),
         });
     });
-    _menuBar->addItem(EditorLocalization::editorTr("View"), [this, actionItem]() {
+    _menuBar->addItem("View", [this, actionItem]() {
         // Ortho XY is a camera option of the Level viewport (world 2D authoring).
         UIMenu::FItem orthoItem = actionItem(_rootSession->actions(), "viewport.ortho");
         orthoItem.bCheckable    = true;
@@ -626,6 +633,15 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
         .rootFor         = rootFor,
     });
     _workspace.buildWindowMenu();
+    // Localize the menu-bar labels reactively (key = source string). Window and
+    // Layout are registered by buildWindowMenu, so this runs after it. A
+    // language switch re-measures and repaints the bar in place.
+    if (_menuBar) {
+        const char* menuBarKeys[] = {"File", "Edit", "View", "Window", "Layout"};
+        for (size_t i = 0; i < std::size(menuBarKeys) && i < _menuBar->itemCount(); ++i) {
+            _menuBar->bindItemLabel(i, EditorLocalization::editorText(menuBarKeys[i]).toReactive());
+        }
+    }
 #if defined(__APPLE__)
     if (_menuBarPlacement == EEditorMenuBarPlacement::NativeApplication) {
         // Window entries register after the install; AppKit does not send
@@ -664,6 +680,25 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
     _viewOverlayHost.setOverlay(_viewportGizmoOverlay);
     _layer->gizmo().setUndoStack(&_rootSession->undo());
     _layer->tileBrush().setUndoStack(&_rootSession->undo());
+
+    // Chrome that is not otherwise bound reactively (window title, native menu
+    // labels, tab spawner titles already handled by panel bindings) refreshes
+    // on a language switch. Registered per rebuild; the handle is released in
+    // shutdown() and re-taken here, so a rebuilt surface never double-subscribes.
+    if (_languageHandle != 0) {
+        LocalizationManager::get().removeLanguageChangedListener(_languageHandle);
+        _languageHandle = 0;
+    }
+    _languageHandle = LocalizationManager::get().addLanguageChangedListener([this](std::string_view) {
+        // syncWindowTitle() is idempotent and cheap: it returns early when the
+        // composed title is unchanged.
+        syncWindowTitle();
+#if defined(__APPLE__)
+        if (_menuBarPlacement == EEditorMenuBarPlacement::NativeApplication) {
+            refreshApplicationMenu();
+        }
+#endif
+    });
 }
 
 void EditorSurface::applyWindowMetrics(const EditorWindowMetrics& metrics)
@@ -1361,6 +1396,7 @@ void EditorSurface::syncPageTabs()
     std::vector<std::string> keys;
     std::vector<std::string> titles;
     std::vector<bool> closable;
+    std::vector<std::shared_ptr<Reactive<std::string>>> titleBindings;
     int selected = -1;
     DockNodeId pageLeaf = _dockContext->dockModel().findFirstLeafWithRole(EDockLeafRole::Page);
     if (pageLeaf == kInvalidDockNodeId) {
@@ -1398,6 +1434,8 @@ void EditorSurface::syncPageTabs()
             keys.push_back(record->stableKey);
             titles.push_back(record->title);
             closable.push_back(record->closable);
+            const FDockContext::FPanel* panel = _dockContext->findPanel(panelId);
+            titleBindings.push_back(panel ? panel->titleBinding : nullptr);
         }
     }
 
@@ -1431,6 +1469,16 @@ void EditorSurface::syncPageTabs()
     for (int i = 0; i < _pageTabBar->tabCount() && i < static_cast<int>(draggable.size()); ++i) {
         if (UITabButton* button = _pageTabBar->tabAt(i)) {
             button->_bDraggable = draggable[static_cast<size_t>(i)];
+        }
+    }
+    // Bind the (possibly reactive) panel title to every page tab, including
+    // ones that already existed: a language switch then repaints/ re-measures
+    // the strip in place, with no dock rebuild and no layout change.
+    for (size_t i = 0; i < titleBindings.size() && i < static_cast<size_t>(_pageTabBar->tabCount()); ++i) {
+        if (titleBindings[i]) {
+            if (UITabButton* button = _pageTabBar->tabAt(static_cast<int>(i))) {
+                button->bindLabel(titleBindings[i]);
+            }
         }
     }
     if (selected >= 0) {

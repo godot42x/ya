@@ -2,6 +2,7 @@
 
 #include "Core/Common/Types.h"
 #include "Core/Event.h"
+#include "Core/Localization/LocalizationManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GameEditor/UI/Dialogs/EditorAssetPicker.h"
 #include "GameEditor/UI/Dock/EditorDockWorkspace.h"
@@ -113,6 +114,11 @@ struct EditorSurface : IEditorViewportHostSink
     std::unique_ptr<EditorConfirmDialog> _confirm;
     std::unique_ptr<EditorNamePrompt> _namePrompt;
     std::string _windowTitle;
+    /// Subscribed to LocalizationManager so chrome that is not already bound
+    /// reactively (window title, native application menu) refreshes on a
+    /// language switch. The dock tab strips refresh through their own reactive
+    /// panel-title bindings, so this does not touch the layout.
+    LocalizationManager::LanguageChangedHandle _languageHandle = 0;
 
     std::shared_ptr<Texture>    _viewportTexture;
     std::shared_ptr<IImage>     _viewportImageResource;

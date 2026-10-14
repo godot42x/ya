@@ -6,6 +6,7 @@
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/Controls/DockSpace/DockTabStack.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <gtest/gtest.h>
@@ -13,6 +14,7 @@
 
 #include <algorithm>
 #include <format>
+#include <functional>
 #include <string_view>
 #include <unordered_set>
 
@@ -638,6 +640,55 @@ TEST(DockNodeTest, ActivatePanelGraftsSelectedTabAndDetachedStopsTick)
     tree.tick(1.0f / 60.0f);
     EXPECT_EQ(visible->ticks, 0);
     EXPECT_EQ(hidden->ticks, 1);
+}
+
+// A reactive panel title updates the docked tab strip in place: the dock tree
+// is not rematerialized, so the layout (and any tear-off/floating placement)
+// survives a language switch.
+TEST(DockNodeTest, ReactivePanelTitleUpdatesTabInPlace)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto context = std::make_shared<FDockContext>();
+    auto content = std::make_shared<UICanvasPanel>("Panel");
+    auto title   = std::make_shared<Reactive<std::string>>("Level");
+    const DockPanelId panelId = context->addPanel("level", "Level", content, title);
+    ASSERT_NE(panelId, kInvalidDockPanelId);
+
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    dock->setContext(context);
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, fill).valid());
+   (void)tree.buildSnapshot(UIFrameBuildContext{});
+
+    // The tab strip's first label reads the bound value.
+    const std::function<UITabBar*(UIElement&)> findTabBar = [&](UIElement& node) -> UITabBar* {
+        for (const UIElementRef& child : node.getChildren()) {
+            if (!child) {
+                continue;
+            }
+            if (auto* bar = dynamic_cast<UITabBar*>(child.get())) {
+                return bar;
+            }
+            if (UITabBar* nested = findTabBar(*child)) {
+                return nested;
+            }
+        }
+        return nullptr;
+    };
+    UITabBar*   bar = findTabBar(*dock);
+    UITabButton* tab = bar ? bar->tabAt(0) : nullptr;
+    ASSERT_NE(tab, nullptr);
+    EXPECT_EQ(tab->resolvedLabel(), "Level");
+    const DockNodeId leafBefore = context->dockModel().leafIds().front();
+
+    title->set("关卡");
+    EXPECT_EQ(tab->resolvedLabel(), "关卡");
+    // No rebuild: the same leaf still holds the panel.
+    ASSERT_FALSE(context->dockModel().leafIds().empty());
+    EXPECT_EQ(context->dockModel().leafIds().front(), leafBefore);
+    EXPECT_NE(context->dockModel().findLeafForPanel(panelId), nullptr);
 }
 
 TEST(DockNodeTest, SanitizeLayoutJsonDropsUnknownDockedAndFloatingKeys)

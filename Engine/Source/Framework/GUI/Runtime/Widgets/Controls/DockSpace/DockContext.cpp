@@ -101,7 +101,17 @@ DockPanelId FDockContext::addPanel(const std::string& name, std::shared_ptr<UIEl
     return addPanel(name, name, std::move(widget));
 }
 
-DockPanelId FDockContext::addPanel(const std::string& stableKey, const std::string& title, std::shared_ptr<UIElement> widget)
+DockPanelId FDockContext::addPanel(const std::string& stableKey,
+                                   const std::string& title,
+                                   std::shared_ptr<UIElement> widget)
+{
+    return addPanel(stableKey, title, std::move(widget), nullptr);
+}
+
+DockPanelId FDockContext::addPanel(const std::string& stableKey,
+                                   const std::string& title,
+                                   std::shared_ptr<UIElement> widget,
+                                   std::shared_ptr<Reactive<std::string>> titleBinding)
 {
     const DockPanelId id = _tabs.nextPanelId++;
     DockNodeId leafId = kInvalidDockNodeId;
@@ -118,7 +128,10 @@ DockPanelId FDockContext::addPanel(const std::string& stableKey, const std::stri
         !_layout.addPanel(id, leafId)) {
         return kInvalidDockPanelId;
     }
-    _tabs.panels.emplace(id, FPanel{.id = id, .name = title, .widget = std::move(widget)});
+    _tabs.panels.emplace(id, FPanel{.id = id,
+                                    .name = title,
+                                    .widget = std::move(widget),
+                                    .titleBinding = std::move(titleBinding)});
     if (const FDockNode* leaf = _layout.findLeafForPanel(id)) {
         _lastFocusedStackId = leaf->id;
         if (_dockSpace) {
@@ -137,6 +150,41 @@ bool FDockContext::setPanelIdentity(DockPanelId id, uint32_t ownerEditorId, std:
     panel->ownerEditorId = ownerEditorId;
     panel->documentKey   = std::move(documentKey);
     return true;
+}
+
+void FDockContext::bindPanelTitle(DockPanelId id, std::shared_ptr<Reactive<std::string>> title)
+{
+    if (FPanel* panel = findPanel(id)) {
+        panel->titleBinding = std::move(title);
+    }
+}
+
+void FDockContext::bindPanelTitle(std::string_view stableKey, std::shared_ptr<Reactive<std::string>> title)
+{
+    const FPanel* panel = findPanelByStableKey(stableKey);
+    if (panel) {
+        bindPanelTitle(panel->id, std::move(title));
+    }
+}
+
+bool FDockContext::setPanelTitle(std::string_view stableKey, const std::string& title)
+{
+    const FDockPanelRecord* record = _layout.findPanelByStableKey(std::string(stableKey));
+    FPanel* panel = record ? findPanel(record->id) : nullptr;
+    if (!panel) {
+        return false;
+    }
+    panel->name = title;
+    if (panel->titleBinding) {
+        panel->titleBinding->set(title);
+    }
+    return true;
+}
+
+std::shared_ptr<Reactive<std::string>> FDockContext::panelTitleBinding(DockPanelId id) const
+{
+    const FPanel* panel = findPanel(id);
+    return panel ? panel->titleBinding : nullptr;
 }
 
 bool FDockContext::setPanelIdentity(std::string_view stableKey, uint32_t ownerEditorId, std::string documentKey)
@@ -558,6 +606,7 @@ std::optional<FDockContext::FDockExtractedPanel> FDockContext::extractPanel(Dock
     extracted.ownerEditorId = panel->ownerEditorId;
     extracted.documentKey   = panel->documentKey;
     extracted.widget        = panel->widget;
+    extracted.titleBinding  = panel->titleBinding;
 
     if (extracted.widget && extracted.widget->isAttached()) {
         if (WidgetTree* tree = extracted.widget->getTree()) {
@@ -599,6 +648,7 @@ DockPanelId FDockContext::adoptPanel(FDockExtractedPanel extracted)
                     FPanel{id,
                            extracted.title,
                            std::move(extracted.widget),
+                           std::move(extracted.titleBinding),
                            extracted.ownerEditorId,
                            extracted.documentKey});
     return id;

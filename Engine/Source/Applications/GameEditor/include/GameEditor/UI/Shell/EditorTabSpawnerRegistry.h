@@ -65,6 +65,12 @@ struct FEditorTabSpawner
 {
     std::string            tabId;
     std::string            title;
+    /// Localization key for the tab title. Empty falls back to `title` as the
+    /// key (short labels like "Viewport" are their own key); a longer display
+    /// string uses a dotted key with `title` as the fallback source. The
+    /// editor binds the translated value reactively, so a language switch
+    /// updates the tab strip without rebuilding the dock.
+    std::string            titleKey;
     std::string            toolsMenuLabel;
     EEditorTabScope        scope          = EEditorTabScope::WindowRootEditor;
     EditorRootId           ownerEditorId  = kInvalidEditorRootId;

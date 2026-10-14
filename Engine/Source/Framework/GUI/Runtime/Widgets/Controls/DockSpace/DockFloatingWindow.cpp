@@ -490,6 +490,11 @@ void UIDockFloatingWindow::refreshFromContext()
     for (const DockPanelId pid : rec->panelIds) {
         const std::string title = _context->findPanel(pid) ? _context->findPanel(pid)->name : std::string{};
         UITabButton* tab = _tabBar->addTab(title.empty() ? "?" : title);
+        // A reactive panel title updates this floating tab strip in place
+        // (language switch / live document title) without rebuilding it.
+        if (const FDockContext::FPanel* panel = _context->findPanel(pid); panel && panel->titleBinding) {
+            tab->bindLabel(panel->titleBinding);
+        }
         if (const FDockPanelRecord* record = _context->dockModel().findPanel(pid)) {
             tab->_bClosable = record->closable;
             if (record->closable) {

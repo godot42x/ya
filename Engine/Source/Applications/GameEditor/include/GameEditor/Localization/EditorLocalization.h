@@ -1,8 +1,10 @@
 #pragma once
 
 #include "Core/Localization/LocalizationManager.h"
+#include "GUI/Binding/LocalizedText.h"
 
 #include <initializer_list>
+#include <memory>
 #include <string>
 #include <string_view>
 
@@ -44,6 +46,15 @@ void setEditorLanguage(std::string_view language);
                                               std::initializer_list<std::string> args)
 {
     return LocalizationManager::format(editorTr(key, fallback), args);
+}
+
+/// A reactive handle for a chrome string: bind it to a widget (`bindLabel` /
+/// `bindText`) and a language switch updates that widget in place, without any
+/// rebuild. `key` is the lookup key; `fallbackSource` is the English source
+/// shown when untranslated.
+[[nodiscard]] inline LocalizedText editorText(std::string key, std::string fallbackSource = {})
+{
+    return LocalizedText(std::move(key), {}, std::move(fallbackSource));
 }
 
 } // namespace EditorLocalization

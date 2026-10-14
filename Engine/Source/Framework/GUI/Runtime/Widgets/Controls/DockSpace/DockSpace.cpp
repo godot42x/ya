@@ -676,6 +676,12 @@ void UIDockSpace::rebuildStack(DockNodeId leafId)
     for (DockPanelId panelId : leaf->panelIds) {
         if (const FDockContext::FPanel* fp = _context->findPanel(panelId)) {
             UITabButton* tab = view->well->addTab(fp->name);
+            // A panel with a reactive title keeps its tab updated in place
+            // (language switch / live document title) without rebuilding this
+            // stack, so the dock arrangement is never disturbed.
+            if (fp->titleBinding) {
+                tab->bindLabel(fp->titleBinding);
+            }
             if (const FDockPanelRecord* rec = _context->dockModel().findPanel(panelId)) {
                 tab->_bClosable = rec->closable;
                 if (rec->closable) {

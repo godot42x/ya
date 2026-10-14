@@ -53,6 +53,10 @@ struct YA_GUI_API UIMenuBarItem : public UIElement, public UIStyledWidget<UIMenu
     void onPointerLeave() override { _bHovered = false; }
     void resetHoverState() override { onPointerLeave(); }
     void clearTransientInputState() override { _bHovered = false; }
+    /// Measure from the resolved label so a reactive label re-measures this
+    /// item when the binding changes (language switch), matching how the bar
+    /// sized items at addItem time.
+    [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 
   private:
     /// Transient hover state. A VisualFlag so every write (enter / leave /
@@ -81,6 +85,15 @@ struct YA_GUI_API UIMenuBar : public UIContainer
     /// Add `label`; clicking opens the menu from `menuFactory` (null factory
     /// = disabled entry, only visual). Returns the created item.
     UIMenuBarItem* addItem(const std::string& label, std::function<std::shared_ptr<UIMenu>()> menuFactory);
+
+    /// Bind a reactive label to the entry at `index` (bar order). A language
+    /// switch then re-labels the bar in place: the item re-measures and
+    /// repaints, and nothing in the chrome tree is rebuilt.
+    void bindItemLabel(size_t index, std::shared_ptr<Reactive<std::string>> ref);
+    /// The label shown for entry `index` right now (resolved binding or the
+    /// authored text). Used by the native application-menu mirror.
+    [[nodiscard]] std::string resolvedItemLabel(size_t index) const;
+    [[nodiscard]] size_t itemCount() const { return _entries.size(); }
 
     /// Registered entries in bar order (label + factory). Mirrors the bar
     /// buttons for consumers that need the menu STRUCTURE rather than the
