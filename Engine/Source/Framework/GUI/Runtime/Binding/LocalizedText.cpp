@@ -11,6 +11,13 @@ LocalizationManager& manager()
 }
 } // namespace
 
+LocalizedText::State::State(std::string keyIn, std::vector<std::string> argsIn, std::string fallbackIn)
+    : key(std::move(keyIn))
+    , args(std::move(argsIn))
+    , fallbackSource(std::move(fallbackIn))
+{
+}
+
 LocalizedText::State::~State()
 {
     if (listenerHandle != 0) {
@@ -20,7 +27,7 @@ LocalizedText::State::~State()
 
 std::string LocalizedText::State::resolveNow() const
 {
-    const std::string text = manager().tr(key);
+    const std::string text = manager().tr(key, fallbackSource);
     if (args.empty()) {
         return text;
     }
@@ -33,23 +40,24 @@ void LocalizedText::State::subscribe()
         return;
     }
     // Weak: the manager holds the callback for the process lifetime, so a
-    // strong capture would keep this state (and its widget) alive forever.
+    // strong capture would keep this state (and any bound widget) alive
+    // forever. The subscription is dropped from ~State when the last owner
+    // (handle or aliased reactive) is gone.
     std::weak_ptr<State> weak = weak_from_this();
     listenerHandle = manager().addLanguageChangedListener([weak](std::string_view) {
         if (std::shared_ptr<State> state = weak.lock()) {
-            if (state->value) {
-                state->value->set(state->resolveNow());
-            }
+            state->value.set(state->resolveNow());
         }
     });
 }
 
-LocalizedText::LocalizedText(std::string key, std::vector<std::string> args)
+LocalizedText::LocalizedText(std::string key, std::vector<std::string> args, std::string fallbackSource)
 {
     if (key.empty()) {
         return;
     }
-    _state = std::make_shared<State>(std::move(key), std::move(args));
+    _state = std::make_shared<State>(std::move(key), std::move(args), std::move(fallbackSource));
+    _state->value.set(_state->resolveNow());
     _state->subscribe();
 }
 
@@ -71,10 +79,9 @@ std::shared_ptr<Reactive<std::string>> LocalizedText::toReactive()
     if (!_state) {
         return nullptr;
     }
-    if (!_state->value) {
-        _state->value = std::make_shared<Reactive<std::string>>(_state->resolveNow());
-    }
-    return _state->value;
+    // Aliasing constructor: the returned pointer shares ownership of the
+    // State, so the subscription (and the reactive value) outlive this handle.
+    return std::shared_ptr<Reactive<std::string>>(_state, &_state->value);
 }
 
 } // namespace ya
