@@ -224,6 +224,15 @@ WidgetAttachment GameUIHost::addToWorld(Scene& world,
     return attachment;
 }
 
+glm::vec2 GameUIHost::presentationToLogical(const glm::vec2& presentationPoint) const
+{
+    // Present pixels are device pixels of the view; the tree lays out in
+    // logical points. Same scale set as dispatchEvent's window→logical map,
+    // without the viewport offset (presentation points are already view-local).
+    return presentationPoint /
+           (glm::max(_framebufferScale, glm::vec2(0.01f)) * _referenceScale);
+}
+
 EWidgetRouteResult GameUIHost::dispatchEvent(const Event& event, const glm::vec2& windowPoint)
 {
     const glm::vec2 max = _viewportPx.pos + _viewportPx.extent;

@@ -43,11 +43,12 @@ GameplayPresentedView gameplayPresentedView(const GameplayScriptContext& ctx)
     if (ctx.presentedPixels) {
         presented.pixelExtent = ctx.presentedPixels();
     }
-    Scene*        scene        = ctx.activeScene ? ctx.activeScene() : nullptr;
-    Entity*       cameraEntity = scene ? findPrimaryCamera(*scene) : nullptr;
-    presented.camera           = cameraEntity && cameraEntity->hasComponent<CameraComponent>()
-                                     ? cameraEntity->getComponent<CameraComponent>()
-                                     : nullptr;
+    Scene*  scene        = ctx.activeScene ? ctx.activeScene() : nullptr;
+    Entity* cameraEntity = scene ? findPrimaryCamera(*scene) : nullptr;
+    presented.cameraEntity = cameraEntity;
+    presented.camera       = cameraEntity && cameraEntity->hasComponent<CameraComponent>()
+                                 ? cameraEntity->getComponent<CameraComponent>()
+                                 : nullptr;
     return presented;
 }
 
@@ -85,6 +86,73 @@ ScriptValue viewSize(const GameplayScriptContext& ctx, ScriptArgs args)
     expectArgCount(args, 0);
     const GameplayPresentedView presented = gameplayPresentedView(ctx);
     return script::scriptMake(scriptViewSize(presented.camera, presented.pixelExtent));
+}
+
+/// `world.screenToWorld(px, py)` — a presentation pixel to world space on the
+/// z=0 plane the game draws on. Tactical input needs this the other way
+/// round from rendering: the script asks "which cell is the mouse over", and
+/// cells are world boxes. The primary camera's actual view/projection (with
+/// pixel-perfect snapping) is inverted so the answer matches what was drawn,
+/// not what the authored transform implies. Throws when there is no camera
+/// or no presented pixels.
+ScriptValue screenToWorld(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 2);
+    const GameplayPresentedView presented = gameplayPresentedView(ctx);
+    if (presented.camera == nullptr || presented.cameraEntity == nullptr) {
+        throw ScriptError("screenToWorld: no primary camera");
+    }
+    if (presented.pixelExtent.x <= 0.0f || presented.pixelExtent.y <= 0.0f) {
+        throw ScriptError("screenToWorld: view has no pixel size");
+    }
+    const glm::vec2 pixel = ctx.windowToViewPixels
+                                ? ctx.windowToViewPixels(glm::vec2{static_cast<float>(script::scriptToNumber(args[0])),
+                                                                   static_cast<float>(script::scriptToNumber(args[1]))})
+                                : glm::vec2{static_cast<float>(script::scriptToNumber(args[0])),
+                                            static_cast<float>(script::scriptToNumber(args[1]))};
+    const CameraRenderMatrices matrices =
+        buildCameraRenderMatrices(*presented.camera, presented.cameraEntity, presented.pixelExtent);
+    const glm::vec2 ndc{(pixel.x / presented.pixelExtent.x) * 2.0f - 1.0f,
+                        1.0f - (pixel.y / presented.pixelExtent.y) * 2.0f};
+    const glm::mat4 invViewProj = glm::inverse(matrices.projection * matrices.view);
+    // The ray through the pixel; the game plane is z=0, so intersect it.
+    const glm::vec4 nearPoint = invViewProj * glm::vec4(ndc, -1.0f, 1.0f);
+    const glm::vec4 farPoint  = invViewProj * glm::vec4(ndc, 1.0f, 1.0f);
+    const glm::vec3 nearWorld = glm::vec3(nearPoint) / nearPoint.w;
+    const glm::vec3 farWorld  = glm::vec3(farPoint) / farPoint.w;
+    const glm::vec3 dir       = farWorld - nearWorld;
+    if (std::abs(dir.z) < 1e-6f) {
+        throw ScriptError("screenToWorld: camera does not cross the z=0 plane");
+    }
+    const float t = -nearWorld.z / dir.z;
+    return script::scriptMake(glm::vec2(nearWorld.x + dir.x * t, nearWorld.y + dir.y * t));
+}
+
+/// `world.worldToScreen(x, y)` — a world point on the game plane to
+/// presentation pixels. The twin of screenToWorld: the HUD asks "where does
+/// this unit's action menu go" and positions a widget at that pixel.
+ScriptValue worldToScreen(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 2);
+    const GameplayPresentedView presented = gameplayPresentedView(ctx);
+    if (presented.camera == nullptr || presented.cameraEntity == nullptr) {
+        throw ScriptError("worldToScreen: no primary camera");
+    }
+    if (presented.pixelExtent.x <= 0.0f || presented.pixelExtent.y <= 0.0f) {
+        throw ScriptError("worldToScreen: view has no pixel size");
+    }
+    const glm::vec3 world{static_cast<float>(script::scriptToNumber(args[0])),
+                          static_cast<float>(script::scriptToNumber(args[1])),
+                          0.0f};
+    const CameraRenderMatrices matrices =
+        buildCameraRenderMatrices(*presented.camera, presented.cameraEntity, presented.pixelExtent);
+    const glm::vec4 clip    = matrices.projection * matrices.view * glm::vec4(world, 1.0f);
+    if (std::abs(clip.w) < 1e-6f) {
+        throw ScriptError("worldToScreen: point behind the camera");
+    }
+    const glm::vec2 ndc{clip.x / clip.w, clip.y / clip.w};
+    return script::scriptMake(glm::vec2((ndc.x * 0.5f + 0.5f) * presented.pixelExtent.x,
+                                        (0.5f - ndc.y * 0.5f) * presented.pixelExtent.y));
 }
 
 /// `map:entityAt(x, y[, except])` — the first actor in the cell (rpg-prototype
@@ -781,6 +849,8 @@ void registerGameplayScriptFunctions(GameplayScriptContext ctx)
     registerRuntimeScriptNatives();
     script::registerModuleFunction("world", "find", [ctx](ScriptArgs args) { return find(ctx, args); });
     script::registerModuleFunction("world", "viewSize", [ctx](ScriptArgs args) { return viewSize(ctx, args); });
+    script::registerModuleFunction("world", "screenToWorld", [ctx](ScriptArgs args) { return screenToWorld(ctx, args); });
+    script::registerModuleFunction("world", "worldToScreen", [ctx](ScriptArgs args) { return worldToScreen(ctx, args); });
     script::registerModuleFunction("world", "loadScene", [ctx](ScriptArgs args) -> ScriptValue {
         if (args.empty() || args.size() > 3) {
             throw ScriptError("expects loadScene(path), loadScene(path, spawnName), or loadScene(path, spawnName, actorName)");

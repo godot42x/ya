@@ -234,6 +234,29 @@ void OsEventPump::emitKey(const std::function<void(const Event&)>& emit, EKey::T
     emit(event);
 }
 
+void OsEventPump::emitMouseMotion(const std::function<void(const Event&)>& emit, float x, float y)
+{
+    MouseMoveEvent event(x, y);
+    emit(event);
+}
+
+void OsEventPump::emitMouseButton(const std::function<void(const Event&)>& emit, EMouse::T button,
+                                  float x, float y, bool bDown)
+{
+    // The move first, mirroring the physical stream: a press at a new
+    // position always follows its move, so hover state never goes stale.
+    MouseMoveEvent move(x, y);
+    emit(move);
+    if (bDown) {
+        MouseButtonPressedEvent press(button);
+        press._clickCount = 1u;
+        emit(press);
+        return;
+    }
+    MouseButtonReleasedEvent release(button);
+    emit(release);
+}
+
 void OsEventPump::enqueueKey(EKey::T key, bool bDown, uint32_t pollsUntilEmit)
 {
     g_injectedKeys.push_back(PendingKey{

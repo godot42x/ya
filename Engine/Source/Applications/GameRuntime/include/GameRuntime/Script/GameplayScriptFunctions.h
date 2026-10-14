@@ -12,6 +12,7 @@ namespace ya
 
 struct Scene;
 struct CameraComponent;
+struct Entity;
 struct GameUIHost;
 struct IWorldScriptRuntime;
 struct PostProcessingState;
@@ -26,6 +27,12 @@ struct GameplayScriptContext
 {
     std::function<Scene*()>                                  activeScene;
     std::function<glm::vec2()>                               presentedPixels;
+    /// Window logical point → view device pixels (the pointer mapping). Null
+    /// treats window points as view pixels.
+    std::function<glm::vec2(glm::vec2)>                      windowToViewPixels;
+    /// View device pixels → window logical points (the inverse, for placing
+    /// UI at a world position). Null returns view pixels unchanged.
+    std::function<glm::vec2(glm::vec2)>                      viewPixelsToWindow;
     /// `spawn` is the destination marker; `actor` is the entity to move onto it.
     /// An empty actor moves nobody — the caller supplies the name.
     std::function<void(std::string path, std::string spawn, std::string actor)> requestSceneTransfer;
@@ -54,6 +61,8 @@ struct GameplayPresentedView
 {
     glm::vec2              pixelExtent = glm::vec2(0.0f);
     const CameraComponent* camera      = nullptr;
+    /// The entity owning `camera` (the view's eye). Null without a camera.
+    Entity*                cameraEntity = nullptr;
 };
 
 [[nodiscard]] YA_GAME_RUNTIME_API GameplayPresentedView gameplayPresentedView(const GameplayScriptContext& ctx);

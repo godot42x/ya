@@ -101,6 +101,9 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// The fit factor actually in effect. Pointer mapping and the tree DPI
     /// both read it.
     [[nodiscard]] float referenceScale() const { return _referenceScale; }
+    /// The presentation's pixel density (device px per logical point), the
+    /// other half of the pointer→tree mapping. Read-only: setPresentation owns it.
+    [[nodiscard]] const glm::vec2& framebufferScale() const { return _framebufferScale; }
 
     [[nodiscard]] WidgetTree& getTree() { return _tree; }
     [[nodiscard]] const WidgetTree& getTree() const { return _tree; }
@@ -145,6 +148,11 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// Y down). Returns the route result; the caller decides gameplay
     /// fallback when not exclusively consumed.
     [[nodiscard]] EWidgetRouteResult dispatchEvent(const Event& event, const glm::vec2& windowPoint);
+    /// Presentation (view device) pixels → tree logical coords: the inverse of
+    /// the mapping `dispatchEvent` applies to pointer events. UI placed at a
+    /// world position (`Menu.openAtPixel`) goes through this, so an anchored
+    /// popup lands where the drawn pixel actually is on every DPI.
+    [[nodiscard]] glm::vec2 presentationToLogical(const glm::vec2& presentationPoint) const;
 
     // === Frame ===
     /// Advance the mounted tree's frame-driven state (behaviours, tweens,

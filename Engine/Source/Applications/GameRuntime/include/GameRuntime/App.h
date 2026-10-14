@@ -252,6 +252,11 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     [[nodiscard]] UIDocumentStore*                   getUIDocumentStore() { return _uiDocuments.get(); }
     [[nodiscard]] JSScriptingSystem*                  getJSScriptingSystem() const { return _jsScriptingSystem; }
 
+    /// The native window service. Read-only access for consumers that need
+    /// the window frame (pointer warping, chrome queries).
+    [[nodiscard]] NativeWindowManager*               getNativeWindowManager() { return _nativeWindowManager.get(); }
+    [[nodiscard]] const NativeWindowManager*         getNativeWindowManager() const { return _nativeWindowManager.get(); }
+
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
     [[nodiscard]] BenchmarkRun*                  getBenchmarkRun() const { return _benchmark.get(); }
     /// Chrome policy of the App-owned main window. The framework default is
@@ -382,8 +387,6 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     void handleSceneActivated(Scene* scene);
     bool handleWindowResized(const WindowResizeEvent& event);
     void handleMouseMoved(const MouseMoveEvent& event);
-    [[nodiscard]] NativeWindowManager* getNativeWindowManager() { return _nativeWindowManager.get(); }
-    [[nodiscard]] const NativeWindowManager* getNativeWindowManager() const { return _nativeWindowManager.get(); }
     [[nodiscard]] AppAutomationControlService* getAutomationControlService() { return _automationControlService.get(); }
     [[nodiscard]] const AppAutomationControlService* getAutomationControlService() const { return _automationControlService.get(); }
     void attachModules();

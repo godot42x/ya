@@ -12,6 +12,7 @@
 #include "GUI/Widgets/Controls/Text.h"
 #include "GameRuntime/App.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
+#include "GUI/Host/NativeWindowManager.h"
 #include "Scene/Core/SceneWidgetEntry.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -747,6 +748,84 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
         Json::object(),
         [&](const Json&) -> Json {
             return Json{{"mode", modeToString(requireApp().getInputMode())}};
+        });
+
+    api.registerFunction(
+        "input.get_mouse_position",
+        "Returns the polled pointer position in window logical points: {x, y}.",
+        Json::object(),
+        [&](const Json&) -> Json {
+            App& app = requireApp();
+            const glm::vec2 pos = app.getInputManager().getMousePosition();
+            return Json{{"x", pos.x}, {"y", pos.y}};
+        });
+
+    api.registerFunction(
+        "input.inject_mouse",
+        "Feeds a mouse move/button through the same event path as the physical mouse. "
+        "Args: {x, y} for a move (window pixels, y down); {x, y, button:'left'|'right', "
+        "action:'down'|'up'} for a button. Coordinates go through the same presentation mapping "
+        "as real events. The move also warps the OS pointer (global coords + window offset), so "
+        "hover, polling, and the window enter/leave state all agree — a synthetic move without "
+        "the warp fights the platform's leave-marker path.",
+        Json{{"x", {{"type", "number"}}},
+             {"y", {{"type", "number"}}},
+             {"button", {{"type", "string"}}},
+             {"action", {{"type", "string"}}}},
+        [](const Json& args) -> Json {
+            App& app = []() -> App& {
+                App* current = App::get();
+                if (!current) {
+                    throw Error("input.inject_mouse: app not available");
+                }
+                return *current;
+            }();
+            const float x = args.at("x").get<float>();
+            const float y = args.at("y").get<float>();
+
+            // Warp the real pointer to the same place first: SDL keeps its own
+            // enter/leave bookkeeping, and a window the platform thinks the
+            // pointer left answers every synthetic position with the
+            // -1000000 leave marker (SdlEventSource), poisoning the poll.
+            int winX = 0;
+            int winY = 0;
+            if (NativeWindowManager* nwm = app.getNativeWindowManager()) {
+                if (INativeWindow* window = nwm->getMainWindow()) {
+                    window->getWindowPosition(winX, winY);
+                }
+            }
+            OsEventPump::warpGlobalMouse(static_cast<float>(winX) + x, static_cast<float>(winY) + y);
+
+            const auto emitNow = [&app](const Event& event) { app.dispatchEvent(event); };
+            OsEventPump::emitMouseMotion(emitNow, x, y);
+
+            const std::string button = args.value("button", "");
+            const std::string action = args.value("action", "");
+            if (button.empty() && action.empty()) {
+                Json out{{"x", x}, {"y", y}, {"moved", true}};
+                return out;
+            }
+            if (button.empty() || action.empty()) {
+                throw Error("input.inject_mouse: button and action go together");
+            }
+            EMouse::T which = EMouse::Left;
+            if (button == "left") {
+                which = EMouse::Left;
+            }
+            else if (button == "right") {
+                which = EMouse::Right;
+            }
+            else if (button == "middle") {
+                which = EMouse::Middle;
+            }
+            else {
+                throw Error(std::format("input.inject_mouse: unknown button '{}'", button));
+            }
+            if (action != "down" && action != "up") {
+                throw Error("input.inject_mouse: action must be 'down' or 'up'");
+            }
+            OsEventPump::emitMouseButton(emitNow, which, x, y, action == "down");
+            return Json{{"x", x}, {"y", y}, {"button", button}, {"action", action}};
         });
 
     api.registerFunction(

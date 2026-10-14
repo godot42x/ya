@@ -31,6 +31,13 @@ struct YA_CORE_API OsEventPump
     /// Build the same Core key event a physical key produces and hand it to
     /// `emit` now. `bDown` is press, otherwise release.
     static void emitKey(const std::function<void(const Event&)>& emit, EKey::T key, bool bDown);
+    /// Build the same Core mouse events a physical pointer produces and hand
+    /// them to `emit` now. `emitMouseMotion` also updates the position the
+    /// InputManager polls; `emitMouseButton` presses/releases `button` at
+    /// window pixel `x`/`y`.
+    static void emitMouseMotion(const std::function<void(const Event&)>& emit, float x, float y);
+    static void emitMouseButton(const std::function<void(const Event&)>& emit, EMouse::T button,
+                                float x, float y, bool bDown);
     /// Hold a key event until `drainInjectedKeys` has run `pollsUntilEmit + 1`
     /// times (0 = the next drain). The runtime drains this at the start of
     /// each poll, on the same callback as SDL keys, and only on the game thread.

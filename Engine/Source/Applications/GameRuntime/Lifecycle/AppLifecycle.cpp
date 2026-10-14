@@ -429,6 +429,64 @@ void App::init(AppDesc ci)
     const GameplayScriptContext scriptContext{
         .activeScene     = [&app]() -> Scene* { return app.getSceneServices().getActiveScene(); },
         .presentedPixels = [&app]() { return app.getRenderServices().getRenderResolution().toVec2(); },
+        // Window logical point → view device pixels, the same map
+        // App::dispatchUIInputEvent applies to pointer events, so
+        // `world.screenToWorld(input:getMousePosition())` and what was drawn agree.
+        .windowToViewPixels = [&app](glm::vec2 windowPoint) -> glm::vec2 {
+            if (app._renderState &&
+                app._renderState->hostSettings.resolutionPolicy == EHostResolutionPolicy::ExplicitStretch) {
+                int winW = 0;
+                int winH = 0;
+                if (NativeWindowManager* nwm = app.getNativeWindowManager()) {
+                    if (INativeWindow* window = nwm->getMainWindow()) {
+                        window->getWindowSize(winW, winH);
+                    }
+                }
+                const Extent2D resolution = app._renderState->hostSettings.renderResolution;
+                if (winW > 0 && winH > 0 && resolution.width > 0 && resolution.height > 0) {
+                    return {windowPoint.x * static_cast<float>(resolution.width) / static_cast<float>(winW),
+                            windowPoint.y * static_cast<float>(resolution.height) / static_cast<float>(winH)};
+                }
+                return windowPoint;
+            }
+            if (app._renderState) {
+                const auto mapped = mapWindowPointToViewPixels(windowPoint,
+                                                               app._renderState->hostSettings.logicalViewport,
+                                                               app._renderState->hostSettings.pixelDensity);
+                if (mapped) {
+                    return *mapped;
+                }
+            }
+            return windowPoint;
+        },
+        // The inverse: view device pixels → window logical points. UI
+        // anchoring (Menu.openAtPixel) consumes window points.
+        .viewPixelsToWindow = [&app](glm::vec2 viewPixel) -> glm::vec2 {
+            if (app._renderState &&
+                app._renderState->hostSettings.resolutionPolicy == EHostResolutionPolicy::ExplicitStretch) {
+                int winW = 0;
+                int winH = 0;
+                if (NativeWindowManager* nwm = app.getNativeWindowManager()) {
+                    if (INativeWindow* window = nwm->getMainWindow()) {
+                        window->getWindowSize(winW, winH);
+                    }
+                }
+                const Extent2D resolution = app._renderState->hostSettings.renderResolution;
+                if (winW > 0 && winH > 0 && resolution.width > 0 && resolution.height > 0) {
+                    return {viewPixel.x * static_cast<float>(winW) / static_cast<float>(resolution.width),
+                            viewPixel.y * static_cast<float>(winH) / static_cast<float>(resolution.height)};
+                }
+                return viewPixel;
+            }
+            if (app._renderState) {
+                const float density = app._renderState->hostSettings.pixelDensity;
+                if (density > 0.0f) {
+                    const glm::vec2 pos = app._renderState->hostSettings.logicalViewport.pos;
+                    return pos + viewPixel / density;
+                }
+            }
+            return viewPixel;
+        },
         .requestSceneTransfer = [&app](std::string path, std::string spawn, std::string actor) {
             app.getSceneServices().requestSceneTransfer(path, spawn, actor);
         },
