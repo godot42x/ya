@@ -31,7 +31,7 @@ Bloom、EntityId、Finalize、Shadow 的组合实现被两条管线共用。设�
 
 ## 最近一次更新
 
-2026-10-14：第一阶段落地——Recipe 折叠。`prepareFeature` / `appendFeature` 与两个 tuple fold 进 `FeatureProtocol.h`，`Result<void, E>` 进 `Core/Result.h`；Deferred prepare 153→51、append 262→119，Forward prepare 96→33、append 184→101。验证：`ya-render-3d-test` 237/237（基线 235 + 2 例 step 语义），五帧逐像素 0 diff（Deferred / Forward / 切回 / SSAO-off / Bloom-off），日志 0 ERROR 且 validation 分布与历史同类运行逐值一致。未折叠 `resolve` 行（settings 来源各异），留给第二阶段。
+2026-10-14：第一阶段落地——Recipe 折叠。`prepareFeature` / `appendFeature` 与两个 tuple fold 进 `FeatureProtocol.h`，`Result<void, E>` 进 `Core/Result.h`。真实行数：Deferred prepare 153→148、append 262→247，Forward prepare 96→92、append 184→180——**行数目标未达成**（中途用超长单行压行数被用户指出是作弊，已改回可读多行）。真实收益是每个功能的「调用→查错→存储→日志」样板被统一持有、新增功能只补两行。验证：`ya-render-3d-test` 237/237（基线 235 + 2 例 step 语义），四帧逐像素 0 diff（Deferred / Forward / 切回 Deferred）+ 同实例连拍 0 diff 噪声判据，日志 0 ERROR。未折叠 `resolve` 行与各功能 `PrepareContext` 字段投影，留给第二阶段。
 
 2026-10-14：重写当前计划文档，去掉批次流水账与过期草案；随后修正范围表达。整体目标始终是两条渲染管线的连接、功能封装、统一登记与驱动，而非 SSAO 专项。当前先用 SSAO 验证封装，随后用异构功能验证重复登记删除，再覆盖完整管线和整体验收。
 

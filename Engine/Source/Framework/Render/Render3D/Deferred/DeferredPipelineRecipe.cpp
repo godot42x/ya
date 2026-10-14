@@ -191,34 +191,131 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
     prepared.frameRange = toRange(ctx.frameBinding->frame);
     prepared.lightRange = toRange(ctx.frameBinding->light);
 
-    if (auto step = prepareFeature(ShadowFeature{}, resolved.shadow(), ShadowFeature::PrepareContext{.submission = ctx.submission, .stage = stages.shadow, .view = ctx.view}, prepared.shadow()); step.isErr())
+    const ShadowFeature::PrepareContext shadowPrepare{
+        .submission = ctx.submission,
+        .stage      = stages.shadow,
+        .view       = ctx.view,
+    };
+    if (auto step = prepareFeature(ShadowFeature{},
+                                   resolved.shadow(),
+                                   shadowPrepare,
+                                   prepared.shadow());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(GBufferFeature{}, resolved.gbuffer(), GBufferFeature::PrepareContext{.frameAndLightDS = ctx.frameBinding->frameAndLightDescriptorSet, .skinningDS = ctx.frameBinding->skinningDescriptorSet}, prepared.gbuffer()); step.isErr())
+    const GBufferFeature::PrepareContext gbufferPrepare{
+        .frameAndLightDS = ctx.frameBinding->frameAndLightDescriptorSet,
+        .skinningDS      = ctx.frameBinding->skinningDescriptorSet,
+    };
+    if (auto step = prepareFeature(GBufferFeature{},
+                                   resolved.gbuffer(),
+                                   gbufferPrepare,
+                                   prepared.gbuffer());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(SSAOFeature{}, resolved.ssao(), SSAOFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.ssao, .alignment = ctx.alignment}, prepared.ssao()); step.isErr())
+    const SSAOFeature::PrepareContext ssaoPrepare{
+        .submission = ctx.submission,
+        .render     = ctx.render,
+        .stage      = stages.ssao,
+        .alignment  = ctx.alignment,
+    };
+    if (auto step = prepareFeature(SSAOFeature{},
+                                   resolved.ssao(),
+                                   ssaoPrepare,
+                                   prepared.ssao());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(SkyboxFeature{}, resolved.skybox(), SkyboxFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.skybox, .alignment = ctx.alignment}, prepared.skybox()); step.isErr())
+    const SkyboxFeature::PrepareContext skyboxPrepare{
+        .submission = ctx.submission,
+        .render     = ctx.render,
+        .stage      = stages.skybox,
+        .alignment  = ctx.alignment,
+    };
+    if (auto step = prepareFeature(SkyboxFeature{},
+                                   resolved.skybox(),
+                                   skyboxPrepare,
+                                   prepared.skybox());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(LightingFeature{}, resolved.lighting(), LightingFeature::PrepareContext{.submission = ctx.submission, .stage = stages.light, .frameAndLightDS = ctx.frameBinding->frameAndLightDescriptorSet, .environmentLightingDS = ctx.environmentLightingDS}, prepared.lighting()); step.isErr())
+    const LightingFeature::PrepareContext lightingPrepare{
+        .submission            = ctx.submission,
+        .stage                 = stages.light,
+        .frameAndLightDS       = ctx.frameBinding->frameAndLightDescriptorSet,
+        .environmentLightingDS = ctx.environmentLightingDS,
+    };
+    if (auto step = prepareFeature(LightingFeature{},
+                                   resolved.lighting(),
+                                   lightingPrepare,
+                                   prepared.lighting());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(Sprite2DFeature{}, resolved.sprites(), Sprite2DFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.sprites, .frameData = ctx.frameData, .alignment = ctx.alignment}, prepared.sprites()); step.isErr())
+    const Sprite2DFeature::PrepareContext spritePrepare{
+        .submission = ctx.submission,
+        .render     = ctx.render,
+        .stage      = stages.sprites,
+        .frameData  = ctx.frameData,
+        .alignment  = ctx.alignment,
+    };
+    if (auto step = prepareFeature(Sprite2DFeature{},
+                                   resolved.sprites(),
+                                   spritePrepare,
+                                   prepared.sprites());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(BloomFeature{}, resolved.bloom(), BloomFeature::PrepareContext{.submission = ctx.submission, .stage = stages.bloom}, prepared.bloom()); step.isErr())
+    const BloomFeature::PrepareContext bloomPrepare{
+        .submission = ctx.submission,
+        .stage      = stages.bloom,
+    };
+    if (auto step = prepareFeature(BloomFeature{},
+                                   resolved.bloom(),
+                                   bloomPrepare,
+                                   prepared.bloom());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(OverlayFeature{}, resolved.overlay(), OverlayFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.overlay, .inputs = ctx.overlayInputs, .frameData = ctx.frameData, .alignment = ctx.alignment}, prepared.overlay()); step.isErr())
+    const OverlayFeature::PrepareContext overlayPrepare{
+        .submission = ctx.submission,
+        .render     = ctx.render,
+        .stage      = stages.overlay,
+        .inputs     = ctx.overlayInputs,
+        .frameData  = ctx.frameData,
+        .alignment  = ctx.alignment,
+    };
+    if (auto step = prepareFeature(OverlayFeature{},
+                                   resolved.overlay(),
+                                   overlayPrepare,
+                                   prepared.overlay());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(EntityIdFeature{}, resolved.entityId(), EntityIdFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.entityId, .frameData = ctx.frameData, .alignment = ctx.alignment}, prepared.entityId()); step.isErr())
+    const EntityIdFeature::PrepareContext entityIdPrepare{
+        .submission = ctx.submission,
+        .render     = ctx.render,
+        .stage      = stages.entityId,
+        .frameData  = ctx.frameData,
+        .alignment  = ctx.alignment,
+    };
+    if (auto step = prepareFeature(EntityIdFeature{},
+                                   resolved.entityId(),
+                                   entityIdPrepare,
+                                   prepared.entityId());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(FinalizeFeature{}, resolved.finalize(), FinalizeFeature::PrepareContext{.submission = ctx.submission, .stage = stages.post}, prepared.finalize()); step.isErr())
+    const FinalizeFeature::PrepareContext finalizePrepare{
+        .submission = ctx.submission,
+        .stage      = stages.post,
+    };
+    if (auto step = prepareFeature(FinalizeFeature{},
+                                   resolved.finalize(),
+                                   finalizePrepare,
+                                   prepared.finalize());
+        step.isErr())
         return step.error();
 
     return prepared;
@@ -251,15 +348,54 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     // helper owns the call, the failure check and the log.
 
     // ── Shadow (first: its passes take the family ordering point) ─────────
-    if (auto step = appendFeature(ShadowFeature{}, ctx.graph, ctx.stages->shadow, featureCtx, ShadowFeature::Facts{}, resolved.shadow(), prepared.shadow(), ShadowFeature::Inputs{}, outputs.shadow()); step.isErr())
+    if (auto step = appendFeature(ShadowFeature{},
+                                  ctx.graph,
+                                  ctx.stages->shadow,
+                                  featureCtx,
+                                  ShadowFeature::Facts{},
+                                  resolved.shadow(),
+                                  prepared.shadow(),
+                                  ShadowFeature::Inputs{},
+                                  outputs.shadow());
+        step.isErr())
         return step.error();
 
     // ── GBuffer ───────────────────────────────────────────────────────────
-    if (auto step = appendFeature(GBufferFeature{}, ctx.graph, ctx.stages->gBuffer, featureCtx, GBufferFeature::Facts{.viewId = resolved.viewId, .viewExtent = resolved.viewExtent}, resolved.gbuffer(), prepared.gbuffer(), GBufferFeature::Inputs{.frame = ctx.frameBuffer, .frameRange = prepared.frameRange, .light = ctx.lightBuffer, .lightRange = prepared.lightRange, .skinning = ctx.skinningBuffer}, outputs.gbuffer()); step.isErr())
+    const GBufferFeature::Inputs gbufferInputs{
+        .frame      = ctx.frameBuffer,
+        .frameRange = prepared.frameRange,
+        .light      = ctx.lightBuffer,
+        .lightRange = prepared.lightRange,
+        .skinning   = ctx.skinningBuffer,
+    };
+    if (auto step = appendFeature(GBufferFeature{},
+                                  ctx.graph,
+                                  ctx.stages->gBuffer,
+                                  featureCtx,
+                                  GBufferFeature::Facts{.viewId = resolved.viewId, .viewExtent = resolved.viewExtent},
+                                  resolved.gbuffer(),
+                                  prepared.gbuffer(),
+                                  gbufferInputs,
+                                  outputs.gbuffer());
+        step.isErr())
         return step.error();
 
     // ── SSAO (optional) ───────────────────────────────────────────────────
-    if (auto step = appendFeature(SSAOFeature{}, ctx.graph, ctx.stages->ssao, featureCtx, SSAOFeature::Facts{.viewExtent = resolved.viewExtent}, resolved.ssao(), prepared.ssao(), SSAOFeature::Inputs{.albedo = outputs.gbuffer().albedo, .normal = outputs.gbuffer().normal, .depth = outputs.gbuffer().depth}, outputs.ssao()); step.isErr())
+    const SSAOFeature::Inputs ssaoInputs{
+        .albedo = outputs.gbuffer().albedo,
+        .normal = outputs.gbuffer().normal,
+        .depth  = outputs.gbuffer().depth,
+    };
+    if (auto step = appendFeature(SSAOFeature{},
+                                  ctx.graph,
+                                  ctx.stages->ssao,
+                                  featureCtx,
+                                  SSAOFeature::Facts{.viewExtent = resolved.viewExtent},
+                                  resolved.ssao(),
+                                  prepared.ssao(),
+                                  ssaoInputs,
+                                  outputs.ssao());
+        step.isErr())
         return step.error();
 
     // ── Lighting ──────────────────────────────────────────────────────────
@@ -289,7 +425,16 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         lightingInputs.environmentBrdfLut = ctx.graph.importTexture(makeImportedTextureDesc(
             *ctx.environmentLighting->brdfLut, "DeferredLight.Environment.BrdfLut", EImageLayout::ShaderReadOnlyOptimal));
     }
-    if (auto step = appendFeature(LightingFeature{}, ctx.graph, ctx.stages->light, featureCtx, LightingFeature::Facts{.viewExtent = resolved.viewExtent}, resolved.lighting(), prepared.lighting(), lightingInputs, outputs.lighting()); step.isErr())
+    if (auto step = appendFeature(LightingFeature{},
+                                  ctx.graph,
+                                  ctx.stages->light,
+                                  featureCtx,
+                                  LightingFeature::Facts{.viewExtent = resolved.viewExtent},
+                                  resolved.lighting(),
+                                  prepared.lighting(),
+                                  lightingInputs,
+                                  outputs.lighting());
+        step.isErr())
         return step.error();
 
     if (!outputs.lighting().sceneColor.isValid()) {
@@ -319,27 +464,107 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         .viewExtent = resolved.viewExtent,
         .skybox     = ctx.overlayInputs != nullptr ? ctx.overlayInputs->skybox : ViewOverlayFrameInputs::SkyboxInput{},
     };
-    if (auto step = appendFeature(SkyboxFeature{}, ctx.graph, ctx.stages->skybox, featureCtx, skyboxFacts, resolved.skybox(), prepared.skybox(), SkyboxFeature::Inputs{.color = outputs.lighting().sceneColor, .depth = outputs.gbuffer().depth}, outputs.skybox()); step.isErr())
+    const SkyboxFeature::Inputs skyboxInputs{
+        .color = outputs.lighting().sceneColor,
+        .depth = outputs.gbuffer().depth,
+    };
+    if (auto step = appendFeature(SkyboxFeature{},
+                                  ctx.graph,
+                                  ctx.stages->skybox,
+                                  featureCtx,
+                                  skyboxFacts,
+                                  resolved.skybox(),
+                                  prepared.skybox(),
+                                  skyboxInputs,
+                                  outputs.skybox());
+        step.isErr())
         return step.error();
 
     // ── Scene sprites ─────────────────────────────────────────────────────
-    if (auto step = appendFeature(Sprite2DFeature{}, ctx.graph, ctx.stages->sprites, featureCtx, Sprite2DFeature::Facts{.viewExtent = resolved.viewExtent, .frameData = ctx.stageCtx.frameData}, resolved.sprites(), prepared.sprites(), Sprite2DFeature::Inputs{.color = outputs.skybox().color, .depth = outputs.gbuffer().depth}, outputs.sprites()); step.isErr())
+    const Sprite2DFeature::Inputs spriteInputs{
+        .color = outputs.skybox().color,
+        .depth = outputs.gbuffer().depth,
+    };
+    if (auto step = appendFeature(Sprite2DFeature{},
+                                  ctx.graph,
+                                  ctx.stages->sprites,
+                                  featureCtx,
+                                  Sprite2DFeature::Facts{
+                                      .viewExtent = resolved.viewExtent,
+                                      .frameData  = ctx.stageCtx.frameData,
+                                  },
+                                  resolved.sprites(),
+                                  prepared.sprites(),
+                                  spriteInputs,
+                                  outputs.sprites());
+        step.isErr())
         return step.error();
 
     // ── Bloom (optional) ──────────────────────────────────────────────────
-    if (auto step = appendFeature(BloomFeature{}, ctx.graph, ctx.stages->bloom, featureCtx, BloomFeature::Facts{.viewExtent = resolved.viewExtent}, resolved.bloom(), prepared.bloom(), BloomFeature::Inputs{.color = outputs.sprites().color}, outputs.bloom()); step.isErr())
+    if (auto step = appendFeature(BloomFeature{},
+                                  ctx.graph,
+                                  ctx.stages->bloom,
+                                  featureCtx,
+                                  BloomFeature::Facts{.viewExtent = resolved.viewExtent},
+                                  resolved.bloom(),
+                                  prepared.bloom(),
+                                  BloomFeature::Inputs{.color = outputs.sprites().color},
+                                  outputs.bloom());
+        step.isErr())
         return step.error();
 
     // ── Overlay (forward transparent) ─────────────────────────────────────
-    if (auto step = appendFeature(OverlayFeature{}, ctx.graph, ctx.stages->overlay, featureCtx, OverlayFeature::Facts{.viewExtent = resolved.viewExtent, .inputs = ctx.overlayInputs}, resolved.overlay(), prepared.overlay(), OverlayFeature::Inputs{.color = outputs.bloom().color, .depth = outputs.gbuffer().depth}, outputs.overlay()); step.isErr())
+    const OverlayFeature::Inputs overlayInputs{
+        .color = outputs.bloom().color,
+        .depth = outputs.gbuffer().depth,
+    };
+    if (auto step = appendFeature(OverlayFeature{},
+                                  ctx.graph,
+                                  ctx.stages->overlay,
+                                  featureCtx,
+                                  OverlayFeature::Facts{.viewExtent = resolved.viewExtent, .inputs = ctx.overlayInputs},
+                                  resolved.overlay(),
+                                  prepared.overlay(),
+                                  overlayInputs,
+                                  outputs.overlay());
+        step.isErr())
         return step.error();
 
     // ── Entity id (picking) ───────────────────────────────────────────────
-    if (auto step = appendFeature(EntityIdFeature{}, ctx.graph, ctx.stages->entityId, featureCtx, EntityIdFeature::Facts{.viewExtent = resolved.viewExtent, .frameData = ctx.stageCtx.frameData, .overlayInputs = ctx.overlayInputs}, resolved.entityId(), prepared.entityId(), EntityIdFeature::Inputs{.depth = outputs.gbuffer().depth, .skinningDS = ctx.frameBinding->skinningDescriptorSet}, outputs.entityId()); step.isErr())
+    const EntityIdFeature::Inputs entityIdInputs{
+        .depth      = outputs.gbuffer().depth,
+        .skinningDS = ctx.frameBinding->skinningDescriptorSet,
+    };
+    if (auto step = appendFeature(EntityIdFeature{},
+                                  ctx.graph,
+                                  ctx.stages->entityId,
+                                  featureCtx,
+                                  EntityIdFeature::Facts{
+                                      .viewExtent    = resolved.viewExtent,
+                                      .frameData     = ctx.stageCtx.frameData,
+                                      .overlayInputs = ctx.overlayInputs,
+                                  },
+                                  resolved.entityId(),
+                                  prepared.entityId(),
+                                  entityIdInputs,
+                                  outputs.entityId());
+        step.isErr())
         return step.error();
 
     // ── Finalize (mandatory display pass) ─────────────────────────────────
-    if (auto step = appendFeature(FinalizeFeature{}, ctx.graph, ctx.stages->post, featureCtx, FinalizeFeature::Facts{.viewExtent = resolved.viewExtent, .postContext = ctx.postContext}, resolved.finalize(), prepared.finalize(), FinalizeFeature::Inputs{.color = outputs.overlay().color}, outputs.finalize()); step.isErr())
+    if (auto step = appendFeature(FinalizeFeature{},
+                                  ctx.graph,
+                                  ctx.stages->post,
+                                  featureCtx,
+                                  FinalizeFeature::Facts{
+                                      .viewExtent  = resolved.viewExtent,
+                                      .postContext = ctx.postContext,
+                                  },
+                                  resolved.finalize(),
+                                  prepared.finalize(),
+                                  FinalizeFeature::Inputs{.color = outputs.overlay().color},
+                                  outputs.finalize());
+        step.isErr())
         return step.error();
 
     return outputs;

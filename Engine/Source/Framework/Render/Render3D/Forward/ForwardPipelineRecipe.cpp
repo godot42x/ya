@@ -140,22 +140,81 @@ ForwardPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
     PreparedView prepared;
     prepared.viewId = resolved.viewId;
 
-    if (auto step = prepareFeature(ShadowFeature{}, resolved.shadow(), ShadowFeature::PrepareContext{.submission = ctx.submission, .stage = stages.shadow, .view = ctx.view}, prepared.shadow()); step.isErr())
+    const ShadowFeature::PrepareContext shadowPrepare{
+        .submission = ctx.submission,
+        .stage      = stages.shadow,
+        .view       = ctx.view,
+    };
+    if (auto step = prepareFeature(ShadowFeature{},
+                                   resolved.shadow(),
+                                   shadowPrepare,
+                                   prepared.shadow());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(ForwardOpaqueFeature{}, resolved.opaque(), ForwardOpaqueFeature::PrepareContext{.frameBinding = ctx.frameBinding, .submission = ctx.submission, .render = ctx.render, .auxPasses = ctx.auxPasses, .alignment = ctx.alignment, .frameData = ctx.frameData, .viewExtent = resolved.viewExtent}, prepared.opaque()); step.isErr())
+    const ForwardOpaqueFeature::PrepareContext opaquePrepare{
+        .frameBinding = ctx.frameBinding,
+        .submission   = ctx.submission,
+        .render       = ctx.render,
+        .auxPasses    = ctx.auxPasses,
+        .alignment    = ctx.alignment,
+        .frameData    = ctx.frameData,
+        .viewExtent   = resolved.viewExtent,
+    };
+    if (auto step = prepareFeature(ForwardOpaqueFeature{},
+                                   resolved.opaque(),
+                                   opaquePrepare,
+                                   prepared.opaque());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(ForwardSkyboxFeature{}, resolved.skybox(), ForwardSkyboxFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.viewStage != nullptr ? &stages.viewStage->getAuxPasses() : nullptr, .alignment = ctx.alignment}, prepared.skybox()); step.isErr())
+    const ForwardSkyboxFeature::PrepareContext skyboxPrepare{
+        .submission = ctx.submission,
+        .render     = ctx.render,
+        .stage      = stages.viewStage != nullptr ? &stages.viewStage->getAuxPasses() : nullptr,
+        .alignment  = ctx.alignment,
+    };
+    if (auto step = prepareFeature(ForwardSkyboxFeature{},
+                                   resolved.skybox(),
+                                   skyboxPrepare,
+                                   prepared.skybox());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(EntityIdFeature{}, resolved.entityId(), EntityIdFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.entityId, .frameData = ctx.frameData, .alignment = ctx.alignment}, prepared.entityId()); step.isErr())
+    const EntityIdFeature::PrepareContext entityIdPrepare{
+        .submission = ctx.submission,
+        .render     = ctx.render,
+        .stage      = stages.entityId,
+        .frameData  = ctx.frameData,
+        .alignment  = ctx.alignment,
+    };
+    if (auto step = prepareFeature(EntityIdFeature{},
+                                   resolved.entityId(),
+                                   entityIdPrepare,
+                                   prepared.entityId());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(BloomFeature{}, resolved.bloom(), BloomFeature::PrepareContext{.submission = ctx.submission, .stage = stages.bloom}, prepared.bloom()); step.isErr())
+    const BloomFeature::PrepareContext bloomPrepare{
+        .submission = ctx.submission,
+        .stage      = stages.bloom,
+    };
+    if (auto step = prepareFeature(BloomFeature{},
+                                   resolved.bloom(),
+                                   bloomPrepare,
+                                   prepared.bloom());
+        step.isErr())
         return step.error();
 
-    if (auto step = prepareFeature(FinalizeFeature{}, resolved.finalize(), FinalizeFeature::PrepareContext{.submission = ctx.submission, .stage = stages.post}, prepared.finalize()); step.isErr())
+    const FinalizeFeature::PrepareContext finalizePrepare{
+        .submission = ctx.submission,
+        .stage      = stages.post,
+    };
+    if (auto step = prepareFeature(FinalizeFeature{},
+                                   resolved.finalize(),
+                                   finalizePrepare,
+                                   prepared.finalize());
+        step.isErr())
         return step.error();
 
     return prepared;
@@ -196,13 +255,36 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     // Deferred recipe's appendGraph for the shape).
 
     // ── Shadow (first: its passes take the family ordering point) ─────────
-    if (auto step = appendFeature(ShadowFeature{}, ctx.graph, ctx.stages->shadow, featureCtx, ShadowFeature::Facts{}, resolved.shadow(), prepared.shadow(), ShadowFeature::Inputs{}, outputs.shadow()); step.isErr())
+    if (auto step = appendFeature(ShadowFeature{},
+                                  ctx.graph,
+                                  ctx.stages->shadow,
+                                  featureCtx,
+                                  ShadowFeature::Facts{},
+                                  resolved.shadow(),
+                                  prepared.shadow(),
+                                  ShadowFeature::Inputs{},
+                                  outputs.shadow());
+        step.isErr())
         return step.error();
 
     // ── Opaque (clear + every shading model) ──────────────────────────────
     // No stage guard here: the feature itself answers MissingContext when the
     // view stage is absent, so the row can be a plain call.
-    if (auto step = appendFeature(ForwardOpaqueFeature{}, ctx.graph, ctx.stages->viewStage, featureCtx, ForwardOpaqueFeature::Facts{.viewExtent = resolved.viewExtent, .passContext = ctx.viewPassContext, .directionGizmos = ctx.directionGizmos}, resolved.opaque(), prepared.opaque(), ForwardOpaqueFeature::Inputs{.color = color, .depth = depth}, outputs.opaque()); step.isErr())
+    const ForwardOpaqueFeature::Facts opaqueFacts{
+        .viewExtent      = resolved.viewExtent,
+        .passContext     = ctx.viewPassContext,
+        .directionGizmos = ctx.directionGizmos,
+    };
+    if (auto step = appendFeature(ForwardOpaqueFeature{},
+                                  ctx.graph,
+                                  ctx.stages->viewStage,
+                                  featureCtx,
+                                  opaqueFacts,
+                                  resolved.opaque(),
+                                  prepared.opaque(),
+                                  ForwardOpaqueFeature::Inputs{.color = color, .depth = depth},
+                                  outputs.opaque());
+        step.isErr())
         return step.error();
     // The depth stream is the recipe's own import; it belongs in the typed
     // outputs the collector reads, beside the color the opaque pass produced.
@@ -213,9 +295,28 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     // color simply continues: this is a legal skip, not a failure.
     if (ctx.stages->viewStage == nullptr) {
         outputs.skybox().color = outputs.opaque().color;
-    } else if (auto step = appendFeature(ForwardSkyboxFeature{}, ctx.graph, &ctx.stages->viewStage->getAuxPasses(), featureCtx, ForwardSkyboxFeature::Facts{.viewExtent = resolved.viewExtent, .skybox = ctx.skybox}, resolved.skybox(), prepared.skybox(), ForwardSkyboxFeature::Inputs{.color = outputs.opaque().color, .depth = depth, .colorFinalLayout = EImageLayout::ColorAttachmentOptimal}, outputs.skybox());
-               step.isErr()) {
-        return step.error();
+    } else {
+        const ForwardSkyboxFeature::Facts skyboxFacts{
+            .viewExtent = resolved.viewExtent,
+            .skybox     = ctx.skybox,
+        };
+        const ForwardSkyboxFeature::Inputs skyboxInputs{
+            .color            = outputs.opaque().color,
+            .depth            = depth,
+            .colorFinalLayout = EImageLayout::ColorAttachmentOptimal,
+        };
+        if (auto step = appendFeature(ForwardSkyboxFeature{},
+                                      ctx.graph,
+                                      &ctx.stages->viewStage->getAuxPasses(),
+                                      featureCtx,
+                                      skyboxFacts,
+                                      resolved.skybox(),
+                                      prepared.skybox(),
+                                      skyboxInputs,
+                                      outputs.skybox());
+            step.isErr()) {
+            return step.error();
+        }
     }
 
     // ── Transparent slot ──────────────────────────────────────────────────
@@ -250,15 +351,52 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         });
 
     // ── Entity id (picking) ───────────────────────────────────────────────
-    if (auto step = appendFeature(EntityIdFeature{}, ctx.graph, ctx.stages->entityId, featureCtx, EntityIdFeature::Facts{.viewExtent = resolved.viewExtent, .frameData = ctx.stageCtx.frameData}, resolved.entityId(), prepared.entityId(), EntityIdFeature::Inputs{.depth = depth, .skinningDS = ctx.frameBinding->skinningDescriptorSet}, outputs.entityId()); step.isErr())
+    const EntityIdFeature::Inputs entityIdInputs{
+        .depth      = depth,
+        .skinningDS = ctx.frameBinding->skinningDescriptorSet,
+    };
+    if (auto step = appendFeature(EntityIdFeature{},
+                                  ctx.graph,
+                                  ctx.stages->entityId,
+                                  featureCtx,
+                                  EntityIdFeature::Facts{
+                                      .viewExtent = resolved.viewExtent,
+                                      .frameData  = ctx.stageCtx.frameData,
+                                  },
+                                  resolved.entityId(),
+                                  prepared.entityId(),
+                                  entityIdInputs,
+                                  outputs.entityId());
+        step.isErr())
         return step.error();
 
     // ── Bloom (optional) ──────────────────────────────────────────────────
-    if (auto step = appendFeature(BloomFeature{}, ctx.graph, ctx.stages->bloom, featureCtx, BloomFeature::Facts{.viewExtent = resolved.viewExtent}, resolved.bloom(), prepared.bloom(), BloomFeature::Inputs{.color = outputs.skybox().color}, outputs.bloom()); step.isErr())
+    if (auto step = appendFeature(BloomFeature{},
+                                  ctx.graph,
+                                  ctx.stages->bloom,
+                                  featureCtx,
+                                  BloomFeature::Facts{.viewExtent = resolved.viewExtent},
+                                  resolved.bloom(),
+                                  prepared.bloom(),
+                                  BloomFeature::Inputs{.color = outputs.skybox().color},
+                                  outputs.bloom());
+        step.isErr())
         return step.error();
 
     // ── Finalize (mandatory display pass) ─────────────────────────────────
-    if (auto step = appendFeature(FinalizeFeature{}, ctx.graph, ctx.stages->post, featureCtx, FinalizeFeature::Facts{.viewExtent = resolved.viewExtent, .postContext = ctx.postContext}, resolved.finalize(), prepared.finalize(), FinalizeFeature::Inputs{.color = outputs.bloom().color}, outputs.finalize()); step.isErr())
+    if (auto step = appendFeature(FinalizeFeature{},
+                                  ctx.graph,
+                                  ctx.stages->post,
+                                  featureCtx,
+                                  FinalizeFeature::Facts{
+                                      .viewExtent  = resolved.viewExtent,
+                                      .postContext = ctx.postContext,
+                                  },
+                                  resolved.finalize(),
+                                  prepared.finalize(),
+                                  FinalizeFeature::Inputs{.color = outputs.bloom().color},
+                                  outputs.finalize());
+        step.isErr())
         return step.error();
 
     return outputs;
