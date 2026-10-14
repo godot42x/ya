@@ -343,3 +343,49 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
 - 保留 / 未完成：任务推进只在战斗进出与对话接受点接线；「拾取物品推进」按 plan 约束留到内容期（C1）有真实
   用例再加。`quest.py` / `playthrough.py` / `inventory.py` 是 v1 城镇（默认场景已被 F1 换成 Camp）的旧脚本，
   不在本轮范围。
+
+## 2026-10-14 — G2：装备与背包（物品目录 / 三槽装备 / 战斗掉落 / 属性即时更新）
+
+- 目标：战斗掉落装备 → 背包界面 → 武器/护甲/饰品三槽 → 属性即时更新。
+- 内容：
+  - `Content/Scripts/Items.lua`（重写）：目录条目从「id→名字」升级为定义
+    `{ id, type, name, stats?, desc? }`；`type` 就是装备槽（`weapon`/`armor`/`accessory`），
+    或不可装备的种类（`key`/`coin`）。新增 `get` / `name` / `slotFor` / `isEquippable` / `statText`，
+    背包 API 新增 `inventory()`（按 id 排序的行）；`addToInventory`/`removeFromInventory`/`getInventory`
+    是既有 `give`/`take`/`count` 的同义名（同一份 `Persist.items` 存储，旧调用点不变）。
+  - `Content/Scripts/Party.lua`：成员新增 `equipment = { weapon, armor, accessory }`（存 `Persist.party`）。
+    `equip(id, itemId)` 按物品槽安装（自动把旧装备退回背包，返回 `ok`/`not_owned`/`not_equippable`/`already`）、
+    `unequip(id, slot)`、`equipped` / `getEquipment` / `memberIds`。**`stats()` 现在折入装备**
+    （base + 每级成长 + 装备），成为唯一属性真源；`ensure()` 给旧存档补 `equipment`。
+  - `Content/Scripts/Unit.lua`：新增 `refreshStats()`（重拉 `Party.stats`）；战斗单位开局从这里取属性，
+    与装备/升级保持同步。装备改变 maxHp 不回血，卸甲把当前 hp 夹到新上限。
+  - `Content/Scripts/Loot.lua`（新）：掉落表（每槽一个 id）+ `roll` / `award`；`award` 进背包并
+    记一行 `Battle: loot <id> x1`（自动化据此读掉落）。`Battle.lua` 的 `grantVictoryReward` 调用它，
+    `lootTable`/`lootIndex` 为可编辑属性（`lootIndex>0` 钉住某行，供测试）。
+  - `Content/UI/Inventory.{yaui.json,lua}`（生成器 `Tools/make_inventory.py`）：面板 = 左侧背包行
+    （`BagRow1..6`）+ 右侧装备槽（`SlotWeapon`/`SlotArmor`/`SlotAccessory`）+ 成员属性行 + 底部详情
+    （名字/加成/描述）+ 控件（`PrevMember`/`NextMember`/`EquipButton`/`UnequipButton`）。键鼠都能操作：
+    ↑↓ 选背包行、←→ 换成员、确认/点按钮装备；点已装备槽或 Unequip 卸下。复用既有 `Inventory` 条目与
+    `I` 热键（原地重建），不新增第二块面板。
+  - `Content/Locale/zh.json`：装备名/描述与面板文案。
+- 逼出来的引擎改动：无。全程走既有 GUI 控件脚本面（`find`/`onClicked:add`/`enabled`）与中立脚本层。
+- 途中发现（一个真坑，写进脚本注释）：**widget 脚本默认不 tick**——`onUpdate` 只有在脚本显式
+  `self:setTickEnabled(true)` 之后才到达（`LuaWidgetScriptBehavior` 构造即 `setTickEnabled(false)`；
+  `Dialogue.lua` 就调了）。第一版背包面板漏了这句，面板能开但键盘完全无响应。同时按 `Dialogue` 的做法加了
+  开面板帧忽略输入（`openedFrame`），避免开面板的那次按键被当成确认。
+- 验证：
+  - `Script/automation/2d-rpg/equipment.py`：EquipmentScene 跑 `EquipmentSelfTest`（装备 +atk、卸下还原、
+    护甲 ±maxHp、槽位、掉落表可装备、roll 钉行、award 进包）——20 checks 全 OK；再用真面板 `I`→点 Equip
+    →断言 `SlotWeapon` 显示 Iron Sword 且 `Stats` 的 ATK 6→9，点 Unequip 回到 6。
+  - `Script/automation/2d-rpg/equipment_loot.py`：营地→踩门→打赢一场→日志出现 `Battle: loot <id> x1`，
+    且 id 属于掉落表。
+  - 端到端手测（`scene.load` 走的是自动化 RPC 会清 `Persist`，所以用游戏内 `world.loadScene` 验）：营地打赢一场
+    → 回营地开背包已见掉落、名册有 Archer Lv2；点装备护甲 → Stats HP 23→28、DEF 2→4；再走门进第二场战斗，
+    Archer 头顶血条读 **15/28**（Lv2 基础 23 + 护甲 +5），证明装备经 `refreshStats()` 进了战斗单位。
+  - 回归：`inventory.py`（已适配新面板行）、`party_growth.py`、`camp_battle_loop.py`、`camp_hub.py`、
+    `battle_combat.py`、`battle_mouse.py`、`kbd_main_flow.py`、`world_text.py` 全过；
+    `xmake r ya-testing` 1835 tests 全绿；`--exit-after-frame=120` exit 0。
+- 保留 / 未完成：按 plan 约束，本轮无耐久/强化/品质，只有「有/无 + 属性数值」；掉落固定 1 件、从预定义表随机抽。
+  面板一次显示 6 行背包（超出不分页，随内容期再加滚动）。`progression.py`/`battle_skill_kill.py`/`battle_turns.py`/
+  `battle_move.py`/`battle_ai.py` 仍在查 UB1 之前的旧 HUD 控件名（`Row1`/`Menu1`，现为 `Order1`/`Action1`），
+  属既有失效脚本，与本轮无关。

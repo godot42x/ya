@@ -1,4 +1,4 @@
-"""Opening the house pot puts a brass key in Persist. I lists it."""
+"""Opening the house pot puts a brass key in Persist. I lists it in the bag."""
 
 from __future__ import annotations
 
@@ -21,6 +21,11 @@ def query(entry: str, widget: str) -> dict:
     if not isinstance(result, dict):
         raise SystemExit(f"ui.query {entry}/{widget} returned {result!r}")
     return result
+
+
+def bag_row(index: int) -> str:
+    """The label text of bag row `index` (1-based), stripped of the cursor."""
+    return (query("Inventory", f"BagRow{index}Label").get("text") or "").strip().lstrip("> ").strip()
 
 
 def main() -> None:
@@ -60,15 +65,18 @@ def main() -> None:
         rpg.wait_until(dialogue_closed, 2.0, "dialogue closed")
         rpg.tap("I")
 
+        # The bag is sorted by id: brass_key, then coin. The key row carries
+        # the cursor mark; a count only prints when it is above one.
         def listed():
-            body = query("Inventory", "Body")
-            text = body.get("text") or ""
-            if body.get("visible") and text == "Brass Key x1\nCoin x5":
-                return text
+            if not query("Inventory", "BagRow1Label").get("visible"):
+                return None
+            first, second = bag_row(1), bag_row(2)
+            if first == "Brass Key" and second == "Coin x5":
+                return (first, second)
             return None
 
-        bag = rpg.wait_until(listed, 2.0, "inventory line")
-        print(f"inventory:\n  {opened}\n  {bag}")
+        bag = rpg.wait_until(listed, 2.0, "bag rows")
+        print(f"inventory:\n  {opened}\n  {bag[0]} / {bag[1]}")
     finally:
         rpg.stop()
 

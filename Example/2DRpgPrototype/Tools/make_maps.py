@@ -599,6 +599,25 @@ def build_physics_scene() -> dict:
             "layers": [ground], "widgets": []}
 
 
+def build_equipment_scene() -> dict:
+    """A minimal scene for the G2 test: a camera, a floor, the
+    EquipmentSelfTest controller, and the Inventory entry mounted so the test
+    can drive the real panel (open it, click Equip) rather than the model API
+    alone."""
+    w, h = 16, 12
+    origin = map_origin(w, h)
+    ground = [TOWN_GRASS + 1] * (w * h)
+    spawn = (w // 2, h // 2)
+    entities: list[dict] = [
+        camera_entity(spawn, origin, script=None),
+        script_entity(1011, "EquipmentSelfTest", "Content/Scripts/EquipmentSelfTest.lua"),
+        tilemap_entity(2000, "TilemapGround", TOWN_ATLAS, TOWN_TILESET, w, h, origin,
+                       [layer("Ground", ground)]),
+    ]
+    return {"name": "EquipmentScene", "width": w, "height": h, "entities": entities,
+            "layers": [ground], "widgets": [("Dialogue", 10), ("Inventory", 20)]}
+
+
 def main() -> None:
     write_scene(ROOT / "Content/Scenes/Camp.scene.json", build_camp())
     write_scene(ROOT / "Content/Scenes/BattleRuins1.scene.json", build_battle_ruins1())
@@ -606,6 +625,7 @@ def main() -> None:
     write_scene(ROOT / "Content/Scenes/FadeScene.scene.json", build_fade_scene())
     write_scene(ROOT / "Content/Scenes/FxScene.scene.json", build_fx_scene())
     write_scene(ROOT / "Content/Scenes/PhysicsScene.scene.json", build_physics_scene())
+    write_scene(ROOT / "Content/Scenes/EquipmentScene.scene.json", build_equipment_scene())
     print(f"Camp {CAMP_W}x{CAMP_H}, BattleRuins1 {BAT_W}x{BAT_H}, WorldText 16x12")
 
 

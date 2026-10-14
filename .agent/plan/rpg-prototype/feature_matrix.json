@@ -367,14 +367,27 @@
       "id": "equipment_inventory",
       "wave": "D",
       "phase": "G2",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: battle drops, bag UI, equip slots, live stat update",
-      "plan": ".yaui bag/equip panel with TableGrid/ScrollViewport/Button; Persist.inventory",
-      "evidence": [],
+      "plan": "bag/equip panel (bag list + 3 gear slots + detail + controls); Persist.items bag; Persist.party[id].equipment",
+      "evidence": [
+        "Example/2DRpgPrototype/Content/Scripts/Items.lua: catalog entries {id,type,name,stats,desc} (type IS the slot); get/name/slotFor/isEquippable/statText; bag get/give/take/count/inventory/lines; addToInventory/removeFromInventory/getInventory aliases",
+        "Example/2DRpgPrototype/Content/Scripts/Party.lua: member equipment = {weapon,armor,accessory} in Persist.party; equip/unequip/equipped/getEquipment/memberIds; stats() folds base + level growth + equipment (single stat truth); ensure() backfills equipment for old saves",
+        "Example/2DRpgPrototype/Content/Scripts/Unit.lua: refreshStats() re-pulls Party.stats for a live unit; battle starts from the roster's carried hp; maxHp from equipment does not heal, unequipping clamps hp down",
+        "Example/2DRpgPrototype/Content/Scripts/Loot.lua: drop table (one id per slot) + roll/award; award adds to the bag and logs 'Battle: loot <id> x1'",
+        "Example/2DRpgPrototype/Content/Scripts/Battle.lua: grantVictoryReward rolls the drop (lootTable/lootIndex properties) and shows the HUD hint",
+        "Example/2DRpgPrototype/Content/UI/Inventory.lua + Content/UI/Inventory.yaui.json: bag rows (BagRow1..6), gear slots (SlotWeapon/Armor/Accessory), detail (DetailName/Stats/Desc), controls (PrevMember/NextMember/Equip/Unequip); keys + buttons; I toggles",
+        "Example/2DRpgPrototype/Tools/make_inventory.py: generates Inventory.yaui.json",
+        "Script/automation/2d-rpg/equipment.py: model contract (equip raises atk, unequip restores, armor +/- maxHp, slots, loot table) -- 20 checks -- plus UI equip/unequip through the real panel",
+        "Script/automation/2d-rpg/equipment_loot.py: a won battle (Camp -> ruins -> victory) drops exactly one equippable id into the bag",
+        "Script/automation/2d-rpg/inventory.py: pot -> I -> bag rows read the real panel"
+      ],
       "tests": [
         "EquippingRaisesStats",
         "UnequipRestoresBase"
-      ]
+      ],
+      "verified": "2026-10-14",
+      "notes": "Reuses the existing Inventory entry and I hotkey (rebuilt in place as bag+equip) rather than adding a second panel. Equipped items live in the roster slot, not the bag; swapping returns the old item. Unit.refreshStats folds equipment into the live battle unit, so a weapon equipped at Camp raises the next battle's atk (verified: Archer head HP 15/28 = Lv2 base 23 + armor +5 across an in-game scene transfer). No durability/upgrade this round."
     },
     {
       "id": "party_companions",

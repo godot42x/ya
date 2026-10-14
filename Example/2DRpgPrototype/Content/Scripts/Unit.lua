@@ -58,24 +58,47 @@ function Script:onInit()
     self.transform = self.entity:getTransform()
     self.sprite = self.entity:getSprite2D()
     self.baseTint = { self.sprite.tint.x, self.sprite.tint.y, self.sprite.tint.z, self.sprite.tint.w }
-    -- A party unit reads its stats from the roster at the member's level; the
-    -- authored fields are the fallback for an enemy or a standalone unit.
+    -- A party unit reads its stats from the roster at the member's level and
+    -- equipment; the authored fields are the fallback for an enemy or a
+    -- standalone unit.
     self.useParty = self.partyId ~= nil and self.partyId ~= "" and self.team == "player"
     if self.useParty then
         Party.ensure(self.partyId, self.job, self.displayName)
-        local stats = Party.stats(self.partyId)
-        self.maxHp = stats.maxHp
-        self.atk   = stats.atk
-        self.def   = stats.def
-        self.spd   = stats.spd
-        self.move  = stats.move
-        self.range = stats.range
-        self.displayName = stats.displayName
+        -- Bring the authored maxHp into the roster's range before refreshStats
+        -- reads it, so the hp clamp below sees a real "previous max".
         self.hp = math.max(1, Party.hp(self.partyId))
+        self:refreshStats()
     else
         self.hp = self.maxHp
     end
     self.mp = self.maxMp
+end
+
+-- Re-pull this unit's stats from the roster. `Party.stats` folds base + level
+-- growth + equipment, so one call after an equip/unequip (or a level-up) is all
+-- a live unit needs; this keeps the fields the battle reads in sync. Only a
+-- party unit has a roster entry to pull from.
+function Script:refreshStats()
+    if not self.useParty then
+        return false
+    end
+    local stats = Party.stats(self.partyId)
+    if stats == nil then
+        return false
+    end
+    self.maxHp = stats.maxHp
+    self.atk   = stats.atk
+    self.def   = stats.def
+    self.spd   = stats.spd
+    self.move  = stats.move
+    self.range = stats.range
+    self.displayName = stats.displayName
+    -- Equipment changes maxHp, not current hp: equipping does not heal, and
+    -- unequipping armor clamps hp down to the smaller max.
+    if self.hp ~= nil then
+        self.hp = math.min(self.hp, self.maxHp)
+    end
+    return true
 end
 
 function Script:isAlive()

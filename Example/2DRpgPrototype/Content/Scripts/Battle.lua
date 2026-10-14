@@ -33,6 +33,11 @@ Script.returnScene = ""
 Script.returnSpawn = ""
 Script.returnActor = "Player"
 Script.returnDelay = 2.5
+-- The drop rolled on a victory (G2). Empty lootTable uses Loot.table; lootIndex
+-- pins a specific row (0 or negative = random), which an automation run sets so
+-- the drop is deterministic without touching production content.
+Script.lootTable = {}
+Script.lootIndex = 0
 Script:properties({
     mapName = { type = "string", tooltip = "Tilemap entity holding the board" },
     hudName = { type = "string", tooltip = "Game UI entry showing the turn order" },
@@ -42,6 +47,7 @@ Script:properties({
     returnSpawn = { type = "string", tooltip = "Spawn marker in the return scene" },
     returnActor = { type = "string", tooltip = "Entity in the return scene to place on the marker" },
     returnDelay = { type = "float", min = 0.0, max = 30.0, tooltip = "Seconds the outcome banner holds" },
+    lootIndex = { type = "int", min = 0, max = 99, tooltip = "0 = random drop row; 1..N pins a row" },
 })
 
 local MOVE_SECONDS = 0.14   -- per cell while walking
@@ -629,6 +635,12 @@ function Script:grantVictoryReward()
     if #self.levelsGained > 0 and type(hud) == "table" and hud.showHint then
         local first = self.levelsGained[1]
         hud:showHint("Level up! Lv " .. tostring(first.level))
+    end
+    -- And a drop (G2): one item from the table into the bag, so the equipment
+    -- screen has something to wear. A victory with no table rolls nothing.
+    self.lootId = require("Loot").award(self.lootTable, self.lootIndex)
+    if self.lootId ~= nil and type(hud) == "table" and hud.showHint and #self.levelsGained == 0 then
+        hud:showHint("Obtained: " .. tostring(self.lootId))
     end
 end
 

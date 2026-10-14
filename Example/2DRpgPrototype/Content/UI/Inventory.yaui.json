@@ -22,7 +22,12 @@
       "version": 2,
       "typeId": "engine.border",
       "fields": {
-        "_color": [0.08, 0.1, 0.12, 0.94],
+        "_color": [
+          0.07,
+          0.09,
+          0.12,
+          0.96
+        ],
         "_cornerRadius": 10.0,
         "__base__": {
           "UIElement": {
@@ -37,8 +42,11 @@
           "fields": {
             "_boxLayout": {
               "_direction": 1,
-              "_spacing": 8.0,
-              "_padding": [16.0, 12.0]
+              "_spacing": 10.0,
+              "_padding": [
+                18.0,
+                14.0
+              ]
             },
             "__base__": {
               "UIElement": {
@@ -53,8 +61,11 @@
               "fields": {
                 "_boxLayout": {
                   "_direction": 0,
-                  "_spacing": 12.0,
-                  "_padding": [0.0, 0.0]
+                  "_spacing": 14.0,
+                  "_padding": [
+                    0.0,
+                    0.0
+                  ]
                 },
                 "__base__": {
                   "UIElement": {
@@ -68,8 +79,13 @@
                   "typeId": "engine.text",
                   "fields": {
                     "_text": "Inventory",
-                    "_fontSize": 14,
-                    "_color": [0.95, 0.84, 0.45, 1.0],
+                    "_fontSize": 18,
+                    "_color": [
+                      0.95,
+                      0.84,
+                      0.45,
+                      1.0
+                    ],
                     "__base__": {
                       "UIElement": {
                         "_name": "Title"
@@ -83,10 +99,35 @@
                   "version": 2,
                   "typeId": "engine.text",
                   "fields": {
+                    "_text": "-",
+                    "_fontSize": 15,
+                    "_color": [
+                      0.85,
+                      0.88,
+                      0.95,
+                      1.0
+                    ],
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "MemberLabel"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
                     "_text": "I",
                     "_fontSize": 13,
-                    "_color": [0.68, 0.7, 0.76, 0.9],
-                    "_hAlign": 2,
+                    "_color": [
+                      0.68,
+                      0.7,
+                      0.76,
+                      0.9
+                    ],
                     "__base__": {
                       "UIElement": {
                         "_name": "Hint"
@@ -102,23 +143,77 @@
                   "type": "box",
                   "sizeRule": 0,
                   "weight": 1.0,
-                  "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
                   "crossAlignment": 0,
-                  "minSize": [0.0, 0.0],
-                  "maxSize": [1000000.0, 1000000.0],
-                  "preferredSize": [0.0, 0.0],
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
                   "participatesInLayout": true,
                   "reserveSpaceWhenHidden": true
                 },
                 {
                   "type": "box",
-                  "sizeRule": 1,
+                  "sizeRule": 0,
                   "weight": 1.0,
-                  "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
                   "crossAlignment": 0,
-                  "minSize": [0.0, 0.0],
-                  "maxSize": [1000000.0, 1000000.0],
-                  "preferredSize": [0.0, 0.0],
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
                   "participatesInLayout": true,
                   "reserveSpaceWhenHidden": true
                 }
@@ -126,20 +221,1500 @@
             },
             {
               "version": 2,
-              "typeId": "engine.text",
+              "typeId": "engine.container",
               "fields": {
-                "_text": "Nothing carried.",
-                "_fontSize": 18,
-                "_color": [0.96, 0.96, 0.94, 1.0],
-                "_bWrap": false,
+                "_boxLayout": {
+                  "_direction": 0,
+                  "_spacing": 24.0,
+                  "_padding": [
+                    0.0,
+                    0.0
+                  ]
+                },
                 "__base__": {
                   "UIElement": {
                     "_name": "Body"
                   }
                 }
               },
-              "children": [],
-              "childSlots": []
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.container",
+                  "fields": {
+                    "_boxLayout": {
+                      "_direction": 1,
+                      "_spacing": 4.0,
+                      "_padding": [
+                        6.0,
+                        4.0
+                      ]
+                    },
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "BagColumn"
+                      }
+                    }
+                  },
+                  "children": [
+                    {
+                      "version": 2,
+                      "typeId": "engine.text",
+                      "fields": {
+                        "_text": "Bag",
+                        "_fontSize": 14,
+                        "_color": [
+                          0.72,
+                          0.78,
+                          0.86,
+                          1.0
+                        ],
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "BagTitle"
+                          }
+                        }
+                      },
+                      "children": [],
+                      "childSlots": []
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "BagRow1"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "BagRow1Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "BagRow2"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "BagRow2Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "BagRow3"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "BagRow3Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "BagRow4"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "BagRow4Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "BagRow5"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "BagRow5Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "BagRow6"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "BagRow6Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "childSlots": [
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 1,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 1,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 1,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 1,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 1,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 1,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    }
+                  ]
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.container",
+                  "fields": {
+                    "_boxLayout": {
+                      "_direction": 1,
+                      "_spacing": 4.0,
+                      "_padding": [
+                        6.0,
+                        4.0
+                      ]
+                    },
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "GearColumn"
+                      }
+                    }
+                  },
+                  "children": [
+                    {
+                      "version": 2,
+                      "typeId": "engine.text",
+                      "fields": {
+                        "_text": "Equipped",
+                        "_fontSize": 14,
+                        "_color": [
+                          0.72,
+                          0.78,
+                          0.86,
+                          1.0
+                        ],
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "EquipTitle"
+                          }
+                        }
+                      },
+                      "children": [],
+                      "childSlots": []
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "SlotWeapon"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "-",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "SlotWeaponLabel"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "SlotArmor"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "-",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "SlotArmorLabel"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "SlotAccessory"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "-",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "SlotAccessoryLabel"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.text",
+                      "fields": {
+                        "_text": "Stats",
+                        "_fontSize": 14,
+                        "_color": [
+                          0.72,
+                          0.78,
+                          0.86,
+                          1.0
+                        ],
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "StatsTitle"
+                          }
+                        }
+                      },
+                      "children": [],
+                      "childSlots": []
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.text",
+                      "fields": {
+                        "_text": "-",
+                        "_fontSize": 15,
+                        "_color": [
+                          0.9,
+                          0.95,
+                          0.86,
+                          1.0
+                        ],
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "Stats"
+                          }
+                        }
+                      },
+                      "children": [],
+                      "childSlots": []
+                    }
+                  ],
+                  "childSlots": [
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 1,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    }
+                  ]
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "box",
+                  "sizeRule": 1,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 1,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                }
+              ]
+            },
+            {
+              "version": 2,
+              "typeId": "engine.container",
+              "fields": {
+                "_boxLayout": {
+                  "_direction": 1,
+                  "_spacing": 2.0,
+                  "_padding": [
+                    8.0,
+                    6.0
+                  ]
+                },
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Detail"
+                  }
+                }
+              },
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "_text": "",
+                    "_fontSize": 16,
+                    "_color": [
+                      0.98,
+                      0.92,
+                      0.7,
+                      1.0
+                    ],
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "DetailName"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "_text": "",
+                    "_fontSize": 14,
+                    "_color": [
+                      0.85,
+                      0.92,
+                      0.98,
+                      1.0
+                    ],
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "DetailStats"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "_text": "",
+                    "_fontSize": 13,
+                    "_color": [
+                      0.78,
+                      0.8,
+                      0.84,
+                      1.0
+                    ],
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "DetailDesc"
+                      }
+                    }
+                  },
+                  "children": [],
+                  "childSlots": []
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                }
+              ]
+            },
+            {
+              "version": 2,
+              "typeId": "engine.container",
+              "fields": {
+                "_boxLayout": {
+                  "_direction": 0,
+                  "_spacing": 10.0,
+                  "_padding": [
+                    0.0,
+                    0.0
+                  ]
+                },
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Actions"
+                  }
+                }
+              },
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.button",
+                  "fields": {
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "PrevMember"
+                      }
+                    }
+                  },
+                  "children": [
+                    {
+                      "version": 2,
+                      "typeId": "engine.text",
+                      "fields": {
+                        "_text": "<",
+                        "_fontSize": 16,
+                        "_color": [
+                          0.9,
+                          0.9,
+                          0.94,
+                          1.0
+                        ],
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "PrevMemberLabel"
+                          }
+                        }
+                      },
+                      "children": [],
+                      "childSlots": []
+                    }
+                  ],
+                  "childSlots": [
+                    {
+                      "type": "content",
+                      "hAlign": 0,
+                      "vAlign": 0,
+                      "padding": {
+                        "left": 10.0,
+                        "top": 5.0,
+                        "right": 10.0,
+                        "bottom": 5.0
+                      },
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.button",
+                  "fields": {
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "NextMember"
+                      }
+                    }
+                  },
+                  "children": [
+                    {
+                      "version": 2,
+                      "typeId": "engine.text",
+                      "fields": {
+                        "_text": ">",
+                        "_fontSize": 16,
+                        "_color": [
+                          0.9,
+                          0.9,
+                          0.94,
+                          1.0
+                        ],
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "NextMemberLabel"
+                          }
+                        }
+                      },
+                      "children": [],
+                      "childSlots": []
+                    }
+                  ],
+                  "childSlots": [
+                    {
+                      "type": "content",
+                      "hAlign": 0,
+                      "vAlign": 0,
+                      "padding": {
+                        "left": 10.0,
+                        "top": 5.0,
+                        "right": 10.0,
+                        "bottom": 5.0
+                      },
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.button",
+                  "fields": {
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "EquipButton"
+                      }
+                    }
+                  },
+                  "children": [
+                    {
+                      "version": 2,
+                      "typeId": "engine.text",
+                      "fields": {
+                        "_text": "Equip",
+                        "_fontSize": 16,
+                        "_color": [
+                          0.8,
+                          0.96,
+                          0.82,
+                          1.0
+                        ],
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "EquipButtonLabel"
+                          }
+                        }
+                      },
+                      "children": [],
+                      "childSlots": []
+                    }
+                  ],
+                  "childSlots": [
+                    {
+                      "type": "content",
+                      "hAlign": 0,
+                      "vAlign": 0,
+                      "padding": {
+                        "left": 10.0,
+                        "top": 5.0,
+                        "right": 10.0,
+                        "bottom": 5.0
+                      },
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.button",
+                  "fields": {
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "UnequipButton"
+                      }
+                    }
+                  },
+                  "children": [
+                    {
+                      "version": 2,
+                      "typeId": "engine.text",
+                      "fields": {
+                        "_text": "Unequip",
+                        "_fontSize": 16,
+                        "_color": [
+                          0.98,
+                          0.86,
+                          0.72,
+                          1.0
+                        ],
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "UnequipButtonLabel"
+                          }
+                        }
+                      },
+                      "children": [],
+                      "childSlots": []
+                    }
+                  ],
+                  "childSlots": [
+                    {
+                      "type": "content",
+                      "hAlign": 0,
+                      "vAlign": 0,
+                      "padding": {
+                        "left": 10.0,
+                        "top": 5.0,
+                        "right": 10.0,
+                        "bottom": 5.0
+                      },
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                }
+              ]
             }
           ],
           "childSlots": [
@@ -147,11 +1722,51 @@
               "type": "box",
               "sizeRule": 0,
               "weight": 1.0,
-              "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
               "crossAlignment": 0,
-              "minSize": [0.0, 0.0],
-              "maxSize": [1000000.0, 1000000.0],
-              "preferredSize": [0.0, 0.0],
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            },
+            {
+              "type": "box",
+              "sizeRule": 1,
+              "weight": 1.0,
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
+              "crossAlignment": 0,
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
               "participatesInLayout": true,
               "reserveSpaceWhenHidden": true
             },
@@ -159,11 +1774,51 @@
               "type": "box",
               "sizeRule": 0,
               "weight": 1.0,
-              "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
               "crossAlignment": 0,
-              "minSize": [0.0, 0.0],
-              "maxSize": [1000000.0, 1000000.0],
-              "preferredSize": [0.0, 0.0],
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            },
+            {
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
+              "crossAlignment": 0,
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
               "participatesInLayout": true,
               "reserveSpaceWhenHidden": true
             }
@@ -175,8 +1830,16 @@
           "type": "content",
           "hAlign": 0,
           "vAlign": 0,
-          "padding": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
-          "preferredSize": [0.0, 0.0]
+          "padding": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "preferredSize": [
+            0.0,
+            0.0
+          ]
         }
       ]
     }
@@ -184,19 +1847,48 @@
   "childSlots": [
     {
       "type": "canvas",
-      "anchorMin": [0.0, 0.0],
-      "anchorMax": [1.0, 0.0],
-      "offset": [0.0, 16.0],
-      "minSize": [0.0, 0.0],
-      "maxSize": [300.0, 1000000.0],
-      "offsets": { "left": 16.0, "top": 0.0, "right": 16.0, "bottom": 0.0 },
-      "alignmentH": 2,
+      "anchorMin": [
+        0.5,
+        0.5
+      ],
+      "anchorMax": [
+        0.5,
+        0.5
+      ],
+      "offset": [
+        0.0,
+        0.0
+      ],
+      "minSize": [
+        760.0,
+        440.0
+      ],
+      "maxSize": [
+        760.0,
+        440.0
+      ],
+      "offsets": {
+        "left": 0.0,
+        "top": 0.0,
+        "right": 0.0,
+        "bottom": 0.0
+      },
+      "alignmentH": 0,
       "alignmentV": 0,
       "widthSizeMode": 0,
-      "heightSizeMode": 1,
-      "pivot": [0.0, 0.0],
-      "preferredSize": [0.0, 0.0],
-      "fixedSize": [0.0, 0.0]
+      "heightSizeMode": 0,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "preferredSize": [
+        0.0,
+        0.0
+      ],
+      "fixedSize": [
+        760.0,
+        440.0
+      ]
     }
   ]
 }
