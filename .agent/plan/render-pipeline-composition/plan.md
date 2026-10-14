@@ -139,7 +139,15 @@ appendExtensionsAt<DeferredExtensionPoint::AfterLighting>(extCtx, resolved.exten
 
 **结论：** 新增效果的成本 = 功能实现 + **约 105 行连接声明**；协议层是一次性投入。连接声明相比核心 feature（Bloom 约 32 处提及）没有数量级下降——因为扩展同样要声明 settings、device object、生命周期。**真正的收益是位置语义**：扩展明确声明 `extensionPoint()`，Recipe 在命名位置 fold 调用，不需要在每条 phase 里插一行、也不改核心调度；且第二个同点扩展只是 tuple 多一项，连接声明零增长。
 
-**验收证据：** `ya-render-3d-test` 238/238；SSR off 帧与历史基线**逐像素 0 diff**（说明关闭时零影响）；SSR on 帧产生可复现差异（intensity=3.0 时 6369 像素、bbox 落在反射区域，同实例连拍 0 diff 确认非噪声）；日志 0 ERROR、0 断言。
+**验收证据（第一次验收不合格，已重做）：** 第一次只凭 `Runtime.json` 开关 + 一张 max 6/255 近乎不可见的图就报完成，且没接编辑器开关、没构建能显示效果的场景——被指出后重做，见下。
+
+**重做后的验收（提交 `9a7799e1`）：**
+- SSR 接入 `RenderPipelineSettings`，与 SSAO 同一块、同一 settings 请求路径；编辑器 Runtime 面板 Deferred 段出现 "Screen-Space Reflection" 分区（Enable SSR + Max Distance/Thickness/Intensity/Steps），可点击切换。
+- automation 增 `set_render_settings`（走与编辑器相同的 `getRenderPipelineSettings→mutate→setRenderPipelineSettings` 路径）与 `create_ssr_reflection_scene`（地板 + 直立方块 + 掠射相机，使反射可见）。
+- **同场景同运行内 A/B**：SSR off vs on = **28301 像素差异、max 95/255**（bbox 落在反射区）；on 再关回 off = 与初始 off 帧**逐像素 0 diff**（切换干净可逆）；日志 0 ERROR、0 SSR 失败。
+- `ya-render-3d-test` 238/238。
+
+**教训（已记入 memory）**：验收"效果"必须①有能显示该效果的场景，②同场景同运行内做 A/B，③差异要肉眼可见；只改配置 + 一张平淡的截图不构成证据。
 
 **实现中发现并修掉的两个真 bug（都是"临时对象"类）：**
 1. fold 最初用 `Ext{}.appendExtension(...)` 在**新构造的临时对象**上调用 → 临时的 `_stage` 为 null → MissingContext（与 D5 的栈临时 bug 同类）。修正：fold 接收管线持有的长期实例 `ExtensionInstances`，按类型匹配后调用实例。

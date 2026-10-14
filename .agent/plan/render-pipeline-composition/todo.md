@@ -69,7 +69,9 @@
 - [x] `ExtensionFeature` concept + `appendExtensionsAt<Point>` 编译期 fold（未用 `IExtensionFeature` 虚基类/vector 注册表——design.md 禁止类型擦除）
 - [x] Recipe 在 AfterLighting 位置 fold 调用；扩展通过 `extensionPoint()` 声明位置
 - [x] 真实效果验证：简单 SSR（`SSR.slang` + `SSRStage` + `SSRFeature`）
-- [x] 验收：SSR off 帧与历史基线逐像素 0 diff；SSR on 帧可复现差异（intensity=3.0 → 6369 像素）
+- [x] 验收（重做）：SSR 接入 RenderPipelineSettings + 编辑器面板分区（可点击）；
+      同场景同运行 A/B：off vs on = 28301 像素/max 95，on→off 逐像素 0 diff
+- [x] 教训落库：验收"效果"必须有 ①能显示它的场景 ②同运行 A/B ③差异肉眼可见
 - [x] 记录接入成本（见下）
 - [x] 提交
 
