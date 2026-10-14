@@ -32,8 +32,19 @@
 | U1 | 需要本地化 feature（游戏切语言，引擎 / 编辑器也需要） | 游戏侧已有（`Locale.lua` + `Persist.locale`）。**引擎/编辑器级 locale 服务**是另一条线（归 `game-ui-authoring` / 编辑器），本计划只登记，不在此实现 |
 | U2 | AI Native：人工操纵编辑器逐步骤开发可能过时；要创新、要找到本引擎的生态位，不能只是 `Yet Another Game Engine` | **战略方向**，记入本计划作为持续指引；不伪装成 checkpoint。与本计划相关的落地：内容生成走 `image-gen`（本机无 grok-cli），后续接本地 ComfyUI |
 | U3 | 伤害跳字不该用一张 digits 图，应该用 `Sprite2D` 组件或**世界空间文字组件** | 现状：已用 `Sprite2DComponent`（每位一精灵），`digits.png` 只是它采样的贴图。真正的缺口是**世界空间文字**（引擎只有 `ScreenDrawList::makeText`）。新增 checkpoint **WT1：世界空间文字**（Wave B2） |
-| U4 | UI/HUD 简陋：行动面板应屏幕底部横向布局；敌人选择 / 技能选择太简陋；血条与血量直接显示在敌人头顶 | 拆成 **UB1 战斗 HUD 重做**（底部横向行动栏、目标/技能选择、头顶血条用 WT1 的世界文字）。底部横向布局框架已支持（`EWidgetAlignV::Bottom`），主要是内容工作 |
-| U5 | 面板要风格化；UI 框架可能需前置开发 | 归 `gui-style-system-convergence` 线；本计划只登记需求。战斗面板先用现有控件做出可用版 |
+| U4 | UI/HUD 简陋：行动面板应屏幕底部横向布局；敌人选择 / 技能选择太简陋；血条与血量直接显示在敌人头顶 | **UB1 战斗 HUD 重做**（Wave B2）已按参考图落地：左上行动单位卡（名字+数值血条）、右上回合徽章、左侧行动序、底部带热键的行动按钮栏；单位头顶名字+`hp/maxHp` 数字 |
+| U5 | 面板要风格化；UI 框架可能需前置开发 | **UB2 面板风格化**（Wave B2）已落地：Kenney UI Pack 九宫格（`FBrush::ninePatch`）经 `Border.setFillImage`/`Button.setFillImage` 接入脚本面；面板改为深色 tint + 纹理边框。同时补了框架缺口：`UIMenu` 反射块、`Widget.setSize/setPosition`、槽反序列化容错（缺键不再断言崩溃）（`ui.create/destroy` 一度作为模块函数加入，随后移除：它与既有的 `ya.ui.create/set/detach/destroy` registry 命令重名并遮蔽它们，且无调用方） |
+
+### 0.3 本轮（2026-10-13 晚）追加反馈与处置
+
+| # | 反馈 | 处置 |
+| --- | --- | --- |
+| U6 | wasd+空格跑不完主流程 | 复现并定位：胜利路径从未被测试覆盖；同时发现 Camp 场景渲染回归（peer 线修复）。修复后 `battle_mouse`/`kbd_main_flow` 覆盖两条输入路径 |
+| U7 | 本地化引擎化提前 | **L1**：`Core/Localization/LocalizationManager`（语言表/回退链/变更事件）+ `locale.*` 脚本模块 + `Content/Locale/zh.json` 数据化；游戏 `Locale.lua` 改为引擎服务的薄壳 |
+| U8 | 鼠标操纵缺失、UX 差 | **UX1**：`world.screenToWorld/worldToScreen`（取主相机真实矩阵反投影，含像素完美吸附）、`input.inject_mouse`/`get_mouse_position`（含 OS 指针 warp，避免合成 move 与平台 leave 状态打架）；Battle 支持悬停预览/左键确认/右键取消 |
+| U9 | 参照其他战旗游戏 UI | **UB1** 按参考图语言重做（见 U4 行）；`shot.py` 截图工具（含全黑帧检测与 RGBA→RGB 归一） |
+| U10 | 世界文字字形断裂（`Slim e`） | **TL1 文本路径收敛**：`Render/Resources/TextLayout`（共享字形布局 walk：advance/bearing/baseline/换行）替代 `Text2DExtraction` 里抄的第二份；世界文字按主相机 texels/unit 反推屏幕像素高度去取图集（与 GUI `planTextRaster` 同一条"1:1 栅格、不重采样 bitmap"契约），细笔画不再丢 |
+| U11 | 世界文字为什么"用 3D text"、是否重复造轮子 | 调研（Godot `Label3D` 自建网格但共享 `Font`/`TextServer`；Unity TMP 世界/UI 共享 `FontAsset` 与排版、只有 renderer 不同；UE `UWidgetComponent` 渲到 RT 贴世界网格，`UTextRenderComponent` 另起 `UFont` 几何路径）。结论：**共享字体/图集/整形层、分开"往哪画"是正确的**，我们此前已共享字体层与合批，缺的正是 TL1 那层共享布局 |
 
 ### 0.2 checkpoint 顺序调整（响应 U3 / U4）
 

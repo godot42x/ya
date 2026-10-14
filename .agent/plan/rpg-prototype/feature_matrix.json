@@ -92,9 +92,8 @@
       "source": "engine",
       "used_by": "battle HUD, inventory, equipment, skills, journal, dialogue, settings",
       "evidence": [
-        "GUI/Widgets/Controls/",
-        "LuaWidgetHandle.cpp",
-        "LuaWidgetScripts.cpp"
+        "Engine/Source/Framework/GUI/Runtime/Widgets/Controls/Menu.h: UIMenu reflection block + setItems",
+        "Engine/Source/Applications/GameRuntime/Script/LuaWidgetHandle.cpp: Menu/Border/Button/Widget script surface"
       ]
     },
     {
@@ -221,14 +220,19 @@
       "id": "mouse_picking",
       "wave": "B",
       "phase": "T2",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: click to select a unit / click a reachable cell to move",
-      "engine_gap": "N7 Sprite2DComponent.pickId reflected but unused; no screen->cell",
-      "plan": "input:mousePosition() + camera unproject -> cell (render.screenToCell); pickId for unit selection, entityAt fallback",
-      "evidence": [],
+      "engine_gap": "",
+      "plan": "world.screenToWorld / worldToScreen (primary camera matrices, pixel-perfect snap, DPI-correct) + input.inject_mouse/get_mouse_position; Battle.lua hover preview + left-click confirm + right-click cancel",
+      "evidence": [
+        "Engine/Source/Applications/GameRuntime/Script/GameplayScriptFunctions.cpp: screenToWorld/worldToScreen",
+        "Engine/Source/Applications/GameRuntime/ScriptApiCore.cpp: input.inject_mouse/get_mouse_position",
+        "Script/automation/2d-rpg/battle_mouse.py"
+      ],
       "tests": [
-        "ScreenToCellRoundTrips"
-      ]
+        "battle_mouse.py (pure-mouse turn: hover -> click cell -> menu -> attack, Bat 10->4)"
+      ],
+      "verified": "2026-10-14"
     },
     {
       "id": "turn_battle_frame",
@@ -425,11 +429,21 @@
       "id": "hud_polish",
       "wave": "E",
       "phase": "Z2",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: full battle HUD (action menu, unit panel, initiative bar), settings (volume/language)",
-      "plan": "yaui panels using existing controls",
-      "evidence": [],
-      "tests": []
+      "plan": "UB1/UB2: top-left acting-unit card, top-right round badge, left turn order, bottom hotkeyed action bar; Kenney nine-patch panels via Border/Button.setFillImage; unit HP as world text",
+      "evidence": [
+        "Example/2DRpgPrototype/Content/UI/BattleHUD.lua",
+        "Example/2DRpgPrototype/Content/UI/BattleHUD.yaui.json",
+        "Example/2DRpgPrototype/Content/Scripts/BattleFx.lua: UnitHp_<name> world text"
+      ],
+      "tests": [
+        "kbd_main_flow.py",
+        "camp_battle_loop.py",
+        "battle_combat.py",
+        "battle_mouse.py"
+      ],
+      "verified": "2026-10-14"
     },
     {
       "id": "capability_audit",
@@ -483,6 +497,25 @@
       ],
       "tests": [],
       "verified": "2026-10-13"
+    },
+    {
+      "id": "engine_localization",
+      "wave": "B",
+      "phase": "T2",
+      "status": "done",
+      "driven_by": "game: language switch (settings); engine + editor also need it",
+      "engine_gap": "",
+      "plan": "Core/Localization/LocalizationManager (per-language tables, fallback chain, onLanguageChanged) + locale.* script module; game table as Content/Locale/zh.json",
+      "evidence": [
+        "Engine/Source/Framework/Core/Localization/LocalizationManager.cpp",
+        "Engine/Source/Framework/Core/include/Core/Localization/LocalizationManager.h",
+        "Engine/Source/Applications/GameRuntime/Script/GameplayScriptFunctions.cpp: locale.tr/language/setLanguage/languages/loadTable",
+        "Example/2DRpgPrototype/Content/Locale/zh.json"
+      ],
+      "verified": "2026-10-14",
+      "tests": [
+        "Engine/Test/Source/Core/LocalizationManagerTest.cpp"
+      ]
     }
   ]
 }
