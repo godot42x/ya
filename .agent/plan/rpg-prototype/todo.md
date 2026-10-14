@@ -22,6 +22,12 @@
 
 - [x] WT1 世界空间文字（`world.spawnText` + `Text2DComponent`；伤害跳字/名字/头顶血条改用引擎世界文字）
 - [x] UB1 战斗 HUD 重做（底部横向行动栏、目标/技能选择、头顶血条）
+- [ ] **UB3 战斗 HUD 布局收敛**（响应 U9：参照成熟 SRPG，2026-10-14 定案）
+      ——世界层只留名字+血条，新增确定性伤害预测；屏幕层合并为底部一块战术面板（单位信息+行动按钮）；
+      行动序压缩成一行色块；回合信息收敛成顶部一行；面板滑入/滑出。
+      方案 C（混合式），不新增 C++ 控件，复用现有 `ActionButton`/`HpTrack`/`showMenu`。
+      先决条件：修 `Tools/make_battle_hud.py` 过期问题（与线上 `.yaui` 不一致，重跑会抹掉按钮）。
+      可延后：世界锚定菜单（FE 式）、敌人意图外显（ITB 式）。详见 `plan.md` §0.5 与 §7 UB3。
 
 ## Wave C — 四子系统（每个都要有真实使用点）
 
@@ -47,15 +53,16 @@
 ## 待用户确认 / 决策门
 
 - [x] 素材下载与入库 —— 已自行下载 Kenney CC0 素材（Tiny Dungeon/Battle、Particle、UI/SFX 音频）
-- [ ] 单位动画策略（Tiny Battle 静态是否接受；需要动画才用 image-gen 生成）
+- [x] 单位动画策略 —— 2026-10-14 用户决定：暂时接受静态单位
 - [ ] 后处理作用域（管线级先做；是否需要每 View 独立 look 到 R1 再定）
-- [ ] Box2D 与 tile 棋盘的空间边界约定（写进 `2d-gameplay` skill）
+- [x] Box2D 与 tile 棋盘的空间边界约定 —— 已写进 `.agent/skills/2d-gameplay/SKILL.md`
 - [ ] 目录名（沿用 `2DRpgPrototype` 还是改名，如 `2DTacticsRpg`）
 
 ## 来自 Notes.md 的持续性方向（非 checkpoint）
 
-- [ ] **U1 引擎/编辑器级本地化服务**：游戏侧已有 `Locale.lua`；引擎与编辑器自身切语言是另一条线，
-      登记给 `game-ui-authoring` / 编辑器线，不在本计划实现
+- [ ] **U1 引擎/编辑器级本地化服务**：游戏侧已有 `Locale.lua`；引擎与编辑器自身切语言是另一条线。
+      2026-10-14 定案：见 `localization-final-design.md`——采纳方案 A（可本地化文本属性）+ C-lite（编辑器集成），
+      跳过方案 B（FText-like，规模不匹配）。P0 已落地（`eb07437e`），真正空洞是 P2 断链（`editorTr` 0 调用点）。
 - [ ] **U2 AI Native**：用 AI 加速内容/开发流程、找到本引擎的生态位（不做 `Yet Another Game Engine`）。
       方向性，持续指引；本计划相关落地 = 内容生成走 `image-gen`（本机无 grok-cli），后续接本地 ComfyUI
 - [ ] **U5 风格化 UI 框架**：归 `gui-style-system-convergence`；本计划只登记，战斗面板先用现有控件做可用版
