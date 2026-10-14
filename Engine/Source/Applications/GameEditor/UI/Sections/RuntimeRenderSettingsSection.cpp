@@ -120,6 +120,11 @@ void saveDeferredExtras(const RenderPipelineSettings& settings)
         .set("render.deferred.ssao.bias", settings.ssaoBias)
         .set("render.deferred.ssao.power", settings.ssaoPower)
         .set("render.deferred.ssao.intensity", settings.ssaoIntensity)
+        .set("render.deferred.ssrEnabled", settings.bSSREnabled)
+        .set("render.deferred.ssr.maxDistance", settings.ssrMaxDistance)
+        .set("render.deferred.ssr.thickness", settings.ssrThickness)
+        .set("render.deferred.ssr.intensity", settings.ssrIntensity)
+        .set("render.deferred.ssr.stepCount", settings.ssrStepCount)
         .set("render.deferred.light.enablePBRDiffuseIBL", settings.bPBRDiffuseIBL)
         .set("render.deferred.light.enablePBRSpecularIBL", settings.bPBRSpecularIBL);
 }
@@ -279,6 +284,11 @@ void RuntimeRenderSettingsSection::construct()
     _ssaoBias = makeDrag("RenderSSAOBias", 0.0f, 0.2f, 0.001f, 4);
     _ssaoPower = makeDrag("RenderSSAOPower", 0.1f, 4.0f, 0.01f, 3);
     _ssaoIntensity = makeDrag("RenderSSAOIntensity", 0.0f, 8.0f, 0.05f, 3);
+    _ssrEnable = makeCheck("RenderSSREnable", "Enable SSR");
+    _ssrMaxDistance = makeDrag("RenderSSRMaxDistance", 1.0f, 100.0f, 0.5f, 1);
+    _ssrThickness = makeDrag("RenderSSRThickness", 0.05f, 5.0f, 0.05f, 2);
+    _ssrIntensity = makeDrag("RenderSSRIntensity", 0.0f, 5.0f, 0.05f, 2);
+    _ssrSteps = makeDrag("RenderSSRSteps", 8.0f, 128.0f, 1.0f, 0);
 
     auto splitRows = ui::column("RenderShadowSplits").setSpacing(editor_density::kRowSpacing);
     for (uint32_t i = 0; i < _shadowSplits.size(); ++i) {
@@ -336,6 +346,15 @@ void RuntimeRenderSettingsSection::construct()
                         .share();
     _ssaoBody = ssaoBody;
 
+    auto ssrBody = ui::column("RenderSSRBody")
+                       .setSpacing(editor_density::kRowSpacing)
+                       .child(labeledRow("RenderSSRMaxDistanceRow", "Max Distance", _ssrMaxDistance))
+                       .child(labeledRow("RenderSSRThicknessRow", "Thickness", _ssrThickness))
+                       .child(labeledRow("RenderSSRIntensityRow", "Intensity", _ssrIntensity))
+                       .child(labeledRow("RenderSSRStepsRow", "Steps", _ssrSteps))
+                       .share();
+    _ssrBody = ssrBody;
+
     auto deferredBody = ui::column("RenderDeferredBody")
                             .setSpacing(editor_density::kRowSpacing)
                             .child(_reverseY)
@@ -345,6 +364,9 @@ void RuntimeRenderSettingsSection::construct()
                             .child(ui::text("RenderAOHeader").setText("Ambient Occlusion").setStyleKey("text.small"))
                             .child(_ssaoEnable)
                             .child(ssaoBody)
+                            .child(ui::text("RenderSSRHeader").setText("Screen-Space Reflection").setStyleKey("text.small"))
+                            .child(_ssrEnable)
+                            .child(ssrBody)
                             .share();
     _deferredBody = deferredBody;
 
@@ -706,6 +728,33 @@ void RuntimeRenderSettingsSection::bindCallbacks()
             mutateDeferred(_app, [value](RenderPipelineSettings& snap) { snap.ssaoIntensity = value; });
         }
     };
+    _ssrEnable->_onChanged = [this](bool value) {
+        if (!_bSyncing) {
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) { snap.bSSREnabled = value; });
+        }
+    };
+    _ssrMaxDistance->_onValueChanged = [this](float value) {
+        if (!_bSyncing) {
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) { snap.ssrMaxDistance = value; });
+        }
+    };
+    _ssrThickness->_onValueChanged = [this](float value) {
+        if (!_bSyncing) {
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) { snap.ssrThickness = value; });
+        }
+    };
+    _ssrIntensity->_onValueChanged = [this](float value) {
+        if (!_bSyncing) {
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) { snap.ssrIntensity = value; });
+        }
+    };
+    _ssrSteps->_onValueChanged = [this](float value) {
+        if (!_bSyncing) {
+            mutateDeferred(_app, [value](RenderPipelineSettings& snap) {
+                snap.ssrStepCount = static_cast<uint32_t>(std::max(value, 1.0f));
+            });
+        }
+    };
 }
 
 void RuntimeRenderSettingsSection::sync(const App* app, IRenderSurfaceContext* presentSurface)
@@ -755,6 +804,12 @@ void RuntimeRenderSettingsSection::sync(const App* app, IRenderSurfaceContext* p
         _ssaoPower->setValue(settings.ssaoPower, false);
         _ssaoIntensity->setValue(settings.ssaoIntensity, false);
         _ssaoBody->setEnabled(settings.bSSAOEnabled);
+        _ssrEnable->setChecked(settings.bSSREnabled);
+        _ssrMaxDistance->setValue(settings.ssrMaxDistance, false);
+        _ssrThickness->setValue(settings.ssrThickness, false);
+        _ssrIntensity->setValue(settings.ssrIntensity, false);
+        _ssrSteps->setValue(static_cast<float>(settings.ssrStepCount), false);
+        _ssrBody->setEnabled(settings.bSSREnabled);
     }
 
     _inversion->setChecked(post.bEnableInversion);

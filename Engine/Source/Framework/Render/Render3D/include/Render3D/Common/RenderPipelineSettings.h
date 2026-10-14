@@ -49,6 +49,15 @@ struct RenderPipelineSettings
     float ssaoBias          = 0.025f;
     float ssaoPower         = 1.5f;
     float ssaoIntensity     = 2.5f;
+    /// Screen-space reflection: an extension effect at the AfterLighting point.
+    /// It appears in this settings block like any other deferred switch, so the
+    /// editor/automation reach it through the same request path -- being an
+    /// extension changes where it runs in the schedule, not how it is configured.
+    bool     bSSREnabled    = false;
+    float    ssrMaxDistance = 24.0f;
+    float    ssrThickness   = 0.6f;
+    float    ssrIntensity   = 1.0f;
+    uint32_t ssrStepCount   = 48;
     bool  bPBRDiffuseIBL    = true;
     bool  bPBRSpecularIBL   = true;
 

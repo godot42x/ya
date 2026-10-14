@@ -62,6 +62,11 @@ class YA_GAME_RUNTIME_API AppAutomationControlService
     void handleGetDirectionalLightInfo(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleSetRenderPipeline(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleSetShadowSettings(App& app, const AppAutomationControlServer::RequestPtr& call);
+    /// Set deferred render switches (SSAO / SSR) through the same settings
+    /// request path the editor panel uses. Proves an extension effect is
+    /// configurable exactly like a core one, and makes in-run A/B captures
+    /// possible without restarting the runtime.
+    void handleSetRenderSettings(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleSetAppState(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleSetEditorCamera(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleCaptureScreenshot(App& app, const AppAutomationControlServer::RequestPtr& call);
@@ -74,6 +79,10 @@ class YA_GAME_RUNTIME_API AppAutomationControlService
     void handleFindEntitiesNear(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleCreateBillboardRegressionScene(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleCreateSprite2DRegressionScene(App& app, const AppAutomationControlServer::RequestPtr& call);
+    /// Build a scene whose geometry actually reflects: a large floor plus
+    /// upright blocks seen at a grazing angle, so a screen-space reflection has
+    /// something to hit and the difference between SSR on/off is visible.
+    void handleCreateSsrReflectionScene(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleSetEditorConfigValue(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleSetEditorGizmosVisible(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleEntityRemoveComponent(App& app, const AppAutomationControlServer::RequestPtr& call);

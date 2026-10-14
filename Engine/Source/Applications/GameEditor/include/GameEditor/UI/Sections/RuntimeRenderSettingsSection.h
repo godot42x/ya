@@ -97,6 +97,16 @@ class RuntimeRenderSettingsSection final : public UICompoundWidget
     std::shared_ptr<UIDragFloat> _ssaoPower;
     std::shared_ptr<UIDragFloat> _ssaoIntensity;
 
+    /// Screen-space reflection (an extension effect at AfterLighting). Exposed
+    /// here like any deferred switch: where it runs in the schedule is the
+    /// extension point's business, not the settings panel's.
+    std::shared_ptr<UICheckBox> _ssrEnable;
+    std::shared_ptr<UIContainer> _ssrBody;
+    std::shared_ptr<UIDragFloat> _ssrMaxDistance;
+    std::shared_ptr<UIDragFloat> _ssrThickness;
+    std::shared_ptr<UIDragFloat> _ssrIntensity;
+    std::shared_ptr<UIDragFloat> _ssrSteps;
+
     void bindCallbacks();
 };
 } // namespace ya

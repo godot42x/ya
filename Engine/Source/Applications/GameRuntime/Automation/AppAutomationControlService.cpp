@@ -348,6 +348,110 @@ Scene* createSprite2DRegressionScene(App& app, float cameraDistance, bool bOcclu
     return rawScene;
 }
 
+// A scene built so a screen-space reflection is actually visible: a wide floor
+// the camera looks across at a shallow angle, plus upright blocks whose
+// reflections land on that floor. Flat, camera-facing geometry reflects nothing
+// (the mirror ray leaves the screen immediately), which is why the plain
+// material scene showed an almost invisible SSR difference.
+Scene* createSsrReflectionScene(App& app, float cameraHeight)
+{
+    auto* sceneManager = app.getSceneServices().getSceneManager();
+    if (!sceneManager) {
+        return nullptr;
+    }
+
+    auto   scene    = makeShared<Scene>("SsrReflection");
+    Scene* rawScene = scene.get();
+    if (!sceneManager->activateScene(scene)) {
+        return nullptr;
+    }
+
+    const auto addBlock = [rawScene](const std::string& name, const glm::vec3& position, const glm::vec3& scale) -> Node*
+    {
+        Node* node = rawScene->createNode3D(name);
+        if (!node) {
+            return nullptr;
+        }
+        auto* entity    = node->getEntity();
+        auto* transform = entity->getComponent<TransformComponent>();
+        auto* mesh      = entity->addComponent<StaticMeshComponent>();
+        entity->addComponent<PhongMaterialComponent>();
+        if (transform) {
+            transform->setPosition(position);
+            transform->setScale(scale);
+        }
+        if (mesh) {
+            mesh->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
+        }
+        return node;
+    };
+
+    // Floor: a thin, wide slab lying in XZ. The camera looks across it at a
+    // shallow angle so reflections travel far enough to hit the blocks.
+    {
+        Node* node = rawScene->createNode3D("SsrFloor");
+        if (node) {
+            auto* entity    = node->getEntity();
+            auto* transform = entity->getComponent<TransformComponent>();
+            auto* mesh      = entity->addComponent<StaticMeshComponent>();
+            entity->addComponent<PhongMaterialComponent>();
+            if (transform) {
+                transform->setPosition(glm::vec3(0.0f, 0.0f, 0.0f));
+                transform->setScale(glm::vec3(30.0f, 0.25f, 30.0f));
+            }
+            if (mesh) {
+                mesh->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
+            }
+        }
+    }
+
+    // Upright blocks scattered across the floor: their mirror images are what
+    // SSR reconstructs.
+    addBlock("SsrBlockA", glm::vec3(-3.0f, 2.0f, -4.0f), glm::vec3(1.5f, 4.0f, 1.5f));
+    addBlock("SsrBlockB", glm::vec3(2.5f, 1.5f, -6.0f), glm::vec3(2.0f, 3.0f, 2.0f));
+    addBlock("SsrBlockC", glm::vec3(6.0f, 3.0f, -2.0f), glm::vec3(1.5f, 6.0f, 1.5f));
+    addBlock("SsrBlockD", glm::vec3(-6.5f, 1.0f, -8.0f), glm::vec3(2.0f, 2.0f, 2.0f));
+    addBlock("SsrBlockE", glm::vec3(0.5f, 5.0f, -11.0f), glm::vec3(2.5f, 10.0f, 2.5f));
+
+    auto* cameraNode = rawScene->createNode3D("SsrCamera");
+    if (cameraNode) {
+        auto* entity    = cameraNode->getEntity();
+        auto* transform = entity->getComponent<TransformComponent>();
+        auto* camera    = entity->addComponent<CameraComponent>();
+        if (transform) {
+            // Low and close: a shallow view across the floor is what makes the
+            // reflection long enough to be seen.
+            transform->setPosition(glm::vec3(0.0f, cameraHeight, 12.0f));
+            transform->setRotation(glm::vec3(-14.0f, 0.0f, 0.0f));
+        }
+        if (camera) {
+            camera->bPrimary  = true;
+            camera->_nearClip = 0.1f;
+            camera->_farClip  = 200.0f;
+        }
+    }
+
+    auto* lightNode = rawScene->createNode3D("SsrDirectionalLight");
+    if (lightNode) {
+        auto* entity    = lightNode->getEntity();
+        auto* transform = entity->getComponent<TransformComponent>();
+        auto* light     = entity->addComponent<DirectionalLightComponent>();
+        if (transform) {
+            transform->setPosition(glm::vec3(4.0f, 8.0f, 6.0f));
+            transform->setRotation(glm::vec3(-35.0f, 35.0f, 0.0f));
+        }
+        if (light) {
+            light->_color    = glm::vec3(1.0f, 0.97f, 0.9f);
+            light->intensity = 3.0f;
+            light->bEnable   = true;
+        }
+        CompanionManager::reconcileNow(*rawScene, entity->getHandle());
+    }
+
+    app.getSceneServices().refreshSceneDerivedState(rawScene);
+    return rawScene;
+}
+
 } // namespace
 
 AppAutomationControlService::AppAutomationControlService() = default;
@@ -396,6 +500,7 @@ void AppAutomationControlService::bindMethods(App& app)
     _methods.add("get_directional_light_info", [this, &app](const RequestPtr& call) { handleGetDirectionalLightInfo(app, call); });
     _methods.add("set_render_pipeline", [this, &app](const RequestPtr& call) { handleSetRenderPipeline(app, call); });
     _methods.add("set_shadow_settings", [this, &app](const RequestPtr& call) { handleSetShadowSettings(app, call); });
+    _methods.add("set_render_settings", [this, &app](const RequestPtr& call) { handleSetRenderSettings(app, call); });
     _methods.add("set_app_state", [this, &app](const RequestPtr& call) { handleSetAppState(app, call); });
     _methods.add("set_editor_camera", [this, &app](const RequestPtr& call) { handleSetEditorCamera(app, call); });
     _methods.add("capture_screenshot", [this, &app](const RequestPtr& call) { handleCaptureScreenshot(app, call); });
@@ -408,6 +513,7 @@ void AppAutomationControlService::bindMethods(App& app)
     _methods.add("find_entities_near", [this, &app](const RequestPtr& call) { handleFindEntitiesNear(app, call); });
     _methods.add("create_billboard_regression_scene", [this, &app](const RequestPtr& call) { handleCreateBillboardRegressionScene(app, call); });
     _methods.add("create_sprite2d_regression_scene", [this, &app](const RequestPtr& call) { handleCreateSprite2DRegressionScene(app, call); });
+    _methods.add("create_ssr_reflection_scene", [this, &app](const RequestPtr& call) { handleCreateSsrReflectionScene(app, call); });
     _methods.add("set_editor_config_value", [this, &app](const RequestPtr& call) { handleSetEditorConfigValue(app, call); });
     _methods.add("set_editor_gizmos_visible", [this, &app](const RequestPtr& call) { handleSetEditorGizmosVisible(app, call); });
     _methods.add("entity_remove_component", [this, &app](const RequestPtr& call) { handleEntityRemoveComponent(app, call); });
@@ -649,6 +755,61 @@ void AppAutomationControlService::handleSetShadowSettings(App& app, const AppAut
                                  {"pointLightUseIndirect", settings.pointLightUseIndirect},
                                  {"pointLightIndirectCullEnabled", settings.pointLightIndirectCullEnabled},
                                  {"directionalEnabled", settings.directionalEnabled},
+                             }));
+}
+
+void AppAutomationControlService::handleSetRenderSettings(App& app, const AppAutomationControlServer::RequestPtr& call)
+{
+    // The editor's render-settings path, driven from automation: read the
+    // current snapshot, mutate the requested fields, request it back. SSR goes
+    // through exactly this path, which is the point -- an extension effect is
+    // configured like a core switch, not through a side channel.
+    auto settings = app.getRenderServices().getRenderPipelineSettings();
+
+    const auto setBool = [&](const char* key, bool& target) -> bool {
+        if (!call->params.contains(key)) {
+            return true;
+        }
+        if (!call->params[key].is_boolean()) {
+            completeCall(call, makeError(*call, std::string("set_render_settings requires boolean '") + key + "'"));
+            return false;
+        }
+        target = call->params[key].get<bool>();
+        return true;
+    };
+    const auto setNumber = [&](const char* key, float& target) -> bool {
+        if (!call->params.contains(key)) {
+            return true;
+        }
+        if (!call->params[key].is_number()) {
+            completeCall(call, makeError(*call, std::string("set_render_settings requires number '") + key + "'"));
+            return false;
+        }
+        target = call->params[key].get<float>();
+        return true;
+    };
+
+    if (!setBool("ssaoEnabled", settings.bSSAOEnabled) ||
+        !setBool("ssrEnabled", settings.bSSREnabled) ||
+        !setNumber("ssrMaxDistance", settings.ssrMaxDistance) ||
+        !setNumber("ssrThickness", settings.ssrThickness) ||
+        !setNumber("ssrIntensity", settings.ssrIntensity)) {
+        return;
+    }
+    if (call->params.contains("ssrStepCount")) {
+        settings.ssrStepCount = call->params.value("ssrStepCount", settings.ssrStepCount);
+    }
+
+    app.getRenderServices().setRenderPipelineSettings(settings);
+    completeCall(call,
+                 makeSuccess(*call,
+                             {
+                                 {"ssaoEnabled", settings.bSSAOEnabled},
+                                 {"ssrEnabled", settings.bSSREnabled},
+                                 {"ssrMaxDistance", settings.ssrMaxDistance},
+                                 {"ssrThickness", settings.ssrThickness},
+                                 {"ssrIntensity", settings.ssrIntensity},
+                                 {"ssrStepCount", settings.ssrStepCount},
                              }));
 }
 
@@ -1073,6 +1234,24 @@ void AppAutomationControlService::handleCreateSprite2DRegressionScene(App& app, 
                                  {"scene_name", scene->getName()},
                                  {"entity_count", scene->_entityMap.size()},
                                  {"occluder_entity_id", occluderEntityId},
+                             }));
+}
+
+void AppAutomationControlService::handleCreateSsrReflectionScene(App& app, const AppAutomationControlServer::RequestPtr& call)
+{
+    const float cameraHeight = call->params.value("camera_height", 2.0f);
+
+    Scene* scene = createSsrReflectionScene(app, cameraHeight);
+    if (!scene) {
+        completeCall(call, makeError(*call, "failed to create SSR reflection scene"));
+        return;
+    }
+
+    completeCall(call,
+                 makeSuccess(*call,
+                             {
+                                 {"scene_name", scene->getName()},
+                                 {"entity_count", scene->_entityMap.size()},
                              }));
 }
 

@@ -294,6 +294,11 @@ RenderPipelineSettings DeferredRenderPipeline::buildSettingsSnapshot() const
         .ssaoBias          = _ssaoFeature.settings().bias,
         .ssaoPower         = _ssaoFeature.settings().power,
         .ssaoIntensity     = _ssaoFeature.settings().intensity,
+        .bSSREnabled       = _ssrFeature.settings().bEnabled,
+        .ssrMaxDistance    = _ssrFeature.settings().maxDistance,
+        .ssrThickness      = _ssrFeature.settings().thickness,
+        .ssrIntensity      = _ssrFeature.settings().intensity,
+        .ssrStepCount      = _ssrFeature.settings().stepCount,
         .bPBRDiffuseIBL    = _lightFeature.isPBRDiffuseIBLEnabled(),
         .bPBRSpecularIBL   = _lightFeature.isPBRSpecularIBLEnabled(),
     };
@@ -376,6 +381,13 @@ void DeferredRenderPipeline::applyPendingSettings()
         .power     = settings.ssaoPower,
         .intensity = settings.ssaoIntensity,
     };
+    _ssrFeature.settings() = SSRFeature::Settings{
+        .bEnabled    = settings.bSSREnabled,
+        .maxDistance = settings.ssrMaxDistance,
+        .thickness   = settings.ssrThickness,
+        .intensity   = settings.ssrIntensity,
+        .stepCount   = settings.ssrStepCount,
+    };
     _postProcessState = settings.postProcessing;
     _bGradingEnabled  = settings.bPostProcessGrading;
     applyShadowSettings(settings.shadow);
@@ -421,8 +433,8 @@ void DeferredRenderPipeline::loadPersistentSettings()
         RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.power", _ssaoFeature.settings().power);
     _ssaoFeature.settings().intensity = config.getOr<float>(
         RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.intensity", _ssaoFeature.settings().intensity);
-    // SSR is an extension effect: same config-seeded settings path as a core
-    // feature, so it can be turned on for a run without touching the schedule.
+    // SSR is an extension effect: it reads its settings through the same config
+    // path as a core deferred switch, so it is seeded and persisted like SSAO.
     _ssrFeature.settings().bEnabled = config.getOr<bool>(
         RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssrEnabled", _ssrFeature.settings().bEnabled);
     _ssrFeature.settings().maxDistance = config.getOr<float>(
