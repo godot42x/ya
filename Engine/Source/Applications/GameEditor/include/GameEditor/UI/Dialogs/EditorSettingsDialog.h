@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GameEditor/Localization/EditorLocalization.h"
 #include "GameEditor/UI/Dialogs/EditorFilePicker.h"
 #include "GameRuntime/Settings/UiFontSettings.h"
 
@@ -39,25 +40,40 @@ struct FEditorSettingsBindings
     std::function<std::vector<ui_font_settings::FOption>()> fontOptions;
     std::function<std::string()> fontFace;
     std::function<void(std::string)> setFontFace;
+    /// Active chrome language id ("" = English passthrough / untranslated).
+    /// The dialog lists `languageOptions` and reports the pick; the surface
+    /// switches the language and persists it.
+    std::function<std::string()> language;
+    std::function<void(std::string)> setLanguage;
+    /// Selectable language ids, in display order.
+    std::function<std::vector<std::string>()> languageOptions;
     EditorFilePickerCallback openFilePicker;
 };
 
+/// Startup-scene status line for the settings dialog. Returns a localized
+/// string (source strings are the fallback), plus the style key.
 struct FEditorSettingsScenePathStatus
 {
-    const char* styleKey = "text.muted";
-    const char* text = "";
+    std::string styleKey = "text.muted";
+    std::string text;
 };
 
 [[nodiscard]] inline FEditorSettingsScenePathStatus describeEditorSettingsScenePath(const std::string& path,
                                                                                     bool exists)
 {
     if (path.empty()) {
-        return {"text.muted", "Empty means startup falls back to an empty scene"};
+        return {"text.muted",
+                EditorLocalization::editorTr("editor.settings.scene.empty",
+                                             "Empty means startup falls back to an empty scene")};
     }
     if (exists) {
-        return {"text.muted", "Used on next app start — scene exists"};
+        return {"text.muted",
+                EditorLocalization::editorTr("editor.settings.scene.exists",
+                                             "Used on next app start — scene exists")};
     }
-    return {"text.error", "Used on next app start — scene not found"};
+    return {"text.error",
+            EditorLocalization::editorTr("editor.settings.scene.missing",
+                                         "Used on next app start — scene not found")};
 }
 
 /// Retained editor-settings modal. EditorSurface hosts it but does not own
@@ -80,6 +96,10 @@ class EditorSettingsDialog
     /// Push current bindings into the controls. Called from this dialog's own
     /// tree-tick, never by a shell.
     void sync(WidgetTree& tree);
+    /// Re-translate every static label of this dialog. Called from sync so an
+    /// open dialog reflects a language switch on the next tick (the language
+    /// dropdown lives in this very dialog).
+    void relocalize();
 
     FEditorSettingsBindings _bindings;
     std::shared_ptr<UIPopupOverlay> _overlay;
@@ -88,11 +108,24 @@ class EditorSettingsDialog
     std::shared_ptr<UIComboBox> _samplerCombo;
     std::shared_ptr<UIComboBox> _fontCombo;
     std::vector<std::string>    _fontOptionIds;
+    std::shared_ptr<UIComboBox> _languageCombo;
+    std::vector<std::string>    _languageOptionIds;
     std::shared_ptr<UICheckBox> _overlayCheckbox;
     std::shared_ptr<UITextField> _scenePathField;
     std::shared_ptr<UIText> _sceneStatusText;
     std::shared_ptr<UIButton> _applyButton;
     std::shared_ptr<UIButton> _resetButton;
+    /// Static labels, re-translated by relocalize().
+    std::shared_ptr<UIText> _titleText;
+    std::shared_ptr<UIText> _languageLabelText;
+    std::shared_ptr<UIText> _samplerLabelText;
+    std::shared_ptr<UIText> _fontLabelText;
+    std::shared_ptr<UIText> _sceneLabelText;
+    /// Label text children of the checkbox / buttons (re-translated in place).
+    std::shared_ptr<UIText> _overlayLabelText;
+    std::shared_ptr<UIText> _applyLabel;
+    std::shared_ptr<UIText> _resetLabel;
+    std::shared_ptr<UIText> _closeLabel;
 };
 
 } // namespace ya

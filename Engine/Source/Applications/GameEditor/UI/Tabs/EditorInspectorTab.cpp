@@ -30,6 +30,7 @@
 #include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/EditorUIDesignerSession.h"
 #include "GameEditor/UI/Shell/EditorListRows.h"
+#include "GameEditor/Localization/EditorLocalization.h"
 #include "GameEditor/UI/Shell/EditorTheme.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
@@ -217,7 +218,8 @@ void EditorInspectorTab::construct()
     };
 
     auto empty = ui::text("InspectorEmpty")
-                     .setText("Select an entity in the Hierarchy")
+                     .setText(EditorLocalization::editorTr("editor.inspector.empty",
+                                                           "Select an entity in the Hierarchy"))
                      .setStyleKey("text.muted")
                      .setWrap(true);
     _emptyText = empty.share();

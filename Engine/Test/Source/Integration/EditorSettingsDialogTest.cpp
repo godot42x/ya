@@ -1,6 +1,7 @@
 #include "GameEditor/UI/Dialogs/EditorSettingsDialog.h"
 
 #include "GUI/Widgets/Controls/ComboBox.h"
+#include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <gtest/gtest.h>
@@ -50,17 +51,19 @@ FEditorSettingsBindings requiredBindings(int& sampler, bool& overlay, std::strin
 
 TEST(EditorSettingsDialogTest, ScenePathStatusCoversEmptyExistsAndMissing)
 {
+    // Source strings are the fallback when no language is active.
+    LocalizationManager::get().clear();
     const FEditorSettingsScenePathStatus empty = describeEditorSettingsScenePath("", true);
-    EXPECT_STREQ(empty.styleKey, "text.muted");
-    EXPECT_STREQ(empty.text, "Empty means startup falls back to an empty scene");
+    EXPECT_EQ(empty.styleKey, "text.muted");
+    EXPECT_EQ(empty.text, "Empty means startup falls back to an empty scene");
 
     const FEditorSettingsScenePathStatus exists = describeEditorSettingsScenePath("Forest.scene.json", true);
-    EXPECT_STREQ(exists.styleKey, "text.muted");
-    EXPECT_STREQ(exists.text, "Used on next app start — scene exists");
+    EXPECT_EQ(exists.styleKey, "text.muted");
+    EXPECT_EQ(exists.text, "Used on next app start — scene exists");
 
     const FEditorSettingsScenePathStatus missing = describeEditorSettingsScenePath("Missing.scene.json", false);
-    EXPECT_STREQ(missing.styleKey, "text.error");
-    EXPECT_STREQ(missing.text, "Used on next app start — scene not found");
+    EXPECT_EQ(missing.styleKey, "text.error");
+    EXPECT_EQ(missing.text, "Used on next app start — scene not found");
 }
 
 TEST(EditorSettingsDialogTest, SyncEnablesApplyWhenDraftIsDirty)
@@ -186,6 +189,57 @@ TEST(EditorSettingsDialogTest, MissingFontOptionsStillOpensTheDialog)
     UIElement* root = tree.getRoot();
     ASSERT_NE(root, nullptr);
     EXPECT_EQ(findByKey(*root, "EditorSettingsFontFace"), nullptr);
+}
+
+// The language dropdown reports the pick, and an open dialog re-translates its
+// labels on the next tick: switching inside this very dialog must show the new
+// language in the current frame, not only after a reopen.
+TEST(EditorSettingsDialogTest, LanguageSwitchRelocalizesOpenDialog)
+{
+    int  sampler = 0;
+    bool overlay = false;
+    bool dirty   = false;
+    bool exists  = false;
+    std::string path;
+    std::string language = "en";
+    std::vector<std::string> applied;
+
+    LocalizationManager& manager = LocalizationManager::get();
+    manager.clear();
+    ASSERT_TRUE(manager.loadLanguageFromJson("zh", R"({"editor.settings.title": "编辑器设置"})"));
+
+    FEditorSettingsBindings bindings = requiredBindings(sampler, overlay, path, dirty, exists);
+    bindings.language          = [&]() { return language; };
+    bindings.setLanguage       = [&](std::string value) { applied.push_back(value); };
+    bindings.languageOptions   = []() { return std::vector<std::string>{"en", "zh"}; };
+
+    WidgetTree tree({.width = 800, .height = 600});
+    EditorSettingsDialog dialog;
+    dialog.open(tree, bindings);
+    ASSERT_TRUE(dialog.isOpen());
+    tree.tick(1.0f / 60.0f);
+
+    UIElement* root = tree.getRoot();
+    ASSERT_NE(root, nullptr);
+    auto* combo = dynamic_cast<UIComboBox*>(findByKey(*root, "EditorSettingsLanguage"));
+    ASSERT_NE(combo, nullptr);
+    EXPECT_EQ(combo->_items.size(), 2u);
+
+    // The pick is reported to the surface (it owns switching + persistence).
+    combo->setSelectedIndex(1);
+    ASSERT_EQ(applied.size(), 1u);
+    EXPECT_EQ(applied.front(), "zh");
+
+    // Title shows the English source while untranslated, then the Chinese
+    // table value once the language is active.
+    auto* title = dynamic_cast<UIText*>(findByKey(*root, "EditorSettingsTitle"));
+    ASSERT_NE(title, nullptr);
+    EXPECT_EQ(title->getText(), "Editor Settings");
+    manager.setLanguage("zh");
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(title->getText(), "编辑器设置");
+
+    manager.clear();
 }
 
 } // namespace ya

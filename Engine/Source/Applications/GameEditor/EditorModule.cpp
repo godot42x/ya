@@ -18,6 +18,7 @@
 #include "GameEditor/EditorViewProducer.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/EditorPlaySession.h"
+#include "GameEditor/Localization/EditorLocalization.h"
 #include "GameEditor/EditorProfilingSettings.h"
 #include "GameEditor/EditorRuntimeSettings.h"
 #include "GameEditor/Input/EditorInputNode.h"
@@ -806,6 +807,13 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             }
         }
         _chromeHost = EEditorChromeHost::WidgetTree;
+
+        // Chrome language: restore the saved pick ("" = English passthrough).
+        // setEditorLanguage loads that language's editor table and selects it,
+        // which broadcasts to every subscribed chrome binding.
+        const std::string savedLanguage =
+            ConfigManager::get().getOr<std::string>("editor", "locale.language", "");
+        EditorLocalization::setEditorLanguage(savedLanguage);
     }
 
     void onAttach(App& app) override

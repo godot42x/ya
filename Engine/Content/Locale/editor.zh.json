@@ -96,5 +96,12 @@
 
     "editor.inspector.empty": "在层级中选择一个实体",
     "editor.hierarchy.empty": "场景为空",
-    "editor.content.empty": "此文件夹为空"
+    "editor.content.empty": "此文件夹为空",
+
+    "editor.content.back": "< 返回",
+    "editor.content.list": "列表",
+    "editor.content.grid": "网格",
+    "editor.content.new_ui": "新建 UI",
+    "editor.content.new_script": "新建脚本",
+    "editor.play.detach": "分离"
 }

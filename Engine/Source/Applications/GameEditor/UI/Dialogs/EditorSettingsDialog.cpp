@@ -13,12 +13,39 @@
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/UIBehavior.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "GameEditor/Localization/EditorLocalization.h"
 #include "GameEditor/UI/Shell/EditorListRows.h"
 
 #include <algorithm>
 
 namespace ya
 {
+
+namespace
+{
+/// Two-state sampler labels; localized through the shared table.
+std::vector<std::string> samplerLabels()
+{
+    return {EditorLocalization::editorTr("Linear"), EditorLocalization::editorTr("Nearest")};
+}
+
+/// The first UIText descendant of `root` (a button's / checkbox's label).
+std::shared_ptr<UIText> findLabelText(UIElement& root)
+{
+    for (const UIElementRef& child : root.getChildren()) {
+        if (!child) {
+            continue;
+        }
+        if (auto* text = dynamic_cast<UIText*>(child.get())) {
+            return std::static_pointer_cast<UIText>(child);
+        }
+        if (auto nested = findLabelText(*child)) {
+            return nested;
+        }
+    }
+    return nullptr;
+}
+} // namespace
 
 void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindings)
 {
@@ -38,7 +65,7 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
 
     auto samplerCombo = ui::comboBox("EditorSettingsSampler")
                             .setStyleKey(editorStyle(StyleKey::ComboBox))
-                            .setItems({"Linear", "Nearest"})
+                            .setItems(samplerLabels())
                             .setSelectedIndex(_bindings.samplerIndex())
                             .setOnSelectionChanged([this](int index) {
                                 if (_bindings.setSamplerIndex) {
@@ -48,7 +75,8 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
     _samplerCombo = samplerCombo.share();
 
     auto overlayCheckbox = ui::checkBox("EditorSettingsCameraOverlay")
-                               .setText("Show Viewport Camera Overlay")
+                               .setText(EditorLocalization::editorTr("editor.settings.camera_overlay",
+                                                                     "Show Viewport Camera Overlay"))
                                .setChecked(_bindings.showCameraOverlay())
                                .setOnChanged([this](bool checked) {
                                    if (_bindings.setShowCameraOverlay) {
@@ -56,6 +84,7 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
                                    }
                                });
     _overlayCheckbox = overlayCheckbox.share();
+    _overlayLabelText = findLabelText(*_overlayCheckbox);
 
     auto scenePathField = ui::textField("EditorSettingsScenePath")
                               .setStyleKey(editorStyle(StyleKey::TextField))
@@ -83,7 +112,11 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
         // Say WHY a face cannot be picked: a face that vanishes from the list
         // would read as "the setting was lost" rather than "the file is not on
         // this machine".
-        faceLabels.push_back(option.bAvailable ? option.label : option.label + "  (unavailable)");
+        faceLabels.push_back(option.bAvailable
+                                 ? option.label
+                                 : option.label + "  " +
+                                       EditorLocalization::editorTr("editor.settings.font.unavailable",
+                                                                    "(unavailable)"));
         _fontOptionIds.push_back(option.id);
         if (option.id == currentFace) {
             selectedFace = static_cast<int>(i);
@@ -107,66 +140,126 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
     if (!faceOptions.empty()) {
         _fontCombo = fontCombo.share();
     }
+    _fontLabelText = ui::text("EditorSettingsFontLabel")
+                         .setText(EditorLocalization::editorTr("editor.settings.ui_font", "UI Font"))
+                         .setStyleKey("text.muted")
+                         .setVAlign(EWidgetAlignV::Center)
+                         .share();
     auto fontRow = ui::row("EditorSettingsFontRow")
                        .setSpacing(8.0f)
                        .setStretchLastChild(true)
-                       .child(ui::text("EditorSettingsFontLabel")
-                                  .setText("UI Font")
-                                  .setStyleKey("text.muted")
-                                  .setVAlign(EWidgetAlignV::Center),
-                              ui::boxSlot().preferredSize({140.0f, 26.0f}))
+                       .child(_fontLabelText, ui::boxSlot().preferredSize({140.0f, 26.0f}))
                        .child(std::move(fontCombo), ui::boxSlot().preferredSize({240.0f, 26.0f}));
 
     auto sceneStatusText = ui::text("EditorSettingsSceneStatus").setStyleKey("text.muted");
     _sceneStatusText = sceneStatusText.share();
 
-    _applyButton = labeledButton("EditorSettingsApply", "Apply Default Scene Path")
-                       .setOnClick([this]() {
-                           if (_bindings.applyScenePath) {
-                               _bindings.applyScenePath();
-                           }
-                       })
-                       .share();
-    _resetButton = labeledButton("EditorSettingsReset", "Reset")
-                       .setOnClick([this]() {
-                           if (_bindings.resetScenePath) {
-                               _bindings.resetScenePath();
-                           }
-                           _scenePathField->setText(_bindings.scenePathDraft());
-                       })
-                       .share();
+    auto applyButton = labeledButton("EditorSettingsApply",
+                                     EditorLocalization::editorTr("editor.settings.apply_scene_path",
+                                                                  "Apply Default Scene Path"))
+                           .setOnClick([this]() {
+                               if (_bindings.applyScenePath) {
+                                   _bindings.applyScenePath();
+                               }
+                           });
+    _applyButton = applyButton.share();
+    _applyLabel  = findLabelText(*_applyButton);
+    auto resetButton = labeledButton("EditorSettingsReset",
+                                     EditorLocalization::editorTr("editor.settings.reset", "Reset"))
+                           .setOnClick([this]() {
+                               if (_bindings.resetScenePath) {
+                                   _bindings.resetScenePath();
+                               }
+                               _scenePathField->setText(_bindings.scenePathDraft());
+                           });
+    _resetButton = resetButton.share();
+    _resetLabel  = findLabelText(*_resetButton);
 
+    _sceneLabelText = ui::text("EditorSettingsSceneLabel")
+                          .setText(EditorLocalization::editorTr("editor.settings.startup_scene", "Startup Scene"))
+                          .setStyleKey("text.muted")
+                          .setVAlign(EWidgetAlignV::Center)
+                          .share();
     auto sceneRow = ui::row("EditorSettingsSceneRow")
                         .setSpacing(6.0f)
                         .setStretchLastChild(true)
-                        .child(ui::text("EditorSettingsSceneLabel")
-                                   .setText("Startup Scene")
-                                   .setStyleKey("text.muted")
-                                   .setVAlign(EWidgetAlignV::Center),
-                               ui::boxSlot().preferredSize({120.0f, 26.0f}))
+                        .child(_sceneLabelText, ui::boxSlot().preferredSize({120.0f, 26.0f}))
                         .child(std::move(scenePathField), ui::boxSlot().fill())
-                        .child(labeledButton("EditorSettingsBrowse", "Browse")
+                        .child(labeledButton("EditorSettingsBrowse",
+                                             EditorLocalization::editorTr("editor.settings.browse", "Browse"))
                                    .setOnClick([this]() { browseStartupScene(); }),
                                ui::boxSlot().preferredSize({84.0f, 26.0f}));
     auto sceneActions = ui::row("EditorSettingsSceneActions")
                             .setSpacing(8.0f)
                             .child(_applyButton, ui::boxSlot().preferredSize({180.0f, 26.0f}))
                             .child(_resetButton, ui::boxSlot().preferredSize({84.0f, 26.0f}));
+
+    // Language row. Options come from the binding (the surface owns the set of
+    // selectable languages); the pick is reported back for the surface to apply
+    // and persist.
+    std::vector<std::string> languageIds;
+    if (_bindings.languageOptions) {
+        languageIds = _bindings.languageOptions();
+    }
+    _languageOptionIds = languageIds;
+    int selectedLanguage = 0;
+    const std::string currentLanguage = _bindings.language ? _bindings.language() : std::string{};
+    for (size_t i = 0; i < languageIds.size(); ++i) {
+        if (languageIds[i] == currentLanguage) {
+            selectedLanguage = static_cast<int>(i);
+        }
+    }
+    _languageLabelText = ui::text("EditorSettingsLanguageLabel")
+                             .setText(EditorLocalization::editorTr("editor.settings.language", "Language"))
+                             .setStyleKey("text.muted")
+                             .setVAlign(EWidgetAlignV::Center)
+                             .share();
+    auto languageCombo = ui::comboBox("EditorSettingsLanguage")
+                             .setStyleKey(editorStyle(StyleKey::ComboBox))
+                             .setItems(std::move(languageIds))
+                             .setSelectedIndex(selectedLanguage)
+                             .setOnSelectionChanged([this](int index) {
+                                 if (!_bindings.setLanguage) {
+                                     return;
+                                 }
+                                 if (index >= 0 && index < static_cast<int>(_languageOptionIds.size())) {
+                                     _bindings.setLanguage(_languageOptionIds[static_cast<size_t>(index)]);
+                                 }
+                             });
+    _languageCombo = languageCombo.share();
+    auto languageRow = ui::row("EditorSettingsLanguageRow")
+                           .setSpacing(8.0f)
+                           .setStretchLastChild(true)
+                           .child(_languageLabelText, ui::boxSlot().preferredSize({140.0f, 26.0f}))
+                           .child(std::move(languageCombo), ui::boxSlot().preferredSize({160.0f, 26.0f}));
+
+    _titleText = ui::text("EditorSettingsTitle")
+                     .setText(EditorLocalization::editorTr("editor.settings.title", "Editor Settings"))
+                     .setStyleKey("text.header")
+                     .share();
+    _samplerLabelText = ui::text("EditorSettingsSamplerLabel")
+                            .setText(EditorLocalization::editorTr("editor.settings.sampler", "Viewport Sampler"))
+                            .setStyleKey("text.muted")
+                            .setVAlign(EWidgetAlignV::Center)
+                            .share();
+    auto closeButton = labeledButton("EditorSettingsClose",
+                                     EditorLocalization::editorTr("editor.settings.close", "Close"))
+                           .setOnClick([this]() { close(); });
+    auto closeButtonShared = closeButton.share();
+    _closeLabel = findLabelText(*closeButtonShared);
+
     auto settingsRoot = ui::column("EditorSettingsRoot")
                             .setSpacing(10.0f)
                             .setPadding({12.0f, 12.0f})
-                            .child(ui::text("EditorSettingsTitle")
-                                       .setText("Editor Settings")
-                                       .setStyleKey("text.header"))
+                            .child(_titleText)
                             .child(ui::row("EditorSettingsSamplerRow")
                                        .setSpacing(8.0f)
                                        .setStretchLastChild(true)
-                                       .child(ui::text("EditorSettingsSamplerLabel")
-                                                  .setText("Viewport Sampler")
-                                                  .setStyleKey("text.muted")
-                                                  .setVAlign(EWidgetAlignV::Center),
-                                              ui::boxSlot().preferredSize({140.0f, 26.0f}))
-                            .child(std::move(samplerCombo), ui::boxSlot().preferredSize({160.0f, 26.0f})))
+                                       .child(_samplerLabelText, ui::boxSlot().preferredSize({140.0f, 26.0f}))
+                                       .child(std::move(samplerCombo), ui::boxSlot().preferredSize({160.0f, 26.0f})))
+                            // Language switch, above the font row so a user
+                            // changing language can immediately read the result.
+                            .child(std::move(languageRow))
                             // A host with no font catalog gets no row at all: an
                             // empty picker reads as a broken dialog, not as "this
                             // application has no font setting".
@@ -175,9 +268,7 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
                             .child(std::move(sceneRow), ui::boxSlot().preferredSize({0.0f, 26.0f}))
                             .child(std::move(sceneStatusText))
                             .child(std::move(sceneActions))
-                            .child(labeledButton("EditorSettingsClose", "Close")
-                                       .setOnClick([this]() { close(); }),
-                                   ui::boxSlot().preferredSize({84.0f, 26.0f}));
+                            .child(std::move(closeButtonShared), ui::boxSlot().preferredSize({84.0f, 26.0f}));
     _settingsRoot = settingsRoot.share();
     auto dialogPanel = ui::border("EditorSettingsPanel")
                            .setStyleKey("panel.window")
@@ -239,6 +330,18 @@ void EditorSettingsDialog::sync(WidgetTree& tree)
     if (_bindings.showCameraOverlay) {
         _overlayCheckbox->setChecked(_bindings.showCameraOverlay());
     }
+    if (_bindings.language && _languageCombo) {
+        const std::string language = _bindings.language();
+        for (size_t i = 0; i < _languageOptionIds.size(); ++i) {
+            if (_languageOptionIds[i] == language) {
+                _languageCombo->setSelectedIndex(static_cast<int>(i), false);
+                break;
+            }
+        }
+    }
+    // Re-translate the static labels every tick: the language dropdown is in
+    // this dialog, so a pick must show in the CURRENT frame, not the next open.
+    relocalize();
     const bool dirty = _bindings.scenePathDirty && _bindings.scenePathDirty();
     _applyButton->setEnabled(dirty);
     _resetButton->setEnabled(dirty);
@@ -248,6 +351,36 @@ void EditorSettingsDialog::sync(WidgetTree& tree)
         _sceneStatusText->setStyleKey(status.styleKey);
         _sceneStatusText->setText(status.text);
     }
+}
+
+void EditorSettingsDialog::relocalize()
+{
+    if (!_settingsRoot) {
+        return;
+    }
+    // setText is changed-only, so re-running this every tick is cheap and the
+    // string does not churn the paint cache when nothing changed.
+    _titleText->setText(EditorLocalization::editorTr("editor.settings.title", "Editor Settings"));
+    _languageLabelText->setText(EditorLocalization::editorTr("editor.settings.language", "Language"));
+    _samplerLabelText->setText(EditorLocalization::editorTr("editor.settings.sampler", "Viewport Sampler"));
+    _fontLabelText->setText(EditorLocalization::editorTr("editor.settings.ui_font", "UI Font"));
+    _sceneLabelText->setText(EditorLocalization::editorTr("editor.settings.startup_scene", "Startup Scene"));
+    if (_overlayLabelText) {
+        _overlayLabelText->setText(EditorLocalization::editorTr("editor.settings.camera_overlay",
+                                                                "Show Viewport Camera Overlay"));
+    }
+    if (_applyLabel) {
+        _applyLabel->setText(EditorLocalization::editorTr("editor.settings.apply_scene_path",
+                                                          "Apply Default Scene Path"));
+    }
+    if (_resetLabel) {
+        _resetLabel->setText(EditorLocalization::editorTr("editor.settings.reset", "Reset"));
+    }
+    if (_closeLabel) {
+        _closeLabel->setText(EditorLocalization::editorTr("editor.settings.close", "Close"));
+    }
+    _samplerCombo->_items = samplerLabels();
+    _samplerCombo->markPaintDirty();
 }
 
 void EditorSettingsDialog::close()
@@ -267,11 +400,22 @@ void EditorSettingsDialog::reset()
     _samplerCombo.reset();
     _fontCombo.reset();
     _fontOptionIds.clear();
+    _languageCombo.reset();
+    _languageOptionIds.clear();
     _overlayCheckbox.reset();
     _scenePathField.reset();
     _sceneStatusText.reset();
     _applyButton.reset();
     _resetButton.reset();
+    _titleText.reset();
+    _languageLabelText.reset();
+    _samplerLabelText.reset();
+    _fontLabelText.reset();
+    _sceneLabelText.reset();
+    _overlayLabelText.reset();
+    _applyLabel.reset();
+    _resetLabel.reset();
+    _closeLabel.reset();
     _bindings = {};
 }
 

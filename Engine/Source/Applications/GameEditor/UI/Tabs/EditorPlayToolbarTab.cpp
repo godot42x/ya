@@ -8,6 +8,7 @@
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/EditorModule.h"
 #include "GameEditor/UI/Shell/EditorListRows.h"
+#include "GameEditor/Localization/EditorLocalization.h"
 #include "GameEditor/UI/Shell/EditorTheme.h"
 #include "GameRuntime/App.h"
 
@@ -40,7 +41,7 @@ void EditorPlayToolbarTab::construct()
             (void)_actions->execute("runtime.stop");
         }
     });
-    auto detach = labeledButton("PlayToolbarDetach", "Detach").setOnClick([this]() {
+    auto detach = labeledButton("PlayToolbarDetach", EditorLocalization::editorTr("editor.play.detach", "Detach")).setOnClick([this]() {
         EditorLayer* layer = getEditorLayer();
         if (!layer || !_app) {
             return;

@@ -1183,6 +1183,20 @@ void EditorSurface::openEditorSettingsDialog()
                 ui_font_settings::applyAndStore(*render, faceId);
             }
         },
+        // "en" is the English passthrough (no table, keys display as written);
+        // the manager represents that as "". Map both directions so the
+        // dropdown shows a real id while the manager stays global-language-free.
+        .language = []() {
+            const std::string& current = LocalizationManager::get().language();
+            return current.empty() ? std::string("en") : current;
+        },
+        .setLanguage = [](std::string language) {
+            const std::string managerLanguage = (language == "en") ? std::string{} : language;
+            EditorLocalization::setEditorLanguage(managerLanguage);
+            // Persist the pick so it survives a restart.
+            ConfigManager::Editor("editor").set("locale.language", language).flush();
+        },
+        .languageOptions = []() { return std::vector<std::string>{"en", "zh"}; },
         .openFilePicker = [this](FEditorFilePickerRequest request) {
             openFilePickerDialog(std::move(request));
         },
