@@ -543,16 +543,28 @@ std::shared_ptr<Font> FontManager::getFont(const FName &fontName, uint32_t fontS
     // pre-registered face has no file to rasterize, so a scaled view is the
     // headless stand-in.
     if (chooseModeForSize(fontSize) == EFontRenderMode::Bitmap) {
-        if (auto base = findBestBase(fontName, fontSize); base && !base->bTexelPinned) {
-            auto view = makeScaledView(base, fontSize);
-            _fontCache[key] = view;
-            return view;
+        // A bitmap atlas may only serve the size it was rasterized at, and the
+        // file-backed raster is the honest one: a scaled view over a larger
+        // base (say 64px serving 32px) halves every glyph metric while nearest
+        // sampling keeps the base texels, which drops the thin strokes of i/l/t
+        // entirely. So an exact-size base wins, and otherwise rasterize the
+        // file at the requested size. The scaled view remains only for a
+        // pre-registered face with no file to rasterize (headless stand-in).
+        if (auto base = findBestBase(fontName, fontSize);
+            base && static_cast<uint32_t>(std::lround(base->fontSize)) == fontSize) {
+            _fontCache[key] = base;
+            return base;
         }
         auto pathIt = _fontPaths.find(fontName);
         if (_render && pathIt != _fontPaths.end()) {
             YA_CORE_INFO("FontManager: lazily building bitmap base '{}' size {} (exact device raster)",
                          fontName.toString(), fontSize);
             return loadFont(*_render, pathIt->second, fontName, fontSize);
+        }
+        if (auto base = findBestBase(fontName, fontSize); base) {
+            auto view = makeScaledView(base, fontSize);
+            _fontCache[key] = view;
+            return view;
         }
         YA_CORE_WARN("Font '{}' not in cache. Call loadFont first.", fontName.toString());
         return nullptr;

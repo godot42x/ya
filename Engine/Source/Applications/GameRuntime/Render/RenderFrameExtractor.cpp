@@ -298,6 +298,15 @@ void RenderFrameExtractor::extractText2D(Scene* scene, entt::registry& reg, Scen
     if (!fonts) {
         return;
     }
+    // The glyph atlas is rasterized at the component's `fontPixelSize` and the
+    // layout is then scaled down onto the world quad. That is deliberate: a
+    // label is authored at a readable size (32px here) and drawn at whatever
+    // world height its line occupies, so a small label keeps the crispness of
+    // its authored raster instead of being re-rasterized into a mush of thin
+    // strokes. (The GUI path behaves the same way: its `planTextRaster` picks a
+    // raster near the device size and the run draws 1:1 — but a UI font is
+    // authored AT its device size, while a world label is authored in world
+    // units and only lands on pixels after the camera transform.)
     for (const auto& [entity, text, transform] : reg.view<Text2DComponent, TransformComponent>().each()) {
         if (!text.bVisible || text.text.empty()) {
             continue;
