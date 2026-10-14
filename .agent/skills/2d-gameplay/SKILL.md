@@ -186,6 +186,29 @@ Tiny Town（Town / House / TownLarge）：`_pixelsPerUnit = 16`，`_referenceHei
 缺文件或没有这个动作：`YA_CORE_WARN`，查询返回 false，不崩。没写 `inputMap` 的项目
 沿用 `.yaproject` 里的 `inputActions`，都没有则用引擎内置键位。
 
+## Box2D 与 tile 棋盘的空间边界约定
+
+**权威判据**（P1 已落地，2026-10-14 文档化）：
+
+- **棋盘判定用 tilemap 查询**（权威）：`isSolid(x, y)` / `entityAt(x, y)` / `worldToCell` / `cellToWorld` / `bounds` 反射方法。
+- **Box2D 只负责非格子的可交互物**：物理系统（`Physics2DSystem`）与 tilemap 组件**互不感知**。
+  - 棋盘格子的通行性由 tile 的 solid 属性与 `entityAt` 决定，物理碰撞体不参与。
+  - 角色/NPC 的移动走脚本 `GridMover.lua`，调用 tilemap 查询，**不走物理推动**。
+  - 推箱子/压力板/移动平台等机关用 `RigidBody2DComponent` + `Collider2DComponent`，但**不与 tilemap 碰撞**（Box2D 里没有 tile 静态体）。
+- **机关战斗的物理交互**（C1 内容将用到）：
+  - 推箱子：玩家碰撞体 `onContact2D`，对箱子施加 `impulse`，箱子落到新格后触发压力板。
+  - 压力板：sensor collider（`bSensor = true`），检测 `bBegan` 接触事件。
+  - 移动平台：kinematic body（`type = kinematic`），脚本驱动位置，角色站在上面跟随（velocity 继承或位置约束）。
+- **两套系统的边界**：
+  - tilemap `isSolid` **不问**物理世界（组件看不见场景，查询注册在 `GameplayScriptFunctions.cpp`）。
+  - Box2D `step` **不感知** tilemap（物理系统只看 `RigidBody2D` / `Collider2D` 组件）。
+  - 脚本负责桥接：玩家脚本读 tilemap 决定能否进格，物理事件回调通知脚本触发机关。
+
+**反面约束**（禁止的做法）：
+- ❌ 不要尝试把 tilemap 的 solid tile 导出为 Box2D 静态碰撞体（重复且低效）。
+- ❌ 不要让角色移动同时依赖 tilemap 与物理（会出现"tilemap 说能走、物理说撞墙"的矛盾）。
+- ❌ 不要用物理查询（raycast/overlap）判断格子通行性（权威是 tilemap）。
+
 ## 边界
 
 - 不引入 `Node2D` / `Transform2D` / `Camera2D`；2D 对象 = `Node3D` +
