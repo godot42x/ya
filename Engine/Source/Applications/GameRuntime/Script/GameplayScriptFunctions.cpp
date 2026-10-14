@@ -296,18 +296,29 @@ ScriptValue destroyEntityFn(const GameplayScriptContext& ctx, ScriptArgs args)
 /// Options table for `world.spawnText`. `size` is the world height of one text
 /// line; `color` is the ink (alpha fades the line); `fontPixelSize` is the
 /// device pixel size the face is rasterized at (fixed while the text lives).
+/// `outlineWidth` is a border thickness in world units (0 = none) and
+/// `outlineColor` its colour, for a label over a busy scene. `layer`/`sortOrder`
+/// are the painter-key fields, so a caller can lift a label above the board.
 struct FTextSpawnOptions
 {
     std::string font;
     float       size          = 0.5f;
     glm::vec4   color{1.0f, 1.0f, 1.0f, 1.0f};
     int64_t     fontPixelSize = 32;
+    float       outlineWidth  = 0.0f;
+    glm::vec4   outlineColor{0.0f, 0.0f, 0.0f, 1.0f};
+    int64_t     layer         = 0;
+    int64_t     sortOrder     = 0;
 
     YA_REFLECT_BEGIN_NAMED(FTextSpawnOptions, "FTextSpawnOptions")
     YA_REFLECT_FIELD(font)
     YA_REFLECT_FIELD(size)
     YA_REFLECT_FIELD(color)
     YA_REFLECT_FIELD(fontPixelSize)
+    YA_REFLECT_FIELD(outlineWidth)
+    YA_REFLECT_FIELD(outlineColor)
+    YA_REFLECT_FIELD(layer)
+    YA_REFLECT_FIELD(sortOrder)
     YA_REFLECT_END()
     YA_REFLECT_VALUE_STRUCT()
 };
@@ -342,6 +353,10 @@ Entity* spawnText(const GameplayScriptContext& ctx, const std::string& name, con
     label->size          = options.size;
     label->color         = options.color;
     label->fontPixelSize = options.fontPixelSize > 0 ? static_cast<uint32_t>(options.fontPixelSize) : 32;
+    label->outlineWidth  = options.outlineWidth;
+    label->outlineColor  = options.outlineColor;
+    label->layer         = static_cast<int32_t>(options.layer);
+    label->sortOrder     = static_cast<int32_t>(options.sortOrder);
     return node->getEntity();
 }
 

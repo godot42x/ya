@@ -32,6 +32,8 @@ struct YA_SCENE_2D_API Text2DComponent : public IComponent
     YA_REFLECT_FIELD(color, .color())
     YA_REFLECT_FIELD(size)        ///< World height of one text line, in world units
     YA_REFLECT_FIELD(pivot)       ///< Normalized anchor; (0.5, 0.5) centres the line on the entity
+    YA_REFLECT_FIELD(outlineWidth)  ///< World-unit outline thickness; 0 disables it
+    YA_REFLECT_FIELD(outlineColor, .color())
     YA_REFLECT_FIELD(layer)
     YA_REFLECT_FIELD(sortOrder)
     YA_REFLECT_FIELD(bYSort)
@@ -55,6 +57,16 @@ struct YA_SCENE_2D_API Text2DComponent : public IComponent
     /// bottom-right, (0.5, 0.5) its centre. The anchor sits on the entity, so
     /// centring on the entity needs no offset in the caller.
     glm::vec2 pivot{0.5f, 0.5f};
+    /// Thickness of a coloured border drawn behind the glyphs, in every
+    /// direction, measured in font-raster pixels (the same unit as
+    /// fontPixelSize -- so the border scales with the text, not with the
+    /// scene's tile grid). 0 draws no border. A label over a busy scene needs
+    /// one: unoutlined ink at this scale blends into whatever sits behind it,
+    /// and the border is what keeps it readable (Godot's Label3D outline_size,
+    /// TMP's outline, on the same reasoning). The border quads paint before the
+    /// glyphs and do not advance the layout.
+    float     outlineWidth = 0.0f;
+    glm::vec4 outlineColor{0.0f, 0.0f, 0.0f, 1.0f};
     int32_t   layer     = 0;
     int32_t   sortOrder = 0;
     /// Y-sort against sprites on the same layer, like Sprite2DComponent.

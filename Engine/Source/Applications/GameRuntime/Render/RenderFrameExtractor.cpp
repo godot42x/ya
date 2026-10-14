@@ -225,7 +225,12 @@ void RenderFrameExtractor::snapSpriteCandidatesToTexelGrid(std::vector<WorldSpri
 {
     const bool bSnap = texelStep > 0.0f;
     for (WorldSpriteCandidate& sprite : sprites) {
-        if (bSnap) {
+        // Text opts out (bSnapToTexelGrid): its glyph positions come from a
+        // layout engine measured in font-raster pixels, so rounding each glyph
+        // onto the tilemap's texel grid quantizes the advances and baselines
+        // into uneven spacing. Sprites and tiles are authored on that grid and
+        // keep the per-object snap.
+        if (bSnap && sprite.bSnapToTexelGrid) {
             sprite.worldCenter = snapWorldXY(sprite.worldCenter, texelStep, 0.0f, 0.0f);
             sprite.sortPointY  = snapWorldXY(glm::vec3(0.0f, sprite.sortPointY, 0.0f), texelStep, 0.0f, 0.0f).y;
         }

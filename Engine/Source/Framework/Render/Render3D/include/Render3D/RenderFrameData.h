@@ -89,6 +89,13 @@ struct WorldSpriteCandidate
     /// Host entity when this candidate is a generated companion; 0 for authored
     /// sprites.
     uint32_t hostEntityId = 0;
+    /// Whether the sprite texel snap may move this candidate. Sprites and tiles
+    /// are authored on the tilemap's texel grid, so snapping their quads keeps
+    /// the pixel art aligned. Text is not: its glyph positions come from a
+    /// layout engine (advances, bearings, baselines) measured in font-raster
+    /// pixels, and snapping them to a different grid quantizes the spacing and
+    /// the outline into visible jitter. Text opts out and lays out as measured.
+    bool bSnapToTexelGrid = true;
 };
 
 /// Read-only view over extracted scene candidates.
