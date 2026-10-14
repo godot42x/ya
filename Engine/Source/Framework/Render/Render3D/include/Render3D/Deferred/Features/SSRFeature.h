@@ -129,4 +129,3 @@ struct SSRFeature
 static_assert(ExtensionFeature<SSRFeature>, "SSRFeature must satisfy the extension protocol");
 
 } // namespace ya
-
