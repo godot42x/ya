@@ -4,6 +4,8 @@
 
 #include "Core/Localization/LocalizationManager.h"
 #include "GUI/Binding/LocalizedText.h"
+#include "GUI/Declarative/Build.h"
+#include "GUI/Widgets/Controls/Text.h"
 
 #include <gtest/gtest.h>
 
@@ -69,6 +71,32 @@ TEST(LocalizedTextTest, EmptyHandleIsInert)
     EXPECT_TRUE(empty.empty());
     EXPECT_EQ(empty.toReactive(), nullptr);
     EXPECT_EQ(empty.resolve(), "");
+}
+
+// The builder entry point the editor chrome uses: a text widget built with
+// `.localize(key, source)` resolves through the manager and follows a language
+// switch with no rebuild — this is what replaced each panel's hand-written
+// re-translate-every-frame refresh.
+TEST(LocalizedTextTest, BuilderLocalizeBindsTextToLanguage)
+{
+    auto& manager = LocalizationManager::get();
+    manager.clear();
+    ASSERT_TRUE(manager.loadLanguageFromJson("zh", R"({"editor.settings.title": "编辑器设置"})"));
+
+    auto builder = ui::text("Title").localize("editor.settings.title", "Editor Settings");
+    auto widget  = builder.release();
+    auto* text   = dynamic_cast<UIText*>(widget.get());
+    ASSERT_NE(text, nullptr);
+
+    // English (no language selected): the readable fallback source, not the key.
+    EXPECT_EQ(text->resolvedText(), "Editor Settings");
+
+    manager.setLanguage("zh");
+    EXPECT_EQ(text->resolvedText(), "编辑器设置");
+
+    manager.setLanguage("");
+    EXPECT_EQ(text->resolvedText(), "Editor Settings");
+    manager.clear();
 }
 
 } // namespace ya

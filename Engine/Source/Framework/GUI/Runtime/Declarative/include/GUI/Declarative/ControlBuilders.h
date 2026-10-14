@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Declarative/BuilderBase.h"
+#include "GUI/Binding/LocalizedText.h"
 
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
@@ -44,6 +45,28 @@ class UITextWidgetBuilder final : public TUIWidgetBuilder<UIText, UITextWidgetBu
     [[nodiscard]] UITextWidgetBuilder&& bindText(std::shared_ptr<Reactive<std::string>> ref) &&
     {
         _widget->bindText(std::move(ref));
+        return std::move(*this);
+    }
+
+    /// Bind the text to a localization key: the widget re-resolves on a
+    /// language switch with no rebuild (see LocalizedText). `fallbackSource` is
+    /// the readable English shown when `key` has no translation; short labels
+    /// pass an empty fallback and use the source string as the key itself.
+    /// This is the default for authored chrome text — reach for setText only
+    /// for text that is not localizable (numbers, debug output).
+    [[nodiscard]] UITextWidgetBuilder& localize(std::string key,
+                                                std::string fallbackSource = {},
+                                                std::vector<std::string> args = {}) &
+    {
+        _widget->bindText(LocalizedText(std::move(key), std::move(args), std::move(fallbackSource)).toReactive());
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& localize(std::string key,
+                                                 std::string fallbackSource = {},
+                                                 std::vector<std::string> args = {}) &&
+    {
+        _widget->bindText(LocalizedText(std::move(key), std::move(args), std::move(fallbackSource)).toReactive());
         return std::move(*this);
     }
 
@@ -323,6 +346,20 @@ class UICheckBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UICheckBox
     [[nodiscard]] UICheckBoxWidgetBuilder&& setText(const std::string& value) &&
     {
         child(UITextWidgetBuilder{_widget->_stableKey + "__label"}.setText(value));
+        return std::move(*this);
+    }
+
+    /// Localized label (see UITextWidgetBuilder::localize): the child label
+    /// re-resolves on a language switch with no rebuild.
+    [[nodiscard]] UICheckBoxWidgetBuilder& localizeText(std::string key, std::string fallbackSource = {}) &
+    {
+        child(UITextWidgetBuilder{_widget->_stableKey + "__label"}.localize(std::move(key), std::move(fallbackSource)));
+        return *this;
+    }
+
+    [[nodiscard]] UICheckBoxWidgetBuilder&& localizeText(std::string key, std::string fallbackSource = {}) &&
+    {
+        child(UITextWidgetBuilder{_widget->_stableKey + "__label"}.localize(std::move(key), std::move(fallbackSource)));
         return std::move(*this);
     }
 
@@ -674,6 +711,19 @@ class UISwitchWidgetBuilder final : public TUIWidgetChildrenBuilder<UISwitch, UI
     [[nodiscard]] UISwitchWidgetBuilder&& setText(const std::string& value) &&
     {
         child(UITextWidgetBuilder{_widget->_stableKey + "__label"}.setText(value));
+        return std::move(*this);
+    }
+
+    /// Localized label (see UITextWidgetBuilder::localize).
+    [[nodiscard]] UISwitchWidgetBuilder& localizeText(std::string key, std::string fallbackSource = {}) &
+    {
+        child(UITextWidgetBuilder{_widget->_stableKey + "__label"}.localize(std::move(key), std::move(fallbackSource)));
+        return *this;
+    }
+
+    [[nodiscard]] UISwitchWidgetBuilder&& localizeText(std::string key, std::string fallbackSource = {}) &&
+    {
+        child(UITextWidgetBuilder{_widget->_stableKey + "__label"}.localize(std::move(key), std::move(fallbackSource)));
         return std::move(*this);
     }
 };

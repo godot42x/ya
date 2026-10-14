@@ -25,16 +25,27 @@ namespace EditorLocalization
 
 /// Load (or reload) the editor chrome table for `language`. An empty language
 /// is a no-op: there is no "English table" file, English is the fallback that
-/// `editorTr` returns when the key is untranslated.
+/// the lookup returns when the key is untranslated.
 void loadEditorTables(std::string_view language);
 
 /// Switch the active language: load this language's editor table (if any) and
 /// select it on the manager. Broadcasts through
-/// LocalizationManager::addLanguageChangedListener, so bound chrome refreshes.
+/// LocalizationManager::addLanguageChangedListener, so every reactive binding
+/// (bound chrome text) and every registered listener refreshes in place.
 void setEditorLanguage(std::string_view language);
 
-/// Translate one editor chrome string. `fallback` is the English source shown
-/// when the key has no translation in the active language.
+/// Translate one editor chrome string NOW (one-shot). Use this for strings that
+/// are consumed as plain values — log lines, composed/concatenated text, the
+/// items of a list control that has no reactive binding — where a future
+/// language switch is not expected to re-resolve them. For text that lives in
+/// the UI tree, prefer a reactive binding instead: `ui::text(...).localize(key,
+/// source)`, `localizedButtonLabel(...)`, `editorText(key, source)`, so a
+/// language switch updates the widget with no rebuild and no manual refresh.
+///
+/// Key policy: short labels (`"File"`, `"Edit"`) use the source string as the
+/// key; anything long uses a dotted identifier plus the English source as the
+/// fallback (`editorTr("editor.inspector.empty", "Select an entity")`), so a
+/// missing translation degrades to readable English instead of an identifier.
 [[nodiscard]] inline std::string editorTr(std::string_view key, std::string_view fallback = "")
 {
     return LocalizationManager::get().tr(key, fallback);

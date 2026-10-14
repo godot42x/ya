@@ -96,9 +96,9 @@ class EditorSettingsDialog
     /// Push current bindings into the controls. Called from this dialog's own
     /// tree-tick, never by a shell.
     void sync(WidgetTree& tree);
-    /// Re-translate every static label of this dialog. Called from sync so an
-    /// open dialog reflects a language switch on the next tick (the language
-    /// dropdown lives in this very dialog).
+    /// Refresh the ComboBox option lists, which are plain (non-reactive) string
+    /// data. The text labels localize reactively at build time and need nothing
+    /// here.
     void relocalize();
 
     FEditorSettingsBindings _bindings;
@@ -115,17 +115,6 @@ class EditorSettingsDialog
     std::shared_ptr<UIText> _sceneStatusText;
     std::shared_ptr<UIButton> _applyButton;
     std::shared_ptr<UIButton> _resetButton;
-    /// Static labels, re-translated by relocalize().
-    std::shared_ptr<UIText> _titleText;
-    std::shared_ptr<UIText> _languageLabelText;
-    std::shared_ptr<UIText> _samplerLabelText;
-    std::shared_ptr<UIText> _fontLabelText;
-    std::shared_ptr<UIText> _sceneLabelText;
-    /// Label text children of the checkbox / buttons (re-translated in place).
-    std::shared_ptr<UIText> _overlayLabelText;
-    std::shared_ptr<UIText> _applyLabel;
-    std::shared_ptr<UIText> _resetLabel;
-    std::shared_ptr<UIText> _closeLabel;
 };
 
 } // namespace ya

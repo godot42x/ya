@@ -206,18 +206,42 @@ inline UIKeyedChildReconciler::Factory makeContentGridRowFactory()
     };
 }
 
+/// A button whose child label is a localization key. The label is bound
+/// reactively (see LocalizedText), so a language switch re-labels it in place
+/// with no rebuild. `label` is the English source string AND the lookup key —
+/// the short-label policy: when a language table has no entry the source shows
+/// through unchanged. Labels that need disambiguation use the 3-arg overload.
 inline ui::UIButtonWidgetBuilder labeledButton(std::string key, const std::string& label)
 {
     std::string labelKey = key + "_Label";
     return ui::button(std::move(key))
         .setContentPadding({6.0f, 2.0f})
         .child(ui::text(std::move(labelKey))
-                   .setText(label)
+                   .localize(label)
                    .setStyleKey(editorStyle(StyleKey::Text))
                    .setHAlign(EWidgetAlignH::Center)
                    .setVAlign(EWidgetAlignV::Center));
 }
 
+/// As above, but the lookup key is a dotted identifier (`locKey`) with `source`
+/// as the readable fallback — for labels whose English is ambiguous (e.g.
+/// "Back") and must not collide with another same-text key.
+inline ui::UIButtonWidgetBuilder labeledButton(std::string key,
+                                               const std::string& locKey,
+                                               const std::string& source)
+{
+    std::string labelKey = key + "_Label";
+    return ui::button(std::move(key))
+        .setContentPadding({6.0f, 2.0f})
+        .child(ui::text(std::move(labelKey))
+                   .localize(locKey, source)
+                   .setStyleKey(editorStyle(StyleKey::Text))
+                   .setHAlign(EWidgetAlignH::Center)
+                   .setVAlign(EWidgetAlignV::Center));
+}
+
+/// As labeledButton, with a leading icon. `label` is the English source AND the
+/// lookup key (short-label policy); the label binds reactively.
 inline ui::UIButtonWidgetBuilder iconLabeledButton(std::string key,
                                                    const std::string& label,
                                                    const char* assetPath)
@@ -233,7 +257,7 @@ inline ui::UIButtonWidgetBuilder iconLabeledButton(std::string key,
                           ui::boxSlot().preferredSize({editor_density::kToolbarIconSize,
                                                        editor_density::kToolbarIconSize}))
                    .child(ui::text(labelKey)
-                              .setText(label)
+                              .localize(label)
                               .setStyleKey(editorStyle(StyleKey::Text))
                               .setHAlign(EWidgetAlignH::Left)
                               .setVAlign(EWidgetAlignV::Center)));

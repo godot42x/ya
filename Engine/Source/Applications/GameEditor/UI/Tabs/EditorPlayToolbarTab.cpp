@@ -41,7 +41,7 @@ void EditorPlayToolbarTab::construct()
             (void)_actions->execute("runtime.stop");
         }
     });
-    auto detach = labeledButton("PlayToolbarDetach", EditorLocalization::editorTr("editor.play.detach", "Detach")).setOnClick([this]() {
+    auto detach = labeledButton("PlayToolbarDetach", "editor.play.detach", "Detach").setOnClick([this]() {
         EditorLayer* layer = getEditorLayer();
         if (!layer || !_app) {
             return;

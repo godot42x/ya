@@ -218,8 +218,7 @@ void EditorInspectorTab::construct()
     };
 
     auto empty = ui::text("InspectorEmpty")
-                     .setText(EditorLocalization::editorTr("editor.inspector.empty",
-                                                           "Select an entity in the Hierarchy"))
+                     .localize("editor.inspector.empty", "Select an entity in the Hierarchy")
                      .setStyleKey("text.muted")
                      .setWrap(true);
     _emptyText = empty.share();

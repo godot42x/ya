@@ -73,7 +73,7 @@ void EditorContentBrowserTab::construct()
     auto backButton = ui::button("ContentBack")
                           .setOnClick([this]() { (void)_explorer->navigateBack(); })
                           .child(ui::text("ContentBack_Label")
-                                     .setText(EditorLocalization::editorTr("editor.content.back", "< Back"))
+                                     .localize("editor.content.back", "< Back")
                                      .setStyleKey(editorStyle(StyleKey::Text))
                                      .setHAlign(EWidgetAlignH::Center)
                                      .setVAlign(EWidgetAlignV::Center));
@@ -93,7 +93,7 @@ void EditorContentBrowserTab::construct()
                               setViewMode(FileExplorer::ViewMode::List);
                           })
                           .child(ui::text("ContentViewList_Label")
-                                     .setText(EditorLocalization::editorTr("editor.content.list", "List"))
+                                     .localize("editor.content.list", "List")
                                      .setStyleKey(editorStyle(StyleKey::Text))
                                      .setHAlign(EWidgetAlignH::Center)
                                      .setVAlign(EWidgetAlignV::Center),
@@ -107,7 +107,7 @@ void EditorContentBrowserTab::construct()
                               setViewMode(FileExplorer::ViewMode::Icon);
                           })
                           .child(ui::text("ContentViewGrid_Label")
-                                     .setText(EditorLocalization::editorTr("editor.content.grid", "Grid"))
+                                     .localize("editor.content.grid", "Grid")
                                      .setStyleKey(editorStyle(StyleKey::Text))
                                      .setHAlign(EWidgetAlignH::Center)
                                      .setVAlign(EWidgetAlignV::Center),
@@ -115,7 +115,7 @@ void EditorContentBrowserTab::construct()
     _gridModeToggle = gridToggle.share();
 
     EditorLayer* layer = _layer;
-    auto newUI = labeledButton("ContentNewGameUI", EditorLocalization::editorTr("editor.content.new_ui", "New UI")).setOnClick([this, layer]() {
+    auto newUI = labeledButton("ContentNewGameUI", "editor.content.new_ui", "New UI").setOnClick([this, layer]() {
         if (!layer) {
             return;
         }
@@ -135,7 +135,7 @@ void EditorContentBrowserTab::construct()
             },
         });
     });
-    auto newScript = labeledButton("ContentNewUIScript", EditorLocalization::editorTr("editor.content.new_script", "New Script")).setOnClick([this, layer]() {
+    auto newScript = labeledButton("ContentNewUIScript", "editor.content.new_script", "New Script").setOnClick([this, layer]() {
         if (!layer) {
             return;
         }

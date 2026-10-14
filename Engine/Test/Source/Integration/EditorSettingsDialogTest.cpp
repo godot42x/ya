@@ -191,9 +191,10 @@ TEST(EditorSettingsDialogTest, MissingFontOptionsStillOpensTheDialog)
     EXPECT_EQ(findByKey(*root, "EditorSettingsFontFace"), nullptr);
 }
 
-// The language dropdown reports the pick, and an open dialog re-translates its
-// labels on the next tick: switching inside this very dialog must show the new
-// language in the current frame, not only after a reopen.
+// The language dropdown reports the pick, and the dialog's labels are bound to
+// the localization manager reactively (see `.localize` at build time): an open
+// dialog re-resolves them on a language switch with no rebuild and no per-frame
+// refresh pass.
 TEST(EditorSettingsDialogTest, LanguageSwitchRelocalizesOpenDialog)
 {
     int  sampler = 0;
@@ -230,14 +231,14 @@ TEST(EditorSettingsDialogTest, LanguageSwitchRelocalizesOpenDialog)
     ASSERT_EQ(applied.size(), 1u);
     EXPECT_EQ(applied.front(), "zh");
 
-    // Title shows the English source while untranslated, then the Chinese
-    // table value once the language is active.
+    // The title resolves to the readable fallback source while untranslated,
+    // then to the Chinese table value once the language is active - the binding
+    // re-resolves on setLanguage alone, no tick required.
     auto* title = dynamic_cast<UIText*>(findByKey(*root, "EditorSettingsTitle"));
     ASSERT_NE(title, nullptr);
-    EXPECT_EQ(title->getText(), "Editor Settings");
+    EXPECT_EQ(title->resolvedText(), "Editor Settings");
     manager.setLanguage("zh");
-    tree.tick(1.0f / 60.0f);
-    EXPECT_EQ(title->getText(), "编辑器设置");
+    EXPECT_EQ(title->resolvedText(), "编辑器设置");
 
     manager.clear();
 }

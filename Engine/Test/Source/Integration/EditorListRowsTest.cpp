@@ -91,7 +91,9 @@ TEST(EditorListRowsTest, IconLabeledButtonHostsImageAndLabel)
     ASSERT_NE(icon, nullptr);
     ASSERT_NE(label, nullptr);
     EXPECT_EQ(icon->_assetPath, editor_icons::kPlay);
-    EXPECT_EQ(label->getText(), "Play");
+    // The label is a localization binding (source string = its own key), so it
+    // resolves through the manager: English passthrough shows the source.
+    EXPECT_EQ(label->resolvedText(), "Play");
 }
 
 } // namespace ya
