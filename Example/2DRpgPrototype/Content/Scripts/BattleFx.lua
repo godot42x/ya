@@ -58,7 +58,7 @@ function Fx:spawnDamage(worldX, worldY, amount, color)
     local entity = world.spawnText("DamageNumber", Vec3.new(worldX, worldY, 1.0),
                                    tostring(math.max(0, math.floor(amount))),
                                    { size = TEXT_SIZE, color = Vec4.new(color[1], color[2], color[3], 1.0),
-                                     fontPixelSize = 24 })
+                                     fontPixelSize = 32 })
     if entity then
         self.numbers[#self.numbers + 1] = { entity = entity, t = 0, x = worldX, y = worldY, color = color }
     end
@@ -72,18 +72,25 @@ function Fx:attachBar(unit)
         return self.labels[key]
     end
     local pos = unit.transform:getPosition()
-    local label = world.spawnText("UnitName", Vec3.new(pos.x, pos.y + 1.05, 1.0), tostring(unit.displayName or "?"),
-                                  { size = 0.34, color = Vec4.new(COLORS.name[1], COLORS.name[2], COLORS.name[3], 1.0),
-                                    fontPixelSize = 20 })
+    -- The entity name carries the unit's display name: several units stand on
+    -- the board at once, and a plain "UnitHp" would be ambiguous to anything
+    -- that reads the label back (automation, the inspector).
+    local who = tostring(unit.displayName or "?")
+    local label = world.spawnText("UnitName_" .. who, Vec3.new(pos.x, pos.y + 1.18, 1.0), who,
+                                  { size = 0.48, color = Vec4.new(COLORS.name[1], COLORS.name[2], COLORS.name[3], 1.0),
+                                    fontPixelSize = 32 })
+    local numbers = world.spawnText("UnitHp_" .. who, Vec3.new(pos.x, pos.y + 0.60, 1.0), "",
+                                    { size = 0.36, color = Vec4.new(1.0, 1.0, 0.98, 1.0),
+                                      fontPixelSize = 32 })
     local bg = self:spawnSprite("HpBarBg", { BAR_WIDTH + 0.06, BAR_HEIGHT + 0.04 }, COLORS.barBg)
     local fill = self:spawnSprite("HpBarFill", { BAR_WIDTH, BAR_HEIGHT },
                                   unit.team == "player" and COLORS.barAlly or COLORS.barHp)
-    if not label or not bg or not fill then
+    if not label or not bg or not fill or not numbers then
         return nil
     end
     -- The fill shrinks from the right, so its pivot is the left edge.
     fill:getSprite2D().pivot = Vec2.new(0.0, 0.5)
-    local bar = { label = label, bg = bg, fill = fill, unit = unit }
+    local bar = { label = label, numbers = numbers, bg = bg, fill = fill, unit = unit }
     self.labels[key] = bar
     self:updateBar(unit, bar)
     return bar
@@ -112,13 +119,21 @@ function Fx:updateBar(unit, bar)
         setVisible(bar.bg, false)
         setVisible(bar.fill, false)
         setVisible(bar.label, false)
+        setVisible(bar.numbers, false)
         return
     end
     local pos = unit.transform:getPosition()
     local barY = pos.y + 0.72
     bar.bg:getTransform():setPosition(Vec3.new(pos.x, barY, 1.0))
     bar.fill:getTransform():setPosition(Vec3.new(pos.x - BAR_WIDTH / 2, barY, 1.01))
-    bar.label:getTransform():setPosition(Vec3.new(pos.x, pos.y + 1.05, 1.0))
+    bar.label:getTransform():setPosition(Vec3.new(pos.x, pos.y + 1.18, 1.0))
+    if bar.numbers then
+        bar.numbers:getTransform():setPosition(Vec3.new(pos.x, pos.y + 0.58, 1.0))
+        local text = bar.numbers:getText2D()
+        if text then
+            text.text = string.format("%d/%d", unit.hp or 0, unit.maxHp or 0)
+        end
+    end
     local ratio = (unit.maxHp or 0) > 0 and math.max(0.0, unit.hp / unit.maxHp) or 1.0
     bar.fill:getSprite2D().size = Vec2.new(math.max(0.001, BAR_WIDTH * ratio), BAR_HEIGHT)
     if unit.team == "player" then
@@ -129,6 +144,7 @@ function Fx:updateBar(unit, bar)
     setVisible(bar.bg, true)
     setVisible(bar.fill, true)
     setVisible(bar.label, true)
+    setVisible(bar.numbers, true)
 end
 
 -- Re-anchor every bar (the controller calls this when a unit walks).

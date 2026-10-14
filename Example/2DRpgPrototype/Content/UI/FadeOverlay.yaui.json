@@ -1,14 +1,14 @@
 {
   "version": 2,
   "typeId": "engine.panel",
-  "fields": {
-    "__base__": {
-      "UIElement": {
-        "_name": "FadeOverlay",
-        "_visibility": "Visible"
-      }
-    }
-  },
+      "fields": {
+        "__base__": {
+          "UIElement": {
+            "_name": "FadeOverlay",
+            "_visibility": "SelfHitTestInvisible"
+          }
+        }
+      },
   "behaviors": [
     {
       "type": "script.lua",

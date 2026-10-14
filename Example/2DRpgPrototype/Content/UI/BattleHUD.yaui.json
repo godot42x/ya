@@ -4,54 +4,515 @@
   "fields": {
     "__base__": {
       "UIElement": {
-        "_name": "BattleHUD",
-        "_visibility": "Visible"
+        "_name": "BattleHUD"
       }
     }
   },
-  "behaviors": [
-    {
-      "type": "script.lua",
-      "data": {
-        "script": "Content/UI/BattleHUD.lua"
-      }
-    }
-  ],
   "children": [
     {
       "version": 2,
       "typeId": "engine.border",
       "fields": {
-        "_color": [
-          0.08,
-          0.1,
-          0.12,
-          0.9
-        ],
-        "_cornerRadius": 10.0,
         "__base__": {
           "UIElement": {
-            "_name": "StatusBox"
+            "_name": "PartyCard"
           }
-        }
+        },
+        "_color": [
+          0.09,
+          0.1,
+          0.12,
+          0.92
+        ],
+        "_cornerRadius": 8.0
       },
       "children": [
         {
           "version": 2,
           "typeId": "engine.container",
           "fields": {
+            "__base__": {
+              "UIElement": {
+                "_name": "PartyColumn"
+              }
+            },
             "_boxLayout": {
               "_direction": 1,
-              "_spacing": 3.0,
+              "_spacing": 8.0,
+              "_padding": [
+                14.0,
+                10.0
+              ]
+            }
+          },
+          "children": [
+            {
+              "version": 2,
+              "typeId": "engine.container",
+              "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "NameRow"
+                  }
+                },
+                "_boxLayout": {
+                  "_direction": 0,
+                  "_spacing": 12.0,
+                  "_padding": [
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "ActiveName"
+                      }
+                    },
+                    "_text": "Acting: -",
+                    "_fontSize": 20,
+                    "_color": [
+                      1.0,
+                      1.0,
+                      1.0,
+                      1.0
+                    ]
+                  },
+                  "children": [],
+                  "childSlots": []
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "ActiveHp"
+                      }
+                    },
+                    "_text": "",
+                    "_fontSize": 15,
+                    "_color": [
+                      0.85,
+                      0.95,
+                      0.85,
+                      1.0
+                    ]
+                  },
+                  "children": [],
+                  "childSlots": []
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                }
+              ]
+            },
+            {
+              "version": 2,
+              "typeId": "engine.border",
+              "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "HpTrack"
+                  }
+                },
+                "_color": [
+                  0.1,
+                  0.12,
+                  0.12,
+                  0.85
+                ],
+                "_cornerRadius": 3.0
+              },
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.border",
+                  "fields": {
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "ActiveHpFill"
+                      }
+                    },
+                    "_color": [
+                      0.42,
+                      0.85,
+                      0.46,
+                      1.0
+                    ],
+                    "_cornerRadius": 2.0
+                  },
+                  "children": [],
+                  "childSlots": []
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "canvas",
+                  "anchorMin": [
+                    0.0,
+                    0.0
+                  ],
+                  "anchorMax": [
+                    0.0,
+                    0.0
+                  ],
+                  "offset": [
+                    0.0,
+                    0.0
+                  ],
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "offsets": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "alignmentH": 0,
+                  "alignmentV": 0,
+                  "widthSizeMode": 0,
+                  "heightSizeMode": 0,
+                  "pivot": [
+                    0.0,
+                    0.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "fixedSize": [
+                    132.0,
+                    12.0
+                  ]
+                }
+              ]
+            }
+          ],
+          "childSlots": [
+            {
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
+              "crossAlignment": 0,
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            },
+            {
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
+              "crossAlignment": 0,
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                132.0,
+                12.0
+              ],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            }
+          ]
+        }
+      ],
+      "childSlots": [
+        {
+          "type": "content",
+          "hAlign": 0,
+          "vAlign": 0,
+          "padding": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "preferredSize": [
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "version": 2,
+      "typeId": "engine.border",
+      "fields": {
+        "__base__": {
+          "UIElement": {
+            "_name": "RoundPanel"
+          }
+        },
+        "_color": [
+          0.1,
+          0.1,
+          0.12,
+          0.92
+        ],
+        "_cornerRadius": 8.0
+      },
+      "children": [
+        {
+          "version": 2,
+          "typeId": "engine.container",
+          "fields": {
+            "__base__": {
+              "UIElement": {
+                "_name": "RoundColumn"
+              }
+            },
+            "_boxLayout": {
+              "_direction": 1,
+              "_spacing": 0.0,
+              "_padding": [
+                18.0,
+                6.0
+              ]
+            }
+          },
+          "children": [
+            {
+              "version": 2,
+              "typeId": "engine.text",
+              "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "RoundCaption"
+                  }
+                },
+                "_text": "Round",
+                "_fontSize": 14,
+                "_color": [
+                  0.85,
+                  0.82,
+                  0.72,
+                  1.0
+                ]
+              },
+              "children": [],
+              "childSlots": []
+            },
+            {
+              "version": 2,
+              "typeId": "engine.text",
+              "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "RoundBadge"
+                  }
+                },
+                "_text": "1",
+                "_fontSize": 30,
+                "_color": [
+                  1.0,
+                  0.92,
+                  0.62,
+                  1.0
+                ]
+              },
+              "children": [],
+              "childSlots": []
+            }
+          ],
+          "childSlots": [
+            {
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
+              "crossAlignment": 0,
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            },
+            {
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
+              "crossAlignment": 0,
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            }
+          ]
+        }
+      ],
+      "childSlots": [
+        {
+          "type": "content",
+          "hAlign": 0,
+          "vAlign": 0,
+          "padding": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "preferredSize": [
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "version": 2,
+      "typeId": "engine.border",
+      "fields": {
+        "__base__": {
+          "UIElement": {
+            "_name": "OrderPanel"
+          }
+        },
+        "_color": [
+          0.08,
+          0.09,
+          0.12,
+          0.88
+        ],
+        "_cornerRadius": 8.0
+      },
+      "children": [
+        {
+          "version": 2,
+          "typeId": "engine.container",
+          "fields": {
+            "__base__": {
+              "UIElement": {
+                "_name": "OrderColumn"
+              }
+            },
+            "_boxLayout": {
+              "_direction": 1,
+              "_spacing": 5.0,
               "_padding": [
                 12.0,
                 10.0
               ]
-            },
-            "__base__": {
-              "UIElement": {
-                "_name": "StatusColumn"
-              }
             }
           },
           "children": [
@@ -59,61 +520,19 @@
               "version": 2,
               "typeId": "engine.text",
               "fields": {
-                "_text": "Round 1",
-                "_fontSize": 16,
-                "_color": [
-                  0.95,
-                  0.84,
-                  0.45,
-                  1.0
-                ],
                 "__base__": {
                   "UIElement": {
-                    "_name": "Title"
+                    "_name": "Order1"
                   }
-                }
-              },
-              "children": [],
-              "childSlots": []
-            },
-            {
-              "version": 2,
-              "typeId": "engine.text",
-              "fields": {
-                "_text": "Acting: -",
-                "_fontSize": 14,
-                "_color": [
-                  0.85,
-                  0.85,
-                  0.9,
-                  1.0
-                ],
-                "__base__": {
-                  "UIElement": {
-                    "_name": "Header"
-                  }
-                }
-              },
-              "children": [],
-              "childSlots": []
-            },
-            {
-              "version": 2,
-              "typeId": "engine.text",
-              "fields": {
+                },
                 "_text": "",
-                "_fontSize": 14,
+                "_fontSize": 15,
                 "_color": [
-                  0.75,
+                  0.82,
                   0.9,
                   1.0,
                   1.0
-                ],
-                "__base__": {
-                  "UIElement": {
-                    "_name": "Row1"
-                  }
-                }
+                ]
               },
               "children": [],
               "childSlots": []
@@ -122,19 +541,19 @@
               "version": 2,
               "typeId": "engine.text",
               "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Order2"
+                  }
+                },
                 "_text": "",
-                "_fontSize": 14,
+                "_fontSize": 15,
                 "_color": [
-                  0.75,
+                  0.82,
                   0.9,
                   1.0,
                   1.0
-                ],
-                "__base__": {
-                  "UIElement": {
-                    "_name": "Row2"
-                  }
-                }
+                ]
               },
               "children": [],
               "childSlots": []
@@ -143,19 +562,19 @@
               "version": 2,
               "typeId": "engine.text",
               "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Order3"
+                  }
+                },
                 "_text": "",
-                "_fontSize": 14,
+                "_fontSize": 15,
                 "_color": [
-                  0.75,
+                  0.82,
                   0.9,
                   1.0,
                   1.0
-                ],
-                "__base__": {
-                  "UIElement": {
-                    "_name": "Row3"
-                  }
-                }
+                ]
               },
               "children": [],
               "childSlots": []
@@ -164,19 +583,19 @@
               "version": 2,
               "typeId": "engine.text",
               "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Order4"
+                  }
+                },
                 "_text": "",
-                "_fontSize": 14,
+                "_fontSize": 15,
                 "_color": [
-                  0.75,
+                  0.82,
                   0.9,
                   1.0,
                   1.0
-                ],
-                "__base__": {
-                  "UIElement": {
-                    "_name": "Row4"
-                  }
-                }
+                ]
               },
               "children": [],
               "childSlots": []
@@ -185,19 +604,19 @@
               "version": 2,
               "typeId": "engine.text",
               "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Order5"
+                  }
+                },
                 "_text": "",
-                "_fontSize": 14,
+                "_fontSize": 15,
                 "_color": [
-                  0.75,
+                  0.82,
                   0.9,
                   1.0,
                   1.0
-                ],
-                "__base__": {
-                  "UIElement": {
-                    "_name": "Row5"
-                  }
-                }
+                ]
               },
               "children": [],
               "childSlots": []
@@ -206,77 +625,25 @@
               "version": 2,
               "typeId": "engine.text",
               "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Order6"
+                  }
+                },
                 "_text": "",
-                "_fontSize": 14,
+                "_fontSize": 15,
                 "_color": [
-                  0.75,
+                  0.82,
                   0.9,
                   1.0,
                   1.0
-                ],
-                "__base__": {
-                  "UIElement": {
-                    "_name": "Row6"
-                  }
-                }
+                ]
               },
               "children": [],
               "childSlots": []
             }
           ],
           "childSlots": [
-            {
-              "type": "box",
-              "sizeRule": 0,
-              "weight": 1.0,
-              "margin": {
-                "left": 0.0,
-                "top": 0.0,
-                "right": 0.0,
-                "bottom": 0.0
-              },
-              "crossAlignment": 0,
-              "minSize": [
-                0.0,
-                0.0
-              ],
-              "maxSize": [
-                1000000.0,
-                1000000.0
-              ],
-              "preferredSize": [
-                0.0,
-                0.0
-              ],
-              "participatesInLayout": true,
-              "reserveSpaceWhenHidden": true
-            },
-            {
-              "type": "box",
-              "sizeRule": 0,
-              "weight": 1.0,
-              "margin": {
-                "left": 0.0,
-                "top": 0.0,
-                "right": 0.0,
-                "bottom": 0.0
-              },
-              "crossAlignment": 0,
-              "minSize": [
-                0.0,
-                0.0
-              ],
-              "maxSize": [
-                1000000.0,
-                1000000.0
-              ],
-              "preferredSize": [
-                0.0,
-                0.0
-              ],
-              "participatesInLayout": true,
-              "reserveSpaceWhenHidden": true
-            },
             {
               "type": "box",
               "sizeRule": 0,
@@ -458,119 +825,260 @@
       "version": 2,
       "typeId": "engine.border",
       "fields": {
-        "_color": [
-          0.07,
-          0.09,
-          0.11,
-          0.92
-        ],
-        "_cornerRadius": 10.0,
         "__base__": {
           "UIElement": {
             "_name": "ActionBar"
           }
-        }
+        },
+        "_color": [
+          0.07,
+          0.08,
+          0.1,
+          0.94
+        ],
+        "_cornerRadius": 8.0
       },
       "children": [
         {
           "version": 2,
           "typeId": "engine.container",
           "fields": {
-            "_boxLayout": {
-              "_direction": 0,
-              "_spacing": 22.0,
-              "_padding": [
-                18.0,
-                12.0
-              ]
-            },
             "__base__": {
               "UIElement": {
-                "_name": "ActionRow"
+                "_name": "ActionColumn"
               }
+            },
+            "_boxLayout": {
+              "_direction": 0,
+              "_spacing": 14.0,
+              "_padding": [
+                16.0,
+                10.0
+              ]
             }
           },
           "children": [
             {
               "version": 2,
-              "typeId": "engine.text",
+              "typeId": "engine.button",
               "fields": {
-                "_text": "",
-                "_fontSize": 18,
-                "_color": [
-                  0.9,
-                  0.9,
-                  0.92,
-                  1.0
-                ],
                 "__base__": {
                   "UIElement": {
-                    "_name": "Action1"
+                    "_name": "ActionButton1"
                   }
                 }
               },
-              "children": [],
-              "childSlots": []
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Action1"
+                      }
+                    },
+                    "_text": "",
+                    "_fontSize": 18,
+                    "_color": [
+                      0.94,
+                      0.94,
+                      0.96,
+                      1.0
+                    ]
+                  },
+                  "children": [],
+                  "childSlots": []
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "content",
+                  "hAlign": 0,
+                  "vAlign": 0,
+                  "padding": {
+                    "left": 6.0,
+                    "top": 6.0,
+                    "right": 6.0,
+                    "bottom": 6.0
+                  },
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ]
+                }
+              ]
+            },
+            {
+              "version": 2,
+              "typeId": "engine.button",
+              "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "ActionButton2"
+                  }
+                }
+              },
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Action2"
+                      }
+                    },
+                    "_text": "",
+                    "_fontSize": 18,
+                    "_color": [
+                      0.94,
+                      0.94,
+                      0.96,
+                      1.0
+                    ]
+                  },
+                  "children": [],
+                  "childSlots": []
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "content",
+                  "hAlign": 0,
+                  "vAlign": 0,
+                  "padding": {
+                    "left": 6.0,
+                    "top": 6.0,
+                    "right": 6.0,
+                    "bottom": 6.0
+                  },
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ]
+                }
+              ]
+            },
+            {
+              "version": 2,
+              "typeId": "engine.button",
+              "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "ActionButton3"
+                  }
+                }
+              },
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Action3"
+                      }
+                    },
+                    "_text": "",
+                    "_fontSize": 18,
+                    "_color": [
+                      0.94,
+                      0.94,
+                      0.96,
+                      1.0
+                    ]
+                  },
+                  "children": [],
+                  "childSlots": []
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "content",
+                  "hAlign": 0,
+                  "vAlign": 0,
+                  "padding": {
+                    "left": 6.0,
+                    "top": 6.0,
+                    "right": 6.0,
+                    "bottom": 6.0
+                  },
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ]
+                }
+              ]
+            },
+            {
+              "version": 2,
+              "typeId": "engine.button",
+              "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "ActionButton4"
+                  }
+                }
+              },
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.text",
+                  "fields": {
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Action4"
+                      }
+                    },
+                    "_text": "",
+                    "_fontSize": 18,
+                    "_color": [
+                      0.94,
+                      0.94,
+                      0.96,
+                      1.0
+                    ]
+                  },
+                  "children": [],
+                  "childSlots": []
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "content",
+                  "hAlign": 0,
+                  "vAlign": 0,
+                  "padding": {
+                    "left": 6.0,
+                    "top": 6.0,
+                    "right": 6.0,
+                    "bottom": 6.0
+                  },
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ]
+                }
+              ]
             },
             {
               "version": 2,
               "typeId": "engine.text",
               "fields": {
-                "_text": "",
-                "_fontSize": 18,
-                "_color": [
-                  0.9,
-                  0.9,
-                  0.92,
-                  1.0
-                ],
-                "__base__": {
-                  "UIElement": {
-                    "_name": "Action2"
-                  }
-                }
-              },
-              "children": [],
-              "childSlots": []
-            },
-            {
-              "version": 2,
-              "typeId": "engine.text",
-              "fields": {
-                "_text": "",
-                "_fontSize": 18,
-                "_color": [
-                  0.9,
-                  0.9,
-                  0.92,
-                  1.0
-                ],
-                "__base__": {
-                  "UIElement": {
-                    "_name": "Action3"
-                  }
-                }
-              },
-              "children": [],
-              "childSlots": []
-            },
-            {
-              "version": 2,
-              "typeId": "engine.text",
-              "fields": {
-                "_text": "",
-                "_fontSize": 14,
-                "_color": [
-                  0.85,
-                  0.85,
-                  0.9,
-                  1.0
-                ],
                 "__base__": {
                   "UIElement": {
                     "_name": "Hint"
                   }
-                }
+                },
+                "_text": "",
+                "_fontSize": 13,
+                "_color": [
+                  0.8,
+                  0.8,
+                  0.86,
+                  1.0
+                ]
               },
               "children": [],
               "childSlots": []
@@ -597,8 +1105,8 @@
                 1000000.0
               ],
               "preferredSize": [
-                0.0,
-                0.0
+                150.0,
+                40.0
               ],
               "participatesInLayout": true,
               "reserveSpaceWhenHidden": true
@@ -623,8 +1131,8 @@
                 1000000.0
               ],
               "preferredSize": [
-                0.0,
-                0.0
+                150.0,
+                40.0
               ],
               "participatesInLayout": true,
               "reserveSpaceWhenHidden": true
@@ -649,8 +1157,8 @@
                 1000000.0
               ],
               "preferredSize": [
-                0.0,
-                0.0
+                150.0,
+                40.0
               ],
               "participatesInLayout": true,
               "reserveSpaceWhenHidden": true
@@ -675,8 +1183,34 @@
                 1000000.0
               ],
               "preferredSize": [
+                150.0,
+                40.0
+              ],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            },
+            {
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
+              "crossAlignment": 0,
+              "minSize": [
                 0.0,
                 0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                420.0,
+                30.0
               ],
               "participatesInLayout": true,
               "reserveSpaceWhenHidden": true
@@ -706,36 +1240,36 @@
       "version": 2,
       "typeId": "engine.border",
       "fields": {
+        "__base__": {
+          "UIElement": {
+            "_name": "OutcomeBox"
+          }
+        },
         "_color": [
           0.06,
           0.07,
           0.1,
           0.94
         ],
-        "_cornerRadius": 10.0,
-        "__base__": {
-          "UIElement": {
-            "_name": "OutcomeBox"
-          }
-        }
+        "_cornerRadius": 8.0
       },
       "children": [
         {
           "version": 2,
           "typeId": "engine.container",
           "fields": {
-            "_boxLayout": {
-              "_direction": 1,
-              "_spacing": 0.0,
-              "_padding": [
-                22.0,
-                14.0
-              ]
-            },
             "__base__": {
               "UIElement": {
                 "_name": "OutcomeColumn"
               }
+            },
+            "_boxLayout": {
+              "_direction": 1,
+              "_spacing": 0.0,
+              "_padding": [
+                26.0,
+                14.0
+              ]
             }
           },
           "children": [
@@ -743,19 +1277,19 @@
               "version": 2,
               "typeId": "engine.text",
               "fields": {
+                "__base__": {
+                  "UIElement": {
+                    "_name": "Outcome"
+                  }
+                },
                 "_text": "",
-                "_fontSize": 28,
+                "_fontSize": 32,
                 "_color": [
                   0.95,
                   0.9,
                   0.6,
                   1.0
-                ],
-                "__base__": {
-                  "UIElement": {
-                    "_name": "Outcome"
-                  }
-                }
+                ]
               },
               "children": [],
               "childSlots": []
@@ -822,15 +1356,15 @@
         0.0
       ],
       "offset": [
-        14.0,
-        14.0
+        16.0,
+        16.0
       ],
       "minSize": [
         0.0,
         0.0
       ],
       "maxSize": [
-        320.0,
+        1000000.0,
         1000000.0
       ],
       "offsets": {
@@ -841,8 +1375,8 @@
       },
       "alignmentH": 0,
       "alignmentV": 0,
-      "widthSizeMode": 1,
-      "heightSizeMode": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
       "pivot": [
         0.0,
         0.0
@@ -852,8 +1386,98 @@
         0.0
       ],
       "fixedSize": [
+        300.0,
+        96.0
+      ]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [
+        1.0,
+        0.0
+      ],
+      "anchorMax": [
+        1.0,
+        0.0
+      ],
+      "offset": [
+        -16.0,
+        16.0
+      ],
+      "minSize": [
         0.0,
         0.0
+      ],
+      "maxSize": [
+        1000000.0,
+        1000000.0
+      ],
+      "offsets": {
+        "left": 0.0,
+        "top": 0.0,
+        "right": 0.0,
+        "bottom": 0.0
+      },
+      "alignmentH": 0,
+      "alignmentV": 0,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [
+        1.0,
+        0.0
+      ],
+      "preferredSize": [
+        0.0,
+        0.0
+      ],
+      "fixedSize": [
+        132.0,
+        84.0
+      ]
+    },
+    {
+      "type": "canvas",
+      "anchorMin": [
+        0.0,
+        0.0
+      ],
+      "anchorMax": [
+        0.0,
+        0.0
+      ],
+      "offset": [
+        16.0,
+        124.0
+      ],
+      "minSize": [
+        0.0,
+        0.0
+      ],
+      "maxSize": [
+        1000000.0,
+        1000000.0
+      ],
+      "offsets": {
+        "left": 0.0,
+        "top": 0.0,
+        "right": 0.0,
+        "bottom": 0.0
+      },
+      "alignmentH": 0,
+      "alignmentV": 0,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
+      "pivot": [
+        0.0,
+        0.0
+      ],
+      "preferredSize": [
+        0.0,
+        0.0
+      ],
+      "fixedSize": [
+        176.0,
+        190.0
       ]
     },
     {
@@ -875,8 +1499,8 @@
         0.0
       ],
       "maxSize": [
-        900.0,
-        200.0
+        1000000.0,
+        1000000.0
       ],
       "offsets": {
         "left": 0.0,
@@ -886,8 +1510,8 @@
       },
       "alignmentH": 0,
       "alignmentV": 0,
-      "widthSizeMode": 1,
-      "heightSizeMode": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
       "pivot": [
         0.5,
         1.0
@@ -897,8 +1521,8 @@
         0.0
       ],
       "fixedSize": [
-        0.0,
-        0.0
+        640.0,
+        58.0
       ]
     },
     {
@@ -920,8 +1544,8 @@
         0.0
       ],
       "maxSize": [
-        500.0,
-        200.0
+        1000000.0,
+        1000000.0
       ],
       "offsets": {
         "left": 0.0,
@@ -931,8 +1555,8 @@
       },
       "alignmentH": 0,
       "alignmentV": 0,
-      "widthSizeMode": 1,
-      "heightSizeMode": 1,
+      "widthSizeMode": 0,
+      "heightSizeMode": 0,
       "pivot": [
         0.5,
         0.5
@@ -942,9 +1566,17 @@
         0.0
       ],
       "fixedSize": [
-        0.0,
-        0.0
+        420.0,
+        96.0
       ]
+    }
+  ],
+  "behaviors": [
+    {
+      "type": "script.lua",
+      "data": {
+        "script": "Content/UI/BattleHUD.lua"
+      }
     }
   ]
 }
