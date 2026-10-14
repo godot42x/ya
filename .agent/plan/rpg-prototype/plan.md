@@ -46,6 +46,12 @@
 | U10 | 世界文字字形断裂（`Slim e`） | **TL1 文本路径收敛**：`Render/Resources/TextLayout`（共享字形布局 walk：advance/bearing/baseline/换行）替代 `Text2DExtraction` 里抄的第二份；世界文字按主相机 texels/unit 反推屏幕像素高度去取图集（与 GUI `planTextRaster` 同一条"1:1 栅格、不重采样 bitmap"契约），细笔画不再丢 |
 | U11 | 世界文字为什么"用 3D text"、是否重复造轮子 | 调研（Godot `Label3D` 自建网格但共享 `Font`/`TextServer`；Unity TMP 世界/UI 共享 `FontAsset` 与排版、只有 renderer 不同；UE `UWidgetComponent` 渲到 RT 贴世界网格，`UTextRenderComponent` 另起 `UFont` 几何路径）。结论：**共享字体/图集/整形层、分开"往哪画"是正确的**，我们此前已共享字体层与合批，缺的正是 TL1 那层共享布局 |
 
+### 0.4 世界文字遮挡 / 排版 / 色调（2026-10-14）
+
+| # | 反馈 | 处置 |
+| --- | --- | --- |
+| U12 | 单位头顶文字：与图块遮挡、上下间距错乱、色调不搭 | 三个真问题，两个是引擎 bug：**(a) 遮挡**——文字默认 `layer=0` 且非 y-sort，同层内永远先于 y-sort 的单位/地图 Decor 绘制；需抬到 layer 1 之上。**(b) 排版**——`snapSpriteCandidatesToTexelGrid` 逐字形把 glyph 吸附到图块 texel 网格（16px/unit），而字形间距/基线来自排版引擎、非网格整数倍，逐字取整把字距和基线量化得忽宽忽窄；文字现在 `bSnapToTexelGrid=false` 退出该吸附（精灵/图块仍吸附）。**(c) 色调**——纯白无描边文字铺在土黄棋盘上；新增 `Text2DComponent::outlineWidth/outlineColor`（栅格像素量纲，四向 coverage stamp，对标 Godot `Label3D.outline_size` / TMP outline），`world.spawnText` 透出 `outlineWidth/outlineColor/layer/sortOrder`。内容侧 `BattleFx.lua` 三件套（名字/血条/数字）改为统一 baseline ladder 的等距竖排、数字躺在血条内、地牢调色板 |
+
 ### 0.2 checkpoint 顺序调整（响应 U3 / U4）
 
 原 Wave B 之后直接进 Wave C（四子系统）。用户反馈把「世界空间文字」与「战斗 HUD」提为近期待办：
