@@ -19,7 +19,8 @@ local Script = ScriptBase:new()
 
 Script.mapName = "TilemapGround"
 Script.hudName = "BattleHUD"
-Script.highlightTexture = "Content:Textures/cell_highlight.png"
+Script.highlightTexture = "Content:Textures/range_cell.png"
+Script.gridTexture = "Content:Textures/grid_cell.png"
 -- Where the outcome sends the party (M1). Empty returnScene keeps the battle
 -- on screen (used by the standalone battle tests).
 Script.returnScene = ""
@@ -30,6 +31,7 @@ Script:properties({
     mapName = { type = "string", tooltip = "Tilemap entity holding the board" },
     hudName = { type = "string", tooltip = "Game UI entry showing the turn order" },
     highlightTexture = { type = "string", tooltip = "Texture used for reachable-cell markers" },
+    gridTexture = { type = "string", tooltip = "Texture used for the permanent cell grid" },
     returnScene = { type = "string", tooltip = "Scene to load when the battle ends; empty stays put" },
     returnSpawn = { type = "string", tooltip = "Spawn marker in the return scene" },
     returnActor = { type = "string", tooltip = "Entity in the return scene to place on the marker" },
@@ -97,30 +99,65 @@ function Script:refreshHud()
     end
     hud:setTurnOrder(self.round, self.units, self.index)
     if self.active and hud.showActive then
-        hud:showActive(self.active.displayName)
+        hud:showActive(self.active.displayName, self.active)
     end
-    -- Exactly one of these phases owns the action bar; every other phase
-    -- clears it, so a previous unit's menu never lingers on screen.
-    local menu
+    -- The action bar belongs to exactly one phase; every other phase clears
+    -- it, so a previous unit's menu never lingers. Items carry id/label/
+    -- hotkey/enabled so the bar can gray out what the unit cannot do.
+    local items
     local hint = ""
     if self.phase == "menu" then
-        menu = {}
+        items = {}
         for _, name in ipairs(self.menu) do
-            menu[#menu + 1] = name == "attack" and "Attack" or (name == "skill" and self.active.skillName or "Wait")
+            if name == "attack" then
+                items[#items + 1] = { id = "attack", label = "Attack", hotkey = "1", enabled = true }
+            elseif name == "skill" then
+                items[#items + 1] = { id = "skill", label = self.active.skillName or "Skill",
+                                      hotkey = "2", enabled = self.active:canUseSkill() }
+            else
+                items[#items + 1] = { id = "wait", label = "Wait", hotkey = "3", enabled = true }
+            end
         end
     elseif self.phase == "select" then
-        menu = { "Move" }
-        hint = "Move, then confirm"
+        items = { { id = "move", label = "Move", hotkey = "1", enabled = false } }
+        hint = "Click a highlighted cell to move"
     elseif self.phase == "target" then
-        hint = "Choose a target"
+        items = { { id = "attack", label = self.bSkillAttack and (self.active.skillName or "Skill") or "Attack",
+                    hotkey = "1", enabled = true },
+                  { id = "back", label = "Back", hotkey = "Esc", enabled = true } }
+        hint = "Click a target, right-click to go back"
     end
     if hud.showMenu then
-        hud:showMenu(menu or {}, menu and self.menuIndex or 1)
+        if hud.setMenuReceiver and not self.bMenuReceiverWired then
+            self.bMenuReceiverWired = true
+            hud:setMenuReceiver(self)
+        end
+        hud:showMenu(items or {}, items and self.menuIndex or 1)
     end
     if hud.showHint then
         hud:showHint(hint)
     end
     return true
+end
+
+-- The action bar reports a click here. `id` is one of the item ids this
+-- controller pushed ("attack"/"skill"/"wait"/"back").
+function Script:onMenuChosen(id)
+    if id == "back" and self.phase == "target" then
+        self:enterMenu()
+        return
+    end
+    if self.phase ~= "menu" then
+        return
+    end
+    for index, name in ipairs(self.menu) do
+        if name == id then
+            self.menuIndex = index
+            self:setHudDirty()
+            self:chooseMenu(index)
+            return
+        end
+    end
 end
 
 function Script:setHudDirty()
@@ -258,6 +295,68 @@ function Script:cursorStep()
     elseif input:isActionPressed("move_right") then
         self:moveCursor(1, 0)
     end
+end
+
+-- ── mouse ─────────────────────────────────────────────────────────────────
+-- The mouse is a first-class input: hover previews the cell, left click
+-- confirms, right click cancels one step. `input:getMousePosition()` is a
+-- window point; `world.screenToWorld` takes that same space and answers the
+-- world point on the z=0 plane the board lives on.
+
+-- True when the pointer has moved since the last call. A pointer that never
+-- moved (headless automation, or a player who only uses the keyboard) must not
+-- steer the cursor: `getMousePosition` keeps returning its last value, which
+-- would silently override every keypress-driven cursor step.
+function Script:pointerMoved()
+    local pos = input:getMousePosition()
+    if not pos then
+        return false
+    end
+    local moved = self.lastPointerPos == nil
+        or pos.x ~= self.lastPointerPos.x
+        or pos.y ~= self.lastPointerPos.y
+    self.lastPointerPos = { x = pos.x, y = pos.y }
+    return moved
+end
+
+function Script:mouseCell()
+    local pos = input:getMousePosition()
+    if not pos or pos.x < 0 or pos.y < 0 then
+        return nil
+    end
+    local ok, worldPos = pcall(world.screenToWorld, pos.x, pos.y)
+    if not ok or not worldPos then
+        if not self.bWarnedPick then
+            self.bWarnedPick = true
+            log:warn(string.format("Battle: screenToWorld failed (%s) at %.0f,%.0f",
+                                   tostring(worldPos), pos.x, pos.y))
+        end
+        return nil
+    end
+    local cell = self.map:worldToCell(worldPos)
+    local x, y = math.floor(cell.x + 0.5), math.floor(cell.y + 0.5)
+    if x < 0 or y < 0 or x >= self.width or y >= self.height then
+        if not self.bWarnedOffBoard then
+            self.bWarnedOffBoard = true
+            log:warn(string.format("Battle: mouse off board: window %.0f,%.0f -> world %.2f,%.2f -> cell %.1f,%.1f (board %dx%d)",
+                                   pos.x, pos.y, worldPos.x, worldPos.y, cell.x, cell.y, self.width, self.height))
+        end
+        return nil
+    end
+    if not self.bLoggedPick then
+        self.bLoggedPick = true
+        log:info(string.format("Battle: pick ok: window %.0f,%.0f -> world %.2f,%.2f -> cell %d,%d",
+                               pos.x, pos.y, worldPos.x, worldPos.y, x, y))
+    end
+    return { x = x, y = y }
+end
+
+function Script:mouseLeftPressed()
+    return input:isMouseButtonPressed(EMouse.Left)
+end
+
+function Script:mouseRightPressed()
+    return input:isMouseButtonPressed(EMouse.Right)
 end
 
 -- Confirm arming: the press that opened this phase must be released before the
@@ -459,6 +558,10 @@ function Script:checkBattleOver()
             self.outcome = "defeat"
         end
         self:clearHighlights()
+        -- Repaint the roster too: the killing blow lands in resolveHit and
+        -- finishTurn returns here without the usual setHudDirty, so without
+        -- this the last victim's row still reads as alive under the banner.
+        self:setHudDirty()
         local hud = ui.get(self.hudName)
         if type(hud) == "table" and hud.showOutcome then
             hud:showOutcome(self.outcome)
@@ -540,6 +643,35 @@ function Script:finishTurn()
     self:beginTurn()
 end
 
+-- A permanent grid veil: one faint-bordered quad per cell, pooled and reused
+-- by the highlight painter. The board always reads as cells (the genre's
+-- baseline); selection tints ride the same pool.
+function Script:ensureGrid()
+    if self.bGridReady then
+        return
+    end
+    self.bGridReady = true
+    self.grid = {}
+    for y = 0, self.height - 1 do
+        for x = 0, self.width - 1 do
+            local entity = world.spawnSprite("GridCell",
+                { texture = self.gridTexture, size = Vec2.new(1.0, 1.0) })
+            if not entity then
+                return
+            end
+            local sprite = entity:getSprite2D()
+            if sprite then
+                sprite.bYSort = true
+                sprite.sortOrder = -10
+                sprite.tint = Vec4.new(1.0, 1.0, 1.0, 1.0)
+            end
+            local p = self.map:cellToWorld(x, y)
+            entity:getTransform():setPosition(Vec3.new(p.x, p.y, 0.005))
+            self.grid[#self.grid + 1] = entity
+        end
+    end
+end
+
 function Script:onInit()
     self.map = world.find(self.mapName)
     if not self.map then
@@ -566,8 +698,21 @@ function Script:onInit()
 end
 
 function Script:updateSelect(dt)
+    -- Mouse first: hover moves the cursor, left click confirms, right click
+    -- is a no-op here (nothing to cancel before moving). The pointer only
+    -- steers after it actually moved (see pointerMoved).
+    if self:pointerMoved() then
+        local hover = self:mouseCell()
+        if hover and (hover.x ~= self.cursor.x or hover.y ~= self.cursor.y) then
+            self.cursor.x, self.cursor.y = hover.x, hover.y
+        end
+    end
     self:cursorStep()
-    if not self:confirmEdge() then
+    local confirm = self:confirmEdge()
+    if not confirm and self:mouseLeftPressed() then
+        confirm = true
+    end
+    if not confirm then
         return
     end
     local k = cellKey(self.cursor.x, self.cursor.y)
@@ -621,8 +766,15 @@ function Script:updateMove(dt)
     self.fx:updateBar(unit)
 end
 
+-- Number keys pick an action directly (the bottom bar prints them); arrows
+-- walk the highlight and Space confirms, so the pointer is never required.
+local MENU_HOTKEYS = {
+    [EKey.K_1] = 1,
+    [EKey.K_2] = 2,
+    [EKey.K_3] = 3,
+}
+
 function Script:updateMenu(dt)
-    -- The action bar is horizontal, so left/right move along it.
     if input:isActionPressed("move_left") then
         self.menuIndex = self.menuIndex - 1
         if self.menuIndex < 1 then
@@ -636,10 +788,30 @@ function Script:updateMenu(dt)
         end
         self:setHudDirty()
     end
+    for key, index in pairs(MENU_HOTKEYS) do
+        if input:isKeyPressed(key) and self.menu[index] then
+            self.menuIndex = index
+            self:setHudDirty()
+            self:chooseMenu(index)
+            return
+        end
+    end
+    if self:mouseRightPressed() then
+        -- Cancel back to movement: the unit stays where it walked to, but the
+        -- player may reconsider (the button must be released before the next
+        -- right-click counts, via the next frame's edge check).
+        self.bCancelArmed = false
+        self:enterSelect(self.active)
+        return
+    end
     if not self:confirmEdge() then
         return
     end
-    local choice = self.menu[self.menuIndex]
+    self:chooseMenu(self.menuIndex)
+end
+
+function Script:chooseMenu(index)
+    local choice = self.menu[index]
     if choice == "attack" then
         self:enterTarget(self.active.atk, self.active.range, false)
     elseif choice == "skill" then
@@ -650,8 +822,26 @@ function Script:updateMenu(dt)
 end
 
 function Script:updateTarget(dt)
+    if self:pointerMoved() then
+        local hover = self:mouseCell()
+        if hover then
+            -- Hover steps the cursor across the reachable target cells only.
+            local k = cellKey(hover.x, hover.y)
+            if self.targetIndex[k] and (hover.x ~= self.cursor.x or hover.y ~= self.cursor.y) then
+                self.cursor.x, self.cursor.y = hover.x, hover.y
+            end
+        end
+    end
     self:cursorStep()
-    if not self:confirmEdge() then
+    local confirm = self:confirmEdge()
+    if not confirm and self:mouseLeftPressed() then
+        confirm = true
+    end
+    if self:mouseRightPressed() then
+        self:enterMenu()
+        return
+    end
+    if not confirm then
         return
     end
     local target = self.targetIndex[cellKey(self.cursor.x, self.cursor.y)]
@@ -681,6 +871,7 @@ function Script:onUpdate(dt)
     end
     if not self.bCollected then
         self:collectUnits()
+        self:ensureGrid()
         self.bCollected = true
         if #self.units == 0 then
             log:warn("Battle: no units found on the board")

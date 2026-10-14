@@ -92,7 +92,7 @@ def widget(name: str) -> dict:
 
 
 def row(i: int) -> str:
-    return widget(f"Row{i}").get("text") or ""
+    return widget(f"Order{i}").get("text") or ""
 
 
 def menu(i: int) -> str:
@@ -100,9 +100,10 @@ def menu(i: int) -> str:
 
 
 def active() -> str:
+    """The acting unit: the order row carrying the \u25b6 marker."""
     for i in range(1, 7):
         text = row(i)
-        if text.lstrip().startswith(">"):
+        if text.lstrip().startswith("\u25b6"):
             for name in ("Bat", "Slime", "Ghost", "Archer", "Mage", "Knight"):
                 if name in text:
                     return name
@@ -115,12 +116,26 @@ def outcome() -> str:
 
 
 def tap(key: str = "Space") -> None:
-    rpg.call("input.inject_key", {"key": key, "action": "hold", "frames": 1})
+    """Explicit down/up rather than `hold`: a hold releases at a poll boundary,
+    and when that lands inside the same logic frame the script never observes
+    the press edge, so a Space silently does nothing."""
+    rpg.call("input.inject_key", {"key": key, "action": "down"})
+    time.sleep(0.10)
+    rpg.call("input.inject_key", {"key": key, "action": "up"})
+    time.sleep(0.12)
 
 
 def menu_label() -> str:
-    return next((menu(i).strip().lstrip("> ").strip() for i in range(1, 4)
-                 if menu(i).lstrip().startswith(">")), "") or ""
+    """The highlighted action label. The bar renders `> [1] Attack`, so peel
+    the marker and the hotkey prefix."""
+    for i in range(1, 5):
+        text = menu(i)
+        if text.lstrip().startswith(">"):
+            label = text.strip().lstrip(">").strip()
+            if label.startswith("["):
+                label = label.split("]", 1)[1].strip() if "]" in label else label
+            return label
+    return ""
 
 
 def menu_select(label: str) -> None:
@@ -143,27 +158,24 @@ def in_menu() -> bool:
 
 
 def play_player_turn() -> None:
-    """End the active player turn with Wait. M1 proves the *loop* closes
-    (Camp -> battle -> Camp); who wins is covered by the battle tests, so this
-    does not need to fight well. The enemy AI still plays its own turns."""
+    """End the active player turn with Space alone. M1 proves the *loop*
+    closes (Camp -> battle -> Camp); who wins is covered by the battle tests,
+    so this does not need to fight well -- the enemy AI still plays its turns.
+
+    Space advances whatever phase the bar is in (select -> menu -> pick the
+    highlighted Wait), so a single press may only open the menu. Press until
+    the active unit actually changes, exactly as the keyboard victory run
+    (kbd_main_flow.py) does; a single press plus a fixed sleep is not enough."""
     unit = active()
-    for _ in range(5):
-        if active() != unit:
-            return  # the turn already ended (e.g. a stray press)
-        tap("Space")            # select -> menu (confirm on own cell)
-        try:
-            rpg.wait_until(lambda: in_menu() or None, 4.0, "action menu")
-        except SystemExit:
-            time.sleep(0.4)
-            continue
-        menu_select("Wait")
-        if menu_label() == "Wait":
-            tap("Space")
-            time.sleep(0.4)
+    for _ in range(8):
         if active() != unit:
             return
-        time.sleep(0.4)
-    raise SystemExit(f"could not end {unit}'s turn")
+        tap("Space")
+        deadline = time.time() + 1.0
+        while time.time() < deadline and active() == unit:
+            time.sleep(0.05)
+    raise SystemExit(
+        f"could not end {unit}'s turn; bar={[menu(i) for i in range(1, 5)]}")
 
 
 def main() -> None:

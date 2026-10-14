@@ -68,7 +68,7 @@ def scene_name() -> str:
 
 
 def hud_row(i: int) -> str:
-    r = rpg.call("ui.query", {"entry": "BattleHUD", "widget": f"Row{i}"})
+    r = rpg.call("ui.query", {"entry": "BattleHUD", "widget": f"Order{i}"})
     return (r.get("text") or "") if isinstance(r, dict) else ""
 
 
@@ -80,25 +80,28 @@ def hud_menu(i: int) -> str:
 def active_is(name: str) -> bool:
     for i in range(1, 7):
         text = hud_row(i)
-        if text.lstrip().startswith(">") and name in text:
+        if text.lstrip().startswith("\u25b6") and name in text:
             return True
     return False
 
 
 def entity_hp(name: str) -> int:
-    """Read the unit's hp through its script by asking the entity to expose
-    it: Unit.lua keeps `hp`, and script state is not mirrored in components.
-    The test instead reads HP from the HUD row, which prints hp/maxHp."""
-    for i in range(1, 7):
-        text = hud_row(i)
-        if name in text:
-            # Formats like 'Knight 30/30 [#####-----]' or '> Knight 24/30 [...]'.
-            part = text.split(name, 1)[1].strip()
-            hp = part.split("/", 1)[0].strip()
-            try:
-                return int(hp)
-            except ValueError:
-                return -1
+    """The unit's hp, read from its world-space HP label.
+
+    The HUD order rows carry only the roster (name + down marker); the numbers
+    live above each unit as `UnitHp_<displayName>` world text, formatted
+    "hp/maxHp". Returns -1 when the label is absent or unparsed."""
+    for e in rpg.call("entity.list"):
+        if not isinstance(e, dict) or e.get("name") != f"UnitHp_{name}":
+            continue
+        comp = rpg.call("component.get", {"id": int(e["id"]), "type": "Text2DComponent"})
+        text = ""
+        if isinstance(comp, dict):
+            text = str(rpg._find_field(comp, "text") or "")
+        try:
+            return int(text.split("/", 1)[0].strip())
+        except ValueError:
+            return -1
     return -1
 
 
