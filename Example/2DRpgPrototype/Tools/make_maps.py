@@ -513,6 +513,7 @@ def build_fx_scene() -> dict:
         camera_entity(spawn, origin, script=None),
         script_entity(1006, "ParticleDemo", "Content/Scripts/ParticleDemo.lua"),
         script_entity(1008, "PartySelfTest", "Content/Scripts/PartySelfTest.lua"),
+        script_entity(1009, "QuestSelfTest", "Content/Scripts/QuestSelfTest.lua"),
         emitter_entity(1010, "SparkEmitter", cell_world(origin, spawn[0], spawn[1], 0.5),
                        "Content:Textures/Particles/circle_05.png",
                        {"velocity": [0.0, 0.6], "spread": 3.14, "gravity": [0.0, -1.0],

@@ -15,7 +15,13 @@
 local ScriptBase = require("ScriptBase")
 local BattleFx = require("BattleFx")
 local BattleAI = require("BattleAI")
+local Quests = require("Quests")
 local Script = ScriptBase:new()
+
+-- The scene this board is authored in. It keys both the overworld handoff
+-- (`Persist.battle.lastScene`) and the quest trigger context, so a "visit this
+-- scene" objective is judged against the same name the battle publishes.
+local BATTLE_SCENE = "BattleRuins1"
 
 Script.mapName = "TilemapGround"
 Script.hudName = "BattleHUD"
@@ -569,13 +575,28 @@ function Script:checkBattleOver()
         -- Publish the result for the overworld to consume on return (M1).
         Persist.battle = Persist.battle or {}
         Persist.battle.lastOutcome = self.outcome
-        Persist.battle.lastScene = "BattleRuins1"
+        Persist.battle.lastScene = BATTLE_SCENE
         -- Grow the party (G1): a victory grants exp, and a party unit carries
         -- its ending hp back so the next battle starts where this one left off.
         if self.outcome == "victory" then
             self:grantVictoryReward()
         end
         self:carryPartyState()
+        -- Hand the outcome to the quest system (G4). A victory advances every
+        -- active "defeat monsters" objective by the number of enemies this
+        -- board actually held (all of them are down on a victory), so the
+        -- objective measures monsters defeated, not battles won -- one cleared
+        -- board is one completed objective, not one of three. A visit to this
+        -- scene is recorded on the way in (onInit), not here.
+        if self.outcome == "victory" then
+            local defeated = 0
+            for _, unit in ipairs(self.units) do
+                if unit.team == "enemy" then
+                    defeated = defeated + 1
+                end
+            end
+            Quests.notify("battle_victory", defeated, { scene = BATTLE_SCENE })
+        end
         -- And, when this battle was entered from a scene, go back after a beat.
         if self.returnScene ~= nil and self.returnScene ~= "" then
             self.returnTimer = self.returnDelay or 2.5
@@ -695,6 +716,10 @@ function Script:onInit()
     self.bHudDirty = false
     self.bCollected = false
     self.barsReady = false
+    -- Entering this board satisfies a "visit the ruins" objective (G4). The
+    -- notify is a no-op until the quest is active, so a standalone battle test
+    -- (no quest accepted) is unaffected.
+    Quests.notify("visited", 1, { scene = BATTLE_SCENE })
 end
 
 function Script:updateSelect(dt)

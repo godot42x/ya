@@ -392,14 +392,26 @@
       "id": "quest_system",
       "wave": "D",
       "phase": "G4",
-      "status": "planned",
+      "status": "done",
       "driven_by": "game: quest log, battle outcome advances, rewards",
       "plan": "Persist.quests; journal UI",
-      "evidence": [],
+      "evidence": [
+        "Example/2DRpgPrototype/Content/Scripts/Quests.lua: definition (catalog) vs state (Persist.quests) split; add/get/advance/complete/getActive/getCompleted/notify; objective triggers (visited/battle_victory); self-completion; exactly-once reward (exp on the roster, coin/items in the bag)",
+        "Example/2DRpgPrototype/Content/Scripts/Battle.lua: onInit notifies the scene 'visited' objective; checkBattleOver notifies 'battle_victory' with the board's enemy count on a win",
+        "Example/2DRpgPrototype/Content/UI/Journal.lua + Content/UI/Journal.yaui.json: quest log list (QuestRow1..8, active white / completed grey / selected highlighted) + detail (title, state, one line per objective with count, reward line); read-only, J toggles",
+        "Example/2DRpgPrototype/Content/Scripts/Elder.lua: accepts tutorial_ruins via Quests.add on the errand page",
+        "Example/2DRpgPrototype/Tools/make_journal.py: generates Journal.yaui.json",
+        "Script/automation/2d-rpg/quest_advance.py: accept at the Elder -> journal active (0/3) -> clear the ruins -> journal complete (3/3, Done., Reward) with exactly one completion and one reward log line",
+        "Script/automation/2d-rpg/quest_selftest.py + Content/Scripts/QuestSelfTest.lua: model contract (add idempotent, trigger advance, self-complete, reward once) -- 20 checks",
+        "Engine/Saved/Automation/quest-advance/journal_active.png",
+        "Engine/Saved/Automation/quest-advance/journal_complete.png"
+      ],
       "tests": [
         "QuestAdvancesOnBattleOutcome",
         "QuestRewardGrantedOnce"
-      ]
+      ],
+      "verified": "2026-10-14",
+      "notes": "Reuses the existing Journal entry and J hotkey (rebuilt in place as list+detail) rather than adding a second panel. For a quest with no objectives/rewards (the v1 pot/well/cabinet errands) the Body text is the same two lines as before. Quest progress is event-driven (Quests.notify from Battle/talks), never polled."
     },
     {
       "id": "vertical_slice_content",

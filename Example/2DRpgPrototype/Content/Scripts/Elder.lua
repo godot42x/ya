@@ -17,13 +17,15 @@ Script:properties({
 -- Pages are data, rebuilt per talk so the errand follows Persist (rpg R3).
 local function lines()
     local errand
-    if Quests.state("ruins") == "done" then
+    if Quests.isCompleted("tutorial_ruins") then
         errand = "The ruins are quiet again. Rest, and we will see about the deeper halls."
     else
         errand = {
             text = "Monsters have crept into the ruins east of camp. Make the road safe again.",
             onShow = function()
-                Quests.start("ruins")
+                -- The quest body (objectives, rewards) is the catalog entry;
+                -- accepting only creates the live state.
+                Quests.add("tutorial_ruins")
             end,
         }
     end

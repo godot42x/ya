@@ -313,3 +313,33 @@ v1 进度保留在 `progress-v1-landed.md`。本文件从 2026-10-13 改版起�
   基础属性、升一级 maxHp 30→34、hp 钳制、名册在 Persist —— 全 OK）；`progression.py` 驱动一场战斗并断言
   升级日志与胜负一致。
 - 待办（随 C1 内容）：技能按等级解锁的规则表（当前技能是单位字段，够用）；职业转职。
+
+## 2026-10-14 — G4：任务系统（数据模型 / 事件推进 / 奖励结算 / 任务日志）
+
+- 目标：任务状态（active/completed）、目标进度、奖励发放；战斗结果为推进条件；任务日志面板。
+- 内容：
+  - `Content/Scripts/Quests.lua`（重写）：**定义**（`Quests.catalog`）与**状态**（`Persist.quests`）分离。
+    一个任务的状态是 `{ state, objectives = { key = { done, count, target } }, rewarded, seq }`。
+    API：`add`（幂等接受）/ `get` / `advance`（单目标推进，钳制到 target）/ `notify`（按 trigger 批量推进
+    —— `visited` / `battle_victory`）/ `complete`（结算一次）/ `getActive` / `getCompleted` / `describe` /
+    `objectiveLine` / `rewardLine` / `start`（v1 别名）。`tryComplete` 在所有目标 done 时自动完成。
+  - `Content/Scripts/Battle.lua`：`onInit` 对当前场景发 `visited`；`checkBattleOver` 胜利时按本局敌人数量
+    发 `battle_victory` —— 推进不轮询，战斗结果主动通知。
+  - `Content/UI/Journal.{yaui.json,lua}`（生成器 `Tools/make_journal.py`）：任务日志 = 左侧任务行
+    （`QuestRow1..8`，进行中白、已完成灰、选中高亮）+ 右侧详情（标题 / 状态 / 每目标一行含计数 / 奖励行）。
+    只读，`J` 开关。复用既有 `Journal` 条目与热键（原地重建为列表+详情），正文仍保留 v1 两行文本形态。
+  - `Content/Scripts/Elder.lua`：errand 页 `Quests.add("tutorial_ruins")`（首个任务，目标 `visit_ruins` +
+    `defeat_enemies`×3，奖励 40 exp / 15 coin）。`Npc.lua` / `Chest.lua` / `Well.lua` / `Cabinet.lua` /
+    `Merchant.lua` 改到新状态模型（`isCompleted` / `complete`）。
+  - `Content/Scripts/QuestSelfTest.lua` + FxScene 控制器：模型契约自检。
+  - `Content/Locale/zh.json`：任务标题 / 目标 / 奖励等中文文案。
+- 验证：
+  - `Script/automation/2d-rpg/quest_selftest.py`：FxScene 跑 `QuestSelfTest`（add 幂等、trigger 推进、
+    自完成、奖励只发一次且 exp 到名册 / coin 到背包）—— 20 checks 全 OK。
+  - `Script/automation/2d-rpg/quest_advance.py`：营地找长老接任务 → 日志显示 active（0/3、`[ ]`）→ 走门进
+    BattleRuins1 → 打赢 → 回营地 → 日志显示 completed（`Done.`、`[x] 3/3`、奖励行）；日志行证明完成一次、
+    奖励一次。截图 `Engine/Saved/Automation/quest-advance/journal_{active,complete}.png`。
+  - `xmake r ya-testing` 1836 tests 全绿；`--exit-after-frame=120` exit 0；四个 target 构建通过。
+- 保留 / 未完成：任务推进只在战斗进出与对话接受点接线；「拾取物品推进」按 plan 约束留到内容期（C1）有真实
+  用例再加。`quest.py` / `playthrough.py` / `inventory.py` 是 v1 城镇（默认场景已被 F1 换成 Camp）的旧脚本，
+  不在本轮范围。

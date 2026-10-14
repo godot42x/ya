@@ -19,7 +19,7 @@ Script:properties({
 -- `next` closes the box. Showing `errand` starts the pot quest once.
 local function lines()
     local errand
-    if Quests.state("pot") == "done" then
+    if Quests.isCompleted("pot") then
         errand = "You already looked in the pot."
     else
         errand = {

@@ -22,7 +22,12 @@
       "version": 2,
       "typeId": "engine.border",
       "fields": {
-        "_color": [0.08, 0.1, 0.12, 0.94],
+        "_color": [
+          0.06,
+          0.07,
+          0.1,
+          0.95
+        ],
         "_cornerRadius": 10.0,
         "__base__": {
           "UIElement": {
@@ -37,8 +42,11 @@
           "fields": {
             "_boxLayout": {
               "_direction": 1,
-              "_spacing": 8.0,
-              "_padding": [16.0, 12.0]
+              "_spacing": 10.0,
+              "_padding": [
+                18.0,
+                14.0
+              ]
             },
             "__base__": {
               "UIElement": {
@@ -53,8 +61,11 @@
               "fields": {
                 "_boxLayout": {
                   "_direction": 0,
-                  "_spacing": 12.0,
-                  "_padding": [0.0, 0.0]
+                  "_spacing": 14.0,
+                  "_padding": [
+                    0.0,
+                    0.0
+                  ]
                 },
                 "__base__": {
                   "UIElement": {
@@ -68,8 +79,13 @@
                   "typeId": "engine.text",
                   "fields": {
                     "_text": "Journal",
-                    "_fontSize": 14,
-                    "_color": [0.95, 0.84, 0.45, 1.0],
+                    "_fontSize": 18,
+                    "_color": [
+                      0.95,
+                      0.84,
+                      0.45,
+                      1.0
+                    ],
                     "__base__": {
                       "UIElement": {
                         "_name": "Title"
@@ -85,8 +101,12 @@
                   "fields": {
                     "_text": "J",
                     "_fontSize": 13,
-                    "_color": [0.68, 0.7, 0.76, 0.9],
-                    "_hAlign": 2,
+                    "_color": [
+                      0.68,
+                      0.7,
+                      0.76,
+                      0.9
+                    ],
                     "__base__": {
                       "UIElement": {
                         "_name": "Hint"
@@ -102,23 +122,837 @@
                   "type": "box",
                   "sizeRule": 0,
                   "weight": 1.0,
-                  "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
                   "crossAlignment": 0,
-                  "minSize": [0.0, 0.0],
-                  "maxSize": [1000000.0, 1000000.0],
-                  "preferredSize": [0.0, 0.0],
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
                   "participatesInLayout": true,
                   "reserveSpaceWhenHidden": true
                 },
                 {
                   "type": "box",
-                  "sizeRule": 1,
+                  "sizeRule": 0,
                   "weight": 1.0,
-                  "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
                   "crossAlignment": 0,
-                  "minSize": [0.0, 0.0],
-                  "maxSize": [1000000.0, 1000000.0],
-                  "preferredSize": [0.0, 0.0],
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                }
+              ]
+            },
+            {
+              "version": 2,
+              "typeId": "engine.container",
+              "fields": {
+                "_boxLayout": {
+                  "_direction": 0,
+                  "_spacing": 16.0,
+                  "_padding": [
+                    0.0,
+                    0.0
+                  ]
+                },
+                "__base__": {
+                  "UIElement": {
+                    "_name": "BodyRow"
+                  }
+                }
+              },
+              "children": [
+                {
+                  "version": 2,
+                  "typeId": "engine.container",
+                  "fields": {
+                    "_boxLayout": {
+                      "_direction": 1,
+                      "_spacing": 4.0,
+                      "_padding": [
+                        6.0,
+                        4.0
+                      ]
+                    },
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "QuestList"
+                      }
+                    }
+                  },
+                  "children": [
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "QuestRow1"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "QuestRow1Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "QuestRow2"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "QuestRow2Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "QuestRow3"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "QuestRow3Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "QuestRow4"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "QuestRow4Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "QuestRow5"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "QuestRow5Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "QuestRow6"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "QuestRow6Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "QuestRow7"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "QuestRow7Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "version": 2,
+                      "typeId": "engine.button",
+                      "fields": {
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "QuestRow8"
+                          }
+                        }
+                      },
+                      "children": [
+                        {
+                          "version": 2,
+                          "typeId": "engine.text",
+                          "fields": {
+                            "_text": "",
+                            "_fontSize": 15,
+                            "_color": [
+                              0.92,
+                              0.92,
+                              0.94,
+                              1.0
+                            ],
+                            "__base__": {
+                              "UIElement": {
+                                "_name": "QuestRow8Label"
+                              }
+                            }
+                          },
+                          "children": [],
+                          "childSlots": []
+                        }
+                      ],
+                      "childSlots": [
+                        {
+                          "type": "content",
+                          "hAlign": 0,
+                          "vAlign": 0,
+                          "padding": {
+                            "left": 10.0,
+                            "top": 5.0,
+                            "right": 10.0,
+                            "bottom": 5.0
+                          },
+                          "preferredSize": [
+                            0.0,
+                            0.0
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "childSlots": [
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    },
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    }
+                  ]
+                },
+                {
+                  "version": 2,
+                  "typeId": "engine.container",
+                  "fields": {
+                    "_boxLayout": {
+                      "_direction": 0,
+                      "_spacing": 0.0,
+                      "_padding": [
+                        8.0,
+                        6.0
+                      ]
+                    },
+                    "__base__": {
+                      "UIElement": {
+                        "_name": "Detail"
+                      }
+                    }
+                  },
+                  "children": [
+                    {
+                      "version": 2,
+                      "typeId": "engine.text",
+                      "fields": {
+                        "_text": "No quests.",
+                        "_fontSize": 15,
+                        "_color": [
+                          0.96,
+                          0.96,
+                          0.94,
+                          1.0
+                        ],
+                        "__base__": {
+                          "UIElement": {
+                            "_name": "Body"
+                          }
+                        },
+                        "_bWrap": true,
+                        "_maxWrapWidth": 380.0
+                      },
+                      "children": [],
+                      "childSlots": []
+                    }
+                  ],
+                  "childSlots": [
+                    {
+                      "type": "box",
+                      "sizeRule": 0,
+                      "weight": 1.0,
+                      "margin": {
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 0.0,
+                        "bottom": 0.0
+                      },
+                      "crossAlignment": 0,
+                      "minSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "maxSize": [
+                        1000000.0,
+                        1000000.0
+                      ],
+                      "preferredSize": [
+                        0.0,
+                        0.0
+                      ],
+                      "participatesInLayout": true,
+                      "reserveSpaceWhenHidden": true
+                    }
+                  ]
+                }
+              ],
+              "childSlots": [
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "participatesInLayout": true,
+                  "reserveSpaceWhenHidden": true
+                },
+                {
+                  "type": "box",
+                  "sizeRule": 0,
+                  "weight": 1.0,
+                  "margin": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 0.0,
+                    "bottom": 0.0
+                  },
+                  "crossAlignment": 0,
+                  "minSize": [
+                    0.0,
+                    0.0
+                  ],
+                  "maxSize": [
+                    1000000.0,
+                    1000000.0
+                  ],
+                  "preferredSize": [
+                    0.0,
+                    0.0
+                  ],
                   "participatesInLayout": true,
                   "reserveSpaceWhenHidden": true
                 }
@@ -128,14 +962,17 @@
               "version": 2,
               "typeId": "engine.text",
               "fields": {
-                "_text": "No quests.",
-                "_fontSize": 18,
-                "_color": [0.96, 0.96, 0.94, 1.0],
-                "_bWrap": true,
-                "_maxWrapWidth": 400.0,
+                "_text": "Up / Down select",
+                "_fontSize": 12,
+                "_color": [
+                  0.6,
+                  0.62,
+                  0.66,
+                  1.0
+                ],
                 "__base__": {
                   "UIElement": {
-                    "_name": "Body"
+                    "_name": "FooterHint"
                   }
                 }
               },
@@ -148,11 +985,25 @@
               "type": "box",
               "sizeRule": 0,
               "weight": 1.0,
-              "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
               "crossAlignment": 0,
-              "minSize": [0.0, 0.0],
-              "maxSize": [1000000.0, 1000000.0],
-              "preferredSize": [0.0, 0.0],
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
               "participatesInLayout": true,
               "reserveSpaceWhenHidden": true
             },
@@ -160,11 +1011,51 @@
               "type": "box",
               "sizeRule": 0,
               "weight": 1.0,
-              "margin": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
               "crossAlignment": 0,
-              "minSize": [0.0, 0.0],
-              "maxSize": [1000000.0, 1000000.0],
-              "preferredSize": [0.0, 0.0],
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
+              "participatesInLayout": true,
+              "reserveSpaceWhenHidden": true
+            },
+            {
+              "type": "box",
+              "sizeRule": 0,
+              "weight": 1.0,
+              "margin": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0
+              },
+              "crossAlignment": 0,
+              "minSize": [
+                0.0,
+                0.0
+              ],
+              "maxSize": [
+                1000000.0,
+                1000000.0
+              ],
+              "preferredSize": [
+                0.0,
+                0.0
+              ],
               "participatesInLayout": true,
               "reserveSpaceWhenHidden": true
             }
@@ -176,8 +1067,16 @@
           "type": "content",
           "hAlign": 0,
           "vAlign": 0,
-          "padding": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
-          "preferredSize": [0.0, 0.0]
+          "padding": {
+            "left": 0.0,
+            "top": 0.0,
+            "right": 0.0,
+            "bottom": 0.0
+          },
+          "preferredSize": [
+            0.0,
+            0.0
+          ]
         }
       ]
     }
@@ -185,19 +1084,48 @@
   "childSlots": [
     {
       "type": "canvas",
-      "anchorMin": [0.0, 0.0],
-      "anchorMax": [1.0, 0.0],
-      "offset": [0.0, 88.0],
-      "minSize": [0.0, 0.0],
-      "maxSize": [440.0, 1000000.0],
-      "offsets": { "left": 16.0, "top": 0.0, "right": 16.0, "bottom": 0.0 },
+      "anchorMin": [
+        0.5,
+        0.5
+      ],
+      "anchorMax": [
+        0.5,
+        0.5
+      ],
+      "offset": [
+        0.0,
+        0.0
+      ],
+      "minSize": [
+        720.0,
+        430.0
+      ],
+      "maxSize": [
+        720.0,
+        430.0
+      ],
+      "offsets": {
+        "left": 0.0,
+        "top": 0.0,
+        "right": 0.0,
+        "bottom": 0.0
+      },
       "alignmentH": 0,
       "alignmentV": 0,
       "widthSizeMode": 0,
-      "heightSizeMode": 1,
-      "pivot": [0.0, 0.0],
-      "preferredSize": [0.0, 0.0],
-      "fixedSize": [0.0, 0.0]
+      "heightSizeMode": 0,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "preferredSize": [
+        0.0,
+        0.0
+      ],
+      "fixedSize": [
+        720.0,
+        430.0
+      ]
     }
   ]
 }
