@@ -223,29 +223,37 @@ auto extensionOut = executeExtensions(DeferredExtensionPoint::AfterLighting, ctx
 
 ### 已完成
 
+- 第一阶段完成（2026-10-14）：Recipe 的 prepare/append 折叠为表格式调度，`prepareFeature` / `appendFeature` 与两个 tuple fold 收进 `FeatureProtocol.h`；`Result<void, E>` 补上值空特化（`Core/Result.h`）。
 - Recipe 集中了主要渲染顺序和数据连接
 - 功能自己声明资源需求，两条管线共用部分组合代码
 - 七个功能已持有设备对象，初步封装完成
 
-### 正在进行
+### 第一阶段实测（对照验收标准）
 
-**暂停前的工作（设备成员迁移）停止。** 不再继续"搬完 SSAO 搬 Lighting"的路线。
+| 项 | 之前 | 之后 |
+| --- | --- | --- |
+| Deferred `prepareBindings` | 153 行 | 51 行 |
+| Deferred `appendGraph` | 262 行 | 119 行 |
+| Deferred 整文件 | 617 行 | 348 行 |
+| Forward `prepareBindings` | 96 行 | 33 行 |
+| Forward `appendGraph` | 184 行 | 101 行 |
+| Forward 整文件 | 434 行 | 267 行 |
+
+新增功能时 Recipe 补两行（prepare 一行、append 一行）；失败检查与命名日志由 step 辅助函数统一持有。
+验收证据：`ya-render-3d-test` 237/237（基线 235 + 新增 2 例 step 语义）；五帧逐像素 0 diff（Deferred / Forward / 切回 Deferred / SSAO-off / Bloom-off）；日志 0 ERROR，validation 分布与历史同类运行逐值一致。
+
+`appendGraph` 距 ~100 行的差距是三个声明的槽（ForwardOpaque 槽、Transparent 槽、Lighting 多来源输入组装），它们是连接内容而非重复代码。
+
+### 剩余的重复模式（供第二、三阶段参考）
+
+- `resolve` 阶段仍是逐功能手写行（Deferred 9 行、Forward 6 行）。每行的 settings 来源不同（有的按帧构造），折叠要先把 settings 构造也收拢，留给第二阶段统一初始化一起看。
+- 两个 Recipe 各自维护一份 feature 实例清单与 Stages 指针表——第二阶段表格驱动要消除的就是这份清单。
 
 ### 下一步（按四阶段顺序）
 
-**立刻开始第一阶段：** 折叠 Recipe 重复代码。
+**第二阶段：统一功能初始化。** 设计 `FeatureInitContext`，让 Pipeline 的 init/shutdown 从逐功能特殊调用改为统一循环；前置是核对其与第一阶段的 step 行如何共用同一份"功能清单"。
 
-1. 写 `prepareFeature` / `appendFeature` 辅助函数
-2. 重构 `DeferredPipelineRecipe::prepareBindings` 和 `appendGraph`
-3. 验收：Recipe 行数减半、逻辑等价、画面 0 diff
-4. 提交，标记"第一阶段完成"
-
-**第一阶段完成后报告：**
-- Recipe 从多少行降到多少行
-- 新增功能时 Recipe 需要补几行代码
-- 是否还有其他重复模式需要折叠
-
-**然后依次推进第二、三、四阶段。** 每个阶段独立验收、独立提交，不等全部完成。
+**然后第三、四阶段依次推进。** 每个阶段独立验收、独立提交，不等全部完成。
 
 ---
 

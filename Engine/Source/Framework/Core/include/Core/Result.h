@@ -97,6 +97,39 @@ private:
     std::variant<T, E> _data;
 };
 
+// ────────────────────────────────────────────────────────────────────────────
+// Result<void, E> - an operation that either succeeds carrying nothing or fails
+// ────────────────────────────────────────────────────────────────────────────
+
+/// The value-less case: `Result<T, E>`'s storage cannot hold a `void` variant
+/// member, so success here means only "no error". Used by the composition
+/// steps, where the call's product is written into a caller-owned slot and the
+/// only thing left to report is whether it happened.
+template <typename E>
+class Result<void, E>
+{
+public:
+    Result() : _bOk(true), _error() {}
+    Result(const E& error) : _bOk(false), _error(error) {}
+    Result(E&& error) : _bOk(false), _error(std::move(error)) {}
+
+    [[nodiscard]] bool isOk() const { return _bOk; }
+    [[nodiscard]] bool isErr() const { return !_bOk; }
+    [[nodiscard]] explicit operator bool() const { return _bOk; }
+
+    [[nodiscard]] const E& error() const& { return _error; }
+    [[nodiscard]] E& error() & { return _error; }
+
+    /// Named success for the value-less case. `Result<void, E>{}` reads as one
+    /// too, but an unnamed empty result at a call site ("did that succeed?")
+    /// is not worth the doubt.
+    [[nodiscard]] static Result success() { return Result(); }
+
+private:
+    bool _bOk;
+    E    _error;
+};
+
 // Helper for constructing Ok/Err explicitly
 template <typename T>
 struct Ok

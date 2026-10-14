@@ -28,30 +28,6 @@ constexpr size_t kGBufferColorCount = 4;
 
 } // namespace
 
-namespace
-{
-
-// Fold helpers over the invocation tuple: one generic visit, two consumers. A
-// feature not in the tuple is not in the fold, so nothing can be forgotten here
-// — the tuple is the registration.
-template <typename... F>
-void foldTargets(const std::tuple<Invocation<F>...>& invocations, std::vector<ViewAttachmentDesc>& out)
-{
-    (..., F::targets(std::get<Invocation<F>>(invocations).resolved, out));
-}
-
-template <typename... F>
-void foldDescribe(const std::tuple<Invocation<F>...>& invocations, std::string& out)
-{
-    // No lambda: the fold body runs as a plain comma expression so there is no
-    // capture to get wrong and nothing can swallow the expansion.
-    ((out += std::format("  {} {}\n",
-                         std::get<Invocation<F>>(invocations).resolved.bEnabled ? "[on] " : "[off]",
-                         F::name())), ...);
-}
-
-} // namespace
-
 std::vector<ViewAttachmentDesc> DeferredPipelineRecipe::ResolvedView::collectViewTargets() const
 {
     // Stable order: the fold runs in map order, so the request builder publishes
@@ -204,148 +180,46 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
         return FeatureError::MissingContext;
     }
 
-    const ShadowFeature shadowFeature;
-    auto shadowPrepared = shadowFeature.prepareBindings(
-        resolved.shadow(),
-        ShadowFeature::PrepareContext{
-            .submission = ctx.submission,
-            .stage      = stages.shadow,
-            .view       = ctx.view,
-        });
-    if (shadowPrepared.isErr()) {
-        return shadowPrepared.error();
-    }
-
+    // The prepare schedule: one row per feature, in map order. Each row states
+    // the only thing this recipe knows for that feature -- which device object
+    // and which shared binding its typed prepare context gets. `prepareFeature`
+    // owns the call, the failure check and the log, so a row cannot forget any
+    // of them. Features are constructed per row: they hold no prepare state
+    // (device ownership lives on the pipeline's long-lived instances).
     PreparedView prepared;
-    prepared.viewId          = resolved.viewId;
-    prepared.shadow()          = shadowPrepared.value();
-    prepared.frameRange      = toRange(ctx.frameBinding->frame);
-    prepared.lightRange      = toRange(ctx.frameBinding->light);
+    prepared.viewId     = resolved.viewId;
+    prepared.frameRange = toRange(ctx.frameBinding->frame);
+    prepared.lightRange = toRange(ctx.frameBinding->light);
 
-    const GBufferFeature gbufferFeature;
-    auto gbufferPrepared = gbufferFeature.prepareBindings(
-        resolved.gbuffer(),
-        GBufferFeature::PrepareContext{
-            .frameAndLightDS = ctx.frameBinding->frameAndLightDescriptorSet,
-            .skinningDS      = ctx.frameBinding->skinningDescriptorSet,
-        });
-    if (gbufferPrepared.isErr()) {
-        return gbufferPrepared.error();
-    }
-    prepared.gbuffer() = gbufferPrepared.value();
+    if (auto step = prepareFeature(ShadowFeature{}, resolved.shadow(), ShadowFeature::PrepareContext{.submission = ctx.submission, .stage = stages.shadow, .view = ctx.view}, prepared.shadow()); step.isErr())
+        return step.error();
 
-    const SSAOFeature ssaoFeature;
-    auto ssaoPrepared = ssaoFeature.prepareBindings(
-        resolved.ssao(),
-        SSAOFeature::PrepareContext{
-            .submission = ctx.submission,
-            .render     = ctx.render,
-            .stage      = stages.ssao,
-            .alignment  = ctx.alignment,
-        });
-    if (ssaoPrepared.isErr()) {
-        return ssaoPrepared.error();
-    }
-    prepared.ssao() = ssaoPrepared.value();
+    if (auto step = prepareFeature(GBufferFeature{}, resolved.gbuffer(), GBufferFeature::PrepareContext{.frameAndLightDS = ctx.frameBinding->frameAndLightDescriptorSet, .skinningDS = ctx.frameBinding->skinningDescriptorSet}, prepared.gbuffer()); step.isErr())
+        return step.error();
 
-    const SkyboxFeature skyboxFeature;
-    auto skyboxPrepared = skyboxFeature.prepareBindings(
-        resolved.skybox(),
-        SkyboxFeature::PrepareContext{
-            .submission = ctx.submission,
-            .render     = ctx.render,
-            .stage      = stages.skybox,
-            .alignment  = ctx.alignment,
-        });
-    if (skyboxPrepared.isErr()) {
-        return skyboxPrepared.error();
-    }
-    prepared.skybox() = skyboxPrepared.value();
+    if (auto step = prepareFeature(SSAOFeature{}, resolved.ssao(), SSAOFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.ssao, .alignment = ctx.alignment}, prepared.ssao()); step.isErr())
+        return step.error();
 
-    const LightingFeature lightingFeature;
-    auto lightingPrepared = lightingFeature.prepareBindings(
-        resolved.lighting(),
-        LightingFeature::PrepareContext{
-            .submission            = ctx.submission,
-            .stage                 = stages.light,
-            .frameAndLightDS       = ctx.frameBinding->frameAndLightDescriptorSet,
-            .environmentLightingDS = ctx.environmentLightingDS,
-        });
-    if (lightingPrepared.isErr()) {
-        return lightingPrepared.error();
-    }
-    prepared.lighting() = lightingPrepared.value();
+    if (auto step = prepareFeature(SkyboxFeature{}, resolved.skybox(), SkyboxFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.skybox, .alignment = ctx.alignment}, prepared.skybox()); step.isErr())
+        return step.error();
 
-    const Sprite2DFeature spriteFeature;
-    auto spritePrepared = spriteFeature.prepareBindings(
-        resolved.sprites(),
-        Sprite2DFeature::PrepareContext{
-            .submission = ctx.submission,
-            .render     = ctx.render,
-            .stage      = stages.sprites,
-            .frameData  = ctx.frameData,
-            .alignment  = ctx.alignment,
-        });
-    if (spritePrepared.isErr()) {
-        return spritePrepared.error();
-    }
-    prepared.sprites() = spritePrepared.value();
+    if (auto step = prepareFeature(LightingFeature{}, resolved.lighting(), LightingFeature::PrepareContext{.submission = ctx.submission, .stage = stages.light, .frameAndLightDS = ctx.frameBinding->frameAndLightDescriptorSet, .environmentLightingDS = ctx.environmentLightingDS}, prepared.lighting()); step.isErr())
+        return step.error();
 
-    const BloomFeature bloomFeature;
-    auto bloomPrepared = bloomFeature.prepareBindings(
-        resolved.bloom(),
-        BloomFeature::PrepareContext{
-            .submission = ctx.submission,
-            .stage      = stages.bloom,
-        });
-    if (bloomPrepared.isErr()) {
-        return bloomPrepared.error();
-    }
-    prepared.bloom() = bloomPrepared.value();
+    if (auto step = prepareFeature(Sprite2DFeature{}, resolved.sprites(), Sprite2DFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.sprites, .frameData = ctx.frameData, .alignment = ctx.alignment}, prepared.sprites()); step.isErr())
+        return step.error();
 
-    const OverlayFeature overlayFeature;
-    auto overlayPrepared = overlayFeature.prepareBindings(
-        resolved.overlay(),
-        OverlayFeature::PrepareContext{
-            .submission = ctx.submission,
-            .render     = ctx.render,
-            .stage      = stages.overlay,
-            .inputs     = ctx.overlayInputs,
-            .frameData  = ctx.frameData,
-            .alignment  = ctx.alignment,
-        });
-    if (overlayPrepared.isErr()) {
-        return overlayPrepared.error();
-    }
-    prepared.overlay() = overlayPrepared.value();
+    if (auto step = prepareFeature(BloomFeature{}, resolved.bloom(), BloomFeature::PrepareContext{.submission = ctx.submission, .stage = stages.bloom}, prepared.bloom()); step.isErr())
+        return step.error();
 
-    const EntityIdFeature entityIdFeature;
-    auto entityIdPrepared = entityIdFeature.prepareBindings(
-        resolved.entityId(),
-        EntityIdFeature::PrepareContext{
-            .submission = ctx.submission,
-            .render     = ctx.render,
-            .stage      = stages.entityId,
-            .frameData  = ctx.frameData,
-            .alignment  = ctx.alignment,
-        });
-    if (entityIdPrepared.isErr()) {
-        return entityIdPrepared.error();
-    }
-    prepared.entityId() = entityIdPrepared.value();
+    if (auto step = prepareFeature(OverlayFeature{}, resolved.overlay(), OverlayFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.overlay, .inputs = ctx.overlayInputs, .frameData = ctx.frameData, .alignment = ctx.alignment}, prepared.overlay()); step.isErr())
+        return step.error();
 
-    const FinalizeFeature finalizeFeature;
-    auto finalizePrepared = finalizeFeature.prepareBindings(
-        resolved.finalize(),
-        FinalizeFeature::PrepareContext{
-            .submission = ctx.submission,
-            .stage      = stages.post,
-        });
-    if (finalizePrepared.isErr()) {
-        YA_CORE_ERROR("finalize prepare failed: bEnabled={}", resolved.finalize().bEnabled);
-        return finalizePrepared.error();
-    }
-    prepared.finalize() = finalizePrepared.value();
+    if (auto step = prepareFeature(EntityIdFeature{}, resolved.entityId(), EntityIdFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.entityId, .frameData = ctx.frameData, .alignment = ctx.alignment}, prepared.entityId()); step.isErr())
+        return step.error();
+
+    if (auto step = prepareFeature(FinalizeFeature{}, resolved.finalize(), FinalizeFeature::PrepareContext{.submission = ctx.submission, .stage = stages.post}, prepared.finalize()); step.isErr())
+        return step.error();
 
     return prepared;
 }
@@ -371,75 +245,34 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     featureCtx.predecessor       = ctx.predecessor;
     featureCtx.bReverseViewportY = ctx.bReverseViewportY;
 
+    // The append schedule: one row per connection, in run order. A row states
+    // what this recipe knows -- the device object the pass draws through, the
+    // typed facts, and the upstream handles the feature consumes. The step
+    // helper owns the call, the failure check and the log.
+
     // ── Shadow (first: its passes take the family ordering point) ─────────
-    const ShadowFeature shadowFeature;
-    auto shadowOutputs = shadowFeature.append(
-        ctx.graph,
-        ctx.stages->shadow,
-        featureCtx,
-        ShadowFeature::Facts{},
-        resolved.shadow(),
-        prepared.shadow(),
-        ShadowFeature::Inputs{});
-    if (shadowOutputs.isErr()) {
-        YA_CORE_ERROR("Shadow append failed for View {}", resolved.viewId);
-        return shadowOutputs.error();
-    }
-    outputs.shadow() = shadowOutputs.value();
+    if (auto step = appendFeature(ShadowFeature{}, ctx.graph, ctx.stages->shadow, featureCtx, ShadowFeature::Facts{}, resolved.shadow(), prepared.shadow(), ShadowFeature::Inputs{}, outputs.shadow()); step.isErr())
+        return step.error();
 
     // ── GBuffer ───────────────────────────────────────────────────────────
-    const GBufferFeature gbufferFeature;
-    auto gbufferOutputs = gbufferFeature.append(
-        ctx.graph,
-        ctx.stages->gBuffer,
-        featureCtx,
-        GBufferFeature::Facts{.viewId = resolved.viewId, .viewExtent = resolved.viewExtent},
-        resolved.gbuffer(),
-        prepared.gbuffer(),
-        GBufferFeature::Inputs{
-            .frame      = ctx.frameBuffer,
-            .frameRange = prepared.frameRange,
-            .light      = ctx.lightBuffer,
-            .lightRange = prepared.lightRange,
-            .skinning   = ctx.skinningBuffer,
-        });
-    if (gbufferOutputs.isErr()) {
-        YA_CORE_ERROR("GBuffer append failed for View {}", resolved.viewId);
-        return gbufferOutputs.error();
-    }
-    outputs.gbuffer() = gbufferOutputs.value();
+    if (auto step = appendFeature(GBufferFeature{}, ctx.graph, ctx.stages->gBuffer, featureCtx, GBufferFeature::Facts{.viewId = resolved.viewId, .viewExtent = resolved.viewExtent}, resolved.gbuffer(), prepared.gbuffer(), GBufferFeature::Inputs{.frame = ctx.frameBuffer, .frameRange = prepared.frameRange, .light = ctx.lightBuffer, .lightRange = prepared.lightRange, .skinning = ctx.skinningBuffer}, outputs.gbuffer()); step.isErr())
+        return step.error();
 
     // ── SSAO (optional) ───────────────────────────────────────────────────
-    const SSAOFeature ssaoFeature;
-    auto ssaoOutputs = ssaoFeature.append(
-        ctx.graph,
-        ctx.stages->ssao,
-        featureCtx,
-        SSAOFeature::Facts{.viewExtent = resolved.viewExtent},
-        resolved.ssao(),
-        prepared.ssao(),
-        SSAOFeature::Inputs{
-            .albedo     = outputs.gbuffer().albedo,
-            .normal     = outputs.gbuffer().normal,
-            .depth      = outputs.gbuffer().depth,
-        });
-    if (ssaoOutputs.isErr()) {
-        YA_CORE_ERROR("SSAO append failed for View {}", resolved.viewId);
-        return ssaoOutputs.error();
-    }
-    outputs.ssao() = ssaoOutputs.value();
+    if (auto step = appendFeature(SSAOFeature{}, ctx.graph, ctx.stages->ssao, featureCtx, SSAOFeature::Facts{.viewExtent = resolved.viewExtent}, resolved.ssao(), prepared.ssao(), SSAOFeature::Inputs{.albedo = outputs.gbuffer().albedo, .normal = outputs.gbuffer().normal, .depth = outputs.gbuffer().depth}, outputs.ssao()); step.isErr())
+        return step.error();
 
     // ── Lighting ──────────────────────────────────────────────────────────
     LightingFeature::Inputs lightingInputs;
-    lightingInputs.albedo      = outputs.gbuffer().albedo;
-    lightingInputs.normal      = outputs.gbuffer().normal;
-    lightingInputs.orm         = outputs.gbuffer().orm;
-    lightingInputs.shading     = outputs.gbuffer().shading;
-    lightingInputs.depth       = outputs.gbuffer().depth;
-    lightingInputs.frame       = ctx.frameBuffer;
-    lightingInputs.frameRange  = prepared.frameRange;
-    lightingInputs.light       = ctx.lightBuffer;
-    lightingInputs.lightRange  = prepared.lightRange;
+    lightingInputs.albedo     = outputs.gbuffer().albedo;
+    lightingInputs.normal     = outputs.gbuffer().normal;
+    lightingInputs.orm        = outputs.gbuffer().orm;
+    lightingInputs.shading    = outputs.gbuffer().shading;
+    lightingInputs.depth      = outputs.gbuffer().depth;
+    lightingInputs.frame      = ctx.frameBuffer;
+    lightingInputs.frameRange = prepared.frameRange;
+    lightingInputs.light      = ctx.lightBuffer;
+    lightingInputs.lightRange = prepared.lightRange;
     if (outputs.ssao().ao.isValid()) {
         lightingInputs.ssao = outputs.ssao().ao.get();
     }
@@ -456,21 +289,8 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         lightingInputs.environmentBrdfLut = ctx.graph.importTexture(makeImportedTextureDesc(
             *ctx.environmentLighting->brdfLut, "DeferredLight.Environment.BrdfLut", EImageLayout::ShaderReadOnlyOptimal));
     }
-
-    const LightingFeature lightingFeature;
-    auto lightingOutputs = lightingFeature.append(
-        ctx.graph,
-        ctx.stages->light,
-        featureCtx,
-        LightingFeature::Facts{.viewExtent = resolved.viewExtent},
-        resolved.lighting(),
-        prepared.lighting(),
-        lightingInputs);
-    if (lightingOutputs.isErr()) {
-        YA_CORE_ERROR("Lighting append failed for View {}", resolved.viewId);
-        return lightingOutputs.error();
-    }
-    outputs.lighting() = lightingOutputs.value();
+    if (auto step = appendFeature(LightingFeature{}, ctx.graph, ctx.stages->light, featureCtx, LightingFeature::Facts{.viewExtent = resolved.viewExtent}, resolved.lighting(), prepared.lighting(), lightingInputs, outputs.lighting()); step.isErr())
+        return step.error();
 
     if (!outputs.lighting().sceneColor.isValid()) {
         YA_CORE_ERROR("Lighting append produced no SceneColor for View {}", resolved.viewId);
@@ -495,121 +315,32 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         });
 
     // ── Skybox ────────────────────────────────────────────────────────────
-    const SkyboxFeature skyboxFeature;
-    auto skyboxOutputs = skyboxFeature.append(
-        ctx.graph,
-        ctx.stages->skybox,
-        featureCtx,
-        SkyboxFeature::Facts{
-            .viewExtent = resolved.viewExtent,
-            .skybox     = ctx.overlayInputs != nullptr
-                ? ctx.overlayInputs->skybox
-                : ViewOverlayFrameInputs::SkyboxInput{},
-        },
-        resolved.skybox(),
-        prepared.skybox(),
-        SkyboxFeature::Inputs{
-            .color = outputs.lighting().sceneColor,
-            .depth = outputs.gbuffer().depth,
-        });
-    if (skyboxOutputs.isErr()) {
-        YA_CORE_ERROR("Skybox append failed for View {}", resolved.viewId);
-        return skyboxOutputs.error();
-    }
-    outputs.skybox() = skyboxOutputs.value();
+    const SkyboxFeature::Facts skyboxFacts{
+        .viewExtent = resolved.viewExtent,
+        .skybox     = ctx.overlayInputs != nullptr ? ctx.overlayInputs->skybox : ViewOverlayFrameInputs::SkyboxInput{},
+    };
+    if (auto step = appendFeature(SkyboxFeature{}, ctx.graph, ctx.stages->skybox, featureCtx, skyboxFacts, resolved.skybox(), prepared.skybox(), SkyboxFeature::Inputs{.color = outputs.lighting().sceneColor, .depth = outputs.gbuffer().depth}, outputs.skybox()); step.isErr())
+        return step.error();
 
     // ── Scene sprites ─────────────────────────────────────────────────────
-    const Sprite2DFeature spriteFeature;
-    auto spriteOutputs = spriteFeature.append(
-        ctx.graph,
-        ctx.stages->sprites,
-        featureCtx,
-        Sprite2DFeature::Facts{.viewExtent = resolved.viewExtent, .frameData = ctx.stageCtx.frameData},
-        resolved.sprites(),
-        prepared.sprites(),
-        Sprite2DFeature::Inputs{
-            .color = outputs.skybox().color,
-            .depth = outputs.gbuffer().depth,
-        });
-    if (spriteOutputs.isErr()) {
-        YA_CORE_ERROR("Sprite append failed for View {}", resolved.viewId);
-        return spriteOutputs.error();
-    }
-    outputs.sprites() = spriteOutputs.value();
+    if (auto step = appendFeature(Sprite2DFeature{}, ctx.graph, ctx.stages->sprites, featureCtx, Sprite2DFeature::Facts{.viewExtent = resolved.viewExtent, .frameData = ctx.stageCtx.frameData}, resolved.sprites(), prepared.sprites(), Sprite2DFeature::Inputs{.color = outputs.skybox().color, .depth = outputs.gbuffer().depth}, outputs.sprites()); step.isErr())
+        return step.error();
 
     // ── Bloom (optional) ──────────────────────────────────────────────────
-    const BloomFeature bloomFeature;
-    auto bloomOutputs = bloomFeature.append(
-        ctx.graph,
-        ctx.stages->bloom,
-        featureCtx,
-        BloomFeature::Facts{.viewExtent = resolved.viewExtent},
-        resolved.bloom(),
-        prepared.bloom(),
-        BloomFeature::Inputs{.color = outputs.sprites().color});
-    if (bloomOutputs.isErr()) {
-        YA_CORE_ERROR("Bloom append failed for View {}", resolved.viewId);
-        return bloomOutputs.error();
-    }
-    outputs.bloom() = bloomOutputs.value();
+    if (auto step = appendFeature(BloomFeature{}, ctx.graph, ctx.stages->bloom, featureCtx, BloomFeature::Facts{.viewExtent = resolved.viewExtent}, resolved.bloom(), prepared.bloom(), BloomFeature::Inputs{.color = outputs.sprites().color}, outputs.bloom()); step.isErr())
+        return step.error();
 
     // ── Overlay (forward transparent) ─────────────────────────────────────
-    const OverlayFeature overlayFeature;
-    auto overlayOutputs = overlayFeature.append(
-        ctx.graph,
-        ctx.stages->overlay,
-        featureCtx,
-        OverlayFeature::Facts{.viewExtent = resolved.viewExtent, .inputs = ctx.overlayInputs},
-        resolved.overlay(),
-        prepared.overlay(),
-        OverlayFeature::Inputs{
-            .color = outputs.bloom().color,
-            .depth = outputs.gbuffer().depth,
-        });
-    if (overlayOutputs.isErr()) {
-        YA_CORE_ERROR("Overlay append failed for View {}", resolved.viewId);
-        return overlayOutputs.error();
-    }
-    outputs.overlay() = overlayOutputs.value();
+    if (auto step = appendFeature(OverlayFeature{}, ctx.graph, ctx.stages->overlay, featureCtx, OverlayFeature::Facts{.viewExtent = resolved.viewExtent, .inputs = ctx.overlayInputs}, resolved.overlay(), prepared.overlay(), OverlayFeature::Inputs{.color = outputs.bloom().color, .depth = outputs.gbuffer().depth}, outputs.overlay()); step.isErr())
+        return step.error();
 
     // ── Entity id (picking) ───────────────────────────────────────────────
-    const EntityIdFeature entityIdFeature;
-    auto entityIdOutputs = entityIdFeature.append(
-        ctx.graph,
-        ctx.stages->entityId,
-        featureCtx,
-        EntityIdFeature::Facts{
-            .viewExtent    = resolved.viewExtent,
-            .frameData     = ctx.stageCtx.frameData,
-            .overlayInputs = ctx.overlayInputs,
-        },
-        resolved.entityId(),
-        prepared.entityId(),
-        EntityIdFeature::Inputs{
-            .depth      = outputs.gbuffer().depth,
-            .skinningDS = ctx.frameBinding->skinningDescriptorSet,
-        });
-    if (entityIdOutputs.isErr()) {
-        YA_CORE_ERROR("Entity id append failed for View {}", resolved.viewId);
-        return entityIdOutputs.error();
-    }
-    outputs.entityId() = entityIdOutputs.value();
+    if (auto step = appendFeature(EntityIdFeature{}, ctx.graph, ctx.stages->entityId, featureCtx, EntityIdFeature::Facts{.viewExtent = resolved.viewExtent, .frameData = ctx.stageCtx.frameData, .overlayInputs = ctx.overlayInputs}, resolved.entityId(), prepared.entityId(), EntityIdFeature::Inputs{.depth = outputs.gbuffer().depth, .skinningDS = ctx.frameBinding->skinningDescriptorSet}, outputs.entityId()); step.isErr())
+        return step.error();
 
     // ── Finalize (mandatory display pass) ─────────────────────────────────
-    const FinalizeFeature finalizeFeature;
-    auto finalizeOutputs = finalizeFeature.append(
-        ctx.graph,
-        ctx.stages->post,
-        featureCtx,
-        FinalizeFeature::Facts{.viewExtent = resolved.viewExtent, .postContext = ctx.postContext},
-        resolved.finalize(),
-        prepared.finalize(),
-        FinalizeFeature::Inputs{.color = outputs.overlay().color});
-    if (finalizeOutputs.isErr()) {
-        YA_CORE_ERROR("Finalize append failed for View {}", resolved.viewId);
-        return finalizeOutputs.error();
-    }
-    outputs.finalize() = finalizeOutputs.value();
+    if (auto step = appendFeature(FinalizeFeature{}, ctx.graph, ctx.stages->post, featureCtx, FinalizeFeature::Facts{.viewExtent = resolved.viewExtent, .postContext = ctx.postContext}, resolved.finalize(), prepared.finalize(), FinalizeFeature::Inputs{.color = outputs.overlay().color}, outputs.finalize()); step.isErr())
+        return step.error();
 
     return outputs;
 }

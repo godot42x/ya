@@ -349,6 +349,149 @@ TEST(FeatureProtocolTest, FeatureWithoutTargetsRegistrationIsNotAFeature)
 namespace
 {
 
+// A feature whose prepare and append outcomes are switches: the step helpers'
+// contract (store only what succeeded) is what these pin down.
+struct SwitchableFeature
+{
+    struct Stage {};
+
+    struct Settings
+    {
+        bool bPrepareFails = false;
+        bool bAppendFails  = false;
+    };
+
+    struct Facts
+    {
+    };
+
+    struct Inputs
+    {
+    };
+
+    struct Resolved
+    {
+        bool bEnabled      = true;
+        bool bPrepareFails = false;
+        bool bAppendFails  = false;
+    };
+
+    struct PrepareContext
+    {
+    };
+
+    struct Prepared
+    {
+        int marker = 0;
+    };
+
+    struct GraphOutputs
+    {
+        int marker = 0;
+    };
+
+    [[nodiscard]] Resolved resolve(const Settings& settings, const Facts&, const Inputs&) const
+    {
+        return Resolved{
+            .bEnabled      = true,
+            .bPrepareFails = settings.bPrepareFails,
+            .bAppendFails  = settings.bAppendFails,
+        };
+    }
+
+    [[nodiscard]] Result<Prepared, FeatureError> prepareBindings(const Resolved& resolved,
+                                                                 const PrepareContext&) const
+    {
+        if (resolved.bPrepareFails) {
+            return FeatureError::AllocationFailed;
+        }
+        return Prepared{.marker = 7};
+    }
+
+    [[nodiscard]] Result<GraphOutputs, FeatureError> append(RenderGraph&,
+                                                            Stage*,
+                                                            const FeatureGraphContext&,
+                                                            const Facts&,
+                                                            const Resolved& resolved,
+                                                            const Prepared&,
+                                                            const Inputs&) const
+    {
+        if (resolved.bAppendFails) {
+            return FeatureError::MissingDependency;
+        }
+        return GraphOutputs{.marker = 11};
+    }
+
+    [[nodiscard]] static constexpr std::string_view name() { return "SwitchableFeature"; }
+    static void targets(const Resolved&, std::vector<ViewAttachmentDesc>&) {}
+};
+
+} // namespace
+
+// The step helpers are the folding contract of a recipe's prepare phase: a row
+// that succeeds stores its product, a row that fails reports the feature's own
+// error and leaves the slot it was handed untouched. Those are the two things a
+// hand-written row had to get right; the fold is only worth it if they hold.
+TEST(FeatureStepTest, PrepareStoresOnSuccessAndLeavesSlotOnFailure)
+{
+    const SwitchableFeature feature;
+
+    SwitchableFeature::Prepared slot;
+
+    const auto ok = prepareFeature(feature,
+                                   SwitchableFeature::Resolved{},
+                                   SwitchableFeature::PrepareContext{},
+                                   slot);
+    EXPECT_TRUE(ok.isOk());
+    EXPECT_EQ(slot.marker, 7);
+
+    SwitchableFeature::Prepared untouched{.marker = 3};
+    const auto failed = prepareFeature(feature,
+                                       SwitchableFeature::Resolved{.bPrepareFails = true},
+                                       SwitchableFeature::PrepareContext{},
+                                       untouched);
+    EXPECT_TRUE(failed.isErr());
+    EXPECT_EQ(failed.error(), FeatureError::AllocationFailed);
+    EXPECT_EQ(untouched.marker, 3);
+}
+
+TEST(FeatureStepTest, AppendStoresOnSuccessAndLeavesSlotOnFailure)
+{
+    const SwitchableFeature feature;
+    RenderGraph             graph;
+
+    SwitchableFeature::GraphOutputs slot;
+
+    const auto ok = appendFeature(feature,
+                                  graph,
+                                  static_cast<SwitchableFeature::Stage*>(nullptr),
+                                  FeatureGraphContext{},
+                                  SwitchableFeature::Facts{},
+                                  SwitchableFeature::Resolved{},
+                                  SwitchableFeature::Prepared{},
+                                  SwitchableFeature::Inputs{},
+                                  slot);
+    EXPECT_TRUE(ok.isOk());
+    EXPECT_EQ(slot.marker, 11);
+
+    SwitchableFeature::GraphOutputs untouched{.marker = 5};
+    const auto failed = appendFeature(feature,
+                                      graph,
+                                      static_cast<SwitchableFeature::Stage*>(nullptr),
+                                      FeatureGraphContext{},
+                                      SwitchableFeature::Facts{},
+                                      SwitchableFeature::Resolved{.bAppendFails = true},
+                                      SwitchableFeature::Prepared{},
+                                      SwitchableFeature::Inputs{},
+                                      untouched);
+    EXPECT_TRUE(failed.isErr());
+    EXPECT_EQ(failed.error(), FeatureError::MissingDependency);
+    EXPECT_EQ(untouched.marker, 5);
+}
+
+namespace
+{
+
 // Minimal factory for the executor-backed publish tests below: the same shape
 // the RDG core tests use, reduced to what transient textures need.
 class PublishTestImage final : public IImage

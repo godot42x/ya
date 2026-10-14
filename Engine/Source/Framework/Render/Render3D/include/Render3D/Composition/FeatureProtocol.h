@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Core/Log.h"
 #include "Core/Result.h"
 #include "Graph/RenderGraph.h"
 #include "Render3D/Stage/IRenderStage.h"
@@ -8,8 +9,11 @@
 
 #include <concepts>
 #include <cstdint>
+#include <format>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -153,6 +157,82 @@ void assignInvocations(std::tuple<Invocation<F>...>&       to,
                        const std::tuple<Invocation<F>...>& from)
 {
     (..., static_cast<void>(std::get<Invocation<F>>(to) = std::get<Invocation<F>>(from)));
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Invocation tuple folds
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Every declared target, folded in map order. A feature not in the tuple is
+/// not in the fold, so nothing can be forgotten here: the tuple is the
+/// registration.
+template <typename... F>
+void foldTargets(const std::tuple<Invocation<F>...>& invocations, std::vector<ViewAttachmentDesc>& out)
+{
+    (..., F::targets(std::get<Invocation<F>>(invocations).resolved, out));
+}
+
+/// One line per feature, folded in map order with each feature's own name and
+/// enablement. No lambda: the fold body runs as a plain comma expression so
+/// there is no capture to get wrong and nothing can swallow the expansion.
+template <typename... F>
+void foldDescribe(const std::tuple<Invocation<F>...>& invocations, std::string& out)
+{
+    ((out += std::format("  {} {}\n",
+                         std::get<Invocation<F>>(invocations).resolved.bEnabled ? "[on] " : "[off]",
+                         F::name())),
+     ...);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase steps: the folding helpers a recipe's schedule is written with
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Run one feature's `prepareBindings` as a step of a recipe's prepare phase.
+///
+/// The step owns the part every phase has repeated: call, check, store, and a
+/// log that names the feature. The per-phase contexts stay the feature's own
+/// typed type -- the ports are the point of the protocol, so folding must not
+/// dissolve them. `outPrepared` is written only on success.
+template <typename F>
+[[nodiscard]] Result<void, FeatureError> prepareFeature(const F&                           feature,
+                                                        const typename F::Resolved&        resolved,
+                                                        const typename F::PrepareContext&  ctx,
+                                                        typename F::Prepared&              outPrepared)
+{
+    auto result = feature.prepareBindings(resolved, ctx);
+    if (result.isErr()) {
+        YA_CORE_ERROR("{} prepare failed, error={}", F::name(), static_cast<int>(result.error()));
+        return result.error();
+    }
+    outPrepared = std::move(result.value());
+    return Result<void, FeatureError>::success();
+}
+
+/// Run one feature's `append` as a step of a recipe's append phase.
+///
+/// `stage` is the device object the feature's pass draws through; the concept
+/// still carries it as a parameter (removing that parameter is what the
+/// feature-owned-device work is for), so a recipe states it here exactly as it
+/// states the typed facts/inputs. `outOutputs` is written only on success.
+template <typename F>
+[[nodiscard]] Result<void, FeatureError> appendFeature(const F&                          feature,
+                                                       RenderGraph&                      graph,
+                                                       typename F::Stage*                stage,
+                                                       const FeatureGraphContext&        graphCtx,
+                                                       const typename F::Facts&          facts,
+                                                       const typename F::Resolved&       resolved,
+                                                       const typename F::Prepared&       prepared,
+                                                       const typename F::Inputs&         inputs,
+                                                       typename F::GraphOutputs&         outOutputs)
+{
+    auto result = feature.append(graph, stage, graphCtx, facts, resolved, prepared, inputs);
+    if (result.isErr()) {
+        YA_CORE_ERROR("{} append failed, error={}", F::name(), static_cast<int>(result.error()));
+        return result.error();
+    }
+    outOutputs = std::move(result.value());
+    return Result<void, FeatureError>::success();
 }
 
 } // namespace ya

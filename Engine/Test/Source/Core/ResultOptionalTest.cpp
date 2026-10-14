@@ -107,5 +107,19 @@ TEST(ResultTest, MoveSemantics)
     EXPECT_EQ(moved, "hello");
 }
 
+// Result<void, E>: the value-less case, used by composition steps that report
+// only whether the call happened.
+TEST(ResultTest, VoidResultReportsSuccessWithoutAValue)
+{
+    const Result<void, TestError> ok = Result<void, TestError>::success();
+    EXPECT_TRUE(ok.isOk());
+    EXPECT_FALSE(ok.isErr());
+    EXPECT_TRUE(static_cast<bool>(ok));
+
+    const Result<void, TestError> failed = TestError::Timeout;
+    EXPECT_TRUE(failed.isErr());
+    EXPECT_EQ(failed.error(), TestError::Timeout);
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 } // namespace ya

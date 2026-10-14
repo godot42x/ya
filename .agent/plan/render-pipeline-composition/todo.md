@@ -1,32 +1,53 @@
 # 渲染管线重构 TODO
 
-更新：2026-10-14。按四阶段推进，每阶段独立验收。当前从第一阶段开始。
+更新：2026-10-14。按四阶段推进，每阶段独立验收。第一阶段已完成，当前从第二阶段开始。
 
 ---
 
-## 第一阶段：折叠 Recipe 重复代码（当前执行）
+## 第一阶段：折叠 Recipe 重复代码（已完成 2026-10-14）
 
 **目标：** Recipe 的 prepare/append 从手写循环改为辅助函数驱动，新增功能只需补两行。
 
+### 完成情况
+
+- [x] `prepareFeature<F>` / `appendFeature<F>` 辅助函数（落地在 `FeatureProtocol.h`，未另开 FeatureUtils.h）
+- [x] 两个 tuple fold（`foldTargets` / `foldDescribe`）从两份 Recipe 副本收进 `FeatureProtocol.h`
+- [x] `Result<void, E>` 值空特化（`Core/Result.h`），step 失败通道
+- [x] 重构 `DeferredPipelineRecipe::prepareBindings`（153→51 行）和 `appendGraph`（262→119 行）
+- [x] 重构 `ForwardPipelineRecipe::prepareBindings`（96→33 行）和 `appendGraph`（184→101 行）
+- [x] 验收：单元测试 `ya-render-3d-test` 237/237（基线 235 + 2 例 step 语义）
+- [x] 验收：画面回归五帧逐像素 0 diff（Deferred / Forward / 切回 / SSAO-off / Bloom-off）
+- [x] 验收：日志 0 ERROR，validation 分布与历史同类运行逐值一致
+- [x] 提交
+
+### 实测与偏差
+
+- 达到验收标准；`appendGraph` 119 行略高于 ~100 行目标，差额是三个声明的槽（ForwardOpaque / Transparent / Lighting 多来源输入组装），属连接内容而非重复代码，不再压。
+- `resolve` 阶段（Deferred 9 行、Forward 6 行）未折叠：各功能 settings 来源不同，需与第二阶段统一初始化合并处理。
+
+---
+
+## 第二阶段：统一功能初始化（当前执行）
+
+**目标：** Pipeline 的 init 从逐个手写不同调用改为统一上下文 + 表格驱动。
+
 ### 待办
 
-- [ ] 写 `prepareFeature<F>` 辅助函数（FeatureProtocol.h 或新 FeatureUtils.h）
-- [ ] 写 `appendFeature<F>` 辅助函数
-- [ ] 重构 `DeferredPipelineRecipe::prepareBindings`，用辅助函数替代手写循环
-- [ ] 重构 `DeferredPipelineRecipe::appendGraph`，用辅助函数替代手写循环
-- [ ] 如有 ForwardPipelineRecipe，同样重构
-- [ ] 验收：逻辑等价测试（单元测试全绿）
-- [ ] 验收：画面回归（Deferred/Forward/SSAO on-off/各开关，逐像素 0 diff）
-- [ ] 验收：行数统计（prepareBindings 和 appendGraph 各降到多少行）
-- [ ] 提交，标记"第一阶段完成"
+- [ ] 设计 `FeatureInitContext` 结构（包含所有功能可能需要的初始化依赖）
+- [ ] 核定与第一阶段 step 行的清单关系（避免第二份功能登记表）
+- [ ] Feature Protocol 加 `init(const FeatureInitContext&)` 要求
+- [ ] 10 个 Feature 适应新 init 签名（SSAOFeature, LightingFeature, GBufferFeature, ...）
+- [ ] Pipeline 的 init 改为表格驱动（功能数组 + 循环）
+- [ ] Pipeline 的 shutdown 同样改为表格驱动
+- [ ] 验收：所有功能初始化成功，设备对象与当前等价
+- [ ] 验收：新增功能时 Pipeline 只需加入数组，不补特殊 init 代码
+- [ ] 提交，标记"第二阶段完成"
 
 ### 验收标准
 
-- `DeferredPipelineRecipe::prepareBindings` 从 ~200 行降到 ~50 行
-- `DeferredPipelineRecipe::appendGraph` 从 ~350 行降到 ~100 行
-- 单元测试：`xmake r ya-render-3d-test` 全绿
-- 画面：四场景（Deferred/Forward/SSAO on/SSAO off）逐像素 0 diff
-- 代码：每个功能的接入从 ~10 行重复代码变成 1-2 行调用
+- Pipeline::init 不再逐个知道每个功能的 init 签名
+- 新增功能 = 实现 `init(FeatureInitContext)` + 加入 Pipeline 功能数组
+- 所有现有功能初始化路径通过，单元测试全绿
 
 ---
 
@@ -173,13 +194,13 @@
 
 ## 当前状态
 
-**阶段进度：** 0/4 完成
+**阶段进度：** 1/4 完成
 
-- 第一阶段：未开始（下一步）
-- 第二阶段：未开始
+- 第一阶段：已完成（2026-10-14，见上）
+- 第二阶段：当前执行（统一功能初始化）
 - 第三阶段：未开始
 - 第四阶段：未开始
 
-**上次更新：** 2026-10-14，重新规划四阶段路线
+**上次更新：** 2026-10-14，第一阶段落地（Recipe 折叠 + 验证证据）
 
-**下一步行动：** 开始第一阶段，写 `prepareFeature` / `appendFeature` 辅助函数。
+**下一步行动：** 第二阶段——设计 `FeatureInitContext`，核对它与第一阶段 step 行的清单关系。

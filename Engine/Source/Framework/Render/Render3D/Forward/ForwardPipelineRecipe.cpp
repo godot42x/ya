@@ -20,27 +20,6 @@
 namespace ya
 {
 
-namespace
-{
-
-template <typename... F>
-void foldTargets(const std::tuple<Invocation<F>...>& invocations, std::vector<ViewAttachmentDesc>& out)
-{
-    (..., F::targets(std::get<Invocation<F>>(invocations).resolved, out));
-}
-
-template <typename... F>
-void foldDescribe(const std::tuple<Invocation<F>...>& invocations, std::string& out)
-{
-    // No lambda: the fold body runs as a plain comma expression so there is no
-    // capture to get wrong and nothing can swallow the expansion.
-    ((out += std::format("  {} {}\n",
-                         std::get<Invocation<F>>(invocations).resolved.bEnabled ? "[on] " : "[off]",
-                         F::name())), ...);
-}
-
-} // namespace
-
 std::vector<ViewAttachmentDesc> ForwardPipelineRecipe::ResolvedView::collectViewTargets() const
 {
     std::vector<ViewAttachmentDesc> targets;
@@ -156,91 +135,28 @@ ForwardPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
         return FeatureError::MissingContext;
     }
 
-    const ShadowFeature shadowFeature;
-    auto shadowPrepared = shadowFeature.prepareBindings(
-        resolved.shadow(),
-        ShadowFeature::PrepareContext{
-            .submission = ctx.submission,
-            .stage      = stages.shadow,
-            .view       = ctx.view,
-        });
-    if (shadowPrepared.isErr()) {
-        return shadowPrepared.error();
-    }
-
+    // The prepare schedule: one row per feature, in map order (see the Deferred
+    // recipe's prepareBindings for the shape).
     PreparedView prepared;
     prepared.viewId = resolved.viewId;
-    prepared.shadow() = shadowPrepared.value();
 
-    const ForwardOpaqueFeature opaqueFeature;
-    auto opaquePrepared = opaqueFeature.prepareBindings(
-        resolved.opaque(),
-        ForwardOpaqueFeature::PrepareContext{
-            .frameBinding = ctx.frameBinding,
-            .submission   = ctx.submission,
-            .render       = ctx.render,
-            .auxPasses    = ctx.auxPasses,
-            .alignment    = ctx.alignment,
-            .frameData    = ctx.frameData,
-            .viewExtent   = resolved.viewExtent,
-        });
-    if (opaquePrepared.isErr()) {
-        return opaquePrepared.error();
-    }
-    prepared.opaque() = opaquePrepared.value();
+    if (auto step = prepareFeature(ShadowFeature{}, resolved.shadow(), ShadowFeature::PrepareContext{.submission = ctx.submission, .stage = stages.shadow, .view = ctx.view}, prepared.shadow()); step.isErr())
+        return step.error();
 
-    const ForwardSkyboxFeature skyboxFeature;
-    auto skyboxPrepared = skyboxFeature.prepareBindings(
-        resolved.skybox(),
-        ForwardSkyboxFeature::PrepareContext{
-            .submission = ctx.submission,
-            .render     = ctx.render,
-            .stage      = stages.viewStage != nullptr ? &stages.viewStage->getAuxPasses() : nullptr,
-            .alignment  = ctx.alignment,
-        });
-    if (skyboxPrepared.isErr()) {
-        return skyboxPrepared.error();
-    }
-    prepared.skybox() = skyboxPrepared.value();
+    if (auto step = prepareFeature(ForwardOpaqueFeature{}, resolved.opaque(), ForwardOpaqueFeature::PrepareContext{.frameBinding = ctx.frameBinding, .submission = ctx.submission, .render = ctx.render, .auxPasses = ctx.auxPasses, .alignment = ctx.alignment, .frameData = ctx.frameData, .viewExtent = resolved.viewExtent}, prepared.opaque()); step.isErr())
+        return step.error();
 
-    const EntityIdFeature entityIdFeature;
-    auto entityIdPrepared = entityIdFeature.prepareBindings(
-        resolved.entityId(),
-        EntityIdFeature::PrepareContext{
-            .submission = ctx.submission,
-            .render     = ctx.render,
-            .stage      = stages.entityId,
-            .frameData  = ctx.frameData,
-            .alignment  = ctx.alignment,
-        });
-    if (entityIdPrepared.isErr()) {
-        return entityIdPrepared.error();
-    }
-    prepared.entityId() = entityIdPrepared.value();
+    if (auto step = prepareFeature(ForwardSkyboxFeature{}, resolved.skybox(), ForwardSkyboxFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.viewStage != nullptr ? &stages.viewStage->getAuxPasses() : nullptr, .alignment = ctx.alignment}, prepared.skybox()); step.isErr())
+        return step.error();
 
-    const BloomFeature bloomFeature;
-    auto bloomPrepared = bloomFeature.prepareBindings(
-        resolved.bloom(),
-        BloomFeature::PrepareContext{
-            .submission = ctx.submission,
-            .stage      = stages.bloom,
-        });
-    if (bloomPrepared.isErr()) {
-        return bloomPrepared.error();
-    }
-    prepared.bloom() = bloomPrepared.value();
+    if (auto step = prepareFeature(EntityIdFeature{}, resolved.entityId(), EntityIdFeature::PrepareContext{.submission = ctx.submission, .render = ctx.render, .stage = stages.entityId, .frameData = ctx.frameData, .alignment = ctx.alignment}, prepared.entityId()); step.isErr())
+        return step.error();
 
-    const FinalizeFeature finalizeFeature;
-    auto finalizePrepared = finalizeFeature.prepareBindings(
-        resolved.finalize(),
-        FinalizeFeature::PrepareContext{
-            .submission = ctx.submission,
-            .stage      = stages.post,
-        });
-    if (finalizePrepared.isErr()) {
-        return finalizePrepared.error();
-    }
-    prepared.finalize() = finalizePrepared.value();
+    if (auto step = prepareFeature(BloomFeature{}, resolved.bloom(), BloomFeature::PrepareContext{.submission = ctx.submission, .stage = stages.bloom}, prepared.bloom()); step.isErr())
+        return step.error();
+
+    if (auto step = prepareFeature(FinalizeFeature{}, resolved.finalize(), FinalizeFeature::PrepareContext{.submission = ctx.submission, .stage = stages.post}, prepared.finalize()); step.isErr())
+        return step.error();
 
     return prepared;
 }
@@ -276,71 +192,30 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     const RGTextureHandle depth = ctx.graph.importTexture(makeImportedTextureDesc(
         *depthTarget, forward_graph_exports::viewDepth, EImageLayout::DepthStencilAttachmentOptimal, resolved.opaque().depthUsage));
 
+    // The append schedule: one row per connection, in run order (see the
+    // Deferred recipe's appendGraph for the shape).
+
     // ── Shadow (first: its passes take the family ordering point) ─────────
-    const ShadowFeature shadowFeature;
-    auto shadowOutputs = shadowFeature.append(
-        ctx.graph,
-        ctx.stages->shadow,
-        featureCtx,
-        ShadowFeature::Facts{},
-        resolved.shadow(),
-        prepared.shadow(),
-        ShadowFeature::Inputs{});
-    if (shadowOutputs.isErr()) {
-        YA_CORE_ERROR("Forward shadow append failed for View {}", resolved.viewId);
-        return shadowOutputs.error();
-    }
-    outputs.shadow() = shadowOutputs.value();
+    if (auto step = appendFeature(ShadowFeature{}, ctx.graph, ctx.stages->shadow, featureCtx, ShadowFeature::Facts{}, resolved.shadow(), prepared.shadow(), ShadowFeature::Inputs{}, outputs.shadow()); step.isErr())
+        return step.error();
 
     // ── Opaque (clear + every shading model) ──────────────────────────────
-    auto opaqueOutputs = ctx.stages->viewStage != nullptr
-        ? ForwardOpaqueFeature{}.append(
-              ctx.graph,
-              ctx.stages->viewStage,
-              featureCtx,
-              ForwardOpaqueFeature::Facts{
-                  .viewExtent      = resolved.viewExtent,
-                  .passContext     = ctx.viewPassContext,
-                  .directionGizmos = ctx.directionGizmos,
-              },
-              resolved.opaque(),
-              prepared.opaque(),
-              ForwardOpaqueFeature::Inputs{.color = color, .depth = depth})
-        : Result<ForwardOpaqueFeature::GraphOutputs, FeatureError>{FeatureError::MissingContext};
-    if (opaqueOutputs.isErr()) {
-        YA_CORE_ERROR("Forward opaque append failed for View {}", resolved.viewId);
-        return opaqueOutputs.error();
-    }
-    outputs.opaque() = opaqueOutputs.value();
+    // No stage guard here: the feature itself answers MissingContext when the
+    // view stage is absent, so the row can be a plain call.
+    if (auto step = appendFeature(ForwardOpaqueFeature{}, ctx.graph, ctx.stages->viewStage, featureCtx, ForwardOpaqueFeature::Facts{.viewExtent = resolved.viewExtent, .passContext = ctx.viewPassContext, .directionGizmos = ctx.directionGizmos}, resolved.opaque(), prepared.opaque(), ForwardOpaqueFeature::Inputs{.color = color, .depth = depth}, outputs.opaque()); step.isErr())
+        return step.error();
     // The depth stream is the recipe's own import; it belongs in the typed
     // outputs the collector reads, beside the color the opaque pass produced.
     outputs.opaque().depth = depth;
 
     // ── Skybox ────────────────────────────────────────────────────────────
-    if (ctx.stages->viewStage != nullptr) {
-        auto skyboxOutputs = ForwardSkyboxFeature{}.append(
-            ctx.graph,
-            &ctx.stages->viewStage->getAuxPasses(),
-            featureCtx,
-            ForwardSkyboxFeature::Facts{
-                .viewExtent = resolved.viewExtent,
-                .skybox     = ctx.skybox,
-            },
-            resolved.skybox(),
-            prepared.skybox(),
-            ForwardSkyboxFeature::Inputs{
-                .color           = outputs.opaque().color,
-                .depth           = depth,
-                .colorFinalLayout = EImageLayout::ColorAttachmentOptimal,
-            });
-        if (skyboxOutputs.isErr()) {
-            YA_CORE_ERROR("Forward skybox append failed for View {}", resolved.viewId);
-            return skyboxOutputs.error();
-        }
-        outputs.skybox() = skyboxOutputs.value();
-    }
-    else {
+    // Without a view stage there is nothing to draw the skybox through, and the
+    // color simply continues: this is a legal skip, not a failure.
+    if (ctx.stages->viewStage == nullptr) {
         outputs.skybox().color = outputs.opaque().color;
+    } else if (auto step = appendFeature(ForwardSkyboxFeature{}, ctx.graph, &ctx.stages->viewStage->getAuxPasses(), featureCtx, ForwardSkyboxFeature::Facts{.viewExtent = resolved.viewExtent, .skybox = ctx.skybox}, resolved.skybox(), prepared.skybox(), ForwardSkyboxFeature::Inputs{.color = outputs.opaque().color, .depth = depth, .colorFinalLayout = EImageLayout::ColorAttachmentOptimal}, outputs.skybox());
+               step.isErr()) {
+        return step.error();
     }
 
     // ── Transparent slot ──────────────────────────────────────────────────
@@ -375,58 +250,16 @@ ForwardPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         });
 
     // ── Entity id (picking) ───────────────────────────────────────────────
-    auto entityIdOutputs = ctx.stages->entityId != nullptr
-        ? EntityIdFeature{}.append(
-              ctx.graph,
-              ctx.stages->entityId,
-              featureCtx,
-              EntityIdFeature::Facts{
-                  .viewExtent = resolved.viewExtent,
-                  .frameData  = ctx.stageCtx.frameData,
-              },
-              resolved.entityId(),
-              prepared.entityId(),
-              EntityIdFeature::Inputs{
-                  .depth      = depth,
-                  .skinningDS = ctx.frameBinding->skinningDescriptorSet,
-              })
-        : Result<EntityIdFeature::GraphOutputs, FeatureError>{FeatureError::MissingContext};
-    if (entityIdOutputs.isErr()) {
-        YA_CORE_ERROR("Forward entity id append failed for View {}", resolved.viewId);
-        return entityIdOutputs.error();
-    }
-    outputs.entityId() = entityIdOutputs.value();
+    if (auto step = appendFeature(EntityIdFeature{}, ctx.graph, ctx.stages->entityId, featureCtx, EntityIdFeature::Facts{.viewExtent = resolved.viewExtent, .frameData = ctx.stageCtx.frameData}, resolved.entityId(), prepared.entityId(), EntityIdFeature::Inputs{.depth = depth, .skinningDS = ctx.frameBinding->skinningDescriptorSet}, outputs.entityId()); step.isErr())
+        return step.error();
 
     // ── Bloom (optional) ──────────────────────────────────────────────────
-    const BloomFeature bloomFeature;
-    auto bloomOutputs = bloomFeature.append(
-        ctx.graph,
-        ctx.stages->bloom,
-        featureCtx,
-        BloomFeature::Facts{.viewExtent = resolved.viewExtent},
-        resolved.bloom(),
-        prepared.bloom(),
-        BloomFeature::Inputs{.color = outputs.skybox().color});
-    if (bloomOutputs.isErr()) {
-        YA_CORE_ERROR("Forward bloom append failed for View {}", resolved.viewId);
-        return bloomOutputs.error();
-    }
-    outputs.bloom() = bloomOutputs.value();
+    if (auto step = appendFeature(BloomFeature{}, ctx.graph, ctx.stages->bloom, featureCtx, BloomFeature::Facts{.viewExtent = resolved.viewExtent}, resolved.bloom(), prepared.bloom(), BloomFeature::Inputs{.color = outputs.skybox().color}, outputs.bloom()); step.isErr())
+        return step.error();
 
     // ── Finalize (mandatory display pass) ─────────────────────────────────
-    auto finalizeOutputs = FinalizeFeature{}.append(
-        ctx.graph,
-        ctx.stages->post,
-        featureCtx,
-        FinalizeFeature::Facts{.viewExtent = resolved.viewExtent, .postContext = ctx.postContext},
-        resolved.finalize(),
-        prepared.finalize(),
-        FinalizeFeature::Inputs{.color = outputs.bloom().color});
-    if (finalizeOutputs.isErr()) {
-        YA_CORE_ERROR("Forward finalize append failed for View {}", resolved.viewId);
-        return finalizeOutputs.error();
-    }
-    outputs.finalize() = finalizeOutputs.value();
+    if (auto step = appendFeature(FinalizeFeature{}, ctx.graph, ctx.stages->post, featureCtx, FinalizeFeature::Facts{.viewExtent = resolved.viewExtent, .postContext = ctx.postContext}, resolved.finalize(), prepared.finalize(), FinalizeFeature::Inputs{.color = outputs.bloom().color}, outputs.finalize()); step.isErr())
+        return step.error();
 
     return outputs;
 }
