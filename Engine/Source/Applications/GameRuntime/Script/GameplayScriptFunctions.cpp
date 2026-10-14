@@ -20,6 +20,7 @@
 #include "LuaWidgetScripts.h"
 #include "GameRuntime/Render/SceneCameraQuery.h"
 #include "Audio/AudioSystem.h"
+#include "Core/Localization/LocalizationManager.h"
 #include "Render3D/Common/PostProcessingState.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Core/SceneScriptBindings.h"
@@ -483,6 +484,63 @@ ScriptValue audioStopAllFn(const GameplayScriptContext& ctx, ScriptArgs args)
     return {};
 }
 
+// ── locale.* ───────────────────────────────────────────────────────────────
+// The engine LocalizationManager (Core/Localization) projected to scripts:
+// `locale.tr(key)`, `locale.language()`, `locale.setLanguage(lang)`,
+// `locale.languages()`. A game's own fallback table (e.g. the RPG's zh.json)
+// is loaded through locale.loadTable so content ships translations as data.
+
+ScriptValue localeTrFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 1);
+    (void)ctx;
+    const std::string key = script::scriptToString(args[0]);
+    return script::scriptMake(std::string(LocalizationManager::get().tr(key)));
+}
+
+ScriptValue localeLanguageFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 0);
+    (void)ctx;
+    return script::scriptMake(LocalizationManager::get().language());
+}
+
+ScriptValue localeLanguagesFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 0);
+    (void)ctx;
+    // Space-joined: a vector has no script projection, and callers only test
+    // membership ("is zh loaded?").
+    std::string joined;
+    for (const std::string& language : LocalizationManager::get().loadedLanguages()) {
+        if (!joined.empty()) {
+            joined += " ";
+        }
+        joined += language;
+    }
+    return script::scriptMake(std::move(joined));
+}
+
+ScriptValue localeSetLanguageFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 1);
+    (void)ctx;
+    LocalizationManager::get().setLanguage(script::scriptToString(args[0]));
+    return {};
+}
+
+ScriptValue localeLoadTableFn(const GameplayScriptContext& ctx, ScriptArgs args)
+{
+    expectArgCount(args, 2);
+    (void)ctx;
+    const std::string language = script::scriptToString(args[0]);
+    const std::string path     = script::scriptToString(args[1]);
+    if (!LocalizationManager::get().loadLanguage(language, path)) {
+        throw ScriptError("locale.loadTable: cannot load '" + path + "' for '" + language + "'");
+    }
+    return {};
+}
+
 // `physics2D.impulse(entity, vx, vy)`: a linear impulse (a shove, a knockback).
 ScriptValue physics2DImpulseFn(const GameplayScriptContext& ctx, ScriptArgs args)
 {
@@ -776,6 +834,11 @@ void registerGameplayScriptFunctions(GameplayScriptContext ctx)
     script::registerModuleFunction("audio", "stopMusic", [ctx](ScriptArgs args) { return audioStopMusicFn(ctx, args); });
     script::registerModuleFunction("audio", "setBus", [ctx](ScriptArgs args) { return audioSetBusFn(ctx, args); });
     script::registerModuleFunction("audio", "stopAll", [ctx](ScriptArgs args) { return audioStopAllFn(ctx, args); });
+    script::registerModuleFunction("locale", "tr", [](ScriptArgs args) { return localeTrFn({}, args); });
+    script::registerModuleFunction("locale", "language", [](ScriptArgs args) { return localeLanguageFn({}, args); });
+    script::registerModuleFunction("locale", "languages", [](ScriptArgs args) { return localeLanguagesFn({}, args); });
+    script::registerModuleFunction("locale", "setLanguage", [](ScriptArgs args) { return localeSetLanguageFn({}, args); });
+    script::registerModuleFunction("locale", "loadTable", [](ScriptArgs args) { return localeLoadTableFn({}, args); });
     script::registerModuleFunction("particles", "burst", [ctx](ScriptArgs args) { return particlesBurstFn(ctx, args); });
     script::registerModuleFunction("particles", "setEmitting", [ctx](ScriptArgs args) { return particlesSetEmittingFn(ctx, args); });
     script::registerModuleFunction("physics2D", "impulse", [ctx](ScriptArgs args) { return physics2DImpulseFn(ctx, args); });
