@@ -118,19 +118,6 @@ def unit_alive(name: str) -> bool:
     return False
 
 
-def menu_label() -> str:
-    """Label of the highlighted action entry. The bar renders `> [1] Attack`,
-    so strip the marker and the hotkey prefix."""
-    for i in range(1, 5):
-        text = menu(i)
-        if text.lstrip().startswith(">"):
-            label = text.strip().lstrip(">").strip()
-            if label.startswith("["):
-                label = label.split("]", 1)[1].strip() if "]" in label else label
-            return label
-    return ""
-
-
 def tap(key: str, settle: float = 0.12) -> None:
     """Press and release `key`. Explicit down/up rather than `hold`: a hold
     releases at a poll boundary, and when that boundary lands inside the same
@@ -141,29 +128,6 @@ def tap(key: str, settle: float = 0.12) -> None:
     time.sleep(0.10)
     rpc(PORT, "input.inject_key", {"key": key, "action": "up"})
     time.sleep(settle)
-
-
-def in_menu() -> bool:
-    """True when the real action list is up (not the select-phase Move chip).
-    The bar may also be empty mid-transition, which is not a menu."""
-    return menu_label() in ACTION_LABELS
-
-
-# Every label the action bar may show as "deal damage": the basic Attack, and
-# each unit's skill (the mage offers Firebolt, the archer Pierce).
-ACTION_LABELS = ("Attack", "Firebolt", "Pierce")
-NON_ACTION_LABELS = ("Move", "Wait", "Back", "")
-
-
-def menu_select(label: str) -> None:
-    for _ in range(6):
-        if menu_label() == label:
-            return
-        before = menu_label()
-        tap("D")
-        deadline = time.time() + 0.6
-        while time.time() < deadline and menu_label() == before:
-            time.sleep(0.05)
 
 
 def live_enemies() -> list[str]:
