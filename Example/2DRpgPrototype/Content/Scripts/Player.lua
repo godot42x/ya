@@ -80,6 +80,9 @@ function Script:onSave()
 end
 
 function Script:onInit()
+    -- Localization tables + the persisted language choice, before any UI
+    -- paints (the HUD and panels tr() during their own onInit).
+    require("Locale").init()
     self.anim = self.entity:getSpriteAnimation()
     self.map = world.find(self.mapName):getTilemap()
     self.talking = false
