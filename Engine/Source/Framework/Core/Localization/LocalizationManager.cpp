@@ -10,6 +10,44 @@
 namespace ya
 {
 
+namespace
+{
+/// Replace `{N}` with `args[N]`. A placeholder with no matching arg is left
+/// as written, so a mistyped index is visible in the UI instead of eating the
+/// rest of the string. `{{` is not an escape (this is not std::format; the
+/// tables hold display text, not format strings).
+void substitutePlaceholders(std::string_view text, std::span<const std::string> args, std::string& out)
+{
+    out.reserve(text.size() + 16);
+    for (size_t i = 0; i < text.size(); ++i) {
+        const char c = text[i];
+        if (c != '{') {
+            out.push_back(c);
+            continue;
+        }
+        size_t j = i + 1;
+        size_t index = 0;
+        bool   bHasDigits = false;
+        while (j < text.size() && text[j] >= '0' && text[j] <= '9') {
+            index = index * 10 + static_cast<size_t>(text[j] - '0');
+            bHasDigits = true;
+            ++j;
+        }
+        if (bHasDigits && j < text.size() && text[j] == '}') {
+            if (index < args.size()) {
+                out.append(args[index]);
+            }
+            else {
+                out.append(text.substr(i, j - i + 1));
+            }
+            i = j;
+            continue;
+        }
+        out.push_back(c);
+    }
+}
+} // namespace
+
 LocalizationManager& LocalizationManager::get()
 {
     static LocalizationManager instance;
@@ -83,9 +121,7 @@ void LocalizationManager::setLanguage(std::string_view language)
         YA_CORE_WARN("Localization: language '{}' has no table loaded; keys pass through", next);
     }
     _language = std::move(next);
-    if (onLanguageChanged) {
-        onLanguageChanged(_language);
-    }
+    _languageChangedDelegate.broadcast(std::string_view(_language));
 }
 
 std::vector<std::string> LocalizationManager::loadedLanguages() const
@@ -99,30 +135,57 @@ std::vector<std::string> LocalizationManager::loadedLanguages() const
     return names;
 }
 
-std::string_view LocalizationManager::tr(std::string_view key) const
+std::string LocalizationManager::tr(std::string_view key, std::string_view fallbackSource) const
 {
-    if (_language.empty()) {
-        return key;
-    }
-    // The active language first, then the fallback chain, then the key.
-    if (const auto active = _tables.find(_language); active != _tables.end()) {
-        if (const auto found = active->second.find(std::string(key)); found != active->second.end()) {
-            return found->second;
-        }
-    }
-    for (const auto& fallback : _fallbacks) {
-        if (const auto table = _tables.find(fallback); table != _tables.end()) {
-            if (const auto found = table->second.find(std::string(key)); found != table->second.end()) {
+    if (!_language.empty()) {
+        // The active language first, then the fallback chain.
+        if (const auto active = _tables.find(_language); active != _tables.end()) {
+            if (const auto found = active->second.find(std::string(key)); found != active->second.end()) {
                 return found->second;
             }
         }
+        for (const auto& fallback : _fallbacks) {
+            if (const auto table = _tables.find(fallback); table != _tables.end()) {
+                if (const auto found = table->second.find(std::string(key)); found != table->second.end()) {
+                    return found->second;
+                }
+            }
+        }
+        // A language is active but nothing has this key: worth recording.
+        _missingKeys.insert(std::string(key));
     }
-    return key;
+    if (!fallbackSource.empty()) {
+        return std::string(fallbackSource);
+    }
+    return std::string(key);
+}
+
+std::string LocalizationManager::format(std::string_view text, std::span<const std::string> args)
+{
+    std::string out;
+    substitutePlaceholders(text, args, out);
+    return out;
+}
+
+std::string LocalizationManager::format(std::string_view text, std::initializer_list<std::string> args)
+{
+    return format(text, std::span<const std::string>(args.begin(), args.size()));
 }
 
 void LocalizationManager::setFallbackLanguages(std::vector<std::string> languages)
 {
     _fallbacks = std::move(languages);
+}
+
+LocalizationManager::LanguageChangedHandle
+LocalizationManager::addLanguageChangedListener(std::function<void(std::string_view)> callback)
+{
+    return _languageChangedDelegate.addLambda(std::move(callback));
+}
+
+void LocalizationManager::removeLanguageChangedListener(LanguageChangedHandle handle)
+{
+    _languageChangedDelegate.remove(handle);
 }
 
 void LocalizationManager::clear()
@@ -131,8 +194,9 @@ void LocalizationManager::clear()
     _tables.clear();
     _fallbacks.clear();
     _language.clear();
-    if (bHadLanguage && onLanguageChanged) {
-        onLanguageChanged(_language);
+    _missingKeys.clear();
+    if (bHadLanguage) {
+        _languageChangedDelegate.broadcast(std::string_view(_language));
     }
 }
 

@@ -569,16 +569,21 @@ ScriptValue audioStopAllFn(const GameplayScriptContext& ctx, ScriptArgs args)
 
 // ── locale.* ───────────────────────────────────────────────────────────────
 // The engine LocalizationManager (Core/Localization) projected to scripts:
-// `locale.tr(key)`, `locale.language()`, `locale.setLanguage(lang)`,
+// `locale.tr(key[, fallback])`, `locale.language()`, `locale.setLanguage(lang)`,
 // `locale.languages()`. A game's own fallback table (e.g. the RPG's zh.json)
 // is loaded through locale.loadTable so content ships translations as data.
+// The optional second argument is the source string a missing table falls back
+// to, so a long display string need not be its own key.
 
 ScriptValue localeTrFn(const GameplayScriptContext& ctx, ScriptArgs args)
 {
-    expectArgCount(args, 1);
+    if (args.size() < 1 || args.size() > 2) {
+        throw ScriptError(std::format("locale.tr expects 1 or 2 argument(s), got {}", args.size()));
+    }
     (void)ctx;
     const std::string key = script::scriptToString(args[0]);
-    return script::scriptMake(std::string(LocalizationManager::get().tr(key)));
+    const std::string fallback = args.size() > 1 ? script::scriptToString(args[1]) : std::string{};
+    return script::scriptMake(LocalizationManager::get().tr(key, fallback));
 }
 
 ScriptValue localeLanguageFn(const GameplayScriptContext& ctx, ScriptArgs args)
