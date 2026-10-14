@@ -1,0 +1,79 @@
+{
+    "topic": "editor-localization",
+    "updated": "2026-10-14",
+    "phases": [
+        {
+            "id": "P0",
+            "title": "Core framework: language events, format, fallback key, LocalizedText",
+            "status": "done",
+            "artifacts": [
+                "Core/Localization/LocalizationManager.{h,cpp}",
+                "GUI/Binding/LocalizedText.{h,cpp}",
+                "GameRuntime/Script/GameplayScriptFunctions.cpp (locale.tr)",
+                "Test/Core/LocalizationManagerTest.cpp",
+                "Test/GuiWidgets/LocalizedTextTest.cpp"
+            ],
+            "verified_by": "xmake r ya-testing --gtest_filter=LocalizationManagerTest.*:LocalizedTextTest.*"
+        },
+        {
+            "id": "P1",
+            "title": "Static chrome: EditorLocalization + editor.zh.json + menu/window title",
+            "status": "done",
+            "artifacts": [
+                "GameEditor/Localization/EditorLocalization.{h,cpp}",
+                "Engine/Content/Locale/editor.zh.json",
+                "GameEditor/UI/Shell/EditorSurface.cpp",
+                "GameEditor/UI/Dock/EditorDockWorkspace.cpp"
+            ],
+            "verified_by": "editor run screenshot (zh) + build"
+        },
+        {
+            "id": "P2",
+            "title": "Dock tab title binding: live refresh without rebuild",
+            "status": "done",
+            "artifacts": [
+                "GUI/.../DockSpace/DockContext.{h,cpp}",
+                "GUI/.../DockSpace/DockSpace.cpp",
+                "GUI/.../DockSpace/DockFloatingWindow.cpp",
+                "GUI/.../Controls/TabBar.{h,cpp}",
+                "GUI/.../Controls/MenuBar.{h,cpp}",
+                "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
+            ],
+            "verified_by": "DockNodeTest.ReactivePanelTitleUpdatesTabInPlace (leaf id unchanged)"
+        },
+        {
+            "id": "P3",
+            "title": "Panel content + settings language switcher + persistence",
+            "status": "done",
+            "artifacts": [
+                "GameEditor/UI/Dialogs/EditorSettingsDialog.{cpp,h}",
+                "GameEditor/EditorModule.cpp",
+                "GameEditor/UI/Tabs/EditorInspectorTab.cpp",
+                "GameEditor/UI/Tabs/EditorContentBrowserTab.cpp",
+                "GameEditor/UI/Tabs/EditorPlayToolbarTab.cpp"
+            ],
+            "verified_by": "EditorSettingsDialogTest.LanguageSwitchRelocalizesOpenDialog"
+        },
+        {
+            "id": "P4",
+            "title": "Locale lint tool wired into CI",
+            "status": "done",
+            "artifacts": ["Script/editor_locale_lint.py", "Script/ci.sh"],
+            "verified_by": "python3 Script/editor_locale_lint.py (exit 0)"
+        }
+    ],
+    "capabilities": [
+        {"name": "multi-listener language event", "status": "done"},
+        {"name": "tr(key, fallbackSource)", "status": "done"},
+        {"name": "format('{N}')", "status": "done"},
+        {"name": "missingKeys diagnostics", "status": "done"},
+        {"name": "LocalizedText reactive handle", "status": "done"},
+        {"name": "script locale.tr(key[, fallback])", "status": "done"},
+        {"name": "menu bar + command label localization", "status": "done"},
+        {"name": "window title localization", "status": "done"},
+        {"name": "dock tab title live refresh (no rebuild)", "status": "done"},
+        {"name": "settings language switcher + persistence", "status": "done"},
+        {"name": "representative panel body localization", "status": "partial", "note": "Inspector/Content/Play toolbar only; others still show English source strings"},
+        {"name": "dynamic key localization (property names)", "status": "pending"}
+    ]
+}

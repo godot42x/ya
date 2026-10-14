@@ -76,6 +76,7 @@ completion_and_make_the_final_plan(this_plan);
 | `editor-undo-redo/` | 编辑器 undo/redo |
 | `source-layout-subtraction/` | 目录/头文件布局减法（S1 已落地，S2–S5 进行中） |
 | `editor-ui-grouping/` | GameEditor/UI 关切分组（G1 已落地） |
+| `editor-localization/` | 编辑器本地化 P0–P4：Core 语言能力 + 静态 chrome + dock tab 原地刷新 + 设置语言开关 + lint（已落地） |
 | `display-compose-encoding/` | display compose 只搬运不改色，且 surface 层不再持管线（F1–F3 已落地；仅剩 gamma 开关语义待定） |
 | `game-ui-script-framework/` | 界面自带脚本（与宿主无关的 Lua 运行时 + GUI 不透明行为描述）、帧顺序/暂停/结构变更时机成为契约、条目模态与取消路由；验收用例 GreedSnake（S7 已落地，H9 仍 blocked_on_D7） |
 | `ui-behavior-capabilities/` | `UIBehavior` 按能力登记、树 tick 注册表、Lua `call()` 热路径（C1–C3 完成；归档等结论进 skill） |
