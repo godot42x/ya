@@ -11,6 +11,7 @@
 #include "GameEditor/UI/Ops/EditorCreateMenu.h"
 #include "GameEditor/UI/Shell/EditorContentOpenerRegistry.h"
 #include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
+#include "GameEditor/Localization/EditorLocalization.h"
 
 #include "Core/Event.h"
 #include "Core/Log.h"
@@ -427,42 +428,52 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
                         ui::boxSlot().margin(bandInsets).preferredSize({0.0f, titleH}));
     }
 
-    _menuBar->addItem("File", [this]() {
+    // Menu-bar labels use the source string as their own key. The popup menus
+    // rebuild on every open, so action labels are translated here (key = the
+    // English source string the ActionMap registers): a language set before the
+    // chrome is built is reflected with no stale cache.
+    auto actionItem = [](ActionMap& actions, const char* id) {
+        UIMenu::FItem item = UIMenu::FItem::fromAction(actions, id);
+        item.label = EditorLocalization::editorTr(item.label);
+        return item;
+    };
+    _menuBar->addItem(EditorLocalization::editorTr("File"), [this, actionItem]() {
+        ActionMap& actions = _rootSession->actions();
         return UIMenu::create({
-            UIMenu::FItem::fromAction(_rootSession->actions(), "scene.new"),
-            UIMenu::FItem::fromAction(_rootSession->actions(), "scene.open"),
-            UIMenu::FItem::fromAction(_rootSession->actions(), "scene.save"),
-            UIMenu::FItem::fromAction(_rootSession->actions(), "scene.saveAs"),
+            actionItem(actions, "scene.new"),
+            actionItem(actions, "scene.open"),
+            actionItem(actions, "scene.save"),
+            actionItem(actions, "scene.saveAs"),
             UIMenu::FItem::separator(),
-            UIMenu::FItem::fromAction(_rootSession->actions(), "app.exit"),
+            actionItem(actions, "app.exit"),
         });
     });
-    _menuBar->addItem("Edit", [this]() {
+    _menuBar->addItem(EditorLocalization::editorTr("Edit"), [this, actionItem]() {
         ActionMap& actions = activePageRoot()->actions();
         return UIMenu::create({
-            UIMenu::FItem::fromAction(actions, "edit.undo"),
-            UIMenu::FItem::fromAction(actions, "edit.redo"),
+            actionItem(actions, "edit.undo"),
+            actionItem(actions, "edit.redo"),
             UIMenu::FItem::separator(),
-            UIMenu::FItem::fromAction(actions, "selection.duplicate"),
-            UIMenu::FItem::fromAction(actions, "selection.delete"),
+            actionItem(actions, "selection.duplicate"),
+            actionItem(actions, "selection.delete"),
         });
     });
-    _menuBar->addItem("View", [this]() {
+    _menuBar->addItem(EditorLocalization::editorTr("View"), [this, actionItem]() {
         // Ortho XY is a camera option of the Level viewport (world 2D authoring).
-        UIMenu::FItem orthoItem = UIMenu::FItem::fromAction(_rootSession->actions(), "viewport.ortho");
+        UIMenu::FItem orthoItem = actionItem(_rootSession->actions(), "viewport.ortho");
         orthoItem.bCheckable    = true;
         orthoItem.bChecked      = _layer && _layer->isEditorOrthoXY();
         std::vector<UIMenu::FItem> items = {
             std::move(orthoItem),
             UIMenu::FItem::separator(),
-            UIMenu::FItem::fromAction(_rootSession->actions(), "editor.settings"),
+            actionItem(_rootSession->actions(), "editor.settings"),
         };
         // Generated editor companions (camera body, light icons) are editor
         // furniture, so the authoring viewport draws them while authoring and
         // on request afterwards. The option belongs to the editor, not the app.
         {
             UIMenu::FItem gizmoItem;
-            gizmoItem.label      = "Show Editor Gizmos";
+            gizmoItem.label      = EditorLocalization::editorTr("Show Editor Gizmos");
             gizmoItem.bCheckable = true;
             gizmoItem.bChecked   = _layer && _layer->isEditorGizmoShown();
             gizmoItem.action     = [this]() {
@@ -474,9 +485,9 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
             items.push_back(std::move(gizmoItem));
         }
 #if !defined(YA_PROFILING_DISABLED)
-        auto channelItem = [](const char* label, EGuiFrameInspectorChannel channel) {
+        auto channelItem = [](const char* key, EGuiFrameInspectorChannel channel) {
             UIMenu::FItem item;
-            item.label     = label;
+            item.label     = EditorLocalization::editorTr(key);
             item.bCheckable = true;
             item.bChecked  = isGuiFrameInspectorChannelOn(channel);
             item.action   = [channel]() { toggleGuiFrameInspectorChannel(channel); };
@@ -997,14 +1008,15 @@ void EditorSurface::syncWindowTitle()
         return;
     }
 
-    std::string title = "YA Editor";
+    std::string title = EditorLocalization::editorTr("YA Editor");
     const std::string& path = _layer->getCurrentScenePath();
     if (!path.empty()) {
         title += " - ";
         title += std::filesystem::path(path).filename().string();
     }
     else {
-        title += " - Untitled";
+        title += " - ";
+        title += EditorLocalization::editorTr("Untitled");
     }
     if (_layer->isSceneDirty()) {
         title += " *";

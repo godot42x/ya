@@ -7,6 +7,7 @@
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/UIElement.h"
+#include "GameEditor/Localization/EditorLocalization.h"
 #include "GameEditor/UI/Dock/EditorNestedDockHost.h"
 #include "GameEditor/UI/Dock/EditorLayoutLibrary.h"
 #include "GameEditor/UI/Dock/EditorWindowLayout.h"
@@ -302,7 +303,7 @@ void EditorDockWorkspace::buildWindowMenu()
                 const bool bOpenNested = nested && nested->hasTab(tabId);
                 const bool bOpen = bOpenHere || bOpenNested;
                 items.push_back({
-                    .label    = spawner.title,
+                    .label    = EditorLocalization::editorTr(spawner.title),
                     .action   = [this, tabId, bOpen, bLocked, bOpenHere, nested]() {
                         if (bOpen) {
                             if (bLocked) {
@@ -328,7 +329,7 @@ void EditorDockWorkspace::buildWindowMenu()
     _host.menuBar->addItem("Layout", [this]() {
         return UIMenu::create({
             {
-                .label  = "Default",
+                .label  = EditorLocalization::editorTr("Default"),
                 .action = [this]() { resetLayout(); },
             },
         });
