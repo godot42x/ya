@@ -421,6 +421,18 @@ void DeferredRenderPipeline::loadPersistentSettings()
         RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.power", _ssaoFeature.settings().power);
     _ssaoFeature.settings().intensity = config.getOr<float>(
         RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.intensity", _ssaoFeature.settings().intensity);
+    // SSR is an extension effect: same config-seeded settings path as a core
+    // feature, so it can be turned on for a run without touching the schedule.
+    _ssrFeature.settings().bEnabled = config.getOr<bool>(
+        RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssrEnabled", _ssrFeature.settings().bEnabled);
+    _ssrFeature.settings().maxDistance = config.getOr<float>(
+        RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssr.maxDistance", _ssrFeature.settings().maxDistance);
+    _ssrFeature.settings().thickness = config.getOr<float>(
+        RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssr.thickness", _ssrFeature.settings().thickness);
+    _ssrFeature.settings().intensity = config.getOr<float>(
+        RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssr.intensity", _ssrFeature.settings().intensity);
+    _ssrFeature.settings().stepCount = config.getOr<uint32_t>(
+        RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssr.stepCount", _ssrFeature.settings().stepCount);
     // The IBL switches belong to the lighting feature; config seeds them
     /// through the same setter a settings request uses.
     _lightFeature.setIBLSettings(
@@ -497,6 +509,11 @@ DeferredPipelineRecipe::Config DeferredRenderPipeline::buildRecipeConfig(const R
     // Shadow participates in the composition: whether the frame's settings turn
     // it on decides if the recipe resolves it and appends its passes.
     config.shadow.bEnabled = settings.shadow.isEnabled();
+
+    // SSR is an extension effect: it is on when its own setting says so, with
+    // no coupling to the core features' enablement.
+    config.ssr = _ssrFeature.settings();
+    config.ssr.bEnabled = config.ssr.bEnabled && isGradingEnabled();
 
     config.finalize.bEnabled      = true;
     config.finalize.bOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT);
@@ -793,7 +810,7 @@ void DeferredRenderPipeline::initStages()
         .environmentLightingDSL = _environmentLightingDSL,
         .debugRenderSystem     = _debugRenderSystem,
     };
-    initFeatures(featureInit, _gBufferFeature, _ssaoFeature, _lightFeature, _skyboxFeature, _overlayFeature);
+    initFeatures(featureInit, _gBufferFeature, _ssaoFeature, _lightFeature, _skyboxFeature, _overlayFeature, _ssrFeature);
     // Shadow's technique state depends on the lighting stage existing, so it is
     // applied once both are up (the shadow resources themselves keep their own
     // safe-point path).
@@ -822,7 +839,7 @@ void DeferredRenderPipeline::shutdown()
         _spriteStage->destroy();
         _spriteStage.reset();
     }
-    shutdownFeatures(_overlayFeature, _skyboxFeature, _lightFeature, _ssaoFeature, _gBufferFeature);
+    shutdownFeatures(_ssrFeature, _overlayFeature, _skyboxFeature, _lightFeature, _ssaoFeature, _gBufferFeature);
     if (_frameResources) {
         _frameResources->destroy();
         _frameResources.reset();
@@ -1242,6 +1259,7 @@ void DeferredRenderPipeline::refreshViewStageState()
 
     _overlayFeature.refreshDeviceFormats(buildViewSnapshotFormats());
     _skyboxFeature.refreshDeviceFormats(buildViewSnapshotFormats());
+    _ssrFeature.refreshDeviceFormats(buildViewSnapshotFormats().colorFormats.front());
 
     if (_spriteStage) {
         // Sprites draw into the View's color attachment with the GBuffer depth;
@@ -1357,6 +1375,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         .gBuffer  = _gBufferFeature.stage(),
         .ssao     = _ssaoFeature.stage(),
         .light    = _lightFeature.stage(),
+        .ssr      = _ssrFeature.stage(),
         .skybox   = _skyboxFeature.stage(),
         .overlay  = _overlayFeature.stage(),
         .sprites  = _spriteStage.get(),
@@ -1384,6 +1403,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
     }
 
     const size_t passesBeforeComposition = graph.getPasses().size();
+    ExtensionInstances<SSRFeature> extensionInstances{std::make_tuple(&_ssrFeature)};
     auto composition = DeferredPipelineRecipe::appendGraph(
         resolved,
         preparedResult.value(),
@@ -1395,6 +1415,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
             .frameBinding        = viewBinding,
             .overlayInputs       = &overlayInputs,
             .postContext         = &postContext,
+            .extensionInstances  = &extensionInstances,
             .frameBuffer         = imports.frame,
             .lightBuffer         = imports.light,
             .skinningBuffer      = imports.skinning,

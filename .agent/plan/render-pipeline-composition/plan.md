@@ -104,50 +104,46 @@ initFeatures(featureInit, _gBufferFeature, _ssaoFeature, _lightFeature, _skyboxF
 
 ---
 
-### 第三阶段：定义明确的扩展槽位（基于前两阶段成果）
+### 第三阶段：定义明确的扩展槽位（已完成 2026-10-14）
 
-**现状：** 没有明确的"在哪里可以插入新效果"的协议，每个位置都要手动接线。
+**原来的问题：** 没有明确的"在哪里可以插入新效果"的协议，每个位置都要手动接线。
 
-**目标：** 参考 UE5 SceneViewExtension，在 Recipe 里定义几个固定扩展点，每个扩展点的输入输出清楚，用户实现功能后注册到扩展点即可。
+**落地方式（与本节原先设想的差异）：** 采用**类型化命名扩展点 + 编译期 fold**，未用 `IExtensionFeature` 虚基类 + `vector` 运行时注册表——design.md 明确禁止「预先引入类型擦除、字符串查找或新的 coordinator」，虚基类数组正是类型擦除。
 
-**扩展槽位设计（初步）：**
 ```cpp
-// DeferredPipelineRecipe 提供的扩展点：
-enum class DeferredExtensionPoint {
-    AfterGBuffer,        // GBuffer 完成后，lighting 前（适合自定义 AO、thickness map）
-    AfterLighting,       // 光照完成后，透明物体前（适合 SSR、SSGI）
-    BeforePostProcess,   // 场景渲染完成，后处理前（适合自定义 resolve）
-    PostProcessChain,    // 后处理链中（适合自定义色调、滤镜）
-};
+// 扩展点 = 调度里一个有名字的位置，不是注册表：
+enum class DeferredExtensionPoint { AfterGBuffer, AfterLighting, BeforePostProcess, PostProcessChain };
 
-struct ExtensionContext {
+struct ExtensionContext {          // 该位置能提供的类型化输入
     RenderGraph& graph;
-    const ViewTargetLease* viewLease;
-    RGTextureHandle sceneColor;
-    RGTextureHandle depth;
-    // 当前扩展点可用的输入...
+    const FeatureGraphContext& graphCtx;
+    Extent2D viewExtent;
+    RGTextureHandle color{};        // in/out：进该点的颜色流，扩展可替换
+    RGTextureHandle depth{};
+    RGTextureHandle normal{};
 };
 
-// Feature 可以注册到扩展点：
-class CustomSSGIFeature : public IExtensionFeature {
-    Result<RGTextureHandle> execute(ExtensionContext& ctx) override;
-};
-
-// Recipe 在对应位置调用已注册的扩展：
-auto extensionOut = executeExtensions(DeferredExtensionPoint::AfterLighting, ctx);
+// Recipe 在固定位置调用该点的扩展（编译期展开，类型安全，无擦除）：
+appendExtensionsAt<DeferredExtensionPoint::AfterLighting>(extCtx, resolved.extensions, prepared.extensions, instances);
 ```
 
-**验收标准：**
-- 用一个真实新功能（如 GTAO、简单 SSR）验证扩展点接入
-- 接入只需实现功能 + 注册到扩展点，不改 Recipe 内部逻辑
-- 记录修改的文件数和行数，与当前接入成本对比
+**用真实效果验证：简单 SSR（AfterLighting）。** 读 lit scene color + GBuffer normal + depth，在 view space 里对深度缓冲做 ray march，把反射色混回颜色流。禁用时颜色流原样穿过（消费者不必问"SSR 跑没跑"）。
 
-**改动：**
-- Recipe 定义扩展点枚举和上下文
-- Recipe 在固定位置调用扩展（初期可用简单的 vector 存储已注册功能）
-- 实现一个示例扩展功能作为模板
+**实测接入成本（对照验收标准）：**
 
-**时间：** 3-5 天（设计扩展协议 + 实现调用机制 + 验证真实功能）
+| 类别 | 内容 | 行数 |
+| --- | --- | --- |
+| 功能实现（每个新效果都要写） | `SSR.slang` + `SSRStage.h/.cpp` + `SSRFeature.h/.cpp` | 682 行（5 个新文件） |
+| 接入点连接声明（每个新效果要补） | recipe.h/.cpp + pipeline.h/.cpp + PassNames | 105 行改动（含 39 处 SSR 提及） |
+| 协议层（一次性，后续扩展复用） | `ExtensionProtocol.h` | 172 行 |
+
+**结论：** 新增效果的成本 = 功能实现 + **约 105 行连接声明**；协议层是一次性投入。连接声明相比核心 feature（Bloom 约 32 处提及）没有数量级下降——因为扩展同样要声明 settings、device object、生命周期。**真正的收益是位置语义**：扩展明确声明 `extensionPoint()`，Recipe 在命名位置 fold 调用，不需要在每条 phase 里插一行、也不改核心调度；且第二个同点扩展只是 tuple 多一项，连接声明零增长。
+
+**验收证据：** `ya-render-3d-test` 238/238；SSR off 帧与历史基线**逐像素 0 diff**（说明关闭时零影响）；SSR on 帧产生可复现差异（intensity=3.0 时 6369 像素、bbox 落在反射区域，同实例连拍 0 diff 确认非噪声）；日志 0 ERROR、0 断言。
+
+**实现中发现并修掉的两个真 bug（都是"临时对象"类）：**
+1. fold 最初用 `Ext{}.appendExtension(...)` 在**新构造的临时对象**上调用 → 临时的 `_stage` 为 null → MissingContext（与 D5 的栈临时 bug 同类）。修正：fold 接收管线持有的长期实例 `ExtensionInstances`，按类型匹配后调用实例。
+2. fold 最初从 resolved tuple 里读 `.prepared` → 拿到空 binding。修正：resolved 与 prepared 作为两个 tuple 传入，与核心 feature 的 phase 分离一致。
 
 ---
 
@@ -245,9 +241,11 @@ auto extensionOut = executeExtensions(DeferredExtensionPoint::AfterLighting, ctx
 
 **第二阶段已完成**（见上，统一功能初始化）。
 
-**第三阶段：定义扩展槽位。** 定义 `DeferredExtensionPoint` 与 `ExtensionContext`，用一个真实新功能（GTAO 或简单 SSR）验证接入成本。
+**第三阶段已完成**（见上，命名扩展点 + SSR 验证）。
 
-**然后第四阶段收尾。** 每个阶段独立验收、独立提交，不等全部完成。
+**第四阶段：完成现有功能封装。** 删除遗留的临时实例/Stage 提取/公开访问器，设备成员私有化；未 feature 化的 stage（Deferred 的 shadowStage/spriteStage/entityIdPass、Forward 的 viewStage/shadowStage）按实际职责处理。
+
+**每个阶段独立验收、独立提交，不等全部完成。**
 
 ---
 

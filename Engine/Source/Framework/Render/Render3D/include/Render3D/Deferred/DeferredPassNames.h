@@ -15,6 +15,7 @@ namespace deferred_pass_names
 inline constexpr std::string_view kGBuffer           = "Deferred GBuffer";
 inline constexpr std::string_view kLight             = "Deferred Light";
 inline constexpr std::string_view kSSAO              = "SSAO Pass";
+inline constexpr std::string_view kSSR               = "Deferred SSR";
 inline constexpr std::string_view kForwardOpaque     = "Deferred Forward Opaque";
 inline constexpr std::string_view kSkybox            = "Deferred Skybox";
 inline constexpr std::string_view kSprites           = "Deferred Sprites";

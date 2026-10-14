@@ -58,27 +58,33 @@
 
 ---
 
-## 第三阶段：定义明确的扩展槽位（前两阶段后）
+## 第三阶段：定义明确的扩展槽位（已完成 2026-10-14）
 
-**目标：** Recipe 提供固定扩展点，新效果注册到扩展点即可，不改 Recipe 内部。
+**目标：** Recipe 提供固定扩展点，新效果接到扩展点即可，不改 Recipe 内部调度。
 
-### 待办
+### 完成情况
 
-- [ ] 定义 `DeferredExtensionPoint` 枚举（AfterGBuffer, AfterLighting, BeforePostProcess, PostProcessChain）
-- [ ] 定义 `ExtensionContext` 结构（每个扩展点可用的输入输出）
-- [ ] Recipe 在对应位置调用已注册扩展（初期可用简单 vector）
-- [ ] 定义 `IExtensionFeature` 接口或协议
-- [ ] 实现一个示例扩展（如 GTAO 或简单 SSR）作为验证
-- [ ] 验收：示例扩展接入只需实现功能 + 注册，不改 Recipe 逻辑
-- [ ] 记录修改的文件数和行数，与当前接入成本对比
-- [ ] ForwardPipelineRecipe 提供对应的扩展点（如需要）
-- [ ] 提交，标记"第三阶段完成"
+- [x] `DeferredExtensionPoint` 枚举（AfterGBuffer, AfterLighting, BeforePostProcess, PostProcessChain）
+- [x] `ExtensionContext`（graph / graphCtx / viewExtent / color（in-out）/ depth / normal）
+- [x] `ExtensionFeature` concept + `appendExtensionsAt<Point>` 编译期 fold（未用 `IExtensionFeature` 虚基类/vector 注册表——design.md 禁止类型擦除）
+- [x] Recipe 在 AfterLighting 位置 fold 调用；扩展通过 `extensionPoint()` 声明位置
+- [x] 真实效果验证：简单 SSR（`SSR.slang` + `SSRStage` + `SSRFeature`）
+- [x] 验收：SSR off 帧与历史基线逐像素 0 diff；SSR on 帧可复现差异（intensity=3.0 → 6369 像素）
+- [x] 记录接入成本（见下）
+- [x] 提交
 
-### 验收标准
+### 实测与偏差
 
-- 扩展点协议清晰：每个点的输入输出文档化
-- 真实功能验证：接入改动限于功能实现 + 扩展点注册
-- 对比当前成本：记录改了几个文件、多少行，与无扩展点时对比
+- **方案偏离**：plan.md 原草案用 `IExtensionFeature` 虚基类 + `vector` 运行时注册表；实际用类型化命名扩展点 + 编译期 fold（design.md 边界）。
+- **接入成本（如实）**：功能实现 682 行（5 新文件）+ 连接声明 105 行改动；协议层 `ExtensionProtocol.h` 172 行一次性。连接声明相比核心 feature（Bloom ~32 处提及）无数量级下降——扩展同样要声明 settings/device/生命周期。**真实收益是位置语义**：扩展声明 `extensionPoint()`，Recipe 在命名位置 fold，不改核心调度；第二个同点扩展只是 tuple 多一项。
+- **两个真 bug（临时对象类）**：fold 曾在临时 `Ext{}` 上调用（`_stage` 为 null）；fold 曾从 resolved tuple 读 `.prepared`（空 binding）。均已修正并写入 plan.md。
+- Forward 侧未接扩展点：目前只有 Deferred 需要（SSR 是 Deferred 效果）；需要时按同一协议加。
+
+### 验收标准（对照）
+
+- 扩展点协议清晰、输入输出文档化 —— 达成（`ExtensionProtocol.h` 注释 + ExtensionContext 字段）
+- 真实功能验证：接入限于功能实现 + 连接声明 —— 达成（SSR 未改核心 feature 调度）
+- 记录改动文件/行数与对比 —— 达成（上表）
 
 ---
 
@@ -178,13 +184,13 @@
 
 ## 当前状态
 
-**阶段进度：** 2/4 完成
+**阶段进度：** 3/4 完成
 
 - 第一阶段：已完成（2026-10-14，Recipe 折叠；行数目标未达成，真实收益是样板统一）
 - 第二阶段：已完成（2026-10-14，FeatureInitContext + 编译期展开；行数未减，收益是 Pipeline 不再知道各功能签名）
-- 第三阶段：未开始（扩展槽位）
-- 第四阶段：未开始（完成封装）
+- 第三阶段：已完成（2026-10-14，命名扩展点 + SSR 真实效果验证；收益是位置语义，接入声明约 105 行）
+- 第四阶段：未开始（完成封装收尾）
 
-**上次更新：** 2026-10-14，第二阶段落地（7 个 feature 统一 init 签名 + 两条管线 fold 驱动 + lifecycle 测试）
+**上次更新：** 2026-10-14，第三阶段落地（ExtensionProtocol + SSR，SSR off 0 diff / on 可复现差异）
 
-**下一步行动：** 第三阶段——定义 `DeferredExtensionPoint` 与 `ExtensionContext`，用一个真实新功能（GTAO 或简单 SSR）验证接入成本。
+**下一步行动：** 第四阶段——删除遗留临时实例/Stage 提取/公开访问器，设备成员私有化；未 feature 化的 stage 按实际职责处理。

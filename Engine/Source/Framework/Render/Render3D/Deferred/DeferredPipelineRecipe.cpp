@@ -166,6 +166,19 @@ DeferredPipelineRecipe::resolve(const Config& config, const RenderFramePlan& pla
             FinalizeFeature::Facts{.viewExtent = view.viewExtent},
             FinalizeFeature::Inputs{});
 
+        // The extension at each point resolves from the same settings snapshot
+        // as the core features: it declares its own requirements and builds its
+        // own per-View values, exactly like a core feature, but it is reached
+        // through the extension tuple rather than a named accessor.
+        std::get<Invocation<SSRFeature>>(view.extensions).resolved = SSRFeature{}.resolve(
+            config.ssr,
+            SSRFeature::Facts{
+                .viewExtent = view.viewExtent,
+                .frameData  = recording.frameData,
+                .bReverseY  = config.bReverseViewportY,
+            },
+            SSRFeature::Inputs{});
+
         resolved.push_back(view);
     }
     return resolved;
@@ -318,6 +331,22 @@ DeferredPipelineRecipe::prepareBindings(const ResolvedView&   resolved,
         step.isErr())
         return step.error();
 
+    // The extensions prepare like core features -- same step helper, same
+    // failure semantics -- but their slots live in the extension tuple, so
+    // adding one never edits the core schedule above.
+    const SSRFeature::PrepareContext ssrPrepare{
+        .submission = ctx.submission,
+        .render     = ctx.render,
+        .stage      = stages.ssr,
+        .alignment  = ctx.alignment,
+    };
+    if (auto step = prepareFeature(SSRFeature{},
+                                   std::get<Invocation<SSRFeature>>(resolved.extensions).resolved,
+                                   ssrPrepare,
+                                   std::get<Invocation<SSRFeature>>(prepared.extensions).prepared);
+        step.isErr())
+        return step.error();
+
     return prepared;
 }
 
@@ -442,6 +471,26 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         return FeatureError::MissingDependency;
     }
 
+    // ── AfterLighting extension point ─────────────────────────────────────
+    // The lit colour enters as `color`; an extension may replace it. Everything
+    // downstream continues whatever the stream holds after the fold, so a
+    // consumer never asks whether an extension ran -- it reads the stream.
+    RGTextureHandle sceneColorStream = outputs.lighting().sceneColor;
+    {
+        ExtensionContext extCtx{
+            .graph      = ctx.graph,
+            .graphCtx   = featureCtx,
+            .viewExtent = resolved.viewExtent,
+            .color      = sceneColorStream,
+            .depth      = outputs.gbuffer().depth,
+            .normal     = outputs.gbuffer().normal,
+        };
+        if (auto step = appendExtensionsAt<DeferredExtensionPoint::AfterLighting>(extCtx, resolved.extensions, prepared.extensions, *ctx.extensionInstances); step.isErr()) {
+            return step.error();
+        }
+        sceneColorStream = extCtx.color;
+    }
+
     // ── Forward-opaque slot ───────────────────────────────────────────────
     // A slot with no functional contract today: forward-rendered opaque content
     // would continue the lit color here. The pass is part of the map (kept per
@@ -451,7 +500,7 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
     const Rect2D viewRenderArea{.pos = {0, 0}, .extent = resolved.viewExtent.toVec2()};
     (void)ctx.graph.addPass(
         makeViewGraphName(deferred_pass_names::kForwardOpaque, resolved.viewId),
-        [color = outputs.lighting().sceneColor, depth = outputs.gbuffer().depth, viewRenderArea](RGPassBuilder& passBuilder) {
+        [color = sceneColorStream, depth = outputs.gbuffer().depth, viewRenderArea](RGPassBuilder& passBuilder) {
             composition::declareColorContinuation(passBuilder, viewRenderArea, color, depth);
         },
         [](RGRenderContext& rgCtx) {
@@ -465,7 +514,7 @@ DeferredPipelineRecipe::appendGraph(const ResolvedView&  resolved,
         .skybox     = ctx.overlayInputs != nullptr ? ctx.overlayInputs->skybox : ViewOverlayFrameInputs::SkyboxInput{},
     };
     const SkyboxFeature::Inputs skyboxInputs{
-        .color = outputs.lighting().sceneColor,
+        .color = sceneColorStream,
         .depth = outputs.gbuffer().depth,
     };
     if (auto step = appendFeature(SkyboxFeature{},

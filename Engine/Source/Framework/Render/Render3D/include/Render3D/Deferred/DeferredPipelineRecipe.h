@@ -3,6 +3,7 @@
 #include "Core/Result.h"
 #include "Graph/RenderGraph.h"
 #include "Render3D/Common/Shadow/ShadowGraphOutputs.h"
+#include "Render3D/Composition/ExtensionProtocol.h"
 #include "Render3D/Composition/FeatureProtocol.h"
 #include "Render3D/Deferred/DeferredAttachmentFormats.h"
 #include "Render3D/Deferred/DeferredPassNames.h"
@@ -17,6 +18,7 @@
 #include "Render3D/Deferred/Features/SkyboxFeature.h"
 #include "Render3D/Deferred/Features/Sprite2DFeature.h"
 #include "Render3D/Deferred/Features/SSAOFeature.h"
+#include "Render3D/Deferred/Features/SSRFeature.h"
 #include "RHI/Core/DescriptorSet.h"
 
 #include <optional>
@@ -81,6 +83,8 @@ struct DeferredPipelineRecipe
         GBufferStage*        gBuffer  = nullptr;
         SSAOStage*           ssao     = nullptr;
         LightStage*          light    = nullptr;
+        /// The SSR pass's device object (owned by SSRFeature, an extension).
+        SSRStage*            ssr      = nullptr;
         /// The skybox pass's device object (owned by SkyboxFeature).
         SkyboxStage*         skybox   = nullptr;
         /// The billboard/gizmo/SimpleMaterial overlay device object
@@ -103,6 +107,9 @@ struct DeferredPipelineRecipe
         SSAOFeature::Settings     ssao{};
         BloomFeature::Settings    bloom{};
         FinalizeFeature::Settings finalize{};
+        /// The extension effects' settings: they are optional contributions, so
+        /// they arrive here rather than through a pipeline-named member.
+        SSRFeature::Settings      ssr{};
         bool                      bReverseViewportY = true;
         DeferredAttachmentFormats gBufferFormats{};
         EFormat::T                viewColorFormat = EFormat::Undefined;
@@ -123,12 +130,25 @@ struct DeferredPipelineRecipe
                                           Invocation<EntityIdFeature>,
                                           Invocation<FinalizeFeature>>;
 
+    /// The optional effects attached at named extension points.
+    ///
+    /// Separate from `FeatureInvocations` on purpose: a core feature is a named
+    /// member of every phase struct (the map states what runs and in what
+    /// order), while an extension is reached only through the fold at its point.
+    /// One tuple holds all extensions, so adding a second effect at any point is
+    /// one entry here and zero new members on ResolvedView/PreparedView/
+    /// GraphOutputs -- which is exactly the cost this phase removes.
+    using ExtensionInvocations = std::tuple<Invocation<SSRFeature>>;
+
     struct ResolvedView
     {
         uint64_t viewId     = 0;
         Extent2D viewExtent{};
 
         FeatureInvocations invocations{};
+        /// Optional effects at named extension points. Reached only through the
+        /// extension folds; a core accessor per extension is deliberately absent.
+        ExtensionInvocations extensions{};
 
         // Accessor methods, NOT reference members: this type is stored in a
         // vector, and a reference member binds to the copy SOURCE's tuple during
@@ -172,6 +192,7 @@ struct DeferredPipelineRecipe
         uint64_t viewId = 0;
 
         FeatureInvocations invocations{};
+        ExtensionInvocations extensions{};
 
         // Accessor methods, not reference members (see ResolvedView).
         [[nodiscard]] auto& shadow()   { return std::get<Invocation<ShadowFeature>>(invocations).prepared; }
@@ -231,6 +252,9 @@ struct DeferredPipelineRecipe
         /// The View's overlay packet, seen by the skybox/overlay/id passes.
         ViewOverlayFrameInputs* overlayInputs = nullptr;
         FrameContext*                  postContext   = nullptr;
+        /// The pipeline's long-lived extension instances. An extension owns a
+        /// device object, so it runs on its instance, never on a temporary.
+        ExtensionInstances<SSRFeature>* extensionInstances = nullptr;
 
         /// Imported shared host-written buffers for this View. Feature-local
         /// UBOs (SSAO/skybox frames) are imported by their own features.

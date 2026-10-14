@@ -22,6 +22,7 @@
 #include "Render3D/Common/Shadow/ShadowStage.h"
 #include "Render3D/Services/RenderSharedResourceProvider.h"
 #include "Render3D/Deferred/Features/SSAOFeature.h"
+#include "Render3D/Deferred/Features/SSRFeature.h"
 #include "Render3D/Common/Sprite2DStage.h"
 #include "Render3D/Deferred/Features/OverlayFeature.h"
 #include "Render3D/Deferred/Features/SkyboxFeature.h"
@@ -116,6 +117,11 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     LightingFeature              _lightFeature;
     /// Skybox's device object, settings and lifecycle live on this feature (D5).
     SkyboxFeature                _skyboxFeature;
+    /// SSR is an *extension*, not a core map member: it attaches at the
+    /// AfterLighting extension point and the recipe reaches it through the
+    /// extension tuple. It still holds its device object and settings here, the
+    /// same as a core feature.
+    SSRFeature                   _ssrFeature;
     /// The billboard/gizmo/SimpleMaterial overlay device object and lifecycle
     /// live on this feature (D5).
     OverlayFeature               _overlayFeature;
