@@ -1,6 +1,24 @@
 # AGENTS.md
 
-本文件只提供主入口所需的最小上下文。先读这里，再按需进入 `./.agent/`。不要因为“可能有用”就预读全部 skills / memories。
+本文件只提供主入口所需的最小上下文。先读这里，再按需进入 `./.agent/`。不要因为”可能有用”就预读全部 skills / memories。
+
+## ⚠️ Subagent 派发强制检查
+
+**在调用 `Agent` 工具前，必须先检查是否有可复用 agent**：
+
+1. **查看本 session 已派发的 agent 列表**（回顾之前的 `Agent` 工具调用结果）
+2. **识别本次任务的领域**（RPG 内容/本地化/UX 设计/渲染管线/构建工具/GUI 框架/...）
+3. **决策**：
+   - 若该领域已有 agent → **必须用 `SendMessage` 续接**，禁止派新 agent
+   - 若无 → 才允许派新 agent
+
+**为什么**：续接复用 agent 可利用 prompt cache，节省 ~50k tokens/agent；派新 agent 会让它从零读 plan/skill/代码。
+
+**派发日志**：所有 agent 的领域与上下文记录在 memory 中，见 `~/.zcode/cli/memories/projects/ya-*/memory/subagent-dispatch-log.md`（每次派发后更新）。
+
+详细门禁规则见 `.agent/subagent-reuse-gate.md`。
+
+---
 
 ## Project
 
