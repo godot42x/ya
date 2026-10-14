@@ -79,6 +79,8 @@
     "Script Hierarchy": "脚本层级",
     "Script Inspector": "脚本检查器",
 
+    "Linear": "线性",
+    "Nearest": "最近邻",
     "editor.settings.title": "编辑器设置",
     "editor.settings.language": "语言",
     "editor.settings.sampler": "视口采样",

@@ -9,8 +9,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 # Agent-docs guard needs no build: run it first so a broken index/link fails
-# fast instead of after a full compile.
+# fast instead of after a full compile. The editor locale lint is the same kind
+# of cheap, build-free gate: a chrome key with no table entry and no fallback
+# source would render as a raw identifier.
 python3 Script/ya_agent_docs_lint.py
+python3 Script/editor_locale_lint.py
 
 run_engine_shared() {
     echo "== engine + shared =="
